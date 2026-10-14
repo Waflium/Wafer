@@ -668,6 +668,12 @@ impl ServerLevel {
         self.reset_attack_strength_ticker(id);
     }
 
+    pub fn swing_and_reset_attack_strength(&mut self, id: EntityId, hand: InteractionHand, animation: crate::world::item::component::swing_animation::SwingAnimation, send_to_swinging_entity: bool) {
+        if self.swing(id, hand, animation, send_to_swinging_entity) {
+            self.reset_attack_strength_ticker(id);
+        }
+    }
+
     pub fn handle_extra_items_created_on_use(&mut self, id: EntityId, extra_items: ItemStack) {
         let left = self.player_mut(id).pick_up(extra_items.clone());
         if left > 0 {

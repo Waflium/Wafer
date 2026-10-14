@@ -460,6 +460,7 @@ impl Entity {
     pub fn abs_snap_rotation_to(&mut self, y_rot: f32, x_rot: f32) {
         self.set_y_rot(y_rot % 360.0);
         self.set_x_rot(mth::clamp_f(x_rot, -90.0, 90.0) % 360.0);
+        self.set_old_rot();
     }
 
     pub fn set_y_rot(&mut self, y_rot: f32) {

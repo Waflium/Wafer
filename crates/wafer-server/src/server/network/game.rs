@@ -317,7 +317,17 @@ impl ServerLevel {
         let distance = hit.location.subtract(Vec3::at_center_of(pos));
         let limit = 1.0000001;
         if distance.x.abs() >= limit || distance.y.abs() >= limit || distance.z.abs() >= limit {
-            warn!("Rejecting UseItemOnPacket from {}: Location too far away from hit block.", self.player(id).profile.name);
+            let location = hit.location;
+            warn!(
+                "Rejecting UseItemOnPacket from {}: Location ({}, {}, {}) too far away from hit block BlockPos{{x={}, y={}, z={}}}.",
+                self.player(id).profile.name,
+                crate::nbt::java_double_to_string(location.x),
+                crate::nbt::java_double_to_string(location.y),
+                crate::nbt::java_double_to_string(location.z),
+                pos.x,
+                pos.y,
+                pos.z
+            );
             return;
         }
         let direction = hit.direction;
@@ -340,12 +350,12 @@ impl ServerLevel {
                 let item_after = self.player(id).item_in_hand(hand).filter(|stack| stack.is(item_stack.get_item())).unwrap_or_else(ItemStack::empty);
                 crate::advancements::triggers::criteria_triggers::ANY_BLOCK_USE.trigger(self, id, pos, &item_after);
             }
-            let placement_attempt = was_block_placement_attempt(&item_stack);
+            let placement_attempt = was_block_placement_attempt(self.player(id), &item_stack);
             let swing = |level: &mut ServerLevel| {
                 if let InteractionResult::Success { swing_source, .. } = result
                     && result.should_swing()
                 {
-                    level.swing(id, hand, swing_animation, swing_source != SwingSource::Predicted);
+                    level.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
                 }
             };
             if direction == Direction::Up && !result.consumes_action() && pos.y >= max_y && placement_attempt {
@@ -419,9 +429,7 @@ impl ServerLevel {
             crate::advancements::triggers::criteria_triggers::PLAYER_INTERACTED_WITH_ENTITY.trigger(self, id, &awarded_for_stack, entity_id);
             if result.should_swing() {
                 let swing_animation = used_item_stack.interact_animation();
-                if self.swing(id, hand, swing_animation, swing_source != SwingSource::Predicted) {
-                    self.reset_attack_strength_ticker(id);
-                }
+                self.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
             }
         }
     }
@@ -438,14 +446,13 @@ impl ServerLevel {
         let target_x_rot = mth::wrap_degrees(x_rot);
         let entity = &mut self.player_mut(id).entity;
         if target_x_rot != entity.x_rot || target_y_rot != entity.y_rot {
-            entity.y_rot = target_y_rot % 360.0;
-            entity.x_rot = target_x_rot.clamp(-90.0, 90.0) % 360.0;
+            entity.abs_snap_rotation_to(target_y_rot, target_x_rot);
         }
         let result = self.use_item(id, hand);
         if let InteractionResult::Success { swing_source, .. } = result
             && result.should_swing()
         {
-            self.swing(id, hand, swing_animation, swing_source != SwingSource::Predicted);
+            self.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
         }
     }
 
@@ -635,6 +642,39 @@ mod tests {
     }
 
     #[test]
+    fn using_items_resets_attack_strength() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        level.handle_player_loaded(player);
+        level.player_mut(player).inventory.slots[crate::world::item::HOTBAR_START] = Some(ItemStack::new(items::STONE, 2));
+        level.player_mut(player).attack_strength_ticker = 10;
+        let mut w = Writer::new();
+        w.varint(0);
+        w.position(2, -61, 0);
+        w.varint(1);
+        w.f32(0.5);
+        w.f32(1.0);
+        w.f32(0.5);
+        w.bool(false);
+        w.bool(false);
+        w.varint(1);
+        level.handle_game_packet(player, &Packet { id: serverbound::USE_ITEM_ON, data: w.into_inner() }).unwrap();
+        assert_eq!(crate::world::level::BlockGetter::block_state(&mut level, BlockPos::new(2, -60, 0)), wafer_data::blocks::STONE.default_state());
+        assert_eq!(level.player(player).attack_strength_ticker, 0);
+        level.player_mut(player).inventory.slots[crate::world::item::HOTBAR_START] = Some(ItemStack::new(items::SNOWBALL, 2));
+        level.player_mut(player).attack_strength_ticker = 10;
+        level.tick_connection(player);
+        let mut w = Writer::new();
+        w.varint(0);
+        w.varint(2);
+        w.f32(30.0);
+        w.f32(20.0);
+        level.handle_game_packet(player, &Packet { id: serverbound::USE_ITEM, data: w.into_inner() }).unwrap();
+        assert_eq!(level.player(player).attack_strength_ticker, 0);
+        assert_eq!(level.player(player).entity.y_rot_o, 30.0);
+    }
+
+    #[test]
     fn saved_inventories_keep_components() {
         let mut level = testing::level();
         let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
@@ -655,18 +695,17 @@ mod tests {
     }
 }
 
-fn was_block_placement_attempt(stack: &ItemStack) -> bool {
+fn was_block_placement_attempt(player: &crate::server::level::server_player::ServerPlayer, stack: &ItemStack) -> bool {
     if stack.is_empty() {
         return false;
     }
     let info = stack.item.info();
-    if info.classes.contains(&"BlockItem") {
-        return true;
-    }
-    info.classes.contains(&"BucketItem") && {
-        let fields: serde_json::Value = serde_json::from_str(info.fields).unwrap_or_default();
-        fields["content"].as_str().is_some_and(|c| c != "minecraft:empty")
-    }
+    (info.classes.contains(&"BlockItem")
+        || info.classes.contains(&"BucketItem") && {
+            let fields: serde_json::Value = serde_json::from_str(info.fields).unwrap_or_default();
+            fields["content"].as_str().is_some_and(|c| c != "minecraft:empty")
+        })
+        && !player.cooldowns.is_on_cooldown(stack)
 }
 
 impl ServerLevel {
