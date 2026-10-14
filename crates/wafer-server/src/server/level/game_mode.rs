@@ -1,6 +1,6 @@
 use wafer_core::{AABB, Axis, BlockPos, Direction, Vec3};
 use wafer_data::packets::play::clientbound;
-use wafer_data::{BlockState, fluid_tags, mob_effects};
+use wafer_data::{BlockState, EquipmentSlot, fluid_tags, mob_effects};
 
 use super::ServerLevel;
 use super::events::{PARTICLES_AND_SOUND_DESTROY_PROGRESS, PARTICLES_DESTROY_PROGRESS};
@@ -10,6 +10,7 @@ use crate::world::entity::EntityId;
 use crate::world::entity::attributes::Attribute;
 use crate::world::entity::player::abilities::Abilities;
 use crate::world::item::ItemStack;
+use crate::world::item::enchantment::enchantment_helper;
 use crate::world::level::collision::shapes_collide;
 use crate::world::level::block::{self, BlockHitResult, game_master_block};
 use crate::world::level::{BlockGetter, update_flags};
@@ -302,7 +303,7 @@ impl ServerLevel {
                     self.send_block_update(player, pos);
                     return;
                 }
-                if self.player(player).game_mode.game_type == GameType::Creative {
+                if self.player(player).abilities.instabuild {
                     self.destroy_and_ack(player, pos);
                     return;
                 }
@@ -316,6 +317,8 @@ impl ServerLevel {
                 let state = self.block_state(pos);
                 let mut progress = 1.0;
                 if !state.is_air() {
+                    let main_hand_item = self.item_by_slot(player, EquipmentSlot::Mainhand).unwrap_or_else(ItemStack::empty);
+                    enchantment_helper::on_hit_block(self, &main_hand_item, Some(player), player, Some(EquipmentSlot::Mainhand), Vec3::at_center_of(pos), state);
                     block::of(state).attack(state, self, pos, player);
                     progress = self.destroy_progress_at(player, state, pos);
                 }
@@ -410,16 +413,16 @@ impl ServerLevel {
         if changed {
             behaviour.destroy(self, pos, adjusted);
         }
-        if self.player(player).game_mode.game_type == GameType::Creative {
+        if self.prevents_block_drops(player) {
             return true;
         }
         let destroyed_with = self.player(player).inventory.held().cloned();
         let can_destroy = self.has_correct_tool_for_drops(player, adjusted);
         self.mine_block_with_held_item(player, adjusted);
         if changed && can_destroy {
-            self.award_stat(player, crate::stats::stats::BLOCK_MINED.get(adjusted.block().0), 1);
+            self.award_stat(player, crate::stats::stats::BLOCK_MINED.get(state.block().0), 1);
             self.cause_food_exhaustion(player, crate::world::food::constants::EXHAUSTION_MINE);
-            block::behaviour(adjusted.block()).player_destroy(self, player, pos, adjusted, block_entity.as_ref(), destroyed_with);
+            behaviour.player_destroy(self, player, pos, adjusted, block_entity.as_ref(), destroyed_with);
         }
         true
     }

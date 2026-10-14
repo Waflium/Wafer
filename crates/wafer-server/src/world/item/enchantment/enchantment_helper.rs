@@ -52,8 +52,16 @@ pub fn on_projectile_spawned(level: &mut ServerLevel, weapon: &ItemStack, projec
     run_iteration_on_item(weapon, |enchantment, enchantment_level| enchantment.on_projectile_spawned(level, enchantment_level, &item, projectile));
 }
 
-pub fn on_hit_block(level: &mut ServerLevel, weapon: &ItemStack, owner: Option<EntityId>, entity: EntityId, hit_location: wafer_core::Vec3, hit_block: wafer_data::BlockState) -> bool {
-    let item = EnchantedItemInUse::without_slot(weapon.clone(), owner);
+pub fn on_hit_block(
+    level: &mut ServerLevel,
+    weapon: &ItemStack,
+    owner: Option<EntityId>,
+    entity: EntityId,
+    slot: Option<EquipmentSlot>,
+    hit_location: wafer_core::Vec3,
+    hit_block: wafer_data::BlockState,
+) -> bool {
+    let item = EnchantedItemInUse { item_stack: weapon.clone(), in_slot: slot, owner };
     run_iteration_on_item(weapon, |enchantment, enchantment_level| enchantment.on_hit_block(level, enchantment_level, &item, entity, hit_location, hit_block));
     false
 }

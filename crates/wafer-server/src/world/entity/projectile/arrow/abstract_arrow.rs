@@ -588,7 +588,7 @@ impl ServerLevel {
         let compensated_hit_position = Vec3::new(clamp(location.x, pos.x), clamp(location.y, pos.y), clamp(location.z, pos.z));
         let owner = self.projectile_get_owner(id).filter(|&owner| self.is_living(owner));
         let state = self.block_state(pos);
-        if enchantment_helper::on_hit_block(self, weapon, owner, id, compensated_hit_position, state) {
+        if enchantment_helper::on_hit_block(self, weapon, owner, id, None, compensated_hit_position, state) {
             self.abstract_arrow_on_item_break(id);
         }
     }
