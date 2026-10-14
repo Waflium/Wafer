@@ -39,7 +39,9 @@ pub mod jukebox_song_player;
 pub mod map_item;
 pub mod minecart_item;
 pub mod name_tag_item;
+pub mod potion_item;
 pub mod scaffolding_block_item;
+pub mod shears_item;
 pub mod slot;
 pub mod spawn_egg_item;
 
@@ -122,6 +124,8 @@ fn item_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand,
         Some(&"HoneycombItem") => return honeycomb_item::use_on(level, player, hand, hit, stack),
         Some(&"EnderEyeItem") => return ender_eye_item::use_on(level, player, hand, hit, stack),
         Some(&"FireworkRocketItem") => return firework_rocket_item::use_on(level, player, hand, hit, stack),
+        Some(&"PotionItem") => return potion_item::use_on(level, player, hand, hit, stack),
+        Some(&"ShearsItem") => return shears_item::use_on(level, player, hand, hit, stack),
         Some(&"MapItem") => {
             if let Some(result) = map_item::use_on(level, &hit, &stack) {
                 return result;
