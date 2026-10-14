@@ -507,6 +507,7 @@ impl ServerLevel {
         if self.game_rules.get_bool(game_rule::KEEP_INVENTORY) {
             return;
         }
+        self.destroy_vanishing_cursed_items(id);
         let storage = (crate::world::item::HOTBAR_START..crate::world::item::HOTBAR_START + 9).chain(crate::world::item::MAIN_START..crate::world::item::HOTBAR_START);
         let equipment = [crate::world::item::OFFHAND, 8, 7, 6, 5];
         for index in storage.chain(equipment) {
@@ -514,6 +515,17 @@ impl ServerLevel {
             let Some(stack) = p.inventory.slots[index].take() else { continue };
             if !stack.is_empty() {
                 self.drop_from_player(id, stack, true);
+            }
+        }
+    }
+
+    fn destroy_vanishing_cursed_items(&mut self, id: EntityId) {
+        let storage = (crate::world::item::HOTBAR_START..crate::world::item::HOTBAR_START + 9).chain(crate::world::item::MAIN_START..crate::world::item::HOTBAR_START);
+        let equipment = [8, 7, 6, 5, crate::world::item::OFFHAND];
+        for index in storage.chain(equipment) {
+            let slot = &mut self.player_mut(id).inventory.slots[index];
+            if slot.as_ref().is_some_and(|stack| !stack.is_empty() && crate::world::item::enchantment::enchantment_helper::has_prevent_equipment_drop(stack)) {
+                *slot = None;
             }
         }
     }
