@@ -1402,6 +1402,9 @@ impl ServerLevel {
         if self.is_player(id) {
             return self.player_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Creeper(_))) {
+            return self.creeper_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
+        }
         if self.is_living(id) {
             return self.living_entity_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
@@ -1607,9 +1610,8 @@ impl ServerLevel {
     }
 
     fn play_step_sound(&mut self, id: EntityId, pos: BlockPos, state: BlockState) {
-        if let Some(mob) = self.mob(id) {
-            let sound = sound_event(mob.get_step_sound());
-            self.entity_play_sound(id, sound, 0.15, 1.0);
+        if let Some(sound) = self.mob(id).and_then(|mob| mob.get_step_sound()) {
+            self.entity_play_sound(id, sound_event(sound), 0.15, 1.0);
             return;
         }
         if self.is_player(id) {
@@ -2350,6 +2352,7 @@ impl ServerLevel {
                     super::mob::MobKind::Sheep(_) => "Sheep",
                     super::mob::MobKind::Zombie(_) => "Zombie",
                     super::mob::MobKind::Husk(_) => "Husk",
+                    super::mob::MobKind::Creeper(_) => "Creeper",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

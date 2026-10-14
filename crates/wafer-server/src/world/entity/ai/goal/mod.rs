@@ -16,6 +16,7 @@ pub mod random_look_around_goal;
 pub mod random_stroll_goal;
 pub mod remove_block_goal;
 pub mod restrict_sun_goal;
+pub mod swell_goal;
 pub mod target;
 pub mod tempt_goal;
 pub mod water_avoiding_random_stroll_goal;

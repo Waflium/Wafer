@@ -113,6 +113,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::MushroomCow(_)) => self.mushroom_cow_thunder_hit(id, lightning_bolt),
             Some(MobKind::Pig(_)) => self.pig_thunder_hit(id, lightning_bolt),
+            Some(MobKind::Creeper(_)) => self.creeper_thunder_hit(id, lightning_bolt),
             _ => self.entity_thunder_hit(id, lightning_bolt),
         }
     }

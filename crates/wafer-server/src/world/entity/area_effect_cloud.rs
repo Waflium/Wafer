@@ -116,6 +116,10 @@ impl AreaEffectCloud {
         PotionContents::new(self.potion_contents.as_ref().unwrap_or(&EMPTY))
     }
 
+    pub fn set_potion_duration_scale(&mut self, potion_duration_scale: f32) {
+        self.potion_duration_scale = potion_duration_scale;
+    }
+
     pub fn add_effect(&mut self, effect: &MobEffectInstance) {
         let contents = crate::world::item::alchemy::potion_contents::with_effect_added(self.potion_contents.as_ref(), effect);
         self.set_potion_contents(Some(contents));

@@ -1134,17 +1134,24 @@ impl ServerLevel {
             info!("Named entity {} died: {}", self.entity_to_string(id), message.get_string());
         }
         self.living_mut(id).dead = true;
-        if source.causing_entity.is_none_or(|source_entity| self.killed_entity(source_entity, id)) {
+        if source.causing_entity.is_none_or(|source_entity| self.killed_entity(source_entity, id, &source)) {
             self.drop_all_death_loot(id, &source);
         }
         self.broadcast_entity_event(id, entity_event::DEATH);
         self.entity_mut(id).set_pose(Pose::Dying);
     }
 
-    pub fn killed_entity(&mut self, id: EntityId, entity: EntityId) -> bool {
+    pub fn killed_entity(&mut self, id: EntityId, entity: EntityId, source: &DamageSource) -> bool {
         if self.is_player(id) {
             return self.player_killed_entity(id, entity);
         }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Creeper(_))) {
+            return self.creeper_killed_entity(id, entity, source);
+        }
+        self.entity_killed_entity(id, entity, source)
+    }
+
+    pub fn entity_killed_entity(&mut self, _id: EntityId, _entity: EntityId, _source: &DamageSource) -> bool {
         true
     }
 
@@ -1174,7 +1181,7 @@ impl ServerLevel {
         self.drop_experience(id, source.causing_entity);
     }
 
-    fn should_drop_loot(&self, id: EntityId) -> bool {
+    pub fn should_drop_loot(&self, id: EntityId) -> bool {
         if self.is_monster(id) {
             return self.monster_should_drop_loot();
         }
@@ -1219,6 +1226,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.zombie_get_base_experience_reward(id),
+            Some(MobKind::Creeper(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1615,7 +1623,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_ai_step(id),
-            Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.monster_ai_step(id),
+            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Creeper(_)) => self.monster_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }

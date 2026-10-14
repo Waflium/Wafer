@@ -1696,6 +1696,7 @@ impl ServerLevel {
             Some(LevelEntity::Projectile(_)) => self.projectile_tick(id),
             Some(LevelEntity::AreaEffectCloud(_)) => self.tick_area_effect_cloud(id),
             Some(LevelEntity::Mob(mob)) if mob.is_zombie() => self.zombie_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Creeper(_)) => self.creeper_tick(id),
             Some(LevelEntity::Mob(_)) => self.mob_tick(id),
             Some(LevelEntity::Minecart(_)) => self.tick_minecart(id),
             Some(LevelEntity::Boat(_)) => self.tick_boat(id),
