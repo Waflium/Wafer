@@ -373,3 +373,33 @@ fn seed_slime_chunk(x: i32, z: i32, seed: i64, salt: i64) -> LegacyRandomSource 
     let seed = seed.wrapping_add(int_terms).wrapping_add((z.wrapping_mul(z) as i64).wrapping_mul(4392871)).wrapping_add(z.wrapping_mul(389711) as i64) ^ salt;
     LegacyRandomSource::new(seed)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{SpawnPlacementType, get_heightmap_type, get_placement_type};
+    use crate::world::entity::entity_type::EntityType;
+    use crate::world::entity::entity_types;
+    use crate::world::level::chunk::HeightmapType;
+
+    #[test]
+    fn placements_and_heightmaps_match_vanilla() {
+        let lines: Vec<&str> = include_str!("spawn_placements_oracle.txt").lines().collect();
+        assert_eq!(lines.len(), entity_types::BY_ID.len());
+        for (id, line) in lines.iter().enumerate() {
+            let mut parts = line.split(' ');
+            let (name, placement, heightmap) = (parts.next().unwrap(), parts.next().unwrap(), parts.next().unwrap());
+            let entity_type = EntityType::by_id(id as i32);
+            assert_eq!(entity_type.id, id as i32);
+            assert_eq!(entity_type.get_key(), name);
+            let expected_placement = match placement {
+                "OnGround" => SpawnPlacementType::OnGround,
+                "InWater" => SpawnPlacementType::InWater,
+                "InLava" => SpawnPlacementType::InLava,
+                _ => SpawnPlacementType::NoRestrictions,
+            };
+            let expected_heightmap = if heightmap == "MOTION_BLOCKING" { HeightmapType::MotionBlocking } else { HeightmapType::MotionBlockingNoLeaves };
+            assert_eq!(get_placement_type(entity_type), expected_placement, "{name}");
+            assert_eq!(get_heightmap_type(Some(entity_type)), expected_heightmap, "{name}");
+        }
+    }
+}
