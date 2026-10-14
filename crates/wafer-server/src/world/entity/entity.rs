@@ -949,6 +949,9 @@ impl ServerLevel {
     }
 
     pub fn can_simulate_movement(&self, id: EntityId) -> bool {
+        if self.is_player(id) {
+            return true;
+        }
         match self.entities.get(&id) {
             Some(LevelEntity::ExperienceOrb(_) | LevelEntity::FallingBlock(_)) => true,
             _ => self.is_local_instance_authoritative(id),

@@ -712,4 +712,17 @@ mod tests {
         assert_eq!(level.entity(id).position(), Vec3::new(0.5, -60.0, 0.5));
         assert!(level.player(id).movement.received_position_this_tick);
     }
+
+    #[test]
+    fn standing_players_keep_one_tick_of_gravity() {
+        let mut server = server();
+        let id = testing::server_player(&mut server, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        server.levels[0].handle_player_loaded(id);
+        for _ in 0..40 {
+            server.tick();
+        }
+        let e = server.levels[0].entity(id);
+        assert_eq!(e.position(), Vec3::new(0.5, -60.0, 0.5));
+        assert_eq!(e.delta_movement, Vec3::new(0.0, -0.0784000015258789, 0.0));
+    }
 }
