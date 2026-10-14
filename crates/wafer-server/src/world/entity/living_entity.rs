@@ -596,7 +596,7 @@ impl ServerLevel {
         if self.is_player(id) && self.player(id).abilities.invulnerable {
             return false;
         }
-        !self.entity(id).invulnerable && self.can_be_seen_by_anyone(id)
+        !self.entity(id).is_invulnerable() && self.can_be_seen_by_anyone(id)
     }
 
     pub fn can_be_seen_by_anyone(&self, id: EntityId) -> bool {

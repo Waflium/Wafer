@@ -312,6 +312,18 @@ impl Entity {
         self.removal.is_some()
     }
 
+    pub fn is_invulnerable(&self) -> bool {
+        self.is_permanently_invulnerable() || self.is_temporarily_invulnerable()
+    }
+
+    pub fn is_permanently_invulnerable(&self) -> bool {
+        self.invulnerable
+    }
+
+    pub fn is_temporarily_invulnerable(&self) -> bool {
+        self.invulnerable_time > 0
+    }
+
     pub fn random_x(&mut self, spread: f64) -> f64 {
         self.pos.x + self.dimensions.width as f64 * ((2.0 * self.random.next_double() - 1.0) * spread)
     }
@@ -2111,7 +2123,7 @@ impl ServerLevel {
         let e = self.entity(id);
         let creative_player = source.causing_entity.and_then(|c| self.players.get(&c)).is_some_and(|p| p.abilities.instabuild);
         e.is_removed()
-            || e.invulnerable && !source.is(&damage_type_tags::BYPASSES_INVULNERABILITY) && !creative_player
+            || e.is_invulnerable() && !source.is(&damage_type_tags::BYPASSES_INVULNERABILITY) && !creative_player
             || source.is(&damage_type_tags::IS_FIRE) && self.fire_immune(id)
             || source.is(&damage_type_tags::IS_FALL) && entity_type_tags::FALL_DAMAGE_IMMUNE.contains(e.entity_type as usize)
     }

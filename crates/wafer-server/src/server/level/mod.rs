@@ -1533,6 +1533,9 @@ impl ServerLevel {
 
     pub(crate) fn common_tick(&mut self, id: EntityId) {
         let e = self.entity_mut(id);
+        if e.invulnerable_time > 0 {
+            e.invulnerable_time -= 1;
+        }
         e.set_old_pos_and_rot();
         e.tick_count += 1;
     }
