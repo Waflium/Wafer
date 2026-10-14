@@ -1,4 +1,6 @@
 pub mod base_spawner;
+#[cfg(test)]
+mod base_spawner_tests;
 pub mod biome;
 pub mod block;
 pub mod blockscan;

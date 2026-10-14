@@ -927,6 +927,10 @@ impl ServerLevel {
         }
     }
 
+    pub fn is_spawner_block_enabled(&self) -> bool {
+        self.game_rules.get_bool(wafer_data::game_rule::SPAWNER_BLOCKS_WORK)
+    }
+
     pub fn level_event(&self, source: Option<EntityId>, event: i32, pos: BlockPos, data: i32) {
         let packet = encode(clientbound::LEVEL_EVENT, |p| {
             p.i32(event);

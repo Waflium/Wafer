@@ -73,7 +73,7 @@ mod spread_players_command;
 mod stop_sound_command;
 mod stop_command;
 mod stopwatch_command;
-mod summon_command;
+pub(crate) mod summon_command;
 mod swing_command;
 mod tag_command;
 mod team_msg_command;

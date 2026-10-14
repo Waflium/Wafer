@@ -186,6 +186,7 @@ impl ServerLevel {
             BlockEntityTicker::Crafter => self.crafter_server_tick(pos, state),
             BlockEntityTicker::Sign => self.sign_tick(pos),
             BlockEntityTicker::EndGateway => self.end_gateway_portal_tick(pos, state),
+            BlockEntityTicker::Spawner => crate::world::level::block::entity::spawner_block_entity::SpawnerBlockEntity::server_tick(self, pos),
         }
     }
 

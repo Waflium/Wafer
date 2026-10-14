@@ -15,7 +15,7 @@ static ERROR_DUPLICATE_UUID: SimpleCommandExceptionType = SimpleCommandException
 static INVALID_POSITION: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.invalidPosition");
 static ERROR_NOT_SUMMONABLE_ENTITY: DynamicCommandExceptionType = DynamicCommandExceptionType(|value| tr("entity.not_summonable", vec![value]));
 
-const MODELLED: &[&str] = &[
+pub(crate) const MODELLED: &[&str] = &[
     "minecraft:item",
     "minecraft:tnt",
     "minecraft:falling_block",

@@ -503,21 +503,44 @@ impl ServerLevel {
 
     pub fn load_entity_recursive(&mut self, nbt: &Nbt, post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
         let mut loaded = Vec::new();
-        self.load_entity_recursive_into(nbt, post_load, &mut loaded);
+        self.load_entity_recursive_into(nbt, true, post_load, &mut loaded);
         loaded
     }
 
-    fn load_entity_recursive_into(&mut self, nbt: &Nbt, post_load: &mut dyn FnMut(&mut LevelEntity), loaded: &mut Vec<LevelEntity>) -> Option<usize> {
+    pub fn load_entity_recursive_for_spawn(&mut self, nbt: &Nbt, post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
+        let mut loaded = Vec::new();
+        self.load_entity_recursive_into(nbt, false, post_load, &mut loaded);
+        loaded
+    }
+
+    fn load_entity_recursive_into(&mut self, nbt: &Nbt, ignore_checks: bool, post_load: &mut dyn FnMut(&mut LevelEntity), loaded: &mut Vec<LevelEntity>) -> Option<usize> {
+        if !ignore_checks
+            && let Some(entity_type) = nbt.get("id").and_then(Nbt::as_str)
+            && super::entity_type::EntityType::by_name(entity_type).is_some_and(|ty| !ty.can_spawn(self.difficulty))
+        {
+            warn!("Skipping Entity with id {entity_type}");
+            return None;
+        }
         let mut entity = self.load_entity(nbt)?;
         post_load(&mut entity);
         let index = loaded.len();
         loaded.push(entity);
         for passenger_tag in nbt.get("Passengers").map_or(&[][..], Nbt::as_list) {
-            if let Some(passenger) = self.load_entity_recursive_into(passenger_tag, post_load, loaded) {
+            if let Some(passenger) = self.load_entity_recursive_into(passenger_tag, ignore_checks, post_load, loaded) {
                 start_riding_while_loading(loaded, passenger, index);
             }
         }
         Some(index)
+    }
+
+    pub fn try_add_fresh_entity_with_passengers(&mut self, entities: Vec<LevelEntity>) -> bool {
+        if entities.iter().any(|entity| self.entity_manager.is_loaded(entity.entity().uuid)) {
+            return false;
+        }
+        for entity in entities {
+            self.add_fresh_entity_with_passengers(entity);
+        }
+        true
     }
 
     pub fn load_entity(&mut self, nbt: &Nbt) -> Option<LevelEntity> {
