@@ -40,6 +40,15 @@ impl ServerLevel {
         result
     }
 
+    pub fn has_nearby_alive_player(&self, x: f64, y: f64, z: f64, range: f64) -> bool {
+        self.players.values().any(|player| {
+            player.game_mode.game_type != GameType::Spectator && self.is_alive(player.entity.id) && {
+                let player_dist = player.entity.distance_to_sqr_xyz(x, y, z);
+                range < 0.0 || player_dist < range * range
+            }
+        })
+    }
+
     pub fn is_unobstructed_by_entities(&self, source: Option<EntityId>, aabb: &AABB) -> bool {
         self.get_entities(source, aabb).into_iter().all(|entity| {
             self.entity(entity).is_removed()

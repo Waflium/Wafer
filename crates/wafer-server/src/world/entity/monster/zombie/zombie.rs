@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use wafer_core::random::RandomSource;
-use wafer_core::{BlockPos, Vec3};
+use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::{EquipmentSlot, item_tags, items, mob_effects, registry, registry_id};
 
 use crate::server::level::{ServerLevel, SoundSource};
@@ -28,12 +28,18 @@ use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::living_entity::LivingEntity;
 use crate::world::entity::mob::{Mob, MobKind, RANDOM_SPAWN_BONUS_ID};
 use crate::world::entity::monster::monster;
+use crate::world::damagesource::DamageSource;
 use crate::world::entity::spawn_group_data::SpawnGroupData;
+use crate::world::entity::spawn_placements;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, sound_event};
 use crate::world::item::ItemStack;
 
 const SPEED_MODIFIER_BABY_ID: &str = "minecraft:baby";
 const SPEED_MODIFIER_BABY: AttributeModifier = AttributeModifier { id: Cow::Borrowed(SPEED_MODIFIER_BABY_ID), amount: 0.5, operation: Operation::AddMultipliedBase };
+const REINFORCEMENT_CALLER_CHARGE_ID: &str = "minecraft:reinforcement_caller_charge";
+const ZOMBIE_REINFORCEMENT_CALLEE_CHARGE: AttributeModifier =
+    AttributeModifier { id: Cow::Borrowed("minecraft:reinforcement_callee_charge"), amount: -0.05f32 as f64, operation: Operation::AddValue };
 const LEADER_ZOMBIE_BONUS_ID: &str = "minecraft:leader_zombie_bonus";
 const ZOMBIE_RANDOM_SPAWN_BONUS_ID: &str = "minecraft:zombie_random_spawn_bonus";
 pub const DATA_BABY_ID: usize = 16;
@@ -447,11 +453,76 @@ impl ServerLevel {
         }
     }
 
+    pub fn zombie_hurt_server(&mut self, id: EntityId, source: DamageSource, damage: f32) -> bool {
+        let source_entity = source.causing_entity;
+        if !self.living_entity_hurt_server(id, source, damage) {
+            return false;
+        }
+        let mut target = self.get_target(id);
+        if target.is_none() && source_entity.is_some_and(|entity| self.is_living(entity)) {
+            target = source_entity;
+        }
+        let Some(target) = target else { return true };
+        if self.difficulty != Difficulty::Hard {
+            return true;
+        }
+        let chance = self.attribute_value(id, Attribute::SpawnReinforcements);
+        if !((self.mob_mut(id).expect("a zombie").entity.random.next_float() as f64) < chance && self.is_spawning_monsters()) {
+            return true;
+        }
+        let position = self.entity(id).position();
+        let (x, y, z) = (mth::floor(position.x), mth::floor(position.y), mth::floor(position.z));
+        let entity_type = self.mob(id).expect("a zombie").get_type();
+        let Some(LevelEntity::Mob(mut reinforcement)) = ServerLevel::create_entity(entity_type.get_key()) else { return true };
+        for _ in 0..50 {
+            let random = &mut self.mob_mut(id).expect("a zombie").entity.random;
+            let xt = x + mth::next_int(random, 7, 40) * mth::next_int(random, -1, 1);
+            let yt = y + mth::next_int(random, 7, 40) * mth::next_int(random, -1, 1);
+            let zt = z + mth::next_int(random, 7, 40) * mth::next_int(random, -1, 1);
+            let spawn_pos = BlockPos::new(xt, yt, zt);
+            if spawn_placements::is_spawn_position_ok(entity_type, self, spawn_pos)
+                && spawn_placements::check_spawn_rules(entity_type, self, EntitySpawnReason::Reinforcement, spawn_pos)
+            {
+                reinforcement.entity.set_pos(Vec3::new(xt as f64, yt as f64, zt as f64));
+                let bounding_box = reinforcement.entity.bounding_box();
+                let candidate = LevelEntity::Mob(reinforcement);
+                if !self.has_nearby_alive_player(xt as f64, yt as f64, zt as f64, 7.0)
+                    && self.is_unobstructed_by_entities(None, &bounding_box)
+                    && self.no_collision_for_new(&candidate, &bounding_box)
+                    && (can_spawn_in_liquids(&candidate) || !ServerLevel::contains_any_liquid(self, &bounding_box))
+                {
+                    let difficulty = self.current_difficulty_at(candidate.entity().block_position());
+                    let (candidate, _) = self.finalize_spawn_detached(candidate, &difficulty, EntitySpawnReason::Reinforcement, None);
+                    let reinforcement_id = candidate.entity().id;
+                    self.add_fresh_entity_with_passengers(candidate);
+                    self.set_target(reinforcement_id, Some(target));
+                    let attribute = self.mob_mut(id).expect("a zombie").living.attributes.instance(Attribute::SpawnReinforcements).expect("zombies have a reinforcement chance");
+                    let existing_amount = attribute.modifier(REINFORCEMENT_CALLER_CHARGE_ID).map_or(0.0, |modifier| modifier.amount);
+                    attribute.remove_modifier(REINFORCEMENT_CALLER_CHARGE_ID);
+                    attribute.add_permanent_modifier(AttributeModifier { id: Cow::Borrowed(REINFORCEMENT_CALLER_CHARGE_ID), amount: existing_amount - 0.05, operation: Operation::AddValue });
+                    if let Some(mob) = self.mob_mut(reinforcement_id)
+                        && let Some(instance) = mob.living.attributes.instance(Attribute::SpawnReinforcements)
+                    {
+                        instance.add_permanent_modifier(ZOMBIE_REINFORCEMENT_CALLEE_CHARGE);
+                    }
+                    break;
+                }
+                let LevelEntity::Mob(candidate) = candidate else { unreachable!("a mob") };
+                reinforcement = candidate;
+            }
+        }
+        true
+    }
+
     fn randomize_reinforcements_chance(&mut self, id: EntityId) {
         let mob = self.mob_mut(id).expect("a zombie");
         let base_value = mob.entity.random.next_double() * 0.1f32 as f64;
         mob.living.attributes.instance(Attribute::SpawnReinforcements).expect("zombies have a reinforcement chance").set_base_value(base_value);
     }
+}
+
+fn can_spawn_in_liquids(_entity: &LevelEntity) -> bool {
+    false
 }
 
 fn add_or_replace_permanent_modifier(mob: &mut Mob, attribute: Attribute, id: &'static str, amount: f64, operation: Operation) {

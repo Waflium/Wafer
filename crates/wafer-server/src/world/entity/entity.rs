@@ -2151,6 +2151,9 @@ impl ServerLevel {
             return self.server_player_hurt_server(id, source, damage);
         }
         if self.is_mob(id) {
+            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::Husk(_))) {
+                return self.zombie_hurt_server(id, source, damage);
+            }
             return self.living_entity_hurt_server(id, source, damage);
         }
         match self.entities.get(&id) {
