@@ -25,7 +25,7 @@ impl PathNavigation {
         Vec3::new(e.x(), self.get_surface_y(level, mob) as f64, e.z())
     }
 
-    pub fn create_path(&mut self, level: &ServerLevel, mob: EntityId, mut pos: BlockPos, reach_range: i32) -> Option<Path> {
+    pub fn ground_path_navigation_create_path(&mut self, level: &ServerLevel, mob: EntityId, mut pos: BlockPos, reach_range: i32) -> Option<Path> {
         let chunk = level.chunks.loaded_chunk(pos.chunk())?;
         if !self.can_path_to_targets_below_surface {
             pos = self.find_surface_position(level, chunk, pos);
@@ -59,7 +59,7 @@ impl PathNavigation {
         column_pos
     }
 
-    pub fn create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
+    pub fn ground_path_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
         let pos = level.entity(target).block_position();
         self.create_path(level, mob, pos, reach_range)
     }

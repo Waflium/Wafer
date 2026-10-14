@@ -8,6 +8,7 @@ pub mod float_goal;
 pub mod follow_parent_goal;
 pub mod goal;
 pub mod goal_selector;
+pub mod leap_at_target_goal;
 pub mod look_at_player_goal;
 pub mod melee_attack_goal;
 pub mod move_to_block_goal;

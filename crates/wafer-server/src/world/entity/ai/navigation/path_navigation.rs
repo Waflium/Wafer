@@ -8,6 +8,7 @@ use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path::Path;
 use crate::world::level::pathfinder::path_finder::PathFinder;
 use crate::world::level::pathfinder::path_type::PathType;
+use super::wall_climber_navigation::WallClimberNavigation;
 
 pub struct PathNavigation {
     pub path: Option<Path>,
@@ -30,6 +31,7 @@ pub struct PathNavigation {
     required_path_length: f32,
     pub avoid_sun: bool,
     pub can_path_to_targets_below_surface: bool,
+    pub wall_climber_navigation: Option<WallClimberNavigation>,
 }
 
 impl Default for PathNavigation {
@@ -55,6 +57,7 @@ impl Default for PathNavigation {
             required_path_length: 16.0,
             avoid_sun: false,
             can_path_to_targets_below_surface: false,
+            wall_climber_navigation: None,
         }
     }
 }
@@ -151,7 +154,31 @@ impl PathNavigation {
         self.move_to_path(level, mob, path, speed_modifier)
     }
 
+    pub fn create_path(&mut self, level: &ServerLevel, mob: EntityId, pos: BlockPos, reach_range: i32) -> Option<Path> {
+        if self.wall_climber_navigation.is_some() {
+            self.wall_climber_navigation_create_path(level, mob, pos, reach_range)
+        } else {
+            self.ground_path_navigation_create_path(level, mob, pos, reach_range)
+        }
+    }
+
+    pub fn create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
+        if self.wall_climber_navigation.is_some() {
+            self.wall_climber_navigation_create_path_to_entity(level, mob, target, reach_range)
+        } else {
+            self.ground_path_navigation_create_path_to_entity(level, mob, target, reach_range)
+        }
+    }
+
     pub fn move_to_entity(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId, speed_modifier: f64) -> bool {
+        if self.wall_climber_navigation.is_some() {
+            self.wall_climber_navigation_move_to_entity(level, mob, target, speed_modifier)
+        } else {
+            self.path_navigation_move_to_entity(level, mob, target, speed_modifier)
+        }
+    }
+
+    pub fn path_navigation_move_to_entity(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId, speed_modifier: f64) -> bool {
         self.move_to_entity_with_reach_range(level, mob, target, 1, speed_modifier)
     }
 
@@ -187,6 +214,14 @@ impl PathNavigation {
     }
 
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        if self.wall_climber_navigation.is_some() {
+            self.wall_climber_navigation_tick(level, mob);
+        } else {
+            self.path_navigation_tick(level, mob);
+        }
+    }
+
+    pub fn path_navigation_tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
         self.tick += 1;
         if self.has_delayed_recomputation {
             self.recompute_path(level, mob);
