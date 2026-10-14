@@ -1798,6 +1798,20 @@ impl ServerLevel {
     }
 
     fn push_entities(&mut self, id: EntityId) {
+        if self.is_player(id) {
+            self.server_player_push_entities(id);
+        } else {
+            self.living_entity_push_entities(id);
+        }
+    }
+
+    fn server_player_push_entities(&mut self, id: EntityId) {
+        if self.tick_rate_manager.runs_normally() {
+            self.living_entity_push_entities(id);
+        }
+    }
+
+    fn living_entity_push_entities(&mut self, id: EntityId) {
         let area = self.entity(id).bounding_box();
         let candidates = self.get_entities(Some(id), &area);
         let pushable: Vec<EntityId> = candidates.into_iter().filter(|&other| self.pushable_by(id, other)).collect();
