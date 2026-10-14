@@ -28,6 +28,7 @@ pub mod saveddata;
 pub mod redstone;
 pub mod server_level_accessor;
 pub mod signal;
+pub mod spawn_data;
 pub mod storage;
 pub mod structure_manager;
 pub mod timers;

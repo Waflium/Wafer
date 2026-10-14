@@ -22,6 +22,8 @@ pub mod entity_selector;
 pub mod entity_spawn_reason;
 pub mod entity_type;
 pub mod entity_types;
+pub mod equipment_table;
+pub mod equipment_user;
 pub mod experience_orb;
 pub mod fluid_interaction;
 pub mod inside_block;

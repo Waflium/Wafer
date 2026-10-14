@@ -1350,6 +1350,21 @@ impl ServerLevel {
         }
     }
 
+    pub fn mob_equip(&mut self, id: EntityId, equipment: &super::equipment_table::EquipmentTable) {
+        self.mob_equip_loot_table(id, &equipment.loot_table, &equipment.slot_drop_chances);
+    }
+
+    pub fn mob_equip_loot_table(&mut self, id: EntityId, loot_table: &str, drop_chances: &[(EquipmentSlot, f32)]) {
+        self.equip_loot_table(id, loot_table, create_equipment_params, drop_chances);
+    }
+
+    pub fn mob_equip_detached(&mut self, entity: LevelEntity, equipment: &super::equipment_table::EquipmentTable) -> LevelEntity {
+        let id = entity.entity().id;
+        self.entities.insert(id, entity);
+        self.mob_equip(id, equipment);
+        self.entities.shift_remove(&id).expect("the equipped mob")
+    }
+
     pub fn equip_item_if_possible(&mut self, id: EntityId, item_stack: ItemStack) -> ItemStack {
         let mut slot = self.get_equipment_slot_for_item(id, &item_stack);
         if !self.is_equippable_in_slot(id, &item_stack, slot) {
@@ -1904,7 +1919,15 @@ fn is_humanoid_armor(slot: EquipmentSlot) -> bool {
     matches!(slot, EquipmentSlot::Feet | EquipmentSlot::Legs | EquipmentSlot::Chest | EquipmentSlot::Head)
 }
 
-fn limit(slot: EquipmentSlot, mut to_equip: ItemStack) -> ItemStack {
+fn create_equipment_params(level: &mut ServerLevel, id: EntityId) -> crate::world::level::storage::loot::loot_params::LootParams<'_> {
+    let origin = level.entity(id).position();
+    let mut params = crate::world::level::storage::loot::loot_params::LootParams::new(level);
+    params.origin = Some(origin);
+    params.this_entity = Some(id);
+    params
+}
+
+pub fn limit(slot: EquipmentSlot, mut to_equip: ItemStack) -> ItemStack {
     if slot == EquipmentSlot::Mainhand || slot == EquipmentSlot::Offhand { to_equip } else { to_equip.split(1) }
 }
 

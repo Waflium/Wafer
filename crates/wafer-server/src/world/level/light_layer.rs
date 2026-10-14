@@ -22,6 +22,10 @@ impl ServerLevel {
         self.sky_darken
     }
 
+    pub fn get_effective_sky_brightness(&self, pos: BlockPos) -> i32 {
+        (self.brightness(LightLayer::Sky, pos) - self.sky_darken()).max(0)
+    }
+
     pub fn update_sky_brightness(&mut self) {
         self.sky_darken = (15.0 - self.environment_attributes().get_dimension_value(environment_attributes::SKY_LIGHT_LEVEL)) as i32;
     }

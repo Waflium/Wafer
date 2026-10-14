@@ -9,6 +9,7 @@ pub mod directory_lock;
 pub mod file_util;
 pub mod fraction;
 pub mod hash_ops;
+pub mod inclusive_range;
 pub mod java_collections;
 pub mod keyframe_track;
 pub mod parsing;
