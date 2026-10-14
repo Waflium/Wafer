@@ -5,6 +5,7 @@ pub mod area_effect_cloud;
 pub mod attributes;
 pub mod boss;
 pub mod conversion_params;
+pub mod conversion_tracker;
 pub mod conversion_type;
 pub mod data;
 #[cfg(test)]
@@ -18,6 +19,7 @@ pub mod entity_event;
 pub mod entity_reference;
 pub mod entity_save;
 pub mod entity_selector;
+pub mod entity_spawn_reason;
 pub mod entity_type;
 pub mod entity_types;
 pub mod experience_orb;
@@ -38,6 +40,7 @@ pub mod relative;
 pub mod schedule;
 pub mod shearable;
 pub mod slot_access;
+pub mod spawn_group_data;
 #[cfg(test)]
 mod survival_tests;
 pub mod using_item;
@@ -111,7 +114,7 @@ impl LevelEntity {
             LevelEntity::EyeOfEnder(_) => TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(4), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EndCrystal(_) => TrackingConfig { range: 16 * 16, update_interval: UpdateInterval::Never, track_deltas: false, stepped: false, is_item: false },
             LevelEntity::ExperienceOrb(_) => TrackingConfig { range: 6 * 16, update_interval: UpdateInterval::Periodic(20), track_deltas: true, stepped: false, is_item: false },
-            LevelEntity::Mob(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },
+            LevelEntity::Mob(mob) => TrackingConfig { range: mob.client_tracking_range() * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Projectile(projectile) => {
                 let update_interval = if projectile.abstract_arrow().is_some() { 20 } else { 10 };
                 TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(update_interval), track_deltas: true, stepped: false, is_item: false }

@@ -6,6 +6,7 @@ use crate::commands::brigadier::{CommandContext, CommandSyntaxException, Dynamic
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component, HoverEvent};
 use crate::server::Server;
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::{EntityId, LevelEntity};
 
 static ERROR_FAILED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.failed");
@@ -24,6 +25,8 @@ const MODELLED: &[&str] = &[
     "minecraft:mooshroom",
     "minecraft:pig",
     "minecraft:sheep",
+    "minecraft:zombie",
+    "minecraft:husk",
     "minecraft:snowball",
     "minecraft:egg",
     "minecraft:ender_pearl",
@@ -87,9 +90,14 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
         let (y_rot, x_rot) = (e.y_rot, e.x_rot);
         e.snap_to(pos.x, pos.y, pos.z, y_rot, x_rot);
     });
-    let Some(entity) = loaded.first_mut() else { return Err(ERROR_FAILED.create()) };
-    if finalize && let LevelEntity::Mob(mob) = entity {
-        level.finalize_mob_spawn(mob);
+    if loaded.is_empty() {
+        return Err(ERROR_FAILED.create());
+    }
+    if finalize && matches!(loaded[0], LevelEntity::Mob(_)) {
+        let entity = loaded.remove(0);
+        let difficulty = level.current_difficulty_at(entity.entity().block_position());
+        let (entity, _) = level.finalize_spawn_detached(entity, &difficulty, EntitySpawnReason::Command, None);
+        loaded.insert(0, entity);
     }
     if loaded.iter().any(|e| level.entity_manager.is_loaded(e.entity().uuid)) || loaded[0].entity().is_removed() {
         return Err(ERROR_DUPLICATE_UUID.create());

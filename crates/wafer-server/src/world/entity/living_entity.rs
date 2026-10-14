@@ -210,6 +210,10 @@ impl SwingState {
             None => self.animation = 0.0,
         }
     }
+
+    pub fn is_swinging(&self) -> bool {
+        self.current_swing.is_some()
+    }
 }
 
 pub fn get_comfortable_fall_distance(allowed_damage: f32) -> i32 {
@@ -619,8 +623,22 @@ impl ServerLevel {
         if total > 0 { count as f32 / total as f32 } else { 0.0 }
     }
 
-    pub fn can_attack(&self, _id: EntityId, target: EntityId) -> bool {
+    pub fn can_attack(&self, id: EntityId, target: EntityId) -> bool {
+        if self.is_mob(id) { self.mob_can_attack(id, target) } else { self.living_entity_can_attack(id, target) }
+    }
+
+    pub fn living_entity_can_attack(&self, _id: EntityId, target: EntityId) -> bool {
         if self.is_player(target) && self.difficulty == Difficulty::Peaceful { false } else { self.can_be_seen_as_enemy(target) }
+    }
+
+    pub fn living_entity_cause_extra_knockback(&mut self, id: EntityId, target: EntityId, knockback: f32, _old_movement: Vec3) {
+        if knockback > 0.0 && self.is_living(target) {
+            let y_rot = self.entity(id).y_rot * mth::DEG_TO_RAD;
+            let (sin, cos) = (mth::sin(y_rot as f64) as f64, mth::cos(y_rot as f64) as f64);
+            self.knockback(target, knockback as f64, sin, -cos);
+            let e = self.entity_mut(id);
+            e.set_delta_movement(e.delta_movement.multiply(0.6, 1.0, 0.6));
+        }
     }
 
     pub fn can_be_seen_as_enemy(&self, id: EntityId) -> bool {
@@ -1157,10 +1175,16 @@ impl ServerLevel {
     }
 
     fn should_drop_loot(&self, id: EntityId) -> bool {
+        if self.is_monster(id) {
+            return self.monster_should_drop_loot();
+        }
         !self.is_baby(id) && self.game_rules.get_bool(game_rule::MOB_DROPS)
     }
 
     fn should_drop_experience(&self, id: EntityId) -> bool {
+        if self.is_monster(id) {
+            return self.monster_should_drop_experience();
+        }
         !self.is_baby(id)
     }
 
@@ -1194,6 +1218,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
+            Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.zombie_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1207,6 +1232,10 @@ impl ServerLevel {
         if let Some(mob) = self.mob_mut(id) {
             mob.loot_table = None;
         }
+    }
+
+    pub fn get_last_hurt_by_mob(&self, id: EntityId) -> Option<EntityId> {
+        self.living(id).last_hurt_by_mob.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid)).filter(|&e| self.is_living(e))
     }
 
     pub fn get_last_hurt_by_player(&self, id: EntityId) -> Option<EntityId> {
@@ -1586,6 +1615,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_ai_step(id),
+            Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.monster_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -1754,6 +1784,15 @@ impl ServerLevel {
     }
 
     fn jump_in_liquid(&mut self, id: EntityId) {
+        if self.mob(id).is_some_and(|mob| !mob.ai.navigation.can_float()) {
+            let e = self.entity_mut(id);
+            e.set_delta_movement(e.delta_movement.add(0.0, 0.3, 0.0));
+        } else {
+            self.living_entity_jump_in_liquid(id);
+        }
+    }
+
+    fn living_entity_jump_in_liquid(&mut self, id: EntityId) {
         let e = self.entity_mut(id);
         e.set_delta_movement(e.delta_movement.add(0.0, 0.04f32 as f64, 0.0));
     }

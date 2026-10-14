@@ -1,14 +1,22 @@
+use super::break_door_goal::BreakDoorGoal;
 use super::breed_goal::BreedGoal;
 use super::eat_block_goal::EatBlockGoal;
+use super::flee_sun_goal::FleeSunGoal;
 use super::float_goal::FloatGoal;
 use super::follow_parent_goal::FollowParentGoal;
 use super::look_at_player_goal::LookAtPlayerGoal;
+use super::melee_attack_goal::MeleeAttackGoal;
 use super::panic_goal::PanicGoal;
 use super::random_look_around_goal::RandomLookAroundGoal;
+use super::restrict_sun_goal::RestrictSunGoal;
+use super::target::hurt_by_target_goal::HurtByTargetGoal;
+use super::target::nearest_attackable_target_goal::NearestAttackableTargetGoal;
 use super::tempt_goal::TemptGoal;
 use super::water_avoiding_random_stroll_goal::WaterAvoidingRandomStrollGoal;
+use super::zombie_attack_goal::ZombieAttackGoal;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::entity::monster::zombie::zombie::ZombieAttackTurtleEggGoal;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -36,6 +44,14 @@ pub enum Goal {
     WaterAvoidingRandomStroll(WaterAvoidingRandomStrollGoal),
     LookAtPlayer(LookAtPlayerGoal),
     RandomLookAround(RandomLookAroundGoal),
+    MeleeAttack(MeleeAttackGoal),
+    ZombieAttack(ZombieAttackGoal),
+    ZombieAttackTurtleEgg(ZombieAttackTurtleEggGoal),
+    BreakDoor(BreakDoorGoal),
+    RestrictSun(RestrictSunGoal),
+    FleeSun(FleeSunGoal),
+    NearestAttackableTarget(NearestAttackableTargetGoal),
+    HurtByTarget(HurtByTargetGoal),
 }
 
 impl Goal {
@@ -50,6 +66,14 @@ impl Goal {
             Goal::WaterAvoidingRandomStroll(goal) => goal.can_use(level, mob),
             Goal::LookAtPlayer(goal) => goal.can_use(level, mob),
             Goal::RandomLookAround(goal) => goal.can_use(level, mob),
+            Goal::MeleeAttack(goal) => goal.can_use(level, mob),
+            Goal::ZombieAttack(goal) => goal.melee_attack_goal.can_use(level, mob),
+            Goal::ZombieAttackTurtleEgg(goal) => goal.remove_block_goal.can_use(level, mob),
+            Goal::BreakDoor(goal) => goal.can_use(level, mob),
+            Goal::RestrictSun(goal) => goal.can_use(level, mob),
+            Goal::FleeSun(goal) => goal.can_use(level, mob),
+            Goal::NearestAttackableTarget(goal) => goal.can_use(level, mob),
+            Goal::HurtByTarget(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -64,6 +88,14 @@ impl Goal {
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.can_continue_to_use(level, mob),
             Goal::LookAtPlayer(goal) => goal.can_continue_to_use(level, mob),
             Goal::RandomLookAround(goal) => goal.can_continue_to_use(),
+            Goal::MeleeAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::ZombieAttack(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
+            Goal::ZombieAttackTurtleEgg(goal) => goal.remove_block_goal.can_continue_to_use(level),
+            Goal::BreakDoor(goal) => goal.can_continue_to_use(level, mob),
+            Goal::RestrictSun(goal) => goal.can_use(level, mob),
+            Goal::FleeSun(goal) => goal.can_continue_to_use(level, mob),
+            Goal::NearestAttackableTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
+            Goal::HurtByTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -81,12 +113,20 @@ impl Goal {
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.start(level, mob),
             Goal::LookAtPlayer(goal) => goal.start(level, mob),
             Goal::RandomLookAround(goal) => goal.start(level, mob),
+            Goal::MeleeAttack(goal) => goal.start(level, mob),
+            Goal::ZombieAttack(goal) => goal.start(level, mob),
+            Goal::ZombieAttackTurtleEgg(goal) => goal.remove_block_goal.start(level, mob),
+            Goal::BreakDoor(goal) => goal.start(level, mob),
+            Goal::RestrictSun(goal) => goal.start(level, mob),
+            Goal::FleeSun(goal) => goal.start(level, mob),
+            Goal::NearestAttackableTarget(goal) => goal.start(level, mob),
+            Goal::HurtByTarget(goal) => goal.start(level, mob),
         }
     }
 
     pub fn stop(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self {
-            Goal::Float(_) | Goal::RandomLookAround(_) => {}
+            Goal::Float(_) | Goal::RandomLookAround(_) | Goal::FleeSun(_) => {}
             Goal::Panic(goal) => goal.stop(),
             Goal::Breed(goal) => goal.stop(),
             Goal::Tempt(goal) => goal.stop(level, mob),
@@ -94,34 +134,47 @@ impl Goal {
             Goal::EatBlock(goal) => goal.stop(),
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.stop(level, mob),
             Goal::LookAtPlayer(goal) => goal.stop(),
+            Goal::MeleeAttack(goal) => goal.stop(level, mob),
+            Goal::ZombieAttack(goal) => goal.stop(level, mob),
+            Goal::ZombieAttackTurtleEgg(goal) => goal.remove_block_goal.stop(level, mob),
+            Goal::BreakDoor(goal) => goal.stop(level, mob),
+            Goal::RestrictSun(goal) => goal.stop(level, mob),
+            Goal::NearestAttackableTarget(goal) => goal.target_goal.stop(level, mob),
+            Goal::HurtByTarget(goal) => goal.target_goal.stop(level, mob),
         }
     }
 
     pub fn requires_update_every_tick(&self) -> bool {
-        matches!(self, Goal::Float(_) | Goal::RandomLookAround(_))
+        matches!(self, Goal::Float(_) | Goal::RandomLookAround(_) | Goal::MeleeAttack(_) | Goal::ZombieAttack(_) | Goal::ZombieAttackTurtleEgg(_) | Goal::BreakDoor(_))
     }
 
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self {
             Goal::Float(goal) => goal.tick(level, mob),
-            Goal::Panic(_) | Goal::WaterAvoidingRandomStroll(_) => {}
+            Goal::Panic(_) | Goal::WaterAvoidingRandomStroll(_) | Goal::RestrictSun(_) | Goal::FleeSun(_) | Goal::NearestAttackableTarget(_) | Goal::HurtByTarget(_) => {}
             Goal::Breed(goal) => goal.tick(level, mob),
             Goal::Tempt(goal) => goal.tick(level, mob),
             Goal::FollowParent(goal) => goal.tick(level, mob),
             Goal::EatBlock(goal) => goal.tick(level, mob),
             Goal::LookAtPlayer(goal) => goal.tick(level, mob),
             Goal::RandomLookAround(goal) => goal.tick(level, mob),
+            Goal::MeleeAttack(goal) => goal.tick(level, mob),
+            Goal::ZombieAttack(goal) => goal.tick(level, mob),
+            Goal::ZombieAttackTurtleEgg(goal) => goal.tick(level, mob),
+            Goal::BreakDoor(goal) => goal.tick(level, mob),
         }
     }
 
     pub fn get_flags(&self) -> u8 {
         match self {
             Goal::Float(_) => Flag::Jump.bit(),
-            Goal::Panic(_) | Goal::WaterAvoidingRandomStroll(_) => Flag::Move.bit(),
-            Goal::Breed(_) | Goal::Tempt(_) | Goal::RandomLookAround(_) => Flag::Move.bit() | Flag::Look.bit(),
-            Goal::FollowParent(_) => 0,
+            Goal::Panic(_) | Goal::WaterAvoidingRandomStroll(_) | Goal::FleeSun(_) => Flag::Move.bit(),
+            Goal::Breed(_) | Goal::Tempt(_) | Goal::RandomLookAround(_) | Goal::MeleeAttack(_) | Goal::ZombieAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::FollowParent(_) | Goal::BreakDoor(_) | Goal::RestrictSun(_) => 0,
             Goal::EatBlock(_) => Flag::Move.bit() | Flag::Look.bit() | Flag::Jump.bit(),
+            Goal::ZombieAttackTurtleEgg(_) => Flag::Move.bit() | Flag::Jump.bit(),
             Goal::LookAtPlayer(_) => Flag::Look.bit(),
+            Goal::NearestAttackableTarget(_) | Goal::HurtByTarget(_) => Flag::Target.bit(),
         }
     }
 

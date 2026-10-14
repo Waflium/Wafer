@@ -184,11 +184,11 @@ impl ServerLevel {
         Some(baby)
     }
 
-    pub fn pig_finalize_spawn(&mut self, mob: &mut Mob, pos: BlockPos) {
+    pub fn pig_finalize_spawn(&mut self, id: EntityId, pos: BlockPos) {
         if let Some(variant) = self.select_variant_to_spawn(pos, spawn_selectors()) {
-            set_variant(&mut mob.entity, variant);
+            set_variant(self.entity_mut(id), variant);
         }
         let sound_variant = self.pick_random_sound_variant(SOUND_VARIANT_REGISTRY);
-        set_sound_variant(&mut mob.entity, sound_variant);
+        set_sound_variant(self.entity_mut(id), sound_variant);
     }
 }

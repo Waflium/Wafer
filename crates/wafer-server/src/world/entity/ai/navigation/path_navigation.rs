@@ -152,7 +152,11 @@ impl PathNavigation {
     }
 
     pub fn move_to_entity(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId, speed_modifier: f64) -> bool {
-        let new_path = self.create_path_to_entity(level, mob, target, 1);
+        self.move_to_entity_with_reach_range(level, mob, target, 1, speed_modifier)
+    }
+
+    pub fn move_to_entity_with_reach_range(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId, reach_range: i32, speed_modifier: f64) -> bool {
+        let new_path = self.create_path_to_entity(level, mob, target, reach_range);
         new_path.is_some() && self.move_to_path(level, mob, new_path, speed_modifier)
     }
 

@@ -108,6 +108,10 @@ impl PathNavigation {
         true
     }
 
+    pub fn set_avoid_sun(&mut self, avoid_sun: bool) {
+        self.avoid_sun = avoid_sun;
+    }
+
     pub fn set_can_walk_over_fences(&mut self, can_walk_over_fences: bool) {
         self.path_finder.node_evaluator.node_evaluator.can_walk_over_fences = can_walk_over_fences;
     }

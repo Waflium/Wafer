@@ -53,6 +53,7 @@ impl ServerLevel {
             MobKind::Cow(_) | MobKind::MushroomCow(_) => cow::abstract_cow::is_food(item_stack),
             MobKind::Pig(_) => pig::pig::is_food(item_stack),
             MobKind::Sheep(_) => sheep::sheep::is_food(item_stack),
+            MobKind::Zombie(_) | MobKind::Husk(_) => false,
         }
     }
 

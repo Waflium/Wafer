@@ -254,6 +254,11 @@ impl AttributeInstance {
         self.add_modifier(modifier, true);
     }
 
+    pub fn add_or_replace_permanent_modifier(&mut self, modifier: AttributeModifier) {
+        self.remove_modifier(&modifier.id);
+        self.add_modifier(modifier, true);
+    }
+
     pub fn add_permanent_modifiers(&mut self, modifiers: Vec<AttributeModifier>) {
         for modifier in modifiers {
             self.add_permanent_modifier(modifier);
@@ -421,6 +426,19 @@ pub static SHEEP_ATTRIBUTES: AttributeSupplier = {
             BelowNameDistance, FollowRange, TemptRange,
         ],
         &[(FollowRange, 16.0), (TemptRange, 10.0), (MaxHealth, 8.0), (MovementSpeed, 0.23f32 as f64)],
+    )
+};
+
+pub static ZOMBIE_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage, SpawnReinforcements,
+        ],
+        &[(FollowRange, 35.0), (MovementSpeed, 0.23f32 as f64), (AttackDamage, 3.0), (Armor, 2.0)],
     )
 };
 

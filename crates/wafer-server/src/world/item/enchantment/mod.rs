@@ -5,4 +5,5 @@ pub mod enchantment;
 pub mod enchantment_effect_components;
 pub mod enchantment_helper;
 pub mod level_based_value;
+pub mod providers;
 pub mod targeted_conditional_effect;

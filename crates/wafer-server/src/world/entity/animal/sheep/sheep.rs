@@ -165,9 +165,9 @@ impl ServerLevel {
         sheep_color_spawn_rules::get_sheep_color(biome, &mut self.random)
     }
 
-    pub fn sheep_finalize_spawn(&mut self, mob: &mut Mob, pos: BlockPos) {
+    pub fn sheep_finalize_spawn(&mut self, id: EntityId, pos: BlockPos) {
         let color = self.get_random_sheep_color(pos);
-        set_color(&mut mob.entity, color);
+        set_color(self.entity_mut(id), color);
     }
 
     pub fn is_sheep(&self, id: EntityId) -> bool {

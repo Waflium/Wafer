@@ -199,6 +199,10 @@ impl AABB {
         AABB::new(a.x, a.y, a.z, b.x, b.y, b.z)
     }
 
+    pub fn unit_cube_from_lower_corner(pos: Vec3) -> AABB {
+        AABB::new(pos.x, pos.y, pos.z, pos.x + 1.0, pos.y + 1.0, pos.z + 1.0)
+    }
+
     pub fn of_size(center: Vec3, x: f64, y: f64, z: f64) -> AABB {
         AABB::new(center.x - x / 2.0, center.y - y / 2.0, center.z - z / 2.0, center.x + x / 2.0, center.y + y / 2.0, center.z + z / 2.0)
     }

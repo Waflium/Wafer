@@ -2,6 +2,7 @@ use wafer_core::AABB;
 
 use super::ServerLevel;
 use crate::world::entity::ai::targeting::targeting_conditions::TargetingConditions;
+use crate::world::entity::mob::MobKind;
 use crate::world::entity::{EntityId, LevelEntity};
 
 impl ServerLevel {
@@ -45,6 +46,22 @@ impl ServerLevel {
     pub fn get_nearby_entities_same_kind(&mut self, target_conditions: &TargetingConditions, source: EntityId, bb: &AABB) -> Vec<EntityId> {
         let nearby = self.get_entities_of_class_same_kind(source, bb);
         nearby.into_iter().filter(|&entity| target_conditions.test(self, Some(source), entity)).collect()
+    }
+
+    pub fn get_entities_of_mob_class(&self, mob: EntityId, bb: &AABB) -> Vec<EntityId> {
+        let mut entities = self.get_entities(None, bb);
+        entities.retain(|&entity| self.is_instance_of_mob_class(mob, entity));
+        entities
+    }
+
+    fn is_instance_of_mob_class(&self, mob: EntityId, other: EntityId) -> bool {
+        match (self.entities.get(&mob), self.entities.get(&other)) {
+            (Some(LevelEntity::Mob(a)), Some(LevelEntity::Mob(b))) => match a.kind {
+                MobKind::Zombie(_) => b.is_zombie(),
+                _ => std::mem::discriminant(&a.kind) == std::mem::discriminant(&b.kind),
+            },
+            _ => false,
+        }
     }
 
     fn is_same_mob_class(&self, mob: EntityId, other: EntityId) -> bool {

@@ -9,6 +9,7 @@ impl ServerLevel {
     pub fn get_walk_target_value(&self, id: EntityId, pos: BlockPos) -> f32 {
         match self.mob(id).expect("a pathfinder mob").kind {
             MobKind::MushroomCow(_) => self.mushroom_cow_get_walk_target_value(pos),
+            MobKind::Zombie(_) | MobKind::Husk(_) => self.monster_get_walk_target_value(pos),
             _ => self.animal_get_walk_target_value(pos),
         }
     }

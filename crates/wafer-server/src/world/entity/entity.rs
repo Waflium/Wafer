@@ -830,6 +830,16 @@ impl ServerLevel {
         !self.fire_immune(id) && self.entity(id).remaining_fire_ticks > 0
     }
 
+    pub fn get_entity_light_level_dependent_magic_value(&self, id: EntityId) -> f32 {
+        let e = self.entity(id);
+        let block_pos = e.block_position();
+        if self.chunks.loaded_chunk(block_pos.chunk()).is_some() {
+            self.get_light_level_dependent_magic_value(BlockPos::containing(e.x(), e.eye_y(), e.z()))
+        } else {
+            0.0
+        }
+    }
+
     fn fire_immune_ticks(&self, id: EntityId) -> i32 {
         if self.is_player(id) { 20 } else { 0 }
     }
@@ -940,6 +950,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             None => SoundSource::Players,
             Some(super::LevelEntity::ExperienceOrb(_)) => SoundSource::Ambient,
+            Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
             Some(_) => SoundSource::Neutral,
         }
     }
@@ -1455,6 +1466,8 @@ impl ServerLevel {
     pub fn fall_sounds(&self, id: EntityId) -> (&'static str, &'static str) {
         if self.is_player(id) {
             ("minecraft:entity.player.small_fall", "minecraft:entity.player.big_fall")
+        } else if self.is_monster(id) {
+            self.monster_get_fall_sounds()
         } else {
             ("minecraft:entity.generic.small_fall", "minecraft:entity.generic.big_fall")
         }
@@ -1632,7 +1645,13 @@ impl ServerLevel {
         let m = e.delta_movement;
         let speed = (((m.x * m.x * 0.2f32 as f64 + m.y * m.y + m.z * m.z * 0.2f32 as f64).sqrt() as f32) * 0.35).min(1.0);
         let pitch = 1.0 + (e.random.next_float() - e.random.next_float()) * 0.4;
-        let sound = if self.is_player(id) { "minecraft:entity.player.swim" } else { "minecraft:entity.generic.swim" };
+        let sound = if self.is_player(id) {
+            "minecraft:entity.player.swim"
+        } else if self.is_monster(id) {
+            self.monster_get_swim_sound()
+        } else {
+            "minecraft:entity.generic.swim"
+        };
         self.entity_play_sound(id, sound_event(sound), speed, pitch);
     }
 
@@ -1890,6 +1909,7 @@ impl ServerLevel {
             return;
         }
         let player = self.is_player(id);
+        let monster = self.is_monster(id);
         let e = self.entity_mut(id);
         let m = e.delta_movement;
         let speed = (((m.x * m.x * 0.2f32 as f64 + m.y * m.y + m.z * m.z * 0.2f32 as f64).sqrt() as f32) * 0.2).min(1.0);
@@ -1897,6 +1917,7 @@ impl ServerLevel {
         let sound = match (player, speed < 0.25) {
             (true, true) => "minecraft:entity.player.splash",
             (true, false) => "minecraft:entity.player.splash.high_speed",
+            (false, true) if monster => self.monster_get_swim_splash_sound(),
             (false, _) => "minecraft:entity.generic.splash",
         };
         self.entity_play_sound(id, sound_event(sound), speed, pitch);
@@ -2324,6 +2345,8 @@ impl ServerLevel {
                     super::mob::MobKind::MushroomCow(_) => "MushroomCow",
                     super::mob::MobKind::Pig(_) => "Pig",
                     super::mob::MobKind::Sheep(_) => "Sheep",
+                    super::mob::MobKind::Zombie(_) => "Zombie",
+                    super::mob::MobKind::Husk(_) => "Husk",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

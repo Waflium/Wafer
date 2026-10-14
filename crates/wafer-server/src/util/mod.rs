@@ -15,6 +15,7 @@ pub mod parsing;
 pub mod png_info;
 pub mod random;
 pub mod signature_validator;
+pub mod special_dates;
 pub mod string_util;
 pub mod tick_throttler;
 pub mod tri_state;

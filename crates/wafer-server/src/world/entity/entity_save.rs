@@ -4,6 +4,7 @@ use wafer_core::{AABB, Axis, BlockPos, Vec3, mth};
 use wafer_protocol::nbt::Nbt;
 
 use super::data::{DataValue, ids};
+use super::entity_spawn_reason::EntitySpawnReason;
 use super::item::ItemEntity;
 use super::primed_tnt::PrimedTnt;
 use super::projectile::throwableitemprojectile;
@@ -354,6 +355,8 @@ impl ServerLevel {
             "minecraft:mooshroom" => LevelEntity::Mob(Box::new(super::animal::cow::mushroom_cow::MushroomCow::create())),
             "minecraft:pig" => LevelEntity::Mob(Box::new(super::animal::pig::pig::Pig::create())),
             "minecraft:sheep" => LevelEntity::Mob(Box::new(super::animal::sheep::sheep::Sheep::create())),
+            "minecraft:zombie" => LevelEntity::Mob(Box::new(super::monster::zombie::zombie::Zombie::create())),
+            "minecraft:husk" => LevelEntity::Mob(Box::new(super::monster::zombie::husk::Husk::create())),
             "minecraft:snowball" => LevelEntity::Projectile(Box::new(throwableitemprojectile::snowball::Snowball::of_type())),
             "minecraft:egg" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_egg::ThrownEgg::of_type())),
             "minecraft:ender_pearl" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_enderpearl::ThrownEnderpearl::of_type())),
@@ -384,11 +387,19 @@ impl ServerLevel {
         1.0 + shapes_collide(Axis::Y, entity_box, &shapes, if moved_up { -2.0 } else { -1.0 })
     }
 
-    pub fn spawn_entity_type(&mut self, entity_type: &str, spawn_pos: BlockPos) -> Option<EntityId> {
-        self.spawn_entity_type_from_stack(entity_type, None, spawn_pos, false, false)
+    pub fn spawn_entity_type(&mut self, entity_type: &str, spawn_pos: BlockPos, spawn_reason: EntitySpawnReason) -> Option<EntityId> {
+        self.spawn_entity_type_from_stack(entity_type, None, spawn_pos, spawn_reason, false, false)
     }
 
-    pub fn spawn_entity_type_from_stack(&mut self, entity_type: &str, item_stack: Option<&ItemStack>, spawn_pos: BlockPos, try_move_down: bool, moved_up: bool) -> Option<EntityId> {
+    pub fn spawn_entity_type_from_stack(
+        &mut self,
+        entity_type: &str,
+        item_stack: Option<&ItemStack>,
+        spawn_pos: BlockPos,
+        spawn_reason: EntitySpawnReason,
+        try_move_down: bool,
+        moved_up: bool,
+    ) -> Option<EntityId> {
         let mut entity = ServerLevel::create_entity(entity_type)?;
         let y_off = if try_move_down {
             entity.entity_mut().set_pos(Vec3::new(spawn_pos.x as f64 + 0.5, (spawn_pos.y + 1) as f64, spawn_pos.z as f64 + 0.5));
@@ -401,7 +412,10 @@ impl ServerLevel {
         if let LevelEntity::Mob(mob) = &mut entity {
             mob.entity.y_head_rot = mob.entity.y_rot;
             mob.living.y_body_rot = mob.entity.y_rot;
-            self.finalize_mob_spawn(mob);
+        }
+        if matches!(entity, LevelEntity::Mob(_)) {
+            let difficulty = self.current_difficulty_at(entity.entity().block_position());
+            entity = self.finalize_spawn_detached(entity, &difficulty, spawn_reason, None).0;
         }
         if let Some(item_stack) = item_stack {
             apply_default_stack_config(&mut entity, item_stack);

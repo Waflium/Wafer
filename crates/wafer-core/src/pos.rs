@@ -98,6 +98,10 @@ impl BlockPos {
         self.dist_sqr(o) < mth::square(distance)
     }
 
+    pub fn closer_to_center_than(self, pos: Vec3, distance: f64) -> bool {
+        self.dist_to_center_sqr(pos.x, pos.y, pos.z) < mth::square(distance)
+    }
+
     pub const fn as_long(self) -> i64 {
         ((self.x as i64 & PACKED_X_MASK) << X_OFFSET) | (self.y as i64 & PACKED_Y_MASK) | ((self.z as i64 & PACKED_X_MASK) << Z_OFFSET)
     }

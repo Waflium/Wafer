@@ -52,7 +52,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
 
 fn spawn_mob(level: &mut ServerLevel, entity_type: i32, user: Option<EntityId>, item_stack: &mut ItemStack, spawn_pos: BlockPos, try_move_down: bool, moved_up: bool) -> InteractionResult {
     let name = registry::ENTITY_TYPE[entity_type as usize];
-    if level.spawn_entity_type_from_stack(name, Some(item_stack), spawn_pos, try_move_down, moved_up).is_some() {
+    if level.spawn_entity_type_from_stack(name, Some(item_stack), spawn_pos, crate::world::entity::entity_spawn_reason::EntitySpawnReason::SpawnItemUse, try_move_down, moved_up).is_some() {
         item_stack.consume(1, level, user);
         InteractionResult::SUCCESS
     } else {

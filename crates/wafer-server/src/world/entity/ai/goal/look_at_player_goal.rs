@@ -26,7 +26,7 @@ impl LookAtPlayerGoal {
         if level.entity_mut(mob).random.next_float() >= self.probability {
             return false;
         }
-        if let Some(target) = level.mob(mob).expect("a mob").target {
+        if let Some(target) = level.get_target(mob) {
             self.look_at = Some(target);
         }
         let e = level.entity(mob);

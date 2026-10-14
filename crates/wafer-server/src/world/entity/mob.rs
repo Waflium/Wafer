@@ -1,7 +1,19 @@
-use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
-use wafer_data::{EquipmentSlot, items};
+use wafer_core::{AABB, BlockPos};
+use wafer_data::{EquipmentSlot, EquipmentSlotGroup, Item, damage_types, entity_type_tags, game_rule, items};
 use wafer_protocol::nbt::Nbt;
+
+use super::monster::zombie::husk::{self, Husk};
+use super::monster::zombie::zombie::{self, Zombie};
+use super::entity_spawn_reason::EntitySpawnReason;
+use super::spawn_group_data::SpawnGroupData;
+use crate::world::attribute::environment_attributes;
+use crate::world::difficulty::Difficulty;
+use crate::world::difficulty_instance::DifficultyInstance;
+use crate::world::item::component::attack_range::AttackRange;
+use crate::world::item::component::values::ItemEnchantments;
+use crate::world::item::enchantment::enchantment_helper;
+use crate::world::item::enchantment::providers::vanilla_enchantment_providers;
 
 use super::animal::chicken::{self, Chicken};
 use super::animal::cow::abstract_cow::{self, AbstractCow};
@@ -38,6 +50,21 @@ use crate::world::level::storage::uuid_ints;
 pub const DEFAULT_EQUIPMENT_DROP_CHANCE: f32 = 0.085;
 const MOB_FLAG_NO_AI: i8 = 1;
 const MOB_FLAG_LEFTHANDED: i8 = 2;
+const MOB_FLAG_AGGRESSIVE: i8 = 4;
+const ITEM_PICKUP_REACH: (f64, f64, f64) = (1.0, 0.0, 1.0);
+const EQUIPMENT_POPULATION_ORDER: [EquipmentSlot; 4] = [EquipmentSlot::Head, EquipmentSlot::Chest, EquipmentSlot::Legs, EquipmentSlot::Feet];
+pub const MAX_WEARING_ARMOR_CHANCE: f32 = 0.15;
+pub const WEARING_ARMOR_UPGRADE_MATERIAL_CHANCE: f32 = 0.1087;
+pub const WEARING_ARMOR_UPGRADE_MATERIAL_ATTEMPTS: f32 = 3.0;
+pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
+pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
+pub const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
+const DESPAWN_DISTANCE: i32 = 128;
+const NO_DESPAWN_DISTANCE: i32 = 32;
+
+fn default_attack_reach() -> f64 {
+    (2.04f32 as f64).sqrt() - 0.6f32 as f64
+}
 
 pub enum MobKind {
     Chicken(Chicken),
@@ -45,6 +72,8 @@ pub enum MobKind {
     MushroomCow(MushroomCow),
     Pig(Pig),
     Sheep(Sheep),
+    Zombie(Zombie),
+    Husk(Husk),
 }
 
 pub struct Mob {
@@ -108,7 +137,20 @@ impl Mob {
             MobKind::Cow(_) | MobKind::MushroomCow(_) => AbstractCow::register_goals(&mut self.ai),
             MobKind::Pig(_) => Pig::register_goals(&mut self.ai),
             MobKind::Sheep(_) => Sheep::register_goals(&mut self.ai),
+            MobKind::Zombie(_) | MobKind::Husk(_) => Zombie::register_goals(&mut self.ai),
         }
+    }
+
+    pub fn is_monster(&self) -> bool {
+        matches!(self.kind, MobKind::Zombie(_) | MobKind::Husk(_))
+    }
+
+    pub fn is_zombie(&self) -> bool {
+        matches!(self.kind, MobKind::Zombie(_) | MobKind::Husk(_))
+    }
+
+    pub fn client_tracking_range(&self) -> i32 {
+        if self.is_zombie() { 8 } else { 10 }
     }
 
     fn create_navigation(&self) -> PathNavigation {
@@ -188,8 +230,23 @@ impl Mob {
         self.set_mob_flag(MOB_FLAG_LEFTHANDED, left_handed);
     }
 
+    pub fn is_aggressive(&self) -> bool {
+        self.mob_flags() & MOB_FLAG_AGGRESSIVE != 0
+    }
+
+    pub fn set_aggressive(&mut self, aggressive: bool) {
+        self.set_mob_flag(MOB_FLAG_AGGRESSIVE, aggressive);
+    }
+
+    pub fn set_drop_chance(&mut self, slot: EquipmentSlot, percent: f32) {
+        self.drop_chances[slot as usize] = percent;
+    }
+
     pub fn is_baby(&self) -> bool {
-        self.ageable().is_some_and(|a| a.age < 0)
+        match &self.kind {
+            MobKind::Zombie(_) | MobKind::Husk(_) => zombie::is_baby(&self.entity),
+            _ => self.ageable().is_some_and(|a| a.age < 0),
+        }
     }
 
     pub fn cube_mob_size(&self) -> Option<i32> {
@@ -222,6 +279,7 @@ impl Mob {
             MobKind::MushroomCow(mushroom_cow) => Some(&mushroom_cow.abstract_cow.animal),
             MobKind::Pig(pig) => Some(&pig.animal),
             MobKind::Sheep(sheep) => Some(&sheep.animal),
+            MobKind::Zombie(_) | MobKind::Husk(_) => None,
         }
     }
 
@@ -232,6 +290,7 @@ impl Mob {
             MobKind::MushroomCow(mushroom_cow) => Some(&mut mushroom_cow.abstract_cow.animal),
             MobKind::Pig(pig) => Some(&mut pig.animal),
             MobKind::Sheep(sheep) => Some(&mut sheep.animal),
+            MobKind::Zombie(_) | MobKind::Husk(_) => None,
         }
     }
 
@@ -251,7 +310,9 @@ impl Mob {
     }
 
     pub fn set_baby(&mut self, baby: bool) {
-        if self.ageable().is_some() && self.set_age(if baby { BABY_START_AGE } else { 0 }) {
+        if self.is_zombie() {
+            Zombie::set_baby(self, baby);
+        } else if self.ageable().is_some() && self.set_age(if baby { BABY_START_AGE } else { 0 }) {
             self.refresh_dimensions();
         }
     }
@@ -280,6 +341,7 @@ impl Mob {
             MobKind::Sheep(_) => {
                 self.apply_implicit_component_if_present(components, dc::SHEEP_COLOR);
             }
+            MobKind::Zombie(_) | MobKind::Husk(_) => {}
         }
         self.apply_implicit_component_if_present(components, dc::CUSTOM_NAME);
         self.apply_implicit_component_if_present(components, dc::CUSTOM_DATA);
@@ -358,6 +420,10 @@ impl Mob {
             MobKind::Pig(_) => pig::DIMENSIONS,
             MobKind::Sheep(_) if self.is_baby() => sheep::BABY_DIMENSIONS,
             MobKind::Sheep(_) => sheep::DIMENSIONS,
+            MobKind::Zombie(_) if self.is_baby() => zombie::BABY_DIMENSIONS,
+            MobKind::Zombie(_) => zombie::DIMENSIONS,
+            MobKind::Husk(_) if self.is_baby() => husk::BABY_DIMENSIONS,
+            MobKind::Husk(_) => husk::DIMENSIONS,
         }
     }
 
@@ -372,6 +438,9 @@ impl Mob {
             MobKind::Pig(_) => (0.0, 0.86875f32 as f64, 0.0),
             MobKind::Sheep(_) if baby => (0.0, 0.5625f32 as f64, 0.0),
             MobKind::Sheep(_) => (0.0, 1.2375f32 as f64, 0.0),
+            MobKind::Zombie(_) | MobKind::Husk(_) if baby => (0.0, 0.98f32 as f64, 0.0),
+            MobKind::Zombie(_) => (0.0, 2.0125f32 as f64, 0.0),
+            MobKind::Husk(_) => (0.0, 2.075f32 as f64, 0.0),
         };
         let scale = self.living.attributes.value(Attribute::Scale) as f32 as f64;
         wafer_core::Vec3::new(x * scale, y * scale, z * scale)
@@ -487,6 +556,10 @@ impl Mob {
                 out.push(("Sheared".into(), Nbt::Byte(sheep::is_sheared(&self.entity) as i8)));
                 out.push(("Color".into(), Nbt::Byte(sheep::get_color(&self.entity).id as i8)));
             }
+            MobKind::Zombie(_) | MobKind::Husk(_) => {
+                let is_afflicted = self.entity.is_eye_in_fluid(&wafer_data::fluid_tags::WATER);
+                Zombie::add_additional_save_data(self, is_afflicted, out);
+            }
         }
     }
 
@@ -598,6 +671,10 @@ impl Mob {
                     self.entity.data.set(chicken::DATA_SOUND_VARIANT, DataValue::ChickenSoundVariant(sound_variant));
                 }
             }
+            MobKind::Zombie(_) | MobKind::Husk(_) => {}
+        }
+        if self.is_zombie() {
+            Zombie::read_additional_save_data(self, nbt);
         }
     }
 
@@ -630,6 +707,7 @@ impl Mob {
             MobKind::Cow(_) | MobKind::MushroomCow(_) => &self.cow_sound_set().ambient_sound,
             MobKind::Pig(_) => &Pig::get_sound_set(self).ambient_sound,
             MobKind::Sheep(_) => "minecraft:entity.sheep.ambient",
+            MobKind::Zombie(_) | MobKind::Husk(_) => Zombie::get_ambient_sound(self),
         }
     }
 
@@ -639,6 +717,7 @@ impl Mob {
             MobKind::Cow(_) | MobKind::MushroomCow(_) => &self.cow_sound_set().hurt_sound,
             MobKind::Pig(_) => &Pig::get_sound_set(self).hurt_sound,
             MobKind::Sheep(_) => "minecraft:entity.sheep.hurt",
+            MobKind::Zombie(_) | MobKind::Husk(_) => Zombie::get_hurt_sound(self),
         }
     }
 
@@ -648,6 +727,7 @@ impl Mob {
             MobKind::Cow(_) | MobKind::MushroomCow(_) => &self.cow_sound_set().death_sound,
             MobKind::Pig(_) => &Pig::get_sound_set(self).death_sound,
             MobKind::Sheep(_) => "minecraft:entity.sheep.death",
+            MobKind::Zombie(_) | MobKind::Husk(_) => Zombie::get_death_sound(self),
         }
     }
 
@@ -657,6 +737,7 @@ impl Mob {
             MobKind::Cow(_) | MobKind::MushroomCow(_) => &self.cow_sound_set().step_sound,
             MobKind::Pig(_) => &Pig::get_sound_set(self).step_sound,
             MobKind::Sheep(_) => "minecraft:entity.sheep.step",
+            MobKind::Zombie(_) | MobKind::Husk(_) => Zombie::get_step_sound(self),
         }
     }
 
@@ -750,12 +831,17 @@ impl ServerLevel {
             let (entity_type, position) = (entity.entity_type, entity.position());
             let offspring = spawn_egg_item::spawn_offspring_from_spawn_egg(self, player, id, entity_type, position, &mut item_stack);
             self.player_mut(player).update_item_in_hand(hand, &item_stack);
-            if offspring.is_none() {
-                return InteractionResult::Pass;
-            }
+            let Some(offspring) = offspring else { return InteractionResult::Pass };
+            self.on_offspring_spawned_from_egg(id, player, offspring);
             InteractionResult::SUCCESS_SERVER
         } else {
             InteractionResult::Pass
+        }
+    }
+
+    fn on_offspring_spawned_from_egg(&mut self, id: EntityId, _spawner: EntityId, offspring: EntityId) {
+        if self.mob(id).is_some_and(Mob::is_zombie) {
+            self.zombie_on_offspring_spawned_from_egg(id, offspring);
         }
     }
 
@@ -766,6 +852,7 @@ impl ServerLevel {
             MobKind::MushroomCow(_) => self.mushroom_cow_mob_interact(id, player, hand),
             MobKind::Pig(_) => self.pig_mob_interact(id, player, hand),
             MobKind::Sheep(_) => self.sheep_mob_interact(id, player, hand),
+            MobKind::Zombie(_) | MobKind::Husk(_) => self.mob_mob_interact(id, player, hand),
         }
     }
 
@@ -918,6 +1005,317 @@ impl ServerLevel {
 
     pub fn mob_ai_step(&mut self, id: EntityId) {
         self.living_entity_ai_step(id);
+        if !self.is_mob(id) {
+            return;
+        }
+        if entity_type_tags::BURN_IN_DAYLIGHT.contains(self.entity(id).entity_type as usize) {
+            self.burn_undead(id);
+        }
+        let mob = self.mob(id).expect("a mob");
+        if mob.can_pick_up_loot && self.is_alive(id) && !mob.living.dead && self.game_rules.get_bool(game_rule::MOB_GRIEFING) {
+            let (x, y, z) = self.get_pickup_reach(id);
+            let area = self.entity(id).bounding_box().inflate(x, y, z);
+            for entity in self.items_in(&area, None) {
+                let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { continue };
+                if !item.entity.is_removed() && !item.item.is_empty() && !item.has_pickup_delay() {
+                    let stack = item.item.clone();
+                    if self.wants_to_pick_up(id, &stack) {
+                        self.pick_up_item(id, entity);
+                    }
+                }
+            }
+        }
+    }
+
+    fn sun_protection_slot(&self, _id: EntityId) -> EquipmentSlot {
+        EquipmentSlot::Head
+    }
+
+    fn burn_undead(&mut self, id: EntityId) {
+        if self.is_alive(id) && self.is_sun_burn_tick(id) {
+            let slot = self.sun_protection_slot(id);
+            match self.item_by_slot(id, slot) {
+                Some(sun_blocker) => {
+                    if sun_blocker.is_damageable_item() {
+                        let amount = self.entity_mut(id).random.next_int_bounded(2);
+                        self.hurt_and_break(id, slot, amount);
+                    }
+                }
+                None => self.ignite_for_seconds(id, 8.0),
+            }
+        }
+    }
+
+    fn is_sun_burn_tick(&mut self, id: EntityId) -> bool {
+        let position = self.entity(id).position();
+        if self.environment_attributes().get_value(environment_attributes::MONSTERS_BURN, position) {
+            let br = self.get_entity_light_level_dependent_magic_value(id);
+            let e = self.entity(id);
+            let rounded_pos = BlockPos::containing(e.x(), e.eye_y(), e.z());
+            let (is_in_powder_snow, was_in_powder_snow) = (e.is_in_powder_snow, e.was_in_powder_snow);
+            let is_in_non_burnable_block = self.is_in_water_or_rain(id) || is_in_powder_snow || was_in_powder_snow;
+            if br > 0.5 && self.entity_mut(id).random.next_float() * 30.0 < (br - 0.4) * 2.0 && !is_in_non_burnable_block && self.can_see_sky(rounded_pos) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn get_pickup_reach(&self, _id: EntityId) -> (f64, f64, f64) {
+        ITEM_PICKUP_REACH
+    }
+
+    fn pick_up_item(&mut self, id: EntityId, entity: EntityId) {
+        let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { return };
+        let item_stack = item.item.copy();
+        let equipped_with_stack = self.equip_item_if_possible(id, item_stack);
+        if !equipped_with_stack.is_empty() {
+            self.take(id, entity, equipped_with_stack.count);
+            let Some(LevelEntity::Item(item)) = self.entities.get_mut(&entity) else { return };
+            item.item.shrink(equipped_with_stack.count);
+            if item.item.is_empty() {
+                item.entity.discard();
+            }
+        }
+    }
+
+    pub fn equip_item_if_possible(&mut self, id: EntityId, item_stack: ItemStack) -> ItemStack {
+        let mut slot = self.get_equipment_slot_for_item(id, &item_stack);
+        if !self.is_equippable_in_slot(id, &item_stack, slot) {
+            return ItemStack::empty();
+        }
+        let mut current = self.item_by_slot(id, slot).unwrap_or_else(ItemStack::empty);
+        let mut can_replace = self.can_replace_current_item(id, &item_stack, &current, slot);
+        if slot.is_armor() && !can_replace {
+            slot = EquipmentSlot::Mainhand;
+            current = self.item_by_slot(id, slot).unwrap_or_else(ItemStack::empty);
+            can_replace = current.is_empty();
+        }
+        if can_replace && self.can_hold_item(id, &item_stack) {
+            let mob = self.mob_mut(id).expect("a mob");
+            let drop_chance = mob.drop_chances[slot as usize];
+            if !current.is_empty() && (mob.entity.random.next_float() - 0.1).max(0.0) < drop_chance {
+                self.spawn_at_location(id, current, 0.0);
+            }
+            let to_equip = limit(slot, item_stack);
+            self.set_item_slot_and_drop_when_killed(id, slot, to_equip.clone());
+            self.mob_mut(id).expect("a mob").persistence_required = true;
+            to_equip
+        } else {
+            ItemStack::empty()
+        }
+    }
+
+    fn set_item_slot_and_drop_when_killed(&mut self, id: EntityId, slot: EquipmentSlot, item_stack: ItemStack) {
+        self.living_set_item_slot(id, slot, item_stack);
+        self.set_guaranteed_drop(id, slot);
+    }
+
+    fn can_replace_current_item(&self, id: EntityId, new_item_stack: &ItemStack, current_item_stack: &ItemStack, slot: EquipmentSlot) -> bool {
+        if current_item_stack.is_empty() {
+            true
+        } else if slot.is_armor() {
+            self.compare_armor(id, new_item_stack, current_item_stack, slot)
+        } else if slot == EquipmentSlot::Mainhand {
+            self.compare_weapons(id, new_item_stack, current_item_stack, slot)
+        } else {
+            false
+        }
+    }
+
+    fn compare_armor(&self, id: EntityId, new_item_stack: &ItemStack, current_item_stack: &ItemStack, slot: EquipmentSlot) -> bool {
+        if enchantment_helper::has_prevent_armor_change(current_item_stack) {
+            return false;
+        }
+        let new_defense = self.get_approximate_attribute_with(id, new_item_stack, Attribute::Armor, slot);
+        let old_defense = self.get_approximate_attribute_with(id, current_item_stack, Attribute::Armor, slot);
+        let new_toughness = self.get_approximate_attribute_with(id, new_item_stack, Attribute::ArmorToughness, slot);
+        let old_toughness = self.get_approximate_attribute_with(id, current_item_stack, Attribute::ArmorToughness, slot);
+        if new_defense != old_defense {
+            new_defense > old_defense
+        } else if new_toughness != old_toughness {
+            new_toughness > old_toughness
+        } else {
+            can_replace_equal_item(new_item_stack, current_item_stack)
+        }
+    }
+
+    fn compare_weapons(&self, id: EntityId, new_item_stack: &ItemStack, current_item_stack: &ItemStack, slot: EquipmentSlot) -> bool {
+        if let Some(preferred_weapon_type) = self.get_preferred_weapon_type(id) {
+            if current_item_stack.get_item().is(preferred_weapon_type) && !new_item_stack.get_item().is(preferred_weapon_type) {
+                return false;
+            }
+            if !current_item_stack.get_item().is(preferred_weapon_type) && new_item_stack.get_item().is(preferred_weapon_type) {
+                return true;
+            }
+        }
+        let new_attack_damage = self.get_approximate_attribute_with(id, new_item_stack, Attribute::AttackDamage, slot);
+        let old_attack_damage = self.get_approximate_attribute_with(id, current_item_stack, Attribute::AttackDamage, slot);
+        if new_attack_damage != old_attack_damage { new_attack_damage > old_attack_damage } else { can_replace_equal_item(new_item_stack, current_item_stack) }
+    }
+
+    fn get_approximate_attribute_with(&self, id: EntityId, item_stack: &ItemStack, attribute: Attribute, slot: EquipmentSlot) -> f64 {
+        let attributes = &self.living(id).attributes;
+        let base_value = if attributes.has_attribute(attribute) { attributes.base_value(attribute) } else { 0.0 };
+        compute_attribute_modifiers(item_stack, attribute, base_value, slot)
+    }
+
+    pub fn can_hold_item(&self, id: EntityId, item_stack: &ItemStack) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.zombie_can_hold_item(id, item_stack),
+            _ => self.mob_can_hold_item(id, item_stack),
+        }
+    }
+
+    pub fn mob_can_hold_item(&self, _id: EntityId, _item_stack: &ItemStack) -> bool {
+        true
+    }
+
+    pub fn wants_to_pick_up(&self, id: EntityId, item_stack: &ItemStack) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.zombie_wants_to_pick_up(id, item_stack),
+            _ => self.mob_wants_to_pick_up(id, item_stack),
+        }
+    }
+
+    pub fn mob_wants_to_pick_up(&self, id: EntityId, item_stack: &ItemStack) -> bool {
+        self.can_hold_item(id, item_stack)
+    }
+
+    fn get_preferred_weapon_type(&self, _id: EntityId) -> Option<&'static wafer_data::Tag> {
+        None
+    }
+
+    pub fn is_monster(&self, id: EntityId) -> bool {
+        self.mob(id).is_some_and(Mob::is_monster)
+    }
+
+    pub fn get_target(&self, id: EntityId) -> Option<EntityId> {
+        self.as_valid_target(id, self.mob(id)?.target)
+    }
+
+    fn as_valid_target(&self, id: EntityId, target: Option<EntityId>) -> Option<EntityId> {
+        let target = target.filter(|&target| self.is_living(target))?;
+        if self.is_player(target) && (self.player(target).game_mode.game_type.is_creative() || self.is_spectator(target)) {
+            None
+        } else if !self.can_attack(id, target) {
+            None
+        } else {
+            Some(target)
+        }
+    }
+
+    pub fn set_target(&mut self, id: EntityId, target: Option<EntityId>) {
+        let target = self.as_valid_target(id, target);
+        if let Some(mob) = self.mob_mut(id) {
+            mob.target = target;
+        }
+    }
+
+    pub fn mob_can_attack(&self, id: EntityId, target: EntityId) -> bool {
+        !(wafer_data::registry::ENTITY_TYPE[self.entity(target).entity_type as usize] == "minecraft:ghast") && self.living_entity_can_attack(id, target)
+    }
+
+    pub fn is_within_melee_attack_range(&self, id: EntityId, target: EntityId) -> bool {
+        let (max_range, min_range) = match self.get_active_item(id).get(dc::ATTACK_RANGE).map(AttackRange::from_nbt) {
+            None => (default_attack_reach(), 0.0),
+            Some(attack_range) => (attack_range.effective_max_range(self, id) as f64, attack_range.effective_min_range(self, id) as f64),
+        };
+        let hitbox = self.get_hitbox(target);
+        self.get_attack_bounding_box(id, max_range).intersects(&hitbox) && (min_range <= 0.0 || !self.get_attack_bounding_box(id, min_range).intersects(&hitbox))
+    }
+
+    fn get_attack_bounding_box(&self, id: EntityId, horizontal_expansion: f64) -> AABB {
+        let aabb = match self.vehicle(id) {
+            Some(vehicle) => {
+                let mount_aabb = self.entity(vehicle).bounding_box();
+                let own_aabb = self.entity(id).bounding_box();
+                AABB::new(
+                    own_aabb.min_x.min(mount_aabb.min_x),
+                    own_aabb.min_y,
+                    own_aabb.min_z.min(mount_aabb.min_z),
+                    own_aabb.max_x.max(mount_aabb.max_x),
+                    own_aabb.max_y,
+                    own_aabb.max_z.max(mount_aabb.max_z),
+                )
+            }
+            None => self.entity(id).bounding_box(),
+        };
+        aabb.inflate(horizontal_expansion, 0.0, horizontal_expansion)
+    }
+
+    pub fn get_hitbox(&self, id: EntityId) -> AABB {
+        let aabb = self.entity(id).bounding_box();
+        match self.vehicle(id) {
+            Some(vehicle) => {
+                let pos = self.passenger_riding_position(vehicle, id);
+                aabb.set_min_y(pos.y.max(aabb.min_y))
+            }
+            None => aabb,
+        }
+    }
+
+    pub fn do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Zombie(_)) => self.zombie_do_hurt_target(id, target),
+            Some(MobKind::Husk(_)) => self.husk_do_hurt_target(id, target),
+            _ => self.mob_do_hurt_target(id, target),
+        }
+    }
+
+    pub fn mob_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
+        let mut dmg = self.attribute_value(id, Attribute::AttackDamage) as f32;
+        let weapon_item = self.get_weapon_item(id);
+        let damage_source = self.get_damage_source(&weapon_item, id);
+        dmg = self.modify_damage(&weapon_item, target, &damage_source, dmg);
+        let old_movement = self.entity(target).delta_movement;
+        let was_hurt = self.hurt_server(target, damage_source, dmg);
+        if was_hurt {
+            let knockback = self.get_knockback(id, target, &damage_source);
+            self.living_entity_cause_extra_knockback(id, target, knockback, old_movement);
+            self.do_post_attack_effects(target, &damage_source);
+            self.set_last_hurt_mob(id, target);
+        }
+        self.post_piercing_attack(id);
+        was_hurt
+    }
+
+    fn get_damage_source(&self, item_stack: &ItemStack, attacker: EntityId) -> DamageSource {
+        let ty = item_stack
+            .get(dc::DAMAGE_TYPE)
+            .and_then(Nbt::as_str)
+            .and_then(wafer_data::DamageType::by_name)
+            .unwrap_or(damage_types::MOB_ATTACK);
+        DamageSource { causing_entity: Some(attacker), direct_entity: Some(attacker), ..DamageSource::new(ty) }
+    }
+
+    pub fn swing_for_attack(&mut self, id: EntityId, hand: InteractionHand) {
+        let swing_animation = self.item_by_slot_ref(id, hand.as_equipment_slot()).map_or(crate::world::item::component::swing_animation::SwingAnimation::DEFAULT, ItemStack::attack_animation);
+        self.swing(id, hand, swing_animation, false);
+    }
+
+    pub fn mob_get_base_experience_reward(&mut self, id: EntityId) -> i32 {
+        let xp_reward = self.mob(id).expect("a mob").xp_reward;
+        if xp_reward > 0 {
+            let mut result = xp_reward;
+            for slot in EquipmentSlot::VALUES {
+                if slot != EquipmentSlot::Saddle {
+                    let mob = self.mob_mut(id).expect("a mob");
+                    if mob.item_by_slot(slot).is_some() && mob.drop_chances[slot as usize] <= 1.0 {
+                        result += 1 + mob.entity.random.next_int_bounded(3);
+                    }
+                }
+            }
+            result
+        } else {
+            xp_reward
+        }
+    }
+
+    pub fn set_chicken_jockey(&mut self, id: EntityId, is_chicken_jockey: bool) {
+        if let Some(MobKind::Chicken(chicken)) = self.mob_mut(id).map(|mob| &mut mob.kind) {
+            chicken.is_chicken_jockey = is_chicken_jockey;
+        }
     }
 
     pub fn mob_server_ai_step(&mut self, id: EntityId) {
@@ -970,10 +1368,10 @@ impl ServerLevel {
     }
 
     pub fn get_max_fall_distance(&self, id: EntityId) -> i32 {
-        let mob = self.mob(id).expect("a mob");
-        if mob.target.is_none() {
+        if self.get_target(id).is_none() {
             return get_comfortable_fall_distance(0.0);
         }
+        let mob = self.mob(id).expect("a mob");
         let max_health = mob.living.attributes.value(Attribute::MaxHealth) as f32;
         let mut sacrifice = (mob.health - max_health * 0.33) as i32;
         sacrifice -= (3 - self.difficulty as i32) * 4;
@@ -986,31 +1384,50 @@ impl ServerLevel {
     fn custom_server_ai_step(&mut self, id: EntityId) {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Sheep(_)) => self.sheep_custom_server_ai_step(id),
+            Some(MobKind::Zombie(_) | MobKind::Husk(_)) | None => {}
             Some(_) => self.animal_custom_server_ai_step(id),
-            None => {}
         }
     }
 
-    pub fn check_mob_despawn(&mut self, id: EntityId) {
-        let requires_custom_persistence = self.is_passenger(id);
-        let mob = self.mob(id).expect("a mob");
-        let persistent = mob.persistence_required || requires_custom_persistence;
-        let removes_when_far_away = match &mob.kind {
+    pub fn remove_when_far_away(&self, id: EntityId, _dist_sqr: f64) -> bool {
+        match &self.mob(id).expect("a mob").kind {
             MobKind::Chicken(chicken) => chicken.is_chicken_jockey,
-            _ => false,
-        };
+            MobKind::Cow(_) | MobKind::MushroomCow(_) | MobKind::Pig(_) | MobKind::Sheep(_) => false,
+            MobKind::Zombie(_) | MobKind::Husk(_) => true,
+        }
+    }
+
+    pub fn requires_custom_persistence(&self, id: EntityId) -> bool {
+        self.is_passenger(id)
+    }
+
+    pub fn check_mob_despawn(&mut self, id: EntityId) {
+        let entity_type = wafer_data::registry::ENTITY_TYPE[self.entity(id).entity_type as usize];
+        if self.difficulty == Difficulty::Peaceful && !super::entity_types::by_name(entity_type).is_allowed_in_peaceful() {
+            self.remove(id, super::RemovalReason::Discarded);
+            return;
+        }
+        let requires_custom_persistence = self.requires_custom_persistence(id);
+        let mob = self.mob(id).expect("a mob");
+        let is_persistent = mob.persistence_required || requires_custom_persistence;
         let position = mob.entity.position();
         let Some(player) = self.nearest_player_to_entity(position) else { return };
         let dist_sqr = self.entity(player).position().distance_to_sqr(position);
-        let (despawn, no_despawn) = (128.0 * 128.0, 32.0 * 32.0);
-        if !persistent && dist_sqr > despawn && removes_when_far_away {
+        let despawn_distance_sqr = (DESPAWN_DISTANCE * DESPAWN_DISTANCE) as f64;
+        if !is_persistent && dist_sqr > despawn_distance_sqr && self.remove_when_far_away(id, dist_sqr) {
             self.remove(id, super::RemovalReason::Discarded);
         }
+        let no_despawn_distance_sqr = (NO_DESPAWN_DISTANCE * NO_DESPAWN_DISTANCE) as f64;
         let mob = self.mob_mut(id).expect("a mob");
-        if !persistent && mob.living.no_action_time > 600 && mob.entity.random.next_int_bounded(800) == 0 && dist_sqr > no_despawn && removes_when_far_away {
+        if !is_persistent
+            && mob.living.no_action_time > 600
+            && mob.entity.random.next_int_bounded(800) == 0
+            && dist_sqr > no_despawn_distance_sqr
+            && self.remove_when_far_away(id, dist_sqr)
+        {
             self.remove(id, super::RemovalReason::Discarded);
-        } else if dist_sqr < no_despawn {
-            mob.living.no_action_time = 0;
+        } else if dist_sqr < no_despawn_distance_sqr {
+            self.mob_mut(id).expect("a mob").living.no_action_time = 0;
         }
     }
 
@@ -1025,30 +1442,161 @@ impl ServerLevel {
         best.map(|(id, _)| id)
     }
 
-    pub fn finalize_mob_spawn(&mut self, mob: &mut Mob) {
-        let pos = mob.entity.block_position();
-        match mob.kind {
+    pub fn finalize_spawn_detached(&mut self, entity: LevelEntity, difficulty: &DifficultyInstance, spawn_reason: EntitySpawnReason, group_data: Option<SpawnGroupData>) -> (LevelEntity, Option<SpawnGroupData>) {
+        let id = entity.entity().id;
+        self.entities.insert(id, entity);
+        let group_data = self.finalize_spawn(id, difficulty, spawn_reason, group_data);
+        let entity = self.entities.shift_remove(&id).expect("the finalized mob");
+        (entity, group_data)
+    }
+
+    pub fn finalize_spawn(&mut self, id: EntityId, difficulty: &DifficultyInstance, spawn_reason: EntitySpawnReason, group_data: Option<SpawnGroupData>) -> Option<SpawnGroupData> {
+        let pos = self.entity(id).block_position();
+        match self.mob(id).expect("a mob").kind {
+            MobKind::Zombie(_) => return self.zombie_finalize_spawn(id, difficulty, spawn_reason, group_data),
+            MobKind::Husk(_) => return self.husk_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Chicken(_) => {
                 if let Some(variant) = self.select_chicken_variant_to_spawn(pos) {
-                    mob.entity.data.set(chicken::DATA_VARIANT, DataValue::ChickenVariant(variant));
+                    self.entity_mut(id).data.set(chicken::DATA_VARIANT, DataValue::ChickenVariant(variant));
                 }
                 let sound_variant = self.pick_random_chicken_sound_variant();
-                mob.entity.data.set(chicken::DATA_SOUND_VARIANT, DataValue::ChickenSoundVariant(sound_variant));
+                self.entity_mut(id).data.set(chicken::DATA_SOUND_VARIANT, DataValue::ChickenSoundVariant(sound_variant));
             }
-            MobKind::Cow(_) => self.cow_finalize_spawn(mob, pos),
+            MobKind::Cow(_) => self.cow_finalize_spawn(id, pos),
             MobKind::MushroomCow(_) => {}
-            MobKind::Pig(_) => self.pig_finalize_spawn(mob, pos),
-            MobKind::Sheep(_) => self.sheep_finalize_spawn(mob, pos),
+            MobKind::Pig(_) => self.pig_finalize_spawn(id, pos),
+            MobKind::Sheep(_) => self.sheep_finalize_spawn(id, pos),
         }
-        if let Some(follow_range) = mob.living.attributes.instance(Attribute::FollowRange)
-            && !follow_range.has_modifier("minecraft:random_spawn_bonus")
-        {
+        self.mob_finalize_spawn(id, difficulty, spawn_reason, group_data)
+    }
+
+    pub fn mob_finalize_spawn(&mut self, id: EntityId, _difficulty: &DifficultyInstance, _spawn_reason: EntitySpawnReason, group_data: Option<SpawnGroupData>) -> Option<SpawnGroupData> {
+        let has_modifier = self.mob(id).expect("a mob").living.attributes.has_modifier(Attribute::FollowRange, RANDOM_SPAWN_BONUS_ID);
+        if !has_modifier {
+            let amount = self.random.triangle(0.0, 0.11485000000000001);
+            let mob = self.mob_mut(id).expect("a mob");
+            let follow_range = mob.living.attributes.instance(Attribute::FollowRange).expect("mobs have a follow range");
             follow_range.add_permanent_modifier(super::attributes::AttributeModifier {
-                id: std::borrow::Cow::Borrowed("minecraft:random_spawn_bonus"),
-                amount: self.random.triangle(0.0, 0.11485000000000001),
+                id: std::borrow::Cow::Borrowed(RANDOM_SPAWN_BONUS_ID),
+                amount,
                 operation: super::attributes::Operation::AddMultipliedBase,
             });
         }
-        mob.set_left_handed(self.random.next_float() < 0.05);
+        let left_handed = self.random.next_float() < 0.05;
+        self.mob_mut(id).expect("a mob").set_left_handed(left_handed);
+        group_data
+    }
+
+    pub fn populate_default_equipment_slots(&mut self, id: EntityId, difficulty: &DifficultyInstance) {
+        match self.mob(id).expect("a mob").kind {
+            MobKind::Zombie(_) | MobKind::Husk(_) => self.zombie_populate_default_equipment_slots(id, difficulty),
+            _ => self.mob_populate_default_equipment_slots(id, difficulty),
+        }
+    }
+
+    pub fn mob_populate_default_equipment_slots(&mut self, id: EntityId, difficulty: &DifficultyInstance) {
+        if self.random.next_float() < MAX_WEARING_ARMOR_CHANCE * difficulty.get_special_multiplier() {
+            let mut armor_type = self.random.next_int_bounded(3);
+            let mut i = 1;
+            while i as f32 <= WEARING_ARMOR_UPGRADE_MATERIAL_ATTEMPTS {
+                if self.random.next_float() < WEARING_ARMOR_UPGRADE_MATERIAL_CHANCE {
+                    armor_type += 1;
+                }
+                i += 1;
+            }
+            let partial_chance = if self.difficulty == Difficulty::Hard { 0.1 } else { 0.25 };
+            let mut first = true;
+            for slot in EQUIPMENT_POPULATION_ORDER {
+                let item_stack = self.item_by_slot(id, slot);
+                if !first && self.random.next_float() < partial_chance {
+                    break;
+                }
+                first = false;
+                if item_stack.is_none()
+                    && let Some(equip) = get_equipment_for_slot(slot, armor_type)
+                {
+                    self.living_set_item_slot(id, slot, ItemStack::new(equip, 1));
+                }
+            }
+        }
+    }
+
+    pub fn populate_default_equipment_enchantments(&mut self, id: EntityId, local_difficulty: &DifficultyInstance) {
+        self.enchant_spawned_weapon(id, local_difficulty);
+        for slot in EquipmentSlot::VALUES {
+            if is_humanoid_armor(slot) {
+                self.enchant_spawned_armor(id, slot, local_difficulty);
+            }
+        }
+    }
+
+    fn enchant_spawned_weapon(&mut self, id: EntityId, difficulty: &DifficultyInstance) {
+        self.enchant_spawned_equipment(id, EquipmentSlot::Mainhand, MAX_ENCHANTED_WEAPON_CHANCE, difficulty);
+    }
+
+    fn enchant_spawned_armor(&mut self, id: EntityId, slot: EquipmentSlot, difficulty: &DifficultyInstance) {
+        self.enchant_spawned_equipment(id, slot, MAX_ENCHANTED_ARMOR_CHANCE, difficulty);
+    }
+
+    fn enchant_spawned_equipment(&mut self, id: EntityId, slot: EquipmentSlot, chance: f32, difficulty: &DifficultyInstance) {
+        let Some(mut item_stack) = self.item_by_slot(id, slot) else { return };
+        if self.random.next_float() < chance * difficulty.get_special_multiplier() {
+            enchantment_helper::enchant_item_from_provider(&mut item_stack, &vanilla_enchantment_providers::MOB_SPAWN_EQUIPMENT, difficulty, &mut self.random);
+            self.living_set_item_slot(id, slot, item_stack);
+        }
+    }
+}
+
+fn is_humanoid_armor(slot: EquipmentSlot) -> bool {
+    matches!(slot, EquipmentSlot::Feet | EquipmentSlot::Legs | EquipmentSlot::Chest | EquipmentSlot::Head)
+}
+
+fn limit(slot: EquipmentSlot, mut to_equip: ItemStack) -> ItemStack {
+    if slot == EquipmentSlot::Mainhand || slot == EquipmentSlot::Offhand { to_equip } else { to_equip.split(1) }
+}
+
+fn can_replace_equal_item(new_item_stack: &ItemStack, current_item_stack: &ItemStack) -> bool {
+    let enchantments = |stack: &ItemStack| stack.get(dc::ENCHANTMENTS).map_or(0, |enchantments| ItemEnchantments::from_nbt(enchantments).enchantments.len());
+    let (current_enchantments, new_enchantments) = (enchantments(current_item_stack), enchantments(new_item_stack));
+    if new_enchantments != current_enchantments {
+        return new_enchantments > current_enchantments;
+    }
+    let (new_damage_value, current_damage_value) = (new_item_stack.damage_value(), current_item_stack.damage_value());
+    if new_damage_value != current_damage_value {
+        new_damage_value < current_damage_value
+    } else {
+        new_item_stack.has(dc::CUSTOM_NAME) && !current_item_stack.has(dc::CUSTOM_NAME)
+    }
+}
+
+fn compute_attribute_modifiers(item_stack: &ItemStack, attribute: Attribute, base_value: f64, slot: EquipmentSlot) -> f64 {
+    let mut value = base_value;
+    let Some(modifiers) = item_stack.get(dc::ATTRIBUTE_MODIFIERS) else { return value };
+    for entry in modifiers.as_list() {
+        let entry_attribute = entry.get("type").and_then(Nbt::as_str).and_then(Attribute::by_name);
+        let group = entry.get("slot").map_or(Ok(EquipmentSlotGroup::Any), crate::world::item::enchantment::enchantment::slot_group);
+        if entry_attribute == Some(attribute) && group.is_ok_and(|group| group.test(slot)) {
+            let amount = entry.get("amount").map_or(0.0, crate::world::item::component::codec::as_f64);
+            value += match entry.get("operation").and_then(Nbt::as_str).and_then(super::attributes::Operation::by_name) {
+                Some(super::attributes::Operation::AddValue) | None => amount,
+                Some(super::attributes::Operation::AddMultipliedBase) => amount * base_value,
+                Some(super::attributes::Operation::AddMultipliedTotal) => amount * value,
+            };
+        }
+    }
+    value
+}
+
+pub fn get_equipment_for_slot(slot: EquipmentSlot, ty: i32) -> Option<Item> {
+    let by_type = |types: [Item; 6]| (0..6).contains(&ty).then(|| types[ty as usize]);
+    match slot {
+        EquipmentSlot::Head => by_type([items::LEATHER_HELMET, items::COPPER_HELMET, items::GOLDEN_HELMET, items::CHAINMAIL_HELMET, items::IRON_HELMET, items::DIAMOND_HELMET])
+            .or_else(|| get_equipment_for_slot(EquipmentSlot::Chest, ty)),
+        EquipmentSlot::Chest => by_type([items::LEATHER_CHESTPLATE, items::COPPER_CHESTPLATE, items::GOLDEN_CHESTPLATE, items::CHAINMAIL_CHESTPLATE, items::IRON_CHESTPLATE, items::DIAMOND_CHESTPLATE])
+            .or_else(|| get_equipment_for_slot(EquipmentSlot::Legs, ty)),
+        EquipmentSlot::Legs => by_type([items::LEATHER_LEGGINGS, items::COPPER_LEGGINGS, items::GOLDEN_LEGGINGS, items::CHAINMAIL_LEGGINGS, items::IRON_LEGGINGS, items::DIAMOND_LEGGINGS])
+            .or_else(|| get_equipment_for_slot(EquipmentSlot::Feet, ty)),
+        EquipmentSlot::Feet => by_type([items::LEATHER_BOOTS, items::COPPER_BOOTS, items::GOLDEN_BOOTS, items::CHAINMAIL_BOOTS, items::IRON_BOOTS, items::DIAMOND_BOOTS]),
+        _ => None,
     }
 }

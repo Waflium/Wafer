@@ -210,6 +210,16 @@ pub fn get_enchantment_cost(random: &mut impl RandomSource, slot: i32, mut bookc
     }
 }
 
+pub fn enchant_item_from_provider(
+    item_stack: &mut ItemStack,
+    provider: &super::providers::enchantment_provider::EnchantmentProvider,
+    difficulty: &crate::world::difficulty_instance::DifficultyInstance,
+    random: &mut impl RandomSource,
+) {
+    let item = item_stack.clone();
+    update_enchantments(item_stack, |enchantments| provider.enchant(&item, enchantments, random, difficulty));
+}
+
 pub fn enchant_item(random: &mut impl RandomSource, mut item_stack: ItemStack, enchantment_cost: i32, source: &[&str]) -> ItemStack {
     let enchants = select_enchantment(random, &item_stack, enchantment_cost, source);
     if item_stack.is(items::BOOK) {

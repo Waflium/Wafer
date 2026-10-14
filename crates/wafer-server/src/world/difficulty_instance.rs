@@ -19,6 +19,32 @@ impl DifficultyInstance {
     pub fn new(base: Difficulty, total_game_time: i64, local_game_time: i64, moon_brightness: f32) -> DifficultyInstance {
         DifficultyInstance { base, effective_difficulty: calculate_difficulty(base, total_game_time, local_game_time, moon_brightness) }
     }
+
+    pub fn get_difficulty(&self) -> Difficulty {
+        self.base
+    }
+
+    pub fn get_effective_difficulty(&self) -> f32 {
+        self.effective_difficulty
+    }
+
+    pub fn is_hard(&self) -> bool {
+        self.effective_difficulty >= Difficulty::Hard as i32 as f32
+    }
+
+    pub fn is_harder_than(&self, required_difficulty: f32) -> bool {
+        self.effective_difficulty > required_difficulty
+    }
+
+    pub fn get_special_multiplier(&self) -> f32 {
+        if self.effective_difficulty < 2.0 {
+            0.0
+        } else if self.effective_difficulty > 4.0 {
+            1.0
+        } else {
+            (self.effective_difficulty - 2.0) / 2.0
+        }
+    }
 }
 
 fn calculate_difficulty(base: Difficulty, total_game_time: i64, local_game_time: i64, moon_brightness: f32) -> f32 {

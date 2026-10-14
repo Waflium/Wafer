@@ -85,6 +85,14 @@ pub fn type_can_open_by_hand(door: Block) -> bool {
     CAN_OPEN_BY_HAND[door.0 as usize]
 }
 
+pub fn is_wooden_door(level: &mut ServerLevel, pos: BlockPos) -> bool {
+    is_wooden_door_state(level.block_state(pos))
+}
+
+pub fn is_wooden_door_state(state: BlockState) -> bool {
+    type_can_open_by_hand(state.block())
+}
+
 fn prevent_drop_from_bottom_part(level: &mut ServerLevel, pos: BlockPos, state: BlockState, player: EntityId) {
     if state.get(DOUBLE_BLOCK_HALF) != DoubleBlockHalf::Upper {
         return;

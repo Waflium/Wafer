@@ -161,7 +161,7 @@ impl EnchantmentEntityEffect {
                     return;
                 }
                 let entity_type = registry::ENTITY_TYPE[contents[level.random.next_int_bounded(contents.len() as i32) as usize] as usize];
-                let Some(spawned) = level.spawn_entity_type(entity_type, block_pos) else { return };
+                let Some(spawned) = level.spawn_entity_type(entity_type, block_pos, crate::world::entity::entity_spawn_reason::EntitySpawnReason::Triggered) else { return };
                 if let Some(owner) = item.owner.filter(|&owner| level.is_player(owner))
                     && let Some(LevelEntity::LightningBolt(bolt)) = level.entities.get_mut(&spawned)
                 {

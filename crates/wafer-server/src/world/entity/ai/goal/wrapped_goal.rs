@@ -66,4 +66,8 @@ impl WrappedGoal {
     pub fn get_goal(&self) -> &Goal {
         &self.goal
     }
+
+    pub fn into_goal(self) -> Goal {
+        self.goal
+    }
 }

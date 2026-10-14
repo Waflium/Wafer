@@ -15,6 +15,18 @@ impl GoalSelector {
         self.available_goals.push(WrappedGoal::new(prio, goal));
     }
 
+    pub fn remove_goal(&mut self, to_remove: impl Fn(&Goal) -> bool) -> Option<WrappedGoal> {
+        let index = self.available_goals.iter().position(|wrapped_goal| to_remove(wrapped_goal.get_goal()))?;
+        for locked in &mut self.locked_flags {
+            match *locked {
+                Some(goal) if goal == index => *locked = None,
+                Some(goal) if goal > index => *locked = Some(goal - 1),
+                _ => {}
+            }
+        }
+        Some(self.available_goals.remove(index))
+    }
+
     fn goal_contains_any_flags(goal: &WrappedGoal, disabled_flags: u8) -> bool {
         goal.get_flags() & disabled_flags != 0
     }
