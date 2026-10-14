@@ -1377,41 +1377,60 @@ impl ServerLevel {
         if let Some(LevelEntity::FallingBlock(_)) = self.entities.get(&id) {
             return self.falling_block_cause_fall_damage(id, fall_distance);
         }
+        if self.is_player(id) {
+            return self.player_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
+        }
+        if self.is_living(id) {
+            return self.living_entity_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
+        }
+        self.entity_cause_fall_damage(id, fall_distance, damage_modifier, damage_source)
+    }
+
+    pub fn entity_cause_fall_damage(&mut self, id: EntityId, fall_distance: f64, damage_modifier: f32, damage_source: crate::world::damagesource::DamageSource) -> bool {
         if entity_type_tags::FALL_DAMAGE_IMMUNE.contains(self.entity(id).entity_type as usize) {
             return false;
         }
         self.propagate_fall_to_passengers(id, fall_distance, damage_modifier, damage_source);
-        let Some(p) = self.players.get_mut(&id) else { return false };
-        if p.abilities_may_fly() {
+        false
+    }
+
+    pub fn player_cause_fall_damage(&mut self, id: EntityId, fall_distance: f64, damage_modifier: f32, damage_source: crate::world::damagesource::DamageSource) -> bool {
+        if self.player(id).abilities_may_fly() {
             return false;
         }
         if fall_distance >= 2.0 {
             self.award_stat(id, crate::stats::stats::FALL_ONE_CM, mth::java_round(fall_distance * 100.0) as i32);
         }
-        let p = self.players.get_mut(&id).expect("a player");
-        let effective = match p.living.current_impulse_impact_pos {
+        self.living_entity_cause_fall_damage(id, fall_distance, damage_modifier, damage_source)
+    }
+
+    pub fn living_entity_cause_fall_damage(&mut self, id: EntityId, fall_distance: f64, damage_modifier: f32, damage_source: crate::world::damagesource::DamageSource) -> bool {
+        let y = self.entity(id).y();
+        let living = self.living_mut(id);
+        let effective_fall_distance = match living.current_impulse_impact_pos {
             Some(impact) => {
-                let effective = fall_distance.min(impact.y - p.entity.y());
-                if effective <= 0.0 {
-                    p.living.reset_current_impulse_context();
+                let effective_fall_distance = fall_distance.min(impact.y - y);
+                if effective_fall_distance <= 0.0 {
+                    living.reset_current_impulse_context();
                 } else {
-                    p.living.try_reset_current_impulse_context();
+                    living.try_reset_current_impulse_context();
                 }
-                effective
+                effective_fall_distance
             }
             None => fall_distance,
         };
-        let damage = self.calculate_fall_damage(id, effective, damage_modifier);
-        if damage > 0 {
+        let damaged = self.entity_cause_fall_damage(id, effective_fall_distance, damage_modifier, damage_source);
+        let dmg = self.calculate_fall_damage(id, effective_fall_distance, damage_modifier);
+        if dmg > 0 {
             self.living_mut(id).reset_current_impulse_context();
             let (small, big) = self.fall_sounds(id);
-            let sound = if damage > 4 { big } else { small };
+            let sound = if dmg > 4 { big } else { small };
             self.entity_play_sound(id, sound_event(sound), 1.0, 1.0);
             self.play_block_fall_sound(id);
-            self.hurt(id, damage_source, damage as f32);
+            self.hurt(id, damage_source, dmg as f32);
             return true;
         }
-        false
+        damaged
     }
 
     fn propagate_fall_to_passengers(&mut self, id: EntityId, fall_distance: f64, damage_modifier: f32, damage_source: crate::world::damagesource::DamageSource) {
