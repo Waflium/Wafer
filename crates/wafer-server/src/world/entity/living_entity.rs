@@ -874,9 +874,8 @@ impl ServerLevel {
         let durability_damage = (damage / 4.0).max(1.0) as i32;
         for &slot in slots {
             let Some(stack) = self.item_by_slot(id, slot) else { continue };
-            let info = stack.item.info();
-            let can_be_hurt_by = info.damage_resistant.is_none_or(|tag| !source.is(tag));
-            if info.equipment_slot.is_some() && info.damage_on_hurt && stack.is_damageable_item() && can_be_hurt_by {
+            let damage_on_hurt = stack.get(dc::EQUIPPABLE).is_some_and(|equippable| crate::world::item::component::values::Equippable::from_nbt(equippable).damage_on_hurt);
+            if damage_on_hurt && stack.is_damageable_item() && stack.can_be_hurt_by(source) {
                 self.hurt_and_break(id, slot, durability_damage);
             }
         }
