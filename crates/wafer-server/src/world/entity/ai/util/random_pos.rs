@@ -1,5 +1,5 @@
 use wafer_core::random::RandomSource;
-use wafer_core::{BlockPos, Vec3};
+use wafer_core::{BlockPos, Vec3, mth};
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
@@ -9,6 +9,30 @@ pub fn generate_random_direction(random: &mut impl RandomSource, horizontal_dist
     let yt = random.next_int_bounded(2 * vertical_dist + 1) - vertical_dist;
     let zt = random.next_int_bounded(2 * horizontal_dist + 1) - horizontal_dist;
     BlockPos::new(xt, yt, zt)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn generate_random_direction_within_radians(
+    random: &mut impl RandomSource,
+    min_horizontal_dist: f64,
+    max_horizontal_dist: f64,
+    vertical_dist: i32,
+    flying_height: i32,
+    x_dir: f64,
+    z_dir: f64,
+    max_xz_radians_from_dir: f64,
+) -> Option<BlockPos> {
+    let y_radians_center = mth::atan2(z_dir, x_dir) - std::f32::consts::FRAC_PI_2 as f64;
+    let y_radians = y_radians_center + (2.0 * random.next_float() - 1.0) as f64 * max_xz_radians_from_dir;
+    let dist = mth::lerp(random.next_double().sqrt(), min_horizontal_dist, max_horizontal_dist) * mth::SQRT_OF_TWO as f64;
+    let xt = -dist * y_radians.sin();
+    let zt = dist * y_radians.cos();
+    if !(xt.abs() > max_horizontal_dist) && !(zt.abs() > max_horizontal_dist) {
+        let yt = random.next_int_bounded(2 * vertical_dist + 1) - vertical_dist + flying_height;
+        Some(BlockPos::containing(xt, yt as f64, zt))
+    } else {
+        None
+    }
 }
 
 pub fn move_up_out_of_solid(pos: BlockPos, max_y: i32, solidity_tester: impl Fn(BlockPos) -> bool) -> BlockPos {

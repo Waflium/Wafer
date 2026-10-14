@@ -1,3 +1,4 @@
+pub mod avoid_entity_goal;
 pub mod break_door_goal;
 pub mod breed_goal;
 pub mod door_interact_goal;
