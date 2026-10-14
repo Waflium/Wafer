@@ -1,10 +1,11 @@
 use wafer_core::{AABB, Axis, BlockPos, Direction, Vec3};
-use wafer_data::BlockState;
 use wafer_data::packets::play::clientbound;
+use wafer_data::{BlockState, fluid_tags, mob_effects};
 
 use super::ServerLevel;
 use super::events::{PARTICLES_AND_SOUND_DESTROY_PROGRESS, PARTICLES_DESTROY_PROGRESS};
 use crate::advancements::triggers::criteria_triggers;
+use crate::world::effect::mob_effect_util;
 use crate::world::entity::EntityId;
 use crate::world::entity::attributes::Attribute;
 use crate::world::entity::player::abilities::Abilities;
@@ -195,6 +196,20 @@ impl ServerLevel {
     fn player_destroy_speed(&self, player: EntityId, state: BlockState) -> f32 {
         let p = self.player(player);
         let mut speed = p.inventory.held().map_or(1.0, |s| s.destroy_speed(state));
+        if speed > 1.0 {
+            speed += p.living.attributes.value(Attribute::MiningEfficiency) as f32;
+        }
+        if mob_effect_util::has_dig_speed(&p.living) {
+            speed *= 1.0 + (mob_effect_util::get_dig_speed_amplification(&p.living) + 1) as f32 * 0.2;
+        }
+        if let Some(mining_fatigue) = p.living.effect(mob_effects::MINING_FATIGUE) {
+            let scale = 0.3f64.powf((mining_fatigue.amplifier + 1) as f64) as f32;
+            speed *= scale;
+        }
+        speed *= p.living.attributes.value(Attribute::BlockBreakSpeed) as f32;
+        if p.entity.is_eye_in_fluid(&fluid_tags::WATER) {
+            speed *= p.living.attributes.value(Attribute::SubmergedMiningSpeed) as f32;
+        }
         if !p.entity.on_ground {
             speed /= 5.0;
         }
@@ -653,5 +668,20 @@ mod adventure_mode_tests {
         level.set_block_simple(pos, blocks::CRAFTING_TABLE.default_state());
         assert!(level.use_item_on(player, InteractionHand::MainHand, hit).consumes_action());
         assert!(level.player(player).container_menu.is_some());
+    }
+
+    #[test]
+    fn haste_and_mining_fatigue_change_destroy_speed() {
+        use crate::world::effect::MobEffectInstance;
+        use wafer_data::mob_effects;
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 2.5), 180.0, 60.0);
+        level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(ItemStack::new(items::DIAMOND_PICKAXE, 1)));
+        let stone = blocks::STONE.default_state();
+        let base = level.player_destroy_speed(player, stone);
+        level.add_effect(player, MobEffectInstance::new(mob_effects::HASTE, 100, 1), None);
+        assert_eq!(level.player_destroy_speed(player, stone), base * 1.4);
+        level.add_effect(player, MobEffectInstance::new(mob_effects::MINING_FATIGUE, 100, 0), None);
+        assert_eq!(level.player_destroy_speed(player, stone), base * 1.4 * 0.3);
     }
 }
