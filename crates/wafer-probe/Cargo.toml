@@ -1,0 +1,13 @@
+[package]
+name = "wafer-probe"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+wafer-data.workspace = true
+wafer-protocol.workspace = true
+flate2 = "1.1.10"
+serde_json.workspace = true
+tokio = { workspace = true, features = ["fs"] }

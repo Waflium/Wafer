@@ -1,0 +1,40 @@
+use wafer_core::{BlockPos, Direction};
+use wafer_data::properties::{HORIZONTAL_FACING, SEGMENT_AMOUNT};
+use wafer_data::{Block, BlockState, SupportType};
+
+use super::BlockBehaviour;
+use super::mirror::Mirror;
+use super::rotation::Rotation;
+use super::segmentable_block;
+use super::vegetation_block;
+use crate::server::level::ServerLevel;
+use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::{LevelAccessor, LevelReader};
+
+pub struct LeafLitterBlock;
+
+impl BlockBehaviour for LeafLitterBlock {
+    fn rotate(&self, state: BlockState, rotation: Rotation) -> BlockState {
+        state.set(HORIZONTAL_FACING, rotation.rotate(state.get(HORIZONTAL_FACING)))
+    }
+
+    fn mirror(&self, state: BlockState, mirror: Mirror) -> BlockState {
+        super::rotate(state, mirror.get_rotation(state.get(HORIZONTAL_FACING)))
+    }
+
+    fn get_state_for_placement(&self, block: Block, ctx: &BlockPlaceContext, level: &mut ServerLevel) -> Option<BlockState> {
+        Some(segmentable_block::get_state_for_placement(ctx, level, block, SEGMENT_AMOUNT))
+    }
+
+    fn can_be_replaced(&self, state: BlockState, ctx: &BlockPlaceContext) -> bool {
+        segmentable_block::can_be_replaced(state, ctx, SEGMENT_AMOUNT) || vegetation_block::block_can_be_replaced(state, ctx)
+    }
+
+    fn update_shape(&self, state: BlockState, level: &mut dyn LevelAccessor, pos: BlockPos, _: Direction, _: BlockPos, _: BlockState) -> BlockState {
+        vegetation_block::update_shape(state, level, pos)
+    }
+
+    fn can_survive(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
+        level.block_state(pos.below()).is_face_sturdy(Direction::Up, SupportType::Full)
+    }
+}

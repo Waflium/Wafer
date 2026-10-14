@@ -1,0 +1,26 @@
+pub mod abstract_container_menu;
+pub mod abstract_crafting_menu;
+pub mod abstract_furnace_menu;
+pub mod anvil_menu;
+pub mod beacon_menu;
+pub mod cartography_table_menu;
+pub mod crafter_menu;
+pub mod crafting_menu;
+pub mod enchantment_menu;
+pub mod grindstone_menu;
+pub mod inventory_menu;
+pub mod item_combiner_menu;
+pub mod lectern_menu;
+pub mod loom_menu;
+pub mod menu_provider;
+pub mod player_ender_chest_container;
+pub mod recipe_book_menu;
+pub mod recipe_book_type;
+pub mod result_container;
+pub mod slot;
+pub mod slot_ranges;
+pub mod smithing_menu;
+pub mod stonecutter_menu;
+#[cfg(test)]
+mod tests;
+pub mod transient_crafting_container;

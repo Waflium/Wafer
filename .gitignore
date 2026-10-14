@@ -1,0 +1,9 @@
+/target
+/.vanilla
+/generated
+/logs
+/run
+/.claude
+/CLAUDE.md
+/PROGRESS.md
+/xtask/oracle

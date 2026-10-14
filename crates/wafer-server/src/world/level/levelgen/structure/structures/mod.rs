@@ -1,0 +1,340 @@
+pub mod buried_treasure_pieces;
+pub mod buried_treasure_structure;
+pub mod desert_pyramid_piece;
+pub mod desert_pyramid_structure;
+pub mod end_city_pieces;
+pub mod end_city_structure;
+pub mod igloo_pieces;
+pub mod igloo_structure;
+pub mod jigsaw_structure;
+pub mod jungle_temple_piece;
+pub mod mineshaft_pieces;
+pub mod mineshaft_structure;
+pub mod nether_fortress_pieces;
+pub mod nether_fortress_structure;
+pub mod nether_fossil_pieces;
+pub mod nether_fossil_structure;
+pub mod ocean_ruin_pieces;
+pub mod ocean_ruin_structure;
+pub mod shipwreck_pieces;
+pub mod shipwreck_structure;
+pub mod stronghold_pieces;
+pub mod stronghold_structure;
+pub mod ruined_portal_piece;
+pub mod ruined_portal_structure;
+pub mod ocean_monument_pieces;
+pub mod ocean_monument_structure;
+pub mod swamp_hut_piece;
+pub mod swamp_hut_structure;
+pub mod woodland_mansion_pieces;
+pub mod woodland_mansion_structure;
+
+use wafer_core::random::RandomSource;
+use wafer_core::{BlockPos, ChunkPos};
+use wafer_protocol::nbt::Nbt;
+use serde_json::Value;
+
+use buried_treasure_pieces::BuriedTreasurePiece;
+use desert_pyramid_piece::DesertPyramidPiece;
+use end_city_pieces::EndCityPiece;
+use igloo_pieces::IglooPiece;
+use jungle_temple_piece::JungleTemplePiece;
+use mineshaft_pieces::{MineShaftCorridor, MineShaftCrossing, MineShaftRoom, MineShaftStairs};
+use mineshaft_structure::MineshaftStructure;
+use nether_fortress_pieces::NetherBridgePieceKind;
+use nether_fossil_pieces::NetherFossilPiece;
+use nether_fossil_structure::NetherFossilStructure;
+use ocean_ruin_pieces::OceanRuinPiece;
+use ocean_ruin_structure::OceanRuinStructure;
+use shipwreck_pieces::ShipwreckPiece;
+use stronghold_pieces::StrongholdPieceKind;
+use ruined_portal_piece::RuinedPortalPiece;
+use ruined_portal_structure::RuinedPortalStructure;
+use ocean_monument_pieces::MonumentBuilding;
+use swamp_hut_piece::SwampHutPiece;
+use woodland_mansion_pieces::WoodlandMansionPiece;
+
+use super::BoundingBox;
+use super::pieces::pieces_container::PiecesContainer;
+use super::pool_element_structure_piece::{self, PoolElementStructurePiece};
+use super::single_piece_structure;
+use super::structure::{GenerationContext, GenerationStub};
+use super::structure_piece::StructurePiece;
+use crate::world::level::world_gen_level::WorldGenLevel;
+
+pub enum StructureType {
+    BuriedTreasure,
+    DesertPyramid,
+    EndCity,
+    Igloo,
+    Jigsaw(Box<jigsaw_structure::JigsawStructure>),
+    JungleTemple,
+    Mineshaft(MineshaftStructure),
+    NetherFortress,
+    NetherFossil(NetherFossilStructure),
+    OceanRuin(OceanRuinStructure),
+    Shipwreck { is_beached: bool },
+    Stronghold,
+    RuinedPortal(RuinedPortalStructure),
+    OceanMonument,
+    SwampHut,
+    WoodlandMansion,
+    NotImplemented,
+}
+
+impl StructureType {
+    pub fn parse(json: &Value) -> Result<StructureType, String> {
+        let ty = json.get("type").and_then(Value::as_str).ok_or("structure without type")?;
+        Ok(match ty.strip_prefix("minecraft:").unwrap_or(ty) {
+            "buried_treasure" => StructureType::BuriedTreasure,
+            "desert_pyramid" => StructureType::DesertPyramid,
+            "end_city" => StructureType::EndCity,
+            "igloo" => StructureType::Igloo,
+            "jigsaw" => StructureType::Jigsaw(Box::new(jigsaw_structure::JigsawStructure::parse(json)?)),
+            "jungle_temple" => StructureType::JungleTemple,
+            "mineshaft" => StructureType::Mineshaft(MineshaftStructure::parse(json)?),
+            "fortress" => StructureType::NetherFortress,
+            "nether_fossil" => StructureType::NetherFossil(NetherFossilStructure::parse(json)?),
+            "ocean_ruin" => StructureType::OceanRuin(OceanRuinStructure::parse(json)?),
+            "shipwreck" => StructureType::Shipwreck { is_beached: json.get("is_beached").and_then(Value::as_bool).ok_or("missing is_beached")? },
+            "stronghold" => StructureType::Stronghold,
+            "ruined_portal" => StructureType::RuinedPortal(RuinedPortalStructure::parse(json)?),
+            "ocean_monument" => StructureType::OceanMonument,
+            "swamp_hut" => StructureType::SwampHut,
+            "woodland_mansion" => StructureType::WoodlandMansion,
+            _ => StructureType::NotImplemented,
+        })
+    }
+
+    pub fn find_generation_point(&self, context: &mut GenerationContext) -> Option<GenerationStub<'static>> {
+        match self {
+            StructureType::BuriedTreasure => buried_treasure_structure::find_generation_point(context),
+            StructureType::DesertPyramid => {
+                single_piece_structure::find_generation_point(context, |random, x, z| Piece::DesertPyramid(DesertPyramidPiece::new(random, x, z)), 21, 21)
+            }
+            StructureType::EndCity => end_city_structure::find_generation_point(context),
+            StructureType::Igloo => igloo_structure::find_generation_point(context),
+            StructureType::Jigsaw(structure) => structure.find_generation_point(context),
+            StructureType::JungleTemple => {
+                single_piece_structure::find_generation_point(context, |random, x, z| Piece::JungleTemple(JungleTemplePiece::new(random, x, z)), 12, 15)
+            }
+            StructureType::Mineshaft(structure) => structure.find_generation_point(context),
+            StructureType::NetherFortress => nether_fortress_structure::find_generation_point(context),
+            StructureType::NetherFossil(structure) => structure.find_generation_point(context),
+            StructureType::OceanRuin(structure) => structure.find_generation_point(context),
+            StructureType::Shipwreck { is_beached } => shipwreck_structure::find_generation_point(context, *is_beached),
+            StructureType::Stronghold => stronghold_structure::find_generation_point(context),
+            StructureType::RuinedPortal(structure) => structure.find_generation_point(context),
+            StructureType::OceanMonument => ocean_monument_structure::find_generation_point(context),
+            StructureType::SwampHut => swamp_hut_structure::find_generation_point(context),
+            StructureType::WoodlandMansion => woodland_mansion_structure::find_generation_point(context),
+            StructureType::NotImplemented => None,
+        }
+    }
+
+    pub fn after_place(&self, level: &mut impl WorldGenLevel, _random: &mut impl RandomSource, chunk_bb: &BoundingBox, _chunk_pos: ChunkPos, pieces: &PiecesContainer) {
+        if let StructureType::DesertPyramid = self {
+            desert_pyramid_structure::after_place(level, chunk_bb, pieces);
+        }
+        if let StructureType::WoodlandMansion = self {
+            woodland_mansion_structure::after_place(level, chunk_bb, pieces);
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum Piece {
+    BuriedTreasure(BuriedTreasurePiece),
+    DesertPyramid(DesertPyramidPiece),
+    EndCity(EndCityPiece),
+    Igloo(IglooPiece),
+    Jigsaw(PoolElementStructurePiece),
+    JungleTemple(JungleTemplePiece),
+    MineShaftCorridor(MineShaftCorridor),
+    MineShaftCrossing(MineShaftCrossing),
+    MineShaftRoom(MineShaftRoom),
+    MineShaftStairs(MineShaftStairs),
+    NetherFortress(NetherBridgePieceKind),
+    NetherFossil(NetherFossilPiece),
+    OceanRuin(OceanRuinPiece),
+    Shipwreck(ShipwreckPiece),
+    Stronghold(StrongholdPieceKind),
+    RuinedPortal(RuinedPortalPiece),
+    OceanMonumentBuilding(MonumentBuilding),
+    SwampHut(SwampHutPiece),
+    WoodlandMansion(WoodlandMansionPiece),
+}
+
+impl Piece {
+    pub fn piece(&self) -> &StructurePiece {
+        match self {
+            Piece::BuriedTreasure(piece) => &piece.piece,
+            Piece::DesertPyramid(piece) => &piece.scattered.piece,
+            Piece::EndCity(piece) => &piece.template.piece,
+            Piece::Igloo(piece) => &piece.template.piece,
+            Piece::Jigsaw(piece) => &piece.piece,
+            Piece::JungleTemple(piece) => &piece.scattered.piece,
+            Piece::MineShaftCorridor(piece) => &piece.mine_shaft.piece,
+            Piece::MineShaftCrossing(piece) => &piece.mine_shaft.piece,
+            Piece::MineShaftRoom(piece) => &piece.mine_shaft.piece,
+            Piece::MineShaftStairs(piece) => &piece.mine_shaft.piece,
+            Piece::NetherFortress(piece) => piece.piece(),
+            Piece::NetherFossil(piece) => &piece.template.piece,
+            Piece::OceanRuin(piece) => &piece.template.piece,
+            Piece::Shipwreck(piece) => &piece.template.piece,
+            Piece::Stronghold(piece) => piece.piece(),
+            Piece::RuinedPortal(piece) => &piece.template.piece,
+            Piece::OceanMonumentBuilding(piece) => &piece.monument.piece,
+            Piece::SwampHut(piece) => &piece.scattered.piece,
+            Piece::WoodlandMansion(piece) => &piece.template.piece,
+        }
+    }
+
+    pub fn piece_mut(&mut self) -> &mut StructurePiece {
+        match self {
+            Piece::BuriedTreasure(piece) => &mut piece.piece,
+            Piece::DesertPyramid(piece) => &mut piece.scattered.piece,
+            Piece::EndCity(piece) => &mut piece.template.piece,
+            Piece::Igloo(piece) => &mut piece.template.piece,
+            Piece::Jigsaw(piece) => &mut piece.piece,
+            Piece::JungleTemple(piece) => &mut piece.scattered.piece,
+            Piece::MineShaftCorridor(piece) => &mut piece.mine_shaft.piece,
+            Piece::MineShaftCrossing(piece) => &mut piece.mine_shaft.piece,
+            Piece::MineShaftRoom(piece) => &mut piece.mine_shaft.piece,
+            Piece::MineShaftStairs(piece) => &mut piece.mine_shaft.piece,
+            Piece::NetherFortress(piece) => piece.piece_mut(),
+            Piece::NetherFossil(piece) => &mut piece.template.piece,
+            Piece::OceanMonumentBuilding(piece) => &mut piece.monument.piece,
+            Piece::OceanRuin(piece) => &mut piece.template.piece,
+            Piece::RuinedPortal(piece) => &mut piece.template.piece,
+            Piece::Shipwreck(piece) => &mut piece.template.piece,
+            Piece::Stronghold(piece) => piece.piece_mut(),
+            Piece::SwampHut(piece) => &mut piece.scattered.piece,
+            Piece::WoodlandMansion(piece) => &mut piece.template.piece,
+        }
+    }
+
+    pub fn move_by(&mut self, dx: i32, dy: i32, dz: i32) {
+        match self {
+            Piece::BuriedTreasure(piece) => piece.piece.move_by(dx, dy, dz),
+            Piece::DesertPyramid(piece) => piece.scattered.piece.move_by(dx, dy, dz),
+            Piece::EndCity(piece) => piece.template.move_by(dx, dy, dz),
+            Piece::Igloo(piece) => piece.template.move_by(dx, dy, dz),
+            Piece::Jigsaw(piece) => piece.move_by(dx, dy, dz),
+            Piece::JungleTemple(piece) => piece.scattered.piece.move_by(dx, dy, dz),
+            Piece::MineShaftCorridor(piece) => piece.mine_shaft.piece.move_by(dx, dy, dz),
+            Piece::MineShaftCrossing(piece) => piece.mine_shaft.piece.move_by(dx, dy, dz),
+            Piece::MineShaftRoom(piece) => piece.move_by(dx, dy, dz),
+            Piece::MineShaftStairs(piece) => piece.mine_shaft.piece.move_by(dx, dy, dz),
+            Piece::NetherFortress(piece) => piece.piece_mut().move_by(dx, dy, dz),
+            Piece::NetherFossil(piece) => piece.template.move_by(dx, dy, dz),
+            Piece::OceanMonumentBuilding(piece) => piece.monument.piece.move_by(dx, dy, dz),
+            Piece::OceanRuin(piece) => piece.template.move_by(dx, dy, dz),
+            Piece::RuinedPortal(piece) => piece.template.move_by(dx, dy, dz),
+            Piece::Shipwreck(piece) => piece.template.move_by(dx, dy, dz),
+            Piece::Stronghold(piece) => piece.piece_mut().move_by(dx, dy, dz),
+            Piece::SwampHut(piece) => piece.scattered.piece.move_by(dx, dy, dz),
+            Piece::WoodlandMansion(piece) => piece.template.move_by(dx, dy, dz),
+        }
+    }
+
+    pub fn load(piece_id: &str, tag: &Nbt) -> Option<Piece> {
+        Some(match piece_id {
+            buried_treasure_pieces::BURIED_TREASURE_PIECE => Piece::BuriedTreasure(BuriedTreasurePiece::load(tag)?),
+            desert_pyramid_piece::DESERT_PYRAMID_PIECE => Piece::DesertPyramid(DesertPyramidPiece::load(tag)?),
+            end_city_pieces::END_CITY_PIECE => Piece::EndCity(EndCityPiece::load(tag)?),
+            igloo_pieces::IGLOO => Piece::Igloo(IglooPiece::load(tag)?),
+            pool_element_structure_piece::JIGSAW => Piece::Jigsaw(PoolElementStructurePiece::load(tag)?),
+            jungle_temple_piece::JUNGLE_PYRAMID_PIECE => Piece::JungleTemple(JungleTemplePiece::load(tag)?),
+            mineshaft_pieces::MINE_SHAFT_CORRIDOR => Piece::MineShaftCorridor(MineShaftCorridor::load(tag)?),
+            mineshaft_pieces::MINE_SHAFT_CROSSING => Piece::MineShaftCrossing(MineShaftCrossing::load(tag)?),
+            mineshaft_pieces::MINE_SHAFT_ROOM => Piece::MineShaftRoom(MineShaftRoom::load(tag)?),
+            mineshaft_pieces::MINE_SHAFT_STAIRS => Piece::MineShaftStairs(MineShaftStairs::load(tag)?),
+            nether_fortress_pieces::NETHER_FORTRESS_BRIDGE_CROSSING
+            | nether_fortress_pieces::NETHER_FORTRESS_BRIDGE_END_FILLER
+            | nether_fortress_pieces::NETHER_FORTRESS_BRIDGE_STRAIGHT
+            | nether_fortress_pieces::NETHER_FORTRESS_CASTLE_CORRIDOR_STAIRS
+            | nether_fortress_pieces::NETHER_FORTRESS_CASTLE_CORRIDOR_T_BALCONY
+            | nether_fortress_pieces::NETHER_FORTRESS_CASTLE_ENTRANCE
+            | nether_fortress_pieces::NETHER_FORTRESS_CASTLE_SMALL_CORRIDOR_CROSSING
+            | nether_fortress_pieces::NETHER_FORTRESS_CASTLE_SMALL_CORRIDOR_LEFT_TURN
+            | nether_fortress_pieces::NETHER_FORTRESS_CASTLE_SMALL_CORRIDOR
+            | nether_fortress_pieces::NETHER_FORTRESS_CASTLE_SMALL_CORRIDOR_RIGHT_TURN
+            | nether_fortress_pieces::NETHER_FORTRESS_CASTLE_STALK_ROOM
+            | nether_fortress_pieces::NETHER_FORTRESS_MONSTER_THRONE
+            | nether_fortress_pieces::NETHER_FORTRESS_ROOM_CROSSING
+            | nether_fortress_pieces::NETHER_FORTRESS_STAIRS_ROOM
+            | nether_fortress_pieces::NETHER_FORTRESS_START => Piece::NetherFortress(NetherBridgePieceKind::load(piece_id, tag)?),
+            nether_fossil_pieces::NETHER_FOSSIL => Piece::NetherFossil(NetherFossilPiece::load(tag)?),
+            ocean_ruin_pieces::OCEAN_RUIN => Piece::OceanRuin(OceanRuinPiece::load(tag)?),
+            shipwreck_pieces::SHIPWRECK_PIECE => Piece::Shipwreck(ShipwreckPiece::load(tag)?),
+            stronghold_pieces::STRONGHOLD_CHEST_CORRIDOR
+            | stronghold_pieces::STRONGHOLD_FILLER_CORRIDOR
+            | stronghold_pieces::STRONGHOLD_FIVE_CROSSING
+            | stronghold_pieces::STRONGHOLD_LEFT_TURN
+            | stronghold_pieces::STRONGHOLD_LIBRARY
+            | stronghold_pieces::STRONGHOLD_PORTAL_ROOM
+            | stronghold_pieces::STRONGHOLD_PRISON_HALL
+            | stronghold_pieces::STRONGHOLD_RIGHT_TURN
+            | stronghold_pieces::STRONGHOLD_ROOM_CROSSING
+            | stronghold_pieces::STRONGHOLD_STAIRS_DOWN
+            | stronghold_pieces::STRONGHOLD_START
+            | stronghold_pieces::STRONGHOLD_STRAIGHT
+            | stronghold_pieces::STRONGHOLD_STRAIGHT_STAIRS_DOWN => Piece::Stronghold(StrongholdPieceKind::load(piece_id, tag)?),
+            ruined_portal_piece::RUINED_PORTAL => Piece::RuinedPortal(RuinedPortalPiece::load(tag)?),
+            ocean_monument_pieces::OCEAN_MONUMENT_BUILDING => Piece::OceanMonumentBuilding(MonumentBuilding::load(tag)?),
+            swamp_hut_piece::SWAMPLAND_HUT => Piece::SwampHut(SwampHutPiece::load(tag)?),
+            woodland_mansion_pieces::WOODLAND_MANSION_PIECE => Piece::WoodlandMansion(WoodlandMansionPiece::load(tag)?),
+            _ => return None,
+        })
+    }
+
+    pub fn create_tag(&self) -> Nbt {
+        let mut additional = Vec::new();
+        match self {
+            Piece::BuriedTreasure(_) | Piece::OceanMonumentBuilding(_) => {}
+            Piece::DesertPyramid(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::EndCity(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::Igloo(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::Jigsaw(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::JungleTemple(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::MineShaftCorridor(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::MineShaftCrossing(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::MineShaftRoom(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::MineShaftStairs(piece) => piece.mine_shaft.add_additional_save_data(&mut additional),
+            Piece::NetherFortress(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::NetherFossil(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::OceanRuin(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::Shipwreck(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::Stronghold(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::RuinedPortal(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::SwampHut(piece) => piece.add_additional_save_data(&mut additional),
+            Piece::WoodlandMansion(piece) => piece.add_additional_save_data(&mut additional),
+        }
+        self.piece().create_tag(additional)
+    }
+
+    pub fn post_process(&mut self, level: &mut impl WorldGenLevel, random: &mut impl RandomSource, chunk_bb: &BoundingBox, chunk_pos: ChunkPos, reference_pos: BlockPos) {
+        match self {
+            Piece::BuriedTreasure(piece) => piece.post_process(level, random, chunk_bb),
+            Piece::DesertPyramid(piece) => piece.post_process(level, random, chunk_bb),
+            Piece::EndCity(piece) => piece.post_process(level, random, chunk_bb, reference_pos),
+            Piece::Igloo(piece) => piece.post_process(level, random, chunk_bb, reference_pos),
+            Piece::Jigsaw(piece) => piece.post_process(level, random, chunk_bb, reference_pos),
+            Piece::JungleTemple(piece) => piece.post_process(level, random, chunk_bb),
+            Piece::MineShaftCorridor(piece) => piece.post_process(level, random, chunk_bb),
+            Piece::MineShaftCrossing(piece) => piece.post_process(level, chunk_bb),
+            Piece::MineShaftRoom(piece) => piece.post_process(level, chunk_bb),
+            Piece::MineShaftStairs(piece) => piece.post_process(level, chunk_bb),
+            Piece::NetherFortress(piece) => piece.post_process(level, random, chunk_bb),
+            Piece::NetherFossil(piece) => piece.post_process(level, random, chunk_bb, reference_pos),
+            Piece::OceanRuin(piece) => piece.post_process(level, random, chunk_bb, reference_pos),
+            Piece::Shipwreck(piece) => piece.post_process(level, random, chunk_bb, reference_pos),
+            Piece::Stronghold(piece) => piece.post_process(level, random, chunk_bb),
+            Piece::RuinedPortal(piece) => piece.post_process(level, random, chunk_bb, reference_pos),
+            Piece::OceanMonumentBuilding(piece) => piece.post_process(level, random, chunk_bb),
+            Piece::SwampHut(piece) => piece.post_process(level, chunk_bb, chunk_pos, reference_pos),
+            Piece::WoodlandMansion(piece) => piece.post_process(level, random, chunk_bb, reference_pos),
+        }
+    }
+}
