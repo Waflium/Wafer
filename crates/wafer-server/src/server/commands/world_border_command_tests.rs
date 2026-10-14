@@ -9,9 +9,10 @@ use crate::network::configuration::CommonListenerCookie;
 use crate::network::connection::Outbound;
 use crate::network::login::Profile;
 use crate::server::Server;
+use crate::server::level::testing;
 
 fn server() -> Server {
-    Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+    testing::server()
 }
 
 fn run(server: &mut Server, command: &str) -> Vec<String> {
@@ -194,8 +195,8 @@ fn the_spawn_stays_inside_the_border() {
 fn saved_with_the_overworld() {
     let dir = std::env::temp_dir().join(format!("wafer-worldborder-command-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let config = crate::ServerConfig { level_type: crate::LevelType::Flat, world: Some(dir.clone()), ..crate::ServerConfig::default() };
-    let mut first = Server::new(config.clone()).unwrap();
+    let config = crate::ServerConfig { world: Some(dir.clone()), ..testing::flat_config() };
+    let mut first = testing::server_with(config.clone());
     run(&mut first, "worldborder set 1000 100");
     run(&mut first, "worldborder damage buffer 2");
     for _ in 0..25 {
@@ -208,10 +209,10 @@ fn saved_with_the_overworld() {
     first.save_everything(true, true, true);
     assert!(file.exists());
     let size = first.levels[0].world_border.get_size();
-    let second = Server::new(config.clone()).unwrap();
+    let second = testing::server_with(config.clone());
     let border = &second.levels[0].world_border;
     assert_eq!((border.get_size(), border.get_lerp_time(), border.get_lerp_target(), border.get_safe_zone()), (size, 75, 1000.0, 2.0));
-    let small = Server::new(crate::ServerConfig { max_world_size: 200, ..config }).unwrap();
+    let small = testing::server_with(crate::ServerConfig { max_world_size: 200, ..config });
     let border = &small.levels[0].world_border;
     assert_eq!((border.get_min_x(), border.get_max_x(), border.get_absolute_max_size()), (-200.0, 200.0, 200));
     std::fs::remove_dir_all(dir).unwrap();

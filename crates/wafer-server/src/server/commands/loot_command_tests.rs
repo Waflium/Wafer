@@ -2,7 +2,7 @@ use crate::commands::completion_suggestions;
 use crate::commands::perform_prefixed_command;
 use crate::commands::source::CommandSourceStack;
 use crate::server::Server;
-use crate::{LevelType, ServerConfig};
+use crate::server::level::testing;
 
 fn run(server: &mut Server, command: &str) -> Vec<String> {
     server.console_log.borrow_mut().clear();
@@ -12,7 +12,7 @@ fn run(server: &mut Server, command: &str) -> Vec<String> {
 }
 
 fn flat_server() -> Server {
-    let mut server = Server::new(ServerConfig { level_type: LevelType::Flat, ..ServerConfig::default() }).unwrap();
+    let mut server = testing::server();
     run(&mut server, "forceload add -32 -32 32 32");
     server
 }

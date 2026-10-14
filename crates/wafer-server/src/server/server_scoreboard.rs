@@ -341,7 +341,7 @@ mod tests {
     use super::*;
     use crate::network::configuration::CommonListenerCookie;
     use crate::network::login::Profile;
-    use crate::server::Server;
+    use crate::server::level::testing;
     use crate::world::scores::criteria::{ObjectiveCriteria, RenderType};
     use crate::world::scores::score_holder::ScoreHolder;
 
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn joining_player_gets_teams_then_shown_objectives() {
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         let level = &mut server.levels[0];
         let foo = level.scoreboard.borrow_mut().add_objective("foo", ObjectiveCriteria::DUMMY, Component::literal("Foo"), RenderType::Integer, false, None);
         let hidden = level.scoreboard.borrow_mut().add_objective("hidden", ObjectiveCriteria::DUMMY, Component::literal("h"), RenderType::Integer, false, None);

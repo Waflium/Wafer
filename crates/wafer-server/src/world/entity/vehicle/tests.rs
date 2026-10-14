@@ -4,10 +4,11 @@ use wafer_protocol::nbt::Nbt;
 use crate::commands::perform_prefixed_command;
 use crate::commands::source::CommandSourceStack;
 use crate::server::Server;
+use crate::server::level::testing;
 use crate::world::entity::EntityId;
 
 fn server() -> Server {
-    let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+    let mut server = testing::server();
     for x in -2..=2 {
         for z in -2..=2 {
             server.levels[0].chunks.chunk(ChunkPos::new(x, z));

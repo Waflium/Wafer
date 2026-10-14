@@ -281,7 +281,7 @@ fn droppers_put_items_into_the_container_they_face() {
 }
 
 fn command_server() -> crate::server::Server {
-    let mut server = crate::server::Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+    let mut server = testing::server();
     server.levels[0].chunks.chunk(wafer_core::ChunkPos::new(0, 0));
     server
 }

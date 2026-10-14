@@ -19,7 +19,7 @@ use crate::world::entity::{EntityId, ItemEntity, LevelEntity};
 use crate::world::item::ItemStack;
 
 fn server() -> Server {
-    Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+    testing::server()
 }
 
 fn run_as(server: &mut Server, source: &CommandSourceStack, command: &str) -> Vec<String> {
@@ -705,8 +705,8 @@ fn bossbar() {
 fn forceload() {
     let dir = std::env::temp_dir().join(format!("wafer-forceload-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let config = || crate::ServerConfig { level_type: crate::LevelType::Flat, world: Some(dir.clone()), ..crate::ServerConfig::default() };
-    let mut server = Server::new(config()).unwrap();
+    let config = || crate::ServerConfig { world: Some(dir.clone()), ..testing::flat_config() };
+    let mut server = testing::server_with(config());
     let console = CommandSourceStack::server(&server);
     assert_eq!(run(&mut server, "forceload query"), ["No force loaded chunks were found in minecraft:overworld"]);
     assert_eq!(run(&mut server, "forceload add 100 100"), ["Marked chunk [6, 6] in minecraft:overworld to be force loaded"]);
@@ -721,7 +721,7 @@ fn forceload() {
     assert_eq!(exec(&mut server, &console, "forceload remove 80 80"), Ok(1));
     server.save_everything(true, true, true);
     drop(server);
-    let mut server = Server::new(config()).unwrap();
+    let mut server = testing::server_with(config());
     assert_eq!(server.levels[0].chunks.force_loaded_chunks().len(), 7);
     assert_eq!(run(&mut server, "forceload remove all"), ["Unmarked all force loaded chunks in minecraft:overworld"]);
     assert!(server.levels[0].chunks.force_loaded_chunks().is_empty());

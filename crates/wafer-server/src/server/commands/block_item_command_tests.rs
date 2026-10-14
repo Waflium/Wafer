@@ -15,7 +15,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 
 fn server() -> Server {
-    let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+    let mut server = testing::server();
     for x in -1..=1 {
         for z in -1..=1 {
             server.levels[0].chunks.chunk(ChunkPos::new(x, z));

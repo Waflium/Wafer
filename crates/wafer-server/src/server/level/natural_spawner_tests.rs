@@ -9,7 +9,9 @@ use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::mob_category::MobCategory;
 
 fn server() -> Server {
-    Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+    let mut server = testing::server();
+    server.set_game_rule(game_rule::SPAWN_MOBS, 1);
+    server
 }
 
 fn tick_until(server: &mut Server, game_time: i64) {

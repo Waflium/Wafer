@@ -418,10 +418,10 @@ static MODIFIERS: &[(&str, ModifierFn)] = &[
 
 #[cfg(test)]
 mod tests {
-    use crate::{LevelType, ServerConfig};
     use crate::commands::perform_prefixed_command;
     use crate::commands::source::CommandSourceStack;
     use crate::server::Server;
+    use crate::server::level::testing;
     use crate::world::clock::ServerClockManager;
 
     fn run(server: &mut Server, command: &str) -> Vec<String> {
@@ -437,7 +437,7 @@ mod tests {
 
     #[test]
     fn time_set_ticks_and_markers() {
-        let mut server = Server::new(ServerConfig { level_type: LevelType::Flat, ..ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         assert_eq!(run(&mut server, "time set 1000"), ["Set minecraft:overworld to 1000 tick(s)"]);
         assert_eq!(overworld_ticks(&server), 1000);
         run(&mut server, "time set 0.5d");
@@ -449,7 +449,7 @@ mod tests {
 
     #[test]
     fn syntax_errors_show_their_context() {
-        let mut server = Server::new(ServerConfig { level_type: LevelType::Flat, ..ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         assert_eq!(run(&mut server, "foo"), ["Unknown or incomplete command. See below for error", "foo<--[HERE]"]);
         assert_eq!(run(&mut server, "time set 1x"), ["Time marker minecraft:1x does not exist for clock minecraft:overworld"]);
         assert_eq!(run(&mut server, "time add 1x"), ["Invalid unit", "...ime add 1x<--[HERE]"]);
@@ -459,7 +459,7 @@ mod tests {
     #[test]
     fn help_matches_vanilla() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.vanilla/extracted");
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         for level in [0, 2, 4] {
             let expected = std::fs::read_to_string(dir.join(format!("help_{level}.txt"))).expect("run cargo xtask vanilla");
             let mut source = CommandSourceStack::server(&server);
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn bans_and_whitelist() {
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, online_mode: false, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server_with(crate::ServerConfig { online_mode: false, ..testing::flat_config() });
         assert_eq!(run(&mut server, "banlist"), ["There are no bans"]);
         assert_eq!(run(&mut server, "ban Bob"), ["Banned bob: Banned by an operator."]);
         assert_eq!(run(&mut server, "ban Bob"), ["Nothing changed. The player is already banned"]);
@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn execute_modifiers_and_conditions() {
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         assert_eq!(run(&mut server, "execute if entity @e"), ["Test failed"]);
         assert_eq!(run(&mut server, "execute unless entity @e"), ["Test passed"]);
         assert_eq!(run(&mut server, "execute if entity @e run seed").len(), 0);
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn game_rules() {
-        let mut server = Server::new(ServerConfig { level_type: LevelType::Flat, ..ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         assert_eq!(run(&mut server, "gamerule random_tick_speed"), ["Game rule random_tick_speed is currently set to 3"]);
         assert_eq!(run(&mut server, "gamerule minecraft:random_tick_speed 10"), ["Game rule random_tick_speed is now set to 10"]);
         assert_eq!(server.levels[0].game_rules.get_int(wafer_data::game_rule::RANDOM_TICK_SPEED), 10);
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn data_storage() {
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         assert_eq!(run(&mut server, "data get storage t:s"), ["Storage t:s has the following contents: {}"]);
         assert_eq!(run(&mut server, "data merge storage t:s {z:1,list:[1,2]}"), ["Modified storage t:s"]);
         assert_eq!(run(&mut server, "data merge storage t:s {z:1}"), ["Nothing changed. The specified properties already have these values"]);
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn execute_store_and_if_data() {
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         run(&mut server, "data merge storage t:s {list:[1,2],big:40000}");
         assert_eq!(run(&mut server, "execute store result storage t:s n int 3 run data get storage t:s list"), ["Storage t:s has the following contents: [1, 2]"]);
         run(&mut server, "execute store result storage t:s s short 1 run data get storage t:s big");
@@ -578,7 +578,7 @@ mod tests {
 
     #[test]
     fn idle_players_are_kicked() {
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         let id = crate::server::level::testing::server_player(&mut server, wafer_core::Vec3::new(5.5, -60.0, 5.5), 0.0, 0.0);
         assert_eq!(run(&mut server, "setidletimeout 1"), ["The player idle timeout is now 1 minute(s)"]);
         assert!(!server.kick_if_idle(id));
@@ -592,7 +592,7 @@ mod tests {
 
     #[test]
     fn particle_and_fillbiome_match_vanilla_messages() {
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         assert_eq!(run(&mut server, "particle dust{color:[1,0,0]} 0 -59 0"), ["Can't parse particle options: No key scale in MapLike[{color:[1,0,0]}]"]);
         assert_eq!(run(&mut server, "particle dust{color:[1,0,0],scale:5} 0 -59 0"), ["Can't parse particle options: Value must be within range [0.01;4.0]: 5.0"]);
         assert_eq!(
@@ -609,7 +609,7 @@ mod tests {
 
     #[test]
     fn summon() {
-        let mut server = Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap();
+        let mut server = testing::server();
         assert_eq!(run(&mut server, "summon tnt 0 -60 0 {fuse:5}"), ["Summoned new Primed TNT"]);
         assert_eq!(run(&mut server, "summon item 0 -60 0"), ["Unable to summon entity due to duplicate UUIDs"]);
         assert_eq!(run(&mut server, "summon item 0 -60 0 {Item:{id:\"stone\",count:2}}"), ["Summoned new Stone"]);

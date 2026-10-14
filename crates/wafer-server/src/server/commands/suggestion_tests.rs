@@ -1,9 +1,10 @@
 use crate::commands::completion_suggestions;
 use crate::commands::source::CommandSourceStack;
 use crate::server::Server;
+use crate::server::level::testing;
 
 fn server() -> Server {
-    Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+    testing::server()
 }
 
 fn suggest(server: &Server, command: &str) -> (usize, usize, Vec<String>) {

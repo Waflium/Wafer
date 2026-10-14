@@ -13,10 +13,10 @@ use crate::server::level::testing;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::{EntityId, ItemEntity, LevelEntity};
 use crate::world::item::ItemStack;
-use crate::{LevelType, ServerConfig};
+use crate::ServerConfig;
 
 fn server(world: Option<std::path::PathBuf>) -> Server {
-    Server::new(ServerConfig { level_type: LevelType::Flat, world, ..ServerConfig::default() }).unwrap()
+    testing::server_with(ServerConfig { world, ..testing::flat_config() })
 }
 
 fn run_as(server: &mut Server, source: &CommandSourceStack, command: &str) -> Vec<String> {

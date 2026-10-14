@@ -3,7 +3,6 @@ use wafer_data::packets::play::clientbound;
 use wafer_protocol::Reader;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::ServerConfig;
 use crate::commands::perform_prefixed_command;
 use crate::commands::source::CommandSourceStack;
 use crate::network::connection::Outbound;
@@ -47,7 +46,7 @@ fn run(server: &mut Server, command: &str) -> Vec<String> {
 
 #[test]
 fn players_track_each_other_like_vanilla() {
-    let mut server = Server::new(ServerConfig::default()).unwrap();
+    let mut server = testing::server();
     let (alpha, mut alpha_packets) = join(&mut server, 1, "Alpha", Vec3::new(0.5, -60.0, 0.5));
     let (bravo, mut bravo_packets) = join(&mut server, 2, "Bravo", Vec3::new(3.5, -60.0, 0.5));
     assert!(waypoint_packets(&mut alpha_packets).is_empty());

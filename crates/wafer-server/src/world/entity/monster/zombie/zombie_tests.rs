@@ -1,5 +1,5 @@
 use wafer_core::{BlockPos, Vec3};
-use wafer_data::{EquipmentSlot, items, mob_effects};
+use wafer_data::{EquipmentSlot, game_rule, items, mob_effects};
 use wafer_protocol::nbt::Nbt;
 
 use super::husk::Husk;
@@ -185,6 +185,7 @@ fn hurt_zombies_call_reinforcements_on_hard() {
     let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
     level.difficulty = Difficulty::Hard;
     level.sky_darken = 11;
+    level.game_rules.set(game_rule::SPAWN_MOBS, 1);
     let mut mob = Zombie::create();
     mob.living.attributes.instance(Attribute::SpawnReinforcements).unwrap().set_base_value(1.0);
     let caller = add(&mut level, mob, Vec3::new(30.5, -60.0, 0.5));

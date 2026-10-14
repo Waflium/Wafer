@@ -684,7 +684,7 @@ mod tests {
     use crate::server::level::testing;
 
     fn server() -> Server {
-        Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+        testing::server()
     }
 
     #[test]

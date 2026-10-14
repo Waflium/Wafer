@@ -329,9 +329,7 @@ mod tests {
     use wafer_data::{game_rule, items};
     use wafer_protocol::Reader;
 
-    use crate::ServerConfig;
     use crate::network::connection::{Outbound, Packet};
-    use crate::server::Server;
     use crate::server::level::testing;
     use crate::world::item::ItemStack;
 
@@ -349,7 +347,7 @@ mod tests {
 
     #[test]
     fn death_and_respawn_send_what_vanilla_sends() {
-        let mut server = Server::new(ServerConfig::default()).unwrap();
+        let mut server = testing::server();
         server.game_rules.set(game_rule::KEEP_INVENTORY, 1);
         let id = testing::server_player(&mut server, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
         let (out, mut packets) = Outbound::capture();

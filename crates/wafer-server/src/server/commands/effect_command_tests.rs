@@ -13,7 +13,7 @@ use crate::world::entity::{EntityId, ItemEntity, LevelEntity};
 use crate::world::item::ItemStack;
 
 fn server() -> Server {
-    Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+    testing::server()
 }
 
 fn run(server: &mut Server, command: &str) -> Vec<String> {

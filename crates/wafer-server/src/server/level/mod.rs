@@ -2132,6 +2132,7 @@ fn get_type_count<'a>(values: impl Iterator<Item = &'a str>) -> String {
 #[cfg(test)]
 pub mod testing {
     use wafer_core::{BlockPos, Vec3};
+    use wafer_data::game_rule;
 
     use super::ServerLevel;
     use super::chunk_cache::ChunkCache;
@@ -2139,13 +2140,33 @@ pub mod testing {
     use crate::network::configuration::ClientInfo;
     use crate::network::connection::Outbound;
     use crate::network::login::Profile;
+    use crate::server::Server;
     use crate::world::entity::EntityId;
     use crate::world::level::chunk::FlatLevelSource;
+    use crate::{LevelType, ServerConfig};
+
+    pub const SEED_WITHOUT_NEARBY_VILLAGES: i64 = 2;
 
     pub fn level() -> ServerLevel {
         let dimension = &wafer_data::DIMENSION_TYPES[0];
         let chunks = ChunkCache::new(dimension, FlatLevelSource::default(), None);
-        ServerLevel::new(super::super::OVERWORLD, 0, chunks, None, 10, 10)
+        let level = ServerLevel::new(super::super::OVERWORLD, 0, chunks, None, 10, 10);
+        level.game_rules.set(game_rule::SPAWN_MOBS, 0);
+        level
+    }
+
+    pub fn flat_config() -> ServerConfig {
+        ServerConfig { level_type: LevelType::Flat, seed: Some(SEED_WITHOUT_NEARBY_VILLAGES), ..ServerConfig::default() }
+    }
+
+    pub fn server() -> Server {
+        server_with(flat_config())
+    }
+
+    pub fn server_with(config: ServerConfig) -> Server {
+        let mut server = Server::new(config).unwrap();
+        server.set_game_rule(game_rule::SPAWN_MOBS, 0);
+        server
     }
 
     pub fn player(level: &mut ServerLevel, pos: Vec3, y_rot: f32, x_rot: f32) -> EntityId {

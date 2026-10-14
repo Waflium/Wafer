@@ -1374,7 +1374,7 @@ mod server_tests {
     use crate::world::entity::EntityId;
 
     fn server() -> Server {
-        Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+        testing::server()
     }
 
     fn run(server: &mut Server, command: &str) {

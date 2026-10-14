@@ -1,7 +1,7 @@
 use crate::commands::perform_prefixed_command;
 use crate::commands::source::CommandSourceStack;
 use crate::server::Server;
-use crate::{LevelType, ServerConfig};
+use crate::server::level::testing;
 
 fn run(server: &mut Server, command: &str) -> Vec<String> {
     server.console_log.borrow_mut().clear();
@@ -179,7 +179,7 @@ static COMPONENTS: &[(&str, &[&str])] = &[
 
 #[test]
 fn console_feedback_matches_vanilla() {
-    let mut server = Server::new(ServerConfig { level_type: LevelType::Flat, ..ServerConfig::default() }).unwrap();
+    let mut server = testing::server();
     for &(command, expected) in VANILLA {
         assert_eq!(run(&mut server, command), expected, "/{command}");
     }
@@ -187,7 +187,7 @@ fn console_feedback_matches_vanilla() {
 
 #[test]
 fn components_match_vanilla() {
-    let mut server = Server::new(ServerConfig { level_type: LevelType::Flat, ..ServerConfig::default() }).unwrap();
+    let mut server = testing::server();
     for &(command, expected) in COMPONENTS {
         assert_eq!(run(&mut server, command), expected, "/{command}");
     }
