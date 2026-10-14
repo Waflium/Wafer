@@ -60,6 +60,15 @@ impl Server {
 
     pub fn deliver_level_broadcasts(&mut self) {
         for index in 0..self.levels.len() {
+            for packet in std::mem::take(&mut self.levels[index].pending_broadcasts) {
+                for &id in &self.player_list {
+                    if let Some(level) = self.level_of(id).filter(|&level| level != index) {
+                        self.levels[level].player(id).connection.send_raw(packet.clone());
+                    }
+                }
+            }
+        }
+        for index in 0..self.levels.len() {
             if self.levels[index].pending_system_broadcasts.is_empty() {
                 continue;
             }

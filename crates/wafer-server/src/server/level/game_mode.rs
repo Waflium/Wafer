@@ -129,16 +129,18 @@ impl ServerLevel {
             self.player_mut(player).abilities.flying = false;
         }
         self.on_update_abilities(player);
-        let p = self.player(player);
-        let uuid = p.profile.uuid;
+        let uuid = self.player(player).profile.uuid;
+        let packet = crate::network::connection::encode(clientbound::PLAYER_INFO_UPDATE, |w| {
+            w.u8(INFO_UPDATE_GAME_MODE);
+            w.varint(1);
+            w.uuid(uuid);
+            w.varint(game_type.id());
+        });
         for other in self.players.values() {
-            other.connection.send(clientbound::PLAYER_INFO_UPDATE, |w| {
-                w.u8(INFO_UPDATE_GAME_MODE);
-                w.varint(1);
-                w.uuid(uuid);
-                w.varint(game_type.id());
-            });
+            other.connection.send_raw(packet.clone());
         }
+        self.pending_broadcasts.push(packet);
+        self.update_sleeping_player_list();
         if game_type == GameType::Creative {
             self.player_mut(player).living.reset_current_impulse_context();
         }
