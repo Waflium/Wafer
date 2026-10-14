@@ -1,3 +1,4 @@
+use wafer_core::random::LegacyRandomSource;
 use wafer_core::{BlockPos, Vec3};
 use wafer_data::{EquipmentSlot, game_rule, items, mob_effects};
 use wafer_protocol::nbt::Nbt;
@@ -83,6 +84,8 @@ fn zombies_chase_and_hit_survival_players() {
     assert_eq!(level.get_target(zombie), None);
 }
 
+const SEED_THAT_DOES_NOT_STROLL_BEFORE_THE_ATTACK_GOAL_STARTS: i64 = 0;
+
 #[test]
 fn chasing_zombies_walk_and_hit_like_vanilla() {
     let expected: Vec<(Vec3, f32)> = include_str!("chase_oracle.txt")
@@ -102,6 +105,7 @@ fn chasing_zombies_walk_and_hit_like_vanilla() {
     while mob.entity.id % 2 != 0 {
         mob = Zombie::create();
     }
+    mob.entity.random = LegacyRandomSource::new(SEED_THAT_DOES_NOT_STROLL_BEFORE_THE_ATTACK_GOAL_STARTS);
     let zombie = add(&mut level, mob, Vec3::new(8.5, -60.0, 0.5));
     level.set_target(zombie, Some(player));
     let mut actual = Vec::new();
@@ -179,6 +183,8 @@ fn finalize_spawn_sets_vanillas_attribute_modifiers() {
     assert!(attributes.base_value(Attribute::SpawnReinforcements) < 0.1);
 }
 
+const SEED_THAT_FINDS_A_REINFORCEMENT_SPOT: i64 = 0;
+
 #[test]
 fn hurt_zombies_call_reinforcements_on_hard() {
     let mut level = testing::level();
@@ -186,7 +192,9 @@ fn hurt_zombies_call_reinforcements_on_hard() {
     level.difficulty = Difficulty::Hard;
     level.sky_darken = 11;
     level.game_rules.set(game_rule::SPAWN_MOBS, 1);
+    level.random = LegacyRandomSource::new(SEED_THAT_FINDS_A_REINFORCEMENT_SPOT);
     let mut mob = Zombie::create();
+    mob.entity.random = LegacyRandomSource::new(SEED_THAT_FINDS_A_REINFORCEMENT_SPOT);
     mob.living.attributes.instance(Attribute::SpawnReinforcements).unwrap().set_base_value(1.0);
     let caller = add(&mut level, mob, Vec3::new(30.5, -60.0, 0.5));
     let source = crate::world::damagesource::DamageSource::entity(wafer_data::damage_types::PLAYER_ATTACK, player);

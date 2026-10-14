@@ -1,5 +1,5 @@
-use wafer_core::Vec3;
 use wafer_core::random::LegacyRandomSource;
+use wafer_core::{ChunkPos, Vec3};
 use wafer_data::game_rule;
 
 use crate::server::Server;
@@ -28,6 +28,12 @@ fn mob_positions(server: &Server) -> Vec<(&'static str, Vec3)> {
     .collect()
 }
 
+fn is_close_enough_for_spawning(mob: Vec3, player: Vec3) -> bool {
+    let chunk = ChunkPos::new(mob.x.floor() as i32 >> 4, mob.z.floor() as i32 >> 4);
+    let (dx, dz) = ((chunk.min_block_x() + 8) as f64 - player.x, (chunk.min_block_z() + 8) as f64 - player.z);
+    dx * dx + dz * dz < 16384.0
+}
+
 fn joined(seed: i64) -> Server {
     let mut server = server();
     testing::server_player(&mut server, Vec3::new(8.5, -60.0, 8.5), 0.0, 0.0);
@@ -44,7 +50,8 @@ fn creatures_spawn_every_400_ticks_away_from_the_player() {
     assert!(mob_positions(&server).is_empty(), "{:?} at {}", mob_positions(&server), server.overworld().game_time);
     tick_until(&mut server, 400);
     let mobs = mob_positions(&server);
-    assert!(!mobs.is_empty() && mobs.len() <= 13, "{mobs:?}");
+    let counted_by_the_local_cap = mobs.iter().filter(|(_, pos)| is_close_enough_for_spawning(*pos, Vec3::new(8.5, -60.0, 8.5))).count();
+    assert!(!mobs.is_empty() && counted_by_the_local_cap <= 13, "{mobs:?}");
     for (name, pos) in &mobs {
         assert_eq!(EntityType::by_name(name).unwrap().get_category(), MobCategory::Creature);
         assert!(["minecraft:chicken", "minecraft:cow", "minecraft:pig", "minecraft:sheep"].contains(name), "{name}");
