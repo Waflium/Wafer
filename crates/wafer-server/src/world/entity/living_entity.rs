@@ -954,6 +954,9 @@ impl ServerLevel {
     }
 
     pub fn voice_pitch(&mut self, id: EntityId) -> f32 {
+        if self.is_player(id) {
+            return 1.0;
+        }
         let baby = self.is_baby(id);
         let random = &mut self.entity_mut(id).random;
         let spread = (random.next_float() - random.next_float()) * 0.2;
