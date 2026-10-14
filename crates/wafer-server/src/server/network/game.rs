@@ -998,6 +998,8 @@ impl ServerLevel {
         match self.entities.get(&entity) {
             Some(crate::world::entity::LevelEntity::Minecart(minecart)) => Some(ItemStack::new(minecart.get_pick_result(), 1)),
             Some(crate::world::entity::LevelEntity::Boat(boat)) => Some(ItemStack::new(boat.get_pick_result(), 1)),
+            Some(crate::world::entity::LevelEntity::EndCrystal(_)) => Some(ItemStack::new(wafer_data::items::END_CRYSTAL, 1)),
+            Some(crate::world::entity::LevelEntity::Mob(mob)) => crate::world::item::spawn_egg_item::by_id(mob.entity.entity_type).map(|item| ItemStack::new(item, 1)),
             _ => None,
         }
     }
@@ -1537,6 +1539,18 @@ mod server_tests {
         let jigsaw = jigsaw(&mut server);
         assert_eq!((jigsaw.name.as_str(), jigsaw.target.as_str(), jigsaw.final_state.as_str()), ("minecraft:start", "minecraft:end", "minecraft:stone"));
         assert_eq!((jigsaw.selection_priority, jigsaw.placement_priority), (3, 4));
+    }
+
+    #[test]
+    fn picking_mobs_gives_spawn_eggs() {
+        let mut server = server();
+        let (alice, _) = join(&mut server, "Alice");
+        run(&mut server, "summon pig 1.5 -60 0.5 {NoAI:1b}");
+        let level = &mut server.levels[0];
+        level.set_game_mode(alice, crate::server::level::game_mode::GameType::Creative);
+        let pig = *level.entities.keys().next().unwrap();
+        assert!(level.handle_pick_item_from_entity(alice, pig));
+        assert_eq!(level.player(alice).inventory.held().map(|s| s.item), Some(wafer_data::items::PIG_SPAWN_EGG));
     }
 
     #[test]

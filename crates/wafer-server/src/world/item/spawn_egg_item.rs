@@ -80,6 +80,13 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
     }
 }
 
+pub fn by_id(entity_type: i32) -> Option<wafer_data::Item> {
+    static SPAWN_EGGS: std::sync::LazyLock<Vec<(i32, wafer_data::Item)>> = std::sync::LazyLock::new(|| {
+        (0..wafer_data::Item::count()).map(|i| wafer_data::Item(i as u16)).filter_map(|item| get_type(&ItemStack::new(item, 1)).map(|ty| (ty, item))).collect()
+    });
+    SPAWN_EGGS.iter().find(|&&(ty, _)| ty == entity_type).map(|&(_, item)| item)
+}
+
 pub fn spawns_entity(item_stack: &ItemStack, entity_type: i32) -> bool {
     get_type(item_stack) == Some(entity_type)
 }
