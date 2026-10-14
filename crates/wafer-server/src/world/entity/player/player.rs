@@ -118,6 +118,9 @@ impl ServerLevel {
 
     pub fn interact_on(&mut self, id: EntityId, entity: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {
         if self.is_spectator(id) {
+            if self.is_container_entity(entity) {
+                self.open_menu(id, crate::world::inventory::menu_provider::MenuProvider::ChestVehicle(entity));
+            }
             return InteractionResult::Pass;
         }
         let item_stack_clone = self.player(id).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
