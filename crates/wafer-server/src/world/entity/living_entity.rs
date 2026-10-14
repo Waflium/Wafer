@@ -1383,6 +1383,11 @@ impl ServerLevel {
         } else {
             living.last_hurt_by_player = None;
         }
+        if let Some(last_hurt_mob) = self.living(id).last_hurt_mob
+            && !self.is_alive(last_hurt_mob)
+        {
+            self.living_mut(id).last_hurt_mob = None;
+        }
         if let Some(hurt_by) = self.living(id).last_hurt_by_mob.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid)).filter(|&e| self.is_living(e)) {
             let alive = self.is_alive(hurt_by);
             let tick_count = self.entity(id).tick_count;
