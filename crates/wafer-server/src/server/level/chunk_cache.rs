@@ -1555,8 +1555,8 @@ impl ChunkCache {
             self.poi_manager.storage.flush_all();
             self.process_unloads(true);
             self.poi_manager.storage.synchronize(true);
+            self.io.as_ref().unwrap().flush()?;
         }
-        self.io.as_ref().unwrap().flush()?;
         Ok(saved)
     }
 }
