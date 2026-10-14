@@ -829,7 +829,20 @@ impl ServerLevel {
         } else {
             self.award_stat(id, stats::MOB_KILLS, 1);
         }
+        let victim_holder = ScoreHolder::for_entity(self, victim);
+        self.handle_team_kill(&holder, &victim_holder, ObjectiveCriteria::team_kill);
+        self.handle_team_kill(&victim_holder, &holder, ObjectiveCriteria::killed_by_team);
         criteria_triggers::PLAYER_KILLED_ENTITY.trigger(self, id, victim, killing_blow);
+    }
+
+    fn handle_team_kill(&mut self, source: &ScoreHolder, target: &ScoreHolder, criteria_by_team: fn(crate::world::scores::team_color::TeamColor) -> ObjectiveCriteria) {
+        let color = self.scoreboard.borrow().get_players_team(target.scoreboard_name()).and_then(|own_team| own_team.color());
+        if let Some(color) = color {
+            let criteria = criteria_by_team(color);
+            self.for_all_objectives(&criteria, source, |level, score| {
+                let _ = score.increment(level);
+            });
+        }
     }
 
     pub fn get_enchanted_damage(&mut self, id: EntityId, entity: EntityId, damage: f32, damage_source: &DamageSource) -> f32 {
