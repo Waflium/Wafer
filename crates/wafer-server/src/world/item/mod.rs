@@ -1,3 +1,4 @@
+pub mod adventure_mode_predicate;
 pub mod alchemy;
 pub mod array_item_provider;
 pub mod arrow_item;
@@ -49,11 +50,12 @@ use wafer_data::Item;
 
 use crate::world::entity::player::stacked_item_contents::StackedItemContents;
 
-pub use item_stack::{ItemStack, adventure_mode_predicate_test, read_slot, validate_encodable, write_slot};
+pub use item_stack::{ItemStack, read_slot, validate_encodable, write_slot};
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::level::block::BlockHitResult;
+use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 use crate::world::{InteractionHand, InteractionResult};
 use context::BlockPlaceContext;
 
@@ -95,17 +97,20 @@ pub fn block_item_behaviour(item: Item) -> Option<&'static dyn block_item::Block
     BLOCK_ITEMS[item.0 as usize].as_deref()
 }
 
-pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> InteractionResult {
+pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> (InteractionResult, Option<ItemStack>) {
+    let pos = hit.block_pos;
+    if !level.player(player).abilities.may_build && !stack.can_place_on_block_in_adventure_mode(&mut BlockInWorld::new(level, pos, false)) {
+        return (InteractionResult::Pass, None);
+    }
     let stack_before_use = stack.copy();
+    let used_item = stack.item;
     let result = item_use_on(level, player, hand, hit, stack);
     if let InteractionResult::Success { was_item_interaction: true, .. } = result {
+        level.award_stat(player, crate::stats::stats::ITEM_USED.get(used_item.0), 1);
         let transform_to = level.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
-        let result_item_stack = level.apply_after_use_component_side_effects(player, transform_to.clone(), stack_before_use);
-        if result_item_stack != transform_to {
-            level.player_mut(player).set_item_in_hand(hand, Some(result_item_stack));
-        }
+        return (result, Some(level.apply_after_use_component_side_effects(player, transform_to, stack_before_use)));
     }
-    result
+    (result, None)
 }
 
 fn item_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> InteractionResult {

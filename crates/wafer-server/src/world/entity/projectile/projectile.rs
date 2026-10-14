@@ -21,9 +21,11 @@ use crate::world::entity::data::DataValue;
 use crate::world::entity::entity_reference::EntityReference;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::world::item::ItemStack;
+use crate::world::item::adventure_mode_predicate::AdventureModePredicate;
 use crate::world::item::component as dc;
 use crate::world::item::enchantment::enchantment_helper;
 use crate::world::level::block::{self, BlockHitResult};
+use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 use crate::world::level::BlockGetter;
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::{HitResult, Type};
@@ -254,8 +256,8 @@ impl ServerLevel {
         if !adventure_owner {
             return true;
         }
-        let state = self.block_state(pos);
-        self.projectile(id).can_break.as_ref().is_some_and(|predicates| crate::world::item::adventure_mode_predicate_test(predicates, state))
+        let can_break = self.projectile(id).can_break.as_ref().and_then(|tag| AdventureModePredicate::decode(tag).ok());
+        can_break.is_some_and(|can_break| can_break.test(&mut BlockInWorld::new(self, pos, false)))
     }
 
     pub fn spawn_projectile(&mut self, mut projectile: Projectile, item_stack: &ItemStack, shoot: impl FnOnce(&mut Projectile)) -> EntityId {

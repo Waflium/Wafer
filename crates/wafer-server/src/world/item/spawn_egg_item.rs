@@ -1,7 +1,7 @@
 use wafer_core::{BlockPos, Direction, Vec3};
 use wafer_data::{game_rule, registry, registry_id};
 
-use super::bucket_item::{may_use_item_at, player_pov_hit_result};
+use super::bucket_item::player_pov_hit_result;
 use crate::server::level::ServerLevel;
 use crate::server::level::game_mode::GameType;
 use crate::world::level::block::entity::BlockEntityKind;
@@ -68,7 +68,7 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
     if !level.block_state(pos).block().is_instance_of("LiquidBlock") {
         return (InteractionResult::Pass, None);
     }
-    if level.may_interact(player, pos) && may_use_item_at(level, player) {
+    if level.may_interact(player, pos) && level.may_use_item_at(player, pos, hit.direction, &item_stack) {
         let this = item_stack.item;
         let result = spawn_mob(level, entity_type, Some(player), &mut item_stack, pos, false, false);
         if result == InteractionResult::SUCCESS {

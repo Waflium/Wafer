@@ -2,12 +2,14 @@ use wafer_data::{BlockState, Item, Rarity, items};
 use wafer_protocol::nbt::Nbt;
 use wafer_protocol::{Reader, Writer};
 
+use super::adventure_mode_predicate::AdventureModePredicate;
 use super::component::swing_animation::SwingAnimation;
 use super::component::values::{self, ItemEnchantments, Tool};
 use super::component::{self as dc, DataComponentPatch, DataComponentType, PatchedDataComponentMap, codec, item_components};
 use crate::network::chat::{ChatFormatting, Component, HoverEvent};
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 
 #[derive(Clone, Debug)]
 pub struct ItemStack {
@@ -20,19 +22,6 @@ impl PartialEq for ItemStack {
     fn eq(&self, other: &ItemStack) -> bool {
         ItemStack::matches(self, other)
     }
-}
-
-pub fn adventure_mode_predicate_test(predicates: &Nbt, state: BlockState) -> bool {
-    let single = std::slice::from_ref(predicates);
-    let list = match predicates {
-        Nbt::List(items) => items.as_slice(),
-        _ => single,
-    };
-    list.iter().any(|predicate| {
-        let blocks = predicate.get("blocks").map(values::HolderSet::from_nbt);
-        ["state", "nbt", "components", "predicates"].iter().all(|key| predicate.get(key).is_none())
-            && blocks.is_none_or(|blocks| blocks.contains("minecraft:block", state.block().name(), state.block().0 as i32))
-    })
 }
 
 pub fn rarity_color(rarity: Rarity) -> ChatFormatting {
@@ -138,8 +127,14 @@ impl ItemStack {
         self.get(dc::INTERACT_ANIMATION).map_or(SwingAnimation::DEFAULT, SwingAnimation::from_nbt)
     }
 
-    pub fn can_break_block_in_adventure_mode(&self, state: BlockState) -> bool {
-        self.get(dc::CAN_BREAK).is_some_and(|predicates| adventure_mode_predicate_test(predicates, state))
+    pub fn can_place_on_block_in_adventure_mode(&self, block_in_world: &mut BlockInWorld) -> bool {
+        let can_place_on = self.get(dc::CAN_PLACE_ON).and_then(|tag| AdventureModePredicate::decode(tag).ok());
+        can_place_on.is_some_and(|can_place_on| can_place_on.test(block_in_world))
+    }
+
+    pub fn can_break_block_in_adventure_mode(&self, block_in_world: &mut BlockInWorld) -> bool {
+        let can_break = self.get(dc::CAN_BREAK).and_then(|tag| AdventureModePredicate::decode(tag).ok());
+        can_break.is_some_and(|can_break| can_break.test(block_in_world))
     }
 
     pub fn can_be_hurt_by(&self, source: &crate::world::damagesource::DamageSource) -> bool {

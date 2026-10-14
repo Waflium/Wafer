@@ -9,8 +9,8 @@ use crate::world::entity::sound_event;
 use crate::world::entity::primed_tnt::{PrimedTnt, random_short_fuse};
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
-use crate::world::level::BlockGetter;
 use crate::world::level::block::BlockHitResult;
+use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 use crate::world::level::server_explosion::ServerExplosion;
 use crate::world::level::update_flags::UPDATE_ALL_IMMEDIATE;
 use crate::world::{InteractionHand, InteractionResult};
@@ -21,7 +21,7 @@ pub fn prime(level: &mut ServerLevel, pos: BlockPos, source: Option<EntityId>, i
     }
     if let Some(player) = source.filter(|&s| level.is_player(s))
         && level.player(player).game_mode.game_type == GameType::Adventure
-        && !item.is_some_and(|item| item.can_break_block_in_adventure_mode(level.block_state(pos)))
+        && !item.is_some_and(|item| item.can_break_block_in_adventure_mode(&mut BlockInWorld::new(level, pos, false)))
     {
         return false;
     }

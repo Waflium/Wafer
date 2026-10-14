@@ -42,7 +42,7 @@ impl BucketItem {
         let pos = hit.block_pos;
         let direction = hit.direction;
         let direction_offset_pos = pos.relative(direction);
-        if !(level.may_interact(player, pos) && may_use_item_at(level, player)) {
+        if !(level.may_interact(player, pos) && level.may_use_item_at(player, direction_offset_pos, direction, &item_stack)) {
             return (InteractionResult::Fail, None);
         }
         let clicked = level.block_state(pos);
@@ -135,10 +135,6 @@ pub fn player_pov_hit_result(level: &mut ServerLevel, player: EntityId, fluid: C
     let to = from.add_vec(calculate_view_vector(p.entity.x_rot, p.entity.y_rot).scale(range));
     let result = level.clip(&ClipContext { from, to, block: ClipBlock::Outline, fluid, is_player: true });
     (!result.miss).then_some(result.hit)
-}
-
-pub fn may_use_item_at(level: &ServerLevel, player: EntityId) -> bool {
-    !matches!(level.player(player).game_mode.game_type, GameType::Adventure | GameType::Spectator)
 }
 
 #[cfg(test)]

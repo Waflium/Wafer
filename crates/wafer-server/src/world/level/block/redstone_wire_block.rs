@@ -339,10 +339,3 @@ impl BlockBehaviour for RedstoneWireBlock {
         InteractionResult::Pass
     }
 }
-
-impl ServerLevel {
-    pub fn may_build(&self, player: EntityId) -> bool {
-        use crate::server::level::game_mode::GameType;
-        !matches!(self.player(player).game_mode.game_type, GameType::Adventure | GameType::Spectator)
-    }
-}

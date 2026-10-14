@@ -10,6 +10,7 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::level::BlockGetter;
 use crate::world::level::block::entity::BlockEntity;
+use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 
 #[derive(Debug)]
 pub struct BlockPredicate {
@@ -50,6 +51,13 @@ impl BlockPredicate {
         self.nbt.is_some() || !self.components.is_empty()
     }
 
+    pub fn matches_block_in_world(&self, block_in_world: &mut BlockInWorld) -> bool {
+        if !block_in_world.get_state().is_some_and(|state| self.matches_state(state)) {
+            return false;
+        }
+        self.nbt.as_ref().is_none_or(|nbt| matches_block_entity_data(block_in_world.get_entity().as_deref(), nbt))
+    }
+
     pub fn matches_state(&self, state: BlockState) -> bool {
         if self.blocks.as_ref().is_some_and(|blocks| !blocks.contains(state.block().0 as i32)) {
             return false;
@@ -59,10 +67,14 @@ impl BlockPredicate {
 
     pub fn matches_block_entity(&self, block_entity: Option<&BlockEntity>) -> bool {
         if let Some(nbt) = &self.nbt
-            && !block_entity.is_some_and(|entity| nbt.matches(Some(&entity.save_with_full_metadata())))
+            && !matches_block_entity_data(block_entity, nbt)
         {
             return false;
         }
         self.components.is_empty() || block_entity.is_some_and(|entity| self.components.test(entity.collect_components().as_slice()))
     }
+}
+
+fn matches_block_entity_data(entity: Option<&BlockEntity>, nbt: &NbtPredicate) -> bool {
+    entity.is_some_and(|entity| nbt.matches(Some(&entity.save_with_full_metadata())))
 }

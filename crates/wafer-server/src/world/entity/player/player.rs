@@ -1,4 +1,4 @@
-use wafer_core::{AABB, Axis, BlockPos, Vec3, mth};
+use wafer_core::{AABB, Axis, BlockPos, Direction, Vec3, mth};
 use wafer_data::{DamageType, EquipmentSlot, damage_type_tags, damage_types, game_rule, item_tags, mob_effects};
 use wafer_protocol::nbt::Nbt;
 
@@ -14,7 +14,9 @@ use crate::world::entity::{EntityDimensions, EntityId, RemovalReason, sound_even
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, codec as component_codec};
 use crate::world::level::BlockGetter;
+use crate::server::level::game_mode::GameType;
 use crate::world::level::block::abstract_bed_block::{self, BedKind};
+use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 use crate::world::attribute::bed_rule::BedRule;
 use crate::network::chat::Component;
 use crate::world::{InteractionHand, InteractionResult};
@@ -114,6 +116,36 @@ impl ServerLevel {
 
     pub fn can_use_game_master_blocks(&self, id: EntityId) -> bool {
         self.players.get(&id).is_some_and(|p| p.abilities.instabuild && self.spawn_protection.ops.contains(&p.profile.uuid))
+    }
+
+    pub fn block_action_restricted(&mut self, id: EntityId, pos: BlockPos, game_type: GameType) -> bool {
+        if !game_type.is_block_placing_restricted() {
+            return false;
+        }
+        if game_type == GameType::Spectator {
+            return true;
+        }
+        if self.may_build(id) {
+            return false;
+        }
+        let item_stack = self.item_by_slot(id, EquipmentSlot::Mainhand).unwrap_or_else(ItemStack::empty);
+        item_stack.is_empty() || !item_stack.can_break_block_in_adventure_mode(&mut BlockInWorld::new(self, pos, false))
+    }
+
+    pub fn prevents_block_drops(&self, id: EntityId) -> bool {
+        self.player(id).abilities.instabuild
+    }
+
+    pub fn may_build(&self, id: EntityId) -> bool {
+        self.player(id).abilities.may_build
+    }
+
+    pub fn may_use_item_at(&mut self, id: EntityId, pos: BlockPos, direction: Direction, item_stack: &ItemStack) -> bool {
+        if self.player(id).abilities.may_build {
+            return true;
+        }
+        let target = pos.relative(direction.opposite());
+        item_stack.can_place_on_block_in_adventure_mode(&mut BlockInWorld::new(self, target, false))
     }
 
     pub fn interact_on(&mut self, id: EntityId, entity: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {

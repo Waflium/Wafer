@@ -291,6 +291,11 @@ impl ServerLevel {
                     self.destroy_and_ack(player, pos);
                     return;
                 }
+                let game_type = self.player(player).game_mode.game_type;
+                if self.block_action_restricted(player, pos, game_type) {
+                    self.send_block_update(player, pos);
+                    return;
+                }
                 let ticks = self.player(player).game_mode.game_ticks;
                 self.player_mut(player).game_mode.destroy_progress_start = ticks;
                 let state = self.block_state(pos);
@@ -378,6 +383,10 @@ impl ServerLevel {
             self.send_block_updated(pos, state, state);
             return false;
         }
+        let game_type = self.player(player).game_mode.game_type;
+        if self.block_action_restricted(player, pos, game_type) {
+            return false;
+        }
         let behaviour = block::of(state);
         let adjusted = behaviour.player_will_destroy(self, pos, state, player);
         let mut block_entity = None;
@@ -436,11 +445,29 @@ impl ServerLevel {
             }
         }
         match item {
-            Some(stack) if stack.count > 0 && !self.player(player).cooldowns.is_on_cooldown(&stack) => {
-                let used_item = stack.item;
-                let result = item::use_on(self, player, hand, hit, stack);
-                if let InteractionResult::Success { was_item_interaction: true, .. } = result {
-                    self.award_stat(player, crate::stats::stats::ITEM_USED.get(used_item.0), 1);
+            Some(stack) if !stack.is_empty() && !self.player(player).cooldowns.is_on_cooldown(&stack) => {
+                let result;
+                if self.has_infinite_materials(player) {
+                    let count = stack.count;
+                    result = item::use_on(self, player, hand, hit, stack.clone()).0;
+                    match self.player(player).item_in_hand(hand) {
+                        Some(mut in_hand) if ItemStack::is_same_item(&in_hand, &stack) => {
+                            in_hand.count = count;
+                            self.player_mut(player).set_item_in_hand(hand, Some(in_hand));
+                        }
+                        None => self.player_mut(player).set_item_in_hand(hand, Some(stack.copy_with_count(count))),
+                        Some(_) => {}
+                    }
+                } else {
+                    let transformed;
+                    (result, transformed) = item::use_on(self, player, hand, hit, stack);
+                    if let InteractionResult::Success { .. } = result {
+                        let in_hand = self.player(player).item_in_hand(hand);
+                        let result_item_stack = transformed.or_else(|| in_hand.clone());
+                        if result_item_stack != in_hand {
+                            self.player_mut(player).set_item_in_hand(hand, result_item_stack);
+                        }
+                    }
                 }
                 if result.consumes_action() {
                     criteria_triggers::ITEM_USED_ON_BLOCK.trigger(self, player, pos, &used_item_stack);
@@ -518,7 +545,7 @@ mod spawn_protection_tests {
     fn non_operators_cannot_break_near_spawn() {
         let mut level = testing::level();
         let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 2.5), 180.0, 60.0);
-        level.player_mut(player).game_mode.game_type = GameType::Creative;
+        level.player_mut(player).set_game_mode_for_player(GameType::Creative, None);
         let pos = BlockPos::new(0, -61, 0);
         level.handle_block_break_action(player, pos, BlockBreakAction::StartDestroyBlock, Direction::Up, 320);
         assert!(level.block_state(pos).is_air());
@@ -531,5 +558,77 @@ mod spawn_protection_tests {
         level.spawn_protection.ops.push(level.player(player).profile.uuid);
         level.handle_block_break_action(player, pos, BlockBreakAction::StartDestroyBlock, Direction::Up, 320);
         assert!(level.block_state(pos).is_air());
+    }
+}
+
+#[cfg(test)]
+mod adventure_mode_tests {
+    use wafer_core::{BlockPos, Direction, Vec3};
+    use wafer_data::{Item, blocks, items};
+
+    use super::{BlockBreakAction, GameType};
+    use crate::server::level::{ServerLevel, testing};
+    use crate::world::InteractionHand;
+    use crate::world::entity::EntityId;
+    use crate::world::item::ItemStack;
+    use crate::world::item::component::{self as dc, DataComponentType};
+    use crate::world::level::BlockGetter;
+    use crate::world::level::block::BlockHitResult;
+
+    fn adventure_player(level: &mut ServerLevel) -> EntityId {
+        let player = testing::player(level, Vec3::new(0.5, -60.0, 2.5), 180.0, 60.0);
+        level.player_mut(player).set_game_mode_for_player(GameType::Adventure, None);
+        player
+    }
+
+    fn stack_with(item: Item, count: i32, ty: DataComponentType, snbt: &str) -> ItemStack {
+        let mut stack = ItemStack::new(item, count);
+        stack.set(ty, Some(crate::nbt::parse_fully(snbt).unwrap()));
+        stack
+    }
+
+    fn can_start_and_destroy(level: &mut ServerLevel, player: EntityId, pos: BlockPos) -> (bool, bool) {
+        level.handle_block_break_action(player, pos, BlockBreakAction::StartDestroyBlock, Direction::Up, 320);
+        let started = level.player(player).game_mode.is_destroying_block;
+        if started {
+            level.handle_block_break_action(player, pos, BlockBreakAction::AbortDestroyBlock, Direction::Up, 320);
+        }
+        (started, level.destroy_block_by_player(player, pos))
+    }
+
+    #[test]
+    fn adventure_players_break_only_what_can_break_allows() {
+        let mut level = testing::level();
+        let player = adventure_player(&mut level);
+        let pos = BlockPos::new(0, -61, 0);
+        assert_eq!(can_start_and_destroy(&mut level, player, pos), (false, false));
+        let stone_only = stack_with(items::DIAMOND_PICKAXE, 1, dc::CAN_BREAK, "{blocks:\"minecraft:stone\"}");
+        level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(stone_only));
+        assert_eq!(can_start_and_destroy(&mut level, player, pos), (false, false));
+        assert_eq!(level.block_state(pos), blocks::GRASS_BLOCK.default_state());
+        let grass = stack_with(items::DIAMOND_PICKAXE, 1, dc::CAN_BREAK, "[{blocks:\"minecraft:stone\"},{blocks:\"#minecraft:mineable/shovel\",components:{\"minecraft:damage\":1}}]");
+        level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(grass));
+        assert_eq!(can_start_and_destroy(&mut level, player, pos), (true, true));
+        assert!(level.block_state(pos).is_air());
+    }
+
+    #[test]
+    fn adventure_players_place_only_where_can_place_on_allows() {
+        let mut level = testing::level();
+        let player = adventure_player(&mut level);
+        let pos = BlockPos::new(0, -61, 0);
+        let hit = BlockHitResult { location: Vec3::new(0.5, -60.0, 0.5), direction: Direction::Up, block_pos: pos, inside: false, world_border_hit: false };
+        level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(ItemStack::new(items::DIRT, 2)));
+        assert!(!level.use_item_on(player, InteractionHand::MainHand, hit).consumes_action());
+        assert!(level.block_state(pos.above()).is_air());
+        let on_stone = stack_with(items::DIRT, 2, dc::CAN_PLACE_ON, "{blocks:\"minecraft:stone\"}");
+        level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(on_stone));
+        assert!(!level.use_item_on(player, InteractionHand::MainHand, hit).consumes_action());
+        assert!(level.block_state(pos.above()).is_air());
+        let on_grass = stack_with(items::DIRT, 2, dc::CAN_PLACE_ON, "{blocks:\"minecraft:grass_block\",state:{snowy:\"false\"}}");
+        level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(on_grass));
+        assert!(level.use_item_on(player, InteractionHand::MainHand, hit).consumes_action());
+        assert_eq!(level.block_state(pos.above()), blocks::DIRT.default_state());
+        assert_eq!(level.player(player).item_in_hand(InteractionHand::MainHand).map(|stack| stack.count), Some(1));
     }
 }
