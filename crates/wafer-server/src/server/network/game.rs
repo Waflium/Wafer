@@ -98,6 +98,9 @@ impl ServerLevel {
             serverbound::CLIENT_TICK_END => self.handle_client_tick_end(id),
             serverbound::PLAYER_ACTION => {
                 let action = r.varint()?;
+                if !(player_action::START_DESTROY_BLOCK..=player_action::STAB).contains(&action) {
+                    anyhow::bail!("Unknown player action {action}");
+                }
                 let pos = r.position()?;
                 let pos = BlockPos::new(pos.0, pos.1, pos.2);
                 let direction = Direction::from_3d_data_value(r.u8()? as i32);
@@ -260,34 +263,37 @@ impl ServerLevel {
         }
         self.player_mut(id).reset_last_action_time();
         match action {
+            STAB => {}
             SWAP_ITEM_WITH_OFFHAND => {
-                let p = self.player_mut(id);
-                let main = p.item_in_hand(InteractionHand::MainHand);
-                let off = p.item_in_hand(InteractionHand::OffHand);
-                p.set_item_in_hand(InteractionHand::OffHand, main);
-                p.set_item_in_hand(InteractionHand::MainHand, off);
-            }
-            DROP_ITEM | DROP_ALL_ITEMS if !self.is_spectator(id) => {
-                let p = self.player_mut(id);
-                let slot = p.inventory.selected_slot();
-                let Some(held) = p.inventory.slots[slot].as_mut() else { return };
-                let n = if action == DROP_ALL_ITEMS { held.count } else { 1 };
-                let dropped = held.split(n);
-                if held.count <= 0 {
-                    p.inventory.slots[slot] = None;
+                if !self.is_spectator(id) {
+                    let p = self.player_mut(id);
+                    let swap = p.item_in_hand(InteractionHand::OffHand);
+                    let main = p.item_in_hand(InteractionHand::MainHand);
+                    p.set_item_in_hand(InteractionHand::OffHand, main);
+                    p.set_item_in_hand(InteractionHand::MainHand, swap);
+                    self.stop_using_item(id);
                 }
-                self.player_drop(id, dropped, true, Prediction::Predicted);
+            }
+            DROP_ITEM => {
+                if !self.is_spectator(id) {
+                    self.server_player_drop(id, false);
+                }
+            }
+            DROP_ALL_ITEMS => {
+                if !self.is_spectator(id) {
+                    self.server_player_drop(id, true);
+                }
             }
             RELEASE_USE_ITEM => self.release_using_item(id),
-            STAB => {}
-            START_DESTROY_BLOCK | ABORT_DESTROY_BLOCK | STOP_DESTROY_BLOCK | CHANGE_DESTROY_DIRECTION => {
+            START_DESTROY_BLOCK | CHANGE_DESTROY_DIRECTION | ABORT_DESTROY_BLOCK | STOP_DESTROY_BLOCK => {
+                let action = match action {
+                    START_DESTROY_BLOCK => BlockBreakAction::StartDestroyBlock,
+                    CHANGE_DESTROY_DIRECTION => BlockBreakAction::ChangeDestroyDirection,
+                    ABORT_DESTROY_BLOCK => BlockBreakAction::AbortDestroyBlock,
+                    _ => BlockBreakAction::StopDestroyBlock,
+                };
                 let max_y = self.chunks.max_y();
-                match action {
-                    START_DESTROY_BLOCK => self.handle_block_break_action(id, pos, BlockBreakAction::StartDestroyBlock, direction, max_y),
-                    ABORT_DESTROY_BLOCK => self.handle_block_break_action(id, pos, BlockBreakAction::AbortDestroyBlock, direction, max_y),
-                    STOP_DESTROY_BLOCK => self.handle_block_break_action(id, pos, BlockBreakAction::StopDestroyBlock, direction, max_y),
-                    _ => self.change_destroy_direction(id, direction),
-                }
+                self.handle_block_break_action(id, pos, action, direction, max_y);
                 self.ack_block_changes_up_to(id, sequence);
             }
             _ => {}
@@ -587,6 +593,45 @@ mod tests {
         creative_slot(&mut level, player, 37, &sword.copy_with_count(2)).unwrap();
         assert_eq!(level.player(player).inventory.slots[37], None);
         assert!(creative_slot(&mut level, player, 37, &ItemStack::new(items::STONE, 100)).is_err());
+    }
+
+    fn player_action(level: &mut ServerLevel, player: EntityId, action: i32) {
+        let mut w = Writer::new();
+        w.varint(action);
+        w.position(0, -60, 0);
+        w.u8(1);
+        w.varint(0);
+        level.handle_game_packet(player, &Packet { id: serverbound::PLAYER_ACTION, data: w.into_inner() }).unwrap();
+    }
+
+    fn dropped(level: &ServerLevel) -> Vec<i32> {
+        level.entities.values().filter_map(|e| if let crate::world::entity::LevelEntity::Item(item) = e { Some(item.item.count) } else { None }).collect()
+    }
+
+    #[test]
+    fn player_actions_follow_vanilla_branches() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        level.handle_player_loaded(player);
+        level.player_mut(player).inventory.slots[crate::world::item::HOTBAR_START] = Some(ItemStack::new(items::STONE, 5));
+        player_action(&mut level, player, player_action::DROP_ITEM);
+        assert_eq!(level.player(player).inventory.slots[crate::world::item::HOTBAR_START].as_ref().map(|s| s.count), Some(4));
+        assert_eq!(dropped(&level), [1]);
+        player_action(&mut level, player, player_action::DROP_ALL_ITEMS);
+        assert_eq!(level.player(player).inventory.slots[crate::world::item::HOTBAR_START], None);
+        assert_eq!(dropped(&level).iter().sum::<i32>(), 5);
+        level.player_mut(player).inventory.slots[crate::world::item::HOTBAR_START] = Some(ItemStack::new(items::DIRT, 1));
+        level.set_game_mode(player, GameType::Spectator);
+        player_action(&mut level, player, player_action::SWAP_ITEM_WITH_OFFHAND);
+        player_action(&mut level, player, player_action::DROP_ITEM);
+        assert_eq!(level.player(player).inventory.slots[crate::world::item::HOTBAR_START].as_ref().map(|s| s.item), Some(items::DIRT));
+        assert_eq!(level.player(player).inventory.slots[crate::world::item::OFFHAND], None);
+        level.set_game_mode(player, GameType::Survival);
+        player_action(&mut level, player, player_action::SWAP_ITEM_WITH_OFFHAND);
+        assert_eq!(level.player(player).inventory.slots[crate::world::item::OFFHAND].as_ref().map(|s| s.item), Some(items::DIRT));
+        let mut w = Writer::new();
+        w.varint(9);
+        assert!(level.handle_game_packet(player, &Packet { id: serverbound::PLAYER_ACTION, data: w.into_inner() }).is_err());
     }
 
     #[test]

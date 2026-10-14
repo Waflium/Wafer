@@ -90,6 +90,7 @@ impl GameType {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BlockBreakAction {
     StartDestroyBlock,
+    ChangeDestroyDirection,
     AbortDestroyBlock,
     StopDestroyBlock,
 }
@@ -315,6 +316,7 @@ impl ServerLevel {
                     self.destroy_block_progress(player, pos, sent);
                 }
             }
+            BlockBreakAction::ChangeDestroyDirection => self.player_mut(player).game_mode.destroy_direction = Some(direction),
             BlockBreakAction::StopDestroyBlock => {
                 let gm = &self.player(player).game_mode;
                 if pos == gm.destroy_pos {
@@ -340,10 +342,6 @@ impl ServerLevel {
             }
             BlockBreakAction::AbortDestroyBlock => self.abort_destroy_block(player, pos),
         }
-    }
-
-    pub fn change_destroy_direction(&mut self, player: EntityId, direction: Direction) {
-        self.player_mut(player).game_mode.destroy_direction = Some(direction);
     }
 
     fn abort_destroy_block(&mut self, player: EntityId, pos: BlockPos) {

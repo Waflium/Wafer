@@ -434,6 +434,17 @@ impl Inventory {
         }
     }
 
+    pub fn remove_from_selected(&mut self, all: bool) -> ItemStack {
+        let slot = self.selected_slot();
+        let Some(selected_item) = self.slots[slot].as_mut().filter(|s| !s.is_empty()) else { return ItemStack::empty() };
+        let count = if all { selected_item.count } else { 1 };
+        let removed = selected_item.split(count);
+        if selected_item.is_empty() {
+            self.slots[slot] = None;
+        }
+        removed
+    }
+
     pub fn remove_item_no_update(&mut self, index: usize) -> ItemStack {
         self.slots[inventory_slot(index)].take().unwrap_or_else(ItemStack::empty)
     }

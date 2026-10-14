@@ -406,6 +406,10 @@ impl AbstractContainerMenu {
         slot == -1 || slot == SLOT_CLICKED_OUTSIDE || slot < self.slots.len() as i32
     }
 
+    pub fn find_slot(&self, container: SlotContainer, slot_index: usize) -> Option<usize> {
+        self.slots.iter().position(|slot| slot.container == container && slot.slot == slot_index)
+    }
+
     pub fn set_remote_slot(&mut self, slot: usize, stack: &ItemStack) {
         self.remote_slots[slot].force(stack);
     }

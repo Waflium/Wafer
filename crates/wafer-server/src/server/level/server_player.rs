@@ -650,6 +650,24 @@ impl ServerLevel {
         }
     }
 
+    pub fn server_player_drop(&mut self, id: EntityId, all: bool) {
+        let used_item_hand = self.used_item_hand(id);
+        let p = self.player_mut(id);
+        let removed = p.inventory.remove_from_selected(all);
+        let selected_slot = p.inventory.selected;
+        let selected_item = p.inventory.held().cloned().unwrap_or_else(ItemStack::empty);
+        if let Some(menu) = p.container_menu.as_mut().or(p.inventory_menu.as_mut())
+            && let Some(slot_index) = menu.find_slot(crate::world::inventory::slot::SlotContainer::Inventory, selected_slot)
+        {
+            menu.set_remote_slot(slot_index, &selected_item);
+        }
+        if p.living.use_item.is_none() || used_item_hand == InteractionHand::MainHand && selected_item.is_empty() {
+            self.stop_using_item(id);
+        }
+        self.player_drop(id, removed, true, crate::util::Prediction::Predicted);
+        self.reset_attack_strength_ticker(id);
+    }
+
     pub fn handle_extra_items_created_on_use(&mut self, id: EntityId, extra_items: ItemStack) {
         let left = self.player_mut(id).pick_up(extra_items.clone());
         if left > 0 {
