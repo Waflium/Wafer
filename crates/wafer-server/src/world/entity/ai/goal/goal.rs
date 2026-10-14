@@ -9,6 +9,7 @@ use super::look_at_player_goal::LookAtPlayerGoal;
 use super::melee_attack_goal::MeleeAttackGoal;
 use super::panic_goal::PanicGoal;
 use super::random_look_around_goal::RandomLookAroundGoal;
+use super::ranged_bow_attack_goal::RangedBowAttackGoal;
 use super::restrict_sun_goal::RestrictSunGoal;
 use super::swell_goal::SwellGoal;
 use super::target::hurt_by_target_goal::HurtByTargetGoal;
@@ -18,6 +19,7 @@ use super::water_avoiding_random_stroll_goal::WaterAvoidingRandomStrollGoal;
 use super::zombie_attack_goal::ZombieAttackGoal;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::entity::monster::skeleton::abstract_skeleton::AbstractSkeletonMeleeGoal;
 use crate::world::entity::monster::zombie::zombie::ZombieAttackTurtleEggGoal;
 use super::leap_at_target_goal::LeapAtTargetGoal;
 use crate::world::entity::monster::spider::spider::{SpiderAttackGoal, SpiderTargetGoal};
@@ -61,6 +63,8 @@ pub enum Goal {
     LeapAtTarget(LeapAtTargetGoal),
     SpiderAttack(SpiderAttackGoal),
     SpiderTarget(SpiderTargetGoal),
+    RangedBowAttack(RangedBowAttackGoal),
+    AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
 }
 
 impl Goal {
@@ -88,6 +92,8 @@ impl Goal {
             Goal::LeapAtTarget(goal) => goal.can_use(level, mob),
             Goal::SpiderAttack(goal) => goal.can_use(level, mob),
             Goal::SpiderTarget(goal) => goal.can_use(level, mob),
+            Goal::RangedBowAttack(goal) => goal.can_use(level, mob),
+            Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_use(level, mob),
         }
     }
 
@@ -115,6 +121,8 @@ impl Goal {
             Goal::LeapAtTarget(goal) => goal.can_continue_to_use(level, mob),
             Goal::SpiderAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
+            Goal::RangedBowAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -145,6 +153,8 @@ impl Goal {
             Goal::LeapAtTarget(goal) => goal.start(level, mob),
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.start(level, mob),
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
+            Goal::RangedBowAttack(goal) => goal.start(level, mob),
+            Goal::AbstractSkeletonMelee(goal) => goal.start(level, mob),
         }
     }
 
@@ -170,6 +180,8 @@ impl Goal {
             Goal::LeapAtTarget(_) => {}
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.stop(level, mob),
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
+            Goal::RangedBowAttack(goal) => goal.stop(level, mob),
+            Goal::AbstractSkeletonMelee(goal) => goal.stop(level, mob),
         }
     }
 
@@ -184,6 +196,8 @@ impl Goal {
                 | Goal::BreakDoor(_)
                 | Goal::Swell(_)
                 | Goal::SpiderAttack(_)
+                | Goal::RangedBowAttack(_)
+                | Goal::AbstractSkeletonMelee(_)
         )
     }
 
@@ -205,6 +219,8 @@ impl Goal {
             Goal::AvoidEntity(goal) => goal.tick(level, mob),
             Goal::LeapAtTarget(_) | Goal::SpiderTarget(_) => {}
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.tick(level, mob),
+            Goal::RangedBowAttack(goal) => goal.tick(level, mob),
+            Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.tick(level, mob),
         }
     }
 
@@ -212,7 +228,9 @@ impl Goal {
         match self {
             Goal::Float(_) => Flag::Jump.bit(),
             Goal::Panic(_) | Goal::WaterAvoidingRandomStroll(_) | Goal::FleeSun(_) | Goal::Swell(_) | Goal::AvoidEntity(_) => Flag::Move.bit(),
-            Goal::Breed(_) | Goal::Tempt(_) | Goal::RandomLookAround(_) | Goal::MeleeAttack(_) | Goal::ZombieAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::Breed(_) | Goal::Tempt(_) | Goal::RandomLookAround(_) | Goal::MeleeAttack(_) | Goal::ZombieAttack(_) | Goal::RangedBowAttack(_) | Goal::AbstractSkeletonMelee(_) => {
+                Flag::Move.bit() | Flag::Look.bit()
+            }
             Goal::FollowParent(_) | Goal::BreakDoor(_) | Goal::RestrictSun(_) => 0,
             Goal::EatBlock(_) => Flag::Move.bit() | Flag::Look.bit() | Flag::Jump.bit(),
             Goal::ZombieAttackTurtleEgg(_) => Flag::Move.bit() | Flag::Jump.bit(),

@@ -1749,7 +1749,7 @@ impl ServerLevel {
     fn apply_inside_block_effect_type(&mut self, id: EntityId, ty: InsideBlockEffectType) {
         match ty {
             InsideBlockEffectType::Freeze => {
-                let can_freeze = !entity_type_tags::FREEZE_IMMUNE_ENTITY_TYPES.contains(self.entity(id).entity_type as usize);
+                let can_freeze = self.can_freeze(id);
                 let e = self.entity_mut(id);
                 e.is_in_powder_snow = true;
                 if can_freeze {
@@ -2363,6 +2363,9 @@ impl ServerLevel {
                     super::mob::MobKind::Creeper(_) => "Creeper",
                     super::mob::MobKind::Spider(_) => "Spider",
                     super::mob::MobKind::CaveSpider(_) => "CaveSpider",
+                    super::mob::MobKind::Skeleton(_) => "Skeleton",
+                    super::mob::MobKind::Stray(_) => "Stray",
+                    super::mob::MobKind::Bogged(_) => "Bogged",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
@@ -2680,6 +2683,7 @@ impl crate::server::Server {
         }
         let mut new_entity = ServerLevel::create_entity(registry::ENTITY_TYPE[old_entity.entity_type as usize])?;
         let _ = new_entity.load(&Nbt::Compound(old_entity.data.clone().unwrap_or_default()));
+        let mut new_entity = self.levels[transition.new_level].reassess_weapon_goal_detached(new_entity);
         let e = new_entity.entity_mut();
         e.portal_cooldown = old_entity.portal_cooldown;
         e.portal_process = old_entity.portal_process;
@@ -3116,6 +3120,14 @@ impl ServerLevel {
     }
 
     pub fn ride_tick(&mut self, id: EntityId) {
+        if self.mob(id).is_some_and(super::mob::Mob::is_abstract_skeleton) {
+            self.abstract_skeleton_ride_tick(id);
+        } else {
+            self.entity_ride_tick(id);
+        }
+    }
+
+    pub fn entity_ride_tick(&mut self, id: EntityId) {
         if self.is_player(id) && self.entity(id).is_shift_key_down() && self.is_passenger(id) {
             self.stop_riding(id);
             return;

@@ -15,6 +15,19 @@ impl GoalSelector {
         self.available_goals.push(WrappedGoal::new(prio, goal));
     }
 
+    pub fn remove_all_goals(&mut self, level: &mut ServerLevel, mob: EntityId, predicate: impl Fn(&Goal) -> bool) -> Vec<Goal> {
+        for available_goal in &mut self.available_goals {
+            if predicate(available_goal.get_goal()) && available_goal.is_running() {
+                available_goal.stop(level, mob);
+            }
+        }
+        let mut removed = Vec::new();
+        while let Some(goal) = self.remove_goal(&predicate) {
+            removed.push(goal.into_goal());
+        }
+        removed
+    }
+
     pub fn remove_goal(&mut self, to_remove: impl Fn(&Goal) -> bool) -> Option<WrappedGoal> {
         let index = self.available_goals.iter().position(|wrapped_goal| to_remove(wrapped_goal.get_goal()))?;
         for locked in &mut self.locked_flags {

@@ -7,7 +7,7 @@ use wafer_data::{EquipmentSlot, EquipmentSlotGroup, MobEffect, block_tags, block
 
 use super::attributes::{Attribute, AttributeMap, AttributeModifier, AttributeSupplier, Operation, PLAYER_ATTRIBUTES, SPEED_MODIFIER_SPRINTING};
 use super::data::{DataValue, Pose, ids};
-use super::mob::MobKind;
+use super::mob::{Mob, MobKind};
 use super::{Entity, EntityId, MoverType, RemovalReason, TOTAL_AIR_SUPPLY, compute_modified_friction, entity_event, flags, sound_event};
 use crate::advancements::triggers::criteria_triggers;
 use crate::core::holder_set::HolderSet;
@@ -333,7 +333,42 @@ impl ServerLevel {
         self.player(id).inventory.slots[index].clone().filter(|s| !s.is_empty())
     }
 
+    pub fn get_item_in_hand(&self, id: EntityId, hand: InteractionHand) -> Option<ItemStack> {
+        match self.mob(id) {
+            Some(mob) => mob.item_by_slot(hand.as_equipment_slot()).cloned(),
+            None => self.player(id).item_in_hand(hand),
+        }
+    }
+
+    pub fn set_item_in_hand(&mut self, id: EntityId, hand: InteractionHand, item_stack: ItemStack) {
+        if self.is_player(id) {
+            self.player_mut(id).set_item_in_hand(hand, Some(item_stack));
+        } else {
+            self.living_set_item_slot(id, hand.as_equipment_slot(), item_stack);
+        }
+    }
+
+    pub fn is_holding(&self, id: EntityId, item: wafer_data::Item) -> bool {
+        [EquipmentSlot::Mainhand, EquipmentSlot::Offhand].into_iter().any(|slot| self.item_by_slot_ref(id, slot).is_some_and(|held_item| held_item.is(item)))
+    }
+
+    pub fn get_ticks_using_item(&self, id: EntityId) -> i32 {
+        if !self.is_using_item(id) {
+            return 0;
+        }
+        let living = self.living(id);
+        living.use_item.as_ref().map_or(0, crate::world::item::get_use_duration) - living.use_item_remaining
+    }
+
     pub fn on_equip_item(&mut self, id: EntityId, slot: EquipmentSlot, old_stack: &ItemStack, stack: &ItemStack) {
+        if self.mob(id).is_some_and(Mob::is_abstract_skeleton) {
+            self.abstract_skeleton_on_equip_item(id, slot, old_stack, stack);
+        } else {
+            self.living_entity_on_equip_item(id, slot, old_stack, stack);
+        }
+    }
+
+    pub fn living_entity_on_equip_item(&mut self, id: EntityId, slot: EquipmentSlot, old_stack: &ItemStack, stack: &ItemStack) {
         if self.is_spectator(id) || ItemStack::is_same_item_same_components(old_stack, stack) || self.entity(id).first_tick {
             return;
         }
@@ -1226,7 +1261,9 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.zombie_get_base_experience_reward(id),
-            Some(MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_)) => {
+                self.mob_get_base_experience_reward(id)
+            }
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1473,6 +1510,18 @@ impl ServerLevel {
     }
 
     pub fn can_freeze(&self, id: EntityId) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Skeleton(_)) => self.skeleton_can_freeze(),
+            _ if self.is_living(id) => self.living_entity_can_freeze(id),
+            _ => self.entity_can_freeze(id),
+        }
+    }
+
+    pub fn entity_can_freeze(&self, id: EntityId) -> bool {
+        !entity_type_tags::FREEZE_IMMUNE_ENTITY_TYPES.contains(self.entity(id).entity_type as usize)
+    }
+
+    pub fn living_entity_can_freeze(&self, id: EntityId) -> bool {
         if self.is_spectator(id) {
             return false;
         }
@@ -1481,7 +1530,7 @@ impl ServerLevel {
                 return false;
             }
         }
-        !entity_type_tags::FREEZE_IMMUNE_ENTITY_TYPES.contains(self.entity(id).entity_type as usize)
+        self.entity_can_freeze(id)
     }
 
     pub fn tick_freezing_damage(&mut self, id: EntityId) {
@@ -1623,7 +1672,9 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_ai_step(id),
-            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_)) => self.monster_ai_step(id),
+            Some(
+                MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_),
+            ) => self.monster_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }

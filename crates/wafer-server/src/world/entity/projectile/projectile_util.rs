@@ -1,13 +1,28 @@
 use wafer_core::{AABB, Vec3};
+use wafer_data::{EquipmentSlot, Item, items};
 
+use super::projectile::Projectile;
 use crate::server::level::ServerLevel;
+use crate::world::InteractionHand;
 use crate::world::entity::EntityId;
+use crate::world::item::{ItemStack, arrow_item};
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::{HitResult, Type};
 
 pub fn compute_margin(tick_count: i32) -> f32 {
     0.0f32.max(0.3f32.min((tick_count - 2) as f32 / 20.0))
+}
+
+pub fn get_weapon_holding_hand(level: &ServerLevel, mob: EntityId, weapon_item: Item) -> InteractionHand {
+    if level.item_by_slot_ref(mob, EquipmentSlot::Mainhand).is_some_and(|main_hand_item| main_hand_item.is(weapon_item)) { InteractionHand::MainHand } else { InteractionHand::OffHand }
+}
+
+pub fn get_mob_arrow(level: &mut ServerLevel, mob: EntityId, projectile: &ItemStack, power: f32, fired_from_weapon: Option<&ItemStack>) -> Projectile {
+    let arrow_item = if projectile.get_item().is_instance_of("ArrowItem") { projectile.get_item() } else { items::ARROW };
+    let mut arrow = arrow_item::create_arrow(level, arrow_item, projectile, mob, fired_from_weapon);
+    arrow.set_base_damage_from_mob(power, level.difficulty as i32);
+    arrow
 }
 
 impl ServerLevel {

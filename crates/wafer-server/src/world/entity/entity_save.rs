@@ -361,6 +361,9 @@ impl ServerLevel {
             "minecraft:creeper" => LevelEntity::Mob(Box::new(super::monster::creeper::Creeper::create())),
             "minecraft:spider" => LevelEntity::Mob(Box::new(super::monster::spider::spider::Spider::create())),
             "minecraft:cave_spider" => LevelEntity::Mob(Box::new(super::monster::spider::cave_spider::CaveSpider::create())),
+            "minecraft:skeleton" => LevelEntity::Mob(Box::new(super::monster::skeleton::skeleton::Skeleton::create())),
+            "minecraft:stray" => LevelEntity::Mob(Box::new(super::monster::skeleton::stray::Stray::create())),
+            "minecraft:bogged" => LevelEntity::Mob(Box::new(super::monster::skeleton::bogged::Bogged::create())),
             "minecraft:snowball" => LevelEntity::Projectile(Box::new(throwableitemprojectile::snowball::Snowball::of_type())),
             "minecraft:egg" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_egg::ThrownEgg::of_type())),
             "minecraft:ender_pearl" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_enderpearl::ThrownEnderpearl::of_type())),
@@ -423,6 +426,9 @@ impl ServerLevel {
         }
         if let Some(item_stack) = item_stack {
             apply_default_stack_config(&mut entity, item_stack);
+            if item_stack.has(crate::world::item::component::ENTITY_DATA) {
+                entity = self.reassess_weapon_goal_detached(entity);
+            }
         }
         let id = entity.entity().id;
         let is_mob = matches!(entity, LevelEntity::Mob(_));
@@ -508,7 +514,7 @@ impl ServerLevel {
             error!("{e}");
             return None;
         }
-        Some(entity)
+        Some(self.reassess_weapon_goal_detached(entity))
     }
 
     pub fn entity_tag_to_compare(&self, id: EntityId) -> Nbt {
