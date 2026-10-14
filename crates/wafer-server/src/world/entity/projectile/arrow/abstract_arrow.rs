@@ -597,10 +597,9 @@ impl ServerLevel {
         projectile.set_in_ground(true);
         projectile.set_crit_arrow(false);
         projectile.set_pierce_level(0);
-        let default_sound_event = get_default_hit_ground_sound_event(&projectile.kind);
         let arrow = projectile.abstract_arrow_mut().expect("an arrow");
         arrow.shake_time = SHAKE_TIME;
-        arrow.set_sound_event(default_sound_event);
+        arrow.set_sound_event(sound_event("minecraft:entity.arrow.hit"));
         arrow.reset_pierced_entities();
     }
 

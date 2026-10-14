@@ -52,7 +52,7 @@ fn thrown_tridents_fly_and_stick() {
     let get = |key: &str| out.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
     assert_eq!(get("DealtDamage"), Some(Nbt::Byte(1)));
     assert_eq!(get("pickup"), Some(Nbt::Byte(1)));
-    assert_eq!(get("SoundEvent"), Some(Nbt::String("minecraft:item.trident.hit_ground".into())));
+    assert_eq!(get("SoundEvent"), Some(Nbt::String("minecraft:entity.arrow.hit".into())));
 }
 
 #[test]

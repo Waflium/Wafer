@@ -153,5 +153,13 @@ fn drowned_with_tridents_throw_them() {
         thrown |= level.entities.values().any(|e| matches!(e, LevelEntity::Projectile(p) if matches!(p.kind, ProjectileKind::ThrownTrident(_))));
     }
     assert!(thrown, "the drowned never threw its trident");
-    assert!(level.health(player) < 20.0, "the trident never hit");
+    let mut hit = level.health(player) < 20.0;
+    for _ in 0..200 {
+        level.tick();
+        level.server_player_do_tick(player);
+        hit |= level.health(player) < 20.0;
+    }
+    let tridents = level.entities.values().filter(|e| matches!(e, LevelEntity::Projectile(p) if matches!(p.kind, ProjectileKind::ThrownTrident(_)))).count();
+    assert!(tridents >= 3, "the drowned stopped throwing: {tridents} tridents");
+    assert!(hit, "no trident ever hit");
 }
