@@ -21,9 +21,15 @@ use crate::world::inventory::recipe_book_type::RecipeBookType;
 use crate::world::item::component::swing_animation::SwingAnimation;
 use crate::world::item::crafting::display::recipe_display_entry::RecipeDisplayId;
 use crate::world::item::crafting::recipe_manager::RecipeManager;
-use crate::world::item::{ItemStack, read_slot, validate_encodable};
+use crate::world::item::component as dc;
+use crate::world::item::{ItemStack, inventory_slot, read_slot, validate_encodable};
 use crate::world::level::BlockGetter;
 use crate::world::level::block::BlockHitResult;
+use crate::world::level::block::entity::BlockEntityKind;
+use crate::world::level::block::entity::jigsaw_block_entity::{JigsawBlockEntity, JointType};
+use crate::world::level::levelgen::structure::pools::structure_template_pool::TemplatePoolHolder;
+use crate::world::level::levelgen::structure::templatesystem::structure_template::get_front_facing;
+use wafer_protocol::nbt::Nbt;
 use crate::world::level::block::entity::sign_block_entity::{FilteredText, SignTextSlot};
 use crate::world::{InteractionHand, InteractionResult, SwingSource};
 
@@ -234,6 +240,56 @@ impl ServerLevel {
             serverbound::CHUNK_BATCH_RECEIVED => {
                 let desired = r.f32()?;
                 self.player_mut(id).chunk_sender.on_chunk_batch_received(desired);
+            }
+            serverbound::PING_REQUEST => {
+                let time = r.i64()?;
+                self.player(id).connection.send(clientbound::PONG_RESPONSE, |w| w.i64(time));
+            }
+            serverbound::SET_COMMAND_BLOCK => {
+                r.position()?;
+                r.string(32767)?;
+                let mode = r.varint()?;
+                if !(0..3).contains(&mode) {
+                    anyhow::bail!("Unknown command block mode {mode}");
+                }
+                r.u8()?;
+                self.handle_set_command_block(id);
+            }
+            serverbound::SET_COMMAND_MINECART => {
+                r.varint()?;
+                r.string(32767)?;
+                r.bool()?;
+                self.handle_set_command_minecart(id);
+            }
+            serverbound::SET_JIGSAW_BLOCK => {
+                let pos = r.position()?;
+                let mut identifier = || crate::resources::identifier::parse(r.string(32767)?).map_err(anyhow::Error::msg);
+                let (name, target, pool) = (identifier()?, identifier()?, identifier()?);
+                let final_state = r.string(32767)?.to_owned();
+                let joint = JointType::by_name(r.string(32767)?).unwrap_or(JointType::Aligned);
+                let selection_priority = r.varint()?;
+                let placement_priority = r.varint()?;
+                let jigsaw = JigsawBlockEntity { name, target, pool, joint, final_state, placement_priority, selection_priority };
+                self.handle_set_jigsaw_block(id, BlockPos::new(pos.0, pos.1, pos.2), jigsaw);
+            }
+            serverbound::JIGSAW_GENERATE => {
+                let pos = r.position()?;
+                let levels = r.varint()?;
+                let keep_jigsaws = r.bool()?;
+                self.handle_jigsaw_generate(id, BlockPos::new(pos.0, pos.1, pos.2), levels, keep_jigsaws);
+            }
+            serverbound::EDIT_BOOK => {
+                let slot = r.varint()?;
+                let count = r.varint()?;
+                if !(0..=100).contains(&count) {
+                    anyhow::bail!("{count} elements exceeded max size of: 100");
+                }
+                let mut pages = Vec::with_capacity(count as usize);
+                for _ in 0..count {
+                    pages.push(r.string(1024)?.to_owned());
+                }
+                let title = if r.bool()? { Some(r.string(32)?.to_owned()) } else { None };
+                self.handle_edit_book(id, slot, pages, title);
             }
             serverbound::SEEN_ADVANCEMENTS => {
                 let action = r.varint()?;
@@ -727,6 +783,90 @@ impl ServerLevel {
         }
     }
 
+    fn handle_set_command_block(&mut self, id: EntityId) {
+        if !self.can_use_game_master_blocks(id) {
+            self.send_system_message(id, &Component::translatable("advMode.notAllowed"));
+        }
+    }
+
+    fn handle_set_command_minecart(&mut self, id: EntityId) {
+        if !self.can_use_game_master_blocks(id) {
+            self.send_system_message(id, &Component::translatable("advMode.notAllowed"));
+        }
+    }
+
+    fn handle_set_jigsaw_block(&mut self, id: EntityId, block_pos: BlockPos, packet: JigsawBlockEntity) {
+        if !self.can_use_game_master_blocks(id) {
+            return;
+        }
+        let state = self.block_state(block_pos);
+        let Some(BlockEntityKind::Jigsaw(jigsaw)) = self.get_block_entity(block_pos).map(|block_entity| &mut block_entity.kind) else { return };
+        jigsaw.name = packet.name;
+        jigsaw.target = packet.target;
+        jigsaw.pool = packet.pool;
+        jigsaw.final_state = packet.final_state;
+        jigsaw.joint = packet.joint;
+        jigsaw.placement_priority = packet.placement_priority;
+        jigsaw.selection_priority = packet.selection_priority;
+        self.block_entity_set_changed(block_pos);
+        self.send_block_updated(block_pos, state, state);
+    }
+
+    fn handle_jigsaw_generate(&mut self, id: EntityId, block_pos: BlockPos, levels: i32, keep_jigsaws: bool) {
+        if !self.can_use_game_master_blocks(id) {
+            return;
+        }
+        let Some(block_entity) = self.get_block_entity(block_pos) else { return };
+        let BlockEntityKind::Jigsaw(jigsaw) = &block_entity.kind else { return };
+        let position = block_pos.relative(get_front_facing(block_entity.block_state()));
+        let target = jigsaw.target.clone();
+        let Some(pool) = TemplatePoolHolder::by_name(&jigsaw.pool) else { return };
+        crate::server::commands::place_command::generate_jigsaw(self, pool, &target, levels, position, keep_jigsaws);
+    }
+
+    fn handle_edit_book(&mut self, id: EntityId, slot: i32, pages: Vec<String>, title: Option<String>) {
+        if !((0..9).contains(&slot) || slot == 40) {
+            return;
+        }
+        let slot = slot as usize;
+        let pages = pages.into_iter().map(FilteredText::pass_through).collect();
+        match title {
+            Some(title) => self.sign_book(id, FilteredText::pass_through(title), pages, slot),
+            None => self.update_book_contents(id, pages, slot),
+        }
+    }
+
+    fn update_book_contents(&mut self, id: EntityId, contents: Vec<FilteredText>, slot: usize) {
+        let pages: Vec<Nbt> = contents.iter().map(|page| self.filterable_from_outgoing(id, page)).collect();
+        let Some(carried) = self.player_mut(id).inventory.slots[inventory_slot(slot)].as_mut().filter(|s| s.has(dc::WRITABLE_BOOK_CONTENT)) else { return };
+        let mut content = Vec::new();
+        if !pages.is_empty() {
+            content.push(("pages".to_owned(), Nbt::List(pages)));
+        }
+        carried.set_value(dc::WRITABLE_BOOK_CONTENT, Nbt::Compound(content));
+    }
+
+    fn sign_book(&mut self, id: EntityId, title: FilteredText, contents: Vec<FilteredText>, slot: usize) {
+        let title = self.filterable_from_outgoing(id, &title);
+        let pages: Vec<Nbt> = contents.iter().map(|page| self.filterable_from_outgoing(id, page)).collect();
+        let p = self.player_mut(id);
+        let Some(carried) = p.inventory.slots[inventory_slot(slot)].as_ref().filter(|s| s.has(dc::WRITABLE_BOOK_CONTENT)) else { return };
+        let mut written_book = carried.transmute_copy(wafer_data::items::WRITTEN_BOOK, carried.count);
+        written_book.remove(dc::WRITABLE_BOOK_CONTENT);
+        let mut content = vec![("title".to_owned(), title), ("author".to_owned(), Nbt::String(p.profile.name.clone()))];
+        if !pages.is_empty() {
+            content.push(("pages".to_owned(), Nbt::List(pages)));
+        }
+        content.push(("resolved".to_owned(), Nbt::Byte(1)));
+        written_book.set_value(dc::WRITTEN_BOOK_CONTENT, Nbt::Compound(content));
+        p.inventory.slots[inventory_slot(slot)] = Some(written_book);
+    }
+
+    fn filterable_from_outgoing(&self, id: EntityId, text: &FilteredText) -> Nbt {
+        let raw = if self.player(id).client.text_filtering { text.filtered_or_empty() } else { text.raw.as_str() };
+        Nbt::Compound(vec![("raw".to_owned(), Nbt::String(raw.to_owned()))])
+    }
+
     fn handle_rename_item(&mut self, id: EntityId, name: &str) {
         if self.player(id).container_menu.as_ref().is_none_or(|menu| menu.kind != MenuKind::Anvil) {
             return;
@@ -909,6 +1049,101 @@ impl crate::server::Server {
             });
             for other in self.players() {
                 other.connection.send_raw(packet.clone());
+            }
+        }
+        Ok(())
+    }
+
+    pub(in crate::server) fn handle_change_difficulty(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        let difficulty = crate::world::difficulty::Difficulty::VALUES[packet.reader().varint()?.rem_euclid(4) as usize];
+        let player = self.player(id);
+        if self.profile_permission_level(player.profile.uuid) < 2 {
+            warn!("Player {} tried to change difficulty to translation{{key='options.difficulty.{}', args=[]}} without required permissions", player.profile.name, difficulty.key());
+        } else {
+            self.set_difficulty(difficulty, false);
+        }
+        Ok(())
+    }
+
+    pub(in crate::server) fn handle_lock_difficulty(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        let locked = packet.reader().bool()?;
+        if self.profile_permission_level(self.player(id).profile.uuid) >= 2 {
+            self.set_difficulty_locked(locked);
+        }
+        Ok(())
+    }
+
+    pub(in crate::server) fn handle_entity_tag_query(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        let mut r = packet.reader();
+        let transaction_id = r.varint()?;
+        let entity_id = r.varint()?;
+        if self.profile_permission_level(self.player(id).profile.uuid) >= 2 {
+            let level = self.entity_level(id);
+            if level.entity_ref(entity_id).is_some() {
+                let result = if level.players.contains_key(&entity_id) {
+                    level.save_player(entity_id)
+                } else {
+                    let mut output = Vec::new();
+                    level.save_without_id(entity_id, &mut output);
+                    Nbt::Compound(output)
+                };
+                level.player(id).connection.send(clientbound::TAG_QUERY, |w| {
+                    w.varint(transaction_id);
+                    result.write(w);
+                });
+            }
+        }
+        Ok(())
+    }
+
+    pub(in crate::server) fn handle_block_entity_tag_query(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        let mut r = packet.reader();
+        let transaction_id = r.varint()?;
+        let pos = r.position()?;
+        if self.profile_permission_level(self.player(id).profile.uuid) >= 2 {
+            let level = self.entity_level_mut(id);
+            let tag = level.get_block_entity(BlockPos::new(pos.0, pos.1, pos.2)).map(|block_entity| block_entity.save_without_metadata());
+            level.player(id).connection.send(clientbound::TAG_QUERY, |w| {
+                w.varint(transaction_id);
+                match &tag {
+                    Some(tag) => tag.write(w),
+                    None => w.u8(0),
+                }
+            });
+        }
+        Ok(())
+    }
+
+    pub(in crate::server) fn handle_spectator_action(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        let spectate_entity_id = packet.reader().varint()?;
+        let spectate_entity_id = (spectate_entity_id != 0).then(|| spectate_entity_id - 1);
+        let level = self.entity_level(id);
+        if level.player(id).movement.has_client_loaded() && level.is_spectator(id) {
+            self.player_mut(id).reset_last_action_time();
+            if let Some(target) = spectate_entity_id {
+                let level = self.entity_level(id);
+                if let Some(target_pos) = level.entity_ref(target).map(crate::world::entity::Entity::block_position)
+                    && level.world_border.is_within_bounds_pos(target_pos)
+                    && level.is_within_entity_interaction_range(id, target, 3.0)
+                    && level.is_pickable(target)
+                {
+                    self.set_camera(id, Some(target));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub(in crate::server) fn handle_teleport_to_entity_packet(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        let uuid = packet.reader().uuid()?;
+        if self.entity_level(id).is_spectator(id) {
+            for level in 0..self.levels.len() {
+                if let Some(entity) = self.levels[level].entity_manager.visible_entity_storage.get(uuid) {
+                    let e = self.levels[level].entity(entity);
+                    let (pos, y_rot, x_rot) = (e.position(), e.y_rot, e.x_rot);
+                    self.server_player_teleport_to(id, level, pos, 0, y_rot, x_rot, true);
+                    return Ok(());
+                }
             }
         }
         Ok(())
@@ -1208,6 +1443,114 @@ mod server_tests {
         expected.uuid(offline_uuid("Alice"));
         expected.bool(true);
         assert_eq!(packets(&mut bob_packets), [(clientbound::PLAYER_INFO_UPDATE, expected.into_inner())]);
+    }
+
+    #[test]
+    fn game_master_packets_need_permission() {
+        let mut server = server();
+        let (alice, mut alice_packets) = join(&mut server, "Alice");
+        server.levels[0].handle_game_packet(alice, &packet(serverbound::PING_REQUEST, |w| w.i64(42))).unwrap();
+        assert_eq!(packets(&mut alice_packets), [(clientbound::PONG_RESPONSE, 42i64.to_be_bytes().to_vec())]);
+        let difficulty = server.difficulty;
+        server.handle_change_difficulty(alice, &packet(serverbound::CHANGE_DIFFICULTY, |w| w.varint(7))).unwrap();
+        server.handle_lock_difficulty(alice, &packet(serverbound::LOCK_DIFFICULTY, |w| w.bool(true))).unwrap();
+        server.handle_entity_tag_query(alice, &packet(serverbound::ENTITY_TAG_QUERY, |w| (w.varint(5), w.varint(alice)).1)).unwrap();
+        let command_block = packet(serverbound::SET_COMMAND_BLOCK, |w| {
+            w.position(0, -60, 0);
+            w.string("say hi");
+            w.varint(2);
+            w.u8(0);
+        });
+        server.levels[0].handle_game_packet(alice, &command_block).unwrap();
+        assert_eq!(server.difficulty, difficulty);
+        assert!(!server.difficulty_locked);
+        assert_eq!(packets(&mut alice_packets).iter().map(|p| p.0).collect::<Vec<_>>(), [clientbound::SYSTEM_CHAT]);
+        run(&mut server, "op Alice");
+        packets(&mut alice_packets);
+        server.handle_change_difficulty(alice, &packet(serverbound::CHANGE_DIFFICULTY, |w| w.varint(7))).unwrap();
+        assert_eq!(server.difficulty, crate::world::difficulty::Difficulty::Hard);
+        server.handle_lock_difficulty(alice, &packet(serverbound::LOCK_DIFFICULTY, |w| w.bool(true))).unwrap();
+        assert!(server.difficulty_locked);
+        packets(&mut alice_packets);
+        server.handle_entity_tag_query(alice, &packet(serverbound::ENTITY_TAG_QUERY, |w| (w.varint(5), w.varint(alice)).1)).unwrap();
+        server.handle_block_entity_tag_query(alice, &packet(serverbound::BLOCK_ENTITY_TAG_QUERY, |w| (w.varint(6), w.position(0, -60, 0)).1)).unwrap();
+        let sent = packets(&mut alice_packets);
+        assert_eq!(sent.len(), 2);
+        assert_eq!((sent[0].0, sent[0].1[0], sent[0].1[1]), (clientbound::TAG_QUERY, 5, 10));
+        assert_eq!(sent[1], (clientbound::TAG_QUERY, vec![6, 0]));
+    }
+
+    #[test]
+    fn books_are_edited_and_signed() {
+        let mut server = server();
+        let (alice, _) = join(&mut server, "Alice");
+        let level = &mut server.levels[0];
+        level.player_mut(alice).inventory.slots[crate::world::item::HOTBAR_START + 1] = Some(crate::world::item::ItemStack::new(wafer_data::items::WRITABLE_BOOK, 1));
+        let edit = |slot: i32, title: Option<&str>| {
+            packet(serverbound::EDIT_BOOK, |w| {
+                w.varint(slot);
+                w.varint(2);
+                w.string("first");
+                w.string("second");
+                w.bool(title.is_some());
+                if let Some(title) = title {
+                    w.string(title);
+                }
+            })
+        };
+        level.handle_game_packet(alice, &edit(9, None)).unwrap();
+        level.handle_game_packet(alice, &edit(1, None)).unwrap();
+        let book = level.player(alice).inventory.slots[crate::world::item::HOTBAR_START + 1].clone().unwrap();
+        assert_eq!(crate::world::item::component::values::writable_book_pages(book.get(crate::world::item::component::WRITABLE_BOOK_CONTENT).unwrap()), ["first", "second"]);
+        level.handle_game_packet(alice, &edit(1, Some("Title"))).unwrap();
+        let book = level.player(alice).inventory.slots[crate::world::item::HOTBAR_START + 1].clone().unwrap();
+        assert_eq!(book.item, wafer_data::items::WRITTEN_BOOK);
+        assert!(!book.has(crate::world::item::component::WRITABLE_BOOK_CONTENT));
+        let content = crate::world::item::component::values::WrittenBookContent::from_nbt(book.get(crate::world::item::component::WRITTEN_BOOK_CONTENT).unwrap());
+        assert_eq!((content.title.as_str(), content.author.as_str(), content.pages.len(), content.resolved), ("Title", "Alice", 2, true));
+    }
+
+    #[test]
+    fn jigsaw_blocks_are_configured_by_game_masters() {
+        let mut server = server();
+        let (alice, _) = join(&mut server, "Alice");
+        run(&mut server, "setblock 2 -60 0 minecraft:jigsaw");
+        let set_jigsaw = packet(serverbound::SET_JIGSAW_BLOCK, |w| {
+            w.position(2, -60, 0);
+            w.string("minecraft:start");
+            w.string("end");
+            w.string("minecraft:village/plains/town_centers");
+            w.string("minecraft:stone");
+            w.string("rollable");
+            w.varint(3);
+            w.varint(4);
+        });
+        let jigsaw = |server: &mut Server| match &server.levels[0].get_block_entity(wafer_core::BlockPos::new(2, -60, 0)).unwrap().kind {
+            crate::world::level::block::entity::BlockEntityKind::Jigsaw(jigsaw) => jigsaw.clone(),
+            _ => panic!("a jigsaw"),
+        };
+        server.levels[0].handle_game_packet(alice, &set_jigsaw).unwrap();
+        assert_eq!(jigsaw(&mut server).name, "minecraft:empty");
+        server.levels[0].spawn_protection.ops.push(offline_uuid("Alice"));
+        server.levels[0].set_game_mode(alice, crate::server::level::game_mode::GameType::Creative);
+        server.levels[0].handle_game_packet(alice, &set_jigsaw).unwrap();
+        let jigsaw = jigsaw(&mut server);
+        assert_eq!((jigsaw.name.as_str(), jigsaw.target.as_str(), jigsaw.final_state.as_str()), ("minecraft:start", "minecraft:end", "minecraft:stone"));
+        assert_eq!((jigsaw.selection_priority, jigsaw.placement_priority), (3, 4));
+    }
+
+    #[test]
+    fn spectators_teleport_to_entities() {
+        let mut server = server();
+        let (alice, _) = join(&mut server, "Alice");
+        run(&mut server, "summon pig 20.5 -60 3.5 {NoAI:1b,UUID:[I;1,2,3,4]}");
+        let uuid = (1u128 << 96) | (2u128 << 64) | (3u128 << 32) | 4;
+        let teleport = packet(serverbound::TELEPORT_TO_ENTITY, |w| w.uuid(uuid));
+        server.handle_teleport_to_entity_packet(alice, &teleport).unwrap();
+        assert_eq!(server.levels[0].entity(alice).position(), Vec3::new(0.5, -60.0, 0.5));
+        server.levels[0].set_game_mode(alice, crate::server::level::game_mode::GameType::Spectator);
+        server.handle_teleport_to_entity_packet(alice, &teleport).unwrap();
+        assert_eq!(server.levels[0].entity(alice).position(), Vec3::new(20.5, -60.0, 3.5));
     }
 
     #[test]

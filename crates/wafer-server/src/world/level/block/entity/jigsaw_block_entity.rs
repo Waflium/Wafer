@@ -23,7 +23,7 @@ impl JointType {
         }
     }
 
-    fn by_name(name: &str) -> Option<JointType> {
+    pub fn by_name(name: &str) -> Option<JointType> {
         match name {
             "rollable" => Some(JointType::Rollable),
             "aligned" => Some(JointType::Aligned),

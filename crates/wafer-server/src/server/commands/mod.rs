@@ -48,7 +48,7 @@ mod loot_context_sources;
 mod msg_command;
 mod op_command;
 mod particle_command;
-mod place_command;
+pub(crate) mod place_command;
 mod play_sound_command;
 mod post_effect_command;
 mod random_command;

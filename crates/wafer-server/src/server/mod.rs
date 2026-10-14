@@ -550,6 +550,13 @@ impl Server {
         }
     }
 
+    pub fn set_difficulty_locked(&mut self, locked: bool) {
+        self.difficulty_locked = locked;
+        for player in self.players() {
+            self.send_difficulty_update(&player.connection);
+        }
+    }
+
     fn send_difficulty_update(&self, connection: &Outbound) {
         connection.send(clientbound::CHANGE_DIFFICULTY, |p| {
             p.varint(self.difficulty.id());
@@ -825,6 +832,12 @@ impl Server {
                     serverbound::CLIENT_COMMAND => self.handle_client_command(id, &packet),
                     serverbound::CLIENT_INFORMATION => self.handle_client_information(id, &packet),
                     serverbound::SET_GAME_RULE => self.handle_set_game_rule(id, &packet),
+                    serverbound::CHANGE_DIFFICULTY => self.handle_change_difficulty(id, &packet),
+                    serverbound::LOCK_DIFFICULTY => self.handle_lock_difficulty(id, &packet),
+                    serverbound::ENTITY_TAG_QUERY => self.handle_entity_tag_query(id, &packet),
+                    serverbound::BLOCK_ENTITY_TAG_QUERY => self.handle_block_entity_tag_query(id, &packet),
+                    serverbound::SPECTATOR_ACTION => self.handle_spectator_action(id, &packet),
+                    serverbound::TELEPORT_TO_ENTITY => self.handle_teleport_to_entity_packet(id, &packet),
                     serverbound::CHANGE_GAME_MODE => self.handle_change_game_mode(id, &packet),
                     serverbound::PICK_ITEM_FROM_ENTITY => self.handle_pick_item_from_entity(id, &packet),
                     serverbound::RESOURCE_PACK => self.handle_resource_pack_response(id, &packet),

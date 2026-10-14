@@ -111,7 +111,7 @@ pub fn place_jigsaw(server: &mut Server, source: &CommandSourceStack, pool: Temp
     Ok(1)
 }
 
-fn generate_jigsaw(level: &mut ServerLevel, pool: TemplatePoolHolder, target: &str, max_depth: i32, position: BlockPos, keep_jigsaws: bool) -> bool {
+pub(crate) fn generate_jigsaw(level: &mut ServerLevel, pool: TemplatePoolHolder, target: &str, max_depth: i32, position: BlockPos, keep_jigsaws: bool) -> bool {
     let generator = level.chunks.generator.clone();
     let all_biomes = HolderSet::Direct((0..wafer_data::SyncedRegistry::get("minecraft:worldgen/biome").entries.len() as i32).collect());
     let (seed, min_y, height) = (level.seed, level.chunks.min_y(), level.chunks.height());
