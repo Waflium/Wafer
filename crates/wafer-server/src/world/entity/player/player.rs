@@ -641,6 +641,14 @@ impl ServerLevel {
         if !can_sleep {
             return Err(abstract_bed_block::error_message(rule));
         }
+        if !self.player(id).game_mode.game_type.is_creative() {
+            let bed_center = Vec3::at_bottom_center_of(pos);
+            let area = AABB::new(bed_center.x - 8.0, bed_center.y - 5.0, bed_center.z - 8.0, bed_center.x + 8.0, bed_center.y + 5.0, bed_center.z + 8.0);
+            let monsters = self.get_entities(None, &area).into_iter().filter(|&monster| self.is_monster(monster) && self.is_preventing_player_rest(monster, id)).count();
+            if monsters > 0 {
+                return Err(Some(Component::translatable("block.minecraft.bed.not_safe")));
+            }
+        }
         let result = self.player_start_sleep_in_bed(id, pos);
         if result.is_ok() {
             self.award_stat(id, abstract_bed_block::get_slept_in_bed_stat_type(kind), 1);
