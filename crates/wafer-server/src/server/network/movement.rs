@@ -186,6 +186,9 @@ impl ServerLevel {
             }
             self.player_mut(id).movement.received_position_this_tick = true;
         }
+        if self.player(id).won_game {
+            return;
+        }
         if self.player(id).movement.tick_count == 0 {
             self.player_mut(id).reset_position();
         }
@@ -385,8 +388,13 @@ impl ServerLevel {
         let e = self.entity(id);
         let new_aabb = e.bounding_box().move_by(x - e.x(), y - e.y(), z - e.z());
         let deflate = 1.0e-5f32 as f64;
+        let box_ = new_aabb.deflate_all(deflate);
         let old_shape = VoxelShape::from_boxes(&[old_aabb.deflate_all(deflate)]);
-        for (_, collider) in self.block_collisions(&new_aabb.deflate_all(deflate), &crate::world::phys::shapes::collision_context::CollisionContext::of(self, id), false) {
+        if self.entity_collisions(Some(id), &box_).iter().any(|shape| !join_is_not_empty(shape, &old_shape, BooleanOp::And)) {
+            return true;
+        }
+        let context = crate::world::phys::shapes::collision_context::CollisionContext::with_position(self, id, old_aabb.min_y);
+        for (_, collider) in self.block_collisions(&box_, &context, false) {
             let [ox, oy, oz] = collider.offset;
             if !join_is_not_empty(&collider.shape.moved(ox, oy, oz), &old_shape, BooleanOp::And) {
                 return true;
@@ -490,10 +498,10 @@ impl ServerLevel {
             let horizontal_collision = self.entity(vehicle).horizontal_collision;
             self.set_on_ground_with_movement(vehicle, on_ground, horizontal_collision, client_delta_movement);
             self.do_check_fall_damage(vehicle, client_delta_movement.x, client_delta_movement.y, client_delta_movement.z, on_ground);
+            self.check_movement_statistics(id, client_delta_movement.x, client_delta_movement.y, client_delta_movement.z);
             if self.entity_ref(vehicle).is_none() {
                 return;
             }
-            self.check_movement_statistics(id, client_delta_movement.x, client_delta_movement.y, client_delta_movement.z);
             let floating = oy_dist >= -0.03125 && !vehicle_rests_on_something && !self.allow_flight && !self.entity(vehicle).is_no_gravity() && {
                 let box_ = self.entity(vehicle).bounding_box().inflate_all(0.0625).expand_towards(0.0, -0.55, 0.0);
                 self.all_air_in(&box_)
@@ -662,5 +670,46 @@ impl ServerLevel {
         }
         let modifier = 0.08 / gravity;
         mth::ceil(80.0 * modifier.max(1.0))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wafer_core::Vec3;
+
+    use crate::commands::perform_prefixed_command;
+    use crate::commands::source::CommandSourceStack;
+    use crate::server::Server;
+    use crate::server::level::game_mode::GameType;
+    use crate::server::level::testing;
+
+    fn server() -> Server {
+        Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+    }
+
+    #[test]
+    fn creative_players_cannot_move_into_boats() {
+        let mut server = server();
+        let id = testing::server_player(&mut server, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let source = CommandSourceStack::server(&server);
+        perform_prefixed_command(&mut server, &source, "summon oak_boat 2.5 -60 0.5");
+        let level = &mut server.levels[0];
+        level.handle_player_loaded(id);
+        level.set_game_mode(id, GameType::Creative);
+        level.handle_move_player(id, Some(Vec3::new(1.9, -60.0, 0.5)), None, true, false);
+        assert_eq!(level.entity(id).position(), Vec3::new(0.5, -60.0, 0.5));
+        assert!(level.player(id).movement.awaiting_position_from_client.is_some());
+    }
+
+    #[test]
+    fn players_who_won_the_game_ignore_movement() {
+        let mut server = server();
+        let id = testing::server_player(&mut server, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let level = &mut server.levels[0];
+        level.handle_player_loaded(id);
+        level.player_mut(id).won_game = true;
+        level.handle_move_player(id, Some(Vec3::new(1.5, -60.0, 0.5)), None, true, false);
+        assert_eq!(level.entity(id).position(), Vec3::new(0.5, -60.0, 0.5));
+        assert!(level.player(id).movement.received_position_this_tick);
     }
 }

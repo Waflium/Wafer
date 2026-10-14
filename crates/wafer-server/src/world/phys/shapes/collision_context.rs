@@ -48,6 +48,10 @@ impl CollisionContext {
         }
     }
 
+    pub fn with_position(level: &ServerLevel, entity: EntityId, position: f64) -> CollisionContext {
+        CollisionContext::new(level, entity, true, position)
+    }
+
     fn new(level: &ServerLevel, entity: EntityId, placement: bool, entity_bottom: f64) -> CollisionContext {
         let e = level.entity(entity);
         let properties = EntityProperties {
