@@ -559,6 +559,19 @@ pub static ENDERMITE_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static WITCH_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage,
+        ],
+        &[(FollowRange, 16.0), (MaxHealth, 26.0), (MovementSpeed, 0.25)],
+    )
+};
+
 pub struct AttributeMap {
     supplier: &'static AttributeSupplier,
     instances: Vec<AttributeInstance>,

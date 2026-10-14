@@ -67,6 +67,10 @@ impl WrappedGoal {
         &self.goal
     }
 
+    pub fn get_goal_mut(&mut self) -> &mut Goal {
+        &mut self.goal
+    }
+
     pub fn into_goal(self) -> Goal {
         self.goal
     }

@@ -21,6 +21,7 @@ impl ServerLevel {
             | MobKind::Endermite(_) => self.monster_get_walk_target_value(pos),
             MobKind::Silverfish(_) => self.silverfish_get_walk_target_value(pos),
             MobKind::Enderman(_) => crate::world::entity::monster::enderman::Enderman::get_walk_target_value(),
+            MobKind::Witch(_) => self.monster_get_walk_target_value(pos),
             _ => self.animal_get_walk_target_value(pos),
         }
     }

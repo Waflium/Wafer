@@ -94,6 +94,7 @@ impl ServerLevel {
             | MobKind::Silverfish(_)
             | MobKind::Endermite(_) => None,
             MobKind::Enderman(_) => None,
+            MobKind::Witch(_) => None,
         }
     }
 

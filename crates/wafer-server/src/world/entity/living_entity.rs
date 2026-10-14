@@ -1067,7 +1067,14 @@ impl ServerLevel {
         combat_rules::get_damage_after_absorb(self, id, damage, source, armor, toughness)
     }
 
-    pub fn damage_after_magic_absorb(&mut self, id: EntityId, source: &DamageSource, mut damage: f32) -> f32 {
+    pub fn damage_after_magic_absorb(&mut self, id: EntityId, source: &DamageSource, damage: f32) -> f32 {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Witch(_)) => self.witch_get_damage_after_magic_absorb(id, source, damage),
+            _ => self.living_entity_damage_after_magic_absorb(id, source, damage),
+        }
+    }
+
+    pub fn living_entity_damage_after_magic_absorb(&mut self, id: EntityId, source: &DamageSource, mut damage: f32) -> f32 {
         if source.is(&damage_type_tags::BYPASSES_EFFECTS) {
             return damage;
         }
@@ -1264,6 +1271,8 @@ impl ServerLevel {
     pub fn die(&mut self, id: EntityId, source: DamageSource) {
         if self.is_player(id) {
             self.server_player_die(id, source);
+        } else if self.mob(id).and_then(Mob::raider).is_some() {
+            self.raider_die(id, source);
         } else {
             self.living_entity_die(id, source);
         }
@@ -1393,6 +1402,7 @@ impl ServerLevel {
                 | MobKind::Endermite(_),
             ) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Enderman(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Witch(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1815,6 +1825,7 @@ impl ServerLevel {
             ) => self.monster_ai_step(id),
             Some(MobKind::Endermite(_)) => self.endermite_ai_step(id),
             Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),
+            Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }

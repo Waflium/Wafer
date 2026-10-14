@@ -18,6 +18,7 @@ pub enum TargetType {
     Turtle,
     Axolotl,
     Endermite,
+    Raider,
 }
 
 impl TargetType {
@@ -29,6 +30,7 @@ impl TargetType {
             TargetType::Turtle => is_type(level, entity, &["minecraft:turtle"]),
             TargetType::Axolotl => is_type(level, entity, &["minecraft:axolotl"]),
             TargetType::Endermite => is_type(level, entity, &["minecraft:endermite"]),
+            TargetType::Raider => level.mob(entity).is_some_and(|mob| mob.raider().is_some()),
         }
     }
 }
@@ -68,7 +70,7 @@ impl NearestAttackableTargetGoal {
         level.entity(mob).bounding_box().inflate(follow_distance, follow_distance, follow_distance)
     }
 
-    fn find_target(&mut self, level: &mut ServerLevel, mob: EntityId) {
+    pub fn find_target(&mut self, level: &mut ServerLevel, mob: EntityId) {
         let follow_distance = get_follow_distance(level, mob);
         let selector = self.selector;
         let mut target_conditions = TargetingConditions::for_combat().range(follow_distance);

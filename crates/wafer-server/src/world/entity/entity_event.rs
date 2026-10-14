@@ -1,5 +1,6 @@
 pub const DEATH: u8 = 3;
 pub const EAT_GRASS: u8 = 10;
+pub const WITCH_HAT_MAGIC: u8 = 15;
 pub const IN_LOVE_HEARTS: u8 = 18;
 pub const SILVERFISH_MERGE_ANIM: u8 = 20;
 pub const PROTECTED_FROM_DEATH: u8 = 35;

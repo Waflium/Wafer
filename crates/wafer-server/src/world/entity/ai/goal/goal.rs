@@ -22,6 +22,11 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::monster::skeleton::abstract_skeleton::AbstractSkeletonMeleeGoal;
 use crate::world::entity::monster::zombie::drowned::{DrownedAttackGoal, DrownedGoToBeachGoal, DrownedGoToWaterGoal, DrownedSwimUpGoal, DrownedTridentAttackGoal};
+use super::ranged_attack_goal::RangedAttackGoal;
+use super::target::nearest_attackable_witch_target_goal::NearestAttackableWitchTargetGoal;
+use super::target::nearest_healable_raider_target_goal::NearestHealableRaiderTargetGoal;
+use crate::world::entity::monster::patrolling_monster::LongDistancePatrolGoal;
+use crate::world::entity::raid::raider::{ObtainRaidLeaderBannerGoal, RaiderCelebration};
 use crate::world::entity::monster::zombie::zombie::ZombieAttackTurtleEggGoal;
 use super::leap_at_target_goal::LeapAtTargetGoal;
 use crate::world::entity::monster::spider::spider::{SpiderAttackGoal, SpiderTargetGoal};
@@ -85,6 +90,12 @@ pub enum Goal {
     EndermanLeaveBlock(EndermanLeaveBlockGoal),
     EndermanLookForPlayer(EndermanLookForPlayerGoal),
     EndermanTakeBlock(EndermanTakeBlockGoal),
+    RangedAttack(RangedAttackGoal),
+    LongDistancePatrol(LongDistancePatrolGoal),
+    ObtainRaidLeaderBanner(ObtainRaidLeaderBannerGoal),
+    RaiderCelebration(RaiderCelebration),
+    NearestHealableRaiderTarget(NearestHealableRaiderTargetGoal),
+    NearestAttackableWitchTarget(NearestAttackableWitchTargetGoal),
 }
 
 impl Goal {
@@ -128,6 +139,12 @@ impl Goal {
             Goal::EndermanLeaveBlock(goal) => goal.can_use(level, mob),
             Goal::EndermanLookForPlayer(goal) => goal.can_use(level, mob),
             Goal::EndermanTakeBlock(goal) => goal.can_use(level, mob),
+            Goal::RangedAttack(goal) => goal.can_use(level, mob),
+            Goal::LongDistancePatrol(goal) => goal.can_use(level, mob),
+            Goal::ObtainRaidLeaderBanner(goal) => goal.can_use(level, mob),
+            Goal::RaiderCelebration(goal) => goal.can_use(level, mob),
+            Goal::NearestHealableRaiderTarget(goal) => goal.can_use(level, mob),
+            Goal::NearestAttackableWitchTarget(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -171,6 +188,12 @@ impl Goal {
             Goal::EndermanLeaveBlock(goal) => goal.can_use(level, mob),
             Goal::EndermanLookForPlayer(goal) => goal.can_continue_to_use(level, mob),
             Goal::EndermanTakeBlock(goal) => goal.can_use(level, mob),
+            Goal::RangedAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::LongDistancePatrol(goal) => goal.can_use(level, mob),
+            Goal::ObtainRaidLeaderBanner(goal) => goal.can_continue_to_use(level, mob),
+            Goal::RaiderCelebration(goal) => goal.can_use(level, mob),
+            Goal::NearestHealableRaiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
+            Goal::NearestAttackableWitchTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -215,6 +238,11 @@ impl Goal {
             Goal::EndermanFreezeWhenLookedAt(goal) => goal.start(level, mob),
             Goal::EndermanLeaveBlock(_) | Goal::EndermanTakeBlock(_) => {}
             Goal::EndermanLookForPlayer(goal) => goal.start(level, mob),
+            Goal::RangedAttack(_) | Goal::LongDistancePatrol(_) => {}
+            Goal::ObtainRaidLeaderBanner(goal) => goal.start(level, mob),
+            Goal::RaiderCelebration(goal) => goal.start(level, mob),
+            Goal::NearestHealableRaiderTarget(goal) => goal.start(level, mob),
+            Goal::NearestAttackableWitchTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
         }
     }
 
@@ -251,6 +279,12 @@ impl Goal {
             Goal::SilverfishMergeWithStone(goal) => goal.random_stroll_goal.stop(level, mob),
             Goal::ResetUniversalAngerTarget(_) | Goal::EndermanFreezeWhenLookedAt(_) | Goal::EndermanLeaveBlock(_) | Goal::EndermanTakeBlock(_) => {}
             Goal::EndermanLookForPlayer(goal) => goal.stop(level, mob),
+            Goal::RangedAttack(goal) => goal.stop(),
+            Goal::LongDistancePatrol(_) => {}
+            Goal::ObtainRaidLeaderBanner(goal) => goal.stop(),
+            Goal::RaiderCelebration(goal) => goal.stop(level, mob),
+            Goal::NearestHealableRaiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
+            Goal::NearestAttackableWitchTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
         }
     }
 
@@ -271,6 +305,7 @@ impl Goal {
                 | Goal::DrownedAttack(_)
                 | Goal::DrownedGoToBeach(_)
                 | Goal::ClimbOnTopOfPowderSnow(_)
+                | Goal::RangedAttack(_)
         )
     }
 
@@ -307,6 +342,11 @@ impl Goal {
             Goal::EndermanLeaveBlock(goal) => goal.tick(level, mob),
             Goal::EndermanLookForPlayer(goal) => goal.tick(level, mob),
             Goal::EndermanTakeBlock(goal) => goal.tick(level, mob),
+            Goal::RangedAttack(goal) => goal.tick(level, mob),
+            Goal::LongDistancePatrol(goal) => goal.tick(level, mob),
+            Goal::ObtainRaidLeaderBanner(goal) => goal.tick(level, mob),
+            Goal::RaiderCelebration(goal) => goal.tick(level, mob),
+            Goal::NearestHealableRaiderTarget(_) | Goal::NearestAttackableWitchTarget(_) => {}
         }
     }
 
@@ -343,6 +383,9 @@ impl Goal {
             Goal::ResetUniversalAngerTarget(_) | Goal::EndermanLeaveBlock(_) | Goal::EndermanTakeBlock(_) => 0,
             Goal::EndermanFreezeWhenLookedAt(_) => Flag::Jump.bit() | Flag::Move.bit(),
             Goal::EndermanLookForPlayer(_) => Flag::Target.bit(),
+            Goal::RangedAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::LongDistancePatrol(_) | Goal::ObtainRaidLeaderBanner(_) | Goal::RaiderCelebration(_) => Flag::Move.bit(),
+            Goal::NearestHealableRaiderTarget(_) | Goal::NearestAttackableWitchTarget(_) => Flag::Target.bit(),
         }
     }
 

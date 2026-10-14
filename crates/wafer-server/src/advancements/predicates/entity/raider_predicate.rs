@@ -20,6 +20,6 @@ impl RaiderPredicate {
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {
-        level.mob(entity).and_then(|mob| mob.raider()).is_some_and(|(has_raid, is_captain)| has_raid == self.has_raid && is_captain == self.is_captain)
+        level.mob(entity).and_then(|mob| mob.raider()).is_some() && level.has_raid(entity) == self.has_raid && level.is_captain(entity) == self.is_captain
     }
 }

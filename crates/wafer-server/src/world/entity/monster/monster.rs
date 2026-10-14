@@ -24,6 +24,14 @@ impl ServerLevel {
     }
 
     pub fn update_no_action_time(&mut self, id: EntityId) {
+        if self.mob(id).and_then(mob::Mob::raider).is_some() {
+            self.raider_update_no_action_time(id);
+        } else {
+            self.monster_update_no_action_time(id);
+        }
+    }
+
+    pub fn monster_update_no_action_time(&mut self, id: EntityId) {
         let br = self.get_entity_light_level_dependent_magic_value(id);
         if br > 0.5 {
             self.living_mut(id).no_action_time += 2;

@@ -95,6 +95,10 @@ impl GoalSelector {
         &self.available_goals
     }
 
+    pub fn get_available_goals_mut(&mut self) -> &mut [WrappedGoal] {
+        &mut self.available_goals
+    }
+
     pub fn disable_control_flag(&mut self, flag: Flag) {
         self.disabled_flags |= flag.bit();
     }

@@ -2180,6 +2180,9 @@ impl ServerLevel {
             if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Enderman(_))) {
                 return self.enderman_hurt_server(id, source, damage);
             }
+            if self.mob(id).and_then(super::mob::Mob::raider).is_some() {
+                return self.raider_hurt_server(id, source, damage);
+            }
             return self.living_entity_hurt_server(id, source, damage);
         }
         match self.entities.get(&id) {
@@ -2395,6 +2398,7 @@ impl ServerLevel {
                     super::mob::MobKind::Silverfish(_) => "Silverfish",
                     super::mob::MobKind::Endermite(_) => "Endermite",
                     super::mob::MobKind::Enderman(_) => "Enderman",
+                    super::mob::MobKind::Witch(_) => "Witch",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
