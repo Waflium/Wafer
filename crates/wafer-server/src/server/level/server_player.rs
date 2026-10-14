@@ -305,12 +305,26 @@ impl ServerPlayer {
             _ => 0.0,
         };
         nbt.push(("AbsorptionAmount".into(), Nbt::Float(absorption)));
+        nbt.push(("current_impulse_context_reset_grace_time".into(), Nbt::Int(self.living.current_impulse_context_reset_grace_time)));
+        if let Some(pos) = self.living.current_impulse_impact_pos {
+            nbt.push(("current_explosion_impact_pos".into(), Nbt::List(vec![Nbt::Double(pos.x), Nbt::Double(pos.y), Nbt::Double(pos.z)])));
+        }
         nbt.push(("attributes".into(), self.living.attributes.to_nbt()));
         if !self.living.active_effects.is_empty() {
             nbt.push(("active_effects".into(), Nbt::List(self.living.active_effects.iter().map(MobEffectInstance::to_nbt).collect())));
         }
+        nbt.push(("FallFlying".into(), Nbt::Byte(self.entity.is_fall_flying() as i8)));
         if let DataValue::OptionalBlockPos(Some(pos)) = self.entity.data.get(ids::SLEEPING_POS) {
             nbt.push(("sleeping_pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z])));
+        }
+        nbt.push(("Brain".into(), Nbt::Compound(vec![("memories".into(), Nbt::Compound(Vec::new()))])));
+        if let Some(player) = self.living.last_hurt_by_player {
+            nbt.push(("last_hurt_by_player".into(), crate::world::level::storage::uuid_ints(player)));
+            nbt.push(("last_hurt_by_player_memory_time".into(), Nbt::Int(self.living.last_hurt_by_player_memory_time)));
+        }
+        if let Some(mob) = self.living.last_hurt_by_mob {
+            nbt.push(("last_hurt_by_mob".into(), crate::world::level::storage::uuid_ints(mob)));
+            nbt.push(("ticks_since_last_hurt_by_mob".into(), Nbt::Int(self.entity.tick_count - self.living.last_hurt_by_mob_timestamp)));
         }
         let stack_at = |slot: usize| self.inventory.slots[slot].as_ref().filter(|s| !s.is_empty());
         let equipment: Vec<(String, Nbt)> = [("offhand", OFFHAND), ("feet", 8), ("legs", 7), ("chest", 6), ("head", 5)]
@@ -412,6 +426,13 @@ impl ServerPlayer {
         self.living.attributes.instance(Attribute::MovementSpeed).expect("players have movement speed").set_base_value(walking_speed);
         self.living.hurt_time = number("HurtTime").map_or(0, |v| v as i32);
         self.living.death_time = number("DeathTime").map_or(0, |v| v as i32);
+        self.entity.set_shared_flag(flags::FALL_FLYING, number("FallFlying").is_some_and(|v| v != 0.0));
+        self.living.last_hurt_by_player = nbt.get("last_hurt_by_player").and_then(crate::world::entity::entity_save::uuid_from_nbt);
+        self.living.last_hurt_by_player_memory_time = number("last_hurt_by_player_memory_time").map_or(0, |v| v as i32);
+        self.living.last_hurt_by_mob = nbt.get("last_hurt_by_mob").and_then(crate::world::entity::entity_save::uuid_from_nbt);
+        self.living.last_hurt_by_mob_timestamp = self.entity.tick_count - number("ticks_since_last_hurt_by_mob").map_or(0, |v| v as i32);
+        self.living.current_impulse_context_reset_grace_time = number("current_impulse_context_reset_grace_time").map_or(0, |v| v as i32);
+        self.living.current_impulse_impact_pos = nbt.get("current_explosion_impact_pos").map(Nbt::as_list).filter(|p| p.len() == 3).and_then(|p| Some(Vec3::new(p[0].as_f64()?, p[1].as_f64()?, p[2].as_f64()?)));
         self.entity.data.set(ids::PLAYER_ABSORPTION, DataValue::Float(number("AbsorptionAmount").map_or(0.0, |v| v as f32).max(0.0)));
         self.last_death_location = nbt.get("LastDeathLocation").and_then(|l| {
             let dimension = l.get("dimension").and_then(Nbt::as_str)?.to_owned();

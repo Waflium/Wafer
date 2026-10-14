@@ -413,6 +413,10 @@ impl Mob {
             out.push(("last_hurt_by_player".into(), uuid_ints(player)));
             out.push(("last_hurt_by_player_memory_time".into(), Nbt::Int(living.last_hurt_by_player_memory_time)));
         }
+        if let Some(mob) = living.last_hurt_by_mob {
+            out.push(("last_hurt_by_mob".into(), uuid_ints(mob)));
+            out.push(("ticks_since_last_hurt_by_mob".into(), Nbt::Int(self.entity.tick_count - living.last_hurt_by_mob_timestamp)));
+        }
         if let Some(equipment) = self.save_equipment() {
             out.push(("equipment".into(), equipment));
         }
@@ -510,6 +514,8 @@ impl Mob {
         self.entity.set_shared_flag(super::flags::FALL_FLYING, boolean("FallFlying"));
         self.living.last_hurt_by_player = nbt.get("last_hurt_by_player").and_then(uuid_from_nbt);
         self.living.last_hurt_by_player_memory_time = int("last_hurt_by_player_memory_time").unwrap_or(0);
+        self.living.last_hurt_by_mob = nbt.get("last_hurt_by_mob").and_then(uuid_from_nbt);
+        self.living.last_hurt_by_mob_timestamp = self.entity.tick_count - int("ticks_since_last_hurt_by_mob").unwrap_or(0);
         self.load_equipment(nbt.get("equipment"));
         self.living.locator_bar_icon = nbt.get("locator_bar_icon").and_then(crate::world::waypoints::waypoint::Icon::from_nbt).unwrap_or_default();
         self.living.current_impulse_context_reset_grace_time = int("current_impulse_context_reset_grace_time").unwrap_or(0);
