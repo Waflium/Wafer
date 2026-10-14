@@ -36,6 +36,7 @@ fn is_close_enough_for_spawning(mob: Vec3, player: Vec3) -> bool {
 
 fn joined(seed: i64) -> Server {
     let mut server = server();
+    server.set_game_rule(game_rule::SPAWN_MONSTERS, 0);
     testing::server_player(&mut server, Vec3::new(8.5, -60.0, 8.5), 0.0, 0.0);
     server.overworld_mut().chunks.run_until_idle();
     server.overworld_mut().process_chunk_events();
