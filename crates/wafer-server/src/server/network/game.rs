@@ -241,6 +241,7 @@ impl ServerLevel {
                 let desired = r.f32()?;
                 self.player_mut(id).chunk_sender.on_chunk_batch_received(desired);
             }
+            serverbound::COOKIE_RESPONSE => self.player_mut(id).disconnect("multiplayer.disconnect.unexpected_query_response"),
             serverbound::PING_REQUEST => {
                 let time = r.i64()?;
                 self.player(id).connection.send(clientbound::PONG_RESPONSE, |w| w.i64(time));
