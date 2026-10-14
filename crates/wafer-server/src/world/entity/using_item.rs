@@ -33,14 +33,6 @@ fn create_effect_instance(entry: &Nbt) -> Option<MobEffectInstance> {
     Some(MobEffectInstance::new(effect, duration, 0))
 }
 
-pub fn use_duration(stack: &ItemStack) -> i32 {
-    match stack.item.info().consumable.as_ref() {
-        Some(consumable) => consumable.consume_ticks(),
-        None if stack.has(dc::BLOCKS_ATTACKS) || stack.has(dc::KINETIC_WEAPON) => 72000,
-        None => 0,
-    }
-}
-
 impl ServerLevel {
     fn living_entity_flags(&self, id: EntityId) -> i8 {
         match self.entity(id).data.get(ids::LIVING_ENTITY_FLAGS) {

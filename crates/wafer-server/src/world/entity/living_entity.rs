@@ -371,9 +371,7 @@ impl ServerLevel {
             return slot == EquipmentSlot::Mainhand && self.can_use_slot(id, EquipmentSlot::Mainhand);
         };
         let entity_type = self.entity_ref(id).map_or(-1, |e| e.entity_type);
-        let can_be_equipped_by =
-            equippable.allowed_entities.as_ref().is_none_or(|allowed| entity_type >= 0 && allowed.contains("minecraft:entity_type", wafer_data::registry::ENTITY_TYPE[entity_type as usize], entity_type));
-        EquipmentSlot::by_name(&equippable.slot) == Some(slot) && self.can_use_slot(id, slot) && can_be_equipped_by
+        EquipmentSlot::by_name(&equippable.slot) == Some(slot) && self.can_use_slot(id, slot) && equippable.can_be_equipped_by(entity_type)
     }
 
     pub fn living_set_item_slot(&mut self, id: EntityId, slot: EquipmentSlot, item_stack: ItemStack) {

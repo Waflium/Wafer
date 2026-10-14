@@ -262,6 +262,51 @@ fn stew_leaves_its_bowl() {
 }
 
 #[test]
+fn armor_swaps_with_its_equipment_slot() {
+    use wafer_data::EquipmentSlot;
+    let (mut level, id, _packets) = setup();
+    let slot = level.player(id).inventory.selected_slot();
+    level.player_mut(id).inventory.slots[slot] = Some(ItemStack::new(items::DIAMOND_HELMET, 1));
+    assert!(level.use_item(id, InteractionHand::MainHand).consumes_action());
+    assert_eq!(level.player(id).inventory.slots[slot], None);
+    assert_eq!(level.item_by_slot(id, EquipmentSlot::Head), Some(ItemStack::new(items::DIAMOND_HELMET, 1)));
+    level.player_mut(id).inventory.slots[slot] = Some(ItemStack::new(items::IRON_HELMET, 1));
+    assert!(level.use_item(id, InteractionHand::MainHand).consumes_action());
+    assert_eq!(level.player(id).inventory.slots[slot], Some(ItemStack::new(items::DIAMOND_HELMET, 1)));
+    assert_eq!(level.item_by_slot(id, EquipmentSlot::Head), Some(ItemStack::new(items::IRON_HELMET, 1)));
+    level.player_mut(id).inventory.slots[slot] = Some(ItemStack::new(items::IRON_HELMET, 1));
+    assert_eq!(level.use_item(id, InteractionHand::MainHand), crate::world::InteractionResult::Fail);
+    let mut hat = ItemStack::new(items::STONE, 2);
+    hat.set(crate::world::item::component::EQUIPPABLE, Some(wafer_protocol::nbt::Nbt::Compound(vec![("slot".into(), wafer_protocol::nbt::Nbt::String("head".into()))])));
+    level.player_mut(id).inventory.slots[slot] = Some(hat.clone());
+    assert!(level.use_item(id, InteractionHand::MainHand).consumes_action());
+    assert_eq!(level.player(id).inventory.slots[slot], Some(hat.copy_with_count(1)));
+    assert_eq!(level.item_by_slot(id, EquipmentSlot::Head), Some(hat.copy_with_count(1)));
+    assert!(level.player(id).inventory.slots.iter().flatten().any(|s| *s == ItemStack::new(items::IRON_HELMET, 1)));
+    level.player_mut(id).game_mode.game_type = crate::server::level::game_mode::GameType::Creative;
+    level.player_mut(id).inventory.slots[slot] = Some(ItemStack::new(items::GOLDEN_HELMET, 1));
+    assert!(level.use_item(id, InteractionHand::MainHand).consumes_action());
+    assert_eq!(level.player(id).inventory.slots[slot], Some(hat.copy_with_count(1)));
+    assert_eq!(level.item_by_slot(id, EquipmentSlot::Head), Some(ItemStack::new(items::GOLDEN_HELMET, 1)));
+}
+
+#[test]
+fn shields_are_raised_until_released() {
+    let (mut level, id, _packets) = setup();
+    let slot = level.player(id).inventory.selected_slot();
+    level.player_mut(id).inventory.slots[slot] = Some(ItemStack::new(items::SHIELD, 1));
+    assert!(level.use_item(id, InteractionHand::MainHand).consumes_action());
+    assert!(level.is_using_item(id));
+    for _ in 0..100 {
+        level.tick();
+        level.tick_connection(id);
+    }
+    assert!(level.is_using_item(id));
+    level.release_using_item(id);
+    assert!(!level.is_using_item(id));
+}
+
+#[test]
 fn drowning_runs_out_of_air() {
     let (mut level, id, _packets) = setup();
     for y in [-60, -59] {

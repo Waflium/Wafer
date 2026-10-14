@@ -205,6 +205,12 @@ impl Equippable {
             shearing_sound: v.get("shearing_sound").cloned().unwrap_or_else(|| Nbt::String("minecraft:item.shears.snip".into())),
         }
     }
+
+    pub fn can_be_equipped_by(&self, entity_type: i32) -> bool {
+        self.allowed_entities
+            .as_ref()
+            .is_none_or(|allowed| entity_type >= 0 && allowed.contains("minecraft:entity_type", wafer_data::registry::ENTITY_TYPE[entity_type as usize], entity_type))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

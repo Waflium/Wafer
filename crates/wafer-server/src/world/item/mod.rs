@@ -182,11 +182,77 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     }
     match bucket_item::BucketItem::for_item(stack.item) {
         Some(bucket) => bucket.use_item(level, player, hand),
-        None => match &stack.item.info().consumable {
-            Some(consumable) => level.start_consuming(player, hand, stack.clone(), consumable),
-            None => (InteractionResult::Pass, None),
-        },
+        None => default_use(level, player, hand, stack),
     }
+}
+
+fn default_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, stack: ItemStack) -> (InteractionResult, Option<ItemStack>) {
+    if let Some(consumable) = &stack.item.info().consumable {
+        return level.start_consuming(player, hand, stack.clone(), consumable);
+    }
+    if let Some(equippable) = stack.get(component::EQUIPPABLE).map(component::values::Equippable::from_nbt)
+        && equippable.swappable
+    {
+        return swap_with_equipment_slot(level, &equippable, stack, hand, player);
+    }
+    if stack.has(component::BLOCKS_ATTACKS) {
+        level.start_using_item(player, hand);
+        return (InteractionResult::CONSUME, None);
+    }
+    if let Some(kinetic_weapon) = stack.get(component::KINETIC_WEAPON) {
+        level.start_using_item(player, hand);
+        make_sound(level, kinetic_weapon, player);
+        return (InteractionResult::CONSUME, None);
+    }
+    (InteractionResult::Pass, None)
+}
+
+fn make_sound(level: &mut ServerLevel, kinetic_weapon: &wafer_protocol::nbt::Nbt, causer: EntityId) {
+    let Some(sound) = kinetic_weapon.get("sound").and_then(wafer_protocol::nbt::Nbt::as_str) else { return };
+    let Some(sound) = wafer_data::registry::SOUND_EVENT.iter().position(|&s| s == sound) else { return };
+    let source = level.sound_source(causer);
+    let e = level.entity(causer);
+    let (x, y, z) = (e.x(), e.y(), e.z());
+    level.play_sound_at(Some(causer), x, y, z, sound as i32, source, 1.0, 1.0);
+}
+
+fn swap_with_equipment_slot(
+    level: &mut ServerLevel,
+    equippable: &component::values::Equippable,
+    mut in_hand: ItemStack,
+    hand: InteractionHand,
+    player: EntityId,
+) -> (InteractionResult, Option<ItemStack>) {
+    let Some(slot) = wafer_data::EquipmentSlot::by_name(&equippable.slot) else { return (InteractionResult::Pass, None) };
+    let entity_type = level.entity(player).entity_type;
+    if !(level.can_use_slot(player, slot) && equippable.can_be_equipped_by(entity_type)) {
+        return (InteractionResult::Pass, None);
+    }
+    let in_equipment_slot = level.item_by_slot(player, slot).unwrap_or_else(ItemStack::empty);
+    let is_creative = level.player(player).game_mode.game_type == crate::server::level::game_mode::GameType::Creative;
+    if (enchantment::enchantment_helper::has_prevent_armor_change(&in_equipment_slot) && !is_creative) || ItemStack::is_same_item_same_components(&in_hand, &in_equipment_slot) {
+        return (InteractionResult::Fail, None);
+    }
+    level.award_stat(player, crate::stats::stats::ITEM_USED.get(in_hand.get_item().0), 1);
+    if in_hand.count <= 1 {
+        let swapped_to_equipment = in_hand.copy();
+        if !is_creative {
+            in_hand.count = 0;
+        }
+        let swapped_to_hand = if in_equipment_slot.is_empty() { in_hand } else { in_equipment_slot };
+        level.living_set_item_slot(player, slot, swapped_to_equipment);
+        return (InteractionResult::SUCCESS, Some(swapped_to_hand));
+    }
+    let mut swapped_to_inventory = in_equipment_slot;
+    let swapped_to_equipment = in_hand.copy_with_count(1);
+    in_hand.consume(1, level, Some(player));
+    level.player_mut(player).set_item_in_hand(hand, Some(in_hand.clone()));
+    level.living_set_item_slot(player, slot, swapped_to_equipment);
+    let infinite_materials = level.has_infinite_materials(player);
+    if !level.player_mut(player).inventory.add_stack(&mut swapped_to_inventory, infinite_materials).0 {
+        level.player_drop(player, swapped_to_inventory, false, crate::util::Prediction::Predicted);
+    }
+    (InteractionResult::SUCCESS, Some(in_hand))
 }
 
 pub fn can_destroy_block(level: &ServerLevel, item_stack: Option<&ItemStack>, user: EntityId) -> bool {
@@ -203,7 +269,16 @@ pub fn get_use_duration(stack: &ItemStack) -> i32 {
     if stack.item.is_instance_of("CrossbowItem") {
         return crossbow_item::USE_DURATION;
     }
-    crate::world::entity::using_item::use_duration(stack)
+    match &stack.item.info().consumable {
+        Some(consumable) => consumable.consume_ticks(),
+        None => {
+            if !stack.has(component::BLOCKS_ATTACKS) && !stack.has(component::KINETIC_WEAPON) {
+                0
+            } else {
+                72000
+            }
+        }
+    }
 }
 
 pub fn release_using(level: &mut ServerLevel, stack: &ItemStack, entity: EntityId, remaining_time: i32) -> bool {
