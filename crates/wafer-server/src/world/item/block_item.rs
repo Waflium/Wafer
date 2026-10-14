@@ -4,10 +4,10 @@ use wafer_data::{Block, BlockState, Item, blocks};
 use super::context::BlockPlaceContext;
 use crate::server::level::game_mode::GameType;
 use crate::server::level::{ServerLevel, SoundSource};
-use crate::world::InteractionResult;
-use crate::world::level::block;
+use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::block::{self, BlockHitResult};
 use crate::world::level::BlockGetter;
-use crate::world::level::update_flags::UPDATE_ALL_IMMEDIATE;
+use crate::world::level::update_flags::{UPDATE_ALL_IMMEDIATE, UPDATE_CLIENTS};
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, values};
@@ -40,6 +40,26 @@ pub trait BlockItemBehaviour: Send + Sync {
     }
 }
 
+pub fn use_on(item: &dyn BlockItemBehaviour, level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> InteractionResult {
+    let ctx = BlockPlaceContext::new(level, Some(player), hand, stack.clone(), hit);
+    let place_result = place(item, level, ctx);
+    if place_result.consumes_action() {
+        return place_result;
+    }
+    let result = super::default_use_on(level, player, hand, hit, stack.clone());
+    if result.consumes_action() {
+        return result;
+    }
+    if !stack.has(dc::CONSUMABLE) {
+        return place_result;
+    }
+    let (result, transformed) = super::default_use(level, player, hand, stack);
+    if let Some(transformed) = transformed {
+        level.player_mut(player).set_item_in_hand(hand, Some(transformed));
+    }
+    result
+}
+
 pub fn place(item: &dyn BlockItemBehaviour, level: &mut ServerLevel, ctx: BlockPlaceContext) -> InteractionResult {
     if !ctx.can_place(level) {
         return InteractionResult::Fail;
@@ -51,8 +71,9 @@ pub fn place(item: &dyn BlockItemBehaviour, level: &mut ServerLevel, ctx: BlockP
     }
     let pos = ctx.clicked_pos();
     let player = ctx.player.map(|p| p.id);
-    let placed = level.block_state(pos);
+    let mut placed = level.block_state(pos);
     if placed.is_block(state.block()) {
+        placed = update_block_state_from_tag(pos, level, &ctx.item, placed);
         update_custom_block_entity_tag(level, player, pos, &ctx.item);
         update_block_entity_components(level, pos, &ctx.item);
         let item_stack = ctx.item.clone();
@@ -76,6 +97,18 @@ pub fn place(item: &dyn BlockItemBehaviour, level: &mut ServerLevel, ctx: BlockP
         }
     }
     InteractionResult::SUCCESS
+}
+
+fn update_block_state_from_tag(pos: BlockPos, level: &mut ServerLevel, item_stack: &ItemStack, placed_state: BlockState) -> BlockState {
+    let block_state = item_stack.get(dc::BLOCK_STATE).map(values::block_state_properties).unwrap_or_default();
+    if block_state.is_empty() {
+        return placed_state;
+    }
+    let modified_state = block_state.iter().fold(placed_state, |state, (property, value)| state.with_property_by_name(property, value).unwrap_or(state));
+    if modified_state != placed_state {
+        level.set_block(pos, modified_state, UPDATE_CLIENTS);
+    }
+    modified_state
 }
 
 pub fn update_custom_block_entity_tag(level: &mut ServerLevel, player: Option<EntityId>, pos: BlockPos, stack: &ItemStack) -> bool {
@@ -119,6 +152,25 @@ pub struct BlockItem {
 impl BlockItemBehaviour for BlockItem {
     fn block(&self) -> Block {
         self.block
+    }
+}
+
+pub struct GameMasterBlockItem {
+    pub block: Block,
+}
+
+impl BlockItemBehaviour for GameMasterBlockItem {
+    fn block(&self) -> Block {
+        self.block
+    }
+
+    fn placement_state(&self, level: &mut ServerLevel, ctx: &BlockPlaceContext) -> Option<BlockState> {
+        if ctx.player.as_ref().is_some_and(|player| !level.can_use_game_master_blocks(player.id)) {
+            return None;
+        }
+        let block = self.block();
+        let state = block::behaviour(block).get_state_for_placement(block, ctx, level)?;
+        self.can_place(level, ctx, state).then_some(state)
     }
 }
 
@@ -187,6 +239,7 @@ pub fn for_item(item: Item) -> Option<Box<dyn BlockItemBehaviour>> {
             }
             "DoubleHighBlockItem" => return Some(Box::new(DoubleHighBlockItem { block })),
             "ScaffoldingBlockItem" => return Some(Box::new(super::scaffolding_block_item::ScaffoldingBlockItem { block })),
+            "GameMasterBlockItem" => return Some(Box::new(GameMasterBlockItem { block })),
             "BlockItem" => return Some(Box::new(BlockItem { block })),
             _ => {}
         }
@@ -210,5 +263,64 @@ impl ServerLevel {
 
     pub fn is_water_at(&mut self, pos: BlockPos) -> bool {
         self.fluid_state(pos).is(&wafer_data::fluid_tags::WATER)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wafer_core::{BlockPos, Direction, Vec3};
+    use wafer_data::properties::LEVEL_HONEY;
+    use wafer_data::{blocks, items};
+
+    use crate::server::level::game_mode::GameType;
+    use crate::server::level::testing;
+    use crate::world::item::ItemStack;
+    use crate::world::item::component::{self as dc, values::block_state_properties_nbt};
+    use crate::world::level::BlockGetter;
+    use crate::world::level::block::BlockHitResult;
+    use crate::world::level::update_flags::UPDATE_ALL;
+    use crate::world::{InteractionHand, InteractionResult};
+
+    fn hit_top_of(pos: BlockPos) -> BlockHitResult {
+        BlockHitResult { location: Vec3::new(pos.x as f64 + 0.5, pos.y as f64 + 1.0, pos.z as f64 + 0.5), direction: Direction::Up, block_pos: pos, inside: false, world_border_hit: false }
+    }
+
+    #[test]
+    fn food_that_cannot_be_placed_is_eaten() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 2.5), 180.0, 30.0);
+        level.player_mut(player).food_data.food_level = 10;
+        let stone = BlockPos::new(0, -61, 0);
+        level.set_block(stone, blocks::STONE.default_state(), UPDATE_ALL);
+        level.player_mut(player).inventory.slots[36] = Some(ItemStack::new(items::SWEET_BERRIES, 2));
+        assert_eq!(level.use_item_on(player, InteractionHand::MainHand, hit_top_of(stone)), InteractionResult::CONSUME);
+        assert!(level.block_state(stone.above()).is_air());
+        assert!(level.is_using_item(player));
+    }
+
+    #[test]
+    fn placed_blocks_take_the_item_block_state() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 2.5), 180.0, 30.0);
+        let mut beehive = ItemStack::new(items::BEEHIVE, 1);
+        beehive.set(dc::BLOCK_STATE, Some(block_state_properties_nbt(&[("honey_level", "3")])));
+        level.player_mut(player).inventory.slots[36] = Some(beehive);
+        let ground = BlockPos::new(0, -61, 0);
+        assert_eq!(level.use_item_on(player, InteractionHand::MainHand, hit_top_of(ground)), InteractionResult::SUCCESS);
+        let placed = level.block_state(ground.above());
+        assert!(placed.is_block(blocks::BEEHIVE));
+        assert_eq!(placed.get(LEVEL_HONEY), 3);
+    }
+
+    #[test]
+    fn game_master_blocks_need_permission() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 2.5), 180.0, 30.0);
+        level.player_mut(player).game_mode.game_type = GameType::Creative;
+        level.player_mut(player).abilities.instabuild = true;
+        level.player_mut(player).inventory.slots[36] = Some(ItemStack::new(items::COMMAND_BLOCK, 1));
+        let ground = BlockPos::new(0, -61, 0);
+        assert_eq!(level.use_item_on(player, InteractionHand::MainHand, hit_top_of(ground)), InteractionResult::Fail);
+        assert!(level.block_state(ground.above()).is_air());
     }
 }

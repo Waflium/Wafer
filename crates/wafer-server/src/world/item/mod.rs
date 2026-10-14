@@ -94,6 +94,19 @@ pub fn block_item_behaviour(item: Item) -> Option<&'static dyn block_item::Block
 }
 
 pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> InteractionResult {
+    let stack_before_use = stack.copy();
+    let result = item_use_on(level, player, hand, hit, stack);
+    if let InteractionResult::Success { was_item_interaction: true, .. } = result {
+        let transform_to = level.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
+        let result_item_stack = level.apply_after_use_component_side_effects(player, transform_to.clone(), stack_before_use);
+        if result_item_stack != transform_to {
+            level.player_mut(player).set_item_in_hand(hand, Some(result_item_stack));
+        }
+    }
+    result
+}
+
+fn item_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> InteractionResult {
     match stack.item.info().classes.first() {
         Some(&"BoneMealItem") => return bone_meal_item::use_on(level, player, hand, hit, stack),
         Some(&"FlintAndSteelItem") => {
@@ -117,17 +130,18 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
         _ => {}
     }
     match &BLOCK_ITEMS[stack.item.0 as usize] {
-        Some(item) => {
+        Some(item) => block_item::use_on(item.as_ref(), level, player, hand, hit, stack),
+        None => default_use_on(level, player, hand, hit, stack),
+    }
+}
+
+pub(super) fn default_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> InteractionResult {
+    match stack.get(component::BLOCK_TRANSFORMER).and_then(crate::core::component::block_transformer::BlockTransformer::get) {
+        Some(block_transformer) => {
             let ctx = BlockPlaceContext::new(level, Some(player), hand, stack, hit);
-            block_item::place(item.as_ref(), level, ctx)
+            block_transformer.transform_block(level, &ctx)
         }
-        None => match stack.get(component::BLOCK_TRANSFORMER).and_then(crate::core::component::block_transformer::BlockTransformer::get) {
-            Some(block_transformer) => {
-                let ctx = BlockPlaceContext::new(level, Some(player), hand, stack, hit);
-                block_transformer.transform_block(level, &ctx)
-            }
-            None => InteractionResult::Pass,
-        },
+        None => InteractionResult::Pass,
     }
 }
 
@@ -186,7 +200,7 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     }
 }
 
-fn default_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, stack: ItemStack) -> (InteractionResult, Option<ItemStack>) {
+pub(super) fn default_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, stack: ItemStack) -> (InteractionResult, Option<ItemStack>) {
     if let Some(consumable) = &stack.item.info().consumable {
         return level.start_consuming(player, hand, stack.clone(), consumable);
     }
