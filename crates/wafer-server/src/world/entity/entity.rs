@@ -702,6 +702,16 @@ pub fn sound_event(name: &str) -> i32 {
     registry_id(registry::SOUND_EVENT, name)
 }
 
+pub fn calculate_view_vector(x_rot: f32, y_rot: f32) -> Vec3 {
+    let real_x_rot = x_rot * mth::DEG_TO_RAD;
+    let real_y_rot = -y_rot * mth::DEG_TO_RAD;
+    let y_cos = mth::cos(real_y_rot as f64);
+    let y_sin = mth::sin(real_y_rot as f64);
+    let x_cos = mth::cos(real_x_rot as f64);
+    let x_sin = mth::sin(real_x_rot as f64);
+    Vec3::new((y_sin * x_cos) as f64, -x_sin as f64, (y_cos * x_cos) as f64)
+}
+
 pub fn compute_modified_friction(friction: f32, modifier: f32) -> f32 {
     mth::clamp_f(1.0 - (1.0 - friction) * modifier, 0.0, 1.0)
 }
@@ -2104,6 +2114,10 @@ impl ServerLevel {
         } else {
             self.entity_base_tick(id);
         }
+    }
+
+    pub fn mark_hurt(&mut self, id: EntityId) {
+        self.entity_mut(id).sync_velocity = true;
     }
 
     pub fn hurt(&mut self, id: EntityId, source: DamageSource, damage: f32) {

@@ -25,6 +25,7 @@ use crate::world::effect::mob_effect::{add_attribute_modifiers, remove_attribute
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::attack_range::AttackRange;
+use crate::world::item::component::blocks_attacks::BlocksAttacks;
 use crate::world::item::component::swing_animation::SwingAnimation;
 use crate::world::item::enchantment::{enchantment, enchantment_helper};
 use crate::world::level::BlockGetter;
@@ -440,6 +441,38 @@ impl ServerLevel {
         self.item_by_slot(id, EquipmentSlot::Mainhand).unwrap_or_else(ItemStack::empty)
     }
 
+    pub fn get_active_item(&self, id: EntityId) -> ItemStack {
+        if self.is_spectator(id) {
+            ItemStack::empty()
+        } else if self.is_using_item(id) {
+            self.get_use_item(id)
+        } else {
+            self.get_weapon_item(id)
+        }
+    }
+
+    pub fn get_use_item(&self, id: EntityId) -> ItemStack {
+        self.living(id).use_item.clone().unwrap_or_else(ItemStack::empty)
+    }
+
+    pub fn get_item_blocking_with(&self, id: EntityId) -> Option<ItemStack> {
+        if !self.is_using_item(id) {
+            return None;
+        }
+        let use_item = self.living(id).use_item.as_ref()?;
+        let blocks_attacks = BlocksAttacks::from_nbt(use_item.get(dc::BLOCKS_ATTACKS)?);
+        let elapsed_ticks = crate::world::item::get_use_duration(use_item) - self.living(id).use_item_remaining;
+        (elapsed_ticks >= blocks_attacks.block_delay_ticks()).then(|| use_item.clone())
+    }
+
+    pub fn get_seconds_to_disable_blocking(&self, id: EntityId) -> f32 {
+        let weapon_item = self.get_weapon_item(id);
+        match weapon_item.get(dc::WEAPON) {
+            Some(weapon) if weapon_item == self.get_active_item(id) => weapon.get("disable_blocking_for_seconds").map_or(0.0, component_codec::as_f32),
+            _ => 0.0,
+        }
+    }
+
     pub fn hurt_and_break(&mut self, owner: EntityId, slot: EquipmentSlot, amount: i32) {
         let Some(mut item_stack) = self.item_by_slot(owner, slot) else { return };
         let new_amount = if !item_stack.is_damageable_item() || self.players.get(&owner).is_some_and(|p| p.abilities.instabuild) {
@@ -663,7 +696,11 @@ impl ServerLevel {
             damage = 0.0;
         }
         let original_damage = damage;
-        let blocked = false;
+        let item_in_use = self.get_use_item(id);
+        let item_in_use_slot = self.used_item_hand(id).as_equipment_slot();
+        let damage_blocked = self.apply_item_blocking(id, &source, damage);
+        damage -= damage_blocked;
+        let blocked = damage_blocked > 0.0;
         if source.is(&damage_type_tags::IS_FREEZING) && entity_type_tags::FREEZE_HURTS_EXTRA_TYPES.contains(self.entity(id).entity_type as usize) {
             damage *= 5.0;
         }
@@ -696,11 +733,16 @@ impl ServerLevel {
         self.resolve_mob_responsible_for_damage(id, &source);
         self.resolve_player_responsible_for_damage(id, &source);
         if took_full_damage {
-            self.broadcast_damage_event(id, &source);
-            if !source.is(&damage_type_tags::NO_IMPACT) {
-                self.entity_mut(id).sync_velocity = true;
+            let item_in_use_broken = !item_in_use.is_empty() && self.item_by_slot(id, item_in_use_slot).is_none();
+            match item_in_use.get(dc::BLOCKS_ATTACKS).filter(|_| blocked && !item_in_use_broken) {
+                Some(blocks_attacks) => BlocksAttacks::from_nbt(blocks_attacks).on_blocked(self, id),
+                None => self.broadcast_damage_event(id, &source),
             }
-            if !source.is(&damage_type_tags::NO_KNOCKBACK) {
+            if !source.is(&damage_type_tags::NO_IMPACT) && (!blocked || damage > 0.0) {
+                self.mark_hurt(id);
+            }
+            let fully_blocked = blocked && damage <= 0.0;
+            if !source.is(&damage_type_tags::NO_KNOCKBACK) && !fully_blocked {
                 self.deal_default_knockback(id, &source, blocked);
             }
         }
@@ -726,6 +768,9 @@ impl ServerLevel {
         }
         if self.is_player(id) {
             criteria_triggers::ENTITY_HURT_PLAYER.trigger(self, id, &source, original_damage, damage, blocked);
+            if damage_blocked > 0.0 && damage_blocked < 3.4028235E37 {
+                self.award_stat(id, stats::DAMAGE_BLOCKED_BY_SHIELD, crate::util::java_round_f(damage_blocked * 10.0));
+            }
         }
         if let Some(source_player) = source.causing_entity.filter(|&entity| self.is_player(entity)) {
             criteria_triggers::PLAYER_HURT_ENTITY.trigger(self, source_player, id, &source, original_damage, damage, blocked);
@@ -787,6 +832,28 @@ impl ServerLevel {
             let living = self.living_mut(id);
             living.last_hurt_by_player = Some(uuid);
             living.last_hurt_by_player_memory_time = 100;
+        }
+    }
+
+    fn block_using_item(&mut self, id: EntityId, attacker: EntityId, fully_blocked: bool) {
+        self.blocked_by_item(attacker, id, fully_blocked);
+        if self.is_player(id) {
+            let item_blocking_with = self.get_item_blocking_with(id);
+            let blocks_attacks = item_blocking_with.as_ref().and_then(|item| item.get(dc::BLOCKS_ATTACKS)).map(BlocksAttacks::from_nbt);
+            let seconds_to_disable_blocking = self.get_seconds_to_disable_blocking(attacker);
+            if seconds_to_disable_blocking > 0.0
+                && let (Some(blocks_attacks), Some(item_blocking_with)) = (blocks_attacks, item_blocking_with)
+            {
+                blocks_attacks.disable(self, id, seconds_to_disable_blocking, &item_blocking_with);
+            }
+        }
+    }
+
+    fn blocked_by_item(&mut self, id: EntityId, defender: EntityId, fully_blocked: bool) {
+        if !fully_blocked {
+            let (d, e) = (self.entity(defender), self.entity(id));
+            let (xd, zd) = (d.x() - e.x(), d.z() - e.z());
+            self.knockback(defender, 0.5, xd, zd);
         }
     }
 
@@ -918,6 +985,40 @@ impl ServerLevel {
         if !blocked {
             self.indicate_damage(id, xd, zd);
         }
+    }
+
+    pub fn apply_item_blocking(&mut self, id: EntityId, source: &DamageSource, damage: f32) -> f32 {
+        if damage <= 0.0 {
+            return 0.0;
+        }
+        let Some(blocking_with) = self.get_item_blocking_with(id) else { return 0.0 };
+        let Some(blocks_attacks) = blocking_with.get(dc::BLOCKS_ATTACKS).map(BlocksAttacks::from_nbt) else { return 0.0 };
+        if blocks_attacks.bypassed_by.as_ref().is_some_and(|types| types.contains(source.ty.0 as i32)) {
+            return 0.0;
+        }
+        if source.direct_entity.and_then(|direct| self.as_projectile(direct)).is_some_and(|projectile| projectile.abstract_arrow().is_some() && projectile.get_pierce_level() > 0) {
+            return 0.0;
+        }
+        let angle = match source.source_position(self) {
+            Some(source_position) => {
+                let e = self.entity(id);
+                let view_vector = super::calculate_view_vector(0.0, e.y_head_rot);
+                let vector_to = source_position.subtract(e.position());
+                let vector_to = Vec3::new(vector_to.x, 0.0, vector_to.z).normalize();
+                vector_to.dot(view_vector).acos()
+            }
+            None => std::f32::consts::PI as f64,
+        };
+        let damage_blocked = blocks_attacks.resolve_blocked_damage(source, damage, angle);
+        let hand = self.used_item_hand(id);
+        blocks_attacks.hurt_blocking_item(self, &blocking_with, id, hand, damage_blocked);
+        if damage_blocked > 0.0
+            && !source.is(&damage_type_tags::IS_PROJECTILE)
+            && let Some(living_entity) = source.direct_entity.filter(|&direct| self.is_living(direct))
+        {
+            self.block_using_item(id, living_entity, damage_blocked >= damage);
+        }
+        damage_blocked
     }
 
     pub fn knockback(&mut self, id: EntityId, power: f64, mut xd: f64, mut zd: f64) {
@@ -2257,6 +2358,77 @@ mod tests {
         assert!(level.hurt_server(id, attack, 1.0));
         assert_eq!(level.health(id), 3.0);
         assert!(level.entity(id).needs_sync);
+    }
+
+    fn raised_shield(level: &mut ServerLevel, attacker_z: f64) -> (EntityId, EntityId) {
+        let player = testing::player(level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        level.player_mut(player).movement.client_loaded_timeout_timer = 0;
+        level.entity_mut(player).y_head_rot = 0.0;
+        level.set_item_slot(player, wafer_data::EquipmentSlot::Offhand, crate::world::item::ItemStack::new(wafer_data::items::SHIELD, 1));
+        level.start_using_item(player, crate::world::InteractionHand::OffHand);
+        level.living_mut(player).use_item_remaining -= 5;
+        let attacker = testing::player_with_profile(level, crate::network::login::Profile { uuid: 2, name: "Attacker".into(), properties: Vec::new() }, Vec3::new(0.5, -60.0, attacker_z), 180.0, 0.0);
+        (player, attacker)
+    }
+
+    #[test]
+    fn raised_shields_block_attacks_from_the_front() {
+        let mut level = testing::level();
+        let (player, attacker) = raised_shield(&mut level, 2.5);
+        let attack = DamageSource { causing_entity: Some(attacker), direct_entity: Some(attacker), ..DamageSource::new(damage_types::PLAYER_ATTACK) };
+        assert!(!level.hurt_server(player, attack, 4.0));
+        assert_eq!(level.health(player), 20.0);
+        let shield = level.item_by_slot(player, wafer_data::EquipmentSlot::Offhand).unwrap();
+        assert_eq!(shield.damage_value(), 5);
+        assert!(level.is_using_item(player));
+    }
+
+    #[test]
+    fn raised_shields_do_not_block_attacks_from_behind() {
+        let mut level = testing::level();
+        let (player, attacker) = raised_shield(&mut level, -1.5);
+        let attack = DamageSource { causing_entity: Some(attacker), direct_entity: Some(attacker), ..DamageSource::new(damage_types::PLAYER_ATTACK) };
+        assert!(level.hurt_server(player, attack, 4.0));
+        assert_eq!(level.health(player), 16.0);
+        assert_eq!(level.item_by_slot(player, wafer_data::EquipmentSlot::Offhand).unwrap().damage_value(), 0);
+    }
+
+    #[test]
+    fn axes_disable_raised_shields() {
+        let mut level = testing::level();
+        let (player, attacker) = raised_shield(&mut level, 2.5);
+        level.set_item_slot(attacker, wafer_data::EquipmentSlot::Mainhand, crate::world::item::ItemStack::new(wafer_data::items::IRON_AXE, 1));
+        let attack = DamageSource { causing_entity: Some(attacker), direct_entity: Some(attacker), ..DamageSource::new(damage_types::PLAYER_ATTACK) };
+        level.hurt_server(player, attack, 9.0);
+        assert!(!level.is_using_item(player));
+        let shield = crate::world::item::ItemStack::new(wafer_data::items::SHIELD, 1);
+        assert!(level.player(player).cooldowns.is_on_cooldown(&shield));
+    }
+
+    #[test]
+    fn cows_take_fall_damage_and_chickens_do_not() {
+        let mut level = testing::level();
+        let mut cow = crate::world::entity::animal::cow::cow::Cow::create();
+        cow.entity.set_pos(Vec3::new(0.5, -60.0, 0.5));
+        let id = cow.entity.id;
+        assert!(level.add_fresh_entity(LevelEntity::Mob(Box::new(cow))));
+        let cow = id;
+        assert!(level.cause_fall_damage(cow, 10.0, 1.0, DamageSource::new(damage_types::FALL)));
+        assert_eq!(level.health(cow), 3.0);
+        let chicken = chicken(&mut level, 0);
+        assert!(!level.cause_fall_damage(chicken, 10.0, 1.0, DamageSource::new(damage_types::FALL)));
+        assert_eq!(level.health(chicken), 4.0);
+    }
+
+    #[test]
+    fn temporarily_invulnerable_entities_are_not_hurt() {
+        let mut level = testing::level();
+        let id = chicken(&mut level, 0);
+        level.entity_mut(id).invulnerable_time = 2;
+        assert!(!level.hurt_server(id, DamageSource::new(damage_types::GENERIC), 1.0));
+        level.common_tick(id);
+        level.common_tick(id);
+        assert!(level.hurt_server(id, DamageSource::new(damage_types::GENERIC), 1.0));
     }
 
     #[test]

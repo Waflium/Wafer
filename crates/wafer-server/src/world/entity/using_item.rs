@@ -26,7 +26,11 @@ fn triangle(random: &mut impl RandomSource, mean: f32, spread: f32) -> f32 {
 }
 
 pub fn use_duration(stack: &ItemStack) -> i32 {
-    stack.item.info().consumable.as_ref().map_or(0, Consumable::consume_ticks)
+    match stack.item.info().consumable.as_ref() {
+        Some(consumable) => consumable.consume_ticks(),
+        None if stack.has(dc::BLOCKS_ATTACKS) || stack.has(dc::KINETIC_WEAPON) => 72000,
+        None => 0,
+    }
 }
 
 impl ServerLevel {

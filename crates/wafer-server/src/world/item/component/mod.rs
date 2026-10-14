@@ -1,4 +1,5 @@
 pub mod attack_range;
+pub mod blocks_attacks;
 pub mod bundle_contents;
 pub mod charged_projectiles;
 pub mod codec;
