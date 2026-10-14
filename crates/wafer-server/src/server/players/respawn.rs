@@ -23,6 +23,7 @@ use crate::world::level::border::border_change_listener::write_initialize_border
 
 const PERFORM_RESPAWN: i32 = 0;
 const REQUEST_STATS: i32 = 1;
+const REQUEST_GAMERULE_VALUES: i32 = 2;
 const GAME_EVENT_NO_RESPAWN_BLOCK_AVAILABLE: u8 = 0;
 
 pub fn write_death_location(p: &mut Writer, location: &Option<(String, BlockPos)>) {
@@ -91,8 +92,12 @@ impl Server {
             player.stats.send_stats(&player.connection);
             return Ok(());
         }
-        if action != PERFORM_RESPAWN {
+        if action == REQUEST_GAMERULE_VALUES {
+            self.send_game_rule_values(id);
             return Ok(());
+        }
+        if action != PERFORM_RESPAWN {
+            anyhow::bail!("Unknown client command action {action}");
         }
         if self.player(id).won_game {
             self.player_mut(id).won_game = false;

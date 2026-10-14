@@ -35,6 +35,7 @@ use crate::world::item::component as dc;
 use crate::world::item::{Inventory, ItemStack, OFFHAND, inventory_slot, map_item, protocol_slot};
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::entity::player::abilities::Abilities;
+use crate::world::entity::player::player_model_part::PlayerModelPart;
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};
 use crate::world::level::storage::RespawnData;
 use crate::world::InteractionHand;
@@ -485,7 +486,15 @@ impl ServerPlayer {
         p.varint(self.latency);
         p.bool(false);
         p.varint(0);
-        p.bool(true);
+        p.bool(self.is_model_part_shown(PlayerModelPart::Hat));
+    }
+
+    pub fn is_model_part_shown(&self, part: PlayerModelPart) -> bool {
+        let customisation = match self.entity.data.get(ids::PLAYER_MODE_CUSTOMISATION) {
+            DataValue::Byte(b) => *b as i32,
+            _ => 0,
+        };
+        customisation & part.get_mask() == part.get_mask()
     }
 
     pub fn update_player_attributes(&mut self) {

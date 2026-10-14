@@ -823,6 +823,8 @@ impl Server {
                     serverbound::CHAT_SESSION_UPDATE => self.handle_chat_session_update(id, &packet),
                     serverbound::COMMAND_SUGGESTION => self.handle_custom_command_suggestions(id, &packet),
                     serverbound::CLIENT_COMMAND => self.handle_client_command(id, &packet),
+                    serverbound::CLIENT_INFORMATION => self.handle_client_information(id, &packet),
+                    serverbound::SET_GAME_RULE => self.handle_set_game_rule(id, &packet),
                     serverbound::CHANGE_GAME_MODE => self.handle_change_game_mode(id, &packet),
                     serverbound::PICK_ITEM_FROM_ENTITY => self.handle_pick_item_from_entity(id, &packet),
                     serverbound::RESOURCE_PACK => self.handle_resource_pack_response(id, &packet),
@@ -1166,7 +1168,7 @@ impl Server {
     pub(crate) fn kick_if_idle(&mut self, id: EntityId) -> bool {
         let timeout = self.config.player_idle_timeout;
         let player = self.player_mut(id);
-        if timeout > 0 && player.last_action_time.elapsed() > Duration::from_secs(timeout as u64 * 60) {
+        if timeout > 0 && player.last_action_time.elapsed() > Duration::from_secs(timeout as u64 * 60) && !player.won_game {
             player.disconnect("multiplayer.disconnect.idling");
             return true;
         }

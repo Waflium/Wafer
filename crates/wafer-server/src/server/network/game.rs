@@ -12,6 +12,7 @@ use crate::server::level::game_mode::{BlockBreakAction, GameType};
 use crate::server::network::movement::Input;
 use crate::util::Prediction;
 use crate::world::entity::EntityId;
+use crate::world::entity::player::player_model_part::PlayerModelPart;
 use crate::network::hashed_stack::HashedStack;
 use crate::world::container::ContainerRef;
 use crate::world::inventory::abstract_container_menu::MenuKind;
@@ -86,6 +87,9 @@ impl ServerLevel {
             serverbound::PLAYER_COMMAND => {
                 let _entity = r.varint()?;
                 let action = r.varint()?;
+                if !(0..=6).contains(&action) {
+                    anyhow::bail!("Unknown player command {action}");
+                }
                 let _data = r.varint()?;
                 self.handle_player_command(id, action);
             }
@@ -226,10 +230,6 @@ impl ServerLevel {
                 } else {
                     warn!("{} tried to set an invalid carried item", self.player(id).profile.name);
                 }
-            }
-            serverbound::CLIENT_INFORMATION => {
-                let info = read_client_information(&packet.data)?;
-                self.player_mut(id).update_options(info);
             }
             serverbound::CHUNK_BATCH_RECEIVED => {
                 let desired = r.f32()?;
@@ -401,7 +401,11 @@ impl ServerLevel {
         if !self.is_within_attack_range(id, &main_hand_item, &target_bounds, 3.0) || main_hand_item.has(crate::world::item::component::PIERCING_WEAPON) {
             return;
         }
-        let invalid = entity_id == id || matches!(self.entities.get(&entity_id), Some(crate::world::entity::LevelEntity::Item(_) | crate::world::entity::LevelEntity::ExperienceOrb(_)));
+        let invalid = match self.entities.get(&entity_id) {
+            Some(crate::world::entity::LevelEntity::Item(_) | crate::world::entity::LevelEntity::ExperienceOrb(_)) => true,
+            Some(crate::world::entity::LevelEntity::Projectile(projectile)) => projectile.abstract_arrow().is_some() && !self.is_attackable(entity_id),
+            _ => entity_id == id,
+        };
         if invalid {
             self.player_mut(id).disconnect("multiplayer.disconnect.invalid_entity_attacked");
             warn!("Player {} tried to attack an invalid entity", self.player(id).profile.name);
@@ -889,6 +893,98 @@ impl crate::server::Server {
         Ok(())
     }
 
+    pub(in crate::server) fn handle_client_information(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        let info = read_client_information(&packet.data)?;
+        let player = self.player_mut(id);
+        let was_hat_shown = player.is_model_part_shown(PlayerModelPart::Hat);
+        player.update_options(info);
+        let show_hat = player.is_model_part_shown(PlayerModelPart::Hat);
+        if show_hat != was_hat_shown {
+            let uuid = player.profile.uuid;
+            let packet = crate::network::connection::encode(clientbound::PLAYER_INFO_UPDATE, |w| {
+                w.u8(1 << 7);
+                w.varint(1);
+                w.uuid(uuid);
+                w.bool(show_hat);
+            });
+            for other in self.players() {
+                other.connection.send_raw(packet.clone());
+            }
+        }
+        Ok(())
+    }
+
+    pub(in crate::server) fn handle_set_game_rule(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        let mut r = packet.reader();
+        let count = r.varint()?;
+        if count < 0 {
+            anyhow::bail!("Negative game rule count {count}");
+        }
+        let mut entries = Vec::new();
+        for _ in 0..count {
+            let game_rule_key = crate::resources::identifier::parse(r.string(32767)?).map_err(anyhow::Error::msg)?;
+            let value = r.string(32767)?.to_owned();
+            entries.push((game_rule_key, value));
+        }
+        let player = self.player(id);
+        if self.profile_permission_level(player.profile.uuid) < 2 {
+            warn!("Player {} tried to set game rule values without required permissions", player.profile.name);
+            return Ok(());
+        }
+        for (game_rule_key, value) in entries {
+            match wafer_data::GameRule::by_name(&game_rule_key).filter(|_| game_rule_key.starts_with("minecraft:")) {
+                Some(rule) => self.set_game_rule_value(rule, &value),
+                None => warn!("Received request to set unknown game rule: ResourceKey[minecraft:game_rule / {game_rule_key}]"),
+            }
+        }
+        Ok(())
+    }
+
+    fn set_game_rule_value(&mut self, rule: wafer_data::GameRule, value: &str) {
+        let units: Vec<u16> = value.encode_utf16().collect();
+        let mut reader = crate::commands::brigadier::StringReader::new(&units);
+        let parsed = match rule.info().kind {
+            wafer_data::GameRuleType::Bool => reader.read_boolean().ok().map(i32::from),
+            wafer_data::GameRuleType::Int => reader.read_int().ok().filter(|v| (rule.info().min..=rule.info().max).contains(v)),
+        };
+        let Some(parsed_value) = parsed else { return };
+        if reader.can_read() {
+            return;
+        }
+        if !self.game_rules.has(rule) {
+            warn!("Tried to set invalid game rule 'minecraft:{}' to value '{}'", rule.info().name, crate::world::level::gamerules::GameRules::serialize(rule, parsed_value));
+        } else {
+            self.set_game_rule(rule, parsed_value);
+        }
+        self.broadcast_game_rule_change_to_operators(rule, parsed_value);
+    }
+
+    fn broadcast_game_rule_change_to_operators(&mut self, rule: wafer_data::GameRule, value: i32) {
+        let serialized = crate::world::level::gamerules::GameRules::serialize(rule, value);
+        let message = Component::translatable_with("commands.gamerule.set", vec![rule.info().name.into(), serialized.as_str().into()]);
+        let ops: Vec<EntityId> = self.player_list.iter().copied().filter(|&op| self.is_op(self.player(op).profile.uuid)).collect();
+        for op in ops {
+            self.send_player_system_message(op, &message, false);
+        }
+    }
+
+    pub(in crate::server) fn send_game_rule_values(&mut self, id: EntityId) {
+        let player = self.player(id);
+        if self.profile_permission_level(player.profile.uuid) < 2 {
+            warn!("Player {} tried to request game rule values without required permissions", player.profile.name);
+            return;
+        }
+        let game_rules = &self.game_rules;
+        let values: Vec<(wafer_data::GameRule, String)> = game_rules.available().map(|rule| (rule, crate::world::level::gamerules::GameRules::serialize(rule, game_rules.get(rule)))).collect();
+        player.connection.send(clientbound::GAME_RULE_VALUES, |w| {
+            w.varint(values.len() as i32);
+            for (rule, value) in &values {
+                w.string(&format!("minecraft:{}", rule.info().name));
+                w.string(value);
+            }
+        });
+    }
+
     pub(in crate::server) fn handle_change_game_mode(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
         let mode = GameType::by_id(packet.reader().varint()?);
         let player = self.player(id);
@@ -1021,5 +1117,129 @@ mod pick_item_tests {
         level.set_block(TARGET, light, UPDATE_ALL);
         let stack = crate::world::level::block::of(light).get_clone_item_stack(&level, TARGET, light, false);
         assert_eq!(stack.get(crate::world::item::component::BLOCK_STATE), Some(&crate::world::item::component::values::block_state_properties_nbt(&[("level", "7")])));
+    }
+}
+
+#[cfg(test)]
+mod server_tests {
+    use tokio::sync::mpsc::UnboundedReceiver;
+    use wafer_core::Vec3;
+    use wafer_data::packets::play::{clientbound, serverbound};
+    use wafer_protocol::{Reader, Writer};
+
+    use crate::commands::perform_prefixed_command;
+    use crate::commands::source::CommandSourceStack;
+    use crate::network::connection::{Outbound, Packet};
+    use crate::network::login::{Profile, offline_uuid};
+    use crate::server::Server;
+    use crate::server::level::testing;
+    use crate::world::entity::EntityId;
+
+    fn server() -> Server {
+        Server::new(crate::ServerConfig { level_type: crate::LevelType::Flat, ..crate::ServerConfig::default() }).unwrap()
+    }
+
+    fn run(server: &mut Server, command: &str) {
+        let source = CommandSourceStack::server(server);
+        perform_prefixed_command(server, &source, command);
+    }
+
+    fn join(server: &mut Server, name: &str) -> (EntityId, UnboundedReceiver<Vec<u8>>) {
+        let profile = Profile { uuid: offline_uuid(name), name: name.into(), properties: Vec::new() };
+        let id = testing::server_player_with_profile(server, profile, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let (out, packets) = Outbound::capture();
+        server.levels[0].player_mut(id).connection = out;
+        server.levels[0].handle_player_loaded(id);
+        server.name_to_id_cache.add(crate::server::players::NameAndId { id: offline_uuid(name), name: name.into() });
+        (id, packets)
+    }
+
+    fn packets(rx: &mut UnboundedReceiver<Vec<u8>>) -> Vec<(i32, Vec<u8>)> {
+        let mut out = Vec::new();
+        while let Ok(packet) = rx.try_recv() {
+            let mut r = Reader::new(&packet);
+            let id = r.varint().unwrap();
+            out.push((id, packet[packet.len() - r.remaining()..].to_vec()));
+        }
+        out
+    }
+
+    fn packet(id: i32, write: impl FnOnce(&mut Writer)) -> Packet {
+        let mut w = Writer::new();
+        write(&mut w);
+        Packet { id, data: w.into_inner() }
+    }
+
+    #[test]
+    fn attacking_an_arrow_disconnects() {
+        let mut server = server();
+        let (id, _) = join(&mut server, "Alice");
+        run(&mut server, "summon arrow 1.5 -60 0.5 {NoGravity:1b}");
+        let level = &mut server.levels[0];
+        let arrow = *level.entities.keys().next().unwrap();
+        level.handle_game_packet(id, &packet(serverbound::ATTACK, |w| w.varint(arrow))).unwrap();
+        assert!(level.player(id).disconnected);
+    }
+
+    #[test]
+    fn hat_changes_are_broadcast() {
+        let mut server = server();
+        let (alice, _) = join(&mut server, "Alice");
+        let (_, mut bob_packets) = join(&mut server, "Bob");
+        let information = |skin_parts: u8| {
+            packet(serverbound::CLIENT_INFORMATION, |w| {
+                w.string("en_us");
+                w.u8(10);
+                w.varint(0);
+                w.bool(true);
+                w.u8(skin_parts);
+                w.varint(1);
+                w.bool(false);
+                w.bool(true);
+                w.varint(0);
+            })
+        };
+        server.handle_client_information(alice, &information(1)).unwrap();
+        assert!(packets(&mut bob_packets).is_empty());
+        server.handle_client_information(alice, &information(0x41)).unwrap();
+        let mut expected = Writer::new();
+        expected.u8(0x80);
+        expected.varint(1);
+        expected.uuid(offline_uuid("Alice"));
+        expected.bool(true);
+        assert_eq!(packets(&mut bob_packets), [(clientbound::PLAYER_INFO_UPDATE, expected.into_inner())]);
+    }
+
+    #[test]
+    fn game_rules_need_game_master_permission() {
+        let mut server = server();
+        let (alice, mut alice_packets) = join(&mut server, "Alice");
+        let set_keep_inventory = packet(serverbound::SET_GAME_RULE, |w| {
+            w.varint(2);
+            w.string("minecraft:keep_inventory");
+            w.string("true");
+            w.string("minecraft:no_such_rule");
+            w.string("1");
+        });
+        server.handle_set_game_rule(alice, &set_keep_inventory).unwrap();
+        assert!(!server.game_rules.get_bool(wafer_data::game_rule::KEEP_INVENTORY));
+        server.send_game_rule_values(alice);
+        assert!(packets(&mut alice_packets).is_empty());
+        run(&mut server, "op Alice");
+        packets(&mut alice_packets);
+        server.handle_set_game_rule(alice, &set_keep_inventory).unwrap();
+        assert!(server.game_rules.get_bool(wafer_data::game_rule::KEEP_INVENTORY));
+        assert_eq!(packets(&mut alice_packets).iter().filter(|p| p.0 == clientbound::SYSTEM_CHAT).count(), 1);
+        let bad_value = packet(serverbound::SET_GAME_RULE, |w| {
+            w.varint(1);
+            w.string("minecraft:keep_inventory");
+            w.string("false ");
+        });
+        server.handle_set_game_rule(alice, &bad_value).unwrap();
+        assert!(server.game_rules.get_bool(wafer_data::game_rule::KEEP_INVENTORY));
+        server.send_game_rule_values(alice);
+        let sent = packets(&mut alice_packets);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].0, clientbound::GAME_RULE_VALUES);
     }
 }

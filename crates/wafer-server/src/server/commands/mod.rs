@@ -583,6 +583,9 @@ mod tests {
         assert_eq!(run(&mut server, "setidletimeout 1"), ["The player idle timeout is now 1 minute(s)"]);
         assert!(!server.kick_if_idle(id));
         server.levels[0].player_mut(id).last_action_time -= std::time::Duration::from_secs(61);
+        server.levels[0].player_mut(id).won_game = true;
+        assert!(!server.kick_if_idle(id));
+        server.levels[0].player_mut(id).won_game = false;
         assert!(server.kick_if_idle(id));
         assert!(server.levels[0].player(id).disconnected);
     }
