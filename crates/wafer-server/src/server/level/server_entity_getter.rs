@@ -94,6 +94,7 @@ impl ServerLevel {
         match (self.entities.get(&mob), self.entities.get(&other)) {
             (Some(LevelEntity::Mob(a)), Some(LevelEntity::Mob(b))) => match a.kind {
                 MobKind::Zombie(_) => b.is_zombie(),
+                MobKind::Spider(_) => b.is_spider(),
                 _ => std::mem::discriminant(&a.kind) == std::mem::discriminant(&b.kind),
             },
             _ => false,

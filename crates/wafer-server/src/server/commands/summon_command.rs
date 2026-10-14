@@ -7,6 +7,7 @@ use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component, HoverEvent};
 use crate::server::Server;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::entity::{EntityId, LevelEntity};
 
 static ERROR_FAILED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.failed");
@@ -28,6 +29,8 @@ const MODELLED: &[&str] = &[
     "minecraft:zombie",
     "minecraft:husk",
     "minecraft:creeper",
+    "minecraft:spider",
+    "minecraft:cave_spider",
     "minecraft:snowball",
     "minecraft:egg",
     "minecraft:ender_pearl",
@@ -105,7 +108,7 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
     }
     let id = loaded[0].entity().id;
     for entity in loaded {
-        level.add_fresh_entity(entity);
+        level.add_fresh_entity_with_passengers(entity);
     }
     Ok(id)
 }

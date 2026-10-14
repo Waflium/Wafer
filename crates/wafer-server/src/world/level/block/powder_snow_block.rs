@@ -21,7 +21,7 @@ fn random_between(level: &mut ServerLevel, min: f32, max: f32) -> f32 {
 impl BlockBehaviour for PowderSnowBlock {
     fn entity_inside(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, entity: EntityId, effects: &mut InsideBlockEffects, _is_precise: bool) {
         if !level.is_living(entity) || level.in_block_state(entity).is_block(state.block()) {
-            level.make_stuck_in_block(entity, Vec3::new(0.9f32 as f64, 1.5, 0.9f32 as f64));
+            level.make_stuck_in_block(entity, state, Vec3::new(0.9f32 as f64, 1.5, 0.9f32 as f64));
             let known_movement = level.known_movement(entity);
             let is_moving = known_movement.x != 0.0 || known_movement.z != 0.0;
             if is_moving && level.random.next_boolean() {

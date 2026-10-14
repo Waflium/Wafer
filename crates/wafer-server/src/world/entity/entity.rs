@@ -2111,7 +2111,15 @@ impl ServerLevel {
         }
     }
 
-    pub fn make_stuck_in_block(&mut self, id: EntityId, speed_multiplier: Vec3) {
+    pub fn make_stuck_in_block(&mut self, id: EntityId, state: BlockState, speed_multiplier: Vec3) {
+        if self.mob(id).is_some_and(super::mob::Mob::is_spider) {
+            self.spider_make_stuck_in_block(id, state, speed_multiplier);
+        } else {
+            self.entity_make_stuck_in_block(id, state, speed_multiplier);
+        }
+    }
+
+    pub fn entity_make_stuck_in_block(&mut self, id: EntityId, _state: BlockState, speed_multiplier: Vec3) {
         if !self.players.get(&id).is_some_and(|p| p.abilities_flying()) {
             self.reset_fall_distance(id);
             self.entity_mut(id).stuck_speed_multiplier = speed_multiplier;
@@ -2353,6 +2361,8 @@ impl ServerLevel {
                     super::mob::MobKind::Zombie(_) => "Zombie",
                     super::mob::MobKind::Husk(_) => "Husk",
                     super::mob::MobKind::Creeper(_) => "Creeper",
+                    super::mob::MobKind::Spider(_) => "Spider",
+                    super::mob::MobKind::CaveSpider(_) => "CaveSpider",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
@@ -3158,7 +3168,15 @@ impl ServerLevel {
         }
     }
 
-    pub fn vehicle_attachment_point(&self, id: EntityId, _vehicle: EntityId) -> Vec3 {
+    pub fn vehicle_attachment_point(&self, id: EntityId, vehicle: EntityId) -> Vec3 {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(super::mob::MobKind::Spider(_)) => self.spider_get_vehicle_attachment_point(id, vehicle),
+            Some(super::mob::MobKind::CaveSpider(_)) => self.cave_spider_get_vehicle_attachment_point(id, vehicle),
+            _ => self.entity_get_vehicle_attachment_point(id, vehicle),
+        }
+    }
+
+    pub fn entity_get_vehicle_attachment_point(&self, id: EntityId, _vehicle: EntityId) -> Vec3 {
         let e = self.entity(id);
         e.dimensions.attachments.get(EntityAttachment::Vehicle, 0, e.y_rot)
     }

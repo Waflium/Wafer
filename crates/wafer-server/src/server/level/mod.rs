@@ -1697,6 +1697,7 @@ impl ServerLevel {
             Some(LevelEntity::AreaEffectCloud(_)) => self.tick_area_effect_cloud(id),
             Some(LevelEntity::Mob(mob)) if mob.is_zombie() => self.zombie_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Creeper(_)) => self.creeper_tick(id),
+            Some(LevelEntity::Mob(mob)) if mob.is_spider() => self.spider_tick(id),
             Some(LevelEntity::Mob(_)) => self.mob_tick(id),
             Some(LevelEntity::Minecart(_)) => self.tick_minecart(id),
             Some(LevelEntity::Boat(_)) => self.tick_boat(id),
@@ -2023,6 +2024,18 @@ impl crate::world::level::server_level_accessor::ServerLevelAccessor for ServerL
 
     fn add_fresh_entity(&mut self, entity: LevelEntity) -> bool {
         ServerLevel::add_fresh_entity(self, entity)
+    }
+
+    fn add_fresh_entity_with_passengers(&mut self, entity: LevelEntity) {
+        let passengers = entity.entity().passengers.clone();
+        ServerLevel::add_fresh_entity(self, entity);
+        for passenger in passengers {
+            if self.entities.get(&passenger).is_some_and(|p| !self.entity_manager.is_loaded(p.entity().uuid))
+                && let Some(passenger) = self.entities.shift_remove(&passenger)
+            {
+                self.add_fresh_entity_with_passengers(passenger);
+            }
+        }
     }
 
     fn can_see_sky(&mut self, pos: BlockPos) -> bool {

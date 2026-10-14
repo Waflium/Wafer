@@ -1226,7 +1226,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.zombie_get_base_experience_reward(id),
-            Some(MobKind::Creeper(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1623,7 +1623,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_ai_step(id),
-            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Creeper(_)) => self.monster_ai_step(id),
+            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_)) => self.monster_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -2009,6 +2009,9 @@ impl ServerLevel {
     }
 
     pub fn on_climbable_peek(&self, id: EntityId) -> bool {
+        if let Some(mob) = self.mob(id).filter(|mob| mob.is_spider()) {
+            return super::monster::spider::spider::Spider::on_climbable(mob);
+        }
         if self.is_spectator(id) {
             return false;
         }
@@ -2023,6 +2026,13 @@ impl ServerLevel {
     }
 
     pub fn on_climbable(&mut self, id: EntityId) -> bool {
+        match self.mob(id) {
+            Some(mob) if mob.is_spider() => super::monster::spider::spider::Spider::on_climbable(mob),
+            _ => self.living_entity_on_climbable(id),
+        }
+    }
+
+    pub fn living_entity_on_climbable(&mut self, id: EntityId) -> bool {
         if self.is_spectator(id) {
             return false;
         }
@@ -2070,6 +2080,10 @@ impl ServerLevel {
     }
 
     pub fn can_be_affected(&self, id: EntityId, effect: &MobEffectInstance) -> bool {
+        if self.mob(id).is_some_and(super::mob::Mob::is_spider) { self.spider_can_be_affected(id, effect) } else { self.living_entity_can_be_affected(id, effect) }
+    }
+
+    pub fn living_entity_can_be_affected(&self, id: EntityId, effect: &MobEffectInstance) -> bool {
         let entity_type = self.entity(id).entity_type as usize;
         if entity_type_tags::IMMUNE_TO_INFESTED.contains(entity_type) {
             effect.effect != mob_effects::INFESTED

@@ -30,7 +30,7 @@ impl BlockBehaviour for SweetBerryBushBlock {
         if !level.is_living(entity) {
             return;
         }
-        level.make_stuck_in_block(entity, wafer_core::Vec3::new(0.8f32 as f64, 0.75, 0.8f32 as f64));
+        level.make_stuck_in_block(entity, state, wafer_core::Vec3::new(0.8f32 as f64, 0.75, 0.8f32 as f64));
         if state.get(AGE_3) != 0 {
             let movement = level.player(entity).known_movement;
             if movement.horizontal_distance_sqr() > 0.0 {

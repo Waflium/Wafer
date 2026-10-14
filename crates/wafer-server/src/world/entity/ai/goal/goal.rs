@@ -19,6 +19,8 @@ use super::zombie_attack_goal::ZombieAttackGoal;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::monster::zombie::zombie::ZombieAttackTurtleEggGoal;
+use super::leap_at_target_goal::LeapAtTargetGoal;
+use crate::world::entity::monster::spider::spider::{SpiderAttackGoal, SpiderTargetGoal};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -56,6 +58,9 @@ pub enum Goal {
     AvoidEntity(AvoidEntityGoal),
     NearestAttackableTarget(NearestAttackableTargetGoal),
     HurtByTarget(HurtByTargetGoal),
+    LeapAtTarget(LeapAtTargetGoal),
+    SpiderAttack(SpiderAttackGoal),
+    SpiderTarget(SpiderTargetGoal),
 }
 
 impl Goal {
@@ -80,6 +85,9 @@ impl Goal {
             Goal::AvoidEntity(goal) => goal.can_use(level, mob),
             Goal::NearestAttackableTarget(goal) => goal.can_use(level, mob),
             Goal::HurtByTarget(goal) => goal.can_use(level, mob),
+            Goal::LeapAtTarget(goal) => goal.can_use(level, mob),
+            Goal::SpiderAttack(goal) => goal.can_use(level, mob),
+            Goal::SpiderTarget(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -104,6 +112,9 @@ impl Goal {
             Goal::AvoidEntity(goal) => goal.can_continue_to_use(level, mob),
             Goal::NearestAttackableTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
             Goal::HurtByTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
+            Goal::LeapAtTarget(goal) => goal.can_continue_to_use(level, mob),
+            Goal::SpiderAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -131,6 +142,9 @@ impl Goal {
             Goal::AvoidEntity(goal) => goal.start(level, mob),
             Goal::NearestAttackableTarget(goal) => goal.start(level, mob),
             Goal::HurtByTarget(goal) => goal.start(level, mob),
+            Goal::LeapAtTarget(goal) => goal.start(level, mob),
+            Goal::SpiderAttack(goal) => goal.melee_attack_goal.start(level, mob),
+            Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
         }
     }
 
@@ -153,13 +167,23 @@ impl Goal {
             Goal::AvoidEntity(goal) => goal.stop(),
             Goal::NearestAttackableTarget(goal) => goal.target_goal.stop(level, mob),
             Goal::HurtByTarget(goal) => goal.target_goal.stop(level, mob),
+            Goal::LeapAtTarget(_) => {}
+            Goal::SpiderAttack(goal) => goal.melee_attack_goal.stop(level, mob),
+            Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
         }
     }
 
     pub fn requires_update_every_tick(&self) -> bool {
         matches!(
             self,
-            Goal::Float(_) | Goal::RandomLookAround(_) | Goal::MeleeAttack(_) | Goal::ZombieAttack(_) | Goal::ZombieAttackTurtleEgg(_) | Goal::BreakDoor(_) | Goal::Swell(_)
+            Goal::Float(_)
+                | Goal::RandomLookAround(_)
+                | Goal::MeleeAttack(_)
+                | Goal::ZombieAttack(_)
+                | Goal::ZombieAttackTurtleEgg(_)
+                | Goal::BreakDoor(_)
+                | Goal::Swell(_)
+                | Goal::SpiderAttack(_)
         )
     }
 
@@ -179,6 +203,8 @@ impl Goal {
             Goal::BreakDoor(goal) => goal.tick(level, mob),
             Goal::Swell(goal) => goal.tick(level, mob),
             Goal::AvoidEntity(goal) => goal.tick(level, mob),
+            Goal::LeapAtTarget(_) | Goal::SpiderTarget(_) => {}
+            Goal::SpiderAttack(goal) => goal.melee_attack_goal.tick(level, mob),
         }
     }
 
@@ -192,6 +218,9 @@ impl Goal {
             Goal::ZombieAttackTurtleEgg(_) => Flag::Move.bit() | Flag::Jump.bit(),
             Goal::LookAtPlayer(_) => Flag::Look.bit(),
             Goal::NearestAttackableTarget(_) | Goal::HurtByTarget(_) => Flag::Target.bit(),
+            Goal::LeapAtTarget(_) => Flag::Jump.bit() | Flag::Move.bit(),
+            Goal::SpiderAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::SpiderTarget(_) => Flag::Target.bit(),
         }
     }
 

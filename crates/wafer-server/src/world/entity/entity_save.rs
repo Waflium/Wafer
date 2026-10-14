@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::data::{DataValue, ids};
 use super::entity_spawn_reason::EntitySpawnReason;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use super::item::ItemEntity;
 use super::primed_tnt::PrimedTnt;
 use super::projectile::throwableitemprojectile;
@@ -358,6 +359,8 @@ impl ServerLevel {
             "minecraft:zombie" => LevelEntity::Mob(Box::new(super::monster::zombie::zombie::Zombie::create())),
             "minecraft:husk" => LevelEntity::Mob(Box::new(super::monster::zombie::husk::Husk::create())),
             "minecraft:creeper" => LevelEntity::Mob(Box::new(super::monster::creeper::Creeper::create())),
+            "minecraft:spider" => LevelEntity::Mob(Box::new(super::monster::spider::spider::Spider::create())),
+            "minecraft:cave_spider" => LevelEntity::Mob(Box::new(super::monster::spider::cave_spider::CaveSpider::create())),
             "minecraft:snowball" => LevelEntity::Projectile(Box::new(throwableitemprojectile::snowball::Snowball::of_type())),
             "minecraft:egg" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_egg::ThrownEgg::of_type())),
             "minecraft:ender_pearl" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_enderpearl::ThrownEnderpearl::of_type())),
@@ -423,7 +426,7 @@ impl ServerLevel {
         }
         let id = entity.entity().id;
         let is_mob = matches!(entity, LevelEntity::Mob(_));
-        self.add_fresh_entity(entity);
+        self.add_fresh_entity_with_passengers(entity);
         if is_mob {
             self.play_ambient_sound(id);
         }

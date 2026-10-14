@@ -1,4 +1,5 @@
 use super::ageable_mob::AgeableMobGroupData;
+use super::monster::spider::spider::SpiderEffectsGroupData;
 use super::monster::zombie::husk::HuskGroupData;
 use super::monster::zombie::zombie::ZombieGroupData;
 
@@ -7,4 +8,5 @@ pub enum SpawnGroupData {
     AgeableMob(AgeableMobGroupData),
     Zombie(ZombieGroupData),
     Husk(HuskGroupData),
+    SpiderEffects(SpiderEffectsGroupData),
 }
