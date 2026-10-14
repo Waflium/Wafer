@@ -14,6 +14,7 @@ use crate::world::item::component as dc;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ConversionType {
     Single,
+    SplitOnDeath,
 }
 
 impl ConversionType {
@@ -22,6 +23,11 @@ impl ConversionType {
     }
 
     pub fn convert(self, level: &mut ServerLevel, from: EntityId, to: EntityId, params: &ConversionParams) {
+        if self == ConversionType::SplitOnDeath
+            && let Some(root_passenger) = level.first_passenger(from)
+        {
+            level.stop_riding(root_passenger);
+        }
         if self == ConversionType::Single {
             let root_passenger = level.first_passenger(from);
             let e = level.entity(from);

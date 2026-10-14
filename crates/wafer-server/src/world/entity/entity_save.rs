@@ -377,6 +377,8 @@ impl ServerLevel {
             "minecraft:endermite" => LevelEntity::Mob(Box::new(super::monster::endermite::Endermite::create())),
             "minecraft:enderman" => LevelEntity::Mob(Box::new(super::monster::enderman::Enderman::create())),
             "minecraft:witch" => LevelEntity::Mob(Box::new(super::monster::witch::Witch::create())),
+            "minecraft:slime" => LevelEntity::Mob(Box::new(super::monster::cubemob::slime::Slime::create())),
+            "minecraft:magma_cube" => LevelEntity::Mob(Box::new(super::monster::cubemob::magma_cube::MagmaCube::create())),
             "minecraft:snowball" => LevelEntity::Projectile(Box::new(throwableitemprojectile::snowball::Snowball::of_type())),
             "minecraft:egg" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_egg::ThrownEgg::of_type())),
             "minecraft:ender_pearl" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_enderpearl::ThrownEnderpearl::of_type())),

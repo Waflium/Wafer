@@ -831,6 +831,9 @@ impl ServerLevel {
     }
 
     pub fn get_entity_light_level_dependent_magic_value(&self, id: EntityId) -> f32 {
+        if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::MagmaCube(_))) {
+            return super::monster::cubemob::magma_cube::MagmaCube::get_light_level_dependent_magic_value();
+        }
         let e = self.entity(id);
         let block_pos = e.block_position();
         if self.chunks.loaded_chunk(block_pos.chunk()).is_some() {
@@ -957,6 +960,7 @@ impl ServerLevel {
             None => SoundSource::Players,
             Some(super::LevelEntity::ExperienceOrb(_)) => SoundSource::Ambient,
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
+            Some(super::LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_get_sound_source(),
             Some(_) => SoundSource::Neutral,
         }
     }
@@ -1912,7 +1916,7 @@ impl ServerLevel {
         in_any_fluid
     }
 
-    fn do_water_splash_effect(&mut self, id: EntityId) {
+    pub fn do_water_splash_effect(&mut self, id: EntityId) {
         if self.is_spectator(id) || matches!(self.entities.get(&id), Some(super::LevelEntity::ExperienceOrb(_))) {
             return;
         }
@@ -2399,6 +2403,8 @@ impl ServerLevel {
                     super::mob::MobKind::Endermite(_) => "Endermite",
                     super::mob::MobKind::Enderman(_) => "Enderman",
                     super::mob::MobKind::Witch(_) => "Witch",
+                    super::mob::MobKind::Slime(_) => "Slime",
+                    super::mob::MobKind::MagmaCube(_) => "MagmaCube",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
@@ -3280,12 +3286,15 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_push(id, other),
             Some(LevelEntity::Boat(_)) => self.abstract_boat_push(id, other),
-            _ if self.is_living(id) => {
-                if !self.is_sleeping(id) {
-                    self.entity_push_entity(id, other);
-                }
-            }
+            Some(LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_push(id, other),
+            _ if self.is_living(id) => self.living_entity_push(id, other),
             _ => self.entity_push_entity(id, other),
+        }
+    }
+
+    pub fn living_entity_push(&mut self, id: EntityId, other: EntityId) {
+        if !self.is_sleeping(id) {
+            self.entity_push_entity(id, other);
         }
     }
 

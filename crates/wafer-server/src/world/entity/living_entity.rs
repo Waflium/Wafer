@@ -1403,6 +1403,7 @@ impl ServerLevel {
             ) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Enderman(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Witch(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1628,6 +1629,8 @@ impl ServerLevel {
     pub fn remove(&mut self, id: EntityId, reason: RemovalReason) {
         if self.is_player(id) {
             self.player_remove(id, reason);
+        } else if self.mob(id).is_some_and(|mob| mob.is_cube_mob()) {
+            self.abstract_cube_mob_remove(id, reason);
         } else if self.is_living(id) {
             self.living_entity_remove(id, reason);
         } else if self.is_container_entity(id) {
@@ -1826,6 +1829,7 @@ impl ServerLevel {
             Some(MobKind::Endermite(_)) => self.endermite_ai_step(id),
             Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
+            Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -1893,10 +1897,10 @@ impl ServerLevel {
                         self.living_mut(id).no_jump_delay = 10;
                     }
                 } else {
-                    self.jump_in_liquid(id);
+                    self.jump_in_liquid(id, &fluid_tags::LAVA);
                 }
             } else {
-                self.jump_in_liquid(id);
+                self.jump_in_liquid(id, &fluid_tags::WATER);
             }
         } else {
             self.living_mut(id).no_jump_delay = 0;
@@ -2047,26 +2051,39 @@ impl ServerLevel {
         }
     }
 
-    fn jump_in_liquid(&mut self, id: EntityId) {
+    fn jump_in_liquid(&mut self, id: EntityId, ty: &wafer_data::Tag) {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::MagmaCube(_)) => self.magma_cube_jump_in_liquid(id, ty),
+            Some(_) => self.mob_jump_in_liquid(id, ty),
+            None => self.living_entity_jump_in_liquid(id, ty),
+        }
+    }
+
+    pub fn mob_jump_in_liquid(&mut self, id: EntityId, ty: &wafer_data::Tag) {
         if self.mob(id).is_some_and(|mob| !mob.ai.navigation.can_float()) {
             let e = self.entity_mut(id);
             e.set_delta_movement(e.delta_movement.add(0.0, 0.3, 0.0));
         } else {
-            self.living_entity_jump_in_liquid(id);
+            self.living_entity_jump_in_liquid(id, ty);
         }
     }
 
-    fn living_entity_jump_in_liquid(&mut self, id: EntityId) {
+    fn living_entity_jump_in_liquid(&mut self, id: EntityId, _ty: &wafer_data::Tag) {
         let e = self.entity_mut(id);
         e.set_delta_movement(e.delta_movement.add(0.0, 0.04f32 as f64, 0.0));
     }
 
     pub fn jump_from_ground(&mut self, id: EntityId) {
-        if self.is_player(id) {
-            self.server_player_jump_from_ground(id);
-        } else {
-            self.living_entity_jump_from_ground(id);
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Slime(_)) => self.abstract_cube_mob_jump_from_ground(id),
+            Some(MobKind::MagmaCube(_)) => self.magma_cube_jump_from_ground(id),
+            _ if self.is_player(id) => self.server_player_jump_from_ground(id),
+            _ => self.living_entity_jump_from_ground(id),
         }
+    }
+
+    pub fn get_jump_power(&mut self, id: EntityId) -> f32 {
+        self.attribute_value(id, Attribute::JumpStrength) as f32 * 1.0 * self.block_jump_factor(id) + self.jump_boost_power(id)
     }
 
     fn jump_boost_power(&self, id: EntityId) -> f32 {
@@ -2077,7 +2094,7 @@ impl ServerLevel {
     }
 
     pub fn living_entity_jump_from_ground(&mut self, id: EntityId) {
-        let jump_power = self.attribute_value(id, Attribute::JumpStrength) as f32 * 1.0 * self.block_jump_factor(id) + self.jump_boost_power(id);
+        let jump_power = self.get_jump_power(id);
         if jump_power <= 1.0e-5 {
             return;
         }

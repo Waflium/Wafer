@@ -34,6 +34,7 @@ use super::climb_on_top_of_powder_snow_goal::ClimbOnTopOfPowderSnowGoal;
 use crate::world::entity::monster::silverfish::{SilverfishMergeWithStoneGoal, SilverfishWakeUpFriendsGoal};
 use super::target::reset_universal_anger_target_goal::ResetUniversalAngerTargetGoal;
 use crate::world::entity::monster::enderman::{EndermanFreezeWhenLookedAt, EndermanLeaveBlockGoal, EndermanLookForPlayerGoal, EndermanTakeBlockGoal};
+use crate::world::entity::monster::cubemob::abstract_cube_mob::{CubeMobAttackGoal, CubeMobFloatGoal, CubeMobKeepOnJumpingGoal, CubeMobRandomDirectionGoal};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -96,6 +97,10 @@ pub enum Goal {
     RaiderCelebration(RaiderCelebration),
     NearestHealableRaiderTarget(NearestHealableRaiderTargetGoal),
     NearestAttackableWitchTarget(NearestAttackableWitchTargetGoal),
+    CubeMobAttack(CubeMobAttackGoal),
+    CubeMobFloat(CubeMobFloatGoal),
+    CubeMobKeepOnJumping(CubeMobKeepOnJumpingGoal),
+    CubeMobRandomDirection(CubeMobRandomDirectionGoal),
 }
 
 impl Goal {
@@ -145,6 +150,10 @@ impl Goal {
             Goal::RaiderCelebration(goal) => goal.can_use(level, mob),
             Goal::NearestHealableRaiderTarget(goal) => goal.can_use(level, mob),
             Goal::NearestAttackableWitchTarget(goal) => goal.can_use(level, mob),
+            Goal::CubeMobAttack(goal) => goal.can_use(level, mob),
+            Goal::CubeMobFloat(goal) => goal.can_use(level, mob),
+            Goal::CubeMobKeepOnJumping(goal) => goal.can_use(level, mob),
+            Goal::CubeMobRandomDirection(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -194,6 +203,10 @@ impl Goal {
             Goal::RaiderCelebration(goal) => goal.can_use(level, mob),
             Goal::NearestHealableRaiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
             Goal::NearestAttackableWitchTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
+            Goal::CubeMobAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::CubeMobFloat(goal) => goal.can_use(level, mob),
+            Goal::CubeMobKeepOnJumping(goal) => goal.can_use(level, mob),
+            Goal::CubeMobRandomDirection(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -243,6 +256,8 @@ impl Goal {
             Goal::RaiderCelebration(goal) => goal.start(level, mob),
             Goal::NearestHealableRaiderTarget(goal) => goal.start(level, mob),
             Goal::NearestAttackableWitchTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
+            Goal::CubeMobAttack(goal) => goal.start(),
+            Goal::CubeMobFloat(_) | Goal::CubeMobKeepOnJumping(_) | Goal::CubeMobRandomDirection(_) => {}
         }
     }
 
@@ -285,6 +300,7 @@ impl Goal {
             Goal::RaiderCelebration(goal) => goal.stop(level, mob),
             Goal::NearestHealableRaiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::NearestAttackableWitchTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
+            Goal::CubeMobAttack(_) | Goal::CubeMobFloat(_) | Goal::CubeMobKeepOnJumping(_) | Goal::CubeMobRandomDirection(_) => {}
         }
     }
 
@@ -306,6 +322,8 @@ impl Goal {
                 | Goal::DrownedGoToBeach(_)
                 | Goal::ClimbOnTopOfPowderSnow(_)
                 | Goal::RangedAttack(_)
+                | Goal::CubeMobAttack(_)
+                | Goal::CubeMobFloat(_)
         )
     }
 
@@ -326,6 +344,10 @@ impl Goal {
             Goal::Swell(goal) => goal.tick(level, mob),
             Goal::AvoidEntity(goal) => goal.tick(level, mob),
             Goal::LeapAtTarget(_) | Goal::SpiderTarget(_) => {}
+            Goal::CubeMobAttack(goal) => goal.tick(level, mob),
+            Goal::CubeMobFloat(goal) => goal.tick(level, mob),
+            Goal::CubeMobKeepOnJumping(goal) => goal.tick(level, mob),
+            Goal::CubeMobRandomDirection(goal) => goal.tick(level, mob),
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.tick(level, mob),
             Goal::RangedBowAttack(goal) => goal.tick(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.tick(level, mob),
@@ -386,6 +408,8 @@ impl Goal {
             Goal::RangedAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::LongDistancePatrol(_) | Goal::ObtainRaidLeaderBanner(_) | Goal::RaiderCelebration(_) => Flag::Move.bit(),
             Goal::NearestHealableRaiderTarget(_) | Goal::NearestAttackableWitchTarget(_) => Flag::Target.bit(),
+            Goal::CubeMobAttack(_) | Goal::CubeMobRandomDirection(_) => Flag::Look.bit(),
+            Goal::CubeMobFloat(_) | Goal::CubeMobKeepOnJumping(_) => Flag::Jump.bit() | Flag::Move.bit(),
         }
     }
 

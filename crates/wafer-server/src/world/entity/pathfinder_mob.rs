@@ -5,6 +5,10 @@ use super::ai::goal::goal::Goal;
 use super::mob::MobKind;
 use crate::server::level::ServerLevel;
 
+pub fn get_walk_target_value() -> f32 {
+    0.0
+}
+
 impl ServerLevel {
     pub fn get_walk_target_value(&self, id: EntityId, pos: BlockPos) -> f32 {
         match self.mob(id).expect("a pathfinder mob").kind {
@@ -22,6 +26,7 @@ impl ServerLevel {
             MobKind::Silverfish(_) => self.silverfish_get_walk_target_value(pos),
             MobKind::Enderman(_) => crate::world::entity::monster::enderman::Enderman::get_walk_target_value(),
             MobKind::Witch(_) => self.monster_get_walk_target_value(pos),
+            MobKind::Slime(_) | MobKind::MagmaCube(_) => get_walk_target_value(),
             _ => self.animal_get_walk_target_value(pos),
         }
     }

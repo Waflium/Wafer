@@ -39,6 +39,8 @@ const MODELLED: &[&str] = &[
     "minecraft:endermite",
     "minecraft:enderman",
     "minecraft:witch",
+    "minecraft:slime",
+    "minecraft:magma_cube",
     "minecraft:snowball",
     "minecraft:egg",
     "minecraft:ender_pearl",

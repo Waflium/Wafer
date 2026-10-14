@@ -95,6 +95,7 @@ impl ServerLevel {
             | MobKind::Endermite(_) => None,
             MobKind::Enderman(_) => None,
             MobKind::Witch(_) => None,
+            MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
         }
     }
 
