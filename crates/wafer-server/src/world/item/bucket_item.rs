@@ -8,15 +8,13 @@ use crate::server::level::game_mode::GameType;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::attribute::environment_attributes;
 use crate::world::entity::EntityId;
+use crate::world::entity::attributes::Attribute;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::{self, BlockHitResult};
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::level::material;
 use crate::world::level::update_flags::UPDATE_LIMIT;
 use crate::world::{InteractionHand, InteractionResult};
-
-const DEFAULT_BLOCK_INTERACTION_RANGE: f64 = 4.5;
-const CREATIVE_BLOCK_INTERACTION_RANGE_BONUS: f64 = 0.5;
 
 pub struct BucketItem {
     content: Fluid,
@@ -95,6 +93,7 @@ impl BucketItem {
             let pitch = 2.6 + (level.random.next_float() - level.random.next_float()) * 0.8;
             let sound = registry_id(registry::SOUND_EVENT, "minecraft:block.fire.extinguish");
             level.play_sound(user, pos, sound, SoundSource::Blocks, 0.5, pitch);
+            level.send_particles_with_speeds("minecraft:large_smoke", |_| {}, pos.x as f64, pos.y as f64, pos.z as f64, 8, (1.0, 1.0, 1.0), (0.0, 0.0, 0.0), 1);
             return true;
         }
         if is_container && self.content == Fluid::Water {
@@ -132,7 +131,7 @@ fn calculate_view_vector(x_rot: f32, y_rot: f32) -> Vec3 {
 pub fn player_pov_hit_result(level: &mut ServerLevel, player: EntityId, fluid: ClipFluid) -> Option<BlockHitResult> {
     let p = level.player(player);
     let from = p.entity.eye_position();
-    let range = DEFAULT_BLOCK_INTERACTION_RANGE + if p.game_mode.game_type == GameType::Creative { CREATIVE_BLOCK_INTERACTION_RANGE_BONUS } else { 0.0 };
+    let range = p.living.attributes.value(Attribute::BlockInteractionRange);
     let to = from.add_vec(calculate_view_vector(p.entity.x_rot, p.entity.y_rot).scale(range));
     let result = level.clip(&ClipContext { from, to, block: ClipBlock::Outline, fluid, is_player: true });
     (!result.miss).then_some(result.hit)

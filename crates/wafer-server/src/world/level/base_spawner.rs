@@ -61,6 +61,19 @@ impl BaseSpawner {
         }
     }
 
+    pub fn set_entity_data(&mut self, entity_data: &Nbt, random: &mut impl RandomSource) {
+        let (entity_type, data) = crate::world::item::component::values::typed_entity_data(entity_data);
+        let entity_type = crate::commands::arguments::parse_identifier(&entity_type).unwrap_or(entity_type);
+        self.set_entity_id(&entity_type, random);
+        let spawn_data = self.get_or_create_next_spawn_data(random);
+        if let Nbt::Compound(fields) = spawn_data
+            && let Some((_, Nbt::Compound(entity))) = fields.iter_mut().find(|(key, _)| key == "entity")
+            && let Nbt::Compound(data) = &data
+        {
+            crate::nbt::merge(entity, data);
+        }
+    }
+
     fn get_or_create_next_spawn_data(&mut self, random: &mut impl RandomSource) -> &mut Nbt {
         if self.next_spawn_data.is_none() {
             let total_weight: i32 = self.spawn_potentials.iter().map(|(_, weight)| *weight).sum();
