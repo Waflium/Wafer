@@ -673,7 +673,7 @@ impl Server {
     }
 
     fn refresh_spawn_protection(&mut self) {
-        let ops: Vec<u128> = self.ops.entries().into_iter().map(|e| e.user.id).collect();
+        let ops: Vec<(u128, i32)> = self.ops.entries().into_iter().map(|e| (e.user.id, e.level)).collect();
         for level in &mut self.levels {
             let protection = &mut level.spawn_protection;
             protection.radius = self.config.spawn_protection;

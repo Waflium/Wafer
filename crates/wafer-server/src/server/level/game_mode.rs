@@ -579,10 +579,10 @@ mod spawn_protection_tests {
         let pos = BlockPos::new(0, -61, 1);
         level.spawn_protection.radius = 16;
         level.spawn_protection.dimension = crate::server::OVERWORLD.into();
-        level.spawn_protection.ops = vec![12345];
+        level.spawn_protection.ops = vec![(12345, 4)];
         level.handle_block_break_action(player, pos, BlockBreakAction::StartDestroyBlock, Direction::Up, 320);
         assert_eq!(level.block_state(pos), blocks::GRASS_BLOCK.default_state());
-        level.spawn_protection.ops.push(level.player(player).profile.uuid);
+        level.spawn_protection.ops.push((level.player(player).profile.uuid, 1));
         level.handle_block_break_action(player, pos, BlockBreakAction::StartDestroyBlock, Direction::Up, 320);
         assert!(level.block_state(pos).is_air());
     }

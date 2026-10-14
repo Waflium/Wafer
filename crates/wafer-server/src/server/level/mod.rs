@@ -69,7 +69,7 @@ pub struct SpawnProtection {
     pub radius: i32,
     pub dimension: String,
     pub spawn: BlockPos,
-    pub ops: Vec<u128>,
+    pub ops: Vec<(u128, i32)>,
 }
 
 pub const RAIN_DELAY: (i32, i32) = (12000, 180000);
@@ -451,11 +451,19 @@ impl ServerLevel {
         if self.dimension != protection.dimension {
             return false;
         }
-        if protection.ops.is_empty() || protection.ops.contains(&self.player(player).profile.uuid) || protection.radius <= 0 {
+        if protection.ops.is_empty() || self.is_op(self.player(player).profile.uuid) || protection.radius <= 0 {
             return false;
         }
         let distance = (pos.x - protection.spawn.x).abs().max((pos.z - protection.spawn.z).abs());
         distance <= protection.radius
+    }
+
+    pub fn is_op(&self, uuid: u128) -> bool {
+        self.spawn_protection.ops.iter().any(|&(id, _)| id == uuid)
+    }
+
+    pub fn profile_permission_level(&self, uuid: u128) -> i32 {
+        self.spawn_protection.ops.iter().find(|&&(id, _)| id == uuid).map_or(0, |&(_, level)| level)
     }
 
     pub fn may_interact(&self, player: EntityId, pos: BlockPos) -> bool {

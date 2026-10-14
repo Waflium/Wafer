@@ -26,7 +26,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
             return InteractionResult::Fail;
         }
         let entity_data = item_stack.get(dc::ENTITY_DATA).cloned();
-        let is_op = level.spawn_protection.ops.contains(&level.player(player).profile.uuid);
+        let is_op = level.is_op(level.player(player).profile.uuid);
         if let Some(block_entity) = level.chunks.block_entity(pos, EntityCreationType::Immediate)
             && let BlockEntityKind::Spawner(spawner_holder) = &mut block_entity.kind
         {

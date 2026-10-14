@@ -1534,8 +1534,11 @@ mod server_tests {
         };
         server.levels[0].handle_game_packet(alice, &set_jigsaw).unwrap();
         assert_eq!(jigsaw(&mut server).name, "minecraft:empty");
-        server.levels[0].spawn_protection.ops.push(offline_uuid("Alice"));
+        server.levels[0].spawn_protection.ops.push((offline_uuid("Alice"), 1));
         server.levels[0].set_game_mode(alice, crate::server::level::game_mode::GameType::Creative);
+        server.levels[0].handle_game_packet(alice, &set_jigsaw).unwrap();
+        assert_eq!(jigsaw(&mut server).name, "minecraft:empty");
+        server.levels[0].spawn_protection.ops.last_mut().unwrap().1 = 2;
         server.levels[0].handle_game_packet(alice, &set_jigsaw).unwrap();
         let jigsaw = jigsaw(&mut server);
         assert_eq!((jigsaw.name.as_str(), jigsaw.target.as_str(), jigsaw.final_state.as_str()), ("minecraft:start", "minecraft:end", "minecraft:stone"));

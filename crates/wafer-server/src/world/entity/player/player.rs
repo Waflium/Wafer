@@ -115,7 +115,7 @@ impl ServerLevel {
     }
 
     pub fn can_use_game_master_blocks(&self, id: EntityId) -> bool {
-        self.players.get(&id).is_some_and(|p| p.abilities.instabuild && self.spawn_protection.ops.contains(&p.profile.uuid))
+        self.players.get(&id).is_some_and(|p| p.abilities.instabuild && self.profile_permission_level(p.profile.uuid) >= 2)
     }
 
     pub fn block_action_restricted(&mut self, id: EntityId, pos: BlockPos, game_type: GameType) -> bool {
