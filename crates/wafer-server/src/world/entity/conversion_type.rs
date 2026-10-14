@@ -4,6 +4,9 @@ use super::EntityId;
 use super::conversion_params::ConversionParams;
 use super::data::{DataValue, ids};
 use super::flags;
+use super::mob::Mob;
+use super::monster::zombie::zombie::Zombie;
+use super::RemovalReason;
 use crate::server::level::ServerLevel;
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
@@ -20,11 +23,25 @@ impl ConversionType {
 
     pub fn convert(self, level: &mut ServerLevel, from: EntityId, to: EntityId, params: &ConversionParams) {
         if self == ConversionType::Single {
+            let root_passenger = level.first_passenger(from);
             let e = level.entity(from);
             let (pos, y_rot, x_rot, delta_movement) = (e.position(), e.y_rot, e.x_rot, e.delta_movement);
             let to_entity = level.entity_mut(to);
             to_entity.snap_to(pos.x, pos.y, pos.z, y_rot, x_rot);
             to_entity.set_delta_movement(delta_movement);
+            if let Some(root_passenger) = root_passenger {
+                level.stop_riding(root_passenger);
+                level.entity_mut(root_passenger).boarding_cooldown = 0;
+                for passenger in level.passengers(to).to_vec() {
+                    level.stop_riding(passenger);
+                    level.remove(passenger, RemovalReason::Discarded);
+                }
+                level.start_riding(root_passenger, to, false, true);
+            }
+            if let Some(vehicle) = level.vehicle(from) {
+                level.stop_riding(from);
+                level.start_riding(to, vehicle, false, false);
+            }
             if params.keep_equipment {
                 for slot in EquipmentSlot::VALUES {
                     let Some(item_stack) = level.item_by_slot(from, slot) else { continue };
@@ -111,5 +128,9 @@ fn convert_common(level: &mut ServerLevel, from: EntityId, to: EntityId, params:
             let from_name = level.scoreboard_name(from);
             level.scoreboard.borrow_mut().remove_player_from_team(&from_name, team);
         }
+    }
+    let from_mob = level.mob(from).expect("a mob");
+    if from_mob.is_zombie() && Zombie::can_break_doors(from_mob) && level.mob(to).is_some_and(Mob::is_zombie) {
+        Zombie::set_can_break_doors(level.mob_mut(to).expect("a zombie"), true);
     }
 }
