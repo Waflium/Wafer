@@ -828,6 +828,12 @@ impl ServerLevel {
             let living = &mut self.living_mut(id);
             living.last_damage_source = Some(source);
             living.last_damage_stamp = game_time;
+            let mut index = 0;
+            while let Some(effect) = self.living(id).active_effects.get(index) {
+                let (effect, amplifier) = (effect.effect, effect.amplifier);
+                self.on_mob_hurt(id, effect, amplifier, &source, damage);
+                index += 1;
+            }
         }
         if self.is_player(id) {
             criteria_triggers::ENTITY_HURT_PLAYER.trigger(self, id, &source, original_damage, damage, blocked);
@@ -1273,9 +1279,16 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_)) => self.zombie_get_base_experience_reward(id),
-            Some(MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_)) => {
-                self.mob_get_base_experience_reward(id)
-            }
+            Some(
+                MobKind::Creeper(_)
+                | MobKind::Spider(_)
+                | MobKind::CaveSpider(_)
+                | MobKind::Skeleton(_)
+                | MobKind::Stray(_)
+                | MobKind::Bogged(_)
+                | MobKind::Silverfish(_)
+                | MobKind::Endermite(_),
+            ) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1693,8 +1706,10 @@ impl ServerLevel {
                 | MobKind::CaveSpider(_)
                 | MobKind::Skeleton(_)
                 | MobKind::Stray(_)
-                | MobKind::Bogged(_),
+                | MobKind::Bogged(_)
+                | MobKind::Silverfish(_),
             ) => self.monster_ai_step(id),
+            Some(MobKind::Endermite(_)) => self.endermite_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }

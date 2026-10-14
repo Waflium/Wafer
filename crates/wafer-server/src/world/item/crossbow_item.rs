@@ -129,7 +129,7 @@ impl Quaternionf {
     }
 }
 
-fn cos_from_sin(sin: f32, angle: f32) -> f32 {
+pub fn cos_from_sin(sin: f32, angle: f32) -> f32 {
     let pi_f = std::f64::consts::PI as f32;
     let pi2_f = (std::f64::consts::PI * 2.0) as f32;
     let pi_half_f = (std::f64::consts::PI * 0.5) as f32;

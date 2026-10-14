@@ -52,7 +52,7 @@ pub mod brewing_stand_block;
 mod conduit_block;
 pub mod enchanting_table_block;
 mod eyeblossom_block;
-mod infested_block;
+pub mod infested_block;
 mod daylight_detector_block;
 mod copper_bulb_block;
 mod jukebox_block;

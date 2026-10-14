@@ -1,6 +1,7 @@
 pub mod avoid_entity_goal;
 pub mod break_door_goal;
 pub mod breed_goal;
+pub mod climb_on_top_of_powder_snow_goal;
 pub mod door_interact_goal;
 pub mod eat_block_goal;
 pub mod flee_sun_goal;

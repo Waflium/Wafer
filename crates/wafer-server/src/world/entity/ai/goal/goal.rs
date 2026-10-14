@@ -25,6 +25,8 @@ use crate::world::entity::monster::zombie::drowned::{DrownedAttackGoal, DrownedG
 use crate::world::entity::monster::zombie::zombie::ZombieAttackTurtleEggGoal;
 use super::leap_at_target_goal::LeapAtTargetGoal;
 use crate::world::entity::monster::spider::spider::{SpiderAttackGoal, SpiderTargetGoal};
+use super::climb_on_top_of_powder_snow_goal::ClimbOnTopOfPowderSnowGoal;
+use crate::world::entity::monster::silverfish::{SilverfishMergeWithStoneGoal, SilverfishWakeUpFriendsGoal};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -73,6 +75,9 @@ pub enum Goal {
     DrownedAttack(DrownedAttackGoal),
     DrownedGoToBeach(DrownedGoToBeachGoal),
     DrownedSwimUp(DrownedSwimUpGoal),
+    ClimbOnTopOfPowderSnow(ClimbOnTopOfPowderSnowGoal),
+    SilverfishWakeUpFriends,
+    SilverfishMergeWithStone(SilverfishMergeWithStoneGoal),
 }
 
 impl Goal {
@@ -108,6 +113,9 @@ impl Goal {
             Goal::DrownedAttack(goal) => goal.can_use(level, mob),
             Goal::DrownedGoToBeach(goal) => goal.can_use(level, mob),
             Goal::DrownedSwimUp(goal) => goal.can_use(level, mob),
+            Goal::ClimbOnTopOfPowderSnow(goal) => goal.can_use(level, mob),
+            Goal::SilverfishWakeUpFriends => SilverfishWakeUpFriendsGoal::can_use(level, mob),
+            Goal::SilverfishMergeWithStone(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -143,6 +151,9 @@ impl Goal {
             Goal::DrownedAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::DrownedGoToBeach(goal) => goal.can_continue_to_use(level),
             Goal::DrownedSwimUp(goal) => goal.can_continue_to_use(level, mob),
+            Goal::ClimbOnTopOfPowderSnow(goal) => goal.can_use(level, mob),
+            Goal::SilverfishWakeUpFriends => SilverfishWakeUpFriendsGoal::can_use(level, mob),
+            Goal::SilverfishMergeWithStone(goal) => goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -181,6 +192,8 @@ impl Goal {
             Goal::DrownedAttack(goal) => goal.zombie_attack_goal.start(level, mob),
             Goal::DrownedGoToBeach(goal) => goal.start(level, mob),
             Goal::DrownedSwimUp(goal) => goal.start(level, mob),
+            Goal::ClimbOnTopOfPowderSnow(_) | Goal::SilverfishWakeUpFriends => {}
+            Goal::SilverfishMergeWithStone(goal) => goal.start(level, mob),
         }
     }
 
@@ -213,6 +226,8 @@ impl Goal {
             Goal::DrownedTridentAttack(goal) => goal.stop(level, mob),
             Goal::DrownedAttack(goal) => goal.zombie_attack_goal.stop(level, mob),
             Goal::DrownedSwimUp(goal) => goal.stop(level, mob),
+            Goal::ClimbOnTopOfPowderSnow(_) | Goal::SilverfishWakeUpFriends => {}
+            Goal::SilverfishMergeWithStone(goal) => goal.random_stroll_goal.stop(level, mob),
         }
     }
 
@@ -232,6 +247,7 @@ impl Goal {
                 | Goal::DrownedTridentAttack(_)
                 | Goal::DrownedAttack(_)
                 | Goal::DrownedGoToBeach(_)
+                | Goal::ClimbOnTopOfPowderSnow(_)
         )
     }
 
@@ -260,6 +276,9 @@ impl Goal {
             Goal::DrownedAttack(goal) => goal.zombie_attack_goal.tick(level, mob),
             Goal::DrownedGoToBeach(goal) => goal.tick(level, mob),
             Goal::DrownedSwimUp(goal) => goal.tick(level, mob),
+            Goal::ClimbOnTopOfPowderSnow(goal) => goal.tick(level, mob),
+            Goal::SilverfishWakeUpFriends => SilverfishWakeUpFriendsGoal::tick(level, mob),
+            Goal::SilverfishMergeWithStone(_) => {}
         }
     }
 
@@ -290,6 +309,9 @@ impl Goal {
             Goal::LeapAtTarget(_) => Flag::Jump.bit() | Flag::Move.bit(),
             Goal::SpiderAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::SpiderTarget(_) => Flag::Target.bit(),
+            Goal::ClimbOnTopOfPowderSnow(_) => Flag::Jump.bit(),
+            Goal::SilverfishWakeUpFriends => 0,
+            Goal::SilverfishMergeWithStone(_) => Flag::Move.bit(),
         }
     }
 

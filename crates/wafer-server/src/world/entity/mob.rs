@@ -15,6 +15,8 @@ use super::monster::zombie::husk::{self, Husk};
 use super::monster::zombie::zombie::{self, Zombie};
 use super::monster::spider::cave_spider::{self, CaveSpider};
 use super::monster::spider::spider::{self, Spider};
+use super::monster::endermite::{self, Endermite};
+use super::monster::silverfish::{self, Silverfish};
 use super::entity_spawn_reason::EntitySpawnReason;
 use super::spawn_group_data::SpawnGroupData;
 use crate::world::attribute::environment_attributes;
@@ -93,6 +95,8 @@ pub enum MobKind {
     Stray(Stray),
     Bogged(Bogged),
     Drowned(Drowned),
+    Silverfish(Silverfish),
+    Endermite(Endermite),
 }
 
 pub struct Mob {
@@ -160,11 +164,15 @@ impl Mob {
             MobKind::Creeper(_) => Creeper::register_goals(&mut self.ai),
             MobKind::Spider(_) | MobKind::CaveSpider(_) => Spider::register_goals(&mut self.ai),
             MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => AbstractSkeleton::register_goals(&mut self.ai),
+            MobKind::Silverfish(_) => Silverfish::register_goals(&mut self.ai),
+            MobKind::Endermite(_) => Endermite::register_goals(&mut self.ai),
         }
     }
 
     pub fn is_monster(&self) -> bool {
-        matches!(self.kind, MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_)) || self.is_spider() || self.is_abstract_skeleton()
+        matches!(self.kind, MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_))
+            || self.is_spider()
+            || self.is_abstract_skeleton()
     }
 
     pub fn is_zombie(&self) -> bool {
@@ -180,7 +188,11 @@ impl Mob {
     }
 
     pub fn client_tracking_range(&self) -> i32 {
-        if self.is_zombie() || matches!(self.kind, MobKind::Creeper(_)) || self.is_spider() || self.is_abstract_skeleton() { 8 } else { 10 }
+        if self.is_zombie() || matches!(self.kind, MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_)) || self.is_spider() || self.is_abstract_skeleton() {
+            8
+        } else {
+            10
+        }
     }
 
     fn create_navigation(&self) -> PathNavigation {
@@ -231,7 +243,7 @@ impl Mob {
     pub fn remove_when_far_away(&self, dist_sqr: f64) -> bool {
         match &self.kind {
             MobKind::Chicken(chicken) => chicken::remove_when_far_away(chicken),
-            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => true,
+            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => true,
             _ => super::animal::remove_when_far_away(dist_sqr),
         }
     }
@@ -338,7 +350,7 @@ impl Mob {
             MobKind::MushroomCow(mushroom_cow) => Some(&mushroom_cow.abstract_cow.animal),
             MobKind::Pig(pig) => Some(&pig.animal),
             MobKind::Sheep(sheep) => Some(&sheep.animal),
-            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => None,
+            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => None,
         }
     }
 
@@ -349,7 +361,7 @@ impl Mob {
             MobKind::MushroomCow(mushroom_cow) => Some(&mut mushroom_cow.abstract_cow.animal),
             MobKind::Pig(pig) => Some(&mut pig.animal),
             MobKind::Sheep(sheep) => Some(&mut sheep.animal),
-            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => None,
+            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => None,
         }
     }
 
@@ -400,7 +412,7 @@ impl Mob {
             MobKind::Sheep(_) => {
                 self.apply_implicit_component_if_present(components, dc::SHEEP_COLOR);
             }
-            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => {}
+            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => {}
         }
         self.apply_implicit_component_if_present(components, dc::CUSTOM_NAME);
         self.apply_implicit_component_if_present(components, dc::CUSTOM_DATA);
@@ -489,6 +501,8 @@ impl Mob {
             MobKind::Spider(_) => spider::DIMENSIONS,
             MobKind::CaveSpider(_) => cave_spider::DIMENSIONS,
             MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => abstract_skeleton::DIMENSIONS,
+            MobKind::Silverfish(_) => silverfish::DIMENSIONS,
+            MobKind::Endermite(_) => endermite::DIMENSIONS,
         }
     }
 
@@ -510,6 +524,7 @@ impl Mob {
             MobKind::Spider(_) => (0.0, 0.765f32 as f64, 0.0),
             MobKind::CaveSpider(_) => (0.0, 0.5f32 as f64, 0.0),
             MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => (0.0, 1.99f32 as f64, 0.0),
+            MobKind::Silverfish(_) | MobKind::Endermite(_) => (0.0, 0.2375f32 as f64, 0.0),
         };
         let scale = self.living.attributes.value(Attribute::Scale) as f32 as f64;
         wafer_core::Vec3::new(x * scale, y * scale, z * scale)
@@ -634,6 +649,8 @@ impl Mob {
             MobKind::Skeleton(_) => Skeleton::add_additional_save_data(self, out),
             MobKind::Stray(_) => {}
             MobKind::Bogged(_) => Bogged::add_additional_save_data(self, out),
+            MobKind::Silverfish(_) => {}
+            MobKind::Endermite(_) => Endermite::add_additional_save_data(self, out),
         }
     }
 
@@ -745,12 +762,13 @@ impl Mob {
                     self.entity.data.set(chicken::DATA_SOUND_VARIANT, DataValue::ChickenSoundVariant(sound_variant));
                 }
             }
-            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => {}
+            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => {}
         }
         match self.kind {
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) => Zombie::read_additional_save_data(self, nbt),
             MobKind::Skeleton(_) => Skeleton::read_additional_save_data(self, nbt),
             MobKind::Bogged(_) => Bogged::read_additional_save_data(self, nbt),
+            MobKind::Endermite(_) => Endermite::read_additional_save_data(self, nbt),
             _ => {}
         }
         if matches!(self.kind, MobKind::Creeper(_)) {
@@ -794,6 +812,8 @@ impl Mob {
             MobKind::Skeleton(_) => Skeleton::get_ambient_sound(),
             MobKind::Stray(_) => Stray::get_ambient_sound(),
             MobKind::Bogged(_) => Bogged::get_ambient_sound(),
+            MobKind::Silverfish(_) => Silverfish::get_ambient_sound(),
+            MobKind::Endermite(_) => Endermite::get_ambient_sound(),
         })
     }
 
@@ -810,6 +830,8 @@ impl Mob {
             MobKind::Skeleton(_) => Skeleton::get_hurt_sound(),
             MobKind::Stray(_) => Stray::get_hurt_sound(),
             MobKind::Bogged(_) => Bogged::get_hurt_sound(),
+            MobKind::Silverfish(_) => Silverfish::get_hurt_sound(),
+            MobKind::Endermite(_) => Endermite::get_hurt_sound(),
         }
     }
 
@@ -826,6 +848,8 @@ impl Mob {
             MobKind::Skeleton(_) => Skeleton::get_death_sound(),
             MobKind::Stray(_) => Stray::get_death_sound(),
             MobKind::Bogged(_) => Bogged::get_death_sound(),
+            MobKind::Silverfish(_) => Silverfish::get_death_sound(),
+            MobKind::Endermite(_) => Endermite::get_death_sound(),
         }
     }
 
@@ -842,6 +866,8 @@ impl Mob {
             MobKind::Skeleton(_) => Skeleton::get_step_sound(),
             MobKind::Stray(_) => Stray::get_step_sound(),
             MobKind::Bogged(_) => Bogged::get_step_sound(),
+            MobKind::Silverfish(_) => Silverfish::get_step_sound(),
+            MobKind::Endermite(_) => Endermite::get_step_sound(),
         })
     }
 
@@ -961,7 +987,7 @@ impl ServerLevel {
             MobKind::MushroomCow(_) => self.mushroom_cow_mob_interact(id, player, hand),
             MobKind::Pig(_) => self.pig_mob_interact(id, player, hand),
             MobKind::Sheep(_) => self.sheep_mob_interact(id, player, hand),
-            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) => {
+            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => {
                 self.mob_mob_interact(id, player, hand)
             }
             MobKind::Creeper(_) => self.creeper_mob_interact(id, player, hand),
@@ -1115,6 +1141,10 @@ impl ServerLevel {
         if let Some(sound) = self.mob(id).expect("a mob").get_ambient_sound() {
             self.make_sound(id, super::sound_event(sound));
         }
+    }
+
+    pub fn spawn_anim(&mut self, id: EntityId) {
+        self.broadcast_entity_event(id, super::entity_event::SILVERFISH_MERGE_ANIM);
     }
 
     pub fn mob_ai_step(&mut self, id: EntityId) {
@@ -1545,7 +1575,20 @@ impl ServerLevel {
     fn custom_server_ai_step(&mut self, id: EntityId) {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Sheep(_)) => self.sheep_custom_server_ai_step(id),
-            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_)) | None => {}
+            Some(
+                MobKind::Zombie(_)
+                | MobKind::Husk(_)
+                | MobKind::Drowned(_)
+                | MobKind::Creeper(_)
+                | MobKind::Spider(_)
+                | MobKind::CaveSpider(_)
+                | MobKind::Skeleton(_)
+                | MobKind::Stray(_)
+                | MobKind::Bogged(_)
+                | MobKind::Silverfish(_)
+                | MobKind::Endermite(_),
+            )
+            | None => {}
             Some(_) => self.animal_custom_server_ai_step(id),
         }
     }
@@ -1768,7 +1811,16 @@ pub fn finalize_spawn(
         MobKind::MushroomCow(_) => {}
         MobKind::Pig(_) => pig::finalize_spawn(level, mob),
         MobKind::Sheep(_) => sheep::finalize_spawn(level, mob),
-        MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => {}
+        MobKind::Zombie(_)
+        | MobKind::Husk(_)
+        | MobKind::Drowned(_)
+        | MobKind::Creeper(_)
+        | MobKind::Spider(_)
+        | MobKind::Skeleton(_)
+        | MobKind::Stray(_)
+        | MobKind::Bogged(_)
+        | MobKind::Silverfish(_)
+        | MobKind::Endermite(_) => {}
         MobKind::CaveSpider(_) => return group_data,
     }
     let group_data = if mob.ageable().is_some() { ageable_mob::finalize_spawn(level, mob, group_data) } else { group_data };
@@ -1799,7 +1851,17 @@ fn mob_finalize_spawn(
 pub fn get_walk_target_value(mob: &Mob, pos: BlockPos, level: &mut (impl ServerLevelAccessor + ?Sized)) -> f32 {
     match mob.kind {
         MobKind::MushroomCow(_) => mushroom_cow::get_walk_target_value(pos, level),
-        MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => super::monster::monster::get_walk_target_value(pos, level),
+        MobKind::Zombie(_)
+        | MobKind::Husk(_)
+        | MobKind::Drowned(_)
+        | MobKind::Creeper(_)
+        | MobKind::Spider(_)
+        | MobKind::CaveSpider(_)
+        | MobKind::Skeleton(_)
+        | MobKind::Stray(_)
+        | MobKind::Bogged(_)
+        | MobKind::Endermite(_) => super::monster::monster::get_walk_target_value(pos, level),
+        MobKind::Silverfish(_) => silverfish::get_walk_target_value(pos, level),
         _ => super::animal::get_walk_target_value(pos, level),
     }
 }

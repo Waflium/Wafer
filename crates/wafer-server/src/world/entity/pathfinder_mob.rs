@@ -17,7 +17,9 @@ impl ServerLevel {
             | MobKind::CaveSpider(_)
             | MobKind::Skeleton(_)
             | MobKind::Stray(_)
-            | MobKind::Bogged(_) => self.monster_get_walk_target_value(pos),
+            | MobKind::Bogged(_)
+            | MobKind::Endermite(_) => self.monster_get_walk_target_value(pos),
+            MobKind::Silverfish(_) => self.silverfish_get_walk_target_value(pos),
             _ => self.animal_get_walk_target_value(pos),
         }
     }

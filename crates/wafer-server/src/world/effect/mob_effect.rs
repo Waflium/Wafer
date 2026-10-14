@@ -1,18 +1,27 @@
 use std::borrow::Cow;
 
 use wafer_core::random::RandomSource;
-use wafer_core::{BlockPos, Direction};
+use wafer_core::{BlockPos, Direction, Vec3, mth};
 use wafer_data::{MobEffect, blocks, damage_types, entity_type_tags, game_rule, mob_effects};
 
 use crate::server::level::ServerLevel;
+use crate::util::argb::Vec3f;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::attributes::{Attribute, AttributeMap, AttributeModifier, Operation};
 use crate::world::entity::sound_event;
 use crate::world::entity::{EntityId, RemovalReason};
+use crate::world::item::crossbow_item::cos_from_sin;
 use crate::world::level::BlockGetter;
 use crate::world::level::update_flags::UPDATE_ALL;
 
 const ANIMATION_SPAWN_COBWEB: i32 = 3018;
+const INFESTED_CHANCE_TO_SPAWN: f32 = 0.1;
+
+fn rotate_y(v: Vec3f, angle: f32) -> Vec3f {
+    let sin = (angle as f64).sin() as f32;
+    let cos = cos_from_sin(sin, angle);
+    [v[0] * cos + v[2] * sin, v[1], -v[0] * sin + v[2] * cos]
+}
 
 pub fn add_attribute_modifiers(effect: MobEffect, attributes: &mut AttributeMap, amplifier: i32) {
     for template in effect.info().modifiers {
@@ -133,6 +142,37 @@ impl ServerLevel {
             let (x, y, z) = (e.x(), e.y(), e.z());
             self.play_sound_at(None, x, y, z, sound_event(sound), crate::server::level::SoundSource::Players, 1.0, 1.0);
         }
+    }
+
+    pub fn on_mob_hurt(&mut self, id: EntityId, effect: MobEffect, _amplifier: i32, _source: &DamageSource, _damage: f32) {
+        if effect == mob_effects::INFESTED {
+            self.infested_on_mob_hurt(id);
+        }
+    }
+
+    fn infested_on_mob_hurt(&mut self, mob: EntityId) {
+        if self.entity_mut(mob).random.next_float() <= INFESTED_CHANCE_TO_SPAWN {
+            let count = mth::random_between_inclusive(&mut self.entity_mut(mob).random, 1, 2);
+            for _ in 0..count {
+                let e = self.entity(mob);
+                let (x, y, z) = (e.x(), e.y() + e.dimensions.height as f64 / 2.0, e.z());
+                self.spawn_silverfish(mob, x, y, z);
+            }
+        }
+    }
+
+    fn spawn_silverfish(&mut self, mob: EntityId, x: f64, y: f64, z: f64) {
+        let Some(mut silverfish) = ServerLevel::create_entity("minecraft:silverfish") else { return };
+        let random_angle = mth::random_between(&mut self.entity_mut(mob).random, -std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
+        let look_angle = self.entity(mob).look_angle();
+        let view_direction = rotate_y([look_angle.x as f32 * 0.3, look_angle.y as f32 * 0.3 * 1.5, look_angle.z as f32 * 0.3], random_angle);
+        let y_rot = self.random.next_float() * 360.0;
+        let silverfish_entity = silverfish.entity_mut();
+        silverfish_entity.snap_to(x, y, z, y_rot, 0.0);
+        silverfish_entity.set_delta_movement(Vec3::new(view_direction[0] as f64, view_direction[1] as f64, view_direction[2] as f64));
+        let id = silverfish_entity.id;
+        self.add_fresh_entity(silverfish);
+        self.entity_play_sound(id, sound_event("minecraft:entity.silverfish.hurt"), 1.0, 1.0);
     }
 
     pub fn on_mob_removed(&mut self, id: EntityId, effect: MobEffect, reason: RemovalReason) {

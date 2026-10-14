@@ -916,6 +916,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(super::LevelEntity::Projectile(projectile)) if matches!(projectile.kind, super::projectile::projectile::ProjectileKind::FireworkRocket(_)) => MovementEmission::All,
             Some(super::LevelEntity::AreaEffectCloud(_)) => MovementEmission::All,
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Silverfish(_) | super::mob::MobKind::Endermite(_)) => MovementEmission::Events,
             _ if self.is_living(id) => MovementEmission::All,
             _ if self.is_vehicle_entity(id) => MovementEmission::Events,
             _ => MovementEmission::None,
@@ -2173,6 +2174,9 @@ impl ServerLevel {
             if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::Husk(_) | super::mob::MobKind::Drowned(_))) {
                 return self.zombie_hurt_server(id, source, damage);
             }
+            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Silverfish(_))) {
+                return self.silverfish_hurt_server(id, source, damage);
+            }
             return self.living_entity_hurt_server(id, source, damage);
         }
         match self.entities.get(&id) {
@@ -2378,6 +2382,8 @@ impl ServerLevel {
                     super::mob::MobKind::Stray(_) => "Stray",
                     super::mob::MobKind::Bogged(_) => "Bogged",
                     super::mob::MobKind::Drowned(_) => "Drowned",
+                    super::mob::MobKind::Silverfish(_) => "Silverfish",
+                    super::mob::MobKind::Endermite(_) => "Endermite",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
@@ -3333,9 +3339,16 @@ impl ServerLevel {
     }
 
     pub fn set_y_body_rot(&mut self, id: EntityId, y_body_rot: f32) {
-        if self.is_living(id) {
-            self.living_mut(id).y_body_rot = y_body_rot;
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(super::mob::MobKind::Silverfish(_)) => self.silverfish_set_y_body_rot(id, y_body_rot),
+            Some(super::mob::MobKind::Endermite(_)) => self.endermite_set_y_body_rot(id, y_body_rot),
+            _ if self.is_living(id) => self.living_entity_set_y_body_rot(id, y_body_rot),
+            _ => {}
         }
+    }
+
+    pub fn living_entity_set_y_body_rot(&mut self, id: EntityId, y_body_rot: f32) {
+        self.living_mut(id).y_body_rot = y_body_rot;
     }
 
     pub fn clamp_head_rotation_to_body(&mut self, id: EntityId) {

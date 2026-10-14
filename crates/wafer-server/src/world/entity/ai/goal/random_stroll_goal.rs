@@ -20,7 +20,11 @@ pub struct RandomStrollGoal {
 
 impl RandomStrollGoal {
     pub fn new(speed_modifier: f64) -> RandomStrollGoal {
-        RandomStrollGoal { wanted_x: 0.0, wanted_y: 0.0, wanted_z: 0.0, speed_modifier, interval: DEFAULT_INTERVAL, force_trigger: false, check_no_action_time: true }
+        RandomStrollGoal::with_interval(speed_modifier, DEFAULT_INTERVAL)
+    }
+
+    pub fn with_interval(speed_modifier: f64, interval: i32) -> RandomStrollGoal {
+        RandomStrollGoal { wanted_x: 0.0, wanted_y: 0.0, wanted_z: 0.0, speed_modifier, interval, force_trigger: false, check_no_action_time: true }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId, get_position: impl FnOnce(&mut ServerLevel, EntityId) -> Option<Vec3>) -> bool {

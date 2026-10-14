@@ -1699,6 +1699,8 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Creeper(_)) => self.creeper_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.is_spider() => self.spider_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Skeleton(_)) => self.skeleton_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Silverfish(_)) => self.silverfish_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Endermite(_)) => self.endermite_tick(id),
             Some(LevelEntity::Mob(_)) => self.mob_tick(id),
             Some(LevelEntity::Minecart(_)) => self.tick_minecart(id),
             Some(LevelEntity::Boat(_)) => self.tick_boat(id),

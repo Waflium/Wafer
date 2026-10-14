@@ -90,7 +90,9 @@ impl ServerLevel {
             | MobKind::CaveSpider(_)
             | MobKind::Skeleton(_)
             | MobKind::Stray(_)
-            | MobKind::Bogged(_) => None,
+            | MobKind::Bogged(_)
+            | MobKind::Silverfish(_)
+            | MobKind::Endermite(_) => None,
         }
     }
 
