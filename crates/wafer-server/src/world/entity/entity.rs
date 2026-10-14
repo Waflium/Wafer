@@ -867,7 +867,11 @@ impl ServerLevel {
             Some(super::LevelEntity::ExperienceOrb(_)) => 0.03,
             Some(super::LevelEntity::Projectile(projectile)) => match projectile.kind {
                 ProjectileKind::ThrownExperienceBottle(_) => 0.07,
-                ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) | ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) => 0.05,
+                ProjectileKind::ThrownSplashPotion(_)
+                | ProjectileKind::ThrownLingeringPotion(_)
+                | ProjectileKind::Arrow(_)
+                | ProjectileKind::SpectralArrow(_)
+                | ProjectileKind::ThrownTrident(_) => 0.05,
                 ProjectileKind::FireworkRocket(_) => 0.0,
                 _ => 0.03,
             },
@@ -2250,7 +2254,9 @@ impl ServerLevel {
             Some(LevelEntity::Item(_) | LevelEntity::ExperienceOrb(_) | LevelEntity::FallingBlock(_) | LevelEntity::EyeOfEnder(_)) => false,
             Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                 super::projectile::projectile::ProjectileKind::FireworkRocket(_) => false,
-                super::projectile::projectile::ProjectileKind::Arrow(_) | super::projectile::projectile::ProjectileKind::SpectralArrow(_) => {
+                super::projectile::projectile::ProjectileKind::Arrow(_)
+                | super::projectile::projectile::ProjectileKind::SpectralArrow(_)
+                | super::projectile::projectile::ProjectileKind::ThrownTrident(_) => {
                     entity_type_tags::REDIRECTABLE_PROJECTILE.contains(projectile.entity.entity_type as usize)
                 }
                 _ => true,
@@ -2376,6 +2382,7 @@ impl ServerLevel {
                     ProjectileKind::ThrownLingeringPotion(_) => "ThrownLingeringPotion",
                     ProjectileKind::Arrow(_) => "Arrow",
                     ProjectileKind::SpectralArrow(_) => "SpectralArrow",
+                    ProjectileKind::ThrownTrident(_) => "ThrownTrident",
                     ProjectileKind::FireworkRocket(_) => "FireworkRocketEntity",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",

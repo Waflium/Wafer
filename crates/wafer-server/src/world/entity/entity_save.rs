@@ -215,6 +215,10 @@ impl LevelEntity {
                         projectile.abstract_arrow_add_additional_save_data(out);
                         projectile.spectral_arrow_add_additional_save_data(out);
                     }
+                    ProjectileKind::ThrownTrident(_) => {
+                        projectile.abstract_arrow_add_additional_save_data(out);
+                        projectile.thrown_trident_add_additional_save_data(out);
+                    }
                     ProjectileKind::FireworkRocket(_) => projectile.firework_add_additional_save_data(out),
                     _ => projectile.throwable_item_projectile_add_additional_save_data(out),
                 }
@@ -280,6 +284,10 @@ impl LevelEntity {
                     ProjectileKind::SpectralArrow(_) => {
                         projectile.abstract_arrow_read_additional_save_data(nbt);
                         projectile.spectral_arrow_read_additional_save_data(nbt);
+                    }
+                    ProjectileKind::ThrownTrident(_) => {
+                        projectile.abstract_arrow_read_additional_save_data(nbt);
+                        projectile.thrown_trident_read_additional_save_data(nbt);
                     }
                     ProjectileKind::FireworkRocket(_) => projectile.firework_read_additional_save_data(nbt),
                     _ => projectile.throwable_item_projectile_read_additional_save_data(nbt),
@@ -372,6 +380,7 @@ impl ServerLevel {
             "minecraft:lingering_potion" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_lingering_potion::ThrownLingeringPotion::of_type())),
             "minecraft:arrow" => LevelEntity::Projectile(Box::new(super::projectile::arrow::arrow::Arrow::of_type())),
             "minecraft:spectral_arrow" => LevelEntity::Projectile(Box::new(super::projectile::arrow::spectral_arrow::SpectralArrow::of_type())),
+            "minecraft:trident" => LevelEntity::Projectile(Box::new(super::projectile::arrow::thrown_trident::ThrownTrident::of_type())),
             "minecraft:firework_rocket" => LevelEntity::Projectile(Box::new(super::projectile::firework_rocket_entity::FireworkRocketEntity::of_type())),
             "minecraft:area_effect_cloud" => LevelEntity::AreaEffectCloud(Box::new(super::area_effect_cloud::AreaEffectCloud::of_type())),
             "minecraft:minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart::Minecart::create())),

@@ -97,6 +97,25 @@ impl ItemStack {
         }
     }
 
+    pub fn hurt_without_breaking(&mut self, amount: i32, level: &mut ServerLevel, player: EntityId) {
+        let new_amount = if !self.is_damageable_item() || level.has_infinite_materials(player) {
+            0
+        } else if amount > 0 {
+            level.process_durability_change(self, amount)
+        } else {
+            amount
+        };
+        if new_amount == 0 {
+            return;
+        }
+        let new_damage = (self.damage_value() + new_amount).min(self.max_damage() - 1);
+        crate::advancements::triggers::criteria_triggers::ITEM_DURABILITY_CHANGED.trigger(level, player, self, new_damage);
+        self.set_damage_value(new_damage);
+        if self.is_broken() {
+            self.shrink(1);
+        }
+    }
+
     pub fn limit_size(&mut self, max: i32) {
         if !self.is_empty() && self.count > max {
             self.count = max;
@@ -215,6 +234,23 @@ impl ItemStack {
 
     pub fn is_stackable(&self) -> bool {
         self.max_stack_size() > 1 && (!self.is_damageable_item() || !self.is_damaged())
+    }
+
+    pub fn next_damage_will_break(&self) -> bool {
+        self.is_damageable_item() && self.damage_value() >= self.max_damage() - 1
+    }
+
+    pub fn consume_and_return(&mut self, amount: i32, level: &ServerLevel, owner: Option<EntityId>) -> ItemStack {
+        let split = self.copy_with_count(amount);
+        self.consume(amount, level, owner);
+        split
+    }
+
+    pub fn has_foil(&self) -> bool {
+        match self.get(dc::ENCHANTMENT_GLINT_OVERRIDE) {
+            Some(enchantment_glint_override) => enchantment_glint_override.as_i64().is_some_and(|v| v != 0),
+            None => self.is_enchanted(),
+        }
     }
 
     pub fn hurt(&mut self, amount: i32) -> bool {

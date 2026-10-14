@@ -63,7 +63,14 @@ impl DamageSource {
     }
 
     pub fn get_weapon_item(&self, level: &ServerLevel) -> Option<crate::world::item::ItemStack> {
-        self.direct_entity.filter(|&e| level.is_living(e)).map(|e| level.get_weapon_item(e))
+        let direct_entity = self.direct_entity?;
+        if level.is_living(direct_entity) {
+            Some(level.get_weapon_item(direct_entity))
+        } else if level.as_projectile(direct_entity).is_some_and(|projectile| projectile.abstract_arrow().is_some()) {
+            level.get_projectile_weapon_item(direct_entity)
+        } else {
+            None
+        }
     }
 
     pub fn source_position(&self, level: &ServerLevel) -> Option<Vec3> {

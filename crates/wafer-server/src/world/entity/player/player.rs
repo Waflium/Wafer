@@ -205,6 +205,18 @@ impl ServerLevel {
         !self.is_attackable(entity)
     }
 
+    pub fn start_auto_spin_attack(&mut self, id: EntityId, activation_ticks: i32, dmg: f32, item_stack_used: ItemStack) {
+        let living = self.living_mut(id);
+        living.auto_spin_attack_ticks = activation_ticks;
+        living.auto_spin_attack_dmg = dmg;
+        living.auto_spin_attack_item_stack = Some(item_stack_used);
+        self.set_living_entity_flag(id, crate::world::entity::using_item::FLAG_SPIN_ATTACK, true);
+    }
+
+    pub fn player_get_weapon_item(&self, id: EntityId) -> Option<ItemStack> {
+        if self.is_auto_spin_attack(id) { self.living(id).auto_spin_attack_item_stack.clone() } else { None }
+    }
+
     fn base_damage_scale_factor(&self, id: EntityId) -> f32 {
         let attack_strength_scale = self.get_attack_strength_scale(id, 0.5);
         0.2 + attack_strength_scale * attack_strength_scale * 0.8
@@ -214,7 +226,7 @@ impl ServerLevel {
         if self.cannot_attack(entity) {
             return;
         }
-        let mut base_damage = self.attribute_value(id, Attribute::AttackDamage) as f32;
+        let mut base_damage = if self.is_auto_spin_attack(id) { self.living(id).auto_spin_attack_dmg } else { self.attribute_value(id, Attribute::AttackDamage) as f32 };
         let attacking_item_stack = self.get_weapon_item(id);
         let damage_source = self.create_attack_source(id, &attacking_item_stack);
         let attack_strength_scale = self.get_attack_strength_scale(id, 0.5);
@@ -738,6 +750,8 @@ impl ServerLevel {
             Pose::Swimming
         } else if e.is_fall_flying() {
             Pose::FallFlying
+        } else if self.is_auto_spin_attack(id) {
+            Pose::SpinAttack
         } else if e.is_shift_key_down() && !p.abilities_flying() {
             Pose::Crouching
         } else {

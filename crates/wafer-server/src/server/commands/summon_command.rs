@@ -42,6 +42,7 @@ const MODELLED: &[&str] = &[
     "minecraft:lingering_potion",
     "minecraft:arrow",
     "minecraft:spectral_arrow",
+    "minecraft:trident",
     "minecraft:firework_rocket",
     "minecraft:area_effect_cloud",
     "minecraft:minecart",

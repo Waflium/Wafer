@@ -16,6 +16,7 @@ use crate::world::{InteractionHand, InteractionResult};
 
 const FLAG_IS_USING: i8 = 1;
 const FLAG_OFF_HAND: i8 = 2;
+pub const FLAG_SPIN_ATTACK: i8 = 4;
 
 const EVENT_USE_ITEM_COMPLETE: u8 = 9;
 
@@ -34,14 +35,14 @@ fn create_effect_instance(entry: &Nbt) -> Option<MobEffectInstance> {
 }
 
 impl ServerLevel {
-    fn living_entity_flags(&self, id: EntityId) -> i8 {
+    pub fn living_entity_flags(&self, id: EntityId) -> i8 {
         match self.entity(id).data.get(ids::LIVING_ENTITY_FLAGS) {
             DataValue::Byte(b) => *b,
             _ => 0,
         }
     }
 
-    fn set_living_entity_flag(&mut self, id: EntityId, flag: i8, value: bool) {
+    pub fn set_living_entity_flag(&mut self, id: EntityId, flag: i8, value: bool) {
         let flags = self.living_entity_flags(id);
         let flags = if value { flags | flag } else { flags & !flag };
         self.entity_mut(id).data.set(ids::LIVING_ENTITY_FLAGS, DataValue::Byte(flags));

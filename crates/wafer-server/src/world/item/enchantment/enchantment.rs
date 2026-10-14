@@ -313,6 +313,16 @@ impl Enchantment {
         modify_entity_filtered_value(&self.effects.projectile_spread, level, enchantment_level, shooter, angle);
     }
 
+    pub fn modify_trident_return_to_owner_acceleration(&self, level: &mut ServerLevel, enchantment_level: i32, trident: EntityId, count: &mut f32) {
+        modify_entity_filtered_value(&self.effects.trident_return_acceleration, level, enchantment_level, trident, count);
+    }
+
+    pub fn modify_trident_spin_attack_strength(&self, random: &mut impl wafer_core::random::RandomSource, enchantment_level: i32, strength: &mut f32) {
+        if let Some(effect) = &self.effects.trident_spin_attack_strength {
+            *strength = effect.process(enchantment_level, random, *strength);
+        }
+    }
+
     pub fn modify_crossbow_charge_time(&self, random: &mut impl wafer_core::random::RandomSource, enchantment_level: i32, time: &mut f32) {
         if let Some(effect) = &self.effects.crossbow_charge_time {
             *time = effect.process(enchantment_level, random, *time);

@@ -6,6 +6,7 @@ use wafer_protocol::nbt::Nbt;
 use super::arrow::abstract_arrow::AbstractArrow;
 use super::arrow::arrow::Arrow;
 use super::arrow::spectral_arrow::SpectralArrow;
+use super::arrow::thrown_trident::ThrownTrident;
 use super::firework_rocket_entity::FireworkRocketEntity;
 use super::projectile_deflection::ProjectileDeflection;
 use super::throwableitemprojectile::snowball::Snowball;
@@ -39,6 +40,7 @@ pub enum ProjectileKind {
     ThrownLingeringPotion(ThrownLingeringPotion),
     Arrow(Arrow),
     SpectralArrow(SpectralArrow),
+    ThrownTrident(ThrownTrident),
     FireworkRocket(FireworkRocketEntity),
 }
 
@@ -63,6 +65,7 @@ impl Projectile {
         match &self.kind {
             ProjectileKind::Arrow(arrow) => Some(&arrow.abstract_arrow),
             ProjectileKind::SpectralArrow(arrow) => Some(&arrow.abstract_arrow),
+            ProjectileKind::ThrownTrident(trident) => Some(&trident.abstract_arrow),
             _ => None,
         }
     }
@@ -71,6 +74,7 @@ impl Projectile {
         match &mut self.kind {
             ProjectileKind::Arrow(arrow) => Some(&mut arrow.abstract_arrow),
             ProjectileKind::SpectralArrow(arrow) => Some(&mut arrow.abstract_arrow),
+            ProjectileKind::ThrownTrident(trident) => Some(&mut trident.abstract_arrow),
             _ => None,
         }
     }
@@ -212,6 +216,7 @@ impl ServerLevel {
             ProjectileKind::ThrownEnderpearl(_) => self.thrown_enderpearl_tick(id),
             ProjectileKind::Arrow(_) => self.arrow_tick(id),
             ProjectileKind::SpectralArrow(_) => self.abstract_arrow_tick(id),
+            ProjectileKind::ThrownTrident(_) => self.thrown_trident_tick(id),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_tick(id),
             _ => self.throwable_projectile_tick(id),
         }
@@ -341,7 +346,9 @@ impl ServerLevel {
             ProjectileKind::ThrownEnderpearl(_) => self.thrown_enderpearl_on_hit(id, hit_result),
             ProjectileKind::ThrownExperienceBottle(_) => self.thrown_experience_bottle_on_hit(id, hit_result),
             ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => self.abstract_thrown_potion_on_hit(id, hit_result),
-            ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::FireworkRocket(_) => self.projectile_base_on_hit(id, hit_result),
+            ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::ThrownTrident(_) | ProjectileKind::FireworkRocket(_) => {
+                self.projectile_base_on_hit(id, hit_result)
+            }
         }
     }
 
@@ -376,6 +383,7 @@ impl ServerLevel {
                 self.hurt(hit_result.entity, source, 0.0);
             }
             ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) => self.abstract_arrow_on_hit_entity(id, hit_result),
+            ProjectileKind::ThrownTrident(_) => self.thrown_trident_on_hit_entity(id, hit_result),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_on_hit_entity(id),
             ProjectileKind::ThrownExperienceBottle(_) | ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => {}
         }
@@ -383,7 +391,7 @@ impl ServerLevel {
 
     pub fn on_hit_block(&mut self, id: EntityId, hit_result: BlockHitResult) {
         match self.projectile(id).kind {
-            ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) => self.abstract_arrow_on_hit_block(id, hit_result),
+            ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::ThrownTrident(_) => self.abstract_arrow_on_hit_block(id, hit_result),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_on_hit_block(id, hit_result),
             ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => self.abstract_thrown_potion_on_hit_block(id, hit_result),
             _ => self.projectile_base_on_hit_block(id, hit_result),

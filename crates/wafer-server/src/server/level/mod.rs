@@ -1738,7 +1738,7 @@ impl ServerLevel {
             match self.entities.get(&id) {
                 Some(LevelEntity::Item(item)) if !item.entity.is_removed() => self.item_entity_player_touch(id, player),
                 Some(LevelEntity::Projectile(projectile)) if !projectile.entity.is_removed() && projectile.abstract_arrow().is_some() => {
-                    self.abstract_arrow_player_touch(id, player);
+                    self.player_touch(id, player);
                     if self.entities.get(&id).is_some_and(|e| e.entity().is_removed()) {
                         self.remove_entity(id);
                     }

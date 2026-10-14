@@ -10,6 +10,7 @@ use crate::world::damagesource::DamageSource;
 use crate::world::entity::attributes::Attribute;
 use crate::world::entity::data::{DataValue, entity_defaults};
 use crate::world::entity::entity_reference::EntityReference;
+use super::thrown_trident;
 use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind, lerp_rotation};
 use crate::world::entity::projectile::projectile_deflection::ProjectileDeflection;
 use crate::world::entity::projectile::projectile_util::compute_margin;
@@ -76,7 +77,7 @@ impl AbstractArrow {
             shake_time: 0,
             life: 0,
             base_damage: ARROW_BASE_DAMAGE,
-            sound_event: get_default_hit_ground_sound_event(),
+            sound_event: sound_event("minecraft:entity.arrow.hit"),
             piercing_ignore_entity_ids: None,
             pierced_and_killed_entities: None,
             pickup_item_stack: default_pickup_item,
@@ -102,8 +103,11 @@ impl AbstractArrow {
     }
 }
 
-pub fn get_default_hit_ground_sound_event() -> i32 {
-    sound_event("minecraft:entity.arrow.hit")
+pub fn get_default_hit_ground_sound_event(kind: &ProjectileKind) -> i32 {
+    match kind {
+        ProjectileKind::ThrownTrident(_) => thrown_trident::get_default_hit_ground_sound_event(),
+        _ => sound_event("minecraft:entity.arrow.hit"),
+    }
 }
 
 pub fn defaults() -> Vec<DataValue> {
@@ -117,6 +121,7 @@ pub fn defaults() -> Vec<DataValue> {
 pub fn get_default_pickup_item(kind: &ProjectileKind) -> ItemStack {
     match kind {
         ProjectileKind::SpectralArrow(_) => ItemStack::new(wafer_data::items::SPECTRAL_ARROW, 1),
+        ProjectileKind::ThrownTrident(_) => thrown_trident::get_default_pickup_item(),
         _ => ItemStack::new(wafer_data::items::ARROW, 1),
     }
 }
@@ -259,7 +264,7 @@ impl Projectile {
             .and_then(Nbt::as_str)
             .and_then(crate::commands::arguments::parse_identifier)
             .and_then(|name| registry::SOUND_EVENT.iter().position(|&s| s == name))
-            .map_or_else(get_default_hit_ground_sound_event, |id| id as i32);
+            .map_or_else(|| get_default_hit_ground_sound_event(&self.kind), |id| id as i32);
         let item = input.get("item").and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(|| get_default_pickup_item(&self.kind));
         let weapon = input.get("weapon").and_then(|weapon| ItemStack::from_nbt(weapon).ok());
         let arrow = self.abstract_arrow_mut().expect("an arrow");
@@ -275,11 +280,11 @@ impl Projectile {
 }
 
 impl ServerLevel {
-    fn abstract_arrow(&self, id: EntityId) -> &AbstractArrow {
+    pub(super) fn abstract_arrow(&self, id: EntityId) -> &AbstractArrow {
         self.projectile(id).abstract_arrow().expect("an arrow")
     }
 
-    fn abstract_arrow_mut(&mut self, id: EntityId) -> &mut AbstractArrow {
+    pub(super) fn abstract_arrow_mut(&mut self, id: EntityId) -> &mut AbstractArrow {
         self.projectile_mut(id).abstract_arrow_mut().expect("an arrow")
     }
 
@@ -405,8 +410,11 @@ impl ServerLevel {
         e.set_delta_movement(e.delta_movement.scale(inertia as f64));
     }
 
-    fn get_water_inertia(&self, _id: EntityId) -> f32 {
-        WATER_INERTIA
+    fn get_water_inertia(&self, id: EntityId) -> f32 {
+        match self.projectile(id).kind {
+            ProjectileKind::ThrownTrident(_) => thrown_trident::WATER_INERTIA,
+            _ => WATER_INERTIA,
+        }
     }
 
     fn should_fall(&self, id: EntityId) -> bool {
@@ -431,6 +439,13 @@ impl ServerLevel {
     }
 
     fn tick_despawn(&mut self, id: EntityId) {
+        match self.projectile(id).kind {
+            ProjectileKind::ThrownTrident(_) => self.thrown_trident_tick_despawn(id),
+            _ => self.abstract_arrow_tick_despawn(id),
+        }
+    }
+
+    pub fn abstract_arrow_tick_despawn(&mut self, id: EntityId) {
         let arrow = self.abstract_arrow_mut(id);
         arrow.life += 1;
         if arrow.life >= 1200 {
@@ -442,13 +457,20 @@ impl ServerLevel {
         self.abstract_arrow_mut(id).fired_from_weapon = None;
     }
 
+    pub fn get_projectile_weapon_item(&self, id: EntityId) -> Option<ItemStack> {
+        match self.projectile(id).kind {
+            ProjectileKind::ThrownTrident(_) => Some(self.thrown_trident_get_weapon_item(id)),
+            _ => self.abstract_arrow(id).fired_from_weapon.clone(),
+        }
+    }
+
     pub fn abstract_arrow_on_hit_entity(&mut self, id: EntityId, hit_result: EntityHitResult) {
         let entity = hit_result.entity;
         let pow = self.entity(id).delta_movement.length() as f32;
         let mut arrow_damage = self.abstract_arrow(id).base_damage;
         let current_owner = self.projectile_get_owner(id);
         let damage_source = DamageSource::source(damage_types::ARROW, Some(id), Some(current_owner.unwrap_or(id)));
-        if let Some(weapon) = self.abstract_arrow(id).fired_from_weapon.clone() {
+        if let Some(weapon) = self.get_projectile_weapon_item(id) {
             arrow_damage = self.modify_damage(&weapon, entity, &damage_source, arrow_damage as f32) as f64;
         }
         let mut damage = mth::ceil(mth::clamp(pow as f64 * arrow_damage, 0.0, 2.147483647E9));
@@ -483,7 +505,7 @@ impl ServerLevel {
                     self.set_arrow_count(entity, count + 1);
                 }
                 self.do_knockback(id, entity, &damage_source);
-                let weapon = self.abstract_arrow(id).fired_from_weapon.clone();
+                let weapon = self.get_projectile_weapon_item(id);
                 self.do_post_attack_effects_with_item_source(entity, &damage_source, weapon.as_ref());
                 self.do_post_hurt_effects(id, entity);
                 if self.is_player(entity)
@@ -530,7 +552,7 @@ impl ServerLevel {
         }
     }
 
-    fn do_knockback(&mut self, id: EntityId, mob: EntityId, damage_source: &DamageSource) {
+    pub(super) fn do_knockback(&mut self, id: EntityId, mob: EntityId, damage_source: &DamageSource) {
         let knockback = match self.abstract_arrow(id).fired_from_weapon.clone() {
             Some(weapon) => self.modify_knockback(&weapon, mob, damage_source, 0.0) as f64,
             None => 0.0,
@@ -544,7 +566,7 @@ impl ServerLevel {
         }
     }
 
-    fn do_post_hurt_effects(&mut self, id: EntityId, mob: EntityId) {
+    pub(super) fn do_post_hurt_effects(&mut self, id: EntityId, mob: EntityId) {
         match self.projectile(id).kind {
             ProjectileKind::Arrow(_) => self.arrow_do_post_hurt_effects(id, mob),
             ProjectileKind::SpectralArrow(_) => self.spectral_arrow_do_post_hurt_effects(id, mob),
@@ -556,7 +578,7 @@ impl ServerLevel {
         let state = self.block_state(hit_result.block_pos);
         self.abstract_arrow_mut(id).last_state = Some(state);
         self.projectile_base_on_hit_block(id, hit_result);
-        if let Some(weapon_item) = self.abstract_arrow(id).fired_from_weapon.clone() {
+        if let Some(weapon_item) = self.get_projectile_weapon_item(id) {
             self.hit_block_enchantment_effects(id, hit_result, &weapon_item);
         }
         let movement = self.entity(id).delta_movement;
@@ -575,9 +597,10 @@ impl ServerLevel {
         projectile.set_in_ground(true);
         projectile.set_crit_arrow(false);
         projectile.set_pierce_level(0);
+        let default_sound_event = get_default_hit_ground_sound_event(&projectile.kind);
         let arrow = projectile.abstract_arrow_mut().expect("an arrow");
         arrow.shake_time = SHAKE_TIME;
-        arrow.set_sound_event(get_default_hit_ground_sound_event());
+        arrow.set_sound_event(default_sound_event);
         arrow.reset_pierced_entities();
     }
 
@@ -594,6 +617,20 @@ impl ServerLevel {
     }
 
     fn find_hit_entities(&mut self, id: EntityId, from: Vec3, to: Vec3) -> Vec<EntityHitResult> {
+        match self.projectile(id).kind {
+            ProjectileKind::ThrownTrident(_) => self.thrown_trident_find_hit_entities(id, from, to),
+            _ => self.abstract_arrow_find_hit_entities(id, from, to),
+        }
+    }
+
+    pub fn abstract_arrow_find_hit_entity(&mut self, id: EntityId, from: Vec3, to: Vec3) -> Option<EntityHitResult> {
+        let e = self.entity(id);
+        let area = e.bounding_box().expand_towards_vec(e.delta_movement).inflate_all(1.0);
+        let margin = compute_margin(e.tick_count);
+        self.get_entity_hit_result(id, from, to, &area, |level, entity| level.can_hit_entity(id, entity), margin).map(|(entity, location)| EntityHitResult::new(entity, location))
+    }
+
+    fn abstract_arrow_find_hit_entities(&mut self, id: EntityId, from: Vec3, to: Vec3) -> Vec<EntityHitResult> {
         let e = self.entity(id);
         let area = e.bounding_box().expand_towards_vec(e.delta_movement).inflate_all(1.0);
         let margin = compute_margin(e.tick_count);
@@ -611,6 +648,13 @@ impl ServerLevel {
             && self.abstract_arrow(id).piercing_ignore_entity_ids.as_ref().is_none_or(|ids| !ids.contains(&entity))
     }
 
+    pub fn player_touch(&mut self, id: EntityId, player: EntityId) {
+        match self.projectile(id).kind {
+            ProjectileKind::ThrownTrident(_) => self.thrown_trident_player_touch(id, player),
+            _ => self.abstract_arrow_player_touch(id, player),
+        }
+    }
+
     pub fn abstract_arrow_player_touch(&mut self, id: EntityId, player: EntityId) {
         let projectile = self.projectile(id);
         if (projectile.is_in_ground() || projectile.is_no_physics()) && self.abstract_arrow(id).shake_time <= 0 && self.try_pickup(id, player) {
@@ -620,6 +664,13 @@ impl ServerLevel {
     }
 
     fn try_pickup(&mut self, id: EntityId, player: EntityId) -> bool {
+        match self.projectile(id).kind {
+            ProjectileKind::ThrownTrident(_) => self.thrown_trident_try_pickup(id, player),
+            _ => self.abstract_arrow_try_pickup(id, player),
+        }
+    }
+
+    pub fn abstract_arrow_try_pickup(&mut self, id: EntityId, player: EntityId) -> bool {
         match self.abstract_arrow(id).pickup {
             Pickup::Disallowed => false,
             Pickup::Allowed => {

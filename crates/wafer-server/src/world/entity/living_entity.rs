@@ -1,5 +1,5 @@
 use wafer_core::random::RandomSource;
-use wafer_core::{BlockPos, Vec3, mth};
+use wafer_core::{AABB, BlockPos, Vec3, mth};
 use wafer_data::packets::play::clientbound;
 use wafer_data::properties::{HORIZONTAL_FACING, OCCUPIED, OPEN};
 use wafer_protocol::nbt::Nbt;
@@ -8,6 +8,7 @@ use wafer_data::{EquipmentSlot, EquipmentSlotGroup, MobEffect, block_tags, block
 use super::attributes::{Attribute, AttributeMap, AttributeModifier, AttributeSupplier, Operation, PLAYER_ATTRIBUTES, SPEED_MODIFIER_SPRINTING};
 use super::data::{DataValue, Pose, ids};
 use super::mob::{Mob, MobKind};
+use super::using_item::FLAG_SPIN_ATTACK;
 use super::{Entity, EntityId, MoverType, RemovalReason, TOTAL_AIR_SUPPLY, compute_modified_friction, entity_event, flags, sound_event};
 use crate::advancements::triggers::criteria_triggers;
 use crate::core::holder_set::HolderSet;
@@ -72,6 +73,9 @@ pub struct LivingEntity {
     pub hurt_dir: f32,
     pub use_item: Option<ItemStack>,
     pub use_item_remaining: i32,
+    pub auto_spin_attack_ticks: i32,
+    pub auto_spin_attack_dmg: f32,
+    pub auto_spin_attack_item_stack: Option<ItemStack>,
     pub remove_arrow_time: i32,
     pub last_equipment_items: [Option<ItemStack>; 8],
     pub swing_state: SwingState,
@@ -118,6 +122,9 @@ impl LivingEntity {
             hurt_dir: 0.0,
             use_item: None,
             use_item_remaining: 0,
+            auto_spin_attack_ticks: 0,
+            auto_spin_attack_dmg: 0.0,
+            auto_spin_attack_item_stack: None,
             remove_arrow_time: 0,
             last_equipment_items: Default::default(),
             swing_state: SwingState::default(),
@@ -475,6 +482,11 @@ impl ServerLevel {
     }
 
     pub fn get_weapon_item(&self, id: EntityId) -> ItemStack {
+        if self.is_player(id)
+            && let Some(item_stack) = self.player_get_weapon_item(id)
+        {
+            return item_stack;
+        }
         self.item_by_slot(id, EquipmentSlot::Mainhand).unwrap_or_else(ItemStack::empty)
     }
 
@@ -1750,6 +1762,7 @@ impl ServerLevel {
         } else {
             self.living_mut(id).no_jump_delay = 0;
         }
+        let before_travel_box = self.entity(id).bounding_box();
         let l = &self.living(id);
         let input = Vec3::new(l.xxa as f64, l.yya as f64, l.zza as f64);
         if l.has_effect(mob_effects::SLOW_FALLING) || l.has_effect(mob_effects::LEVITATION) {
@@ -1768,7 +1781,43 @@ impl ServerLevel {
         self.remove_frost(id);
         self.try_add_frost(id);
         self.tick_freezing_damage(id);
+        if self.living(id).auto_spin_attack_ticks > 0 {
+            self.living_mut(id).auto_spin_attack_ticks -= 1;
+            let current = self.entity(id).bounding_box();
+            self.check_auto_spin_attack(id, before_travel_box, current);
+        }
         self.push_entities(id);
+    }
+
+    fn check_auto_spin_attack(&mut self, id: EntityId, old: AABB, current: AABB) {
+        let minmax = old.minmax(&current);
+        let entities = self.get_entities(Some(id), &minmax);
+        if !entities.is_empty() {
+            if let Some(living_entity) = entities.into_iter().find(|&entity| self.is_living(entity)) {
+                self.do_auto_attack_on_touch(id, living_entity);
+                self.living_mut(id).auto_spin_attack_ticks = 0;
+                let e = self.entity_mut(id);
+                e.set_delta_movement(e.delta_movement.scale(-0.2));
+            }
+        } else if self.entity(id).horizontal_collision {
+            self.living_mut(id).auto_spin_attack_ticks = 0;
+        }
+        if self.living(id).auto_spin_attack_ticks <= 0 {
+            self.set_living_entity_flag(id, FLAG_SPIN_ATTACK, false);
+            let living = self.living_mut(id);
+            living.auto_spin_attack_dmg = 0.0;
+            living.auto_spin_attack_item_stack = None;
+        }
+    }
+
+    fn do_auto_attack_on_touch(&mut self, id: EntityId, entity: EntityId) {
+        if self.is_player(id) {
+            self.player_attack(id, entity);
+        }
+    }
+
+    pub fn is_auto_spin_attack(&self, id: EntityId) -> bool {
+        self.living_entity_flags(id) & FLAG_SPIN_ATTACK != 0
     }
 
     fn is_affected_by_fluids(&self, id: EntityId) -> bool {

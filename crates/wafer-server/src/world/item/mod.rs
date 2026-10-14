@@ -29,6 +29,7 @@ pub mod enchantment;
 pub mod ender_eye_item;
 pub mod flint_and_steel_item;
 pub mod throwable_potion_item;
+pub mod trident_item;
 mod item_stack;
 pub mod honeycomb_item;
 pub mod item_cooldowns;
@@ -181,6 +182,9 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     if stack.item.is_instance_of("CrossbowItem") {
         return crossbow_item::use_item(level, player, hand);
     }
+    if stack.item.is_instance_of("TridentItem") {
+        return trident_item::use_item(level, player, hand);
+    }
     if stack.item.is_instance_of("SnowballItem") {
         return snowball_item::use_item(level, player, hand);
     }
@@ -292,6 +296,9 @@ pub fn get_use_duration(stack: &ItemStack) -> i32 {
     if stack.item.is_instance_of("CrossbowItem") {
         return crossbow_item::USE_DURATION;
     }
+    if stack.item.is_instance_of("TridentItem") {
+        return trident_item::USE_DURATION;
+    }
     match &stack.item.info().consumable {
         Some(consumable) => consumable.consume_ticks(),
         None => {
@@ -310,6 +317,9 @@ pub fn release_using(level: &mut ServerLevel, stack: &ItemStack, entity: EntityI
     }
     if stack.item.is_instance_of("CrossbowItem") {
         return crossbow_item::release_using(level, stack, entity, remaining_time);
+    }
+    if stack.item.is_instance_of("TridentItem") {
+        return trident_item::release_using(level, stack, entity, remaining_time);
     }
     false
 }

@@ -66,6 +66,28 @@ pub fn on_hit_block(
     false
 }
 
+pub fn get_trident_return_to_owner_acceleration(level: &mut ServerLevel, weapon: &ItemStack, trident: EntityId) -> i32 {
+    let mut modified_acceleration = 0.0;
+    run_iteration_on_item(weapon, |enchantment, enchantment_level| enchantment.modify_trident_return_to_owner_acceleration(level, enchantment_level, trident, &mut modified_acceleration));
+    0.max(modified_acceleration as i32)
+}
+
+pub fn get_trident_spin_attack_strength(level: &mut ServerLevel, trident: &ItemStack, holder: EntityId) -> f32 {
+    let mut strength = 0.0;
+    run_iteration_on_item(trident, |enchantment, enchantment_level| enchantment.modify_trident_spin_attack_strength(&mut level.entity_mut(holder).random, enchantment_level, &mut strength));
+    strength
+}
+
+pub fn pick_highest_trident_sound(item_stack: &ItemStack) -> Option<wafer_protocol::nbt::Nbt> {
+    let mut found: Option<(&Vec<wafer_protocol::nbt::Nbt>, i32)> = None;
+    for (enchantment, enchantment_level) in enchantments(item_stack) {
+        if !enchantment.effects.trident_sound.is_empty() && found.is_none_or(|(_, best)| enchantment_level > best) {
+            found = Some((&enchantment.effects.trident_sound, enchantment_level));
+        }
+    }
+    found.map(|(list, enchantment_level)| list[(enchantment_level as usize).min(list.len()) - 1].clone())
+}
+
 pub fn modify_crossbow_charging_time(level: &mut ServerLevel, crossbow: &ItemStack, holder: EntityId, time: f32) -> f32 {
     let mut modified_time = time;
     run_iteration_on_item(crossbow, |enchantment, enchantment_level| enchantment.modify_crossbow_charge_time(&mut level.entity_mut(holder).random, enchantment_level, &mut modified_time));
