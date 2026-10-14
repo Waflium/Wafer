@@ -1050,7 +1050,7 @@ impl ServerLevel {
         if self.should_drop_loot(id) {
             self.drop_from_loot_table(id, source, player_killed);
             if self.is_mob(id) {
-                self.mob_drop_custom_death_loot(id, player_killed);
+                self.mob_drop_custom_death_loot(id, source, player_killed);
             }
         }
         self.drop_equipment(id);

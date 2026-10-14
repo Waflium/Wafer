@@ -26,6 +26,7 @@ use super::living_entity::{LivingEntity, get_comfortable_fall_distance};
 use super::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::core::component::data_component_getter::DataComponentGetter;
 use crate::server::level::ServerLevel;
+use crate::world::damagesource::DamageSource;
 use crate::world::effect::MobEffectInstance;
 use crate::world::item::component::values::ItemStackTemplate;
 use crate::world::item::component::{self as dc, DataComponentType};
@@ -828,12 +829,15 @@ impl ServerLevel {
         Some(new_id)
     }
 
-    pub fn mob_drop_custom_death_loot(&mut self, id: EntityId, killed_by_player: bool) {
+    pub fn mob_drop_custom_death_loot(&mut self, id: EntityId, source: &DamageSource, killed_by_player: bool) {
         for slot in EquipmentSlot::VALUES {
             let item_stack = self.item_by_slot(id, slot).unwrap_or_else(ItemStack::empty);
-            let drop_chance = self.mob(id).expect("a mob").drop_chances[slot as usize];
+            let mut drop_chance = self.mob(id).expect("a mob").drop_chances[slot as usize];
             if drop_chance != 0.0 {
                 let preserve = drop_chance > 1.0;
+                if let Some(living_source) = source.causing_entity.filter(|&e| self.is_living(e)) {
+                    drop_chance = self.process_equipment_drop_chance(living_source, source, drop_chance);
+                }
                 if !item_stack.is_empty()
                     && !crate::world::item::enchantment::enchantment_helper::has_prevent_equipment_drop(&item_stack)
                     && (killed_by_player || preserve)

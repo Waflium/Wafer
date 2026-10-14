@@ -312,6 +312,29 @@ impl ServerLevel {
         (modified_durability as i32).max(0)
     }
 
+    pub fn process_equipment_drop_chance(&mut self, entity: EntityId, killing_blow: &DamageSource, chance: f32) -> f32 {
+        let mut modified_chance = chance;
+        for (enchantment, level, _) in self.run_iteration_on_equipment(entity) {
+            let mut context = super::enchantment::damage_context(self, level, entity, killing_blow);
+            for filtered_effect in &enchantment.effects.equipment_drops {
+                if filtered_effect.enchanted == EnchantmentTarget::Victim && filtered_effect.affected == EnchantmentTarget::Victim && filtered_effect.matches(&mut context) {
+                    modified_chance = filtered_effect.effect.process(level, &mut context.level().entity_mut(entity).random, modified_chance);
+                }
+            }
+        }
+        if let Some(living_attacker) = killing_blow.causing_entity.filter(|&attacker| self.is_living(attacker)) {
+            for (enchantment, level, _) in self.run_iteration_on_equipment(living_attacker) {
+                let mut context = super::enchantment::damage_context(self, level, entity, killing_blow);
+                for filtered_effect in &enchantment.effects.equipment_drops {
+                    if filtered_effect.enchanted == EnchantmentTarget::Attacker && filtered_effect.affected == EnchantmentTarget::Victim && filtered_effect.matches(&mut context) {
+                        modified_chance = filtered_effect.effect.process(level, &mut context.level().entity_mut(entity).random, modified_chance);
+                    }
+                }
+            }
+        }
+        modified_chance
+    }
+
     pub fn is_immune_to_damage(&mut self, victim: EntityId, source: &DamageSource) -> bool {
         let mut result = false;
         for (enchantment, level, _) in self.run_iteration_on_equipment(victim) {

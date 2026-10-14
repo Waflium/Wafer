@@ -124,7 +124,7 @@ impl RegistryElement for Enchantment {
     }
 }
 
-fn damage_context<'a>(level: &'a mut ServerLevel, enchantment_level: i32, victim: EntityId, source: &DamageSource) -> LootContext<'a> {
+pub fn damage_context<'a>(level: &'a mut ServerLevel, enchantment_level: i32, victim: EntityId, source: &DamageSource) -> LootContext<'a> {
     let position = level.entity(victim).position();
     let mut params = LootParams::new(level);
     params.this_entity = Some(victim);
