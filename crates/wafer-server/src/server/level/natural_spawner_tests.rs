@@ -39,7 +39,7 @@ fn joined(seed: i64) -> Server {
 fn creatures_spawn_every_400_ticks_away_from_the_player() {
     let mut server = joined(1);
     tick_until(&mut server, 399);
-    assert!(mob_positions(&server).is_empty());
+    assert!(mob_positions(&server).is_empty(), "{:?} at {}", mob_positions(&server), server.overworld().game_time);
     tick_until(&mut server, 400);
     let mobs = mob_positions(&server);
     assert!(!mobs.is_empty() && mobs.len() <= 13, "{mobs:?}");

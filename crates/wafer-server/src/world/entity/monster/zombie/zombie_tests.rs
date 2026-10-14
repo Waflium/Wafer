@@ -197,7 +197,8 @@ fn hurt_zombies_call_reinforcements_on_hard() {
     let caller_attributes = &level.mob(caller).unwrap().living.attributes;
     assert_eq!(caller_attributes.value(Attribute::SpawnReinforcements), 1.0 - 0.05);
     let callee_attributes = &level.mob(reinforcement).unwrap().living.attributes;
-    assert!(callee_attributes.value(Attribute::SpawnReinforcements) < 0.1 - 0.05);
+    assert!(callee_attributes.has_modifier(Attribute::SpawnReinforcements, "minecraft:reinforcement_callee_charge"));
+    assert!(callee_attributes.has_modifier(Attribute::SpawnReinforcements, "minecraft:leader_zombie_bonus") || callee_attributes.value(Attribute::SpawnReinforcements) < 0.1 - 0.05);
     let (from, to) = (level.entity(caller).position(), level.entity(reinforcement).position());
     let offsets = [to.x - from.x.floor(), to.y - from.y.floor(), to.z - from.z.floor()];
     assert!(offsets.iter().all(|&d| d == 0.0 || (7.0..=40.0).contains(&d.abs())), "{offsets:?}");
