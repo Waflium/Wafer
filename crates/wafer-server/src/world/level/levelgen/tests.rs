@@ -240,6 +240,21 @@ pub fn decorate_like_oracle(generator: &ChunkGenerator, pos: ChunkPos) -> LevelC
     chunks.remove(&pos).expect("the decorated chunk")
 }
 
+fn comparable_entity(tag: &wafer_protocol::nbt::Nbt) -> String {
+    fn sorted(tag: &wafer_protocol::nbt::Nbt) -> wafer_protocol::nbt::Nbt {
+        match tag {
+            wafer_protocol::nbt::Nbt::Compound(fields) => {
+                let mut fields: Vec<_> = fields.iter().filter(|(key, _)| key != "UUID").map(|(key, value)| (key.clone(), sorted(value))).collect();
+                fields.sort_by(|a, b| a.0.cmp(&b.0));
+                wafer_protocol::nbt::Nbt::Compound(fields)
+            }
+            wafer_protocol::nbt::Nbt::List(values) => wafer_protocol::nbt::Nbt::List(values.iter().map(sorted).collect()),
+            other => other.clone(),
+        }
+    }
+    crate::nbt::to_string(&sorted(tag))
+}
+
 #[test]
 #[ignore]
 fn features_match_vanilla_dump() {
@@ -277,6 +292,16 @@ fn features_match_vanilla_dump() {
         let mut mismatches: Vec<_> = mismatches.into_iter().collect();
         mismatches.sort_by_key(|m| std::cmp::Reverse(m.1));
         report.push(format!("{stem}: {} differing blocks {:?}", mismatches.iter().map(|m| m.1).sum::<usize>(), &mismatches[..mismatches.len().min(12)]));
+        if let Ok(expected) = std::fs::read_to_string(path.with_extension("entities")) {
+            let expected: Vec<String> = expected.lines().map(|line| comparable_entity(&crate::nbt::parse_fully(line).expect("vanilla entity snbt"))).collect();
+            let actual: Vec<String> = chunk.proto.as_ref().map_or(Vec::new(), |proto| proto.entities.iter().map(comparable_entity).collect());
+            for line in &expected {
+                report.push(format!("  vanilla {line}{}", if actual.contains(line) { "" } else { "  [missing in Wafer]" }));
+            }
+            for line in actual.iter().filter(|line| !expected.contains(line)) {
+                report.push(format!("  wafer only {line}"));
+            }
+        }
     }
     eprintln!("{}", report.join("\n"));
 }

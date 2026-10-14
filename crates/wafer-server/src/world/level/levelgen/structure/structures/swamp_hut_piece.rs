@@ -4,6 +4,9 @@ use wafer_data::properties::{HORIZONTAL_FACING, STAIRS_SHAPE, StairsShape};
 use wafer_data::{BlockState, blocks};
 use wafer_protocol::nbt::Nbt;
 
+use crate::server::level::ServerLevel;
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::{LevelEntity, mob};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::levelgen::structure::BoundingBox;
 use crate::world::level::levelgen::structure::scattered_feature_piece::ScatteredFeaturePiece;
@@ -87,8 +90,18 @@ impl SwampHutPiece {
                 piece.fill_column_down(level, log, x, -1, z, chunk_bb);
             }
         }
-        if !self.spawned_witch && chunk_bb.is_inside(piece.get_world_pos(2, 2, 5)) {
-            self.spawned_witch = true;
+        if !self.spawned_witch {
+            let pos = piece.get_world_pos(2, 2, 5);
+            if chunk_bb.is_inside(pos) {
+                self.spawned_witch = true;
+                if let Some(LevelEntity::Mob(mut witch)) = ServerLevel::create_entity("minecraft:witch") {
+                    witch.persistence_required = true;
+                    witch.entity.snap_to(pos.x as f64 + 0.5, pos.y as f64, pos.z as f64 + 0.5, 0.0, 0.0);
+                    let difficulty = level.get_current_difficulty_at(pos);
+                    mob::finalize_spawn(level, &mut witch, &difficulty, EntitySpawnReason::Structure, None);
+                    level.add_fresh_entity_with_passengers(LevelEntity::Mob(witch));
+                }
+            }
         }
         self.spawn_cat(chunk_bb);
     }
