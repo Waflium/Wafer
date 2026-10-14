@@ -2426,6 +2426,37 @@ mod tests {
     }
 
     #[test]
+    fn mobs_holding_totems_are_protected_from_death() {
+        let mut level = testing::level();
+        let id = chicken(&mut level, 0);
+        level.set_item_slot(id, wafer_data::EquipmentSlot::Offhand, crate::world::item::ItemStack::new(wafer_data::items::TOTEM_OF_UNDYING, 1));
+        level.hurt_server(id, DamageSource::new(damage_types::GENERIC), 100.0);
+        assert_eq!(level.health(id), 1.0);
+        assert!(!level.living(id).dead);
+        assert!(level.item_by_slot(id, wafer_data::EquipmentSlot::Offhand).is_none());
+        assert!(level.has_effect(id, wafer_data::mob_effects::REGENERATION));
+    }
+
+    #[test]
+    fn mobs_do_not_wear_out_their_armor() {
+        let mut level = testing::level();
+        let id = chicken(&mut level, 0);
+        level.set_item_slot(id, wafer_data::EquipmentSlot::Head, crate::world::item::ItemStack::new(wafer_data::items::LEATHER_HELMET, 1));
+        level.hurt_server(id, DamageSource::new(damage_types::MOB_ATTACK), 1.0);
+        assert_eq!(level.item_by_slot(id, wafer_data::EquipmentSlot::Head).unwrap().damage_value(), 0);
+    }
+
+    #[test]
+    fn players_wear_out_their_armor() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        level.player_mut(player).movement.client_loaded_timeout_timer = 0;
+        level.set_item_slot(player, wafer_data::EquipmentSlot::Head, crate::world::item::ItemStack::new(wafer_data::items::LEATHER_HELMET, 1));
+        level.hurt_server(player, DamageSource::new(damage_types::MOB_ATTACK), 8.0);
+        assert_eq!(level.item_by_slot(player, wafer_data::EquipmentSlot::Head).unwrap().damage_value(), 2);
+    }
+
+    #[test]
     fn temporarily_invulnerable_entities_are_not_hurt() {
         let mut level = testing::level();
         let id = chicken(&mut level, 0);

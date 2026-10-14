@@ -816,4 +816,14 @@ mod tests {
         level.player_attack(player, chicken);
         assert_eq!(level.health(chicken), 2.5);
     }
+
+    #[test]
+    fn vanishing_cursed_items_are_destroyed_on_death() {
+        let (mut level, player, _) = setup(Some(sword(&[("minecraft:vanishing_curse", 1)])));
+        level.set_item_slot(player, EquipmentSlot::Head, ItemStack::new(items::LEATHER_HELMET, 1));
+        level.player_drop_equipment(player);
+        let dropped: Vec<_> = level.entities.values().filter_map(|e| if let LevelEntity::Item(item) = e { Some(item.item.item) } else { None }).collect();
+        assert_eq!(dropped, vec![items::LEATHER_HELMET]);
+        assert!(level.item_by_slot(player, EquipmentSlot::Mainhand).is_none());
+    }
 }
