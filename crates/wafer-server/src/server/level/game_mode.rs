@@ -674,6 +674,19 @@ mod adventure_mode_tests {
     }
 
     #[test]
+    fn creative_players_keep_items_used_on_blocks() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 2.5), 180.0, 60.0);
+        level.player_mut(player).set_game_mode_for_player(GameType::Creative, None);
+        let pos = BlockPos::new(0, -61, 0);
+        let hit = BlockHitResult { location: Vec3::new(0.5, -60.0, 0.5), direction: Direction::Up, block_pos: pos, inside: false, world_border_hit: false };
+        level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(ItemStack::new(items::FIRE_CHARGE, 1)));
+        assert!(level.use_item_on(player, InteractionHand::MainHand, hit).consumes_action());
+        assert_eq!(level.block_state(pos.above()).block(), blocks::FIRE);
+        assert_eq!(level.player(player).item_in_hand(InteractionHand::MainHand), Some(ItemStack::new(items::FIRE_CHARGE, 1)));
+    }
+
+    #[test]
     fn haste_and_mining_fatigue_change_destroy_speed() {
         use crate::world::effect::MobEffectInstance;
         use wafer_data::mob_effects;
