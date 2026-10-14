@@ -156,7 +156,7 @@ pub fn get_spawn_as_baby_odds(random: &mut impl RandomSource) -> bool {
     random.next_float() < 0.05
 }
 
-pub fn baby_on_land_selector(target: EntityId, level: &ServerLevel) -> bool {
+pub fn baby_on_land_selector(_mob: EntityId, target: EntityId, level: &ServerLevel) -> bool {
     level.is_baby(target) && !level.entity(target).is_in_water()
 }
 

@@ -39,7 +39,7 @@ fn is_type(level: &ServerLevel, entity: EntityId, types: &[&str]) -> bool {
     level.is_living(entity) && level.entity_ref(entity).is_some_and(|e| types.contains(&registry::ENTITY_TYPE[e.entity_type as usize]))
 }
 
-pub type Selector = fn(EntityId, &ServerLevel) -> bool;
+pub type Selector = fn(EntityId, EntityId, &ServerLevel) -> bool;
 
 pub struct NearestAttackableTargetGoal {
     pub target_goal: TargetGoal,
@@ -72,7 +72,7 @@ impl NearestAttackableTargetGoal {
 
     pub fn find_target(&mut self, level: &mut ServerLevel, mob: EntityId) {
         let follow_distance = get_follow_distance(level, mob);
-        let selector = self.selector;
+        let selector = self.selector.map(|selector| move |target: EntityId, level: &ServerLevel| selector(mob, target, level));
         let mut target_conditions = TargetingConditions::for_combat().range(follow_distance);
         if let Some(selector) = &selector {
             target_conditions = target_conditions.selector(selector);

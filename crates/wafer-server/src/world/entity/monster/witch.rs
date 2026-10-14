@@ -124,7 +124,7 @@ impl Witch {
     }
 }
 
-fn heal_raiders_selector(target: EntityId, level: &ServerLevel) -> bool {
+fn heal_raiders_selector(_mob: EntityId, target: EntityId, level: &ServerLevel) -> bool {
     registry::ENTITY_TYPE[level.entity(target).entity_type as usize] != "minecraft:witch"
 }
 

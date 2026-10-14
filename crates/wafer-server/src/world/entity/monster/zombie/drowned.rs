@@ -79,7 +79,7 @@ impl Drowned {
         goal_selector.add_goal(7, Goal::RandomStroll(RandomStrollGoal::new(1.0)));
         let target_selector = &mut ai.target_selector;
         target_selector.add_goal(1, Goal::HurtByTarget(HurtByTargetGoal::new(&["minecraft:drowned"]).set_alert_others(&["minecraft:zombified_piglin"])));
-        target_selector.add_goal(2, Goal::NearestAttackableTarget(NearestAttackableTargetGoal::with(TargetType::Player, 10, true, false, Some(ok_target))));
+        target_selector.add_goal(2, Goal::NearestAttackableTarget(NearestAttackableTargetGoal::with(TargetType::Player, 10, true, false, Some(|_mob, target, level| ok_target(target, level)))));
         target_selector.add_goal(3, Goal::NearestAttackableTarget(NearestAttackableTargetGoal::new(TargetType::AbstractVillager, false)));
         target_selector.add_goal(3, Goal::NearestAttackableTarget(NearestAttackableTargetGoal::new(TargetType::IronGolem, true)));
         target_selector.add_goal(3, Goal::NearestAttackableTarget(NearestAttackableTargetGoal::with(TargetType::Axolotl, 10, true, false, None)));
