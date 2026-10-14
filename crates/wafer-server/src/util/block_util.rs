@@ -1,5 +1,15 @@
 use wafer_core::{Axis, AxisDirection, BlockPos, Direction};
 
+pub fn clamped_pack_difference_in_position(pos: BlockPos, test_pos: BlockPos, x_radius: i32, y_radius: i32, z_radius: i32) -> i32 {
+    let clamped_x_radius = x_radius.clamp(0, 127);
+    let clamped_y_radius = y_radius.clamp(0, 127);
+    let clamped_z_radius = z_radius.clamp(0, 127);
+    let x_diff = (test_pos.x - pos.x).clamp(-127, 127);
+    let y_diff = (test_pos.y - pos.y).clamp(-127, 127);
+    let z_diff = (test_pos.z - pos.z).clamp(-127, 127);
+    pack_difference_in_position_internal(clamped_x_radius, clamped_y_radius, clamped_z_radius, x_diff, y_diff, z_diff)
+}
+
 pub fn pack_difference_in_position(pos: BlockPos, test_pos: BlockPos, x_radius: i32, y_radius: i32, z_radius: i32) -> i32 {
     assert!(x_radius <= 127 && y_radius <= 127 && z_radius <= 127, "The radius cannot be larger than 127 when packing the difference between two positions");
     let x_diff = check_difference_in_bounds(test_pos.x, pos.x);

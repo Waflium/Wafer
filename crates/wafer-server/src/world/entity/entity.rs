@@ -2177,6 +2177,9 @@ impl ServerLevel {
             if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Silverfish(_))) {
                 return self.silverfish_hurt_server(id, source, damage);
             }
+            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Enderman(_))) {
+                return self.enderman_hurt_server(id, source, damage);
+            }
             return self.living_entity_hurt_server(id, source, damage);
         }
         match self.entities.get(&id) {
@@ -2187,6 +2190,13 @@ impl ServerLevel {
             Some(LevelEntity::Projectile(_)) => self.projectile_hurt_server(id, &source),
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => self.vehicle_entity_hurt_server(id, source, damage),
             _ => false,
+        }
+    }
+
+    pub fn projectile_receives_side_effects_on_hit(&self, id: EntityId, was_hurt: bool) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(super::mob::MobKind::Enderman(_)) => self.enderman_projectile_receives_side_effects_on_hit(was_hurt),
+            _ => true,
         }
     }
 
@@ -2384,6 +2394,7 @@ impl ServerLevel {
                     super::mob::MobKind::Drowned(_) => "Drowned",
                     super::mob::MobKind::Silverfish(_) => "Silverfish",
                     super::mob::MobKind::Endermite(_) => "Endermite",
+                    super::mob::MobKind::Enderman(_) => "Enderman",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
@@ -2701,8 +2712,10 @@ impl crate::server::Server {
             }
         }
         let mut new_entity = ServerLevel::create_entity(registry::ENTITY_TYPE[old_entity.entity_type as usize])?;
-        let _ = new_entity.load(&Nbt::Compound(old_entity.data.clone().unwrap_or_default()));
-        let mut new_entity = self.levels[transition.new_level].reassess_weapon_goal_detached(new_entity);
+        let saved = Nbt::Compound(old_entity.data.clone().unwrap_or_default());
+        let _ = new_entity.load(&saved);
+        let new_entity = self.levels[transition.new_level].reassess_weapon_goal_detached(new_entity);
+        let mut new_entity = self.levels[transition.new_level].read_level_dependent_save_data_detached(new_entity, &saved);
         let e = new_entity.entity_mut();
         e.portal_cooldown = old_entity.portal_cooldown;
         e.portal_process = old_entity.portal_process;

@@ -61,6 +61,7 @@ impl DataAccessor {
                 if level.mob(*id).is_some_and(crate::world::entity::mob::Mob::is_abstract_skeleton) {
                     level.reassess_weapon_goal(*id);
                 }
+                level.read_level_dependent_save_data(*id, &tag);
                 level.entity_moved(*id);
             }
             DataAccessor::Storage(id) => server.command_storage.borrow_mut().set(id, into_fields(tag)),

@@ -17,6 +17,7 @@ pub enum TargetType {
     IronGolem,
     Turtle,
     Axolotl,
+    Endermite,
 }
 
 impl TargetType {
@@ -27,6 +28,7 @@ impl TargetType {
             TargetType::IronGolem => is_type(level, entity, &["minecraft:iron_golem"]),
             TargetType::Turtle => is_type(level, entity, &["minecraft:turtle"]),
             TargetType::Axolotl => is_type(level, entity, &["minecraft:axolotl"]),
+            TargetType::Endermite => is_type(level, entity, &["minecraft:endermite"]),
         }
     }
 }
@@ -41,7 +43,7 @@ pub struct NearestAttackableTargetGoal {
     pub target_goal: TargetGoal,
     target_type: TargetType,
     random_interval: i32,
-    target: Option<EntityId>,
+    pub target: Option<EntityId>,
     selector: Option<Selector>,
 }
 

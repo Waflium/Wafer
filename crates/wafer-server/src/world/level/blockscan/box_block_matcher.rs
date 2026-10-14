@@ -22,6 +22,10 @@ impl<P: Fn(BlockState) -> bool> BoxBlockMatcher<P> {
         BoxBlockMatcher { from: self.from, to: self.to, state_predicate: move |state| state_predicate(state) && predicate(state) }
     }
 
+    pub fn any_matched(&self, level: &mut ServerLevel) -> bool {
+        find_blocks(level, self.from, self.to, &self.state_predicate, &mut |_, _, _| true)
+    }
+
     pub fn for_each(&self, level: &mut ServerLevel, mut consumer: impl FnMut(&mut ServerLevel, BlockPos, BlockState)) {
         find_blocks(level, self.from, self.to, &self.state_predicate, &mut |level, pos, state| {
             consumer(level, pos, state);

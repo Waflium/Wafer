@@ -3,7 +3,7 @@ use wafer_core::{AABB, BlockPos, Vec3, mth};
 use wafer_data::packets::play::clientbound;
 use wafer_data::properties::{HORIZONTAL_FACING, OCCUPIED, OPEN};
 use wafer_protocol::nbt::Nbt;
-use wafer_data::{EquipmentSlot, EquipmentSlotGroup, MobEffect, block_tags, blocks, damage_type_tags, damage_types, entity_type_tags, fluid_tags, game_rule, item_tags, items, mob_effects};
+use wafer_data::{BlockState, EquipmentSlot, EquipmentSlotGroup, MobEffect, block_tags, blocks, damage_type_tags, damage_types, entity_type_tags, fluid_tags, game_rule, item_tags, items, mob_effects};
 
 use super::attributes::{Attribute, AttributeMap, AttributeModifier, AttributeSupplier, Operation, PLAYER_ATTRIBUTES, SPEED_MODIFIER_SPRINTING};
 use super::data::{DataValue, Pose, ids};
@@ -456,6 +456,68 @@ impl ServerLevel {
             && matches!(wafer_data::registry::ENTITY_TYPE[self.entity(id).entity_type as usize], "minecraft:blaze" | "minecraft:enderman" | "minecraft:snow_golem" | "minecraft:strider")
     }
 
+    pub fn random_teleport(&mut self, id: EntityId, xx: f64, yy: f64, zz: f64, show_particles: bool, is_invalid_position: &dyn Fn(BlockState) -> bool) -> bool {
+        let mut y = yy;
+        let clamped = self.world_border.clamp_vec3_to_bound(xx, y, zz);
+        let mut pos = BlockPos::containing_vec(clamped);
+        if self.has_chunk_at(pos) {
+            while pos.y > self.get_min_y() {
+                pos = pos.below();
+                let state = self.block_state(pos);
+                if state.is(&block_tags::ENTITIES_CAN_TELEPORT_TO) {
+                    return self.check_position_and_teleport(id, clamped.x, y, clamped.z, show_particles, is_invalid_position, state);
+                }
+                y -= 1.0;
+            }
+        }
+        false
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn check_position_and_teleport(&mut self, id: EntityId, xx: f64, y: f64, zz: f64, show_particles: bool, is_invalid_position: &dyn Fn(BlockState) -> bool, state: BlockState) -> bool {
+        if is_invalid_position(state) {
+            return false;
+        }
+        let aabb = self.entity(id).dimensions.make_bounding_box(Vec3::new(xx, y, zz));
+        if self.no_collision(&aabb) && self.entity_collisions(None, &aabb).is_empty() && !self.contains_any_liquid(&aabb) {
+            let from = BlockPos::containing(aabb.min_x, aabb.min_y, aabb.min_z);
+            let to = BlockPos::containing(aabb.max_x, aabb.max_y, aabb.max_z);
+            let has_invalid_position = self.find_blocks_in(from, to).filter_state(is_invalid_position).any_matched(self);
+            if has_invalid_position {
+                return false;
+            }
+            if self.can_randomly_teleport_to(id, xx, y, zz) {
+                self.teleport_to(id, xx, y, zz);
+                if show_particles {
+                    self.broadcast_entity_event(id, entity_event::TELEPORT);
+                }
+                if self.is_mob(id) {
+                    self.get_navigation(id, |navigation, _| navigation.stop());
+                }
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    pub fn can_randomly_teleport_to(&mut self, id: EntityId, x: f64, y: f64, z: f64) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Enderman(_)) => self.enderman_can_randomly_teleport_to(x, y, z),
+            _ => true,
+        }
+    }
+
+    pub fn set_last_hurt_by_mob(&mut self, id: EntityId, hurt_by: Option<EntityId>) {
+        let uuid = hurt_by.map(|hurt_by| self.entity(hurt_by).uuid);
+        let tick_count = self.entity(id).tick_count;
+        let living = self.living_mut(id);
+        living.last_hurt_by_mob = uuid;
+        living.last_hurt_by_mob_timestamp = tick_count;
+    }
+
     pub fn set_last_hurt_mob(&mut self, id: EntityId, target: EntityId) {
         let target = self.is_living(target).then_some(target);
         let tick_count = self.entity(id).tick_count;
@@ -616,15 +678,50 @@ impl ServerLevel {
     }
 
     pub fn has_line_of_sight(&mut self, id: EntityId, target: EntityId) -> bool {
+        let eye_height = self.entity(target).eye_y();
+        self.has_line_of_sight_with(id, target, ClipBlock::Collider, ClipFluid::None, eye_height)
+    }
+
+    pub fn has_line_of_sight_with(&mut self, id: EntityId, target: EntityId, block_colliding_context: ClipBlock, fluid_colliding_context: ClipFluid, eye_height: f64) -> bool {
         let e = self.entity(id);
         let from = Vec3::new(e.x(), e.eye_y(), e.z());
         let t = self.entity(target);
-        let to = Vec3::new(t.x(), t.eye_y(), t.z());
+        let to = Vec3::new(t.x(), eye_height, t.z());
         if to.distance_to(from) > 128.0 {
             return false;
         }
-        let ctx = ClipContext { from, to, block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: self.is_player(id) };
+        let ctx = ClipContext { from, to, block: block_colliding_context, fluid: fluid_colliding_context, is_player: self.is_player(id) };
         self.clip(&ctx).miss
+    }
+
+    pub fn player_not_wearing_disguise_item(&self, id: EntityId) -> bool {
+        if self.is_player(id) {
+            !self.item_by_slot_ref(id, EquipmentSlot::Head).is_some_and(|helmet| helmet.get_item().is(&item_tags::GAZE_DISGUISE_EQUIPMENT))
+        } else {
+            true
+        }
+    }
+
+    pub fn get_view_vector(&self, id: EntityId) -> Vec3 {
+        let e = self.entity(id);
+        let view_y_rot = if self.is_living(id) { e.y_head_rot } else { e.y_rot };
+        super::calculate_view_vector(e.x_rot, view_y_rot)
+    }
+
+    pub fn is_looking_at_me(&mut self, id: EntityId, target: EntityId, cone_size: f64, adjust_for_distance: bool, see_through_transparent_blocks: bool, gaze_heights: &[f64]) -> bool {
+        let look = self.get_view_vector(target).normalize();
+        for &gaze_height in gaze_heights {
+            let (e, t) = (self.entity(id), self.entity(target));
+            let dir = Vec3::new(e.x() - t.x(), gaze_height - t.eye_y(), e.z() - t.z());
+            let dist = dir.length();
+            let dir = dir.normalize();
+            let dot = look.dot(dir);
+            let block = if see_through_transparent_blocks { ClipBlock::Visual } else { ClipBlock::Collider };
+            if dot > 1.0 - cone_size / if adjust_for_distance { dist } else { 1.0 } && self.has_line_of_sight_with(target, id, block, ClipFluid::None, gaze_height) {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn get_visibility_percent(&self, id: EntityId, targeting_entity: Option<EntityId>) -> f64 {
@@ -1226,12 +1323,18 @@ impl ServerLevel {
         let player_killed = self.living(id).last_hurt_by_player_memory_time > 0;
         if self.should_drop_loot(id) {
             self.drop_from_loot_table(id, source, player_killed);
-            if self.is_mob(id) {
-                self.mob_drop_custom_death_loot(id, source, player_killed);
-            }
+            self.drop_custom_death_loot(id, source, player_killed);
         }
         self.drop_equipment(id);
         self.drop_experience(id, source.causing_entity);
+    }
+
+    fn drop_custom_death_loot(&mut self, id: EntityId, source: &DamageSource, killed_by_player: bool) {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Enderman(_)) => self.enderman_drop_custom_death_loot(id, source, killed_by_player),
+            Some(_) => self.mob_drop_custom_death_loot(id, source, killed_by_player),
+            None => {}
+        }
     }
 
     pub fn should_drop_loot(&self, id: EntityId) -> bool {
@@ -1289,6 +1392,7 @@ impl ServerLevel {
                 | MobKind::Silverfish(_)
                 | MobKind::Endermite(_),
             ) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Enderman(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1710,6 +1814,7 @@ impl ServerLevel {
                 | MobKind::Silverfish(_),
             ) => self.monster_ai_step(id),
             Some(MobKind::Endermite(_)) => self.endermite_ai_step(id),
+            Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -1810,6 +1915,9 @@ impl ServerLevel {
             self.check_auto_spin_attack(id, before_travel_box, current);
         }
         self.push_entities(id);
+        if self.is_sensitive_to_water(id) && self.is_in_water_or_rain(id) {
+            self.hurt_server(id, DamageSource::new(damage_types::DROWN), 1.0);
+        }
     }
 
     fn check_auto_spin_attack(&mut self, id: EntityId, old: AABB, current: AABB) {

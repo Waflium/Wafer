@@ -31,6 +31,7 @@ pub mod living_entity;
 pub mod mob;
 pub mod mob_category;
 pub mod monster;
+pub mod neutral_mob;
 pub mod pathfinder_mob;
 pub mod portal_processor;
 pub mod primed_tnt;

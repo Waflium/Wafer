@@ -12,6 +12,7 @@ use crate::world::level::block::BlockHitResult;
 pub enum ClipBlock {
     Collider,
     Outline,
+    Visual,
     FallDamageResetting,
 }
 
@@ -292,11 +293,25 @@ fn add_collisions_along_travel(
     Some(iterations)
 }
 
+fn get_visual_shape(state: BlockState) -> ClipShape {
+    let block = state.block();
+    if block.is_instance_of("TransparentBlock") || block.is_instance_of("IronBarsBlock") || block.is_instance_of("PowderSnowBlock") {
+        ClipShape::Empty
+    } else if block.is_instance_of("MudBlock") || block.is_instance_of("SoulSandBlock") {
+        ClipShape::Block
+    } else if block.is_instance_of("FenceBlock") || block.is_instance_of("SnowLayerBlock") {
+        ClipShape::Voxel(state.voxel_shape())
+    } else {
+        ClipShape::Voxel(state.collision_voxel_shape())
+    }
+}
+
 impl ServerLevel {
     fn clip_block_shape(&self, ctx: &ClipContext, state: BlockState) -> ClipShape {
         match ctx.block {
             ClipBlock::Collider => ClipShape::Voxel(state.collision_voxel_shape()),
             ClipBlock::Outline => ClipShape::Voxel(state.voxel_shape()),
+            ClipBlock::Visual => get_visual_shape(state),
             ClipBlock::FallDamageResetting => {
                 if state.is(&block_tags::FALL_DAMAGE_RESETTING) || ctx.is_player && (state.is_block(blocks::END_GATEWAY) || state.is_block(blocks::END_PORTAL)) {
                     ClipShape::Block

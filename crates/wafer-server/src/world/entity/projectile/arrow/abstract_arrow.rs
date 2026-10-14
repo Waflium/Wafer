@@ -538,7 +538,7 @@ impl ServerLevel {
             if self.projectile(id).get_pierce_level() <= 0 {
                 self.entity_mut(id).discard();
             }
-        } else {
+        } else if self.projectile_receives_side_effects_on_hit(entity, false) {
             self.set_remaining_fire_ticks(entity, remaining_fire_ticks);
             let owner = self.projectile(id).owner;
             self.deflect(id, ProjectileDeflection::Reverse, Some(entity), owner, false, Vec3::new(0.2, 0.2, 0.2));

@@ -19,6 +19,10 @@ impl EntityReference {
         self.uuid
     }
 
+    pub fn matches(self, level: &ServerLevel, entity: EntityId) -> bool {
+        level.entity(entity).uuid == self.uuid
+    }
+
     pub fn get_entity(self, level: &ServerLevel) -> Option<EntityId> {
         level.entity_manager.visible_entity_storage.get(self.uuid).filter(|&id| level.entity_ref(id).is_some_and(|e| !e.is_removed()))
     }

@@ -198,10 +198,6 @@ impl ServerLevel {
         }
     }
 
-    fn projectile_receives_side_effects_on_hit(&self, _entity: EntityId, _was_hurt: bool) -> bool {
-        true
-    }
-
     pub fn thrown_trident_get_weapon_item(&self, id: EntityId) -> ItemStack {
         self.abstract_arrow(id).pickup_item_stack.clone()
     }

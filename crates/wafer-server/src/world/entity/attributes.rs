@@ -468,6 +468,19 @@ pub static CREEPER_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static ENDERMAN_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage,
+        ],
+        &[(MaxHealth, 40.0), (MovementSpeed, 0.3f32 as f64), (AttackDamage, 7.0), (FollowRange, 64.0), (StepHeight, 1.0)],
+    )
+};
+
 pub static SPIDER_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

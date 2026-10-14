@@ -839,6 +839,9 @@ impl ServerLevel {
                 crate::network::chat::Component::empty().write(p);
             });
         }
+        if self.game_rules.get_bool(game_rule::FORGIVE_DEAD_PLAYERS) {
+            self.tell_neutral_mobs_that_i_died(id);
+        }
         if !self.is_spectator(id) {
             self.drop_all_death_loot(id, &source);
         }
@@ -864,6 +867,18 @@ impl ServerLevel {
         let p = self.player_mut(id);
         p.last_death_location = Some((dimension.to_owned(), pos));
         p.movement.waiting_for_respawn = true;
+    }
+
+    fn tell_neutral_mobs_that_i_died(&mut self, id: EntityId) {
+        let aabb = wafer_core::AABB::of_block(self.entity(id).block_position()).inflate(32.0, 10.0, 32.0);
+        let neutral_mobs: Vec<EntityId> = self
+            .get_entities(None, &aabb)
+            .into_iter()
+            .filter(|&entity| !self.is_spectator(entity) && self.mob(entity).is_some_and(|mob| mob.neutral_mob().is_some()))
+            .collect();
+        for mob in neutral_mobs {
+            self.player_died(mob, id);
+        }
     }
 
     pub fn server_player_award_kill_score(&mut self, id: EntityId, victim: EntityId, killing_blow: &DamageSource) {

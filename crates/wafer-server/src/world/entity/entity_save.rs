@@ -375,6 +375,7 @@ impl ServerLevel {
             "minecraft:drowned" => LevelEntity::Mob(Box::new(super::monster::zombie::drowned::Drowned::create())),
             "minecraft:silverfish" => LevelEntity::Mob(Box::new(super::monster::silverfish::Silverfish::create())),
             "minecraft:endermite" => LevelEntity::Mob(Box::new(super::monster::endermite::Endermite::create())),
+            "minecraft:enderman" => LevelEntity::Mob(Box::new(super::monster::enderman::Enderman::create())),
             "minecraft:snowball" => LevelEntity::Projectile(Box::new(throwableitemprojectile::snowball::Snowball::of_type())),
             "minecraft:egg" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_egg::ThrownEgg::of_type())),
             "minecraft:ender_pearl" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_enderpearl::ThrownEnderpearl::of_type())),
@@ -526,7 +527,8 @@ impl ServerLevel {
             error!("{e}");
             return None;
         }
-        Some(self.reassess_weapon_goal_detached(entity))
+        let entity = self.reassess_weapon_goal_detached(entity);
+        Some(self.read_level_dependent_save_data_detached(entity, nbt))
     }
 
     pub fn entity_tag_to_compare(&self, id: EntityId) -> Nbt {

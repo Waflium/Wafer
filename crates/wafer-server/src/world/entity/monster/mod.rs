@@ -1,6 +1,9 @@
 pub mod creeper;
 #[cfg(test)]
 mod creeper_tests;
+pub mod enderman;
+#[cfg(test)]
+mod enderman_tests;
 pub mod endermite;
 #[cfg(test)]
 mod endermite_tests;

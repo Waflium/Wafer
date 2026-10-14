@@ -27,6 +27,8 @@ use super::leap_at_target_goal::LeapAtTargetGoal;
 use crate::world::entity::monster::spider::spider::{SpiderAttackGoal, SpiderTargetGoal};
 use super::climb_on_top_of_powder_snow_goal::ClimbOnTopOfPowderSnowGoal;
 use crate::world::entity::monster::silverfish::{SilverfishMergeWithStoneGoal, SilverfishWakeUpFriendsGoal};
+use super::target::reset_universal_anger_target_goal::ResetUniversalAngerTargetGoal;
+use crate::world::entity::monster::enderman::{EndermanFreezeWhenLookedAt, EndermanLeaveBlockGoal, EndermanLookForPlayerGoal, EndermanTakeBlockGoal};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -78,6 +80,11 @@ pub enum Goal {
     ClimbOnTopOfPowderSnow(ClimbOnTopOfPowderSnowGoal),
     SilverfishWakeUpFriends,
     SilverfishMergeWithStone(SilverfishMergeWithStoneGoal),
+    ResetUniversalAngerTarget(ResetUniversalAngerTargetGoal),
+    EndermanFreezeWhenLookedAt(EndermanFreezeWhenLookedAt),
+    EndermanLeaveBlock(EndermanLeaveBlockGoal),
+    EndermanLookForPlayer(EndermanLookForPlayerGoal),
+    EndermanTakeBlock(EndermanTakeBlockGoal),
 }
 
 impl Goal {
@@ -116,6 +123,11 @@ impl Goal {
             Goal::ClimbOnTopOfPowderSnow(goal) => goal.can_use(level, mob),
             Goal::SilverfishWakeUpFriends => SilverfishWakeUpFriendsGoal::can_use(level, mob),
             Goal::SilverfishMergeWithStone(goal) => goal.can_use(level, mob),
+            Goal::ResetUniversalAngerTarget(goal) => goal.can_use(level, mob),
+            Goal::EndermanFreezeWhenLookedAt(goal) => goal.can_use(level, mob),
+            Goal::EndermanLeaveBlock(goal) => goal.can_use(level, mob),
+            Goal::EndermanLookForPlayer(goal) => goal.can_use(level, mob),
+            Goal::EndermanTakeBlock(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -154,6 +166,11 @@ impl Goal {
             Goal::ClimbOnTopOfPowderSnow(goal) => goal.can_use(level, mob),
             Goal::SilverfishWakeUpFriends => SilverfishWakeUpFriendsGoal::can_use(level, mob),
             Goal::SilverfishMergeWithStone(goal) => goal.can_continue_to_use(level, mob),
+            Goal::ResetUniversalAngerTarget(goal) => goal.can_use(level, mob),
+            Goal::EndermanFreezeWhenLookedAt(goal) => goal.can_use(level, mob),
+            Goal::EndermanLeaveBlock(goal) => goal.can_use(level, mob),
+            Goal::EndermanLookForPlayer(goal) => goal.can_continue_to_use(level, mob),
+            Goal::EndermanTakeBlock(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -194,6 +211,10 @@ impl Goal {
             Goal::DrownedSwimUp(goal) => goal.start(level, mob),
             Goal::ClimbOnTopOfPowderSnow(_) | Goal::SilverfishWakeUpFriends => {}
             Goal::SilverfishMergeWithStone(goal) => goal.start(level, mob),
+            Goal::ResetUniversalAngerTarget(goal) => goal.start(level, mob),
+            Goal::EndermanFreezeWhenLookedAt(goal) => goal.start(level, mob),
+            Goal::EndermanLeaveBlock(_) | Goal::EndermanTakeBlock(_) => {}
+            Goal::EndermanLookForPlayer(goal) => goal.start(level, mob),
         }
     }
 
@@ -228,6 +249,8 @@ impl Goal {
             Goal::DrownedSwimUp(goal) => goal.stop(level, mob),
             Goal::ClimbOnTopOfPowderSnow(_) | Goal::SilverfishWakeUpFriends => {}
             Goal::SilverfishMergeWithStone(goal) => goal.random_stroll_goal.stop(level, mob),
+            Goal::ResetUniversalAngerTarget(_) | Goal::EndermanFreezeWhenLookedAt(_) | Goal::EndermanLeaveBlock(_) | Goal::EndermanTakeBlock(_) => {}
+            Goal::EndermanLookForPlayer(goal) => goal.stop(level, mob),
         }
     }
 
@@ -279,6 +302,11 @@ impl Goal {
             Goal::ClimbOnTopOfPowderSnow(goal) => goal.tick(level, mob),
             Goal::SilverfishWakeUpFriends => SilverfishWakeUpFriendsGoal::tick(level, mob),
             Goal::SilverfishMergeWithStone(_) => {}
+            Goal::ResetUniversalAngerTarget(_) => {}
+            Goal::EndermanFreezeWhenLookedAt(goal) => goal.tick(level, mob),
+            Goal::EndermanLeaveBlock(goal) => goal.tick(level, mob),
+            Goal::EndermanLookForPlayer(goal) => goal.tick(level, mob),
+            Goal::EndermanTakeBlock(goal) => goal.tick(level, mob),
         }
     }
 
@@ -312,6 +340,9 @@ impl Goal {
             Goal::ClimbOnTopOfPowderSnow(_) => Flag::Jump.bit(),
             Goal::SilverfishWakeUpFriends => 0,
             Goal::SilverfishMergeWithStone(_) => Flag::Move.bit(),
+            Goal::ResetUniversalAngerTarget(_) | Goal::EndermanLeaveBlock(_) | Goal::EndermanTakeBlock(_) => 0,
+            Goal::EndermanFreezeWhenLookedAt(_) => Flag::Jump.bit() | Flag::Move.bit(),
+            Goal::EndermanLookForPlayer(_) => Flag::Target.bit(),
         }
     }
 

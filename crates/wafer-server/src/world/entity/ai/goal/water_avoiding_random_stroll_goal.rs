@@ -15,7 +15,11 @@ pub struct WaterAvoidingRandomStrollGoal {
 
 impl WaterAvoidingRandomStrollGoal {
     pub fn new(speed_modifier: f64) -> WaterAvoidingRandomStrollGoal {
-        WaterAvoidingRandomStrollGoal { random_stroll_goal: RandomStrollGoal::new(speed_modifier), probability: PROBABILITY }
+        WaterAvoidingRandomStrollGoal::with_probability(speed_modifier, PROBABILITY)
+    }
+
+    pub fn with_probability(speed_modifier: f64, probability: f32) -> WaterAvoidingRandomStrollGoal {
+        WaterAvoidingRandomStrollGoal { random_stroll_goal: RandomStrollGoal::new(speed_modifier), probability }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {

@@ -3,6 +3,7 @@ pub const EAT_GRASS: u8 = 10;
 pub const IN_LOVE_HEARTS: u8 = 18;
 pub const SILVERFISH_MERGE_ANIM: u8 = 20;
 pub const PROTECTED_FROM_DEATH: u8 = 35;
+pub const TELEPORT: u8 = 46;
 pub const MAINHAND_BREAK: u8 = 47;
 pub const OFFHAND_BREAK: u8 = 48;
 pub const HEAD_BREAK: u8 = 49;
