@@ -744,6 +744,15 @@ impl ServerLevel {
         {
             return false;
         }
+        if let Some(arrow_owner) = source
+            .causing_entity
+            .filter(|&e| self.as_projectile(e).is_some_and(|projectile| projectile.abstract_arrow().is_some()))
+            .and_then(|arrow| self.projectile_get_owner(arrow))
+            .filter(|&owner| self.is_player(owner))
+            && !self.can_harm_player(id, arrow_owner)
+        {
+            return false;
+        }
         self.player_hurt_server(id, source, damage)
     }
 
