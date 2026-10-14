@@ -256,6 +256,17 @@ fn setblock() {
 }
 
 #[test]
+fn setblock_sees_the_spawn_search_chunk_until_its_ticket_expires() {
+    let mut server = testing::server();
+    assert!(server.levels[0].has_chunk_at(BlockPos::new(0, -60, 0)));
+    assert_eq!(run(&mut server, "setblock 0 -60 16 stone"), ["That position is not loaded"]);
+    server.tick();
+    assert!(server.levels[0].has_chunk_at(BlockPos::new(0, -60, 0)));
+    server.tick();
+    assert_eq!(run(&mut server, "setblock 0 -60 0 stone"), ["That position is not loaded"]);
+}
+
+#[test]
 fn setblock_keeps_the_given_properties_against_shape_updates() {
     let mut server = server();
     run(&mut server, "setblock 0 -60 0 water");
