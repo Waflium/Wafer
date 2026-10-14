@@ -42,6 +42,10 @@ impl BlockBehaviour for AnvilBlock {
         InteractionResult::SUCCESS
     }
 
+    fn get_menu_provider(&self, _state: BlockState, _level: &mut ServerLevel, pos: BlockPos) -> Option<crate::world::inventory::menu_provider::MenuProvider> {
+        Some(crate::world::inventory::menu_provider::MenuProvider::Anvil(pos))
+    }
+
     fn on_place(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _old_state: BlockState, _moved_by_piston: bool) {
         falling_block::on_place(level, pos, state.block(), falling_block::DEFAULT_DELAY_AFTER_PLACE);
     }

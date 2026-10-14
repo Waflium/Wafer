@@ -295,6 +295,14 @@ impl BlockBehaviour for ChestBlock {
         InteractionResult::SUCCESS
     }
 
+    fn get_menu_provider(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> Option<MenuProvider> {
+        match combine(state, level, pos, false) {
+            Combined::None => None,
+            Combined::Single(pos) => Some(MenuProvider::BlockEntity(pos)),
+            Combined::Double(first, second) => Some(MenuProvider::DoubleChest { first, second }),
+        }
+    }
+
     fn tick(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
         if matches!(level.get_block_entity(pos).map(|e| &e.kind), Some(BlockEntityKind::Chest(_))) {
             level.recheck_openers(pos);

@@ -285,6 +285,7 @@ use crate::world::level::{LevelAccessor, LevelReader};
 use crate::world::level::biome::Precipitation;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::inventory::menu_provider::{self, MenuProvider};
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::storage::loot::loot_params::LootParams;
@@ -359,6 +360,10 @@ pub trait BlockBehaviour: Send + Sync {
         hit: &BlockHitResult,
     ) -> InteractionResult {
         InteractionResult::TryWithEmptyHand
+    }
+
+    fn get_menu_provider(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> Option<MenuProvider> {
+        base_entity_block_get_menu_provider(level, pos)
     }
 
     fn can_survive(&self, state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
@@ -532,6 +537,10 @@ pub fn push_entities_up(state: BlockState, new_state: BlockState, level: &mut Se
         level.teleport_relative(colliding_entity, 0.0, 1.0 + offset, 0.0);
     }
     new_state
+}
+
+pub fn base_entity_block_get_menu_provider(level: &mut ServerLevel, pos: BlockPos) -> Option<MenuProvider> {
+    level.get_block_entity(pos).filter(|entity| menu_provider::is_menu_provider(entity)).map(|_| MenuProvider::BlockEntity(pos))
 }
 
 pub fn block_player_will_destroy(level: &mut ServerLevel, pos: BlockPos, state: BlockState, player: EntityId) -> BlockState {
@@ -875,6 +884,10 @@ impl BlockBehaviour for CraftingTableBlock {
         level.open_menu(player, crate::world::inventory::menu_provider::MenuProvider::Crafting(pos));
         level.award_stat(player, crate::stats::stats::INTERACT_WITH_CRAFTING_TABLE, 1);
         InteractionResult::SUCCESS
+    }
+
+    fn get_menu_provider(&self, _state: BlockState, _level: &mut ServerLevel, pos: BlockPos) -> Option<MenuProvider> {
+        Some(MenuProvider::Crafting(pos))
     }
 }
 

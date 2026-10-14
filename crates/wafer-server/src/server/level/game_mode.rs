@@ -423,6 +423,13 @@ impl ServerLevel {
     pub fn use_item_on(&mut self, player: EntityId, hand: InteractionHand, hit: BlockHitResult) -> InteractionResult {
         let pos = hit.block_pos;
         let state = self.block_state(pos);
+        if self.player(player).game_mode.game_type == GameType::Spectator {
+            if let Some(menu_provider) = block::of(state).get_menu_provider(state, self, pos) {
+                self.open_menu(player, menu_provider);
+                return InteractionResult::CONSUME;
+            }
+            return InteractionResult::Pass;
+        }
         let p = self.player(player);
         let item = p.item_in_hand(hand);
         let something_in_hands = p.item_in_hand(InteractionHand::MainHand).is_some() || p.item_in_hand(InteractionHand::OffHand).is_some();
@@ -630,5 +637,21 @@ mod adventure_mode_tests {
         assert!(level.use_item_on(player, InteractionHand::MainHand, hit).consumes_action());
         assert_eq!(level.block_state(pos.above()), blocks::DIRT.default_state());
         assert_eq!(level.player(player).item_in_hand(InteractionHand::MainHand).map(|stack| stack.count), Some(1));
+    }
+
+    #[test]
+    fn spectators_open_menus_but_do_not_use_blocks_or_items() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 2.5), 180.0, 60.0);
+        level.player_mut(player).set_game_mode_for_player(GameType::Spectator, None);
+        let pos = BlockPos::new(0, -61, 0);
+        let hit = BlockHitResult { location: Vec3::new(0.5, -60.0, 0.5), direction: Direction::Up, block_pos: pos, inside: false, world_border_hit: false };
+        let on_grass = stack_with(items::DIRT, 2, dc::CAN_PLACE_ON, "{blocks:\"minecraft:grass_block\"}");
+        level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(on_grass));
+        assert!(!level.use_item_on(player, InteractionHand::MainHand, hit).consumes_action());
+        assert!(level.block_state(pos.above()).is_air());
+        level.set_block_simple(pos, blocks::CRAFTING_TABLE.default_state());
+        assert!(level.use_item_on(player, InteractionHand::MainHand, hit).consumes_action());
+        assert!(level.player(player).container_menu.is_some());
     }
 }

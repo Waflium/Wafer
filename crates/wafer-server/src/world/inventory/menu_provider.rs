@@ -44,6 +44,10 @@ fn menu_kind(entity: &BlockEntity) -> Option<MenuKind> {
     })
 }
 
+pub fn is_menu_provider(entity: &BlockEntity) -> bool {
+    matches!(entity.kind, BlockEntityKind::Beacon(_)) || menu_kind(entity).is_some()
+}
+
 impl ServerLevel {
     fn can_open(&mut self, pos: BlockPos, player: EntityId) -> bool {
         let spectator = self.is_spectator(player);

@@ -150,4 +150,8 @@ impl BlockBehaviour for LecternBlock {
             InteractionResult::CONSUME
         }
     }
+
+    fn get_menu_provider(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> Option<MenuProvider> {
+        if !state.get(HAS_BOOK) { None } else { super::base_entity_block_get_menu_provider(level, pos) }
+    }
 }

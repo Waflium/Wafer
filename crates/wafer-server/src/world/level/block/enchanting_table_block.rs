@@ -29,4 +29,8 @@ impl BlockBehaviour for EnchantingTableBlock {
         }
         InteractionResult::SUCCESS
     }
+
+    fn get_menu_provider(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> Option<MenuProvider> {
+        if let Some(BlockEntityKind::EnchantingTable(_)) = level.get_block_entity(pos).map(|entity| &entity.kind) { Some(MenuProvider::BlockEntity(pos)) } else { None }
+    }
 }

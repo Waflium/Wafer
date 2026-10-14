@@ -15,4 +15,8 @@ impl BlockBehaviour for CartographyTableBlock {
         level.award_stat(player, crate::stats::stats::INTERACT_WITH_CARTOGRAPHY_TABLE, 1);
         InteractionResult::SUCCESS
     }
+
+    fn get_menu_provider(&self, _state: BlockState, _level: &mut ServerLevel, pos: BlockPos) -> Option<MenuProvider> {
+        Some(MenuProvider::CartographyTable(pos))
+    }
 }
