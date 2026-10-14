@@ -1,6 +1,7 @@
 use wafer_core::random::RandomSource;
 use wafer_data::packets::play::clientbound;
-use wafer_data::{ConsumeEffect, Consumable, EquipmentSlot, ItemUseAnimation};
+use wafer_data::{ConsumeEffect, Consumable, EquipmentSlot, FoodProperties, ItemUseAnimation, MobEffect, mob_effects};
+use wafer_protocol::nbt::Nbt;
 
 use super::EntityId;
 use super::data::{DataValue, ids};
@@ -9,6 +10,7 @@ use crate::server::level::{ServerLevel, SoundSource};
 use crate::util::Prediction;
 use crate::world::effect::MobEffectInstance;
 use crate::world::item::ItemStack;
+use crate::world::item::alchemy::potion_contents::PotionContents;
 use crate::world::item::component::{self as dc, values::ItemStackTemplate};
 use crate::world::{InteractionHand, InteractionResult};
 
@@ -23,6 +25,12 @@ fn random_between(random: &mut impl RandomSource, min: f32, max_exclusive: f32) 
 
 fn triangle(random: &mut impl RandomSource, mean: f32, spread: f32) -> f32 {
     mean + spread * (random.next_float() - random.next_float())
+}
+
+fn create_effect_instance(entry: &Nbt) -> Option<MobEffectInstance> {
+    let effect = MobEffect::by_name(&crate::commands::arguments::parse_identifier(entry.get("id")?.as_str()?)?)?;
+    let duration = entry.get("duration").and_then(Nbt::as_i64).map_or(160, |duration| duration as i32);
+    Some(MobEffectInstance::new(effect, duration, 0))
 }
 
 pub fn use_duration(stack: &ItemStack) -> i32 {
@@ -217,20 +225,26 @@ impl ServerLevel {
 
     fn on_consume(&mut self, id: EntityId, mut stack: ItemStack, consumable: &Consumable) -> ItemStack {
         self.emit_particles_and_sounds(id, consumable, 16);
-        self.award_stat(id, crate::stats::stats::ITEM_USED.get(stack.get_item().0), 1);
         if self.is_player(id) {
+            self.award_stat(id, crate::stats::stats::ITEM_USED.get(stack.get_item().0), 1);
             crate::advancements::triggers::criteria_triggers::CONSUME_ITEM.trigger(self, id, &stack);
         }
         if let Some(food) = stack.item.info().food {
-            let e = self.entity_mut(id);
-            let pitch = triangle(&mut e.random, 1.0, 0.4);
-            let (x, y, z) = (e.x(), e.y(), e.z());
-            self.play_sound_at(None, x, y, z, sound_event(consumable.sound), SoundSource::Neutral, 1.0, pitch);
-            self.player_mut(id).food_data.eat(&food);
-            let e = self.entity_mut(id);
-            let pitch = random_between(&mut e.random, 0.9, 1.0);
-            let (x, y, z) = (e.x(), e.y(), e.z());
-            self.play_sound_at(None, x, y, z, sound_event("minecraft:entity.player.burp"), SoundSource::Players, 0.5, pitch);
+            self.food_properties_on_consume(id, &food, consumable);
+        }
+        if let Some(potion_contents) = stack.get(dc::POTION_CONTENTS) {
+            let duration_scale = stack.get(dc::POTION_DURATION_SCALE).and_then(Nbt::as_f64).map_or(1.0, |scale| scale as f32);
+            let effects = PotionContents::new(potion_contents).for_each_effect(duration_scale);
+            self.apply_to_living_entity(id, effects);
+        }
+        if let Some(suspicious_stew_effects) = stack.get(dc::SUSPICIOUS_STEW_EFFECTS) {
+            let effects: Vec<MobEffectInstance> = suspicious_stew_effects.as_list().iter().filter_map(create_effect_instance).collect();
+            for effect in effects {
+                self.add_effect(id, effect, None);
+            }
+        }
+        if let Some(ominous_bottle_amplifier) = stack.get(dc::OMINOUS_BOTTLE_AMPLIFIER).and_then(Nbt::as_i64) {
+            self.add_effect(id, MobEffectInstance::with(mob_effects::BAD_OMEN, 120000, ominous_bottle_amplifier as i32, false, false, true), None);
         }
         for effect in consumable.on_consume_effects {
             self.apply_consume_effect(id, effect);
@@ -239,6 +253,31 @@ impl ServerLevel {
             stack.count -= 1;
         }
         stack
+    }
+
+    fn food_properties_on_consume(&mut self, id: EntityId, food: &FoodProperties, consumable: &Consumable) {
+        let e = self.entity_mut(id);
+        let pitch = triangle(&mut e.random, 1.0, 0.4);
+        let (x, y, z) = (e.x(), e.y(), e.z());
+        self.play_sound_at(None, x, y, z, sound_event(consumable.sound), SoundSource::Neutral, 1.0, pitch);
+        if self.is_player(id) {
+            self.player_mut(id).food_data.eat(food);
+            let e = self.entity_mut(id);
+            let pitch = random_between(&mut e.random, 0.9, 1.0);
+            let (x, y, z) = (e.x(), e.y(), e.z());
+            self.play_sound_at(None, x, y, z, sound_event("minecraft:entity.player.burp"), SoundSource::Players, 0.5, pitch);
+        }
+    }
+
+    fn apply_to_living_entity(&mut self, id: EntityId, effects: Vec<MobEffectInstance>) {
+        let player = self.is_player(id).then_some(id);
+        for effect in effects {
+            if effect.effect.info().instantaneous {
+                self.apply_instantaneous_effect(effect.effect, player, player, id, effect.amplifier, 1.0);
+            } else {
+                self.add_effect(id, effect, None);
+            }
+        }
     }
 
     pub fn apply_consume_effect(&mut self, id: EntityId, effect: &ConsumeEffect) {

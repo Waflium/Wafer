@@ -256,6 +256,42 @@ fn food_milk_honey_and_totems() {
 }
 
 #[test]
+fn drinking_potions_stews_and_ominous_bottles() {
+    use crate::world::item::component as dc;
+    use wafer_protocol::nbt::Nbt;
+    let (mut level, id, _packets) = setup();
+    let slot = level.player(id).inventory.selected_slot();
+    let drink = |level: &mut ServerLevel, stack: ItemStack| {
+        level.player_mut(id).inventory.slots[slot] = Some(stack);
+        level.use_item(id, InteractionHand::MainHand);
+        for _ in 0..40 {
+            tick(level, id);
+        }
+    };
+    let mut potion = ItemStack::new(items::POTION, 1);
+    potion.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:strong_swiftness".into()))])));
+    drink(&mut level, potion);
+    assert_eq!(level.player(id).inventory.slots[slot], Some(ItemStack::new(items::GLASS_BOTTLE, 1)));
+    level.hurt_server(id, DamageSource::new(damage_types::GENERIC), 10.0);
+    let mut healing = ItemStack::new(items::POTION, 1);
+    healing.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:healing".into()))])));
+    drink(&mut level, healing);
+    assert_eq!(level.player(id).health, 14.0);
+    let mut stew = ItemStack::new(items::SUSPICIOUS_STEW, 1);
+    stew.set(dc::SUSPICIOUS_STEW_EFFECTS, Some(Nbt::List(vec![Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:night_vision".into())), ("duration".into(), Nbt::Int(100))])])));
+    level.player_mut(id).food_data.food_level = 10;
+    drink(&mut level, stew);
+    let mut ominous = ItemStack::new(items::OMINOUS_BOTTLE, 1);
+    ominous.set(dc::OMINOUS_BOTTLE_AMPLIFIER, Some(Nbt::Int(2)));
+    drink(&mut level, ominous);
+    let mut effects: Vec<_> = level.player(id).living.active_effects.iter().map(|e| (e.effect.0, e.amplifier)).collect();
+    effects.sort();
+    let mut expected = vec![(mob_effects::SPEED.0, 1), (mob_effects::NIGHT_VISION.0, 0), (mob_effects::BAD_OMEN.0, 2)];
+    expected.sort();
+    assert_eq!(effects, expected);
+}
+
+#[test]
 fn weaving_leaves_cobwebs_where_its_player_died() {
     let (mut level, id, _packets) = setup();
     level.entity_mut(id).random = wafer_core::random::LegacyRandomSource::new(42);
