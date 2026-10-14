@@ -125,6 +125,7 @@ fn skeletons_save_and_load_their_fields() {
 fn shoot(level: &mut ServerLevel, mob: Mob) -> (EntityId, EntityId, Vec<EntityId>, usize) {
     level.difficulty = Difficulty::Normal;
     let player = testing::player(level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+    level.player_mut(player).movement.client_loaded_timeout_timer = 0;
     let mut mob = armed(mob);
     mob.equipment[EquipmentSlot::Mainhand as usize] = Some(ItemStack::new(items::BOW, 1));
     let skeleton = add(level, mob, Vec3::new(10.5, -60.0, 0.5));
@@ -150,6 +151,19 @@ fn skeletons_draw_their_bow_for_twenty_ticks_and_shoot() {
     assert_eq!(level.projectile_get_owner(arrows[0]), Some(skeleton));
     assert!(arrow.abstract_arrow().unwrap().pickup_item_stack.get(dc::POTION_CONTENTS).is_none());
     assert!(!level.is_using_item(skeleton));
+}
+
+#[test]
+fn skeleton_arrows_hurt_players() {
+    let mut level = testing::level();
+    let (player, _, _, _) = shoot(&mut level, Skeleton::create());
+    for _ in 0..600 {
+        level.tick();
+        if level.health(player) < 20.0 {
+            return;
+        }
+    }
+    panic!("no arrow hit the player");
 }
 
 #[test]
