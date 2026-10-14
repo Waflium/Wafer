@@ -188,6 +188,7 @@ pub struct NoiseGeneratorSettings {
     pub material_rule: Arc<MaterialRule>,
     pub spawn_target: Vec<SpawnTargetPoint>,
     pub sea_level: i32,
+    pub disable_mob_generation: bool,
     pub aquifers: Option<AquiferConfig>,
     pub legacy_random_source: bool,
 }
@@ -293,6 +294,7 @@ impl WorldgenRegistries {
             material_rule: materials.rule(field("material_rule")?, parser)?,
             spawn_target,
             sea_level: field("sea_level")?.as_i64().ok_or("sea_level")? as i32,
+            disable_mob_generation: field("disable_mob_generation")?.as_bool().ok_or("disable_mob_generation")?,
             aquifers,
             legacy_random_source: field("legacy_random_source")?.as_bool().ok_or("legacy_random_source")?,
         })

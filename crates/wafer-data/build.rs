@@ -1015,7 +1015,7 @@ fn dimension_types(out: &mut String, data: &Path, entries: &[String]) -> anyhow:
         let attributes = v.get("attributes").map_or("{}".to_owned(), Value::to_string);
         writeln!(
             out,
-            "DimensionType {{ name: {id:?}, min_y: {}, height: {}, logical_height: {}, coordinate_scale: {}, has_skylight: {}, has_ceiling: {}, has_ender_dragon_fight: {}, has_fixed_time: {}, ambient_light: {}, infiniburn: &block_tags::{}, default_clock: {:?}, attributes: {attributes:?}, timelines: {:?} }},",
+            "DimensionType {{ name: {id:?}, min_y: {}, height: {}, logical_height: {}, coordinate_scale: {}, has_skylight: {}, has_ceiling: {}, has_ender_dragon_fight: {}, has_fixed_time: {}, ambient_light: {}, infiniburn: &block_tags::{}, default_clock: {:?}, attributes: {attributes:?}, timelines: {:?}, monster_spawn_light_level: {:?}, monster_spawn_block_light_limit: {} }},",
             v["min_y"],
             v["height"],
             v["logical_height"],
@@ -1027,7 +1027,9 @@ fn dimension_types(out: &mut String, data: &Path, entries: &[String]) -> anyhow:
             f32_literal(&v["ambient_light"]),
             const_name(v["infiniburn"].as_str().unwrap().trim_start_matches('#')),
             v["default_clock"].as_str(),
-            v["timelines"].to_string()
+            v["timelines"].to_string(),
+            v["monster_spawn_light_level"].to_string(),
+            v["monster_spawn_block_light_limit"]
         )?;
     }
     writeln!(out, "];")?;

@@ -58,10 +58,10 @@ fn fmt(value: &Value) -> String {
         }
         Value::MobSpawnSettings(s) => {
             let mut out = String::from("mobs:");
-            for category in crate::world::level::biome::mob_spawn_settings::MobCategory::VALUES {
-                if let Some(list) = s.mobs_in_category(category) {
+            for category in crate::world::entity::mob_category::MobCategory::VALUES {
+                if let Some(list) = s.get_mobs_in_category(category) {
                     out += &format!("{}=", category.name());
-                    for (data, weight) in list {
+                    for (data, weight) in &list.items {
                         out += &format!("{}*{weight},", wafer_data::registry::ENTITY_TYPE[data.entity_type as usize]);
                     }
                     out.push(';');

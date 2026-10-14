@@ -29,6 +29,7 @@ pub mod item;
 pub mod lightning_bolt;
 pub mod living_entity;
 pub mod mob;
+pub mod mob_category;
 pub mod monster;
 pub mod pathfinder_mob;
 pub mod portal_processor;
@@ -41,6 +42,8 @@ pub mod schedule;
 pub mod shearable;
 pub mod slot_access;
 pub mod spawn_group_data;
+pub mod spawn_placement_types;
+pub mod spawn_placements;
 #[cfg(test)]
 mod survival_tests;
 pub mod using_item;

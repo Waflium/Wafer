@@ -1,7 +1,14 @@
-use wafer_core::{BlockPos, ChunkPos};
-use wafer_data::{Block, BlockState, Fluid, FluidState, blocks};
+use wafer_core::{AABB, BlockPos, ChunkPos, Vec3};
+use wafer_data::{Block, BlockState, DimensionType, Fluid, FluidState, blocks};
 
+use crate::world::attribute::environment_attribute_system::EnvironmentAccess;
+use crate::world::attribute::{AttributeValue, EnvironmentAttribute, EnvironmentAttributeSystem};
 use crate::world::difficulty::Difficulty;
+use crate::world::difficulty_instance::DifficultyInstance;
+use crate::world::entity::LevelEntity;
+use crate::world::level::collision::for_each_block_collision;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::biome;
 use crate::world::level::block::entity::BlockEntity;
 use crate::world::level::chunk::{Biome, ChunkGenerator, HeightmapType, LevelChunk};
@@ -21,6 +28,7 @@ pub struct WorldGenRegion<'a> {
     writable: [bool; 9],
     lit: [bool; 9],
     center: ChunkPos,
+    dimension: &'static DimensionType,
     seed: i64,
     biome_zoom_seed: i64,
     sea_level: i32,
@@ -32,8 +40,24 @@ pub struct WorldGenRegion<'a> {
     light_engine: &'a LevelLightEngine,
     generator: &'a ChunkGenerator,
     difficulty: Difficulty,
+    pub level_data: RegionLevelData,
+    pub environment_attributes: Option<&'a EnvironmentAttributeSystem>,
     pub light_tasks: Vec<RegionLightTask>,
     pub poi_updates: Vec<(BlockPos, BlockState, BlockState)>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RegionLevelData {
+    pub overworld_clock_time: i64,
+    pub moon_brightness: f32,
+    pub thundering: bool,
+    pub world_border: [f64; 4],
+}
+
+impl Default for RegionLevelData {
+    fn default() -> RegionLevelData {
+        RegionLevelData { overworld_clock_time: 0, moon_brightness: 0.0, thundering: false, world_border: [f64::MIN, f64::MIN, f64::MAX, f64::MAX] }
+    }
 }
 
 pub enum RegionLightTask {
@@ -50,8 +74,7 @@ impl<'a> WorldGenRegion<'a> {
         lit: [bool; 9],
         generator: &'a ChunkGenerator,
         random_state: &RandomState,
-        min_y: i32,
-        height: i32,
+        dimension: &'static DimensionType,
         generation: WorldGenerationContext,
         light_engine: &'a LevelLightEngine,
         difficulty: Difficulty,
@@ -63,17 +86,20 @@ impl<'a> WorldGenRegion<'a> {
             writable,
             lit,
             center,
+            dimension,
             seed,
             biome_zoom_seed: biome::obfuscate_seed(seed),
             sea_level: generation.sea_level,
-            min_y,
-            height,
+            min_y: dimension.min_y,
+            height: dimension.height as i32,
             generation,
             random,
             write_radius: 1,
             light_engine,
             generator,
             difficulty,
+            level_data: RegionLevelData::default(),
+            environment_attributes: None,
             light_tasks: Vec::new(),
             poi_updates: Vec::new(),
         }
@@ -128,6 +154,14 @@ impl<'a> WorldGenRegion<'a> {
     pub fn get_chunk(&mut self, chunk_x: i32, chunk_z: i32) -> &mut LevelChunk {
         let index = self.index(chunk_x, chunk_z);
         self.cache[index].as_deref_mut().expect("a chunk in the region")
+    }
+
+    pub fn has_chunk(&self, chunk_x: i32, chunk_z: i32) -> bool {
+        (chunk_x - self.center.x).abs() <= 1 && (chunk_z - self.center.z).abs() <= 1 && self.cache[self.index(chunk_x, chunk_z)].is_some()
+    }
+
+    fn chunk_for_collisions(&self, pos: ChunkPos) -> Option<&LevelChunk> {
+        if self.has_chunk(pos.x, pos.z) { self.cache[self.index(pos.x, pos.z)].as_deref() } else { None }
     }
 
     fn chunk(&self, chunk_x: i32, chunk_z: i32) -> &LevelChunk {
@@ -277,10 +311,6 @@ impl crate::world::level::world_gen_level::WorldGenLevel for WorldGenRegion<'_> 
         self.generator
     }
 
-    fn get_difficulty(&self) -> Difficulty {
-        self.difficulty
-    }
-
     fn generation(&self) -> WorldGenerationContext {
         self.generation
     }
@@ -289,16 +319,8 @@ impl crate::world::level::world_gen_level::WorldGenLevel for WorldGenRegion<'_> 
         WorldGenRegion::get_block_state(self, pos)
     }
 
-    fn get_height(&mut self, kind: HeightmapType, x: i32, z: i32) -> i32 {
-        WorldGenRegion::get_height(self, kind, x, z)
-    }
-
     fn get_height_of_level(&self) -> i32 {
         self.height
-    }
-
-    fn get_biome(&mut self, pos: BlockPos) -> Biome {
-        WorldGenRegion::get_biome(self, pos)
     }
 
     fn set_block_and_update(&mut self, pos: BlockPos, state: BlockState) -> bool {
@@ -309,7 +331,90 @@ impl crate::world::level::world_gen_level::WorldGenLevel for WorldGenRegion<'_> 
         WorldGenRegion::set_section_block_state(self, pos, state);
     }
 
-    fn add_fresh_entity(&mut self, entity: crate::world::entity::LevelEntity) -> bool {
+    fn destroy_block(&mut self, pos: BlockPos, _drop_resources: bool) -> bool {
+        if self.get_block_state(pos).is_air() {
+            return false;
+        }
+        self.set_block(pos, blocks::AIR.default_state(), crate::world::level::update_flags::UPDATE_ALL)
+    }
+}
+
+impl EnvironmentAccess for WorldGenRegion<'_> {
+    fn biome(&self, x: i32, y: i32, z: i32) -> Biome {
+        WorldGenRegion::get_biome(self, BlockPos::new(x, y, z))
+    }
+
+    fn noise_biome(&self, quart_x: i32, quart_y: i32, quart_z: i32) -> Biome {
+        self.get_noise_biome(quart_x, quart_y, quart_z)
+    }
+
+    fn clock_total_ticks(&self, _clock: usize) -> i64 {
+        0
+    }
+
+    fn rain_level(&self) -> f32 {
+        0.0
+    }
+
+    fn thunder_level(&self) -> f32 {
+        0.0
+    }
+}
+
+impl ServerLevelAccessor for WorldGenRegion<'_> {
+    fn get_difficulty(&self) -> Difficulty {
+        self.difficulty
+    }
+
+    fn get_current_difficulty_at(&mut self, pos: BlockPos) -> DifficultyInstance {
+        assert!(self.has_chunk(pos.x >> 4, pos.z >> 4), "We are asking a region for a chunk out of bound");
+        DifficultyInstance::new(self.difficulty, self.level_data.overworld_clock_time, 0, self.level_data.moon_brightness)
+    }
+
+    fn get_height(&mut self, kind: HeightmapType, x: i32, z: i32) -> i32 {
+        WorldGenRegion::get_height(self, kind, x, z)
+    }
+
+    fn get_biome(&mut self, pos: BlockPos) -> Biome {
+        WorldGenRegion::get_biome(self, pos)
+    }
+
+    fn get_environment_attribute<T: AttributeValue>(&mut self, attribute: EnvironmentAttribute<T>, pos: BlockPos) -> T {
+        let system = self.environment_attributes.expect("a region with environment attributes");
+        system.get_value(attribute, Vec3::at_center_of(pos), self)
+    }
+
+    fn dimension_type(&self) -> &'static DimensionType {
+        self.dimension
+    }
+
+    fn get_sky_darken(&self) -> i32 {
+        0
+    }
+
+    fn is_thundering(&self) -> bool {
+        self.level_data.thundering
+    }
+
+    fn is_within_world_border(&self, pos: BlockPos) -> bool {
+        let [min_x, min_z, max_x, max_z] = self.level_data.world_border;
+        let (x, z) = (pos.x as f64, pos.z as f64);
+        x >= min_x && x < max_x && z >= min_z && z < max_z
+    }
+
+    fn get_nearest_player(&self, _x: f64, _y: f64, _z: f64, _max_dist: f64, _filter_out_creative: bool) -> Option<crate::world::entity::EntityId> {
+        None
+    }
+
+    fn no_collision(&mut self, aabb: &AABB) -> bool {
+        for_each_block_collision(|pos| self.chunk_for_collisions(pos), aabb, &CollisionContext::EMPTY, false, false, |_, c| c.shape.is_empty())
+    }
+
+    fn is_unobstructed(&mut self, _aabb: &AABB) -> bool {
+        true
+    }
+
+    fn add_fresh_entity(&mut self, entity: LevelEntity) -> bool {
         let block_pos = entity.entity().block_position();
         let chunk = self.get_chunk(block_pos.x >> 4, block_pos.z >> 4);
         if let Some(proto) = chunk.proto.as_mut()
@@ -318,13 +423,6 @@ impl crate::world::level::world_gen_level::WorldGenLevel for WorldGenRegion<'_> 
             proto.entities.push(tag);
         }
         true
-    }
-
-    fn destroy_block(&mut self, pos: BlockPos, _drop_resources: bool) -> bool {
-        if self.get_block_state(pos).is_air() {
-            return false;
-        }
-        self.set_block(pos, blocks::AIR.default_state(), crate::world::level::update_flags::UPDATE_ALL)
     }
 }
 

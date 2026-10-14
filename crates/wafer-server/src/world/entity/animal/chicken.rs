@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use wafer_core::random::RandomSource;
-use wafer_core::{BlockPos, Vec3};
+use wafer_core::Vec3;
 use wafer_data::{SyncedRegistry, item_tags, registry, registry_id};
 use serde_json::Value;
 
@@ -24,7 +24,8 @@ use crate::world::entity::ai::goal::panic_goal::PanicGoal;
 use crate::world::entity::ai::goal::random_look_around_goal::RandomLookAroundGoal;
 use crate::world::entity::ai::goal::tempt_goal::TemptGoal;
 use crate::world::entity::ai::goal::water_avoiding_random_stroll_goal::WaterAvoidingRandomStrollGoal;
-use crate::world::entity::variant::variant_utils::SpawnPrioritySelectors;
+use crate::world::entity::variant::variant_utils::{self, SpawnPrioritySelectors};
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::item::ItemStack;
 use crate::world::level::pathfinder::path_type::PathType;
 
@@ -190,12 +191,17 @@ impl ServerLevel {
         let is_chicken_jockey = matches!(&self.mob(id).expect("a chicken").kind, MobKind::Chicken(chicken) if chicken.is_chicken_jockey);
         if is_chicken_jockey { 10 } else { self.animal_get_base_experience_reward(id) }
     }
+}
 
-    pub fn select_chicken_variant_to_spawn(&mut self, pos: BlockPos) -> Option<i32> {
-        self.select_variant_to_spawn(pos, spawn_selectors())
+pub fn finalize_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), mob: &mut Mob) {
+    let pos = mob.entity.block_position();
+    if let Some(variant) = variant_utils::select_variant_to_spawn(level, pos, spawn_selectors()) {
+        mob.entity.data.set(DATA_VARIANT, DataValue::ChickenVariant(variant));
     }
+    let sound_variant = variant_utils::pick_random_sound_variant("minecraft:chicken_sound_variant", level.get_random());
+    mob.entity.data.set(DATA_SOUND_VARIANT, DataValue::ChickenSoundVariant(sound_variant));
+}
 
-    pub fn pick_random_chicken_sound_variant(&mut self) -> i32 {
-        self.pick_random_sound_variant("minecraft:chicken_sound_variant")
-    }
+pub fn remove_when_far_away(chicken: &Chicken) -> bool {
+    chicken.is_chicken_jockey
 }

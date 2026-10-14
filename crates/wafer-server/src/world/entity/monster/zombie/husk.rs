@@ -54,7 +54,7 @@ impl ServerLevel {
         let zombie_group_data = match group_data {
             Some(SpawnGroupData::Zombie(zombie_data)) => Some(zombie_data),
             Some(SpawnGroupData::Husk(husk_data)) => Some(husk_data.zombie_group_data),
-            None => None,
+            _ => None,
         };
         if let Some(zombie_group_data) = zombie_group_data {
             let mut husk_group_data = HuskGroupData::new(zombie_group_data);

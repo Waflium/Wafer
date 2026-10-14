@@ -24,7 +24,7 @@ pub fn select<T: Copy>(entries: &[(T, Selector)], biome: i32) -> Vec<T> {
     unpacked_entries.into_iter().map(|(entry, _)| *entry).collect()
 }
 
-pub fn pick<T: Copy>(entries: &[(T, Selector)], random: &mut impl RandomSource, biome: i32) -> Option<T> {
+pub fn pick<T: Copy>(entries: &[(T, Selector)], random: &mut (impl RandomSource + ?Sized), biome: i32) -> Option<T> {
     let selected = select(entries, biome);
     if selected.is_empty() {
         return None;

@@ -23,6 +23,7 @@ use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::item::dye_color::DyeColor;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
 
 pub const DATA_WOOL_ID: usize = 18;
@@ -88,6 +89,16 @@ impl Sheep {
         goal_selector.add_goal(7, Goal::LookAtPlayer(LookAtPlayerGoal::new(6.0)));
         goal_selector.add_goal(8, Goal::RandomLookAround(RandomLookAroundGoal::default()));
     }
+}
+
+pub fn get_random_sheep_color(level: &mut (impl ServerLevelAccessor + ?Sized), pos: BlockPos) -> DyeColor {
+    let biome = level.get_biome(pos).0 as i32;
+    sheep_color_spawn_rules::get_sheep_color(biome, level.get_random())
+}
+
+pub fn finalize_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), mob: &mut Mob) {
+    let color = get_random_sheep_color(level, mob.entity.block_position());
+    set_color(&mut mob.entity, color);
 }
 
 impl ServerLevel {
@@ -158,16 +169,6 @@ impl ServerLevel {
         if self.can_age_up(id) {
             self.age_up(id, 60, false);
         }
-    }
-
-    pub fn get_random_sheep_color(&mut self, pos: BlockPos) -> DyeColor {
-        let biome = self.get_biome(pos).0 as i32;
-        sheep_color_spawn_rules::get_sheep_color(biome, &mut self.random)
-    }
-
-    pub fn sheep_finalize_spawn(&mut self, id: EntityId, pos: BlockPos) {
-        let color = self.get_random_sheep_color(pos);
-        set_color(self.entity_mut(id), color);
     }
 
     pub fn is_sheep(&self, id: EntityId) -> bool {

@@ -1,6 +1,7 @@
 use wafer_core::AABB;
 
 use super::ServerLevel;
+use super::game_mode::GameType;
 use crate::world::entity::ai::targeting::targeting_conditions::TargetingConditions;
 use crate::world::entity::mob::MobKind;
 use crate::world::entity::{EntityId, LevelEntity};
@@ -20,6 +21,32 @@ impl ServerLevel {
             }
         }
         result
+    }
+
+    pub fn get_nearest_player_to(&self, x: f64, y: f64, z: f64, range: f64, filter_out_creative: bool) -> Option<EntityId> {
+        let mut best = -1.0;
+        let mut result = None;
+        for player in self.players.values() {
+            let game_type = player.game_mode.game_type;
+            if game_type == GameType::Spectator || filter_out_creative && game_type == GameType::Creative {
+                continue;
+            }
+            let dist = player.entity.distance_to_sqr_xyz(x, y, z);
+            if (range < 0.0 || dist < range * range) && (best == -1.0 || dist < best) {
+                best = dist;
+                result = Some(player.entity.id);
+            }
+        }
+        result
+    }
+
+    pub fn is_unobstructed_by_entities(&self, source: Option<EntityId>, aabb: &AABB) -> bool {
+        self.get_entities(source, aabb).into_iter().all(|entity| {
+            self.entity(entity).is_removed()
+                || !self.blocks_building(entity)
+                || source.is_some_and(|source| self.is_passenger_of_same_vehicle(entity, source))
+                || !self.entity(entity).bounding_box().intersects(aabb)
+        })
     }
 
     pub fn get_nearest_entity(&mut self, entities: &[EntityId], target_conditions: &TargetingConditions, source: Option<EntityId>, x: f64, y: f64, z: f64) -> Option<EntityId> {

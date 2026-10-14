@@ -71,70 +71,83 @@ impl ServerLevel {
         out
     }
 
-    fn for_each_block_collision(&self, box_: &AABB, context: &CollisionContext, only_suffocating_blocks: bool, always_collide_with_fluid: bool, mut visit: impl FnMut(BlockPos, Collider<'static>) -> bool) -> bool {
-        let x0 = mth::floor(box_.min_x - 1.0e-7) - 1;
-        let x1 = mth::floor(box_.max_x + 1.0e-7) + 1;
-        let y0 = mth::floor(box_.min_y - 1.0e-7) - 1;
-        let y1 = mth::floor(box_.max_y + 1.0e-7) + 1;
-        let z0 = mth::floor(box_.min_z - 1.0e-7) - 1;
-        let z1 = mth::floor(box_.max_z + 1.0e-7) + 1;
-        let (width, height, depth) = (x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1);
-        let mut entity_shape: Option<VoxelShape> = None;
-        let mut cached_chunk: Option<(ChunkPos, Option<&crate::world::level::chunk::LevelChunk>)> = None;
-        for index in 0..width * height * depth {
-            let (cx, slice) = (index % width, index / width);
-            let (cy, cz) = (slice % height, slice / height);
-            let mut face_type = 0;
-            if cx == 0 || cx == width - 1 {
-                face_type += 1;
-            }
-            if cy == 0 || cy == height - 1 {
-                face_type += 1;
-            }
-            if cz == 0 || cz == depth - 1 {
-                face_type += 1;
-            }
-            if face_type == 3 {
-                continue;
-            }
-            let (x, y, z) = (x0 + cx, y0 + cy, z0 + cz);
-            let chunk_pos = ChunkPos::new(x >> 4, z >> 4);
-            let chunk = match cached_chunk {
-                Some((p, c)) if p == chunk_pos => c,
-                _ => {
-                    let c = self.chunks.loaded_chunk(chunk_pos);
-                    cached_chunk = Some((chunk_pos, c));
-                    c
-                }
-            };
-            let Some(chunk) = chunk else { continue };
-            let pos = BlockPos::new(x, y, z);
-            let state = chunk.block_state(pos);
-            if only_suffocating_blocks && !state.is_suffocating() {
-                continue;
-            }
-            if face_type == 1 && !state.has_large_collision_shape() || face_type == 2 && !state.is_block(blocks::MOVING_PISTON) {
-                continue;
-            }
-            let liquid_block = always_collide_with_fluid && (state.is_block(blocks::WATER) || state.is_block(blocks::LAVA));
-            let shape = if liquid_block { &*FULL_BLOCK } else { context.get_collision_shape(state, pos) };
-            let collider = Collider { shape, offset: [x as f64, y as f64, z as f64] };
-            let collides = if liquid_block || state.is_collision_shape_full_block() {
-                box_.intersects_bounds(x as f64, y as f64, z as f64, x as f64 + 1.0, y as f64 + 1.0, z as f64 + 1.0)
-            } else if !shape.is_empty() {
-                let moved = shape.moved(x as f64, y as f64, z as f64);
-                let entity_shape = entity_shape.get_or_insert_with(|| VoxelShape::from_boxes(&[*box_]));
-                join_is_not_empty(&moved, entity_shape, BooleanOp::And)
-            } else {
-                false
-            };
-            if collides && !visit(pos, collider) {
-                return false;
-            }
-        }
-        true
+    fn for_each_block_collision(&self, box_: &AABB, context: &CollisionContext, only_suffocating_blocks: bool, always_collide_with_fluid: bool, visit: impl FnMut(BlockPos, Collider<'static>) -> bool) -> bool {
+        for_each_block_collision(|pos| self.chunks.loaded_chunk(pos), box_, context, only_suffocating_blocks, always_collide_with_fluid, visit)
     }
+}
 
+pub fn for_each_block_collision<'c>(
+    chunk_for_collisions: impl Fn(ChunkPos) -> Option<&'c crate::world::level::chunk::LevelChunk>,
+    box_: &AABB,
+    context: &CollisionContext,
+    only_suffocating_blocks: bool,
+    always_collide_with_fluid: bool,
+    mut visit: impl FnMut(BlockPos, Collider<'static>) -> bool,
+) -> bool {
+    let x0 = mth::floor(box_.min_x - 1.0e-7) - 1;
+    let x1 = mth::floor(box_.max_x + 1.0e-7) + 1;
+    let y0 = mth::floor(box_.min_y - 1.0e-7) - 1;
+    let y1 = mth::floor(box_.max_y + 1.0e-7) + 1;
+    let z0 = mth::floor(box_.min_z - 1.0e-7) - 1;
+    let z1 = mth::floor(box_.max_z + 1.0e-7) + 1;
+    let (width, height, depth) = (x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1);
+    let mut entity_shape: Option<VoxelShape> = None;
+    let mut cached_chunk: Option<(ChunkPos, Option<&crate::world::level::chunk::LevelChunk>)> = None;
+    for index in 0..width * height * depth {
+        let (cx, slice) = (index % width, index / width);
+        let (cy, cz) = (slice % height, slice / height);
+        let mut face_type = 0;
+        if cx == 0 || cx == width - 1 {
+            face_type += 1;
+        }
+        if cy == 0 || cy == height - 1 {
+            face_type += 1;
+        }
+        if cz == 0 || cz == depth - 1 {
+            face_type += 1;
+        }
+        if face_type == 3 {
+            continue;
+        }
+        let (x, y, z) = (x0 + cx, y0 + cy, z0 + cz);
+        let chunk_pos = ChunkPos::new(x >> 4, z >> 4);
+        let chunk = match cached_chunk {
+            Some((p, c)) if p == chunk_pos => c,
+            _ => {
+                let c = chunk_for_collisions(chunk_pos);
+                cached_chunk = Some((chunk_pos, c));
+                c
+            }
+        };
+        let Some(chunk) = chunk else { continue };
+        let pos = BlockPos::new(x, y, z);
+        let state = chunk.block_state(pos);
+        if only_suffocating_blocks && !state.is_suffocating() {
+            continue;
+        }
+        if face_type == 1 && !state.has_large_collision_shape() || face_type == 2 && !state.is_block(blocks::MOVING_PISTON) {
+            continue;
+        }
+        let liquid_block = always_collide_with_fluid && (state.is_block(blocks::WATER) || state.is_block(blocks::LAVA));
+        let shape = if liquid_block { &*FULL_BLOCK } else { context.get_collision_shape(state, pos) };
+        let collider = Collider { shape, offset: [x as f64, y as f64, z as f64] };
+        let collides = if liquid_block || state.is_collision_shape_full_block() {
+            box_.intersects_bounds(x as f64, y as f64, z as f64, x as f64 + 1.0, y as f64 + 1.0, z as f64 + 1.0)
+        } else if !shape.is_empty() {
+            let moved = shape.moved(x as f64, y as f64, z as f64);
+            let entity_shape = entity_shape.get_or_insert_with(|| VoxelShape::from_boxes(&[*box_]));
+            join_is_not_empty(&moved, entity_shape, BooleanOp::And)
+        } else {
+            false
+        };
+        if collides && !visit(pos, collider) {
+            return false;
+        }
+    }
+    true
+}
+
+impl ServerLevel {
     pub fn no_collision(&self, box_: &AABB) -> bool {
         self.for_each_block_collision(box_, &CollisionContext::EMPTY, false, false, |_, c| c.shape.is_empty())
     }

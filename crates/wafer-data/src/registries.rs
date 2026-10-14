@@ -132,4 +132,6 @@ pub struct DimensionType {
     pub default_clock: Option<&'static str>,
     pub attributes: &'static str,
     pub timelines: &'static str,
+    pub monster_spawn_light_level: &'static str,
+    pub monster_spawn_block_light_limit: i32,
 }

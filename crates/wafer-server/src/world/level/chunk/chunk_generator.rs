@@ -23,6 +23,7 @@ use crate::world::level::levelgen::structure::structure_set::{StructureSelection
 use crate::world::level::levelgen::structure::structure_start::StructureStart;
 use crate::world::level::levelgen::worldgen_random::WorldgenRandom;
 use crate::world::level::levelgen::quart_pos;
+use crate::world::level::natural_spawner;
 use crate::world::level::noise_column::NoiseColumn;
 
 const DECORATION_STEPS: usize = 11;
@@ -137,6 +138,17 @@ impl ChunkGenerator {
         match self {
             ChunkGenerator::Flat(flat) => flat.features_per_step(),
             ChunkGenerator::Noise(noise) => &noise.features_per_step().0,
+        }
+    }
+
+    pub fn spawn_original_mobs(&self, world_gen_region: &mut WorldGenRegion, spawn_mobs: bool) {
+        let ChunkGenerator::Noise(noise) = self else { return };
+        if !noise.settings.disable_mob_generation {
+            let center = world_gen_region.get_center();
+            let source_pos = BlockPos::new(center.min_block_x(), world_gen_region.get_max_y(), center.min_block_z());
+            let mut random = WorldgenRandom::legacy(0);
+            random.set_decoration_seed(world_gen_region.get_seed(), center.min_block_x(), center.min_block_z());
+            natural_spawner::spawn_mobs_for_chunk_generation(world_gen_region, source_pos, center, &mut random, spawn_mobs);
         }
     }
 

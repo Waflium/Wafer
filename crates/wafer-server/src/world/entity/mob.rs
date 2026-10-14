@@ -21,7 +21,7 @@ use super::animal::cow::cow::{self, Cow};
 use super::animal::cow::mushroom_cow::{self, MushroomCow};
 use super::animal::pig::pig::{self, Pig};
 use super::animal::sheep::sheep::{self, Sheep};
-use super::ageable_mob::{AgeableMob, BABY_START_AGE};
+use super::ageable_mob::{self, AgeableMob, BABY_START_AGE};
 use super::conversion_params::ConversionParams;
 use super::variant::variant_utils;
 use crate::world::item::dye_color::DyeColor;
@@ -45,7 +45,10 @@ use crate::world::item::component::{self as dc, DataComponentType};
 use crate::world::item::{self, ItemStack, spawn_egg_item};
 use crate::world::{InteractionHand, InteractionResult};
 use crate::world::level::block::entity::int_value;
+use crate::world::level::block::state::block_behaviour;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::storage::uuid_ints;
+use super::entity_type::EntityType;
 
 pub const DEFAULT_EQUIPMENT_DROP_CHANCE: f32 = 0.085;
 const MOB_FLAG_NO_AI: i8 = 1;
@@ -59,8 +62,6 @@ pub const WEARING_ARMOR_UPGRADE_MATERIAL_ATTEMPTS: f32 = 3.0;
 pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
 pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
 pub const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
-const DESPAWN_DISTANCE: i32 = 128;
-const NO_DESPAWN_DISTANCE: i32 = 32;
 
 fn default_attack_reach() -> f64 {
     (2.04f32 as f64).sqrt() - 0.6f32 as f64
@@ -183,6 +184,30 @@ impl Mob {
 
     pub fn get_head_rot_speed(&self) -> i32 {
         10
+    }
+
+    pub fn get_type(&self) -> &'static EntityType {
+        EntityType::by_id(self.entity.entity_type)
+    }
+
+    pub fn is_persistence_required(&self) -> bool {
+        self.persistence_required
+    }
+
+    pub fn remove_when_far_away(&self, dist_sqr: f64) -> bool {
+        match &self.kind {
+            MobKind::Chicken(chicken) => chicken::remove_when_far_away(chicken),
+            MobKind::Zombie(_) | MobKind::Husk(_) => true,
+            _ => super::animal::remove_when_far_away(dist_sqr),
+        }
+    }
+
+    pub fn get_max_spawn_cluster_size(&self) -> i32 {
+        4
+    }
+
+    pub fn is_max_group_size_reached(&self, _group_size: i32) -> bool {
+        false
     }
 
     pub fn has_home(&self) -> bool {
@@ -783,6 +808,11 @@ impl Mob {
             }
         }
     }
+}
+
+pub fn check_mob_spawn_rules(entity_type: &EntityType, level: &mut (impl ServerLevelAccessor + ?Sized), spawn_reason: EntitySpawnReason, pos: BlockPos) -> bool {
+    let below = pos.below();
+    EntitySpawnReason::is_spawner(spawn_reason) || block_behaviour::is_valid_spawn(level.block_state(below), entity_type)
 }
 
 pub fn slot_name(slot: EquipmentSlot) -> &'static str {
@@ -1389,57 +1419,39 @@ impl ServerLevel {
         }
     }
 
-    pub fn remove_when_far_away(&self, id: EntityId, _dist_sqr: f64) -> bool {
-        match &self.mob(id).expect("a mob").kind {
-            MobKind::Chicken(chicken) => chicken.is_chicken_jockey,
-            MobKind::Cow(_) | MobKind::MushroomCow(_) | MobKind::Pig(_) | MobKind::Sheep(_) => false,
-            MobKind::Zombie(_) | MobKind::Husk(_) => true,
-        }
-    }
-
     pub fn requires_custom_persistence(&self, id: EntityId) -> bool {
         self.is_passenger(id)
     }
 
     pub fn check_mob_despawn(&mut self, id: EntityId) {
-        let entity_type = wafer_data::registry::ENTITY_TYPE[self.entity(id).entity_type as usize];
-        if self.difficulty == Difficulty::Peaceful && !super::entity_types::by_name(entity_type).is_allowed_in_peaceful() {
+        let mob = self.mob(id).expect("a mob");
+        let entity_type = mob.get_type();
+        if self.difficulty == Difficulty::Peaceful && !entity_type.is_allowed_in_peaceful() {
             self.remove(id, super::RemovalReason::Discarded);
             return;
         }
-        let requires_custom_persistence = self.requires_custom_persistence(id);
-        let mob = self.mob(id).expect("a mob");
-        let is_persistent = mob.persistence_required || requires_custom_persistence;
-        let position = mob.entity.position();
-        let Some(player) = self.nearest_player_to_entity(position) else { return };
+        let is_persistent = mob.is_persistence_required() || self.requires_custom_persistence(id);
+        let position = self.entity(id).position();
+        let Some(player) = self.get_nearest_player_to(position.x, position.y, position.z, -1.0, false) else { return };
         let dist_sqr = self.entity(player).position().distance_to_sqr(position);
-        let despawn_distance_sqr = (DESPAWN_DISTANCE * DESPAWN_DISTANCE) as f64;
-        if !is_persistent && dist_sqr > despawn_distance_sqr && self.remove_when_far_away(id, dist_sqr) {
+        let instant_despawn_distance = entity_type.get_category().get_despawn_distance();
+        let despawn_distance_sqr = instant_despawn_distance * instant_despawn_distance;
+        if !is_persistent && dist_sqr > despawn_distance_sqr as f64 && self.mob(id).expect("a mob").remove_when_far_away(dist_sqr) {
             self.remove(id, super::RemovalReason::Discarded);
         }
-        let no_despawn_distance_sqr = (NO_DESPAWN_DISTANCE * NO_DESPAWN_DISTANCE) as f64;
+        let no_despawn_distance = entity_type.get_category().get_no_despawn_distance();
+        let no_despawn_distance_sqr = (no_despawn_distance * no_despawn_distance) as f64;
         let mob = self.mob_mut(id).expect("a mob");
         if !is_persistent
             && mob.living.no_action_time > 600
             && mob.entity.random.next_int_bounded(800) == 0
             && dist_sqr > no_despawn_distance_sqr
-            && self.remove_when_far_away(id, dist_sqr)
+            && mob.remove_when_far_away(dist_sqr)
         {
             self.remove(id, super::RemovalReason::Discarded);
         } else if dist_sqr < no_despawn_distance_sqr {
-            self.mob_mut(id).expect("a mob").living.no_action_time = 0;
+            mob.living.no_action_time = 0;
         }
-    }
-
-    fn nearest_player_to_entity(&self, position: wafer_core::Vec3) -> Option<EntityId> {
-        let mut best: Option<(EntityId, f64)> = None;
-        for p in self.players.values().filter(|p| !self.is_spectator(p.entity.id)) {
-            let distance = p.entity.position().distance_to_sqr(position);
-            if best.is_none_or(|(_, b)| distance < b) {
-                best = Some((p.entity.id, distance));
-            }
-        }
-        best.map(|(id, _)| id)
     }
 
     pub fn finalize_spawn_detached(&mut self, entity: LevelEntity, difficulty: &DifficultyInstance, spawn_reason: EntitySpawnReason, group_data: Option<SpawnGroupData>) -> (LevelEntity, Option<SpawnGroupData>) {
@@ -1451,23 +1463,17 @@ impl ServerLevel {
     }
 
     pub fn finalize_spawn(&mut self, id: EntityId, difficulty: &DifficultyInstance, spawn_reason: EntitySpawnReason, group_data: Option<SpawnGroupData>) -> Option<SpawnGroupData> {
-        let pos = self.entity(id).block_position();
         match self.mob(id).expect("a mob").kind {
-            MobKind::Zombie(_) => return self.zombie_finalize_spawn(id, difficulty, spawn_reason, group_data),
-            MobKind::Husk(_) => return self.husk_finalize_spawn(id, difficulty, spawn_reason, group_data),
-            MobKind::Chicken(_) => {
-                if let Some(variant) = self.select_chicken_variant_to_spawn(pos) {
-                    self.entity_mut(id).data.set(chicken::DATA_VARIANT, DataValue::ChickenVariant(variant));
-                }
-                let sound_variant = self.pick_random_chicken_sound_variant();
-                self.entity_mut(id).data.set(chicken::DATA_SOUND_VARIANT, DataValue::ChickenSoundVariant(sound_variant));
+            MobKind::Zombie(_) => self.zombie_finalize_spawn(id, difficulty, spawn_reason, group_data),
+            MobKind::Husk(_) => self.husk_finalize_spawn(id, difficulty, spawn_reason, group_data),
+            _ => {
+                let (index, _, entity) = self.entities.shift_remove_full(&id).expect("the mob to finalize");
+                let LevelEntity::Mob(mut mob) = entity else { unreachable!("a mob") };
+                let group_data = finalize_spawn(self, &mut mob, difficulty, spawn_reason, group_data);
+                self.entities.shift_insert(index, id, LevelEntity::Mob(mob));
+                group_data
             }
-            MobKind::Cow(_) => self.cow_finalize_spawn(id, pos),
-            MobKind::MushroomCow(_) => {}
-            MobKind::Pig(_) => self.pig_finalize_spawn(id, pos),
-            MobKind::Sheep(_) => self.sheep_finalize_spawn(id, pos),
         }
-        self.mob_finalize_spawn(id, difficulty, spawn_reason, group_data)
     }
 
     pub fn mob_finalize_spawn(&mut self, id: EntityId, _difficulty: &DifficultyInstance, _spawn_reason: EntitySpawnReason, group_data: Option<SpawnGroupData>) -> Option<SpawnGroupData> {
@@ -1599,4 +1605,61 @@ pub fn get_equipment_for_slot(slot: EquipmentSlot, ty: i32) -> Option<Item> {
         EquipmentSlot::Feet => by_type([items::LEATHER_BOOTS, items::COPPER_BOOTS, items::GOLDEN_BOOTS, items::CHAINMAIL_BOOTS, items::IRON_BOOTS, items::DIAMOND_BOOTS]),
         _ => None,
     }
+}
+
+pub fn finalize_spawn(
+    level: &mut (impl ServerLevelAccessor + ?Sized),
+    mob: &mut Mob,
+    difficulty: &DifficultyInstance,
+    spawn_reason: EntitySpawnReason,
+    group_data: Option<SpawnGroupData>,
+) -> Option<SpawnGroupData> {
+    match mob.kind {
+        MobKind::Chicken(_) => chicken::finalize_spawn(level, mob),
+        MobKind::Cow(_) => cow::finalize_spawn(level, mob),
+        MobKind::MushroomCow(_) => {}
+        MobKind::Pig(_) => pig::finalize_spawn(level, mob),
+        MobKind::Sheep(_) => sheep::finalize_spawn(level, mob),
+        MobKind::Zombie(_) | MobKind::Husk(_) => {}
+    }
+    let group_data = if mob.ageable().is_some() { ageable_mob::finalize_spawn(level, mob, group_data) } else { group_data };
+    mob_finalize_spawn(level, mob, difficulty, spawn_reason, group_data)
+}
+
+fn mob_finalize_spawn(
+    level: &mut (impl ServerLevelAccessor + ?Sized),
+    mob: &mut Mob,
+    _difficulty: &DifficultyInstance,
+    _spawn_reason: EntitySpawnReason,
+    group_data: Option<SpawnGroupData>,
+) -> Option<SpawnGroupData> {
+    let random = level.get_random();
+    if let Some(follow_range) = mob.living.attributes.instance(Attribute::FollowRange)
+        && !follow_range.has_modifier(RANDOM_SPAWN_BONUS_ID)
+    {
+        follow_range.add_permanent_modifier(super::attributes::AttributeModifier {
+            id: std::borrow::Cow::Borrowed(RANDOM_SPAWN_BONUS_ID),
+            amount: random.triangle(0.0, 0.11485000000000001),
+            operation: super::attributes::Operation::AddMultipliedBase,
+        });
+    }
+    mob.set_left_handed(random.next_float() < 0.05);
+    group_data
+}
+
+pub fn get_walk_target_value(mob: &Mob, pos: BlockPos, level: &mut (impl ServerLevelAccessor + ?Sized)) -> f32 {
+    match mob.kind {
+        MobKind::MushroomCow(_) => mushroom_cow::get_walk_target_value(pos, level),
+        MobKind::Zombie(_) | MobKind::Husk(_) => super::monster::monster::get_walk_target_value(pos, level),
+        _ => super::animal::get_walk_target_value(pos, level),
+    }
+}
+
+pub fn check_spawn_rules(mob: &Mob, level: &mut (impl ServerLevelAccessor + ?Sized), _spawn_reason: EntitySpawnReason) -> bool {
+    get_walk_target_value(mob, mob.entity.block_position(), level) >= 0.0
+}
+
+pub fn check_spawn_obstruction(mob: &Mob, level: &mut (impl ServerLevelAccessor + ?Sized)) -> bool {
+    let bounding_box = mob.entity.bounding_box();
+    !level.contains_any_liquid(&bounding_box) && level.is_unobstructed(&bounding_box)
 }

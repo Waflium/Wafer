@@ -4,7 +4,9 @@ use super::EntityId;
 use super::data::{DataValue, ids};
 use super::mob::{Mob, MobKind};
 use super::sound_event;
+use super::spawn_group_data::SpawnGroupData;
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::item::ItemStack;
 use crate::world::{InteractionHand, InteractionResult};
 
@@ -24,6 +26,52 @@ pub fn can_use_golden_dandelion(item_in_hand: &ItemStack, is_baby: bool, cooldow
 
 pub fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
     ((ticks_until_adult / 20) as f32 * 0.1) as i32
+}
+
+pub fn finalize_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), mob: &mut Mob, group_data: Option<SpawnGroupData>) -> Option<SpawnGroupData> {
+    let mut group_data = match group_data {
+        Some(SpawnGroupData::AgeableMob(data)) => data,
+        None => AgeableMobGroupData::new(true),
+        Some(other) => panic!("class {other:?} cannot be cast to class AgeableMobGroupData"),
+    };
+    if group_data.is_should_spawn_baby() && group_data.get_group_size() > 0 && level.get_random().next_float() <= group_data.get_baby_spawn_chance() && mob.set_age(BABY_START_AGE) {
+        mob.refresh_dimensions();
+    }
+    group_data.increase_group_size_by_one();
+    Some(SpawnGroupData::AgeableMob(group_data))
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct AgeableMobGroupData {
+    group_size: i32,
+    should_spawn_baby: bool,
+    baby_spawn_chance: f32,
+}
+
+impl AgeableMobGroupData {
+    pub fn with_chance(should_spawn_baby: bool, baby_spawn_chance: f32) -> AgeableMobGroupData {
+        AgeableMobGroupData { group_size: 0, should_spawn_baby, baby_spawn_chance }
+    }
+
+    pub fn new(should_spawn_baby: bool) -> AgeableMobGroupData {
+        AgeableMobGroupData::with_chance(should_spawn_baby, 0.05)
+    }
+
+    pub fn get_group_size(&self) -> i32 {
+        self.group_size
+    }
+
+    pub fn increase_group_size_by_one(&mut self) {
+        self.group_size += 1;
+    }
+
+    pub fn is_should_spawn_baby(&self) -> bool {
+        self.should_spawn_baby
+    }
+
+    pub fn get_baby_spawn_chance(&self) -> f32 {
+        self.baby_spawn_chance
+    }
 }
 
 impl ServerLevel {

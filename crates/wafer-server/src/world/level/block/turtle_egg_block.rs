@@ -17,11 +17,11 @@ use crate::world::level::BlockGetter;
 pub const MAX_HATCH_LEVEL: i32 = 2;
 pub const MAX_EGGS: i32 = 4;
 
-pub fn on_sand(level: &mut ServerLevel, pos: BlockPos) -> bool {
+pub fn on_sand(level: &mut (impl BlockGetter + ?Sized), pos: BlockPos) -> bool {
     is_sand(level, pos.below())
 }
 
-pub fn is_sand(level: &mut ServerLevel, pos: BlockPos) -> bool {
+pub fn is_sand(level: &mut (impl BlockGetter + ?Sized), pos: BlockPos) -> bool {
     level.block_state(pos).is(&block_tags::SAND)
 }
 

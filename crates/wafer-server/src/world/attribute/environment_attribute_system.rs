@@ -57,13 +57,17 @@ impl Builder {
     }
 
     pub fn add_default_layers(self, dimension: &DimensionType, can_have_weather: bool) -> Self {
-        let attributes = EnvironmentAttributeMap::parse(&serde_json::from_str(dimension.attributes).expect("dimension attributes JSON"), false)
-            .unwrap_or_else(|e| panic!("attributes of {}: {e}", dimension.name));
-        let mut builder = self.add_constant_layer(&attributes).add_biome_layer(&BIOME_ATTRIBUTES);
+        let mut builder = self.add_static_layers(dimension);
         for timeline in dimension_timelines(dimension) {
             builder = builder.add_timeline_layer(timeline);
         }
         if can_have_weather { builder.add_weather_layers() } else { builder }
+    }
+
+    pub fn add_static_layers(self, dimension: &DimensionType) -> Self {
+        let attributes = EnvironmentAttributeMap::parse(&serde_json::from_str(dimension.attributes).expect("dimension attributes JSON"), false)
+            .unwrap_or_else(|e| panic!("attributes of {}: {e}", dimension.name));
+        self.add_constant_layer(&attributes).add_biome_layer(&BIOME_ATTRIBUTES)
     }
 
     pub fn add_constant_layer(mut self, map: &EnvironmentAttributeMap) -> Self {

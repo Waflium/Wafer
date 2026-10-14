@@ -212,7 +212,7 @@ pub fn decorate_with(generator: &ChunkGenerator, chunks: &mut HashMap<ChunkPos, 
         };
         let light_engine = LevelLightEngine::new(dimension.min_y, dimension.height as i32, true, dimension.has_skylight);
         let ChunkGenerator::Noise(noise) = generator else { unreachable!() };
-        let mut region = WorldGenRegion::new(center, cache, [true; 9], [false; 9], generator, &noise.state, dimension.min_y, dimension.height as i32, generation, &light_engine, crate::world::difficulty::Difficulty::Easy);
+        let mut region = WorldGenRegion::new(center, cache, [true; 9], [false; 9], generator, &noise.state, dimension, generation, &light_engine, crate::world::difficulty::Difficulty::Easy);
         generator.apply_biome_decoration(&mut region, &structure_starts);
     }
     chunks.extend(taken);

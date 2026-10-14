@@ -1,11 +1,14 @@
 use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
-use wafer_data::{blocks, items, registry, registry_id};
+use wafer_data::{block_tags, blocks, items, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
 use super::abstract_cow::{AbstractCow, CowSoundVariant};
 use crate::server::level::{ServerLevel, SoundSource};
-use crate::world::entity::animal::Animal;
+use crate::world::entity::animal::{self, Animal};
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::entity_type::EntityType;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::entity::attributes::COW_ATTRIBUTES;
 use crate::world::entity::conversion_params::ConversionParams;
 use crate::world::entity::data::{DataValue, ageable_mob_defaults};
@@ -92,6 +95,14 @@ impl MushroomCow {
         Animal::init(&mut mob);
         mob
     }
+}
+
+pub fn get_walk_target_value(pos: BlockPos, level: &mut (impl ServerLevelAccessor + ?Sized)) -> f32 {
+    if level.block_state(pos.below()).is_block(blocks::MYCELIUM) { 10.0 } else { level.get_pathfinding_cost_from_light_levels(pos) }
+}
+
+pub fn check_mushroom_spawn_rules(_entity_type: &EntityType, level: &mut (impl ServerLevelAccessor + ?Sized), _spawn_reason: EntitySpawnReason, pos: BlockPos) -> bool {
+    level.block_state(pos.below()).is(&block_tags::MOOSHROOMS_SPAWNABLE_ON) && animal::is_bright_enough_to_spawn(level, pos)
 }
 
 fn mushroom_cow(level: &mut ServerLevel, id: EntityId) -> &mut MushroomCow {

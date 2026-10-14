@@ -11,7 +11,7 @@ enum SheepColorProvider {
 }
 
 impl SheepColorProvider {
-    fn get(&self, random: &mut impl RandomSource) -> DyeColor {
+    fn get(&self, random: &mut (impl RandomSource + ?Sized)) -> DyeColor {
         match self {
             SheepColorProvider::Single(color) => *color,
             SheepColorProvider::Weighted(elements) => elements.get_random_or_throw(random).get(random),
@@ -41,7 +41,7 @@ static TEMPERATE_SPAWN_CONFIGURATION: LazyLock<SheepColorProvider> = LazyLock::n
 static WARM_SPAWN_CONFIGURATION: LazyLock<SheepColorProvider> = LazyLock::new(|| configuration([("gray", 5), ("light_gray", 5), ("white", 5), ("black", 3)], "brown"));
 static COLD_SPAWN_CONFIGURATION: LazyLock<SheepColorProvider> = LazyLock::new(|| configuration([("light_gray", 5), ("gray", 5), ("white", 5), ("brown", 3)], "black"));
 
-pub fn get_sheep_color(biome: i32, random: &mut impl RandomSource) -> DyeColor {
+pub fn get_sheep_color(biome: i32, random: &mut (impl RandomSource + ?Sized)) -> DyeColor {
     get_sheep_color_configuration(biome).get(random)
 }
 

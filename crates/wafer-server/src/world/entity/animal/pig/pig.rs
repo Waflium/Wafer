@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
 use wafer_data::{EquipmentSlot, item_tags, items, registry, registry_id};
 use serde_json::Value;
@@ -27,6 +26,7 @@ use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::variant::variant_utils::{self, SpawnPrioritySelectors};
 use crate::world::entity::{Entity, EntityDimensions, EntityId};
 use crate::world::item::ItemStack;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
 
 pub const DATA_VARIANT_ID: usize = 19;
@@ -183,12 +183,13 @@ impl ServerLevel {
         }
         Some(baby)
     }
+}
 
-    pub fn pig_finalize_spawn(&mut self, id: EntityId, pos: BlockPos) {
-        if let Some(variant) = self.select_variant_to_spawn(pos, spawn_selectors()) {
-            set_variant(self.entity_mut(id), variant);
-        }
-        let sound_variant = self.pick_random_sound_variant(SOUND_VARIANT_REGISTRY);
-        set_sound_variant(self.entity_mut(id), sound_variant);
+pub fn finalize_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), mob: &mut Mob) {
+    let pos = mob.entity.block_position();
+    if let Some(variant) = variant_utils::select_variant_to_spawn(level, pos, spawn_selectors()) {
+        set_variant(&mut mob.entity, variant);
     }
+    let sound_variant = variant_utils::pick_random_sound_variant(SOUND_VARIANT_REGISTRY, level.get_random());
+    set_sound_variant(&mut mob.entity, sound_variant);
 }

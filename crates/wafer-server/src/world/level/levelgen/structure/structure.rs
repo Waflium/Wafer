@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use super::BoundingBox;
 use super::pieces::structure_pieces_builder::StructurePiecesBuilder;
+use super::structure_spawn_override::StructureSpawnOverride;
 use super::structure_start::StructureStart;
 use super::structures::StructureType;
 use super::terrain_adjustment::TerrainAdjustment;
@@ -51,6 +52,7 @@ static STRUCTURES: LazyLock<Vec<Structure>> = LazyLock::new(|| {
 
 pub struct StructureSettings {
     pub biomes: HolderSet,
+    pub spawn_overrides: [Option<StructureSpawnOverride>; 8],
     pub step: usize,
     pub terrain_adaptation: TerrainAdjustment,
 }
@@ -87,6 +89,7 @@ impl StructureSettings {
         let step = json.get("step").and_then(Value::as_str).ok_or("missing step")?;
         Ok(StructureSettings {
             biomes: parse_biome_holder_set(json.get("biomes").ok_or("missing biomes")?)?,
+            spawn_overrides: StructureSpawnOverride::parse_map(json.get("spawn_overrides"))?,
             step: DECORATION_STEPS.iter().position(|s| *s == step).ok_or_else(|| format!("unknown step {step}"))?,
             terrain_adaptation: match json.get("terrain_adaptation").and_then(Value::as_str) {
                 Some(name) => TerrainAdjustment::by_name(name).ok_or_else(|| format!("unknown terrain adaptation {name}"))?,

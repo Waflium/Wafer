@@ -294,6 +294,7 @@ impl Server {
         let (seed, game_time, generator, game_type, difficulty, difficulty_locked, hardcore) =
             (data.seed, data.game_time, data.generator, data.game_type, data.difficulty, data.difficulty_locked, data.hardcore);
         let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, generator, generate_structures, seed);
+        overworld.chunks.game_rules = game_rules.clone();
         if new_world {
             load_listener.start(level::progress::Stage::PrepareGlobalSpawn, 0);
         }
@@ -334,6 +335,7 @@ impl Server {
         for level in &mut levels {
             level.chunks.set_main_thread_wakeup(main_thread_wakeup.clone());
             level.game_rules = game_rules.clone();
+            level.chunks.game_rules = game_rules.clone();
             level.weather = weather.clone();
             level.scoreboard = scoreboard.clone();
             level.command_storage = command_storage.clone();
@@ -460,6 +462,7 @@ impl Server {
             }
         }
         listener.finish(level::progress::Stage::LoadInitialChunks);
+        self.update_mob_spawning_flags();
     }
 
     fn wait_until_next_tick(&mut self, deadline: Instant) {
@@ -544,9 +547,16 @@ impl Server {
                 level.difficulty = self.difficulty;
                 level.chunks.difficulty = self.difficulty;
             }
+            self.update_mob_spawning_flags();
             for player in self.players() {
                 self.send_difficulty_update(&player.connection);
             }
+        }
+    }
+
+    pub fn update_mob_spawning_flags(&mut self) {
+        for level in &mut self.levels {
+            level.chunks.spawn_enemies = level.is_spawning_monsters();
         }
     }
 
@@ -592,6 +602,9 @@ impl Server {
     fn update_effective_respawn_data(&mut self) {
         let respawn_level = self.find_respawn_dimension();
         self.effective_respawn_data = self.levels[respawn_level].get_world_border_adjusted_respawn_data(self.spawn.clone());
+        for level in &mut self.levels {
+            level.respawn_data = self.effective_respawn_data.clone();
+        }
     }
 
     pub fn find_respawn_dimension(&self) -> usize {
@@ -795,6 +808,8 @@ impl Server {
                     waypoint_manager.break_all_connections(level);
                 }
             }
+        } else if rule == game_rule::SPAWN_MONSTERS {
+            self.update_mob_spawning_flags();
         } else if rule == game_rule::ADVANCE_TIME {
             for p in self.players() {
                 p.connection.send(clientbound::SET_TIME, |w| self.full_time_sync(w));

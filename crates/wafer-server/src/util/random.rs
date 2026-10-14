@@ -1,7 +1,7 @@
 use wafer_core::RandomSource;
 use serde_json::Value;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct WeightedList<T> {
     pub items: Vec<(T, i32)>,
     total_weight: i32,
@@ -11,6 +11,21 @@ impl<T> WeightedList<T> {
     pub fn new(items: Vec<(T, i32)>) -> WeightedList<T> {
         let total_weight = items.iter().map(|(_, w)| *w).sum();
         WeightedList { items, total_weight }
+    }
+
+    pub const fn empty() -> WeightedList<T> {
+        WeightedList { items: Vec::new(), total_weight: 0 }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.total_weight == 0
+    }
+
+    pub fn contains(&self, value: &T) -> bool
+    where
+        T: PartialEq,
+    {
+        self.items.iter().any(|(item, _)| item == value)
     }
 
 

@@ -24,7 +24,10 @@ use crate::world::level::chunk::serialization::{self, SectionLight};
 use crate::world::level::chunk::storage::RegionStorage;
 use crate::world::level::block::entity::BlockEntity;
 use crate::world::level::chunk::block_entities::{BlockEntityTickers, EntityCreationType};
-use super::world_gen_region::{RegionLightTask, WorldGenRegion};
+use super::world_gen_region::{RegionLevelData, RegionLightTask, WorldGenRegion};
+use crate::world::attribute::EnvironmentAttributeSystem;
+use crate::world::level::gamerules::GameRules;
+use crate::world::level::natural_spawner::SpawnState;
 use crate::world::level::chunk::chunk_generator_structure_state::ChunkGeneratorStructureState;
 use crate::world::level::chunk::{Biome, ChunkGenerator, ChunkStructures, HeightmapType, LevelChunk};
 use crate::world::level::levelgen::beardifier::Beardifier;
@@ -57,6 +60,11 @@ pub struct ChunkCache {
     pub generate_structures: bool,
     pub seed: i64,
     pub difficulty: Difficulty,
+    pub game_rules: GameRules,
+    pub region_level_data: RegionLevelData,
+    static_environment_attributes: EnvironmentAttributeSystem,
+    pub spawn_enemies: bool,
+    pub last_spawn_state: Option<SpawnState>,
     io: Option<IoWorker>,
     pub light_engine: ThreadedLevelLightEngine,
     light_changes: Vec<(LightLayer, i64)>,
@@ -107,6 +115,11 @@ impl ChunkCache {
             generate_structures: true,
             seed: 0,
             difficulty: Difficulty::Easy,
+            game_rules: GameRules::default(),
+            region_level_data: RegionLevelData::default(),
+            static_environment_attributes: EnvironmentAttributeSystem::builder().add_static_layers(dimension).build(),
+            spawn_enemies: true,
+            last_spawn_state: None,
             io: storage.map(IoWorker::new),
             light_engine: ThreadedLevelLightEngine::new(dimension.min_y, dimension.height as i32, dimension.has_skylight),
             light_changes: Vec::new(),
@@ -958,6 +971,10 @@ impl ChunkCache {
                 self.create_references(pos);
                 self.complete_step(job);
             }
+            ChunkStatus::Spawn if generate => {
+                self.generate_spawn(pos);
+                self.complete_step(job);
+            }
             ChunkStatus::StructureReferences | ChunkStatus::Biomes | ChunkStatus::Spawn => self.complete_step(job),
             ChunkStatus::Terrain if generate => {
                 let beardifier = self.beardifier_for_structures_in_chunk(pos).map(Arc::new);
@@ -1106,9 +1123,6 @@ impl ChunkCache {
     }
 
     fn apply_biome_decoration(&mut self, center: ChunkPos) {
-        let dimension = self.dimension;
-        let generator = self.generator.clone();
-        let region_random_state = self.region_random_state.clone();
         let mut structure_starts = Vec::new();
         if self.generate_structures {
             structure_starts.resize_with(wafer_data::STRUCTURES.len(), Vec::new);
@@ -1117,6 +1131,18 @@ impl ChunkCache {
                 structure_starts[structure.0 as usize] = self.starts_for_structure(center, structure);
             }
         }
+        self.with_region(center, |region, generator| generator.apply_biome_decoration(region, &structure_starts));
+    }
+
+    fn generate_spawn(&mut self, center: ChunkPos) {
+        let spawn_mobs = self.game_rules.get_bool(wafer_data::game_rule::SPAWN_MOBS);
+        self.with_region(center, |region, generator| generator.spawn_original_mobs(region, spawn_mobs));
+    }
+
+    fn with_region<R>(&mut self, center: ChunkPos, f: impl FnOnce(&mut WorldGenRegion, &ChunkGenerator) -> R) -> R {
+        let dimension = self.dimension;
+        let generator = self.generator.clone();
+        let region_random_state = self.region_random_state.clone();
         let mut taken: Vec<(ChunkPos, Option<LevelChunk>, bool)> = Vec::with_capacity(9);
         let mut writable = [false; 9];
         let mut lit = [false; 9];
@@ -1130,7 +1156,7 @@ impl ChunkCache {
             lit[i] = self.holders.get(pos.pack()).is_some_and(|h| h.status_done(&self.holders.futures, ChunkStatus::InitializeLight));
             taken.push((pos, chunk, terrain));
         }
-        let (light_tasks, poi_updates) = {
+        let (result, light_tasks, poi_updates) = {
             let mut iter = taken.iter_mut();
             let cache: [Option<&mut LevelChunk>; 9] = std::array::from_fn(|_| iter.next().and_then(|(_, c, _)| c.as_mut()));
             let generation = WorldGenerationContext {
@@ -1142,9 +1168,11 @@ impl ChunkCache {
                 ChunkGenerator::Noise(noise) => &noise.state,
                 ChunkGenerator::Flat(_) => region_random_state.as_deref().expect("a flat random state"),
             };
-            let mut region = WorldGenRegion::new(center, cache, writable, lit, &generator, random_state, dimension.min_y, dimension.height as i32, generation, &self.light_engine.engine, self.difficulty);
-            generator.apply_biome_decoration(&mut region, &structure_starts);
-            (std::mem::take(&mut region.light_tasks), std::mem::take(&mut region.poi_updates))
+            let mut region = WorldGenRegion::new(center, cache, writable, lit, &generator, random_state, dimension, generation, &self.light_engine.engine, self.difficulty);
+            region.level_data = self.region_level_data;
+            region.environment_attributes = Some(&self.static_environment_attributes);
+            let result = f(&mut region, &generator);
+            (result, std::mem::take(&mut region.light_tasks), std::mem::take(&mut region.poi_updates))
         };
         for (i, (pos, chunk, terrain)) in taken.into_iter().enumerate() {
             if let Some(mut chunk) = chunk {
@@ -1167,6 +1195,7 @@ impl ChunkCache {
         for (pos, old, new) in poi_updates {
             self.poi_manager.update_on_block_state_change(pos, old, new);
         }
+        result
     }
 
     fn is_lighted(&self, pos: ChunkPos) -> bool {

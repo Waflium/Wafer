@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use super::random::WeightedList;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum IntProvider {
     Constant(i32),
     Uniform { min_inclusive: i32, max_inclusive: i32 },

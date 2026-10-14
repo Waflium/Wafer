@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use super::biome_check::BiomeCheck;
 use super::priority_provider::{self, Selector};
-use crate::server::level::ServerLevel;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 
 pub struct SpawnPrioritySelectors {
     selectors: Vec<(i32, Selector)>,
@@ -27,15 +27,13 @@ impl SpawnPrioritySelectors {
     }
 }
 
-impl ServerLevel {
-    pub fn select_variant_to_spawn(&mut self, pos: BlockPos, variants: &SpawnPrioritySelectors) -> Option<i32> {
-        let biome = self.get_biome(pos).0 as i32;
-        priority_provider::pick(&variants.selectors, &mut self.random, biome)
-    }
+pub fn select_variant_to_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), pos: BlockPos, variants: &SpawnPrioritySelectors) -> Option<i32> {
+    let biome = level.get_biome(pos).0 as i32;
+    priority_provider::pick(&variants.selectors, level.get_random(), biome)
+}
 
-    pub fn pick_random_sound_variant(&mut self, registry: &str) -> i32 {
-        self.random.next_int_bounded(SyncedRegistry::get(registry).entries.len() as i32)
-    }
+pub fn pick_random_sound_variant(registry: &str, random: &mut (impl RandomSource + ?Sized)) -> i32 {
+    random.next_int_bounded(SyncedRegistry::get(registry).entries.len() as i32)
 }
 
 pub fn read_variant(registry: &str, name: &str) -> Option<i32> {

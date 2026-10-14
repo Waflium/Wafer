@@ -8,7 +8,7 @@ use crate::world::entity::ai::village::poi::poi_manager::{self, Occupancy};
 use crate::world::entity::ai::village::poi::poi_types::PoiType;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::update_flags::UPDATE_ALL;
-use crate::world::level::world_gen_level::WorldGenLevel;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::BlockGetter;
 
 const NETHER_PORTAL_RADIUS: i32 = 16;

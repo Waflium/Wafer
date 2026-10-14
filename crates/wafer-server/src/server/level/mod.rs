@@ -9,6 +9,8 @@ pub mod chunk_workers;
 pub mod distance_manager;
 pub mod events;
 pub mod game_mode;
+#[cfg(test)]
+mod natural_spawner_tests;
 pub mod server_player;
 pub mod player_spawn_finder;
 pub mod progress;
@@ -46,7 +48,10 @@ use crate::world::level::chunk::block_entities::EntityCreationType;
 use crate::world::level::chunk::storage::RegionStorage;
 use crate::world::level::entity::PersistentEntitySectionManager;
 use crate::world::level::entity::entity_tick_list::EntityTickList;
+use crate::world::entity::mob_category::MobCategory;
 use crate::world::level::gamerules::GameRules;
+use crate::world::level::local_mob_cap_calculator::LocalMobCapCalculator;
+use crate::world::level::natural_spawner;
 use crate::world::level::pathfinder::path_type_cache::PathTypeCache;
 use crate::world::level::saveddata::weather_data::WeatherData;
 use crate::world::level::saveddata::maps::map_id::MapId;
@@ -114,6 +119,8 @@ pub struct ServerLevel {
     pub server_data_storage: Rc<RefCell<SavedDataStorage>>,
     pub game_rules: GameRules,
     pub spawn_protection: SpawnProtection,
+    pub respawn_data: crate::world::level::storage::RespawnData,
+    pub custom_spawners: Vec<crate::world::level::custom_spawner::CustomSpawner>,
     pub difficulty: crate::world::difficulty::Difficulty,
     pub no_save: bool,
     pub allow_flight: bool,
@@ -209,6 +216,8 @@ impl ServerLevel {
             allow_flight: false,
             entity_broadcast_range_percentage: 100,
             spawn_protection: SpawnProtection::default(),
+            respawn_data: crate::world::level::storage::RespawnData::of("minecraft:overworld", BlockPos::ZERO, 0.0, 0.0),
+            custom_spawners: Vec::new(),
             weather: Rc::default(),
             rain_level: 0.0,
             o_rain_level: 0.0,
@@ -1191,7 +1200,18 @@ impl ServerLevel {
             self.world_border.tick();
             self.advance_weather_cycle();
         }
+        self.update_region_level_data();
         runs
+    }
+
+    fn update_region_level_data(&mut self) {
+        let moon_phase = self.environment_attributes().get_dimension_value(crate::world::attribute::environment_attributes::MOON_PHASE);
+        self.chunks.region_level_data = world_gen_region::RegionLevelData {
+            overworld_clock_time: self.overworld_clock_time,
+            moon_brightness: crate::world::level::moon_phase::MOON_BRIGHTNESS_PER_PHASE[moon_phase.index() as usize],
+            thundering: self.is_thundering(),
+            world_border: [self.world_border.get_min_x(), self.world_border.get_min_z(), self.world_border.get_max_x(), self.world_border.get_max_z()],
+        };
     }
 
     pub fn wake_up_all_players_after_clock(&mut self) {
@@ -1393,16 +1413,42 @@ impl ServerLevel {
     }
 
     fn tick_chunks(&mut self) {
-        self.chunks.distance_manager.natural_spawn_chunk_count();
+        let chunk_count = self.chunks.distance_manager.natural_spawn_chunk_count() as i32;
+        let mut spawn_cookie = natural_spawner::create_state(chunk_count, self, LocalMobCapCalculator::default());
+        let do_mob_spawning = self.game_rules.get_bool(wafer_data::game_rule::SPAWN_MOBS);
         let tick_speed = self.game_rules.get_int(wafer_data::game_rule::RANDOM_TICK_SPEED);
+        let spawning_categories = if do_mob_spawning {
+            let spawn_persistent = self.game_time % 400 == 0;
+            natural_spawner::get_filtered_spawning_categories(&spawn_cookie, self.chunks.spawn_enemies, spawn_persistent)
+        } else {
+            Vec::new()
+        };
         let mut spawning_chunks = self.collect_spawning_chunks();
         crate::util::shuffle(&mut spawning_chunks, &mut self.random);
         for chunk in spawning_chunks {
-            self.tick_spawning_chunk(chunk);
+            self.tick_spawning_chunk(chunk, &spawning_categories, &mut spawn_cookie);
         }
+        self.chunks.last_spawn_state = Some(spawn_cookie);
         for chunk in self.chunks.block_ticking_chunks() {
             self.tick_chunk(chunk, tick_speed);
         }
+        if do_mob_spawning {
+            self.tick_custom_spawners(self.chunks.spawn_enemies);
+        }
+    }
+
+    pub fn tick_custom_spawners(&mut self, spawn_enemies: bool) {
+        let mut custom_spawners = std::mem::take(&mut self.custom_spawners);
+        for spawner in &mut custom_spawners {
+            spawner.tick(self, spawn_enemies);
+        }
+        self.custom_spawners = custom_spawners;
+    }
+
+    pub fn can_spawn_entities_in_chunk(&self, pos: ChunkPos) -> bool {
+        self.entity_manager.is_ticking(pos)
+            && self.world_border.is_within_bounds(pos.min_block_x() as f64, pos.min_block_z() as f64)
+            && self.world_border.is_within_bounds((pos.min_block_x() + 15) as f64, (pos.min_block_z() + 15) as f64)
     }
 
     fn collect_spawning_chunks(&mut self) -> Vec<ChunkPos> {
@@ -1433,19 +1479,34 @@ impl ServerLevel {
     }
 
     pub fn any_player_close_enough_for_spawning(&self, pos: ChunkPos) -> bool {
-        let (x, z) = ((pos.min_block_x() + 8) as f64, (pos.min_block_z() + 8) as f64);
-        self.players.values().any(|p| {
-            let (dx, dz) = (x - p.entity.x(), z - p.entity.z());
-            !self.is_spectator(p.entity.id) && dx * dx + dz * dz < 16384.0
-        })
+        self.players.values().any(|p| self.player_is_close_enough_for_spawning(p, pos))
     }
 
-    fn tick_spawning_chunk(&mut self, pos: ChunkPos) {
+    pub fn get_players_close_for_spawning(&mut self, pos: ChunkPos) -> Vec<EntityId> {
+        if !self.chunks.distance_manager.has_players_nearby(pos.pack()).unwrap_or(true) {
+            return Vec::new();
+        }
+        self.players.values().filter(|p| self.player_is_close_enough_for_spawning(p, pos)).map(|p| p.entity.id).collect()
+    }
+
+    fn player_is_close_enough_for_spawning(&self, player: &ServerPlayer, pos: ChunkPos) -> bool {
+        if self.is_spectator(player.entity.id) {
+            return false;
+        }
+        let (x, z) = ((pos.min_block_x() + 8) as f64, (pos.min_block_z() + 8) as f64);
+        let (dx, dz) = (x - player.entity.x(), z - player.entity.z());
+        dx * dx + dz * dz < 16384.0
+    }
+
+    fn tick_spawning_chunk(&mut self, pos: ChunkPos, spawning_categories: &[MobCategory], spawn_cookie: &mut natural_spawner::SpawnState) {
         if let Some(chunk) = self.chunks.chunk_if_present(pos) {
             chunk.inhabited_time += 1;
         }
         if self.in_entity_ticking_range(pos) {
             self.tick_thunder(pos);
+        }
+        if !spawning_categories.is_empty() && self.can_spawn_entities_in_chunk(pos) {
+            natural_spawner::spawn_for_chunk(self, pos, spawn_cookie, spawning_categories);
         }
     }
 
@@ -1466,7 +1527,7 @@ impl ServerLevel {
     fn find_lightning_rod(&mut self, center: BlockPos) -> Option<BlockPos> {
         use crate::world::entity::ai::village::poi::poi_manager::Occupancy;
         use crate::world::entity::ai::village::poi::poi_types::PoiType;
-        use crate::world::level::world_gen_level::WorldGenLevel;
+        use crate::world::level::server_level_accessor::ServerLevelAccessor;
         let records = self.chunks.poi_manager.get_in_range(&|poi_type| poi_type == PoiType::LightningRod, center, 128, Occupancy::Any);
         let mut nearby_lightning_rod: Option<BlockPos> = None;
         for lightning_rod_pos in records.into_iter().map(|record| record.pos) {
@@ -1875,10 +1936,6 @@ impl crate::world::level::world_gen_level::WorldGenLevel for ServerLevel {
         &self.chunks.generator
     }
 
-    fn get_difficulty(&self) -> crate::world::difficulty::Difficulty {
-        self.difficulty
-    }
-
     fn generation(&self) -> crate::world::level::levelgen::material::WorldGenerationContext {
         let generator = &self.chunks.generator;
         crate::world::level::levelgen::material::WorldGenerationContext {
@@ -1892,23 +1949,8 @@ impl crate::world::level::world_gen_level::WorldGenLevel for ServerLevel {
         self.chunks.block_state(pos)
     }
 
-    fn get_height(&mut self, kind: crate::world::level::chunk::HeightmapType, x: i32, z: i32) -> i32 {
-        if (-30_000_000..30_000_000).contains(&x) && (-30_000_000..30_000_000).contains(&z) {
-            match self.chunks.loaded_chunk_mut(ChunkPos::new(x >> 4, z >> 4)) {
-                Some(chunk) => chunk.get_height(kind, x, z) + 1,
-                None => self.chunks.min_y(),
-            }
-        } else {
-            self.sea_level() + 1
-        }
-    }
-
     fn get_height_of_level(&self) -> i32 {
         self.chunks.height()
-    }
-
-    fn get_biome(&mut self, pos: BlockPos) -> crate::world::level::chunk::Biome {
-        ServerLevel::get_biome(self, pos)
     }
 
     fn set_section_block_state(&mut self, pos: BlockPos, state: BlockState) {
@@ -1920,9 +1962,74 @@ impl crate::world::level::world_gen_level::WorldGenLevel for ServerLevel {
     fn destroy_block(&mut self, pos: BlockPos, drop_resources: bool) -> bool {
         ServerLevel::destroy_block(self, pos, drop_resources, None, 512)
     }
+}
+
+impl crate::world::level::server_level_accessor::ServerLevelAccessor for ServerLevel {
+    fn get_difficulty(&self) -> crate::world::difficulty::Difficulty {
+        self.difficulty
+    }
+
+    fn get_current_difficulty_at(&mut self, pos: BlockPos) -> crate::world::difficulty_instance::DifficultyInstance {
+        ServerLevel::current_difficulty_at(self, pos)
+    }
+
+    fn get_height(&mut self, kind: crate::world::level::chunk::HeightmapType, x: i32, z: i32) -> i32 {
+        if (-30_000_000..30_000_000).contains(&x) && (-30_000_000..30_000_000).contains(&z) {
+            match self.chunks.loaded_chunk_mut(ChunkPos::new(x >> 4, z >> 4)) {
+                Some(chunk) => chunk.get_height(kind, x, z) + 1,
+                None => self.chunks.min_y(),
+            }
+        } else {
+            self.sea_level() + 1
+        }
+    }
+
+    fn get_biome(&mut self, pos: BlockPos) -> crate::world::level::chunk::Biome {
+        ServerLevel::get_biome(self, pos)
+    }
+
+    fn get_environment_attribute<T: crate::world::attribute::AttributeValue>(&mut self, attribute: crate::world::attribute::EnvironmentAttribute<T>, pos: BlockPos) -> T {
+        self.environment_attributes().get_value_at(attribute, pos)
+    }
+
+    fn dimension_type(&self) -> &'static DimensionType {
+        ServerLevel::dimension_type(self)
+    }
+
+    fn get_sky_darken(&self) -> i32 {
+        self.sky_darken
+    }
+
+    fn is_thundering(&self) -> bool {
+        ServerLevel::is_thundering(self)
+    }
+
+    fn is_within_world_border(&self, pos: BlockPos) -> bool {
+        self.world_border.is_within_bounds_pos(pos)
+    }
+
+    fn get_nearest_player(&self, x: f64, y: f64, z: f64, max_dist: f64, filter_out_creative: bool) -> Option<EntityId> {
+        ServerLevel::get_nearest_player_to(self, x, y, z, max_dist, filter_out_creative)
+    }
+
+    fn no_collision(&mut self, aabb: &AABB) -> bool {
+        ServerLevel::no_collision(self, aabb) && self.entity_collisions(None, aabb).is_empty()
+    }
+
+    fn is_unobstructed(&mut self, aabb: &AABB) -> bool {
+        ServerLevel::is_unobstructed_by_entities(self, None, aabb)
+    }
 
     fn add_fresh_entity(&mut self, entity: LevelEntity) -> bool {
         ServerLevel::add_fresh_entity(self, entity)
+    }
+
+    fn can_see_sky(&mut self, pos: BlockPos) -> bool {
+        ServerLevel::can_see_sky(self, pos)
+    }
+
+    fn contains_any_liquid(&mut self, aabb: &AABB) -> bool {
+        ServerLevel::contains_any_liquid(self, aabb)
     }
 }
 

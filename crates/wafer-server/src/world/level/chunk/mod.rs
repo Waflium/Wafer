@@ -33,6 +33,10 @@ impl Biome {
         SyncedRegistry::get("minecraft:worldgen/biome").entries[self.0 as usize]
     }
 
+    pub fn is(self, tag: &str) -> bool {
+        wafer_data::tag("minecraft:worldgen/biome", tag).contains(&(self.0 as i32))
+    }
+
     fn count() -> usize {
         SyncedRegistry::get("minecraft:worldgen/biome").entries.len()
     }

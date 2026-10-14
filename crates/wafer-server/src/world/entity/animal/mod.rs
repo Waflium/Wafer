@@ -1,8 +1,11 @@
 use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Vec3};
-use wafer_data::{blocks, game_rule};
+use wafer_data::{block_tags, blocks, game_rule};
 
 use super::ageable_mob::{AgeableMob, get_speed_up_seconds_when_feeding};
+use super::entity_spawn_reason::EntitySpawnReason;
+use super::entity_type::EntityType;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use super::mob::{Mob, MobKind};
 use crate::world::level::pathfinder::path_type::PathType;
 use super::{EntityId, LevelEntity, entity_event};
@@ -31,6 +34,23 @@ impl Animal {
         mob.set_pathfinding_malus(PathType::FireInNeighbor, 16.0);
         mob.set_pathfinding_malus(PathType::Fire, -1.0);
     }
+}
+
+pub fn get_walk_target_value(pos: BlockPos, level: &mut (impl ServerLevelAccessor + ?Sized)) -> f32 {
+    if level.block_state(pos.below()).is_block(blocks::GRASS_BLOCK) { 10.0 } else { level.get_pathfinding_cost_from_light_levels(pos) }
+}
+
+pub fn check_animal_spawn_rules(_entity_type: &EntityType, level: &mut (impl ServerLevelAccessor + ?Sized), spawn_reason: EntitySpawnReason, pos: BlockPos) -> bool {
+    let bright_enough_to_spawn = EntitySpawnReason::ignores_light_requirements(spawn_reason) || is_bright_enough_to_spawn(level, pos);
+    level.block_state(pos.below()).is(&block_tags::ANIMALS_SPAWNABLE_ON) && bright_enough_to_spawn
+}
+
+pub fn is_bright_enough_to_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), pos: BlockPos) -> bool {
+    level.raw_brightness(pos, 0) > 8
+}
+
+pub fn remove_when_far_away(_dist_sqr: f64) -> bool {
+    false
 }
 
 impl ServerLevel {

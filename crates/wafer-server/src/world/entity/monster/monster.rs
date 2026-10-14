@@ -3,7 +3,13 @@ use wafer_data::{EquipmentSlot, game_rule};
 
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::entity::EntityId;
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::entity_type::EntityType;
+use crate::world::entity::mob;
 use crate::world::item::{ItemStack, projectile_weapon_item};
+use crate::world::level::dimension::dimension_type;
+use crate::world::level::light_layer::LightLayer;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 
 pub const XP_REWARD: i32 = 5;
 
@@ -69,4 +75,33 @@ impl ServerLevel {
         let held_projectile = [EquipmentSlot::Offhand, EquipmentSlot::Mainhand].into_iter().find_map(|slot| self.item_by_slot(id, slot).filter(|stack| supported_projectiles(stack)));
         held_projectile.unwrap_or_else(|| ItemStack::new(wafer_data::items::ARROW, 1))
     }
+}
+
+pub fn get_walk_target_value(pos: BlockPos, level: &mut (impl ServerLevelAccessor + ?Sized)) -> f32 {
+    -level.get_pathfinding_cost_from_light_levels(pos)
+}
+
+pub fn is_dark_enough_to_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), pos: BlockPos) -> bool {
+    if level.get_brightness(LightLayer::Sky, pos) > level.get_random().next_int_bounded(32) {
+        return false;
+    }
+    let dimension_type = level.dimension_type();
+    let block_light_limit = dimension_type::monster_spawn_block_light_limit(dimension_type);
+    if block_light_limit < 15 && level.get_brightness(LightLayer::Block, pos) > block_light_limit {
+        return false;
+    }
+    let brightness = if level.is_thundering() { level.get_max_local_raw_brightness_with(pos, 10) } else { level.get_max_local_raw_brightness(pos) };
+    brightness <= dimension_type::monster_spawn_light_test(dimension_type).sample(level.get_random())
+}
+
+pub fn check_monster_spawn_rules(entity_type: &EntityType, level: &mut (impl ServerLevelAccessor + ?Sized), spawn_reason: EntitySpawnReason, pos: BlockPos) -> bool {
+    (EntitySpawnReason::ignores_light_requirements(spawn_reason) || is_dark_enough_to_spawn(level, pos)) && mob::check_mob_spawn_rules(entity_type, level, spawn_reason, pos)
+}
+
+pub fn check_any_light_monster_spawn_rules(entity_type: &EntityType, level: &mut (impl ServerLevelAccessor + ?Sized), spawn_reason: EntitySpawnReason, pos: BlockPos) -> bool {
+    mob::check_mob_spawn_rules(entity_type, level, spawn_reason, pos)
+}
+
+pub fn check_surface_monsters_spawn_rules(entity_type: &EntityType, level: &mut (impl ServerLevelAccessor + ?Sized), spawn_reason: EntitySpawnReason, pos: BlockPos) -> bool {
+    check_monster_spawn_rules(entity_type, level, spawn_reason, pos) && (EntitySpawnReason::is_spawner(spawn_reason) || level.can_see_sky(pos))
 }
