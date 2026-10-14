@@ -768,7 +768,13 @@ impl ServerLevel {
     }
 
     pub fn can_attack(&self, id: EntityId, target: EntityId) -> bool {
-        if self.is_mob(id) { self.mob_can_attack(id, target) } else { self.living_entity_can_attack(id, target) }
+        if self.is_tamable_animal(id) {
+            self.tamable_animal_can_attack(id, target)
+        } else if self.is_mob(id) {
+            self.mob_can_attack(id, target)
+        } else {
+            self.living_entity_can_attack(id, target)
+        }
     }
 
     pub fn living_entity_can_attack(&self, _id: EntityId, target: EntityId) -> bool {
@@ -797,8 +803,12 @@ impl ServerLevel {
     }
 
     pub fn get_last_damage_source(&self, id: EntityId) -> Option<&DamageSource> {
+        self.get_last_damage_source_with_timeout(id, 40)
+    }
+
+    pub fn get_last_damage_source_with_timeout(&self, id: EntityId, damage_source_timeout: i64) -> Option<&DamageSource> {
         let living = self.living(id);
-        if self.game_time - living.last_damage_stamp > 40 { None } else { living.last_damage_source.as_ref() }
+        if self.game_time - living.last_damage_stamp > damage_source_timeout { None } else { living.last_damage_source.as_ref() }
     }
 
     pub fn item_by_slot_ref(&self, id: EntityId, slot: EquipmentSlot) -> Option<&ItemStack> {
@@ -947,6 +957,8 @@ impl ServerLevel {
     pub fn actually_hurt(&mut self, id: EntityId, source: &DamageSource, damage: f32) {
         if self.is_player(id) {
             self.player_actually_hurt(id, source, damage);
+        } else if self.is_wolf(id) {
+            self.wolf_actually_hurt(id, source, damage);
         } else if self.mob(id).is_some_and(|mob| mob.animal().is_some()) {
             self.animal_actually_hurt(id, source, damage);
         } else {
@@ -1040,6 +1052,7 @@ impl ServerLevel {
 
     fn get_hurt_sound(&self, id: EntityId, source: &DamageSource) -> i32 {
         match self.mob(id) {
+            Some(_) if self.is_wolf(id) => sound_event(self.wolf_get_hurt_sound(id, source)),
             Some(mob) => sound_event(mob.get_hurt_sound()),
             None => sound_event(source.ty.info().effects.sound()),
         }
@@ -1048,6 +1061,8 @@ impl ServerLevel {
     fn hurt_armor(&mut self, id: EntityId, source: &DamageSource, damage: f32) {
         if self.is_player(id) {
             self.do_hurt_equipment(id, source, damage, &[EquipmentSlot::Feet, EquipmentSlot::Legs, EquipmentSlot::Chest, EquipmentSlot::Head]);
+        } else if self.is_wolf(id) {
+            self.wolf_hurt_armor(id, source, damage);
         }
     }
 
@@ -1107,7 +1122,7 @@ impl ServerLevel {
         damage
     }
 
-    fn do_hurt_equipment(&mut self, id: EntityId, source: &DamageSource, damage: f32, slots: &[EquipmentSlot]) {
+    pub fn do_hurt_equipment(&mut self, id: EntityId, source: &DamageSource, damage: f32, slots: &[EquipmentSlot]) {
         if damage <= 0.0 {
             return;
         }
@@ -1273,6 +1288,8 @@ impl ServerLevel {
             self.server_player_die(id, source);
         } else if self.mob(id).and_then(Mob::raider).is_some() {
             self.raider_die(id, source);
+        } else if self.is_wolf(id) {
+            self.wolf_die(id, source);
         } else {
             self.living_entity_die(id, source);
         }
@@ -1830,6 +1847,7 @@ impl ServerLevel {
             Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
+            Some(MobKind::Wolf(_)) => self.wolf_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }

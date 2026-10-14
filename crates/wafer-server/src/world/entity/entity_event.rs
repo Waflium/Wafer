@@ -1,4 +1,7 @@
 pub const DEATH: u8 = 3;
+pub const TAMING_FAILED: u8 = 6;
+pub const TAMING_SUCCEEDED: u8 = 7;
+pub const SHAKE_WETNESS: u8 = 8;
 pub const EAT_GRASS: u8 = 10;
 pub const WITCH_HAT_MAGIC: u8 = 15;
 pub const IN_LOVE_HEARTS: u8 = 18;
@@ -12,6 +15,7 @@ pub const CHEST_BREAK: u8 = 50;
 pub const LEGS_BREAK: u8 = 51;
 pub const FEET_BREAK: u8 = 52;
 pub const SWAP_HANDS: u8 = 55;
+pub const CANCEL_SHAKE_WETNESS: u8 = 56;
 pub const POOF: u8 = 60;
 pub const BODY_BREAK: u8 = 65;
 pub const DROWN_PARTICLES: u8 = 67;

@@ -19,11 +19,15 @@ pub enum TargetType {
     Axolotl,
     Endermite,
     Raider,
+    Animal,
+    AbstractSkeleton,
 }
 
 impl TargetType {
     pub fn is_instance(self, level: &ServerLevel, entity: EntityId) -> bool {
         match self {
+            TargetType::Animal => level.mob(entity).is_some_and(|mob| mob.animal().is_some()),
+            TargetType::AbstractSkeleton => level.mob(entity).is_some_and(|mob| mob.is_abstract_skeleton()),
             TargetType::Player => level.is_player(entity),
             TargetType::AbstractVillager => is_type(level, entity, &["minecraft:villager", "minecraft:wandering_trader"]),
             TargetType::IronGolem => is_type(level, entity, &["minecraft:iron_golem"]),
@@ -46,7 +50,7 @@ pub struct NearestAttackableTargetGoal {
     target_type: TargetType,
     random_interval: i32,
     pub target: Option<EntityId>,
-    selector: Option<Selector>,
+    pub selector: Option<Selector>,
 }
 
 impl NearestAttackableTargetGoal {

@@ -63,6 +63,9 @@ impl HurtByTargetGoal {
             if mob == other || level.get_target(other).is_some() {
                 continue;
             }
+            if level.is_tamable_animal(mob) && level.get_owner(mob) != level.get_owner(other) {
+                continue;
+            }
             if hurt_by_mob.is_some_and(|hurt_by_mob| level.is_allied_to(other, hurt_by_mob)) {
                 continue;
             }

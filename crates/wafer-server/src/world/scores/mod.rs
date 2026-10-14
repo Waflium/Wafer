@@ -77,6 +77,10 @@ impl ServerLevel {
     }
 
     pub fn team_of(&self, id: EntityId) -> Option<Ref<'_, PlayerTeam>> {
+        if self.is_tamable_animal(id) { self.tamable_animal_get_team(id) } else { self.entity_get_team(id) }
+    }
+
+    pub fn entity_get_team(&self, id: EntityId) -> Option<Ref<'_, PlayerTeam>> {
         let scoreboard = self.scoreboard.borrow();
         if scoreboard.team_count() == 0 {
             return None;

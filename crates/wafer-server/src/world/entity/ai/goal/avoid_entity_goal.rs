@@ -12,7 +12,7 @@ fn predicate_on_avoid_entity(target: EntityId, level: &ServerLevel) -> bool {
 pub struct AvoidEntityGoal {
     walk_speed_modifier: f64,
     sprint_speed_modifier: f64,
-    to_avoid: Option<EntityId>,
+    pub to_avoid: Option<EntityId>,
     max_dist: f32,
     path: Option<Path>,
     avoid_class: &'static str,

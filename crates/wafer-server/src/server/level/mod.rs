@@ -1706,6 +1706,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Silverfish(_)) => self.silverfish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Endermite(_)) => self.endermite_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Wolf(_)) => self.wolf_tick(id),
             Some(LevelEntity::Mob(_)) => self.mob_tick(id),
             Some(LevelEntity::Minecart(_)) => self.tick_minecart(id),
             Some(LevelEntity::Boat(_)) => self.tick_boat(id),

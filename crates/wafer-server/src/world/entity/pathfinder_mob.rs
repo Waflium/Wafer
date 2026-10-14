@@ -37,6 +37,6 @@ impl ServerLevel {
 
     pub fn is_panicking(&self, id: EntityId) -> bool {
         let mob = self.mob(id).expect("a pathfinder mob");
-        mob.ai.goal_selector.get_available_goals().iter().any(|wrapped_goal| wrapped_goal.is_running() && matches!(wrapped_goal.get_goal(), Goal::Panic(_)))
+        mob.ai.goal_selector.get_available_goals().iter().any(|wrapped_goal| wrapped_goal.is_running() && matches!(wrapped_goal.get_goal(), Goal::Panic(_) | Goal::TamableAnimalPanic(_)))
     }
 }

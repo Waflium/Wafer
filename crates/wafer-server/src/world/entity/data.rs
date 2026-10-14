@@ -69,6 +69,10 @@ pub enum DataValue {
     OptionalBlockState(Option<wafer_data::BlockState>),
     ChickenVariant(i32),
     ChickenSoundVariant(i32),
+    Long(i64),
+    OptionalLivingEntityReference(Option<u128>),
+    WolfVariant(i32),
+    WolfSoundVariant(i32),
 }
 
 impl DataValue {
@@ -95,6 +99,10 @@ impl DataValue {
             DataValue::OptionalBlockState(_) => 15,
             DataValue::ChickenVariant(_) => 30,
             DataValue::ChickenSoundVariant(_) => 31,
+            DataValue::Long(_) => 2,
+            DataValue::OptionalLivingEntityReference(_) => 13,
+            DataValue::WolfVariant(_) => 25,
+            DataValue::WolfSoundVariant(_) => 26,
         }
     }
 
@@ -134,6 +142,14 @@ impl DataValue {
             | DataValue::ChickenVariant(id)
             | DataValue::ChickenSoundVariant(id) => w.varint(*id),
             DataValue::OptionalBlockState(s) => w.varint(s.map_or(0, |s| s.id() as i32)),
+            DataValue::Long(v) => w.varlong(*v),
+            DataValue::OptionalLivingEntityReference(v) => {
+                w.bool(v.is_some());
+                if let Some(uuid) = v {
+                    w.uuid(*uuid);
+                }
+            }
+            DataValue::WolfVariant(id) | DataValue::WolfSoundVariant(id) => w.varint(*id),
         }
     }
 }

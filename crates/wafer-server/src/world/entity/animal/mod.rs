@@ -21,6 +21,7 @@ pub mod cow;
 mod farm_tests;
 pub mod pig;
 pub mod sheep;
+pub mod wolf;
 
 #[derive(Default)]
 pub struct Animal {
@@ -73,6 +74,7 @@ impl ServerLevel {
             MobKind::Cow(_) | MobKind::MushroomCow(_) => cow::abstract_cow::is_food(item_stack),
             MobKind::Pig(_) => pig::pig::is_food(item_stack),
             MobKind::Sheep(_) => sheep::sheep::is_food(item_stack),
+            MobKind::Wolf(_) => wolf::wolf::is_food(item_stack),
             MobKind::Zombie(_)
             | MobKind::Husk(_)
             | MobKind::Drowned(_)
@@ -90,7 +92,7 @@ impl ServerLevel {
         }
     }
 
-    fn play_eating_sound(&mut self, id: EntityId) {
+    pub fn play_eating_sound(&mut self, id: EntityId) {
         let mob = self.mob(id).expect("an animal");
         if let MobKind::Pig(_) = mob.kind {
             let sound = super::sound_event(&pig::pig::Pig::get_sound_set(mob).eat_sound);
@@ -145,6 +147,13 @@ impl ServerLevel {
     }
 
     pub fn can_mate(&self, id: EntityId, partner: EntityId) -> bool {
+        match self.mob(id).expect("an animal").kind {
+            MobKind::Wolf(_) => self.wolf_can_mate(id, partner),
+            _ => self.animal_can_mate(id, partner),
+        }
+    }
+
+    pub fn animal_can_mate(&self, id: EntityId, partner: EntityId) -> bool {
         if partner == id {
             return false;
         }

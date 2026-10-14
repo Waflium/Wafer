@@ -40,6 +40,8 @@ use super::animal::cow::cow::{self, Cow};
 use super::animal::cow::mushroom_cow::{self, MushroomCow};
 use super::animal::pig::pig::{self, Pig};
 use super::animal::sheep::sheep::{self, Sheep};
+use super::animal::wolf::wolf::{self, Wolf};
+use super::tamable_animal::TamableAnimal;
 use super::ageable_mob::{self, AgeableMob, BABY_START_AGE};
 use super::conversion_params::ConversionParams;
 use super::variant::variant_utils;
@@ -108,6 +110,7 @@ pub enum MobKind {
     Witch(Witch),
     Slime(Slime),
     MagmaCube(MagmaCube),
+    Wolf(Wolf),
 }
 
 pub struct Mob {
@@ -181,6 +184,7 @@ impl Mob {
             MobKind::Witch(_) => Witch::register_goals(&mut self.ai),
             MobKind::Slime(_) => Slime::register_goals(&mut self.ai),
             MobKind::MagmaCube(_) => MagmaCube::register_goals(&mut self.ai),
+            MobKind::Wolf(_) => Wolf::register_goals(&mut self.ai, self.living.attributes.value(Attribute::FollowRange)),
         }
     }
 
@@ -195,15 +199,35 @@ impl Mob {
     pub fn neutral_mob(&self) -> Option<&dyn NeutralMob> {
         match &self.kind {
             MobKind::Enderman(enderman) => Some(enderman),
+            MobKind::Wolf(wolf) => Some(wolf),
             _ => None,
         }
     }
 
-    pub fn neutral_mob_mut(&mut self) -> Option<&mut dyn NeutralMob> {
+    pub fn neutral_mob_mut(&mut self) -> Option<(&mut dyn NeutralMob, &mut Entity)> {
         match &mut self.kind {
-            MobKind::Enderman(enderman) => Some(enderman),
+            MobKind::Enderman(enderman) => Some((enderman, &mut self.entity)),
+            MobKind::Wolf(wolf) => Some((wolf, &mut self.entity)),
             _ => None,
         }
+    }
+
+    pub fn tamable_animal(&self) -> Option<&TamableAnimal> {
+        match &self.kind {
+            MobKind::Wolf(wolf) => Some(&wolf.tamable_animal),
+            _ => None,
+        }
+    }
+
+    pub fn tamable_animal_mut(&mut self) -> Option<&mut TamableAnimal> {
+        match &mut self.kind {
+            MobKind::Wolf(wolf) => Some(&mut wolf.tamable_animal),
+            _ => None,
+        }
+    }
+
+    pub fn llama_strength(&self) -> Option<i32> {
+        None
     }
 
     pub fn is_zombie(&self) -> bool {
@@ -253,7 +277,11 @@ impl Mob {
     }
 
     pub fn get_max_head_x_rot(&self) -> i32 {
-        if self.is_cube_mob() { 0 } else { 40 }
+        match self.kind {
+            MobKind::Wolf(_) => wolf::get_max_head_x_rot(self),
+            _ if self.is_cube_mob() => 0,
+            _ => 40,
+        }
     }
 
     fn update_control_flags(&mut self, no_controller: bool, not_in_boat: bool) {
@@ -287,7 +315,10 @@ impl Mob {
     }
 
     pub fn get_max_spawn_cluster_size(&self) -> i32 {
-        4
+        match self.kind {
+            MobKind::Wolf(_) => 8,
+            _ => 4,
+        }
     }
 
     pub fn is_max_group_size_reached(&self, _group_size: i32) -> bool {
@@ -423,6 +454,7 @@ impl Mob {
             MobKind::MushroomCow(mushroom_cow) => Some(&mushroom_cow.abstract_cow.animal),
             MobKind::Pig(pig) => Some(&pig.animal),
             MobKind::Sheep(sheep) => Some(&sheep.animal),
+            MobKind::Wolf(wolf) => Some(&wolf.tamable_animal.animal),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => None,
             MobKind::Enderman(_) => None,
             MobKind::Witch(_) => None,
@@ -437,6 +469,7 @@ impl Mob {
             MobKind::MushroomCow(mushroom_cow) => Some(&mut mushroom_cow.abstract_cow.animal),
             MobKind::Pig(pig) => Some(&mut pig.animal),
             MobKind::Sheep(sheep) => Some(&mut sheep.animal),
+            MobKind::Wolf(wolf) => Some(&mut wolf.tamable_animal.animal),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => None,
             MobKind::Enderman(_) => None,
             MobKind::Witch(_) => None,
@@ -491,6 +524,11 @@ impl Mob {
             MobKind::Sheep(_) => {
                 self.apply_implicit_component_if_present(components, dc::SHEEP_COLOR);
             }
+            MobKind::Wolf(_) => {
+                self.apply_implicit_component_if_present(components, dc::WOLF_VARIANT);
+                self.apply_implicit_component_if_present(components, dc::WOLF_SOUND_VARIANT);
+                self.apply_implicit_component_if_present(components, dc::WOLF_COLLAR);
+            }
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) => {}
             MobKind::Enderman(_) => {}
             MobKind::Witch(_) => {}
@@ -544,6 +582,24 @@ impl Mob {
                 }
                 return true;
             }
+            MobKind::Wolf(_) if ty == dc::WOLF_VARIANT => {
+                if let Some(variant) = value.as_str().and_then(|name| variant_utils::read_variant(wolf::VARIANT_REGISTRY, name)) {
+                    wolf::set_variant(&mut self.entity, variant);
+                }
+                return true;
+            }
+            MobKind::Wolf(_) if ty == dc::WOLF_SOUND_VARIANT => {
+                if let Some(sound_variant) = value.as_str().and_then(|name| variant_utils::read_variant(super::animal::wolf::wolf_sound_variant::REGISTRY, name)) {
+                    wolf::set_sound_variant(&mut self.entity, sound_variant);
+                }
+                return true;
+            }
+            MobKind::Wolf(_) if ty == dc::WOLF_COLLAR => {
+                if let Some(color) = value.as_str().and_then(DyeColor::by_name) {
+                    wolf::set_collar_color(&mut self.entity, color);
+                }
+                return true;
+            }
             MobKind::Sheep(_) if ty == dc::SHEEP_COLOR => {
                 if let Some(color) = value.as_str().and_then(DyeColor::by_name) {
                     sheep::set_color(&mut self.entity, color);
@@ -589,6 +645,8 @@ impl Mob {
             MobKind::Witch(_) => witch::DIMENSIONS,
             MobKind::Slime(_) => slime::DIMENSIONS.scale(self.get_size() as f32),
             MobKind::MagmaCube(_) => magma_cube::DIMENSIONS.scale(self.get_size() as f32),
+            MobKind::Wolf(_) if self.is_baby() => wolf::BABY_DIMENSIONS,
+            MobKind::Wolf(_) => wolf::DIMENSIONS,
         }
     }
 
@@ -614,6 +672,8 @@ impl Mob {
             MobKind::Enderman(_) => (0.0, 2.80625f32 as f64, 0.0),
             MobKind::Witch(_) => (0.0, 2.2625f32 as f64, 0.0),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return self.abstract_cube_mob_get_passenger_attachment_point(),
+            MobKind::Wolf(_) if baby => (0.0, 0.4375f32 as f64, 0.0),
+            MobKind::Wolf(_) => (0.0, 0.81875, -0.0625),
         };
         let scale = self.living.attributes.value(Attribute::Scale) as f32 as f64;
         wafer_core::Vec3::new(x * scale, y * scale, z * scale)
@@ -743,6 +803,7 @@ impl Mob {
             MobKind::Enderman(_) => Enderman::add_additional_save_data(self, out),
             MobKind::Witch(witch) => witch.raider.add_additional_save_data(out),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_add_additional_save_data(out),
+            MobKind::Wolf(_) => Wolf::add_additional_save_data(self, out),
         }
     }
 
@@ -861,8 +922,10 @@ impl Mob {
             MobKind::Enderman(_) => {}
             MobKind::Witch(witch) => witch.raider.read_additional_save_data(nbt),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_read_was_on_ground(nbt),
+            MobKind::Wolf(_) => {}
         }
         match self.kind {
+            MobKind::Wolf(_) => Wolf::read_additional_save_data(self, nbt),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) => Zombie::read_additional_save_data(self, nbt),
             MobKind::Skeleton(_) => Skeleton::read_additional_save_data(self, nbt),
             MobKind::Bogged(_) => Bogged::read_additional_save_data(self, nbt),
@@ -918,6 +981,7 @@ impl Mob {
             MobKind::Enderman(_) => Enderman::get_ambient_sound(self),
             MobKind::Witch(_) => Witch::get_ambient_sound(),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return None,
+            MobKind::Wolf(_) => unreachable!("wolves pick their ambient sound with their random"),
         })
     }
 
@@ -940,6 +1004,7 @@ impl Mob {
             MobKind::Witch(_) => Witch::get_hurt_sound(),
             MobKind::Slime(_) => Slime::get_hurt_sound(self),
             MobKind::MagmaCube(_) => MagmaCube::get_hurt_sound(self),
+            MobKind::Wolf(_) => Wolf::get_hurt_sound(self),
         }
     }
 
@@ -962,6 +1027,7 @@ impl Mob {
             MobKind::Witch(_) => Witch::get_death_sound(),
             MobKind::Slime(_) => Slime::get_death_sound(self),
             MobKind::MagmaCube(_) => MagmaCube::get_death_sound(self),
+            MobKind::Wolf(_) => Wolf::get_death_sound(self),
         }
     }
 
@@ -983,12 +1049,13 @@ impl Mob {
             MobKind::Enderman(_) => return None,
             MobKind::Witch(_) => return None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return None,
+            MobKind::Wolf(_) => Wolf::get_step_sound(self),
         })
     }
 
     pub fn get_sound_volume(&self) -> f32 {
         match &self.kind {
-            MobKind::Cow(_) | MobKind::MushroomCow(_) => 0.4,
+            MobKind::Cow(_) | MobKind::MushroomCow(_) | MobKind::Wolf(_) => 0.4,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_get_sound_volume(),
             _ => 1.0,
         }
@@ -1111,6 +1178,7 @@ impl ServerLevel {
             MobKind::Enderman(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Witch(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.ageable_mob_mob_interact(id, player, hand),
+            MobKind::Wolf(_) => self.wolf_mob_interact(id, player, hand),
         }
     }
 
@@ -1136,7 +1204,14 @@ impl ServerLevel {
         self.mob_mut(id).expect("a mob").drop_chances[slot as usize] = 2.0;
     }
 
-    pub fn can_shear_equipment(&self, id: EntityId) -> bool {
+    pub fn can_shear_equipment(&self, id: EntityId, player: EntityId) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Wolf(_)) => self.wolf_can_shear_equipment(id, player),
+            _ => self.mob_can_shear_equipment(id, player),
+        }
+    }
+
+    pub fn mob_can_shear_equipment(&self, id: EntityId, _player: EntityId) -> bool {
         !self.is_vehicle(id)
     }
 
@@ -1257,8 +1332,15 @@ impl ServerLevel {
     }
 
     pub fn play_ambient_sound(&mut self, id: EntityId) {
-        if let Some(sound) = self.mob(id).expect("a mob").get_ambient_sound() {
+        if let Some(sound) = self.get_ambient_sound(id) {
             self.make_sound(id, super::sound_event(sound));
+        }
+    }
+
+    fn get_ambient_sound(&mut self, id: EntityId) -> Option<&'static str> {
+        match self.mob(id).expect("a mob").kind {
+            MobKind::Wolf(_) => Some(self.wolf_get_ambient_sound(id)),
+            _ => self.mob(id).expect("a mob").get_ambient_sound(),
         }
     }
 
@@ -1392,9 +1474,17 @@ impl ServerLevel {
         }
     }
 
-    fn set_item_slot_and_drop_when_killed(&mut self, id: EntityId, slot: EquipmentSlot, item_stack: ItemStack) {
+    pub fn set_item_slot_and_drop_when_killed(&mut self, id: EntityId, slot: EquipmentSlot, item_stack: ItemStack) {
         self.living_set_item_slot(id, slot, item_stack);
         self.set_guaranteed_drop(id, slot);
+    }
+
+    pub fn get_body_armor_item(&self, id: EntityId) -> ItemStack {
+        self.item_by_slot(id, EquipmentSlot::Body).unwrap_or_else(ItemStack::empty)
+    }
+
+    pub fn is_wearing_body_armor(&self, id: EntityId) -> bool {
+        self.item_by_slot_ref(id, EquipmentSlot::Body).is_some()
     }
 
     fn can_replace_current_item(&self, id: EntityId, new_item_stack: &ItemStack, current_item_stack: &ItemStack, slot: EquipmentSlot) -> bool {
@@ -1753,7 +1843,7 @@ impl ServerLevel {
     }
 
     pub fn read_level_dependent_save_data(&mut self, id: EntityId, input: &Nbt) {
-        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Enderman(_))) {
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Enderman(_) | MobKind::Wolf(_))) {
             self.read_persistent_anger_save_data(id, input);
         }
     }
@@ -1984,7 +2074,9 @@ pub fn finalize_spawn(
     spawn_reason: EntitySpawnReason,
     group_data: Option<SpawnGroupData>,
 ) -> Option<SpawnGroupData> {
+    let mut group_data = group_data;
     match mob.kind {
+        MobKind::Wolf(_) => group_data = wolf::finalize_spawn(level, mob, group_data),
         MobKind::Chicken(_) => chicken::finalize_spawn(level, mob),
         MobKind::Cow(_) => cow::finalize_spawn(level, mob),
         MobKind::MushroomCow(_) => {}

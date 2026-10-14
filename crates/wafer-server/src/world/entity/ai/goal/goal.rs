@@ -25,6 +25,14 @@ use crate::world::entity::monster::zombie::drowned::{DrownedAttackGoal, DrownedG
 use super::ranged_attack_goal::RangedAttackGoal;
 use super::target::nearest_attackable_witch_target_goal::NearestAttackableWitchTargetGoal;
 use super::target::nearest_healable_raider_target_goal::NearestHealableRaiderTargetGoal;
+use super::beg_goal::BegGoal;
+use super::follow_owner_goal::FollowOwnerGoal;
+use super::sit_when_ordered_to_goal::SitWhenOrderedToGoal;
+use super::target::non_tame_random_target_goal::NonTameRandomTargetGoal;
+use super::target::owner_hurt_by_target_goal::OwnerHurtByTargetGoal;
+use super::target::owner_hurt_target_goal::OwnerHurtTargetGoal;
+use crate::world::entity::animal::wolf::wolf::WolfAvoidEntityGoal;
+use crate::world::entity::tamable_animal::TamableAnimalPanicGoal;
 use crate::world::entity::monster::patrolling_monster::LongDistancePatrolGoal;
 use crate::world::entity::raid::raider::{ObtainRaidLeaderBannerGoal, RaiderCelebration};
 use crate::world::entity::monster::zombie::zombie::ZombieAttackTurtleEggGoal;
@@ -101,6 +109,14 @@ pub enum Goal {
     CubeMobFloat(CubeMobFloatGoal),
     CubeMobKeepOnJumping(CubeMobKeepOnJumpingGoal),
     CubeMobRandomDirection(CubeMobRandomDirectionGoal),
+    TamableAnimalPanic(TamableAnimalPanicGoal),
+    SitWhenOrderedTo(SitWhenOrderedToGoal),
+    WolfAvoidEntity(WolfAvoidEntityGoal),
+    FollowOwner(FollowOwnerGoal),
+    Beg(BegGoal),
+    OwnerHurtByTarget(OwnerHurtByTargetGoal),
+    OwnerHurtTarget(OwnerHurtTargetGoal),
+    NonTameRandomTarget(NonTameRandomTargetGoal),
 }
 
 impl Goal {
@@ -154,6 +170,14 @@ impl Goal {
             Goal::CubeMobFloat(goal) => goal.can_use(level, mob),
             Goal::CubeMobKeepOnJumping(goal) => goal.can_use(level, mob),
             Goal::CubeMobRandomDirection(goal) => goal.can_use(level, mob),
+            Goal::TamableAnimalPanic(goal) => goal.panic_goal.can_use(level, mob),
+            Goal::SitWhenOrderedTo(goal) => goal.can_use(level, mob),
+            Goal::WolfAvoidEntity(goal) => goal.can_use(level, mob),
+            Goal::FollowOwner(goal) => goal.can_use(level, mob),
+            Goal::Beg(goal) => goal.can_use(level, mob),
+            Goal::OwnerHurtByTarget(goal) => goal.can_use(level, mob),
+            Goal::OwnerHurtTarget(goal) => goal.can_use(level, mob),
+            Goal::NonTameRandomTarget(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -207,6 +231,14 @@ impl Goal {
             Goal::CubeMobFloat(goal) => goal.can_use(level, mob),
             Goal::CubeMobKeepOnJumping(goal) => goal.can_use(level, mob),
             Goal::CubeMobRandomDirection(goal) => goal.can_use(level, mob),
+            Goal::TamableAnimalPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
+            Goal::SitWhenOrderedTo(goal) => goal.can_continue_to_use(level, mob),
+            Goal::WolfAvoidEntity(goal) => goal.avoid_entity_goal.can_continue_to_use(level, mob),
+            Goal::FollowOwner(goal) => goal.can_continue_to_use(level, mob),
+            Goal::Beg(goal) => goal.can_continue_to_use(level, mob),
+            Goal::OwnerHurtByTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
+            Goal::OwnerHurtTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
+            Goal::NonTameRandomTarget(goal) => goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -258,6 +290,14 @@ impl Goal {
             Goal::NearestAttackableWitchTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
             Goal::CubeMobAttack(goal) => goal.start(),
             Goal::CubeMobFloat(_) | Goal::CubeMobKeepOnJumping(_) | Goal::CubeMobRandomDirection(_) => {}
+            Goal::TamableAnimalPanic(goal) => goal.panic_goal.start(level, mob),
+            Goal::SitWhenOrderedTo(goal) => goal.start(level, mob),
+            Goal::WolfAvoidEntity(goal) => goal.start(level, mob),
+            Goal::FollowOwner(goal) => goal.start(level, mob),
+            Goal::Beg(goal) => goal.start(level, mob),
+            Goal::OwnerHurtByTarget(goal) => goal.start(level, mob),
+            Goal::OwnerHurtTarget(goal) => goal.start(level, mob),
+            Goal::NonTameRandomTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
         }
     }
 
@@ -301,6 +341,14 @@ impl Goal {
             Goal::NearestHealableRaiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::NearestAttackableWitchTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::CubeMobAttack(_) | Goal::CubeMobFloat(_) | Goal::CubeMobKeepOnJumping(_) | Goal::CubeMobRandomDirection(_) => {}
+            Goal::TamableAnimalPanic(goal) => goal.panic_goal.stop(),
+            Goal::SitWhenOrderedTo(goal) => goal.stop(level, mob),
+            Goal::WolfAvoidEntity(goal) => goal.avoid_entity_goal.stop(),
+            Goal::FollowOwner(goal) => goal.stop(level, mob),
+            Goal::Beg(goal) => goal.stop(level, mob),
+            Goal::OwnerHurtByTarget(goal) => goal.target_goal.stop(level, mob),
+            Goal::OwnerHurtTarget(goal) => goal.target_goal.stop(level, mob),
+            Goal::NonTameRandomTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
         }
     }
 
@@ -369,6 +417,11 @@ impl Goal {
             Goal::ObtainRaidLeaderBanner(goal) => goal.tick(level, mob),
             Goal::RaiderCelebration(goal) => goal.tick(level, mob),
             Goal::NearestHealableRaiderTarget(_) | Goal::NearestAttackableWitchTarget(_) => {}
+            Goal::TamableAnimalPanic(goal) => goal.tick(level, mob),
+            Goal::WolfAvoidEntity(goal) => goal.tick(level, mob),
+            Goal::FollowOwner(goal) => goal.tick(level, mob),
+            Goal::Beg(goal) => goal.tick(level, mob),
+            Goal::SitWhenOrderedTo(_) | Goal::OwnerHurtByTarget(_) | Goal::OwnerHurtTarget(_) | Goal::NonTameRandomTarget(_) => {}
         }
     }
 
@@ -410,6 +463,11 @@ impl Goal {
             Goal::NearestHealableRaiderTarget(_) | Goal::NearestAttackableWitchTarget(_) => Flag::Target.bit(),
             Goal::CubeMobAttack(_) | Goal::CubeMobRandomDirection(_) => Flag::Look.bit(),
             Goal::CubeMobFloat(_) | Goal::CubeMobKeepOnJumping(_) => Flag::Jump.bit() | Flag::Move.bit(),
+            Goal::TamableAnimalPanic(_) | Goal::WolfAvoidEntity(_) => Flag::Move.bit(),
+            Goal::SitWhenOrderedTo(_) => Flag::Jump.bit() | Flag::Move.bit(),
+            Goal::FollowOwner(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::Beg(_) => Flag::Look.bit(),
+            Goal::OwnerHurtByTarget(_) | Goal::OwnerHurtTarget(_) | Goal::NonTameRandomTarget(_) => Flag::Target.bit(),
         }
     }
 

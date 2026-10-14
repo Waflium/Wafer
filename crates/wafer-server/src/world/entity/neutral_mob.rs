@@ -1,7 +1,7 @@
 use wafer_data::game_rule;
 use wafer_protocol::nbt::Nbt;
 
-use super::EntityId;
+use super::{Entity, EntityId};
 use super::entity_reference::EntityReference;
 use super::mob::{Mob, MobKind};
 use crate::server::level::ServerLevel;
@@ -13,16 +13,16 @@ pub const TAG_ANGRY_AT: &str = "angry_at";
 pub const NO_ANGER_END_TIME: i64 = -1;
 
 pub trait NeutralMob {
-    fn get_persistent_anger_end_time(&self) -> i64;
+    fn get_persistent_anger_end_time(&self, entity: &Entity) -> i64;
 
-    fn set_persistent_anger_end_time(&mut self, end_time: i64);
+    fn set_persistent_anger_end_time(&mut self, entity: &mut Entity, end_time: i64);
 
     fn get_persistent_anger_target(&self) -> Option<EntityReference>;
 
     fn set_persistent_anger_target(&mut self, persistent_anger_target: Option<EntityReference>);
 
-    fn add_persistent_anger_save_data(&self, output: &mut Vec<(String, Nbt)>) {
-        output.push((TAG_ANGER_END_TIME.into(), Nbt::Long(self.get_persistent_anger_end_time())));
+    fn add_persistent_anger_save_data(&self, entity: &Entity, output: &mut Vec<(String, Nbt)>) {
+        output.push((TAG_ANGER_END_TIME.into(), Nbt::Long(self.get_persistent_anger_end_time(entity))));
         EntityReference::store(self.get_persistent_anger_target(), output, TAG_ANGRY_AT);
     }
 }
@@ -31,17 +31,19 @@ fn neutral_mob(mob: &Mob) -> &dyn NeutralMob {
     mob.neutral_mob().expect("a neutral mob")
 }
 
-fn neutral_mob_mut(mob: &mut Mob) -> &mut dyn NeutralMob {
+fn neutral_mob_mut(mob: &mut Mob) -> (&mut dyn NeutralMob, &mut Entity) {
     mob.neutral_mob_mut().expect("a neutral mob")
 }
 
 impl ServerLevel {
     pub fn get_persistent_anger_end_time(&self, id: EntityId) -> i64 {
-        neutral_mob(self.mob(id).expect("a mob")).get_persistent_anger_end_time()
+        let mob = self.mob(id).expect("a mob");
+        neutral_mob(mob).get_persistent_anger_end_time(&mob.entity)
     }
 
     pub fn set_persistent_anger_end_time(&mut self, id: EntityId, end_time: i64) {
-        neutral_mob_mut(self.mob_mut(id).expect("a mob")).set_persistent_anger_end_time(end_time);
+        let (neutral_mob, entity) = neutral_mob_mut(self.mob_mut(id).expect("a mob"));
+        neutral_mob.set_persistent_anger_end_time(entity, end_time);
     }
 
     pub fn get_persistent_anger_target(&self, id: EntityId) -> Option<EntityReference> {
@@ -49,12 +51,13 @@ impl ServerLevel {
     }
 
     pub fn set_persistent_anger_target(&mut self, id: EntityId, persistent_anger_target: Option<EntityReference>) {
-        neutral_mob_mut(self.mob_mut(id).expect("a mob")).set_persistent_anger_target(persistent_anger_target);
+        neutral_mob_mut(self.mob_mut(id).expect("a mob")).0.set_persistent_anger_target(persistent_anger_target);
     }
 
     pub fn start_persistent_anger_timer(&mut self, id: EntityId) {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Enderman(_)) => self.enderman_start_persistent_anger_timer(id),
+            Some(MobKind::Wolf(_)) => self.wolf_start_persistent_anger_timer(id),
             _ => unreachable!("not a neutral mob"),
         }
     }

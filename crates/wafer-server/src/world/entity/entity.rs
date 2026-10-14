@@ -2187,6 +2187,9 @@ impl ServerLevel {
             if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Enderman(_))) {
                 return self.enderman_hurt_server(id, source, damage);
             }
+            if self.is_wolf(id) {
+                return self.wolf_hurt_server(id, source, damage);
+            }
             if self.mob(id).and_then(super::mob::Mob::raider).is_some() {
                 return self.raider_hurt_server(id, source, damage);
             }
@@ -2265,7 +2268,7 @@ impl ServerLevel {
         let held_item = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
         if self.is_mob(id)
             && held_item.is(wafer_data::items::SHEARS)
-            && self.can_shear_equipment(id)
+            && self.can_shear_equipment(id, player)
             && !self.player(player).is_secondary_use_active()
             && self.attempt_to_shear_equipment(id, player, hand)
         {
@@ -2295,10 +2298,19 @@ impl ServerLevel {
     }
 
     pub fn is_allied_to(&self, id: EntityId, other: EntityId) -> bool {
-        match (self.team_of(id), self.team_of(other)) {
-            (Some(team), Some(other_team)) => team.name() == other_team.name(),
-            _ => false,
-        }
+        id == other || self.considers_entity_as_ally(id, other) || self.considers_entity_as_ally(other, id)
+    }
+
+    pub fn considers_entity_as_ally(&self, id: EntityId, other: EntityId) -> bool {
+        if self.is_tamable_animal(id) { self.tamable_animal_considers_entity_as_ally(id, other) } else { self.entity_considers_entity_as_ally(id, other) }
+    }
+
+    pub fn entity_considers_entity_as_ally(&self, id: EntityId, other: EntityId) -> bool {
+        self.is_allied_to_team(id, self.team_of(other).as_deref())
+    }
+
+    pub fn is_allied_to_team(&self, id: EntityId, other: Option<&crate::world::scores::player_team::PlayerTeam>) -> bool {
+        self.team_of(id).is_some_and(|team| team.is_allied_to(other))
     }
 
     pub fn kill(&mut self, id: EntityId) {
@@ -2408,6 +2420,7 @@ impl ServerLevel {
                     super::mob::MobKind::Witch(_) => "Witch",
                     super::mob::MobKind::Slime(_) => "Slime",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",
+                    super::mob::MobKind::Wolf(_) => "Wolf",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

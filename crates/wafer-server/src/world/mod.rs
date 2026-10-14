@@ -61,6 +61,13 @@ impl InteractionResult {
     pub const SUCCESS_SERVER: InteractionResult = InteractionResult::Success { swing_source: SwingSource::ServerOnly, was_item_interaction: true };
     pub const CONSUME: InteractionResult = InteractionResult::Success { swing_source: SwingSource::None, was_item_interaction: true };
 
+    pub fn without_item(self) -> InteractionResult {
+        match self {
+            InteractionResult::Success { swing_source, .. } => InteractionResult::Success { swing_source, was_item_interaction: false },
+            other => other,
+        }
+    }
+
     pub fn consumes_action(self) -> bool {
         matches!(self, InteractionResult::Success { .. })
     }

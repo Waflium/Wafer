@@ -1,4 +1,5 @@
 use super::ageable_mob::AgeableMobGroupData;
+use super::animal::wolf::wolf::WolfPackData;
 use super::monster::spider::spider::SpiderEffectsGroupData;
 use super::monster::zombie::husk::HuskGroupData;
 use super::monster::zombie::zombie::ZombieGroupData;
@@ -9,4 +10,15 @@ pub enum SpawnGroupData {
     Zombie(ZombieGroupData),
     Husk(HuskGroupData),
     SpiderEffects(SpiderEffectsGroupData),
+    WolfPack(WolfPackData),
+}
+
+impl SpawnGroupData {
+    pub fn as_ageable_mob_group_data_mut(&mut self) -> Option<&mut AgeableMobGroupData> {
+        match self {
+            SpawnGroupData::AgeableMob(data) => Some(data),
+            SpawnGroupData::WolfPack(data) => Some(&mut data.ageable_mob_group_data),
+            _ => None,
+        }
+    }
 }

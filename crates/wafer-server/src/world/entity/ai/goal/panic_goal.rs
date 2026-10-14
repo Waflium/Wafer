@@ -17,7 +17,11 @@ pub struct PanicGoal {
 
 impl PanicGoal {
     pub fn new(speed_modifier: f64) -> PanicGoal {
-        PanicGoal { speed_modifier, pos_x: 0.0, pos_y: 0.0, pos_z: 0.0, is_running: false, panic_causing_damage_types: &damage_type_tags::PANIC_CAUSES }
+        PanicGoal::with_damage_types(speed_modifier, &damage_type_tags::PANIC_CAUSES)
+    }
+
+    pub fn with_damage_types(speed_modifier: f64, panic_causing_damage_types: &'static Tag) -> PanicGoal {
+        PanicGoal { speed_modifier, pos_x: 0.0, pos_y: 0.0, pos_z: 0.0, is_running: false, panic_causing_damage_types }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {

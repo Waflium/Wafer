@@ -29,16 +29,20 @@ pub fn get_speed_up_seconds_when_feeding(ticks_until_adult: i32) -> i32 {
 }
 
 pub fn finalize_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), mob: &mut Mob, group_data: Option<SpawnGroupData>) -> Option<SpawnGroupData> {
-    let mut group_data = match group_data {
-        Some(SpawnGroupData::AgeableMob(data)) => data,
-        None => AgeableMobGroupData::new(true),
-        Some(other) => panic!("class {other:?} cannot be cast to class AgeableMobGroupData"),
-    };
-    if group_data.is_should_spawn_baby() && group_data.get_group_size() > 0 && level.get_random().next_float() <= group_data.get_baby_spawn_chance() && mob.set_age(BABY_START_AGE) {
+    let mut group_data = group_data.unwrap_or(SpawnGroupData::AgeableMob(AgeableMobGroupData::new(true)));
+    if group_data.as_ageable_mob_group_data_mut().is_none() {
+        panic!("class {group_data:?} cannot be cast to class AgeableMobGroupData");
+    }
+    let ageable_mob_group_data = group_data.as_ageable_mob_group_data_mut().expect("ageable mob group data");
+    if ageable_mob_group_data.is_should_spawn_baby()
+        && ageable_mob_group_data.get_group_size() > 0
+        && level.get_random().next_float() <= ageable_mob_group_data.get_baby_spawn_chance()
+        && mob.set_age(BABY_START_AGE)
+    {
         mob.refresh_dimensions();
     }
-    group_data.increase_group_size_by_one();
-    Some(SpawnGroupData::AgeableMob(group_data))
+    ageable_mob_group_data.increase_group_size_by_one();
+    Some(group_data)
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -82,6 +86,7 @@ impl ServerLevel {
             MobKind::MushroomCow(_) => self.mushroom_cow_get_breed_offspring(id, partner),
             MobKind::Pig(_) => self.pig_get_breed_offspring(id, partner),
             MobKind::Sheep(_) => self.sheep_get_breed_offspring(id, partner),
+            MobKind::Wolf(_) => self.wolf_get_breed_offspring(id, partner),
             MobKind::Zombie(_)
             | MobKind::Husk(_)
             | MobKind::Drowned(_)

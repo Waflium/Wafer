@@ -7,6 +7,7 @@ pub mod boss;
 pub mod conversion_params;
 pub mod conversion_tracker;
 pub mod conversion_type;
+pub mod crackiness;
 pub mod data;
 #[cfg(test)]
 mod effect_tests;
@@ -34,6 +35,7 @@ pub mod mob;
 pub mod mob_category;
 pub mod monster;
 pub mod neutral_mob;
+pub mod ownable_entity;
 pub mod pathfinder_mob;
 pub mod portal_processor;
 pub mod primed_tnt;
@@ -47,6 +49,7 @@ pub mod slot_access;
 pub mod spawn_group_data;
 pub mod spawn_placement_types;
 pub mod spawn_placements;
+pub mod tamable_animal;
 #[cfg(test)]
 mod survival_tests;
 pub mod using_item;

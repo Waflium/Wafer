@@ -63,11 +63,11 @@ pub struct Enderman {
 }
 
 impl NeutralMob for Enderman {
-    fn get_persistent_anger_end_time(&self) -> i64 {
+    fn get_persistent_anger_end_time(&self, _entity: &Entity) -> i64 {
         self.persistent_anger_end_time
     }
 
-    fn set_persistent_anger_end_time(&mut self, end_time: i64) {
+    fn set_persistent_anger_end_time(&mut self, _entity: &mut Entity, end_time: i64) {
         self.persistent_anger_end_time = end_time;
     }
 
@@ -166,7 +166,7 @@ impl Enderman {
         if let Some(block_state) = get_carried_block(&mob.entity) {
             out.push(("carriedBlockState".into(), state_to_nbt(block_state)));
         }
-        enderman(mob).add_persistent_anger_save_data(out);
+        enderman(mob).add_persistent_anger_save_data(&mob.entity, out);
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
