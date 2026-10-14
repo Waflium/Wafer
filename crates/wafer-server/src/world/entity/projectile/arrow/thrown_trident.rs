@@ -184,8 +184,7 @@ impl ServerLevel {
         let weapon_item = self.thrown_trident_get_weapon_item(id);
         dmg = self.modify_damage(&weapon_item, entity, &damage_source, dmg);
         thrown_trident_mut(self.projectile_mut(id)).dealt_damage = true;
-        let was_hurt = self.hurt_server(entity, damage_source, dmg);
-        if was_hurt {
+        let was_hurt = self.hurt_server(entity, damage_source, dmg);        if was_hurt {
             self.do_post_attack_effects_with_item_source(entity, &damage_source, Some(&weapon_item));
             if self.is_living(entity) {
                 self.do_knockback(id, entity, &damage_source);

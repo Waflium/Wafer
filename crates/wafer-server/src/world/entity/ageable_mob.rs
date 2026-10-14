@@ -82,7 +82,15 @@ impl ServerLevel {
             MobKind::MushroomCow(_) => self.mushroom_cow_get_breed_offspring(id, partner),
             MobKind::Pig(_) => self.pig_get_breed_offspring(id, partner),
             MobKind::Sheep(_) => self.sheep_get_breed_offspring(id, partner),
-            MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => None,
+            MobKind::Zombie(_)
+            | MobKind::Husk(_)
+            | MobKind::Drowned(_)
+            | MobKind::Creeper(_)
+            | MobKind::Spider(_)
+            | MobKind::CaveSpider(_)
+            | MobKind::Skeleton(_)
+            | MobKind::Stray(_)
+            | MobKind::Bogged(_) => None,
         }
     }
 

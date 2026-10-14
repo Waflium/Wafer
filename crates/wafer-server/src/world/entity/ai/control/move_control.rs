@@ -19,8 +19,16 @@ pub enum Operation {
     Jumping,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum MoveControlKind {
+    #[default]
+    Default,
+    Drowned,
+}
+
 #[derive(Default)]
 pub struct MoveControl {
+    pub kind: MoveControlKind,
     pub wanted_x: f64,
     pub wanted_y: f64,
     pub wanted_z: f64,
@@ -57,7 +65,7 @@ impl MoveControl {
     }
 }
 
-fn rotlerp(a: f32, b: f32, max: f32) -> f32 {
+pub fn rotlerp(a: f32, b: f32, max: f32) -> f32 {
     let diff = mth::clamp_f(mth::wrap_degrees(b - a), -max, max);
     let result = a + diff;
     if result < 0.0 {

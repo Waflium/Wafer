@@ -1272,7 +1272,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
-            Some(MobKind::Zombie(_) | MobKind::Husk(_)) => self.zombie_get_base_experience_reward(id),
+            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_)) => self.zombie_get_base_experience_reward(id),
             Some(MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_)) => {
                 self.mob_get_base_experience_reward(id)
             }
@@ -1685,14 +1685,22 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_ai_step(id),
             Some(
-                MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_),
+                MobKind::Zombie(_)
+                | MobKind::Husk(_)
+                | MobKind::Drowned(_)
+                | MobKind::Creeper(_)
+                | MobKind::Spider(_)
+                | MobKind::CaveSpider(_)
+                | MobKind::Skeleton(_)
+                | MobKind::Stray(_)
+                | MobKind::Bogged(_),
             ) => self.monster_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
     }
 
-    fn is_effective_ai(&self, id: EntityId) -> bool {
+    pub fn is_effective_ai(&self, id: EntityId) -> bool {
         self.mob(id).is_none_or(|mob| !mob.is_no_ai())
     }
 
@@ -1999,6 +2007,14 @@ impl ServerLevel {
     }
 
     fn travel_in_water(&mut self, id: EntityId, input: Vec3, base_gravity: f64, is_falling: bool, old_y: f64) {
+        if self.is_drowned(id) {
+            self.drowned_travel_in_water(id, input, base_gravity, is_falling, old_y);
+        } else {
+            self.living_entity_travel_in_water(id, input, base_gravity, is_falling, old_y);
+        }
+    }
+
+    pub fn living_entity_travel_in_water(&mut self, id: EntityId, input: Vec3, base_gravity: f64, is_falling: bool, old_y: f64) {
         let e = self.entity(id);
         let mut slow_down = if e.is_sprinting() { 0.9f32 } else { 0.8 };
         let mut speed = 0.02f32;

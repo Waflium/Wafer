@@ -4,13 +4,22 @@ use wafer_data::block_tags;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::attributes::Attribute;
+use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path::Path;
 use crate::world::level::pathfinder::path_finder::PathFinder;
 use crate::world::level::pathfinder::path_type::PathType;
 use super::wall_climber_navigation::WallClimberNavigation;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum PathNavigationKind {
+    #[default]
+    Ground,
+    Amphibious,
+}
+
 pub struct PathNavigation {
+    pub kind: PathNavigationKind,
     pub path: Option<Path>,
     pub speed_modifier: f64,
     pub tick: i32,
@@ -37,6 +46,7 @@ pub struct PathNavigation {
 impl Default for PathNavigation {
     fn default() -> PathNavigation {
         PathNavigation {
+            kind: PathNavigationKind::Ground,
             path: None,
             speed_modifier: 0.0,
             tick: 0,
@@ -64,9 +74,48 @@ impl Default for PathNavigation {
 
 impl PathNavigation {
     pub fn new(follow_range_base: f64) -> PathNavigation {
-        let mut navigation = PathNavigation::default();
+        PathNavigation::of_kind(PathNavigationKind::Ground, follow_range_base)
+    }
+
+    pub fn of_kind(kind: PathNavigationKind, follow_range_base: f64) -> PathNavigation {
+        let mut navigation = PathNavigation { kind, ..PathNavigation::default() };
         navigation.path_finder = navigation.create_path_finder(mth::floor(follow_range_base * 16.0));
         navigation
+    }
+
+    fn create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {
+        match self.kind {
+            PathNavigationKind::Ground => self.ground_path_navigation_create_path_finder(max_visited_nodes),
+            PathNavigationKind::Amphibious => self.amphibious_path_navigation_create_path_finder(max_visited_nodes),
+        }
+    }
+
+    pub fn can_update_path(&self, level: &ServerLevel, mob: EntityId) -> bool {
+        match self.kind {
+            PathNavigationKind::Ground => self.ground_path_navigation_can_update_path(level, mob),
+            PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_update_path(),
+        }
+    }
+
+    pub fn get_temp_mob_pos(&self, level: &ServerLevel, mob: EntityId) -> Vec3 {
+        match self.kind {
+            PathNavigationKind::Ground => self.ground_path_navigation_get_temp_mob_pos(level, mob),
+            PathNavigationKind::Amphibious => self.amphibious_path_navigation_get_temp_mob_pos(level, mob),
+        }
+    }
+
+    pub fn trim_path(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        match self.kind {
+            PathNavigationKind::Ground => self.ground_path_navigation_trim_path(level, mob),
+            PathNavigationKind::Amphibious => self.path_navigation_trim_path(level),
+        }
+    }
+
+    pub fn can_navigate_ground(&self) -> bool {
+        match self.kind {
+            PathNavigationKind::Ground => self.ground_path_navigation_can_navigate_ground(),
+            PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_navigate_ground(),
+        }
     }
 
     pub fn update_pathfinder_max_visited_nodes(&mut self, level: &ServerLevel, mob: EntityId) {
@@ -118,6 +167,11 @@ impl PathNavigation {
         self.create_path_from_targets(level, mob, &[pos], 8, false, reach_range)
     }
 
+    fn path_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
+        let pos = level.entity(target).block_position();
+        self.create_path_from_targets(level, mob, &[pos], 16, true, reach_range)
+    }
+
     fn create_path_from_targets(&mut self, level: &ServerLevel, mob: EntityId, targets: &[BlockPos], radius_offset: i32, above: bool, reach_range: i32) -> Option<Path> {
         let max_path_length = self.get_max_path_length(level, mob);
         self.create_path_with_max_length(level, mob, targets, radius_offset, above, reach_range, max_path_length)
@@ -157,6 +211,8 @@ impl PathNavigation {
     pub fn create_path(&mut self, level: &ServerLevel, mob: EntityId, pos: BlockPos, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_create_path(level, mob, pos, reach_range)
+        } else if self.kind == PathNavigationKind::Amphibious {
+            self.path_navigation_create_path(level, mob, pos, reach_range)
         } else {
             self.ground_path_navigation_create_path(level, mob, pos, reach_range)
         }
@@ -165,6 +221,8 @@ impl PathNavigation {
     pub fn create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_create_path_to_entity(level, mob, target, reach_range)
+        } else if self.kind == PathNavigationKind::Amphibious {
+            self.path_navigation_create_path_to_entity(level, mob, target, reach_range)
         } else {
             self.ground_path_navigation_create_path_to_entity(level, mob, target, reach_range)
         }
@@ -248,6 +306,13 @@ impl PathNavigation {
     }
 
     fn get_ground_y(&self, level: &ServerLevel, target: Vec3) -> f64 {
+        match self.kind {
+            PathNavigationKind::Ground => self.path_navigation_get_ground_y(level, target),
+            PathNavigationKind::Amphibious => self.amphibious_path_navigation_get_ground_y(target),
+        }
+    }
+
+    fn path_navigation_get_ground_y(&self, level: &ServerLevel, target: Vec3) -> f64 {
         let block_pos = BlockPos::containing_vec(target);
         let region = PathNavigationRegion::new(level);
         if region.get_block_state(block_pos.below()).is_air() {
@@ -276,7 +341,7 @@ impl PathNavigation {
         self.do_stuck_detection(level, mob, mob_pos);
     }
 
-    fn should_target_next_node_in_direction(&self, level: &ServerLevel, mob: EntityId, mob_position: Vec3) -> bool {
+    fn should_target_next_node_in_direction(&self, level: &mut ServerLevel, mob: EntityId, mob_position: Vec3) -> bool {
         let path = self.path.as_ref().expect("a path");
         if path.get_next_node_index() as usize + 1 >= path.get_node_count() {
             return false;
@@ -285,7 +350,8 @@ impl PathNavigation {
         if !mob_position.closer_than(current_node, 2.0) {
             return false;
         }
-        if self.can_move_directly(mob_position, path.get_next_entity_pos(level.entity(mob))) {
+        let next_entity_pos = path.get_next_entity_pos(level.entity(mob));
+        if self.can_move_directly(level, mob, mob_position, next_entity_pos) {
             return true;
         }
         let next_node = Vec3::at_bottom_center_of(path.get_node_pos(path.get_next_node_index() as usize + 1));
@@ -378,7 +444,14 @@ impl PathNavigation {
         }
     }
 
-    fn can_move_directly(&self, _start_pos: Vec3, _stop_pos: Vec3) -> bool {
+    fn can_move_directly(&self, level: &mut ServerLevel, mob: EntityId, start_pos: Vec3, stop_pos: Vec3) -> bool {
+        match self.kind {
+            PathNavigationKind::Ground => self.path_navigation_can_move_directly(start_pos, stop_pos),
+            PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_move_directly(level, mob, start_pos, stop_pos),
+        }
+    }
+
+    fn path_navigation_can_move_directly(&self, _start_pos: Vec3, _stop_pos: Vec3) -> bool {
         false
     }
 
@@ -387,10 +460,24 @@ impl PathNavigation {
     }
 
     pub fn is_stable_destination(&self, level: &ServerLevel, pos: BlockPos) -> bool {
+        match self.kind {
+            PathNavigationKind::Ground => self.path_navigation_is_stable_destination(level, pos),
+            PathNavigationKind::Amphibious => self.amphibious_path_navigation_is_stable_destination(level, pos),
+        }
+    }
+
+    fn path_navigation_is_stable_destination(&self, level: &ServerLevel, pos: BlockPos) -> bool {
         PathNavigationRegion::new(level).get_block_state(pos.below()).is_solid_render()
     }
 
     pub fn set_can_float(&mut self, can_float: bool) {
+        match self.kind {
+            PathNavigationKind::Ground => self.path_navigation_set_can_float(can_float),
+            PathNavigationKind::Amphibious => self.amphibious_path_navigation_set_can_float(can_float),
+        }
+    }
+
+    fn path_navigation_set_can_float(&mut self, can_float: bool) {
         self.path_finder.node_evaluator.node_evaluator.can_float = can_float;
     }
 
@@ -428,4 +515,11 @@ impl PathNavigation {
     pub fn set_can_open_doors(&mut self, can_open_doors: bool) {
         self.path_finder.node_evaluator.node_evaluator.can_open_doors = can_open_doors;
     }
+}
+
+pub fn is_clear_for_movement_between(level: &mut ServerLevel, mob: EntityId, start_pos: Vec3, stop_pos: Vec3, blocked_by_fluids: bool) -> bool {
+    let to = Vec3::new(stop_pos.x, stop_pos.y + level.entity(mob).dimensions.height as f64 * 0.5, stop_pos.z);
+    let fluid = if blocked_by_fluids { ClipFluid::Any } else { ClipFluid::None };
+    let ctx = ClipContext { from: start_pos, to, block: ClipBlock::Collider, fluid, is_player: false };
+    level.clip(&ctx).miss
 }

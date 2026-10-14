@@ -12,6 +12,17 @@ pub fn get_pos(level: &mut ServerLevel, mob: EntityId, horizontal_dist: i32, ver
     })
 }
 
+pub fn get_pos_towards(level: &mut ServerLevel, mob: EntityId, horizontal_dist: i32, vertical_dist: i32, towards_pos: Vec3, max_xz_radians_from_dir: f64) -> Option<Vec3> {
+    let e = level.entity(mob);
+    let dir = towards_pos.subtract(Vec3::new(e.x(), e.y(), e.z()));
+    let restrict = goal_utils::mob_restricted(level, mob, horizontal_dist as f64);
+    random_pos::generate_random_pos(level, mob, |level| {
+        let random = &mut level.entity_mut(mob).random;
+        let direction = random_pos::generate_random_direction_within_radians(random, 0.0, horizontal_dist as f64, vertical_dist, 0, dir.x, dir.z, max_xz_radians_from_dir)?;
+        generate_random_pos_toward_direction(level, mob, horizontal_dist, restrict, direction)
+    })
+}
+
 pub fn get_pos_away(level: &mut ServerLevel, mob: EntityId, horizontal_dist: i32, vertical_dist: i32, avoid_pos: Vec3) -> Option<Vec3> {
     let dir_away = level.entity(mob).position().subtract(avoid_pos);
     let restrict = goal_utils::mob_restricted(level, mob, horizontal_dist as f64);

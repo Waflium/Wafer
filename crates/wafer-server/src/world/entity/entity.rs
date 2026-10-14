@@ -927,6 +927,7 @@ impl ServerLevel {
             Some(p) => !p.abilities_flying(),
             None => match self.as_projectile(id) {
                 Some(projectile) if projectile.abstract_arrow().is_some() => self.abstract_arrow_is_pushed_by_fluid(id),
+                _ if self.is_drowned(id) => super::monster::zombie::drowned::Drowned::is_pushed_by_fluid(self.mob(id).expect("a drowned")),
                 _ => true,
             },
         }
@@ -1654,7 +1655,7 @@ impl ServerLevel {
         let sound = if self.is_player(id) {
             "minecraft:entity.player.swim"
         } else if self.is_monster(id) {
-            self.monster_get_swim_sound()
+            if self.is_drowned(id) { super::monster::zombie::drowned::Drowned::get_swim_sound() } else { self.monster_get_swim_sound() }
         } else {
             "minecraft:entity.generic.swim"
         };
@@ -1945,6 +1946,10 @@ impl ServerLevel {
     }
 
     pub fn update_swimming(&mut self, id: EntityId) {
+        if self.is_drowned(id) {
+            self.drowned_update_swimming(id);
+            return;
+        }
         if self.players.get(&id).is_some_and(|p| p.abilities_flying()) {
             self.entity_mut(id).set_swimming(false);
             return;
@@ -2165,7 +2170,7 @@ impl ServerLevel {
             return self.server_player_hurt_server(id, source, damage);
         }
         if self.is_mob(id) {
-            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::Husk(_))) {
+            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::Husk(_) | super::mob::MobKind::Drowned(_))) {
                 return self.zombie_hurt_server(id, source, damage);
             }
             return self.living_entity_hurt_server(id, source, damage);
@@ -2372,6 +2377,7 @@ impl ServerLevel {
                     super::mob::MobKind::Skeleton(_) => "Skeleton",
                     super::mob::MobKind::Stray(_) => "Stray",
                     super::mob::MobKind::Bogged(_) => "Bogged",
+                    super::mob::MobKind::Drowned(_) => "Drowned",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
@@ -3129,6 +3135,8 @@ impl ServerLevel {
     pub fn ride_tick(&mut self, id: EntityId) {
         if self.mob(id).is_some_and(super::mob::Mob::is_abstract_skeleton) {
             self.abstract_skeleton_ride_tick(id);
+        } else if self.is_drowned(id) {
+            self.drowned_ride_tick(id);
         } else {
             self.entity_ride_tick(id);
         }

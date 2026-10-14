@@ -16,6 +16,7 @@ pub enum TargetType {
     AbstractVillager,
     IronGolem,
     Turtle,
+    Axolotl,
 }
 
 impl TargetType {
@@ -25,6 +26,7 @@ impl TargetType {
             TargetType::AbstractVillager => is_type(level, entity, &["minecraft:villager", "minecraft:wandering_trader"]),
             TargetType::IronGolem => is_type(level, entity, &["minecraft:iron_golem"]),
             TargetType::Turtle => is_type(level, entity, &["minecraft:turtle"]),
+            TargetType::Axolotl => is_type(level, entity, &["minecraft:axolotl"]),
         }
     }
 }

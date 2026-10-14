@@ -372,6 +372,7 @@ impl ServerLevel {
             "minecraft:skeleton" => LevelEntity::Mob(Box::new(super::monster::skeleton::skeleton::Skeleton::create())),
             "minecraft:stray" => LevelEntity::Mob(Box::new(super::monster::skeleton::stray::Stray::create())),
             "minecraft:bogged" => LevelEntity::Mob(Box::new(super::monster::skeleton::bogged::Bogged::create())),
+            "minecraft:drowned" => LevelEntity::Mob(Box::new(super::monster::zombie::drowned::Drowned::create())),
             "minecraft:snowball" => LevelEntity::Projectile(Box::new(throwableitemprojectile::snowball::Snowball::of_type())),
             "minecraft:egg" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_egg::ThrownEgg::of_type())),
             "minecraft:ender_pearl" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_enderpearl::ThrownEnderpearl::of_type())),

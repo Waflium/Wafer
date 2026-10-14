@@ -15,6 +15,7 @@ pub mod move_to_block_goal;
 pub mod panic_goal;
 pub mod random_look_around_goal;
 pub mod random_stroll_goal;
+pub mod ranged_attack_goal;
 pub mod ranged_bow_attack_goal;
 pub mod remove_block_goal;
 pub mod restrict_sun_goal;

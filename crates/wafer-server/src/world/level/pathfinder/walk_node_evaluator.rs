@@ -3,6 +3,7 @@ use wafer_core::{AABB, Axis, BlockPos, Direction, Vec3, mth};
 use wafer_data::properties::OPEN;
 use wafer_data::{block_tags, blocks, fluid_tags};
 
+use super::amphibious_node_evaluator::AmphibiousNodeEvaluator;
 use super::node::Node;
 use super::node_evaluator::{NodeEvaluator, is_burning_block};
 use super::path_type::PathType;
@@ -18,23 +19,52 @@ pub struct WalkNodeEvaluator {
     path_types_by_pos_cache_by_mob: FastMap<i64, PathType>,
     collision_cache: FastMap<[u64; 6], bool>,
     reusable_neighbors: [Option<u32>; 4],
+    pub amphibious: Option<AmphibiousNodeEvaluator>,
 }
 
 impl WalkNodeEvaluator {
+    pub fn amphibious(prefers_shallow_swimming: bool) -> WalkNodeEvaluator {
+        WalkNodeEvaluator { amphibious: Some(AmphibiousNodeEvaluator::new(prefers_shallow_swimming)), ..WalkNodeEvaluator::default() }
+    }
+
+    fn is_amphibious(&self) -> bool {
+        self.amphibious.is_some()
+    }
+
     pub fn prepare(&mut self, context: &PathfindingContext, mob: crate::world::entity::EntityId) {
+        if self.is_amphibious() {
+            self.amphibious_node_evaluator_prepare(context, mob);
+        } else {
+            self.walk_node_evaluator_prepare(context, mob);
+        }
+    }
+
+    pub fn walk_node_evaluator_prepare(&mut self, context: &PathfindingContext, mob: crate::world::entity::EntityId) {
         self.node_evaluator.prepare(context, mob);
     }
 
-    pub fn done(&mut self) {
+    pub fn done(&mut self, context: &PathfindingContext) {
+        if self.is_amphibious() {
+            self.amphibious_node_evaluator_done(context);
+        } else {
+            self.walk_node_evaluator_done();
+        }
+    }
+
+    pub fn walk_node_evaluator_done(&mut self) {
         self.path_types_by_pos_cache_by_mob.clear();
         self.collision_cache.clear();
     }
 
-    fn mob<'b>(&self, context: &'b PathfindingContext) -> &'b Mob {
+    pub fn mob<'b>(&self, context: &'b PathfindingContext) -> &'b Mob {
         context.level().level.mob(self.node_evaluator.mob).expect("a pathfinding mob")
     }
 
     pub fn get_start(&mut self, context: &PathfindingContext) -> Option<u32> {
+        if self.is_amphibious() { self.amphibious_node_evaluator_get_start(context) } else { self.walk_node_evaluator_get_start(context) }
+    }
+
+    pub fn walk_node_evaluator_get_start(&mut self, context: &PathfindingContext) -> Option<u32> {
         let mob = self.mob(context);
         let e = &mob.entity;
         let mut start_y = e.block_position().y;
@@ -71,7 +101,7 @@ impl WalkNodeEvaluator {
         Some(self.get_start_node(context, BlockPos::new(start_pos.x, start_y, start_pos.z)))
     }
 
-    fn get_start_node(&mut self, context: &PathfindingContext, pos: BlockPos) -> u32 {
+    pub fn get_start_node(&mut self, context: &PathfindingContext, pos: BlockPos) -> u32 {
         let node = self.node_evaluator.get_node_at(pos);
         let path_type = self.get_cached_path_type(context, pos.x, pos.y, pos.z);
         let cost_malus = self.mob(context).get_pathfinding_malus(path_type);
@@ -87,10 +117,18 @@ impl WalkNodeEvaluator {
     }
 
     pub fn get_target(&mut self, x: f64, y: f64, z: f64) -> Target {
-        self.node_evaluator.get_target_node_at(x, y, z)
+        if self.is_amphibious() { self.amphibious_node_evaluator_get_target(x, y, z) } else { self.node_evaluator.get_target_node_at(x, y, z) }
     }
 
     pub fn get_neighbors(&mut self, context: &PathfindingContext, neighbors: &mut [u32; 32], pos: u32) -> usize {
+        if self.is_amphibious() {
+            self.amphibious_node_evaluator_get_neighbors(context, neighbors, pos)
+        } else {
+            self.walk_node_evaluator_get_neighbors(context, neighbors, pos)
+        }
+    }
+
+    pub fn walk_node_evaluator_get_neighbors(&mut self, context: &PathfindingContext, neighbors: &mut [u32; 32], pos: u32) -> usize {
         let mut p = 0;
         let mut jump_size = 0;
         let Node { x, y, z, .. } = self.node_evaluator.nodes[pos as usize];
@@ -133,7 +171,7 @@ impl WalkNodeEvaluator {
         p
     }
 
-    fn is_neighbor_valid(&self, neighbor: Option<u32>, current: u32) -> bool {
+    pub fn is_neighbor_valid(&self, neighbor: Option<u32>, current: u32) -> bool {
         let nodes = &self.node_evaluator.nodes;
         neighbor.is_some_and(|neighbor| {
             let neighbor = &nodes[neighbor as usize];
@@ -188,9 +226,9 @@ impl WalkNodeEvaluator {
         true
     }
 
-    fn get_floor_level(&self, context: &PathfindingContext, pos: BlockPos) -> f64 {
+    pub fn get_floor_level(&self, context: &PathfindingContext, pos: BlockPos) -> f64 {
         let level = context.level();
-        if self.node_evaluator.can_float && level.get_fluid_state(pos).is(&fluid_tags::ENTITY_FLOATABLE) {
+        if (self.node_evaluator.can_float || self.is_amphibious()) && level.get_fluid_state(pos).is(&fluid_tags::ENTITY_FLOATABLE) {
             pos.y as f64 + 0.5
         } else {
             get_floor_level(level, pos)
@@ -198,7 +236,7 @@ impl WalkNodeEvaluator {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn find_accepted_node(
+    pub fn find_accepted_node(
         &mut self,
         context: &PathfindingContext,
         x: i32,
@@ -226,7 +264,7 @@ impl WalkNodeEvaluator {
         {
             best = None;
         }
-        if path_type == PathType::Walkable {
+        if path_type == PathType::Walkable || self.is_amphibious() && path_type == PathType::Water {
             return best;
         }
         if (best.is_none_or(|best| self.node_evaluator.nodes[best as usize].cost_malus < 0.0))
@@ -237,7 +275,7 @@ impl WalkNodeEvaluator {
             && path_type != PathType::PowderSnow
         {
             best = self.try_jump_on(context, x, y, z, jump_size, node_height, travel_direction, block_path_type_current);
-        } else if path_type == PathType::Water && !self.node_evaluator.can_float {
+        } else if !self.is_amphibious() && path_type == PathType::Water && !self.node_evaluator.can_float {
             best = self.try_find_first_non_water_below(context, x, y, z, best);
         } else if path_type == PathType::Open {
             best = Some(self.try_find_first_ground_node_below(context, x, y, z));
@@ -388,7 +426,7 @@ impl WalkNodeEvaluator {
                 highest_malus_path_type_within_bb = path_type;
             }
         }
-        let current_node_path_type = get_path_type_static(context, x, y, z);
+        let current_node_path_type = self.get_path_type(context, x, y, z);
         if self.node_evaluator.entity_width > 1 {
             let is_current_node_cheaper = mob.get_pathfinding_malus(current_node_path_type) < highest_malus_within_bb;
             let cap_malus_due_to_cheap_node = is_current_node_cheaper && mob.get_pathfinding_malus(PathType::BigMobsCloseToDanger) < highest_malus_within_bb;
@@ -406,7 +444,7 @@ impl WalkNodeEvaluator {
         for dx in 0..evaluator.entity_width {
             for dy in 0..evaluator.entity_height {
                 for dz in 0..evaluator.entity_depth {
-                    let mut block_type = get_path_type_static(context, dx + x, dy + y, dz + z);
+                    let mut block_type = self.get_path_type(context, dx + x, dy + y, dz + z);
                     let mob_position = self.mob(context).entity.block_position();
                     let can_pass_doors = evaluator.can_pass_doors;
                     if block_type == PathType::DoorWoodClosed && evaluator.can_open_doors && can_pass_doors {
@@ -416,8 +454,8 @@ impl WalkNodeEvaluator {
                         block_type = PathType::Blocked;
                     }
                     if block_type == PathType::Rail
-                        && get_path_type_static(context, mob_position.x, mob_position.y, mob_position.z) != PathType::Rail
-                        && get_path_type_static(context, mob_position.x, mob_position.y - 1, mob_position.z) != PathType::Rail
+                        && self.get_path_type(context, mob_position.x, mob_position.y, mob_position.z) != PathType::Rail
+                        && self.get_path_type(context, mob_position.x, mob_position.y - 1, mob_position.z) != PathType::Rail
                     {
                         block_type = PathType::UnpassableRail;
                     }
@@ -426,6 +464,16 @@ impl WalkNodeEvaluator {
             }
         }
         block_types
+    }
+}
+
+impl WalkNodeEvaluator {
+    pub fn get_path_type(&self, context: &PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+        if self.is_amphibious() { self.amphibious_node_evaluator_get_path_type(context, x, y, z) } else { self.walk_node_evaluator_get_path_type(context, x, y, z) }
+    }
+
+    pub fn walk_node_evaluator_get_path_type(&self, context: &PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+        get_path_type_static(context, x, y, z)
     }
 }
 

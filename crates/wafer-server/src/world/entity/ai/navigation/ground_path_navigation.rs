@@ -11,16 +11,16 @@ use crate::world::level::pathfinder::path_finder::PathFinder;
 use crate::world::level::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 
 impl PathNavigation {
-    pub fn create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {
+    pub fn ground_path_navigation_create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {
         PathFinder::new(WalkNodeEvaluator::default(), max_visited_nodes)
     }
 
-    pub fn can_update_path(&self, level: &ServerLevel, mob: EntityId) -> bool {
+    pub fn ground_path_navigation_can_update_path(&self, level: &ServerLevel, mob: EntityId) -> bool {
         let e = level.entity(mob);
         e.on_ground || e.is_in_liquid() || level.is_passenger(mob)
     }
 
-    pub fn get_temp_mob_pos(&self, level: &ServerLevel, mob: EntityId) -> Vec3 {
+    pub fn ground_path_navigation_get_temp_mob_pos(&self, level: &ServerLevel, mob: EntityId) -> Vec3 {
         let e = level.entity(mob);
         Vec3::new(e.x(), self.get_surface_y(level, mob) as f64, e.z())
     }
@@ -85,7 +85,7 @@ impl PathNavigation {
         }
     }
 
-    pub fn trim_path(&mut self, level: &mut ServerLevel, mob: EntityId) {
+    pub fn ground_path_navigation_trim_path(&mut self, level: &mut ServerLevel, mob: EntityId) {
         self.path_navigation_trim_path(level);
         if !self.avoid_sun {
             return;
@@ -104,7 +104,7 @@ impl PathNavigation {
         }
     }
 
-    pub fn can_navigate_ground(&self) -> bool {
+    pub fn ground_path_navigation_can_navigate_ground(&self) -> bool {
         true
     }
 

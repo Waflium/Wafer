@@ -199,7 +199,7 @@ impl ServerLevel {
         let yd = t.get_y(0.3333333333333333) - arrow.entity.y();
         let zd = t.z() - e.z();
         let distance_to_target = (xd * xd + zd * zd).sqrt();
-        let uncertainty = self.ranged_attack_uncertainty();
+        let uncertainty = self.ranged_attack_uncertainty(id);
         self.spawn_projectile_using_shoot(arrow, &projectile, xd, yd + distance_to_target * 0.2f32 as f64, zd, 1.6, uncertainty);
         let pitch = 1.0 / (self.entity_mut(id).random.next_float() * 0.4 + 0.8);
         self.entity_play_sound(id, sound_event("minecraft:entity.skeleton.shoot"), 1.0, pitch);

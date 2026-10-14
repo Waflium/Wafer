@@ -10,6 +10,7 @@ use super::melee_attack_goal::MeleeAttackGoal;
 use super::panic_goal::PanicGoal;
 use super::random_look_around_goal::RandomLookAroundGoal;
 use super::ranged_bow_attack_goal::RangedBowAttackGoal;
+use super::random_stroll_goal::RandomStrollGoal;
 use super::restrict_sun_goal::RestrictSunGoal;
 use super::swell_goal::SwellGoal;
 use super::target::hurt_by_target_goal::HurtByTargetGoal;
@@ -20,6 +21,7 @@ use super::zombie_attack_goal::ZombieAttackGoal;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::monster::skeleton::abstract_skeleton::AbstractSkeletonMeleeGoal;
+use crate::world::entity::monster::zombie::drowned::{DrownedAttackGoal, DrownedGoToBeachGoal, DrownedGoToWaterGoal, DrownedSwimUpGoal, DrownedTridentAttackGoal};
 use crate::world::entity::monster::zombie::zombie::ZombieAttackTurtleEggGoal;
 use super::leap_at_target_goal::LeapAtTargetGoal;
 use crate::world::entity::monster::spider::spider::{SpiderAttackGoal, SpiderTargetGoal};
@@ -65,6 +67,12 @@ pub enum Goal {
     SpiderTarget(SpiderTargetGoal),
     RangedBowAttack(RangedBowAttackGoal),
     AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
+    RandomStroll(RandomStrollGoal),
+    DrownedGoToWater(DrownedGoToWaterGoal),
+    DrownedTridentAttack(DrownedTridentAttackGoal),
+    DrownedAttack(DrownedAttackGoal),
+    DrownedGoToBeach(DrownedGoToBeachGoal),
+    DrownedSwimUp(DrownedSwimUpGoal),
 }
 
 impl Goal {
@@ -94,6 +102,12 @@ impl Goal {
             Goal::SpiderTarget(goal) => goal.can_use(level, mob),
             Goal::RangedBowAttack(goal) => goal.can_use(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_use(level, mob),
+            Goal::RandomStroll(goal) => goal.can_use(level, mob, RandomStrollGoal::get_position),
+            Goal::DrownedGoToWater(goal) => goal.can_use(level, mob),
+            Goal::DrownedTridentAttack(goal) => goal.can_use(level, mob),
+            Goal::DrownedAttack(goal) => goal.can_use(level, mob),
+            Goal::DrownedGoToBeach(goal) => goal.can_use(level, mob),
+            Goal::DrownedSwimUp(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -123,6 +137,12 @@ impl Goal {
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
             Goal::RangedBowAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
+            Goal::RandomStroll(goal) => goal.can_continue_to_use(level, mob),
+            Goal::DrownedGoToWater(goal) => goal.can_continue_to_use(level, mob),
+            Goal::DrownedTridentAttack(goal) => goal.ranged_attack_goal.can_continue_to_use(level, mob),
+            Goal::DrownedAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::DrownedGoToBeach(goal) => goal.can_continue_to_use(level),
+            Goal::DrownedSwimUp(goal) => goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -155,6 +175,12 @@ impl Goal {
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
             Goal::RangedBowAttack(goal) => goal.start(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.start(level, mob),
+            Goal::RandomStroll(goal) => goal.start(level, mob),
+            Goal::DrownedGoToWater(goal) => goal.start(level, mob),
+            Goal::DrownedTridentAttack(goal) => goal.start(level, mob),
+            Goal::DrownedAttack(goal) => goal.zombie_attack_goal.start(level, mob),
+            Goal::DrownedGoToBeach(goal) => goal.start(level, mob),
+            Goal::DrownedSwimUp(goal) => goal.start(level, mob),
         }
     }
 
@@ -182,6 +208,11 @@ impl Goal {
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::RangedBowAttack(goal) => goal.stop(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.stop(level, mob),
+            Goal::RandomStroll(goal) => goal.stop(level, mob),
+            Goal::DrownedGoToWater(_) | Goal::DrownedGoToBeach(_) => {}
+            Goal::DrownedTridentAttack(goal) => goal.stop(level, mob),
+            Goal::DrownedAttack(goal) => goal.zombie_attack_goal.stop(level, mob),
+            Goal::DrownedSwimUp(goal) => goal.stop(level, mob),
         }
     }
 
@@ -198,6 +229,9 @@ impl Goal {
                 | Goal::SpiderAttack(_)
                 | Goal::RangedBowAttack(_)
                 | Goal::AbstractSkeletonMelee(_)
+                | Goal::DrownedTridentAttack(_)
+                | Goal::DrownedAttack(_)
+                | Goal::DrownedGoToBeach(_)
         )
     }
 
@@ -221,19 +255,36 @@ impl Goal {
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.tick(level, mob),
             Goal::RangedBowAttack(goal) => goal.tick(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.tick(level, mob),
+            Goal::RandomStroll(_) | Goal::DrownedGoToWater(_) => {}
+            Goal::DrownedTridentAttack(goal) => goal.ranged_attack_goal.tick(level, mob),
+            Goal::DrownedAttack(goal) => goal.zombie_attack_goal.tick(level, mob),
+            Goal::DrownedGoToBeach(goal) => goal.tick(level, mob),
+            Goal::DrownedSwimUp(goal) => goal.tick(level, mob),
         }
     }
 
     pub fn get_flags(&self) -> u8 {
         match self {
             Goal::Float(_) => Flag::Jump.bit(),
-            Goal::Panic(_) | Goal::WaterAvoidingRandomStroll(_) | Goal::FleeSun(_) | Goal::Swell(_) | Goal::AvoidEntity(_) => Flag::Move.bit(),
-            Goal::Breed(_) | Goal::Tempt(_) | Goal::RandomLookAround(_) | Goal::MeleeAttack(_) | Goal::ZombieAttack(_) | Goal::RangedBowAttack(_) | Goal::AbstractSkeletonMelee(_) => {
-                Flag::Move.bit() | Flag::Look.bit()
-            }
-            Goal::FollowParent(_) | Goal::BreakDoor(_) | Goal::RestrictSun(_) => 0,
+            Goal::Panic(_)
+            | Goal::WaterAvoidingRandomStroll(_)
+            | Goal::FleeSun(_)
+            | Goal::Swell(_)
+            | Goal::AvoidEntity(_)
+            | Goal::RandomStroll(_)
+            | Goal::DrownedGoToWater(_) => Flag::Move.bit(),
+            Goal::Breed(_)
+            | Goal::Tempt(_)
+            | Goal::RandomLookAround(_)
+            | Goal::MeleeAttack(_)
+            | Goal::ZombieAttack(_)
+            | Goal::RangedBowAttack(_)
+            | Goal::AbstractSkeletonMelee(_)
+            | Goal::DrownedTridentAttack(_)
+            | Goal::DrownedAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::FollowParent(_) | Goal::BreakDoor(_) | Goal::RestrictSun(_) | Goal::DrownedSwimUp(_) => 0,
             Goal::EatBlock(_) => Flag::Move.bit() | Flag::Look.bit() | Flag::Jump.bit(),
-            Goal::ZombieAttackTurtleEgg(_) => Flag::Move.bit() | Flag::Jump.bit(),
+            Goal::ZombieAttackTurtleEgg(_) | Goal::DrownedGoToBeach(_) => Flag::Move.bit() | Flag::Jump.bit(),
             Goal::LookAtPlayer(_) => Flag::Look.bit(),
             Goal::NearestAttackableTarget(_) | Goal::HurtByTarget(_) => Flag::Target.bit(),
             Goal::LeapAtTarget(_) => Flag::Jump.bit() | Flag::Move.bit(),

@@ -29,6 +29,7 @@ use crate::world::entity::living_entity::LivingEntity;
 use crate::world::entity::mob::{Mob, MobKind, RANDOM_SPAWN_BONUS_ID};
 use crate::world::entity::monster::monster;
 use crate::world::damagesource::DamageSource;
+use crate::world::entity::monster::zombie::drowned::Drowned;
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::spawn_placements;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
@@ -118,6 +119,7 @@ pub fn zombie(mob: &Mob) -> &Zombie {
     match &mob.kind {
         MobKind::Zombie(zombie) => zombie,
         MobKind::Husk(husk) => &husk.zombie,
+        MobKind::Drowned(drowned) => &drowned.zombie,
         _ => unreachable!("not a zombie"),
     }
 }
@@ -126,6 +128,7 @@ pub fn zombie_mut(mob: &mut Mob) -> &mut Zombie {
     match &mut mob.kind {
         MobKind::Zombie(zombie) => zombie,
         MobKind::Husk(husk) => &mut husk.zombie,
+        MobKind::Drowned(drowned) => &mut drowned.zombie,
         _ => unreachable!("not a zombie"),
     }
 }
@@ -134,6 +137,7 @@ fn drowning_tracker(kind: &mut MobKind) -> &mut ConversionTracker {
     match kind {
         MobKind::Zombie(zombie) => &mut zombie.drowning_tracker,
         MobKind::Husk(husk) => &mut husk.zombie.drowning_tracker,
+        MobKind::Drowned(drowned) => &mut drowned.zombie.drowning_tracker,
         _ => unreachable!("not a zombie"),
     }
 }
@@ -168,12 +172,15 @@ impl Zombie {
         mob
     }
 
-    pub fn register_goals(ai: &mut MobAi) {
+    pub fn register_goals(ai: &mut MobAi, kind: &MobKind) {
         let goal_selector = &mut ai.goal_selector;
         goal_selector.add_goal(4, Goal::ZombieAttackTurtleEgg(ZombieAttackTurtleEggGoal::new(1.0, 3)));
         goal_selector.add_goal(8, Goal::LookAtPlayer(LookAtPlayerGoal::new(8.0)));
         goal_selector.add_goal(8, Goal::RandomLookAround(RandomLookAroundGoal::default()));
-        Zombie::add_behaviour_goals(ai);
+        match kind {
+            MobKind::Drowned(_) => Drowned::add_behaviour_goals(ai),
+            _ => Zombie::add_behaviour_goals(ai),
+        }
     }
 
     fn add_behaviour_goals(ai: &mut MobAi) {
@@ -231,8 +238,11 @@ impl Zombie {
         mob.refresh_dimensions();
     }
 
-    pub fn converts_in_water(_mob: &Mob) -> bool {
-        true
+    pub fn converts_in_water(mob: &Mob) -> bool {
+        match mob.kind {
+            MobKind::Drowned(_) => Drowned::converts_in_water(mob),
+            _ => true,
+        }
     }
 
     pub fn is_sun_sensitive(mob: &Mob) -> bool {
@@ -263,8 +273,11 @@ impl Zombie {
         if matches!(mob.kind, MobKind::Husk(_)) { "minecraft:zombie" } else { "minecraft:drowned" }
     }
 
-    pub fn can_spawn_in_liquids(_mob: &Mob) -> bool {
-        false
+    pub fn can_spawn_in_liquids(mob: &Mob) -> bool {
+        match mob.kind {
+            MobKind::Drowned(_) => Drowned::can_spawn_in_liquids(mob),
+            _ => false,
+        }
     }
 
     pub fn add_additional_save_data(mob: &Mob, is_afflicted: bool, out: &mut Vec<(String, wafer_protocol::nbt::Nbt)>) {

@@ -34,6 +34,7 @@ const MODELLED: &[&str] = &[
     "minecraft:skeleton",
     "minecraft:stray",
     "minecraft:bogged",
+    "minecraft:drowned",
     "minecraft:snowball",
     "minecraft:egg",
     "minecraft:ender_pearl",

@@ -42,7 +42,7 @@ impl PathFinder {
             tos.push((target, pos));
         }
         let path = self.find_path_from(&context, from, &mut tos, max_path_length, reach_range, max_visited_nodes_multiplier);
-        self.node_evaluator.done();
+        self.node_evaluator.done(&context);
         path
     }
 

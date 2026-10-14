@@ -442,6 +442,19 @@ pub static ZOMBIE_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static DROWNED_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage, SpawnReinforcements,
+        ],
+        &[(FollowRange, 35.0), (MovementSpeed, 0.23f32 as f64), (AttackDamage, 3.0), (Armor, 2.0), (StepHeight, 1.0)],
+    )
+};
+
 pub static CREEPER_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(
