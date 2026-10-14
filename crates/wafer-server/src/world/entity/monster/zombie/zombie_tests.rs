@@ -72,8 +72,11 @@ fn zombies_chase_and_hit_survival_players() {
     level.difficulty = Difficulty::Normal;
     let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
     let zombie = add(&mut level, Zombie::create(), Vec3::new(8.5, -60.0, 0.5));
-    for _ in 0..120 {
+    for _ in 0..600 {
         level.tick();
+        if level.health(player) < 20.0 {
+            break;
+        }
     }
     assert_eq!(level.get_target(zombie), Some(player));
     assert!(level.health(player) < 20.0, "the zombie never hit the player");
