@@ -1202,7 +1202,7 @@ impl ServerLevel {
     }
 
     fn drop_from_loot_table(&mut self, id: EntityId, source: &DamageSource, player_killed: bool) {
-        let Some(loot_table) = self.mob(id).and_then(|mob| mob.loot_table_id()) else { return };
+        let Some(loot_table) = self.get_loot_table(id) else { return };
         self.drop_from_loot_table_into(id, source, player_killed, &loot_table, &mut |level, item_stack| {
             level.spawn_at_location(id, item_stack, 0.0);
         });
