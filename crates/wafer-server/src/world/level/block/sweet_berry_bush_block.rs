@@ -6,7 +6,7 @@ use wafer_data::{BlockState, items, registry, registry_id};
 use super::vegetation_block::{self, Vegetation};
 use super::{BlockBehaviour, BlockHitResult};
 use crate::server::level::{ServerLevel, SoundSource};
-use crate::world::entity::EntityId;
+use crate::world::entity::{EntityId, entity_types};
 use crate::world::item::ItemStack;
 use crate::world::level::{LevelAccessor, LevelReader};
 use crate::world::level::block;
@@ -27,12 +27,18 @@ impl BlockBehaviour for SweetBerryBushBlock {
         _effects: &mut crate::world::entity::inside_block::InsideBlockEffects,
         _is_precise: bool,
     ) {
-        if !level.is_living(entity) {
+        let entity_type = level.entity(entity).entity_type;
+        if !level.is_living(entity) || entity_type == entity_types::FOX.id || entity_type == entity_types::BEE.id {
             return;
         }
         level.make_stuck_in_block(entity, state, wafer_core::Vec3::new(0.8f32 as f64, 0.75, 0.8f32 as f64));
         if state.get(AGE_3) != 0 {
-            let movement = level.player(entity).known_movement;
+            let movement = if level.is_client_authoritative(entity) {
+                level.known_movement(entity)
+            } else {
+                let e = level.entity(entity);
+                e.old_position().subtract(e.position())
+            };
             if movement.horizontal_distance_sqr() > 0.0 {
                 let (xs, zs) = (movement.x.abs(), movement.z.abs());
                 if xs >= 0.003f32 as f64 || zs >= 0.003f32 as f64 {
