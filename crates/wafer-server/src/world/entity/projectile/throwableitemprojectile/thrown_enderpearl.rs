@@ -6,6 +6,7 @@ use super::throwable_item_projectile;
 use crate::server::level::ticket::TicketType;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::damagesource::DamageSource;
+use crate::world::difficulty::Difficulty;
 use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind};
 use crate::world::entity::relative::relative;
 use crate::world::entity::{EntityId, sound_event};
@@ -102,7 +103,14 @@ impl ServerLevel {
                 let teleport_pos = self.entity(id).old_position();
                 if self.is_player(owner) {
                     if !self.player(owner).disconnected {
-                        self.entity_mut(id).random.next_float();
+                        if self.entity_mut(id).random.next_float() < 0.05 && self.is_spawning_monsters() && self.difficulty != Difficulty::Peaceful
+                            && let Some(mut endermite) = ServerLevel::create_entity("minecraft:endermite")
+                        {
+                            let e = self.entity(owner);
+                            let (x, y, z, y_rot, x_rot) = (e.x(), e.y(), e.z(), e.y_rot, e.x_rot);
+                            endermite.entity_mut().snap_to(x, y, z, y_rot, x_rot);
+                            self.add_fresh_entity(endermite);
+                        }
                         if self.is_on_portal_cooldown(id) {
                             self.set_portal_cooldown(owner);
                         }
