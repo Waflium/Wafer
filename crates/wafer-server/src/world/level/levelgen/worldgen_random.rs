@@ -21,6 +21,12 @@ impl WorldgenRandom {
         WorldgenRandom::new(AlgorithmRandom::Legacy(LegacyRandomSource::new(seed)))
     }
 
+    pub fn seed_slime_chunk(x: i32, z: i32, seed: i64, salt: i64) -> LegacyRandomSource {
+        let int_terms = x.wrapping_mul(x).wrapping_mul(4987142) as i64 + x.wrapping_mul(5947611) as i64;
+        let seed = seed.wrapping_add(int_terms).wrapping_add((z.wrapping_mul(z) as i64).wrapping_mul(4392871)).wrapping_add(z.wrapping_mul(389711) as i64) ^ salt;
+        LegacyRandomSource::new(seed)
+    }
+
     pub fn next(&mut self, bits: u32) -> i32 {
         match &mut self.random {
             AlgorithmRandom::Legacy(r) => r.next(bits),

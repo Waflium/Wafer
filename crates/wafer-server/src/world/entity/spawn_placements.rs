@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use wafer_core::{BlockPos, ChunkPos, Direction};
-use wafer_core::random::{LegacyRandomSource, RandomSource};
+use wafer_core::random::RandomSource;
 use wafer_data::{block_tags, blocks, fluid_tags};
 
 use super::animal::{self, cow::mushroom_cow};
@@ -15,6 +15,7 @@ use crate::world::attribute::environment_attributes;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::block::turtle_egg_block;
 use crate::world::level::chunk::HeightmapType;
+use crate::world::level::levelgen::worldgen_random::WorldgenRandom;
 use crate::world::level::light_layer::LightLayer;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::world_gen_level::WorldGenLevel;
@@ -360,18 +361,12 @@ fn slime_check_slime_spawn_rules(entity_type: &EntityType, level: &mut (impl Wor
             }
         }
         let chunk_pos = ChunkPos::new(pos.x >> 4, pos.z >> 4);
-        let slime_chunk = seed_slime_chunk(chunk_pos.x, chunk_pos.z, level.get_seed(), 987234911).next_int_bounded(10) == 0;
+        let slime_chunk = WorldgenRandom::seed_slime_chunk(chunk_pos.x, chunk_pos.z, level.get_seed(), 987234911).next_int_bounded(10) == 0;
         if level.get_random().next_int_bounded(10) == 0 && slime_chunk && pos.y < 40 {
             return mob::check_mob_spawn_rules(entity_type, level, spawn_reason, pos);
         }
     }
     false
-}
-
-fn seed_slime_chunk(x: i32, z: i32, seed: i64, salt: i64) -> LegacyRandomSource {
-    let int_terms = x.wrapping_mul(x).wrapping_mul(4987142) as i64 + x.wrapping_mul(5947611) as i64;
-    let seed = seed.wrapping_add(int_terms).wrapping_add((z.wrapping_mul(z) as i64).wrapping_mul(4392871)).wrapping_add(z.wrapping_mul(389711) as i64) ^ salt;
-    LegacyRandomSource::new(seed)
 }
 
 #[cfg(test)]
