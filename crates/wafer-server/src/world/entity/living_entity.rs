@@ -1409,6 +1409,13 @@ impl ServerLevel {
     }
 
     pub fn drop_all_death_loot(&mut self, id: EntityId, source: &DamageSource) {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Fox(_)) => self.fox_drop_all_death_loot(id, source),
+            _ => self.living_entity_drop_all_death_loot(id, source),
+        }
+    }
+
+    pub fn living_entity_drop_all_death_loot(&mut self, id: EntityId, source: &DamageSource) {
         let player_killed = self.living(id).last_hurt_by_player_memory_time > 0;
         if self.should_drop_loot(id) {
             self.drop_from_loot_table(id, source, player_killed);
@@ -1985,6 +1992,7 @@ impl ServerLevel {
             Some(MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_ai_step(id),
             Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
             Some(MobKind::Villager(_)) => self.ageable_mob_ai_step(id),
+            Some(MobKind::Fox(_)) => self.fox_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -2926,6 +2934,13 @@ impl ServerLevel {
     }
 
     pub fn is_sleeping(&self, id: EntityId) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Fox(_)) => crate::world::entity::animal::fox::fox::is_sleeping(self.entity(id)),
+            _ => self.living_entity_is_sleeping(id),
+        }
+    }
+
+    pub fn living_entity_is_sleeping(&self, id: EntityId) -> bool {
         self.is_living(id) && self.get_sleeping_pos(id).is_some()
     }
 

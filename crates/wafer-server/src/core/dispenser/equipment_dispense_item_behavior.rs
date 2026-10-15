@@ -21,6 +21,7 @@ fn equippable(item_stack: &ItemStack) -> Option<Equippable> {
 fn can_dispenser_equip_into_slot(level: &ServerLevel, id: EntityId, slot: EquipmentSlot) -> bool {
     match level.mob(id) {
         Some(mob) if matches!(mob.kind, MobKind::Pig(_)) => slot == EquipmentSlot::Saddle || mob.can_pick_up_loot,
+        Some(mob) if matches!(mob.kind, MobKind::Fox(_)) => slot == EquipmentSlot::Mainhand && mob.can_pick_up_loot,
         Some(mob) => mob.can_pick_up_loot,
         None => true,
     }

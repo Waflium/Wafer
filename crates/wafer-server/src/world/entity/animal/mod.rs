@@ -28,6 +28,7 @@ mod farm_tests;
 pub mod golem;
 pub mod fish;
 pub mod feline;
+pub mod fox;
 pub mod pig;
 pub mod sheep;
 pub mod squid;
@@ -111,6 +112,7 @@ impl ServerLevel {
             MobKind::Frog(_) => frog::frog::is_food(item_stack),
             MobKind::Tadpole(_) => false,
             MobKind::Villager(_) => false,
+            MobKind::Fox(_) => fox::fox::is_food(item_stack),
         }
     }
 
@@ -127,6 +129,8 @@ impl ServerLevel {
             self.armadillo_play_eating_sound(id);
         } else if let MobKind::Frog(_) = mob.kind {
             self.frog_play_eating_sound(id);
+        } else if let MobKind::Fox(_) = mob.kind {
+            self.fox_play_eating_sound(id);
         }
     }
 
@@ -228,7 +232,7 @@ impl ServerLevel {
         self.add_fresh_entity(offspring);
     }
 
-    fn get_love_cause(&self, id: EntityId) -> Option<EntityId> {
+    pub fn get_love_cause(&self, id: EntityId) -> Option<EntityId> {
         let love_cause = self.mob(id)?.animal()?.love_cause?;
         self.players.values().find(|p| p.profile.uuid == love_cause).map(|p| p.entity.id)
     }

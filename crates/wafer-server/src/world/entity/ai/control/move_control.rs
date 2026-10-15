@@ -29,6 +29,7 @@ pub enum MoveControlKind {
     Fish,
     SmoothSwimming(SmoothSwimmingMoveControl),
     Axolotl(SmoothSwimmingMoveControl),
+    Fox,
 }
 
 #[derive(Default)]

@@ -10,6 +10,7 @@ pub enum LookControlKind {
     SmoothSwimming(i32),
     Axolotl(i32),
     Frog,
+    Fox,
 }
 
 #[derive(Default)]
@@ -75,12 +76,14 @@ impl ServerLevel {
             LookControlKind::Default | LookControlKind::Frog => self.look_control_look_control_tick(id),
             LookControlKind::SmoothSwimming(max_y_rot_from_center) => self.smooth_swimming_look_control_tick(id, max_y_rot_from_center),
             LookControlKind::Axolotl(max_y_rot_from_center) => self.axolotl_look_control_tick(id, max_y_rot_from_center),
+            LookControlKind::Fox => self.fox_look_control_tick(id),
         }
     }
 
     fn reset_x_rot_on_tick(&self, id: EntityId) -> bool {
         match self.mob(id).expect("a mob").ai.look_control.kind {
             LookControlKind::Frog => self.frog_look_control_reset_x_rot_on_tick(id),
+            LookControlKind::Fox => self.fox_look_control_reset_x_rot_on_tick(id),
             _ => true,
         }
     }

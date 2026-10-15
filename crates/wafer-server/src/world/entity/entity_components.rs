@@ -85,6 +85,9 @@ impl DataComponentGetter for EntityComponents<'_> {
                 MobKind::TropicalFish(_) if ty == dc::TROPICAL_FISH_PATTERN_COLOR => {
                     return Some(Cow::Owned(Nbt::String(mob.get_tropical_fish_pattern_color().name.to_string())));
                 }
+                MobKind::Fox(_) if ty == dc::FOX_VARIANT => {
+                    return Some(Cow::Owned(Nbt::String(super::animal::fox::fox::get_variant(&mob.entity).get_serialized_name().to_string())));
+                }
                 MobKind::Horse(_) if ty == dc::HORSE_VARIANT => {
                     let variant = super::animal::equine::horse::get_variant(&mob.entity);
                     return Some(Cow::Owned(Nbt::String(variant.get_serialized_name().to_string())));

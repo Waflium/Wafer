@@ -44,6 +44,6 @@ impl ServerLevel {
         if !brain.is_brain_dead() && brain.has_memory_value(super::ai::memory::memory_module_type::IS_PANICKING) {
             return brain.get_memory(super::ai::memory::memory_module_type::IS_PANICKING).is_some();
         }
-        mob.ai.goal_selector.get_available_goals().iter().any(|wrapped_goal| wrapped_goal.is_running() && matches!(wrapped_goal.get_goal(), Goal::Panic(_) | Goal::TamableAnimalPanic(_)))
+        mob.ai.goal_selector.get_available_goals().iter().any(|wrapped_goal| wrapped_goal.is_running() && matches!(wrapped_goal.get_goal(), Goal::Panic(_) | Goal::TamableAnimalPanic(_) | Goal::FoxPanic(_)))
     }
 }

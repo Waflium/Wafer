@@ -18,6 +18,7 @@ pub const VILLAGER_SWEAT: u8 = 42;
 pub const PROTECTED_FROM_DEATH: u8 = 35;
 pub const TRUSTING_FAILED: u8 = 40;
 pub const TRUSTING_SUCCEEDED: u8 = 41;
+pub const FOX_EAT: u8 = 45;
 pub const TELEPORT: u8 = 46;
 pub const MAINHAND_BREAK: u8 = 47;
 pub const OFFHAND_BREAK: u8 = 48;

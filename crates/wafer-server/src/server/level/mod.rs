@@ -1740,6 +1740,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Cat(_)) => self.cat_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Villager(_)) => self.villager_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Fox(_)) => self.fox_tick(id),
             Some(LevelEntity::Mob(_)) => self.mob_tick(id),
             Some(LevelEntity::Minecart(_)) => self.tick_minecart(id),
             Some(LevelEntity::Boat(_)) => self.tick_boat(id),

@@ -518,6 +518,14 @@ impl Entity {
         self.is_shift_key_down()
     }
 
+    pub fn get_direction(&self) -> wafer_core::Direction {
+        wafer_core::Direction::from_y_rot(self.y_rot as f64)
+    }
+
+    pub fn get_motion_direction(&self) -> wafer_core::Direction {
+        self.get_direction()
+    }
+
     pub fn distance_to_sqr_xyz(&self, x: f64, y: f64, z: f64) -> f64 {
         let xd = self.x() - x;
         let yd = self.y() - y;
@@ -2557,6 +2565,7 @@ impl ServerLevel {
                     super::mob::MobKind::Frog(_) => "Frog",
                     super::mob::MobKind::Tadpole(_) => "Tadpole",
                     super::mob::MobKind::Villager(_) => "Villager",
+                    super::mob::MobKind::Fox(_) => "Fox",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

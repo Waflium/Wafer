@@ -117,6 +117,7 @@ impl ServerLevel {
             MobKind::Frog(_) => self.frog_get_breed_offspring(id, partner),
             MobKind::Tadpole(_) => None,
             MobKind::Villager(_) => self.villager_get_breed_offspring(id, partner),
+            MobKind::Fox(_) => self.fox_get_breed_offspring(id, partner),
         }
     }
 

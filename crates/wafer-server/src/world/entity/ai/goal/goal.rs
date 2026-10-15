@@ -60,6 +60,10 @@ use crate::world::entity::animal::feline::ocelot::{OcelotAvoidEntityGoal, Ocelot
 use super::random_stand_goal::RandomStandGoal;
 use super::run_around_like_crazy_goal::RunAroundLikeCrazyGoal;
 use crate::world::entity::animal::equine::abstract_horse::MountPanicGoal;
+use crate::world::entity::animal::fox::fox::{
+    DefendTrustedTargetGoal, FaceplantGoal, FoxBreedGoal, FoxEatBerriesGoal, FoxFloatGoal, FoxFollowParentGoal, FoxLookAtPlayerGoal, FoxMeleeAttackGoal, FoxPanicGoal,
+    FoxPounceGoal, FoxSearchForItemsGoal, FoxStrollThroughVillageGoal, PerchAndSearchGoal, SeekShelterGoal, SleepGoal, StalkPreyGoal,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -155,6 +159,22 @@ pub enum Goal {
     RunAroundLikeCrazy(RunAroundLikeCrazyGoal),
     RandomStand(RandomStandGoal),
     MountPanic(MountPanicGoal),
+    FoxFloat(FoxFloatGoal),
+    Faceplant(FaceplantGoal),
+    FoxPanic(FoxPanicGoal),
+    FoxBreed(FoxBreedGoal),
+    StalkPrey(StalkPreyGoal),
+    FoxPounce(FoxPounceGoal),
+    SeekShelter(SeekShelterGoal),
+    FoxMeleeAttack(FoxMeleeAttackGoal),
+    Sleep(SleepGoal),
+    FoxFollowParent(FoxFollowParentGoal),
+    FoxStrollThroughVillage(FoxStrollThroughVillageGoal),
+    FoxEatBerries(FoxEatBerriesGoal),
+    FoxSearchForItems(FoxSearchForItemsGoal),
+    FoxLookAtPlayer(FoxLookAtPlayerGoal),
+    PerchAndSearch(PerchAndSearchGoal),
+    DefendTrustedTarget(DefendTrustedTargetGoal),
 }
 
 impl Goal {
@@ -237,6 +257,22 @@ impl Goal {
             Goal::RunAroundLikeCrazy(goal) => goal.can_use(level, mob),
             Goal::RandomStand(goal) => goal.can_use(level, mob),
             Goal::MountPanic(goal) => goal.can_use(level, mob),
+            Goal::FoxFloat(goal) => goal.can_use(level, mob),
+            Goal::Faceplant(goal) => goal.can_use(level, mob),
+            Goal::FoxPanic(goal) => goal.can_use(level, mob),
+            Goal::FoxBreed(goal) => goal.breed_goal.can_use(level, mob),
+            Goal::StalkPrey(goal) => goal.can_use(level, mob),
+            Goal::FoxPounce(goal) => goal.can_use(level, mob),
+            Goal::SeekShelter(goal) => goal.can_use(level, mob),
+            Goal::FoxMeleeAttack(goal) => goal.can_use(level, mob),
+            Goal::Sleep(goal) => goal.can_use(level, mob),
+            Goal::FoxFollowParent(goal) => goal.can_use(level, mob),
+            Goal::FoxStrollThroughVillage(goal) => goal.can_use(level, mob),
+            Goal::FoxEatBerries(goal) => goal.can_use(level, mob),
+            Goal::FoxSearchForItems(goal) => goal.can_use(level, mob),
+            Goal::FoxLookAtPlayer(goal) => goal.can_use(level, mob),
+            Goal::PerchAndSearch(goal) => goal.can_use(level, mob),
+            Goal::DefendTrustedTarget(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -319,11 +355,27 @@ impl Goal {
             Goal::RunAroundLikeCrazy(goal) => goal.can_continue_to_use(level, mob),
             Goal::RandomStand(goal) => goal.can_continue_to_use(),
             Goal::MountPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
+            Goal::FoxFloat(goal) => goal.can_use(level, mob),
+            Goal::Faceplant(goal) => goal.can_continue_to_use(level, mob),
+            Goal::FoxPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
+            Goal::FoxBreed(goal) => goal.breed_goal.can_continue_to_use(level, mob),
+            Goal::StalkPrey(goal) => goal.can_use(level, mob),
+            Goal::FoxPounce(goal) => goal.can_continue_to_use(level, mob),
+            Goal::SeekShelter(goal) => goal.flee_sun_goal.can_continue_to_use(level, mob),
+            Goal::FoxMeleeAttack(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
+            Goal::Sleep(goal) => goal.can_continue_to_use(level, mob),
+            Goal::FoxFollowParent(goal) => goal.can_continue_to_use(level, mob),
+            Goal::FoxStrollThroughVillage(goal) => goal.can_continue_to_use(level, mob),
+            Goal::FoxEatBerries(goal) => goal.can_continue_to_use(level),
+            Goal::FoxSearchForItems(goal) => goal.can_use(level, mob),
+            Goal::FoxLookAtPlayer(goal) => goal.can_continue_to_use(level, mob),
+            Goal::PerchAndSearch(goal) => goal.can_continue_to_use(),
+            Goal::DefendTrustedTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
         }
     }
 
     pub fn is_interruptable(&self) -> bool {
-        true
+        !matches!(self, Goal::FoxPounce(_))
     }
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
@@ -399,6 +451,22 @@ impl Goal {
             Goal::RunAroundLikeCrazy(goal) => goal.start(level, mob),
             Goal::RandomStand(goal) => goal.start(level, mob),
             Goal::MountPanic(goal) => goal.panic_goal.start(level, mob),
+            Goal::FoxFloat(goal) => goal.start(level, mob),
+            Goal::Faceplant(goal) => goal.start(),
+            Goal::FoxPanic(goal) => goal.panic_goal.start(level, mob),
+            Goal::FoxBreed(goal) => goal.start(level, mob),
+            Goal::StalkPrey(goal) => goal.start(level, mob),
+            Goal::FoxPounce(goal) => goal.start(level, mob),
+            Goal::SeekShelter(goal) => goal.start(level, mob),
+            Goal::FoxMeleeAttack(goal) => goal.start(level, mob),
+            Goal::Sleep(goal) => goal.start(level, mob),
+            Goal::FoxFollowParent(goal) => goal.start(level, mob),
+            Goal::FoxStrollThroughVillage(goal) => goal.start(level, mob),
+            Goal::FoxEatBerries(goal) => goal.start(level, mob),
+            Goal::FoxSearchForItems(goal) => goal.start(level, mob),
+            Goal::FoxLookAtPlayer(goal) => goal.look_at_player_goal.start(level, mob),
+            Goal::PerchAndSearch(goal) => goal.start(level, mob),
+            Goal::DefendTrustedTarget(goal) => goal.start(level, mob),
         }
     }
 
@@ -469,6 +537,18 @@ impl Goal {
             Goal::OcelotTempt(goal) => goal.tempt_goal.stop(level, mob),
             Goal::RunAroundLikeCrazy(_) | Goal::RandomStand(_) => {}
             Goal::MountPanic(goal) => goal.panic_goal.stop(),
+            Goal::FoxFloat(_) | Goal::SeekShelter(_) | Goal::FoxStrollThroughVillage(_) | Goal::FoxEatBerries(_) | Goal::FoxSearchForItems(_) => {}
+            Goal::Faceplant(goal) => goal.stop(level, mob),
+            Goal::FoxPanic(goal) => goal.panic_goal.stop(),
+            Goal::FoxBreed(goal) => goal.breed_goal.stop(),
+            Goal::StalkPrey(goal) => goal.stop(level, mob),
+            Goal::FoxPounce(goal) => goal.stop(level, mob),
+            Goal::FoxMeleeAttack(goal) => goal.melee_attack_goal.stop(level, mob),
+            Goal::Sleep(goal) => goal.stop(level, mob),
+            Goal::FoxFollowParent(goal) => goal.follow_parent_goal.stop(),
+            Goal::FoxLookAtPlayer(goal) => goal.look_at_player_goal.stop(),
+            Goal::PerchAndSearch(goal) => goal.stop(level, mob),
+            Goal::DefendTrustedTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
         }
     }
 
@@ -497,6 +577,9 @@ impl Goal {
                 | Goal::CatSitOnBlock(_)
                 | Goal::OcelotAttack(_)
                 | Goal::RandomStand(_)
+                | Goal::FoxFloat(_)
+                | Goal::FoxMeleeAttack(_)
+                | Goal::FoxEatBerries(_)
         )
     }
 
@@ -565,6 +648,19 @@ impl Goal {
             Goal::FollowFlockLeader(goal) => goal.tick(level, mob),
             Goal::RunAroundLikeCrazy(goal) => goal.tick(level, mob),
             Goal::RandomStand(_) | Goal::MountPanic(_) => {}
+            Goal::FoxFloat(goal) => goal.float_goal.tick(level, mob),
+            Goal::Faceplant(goal) => goal.tick(),
+            Goal::FoxPanic(_) | Goal::SeekShelter(_) | Goal::Sleep(_) | Goal::DefendTrustedTarget(_) => {}
+            Goal::FoxBreed(goal) => goal.tick(level, mob),
+            Goal::StalkPrey(goal) => goal.tick(level, mob),
+            Goal::FoxPounce(goal) => goal.tick(level, mob),
+            Goal::FoxMeleeAttack(goal) => goal.tick(level, mob),
+            Goal::FoxFollowParent(goal) => goal.follow_parent_goal.tick(level, mob),
+            Goal::FoxStrollThroughVillage(goal) => goal.stroll_through_village_goal.tick(level, mob),
+            Goal::FoxEatBerries(goal) => goal.tick(level, mob),
+            Goal::FoxSearchForItems(goal) => goal.tick(level, mob),
+            Goal::FoxLookAtPlayer(goal) => goal.look_at_player_goal.tick(level, mob),
+            Goal::PerchAndSearch(goal) => goal.tick(level, mob),
         }
     }
 
@@ -623,6 +719,14 @@ impl Goal {
             Goal::CatLieOnBlock(_) | Goal::CatSitOnBlock(_) => Flag::Move.bit() | Flag::Jump.bit(),
             Goal::RunAroundLikeCrazy(_) | Goal::MountPanic(_) => Flag::Move.bit(),
             Goal::RandomStand(_) => 0,
+            Goal::FoxFloat(_) => Flag::Jump.bit(),
+            Goal::Faceplant(_) | Goal::Sleep(_) => Flag::Look.bit() | Flag::Jump.bit() | Flag::Move.bit(),
+            Goal::FoxPanic(_) | Goal::SeekShelter(_) | Goal::FoxStrollThroughVillage(_) | Goal::FoxSearchForItems(_) => Flag::Move.bit(),
+            Goal::FoxBreed(_) | Goal::StalkPrey(_) | Goal::FoxMeleeAttack(_) | Goal::PerchAndSearch(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::FoxPounce(_) | Goal::FoxEatBerries(_) => Flag::Move.bit() | Flag::Jump.bit(),
+            Goal::FoxFollowParent(_) => 0,
+            Goal::FoxLookAtPlayer(_) => Flag::Look.bit(),
+            Goal::DefendTrustedTarget(_) => Flag::Target.bit(),
         }
     }
 
