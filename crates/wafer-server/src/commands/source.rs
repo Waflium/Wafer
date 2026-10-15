@@ -255,9 +255,8 @@ impl CommandSourceStack {
         let from = crate::commands::arguments::coordinates::anchor_position(server, self.anchor, self);
         let (xd, yd, zd) = (pos.x - from.x, pos.y - from.y, pos.z - from.z);
         let sd = (xd * xd + zd * zd).sqrt();
-        let pi = std::f64::consts::PI as f32 as f64;
-        let x_rot = mth::wrap_degrees((-(mth::atan2(yd, sd) * 180.0 / pi)) as f32);
-        let y_rot = mth::wrap_degrees((mth::atan2(zd, xd) * 180.0 / pi) as f32 - 90.0);
+        let x_rot = mth::wrap_degrees((-(mth::atan2(yd, sd) * mth::RAD_TO_DEG as f64)) as f32);
+        let y_rot = mth::wrap_degrees((mth::atan2(zd, xd) * mth::RAD_TO_DEG as f64) as f32 - 90.0);
         self.with_rotation((x_rot, y_rot))
     }
 

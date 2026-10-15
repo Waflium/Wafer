@@ -163,3 +163,36 @@ fn drowned_with_tridents_throw_them() {
     assert!(tridents >= 3, "the drowned stopped throwing: {tridents} tridents");
     assert!(hit, "no trident ever hit");
 }
+
+#[test]
+fn drowned_swimming_along_an_axis_turn_like_vanilla() {
+    let expected = [
+        (11.599410625002161, -61.998, 27.500000055127437, 89.999985),
+        (11.598575236982644, -61.99940980635065, 27.50000010679455, 89.999985),
+        (11.597019459355876, -61.99741194143276, 27.500000179539455, 89.999985),
+        (11.59506972404235, -61.99542368794513, 27.500000270705, 89.999985),
+        (11.592775851245003, -61.993448159081936, 27.500000377961697, 89.999985),
+        (11.590181500360886, -61.99148784891335, 27.50000049926812, 89.999985),
+        (11.587324918584123, -61.98954473234706, 27.50000049891943, 90.000046),
+        (11.584239602376984, -61.98762035121429, 27.50000049854282, 90.000046),
+    ];
+    let mut level = testing::level();
+    testing::player(&mut level, Vec3::new(0.5, -60.0, 30.5), 0.0, 0.0);
+    flood(&mut level, BlockPos::new(-3, -63, 24), BlockPos::new(16, -57, 30));
+    let drowned = add(&mut level, Drowned::create(), Vec3::new(11.6, -62.0, 27.5));
+    let mob = level.mob_mut(drowned).unwrap();
+    mob.entity.y_rot = 90.0;
+    mob.entity.y_head_rot = 90.0;
+    mob.living.y_body_rot = 90.0;
+    mob.ai.goal_selector = Default::default();
+    mob.ai.target_selector = Default::default();
+    Drowned::set_searching_for_land(mob, true);
+    for (x, y, z, y_rot) in expected {
+        if level.mob(drowned).unwrap().ai.navigation.is_done() {
+            level.get_navigation(drowned, |navigation, level| navigation.move_to(level, drowned, 0.5, -62.0, 27.5, 1.0));
+        }
+        level.tick();
+        let e = level.entity(drowned);
+        assert_eq!((e.x(), e.y(), e.z(), e.y_rot), (x, y, z, y_rot));
+    }
+}

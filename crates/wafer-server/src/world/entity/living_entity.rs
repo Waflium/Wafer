@@ -2796,7 +2796,7 @@ impl ServerLevel {
                     Vec3::new(above.x as f64 + 0.5, above.y as f64 + 0.1, above.z as f64 + 0.5)
                 });
                 let look_direction = Vec3::at_bottom_center_of(bed_position).subtract(stand_up).normalize();
-                let yaw = mth::wrap_degrees_d(mth::atan2(look_direction.z, look_direction.x) * (180.0f32 as f64) / std::f32::consts::PI as f64 - 90.0) as f32;
+                let yaw = mth::wrap_degrees_d(mth::atan2(look_direction.z, look_direction.x) * mth::RAD_TO_DEG as f64 - 90.0) as f32;
                 let e = self.entity_mut(id);
                 e.set_pos(stand_up);
                 e.set_y_rot(yaw);

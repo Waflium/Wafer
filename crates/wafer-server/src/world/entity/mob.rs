@@ -1817,8 +1817,8 @@ impl ServerLevel {
         let zd = t.z() - e.z();
         let yd = if self.is_living(entity) { t.eye_y() - e.eye_y() } else { (t.bounding_box().min_y + t.bounding_box().max_y) / 2.0 - e.eye_y() };
         let sd = (xd * xd + zd * zd).sqrt();
-        let y_rot_d = (wafer_core::mth::atan2(zd, xd) * 180.0 / std::f32::consts::PI as f64) as f32 - 90.0;
-        let x_rot_d = (-(wafer_core::mth::atan2(yd, sd) * 180.0 / std::f32::consts::PI as f64)) as f32;
+        let y_rot_d = (wafer_core::mth::atan2(zd, xd) * wafer_core::mth::RAD_TO_DEG as f64) as f32 - 90.0;
+        let x_rot_d = (-(wafer_core::mth::atan2(yd, sd) * wafer_core::mth::RAD_TO_DEG as f64)) as f32;
         let e = self.entity_mut(id);
         let x_rot = rotlerp(e.x_rot, x_rot_d, x_max);
         e.set_x_rot(x_rot);

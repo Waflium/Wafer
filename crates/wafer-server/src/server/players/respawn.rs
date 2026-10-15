@@ -311,7 +311,7 @@ fn transfer_inventory_xp_and_score(
 
 fn calculate_look_at_yaw(position: Vec3, look_at_block_pos: BlockPos) -> f32 {
     let look_direction = Vec3::at_bottom_center_of(look_at_block_pos).subtract(position).normalize();
-    wafer_core::mth::wrap_degrees_d(wafer_core::mth::atan2(look_direction.z, look_direction.x) * (180.0f32 as f64) / std::f32::consts::PI as f64 - 90.0) as f32
+    wafer_core::mth::wrap_degrees_d(wafer_core::mth::atan2(look_direction.z, look_direction.x) * wafer_core::mth::RAD_TO_DEG as f64 - 90.0) as f32
 }
 
 fn is_possible_to_respawn_in_this(state: wafer_data::BlockState) -> bool {

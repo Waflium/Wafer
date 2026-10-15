@@ -256,7 +256,7 @@ impl ServerLevel {
             let zd = control.wanted_z - e.z();
             let dd = (xd * xd + yd * yd + zd * zd).sqrt();
             yd /= dd;
-            let y_rot_d = (mth::atan2(zd, xd) * 180.0f32 as f64 / std::f32::consts::PI as f64) as f32 - 90.0;
+            let y_rot_d = (mth::atan2(zd, xd) * mth::RAD_TO_DEG as f64) as f32 - 90.0;
             let y_rot = rotlerp(e.y_rot, y_rot_d, 90.0);
             mob.entity.set_y_rot(y_rot);
             mob.living.y_body_rot = mob.entity.y_rot;

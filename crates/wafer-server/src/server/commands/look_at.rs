@@ -54,11 +54,10 @@ fn look_at(level: &mut ServerLevel, id: EntityId, anchor: Anchor, pos: Vec3) {
     let from = anchor_apply(level, anchor, id);
     let (xd, yd, zd) = (pos.x - from.x, pos.y - from.y, pos.z - from.z);
     let sd = (xd * xd + zd * zd).sqrt();
-    let pi = std::f32::consts::PI as f64;
     let living = level.is_living(id);
     let e = level.entity_mut(id);
-    e.set_x_rot(mth::wrap_degrees((-(mth::atan2(yd, sd) * 180.0 / pi)) as f32));
-    e.set_y_rot(mth::wrap_degrees((mth::atan2(zd, xd) * 180.0 / pi) as f32 - 90.0));
+    e.set_x_rot(mth::wrap_degrees((-(mth::atan2(yd, sd) * mth::RAD_TO_DEG as f64)) as f32));
+    e.set_y_rot(mth::wrap_degrees((mth::atan2(zd, xd) * mth::RAD_TO_DEG as f64) as f32 - 90.0));
     if living {
         e.y_head_rot = e.y_rot;
     }

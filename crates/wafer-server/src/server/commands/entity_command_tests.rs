@@ -537,7 +537,7 @@ fn rotate() {
     assert_eq!(alice.packets(), [rotation(-80.0, true, -90.0, true)]);
     let item = drop_item(&mut server, Vec3::new(0.5, -60.0, 5.5));
     assert_eq!(run(&mut server, "rotate @e[type=item,limit=1] facing 0.5 -60 10.5"), ["Rotated Stone"]);
-    assert_eq!(server.levels[0].entity(item).y_rot, 0.0);
+    assert_eq!(server.levels[0].entity(item).y_rot, -7.6293945e-6);
 }
 
 #[test]
