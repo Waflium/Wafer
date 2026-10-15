@@ -1453,6 +1453,11 @@ impl ServerLevel {
         }
     }
 
+    pub fn get_random_player(&mut self) -> Option<EntityId> {
+        let players: Vec<EntityId> = self.players.keys().copied().filter(|&player| self.is_alive(player)).collect();
+        if players.is_empty() { None } else { Some(players[self.random.next_int_bounded(players.len() as i32) as usize]) }
+    }
+
     pub fn tick_custom_spawners(&mut self, spawn_enemies: bool) {
         let mut custom_spawners = std::mem::take(&mut self.custom_spawners);
         for spawner in &mut custom_spawners {

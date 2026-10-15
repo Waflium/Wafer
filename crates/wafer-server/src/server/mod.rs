@@ -126,6 +126,9 @@ fn create_level(config: &ServerConfig, world_dir: Option<&WorldDir>, dimension: 
     level.set_max_chained_neighbor_updates(config.max_chained_neighbor_updates);
     level.entity_broadcast_range_percentage = config.entity_broadcast_range_percentage;
     level.seed = seed;
+    if dimension == OVERWORLD {
+        level.custom_spawners = vec![crate::world::level::custom_spawner::CustomSpawner::Cat(crate::world::entity::npc::cat_spawner::CatSpawner::default())];
+    }
     level
 }
 const AUTOSAVE_INTERVAL: i32 = 6000;

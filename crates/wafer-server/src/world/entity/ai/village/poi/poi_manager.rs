@@ -99,6 +99,10 @@ impl PoiManager {
         records
     }
 
+    pub fn get_count_in_range(&mut self, predicate: &dyn Fn(PoiType) -> bool, center: BlockPos, radius: i32, occupancy: Occupancy) -> usize {
+        self.get_in_range(predicate, center, radius, occupancy).len()
+    }
+
     pub fn find_closest(
         &mut self,
         predicate: &dyn Fn(PoiType) -> bool,

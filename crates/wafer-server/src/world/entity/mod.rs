@@ -37,6 +37,7 @@ pub mod mob;
 pub mod mob_category;
 pub mod monster;
 pub mod neutral_mob;
+pub mod npc;
 pub mod ownable_entity;
 pub mod pathfinder_mob;
 pub mod portal_processor;
