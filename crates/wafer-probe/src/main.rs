@@ -409,13 +409,14 @@ async fn main() -> anyhow::Result<()> {
                             .await?;
                         }
                         ["advancement_close"] => send(&mut wr, codec, play::serverbound::SEEN_ADVANCEMENTS, |w| w.varint(1)).await?,
-                        ["interact_last", hand] => {
+                        ["interact_last", hand, rest @ ..] => {
                             let hand: i32 = hand.parse()?;
+                            let using_secondary_action = rest.first().is_some_and(|flag| *flag == "sneak");
                             send(&mut wr, codec, play::serverbound::INTERACT, |w| {
                                 w.varint(last_entity);
                                 w.varint(hand);
                                 w.lp_vec3(0.0, 0.2, 0.0);
-                                w.bool(false);
+                                w.bool(using_secondary_action);
                             })
                             .await?;
                         }
