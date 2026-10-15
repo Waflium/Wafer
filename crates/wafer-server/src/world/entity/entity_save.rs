@@ -383,6 +383,8 @@ impl ServerLevel {
             "minecraft:bat" => LevelEntity::Mob(Box::new(super::ambient::bat::Bat::create())),
             "minecraft:squid" => LevelEntity::Mob(Box::new(super::animal::squid::squid::Squid::create())),
             "minecraft:glow_squid" => LevelEntity::Mob(Box::new(super::animal::squid::glow_squid::GlowSquid::create())),
+            "minecraft:iron_golem" => LevelEntity::Mob(Box::new(super::animal::golem::iron_golem::IronGolem::create())),
+            "minecraft:snow_golem" => LevelEntity::Mob(Box::new(super::animal::golem::snow_golem::SnowGolem::create())),
             "minecraft:snowball" => LevelEntity::Projectile(Box::new(throwableitemprojectile::snowball::Snowball::of_type())),
             "minecraft:egg" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_egg::ThrownEgg::of_type())),
             "minecraft:ender_pearl" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_enderpearl::ThrownEnderpearl::of_type())),

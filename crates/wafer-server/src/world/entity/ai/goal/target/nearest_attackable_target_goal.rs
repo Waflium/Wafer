@@ -21,6 +21,7 @@ pub enum TargetType {
     Raider,
     Animal,
     AbstractSkeleton,
+    Mob,
 }
 
 impl TargetType {
@@ -35,6 +36,7 @@ impl TargetType {
             TargetType::Axolotl => is_type(level, entity, &["minecraft:axolotl"]),
             TargetType::Endermite => is_type(level, entity, &["minecraft:endermite"]),
             TargetType::Raider => level.mob(entity).is_some_and(|mob| mob.raider().is_some()),
+            TargetType::Mob => level.is_mob(entity),
         }
     }
 }

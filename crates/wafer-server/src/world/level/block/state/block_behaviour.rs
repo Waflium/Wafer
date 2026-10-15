@@ -4,6 +4,29 @@ use wafer_data::{Block, BlockState, SupportType, blocks};
 use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::entity_types;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RenderShape {
+    Invisible,
+    Model,
+}
+
+const INVISIBLE_RENDER_SHAPE: &[&str] = &[
+    "AirBlock",
+    "BarrierBlock",
+    "BubbleColumnBlock",
+    "EndGatewayBlock",
+    "EndPortalBlock",
+    "LightBlock",
+    "LiquidBlock",
+    "MovingPistonBlock",
+    "StructureVoidBlock",
+];
+
+pub fn get_render_shape(state: BlockState) -> RenderShape {
+    let block = state.block();
+    if INVISIBLE_RENDER_SHAPE.iter().any(|class| block.is_instance_of(class)) { RenderShape::Invisible } else { RenderShape::Model }
+}
+
 enum IsValidSpawn {
     Default,
     Never,

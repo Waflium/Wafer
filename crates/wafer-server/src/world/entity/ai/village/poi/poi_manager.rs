@@ -36,6 +36,8 @@ impl SectionData for PoiSection {
     }
 }
 
+pub const MAX_VILLAGE_DISTANCE: i32 = 6;
+
 fn block_section_key(pos: BlockPos) -> i64 {
     section_key(pos.x >> 4, pos.y >> 4, pos.z >> 4)
 }
@@ -186,6 +188,31 @@ impl PoiManager {
 
     pub fn section_range(&self) -> (i32, i32) {
         self.storage.section_range()
+    }
+
+    pub fn sections_to_village(&self, section_pos: BlockPos) -> i32 {
+        let mut level = MAX_VILLAGE_DISTANCE + 1;
+        for z in -MAX_VILLAGE_DISTANCE..=MAX_VILLAGE_DISTANCE {
+            for y in -MAX_VILLAGE_DISTANCE..=MAX_VILLAGE_DISTANCE {
+                for x in -MAX_VILLAGE_DISTANCE..=MAX_VILLAGE_DISTANCE {
+                    let distance = x.abs().max(y.abs()).max(z.abs());
+                    if distance < level && self.is_village_center(section_key(section_pos.x + x, section_pos.y + y, section_pos.z + z)) {
+                        level = distance;
+                        if level == 0 {
+                            return level;
+                        }
+                    }
+                }
+            }
+        }
+        level
+    }
+
+    fn is_village_center(&self, section_pos: i64) -> bool {
+        match self.storage.get(section_pos) {
+            Some(Some(section)) => section.get_records(PoiType::is_village, Occupancy::IsOccupied).next().is_some(),
+            _ => false,
+        }
     }
 
     pub fn needs_loading(&mut self, chunk_pos: ChunkPos, section_y: i32) -> bool {

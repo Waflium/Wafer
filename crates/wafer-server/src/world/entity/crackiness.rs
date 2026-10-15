@@ -14,6 +14,7 @@ pub enum Level {
     High,
 }
 
+pub const GOLEM: Crackiness = Crackiness { fraction_low: 0.75, fraction_medium: 0.5, fraction_high: 0.25 };
 pub const WOLF_ARMOR: Crackiness = Crackiness { fraction_low: 0.95, fraction_medium: 0.69, fraction_high: 0.32 };
 
 impl Crackiness {

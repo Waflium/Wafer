@@ -58,6 +58,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Enderman(_)) => self.enderman_start_persistent_anger_timer(id),
             Some(MobKind::Wolf(_)) => self.wolf_start_persistent_anger_timer(id),
+            Some(MobKind::IronGolem(_)) => self.iron_golem_start_persistent_anger_timer(id),
             _ => unreachable!("not a neutral mob"),
         }
     }

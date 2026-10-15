@@ -1,3 +1,4 @@
+pub mod defend_village_target_goal;
 pub mod hurt_by_target_goal;
 pub mod nearest_attackable_target_goal;
 pub mod non_tame_random_target_goal;

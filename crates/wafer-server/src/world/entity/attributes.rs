@@ -611,6 +611,32 @@ pub static MAGMA_CUBE_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static IRON_GOLEM_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage,
+        ],
+        &[(FollowRange, 16.0), (MaxHealth, 100.0), (MovementSpeed, 0.25), (KnockbackResistance, 1.0), (AttackDamage, 15.0), (StepHeight, 1.0)],
+    )
+};
+
+pub static SNOW_GOLEM_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange,
+        ],
+        &[(FollowRange, 16.0), (MaxHealth, 4.0), (MovementSpeed, 0.2f32 as f64)],
+    )
+};
+
 pub static BAT_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

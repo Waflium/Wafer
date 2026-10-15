@@ -931,6 +931,18 @@ impl ServerLevel {
         self.game_rules.get_bool(wafer_data::game_rule::SPAWNER_BLOCKS_WORK)
     }
 
+    pub fn is_village(&self, pos: BlockPos) -> bool {
+        self.is_close_to_village(pos, 1)
+    }
+
+    pub fn is_close_to_village(&self, pos: BlockPos, section_distance: i32) -> bool {
+        if section_distance > 6 { false } else { self.sections_to_village(BlockPos::new(pos.x >> 4, pos.y >> 4, pos.z >> 4)) <= section_distance }
+    }
+
+    pub fn sections_to_village(&self, section_pos: BlockPos) -> i32 {
+        self.chunks.poi_manager.sections_to_village(section_pos)
+    }
+
     pub fn level_event(&self, source: Option<EntityId>, event: i32, pos: BlockPos, data: i32) {
         let packet = encode(clientbound::LEVEL_EVENT, |p| {
             p.i32(event);

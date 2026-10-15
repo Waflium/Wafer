@@ -91,6 +91,29 @@ impl PoiType {
         }
     }
 
+    pub fn is_acquirable_job_site(self) -> bool {
+        matches!(
+            self,
+            PoiType::Armorer
+                | PoiType::Butcher
+                | PoiType::Cartographer
+                | PoiType::Cleric
+                | PoiType::Farmer
+                | PoiType::Fisherman
+                | PoiType::Fletcher
+                | PoiType::Leatherworker
+                | PoiType::Librarian
+                | PoiType::Mason
+                | PoiType::Shepherd
+                | PoiType::Toolsmith
+                | PoiType::Weaponsmith
+        )
+    }
+
+    pub fn is_village(self) -> bool {
+        self.is_acquirable_job_site() || matches!(self, PoiType::Home | PoiType::Meeting)
+    }
+
     pub fn valid_range(self) -> i32 {
         match self {
             PoiType::Meeting => 6,

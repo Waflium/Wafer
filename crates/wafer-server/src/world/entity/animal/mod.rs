@@ -20,6 +20,7 @@ pub mod chicken;
 pub mod cow;
 #[cfg(test)]
 mod farm_tests;
+pub mod golem;
 pub mod pig;
 pub mod sheep;
 pub mod squid;
@@ -92,6 +93,7 @@ impl ServerLevel {
             MobKind::Witch(_) => false,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => false,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => false,
+            MobKind::IronGolem(_) | MobKind::SnowGolem(_) => false,
         }
     }
 

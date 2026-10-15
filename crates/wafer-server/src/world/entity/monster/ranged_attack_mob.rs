@@ -8,6 +8,8 @@ impl ServerLevel {
             self.drowned_perform_ranged_attack(id, target, power);
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Witch(_))) {
             self.witch_perform_ranged_attack(id, target, power);
+        } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::SnowGolem(_))) {
+            self.snow_golem_perform_ranged_attack(id, target, power);
         } else {
             self.abstract_skeleton_perform_ranged_attack(id, target, power);
         }
@@ -18,6 +20,8 @@ impl ServerLevel {
             self.drowned_ranged_attack_uncertainty(id)
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Witch(_))) {
             self.witch_ranged_attack_uncertainty()
+        } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::SnowGolem(_))) {
+            self.snow_golem_ranged_attack_uncertainty()
         } else {
             self.ranged_attack_mob_ranged_attack_uncertainty()
         }

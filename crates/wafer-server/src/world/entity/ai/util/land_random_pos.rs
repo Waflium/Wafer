@@ -13,6 +13,31 @@ pub fn get_pos(level: &mut ServerLevel, mob: EntityId, horizontal_dist: i32, ver
     })
 }
 
+pub fn get_pos_towards(level: &mut ServerLevel, mob: EntityId, horizontal_dist: i32, vertical_dist: i32, towards_pos: Vec3) -> Option<Vec3> {
+    let e = level.entity(mob);
+    let dir = towards_pos.subtract(Vec3::new(e.x(), e.y(), e.z()));
+    let restrict = goal_utils::mob_restricted(level, mob, horizontal_dist as f64);
+    get_pos_in_direction(level, mob, 0.0, horizontal_dist as f64, vertical_dist, dir, restrict)
+}
+
+fn get_pos_in_direction(level: &mut ServerLevel, mob: EntityId, min_horizontal_dist: f64, max_horizontal_dist: f64, vertical_dist: i32, dir: Vec3, restrict: bool) -> Option<Vec3> {
+    random_pos::generate_random_pos(level, mob, |level| {
+        let random = &mut level.entity_mut(mob).random;
+        let direction = random_pos::generate_random_direction_within_radians(
+            random,
+            min_horizontal_dist,
+            max_horizontal_dist,
+            vertical_dist,
+            0,
+            dir.x,
+            dir.z,
+            std::f32::consts::FRAC_PI_2 as f64,
+        )?;
+        let pos = generate_random_pos_toward_direction(level, mob, max_horizontal_dist, restrict, direction)?;
+        move_pos_up_out_of_solid(level, mob, pos)
+    })
+}
+
 pub fn move_pos_up_out_of_solid(level: &ServerLevel, mob: EntityId, pos: BlockPos) -> Option<BlockPos> {
     let pos = random_pos::move_up_out_of_solid(pos, level.chunks.max_y(), |block_pos| goal_utils::is_solid(level, block_pos));
     (!goal_utils::is_water(level, pos) && !goal_utils::has_malus(level, mob, pos)).then_some(pos)

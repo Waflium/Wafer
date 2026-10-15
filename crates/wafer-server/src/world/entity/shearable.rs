@@ -5,7 +5,7 @@ use crate::world::item::ItemStack;
 
 impl ServerLevel {
     pub fn is_shearable(&self, id: EntityId) -> bool {
-        matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Sheep(_) | MobKind::MushroomCow(_) | MobKind::Bogged(_)))
+        matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Sheep(_) | MobKind::MushroomCow(_) | MobKind::Bogged(_) | MobKind::SnowGolem(_)))
     }
 
     pub fn shear(&mut self, id: EntityId, sound_source: SoundSource, tool: &ItemStack) {
@@ -13,6 +13,7 @@ impl ServerLevel {
             Some(MobKind::Sheep(_)) => self.sheep_shear(id, sound_source, tool),
             Some(MobKind::MushroomCow(_)) => self.mushroom_cow_shear(id, sound_source, tool),
             Some(MobKind::Bogged(_)) => self.bogged_shear(id, sound_source, tool),
+            Some(MobKind::SnowGolem(_)) => self.snow_golem_shear(id, sound_source, tool),
             _ => {}
         }
     }
@@ -22,6 +23,7 @@ impl ServerLevel {
             Some(MobKind::Sheep(_)) => self.sheep_ready_for_shearing(id),
             Some(MobKind::MushroomCow(_)) => self.mushroom_cow_ready_for_shearing(id),
             Some(MobKind::Bogged(_)) => self.bogged_ready_for_shearing(id),
+            Some(MobKind::SnowGolem(_)) => self.snow_golem_ready_for_shearing(id),
             _ => false,
         }
     }

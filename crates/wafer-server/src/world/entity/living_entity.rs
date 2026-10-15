@@ -781,11 +781,12 @@ impl ServerLevel {
 
     pub fn can_attack(&self, id: EntityId, target: EntityId) -> bool {
         if self.is_tamable_animal(id) {
-            self.tamable_animal_can_attack(id, target)
-        } else if self.is_mob(id) {
-            self.mob_can_attack(id, target)
-        } else {
-            self.living_entity_can_attack(id, target)
+            return self.tamable_animal_can_attack(id, target);
+        }
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::IronGolem(_)) => self.iron_golem_can_attack(id, target),
+            Some(_) => self.mob_can_attack(id, target),
+            None => self.living_entity_can_attack(id, target),
         }
     }
 
@@ -1442,6 +1443,7 @@ impl ServerLevel {
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => self.ageable_water_creature_get_base_experience_reward(id),
+            Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1667,6 +1669,13 @@ impl ServerLevel {
     }
 
     fn decrease_air_supply(&mut self, id: EntityId, supply: i32) -> i32 {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::IronGolem(_)) => self.iron_golem_decrease_air_supply(supply),
+            _ => self.living_entity_decrease_air_supply(id, supply),
+        }
+    }
+
+    fn living_entity_decrease_air_supply(&mut self, id: EntityId, supply: i32) -> i32 {
         let oxygen_bonus = self.attribute_value(id, Attribute::OxygenBonus);
         if oxygen_bonus > 0.0 && self.entity_mut(id).random.next_double() >= 1.0 / (oxygen_bonus + 1.0) { supply } else { supply - 1 }
     }
@@ -1888,6 +1897,8 @@ impl ServerLevel {
             Some(MobKind::Bat(_)) => self.mob_ai_step(id),
             Some(MobKind::Squid(_)) => self.squid_ai_step(id),
             Some(MobKind::GlowSquid(_)) => self.glow_squid_ai_step(id),
+            Some(MobKind::IronGolem(_)) => self.iron_golem_ai_step(id),
+            Some(MobKind::SnowGolem(_)) => self.snow_golem_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -2115,8 +2126,19 @@ impl ServerLevel {
             }
         }
         for other in pushable {
-            self.push_entity(other, id);
+            self.do_push(id, other);
         }
+    }
+
+    fn do_push(&mut self, id: EntityId, entity: EntityId) {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::IronGolem(_)) => self.iron_golem_do_push(id, entity),
+            _ => self.living_entity_do_push(id, entity),
+        }
+    }
+
+    pub fn living_entity_do_push(&mut self, id: EntityId, entity: EntityId) {
+        self.push_entity(entity, id);
     }
 
     fn remove_frost(&mut self, id: EntityId) {

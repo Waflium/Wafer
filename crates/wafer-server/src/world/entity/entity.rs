@@ -23,6 +23,7 @@ use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::attribute::environment_attributes;
 use crate::world::level::BlockGetter;
 use crate::world::level::block;
+use crate::world::level::block::state::block_behaviour::{self, RenderShape};
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};
 use crate::world::level::block::portal::{PendingPortalTeleport, Portal, PortalEntity};
 use crate::world::phys::shapes::collision_context::CollisionContext;
@@ -1637,6 +1638,10 @@ impl ServerLevel {
     }
 
     fn play_step_sound(&mut self, id: EntityId, pos: BlockPos, state: BlockState) {
+        if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::IronGolem(_))) {
+            self.iron_golem_play_step_sound(id, pos);
+            return;
+        }
         if let Some(sound) = self.mob(id).and_then(|mob| mob.get_step_sound()) {
             self.entity_play_sound(id, sound_event(sound), 0.15, 1.0);
             return;
@@ -1988,6 +1993,28 @@ impl ServerLevel {
         self.entity_mut(id).set_swimming(swimming);
     }
 
+    fn can_spawn_sprint_particle(&mut self, id: EntityId) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(super::mob::MobKind::IronGolem(_)) => self.iron_golem_can_spawn_sprint_particle(id),
+            _ => self.entity_can_spawn_sprint_particle(id),
+        }
+    }
+
+    fn entity_can_spawn_sprint_particle(&self, id: EntityId) -> bool {
+        let e = self.entity(id);
+        e.is_sprinting() && !e.is_in_water() && !self.is_spectator(id) && !e.is_crouching() && !e.is_in_lava() && self.is_alive(id)
+    }
+
+    fn spawn_sprint_particle(&mut self, id: EntityId) {
+        let pos = self.on_pos_legacy(id);
+        let block_state = self.block_state(pos);
+        if block_behaviour::get_render_shape(block_state) != RenderShape::Invisible {
+            let random = &mut self.entity_mut(id).random;
+            random.next_double();
+            random.next_double();
+        }
+    }
+
     pub fn entity_base_tick(&mut self, id: EntityId) {
         let e = self.entity_mut(id);
         e.compute_speed();
@@ -2002,6 +2029,9 @@ impl ServerLevel {
             e.boarding_cooldown -= 1;
         }
         self.handle_portal(id);
+        if self.can_spawn_sprint_particle(id) {
+            self.spawn_sprint_particle(id);
+        }
         let e = self.entity_mut(id);
         e.was_in_powder_snow = e.is_in_powder_snow;
         e.is_in_powder_snow = false;
@@ -2213,6 +2243,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Bat(_)) => return self.bat_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::GlowSquid(_)) => return self.glow_squid_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::IronGolem(_)) => return self.iron_golem_hurt_server(id, source, damage),
                 _ => {}
             }
             return self.living_entity_hurt_server(id, source, damage);
@@ -2446,6 +2477,8 @@ impl ServerLevel {
                     super::mob::MobKind::Bat(_) => "Bat",
                     super::mob::MobKind::Squid(_) => "Squid",
                     super::mob::MobKind::GlowSquid(_) => "GlowSquid",
+                    super::mob::MobKind::IronGolem(_) => "IronGolem",
+                    super::mob::MobKind::SnowGolem(_) => "SnowGolem",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
