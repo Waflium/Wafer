@@ -1,6 +1,6 @@
 use wafer_core::random::LegacyRandomSource;
 use wafer_core::{BlockPos, Vec3};
-use wafer_data::{blocks, damage_types};
+use wafer_data::{blocks, damage_types, items};
 use wafer_protocol::nbt::Nbt;
 
 use super::cod::Cod;
@@ -17,7 +17,11 @@ use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::mob::Mob;
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::{EntityId, LevelEntity};
+use crate::world::item::ItemStack;
+use crate::world::item::component as dc;
+use crate::world::level::BlockGetter;
 use crate::world::level::update_flags::UPDATE_ALL;
+use crate::world::{InteractionHand, InteractionResult};
 
 const ORACLE: &str = include_str!("fish_oracle.txt");
 
@@ -292,6 +296,39 @@ fn puffed_pufferfish_sting_touching_players_like_vanilla() {
         let actual = format!("{:?} {} {}", level.player(player).health, living.damage_cooldown_time, poison);
         assert_eq!(actual, expected, "tick {}", tick + 1);
     }
+}
+
+#[test]
+fn salmon_go_into_buckets_and_come_back_out() {
+    let mut level = testing::level();
+    let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 90.0);
+    let mut salmon = Salmon::create();
+    salmon.set_salmon_variant(salmon::Variant::Small);
+    salmon.set_no_ai(true);
+    salmon.set_health(2.0);
+    salmon.entity.snap_to(0.5, -60.0, 2.0, 0.0, 0.0);
+    let salmon_id = salmon.entity.id;
+    level.add_fresh_entity(LevelEntity::Mob(Box::new(salmon)));
+    level.player_mut(player).inventory.slots[36] = Some(ItemStack::new(items::WATER_BUCKET, 1));
+    assert_eq!(level.mob_interact(salmon_id, player, InteractionHand::MainHand), InteractionResult::SUCCESS);
+    assert!(level.entity(salmon_id).is_removed());
+    let bucket = level.player(player).inventory.slots[36].clone().unwrap();
+    assert_eq!(bucket.item, items::SALMON_BUCKET);
+    assert_eq!(bucket.get(dc::SALMON_SIZE), Some(&Nbt::String("small".into())));
+    assert_eq!(bucket.get(dc::BUCKET_ENTITY_DATA), Some(&Nbt::Compound(vec![("NoAI".into(), Nbt::Byte(1)), ("Health".into(), Nbt::Float(2.0))])));
+    level.tick();
+    assert!(level.use_item(player, InteractionHand::MainHand).consumes_action());
+    assert_eq!(level.player(player).inventory.slots[36], Some(ItemStack::new(items::BUCKET, 1)));
+    assert_eq!(level.block_state(BlockPos::new(0, -60, 0)), blocks::WATER.default_state());
+    let released = level.entities.values().find_map(|entity| match entity {
+        LevelEntity::Mob(mob) if matches!(mob.kind, crate::world::entity::mob::MobKind::Salmon(_)) && !mob.entity.is_removed() => Some(mob),
+        _ => None,
+    });
+    let released = released.expect("a released salmon");
+    assert!(released.from_bucket());
+    assert!(released.is_no_ai());
+    assert_eq!(released.health, 2.0);
+    assert_eq!(released.get_salmon_variant(), salmon::Variant::Small);
 }
 
 #[test]
