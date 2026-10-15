@@ -50,8 +50,8 @@ impl SpeleothemBlock for PointedDripstoneBlock {
         speleothem_block::can_grow(self, level, pos) && fluid_state.fluid == Fluid::Water && fluid_state.is_source()
     }
 
-    fn blocks_stalagmite_scan(&self, _level: &mut dyn LevelReader, _pos: BlockPos, state: BlockState) -> bool {
-        !can_drip_through(state)
+    fn blocks_stalagmite_scan(&self, _level: &mut dyn LevelReader, pos: BlockPos, state: BlockState) -> bool {
+        !can_drip_through(pos, state)
     }
 
     fn get_stalactite_landing_sound(&self) -> i32 {
@@ -154,7 +154,7 @@ fn find_fillable_cauldron_below_stalactite_tip(level: &mut dyn LevelAccessor, st
         level,
         stalactite_tip_pos,
         AxisDirection::Negative,
-        |_, state| can_drip_through(state),
+        can_drip_through,
         |state| state.block().is_instance_of("AbstractCauldronBlock") && super::of(state).can_receive_stalactite_drip(fluid),
         MAX_SEARCH_LENGTH_BETWEEN_STALACTITE_TIP_AND_CAULDRON,
     )
@@ -165,7 +165,7 @@ pub fn find_stalactite_tip_above_cauldron(level: &mut dyn LevelAccessor, cauldro
         level,
         cauldron_pos,
         AxisDirection::Positive,
-        |_, state| can_drip_through(state),
+        can_drip_through,
         speleothem_block::is_free_hanging_stalactite,
         MAX_SEARCH_LENGTH_BETWEEN_STALACTITE_TIP_AND_CAULDRON,
     )
@@ -195,7 +195,7 @@ fn can_fill_cauldron(fluid_above: Fluid) -> bool {
     fluid_above == Fluid::Lava || fluid_above == Fluid::Water
 }
 
-fn can_drip_through(state: BlockState) -> bool {
+fn can_drip_through(pos: BlockPos, state: BlockState) -> bool {
     if state.is_air() {
         return true;
     }
@@ -205,7 +205,7 @@ fn can_drip_through(state: BlockState) -> bool {
     if !state.fluid_state().is_empty() {
         return false;
     }
-    !join_is_not_empty(&REQUIRED_SPACE_TO_DRIP_THROUGH_NON_SOLID_BLOCK, state.collision_voxel_shape(), BooleanOp::And)
+    !join_is_not_empty(&REQUIRED_SPACE_TO_DRIP_THROUGH_NON_SOLID_BLOCK, &state.get_collision_shape(pos), BooleanOp::And)
 }
 
 struct FluidInfo {

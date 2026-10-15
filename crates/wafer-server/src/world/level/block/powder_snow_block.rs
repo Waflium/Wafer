@@ -64,7 +64,7 @@ impl BlockBehaviour for PowderSnowBlock {
     }
 
     fn entity_inside_collision_shape(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, entity: EntityId) -> Option<Vec<AABB>> {
-        let collision_shape = CollisionContext::of(level, entity).get_collision_shape(state, pos);
+        let (collision_shape, _) = CollisionContext::of(level, entity).get_collision_shape(state, pos);
         if collision_shape.is_empty() { None } else { Some(collision_shape.to_aabbs()) }
     }
 

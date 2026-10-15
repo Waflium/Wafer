@@ -249,11 +249,11 @@ pub fn for_item(item: Item) -> Option<Box<dyn BlockItemBehaviour>> {
 
 impl ServerLevel {
     pub fn is_unobstructed(&self, state: BlockState, pos: BlockPos) -> bool {
-        let shape = crate::world::phys::shapes::collision_context::CollisionContext::placement_context(self, None).get_collision_shape(state, pos);
+        let (shape, shape_offset) = crate::world::phys::shapes::collision_context::CollisionContext::placement_context(self, None).get_collision_shape(state, pos);
         if shape.is_empty() {
             return true;
         }
-        let boxes: Vec<wafer_core::AABB> = shape.to_aabbs().iter().map(|b| b.move_by(pos.x as f64, pos.y as f64, pos.z as f64)).collect();
+        let boxes = crate::world::level::collision::Collider { shape, shape_offset, offset: [pos.x as f64, pos.y as f64, pos.z as f64] }.to_aabbs();
         let bounds = boxes.iter().skip(1).fold(boxes[0], |a, b| a.minmax(b));
         !self.get_entities(None, &bounds).into_iter().any(|id| {
             let bb = self.entity(id).bounding_box();

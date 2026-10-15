@@ -1,4 +1,4 @@
-use wafer_core::shapes::{BooleanOp, VoxelShape, join_unoptimized};
+use wafer_core::shapes::{BooleanOp, join_unoptimized};
 use wafer_core::{AABB, Axis, BlockPos, ChunkPos, Vec3};
 use wafer_data::properties::LAYERS;
 use wafer_data::{BlockState, blocks};
@@ -90,7 +90,7 @@ impl ServerLevel {
     }
 
     pub fn push_entities_up(&mut self, state: BlockState, new_state: BlockState, pos: BlockPos) {
-        let offset_shape = join_unoptimized(&VoxelShape::from_boxes(state.collision_shape()), &VoxelShape::from_boxes(new_state.collision_shape()), BooleanOp::OnlySecond);
+        let offset_shape = join_unoptimized(&state.get_collision_shape(pos), &new_state.get_collision_shape(pos), BooleanOp::OnlySecond);
         if offset_shape.is_empty() {
             return;
         }
@@ -106,7 +106,7 @@ impl ServerLevel {
         let colliding: Vec<_> = self.all_entities().filter(|&id| self.entity(id).bounding_box().intersects(&bounds)).collect();
         for id in colliding {
             let moving = self.entity(id).bounding_box().move_vec(Vec3::new(0.0, 1.0, 0.0));
-            let offset = offset_shape.collide([x, y, z], Axis::Y, &moving, -1.0);
+            let offset = offset_shape.collide([0.0; 3], [x, y, z], Axis::Y, &moving, -1.0);
             let dy = 1.0 + offset;
             if let Some(player) = self.players.get_mut(&id) {
                 player.teleport_relative(PositionMoveRotation { position: Vec3::new(0.0, dy, 0.0), delta_movement: Vec3::ZERO, y_rot: 0.0, x_rot: 0.0 }, relative::relative::ALL);

@@ -396,8 +396,7 @@ impl ServerLevel {
         }
         let context = crate::world::phys::shapes::collision_context::CollisionContext::with_position(self, id, old_aabb.min_y);
         for (_, collider) in self.block_collisions(&box_, &context, false) {
-            let [ox, oy, oz] = collider.offset;
-            if !join_is_not_empty(&collider.shape.moved(ox, oy, oz), &old_shape, BooleanOp::And) {
+            if !join_is_not_empty(&collider.moved(), &old_shape, BooleanOp::And) {
                 return true;
             }
         }

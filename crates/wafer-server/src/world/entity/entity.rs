@@ -1290,8 +1290,8 @@ impl ServerLevel {
     }
 
     pub(crate) fn colliders<'a>(&'a self, id: EntityId, entity_colliders: &'a [VoxelShape], box_: &AABB) -> Vec<Collider<'a>> {
-        let entities = entity_colliders.iter().map(|shape| Collider { shape, offset: [0.0; 3] });
-        let border = self.border_collision(id, box_).map(|shape| Collider { shape, offset: [0.0; 3] });
+        let entities = entity_colliders.iter().map(|shape| Collider::new(shape, [0.0; 3]));
+        let border = self.border_collision(id, box_).map(|shape| Collider::new(shape, [0.0; 3]));
         let context = crate::world::phys::shapes::collision_context::CollisionContext::of(self, id);
         entities.chain(border).chain(self.block_collisions(box_, &context, false).into_iter().map(|(_, c)| c)).collect()
     }

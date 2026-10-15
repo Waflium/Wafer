@@ -53,30 +53,30 @@ pub struct ClipResult {
 enum ClipShape {
     Empty,
     Block,
-    Voxel(&'static VoxelShape),
+    Voxel(&'static VoxelShape, Vec3),
     Boxes(Vec<AABB>),
 }
 
 impl ClipShape {
     fn clip(&self, from: Vec3, to: Vec3, pos: BlockPos) -> Option<BlockHitResult> {
         let owned;
-        let shape = match self {
+        let (shape, offset) = match self {
             ClipShape::Empty => return None,
             ClipShape::Block => {
                 owned = VoxelShape::block();
-                &owned
+                (&owned, Vec3::ZERO)
             }
-            ClipShape::Voxel(shape) => *shape,
+            ClipShape::Voxel(shape, offset) => (*shape, *offset),
             ClipShape::Boxes(boxes) => {
                 owned = VoxelShape::from_boxes(boxes);
-                &owned
+                (&owned, Vec3::ZERO)
             }
         };
-        voxel_clip(shape, from, to, pos)
+        voxel_clip(shape, offset, from, to, pos)
     }
 }
 
-fn voxel_clip(shape: &VoxelShape, from: Vec3, to: Vec3, pos: BlockPos) -> Option<BlockHitResult> {
+fn voxel_clip(shape: &VoxelShape, offset: Vec3, from: Vec3, to: Vec3, pos: BlockPos) -> Option<BlockHitResult> {
     if shape.is_empty() {
         return None;
     }
@@ -85,19 +85,19 @@ fn voxel_clip(shape: &VoxelShape, from: Vec3, to: Vec3, pos: BlockPos) -> Option
         return None;
     }
     let test_point = from.add_vec(diff.scale(0.001));
-    if shape.contains_point(test_point.x - pos.x as f64, test_point.y - pos.y as f64, test_point.z - pos.z as f64) {
+    if shape.contains_point_moved([offset.x, offset.y, offset.z], test_point.x - pos.x as f64, test_point.y - pos.y as f64, test_point.z - pos.z as f64) {
         let direction = Direction::approximate_nearest(diff.x as f32, diff.y as f32, diff.z as f32).opposite();
         return Some(BlockHitResult { location: test_point, direction, block_pos: pos, inside: true, world_border_hit: false });
     }
-    clip_boxes(&shape.to_aabbs(), from, to, pos)
+    clip_boxes(&shape.to_aabbs(), offset, from, to, pos)
 }
 
-fn clip_boxes(boxes: &[AABB], from: Vec3, to: Vec3, pos: BlockPos) -> Option<BlockHitResult> {
+fn clip_boxes(boxes: &[AABB], offset: Vec3, from: Vec3, to: Vec3, pos: BlockPos) -> Option<BlockHitResult> {
     let mut scale = 1.0;
     let mut direction = None;
     let (dx, dy, dz) = (to.x - from.x, to.y - from.y, to.z - from.z);
     for b in boxes {
-        direction = b.move_to_block(pos).clip_direction(from, &mut scale, direction, dx, dy, dz);
+        direction = b.move_by(offset.x, offset.y, offset.z).move_to_block(pos).clip_direction(from, &mut scale, direction, dx, dy, dz);
     }
     let direction = direction?;
     Some(BlockHitResult { location: from.add(scale * dx, scale * dy, scale * dz), direction, block_pos: pos, inside: false, world_border_hit: false })
@@ -293,25 +293,25 @@ fn add_collisions_along_travel(
     Some(iterations)
 }
 
-fn get_visual_shape(state: BlockState) -> ClipShape {
+fn get_visual_shape(state: BlockState, pos: BlockPos) -> ClipShape {
     let block = state.block();
     if block.is_instance_of("TransparentBlock") || block.is_instance_of("IronBarsBlock") || block.is_instance_of("PowderSnowBlock") {
         ClipShape::Empty
     } else if block.is_instance_of("MudBlock") || block.is_instance_of("SoulSandBlock") {
         ClipShape::Block
     } else if block.is_instance_of("FenceBlock") || block.is_instance_of("SnowLayerBlock") {
-        ClipShape::Voxel(state.voxel_shape())
+        ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos))
     } else {
-        ClipShape::Voxel(state.collision_voxel_shape())
+        ClipShape::Voxel(state.collision_voxel_shape(), state.collision_offset(pos))
     }
 }
 
 impl ServerLevel {
-    fn clip_block_shape(&self, ctx: &ClipContext, state: BlockState) -> ClipShape {
+    fn clip_block_shape(&self, ctx: &ClipContext, state: BlockState, pos: BlockPos) -> ClipShape {
         match ctx.block {
-            ClipBlock::Collider => ClipShape::Voxel(state.collision_voxel_shape()),
-            ClipBlock::Outline => ClipShape::Voxel(state.voxel_shape()),
-            ClipBlock::Visual => get_visual_shape(state),
+            ClipBlock::Collider => ClipShape::Voxel(state.collision_voxel_shape(), state.collision_offset(pos)),
+            ClipBlock::Outline => ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos)),
+            ClipBlock::Visual => get_visual_shape(state, pos),
             ClipBlock::FallDamageResetting => {
                 if state.is(&block_tags::FALL_DAMAGE_RESETTING) || ctx.is_player && (state.is_block(blocks::END_GATEWAY) || state.is_block(blocks::END_PORTAL)) {
                     ClipShape::Block
@@ -330,7 +330,7 @@ impl ServerLevel {
             |pos| {
                 let state = self.block_state(pos);
                 let fluid = self.fluid_state(pos);
-                let block_shape = self.clip_block_shape(&ctx, state);
+                let block_shape = self.clip_block_shape(&ctx, state, pos);
                 let block_result = self.clip_with_interaction_override(ctx.from, ctx.to, pos, &block_shape, state);
                 let fluid_shape = if ctx.fluid.can_pick(fluid) {
                     let height = self.fluid_height(fluid, pos) as f64;

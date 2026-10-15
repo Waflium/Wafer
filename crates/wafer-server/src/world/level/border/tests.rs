@@ -16,7 +16,7 @@ fn bounds(border: &WorldBorder) -> [f64; 4] {
 }
 
 fn collide(border: &WorldBorder, axis: Axis, moving: &AABB, distance: f64) -> f64 {
-    shapes_collide(axis, moving, &[Collider { shape: border.get_collision_shape(), offset: [0.0; 3] }], distance)
+    shapes_collide(axis, moving, &[Collider::new(border.get_collision_shape(), [0.0; 3])], distance)
 }
 
 fn shape_coords(border: &WorldBorder) -> [Vec<f64>; 3] {

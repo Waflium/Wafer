@@ -217,8 +217,21 @@ impl VoxelShape {
         &self.coords[axis_index(axis)]
     }
 
-    fn find_index_offset(&self, axis: usize, coord: f64, offset: f64) -> isize {
-        self.coords[axis].partition_point(|&c| !(coord < c + offset)) as isize - 1
+    fn find_index_offset(&self, axis: usize, coord: f64, shape_offset: f64, offset: f64) -> isize {
+        self.coords[axis].partition_point(|&c| !(coord < c + shape_offset + offset)) as isize - 1
+    }
+
+    pub fn contains_point_moved(&self, shape_offset: [f64; 3], x: f64, y: f64, z: f64) -> bool {
+        let point = [x, y, z];
+        let mut idx = [0usize; 3];
+        for a in 0..3 {
+            let i = self.find_index_offset(a, point[a], shape_offset[a], 0.0);
+            if i < 0 || i as usize >= self.size(a) {
+                return false;
+            }
+            idx[a] = i as usize;
+        }
+        self.is_full(idx[0], idx[1], idx[2])
     }
 
     fn is_full_wide(&self, x: isize, y: isize, z: isize) -> bool {
@@ -231,7 +244,7 @@ impl VoxelShape {
             && self.is_full(x as usize, y as usize, z as usize)
     }
 
-    pub fn collide(&self, offset: [f64; 3], axis: Axis, moving: &AABB, mut distance: f64) -> f64 {
+    pub fn collide(&self, shape_offset: [f64; 3], offset: [f64; 3], axis: Axis, moving: &AABB, mut distance: f64) -> f64 {
         if self.is_empty() {
             return distance;
         }
@@ -242,13 +255,14 @@ impl VoxelShape {
         let (b, c) = ((a + 1) % 3, (a + 2) % 3);
         let min = |axis: usize| [moving.min_x, moving.min_y, moving.min_z][axis];
         let max = |axis: usize| [moving.max_x, moving.max_y, moving.max_z][axis];
+        let find = |axis: usize, coord: f64| self.find_index_offset(axis, coord, shape_offset[axis], offset[axis]);
         let (max_a, min_a) = (max(a), min(a));
-        let a_min = self.find_index_offset(a, min_a + 1.0e-7, offset[a]);
-        let a_max = self.find_index_offset(a, max_a - 1.0e-7, offset[a]);
-        let b_min = 0.max(self.find_index_offset(b, min(b) + 1.0e-7, offset[b]));
-        let b_max = (self.size(b) as isize).min(self.find_index_offset(b, max(b) - 1.0e-7, offset[b]) + 1);
-        let c_min = 0.max(self.find_index_offset(c, min(c) + 1.0e-7, offset[c]));
-        let c_max = (self.size(c) as isize).min(self.find_index_offset(c, max(c) - 1.0e-7, offset[c]) + 1);
+        let a_min = find(a, min_a + 1.0e-7);
+        let a_max = find(a, max_a - 1.0e-7);
+        let b_min = 0.max(find(b, min(b) + 1.0e-7));
+        let b_max = (self.size(b) as isize).min(find(b, max(b) - 1.0e-7) + 1);
+        let c_min = 0.max(find(c, min(c) + 1.0e-7));
+        let c_max = (self.size(c) as isize).min(find(c, max(c) - 1.0e-7) + 1);
         let full = |ia: isize, ib: isize, ic: isize| {
             let mut idx = [0isize; 3];
             idx[a] = ia;
@@ -262,7 +276,7 @@ impl VoxelShape {
                 for ib in b_min..b_max {
                     for ic in c_min..c_max {
                         if full(ia, ib, ic) {
-                            let new_distance = self.coords[a][ia as usize] + offset[a] - max_a;
+                            let new_distance = self.coords[a][ia as usize] + shape_offset[a] + offset[a] - max_a;
                             if new_distance >= -1.0e-7 {
                                 distance = distance.min(new_distance);
                             }
@@ -276,7 +290,7 @@ impl VoxelShape {
                 for ib in b_min..b_max {
                     for ic in c_min..c_max {
                         if full(ia, ib, ic) {
-                            let new_distance = self.coords[a][ia as usize + 1] + offset[a] - min_a;
+                            let new_distance = self.coords[a][ia as usize + 1] + shape_offset[a] + offset[a] - min_a;
                             if new_distance <= 1.0e-7 {
                                 distance = distance.max(new_distance);
                             }

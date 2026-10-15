@@ -44,12 +44,12 @@ impl WallBlock {
         Self::connects_to(neighbour, neighbour.is_face_sturdy(opposite, SupportType::Full), opposite)
     }
 
-    fn top_update(state: BlockState, top_neighbour: BlockState) -> BlockState {
+    fn top_update(state: BlockState, top_pos: BlockPos, top_neighbour: BlockState) -> BlockState {
         let north = is_connected(state, NORTH_WALL);
         let east = is_connected(state, EAST_WALL);
         let south = is_connected(state, SOUTH_WALL);
         let west = is_connected(state, WEST_WALL);
-        Self::update_wall_shape(state, top_neighbour, north, east, south, west)
+        Self::update_wall_shape(state, top_pos, top_neighbour, north, east, south, west)
     }
 
     fn side_update(level: &mut dyn LevelReader, pos: BlockPos, state: BlockState, neighbour: BlockState, direction: Direction) -> BlockState {
@@ -60,11 +60,11 @@ impl WallBlock {
         let west = if direction == Direction::West { Self::connects_to_neighbour(neighbour, opposite) } else { is_connected(state, WEST_WALL) };
         let above = pos.above();
         let above_state = level.block_state(above);
-        Self::update_wall_shape(state, above_state, north, east, south, west)
+        Self::update_wall_shape(state, above, above_state, north, east, south, west)
     }
 
-    fn update_wall_shape(state: BlockState, top_neighbour: BlockState, north: bool, east: bool, south: bool, west: bool) -> BlockState {
-        let above_shape = VoxelShape::from_boxes(top_neighbour.collision_shape()).face_shape(Direction::Down);
+    fn update_wall_shape(state: BlockState, top_pos: BlockPos, top_neighbour: BlockState, north: bool, east: bool, south: bool, west: bool) -> BlockState {
+        let above_shape = top_neighbour.get_collision_shape(top_pos).face_shape(Direction::Down);
         let sides_updated = Self::update_sides(state, north, east, south, west, &above_shape);
         sides_updated.set(UP, Self::should_raise_post(sides_updated, top_neighbour, &above_shape))
     }
@@ -154,7 +154,7 @@ impl BlockBehaviour for WallBlock {
         let south = Self::connects_to_neighbour(south_state, Direction::North);
         let west = Self::connects_to_neighbour(west_state, Direction::East);
         let state = block.default_state().set(WATERLOGGED, water);
-        Some(Self::update_wall_shape(state, top_state, north, east, south, west))
+        Some(Self::update_wall_shape(state, top_pos, top_state, north, east, south, west))
     }
 
     fn update_shape(
@@ -163,13 +163,13 @@ impl BlockBehaviour for WallBlock {
         level: &mut dyn LevelAccessor,
         pos: BlockPos,
         direction: Direction,
-        _neighbour_pos: BlockPos,
+        neighbour_pos: BlockPos,
         neighbour_state: BlockState,
     ) -> BlockState {
         schedule_water_tick(state, level, pos);
         match direction {
             Direction::Down => state,
-            Direction::Up => Self::top_update(state, neighbour_state),
+            Direction::Up => Self::top_update(state, neighbour_pos, neighbour_state),
             _ => Self::side_update(level, pos, state, neighbour_state, direction),
         }
     }

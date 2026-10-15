@@ -626,7 +626,7 @@ impl ServerLevel {
             self.chunk_map.block_changed(pos);
         }
         self.path_types_by_pos_cache.get_mut().invalidate(pos);
-        if join_is_not_empty(old.collision_voxel_shape(), current.collision_voxel_shape(), BooleanOp::NotSame) {
+        if join_is_not_empty(&old.get_collision_shape(pos), &current.get_collision_shape(pos), BooleanOp::NotSame) {
             let navigations_to_update: Vec<EntityId> = self
                 .entities
                 .iter()

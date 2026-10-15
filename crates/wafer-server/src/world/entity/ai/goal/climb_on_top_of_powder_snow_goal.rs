@@ -14,7 +14,7 @@ impl ClimbOnTopOfPowderSnowGoal {
         if in_powder_snow && entity_type_tags::POWDER_SNOW_WALKABLE_MOBS.contains(e.entity_type as usize) {
             let above = e.block_position().above();
             let above_block_state = level.block_state(above);
-            above_block_state.is_block(blocks::POWDER_SNOW) || CollisionContext::EMPTY.get_collision_shape(above_block_state, above).is_empty()
+            above_block_state.is_block(blocks::POWDER_SNOW) || CollisionContext::EMPTY.get_collision_shape(above_block_state, above).0.is_empty()
         } else {
             false
         }

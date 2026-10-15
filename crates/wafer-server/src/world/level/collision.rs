@@ -12,17 +12,34 @@ use crate::world::phys::shapes::collision_context::CollisionContext;
 #[derive(Clone, Copy, Debug)]
 pub struct Collider<'a> {
     pub shape: &'a VoxelShape,
+    pub shape_offset: [f64; 3],
     pub offset: [f64; 3],
 }
 
-impl Collider<'_> {
+impl<'a> Collider<'a> {
+    pub fn new(shape: &'a VoxelShape, offset: [f64; 3]) -> Collider<'a> {
+        Collider { shape, shape_offset: [0.0; 3], offset }
+    }
+
     pub fn collide(&self, axis: Axis, moving: &AABB, distance: f64) -> f64 {
-        self.shape.collide(self.offset, axis, moving, distance)
+        self.shape.collide(self.shape_offset, self.offset, axis, moving, distance)
     }
 
     pub fn coords(&self, axis: Axis) -> impl Iterator<Item = f64> + '_ {
-        let offset = self.offset[axis as usize];
-        self.shape.coords(axis).iter().map(move |c| c + offset)
+        let (shape_offset, offset) = (self.shape_offset[axis as usize], self.offset[axis as usize]);
+        self.shape.coords(axis).iter().map(move |c| c + shape_offset + offset)
+    }
+
+    pub fn moved(&self) -> VoxelShape {
+        let [sx, sy, sz] = self.shape_offset;
+        let [x, y, z] = self.offset;
+        if self.shape_offset == [0.0; 3] { self.shape.moved(x, y, z) } else { self.shape.moved(sx, sy, sz).moved(x, y, z) }
+    }
+
+    pub fn to_aabbs(&self) -> Vec<AABB> {
+        let [sx, sy, sz] = self.shape_offset;
+        let [x, y, z] = self.offset;
+        self.shape.to_aabbs().iter().map(|b| b.move_by(sx, sy, sz).move_by(x, y, z)).collect()
     }
 }
 
@@ -129,12 +146,12 @@ pub fn for_each_block_collision<'c>(
             continue;
         }
         let liquid_block = always_collide_with_fluid && (state.is_block(blocks::WATER) || state.is_block(blocks::LAVA));
-        let shape = if liquid_block { &*FULL_BLOCK } else { context.get_collision_shape(state, pos) };
-        let collider = Collider { shape, offset: [x as f64, y as f64, z as f64] };
+        let (shape, shape_offset) = if liquid_block { (&*FULL_BLOCK, [0.0; 3]) } else { context.get_collision_shape(state, pos) };
+        let collider = Collider { shape, shape_offset, offset: [x as f64, y as f64, z as f64] };
         let collides = if liquid_block || state.is_collision_shape_full_block() {
             box_.intersects_bounds(x as f64, y as f64, z as f64, x as f64 + 1.0, y as f64 + 1.0, z as f64 + 1.0)
         } else if !shape.is_empty() {
-            let moved = shape.moved(x as f64, y as f64, z as f64);
+            let moved = collider.moved();
             let entity_shape = entity_shape.get_or_insert_with(|| VoxelShape::from_boxes(&[*box_]));
             join_is_not_empty(&moved, entity_shape, BooleanOp::And)
         } else {
@@ -200,8 +217,7 @@ impl ServerLevel {
         let search = allowed.inflate(size_x, size_y, size_z);
         let mut expanded = Vec::new();
         for (_, collider) in self.block_collisions(&search, context, false) {
-            let [dx, dy, dz] = collider.offset;
-            let boxes: Vec<AABB> = collider.shape.to_aabbs().iter().map(|b| b.move_by(dx, dy, dz)).collect();
+            let boxes = collider.to_aabbs();
             let Some(bounds) = boxes.iter().copied().reduce(|a, b| a.minmax(&b)) else { continue };
             if self.world_border.is_within_bounds_aabb(&bounds) {
                 expanded.extend(boxes.iter().map(|b| b.inflate(size_x / 2.0, size_y / 2.0, size_z / 2.0)));
@@ -284,5 +300,62 @@ impl ServerLevel {
             }
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wafer_core::{AABB, BlockPos, Vec3};
+    use wafer_data::blocks;
+
+    use super::collide_with_shapes;
+    use crate::server::level::testing;
+    use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+    use crate::world::level::update_flags::UPDATE_ALL;
+    use crate::world::phys::shapes::collision_context::CollisionContext;
+
+    fn player_box(x: f64, z: f64) -> AABB {
+        AABB::new(x - 0.3, -60.0, z - 0.3, x + 0.3, -58.2, z + 0.3)
+    }
+
+    #[test]
+    fn bamboo_collides_at_its_offset() {
+        let mut level = testing::level();
+        testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let (first, second) = (BlockPos::new(4, -60, 4), BlockPos::new(4, -60, 5));
+        let bamboo = blocks::BAMBOO.default_state();
+        level.set_block(first, bamboo, UPDATE_ALL);
+        level.set_block(second, bamboo, UPDATE_ALL);
+        assert!(level.no_collision(&player_box(4.0, 5.2166666)));
+        assert!(!level.no_collision(&player_box(4.5, 5.5)));
+
+        let offset = bamboo.get_offset(second);
+        let from = player_box(3.5, 5.5);
+        let colliders = level.block_collisions(&from.expand_towards(1.0, 0.0, 0.0), &CollisionContext::EMPTY, false);
+        let colliders: Vec<_> = colliders.into_iter().map(|(_, collider)| collider).collect();
+        let moved = collide_with_shapes(Vec3::new(1.0, 0.0, 0.0), &from, &colliders);
+        assert_eq!(moved.x, 6.5 / 16.0 + offset.x + 4.0 - from.max_x);
+
+        let ctx = ClipContext { from: Vec3::new(1.5, -59.5, 5.7), to: Vec3::new(6.5, -59.5, 5.7), block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false };
+        let hit = level.clip(&ctx);
+        assert!(!hit.miss);
+        assert_eq!(hit.hit.block_pos, second);
+        assert!((hit.hit.location.x - (6.5 / 16.0 + offset.x + 4.0)).abs() < 1.0e-9);
+    }
+
+    #[test]
+    fn flower_outline_clips_at_its_offset() {
+        let mut level = testing::level();
+        testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let pos = BlockPos::new(6, -60, 6);
+        let poppy = blocks::POPPY.default_state();
+        level.set_block(pos, poppy, UPDATE_ALL);
+        let offset = poppy.get_offset(pos);
+        let z = 6.5 + offset.z;
+        let ctx = ClipContext { from: Vec3::new(5.0, -59.8, z), to: Vec3::new(8.0, -59.8, z), block: ClipBlock::Outline, fluid: ClipFluid::None, is_player: true };
+        let hit = level.clip(&ctx);
+        assert!(!hit.miss);
+        assert_eq!(hit.hit.block_pos, pos);
+        assert!((hit.hit.location.x - (5.0 / 16.0 + offset.x + 6.0)).abs() < 1.0e-9);
     }
 }

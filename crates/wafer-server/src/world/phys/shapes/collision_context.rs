@@ -81,13 +81,14 @@ impl CollisionContext {
         self.entity_bottom > pos.y as f64 + max_y - 1.0e-5f32 as f64
     }
 
-    pub fn get_collision_shape(&self, state: BlockState, pos: BlockPos) -> &'static VoxelShape {
+    pub fn get_collision_shape(&self, state: BlockState, pos: BlockPos) -> (&'static VoxelShape, [f64; 3]) {
         if state.is_block(blocks::SCAFFOLDING) {
-            self.scaffolding_collision_shape(state, pos)
+            (self.scaffolding_collision_shape(state, pos), [0.0; 3])
         } else if state.is_block(blocks::POWDER_SNOW) {
-            self.powder_snow_collision_shape(pos)
+            (self.powder_snow_collision_shape(pos), [0.0; 3])
         } else {
-            state.collision_voxel_shape()
+            let offset = state.collision_offset(pos);
+            (state.collision_voxel_shape(), [offset.x, offset.y, offset.z])
         }
     }
 

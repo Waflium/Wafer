@@ -518,7 +518,7 @@ pub fn block_fall_on(level: &mut ServerLevel, state: BlockState, _pos: BlockPos,
 pub fn push_entities_up(state: BlockState, new_state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> BlockState {
     use wafer_core::Axis;
     use wafer_core::shapes::{BooleanOp, join_unoptimized};
-    let offset_shape = join_unoptimized(state.collision_voxel_shape(), new_state.collision_voxel_shape(), BooleanOp::OnlySecond).moved(pos.x as f64, pos.y as f64, pos.z as f64);
+    let offset_shape = join_unoptimized(&state.get_collision_shape(pos), &new_state.get_collision_shape(pos), BooleanOp::OnlySecond).moved(pos.x as f64, pos.y as f64, pos.z as f64);
     if offset_shape.is_empty() {
         return new_state;
     }
@@ -530,7 +530,7 @@ pub fn push_entities_up(state: BlockState, new_state: BlockState, level: &mut Se
         offset_shape.max(Axis::Y),
         offset_shape.max(Axis::Z),
     );
-    let colliders = [crate::world::level::collision::Collider { shape: &offset_shape, offset: [0.0; 3] }];
+    let colliders = [crate::world::level::collision::Collider::new(&offset_shape, [0.0; 3])];
     for colliding_entity in level.get_entities(None, &bounds) {
         let moved = level.entity(colliding_entity).bounding_box().move_by(0.0, 1.0, 0.0);
         let offset = crate::world::level::collision::shapes_collide(Axis::Y, &moved, &colliders, -1.0);

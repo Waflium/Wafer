@@ -1,8 +1,9 @@
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 
 use wafer_core::shapes::{BooleanOp, VoxelShape, join_is_not_empty};
-use wafer_core::{AABB, AxisDirection, BlockPos, Direction};
+use wafer_core::{AABB, AxisDirection, BlockPos, Direction, Vec3};
 use wafer_data::{BlockState, Fluid, FluidState, block_tags, blocks};
 
 use super::{can_be_replaced_with, create_legacy_block};
@@ -329,13 +330,22 @@ fn is_full_block(shape: &[AABB]) -> bool {
     shape.len() == 1 && shape[0] == AABB::new(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
 }
 
-fn can_pass_through_wall(direction: Direction, _source_pos: BlockPos, source_state: BlockState, _target_pos: BlockPos, target_state: BlockState) -> bool {
-    let target_shape = target_state.collision_shape();
-    if is_full_block(target_shape) {
+fn collision_shape(state: BlockState, pos: BlockPos) -> Cow<'static, [AABB]> {
+    let offset = state.collision_offset(pos);
+    if offset == Vec3::ZERO {
+        Cow::Borrowed(state.collision_shape())
+    } else {
+        Cow::Owned(state.collision_shape().iter().map(|b| b.move_by(offset.x, offset.y, offset.z)).collect())
+    }
+}
+
+fn can_pass_through_wall(direction: Direction, source_pos: BlockPos, source_state: BlockState, target_pos: BlockPos, target_state: BlockState) -> bool {
+    let target_shape = collision_shape(target_state, target_pos);
+    if is_full_block(&target_shape) {
         return false;
     }
-    let source_shape = source_state.collision_shape();
-    if is_full_block(source_shape) {
+    let source_shape = collision_shape(source_state, source_pos);
+    if is_full_block(&source_shape) {
         return false;
     }
     if source_shape.is_empty() && target_shape.is_empty() {
@@ -353,7 +363,7 @@ fn can_pass_through_wall(direction: Direction, _source_pos: BlockPos, source_sta
             return result;
         }
     }
-    let result = !merged_face_occludes(source_shape, target_shape, direction);
+    let result = !merged_face_occludes(&source_shape, &target_shape, direction);
     if cacheable {
         OCCLUSION_CACHE.with_borrow_mut(|cache| {
             if cache.len() == CACHE_SIZE {
