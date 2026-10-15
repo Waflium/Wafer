@@ -7,6 +7,7 @@ use super::crafter_menu::{INV_SLOT_START, SLOT_COUNT, USE_ROW_SLOT_END};
 use super::anvil_menu::{self, AnvilMenu};
 use super::cartography_table_menu::{self, CartographyTableMenu};
 use super::grindstone_menu;
+use super::horse_inventory_menu;
 use super::item_combiner_menu;
 use super::loom_menu::{self, LoomMenu};
 use super::smithing_menu::{self, SmithingMenu};
@@ -59,12 +60,13 @@ pub enum MenuKind {
     Grindstone,
     Loom,
     CartographyTable,
+    HorseInventory { mount: EntityId, inventory_columns: usize, inventory_version: u32 },
 }
 
 impl MenuKind {
     pub fn menu_type(self) -> &'static str {
         match self {
-            MenuKind::Inventory => "",
+            MenuKind::Inventory | MenuKind::HorseInventory { .. } => "",
             MenuKind::Crafting => "minecraft:crafting",
             MenuKind::Chest { rows: 3 } => "minecraft:generic_9x3",
             MenuKind::Chest { rows: 6 } => "minecraft:generic_9x6",
@@ -355,6 +357,7 @@ impl AbstractContainerMenu {
                 menu.add_slot(Slot::new(SlotContainer::Menu(cartography_table_menu::CONTAINER), 1, SlotKind::CartographyAdditional));
                 menu.add_slot(Slot::new(SlotContainer::Menu(cartography_table_menu::RESULT_CONTAINER), 2, SlotKind::CartographyResult));
             }
+            MenuKind::HorseInventory { mount, inventory_columns, .. } => horse_inventory_menu::add_mount_slots(&mut menu, mount, inventory_columns),
         }
         for i in 9..36 {
             menu.add_slot(Slot::new(SlotContainer::Inventory, i, SlotKind::Normal));
@@ -382,7 +385,7 @@ impl AbstractContainerMenu {
         menu
     }
 
-    fn add_slot(&mut self, mut slot: Slot) {
+    pub(super) fn add_slot(&mut self, mut slot: Slot) {
         slot.index = self.slots.len();
         self.slots.push(slot);
         self.last_slots.push(ItemStack::empty());
@@ -899,6 +902,10 @@ impl ServerLevel {
         let clicked = stack.copy();
         let total = menu.slots.len();
         let moved = match menu.kind {
+            MenuKind::HorseInventory { inventory_columns, .. } => {
+                let mount_container_size = super::abstract_mount_inventory_menu::get_inventory_size(inventory_columns);
+                return self.abstract_mount_inventory_menu_quick_move_stack(menu, player, index, stack, clicked, mount_container_size);
+            }
             MenuKind::Inventory => {
                 let equipment_slot = self.get_equipment_slot_for_item(player, &clicked);
                 let armor_slot = humanoid_armor_index(equipment_slot).map(|armor_index| 8 - armor_index);
@@ -1250,6 +1257,7 @@ impl ServerLevel {
             MenuKind::Grindstone => self.still_valid_access(menu.access, player, wafer_data::blocks::GRINDSTONE),
             MenuKind::Loom => self.still_valid_access(menu.access, player, wafer_data::blocks::LOOM),
             MenuKind::CartographyTable => self.still_valid_access(menu.access, player, wafer_data::blocks::CARTOGRAPHY_TABLE),
+            MenuKind::HorseInventory { mount, inventory_version, .. } => self.abstract_mount_inventory_menu_still_valid(menu, player, mount, inventory_version),
             MenuKind::Anvil => menu.access.is_none_or(|pos| {
                 crate::world::level::BlockGetter::block_state(self, pos).block().is(&wafer_data::block_tags::ANVIL) && self.is_within_block_interaction_range(player, pos, 4.0)
             }),

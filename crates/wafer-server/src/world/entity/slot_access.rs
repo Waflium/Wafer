@@ -23,6 +23,7 @@ pub enum LevelSlot {
     EnderChest(EntityId, usize),
     Item(EntityId),
     Container(ContainerRef, usize),
+    ChestedHorseChest(EntityId),
     Detached(ItemStack),
 }
 
@@ -74,6 +75,14 @@ impl ServerLevel {
                 return Some(LevelSlot::EnderChest(id, ender_slot as usize));
             }
         }
+        if self.is_abstract_chested_horse(id) && slot == super::animal::equine::abstract_horse::CHEST_SLOT_OFFSET {
+            return Some(LevelSlot::ChestedHorseChest(id));
+        }
+        if self.is_abstract_horse(id)
+            && let Some(inventory_slot) = self.abstract_horse_get_slot(id, slot)
+        {
+            return Some(inventory_slot);
+        }
         if self.is_living(id) {
             return get_equipment_slot(slot).map(|slot| LevelSlot::Equipment { entity: id, slot });
         }
@@ -108,6 +117,7 @@ impl ServerLevel {
                 _ => ItemStack::empty(),
             },
             LevelSlot::Container(..) => ItemStack::empty(),
+            LevelSlot::ChestedHorseChest(id) => self.chested_horse_chest_slot_get(id),
             LevelSlot::Detached(ref item_stack) => item_stack.clone(),
         }
     }
@@ -143,6 +153,7 @@ impl ServerLevel {
                 }
             }
             LevelSlot::Container(container, index) => self.set_item(container, index, item_stack),
+            LevelSlot::ChestedHorseChest(id) => return self.chested_horse_chest_slot_set(id, &item_stack),
             LevelSlot::Detached(_) => {}
         }
         true
@@ -171,6 +182,7 @@ impl ServerLevel {
                 }
             }
             LevelSlot::Container(container, index) => self.put_item(container, index, item_stack),
+            LevelSlot::ChestedHorseChest(_) => {}
             LevelSlot::Detached(_) => {}
         }
     }

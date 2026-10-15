@@ -19,6 +19,7 @@ pub mod ageable_water_creature;
 pub mod chicken;
 pub mod cow;
 pub mod goat;
+pub mod equine;
 #[cfg(test)]
 mod farm_tests;
 pub mod golem;
@@ -101,6 +102,7 @@ impl ServerLevel {
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => false,
             MobKind::Cat(_) => feline::cat::is_food(item_stack),
             MobKind::Ocelot(_) => feline::ocelot::is_food(item_stack),
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => equine::abstract_horse::is_food(item_stack),
         }
     }
 
@@ -166,6 +168,9 @@ impl ServerLevel {
         match self.mob(id).expect("an animal").kind {
             MobKind::Wolf(_) => self.wolf_can_mate(id, partner),
             MobKind::Cat(_) => self.cat_can_mate(id, partner),
+            MobKind::Horse(_) => self.horse_can_mate(id, partner),
+            MobKind::Donkey(_) => self.donkey_can_mate(id, partner),
+            MobKind::Mule(_) => false,
             _ => self.animal_can_mate(id, partner),
         }
     }

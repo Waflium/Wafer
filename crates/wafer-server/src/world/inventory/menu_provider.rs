@@ -267,6 +267,27 @@ impl ServerLevel {
         true
     }
 
+    pub fn open_horse_inventory(&mut self, player: EntityId, horse: EntityId) {
+        if self.player(player).container_menu.is_some() {
+            self.close_container(player);
+        }
+        let p = self.player_mut(player);
+        p.last_window_id = p.last_window_id % 100 + 1;
+        let container_id = p.last_window_id;
+        let mob = self.mob(horse).expect("an abstract horse");
+        let inventory_columns = crate::world::entity::animal::equine::abstract_horse::get_inventory_columns(mob);
+        let inventory_version = mob.abstract_horse().expect("an abstract horse").inventory_version;
+        self.player(player).connection.send(clientbound::MOUNT_SCREEN_OPEN, |w| {
+            w.varint(container_id);
+            w.varint(inventory_columns);
+            w.i32(horse);
+        });
+        let mut menu = AbstractContainerMenu::horse_inventory(container_id, horse, inventory_columns as usize, inventory_version);
+        self.menu_broadcast_changes(&mut menu, player);
+        self.menu_set_synchronizer(&mut menu, player);
+        self.player_mut(player).container_menu = Some(menu);
+    }
+
     pub fn tick_container_menu(&mut self, player: EntityId) {
         let Some(mut menu) = self.take_container_menu(player) else { return };
         self.menu_broadcast_changes(&mut menu, player);

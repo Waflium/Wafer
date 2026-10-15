@@ -96,8 +96,8 @@ impl ServerLevel {
                 if !(0..=6).contains(&action) {
                     anyhow::bail!("Unknown player command {action}");
                 }
-                let _data = r.varint()?;
-                self.handle_player_command(id, action);
+                let data = r.varint()?;
+                self.handle_player_command(id, action, data);
             }
             serverbound::PLAYER_LOADED => self.handle_player_loaded(id),
             serverbound::PLAYER_ABILITIES => {

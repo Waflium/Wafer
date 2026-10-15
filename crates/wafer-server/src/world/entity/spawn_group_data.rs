@@ -1,4 +1,5 @@
 use super::ageable_mob::AgeableMobGroupData;
+use super::animal::equine::horse::HorseGroupData;
 use super::animal::wolf::wolf::WolfPackData;
 use super::animal::fish::abstract_schooling_fish::SchoolSpawnGroupData;
 use super::animal::fish::tropical_fish::TropicalFishGroupData;
@@ -15,6 +16,7 @@ pub enum SpawnGroupData {
     WolfPack(WolfPackData),
     School(SchoolSpawnGroupData),
     TropicalFish(TropicalFishGroupData),
+    Horse(HorseGroupData),
 }
 
 impl SpawnGroupData {
@@ -22,6 +24,7 @@ impl SpawnGroupData {
         match self {
             SpawnGroupData::AgeableMob(data) => Some(data),
             SpawnGroupData::WolfPack(data) => Some(&mut data.ageable_mob_group_data),
+            SpawnGroupData::Horse(data) => Some(&mut data.ageable_mob_group_data),
             _ => None,
         }
     }

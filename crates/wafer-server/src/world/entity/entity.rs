@@ -480,6 +480,11 @@ impl Entity {
         }
     }
 
+    pub fn set_rot(&mut self, y_rot: f32, x_rot: f32) {
+        self.set_y_rot(y_rot % 360.0);
+        self.set_x_rot(x_rot % 360.0);
+    }
+
     fn shared_flags(&self) -> i8 {
         match self.data.get(ids::SHARED_FLAGS) {
             DataValue::Byte(b) => *b,
@@ -1434,6 +1439,9 @@ impl ServerLevel {
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Creeper(_))) {
             return self.creeper_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
+        if self.is_abstract_horse(id) {
+            return self.abstract_horse_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
+        }
         if self.is_living(id) {
             return self.living_entity_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
@@ -1486,7 +1494,7 @@ impl ServerLevel {
         damaged
     }
 
-    fn propagate_fall_to_passengers(&mut self, id: EntityId, fall_distance: f64, damage_modifier: f32, damage_source: crate::world::damagesource::DamageSource) {
+    pub fn propagate_fall_to_passengers(&mut self, id: EntityId, fall_distance: f64, damage_modifier: f32, damage_source: crate::world::damagesource::DamageSource) {
         for passenger in self.passengers(id).to_vec() {
             if self.entity_ref(passenger).is_some() {
                 self.cause_fall_damage(passenger, fall_distance, damage_modifier, damage_source);
@@ -1524,7 +1532,7 @@ impl ServerLevel {
         mth::floor(base_damage * damage_modifier as f64 * self.attribute_value(id, Attribute::FallDamageMultiplier))
     }
 
-    fn play_block_fall_sound(&mut self, id: EntityId) {
+    pub fn play_block_fall_sound(&mut self, id: EntityId) {
         let e = self.entity(id);
         if e.is_silent() {
             return;
@@ -1655,6 +1663,10 @@ impl ServerLevel {
             return;
         }
         if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
+            return;
+        }
+        if self.is_abstract_horse(id) {
+            self.abstract_horse_play_step_sound(id, pos, state);
             return;
         }
         if let Some(sound) = self.mob(id).and_then(|mob| mob.get_step_sound()) {
@@ -2263,6 +2275,9 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::GlowSquid(_)) => return self.glow_squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::IronGolem(_)) => return self.iron_golem_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Horse(_) | super::mob::MobKind::Donkey(_) | super::mob::MobKind::Mule(_)) => {
+                    return self.abstract_horse_hurt_server(id, source, damage);
+                }
                 _ => {}
             }
             return self.living_entity_hurt_server(id, source, damage);
@@ -2517,6 +2532,9 @@ impl ServerLevel {
                     super::mob::MobKind::TropicalFish(_) => "TropicalFish",
                     super::mob::MobKind::Cat(_) => "Cat",
                     super::mob::MobKind::Ocelot(_) => "Ocelot",
+                    super::mob::MobKind::Horse(_) => "Horse",
+                    super::mob::MobKind::Donkey(_) => "Donkey",
+                    super::mob::MobKind::Mule(_) => "Mule",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
@@ -3022,12 +3040,15 @@ impl ServerLevel {
     pub fn controlling_passenger(&self, id: EntityId) -> Option<EntityId> {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_controlling_passenger(id),
-            Some(LevelEntity::Mob(mob)) => {
-                let first_passenger = self.first_passenger(id)?;
-                (!mob.is_no_ai() && self.is_mob(first_passenger) && self.can_control_vehicle(first_passenger)).then_some(first_passenger)
-            }
+            Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_get_controlling_passenger(id),
+            Some(LevelEntity::Mob(_)) => self.mob_get_controlling_passenger(id),
             _ => None,
         }
+    }
+
+    pub fn mob_get_controlling_passenger(&self, id: EntityId) -> Option<EntityId> {
+        let first_passenger = self.first_passenger(id)?;
+        (!self.mob(id)?.is_no_ai() && self.is_mob(first_passenger) && self.can_control_vehicle(first_passenger)).then_some(first_passenger)
     }
 
     pub fn has_controlling_passenger(&self, id: EntityId) -> bool {
@@ -3114,6 +3135,14 @@ impl ServerLevel {
     }
 
     fn add_passenger(&mut self, id: EntityId, passenger: EntityId) {
+        if self.is_abstract_horse(id) {
+            self.abstract_horse_add_passenger(id, passenger);
+        } else {
+            self.entity_add_passenger(id, passenger);
+        }
+    }
+
+    pub fn entity_add_passenger(&mut self, id: EntityId, passenger: EntityId) {
         let player_first = self.is_player(passenger) && !self.first_passenger(id).is_some_and(|first| self.is_player(first));
         let passengers = &mut self.entity_mut(id).passengers;
         if !passengers.is_empty() && player_first {
@@ -3250,6 +3279,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_dismount_location_for_passenger(id, passenger),
             Some(LevelEntity::Boat(_)) => self.abstract_boat_dismount_location_for_passenger(id, passenger),
+            Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_dismount_location_for_passenger(id, passenger),
             _ => self.entity_dismount_location_for_passenger(id, passenger),
         }
     }
@@ -3332,6 +3362,7 @@ impl ServerLevel {
                     self.living_mut(passenger).y_body_rot = y_body_rot;
                 }
             }
+            Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_position_rider(id, passenger),
             _ => {}
         }
     }
@@ -3357,6 +3388,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_passenger_attachment_point(id, passenger),
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_passenger_attachment_point(id, passenger),
+            Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_passenger_attachment_point(id, passenger),
             _ => self.default_passenger_attachment_point(id, passenger),
         }
     }
@@ -3390,6 +3422,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_) | LevelEntity::Minecart(_)) => true,
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Bat(_)) => self.bat_is_pushable(id),
+            Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_is_pushable(id),
             _ if self.is_living(id) => self.is_alive(id) && !self.is_spectator(id) && !self.on_climbable_peek(id),
             _ => false,
         }
@@ -3455,6 +3488,8 @@ impl ServerLevel {
     pub fn is_pushable(&mut self, id: EntityId) -> bool {
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Bat(_))) {
             self.bat_is_pushable(id)
+        } else if self.is_abstract_horse(id) {
+            self.abstract_horse_is_pushable(id)
         } else if self.is_living(id) {
             self.living_entity_is_pushable(id)
         } else {

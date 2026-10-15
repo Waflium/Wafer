@@ -1,6 +1,7 @@
 pub mod abstract_container_menu;
 pub mod abstract_crafting_menu;
 pub mod abstract_furnace_menu;
+pub mod abstract_mount_inventory_menu;
 pub mod anvil_menu;
 pub mod beacon_menu;
 pub mod cartography_table_menu;
@@ -8,6 +9,7 @@ pub mod crafter_menu;
 pub mod crafting_menu;
 pub mod enchantment_menu;
 pub mod grindstone_menu;
+pub mod horse_inventory_menu;
 pub mod inventory_menu;
 pub mod item_combiner_menu;
 pub mod lectern_menu;

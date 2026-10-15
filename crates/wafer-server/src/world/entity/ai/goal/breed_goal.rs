@@ -5,7 +5,10 @@ use crate::world::entity::ai::targeting::targeting_conditions::TargetingConditio
 
 const PARTNER_TARGETING: TargetingConditions<'static> = TargetingConditions::for_non_combat().range(8.0).ignore_line_of_sight();
 
+pub type PartnerClass = fn(&ServerLevel, EntityId) -> bool;
+
 pub struct BreedGoal {
+    partner_class: Option<PartnerClass>,
     partner: Option<EntityId>,
     love_time: i32,
     speed_modifier: f64,
@@ -13,7 +16,11 @@ pub struct BreedGoal {
 
 impl BreedGoal {
     pub fn new(speed_modifier: f64) -> BreedGoal {
-        BreedGoal { partner: None, love_time: 0, speed_modifier }
+        BreedGoal { partner_class: None, partner: None, love_time: 0, speed_modifier }
+    }
+
+    pub fn with_partner_class(speed_modifier: f64, partner_class: PartnerClass) -> BreedGoal {
+        BreedGoal { partner_class: Some(partner_class), ..BreedGoal::new(speed_modifier) }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
@@ -48,7 +55,15 @@ impl BreedGoal {
 
     fn get_free_partner(&self, level: &mut ServerLevel, mob: EntityId) -> Option<EntityId> {
         let area = level.entity(mob).bounding_box().inflate_all(8.0);
-        let animals = level.get_nearby_entities_same_kind(&PARTNER_TARGETING, mob, &area);
+        let animals = match self.partner_class {
+            Some(partner_class) => {
+                let mut nearby = level.get_entities(None, &area);
+                nearby.retain(|&entity| partner_class(level, entity));
+                nearby.retain(|&entity| PARTNER_TARGETING.test(level, Some(mob), entity));
+                nearby
+            }
+            None => level.get_nearby_entities_same_kind(&PARTNER_TARGETING, mob, &area),
+        };
         let mut dist = f64::MAX;
         let mut partner = None;
         for potential_partner in animals {

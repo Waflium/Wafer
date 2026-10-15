@@ -38,6 +38,10 @@ impl ServerLevel {
     }
 
     pub fn open_custom_inventory_screen(&mut self, id: EntityId, player: EntityId) {
+        if self.is_abstract_horse(id) {
+            self.abstract_horse_open_custom_inventory_screen(id, player);
+            return;
+        }
         self.open_menu(player, MenuProvider::ChestVehicle(id));
     }
 }

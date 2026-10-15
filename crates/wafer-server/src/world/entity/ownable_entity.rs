@@ -5,10 +5,13 @@ use crate::server::level::ServerLevel;
 
 impl ServerLevel {
     pub fn is_ownable_entity(&self, id: EntityId) -> bool {
-        self.is_tamable_animal(id)
+        self.is_tamable_animal(id) || self.is_abstract_horse(id)
     }
 
     pub fn get_owner_reference(&self, id: EntityId) -> Option<EntityReference> {
+        if self.is_abstract_horse(id) {
+            return self.abstract_horse_get_owner_reference(id);
+        }
         tamable_animal::get_owner_reference(self.entity(id))
     }
 

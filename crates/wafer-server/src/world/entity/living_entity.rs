@@ -47,6 +47,7 @@ pub struct LivingEntity {
     pub attributes: AttributeMap,
     pub y_body_rot: f32,
     pub y_body_rot_o: f32,
+    pub y_head_rot_o: f32,
     pub no_action_time: i32,
     pub last_hurt_by_player: Option<u128>,
     pub last_hurt_by_player_memory_time: i32,
@@ -100,6 +101,7 @@ impl LivingEntity {
             attributes: AttributeMap::new(attributes),
             y_body_rot: 0.0,
             y_body_rot_o: 0.0,
+            y_head_rot_o: 0.0,
             no_action_time: 0,
             last_hurt_by_player: None,
             last_hurt_by_player_memory_time: 0,
@@ -410,6 +412,8 @@ impl ServerLevel {
     pub fn can_use_slot(&self, id: EntityId, slot: EquipmentSlot) -> bool {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Pig(_)) => self.pig_can_use_slot(id, slot),
+            Some(MobKind::Horse(_)) => true,
+            Some(MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_can_use_slot(id, slot),
             _ => true,
         }
     }
@@ -417,6 +421,9 @@ impl ServerLevel {
     fn get_equip_sound(&self, id: EntityId, slot: EquipmentSlot, equippable: &crate::world::item::component::values::Equippable) -> Option<i32> {
         if slot == EquipmentSlot::Saddle && matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Pig(_))) {
             return Some(sound_event("minecraft:entity.pig.saddle"));
+        }
+        if slot == EquipmentSlot::Saddle && self.is_abstract_horse(id) {
+            return self.get_equip_sound_for_saddle(id);
         }
         equippable.equip_sound.as_str().and_then(|name| wafer_data::registry::SOUND_EVENT.iter().position(|&s| s == name)).map(|sound| sound as i32)
     }
@@ -1081,6 +1088,8 @@ impl ServerLevel {
             self.do_hurt_equipment(id, source, damage, &[EquipmentSlot::Feet, EquipmentSlot::Legs, EquipmentSlot::Chest, EquipmentSlot::Head]);
         } else if self.is_wolf(id) {
             self.wolf_hurt_armor(id, source, damage);
+        } else if self.is_horse(id) {
+            self.horse_hurt_armor(id, source, damage);
         }
     }
 
@@ -1411,6 +1420,10 @@ impl ServerLevel {
     fn drop_equipment(&mut self, id: EntityId) {
         if self.is_player(id) {
             self.player_drop_equipment(id);
+        } else if self.is_abstract_chested_horse(id) {
+            self.abstract_chested_horse_drop_equipment(id);
+        } else if self.is_abstract_horse(id) {
+            self.abstract_horse_drop_equipment(id);
         }
     }
 
@@ -1668,7 +1681,9 @@ impl ServerLevel {
             }
         }
         self.tick_effects(id);
+        let y_head_rot = self.entity(id).y_head_rot;
         let living = self.living_mut(id);
+        living.y_head_rot_o = y_head_rot;
         living.y_body_rot_o = living.y_body_rot;
     }
 
@@ -1913,13 +1928,61 @@ impl ServerLevel {
             Some(MobKind::SnowGolem(_)) => self.snow_golem_ai_step(id),
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::TropicalFish(_)) => self.abstract_fish_ai_step(id),
             Some(MobKind::Pufferfish(_)) => self.pufferfish_ai_step(id),
+            Some(MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
     }
 
     pub fn is_effective_ai(&self, id: EntityId) -> bool {
-        self.mob(id).is_none_or(|mob| !mob.is_no_ai())
+        if self.is_player(id) {
+            return true;
+        }
+        self.is_local_instance_authoritative(id) && self.mob(id).is_none_or(|mob| !mob.is_no_ai())
+    }
+
+    pub fn is_immobile(&self, id: EntityId) -> bool {
+        if self.is_player(id) {
+            self.living_entity_is_immobile(id) || self.is_sleeping(id)
+        } else if self.is_abstract_horse(id) {
+            self.abstract_horse_is_immobile(id)
+        } else {
+            self.living_entity_is_immobile(id)
+        }
+    }
+
+    pub fn living_entity_is_immobile(&self, id: EntityId) -> bool {
+        self.is_dead_or_dying(id)
+    }
+
+    fn travel_ridden(&mut self, id: EntityId, controller: EntityId, self_input: Vec3) {
+        let ridden_input = self.get_ridden_input(id, controller, self_input);
+        self.tick_ridden_by(id, controller, ridden_input);
+        if self.can_simulate_movement(id) {
+            let speed = self.get_ridden_speed(id, controller);
+            self.set_speed(id, speed);
+            self.travel(id, ridden_input);
+        } else {
+            self.entity_mut(id).set_delta_movement(Vec3::ZERO);
+        }
+    }
+
+    pub fn tick_ridden_by(&mut self, id: EntityId, controller: EntityId, ridden_input: Vec3) {
+        if self.is_abstract_horse(id) {
+            self.abstract_horse_tick_ridden(id, controller, ridden_input);
+        } else {
+            self.living_entity_tick_ridden(id, controller, ridden_input);
+        }
+    }
+
+    pub fn living_entity_tick_ridden(&mut self, _id: EntityId, _controller: EntityId, _ridden_input: Vec3) {}
+
+    pub fn get_ridden_input(&self, id: EntityId, controller: EntityId, self_input: Vec3) -> Vec3 {
+        if self.is_abstract_horse(id) { self.abstract_horse_get_ridden_input(id, controller, self_input) } else { self_input }
+    }
+
+    pub fn get_ridden_speed(&self, id: EntityId, controller: EntityId) -> f32 {
+        if self.is_abstract_horse(id) { self.abstract_horse_get_ridden_speed(id, controller) } else { self.living(id).speed }
     }
 
     fn server_ai_step(&mut self, id: EntityId) {
@@ -1930,10 +1993,14 @@ impl ServerLevel {
 
     pub fn living_entity_ai_step(&mut self, id: EntityId) {
         let player = self.is_player(id);
-        let dead = self.is_dead_or_dying(id);
+        let immobile = self.is_immobile(id);
         let living = self.living_mut(id);
         if living.no_jump_delay > 0 {
             living.no_jump_delay -= 1;
+        }
+        if !self.can_simulate_movement(id) {
+            let e = self.entity_mut(id);
+            e.set_delta_movement(e.delta_movement.scale(0.98));
         }
         if player {
             self.player_equipment_tick(id);
@@ -1960,7 +2027,7 @@ impl ServerLevel {
         e.set_delta_movement(Vec3::new(dx, dy, dz));
         living.xxa *= 0.98;
         living.zza *= 0.98;
-        if dead {
+        if immobile {
             living.jumping = false;
             living.xxa = 0.0;
             living.zza = 0.0;
@@ -1997,8 +2064,13 @@ impl ServerLevel {
         if l.has_effect(mob_effects::SLOW_FALLING) || l.has_effect(mob_effects::LEVITATION) {
             self.reset_fall_distance(id);
         }
-        if self.is_effective_ai(id) {
-            self.travel(id, input);
+        match self.controlling_passenger(id).filter(|&controller| self.is_player(controller)) {
+            Some(controller) if self.is_alive(id) => self.travel_ridden(id, controller, input),
+            _ => {
+                if self.can_simulate_movement(id) && self.is_effective_ai(id) {
+                    self.travel(id, input);
+                }
+            }
         }
         self.apply_effects_from_blocks(id);
         let e = self.entity_mut(id);
@@ -2213,7 +2285,11 @@ impl ServerLevel {
     }
 
     pub fn get_jump_power(&mut self, id: EntityId) -> f32 {
-        self.attribute_value(id, Attribute::JumpStrength) as f32 * 1.0 * self.block_jump_factor(id) + self.jump_boost_power(id)
+        self.get_jump_power_with_multiplier(id, 1.0)
+    }
+
+    pub fn get_jump_power_with_multiplier(&mut self, id: EntityId, multiplier: f32) -> f32 {
+        self.attribute_value(id, Attribute::JumpStrength) as f32 * multiplier * self.block_jump_factor(id) + self.jump_boost_power(id)
     }
 
     pub fn jump_boost_power(&self, id: EntityId) -> f32 {
@@ -2474,6 +2550,13 @@ impl ServerLevel {
         if self.is_player(id) { self.player_get_speed(id) } else { self.living(id).speed }
     }
 
+    pub fn set_speed(&mut self, id: EntityId, speed: f32) {
+        match self.mob_mut(id) {
+            Some(mob) => mob.set_speed(speed),
+            None => self.living_mut(id).speed = speed,
+        }
+    }
+
     fn handle_on_climbable(&mut self, id: EntityId, delta: Vec3) -> Vec3 {
         if !self.on_climbable(id) {
             return delta;
@@ -2492,6 +2575,9 @@ impl ServerLevel {
     pub fn on_climbable_peek(&self, id: EntityId) -> bool {
         if let Some(mob) = self.mob(id).filter(|mob| mob.is_spider()) {
             return super::monster::spider::spider::Spider::on_climbable(mob);
+        }
+        if self.is_abstract_horse(id) {
+            return super::animal::equine::abstract_horse::on_climbable();
         }
         if self.is_spectator(id) {
             return false;
@@ -2512,6 +2598,7 @@ impl ServerLevel {
     pub fn on_climbable(&mut self, id: EntityId) -> bool {
         match self.mob(id) {
             Some(mob) if mob.is_spider() => super::monster::spider::spider::Spider::on_climbable(mob),
+            Some(mob) if mob.abstract_horse().is_some() => super::animal::equine::abstract_horse::on_climbable(),
             _ => self.living_entity_on_climbable(id),
         }
     }

@@ -455,6 +455,50 @@ pub static GOAT_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static HORSE_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange,
+        ],
+        &[
+            (FollowRange, 16.0),
+            (TemptRange, 10.0),
+            (JumpStrength, 0.7),
+            (MaxHealth, 53.0),
+            (MovementSpeed, 0.225f32 as f64),
+            (StepHeight, 1.0),
+            (SafeFallDistance, 6.0),
+            (FallDamageMultiplier, 0.5),
+        ],
+    )
+};
+
+pub static CHESTED_HORSE_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange,
+        ],
+        &[
+            (FollowRange, 16.0),
+            (TemptRange, 10.0),
+            (JumpStrength, 0.5),
+            (MaxHealth, 53.0),
+            (MovementSpeed, 0.175f32 as f64),
+            (StepHeight, 1.0),
+            (SafeFallDistance, 6.0),
+            (FallDamageMultiplier, 0.5),
+        ],
+    )
+};
+
 pub static ZOMBIE_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

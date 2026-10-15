@@ -40,6 +40,8 @@ mod player_command {
     pub const STOP_SLEEPING: i32 = 0;
     pub const START_SPRINTING: i32 = 1;
     pub const STOP_SPRINTING: i32 = 2;
+    pub const START_RIDING_JUMP: i32 = 3;
+    pub const STOP_RIDING_JUMP: i32 = 4;
     pub const OPEN_INVENTORY: i32 = 5;
     pub const START_FALL_FLYING: i32 = 6;
 }
@@ -558,7 +560,7 @@ impl ServerLevel {
         }
     }
 
-    pub fn handle_player_command(&mut self, id: EntityId, action: i32) {
+    pub fn handle_player_command(&mut self, id: EntityId, action: i32, data: i32) {
         if !self.player(id).movement.has_client_loaded() {
             return;
         }
@@ -573,9 +575,22 @@ impl ServerLevel {
             }
             player_command::START_SPRINTING => self.set_sprinting(id, true),
             player_command::STOP_SPRINTING => self.set_sprinting(id, false),
+            player_command::START_RIDING_JUMP => {
+                if let Some(vehicle) = self.controlled_vehicle(id).filter(|&vehicle| self.is_player_rideable_jumping(vehicle))
+                    && self.can_jump(vehicle)
+                    && data > 0
+                {
+                    self.handle_start_jump(vehicle, data);
+                }
+            }
+            player_command::STOP_RIDING_JUMP => {
+                if let Some(vehicle) = self.controlled_vehicle(id).filter(|&vehicle| self.is_player_rideable_jumping(vehicle)) {
+                    self.handle_stop_jump(vehicle);
+                }
+            }
             player_command::OPEN_INVENTORY => {
                 if let Some(vehicle) = self.vehicle(id)
-                    && self.is_container_entity(vehicle)
+                    && self.has_custom_inventory_screen(vehicle)
                 {
                     self.open_custom_inventory_screen(vehicle, id);
                 }
@@ -739,7 +754,7 @@ mod tests {
         let level = &mut server.levels[0];
         level.handle_player_loaded(id);
         level.set_item_slot(id, EquipmentSlot::Chest, ItemStack::new(items::ELYTRA, 1));
-        level.handle_player_command(id, 6);
+        level.handle_player_command(id, 6, 0);
         id
     }
 
@@ -772,21 +787,21 @@ mod tests {
         let id = testing::server_player(&mut server, Vec3::new(0.5, -40.0, 0.5), 0.0, 0.0);
         let level = &mut server.levels[0];
         level.handle_player_loaded(id);
-        level.handle_player_command(id, 6);
+        level.handle_player_command(id, 6, 0);
         assert!(!level.entity(id).is_fall_flying());
         let mut almost_broken = ItemStack::new(items::ELYTRA, 1);
         almost_broken.set_damage_value(almost_broken.max_damage() - 1);
         level.set_item_slot(id, EquipmentSlot::Chest, almost_broken);
-        level.handle_player_command(id, 6);
+        level.handle_player_command(id, 6, 0);
         assert!(!level.entity(id).is_fall_flying());
         level.set_item_slot(id, EquipmentSlot::Chest, ItemStack::new(items::ELYTRA, 1));
         level.entity_mut(id).on_ground = true;
-        level.handle_player_command(id, 6);
+        level.handle_player_command(id, 6, 0);
         assert!(!level.entity(id).is_fall_flying());
         level.entity_mut(id).on_ground = false;
-        level.handle_player_command(id, 6);
+        level.handle_player_command(id, 6, 0);
         assert!(level.entity(id).is_fall_flying());
-        level.handle_player_command(id, 6);
+        level.handle_player_command(id, 6, 0);
         assert!(!level.entity(id).is_fall_flying());
     }
 

@@ -57,6 +57,9 @@ use super::cat_sit_on_block_goal::CatSitOnBlockGoal;
 use super::ocelot_attack_goal::OcelotAttackGoal;
 use crate::world::entity::animal::feline::cat::{CatAvoidEntityGoal, CatRelaxOnOwnerGoal, CatTemptGoal};
 use crate::world::entity::animal::feline::ocelot::{OcelotAvoidEntityGoal, OcelotTemptGoal};
+use super::random_stand_goal::RandomStandGoal;
+use super::run_around_like_crazy_goal::RunAroundLikeCrazyGoal;
+use crate::world::entity::animal::equine::abstract_horse::MountPanicGoal;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -149,6 +152,9 @@ pub enum Goal {
     OcelotAttack(OcelotAttackGoal),
     OcelotAvoidEntity(OcelotAvoidEntityGoal),
     OcelotTempt(OcelotTemptGoal),
+    RunAroundLikeCrazy(RunAroundLikeCrazyGoal),
+    RandomStand(RandomStandGoal),
+    MountPanic(MountPanicGoal),
 }
 
 impl Goal {
@@ -228,6 +234,9 @@ impl Goal {
             Goal::OcelotAttack(goal) => goal.can_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.can_use(level, mob),
+            Goal::RunAroundLikeCrazy(goal) => goal.can_use(level, mob),
+            Goal::RandomStand(goal) => goal.can_use(level, mob),
+            Goal::MountPanic(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -307,6 +316,9 @@ impl Goal {
             Goal::OcelotAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotTempt(goal) => goal.can_continue_to_use(level, mob),
+            Goal::RunAroundLikeCrazy(goal) => goal.can_continue_to_use(level, mob),
+            Goal::RandomStand(goal) => goal.can_continue_to_use(),
+            Goal::MountPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -384,6 +396,9 @@ impl Goal {
             Goal::OcelotAttack(_) => {}
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.start(level),
+            Goal::RunAroundLikeCrazy(goal) => goal.start(level, mob),
+            Goal::RandomStand(goal) => goal.start(level, mob),
+            Goal::MountPanic(goal) => goal.panic_goal.start(level, mob),
         }
     }
 
@@ -452,6 +467,8 @@ impl Goal {
             Goal::OcelotAttack(goal) => goal.stop(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.stop(),
             Goal::OcelotTempt(goal) => goal.tempt_goal.stop(level, mob),
+            Goal::RunAroundLikeCrazy(_) | Goal::RandomStand(_) => {}
+            Goal::MountPanic(goal) => goal.panic_goal.stop(),
         }
     }
 
@@ -479,6 +496,7 @@ impl Goal {
                 | Goal::CatLieOnBlock(_)
                 | Goal::CatSitOnBlock(_)
                 | Goal::OcelotAttack(_)
+                | Goal::RandomStand(_)
         )
     }
 
@@ -545,6 +563,8 @@ impl Goal {
             Goal::SitWhenOrderedTo(_) | Goal::OwnerHurtByTarget(_) | Goal::OwnerHurtTarget(_) | Goal::NonTameRandomTarget(_) => {}
             Goal::FishSwim(_) | Goal::PufferfishPuff(_) => {}
             Goal::FollowFlockLeader(goal) => goal.tick(level, mob),
+            Goal::RunAroundLikeCrazy(goal) => goal.tick(level, mob),
+            Goal::RandomStand(_) | Goal::MountPanic(_) => {}
         }
     }
 
@@ -601,6 +621,8 @@ impl Goal {
             Goal::CatRelaxOnOwner(_) => 0,
             Goal::CatTempt(_) | Goal::OcelotTempt(_) | Goal::OcelotAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::CatLieOnBlock(_) | Goal::CatSitOnBlock(_) => Flag::Move.bit() | Flag::Jump.bit(),
+            Goal::RunAroundLikeCrazy(_) | Goal::MountPanic(_) => Flag::Move.bit(),
+            Goal::RandomStand(_) => 0,
         }
     }
 

@@ -32,6 +32,7 @@ pub enum SlotKind {
     EnchantmentLapis,
     Result { remove_count: i32, craft_slots: usize },
     Armor(EquipmentSlot),
+    MountArmor(EntityId, EquipmentSlot),
     Offhand,
     Crafter,
     NonInteractiveResult,
@@ -115,6 +116,7 @@ impl ServerLevel {
         let previous = self.slot_get(menu, player, index);
         match menu.slots[index].kind {
             SlotKind::Armor(equipment_slot) => self.on_equip_item(player, equipment_slot, &previous, &stack),
+            SlotKind::MountArmor(owner, equipment_slot) => self.on_equip_item(owner, equipment_slot, &previous, &stack),
             SlotKind::Offhand => self.on_equip_item(player, EquipmentSlot::Offhand, &previous, &stack),
             _ => {}
         }
@@ -136,7 +138,7 @@ impl ServerLevel {
         let slot = &menu.slots[index];
         match slot.kind {
             SlotKind::FurnaceFuel if is_bucket(stack) => return 1,
-            SlotKind::BrewingStandPotion | SlotKind::BeaconPayment | SlotKind::EnchantmentItem | SlotKind::Armor(_) => return stack.max_stack_size().min(1),
+            SlotKind::BrewingStandPotion | SlotKind::BeaconPayment | SlotKind::EnchantmentItem | SlotKind::Armor(_) | SlotKind::MountArmor(..) => return stack.max_stack_size().min(1),
             _ => {}
         }
         let container_max_stack_size = match slot.container {
@@ -173,6 +175,7 @@ impl ServerLevel {
             SlotKind::BeaconPayment => stack.get_item().is(&wafer_data::item_tags::BEACON_PAYMENT_ITEMS),
             SlotKind::EnchantmentLapis => stack.is(items::LAPIS_LAZULI),
             SlotKind::Armor(equipment_slot) => self.is_equippable_in_slot(player, stack, equipment_slot),
+            SlotKind::MountArmor(owner, equipment_slot) => self.is_equippable_in_slot(owner, stack, equipment_slot),
         }
     }
 
@@ -184,7 +187,7 @@ impl ServerLevel {
             let has_item = self.slot_has_item(menu, player, index);
             return self.item_combiner_menu_may_pickup(menu, player, has_item);
         }
-        if let SlotKind::Armor(_) = menu.slots[index].kind {
+        if let SlotKind::Armor(_) | SlotKind::MountArmor(..) = menu.slots[index].kind {
             let item_stack = self.slot_get(menu, player, index);
             if !item_stack.is_empty() && !self.player(player).game_mode.game_type.is_creative() && crate::world::item::enchantment::enchantment_helper::has_prevent_armor_change(&item_stack) {
                 return false;
