@@ -41,6 +41,7 @@ mod player_command {
     pub const START_SPRINTING: i32 = 1;
     pub const STOP_SPRINTING: i32 = 2;
     pub const OPEN_INVENTORY: i32 = 5;
+    pub const START_FALL_FLYING: i32 = 6;
 }
 
 pub struct PlayerMovement {
@@ -580,6 +581,11 @@ impl ServerLevel {
                     self.open_custom_inventory_screen(vehicle, id);
                 }
             }
+            player_command::START_FALL_FLYING => {
+                if !self.try_to_start_fall_flying(id) {
+                    self.stop_fall_flying(id);
+                }
+            }
             _ => {}
         }
     }
@@ -676,12 +682,15 @@ impl ServerLevel {
 #[cfg(test)]
 mod tests {
     use wafer_core::Vec3;
+    use wafer_data::{EquipmentSlot, items};
 
     use crate::commands::perform_prefixed_command;
     use crate::commands::source::CommandSourceStack;
     use crate::server::Server;
     use crate::server::level::game_mode::GameType;
     use crate::server::level::testing;
+    use crate::world::entity::data::Pose;
+    use crate::world::item::ItemStack;
 
     fn server() -> Server {
         testing::server()
@@ -724,5 +733,89 @@ mod tests {
         let e = server.levels[0].entity(id);
         assert_eq!(e.position(), Vec3::new(0.5, -60.0, 0.5));
         assert_eq!(e.delta_movement, Vec3::new(0.0, -0.0784000015258789, 0.0));
+    }
+
+    fn gliding_player(server: &mut Server, pos: Vec3) -> crate::world::entity::EntityId {
+        let id = testing::server_player(server, pos, 0.0, 0.0);
+        let level = &mut server.levels[0];
+        level.handle_player_loaded(id);
+        level.set_item_slot(id, EquipmentSlot::Chest, ItemStack::new(items::ELYTRA, 1));
+        level.handle_player_command(id, 6);
+        id
+    }
+
+    #[test]
+    fn players_glide_from_rest_like_vanilla() {
+        let mut server = server();
+        let id = gliding_player(&mut server, Vec3::new(0.5, -40.0, 0.5));
+        assert!(server.levels[0].entity(id).is_fall_flying());
+        let mut motions = Vec::new();
+        for _ in 0..20 {
+            server.tick();
+            motions.push(server.levels[0].entity(id).delta_movement);
+            if motions.len() == 19 {
+                assert_eq!(server.levels[0].item_by_slot(id, EquipmentSlot::Chest).unwrap().damage_value(), 0);
+            }
+        }
+        let level = &server.levels[0];
+        assert!(level.entity(id).is_fall_flying());
+        assert_eq!(level.entity(id).pose(), Pose::FallFlying);
+        assert_eq!(level.entity(id).position(), Vec3::new(0.5, -40.0, 0.5));
+        assert_eq!(motions[0], Vec3::new(0.0, -0.017640000343322755, 0.0017820000171661376));
+        assert_eq!(motions[1], Vec3::new(0.0, -0.03319848094894409, 0.003353724062896729));
+        assert_eq!(motions[19], Vec3::new(0.0, -0.1373579824041842, 0.18265649309048199));
+        assert_eq!(level.item_by_slot(id, EquipmentSlot::Chest).unwrap().damage_value(), 1);
+    }
+
+    #[test]
+    fn fall_flying_needs_a_usable_glider_in_the_air() {
+        let mut server = server();
+        let id = testing::server_player(&mut server, Vec3::new(0.5, -40.0, 0.5), 0.0, 0.0);
+        let level = &mut server.levels[0];
+        level.handle_player_loaded(id);
+        level.handle_player_command(id, 6);
+        assert!(!level.entity(id).is_fall_flying());
+        let mut almost_broken = ItemStack::new(items::ELYTRA, 1);
+        almost_broken.set_damage_value(almost_broken.max_damage() - 1);
+        level.set_item_slot(id, EquipmentSlot::Chest, almost_broken);
+        level.handle_player_command(id, 6);
+        assert!(!level.entity(id).is_fall_flying());
+        level.set_item_slot(id, EquipmentSlot::Chest, ItemStack::new(items::ELYTRA, 1));
+        level.entity_mut(id).on_ground = true;
+        level.handle_player_command(id, 6);
+        assert!(!level.entity(id).is_fall_flying());
+        level.entity_mut(id).on_ground = false;
+        level.handle_player_command(id, 6);
+        assert!(level.entity(id).is_fall_flying());
+        level.handle_player_command(id, 6);
+        assert!(!level.entity(id).is_fall_flying());
+    }
+
+    #[test]
+    fn gliding_into_a_wall_hurts_like_vanilla() {
+        let mut server = server();
+        let id = gliding_player(&mut server, Vec3::new(20.5, -40.0, 0.7));
+        let source = CommandSourceStack::server(&server);
+        perform_prefixed_command(&mut server, &source, "fill 15 -45 2 25 -35 2 stone");
+        let mut ticks = 0;
+        while server.levels[0].health(id) == 20.0 && ticks < 400 {
+            server.tick();
+            ticks += 1;
+        }
+        let level = &server.levels[0];
+        assert_eq!(level.health(id), f32::from_bits(0x4150bdf2));
+        assert_eq!(level.living(id).last_damage_source.as_ref().unwrap().ty, wafer_data::damage_types::FLY_INTO_WALL);
+        assert_eq!(level.entity(id).position(), Vec3::new(20.5, -40.0, 0.7));
+    }
+
+    #[test]
+    fn fall_flying_stops_on_the_ground() {
+        let mut server = server();
+        let id = gliding_player(&mut server, Vec3::new(0.5, -59.99, 0.5));
+        assert!(server.levels[0].entity(id).is_fall_flying());
+        server.tick();
+        server.tick();
+        assert!(!server.levels[0].entity(id).is_fall_flying());
+        assert_eq!(server.levels[0].living(id).fall_fly_ticks, 0);
     }
 }

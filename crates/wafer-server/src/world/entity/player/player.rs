@@ -457,6 +457,23 @@ impl ServerLevel {
         }
     }
 
+    pub fn player_can_glide(&self, id: EntityId) -> bool {
+        !self.player(id).abilities_flying() && self.living_entity_can_glide(id)
+    }
+
+    pub fn try_to_start_fall_flying(&mut self, id: EntityId) -> bool {
+        if !self.entity(id).is_fall_flying() && self.can_glide(id) && !self.entity(id).is_in_liquid() {
+            self.start_fall_flying(id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn start_fall_flying(&mut self, id: EntityId) {
+        self.entity_mut(id).set_shared_flag(crate::world::entity::flags::FALL_FLYING, true);
+    }
+
     pub fn player_pickup_area(&self, id: EntityId) -> AABB {
         let bounding_box = self.entity(id).bounding_box();
         match self.vehicle(id).filter(|&vehicle| !self.entity(vehicle).is_removed()) {

@@ -78,6 +78,7 @@ pub struct LivingEntity {
     pub auto_spin_attack_dmg: f32,
     pub auto_spin_attack_item_stack: Option<ItemStack>,
     pub remove_arrow_time: i32,
+    pub fall_fly_ticks: i32,
     pub last_equipment_items: [Option<ItemStack>; 8],
     pub swing_state: SwingState,
     pub active_effects: Vec<MobEffectInstance>,
@@ -128,6 +129,7 @@ impl LivingEntity {
             auto_spin_attack_dmg: 0.0,
             auto_spin_attack_item_stack: None,
             remove_arrow_time: 0,
+            fall_fly_ticks: 0,
             last_equipment_items: Default::default(),
             swing_state: SwingState::default(),
             active_effects: Vec::new(),
@@ -227,6 +229,14 @@ impl SwingState {
 
 pub fn get_comfortable_fall_distance(allowed_damage: f32) -> i32 {
     mth::floor_f(allowed_damage + 3.0)
+}
+
+pub fn can_glide_using(item_stack: &ItemStack, slot: EquipmentSlot) -> bool {
+    if !item_stack.has(dc::GLIDER) {
+        return false;
+    }
+    let Some(equippable) = item_stack.get(dc::EQUIPPABLE).map(dc::values::Equippable::from_nbt) else { return false };
+    EquipmentSlot::by_name(&equippable.slot) == Some(slot) && !item_stack.next_damage_will_break()
 }
 
 pub fn entity_event_for_equipment_break(slot: EquipmentSlot) -> u8 {
@@ -1563,6 +1573,9 @@ impl ServerLevel {
         while living.y_body_rot - living.y_body_rot_o >= 180.0 {
             living.y_body_rot_o += 360.0;
         }
+        let fall_flying = self.entity(id).is_fall_flying();
+        let living = self.living_mut(id);
+        living.fall_fly_ticks = if fall_flying { living.fall_fly_ticks + 1 } else { 0 };
         if self.is_sleeping(id) {
             self.entity_mut(id).set_x_rot(0.0);
         }
@@ -1950,6 +1963,9 @@ impl ServerLevel {
         } else {
             self.living_mut(id).no_jump_delay = 0;
         }
+        if self.entity(id).is_fall_flying() {
+            self.update_fall_flying(id);
+        }
         let before_travel_box = self.entity(id).bounding_box();
         let l = &self.living(id);
         let input = Vec3::new(l.xxa as f64, l.yya as f64, l.zza as f64);
@@ -1978,6 +1994,37 @@ impl ServerLevel {
         if self.is_sensitive_to_water(id) && self.is_in_water_or_rain(id) {
             self.hurt_server(id, DamageSource::new(damage_types::DROWN), 1.0);
         }
+    }
+
+    fn update_fall_flying(&mut self, id: EntityId) {
+        self.entity_mut(id).check_fall_distance_accumulation();
+        if !self.can_glide(id) {
+            self.entity_mut(id).set_shared_flag(flags::FALL_FLYING, false);
+            return;
+        }
+        let check_fall_fly_ticks = self.living(id).fall_fly_ticks + 1;
+        if check_fall_fly_ticks % 10 == 0 {
+            let free_fall_interval = check_fall_fly_ticks / 10;
+            if free_fall_interval % 2 == 0 {
+                let slots_with_gliders: Vec<EquipmentSlot> = EquipmentSlot::VALUES
+                    .into_iter()
+                    .filter(|&slot| self.item_by_slot_ref(id, slot).is_some_and(|item_stack| can_glide_using(item_stack, slot)))
+                    .collect();
+                let index = self.entity_mut(id).random.next_int_bounded(slots_with_gliders.len() as i32);
+                self.hurt_and_break(id, slots_with_gliders[index as usize], 1);
+            }
+        }
+    }
+
+    pub fn can_glide(&self, id: EntityId) -> bool {
+        if self.is_player(id) { self.player_can_glide(id) } else { self.living_entity_can_glide(id) }
+    }
+
+    pub fn living_entity_can_glide(&self, id: EntityId) -> bool {
+        if self.entity(id).on_ground || self.is_passenger(id) || self.has_effect(id, mob_effects::LEVITATION) {
+            return false;
+        }
+        EquipmentSlot::VALUES.into_iter().any(|slot| self.item_by_slot_ref(id, slot).is_some_and(|item_stack| can_glide_using(item_stack, slot)))
     }
 
     fn check_auto_spin_attack(&mut self, id: EntityId, old: AABB, current: AABB) {
@@ -2168,8 +2215,70 @@ impl ServerLevel {
     pub fn living_entity_travel(&mut self, id: EntityId, input: Vec3) {
         if self.entity(id).is_in_liquid() && self.is_affected_by_fluids(id) {
             self.travel_in_fluid(id, input);
+        } else if self.entity(id).is_fall_flying() {
+            self.travel_fall_flying(id, input);
         } else {
             self.travel_in_air(id, input);
+        }
+    }
+
+    fn travel_fall_flying(&mut self, id: EntityId, input: Vec3) {
+        if self.on_climbable(id) {
+            self.travel_in_air(id, input);
+            self.stop_fall_flying(id);
+        } else {
+            let last_movement = self.entity(id).delta_movement;
+            let last_speed = last_movement.horizontal_distance();
+            let movement = self.update_fall_flying_movement(id, last_movement);
+            self.entity_mut(id).set_delta_movement(movement);
+            self.move_entity(id, MoverType::SelfMove, movement);
+            let new_speed = self.entity(id).delta_movement.horizontal_distance();
+            self.handle_fall_flying_collisions(id, last_speed, new_speed);
+        }
+    }
+
+    pub fn stop_fall_flying(&mut self, id: EntityId) {
+        let e = self.entity_mut(id);
+        e.set_shared_flag(flags::FALL_FLYING, true);
+        e.set_shared_flag(flags::FALL_FLYING, false);
+    }
+
+    fn update_fall_flying_movement(&self, id: EntityId, mut movement: Vec3) -> Vec3 {
+        let e = self.entity(id);
+        let look_angle = e.look_angle();
+        let lean_angle = e.x_rot * mth::DEG_TO_RAD;
+        let look_hor_length = (look_angle.x * look_angle.x + look_angle.z * look_angle.z).sqrt();
+        let move_hor_length = movement.horizontal_distance();
+        let gravity = self.effective_gravity(id);
+        let lift_force = mth::square((lean_angle as f64).cos());
+        movement = movement.add(0.0, gravity * (-1.0 + lift_force * 0.75), 0.0);
+        if movement.y < 0.0 && look_hor_length > 0.0 {
+            let convert = movement.y * -0.1 * lift_force;
+            movement = movement.add(look_angle.x * convert / look_hor_length, convert, look_angle.z * convert / look_hor_length);
+        }
+        if lean_angle < 0.0 && look_hor_length > 0.0 {
+            let convert = move_hor_length * -mth::sin(lean_angle as f64) as f64 * 0.04;
+            movement = movement.add(-look_angle.x * convert / look_hor_length, convert * 3.2, -look_angle.z * convert / look_hor_length);
+        }
+        if look_hor_length > 0.0 {
+            movement = movement.add(
+                (look_angle.x / look_hor_length * move_hor_length - movement.x) * 0.1,
+                0.0,
+                (look_angle.z / look_hor_length * move_hor_length - movement.z) * 0.1,
+            );
+        }
+        movement.multiply(0.99f32 as f64, 0.98f32 as f64, 0.99f32 as f64)
+    }
+
+    fn handle_fall_flying_collisions(&mut self, id: EntityId, move_hor_length: f64, new_move_hor_length: f64) {
+        if self.entity(id).horizontal_collision {
+            let diff = move_hor_length - new_move_hor_length;
+            let dmg = (diff * 10.0 - 3.0) as f32;
+            if dmg > 0.0 {
+                let sound = self.get_fall_damage_sound(id, dmg as i32);
+                self.entity_play_sound(id, sound_event(sound), 1.0, 1.0);
+                self.hurt(id, DamageSource::new(damage_types::FLY_INTO_WALL), dmg);
+            }
         }
     }
 
@@ -2348,6 +2457,9 @@ impl ServerLevel {
         let pos = self.entity(id).block_position();
         let state_at = |pos: BlockPos| self.chunks.loaded_chunk(pos.chunk()).map_or(blocks::AIR.default_state(), |chunk| chunk.block_state(pos));
         let state = state_at(pos);
+        if self.entity(id).is_fall_flying() && state.is(&block_tags::CAN_GLIDE_THROUGH) {
+            return false;
+        }
         state.is(&block_tags::CLIMBABLE)
             || state.block().is_instance_of("TrapDoorBlock") && state.get(OPEN) && {
                 let below = state_at(pos.below());
@@ -2368,6 +2480,9 @@ impl ServerLevel {
         }
         let pos = self.entity(id).block_position();
         let state = self.in_block_state(id);
+        if self.entity(id).is_fall_flying() && state.is(&block_tags::CAN_GLIDE_THROUGH) {
+            return false;
+        }
         let climbable = state.is(&block_tags::CLIMBABLE)
             || state.block().is_instance_of("TrapDoorBlock") && state.get(OPEN) && {
                 let below = self.block_state(pos.below());
@@ -2824,6 +2939,26 @@ mod tests {
         assert!(!level.living(id).dead);
         assert!(level.item_by_slot(id, wafer_data::EquipmentSlot::Offhand).is_none());
         assert!(level.has_effect(id, wafer_data::mob_effects::REGENERATION));
+    }
+
+    #[test]
+    fn mobs_glide_only_while_wearing_a_glider() {
+        let mut level = testing::level();
+        testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let gliding = chicken(&mut level, 0);
+        let falling = chicken(&mut level, 0);
+        for id in [gliding, falling] {
+            level.entity_mut(id).set_pos(Vec3::new(0.5, -20.0, 0.5));
+            level.entity_mut(id).set_shared_flag(super::flags::FALL_FLYING, true);
+        }
+        level.set_item_slot(gliding, wafer_data::EquipmentSlot::Chest, crate::world::item::ItemStack::new(wafer_data::items::ELYTRA, 1));
+        for _ in 0..20 {
+            level.tick();
+        }
+        assert!(level.entity(gliding).is_fall_flying());
+        assert!(!level.entity(falling).is_fall_flying());
+        assert_eq!(level.living(gliding).fall_fly_ticks, 20);
+        assert_eq!(level.item_by_slot(gliding, wafer_data::EquipmentSlot::Chest).unwrap().damage_value(), 1);
     }
 
     #[test]

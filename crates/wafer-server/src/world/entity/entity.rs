@@ -1092,6 +1092,9 @@ impl ServerLevel {
         {
             return factor;
         }
+        if self.players.get(&id).is_some_and(|p| p.abilities_flying() || p.entity.is_fall_flying()) {
+            return 1.0;
+        }
         let state = self.block_state(self.entity(id).block_position());
         let here = state.block().info().speed_factor;
         let factor = if !state.is_block(blocks::WATER) && !state.is_block(blocks::BUBBLE_COLUMN) {
@@ -1468,8 +1471,7 @@ impl ServerLevel {
         let dmg = self.calculate_fall_damage(id, effective_fall_distance, damage_modifier);
         if dmg > 0 {
             self.living_mut(id).reset_current_impulse_context();
-            let (small, big) = self.fall_sounds(id);
-            let sound = if dmg > 4 { big } else { small };
+            let sound = self.get_fall_damage_sound(id, dmg);
             self.entity_play_sound(id, sound_event(sound), 1.0, 1.0);
             self.play_block_fall_sound(id);
             self.hurt(id, damage_source, dmg as f32);
@@ -1484,6 +1486,11 @@ impl ServerLevel {
                 self.cause_fall_damage(passenger, fall_distance, damage_modifier, damage_source);
             }
         }
+    }
+
+    pub fn get_fall_damage_sound(&self, id: EntityId, dmg: i32) -> &'static str {
+        let (small, big) = self.fall_sounds(id);
+        if dmg > 4 { big } else { small }
     }
 
     pub fn fall_sounds(&self, id: EntityId) -> (&'static str, &'static str) {

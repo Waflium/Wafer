@@ -290,7 +290,7 @@ impl ServerEntity {
                     let should_send_position = position_changed || self.tick_count % 60 == 0;
                     self.create_move_packet(entity, &path, y_rot, x_rot, should_send_position, should_send_rotation)
                 };
-                if entity.needs_sync || self.track_delta {
+                if entity.needs_sync || self.track_delta || attributes.is_some() && entity.is_fall_flying() {
                     let movement = entity.delta_movement;
                     let diff = movement.distance_to_sqr(self.last_sent_movement);
                     if diff > 1.0e-7 || diff > 0.0 && movement.length_sqr() == 0.0 {
