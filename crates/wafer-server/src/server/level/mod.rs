@@ -1808,12 +1808,13 @@ impl ServerLevel {
             return;
         }
         let original = item.item.count;
-        let stack = item.item.clone();
-        let picked_up_item = stack.get_item();
-        let left = self.player_mut(player).pick_up(stack);
-        if left == original {
+        let mut item_stack = item.item.clone();
+        let picked_up_item = item_stack.get_item();
+        let infinite_materials = self.has_infinite_materials(player);
+        if !self.player_mut(player).inventory.add_stack(&mut item_stack, infinite_materials).0 {
             return;
         }
+        let left = item_stack.count;
         let packet = encode(clientbound::TAKE_ITEM_ENTITY, |p| {
             p.varint(id);
             p.varint(player);

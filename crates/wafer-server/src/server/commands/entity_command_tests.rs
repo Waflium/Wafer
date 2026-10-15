@@ -922,3 +922,22 @@ fn players_pick_up_items_in_entity_section_order() {
     let hotbar: Vec<_> = (0..4).map(|i| inventory.get_item(i).get_item()).collect();
     assert_eq!(hotbar, [wafer_data::items::EMERALD, wafer_data::items::APPLE, wafer_data::items::DIAMOND, wafer_data::items::AIR]);
 }
+
+#[test]
+fn creative_players_take_items_into_a_full_inventory() {
+    let mut server = server();
+    let alice = join(&mut server, "Alice", Vec3::new(8.5, -60.0, 8.5));
+    run(&mut server, "give Alice minecraft:stone 2304");
+    run(&mut server, "item replace entity Alice weapon.offhand with minecraft:stone 64");
+    run(&mut server, "summon minecraft:item 8.5 -60 8.5 {Item:{id:\"minecraft:diamond\",count:3},PickupDelay:0s}");
+    for _ in 0..5 {
+        server.tick();
+    }
+    assert_eq!(run(&mut server, "execute if entity @e[type=item]"), ["Test passed. Count: 1"]);
+    run(&mut server, "gamemode creative Alice");
+    for _ in 0..5 {
+        server.tick();
+    }
+    assert_eq!(run(&mut server, "execute if entity @e[type=item]"), ["Test failed"]);
+    assert_eq!(server.levels[0].player(alice.id).inventory.get_item(0).count, 64);
+}
