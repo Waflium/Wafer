@@ -8,6 +8,7 @@ use crate::world::difficulty_instance::DifficultyInstance;
 use crate::world::effect::MobEffectInstance;
 use crate::world::entity::ai::MobAi;
 use crate::world::entity::ai::goal::avoid_entity_goal::AvoidEntityGoal;
+use crate::world::entity::animal::armadillo::armadillo;
 use crate::world::entity::ai::goal::float_goal::FloatGoal;
 use crate::world::entity::ai::goal::goal::Goal;
 use crate::world::entity::ai::goal::leap_at_target_goal::LeapAtTargetGoal;
@@ -128,7 +129,10 @@ impl Spider {
         let float_goal = FloatGoal::new(&mut ai.navigation);
         let goal_selector = &mut ai.goal_selector;
         goal_selector.add_goal(1, Goal::Float(float_goal));
-        goal_selector.add_goal(2, Goal::AvoidEntity(AvoidEntityGoal::new("minecraft:armadillo", 6.0, 1.0, 1.2)));
+        goal_selector.add_goal(
+            2,
+            Goal::AvoidEntity(AvoidEntityGoal::with_predicate_on_avoid_entity("minecraft:armadillo", 6.0, 1.0, 1.2, |entity, level| !armadillo::is_scared(level.entity(entity)))),
+        );
         goal_selector.add_goal(3, Goal::LeapAtTarget(LeapAtTargetGoal::new(0.4)));
         goal_selector.add_goal(4, Goal::SpiderAttack(SpiderAttackGoal::new()));
         goal_selector.add_goal(5, Goal::WaterAvoidingRandomStroll(WaterAvoidingRandomStrollGoal::new(0.8)));
