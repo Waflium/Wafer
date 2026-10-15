@@ -90,6 +90,7 @@ impl ServerLevel {
             MobKind::Goat(_) => self.goat_get_breed_offspring(id, partner),
             MobKind::Cat(_) => self.cat_get_breed_offspring(id, partner),
             MobKind::Ocelot(_) => Some(Box::new(super::animal::feline::ocelot::Ocelot::create())),
+            MobKind::Armadillo(_) => self.armadillo_get_breed_offspring(id, partner),
             MobKind::Zombie(_)
             | MobKind::Husk(_)
             | MobKind::Drowned(_)

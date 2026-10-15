@@ -499,6 +499,19 @@ pub static CHESTED_HORSE_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static ARMADILLO_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange,
+        ],
+        &[(FollowRange, 16.0), (TemptRange, 10.0), (MaxHealth, 12.0), (MovementSpeed, 0.14)],
+    )
+};
+
 pub static ZOMBIE_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

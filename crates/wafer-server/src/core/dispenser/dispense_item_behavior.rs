@@ -139,10 +139,7 @@ impl DispenseItemBehavior {
             GlassBottle => execute_glass_bottle(level, source, dispensed, success),
             Glowstone => execute_glowstone(level, source, dispensed, success),
             Shears => shears_dispense_item_behavior::execute(level, source, dispensed, success),
-            Brush => {
-                *success = false;
-                dispensed
-            }
+            Brush => execute_brush(level, source, dispensed, success),
             Honeycomb => execute_honeycomb(level, source, dispensed, success),
             Potion => execute_potion(level, source, dispensed),
             Equipment => equipment_dispense_item_behavior::execute(level, source, dispensed),
@@ -150,6 +147,27 @@ impl DispenseItemBehavior {
             Projectile => projectile_dispense_behavior::execute(level, source, dispensed),
         }
     }
+}
+
+fn execute_brush(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack, success: &mut bool) -> ItemStack {
+    let pos = source.pos.relative(source.facing());
+    let armadillos: Vec<_> = level
+        .get_entities(None, &wafer_core::AABB::of_block(pos))
+        .into_iter()
+        .filter(|&entity| level.mob(entity).is_some_and(|mob| matches!(mob.kind, crate::world::entity::mob::MobKind::Armadillo(_))) && !level.is_spectator(entity))
+        .collect();
+    if armadillos.is_empty() {
+        *success = false;
+        return dispensed;
+    }
+    for armadillo in armadillos {
+        if level.armadillo_brush_off_scute(armadillo, None, &dispensed) {
+            dispensed.hurt_and_break(16, level);
+            return dispensed;
+        }
+    }
+    *success = false;
+    dispensed
 }
 
 fn empty_contents(level: &mut ServerLevel, item: Item, pos: wafer_core::BlockPos) -> bool {

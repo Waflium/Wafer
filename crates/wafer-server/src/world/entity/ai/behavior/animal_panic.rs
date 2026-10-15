@@ -27,6 +27,10 @@ impl AnimalPanic {
         AnimalPanic::with_position_getter(speed_multiplier, |_, _| &damage_type_tags::PANIC_CAUSES, |level, mob| land_random_pos::get_pos(level, mob, PANIC_DISTANCE_HORIZONTAL, PANIC_DISTANCE_VERTICAL))
     }
 
+    pub fn with_panic_causing_damage_types(speed_multiplier: f32, panic_causing_damage_types: fn(&ServerLevel, EntityId) -> &'static Tag) -> AnimalPanic {
+        AnimalPanic::with_position_getter(speed_multiplier, panic_causing_damage_types, |level, mob| land_random_pos::get_pos(level, mob, PANIC_DISTANCE_HORIZONTAL, PANIC_DISTANCE_VERTICAL))
+    }
+
     pub fn with_position_getter(
         speed_multiplier: f32,
         panic_causing_damage_types: fn(&ServerLevel, EntityId) -> &'static Tag,

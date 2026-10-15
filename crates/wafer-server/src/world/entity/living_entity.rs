@@ -984,6 +984,8 @@ impl ServerLevel {
             self.player_actually_hurt(id, source, damage);
         } else if self.is_wolf(id) {
             self.wolf_actually_hurt(id, source, damage);
+        } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::Armadillo(_))) {
+            self.armadillo_actually_hurt(id, source, damage);
         } else if self.mob(id).is_some_and(|mob| mob.animal().is_some()) {
             self.animal_actually_hurt(id, source, damage);
         } else {
@@ -1530,6 +1532,29 @@ impl ServerLevel {
         )
     }
 
+    pub fn drop_from_entity_interact_loot_table(
+        &mut self,
+        id: EntityId,
+        key: &str,
+        interacting_entity: Option<EntityId>,
+        tool: &ItemStack,
+        mut consumer: impl FnMut(&mut ServerLevel, ItemStack),
+    ) -> bool {
+        let loot_table = LootTable::get(key);
+        let mut params = LootParams::new(self);
+        params.target_entity = Some(id);
+        params.interacting_entity = interacting_entity;
+        params.tool = Some(tool);
+        let drops = loot_table.get_random_items(params);
+        if drops.is_empty() {
+            return false;
+        }
+        for stack in drops {
+            consumer(self, stack);
+        }
+        true
+    }
+
     pub fn drop_from_shearing_loot_table(&mut self, id: EntityId, key: &str, tool: &ItemStack, mut consumer: impl FnMut(&mut ServerLevel, ItemStack)) {
         let position = self.entity(id).position();
         let loot_table = LootTable::get(key);
@@ -1587,7 +1612,7 @@ impl ServerLevel {
             return;
         }
         if self.is_mob(id) {
-            self.body_rotation_control_tick(id);
+            self.mob_tick_head_turn(id);
         }
         let living = self.living_mut(id);
         while living.y_body_rot - living.y_body_rot_o < -180.0 {

@@ -2267,6 +2267,9 @@ impl ServerLevel {
             if self.is_wolf(id) {
                 return self.wolf_hurt_server(id, source, damage);
             }
+            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Armadillo(_))) {
+                return self.armadillo_hurt_server(id, source, damage);
+            }
             if self.mob(id).and_then(super::mob::Mob::raider).is_some() {
                 return self.raider_hurt_server(id, source, damage);
             }
@@ -2505,6 +2508,7 @@ impl ServerLevel {
                     super::mob::MobKind::Pig(_) => "Pig",
                     super::mob::MobKind::Sheep(_) => "Sheep",
                     super::mob::MobKind::Goat(_) => "Goat",
+                    super::mob::MobKind::Armadillo(_) => "Armadillo",
                     super::mob::MobKind::Zombie(_) => "Zombie",
                     super::mob::MobKind::Husk(_) => "Husk",
                     super::mob::MobKind::Creeper(_) => "Creeper",

@@ -2,7 +2,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use wafer_core::random::RandomSource;
 
-use super::sensor_type::SensorType;
+use super::mob_sensor::MobSensor;
+use super::sensor_type::{self, SensorType};
 use super::{adult_sensor, hurt_by_sensor, nearest_item_sensor, nearest_living_entity_sensor, player_sensor, tempting_sensor};
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
@@ -78,6 +79,7 @@ impl Sensor {
             SensorType::NearestLivingEntities => nearest_living_entity_sensor::do_tick(level, body),
             SensorType::NearestPlayers => player_sensor::do_tick(level, body),
             SensorType::HurtBy => hurt_by_sensor::do_tick(level, body),
+            SensorType::ArmadilloScareDetected => sensor_type::ARMADILLO_SCARE_DETECTED.do_tick(level, body),
             SensorType::NearestAdult => adult_sensor::do_tick(level, body),
             SensorType::FoodTemptations => tempting_sensor::do_tick(level, body, tempting_sensor::for_animal),
         }
@@ -89,6 +91,7 @@ impl Sensor {
             SensorType::NearestLivingEntities => nearest_living_entity_sensor::requires(),
             SensorType::NearestPlayers => player_sensor::requires(),
             SensorType::HurtBy => hurt_by_sensor::requires(),
+            SensorType::ArmadilloScareDetected => MobSensor::requires(),
             SensorType::NearestAdult => adult_sensor::requires(),
             SensorType::FoodTemptations => tempting_sensor::requires(),
         }

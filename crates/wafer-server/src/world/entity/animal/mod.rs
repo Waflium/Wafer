@@ -16,6 +16,7 @@ use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::{InteractionHand, InteractionResult};
 
 pub mod ageable_water_creature;
+pub mod armadillo;
 pub mod chicken;
 pub mod cow;
 pub mod goat;
@@ -83,6 +84,7 @@ impl ServerLevel {
             MobKind::Sheep(_) => sheep::sheep::is_food(item_stack),
             MobKind::Wolf(_) => wolf::wolf::is_food(item_stack),
             MobKind::Goat(_) => goat::goat::is_food(item_stack),
+            MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),
             MobKind::Zombie(_)
             | MobKind::Husk(_)
             | MobKind::Drowned(_)
@@ -115,6 +117,8 @@ impl ServerLevel {
             self.goat_play_eating_sound(id);
         } else if let MobKind::Cat(_) = mob.kind {
             self.cat_play_eating_sound(id);
+        } else if let MobKind::Armadillo(_) = mob.kind {
+            self.armadillo_play_eating_sound(id);
         }
     }
 
@@ -139,6 +143,13 @@ impl ServerLevel {
     }
 
     pub fn can_fall_in_love(&self, id: EntityId) -> bool {
+        match self.mob(id).expect("an animal").kind {
+            MobKind::Armadillo(_) => self.armadillo_can_fall_in_love(id),
+            _ => self.animal_can_fall_in_love(id),
+        }
+    }
+
+    pub fn animal_can_fall_in_love(&self, id: EntityId) -> bool {
         self.mob(id).expect("an animal").animal().expect("an animal").in_love <= 0
     }
 

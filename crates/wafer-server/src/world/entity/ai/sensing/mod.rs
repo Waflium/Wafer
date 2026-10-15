@@ -1,5 +1,6 @@
 pub mod adult_sensor;
 pub mod hurt_by_sensor;
+pub mod mob_sensor;
 pub mod nearest_item_sensor;
 pub mod nearest_living_entity_sensor;
 pub mod player_sensor;
