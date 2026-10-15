@@ -4,7 +4,9 @@ use wafer_data::{BlockState, block_tags, blocks};
 
 use super::node::Node;
 use super::pathfinding_context::PathfindingContext;
+use super::swim_node_evaluator::SwimNodeEvaluator;
 use super::target::Target;
+use super::walk_node_evaluator::WalkNodeEvaluator;
 use crate::world::entity::EntityId;
 use crate::world::level::block::campfire_block::is_lit_campfire;
 
@@ -64,6 +66,62 @@ impl NodeEvaluator {
     pub fn get_target_node_at(&mut self, x: f64, y: f64, z: f64) -> Target {
         let node = self.get_node(mth::floor(x), mth::floor(y), mth::floor(z));
         Target::new(&self.nodes[node as usize])
+    }
+}
+
+pub enum NodeEvaluatorKind {
+    Walk(WalkNodeEvaluator),
+    Swim(SwimNodeEvaluator),
+}
+
+impl NodeEvaluatorKind {
+    pub fn node_evaluator(&self) -> &NodeEvaluator {
+        match self {
+            NodeEvaluatorKind::Walk(walk) => &walk.node_evaluator,
+            NodeEvaluatorKind::Swim(swim) => &swim.node_evaluator,
+        }
+    }
+
+    pub fn node_evaluator_mut(&mut self) -> &mut NodeEvaluator {
+        match self {
+            NodeEvaluatorKind::Walk(walk) => &mut walk.node_evaluator,
+            NodeEvaluatorKind::Swim(swim) => &mut swim.node_evaluator,
+        }
+    }
+
+    pub fn prepare(&mut self, context: &PathfindingContext, mob: EntityId) {
+        match self {
+            NodeEvaluatorKind::Walk(walk) => walk.prepare(context, mob),
+            NodeEvaluatorKind::Swim(swim) => swim.prepare(context, mob),
+        }
+    }
+
+    pub fn done(&mut self, context: &PathfindingContext) {
+        match self {
+            NodeEvaluatorKind::Walk(walk) => walk.done(context),
+            NodeEvaluatorKind::Swim(swim) => swim.done(),
+        }
+    }
+
+    pub fn get_start(&mut self, context: &PathfindingContext) -> Option<u32> {
+        match self {
+            NodeEvaluatorKind::Walk(walk) => walk.get_start(context),
+            NodeEvaluatorKind::Swim(swim) => swim.get_start(context),
+        }
+    }
+
+    pub fn get_target(&mut self, x: f64, y: f64, z: f64) -> Target {
+        match self {
+            NodeEvaluatorKind::Walk(walk) => walk.get_target(x, y, z),
+            NodeEvaluatorKind::Swim(swim) => swim.get_target(x, y, z),
+        }
+    }
+
+    pub fn get_neighbors(&mut self, context: &PathfindingContext, neighbors: &mut [u32; 32], pos: u32) -> usize {
+        match self {
+            NodeEvaluatorKind::Walk(walk) => walk.get_neighbors(context, neighbors, pos),
+            NodeEvaluatorKind::Swim(swim) => swim.get_neighbors(context, neighbors, pos),
+        }
     }
 }
 

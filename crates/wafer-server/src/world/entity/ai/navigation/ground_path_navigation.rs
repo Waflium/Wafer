@@ -7,12 +7,13 @@ use crate::world::entity::EntityId;
 use crate::world::level::chunk::LevelChunk;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path::Path;
+use crate::world::level::pathfinder::node_evaluator::NodeEvaluatorKind;
 use crate::world::level::pathfinder::path_finder::PathFinder;
 use crate::world::level::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 
 impl PathNavigation {
     pub fn ground_path_navigation_create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {
-        PathFinder::new(WalkNodeEvaluator::default(), max_visited_nodes)
+        PathFinder::new(NodeEvaluatorKind::Walk(WalkNodeEvaluator::default()), max_visited_nodes)
     }
 
     pub fn ground_path_navigation_can_update_path(&self, level: &ServerLevel, mob: EntityId) -> bool {
@@ -113,6 +114,6 @@ impl PathNavigation {
     }
 
     pub fn set_can_walk_over_fences(&mut self, can_walk_over_fences: bool) {
-        self.path_finder.node_evaluator.node_evaluator.can_walk_over_fences = can_walk_over_fences;
+        self.path_finder.node_evaluator.node_evaluator_mut().can_walk_over_fences = can_walk_over_fences;
     }
 }

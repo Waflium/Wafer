@@ -7,5 +7,6 @@ pub mod path_finder;
 pub mod path_type;
 pub mod path_type_cache;
 pub mod pathfinding_context;
+pub mod swim_node_evaluator;
 pub mod target;
 pub mod walk_node_evaluator;

@@ -16,6 +16,7 @@ pub enum PathNavigationKind {
     #[default]
     Ground,
     Amphibious,
+    WaterBound,
 }
 
 pub struct PathNavigation {
@@ -41,6 +42,7 @@ pub struct PathNavigation {
     pub avoid_sun: bool,
     pub can_path_to_targets_below_surface: bool,
     pub wall_climber_navigation: Option<WallClimberNavigation>,
+    pub allow_breaching: bool,
 }
 
 impl Default for PathNavigation {
@@ -68,6 +70,7 @@ impl Default for PathNavigation {
             avoid_sun: false,
             can_path_to_targets_below_surface: false,
             wall_climber_navigation: None,
+            allow_breaching: false,
         }
     }
 }
@@ -87,6 +90,7 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_create_path_finder(max_visited_nodes),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_create_path_finder(max_visited_nodes),
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_create_path_finder(max_visited_nodes),
         }
     }
 
@@ -94,6 +98,7 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_can_update_path(level, mob),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_update_path(),
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_update_path(level, mob),
         }
     }
 
@@ -101,13 +106,14 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_get_temp_mob_pos(level, mob),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_get_temp_mob_pos(level, mob),
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_temp_mob_pos(level, mob),
         }
     }
 
     pub fn trim_path(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_trim_path(level, mob),
-            PathNavigationKind::Amphibious => self.path_navigation_trim_path(level),
+            PathNavigationKind::Amphibious | PathNavigationKind::WaterBound => self.path_navigation_trim_path(level),
         }
     }
 
@@ -115,6 +121,7 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_can_navigate_ground(),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_navigate_ground(),
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_navigate_ground(),
         }
     }
 
@@ -211,7 +218,7 @@ impl PathNavigation {
     pub fn create_path(&mut self, level: &ServerLevel, mob: EntityId, pos: BlockPos, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_create_path(level, mob, pos, reach_range)
-        } else if self.kind == PathNavigationKind::Amphibious {
+        } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::WaterBound) {
             self.path_navigation_create_path(level, mob, pos, reach_range)
         } else {
             self.ground_path_navigation_create_path(level, mob, pos, reach_range)
@@ -221,7 +228,7 @@ impl PathNavigation {
     pub fn create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_create_path_to_entity(level, mob, target, reach_range)
-        } else if self.kind == PathNavigationKind::Amphibious {
+        } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::WaterBound) {
             self.path_navigation_create_path_to_entity(level, mob, target, reach_range)
         } else {
             self.ground_path_navigation_create_path_to_entity(level, mob, target, reach_range)
@@ -309,6 +316,7 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.path_navigation_get_ground_y(level, target),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_get_ground_y(target),
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_ground_y(target),
         }
     }
 
@@ -448,6 +456,7 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.path_navigation_can_move_directly(start_pos, stop_pos),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_move_directly(level, mob, start_pos, stop_pos),
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_move_directly(level, mob, start_pos, stop_pos),
         }
     }
 
@@ -463,6 +472,7 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.path_navigation_is_stable_destination(level, pos),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_is_stable_destination(level, pos),
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_is_stable_destination(level, pos),
         }
     }
 
@@ -474,15 +484,16 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.path_navigation_set_can_float(can_float),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_set_can_float(can_float),
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_set_can_float(can_float),
         }
     }
 
     fn path_navigation_set_can_float(&mut self, can_float: bool) {
-        self.path_finder.node_evaluator.node_evaluator.can_float = can_float;
+        self.path_finder.node_evaluator.node_evaluator_mut().can_float = can_float;
     }
 
     pub fn can_float(&self) -> bool {
-        self.path_finder.node_evaluator.node_evaluator.can_float
+        self.path_finder.node_evaluator.node_evaluator().can_float
     }
 
     pub fn should_recompute_path(&self, level: &ServerLevel, mob: EntityId, pos: BlockPos) -> bool {
@@ -505,6 +516,13 @@ impl PathNavigation {
     }
 
     pub fn get_max_vertical_distance_to_waypoint(&self) -> f32 {
+        match self.kind {
+            PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_max_vertical_distance_to_waypoint(),
+            PathNavigationKind::Ground | PathNavigationKind::Amphibious => self.path_navigation_get_max_vertical_distance_to_waypoint(),
+        }
+    }
+
+    fn path_navigation_get_max_vertical_distance_to_waypoint(&self) -> f32 {
         1.0
     }
 
@@ -513,7 +531,7 @@ impl PathNavigation {
     }
 
     pub fn set_can_open_doors(&mut self, can_open_doors: bool) {
-        self.path_finder.node_evaluator.node_evaluator.can_open_doors = can_open_doors;
+        self.path_finder.node_evaluator.node_evaluator_mut().can_open_doors = can_open_doors;
     }
 }
 

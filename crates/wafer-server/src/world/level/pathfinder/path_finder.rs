@@ -2,6 +2,7 @@ use wafer_core::BlockPos;
 
 use super::binary_heap::BinaryHeap;
 use super::node::Node;
+use super::node_evaluator::NodeEvaluatorKind;
 use super::path::Path;
 use super::pathfinding_context::PathfindingContext;
 use super::target::Target;
@@ -12,18 +13,18 @@ use crate::world::level::path_navigation_region::PathNavigationRegion;
 pub struct PathFinder {
     neighbors: [u32; 32],
     max_visited_nodes: i32,
-    pub node_evaluator: WalkNodeEvaluator,
+    pub node_evaluator: NodeEvaluatorKind,
     open_set: BinaryHeap,
 }
 
 impl Default for PathFinder {
     fn default() -> PathFinder {
-        PathFinder::new(WalkNodeEvaluator::default(), 0)
+        PathFinder::new(NodeEvaluatorKind::Walk(WalkNodeEvaluator::default()), 0)
     }
 }
 
 impl PathFinder {
-    pub fn new(node_evaluator: WalkNodeEvaluator, max_visited_nodes: i32) -> PathFinder {
+    pub fn new(node_evaluator: NodeEvaluatorKind, max_visited_nodes: i32) -> PathFinder {
         PathFinder { neighbors: [0; 32], max_visited_nodes, node_evaluator, open_set: BinaryHeap::default() }
     }
 
@@ -48,7 +49,7 @@ impl PathFinder {
 
     fn find_path_from(&mut self, context: &PathfindingContext, from: u32, targets: &mut [(Target, BlockPos)], max_path_length: f32, reach_range: i32, max_visited_nodes_multiplier: f32) -> Option<Path> {
         let h = self.get_best_h(from, targets);
-        let nodes = &mut self.node_evaluator.node_evaluator.nodes;
+        let nodes = &mut self.node_evaluator.node_evaluator_mut().nodes;
         let from_node = &mut nodes[from as usize];
         from_node.g = 0.0;
         from_node.h = h;
@@ -63,9 +64,9 @@ impl PathFinder {
             if count >= max_visited_nodes_adjusted {
                 break;
             }
-            let current = self.open_set.pop(&mut self.node_evaluator.node_evaluator.nodes);
+            let current = self.open_set.pop(&mut self.node_evaluator.node_evaluator_mut().nodes);
             let current_node = {
-                let node = &mut self.node_evaluator.node_evaluator.nodes[current as usize];
+                let node = &mut self.node_evaluator.node_evaluator_mut().nodes[current as usize];
                 node.closed = true;
                 *node
             };
@@ -78,20 +79,20 @@ impl PathFinder {
             if reached_targets {
                 break;
             }
-            let from_node = self.node_evaluator.node_evaluator.nodes[from as usize];
+            let from_node = self.node_evaluator.node_evaluator_mut().nodes[from as usize];
             if !(current_node.distance_to(&from_node) >= max_path_length) {
                 let mut neighbors = self.neighbors;
                 let neighbor_count = self.node_evaluator.get_neighbors(context, &mut neighbors, current);
                 self.neighbors = neighbors;
                 for &neighbor in &neighbors[..neighbor_count] {
-                    let neighbor_node = self.node_evaluator.node_evaluator.nodes[neighbor as usize];
+                    let neighbor_node = self.node_evaluator.node_evaluator_mut().nodes[neighbor as usize];
                     let distance = current_node.distance_to(&neighbor_node);
                     let walked_distance = current_node.walked_distance + distance;
-                    self.node_evaluator.node_evaluator.nodes[neighbor as usize].walked_distance = walked_distance;
+                    self.node_evaluator.node_evaluator_mut().nodes[neighbor as usize].walked_distance = walked_distance;
                     let tentative_g_score = current_node.g + distance + neighbor_node.cost_malus;
                     if walked_distance < max_path_length && (!neighbor_node.in_open_set() || tentative_g_score < neighbor_node.g) {
                         let h = self.get_best_h(neighbor, targets) * 1.5;
-                        let nodes = &mut self.node_evaluator.node_evaluator.nodes;
+                        let nodes = &mut self.node_evaluator.node_evaluator_mut().nodes;
                         let n = &mut nodes[neighbor as usize];
                         n.came_from = Some(current);
                         n.g = tentative_g_score;
@@ -107,7 +108,7 @@ impl PathFinder {
                 }
             }
         }
-        let nodes = &self.node_evaluator.node_evaluator.nodes;
+        let nodes = &self.node_evaluator.node_evaluator().nodes;
         let mut best: Option<Path> = None;
         if reached_targets {
             for (target, pos) in targets.iter().filter(|(target, _)| target.is_reached()) {
@@ -131,7 +132,7 @@ impl PathFinder {
     }
 
     fn get_best_h(&self, from: u32, targets: &mut [(Target, BlockPos)]) -> f32 {
-        let from_node = &self.node_evaluator.node_evaluator.nodes[from as usize];
+        let from_node = &self.node_evaluator.node_evaluator().nodes[from as usize];
         let mut best_h = f32::MAX;
         for (target, _) in targets.iter_mut() {
             let h = from_node.distance_to(&target.node);

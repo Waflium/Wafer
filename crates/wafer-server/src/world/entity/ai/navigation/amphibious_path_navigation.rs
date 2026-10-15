@@ -4,12 +4,13 @@ use super::path_navigation::{PathNavigation, is_clear_for_movement_between};
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
+use crate::world::level::pathfinder::node_evaluator::NodeEvaluatorKind;
 use crate::world::level::pathfinder::path_finder::PathFinder;
 use crate::world::level::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 
 impl PathNavigation {
     pub fn amphibious_path_navigation_create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {
-        PathFinder::new(WalkNodeEvaluator::amphibious(false), max_visited_nodes)
+        PathFinder::new(NodeEvaluatorKind::Walk(WalkNodeEvaluator::amphibious(false)), max_visited_nodes)
     }
 
     pub fn amphibious_path_navigation_can_update_path(&self) -> bool {
