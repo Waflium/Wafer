@@ -213,20 +213,11 @@ impl EntitySelector {
         let candidates: Vec<EntityId> = match aabb {
             None => level.all_entities().filter(of_type).collect(),
             Some(bb) => {
-                let section = |v: f64| mth::floor(v) >> 4;
-                let (x0, y0, z0) = (section(bb.min_x - 2.0), section(bb.min_y - 4.0), section(bb.min_z - 2.0));
-                let (x1, y1, z1) = (section(bb.max_x + 2.0), section(bb.max_y), section(bb.max_z + 2.0));
-                let mut in_sections: Vec<(i32, u32, u32, EntityId)> = level
-                    .all_entities()
-                    .filter_map(|id| {
-                        let block = level.entity(id).block_position();
-                        let (x, y, z) = (block.x >> 4, block.y >> 4, block.z >> 4);
-                        let inside = (x0..=x1).contains(&x) && (y0..=y1).contains(&y) && (z0..=z1).contains(&z);
-                        inside.then_some((x, (z & 0x3F_FFFF) as u32, (y & 0xF_FFFF) as u32, id))
-                    })
-                    .collect();
-                in_sections.sort_by_key(|&(x, z, y, _)| (x, z, y));
-                in_sections.into_iter().map(|e| e.3).filter(|id| of_type(id) && level.entity(*id).bounding_box().intersects(&bb)).collect()
+                let mut found = Vec::new();
+                level.entity_manager.section_storage.for_each_accessible_non_empty_section(&bb, |section| {
+                    found.extend(section.entities().iter().copied().filter(|id| of_type(id) && level.entity(*id).bounding_box().intersects(&bb)));
+                });
+                found
             }
         };
         for id in candidates {

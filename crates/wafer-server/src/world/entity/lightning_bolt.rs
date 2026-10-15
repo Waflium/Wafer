@@ -75,10 +75,7 @@ impl ServerLevel {
                 let pos = bolt.entity.position();
                 let area = AABB::new(pos.x - 15.0, pos.y - 15.0, pos.z - 15.0, pos.x + 15.0, pos.y + 6.0 + 15.0, pos.z + 15.0);
                 let hit_entities = bolt.hit_entities.clone();
-                let viewers: Vec<EntityId> = self
-                    .all_entities()
-                    .filter(|&e| e != id && self.is_alive(e) && !hit_entities.contains(&e) && self.entity(e).bounding_box().intersects(&area))
-                    .collect();
+                let viewers = self.get_entities_matching(Some(id), &area, |level, e| level.is_alive(e) && !hit_entities.contains(&e));
                 let players: Vec<EntityId> = self.players.values().filter(|p| (p.entity.position().distance_to_sqr(pos) as f32).sqrt() < 256.0).map(|p| p.entity.id).collect();
                 for player in players {
                     crate::advancements::triggers::criteria_triggers::LIGHTNING_STRIKE.trigger(self, player, id, &viewers);
@@ -95,10 +92,7 @@ impl ServerLevel {
         if bolt.life >= 0 && !bolt.visual_only {
             let pos = bolt.entity.position();
             let area = AABB::new(pos.x - 3.0, pos.y - 3.0, pos.z - 3.0, pos.x + 3.0, pos.y + 6.0 + 3.0, pos.z + 3.0);
-            let hit: Vec<EntityId> = self
-                .all_entities()
-                .filter(|&e| e != id && self.is_alive(e) && self.entity(e).bounding_box().intersects(&area))
-                .collect();
+            let hit = self.get_entities_matching(Some(id), &area, |level, e| level.is_alive(e));
             for &entity in &hit {
                 self.thunder_hit(entity, id);
             }

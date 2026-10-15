@@ -1156,6 +1156,10 @@ impl ServerLevel {
     }
 
     pub fn get_entities(&self, except: Option<EntityId>, area: &AABB) -> Vec<EntityId> {
+        self.get_entities_matching(except, area, |level, id| !level.is_spectator(id))
+    }
+
+    pub fn get_entities_matching(&self, except: Option<EntityId>, area: &AABB, selector: impl Fn(&ServerLevel, EntityId) -> bool) -> Vec<EntityId> {
         let mut found = Vec::new();
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
             for &id in section.entities() {
@@ -1163,7 +1167,7 @@ impl ServerLevel {
                     && let Some(entity) = self.entity_ref(id)
                     && !entity.is_removed()
                     && entity.bounding_box().intersects(area)
-                    && !self.is_spectator(id)
+                    && selector(self, id)
                 {
                     found.push(id);
                 }

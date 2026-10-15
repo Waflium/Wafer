@@ -103,8 +103,7 @@ impl ServerLevel {
             offset_shape.max(Axis::Y) + y,
             offset_shape.max(Axis::Z) + z,
         );
-        let colliding: Vec<_> = self.all_entities().filter(|&id| self.entity(id).bounding_box().intersects(&bounds)).collect();
-        for id in colliding {
+        for id in self.get_entities(None, &bounds) {
             let moving = self.entity(id).bounding_box().move_vec(Vec3::new(0.0, 1.0, 0.0));
             let offset = offset_shape.collide([0.0; 3], [x, y, z], Axis::Y, &moving, -1.0);
             let dy = 1.0 + offset;

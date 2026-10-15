@@ -882,3 +882,43 @@ fn teleport_between_dimensions() {
     assert_eq!(server.level_of(alice.id), Some(0));
     assert_eq!(server.player_list, [alice.id]);
 }
+
+fn summon_items(server: &mut Server, pickup_delay: i32) {
+    for (x, item, motion) in [(15.9, "diamond", 0.6), (17.5, "emerald", 0.0), (18.5, "apple", 0.0), (8.5, "stick", 0.0)] {
+        run(server, &format!("summon minecraft:item {x} -60 8.5 {{Item:{{id:\"minecraft:{item}\",count:1}},PickupDelay:{pickup_delay}s,Motion:[{motion},0.0,0.0]}}"));
+    }
+}
+
+fn names(lines: Vec<String>) -> Vec<String> {
+    lines.into_iter().map(|line| line.split(' ').next().unwrap().to_string()).collect()
+}
+
+#[test]
+fn area_selectors_follow_entity_section_order() {
+    let mut server = server();
+    join(&mut server, "Alice", Vec3::new(8.5, -60.0, 30.5));
+    summon_items(&mut server, 32767);
+    for _ in 0..40 {
+        server.tick();
+    }
+    assert_eq!(names(run(&mut server, "execute as @e[type=item] run data get entity @s Item.id")), ["Diamond", "Emerald", "Apple", "Stick"]);
+    assert_eq!(names(run(&mut server, "execute positioned 16 -60 8 as @e[type=item,distance=..10] run data get entity @s Item.id")), ["Stick", "Emerald", "Apple", "Diamond"]);
+    assert_eq!(names(run(&mut server, "execute positioned 16 -60 8 as @e[type=item,dx=4,dy=2,dz=2] run data get entity @s Item.id")), ["Emerald", "Apple", "Diamond"]);
+}
+
+#[test]
+fn players_pick_up_items_in_entity_section_order() {
+    let mut server = server();
+    let alice = join(&mut server, "Alice", Vec3::new(8.5, -60.0, 30.5));
+    summon_items(&mut server, 40);
+    for _ in 0..20 {
+        server.tick();
+    }
+    run(&mut server, "tp Alice 17.5 -60 8.5");
+    for _ in 0..30 {
+        server.tick();
+    }
+    let inventory = &server.levels[0].player(alice.id).inventory;
+    let hotbar: Vec<_> = (0..4).map(|i| inventory.get_item(i).get_item()).collect();
+    assert_eq!(hotbar, [wafer_data::items::EMERALD, wafer_data::items::APPLE, wafer_data::items::DIAMOND, wafer_data::items::AIR]);
+}
