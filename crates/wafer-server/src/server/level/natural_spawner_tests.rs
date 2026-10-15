@@ -55,7 +55,7 @@ fn creatures_spawn_every_400_ticks_away_from_the_player() {
     assert!(!mobs.is_empty() && counted_by_the_local_cap <= 13, "{mobs:?}");
     for (name, pos) in &mobs {
         assert_eq!(EntityType::by_name(name).unwrap().get_category(), MobCategory::Creature);
-        assert!(["minecraft:chicken", "minecraft:cow", "minecraft:pig", "minecraft:sheep"].contains(name), "{name}");
+        assert!(["minecraft:chicken", "minecraft:cow", "minecraft:pig", "minecraft:sheep", "minecraft:horse", "minecraft:donkey"].contains(name), "{name}");
         let (dx, dz) = (pos.x - 8.5, pos.z - 8.5);
         assert!(dx * dx + (pos.y + 60.0) * (pos.y + 60.0) + dz * dz > 24.0 * 24.0, "{name} at {pos:?}");
         assert_eq!(pos.y, -60.0);
