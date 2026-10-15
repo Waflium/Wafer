@@ -52,6 +52,11 @@ use super::target::defend_village_target_goal::DefendVillageTargetGoal;
 use super::follow_flock_leader_goal::FollowFlockLeaderGoal;
 use crate::world::entity::animal::fish::abstract_fish::FishSwimGoal;
 use crate::world::entity::animal::fish::pufferfish::PufferfishPuffGoal;
+use super::cat_lie_on_block_goal::CatLieOnBlockGoal;
+use super::cat_sit_on_block_goal::CatSitOnBlockGoal;
+use super::ocelot_attack_goal::OcelotAttackGoal;
+use crate::world::entity::animal::feline::cat::{CatAvoidEntityGoal, CatRelaxOnOwnerGoal, CatTemptGoal};
+use crate::world::entity::animal::feline::ocelot::{OcelotAvoidEntityGoal, OcelotTemptGoal};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -136,6 +141,14 @@ pub enum Goal {
     FishSwim(FishSwimGoal),
     FollowFlockLeader(FollowFlockLeaderGoal),
     PufferfishPuff(PufferfishPuffGoal),
+    CatAvoidEntity(CatAvoidEntityGoal),
+    CatRelaxOnOwner(CatRelaxOnOwnerGoal),
+    CatTempt(CatTemptGoal),
+    CatLieOnBlock(CatLieOnBlockGoal),
+    CatSitOnBlock(CatSitOnBlockGoal),
+    OcelotAttack(OcelotAttackGoal),
+    OcelotAvoidEntity(OcelotAvoidEntityGoal),
+    OcelotTempt(OcelotTemptGoal),
 }
 
 impl Goal {
@@ -207,6 +220,14 @@ impl Goal {
             Goal::FishSwim(goal) => goal.can_use(level, mob),
             Goal::FollowFlockLeader(goal) => goal.can_use(level, mob),
             Goal::PufferfishPuff(goal) => goal.can_use(level, mob),
+            Goal::CatAvoidEntity(goal) => goal.can_use(level, mob),
+            Goal::CatRelaxOnOwner(goal) => goal.can_use(level, mob),
+            Goal::CatTempt(goal) => goal.can_use(level, mob),
+            Goal::CatLieOnBlock(goal) => goal.can_use(level, mob),
+            Goal::CatSitOnBlock(goal) => goal.can_use(level, mob),
+            Goal::OcelotAttack(goal) => goal.can_use(level, mob),
+            Goal::OcelotAvoidEntity(goal) => goal.can_use(level, mob),
+            Goal::OcelotTempt(goal) => goal.tempt_goal.can_use(level, mob),
         }
     }
 
@@ -278,6 +299,14 @@ impl Goal {
             Goal::FishSwim(goal) => goal.random_swimming_goal.random_stroll_goal.can_continue_to_use(level, mob),
             Goal::FollowFlockLeader(goal) => goal.can_continue_to_use(level, mob),
             Goal::PufferfishPuff(goal) => goal.can_use(level, mob),
+            Goal::CatAvoidEntity(goal) => goal.can_continue_to_use(level, mob),
+            Goal::CatRelaxOnOwner(goal) => goal.can_continue_to_use(level, mob),
+            Goal::CatTempt(goal) => goal.can_continue_to_use(level, mob),
+            Goal::CatLieOnBlock(goal) => goal.can_continue_to_use(level),
+            Goal::CatSitOnBlock(goal) => goal.can_continue_to_use(level),
+            Goal::OcelotAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::OcelotAvoidEntity(goal) => goal.can_continue_to_use(level, mob),
+            Goal::OcelotTempt(goal) => goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -347,6 +376,14 @@ impl Goal {
             Goal::FishSwim(goal) => goal.random_swimming_goal.random_stroll_goal.start(level, mob),
             Goal::FollowFlockLeader(goal) => goal.start(),
             Goal::PufferfishPuff(goal) => goal.start(level, mob),
+            Goal::CatAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
+            Goal::CatRelaxOnOwner(goal) => goal.start(level, mob),
+            Goal::CatTempt(goal) => goal.tempt_goal.start(level),
+            Goal::CatLieOnBlock(goal) => goal.start(level, mob),
+            Goal::CatSitOnBlock(goal) => goal.start(level, mob),
+            Goal::OcelotAttack(_) => {}
+            Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
+            Goal::OcelotTempt(goal) => goal.tempt_goal.start(level),
         }
     }
 
@@ -407,6 +444,14 @@ impl Goal {
             Goal::FishSwim(goal) => goal.random_swimming_goal.random_stroll_goal.stop(level, mob),
             Goal::FollowFlockLeader(goal) => goal.stop(level, mob),
             Goal::PufferfishPuff(goal) => goal.stop(level, mob),
+            Goal::CatAvoidEntity(goal) => goal.avoid_entity_goal.stop(),
+            Goal::CatRelaxOnOwner(goal) => goal.stop(level, mob),
+            Goal::CatTempt(goal) => goal.tempt_goal.stop(level, mob),
+            Goal::CatLieOnBlock(goal) => goal.stop(level, mob),
+            Goal::CatSitOnBlock(goal) => goal.stop(level, mob),
+            Goal::OcelotAttack(goal) => goal.stop(level, mob),
+            Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.stop(),
+            Goal::OcelotTempt(goal) => goal.tempt_goal.stop(level, mob),
         }
     }
 
@@ -431,10 +476,15 @@ impl Goal {
                 | Goal::CubeMobAttack(_)
                 | Goal::CubeMobFloat(_)
                 | Goal::SquidFlee(_)
+                | Goal::CatLieOnBlock(_)
+                | Goal::CatSitOnBlock(_)
+                | Goal::OcelotAttack(_)
         )
     }
 
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        let requires_update_every_tick = self.requires_update_every_tick();
+        let adjusted_tick_delay = |ticks: i32| if requires_update_every_tick { ticks } else { reduced_tick_delay(ticks) };
         match self {
             Goal::Float(goal) => goal.tick(level, mob),
             Goal::Panic(_) | Goal::WaterAvoidingRandomStroll(_) | Goal::RestrictSun(_) | Goal::FleeSun(_) | Goal::NearestAttackableTarget(_) | Goal::HurtByTarget(_) => {}
@@ -459,6 +509,14 @@ impl Goal {
             Goal::SquidFlee(goal) => goal.tick(level, mob),
             Goal::MoveTowardsTarget(_) | Goal::MoveBackToVillage(_) | Goal::GolemRandomStrollInVillage(_) | Goal::DefendVillageTarget(_) => {}
             Goal::OfferFlower(goal) => goal.tick(level, mob),
+            Goal::CatAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
+            Goal::CatRelaxOnOwner(goal) => goal.tick(level, mob, adjusted_tick_delay(16)),
+            Goal::CatTempt(goal) => goal.tick(level, mob, adjusted_tick_delay(600), adjusted_tick_delay(500)),
+            Goal::CatLieOnBlock(goal) => goal.tick(level, mob),
+            Goal::CatSitOnBlock(goal) => goal.tick(level, mob),
+            Goal::OcelotAttack(goal) => goal.tick(level, mob),
+            Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
+            Goal::OcelotTempt(goal) => goal.tempt_goal.tick(level, mob),
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.tick(level, mob),
             Goal::RangedBowAttack(goal) => goal.tick(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.tick(level, mob),
@@ -539,6 +597,10 @@ impl Goal {
             Goal::SquidRandomMovement(_) | Goal::SquidFlee(_) => 0,
             Goal::FishSwim(_) => Flag::Move.bit(),
             Goal::FollowFlockLeader(_) | Goal::PufferfishPuff(_) => 0,
+            Goal::CatAvoidEntity(_) | Goal::OcelotAvoidEntity(_) => Flag::Move.bit(),
+            Goal::CatRelaxOnOwner(_) => 0,
+            Goal::CatTempt(_) | Goal::OcelotTempt(_) | Goal::OcelotAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::CatLieOnBlock(_) | Goal::CatSitOnBlock(_) => Flag::Move.bit() | Flag::Jump.bit(),
         }
     }
 

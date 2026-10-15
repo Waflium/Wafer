@@ -2377,6 +2377,18 @@ impl ServerLevel {
         if self.is_tamable_animal(id) { self.tamable_animal_considers_entity_as_ally(id, other) } else { self.entity_considers_entity_as_ally(id, other) }
     }
 
+    pub fn is_stepping_carefully(&self, id: EntityId) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(super::mob::MobKind::Cat(_)) => self.cat_is_stepping_carefully(id),
+            Some(super::mob::MobKind::Ocelot(_)) => self.ocelot_is_stepping_carefully(id),
+            _ => self.entity_is_stepping_carefully(id),
+        }
+    }
+
+    pub fn entity_is_stepping_carefully(&self, id: EntityId) -> bool {
+        self.entity(id).is_shift_key_down()
+    }
+
     pub fn entity_considers_entity_as_ally(&self, id: EntityId, other: EntityId) -> bool {
         self.is_allied_to_team(id, self.team_of(other).as_deref())
     }
@@ -2503,6 +2515,8 @@ impl ServerLevel {
                     super::mob::MobKind::Salmon(_) => "Salmon",
                     super::mob::MobKind::Pufferfish(_) => "Pufferfish",
                     super::mob::MobKind::TropicalFish(_) => "TropicalFish",
+                    super::mob::MobKind::Cat(_) => "Cat",
+                    super::mob::MobKind::Ocelot(_) => "Ocelot",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

@@ -39,11 +39,15 @@ impl MoveToBlockGoal {
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId, is_valid_target: IsValidTarget) -> bool {
+        self.can_use_with(level, mob, next_start_tick, is_valid_target)
+    }
+
+    pub fn can_use_with(&mut self, level: &mut ServerLevel, mob: EntityId, next_start_tick_of: impl FnOnce(&mut ServerLevel, EntityId) -> i32, is_valid_target: IsValidTarget) -> bool {
         if self.next_start_tick > 0 {
             self.next_start_tick -= 1;
             false
         } else {
-            self.next_start_tick = next_start_tick(level, mob);
+            self.next_start_tick = next_start_tick_of(level, mob);
             self.find_nearest_block(level, mob, is_valid_target)
         }
     }

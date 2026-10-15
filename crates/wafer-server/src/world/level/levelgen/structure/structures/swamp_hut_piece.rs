@@ -103,12 +103,22 @@ impl SwampHutPiece {
                 }
             }
         }
-        self.spawn_cat(chunk_bb);
+        self.spawn_cat(level, chunk_bb);
     }
 
-    fn spawn_cat(&mut self, chunk_bb: &BoundingBox) {
-        if !self.spawned_cat && chunk_bb.is_inside(self.scattered.piece.get_world_pos(2, 2, 5)) {
-            self.spawned_cat = true;
+    fn spawn_cat(&mut self, level: &mut impl WorldGenLevel, chunk_bb: &BoundingBox) {
+        if !self.spawned_cat {
+            let pos = self.scattered.piece.get_world_pos(2, 2, 5);
+            if chunk_bb.is_inside(pos) {
+                self.spawned_cat = true;
+                if let Some(LevelEntity::Mob(mut cat)) = ServerLevel::create_entity("minecraft:cat") {
+                    cat.persistence_required = true;
+                    cat.entity.snap_to(pos.x as f64 + 0.5, pos.y as f64, pos.z as f64 + 0.5, 0.0, 0.0);
+                    let difficulty = level.get_current_difficulty_at(pos);
+                    mob::finalize_spawn(level, &mut cat, &difficulty, EntitySpawnReason::Structure, None);
+                    level.add_fresh_entity_with_passengers(LevelEntity::Mob(cat));
+                }
+            }
         }
     }
 }

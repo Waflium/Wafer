@@ -73,6 +73,8 @@ pub enum DataValue {
     OptionalLivingEntityReference(Option<u128>),
     WolfVariant(i32),
     WolfSoundVariant(i32),
+    CatVariant(i32),
+    CatSoundVariant(i32),
 }
 
 impl DataValue {
@@ -103,6 +105,8 @@ impl DataValue {
             DataValue::OptionalLivingEntityReference(_) => 13,
             DataValue::WolfVariant(_) => 25,
             DataValue::WolfSoundVariant(_) => 26,
+            DataValue::CatVariant(_) => 21,
+            DataValue::CatSoundVariant(_) => 22,
         }
     }
 
@@ -150,6 +154,7 @@ impl DataValue {
                 }
             }
             DataValue::WolfVariant(id) | DataValue::WolfSoundVariant(id) => w.varint(*id),
+            DataValue::CatVariant(id) | DataValue::CatSoundVariant(id) => w.varint(*id),
         }
     }
 }

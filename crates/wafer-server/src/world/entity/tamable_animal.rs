@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::ai::goal::panic_goal::PanicGoal;
 use super::animal::Animal;
+use super::animal::feline::cat;
 use super::animal::wolf::wolf;
 use super::data::{DataValue, ageable_mob_defaults};
 use super::entity_reference::EntityReference;
@@ -55,6 +56,9 @@ pub fn set_tame(mob: &mut Mob, is_tame: bool, include_side_effects: bool) {
     mob.entity.data.set(DATA_FLAGS_ID, DataValue::Byte(if is_tame { current | 4 } else { current & -5 }));
     if include_side_effects {
         apply_taming_side_effects(mob);
+    }
+    if let MobKind::Cat(_) = mob.kind {
+        cat::reassess_tame_goals(mob);
     }
 }
 

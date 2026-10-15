@@ -10,7 +10,7 @@ pub struct MagmaBlock;
 
 impl BlockBehaviour for MagmaBlock {
     fn step_on(&self, level: &mut ServerLevel, _pos: BlockPos, _state: BlockState, entity: EntityId) {
-        if !level.entity(entity).is_shift_key_down() && level.is_living(entity) {
+        if !level.is_stepping_carefully(entity) && level.is_living(entity) {
             level.hurt(entity, DamageSource::new(damage_types::HOT_FLOOR), 1.0);
         }
     }

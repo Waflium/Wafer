@@ -22,6 +22,8 @@ pub enum TargetType {
     Animal,
     AbstractSkeleton,
     Mob,
+    Rabbit,
+    Chicken,
 }
 
 impl TargetType {
@@ -37,6 +39,8 @@ impl TargetType {
             TargetType::Endermite => is_type(level, entity, &["minecraft:endermite"]),
             TargetType::Raider => level.mob(entity).is_some_and(|mob| mob.raider().is_some()),
             TargetType::Mob => level.is_mob(entity),
+            TargetType::Rabbit => is_type(level, entity, &["minecraft:rabbit"]),
+            TargetType::Chicken => is_type(level, entity, &["minecraft:chicken"]),
         }
     }
 }

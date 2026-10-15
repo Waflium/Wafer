@@ -16,9 +16,10 @@ impl BlockBehaviour for SlimeBlock {
     }
 
     fn step_on(&self, level: &mut ServerLevel, _pos: BlockPos, _state: BlockState, entity: EntityId) {
+        let stepping_carefully = level.is_stepping_carefully(entity);
         let e = level.entity_mut(entity);
         let abs_delta_y = e.delta_movement.y.abs();
-        if abs_delta_y < 0.1 && !e.is_shift_key_down() {
+        if abs_delta_y < 0.1 && !stepping_carefully {
             let scale = 0.4 + abs_delta_y * 0.2;
             e.set_delta_movement(e.delta_movement.multiply(scale, 1.0, scale));
         }

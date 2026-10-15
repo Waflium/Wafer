@@ -1,8 +1,12 @@
+use wafer_core::BlockPos;
 use wafer_protocol::nbt::Nbt;
 
+use super::BlockEntityKind;
 use super::base_container_block_entity::{BaseContainerBlockEntity, save_all_items};
 use super::container_openers_counter::ContainerOpenersCounter;
+use crate::server::level::ServerLevel;
 use crate::world::item::ItemStack;
+use crate::world::level::path_navigation_region::PathNavigationRegion;
 
 pub const EVENT_SET_OPEN_COUNT: i32 = 1;
 
@@ -34,6 +38,14 @@ impl ChestBlockEntity {
         self.base.save_additional(output);
         if !self.base.try_save_loot_table(output) {
             save_all_items(output, &self.base.items, true);
+        }
+    }
+
+    pub fn get_open_count(level: &ServerLevel, pos: BlockPos) -> i32 {
+        let state = PathNavigationRegion::new(level).get_block_state(pos);
+        match level.chunks.block_entity_ref(pos).map(|entity| &entity.kind) {
+            Some(BlockEntityKind::Chest(chest)) if state.has_block_entity() => chest.openers_counter.open_count,
+            _ => 0,
         }
     }
 

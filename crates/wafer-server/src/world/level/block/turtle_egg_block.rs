@@ -75,7 +75,7 @@ impl TurtleEggBlock {
 
 impl BlockBehaviour for TurtleEggBlock {
     fn step_on(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState, entity: EntityId) {
-        if !level.entity(entity).is_shift_key_down() {
+        if !level.is_stepping_carefully(entity) {
             self.destroy_egg(level, state, pos, entity, 100);
         }
     }

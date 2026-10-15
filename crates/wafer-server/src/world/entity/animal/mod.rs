@@ -23,6 +23,7 @@ pub mod goat;
 mod farm_tests;
 pub mod golem;
 pub mod fish;
+pub mod feline;
 pub mod pig;
 pub mod sheep;
 pub mod squid;
@@ -98,6 +99,8 @@ impl ServerLevel {
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => false,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => false,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => false,
+            MobKind::Cat(_) => feline::cat::is_food(item_stack),
+            MobKind::Ocelot(_) => feline::ocelot::is_food(item_stack),
         }
     }
 
@@ -108,6 +111,8 @@ impl ServerLevel {
             self.make_sound(id, sound);
         } else if let MobKind::Goat(_) = mob.kind {
             self.goat_play_eating_sound(id);
+        } else if let MobKind::Cat(_) = mob.kind {
+            self.cat_play_eating_sound(id);
         }
     }
 
@@ -160,6 +165,7 @@ impl ServerLevel {
     pub fn can_mate(&self, id: EntityId, partner: EntityId) -> bool {
         match self.mob(id).expect("an animal").kind {
             MobKind::Wolf(_) => self.wolf_can_mate(id, partner),
+            MobKind::Cat(_) => self.cat_can_mate(id, partner),
             _ => self.animal_can_mate(id, partner),
         }
     }

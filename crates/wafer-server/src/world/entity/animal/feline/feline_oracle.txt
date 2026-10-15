@@ -1,0 +1,779 @@
+== creeper_flee
+summoned c id=32 0.5 -60.0 -30.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+summoned s id=33 3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5 -60.0 -30.5 0.0 pose=standing sprint=false health=20.0
+3.5900000071525575 -60.0 -30.5 270.0 pose=standing sprint=false health=20.0
+3.639140016765595 -60.0 -30.590000007152558 180.0 pose=standing sprint=false health=20.0
+3.652363699524197 -60.0 -30.72810550118331 171.30676 pose=standing sprint=false health=20.0
+3.642152661654548 -60.0 -30.8918069537445 168.8342 pose=standing sprint=false health=20.0
+3.6160929531854373 -60.0 -31.068825774896666 166.84454 pose=standing sprint=false health=20.0
+3.649150862549951 -60.0 -31.242054733601766 211.6997 pose=standing sprint=false health=20.0
+3.71761714926322 -60.0 -31.41119082905389 214.07349 pose=standing sprint=false health=20.0
+3.8075115448911228 -60.0 -31.57663163996844 215.69968 pose=standing sprint=false health=20.0
+3.910587266621091 -60.0 -31.73896730746635 216.86847 pose=standing sprint=false health=20.0
+4.021971785057023 -60.0 -31.898760315575313 217.75757 pose=standing sprint=false health=20.0
+4.138795749376349 -60.0 -32.05645660639534 218.48706 pose=standing sprint=false health=20.0
+4.2244247485941155 -60.0 -32.22986789875067 194.0481 pose=standing sprint=false health=20.0
+4.290256940320192 -60.0 -32.412505024405135 192.2414 pose=standing sprint=false health=20.0
+4.343242921239446 -60.0 -32.60059676446656 190.91647 pose=standing sprint=false health=20.0
+4.387619348696435 -60.0 -32.79195951429945 189.88678 pose=standing sprint=false health=20.0
+4.4259501412843125 -60.0 -32.98533203384857 189.0188 pose=standing sprint=false health=20.0
+4.459691751758009 -60.0 -33.17999670737529 188.18744 pose=standing sprint=false health=20.0
+4.478114673216518 -60.0 -33.28628363146638 188.18744 pose=standing sprint=false health=20.0
+4.489795686544944 -60.0 -33.43430168787303 181.03314 pose=standing sprint=false health=20.0
+4.497027743349581 -60.0 -33.60511550771047 180.54858 pose=standing sprint=false health=20.0
+4.501269820163406 -60.0 -33.78837939389393 180.1903 pose=standing sprint=false health=20.0
+4.501105876044061 -60.0 -33.97844134432142 179.8978 pose=standing sprint=false health=20.0
+4.500907417434485 -60.0 -34.17221496851983 179.87848 pose=standing sprint=false health=20.0
+4.500838388302101 -60.0 -34.36801535995163 179.9609 pose=standing sprint=false health=20.0
+4.500769359169716 -60.0 -34.564922366421385 179.95758 pose=standing sprint=false health=20.0
+4.5006917013964385 -60.0 -34.762433579407634 179.95288 pose=standing sprint=false health=20.0
+4.500605414982267 -60.0 -34.96027467846137 179.94632 pose=standing sprint=false health=20.0
+4.500501871291549 -60.0 -35.15829587923561 179.93573 pose=standing sprint=false health=20.0
+4.500467356722737 -60.0 -35.35641546920486 179.9786 pose=standing sprint=false health=20.0
+4.500424213510413 -60.0 -35.55458877431641 179.9766 pose=standing sprint=false health=20.0
+4.500381070298088 -60.0 -35.75279140789905 179.9743 pose=standing sprint=false health=20.0
+4.5003292984474905 -60.0 -35.95101004946436 179.97083 pose=standing sprint=false health=20.0
+4.5002688979559995 -60.0 -36.1492374260248 179.96564 pose=standing sprint=false health=20.0
+4.500243012028081 -60.0 -36.34746958798638 179.98862 pose=standing sprint=false health=20.0
+4.5002250356906774 -60.0 -36.51820435726387 179.98795 pose=standing sprint=false health=20.0
+4.500207059353274 -60.0 -36.67392554839198 179.98691 pose=standing sprint=false health=20.0
+4.50018908301587 -60.0 -36.82144932489837 179.98566 pose=standing sprint=false health=20.0
+4.500171106678467 -60.0 -36.96449731250143 179.98407 pose=standing sprint=false health=20.0
+4.500147138229808 -60.0 -37.10510151907942 179.98169 pose=standing sprint=false health=20.0
+4.500135154004569 -60.0 -37.24437142478803 179.99396 pose=standing sprint=false health=20.0
+4.5001231697793305 -60.0 -37.382912802137334 179.99384 pose=standing sprint=false health=20.0
+4.500111185554092 -60.0 -37.521056402956255 179.99368 pose=standing sprint=false health=20.0
+4.500099201328853 -60.0 -37.65898281776436 179.9935 pose=standing sprint=false health=20.0
+4.500087217103614 -60.0 -37.79679064899679 179.99326 pose=standing sprint=false health=20.0
+4.500075232878375 -60.0 -37.934533733589376 179.99289 pose=standing sprint=false health=20.0
+4.500063248653136 -60.0 -38.07224146651251 179.9924 pose=standing sprint=false health=20.0
+4.500057256540517 -60.0 -38.20992989742187 179.99747 pose=standing sprint=false health=20.0
+4.500051264427897 -60.0 -38.34760778943049 179.99747 pose=standing sprint=false health=20.0
+4.500045272315278 -60.0 -38.48527992719864 179.99747 pose=standing sprint=false health=20.0
+4.5000392802026585 -60.0 -38.62294892315113 179.99747 pose=standing sprint=false health=20.0
+4.500033288090039 -60.0 -38.760616203672065 179.99744 pose=standing sprint=false health=20.0
+4.50002729597742 -60.0 -38.89828254756726 179.99744 pose=standing sprint=false health=20.0
+4.5000213038648 -60.0 -39.03594838006475 179.9974 pose=standing sprint=false health=20.0
+4.500015311752181 -60.0 -39.173613933339055 179.99738 pose=standing sprint=false health=20.0
+4.500009319639561 -60.0 -39.31127933415748 179.99933 pose=standing sprint=false health=20.0
+4.500003327526942 -60.0 -39.448944651735 179.99957 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -39.586609923862966 179.99982 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -39.72427517117548 180.00018 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -39.86194040493875 180.00018 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -39.999605631304135 180.00024 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -40.13727085363027 180.0003 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -40.27493607375098 180.00012 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -40.412601292667524 180.00012 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -40.5502665109266 180.00015 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -40.68793172882669 180.00015 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -40.82559694653078 180.00018 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -40.96326216412785 180.00024 pose=standing sprint=false health=20.0
+4.499997335414323 -60.0 -41.10092738166649 180.0003 pose=standing sprint=false health=20.0
+== cat_tempt
+summoned s id=34 0.5 -60.0 -26.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.46759999742508 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.417509591389464 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.357760223942396 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.29273706295211 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.224834410352766 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.155359555152263 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.08502627723182 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -26.014224300451843 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.94316641406484 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.871968801016173 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.800694897201375 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.729379338623428 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.658041036542162 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.586690316506644 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.515332816267314 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.443971614036272 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.372608390517524 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.301244063375556 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.229879133655242 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.158513874927113 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.087148436560696 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -25.015782900111763 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.94441731010977 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.873051690867804 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.80168605566081 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.73032041173691 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.658954763053575 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.587589111771592 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.516223459070748 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.444857805595202 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.37349215169667 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.302126497567187 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.230760843311607 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.159395188987176 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.088029534625154 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.016663880242607 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.945298225848852 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.87393257144898 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.802566917045763 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.731201262640724 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.65983560823469 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.588469953828113 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.517104299421238 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.4457386450142 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.37437299060707 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.303007336199897 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.231641681792695 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.16027602738548 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.088910372978255 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.017544718571028 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.946179064163797 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.874813409756566 360.0 pose=crouching sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.835847757924256 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.814572509552637 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.80295622259247 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.796613729175522 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+== cat_avoid
+summoned s id=35 0.5 -60.0 -24.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -24.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.2309503062405014 -60.0 -24.5 90.0 pose=standing sprint=true health=10.0 tame=false sit=false ordered=false lying=false
+-0.07472801831670534 -60.0 -24.717203938418677 143.83508 pose=standing sprint=true health=10.0 tame=false sit=false ordered=false lying=false
+-0.37006977728372864 -60.0 -25.07220912439456 151.486 pose=standing sprint=true health=10.0 tame=false sit=false ordered=false lying=false
+-0.6982942222863686 -60.0 -25.477014683025732 141.64249 pose=standing sprint=true health=10.0 tame=false sit=false ordered=false lying=false
+-1.0434796610437356 -60.0 -25.909793305714285 141.91446 pose=standing sprint=true health=10.0 tame=false sit=false ordered=false lying=false
+-1.3965621783242788 -60.0 -26.358906991157937 142.27853 pose=standing sprint=true health=10.0 tame=false sit=false ordered=false lying=false
+-1.7763920892027905 -60.0 -26.79751704034242 135.96109 pose=standing sprint=true health=10.0 tame=false sit=false ordered=false lying=false
+-2.176832142465633 -60.0 -27.224396960612104 134.15121 pose=standing sprint=true health=10.0 tame=false sit=false ordered=false lying=false
+-2.4369407511667402 -60.0 -27.49745015881995 133.95145 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-2.6208666166014627 -60.0 -27.686054330219896 133.32217 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-2.7635586302572115 -60.0 -27.82816195309978 132.79507 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-2.884024669583711 -60.0 -27.944569357462168 132.3732 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-2.992577911975613 -60.0 -28.046698999427836 132.04108 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.0948038146107555 -60.0 -28.14083570894934 131.77557 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.1920222674275336 -60.0 -28.23227862801061 134.04602 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.2864682413731554 -60.0 -28.32229041169035 134.10458 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.3793735320397076 -60.0 -28.411548549574643 134.14163 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.4714183765959765 -60.0 -28.500415006531302 134.16537 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.5629857202247073 -60.0 -28.589075529566422 134.18085 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.654284651019965 -60.0 -28.677631533123886 134.19092 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.7454293310943703 -60.0 -28.766138386063254 134.198 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.836489790265407 -60.0 -28.854618402762025 134.20285 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-3.9275004127362587 -60.0 -28.943087725383393 134.20648 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.018479975717272 -60.0 -29.03155516754949 134.20905 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.109442580214862 -60.0 -29.12002158298689 134.21124 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.199993417183989 -60.0 -29.208897111172238 134.78107 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.290303866234788 -60.0 -29.298011691062104 134.80313 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.3804752803394855 -60.0 -29.38726462782366 134.81674 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.4705629947941175 -60.0 -29.476600942071805 134.8255 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.560601115954166 -60.0 -29.565986697745846 134.83139 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.650612159172227 -60.0 -29.65539944844156 134.83508 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.740604524551907 -60.0 -29.744830855733756 134.83789 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.830586691830646 -60.0 -29.834272449528815 134.84015 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-4.920559397665286 -60.0 -29.923723519034784 134.84177 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.010526937550848 -60.0 -30.013179762279513 134.84286 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.100491656827886 -60.0 -30.102638830385935 134.84421 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.205023061926456 -60.0 -30.16721304190894 105.8508 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.317885468235374 -60.0 -30.216803447894748 104.41226 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.435524073675394 -60.0 -30.257296194084287 103.47241 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.555913769906629 -60.0 -30.292208598314446 102.844055 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.677900923220045 -60.0 -30.32364842209866 102.41278 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.80082477451963 -60.0 -30.352895413336515 102.10736 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-5.924308251764638 -60.0 -30.38071824158811 101.88162 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.048133388635008 -60.0 -30.407590489284047 101.70593 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.172174013792947 -60.0 -30.433803086342063 101.55798 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.284815405845081 -60.0 -30.48417601595566 128.76312 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.390511903289341 -60.0 -30.54862047303022 129.89359 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.491949057303898 -60.0 -30.62130011668758 130.61298 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.590753620604453 -60.0 -30.69883126462755 131.078 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.687920611427405 -60.0 -30.779239760592745 131.38434 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.784054479612856 -60.0 -30.8613764962637 131.59064 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.879528822472769 -60.0 -30.944564118693354 131.73282 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-6.97457683406539 -60.0 -31.028399648748366 131.83408 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-7.06934046734502 -60.0 -31.11264651163832 131.90997 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-7.176680934788827 -60.0 -31.173693701234857 105.14972 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-7.2912145832238044 -60.0 -31.22081211618057 103.851715 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-7.409873157300838 -60.0 -31.259498227674268 103.00543 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-7.530909178324158 -60.0 -31.29302546129324 102.44122 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-7.653325267577847 -60.0 -31.323358178051308 102.055725 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-7.776550753388706 -60.0 -31.351681926454944 101.784546 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-7.900258427800435 -60.0 -31.37871409339335 101.58588 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-8.024260228203936 -60.0 -31.404889540701724 101.43286 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-8.148447656514803 -60.0 -31.43047269672334 101.30554 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-8.273777969129707 -60.0 -31.447399768427143 92.944824 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-8.399755446902233 -60.0 -31.459109677125348 92.4563 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-8.526099518851534 -60.0 -31.467639939965228 92.12842 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-8.652651706033444 -60.0 -31.474207840288223 91.90289 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-8.779322612189173 -60.0 -31.479544223816003 91.74353 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-8.906061902602605 -60.0 -31.481173094396905 91.625854 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.03283274240299 -60.0 -31.482995159680527 91.81555 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.15961161398657 -60.0 -31.485087662679238 92.084656 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.274756558231777 -60.0 -31.51985512988933 127.13199 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.382606523791344 -60.0 -31.574817143531643 128.65842 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.485859953914652 -60.0 -31.641559218070565 129.62415 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.586203124142665 -60.0 -31.71521170586595 130.24683 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.684688590708582 -60.0 -31.792952460350435 130.65677 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.78197935886826 -60.0 -31.87313445108145 130.93222 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.878490953555028 -60.0 -31.954795173009526 131.1224 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-9.974489839958741 -60.0 -32.03736302096614 131.25821 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.07013952910274 -60.0 -32.12050497983597 131.35931 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.16382108178541 -60.0 -32.20588915635328 133.97253 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.256347436812495 -60.0 -32.2925809700854 134.08371 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.34819692156426 -60.0 -32.38003432805754 134.15298 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.439646052782209 -60.0 -32.467935177925725 134.19684 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.530857340836965 -60.0 -32.556100150955864 134.22528 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.621923354749885 -60.0 -32.64442516242939 134.24384 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.71290234480894 -60.0 -32.732845468493274 134.2561 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.803826112241829 -60.0 -32.8213257155664 134.2649 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.894715872602495 -60.0 -32.909842645512825 134.27039 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-10.98558706509957 -60.0 -32.998379604310394 134.27475 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-11.076444264027117 -60.0 -33.086931450507166 134.27869 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-11.12605230040366 -60.0 -33.13528076414651 134.27869 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-11.153138291411363 -60.0 -33.16167949245987 134.27869 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-11.167927244219344 -60.0 -33.17609319979315 134.27869 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-11.176002013390407 -60.0 -33.183963084911234 134.27869 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+-11.180410837869905 -60.0 -33.18826004268481 134.27869 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+== cat_chest
+summoned s id=36 0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -23.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5576000045776368 -60.0 -23.5 270.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.6466496153076177 -60.0 -23.5 270.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.7528707129912917 -60.0 -23.5 270.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.8684674436406867 -60.0 -23.5 270.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.9891832704839618 -60.0 -23.5 270.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.1126941241737451 -60.0 -23.5 270.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.2268586447664371 -60.0 -23.46632072867717 305.78497 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.3350761245675664 -60.0 -23.413111567278698 307.1988 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.4394967878488738 -60.0 -23.348526322534 308.0907 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.5414878449280722 -60.0 -23.27727948833263 308.6639 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.6419167934063434 -60.0 -23.202102966354293 309.03928 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.7413324129199288 -60.0 -23.12458386688771 309.2908 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.840082646133561 -60.0 -23.045649118695806 309.46304 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+1.9383922620948963 -60.0 -22.96584771282374 309.58542 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.036404948007229 -60.0 -22.88550505836166 309.67526 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.1342096456036357 -60.0 -22.804811651799287 309.74518 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.2438283540017014 -60.0 -22.74820825972533 282.5809 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.360188444771491 -60.0 -22.706141437953246 281.17728 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.480401768043857 -60.0 -22.672923159686974 280.25153 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.6028275941346517 -60.0 -22.64515628518544 279.62576 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.7265327516130493 -59.58000001311302 -22.620796273790138 279.19043 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.762499988079071 -59.2468000194788 -22.60672909805796 279.19043 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.7672383751739282 -58.99866402088785 -22.593161359807308 279.19043 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+2.7762886946493746 -58.833890739061786 -22.580048109677943 279.19043 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+2.7892628727042417 -58.75081292125532 -22.567348443750866 279.19043 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+2.805807762169289 -58.74779665974627 -22.555025139458717 279.19043 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+2.8256019991112464 -58.82324072493576 -22.543044324264226 279.19043 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+2.8483531423424093 -58.975575911786315 -22.531375174157585 279.19043 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+2.873795070374297 -59.125 -22.51998963928906 279.19043 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+2.953807874219214 -59.125 -22.500429506103597 279.19043 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.055094857604396 -59.125 -22.489705493499116 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.110397556956259 -59.125 -22.483850181936962 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.140592834309637 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1570794576595462 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1660811550541674 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+3.1709960824025125 -59.125 -22.480653181452684 270.04504 pose=standing sprint=false health=10.0 tame=true sit=true ordered=false lying=false
+== ocelot_trust
+summoned s id=37 0.5 -60.0 -26.5 0.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.5 0.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.5 0.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.46759999742508 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.417509591389464 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.357760223942396 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.29273706295211 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.224834410352766 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.155359555152263 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.08502627723182 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -26.014224300451843 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.94316641406484 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.871968801016173 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.800694897201375 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.729379338623428 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.658041036542162 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.586690316506644 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.515332816267314 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.443971614036272 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.372608390517524 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.301244063375556 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.229879133655242 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.158513874927113 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.087148436560696 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -25.015782900111763 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.94441731010977 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.873051690867804 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.80168605566081 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.73032041173691 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.658954763053575 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.587589111771592 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.516223459070748 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.444857805595202 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.37349215169667 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.302126497567187 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.230760843311607 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.159395188987176 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.088029534625154 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -24.016663880242607 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.945298225848852 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.87393257144898 360.0 pose=crouching sprint=false health=10.0 trusting=false
+interact Success[swingSource=SERVER_ONLY, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=63 0.5 -60.0 -23.87393257144898 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.802566917045763 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.731201262640724 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.65983560823469 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.588469953828113 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.517104299421238 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.4457386450142 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.37437299060707 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.303007336199897 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.231641681792695 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.16027602738548 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.088910372978255 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -23.017544718571028 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.946179064163797 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.874813409756566 360.0 pose=crouching sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.835847757924256 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.814572509552637 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.80295622259247 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.796613729175522 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=62 0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=61 0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+interact Pass[] held=61 0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+0.5 -60.0 -22.79315072736763 360.0 pose=standing sprint=false health=10.0 trusting=true
+== cat_tame
+summoned s id=38 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=60 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=59 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=58 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=57 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=56 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=55 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=54 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=53 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=52 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=51 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=50 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=false sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=49 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=true lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=true lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=1 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=false lying=false
+interact Success[swingSource=PREDICTED, itemContext=ItemContext[wasItemInteraction=true, heldItemTransformedTo=null]] held=1 0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=true lying=false
+0.5 -60.0 -18.5 0.0 pose=standing sprint=false health=10.0 tame=true sit=false ordered=true lying=false
+== ocelot_hunt
+summoned s id=39 10.5 -60.0 -30.5 0.0 pose=standing sprint=false health=10.0 trusting=false
+summoned k id=40 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+10.5 -60.0 -30.5 0.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+10.5 -60.0 -30.5 0.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+10.53240000257492 -60.0 -30.5 270.0 pose=crouching sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+10.819140099795113 -60.0 -30.5 270.0 pose=standing sprint=true health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+11.250452122048532 -59.69999998807907 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+11.485948513552424 -59.48439997220039 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+11.700250235997103 -59.351511954052924 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+11.895264809042049 -59.29968169525964 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+12.07272807562741 -59.327288042179525 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+12.234219652874247 -59.43274226421344 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+12.381176992404153 -59.61448740534393 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+12.51490817523048 -59.870997648644206 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+12.636603555109675 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+12.74734635399133 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+13.076861622963449 -60.0 -30.5 270.0 pose=standing sprint=true health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+13.256776980719867 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+13.355010777464985 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 14.5 -60.0 -30.5 0.0 pose=standing sprint=false health=4.0
+13.408646436717742 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 15.022500001788138 -59.639199994802475 -30.5 270.0 pose=standing sprint=false health=1.0
+13.706981203830784 -60.0 -30.5 270.0 pose=standing sprint=true health=10.0 trusting=false | 15.310800955527265 -59.36401598435307 -30.5063169792787 205.52448 pose=standing sprint=false health=1.0
+14.1389216993542 -60.0 -30.5 270.0 pose=standing sprint=true health=10.0 trusting=false | 15.574463810435674 -59.172735650389804 -30.51894195369269 190.78021 pose=standing sprint=false health=1.0
+14.374761237303366 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 15.813866670777303 -59.0636809209833 -30.537410561096614 175.65964 pose=standing sprint=false health=1.0
+14.5035296399804 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 16.029553013632594 -59.03520728561076 -30.560872062930816 161.94077 pose=standing sprint=false health=1.0
+14.842886889767966 -60.0 -30.5 270.0 pose=standing sprint=true health=10.0 trusting=false | 16.222388989064825 -59.06550478860137 -30.588319243541427 150.58234 pose=standing sprint=false health=1.0
+15.29722566343329 -60.0 -30.5 270.0 pose=standing sprint=true health=10.0 trusting=false | 16.393521963868388 -59.13035972162211 -30.618782243967402 141.60773 pose=standing sprint=false health=1.0
+15.545294662668422 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 16.54426870725677 -59.21553442389604 -30.651418559365446 134.60242 pose=standing sprint=false health=1.0
+15.680740351983177 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 16.676015526352405 -59.31265715072338 -30.685531849446566 129.09747 pose=standing sprint=false health=1.0
+15.75469370693891 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 16.790150149303923 -59.416805316124865 -30.720559932728317 124.7052 pose=standing sprint=false health=1.0
+15.795072243434813 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 16.88802101569224 -59.525084439488346 -30.756054909998046 121.13803 pose=standing sprint=false health=1.0
+15.817118926922356 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 16.97091354135015 -59.635792566180754 -30.791661625942538 118.19025 pose=standing sprint=false health=1.0
+15.829156417504741 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 17.0400389184503 -59.74792894685837 -30.82710083798529 115.713745 pose=standing sprint=false health=1.0
+16.104778581885633 -60.0 -30.5 270.0 pose=standing sprint=true health=10.0 trusting=false | 17.09652840758258 -59.86090514089564 -30.862152811994257 113.60211 pose=standing sprint=false health=1.0
+16.255268301117376 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 17.141433305544858 -59.97437514519799 -30.89664683685847 111.77777 pose=standing sprint=false health=1.0
+16.337435697361865 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 17.17572654908055 -60.0 -30.930451410508287 110.18222 pose=standing sprint=false health=1.0
+16.38229910092236 -60.0 -30.5 270.0 pose=standing sprint=false health=10.0 trusting=false | 17.090948310791948 -60.0 -31.000630683351222 108.77194 pose=standing sprint=false health=1.0
+16.430940610079634 -60.0 -30.52160385508568 228.18109 pose=crouching sprint=false health=10.0 trusting=false | 16.92778051147532 -60.0 -31.075630673695127 107.42624 pose=standing sprint=false health=1.0
+16.45749887716432 -60.0 -30.533399561332562 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.721266426348432 -60.0 -31.15147688905386 106.55319 pose=standing sprint=false health=1.0
+16.471999692676864 -60.0 -30.539840017691436 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.490710885784765 -60.0 -31.226499680243627 105.92752 pose=standing sprint=false health=1.0
+16.479917138866345 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.438665006853146 -59.639199994802475 -31.64683248521683 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.410247953655766 -59.36401598435307 -31.876334223389428 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.384388434500885 -59.172735650389804 -32.08518081114541 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.36085627139175 -59.0636809209833 -32.27523121148058 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.33944200234528 -59.03520728561076 -32.44817708076985 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.31995501695138 -59.06550478860137 -32.605557826358776 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.302221859731866 -59.13035972162211 -32.74877430897217 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.286084686197036 -59.21553442389604 -32.87910131190637 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.271399857857126 -59.31265715072338 -32.997698887994446 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.258036663682685 -59.416805316124865 -33.10562268534494 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.24587615663348 -59.525084439488346 -33.2038333437643 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.234810094899778 -59.635792566180754 -33.2932050455016 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.22473997843189 -59.74792894685837 -33.37453329642641 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.21557617218202 -59.86090514089564 -33.4485420069009 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.2072371082543 -59.97437514519799 -33.51588993537364 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.199648559861377 -60.0 -33.57717655205011 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.1927429806248 -60.0 -33.632947374833 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.188972533923682 -60.0 -33.66339824760941 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | 16.188972533923682 -60.0 -33.6800244260765 105.92752 pose=dying sprint=false health=0.0
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+16.484240064987922 -60.0 -30.54335650727183 228.18109 pose=standing sprint=false health=10.0 trusting=false | gone
+done

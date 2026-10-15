@@ -1315,6 +1315,8 @@ impl ServerLevel {
             self.raider_die(id, source);
         } else if self.is_wolf(id) {
             self.wolf_die(id, source);
+        } else if self.is_cat(id) {
+            self.tamable_animal_die(id, source);
         } else {
             self.living_entity_die(id, source);
         }

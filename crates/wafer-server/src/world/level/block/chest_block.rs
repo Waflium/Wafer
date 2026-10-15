@@ -64,7 +64,16 @@ pub enum Combined {
 }
 
 fn is_chest_blocked_at(level: &mut ServerLevel, pos: BlockPos) -> bool {
+    is_blocked_chest_by_block(level, pos) || is_cat_sitting_on_chest(level, pos)
+}
+
+fn is_blocked_chest_by_block(level: &mut ServerLevel, pos: BlockPos) -> bool {
     level.block_state(pos.above()).is_redstone_conductor()
+}
+
+fn is_cat_sitting_on_chest(level: &ServerLevel, pos: BlockPos) -> bool {
+    let area = wafer_core::AABB::new(pos.x as f64, (pos.y + 1) as f64, pos.z as f64, (pos.x + 1) as f64, (pos.y + 2) as f64, (pos.z + 1) as f64);
+    level.get_entities(None, &area).into_iter().any(|cat| level.is_cat(cat) && level.is_in_sitting_pose(cat))
 }
 
 fn has_chest_block_entity(level: &mut ServerLevel, pos: BlockPos, state: BlockState) -> bool {

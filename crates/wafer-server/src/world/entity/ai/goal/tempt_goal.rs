@@ -16,7 +16,7 @@ pub struct TemptGoal {
     pz: f64,
     p_rot_x: f64,
     p_rot_y: f64,
-    player: Option<EntityId>,
+    pub player: Option<EntityId>,
     calm_down: i32,
     is_running: bool,
     items: fn(&ItemStack) -> bool,
@@ -57,7 +57,12 @@ impl TemptGoal {
     }
 
     pub fn can_continue_to_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        if self.can_scare
+        let can_scare = self.can_scare();
+        self.is_not_scared(level, mob, can_scare) && self.can_use(level, mob)
+    }
+
+    pub fn is_not_scared(&mut self, level: &ServerLevel, mob: EntityId, can_scare: bool) -> bool {
+        if can_scare
             && let Some(player) = level.entity_ref(self.player.expect("a tempting player"))
         {
             if level.entity(mob).distance_to_sqr(player) < 36.0 {
@@ -75,7 +80,11 @@ impl TemptGoal {
             self.p_rot_x = player.x_rot as f64;
             self.p_rot_y = player.y_rot as f64;
         }
-        self.can_use(level, mob)
+        true
+    }
+
+    pub fn can_scare(&self) -> bool {
+        self.can_scare
     }
 
     pub fn start(&mut self, level: &mut ServerLevel) {
