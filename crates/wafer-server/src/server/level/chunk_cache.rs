@@ -1154,7 +1154,11 @@ impl ChunkCache {
                 structure_starts[structure.0 as usize] = self.starts_for_structure(center, structure);
             }
         }
-        self.with_region(center, |region, generator| generator.apply_biome_decoration(region, &structure_starts));
+        let structure_starts = Arc::new(structure_starts);
+        self.with_region(center, |region, generator| {
+            region.structure_starts = Some(structure_starts.clone());
+            generator.apply_biome_decoration(region, &structure_starts);
+        });
     }
 
     fn generate_spawn(&mut self, center: ChunkPos) {

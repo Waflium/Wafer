@@ -5,8 +5,9 @@ use wafer_core::random::RandomSource;
 use wafer_data::SyncedRegistry;
 use serde_json::Value;
 
-use super::biome_check::BiomeCheck;
 use super::priority_provider::{self, Selector};
+use super::spawn_condition::SpawnCondition;
+use super::spawn_context::SpawnContext;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 
 pub struct SpawnPrioritySelectors {
@@ -19,7 +20,7 @@ impl SpawnPrioritySelectors {
         let mut selectors = Vec::new();
         for (id, name) in SyncedRegistry::get(registry).entries.iter().enumerate() {
             for selector in json[name]["spawn_conditions"].as_array().into_iter().flatten() {
-                let condition = selector.get("condition").map(BiomeCheck::from_json);
+                let condition = selector.get("condition").map(SpawnCondition::from_json);
                 selectors.push((id as i32, Selector { condition, priority: selector["priority"].as_i64().unwrap_or(0) as i32 }));
             }
         }
@@ -28,8 +29,9 @@ impl SpawnPrioritySelectors {
 }
 
 pub fn select_variant_to_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), pos: BlockPos, variants: &SpawnPrioritySelectors) -> Option<i32> {
-    let biome = level.get_biome(pos).0 as i32;
-    priority_provider::pick(&variants.selectors, level.get_random(), biome)
+    let mut context = SpawnContext::create(level, pos);
+    let selected = priority_provider::select(&variants.selectors, |condition| condition.test(&mut context));
+    crate::util::get_random_safe(&selected, level.get_random())
 }
 
 pub fn pick_random_sound_variant(registry: &str, random: &mut (impl RandomSource + ?Sized)) -> i32 {

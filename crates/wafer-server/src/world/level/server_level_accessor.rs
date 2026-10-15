@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
 use wafer_core::{AABB, BlockPos, mth};
 use wafer_data::DimensionType;
 
 use super::LevelAccessor;
 use super::chunk::{Biome, HeightmapType};
+use super::levelgen::structure::structure::StructureHolder;
+use super::levelgen::structure::structure_start::StructureStart;
 use super::light_layer::LightLayer;
 use crate::world::attribute::{AttributeValue, EnvironmentAttribute};
 use crate::world::difficulty::Difficulty;
@@ -35,6 +39,8 @@ pub trait ServerLevelAccessor: LevelAccessor {
     fn is_unobstructed(&mut self, aabb: &AABB) -> bool;
 
     fn add_fresh_entity(&mut self, entity: LevelEntity) -> bool;
+
+    fn get_structure_with_piece_at(&mut self, pos: BlockPos, predicate: &dyn Fn(StructureHolder) -> bool) -> Option<Arc<StructureStart>>;
 
     fn add_fresh_entity_with_passengers(&mut self, entity: LevelEntity) {
         self.add_fresh_entity(entity);

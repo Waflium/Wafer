@@ -138,6 +138,10 @@ pub fn java_format_fixed(value: f64, decimals: i32) -> String {
     out
 }
 
+pub fn get_random_safe<T: Copy>(list: &[T], random: &mut (impl RandomSource + ?Sized)) -> Option<T> {
+    if list.is_empty() { None } else { Some(list[random.next_int_bounded(list.len() as i32) as usize]) }
+}
+
 pub fn shuffle<T>(list: &mut [T], random: &mut impl RandomSource) {
     for i in (2..=list.len()).rev() {
         let swap_to = random.next_int_bounded(i as i32) as usize;

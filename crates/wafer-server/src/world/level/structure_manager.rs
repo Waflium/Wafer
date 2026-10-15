@@ -14,6 +14,12 @@ impl ServerLevel {
         self.chunks.starts_for_structure(chunk_pos, structure).into_iter().find(|start| start.get_bounding_box().is_inside(block_pos))
     }
 
+    pub fn get_structure_with_piece_at(&mut self, pos: BlockPos, predicate: &dyn Fn(StructureHolder) -> bool) -> Option<Arc<StructureStart>> {
+        let chunk_pos = ChunkPos::new(pos.x >> 4, pos.z >> 4);
+        self.chunks.get_chunk_structures(chunk_pos, ChunkStatus::StructureReferences);
+        self.chunks.starts_for_structure_matching(chunk_pos, predicate).into_iter().find(|start| self.structure_has_piece_at(pos, start))
+    }
+
     pub fn structure_has_piece_at(&self, block_pos: BlockPos, structure_start: &StructureStart) -> bool {
         structure_start.piece_container.lock().unwrap().is_inside_piece(block_pos)
     }

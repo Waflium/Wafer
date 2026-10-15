@@ -2059,6 +2059,14 @@ impl crate::world::level::server_level_accessor::ServerLevelAccessor for ServerL
         ServerLevel::add_fresh_entity(self, entity)
     }
 
+    fn get_structure_with_piece_at(
+        &mut self,
+        pos: BlockPos,
+        predicate: &dyn Fn(crate::world::level::levelgen::structure::structure::StructureHolder) -> bool,
+    ) -> Option<std::sync::Arc<crate::world::level::levelgen::structure::structure_start::StructureStart>> {
+        ServerLevel::get_structure_with_piece_at(self, pos, predicate)
+    }
+
     fn add_fresh_entity_with_passengers(&mut self, entity: LevelEntity) {
         let passengers = entity.entity().passengers.clone();
         ServerLevel::add_fresh_entity(self, entity);

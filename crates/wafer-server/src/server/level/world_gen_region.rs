@@ -1,3 +1,5 @@
+use std::sync::{Arc, TryLockError};
+
 use wafer_core::{AABB, BlockPos, ChunkPos, Vec3};
 use wafer_data::{Block, BlockState, DimensionType, Fluid, FluidState, blocks};
 
@@ -15,6 +17,8 @@ use crate::world::level::chunk::{Biome, ChunkGenerator, HeightmapType, LevelChun
 use crate::world::level::levelgen::AlgorithmRandom;
 use crate::world::level::levelgen::material::WorldGenerationContext;
 use crate::world::level::levelgen::random_state::RandomState;
+use crate::world::level::levelgen::structure::structure::StructureHolder;
+use crate::world::level::levelgen::structure::structure_start::StructureStart;
 use crate::world::level::lighting::has_different_light_properties;
 use crate::world::level::lighting::level_light_engine::LevelLightEngine;
 use crate::world::level::update_flags::UPDATE_KNOWN_SHAPE;
@@ -44,6 +48,7 @@ pub struct WorldGenRegion<'a> {
     pub environment_attributes: Option<&'a EnvironmentAttributeSystem>,
     pub light_tasks: Vec<RegionLightTask>,
     pub poi_updates: Vec<(BlockPos, BlockState, BlockState)>,
+    pub structure_starts: Option<Arc<Vec<Vec<Arc<StructureStart>>>>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -102,6 +107,7 @@ impl<'a> WorldGenRegion<'a> {
             environment_attributes: None,
             light_tasks: Vec::new(),
             poi_updates: Vec::new(),
+            structure_starts: None,
         }
     }
 
@@ -423,6 +429,27 @@ impl ServerLevelAccessor for WorldGenRegion<'_> {
             proto.entities.push(tag);
         }
         true
+    }
+
+    fn get_structure_with_piece_at(&mut self, pos: BlockPos, predicate: &dyn Fn(StructureHolder) -> bool) -> Option<Arc<StructureStart>> {
+        let structure_starts = self.structure_starts.as_ref().filter(|_| pos.x >> 4 == self.center.x && pos.z >> 4 == self.center.z)?;
+        for (structure, starts) in structure_starts.iter().enumerate() {
+            if !predicate(StructureHolder(structure as u16)) {
+                continue;
+            }
+            if let Some(start) = starts.iter().find(|start| structure_has_piece_at(pos, start)) {
+                return Some(start.clone());
+            }
+        }
+        None
+    }
+}
+
+fn structure_has_piece_at(pos: BlockPos, structure_start: &StructureStart) -> bool {
+    match structure_start.piece_container.try_lock() {
+        Ok(container) => container.is_inside_piece(pos),
+        Err(TryLockError::Poisoned(container)) => container.into_inner().is_inside_piece(pos),
+        Err(TryLockError::WouldBlock) => true,
     }
 }
 
