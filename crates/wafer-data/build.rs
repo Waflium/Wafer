@@ -109,6 +109,8 @@ fn main() -> anyhow::Result<()> {
     embed_json(&mut out, &data, "worldgen/block_state_provider", "BLOCK_STATE_PROVIDERS")?;
     embed_json(&mut out, &data, "block_transformer", "BLOCK_TRANSFORMERS")?;
     embed_json(&mut out, &data, "worldgen/processor_list", "PROCESSOR_LISTS")?;
+    embed_json(&mut out, &data, "villager_trade", "VILLAGER_TRADES")?;
+    embed_json(&mut out, &data, "trade_set", "TRADE_SETS")?;
     writeln!(out, "pub static BIOME_PARAMETERS: &[(&str, &str)] = &[")?;
     let parameters = reports.join("biome_parameters");
     for ns in namespaces(&parameters)? {
@@ -124,12 +126,15 @@ fn main() -> anyhow::Result<()> {
     let mut tagged = synced.clone();
     let mut structures = Vec::new();
     let mut features = Vec::new();
+    let mut villager_trades = Vec::new();
     for ns in namespaces(&data)? {
         structures.extend(list_entries(&ns, &data.join(&ns).join("worldgen/structure"))?);
         features.extend(list_entries(&ns, &data.join(&ns).join("worldgen/feature"))?);
+        villager_trades.extend(list_entries(&ns, &data.join(&ns).join("villager_trade"))?);
     }
     tagged.insert("minecraft:worldgen/structure".into(), structures);
     tagged.insert("minecraft:worldgen/feature".into(), features);
+    tagged.insert("minecraft:villager_trade".into(), villager_trades);
     tags(&mut out, &data, &builtin, &tagged)?;
     let lang = vanilla.join("assets/minecraft/lang/en_us.json").canonicalize()?;
     writeln!(out, "pub static LANGUAGE_EN_US: &str = include_str!({lang:?});")?;

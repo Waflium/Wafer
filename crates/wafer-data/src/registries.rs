@@ -1,16 +1,20 @@
 use std::cell::Cell;
 use std::sync::{LazyLock, RwLock};
 
-use crate::{BUILTIN_REGISTRIES, FEATURES, PACKET_NAMES, STRUCTURES, SYNCED_REGISTRIES, TAGS, TYPED_TAGS};
+use crate::{BUILTIN_REGISTRIES, FEATURES, PACKET_NAMES, STRUCTURES, SYNCED_REGISTRIES, TAGS, TRADE_SETS, TYPED_TAGS, VILLAGER_TRADES};
 
 static STRUCTURE_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| STRUCTURES.iter().map(|structure| structure.0).collect());
 static FEATURE_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| FEATURES.iter().map(|feature| feature.0).collect());
+static VILLAGER_TRADE_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| VILLAGER_TRADES.iter().map(|trade| trade.0).collect());
+static TRADE_SET_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| TRADE_SETS.iter().map(|trade_set| trade_set.0).collect());
 
 pub fn registry_entries(name: &str) -> Option<&'static [&'static str]> {
     BUILTIN_REGISTRIES.iter().find(|r| r.0 == name).map(|r| r.1).or_else(|| SYNCED_REGISTRIES.iter().find(|r| r.name == name).map(|r| r.entries)).or_else(|| {
         match name {
             "minecraft:worldgen/structure" => Some(&STRUCTURE_NAMES[..]),
             "minecraft:worldgen/feature" => Some(&FEATURE_NAMES[..]),
+            "minecraft:villager_trade" => Some(&VILLAGER_TRADE_NAMES[..]),
+            "minecraft:trade_set" => Some(&TRADE_SET_NAMES[..]),
             _ => None,
         }
     })
@@ -21,7 +25,7 @@ pub fn registry_names() -> impl Iterator<Item = &'static str> {
         .iter()
         .map(|r| r.0)
         .chain(SYNCED_REGISTRIES.iter().map(|r| r.name))
-        .chain(["minecraft:worldgen/structure", "minecraft:worldgen/feature"])
+        .chain(["minecraft:worldgen/structure", "minecraft:worldgen/feature", "minecraft:villager_trade", "minecraft:trade_set"])
 }
 
 pub struct SyncedRegistry {
