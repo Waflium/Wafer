@@ -212,7 +212,7 @@ async fn main() -> anyhow::Result<()> {
                         }
                         position = Some(pos);
                     }
-                    play::clientbound::OPEN_SCREEN => open_container = Reader::new(&data).varint()?,
+                    play::clientbound::OPEN_SCREEN | play::clientbound::MOUNT_SCREEN_OPEN => open_container = Reader::new(&data).varint()?,
                     play::clientbound::ADD_ENTITY => {
                         let mut r = Reader::new(&data);
                         let id = r.varint()?;
@@ -302,6 +302,24 @@ async fn main() -> anyhow::Result<()> {
                                 w.varint(0);
                                 w.varint(6);
                                 w.varint(0);
+                            })
+                            .await?;
+                        }
+                        ["command", action, data] => {
+                            let (action, data): (i32, i32) = (action.parse()?, data.parse()?);
+                            send(&mut wr, codec, play::serverbound::PLAYER_COMMAND, |w| {
+                                w.varint(0);
+                                w.varint(action);
+                                w.varint(data);
+                            })
+                            .await?;
+                        }
+                        ["rot", y_rot, x_rot] => {
+                            let (y_rot, x_rot): (f32, f32) = (y_rot.parse()?, x_rot.parse()?);
+                            send(&mut wr, codec, play::serverbound::MOVE_PLAYER_ROT, |w| {
+                                w.f32(y_rot);
+                                w.f32(x_rot);
+                                w.u8(on_ground);
                             })
                             .await?;
                         }
@@ -403,15 +421,16 @@ async fn main() -> anyhow::Result<()> {
                         }
                         ["skip_type", entity_type] => skip_types.push(entity_type.parse()?),
                         ["attack_last"] => send(&mut wr, codec, play::serverbound::ATTACK, |w| w.varint(last_entity)).await?,
-                        ["vehicle", vx, vy, vz, y_rot] => {
+                        ["vehicle", vx, vy, vz, y_rot, rest @ ..] => {
                             let (vx, vy, vz, y_rot): (f64, f64, f64, f32) = (vx.parse()?, vy.parse()?, vz.parse()?, y_rot.parse()?);
+                            let vehicle_on_ground = rest.first().is_some_and(|flag| *flag == "1");
                             send(&mut wr, codec, play::serverbound::MOVE_VEHICLE, |w| {
                                 w.f64(vx);
                                 w.f64(vy);
                                 w.f64(vz);
                                 w.f32(y_rot);
                                 w.f32(0.0);
-                                w.bool(false);
+                                w.bool(vehicle_on_ground);
                             })
                             .await?;
                         }
