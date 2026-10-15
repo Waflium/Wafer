@@ -25,7 +25,7 @@ mod enchant_command;
 mod experience_command;
 mod execute_command;
 pub mod fetch_profile_command;
-mod fill_biome_command;
+pub mod fill_biome_command;
 mod fill_command;
 mod force_load_command;
 mod function_command;
