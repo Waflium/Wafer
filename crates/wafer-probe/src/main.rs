@@ -255,9 +255,13 @@ async fn main() -> anyhow::Result<()> {
                     })
                     .await?;
                 }
+                let mut lines = Vec::new();
                 if ticks_loaded >= 20 && script_wait > 0 {
                     script_wait -= 1;
                 } else if ticks_loaded >= 20 && let Some(line) = script.next() {
+                    lines.extend(line.split(';').map(str::trim));
+                }
+                for line in lines {
                     let words: Vec<&str> = line.split_whitespace().collect();
                     match words.as_slice() {
                         ["wait", ticks] => script_wait = ticks.parse()?,
@@ -278,8 +282,9 @@ async fn main() -> anyhow::Result<()> {
                             })
                             .await?;
                         }
-                        ["move_air", nx, ny, nz, y_rot] => {
+                        ["move_air", nx, ny, nz, y_rot, x_rot @ ..] => {
                             let (nx, ny, nz, y_rot): (f64, f64, f64, f32) = (nx.parse()?, ny.parse()?, nz.parse()?, y_rot.parse()?);
+                            let x_rot: f32 = x_rot.first().map_or(Ok(0.0), |x_rot| x_rot.parse())?;
                             (*x, *y, *z) = (nx, ny, nz);
                             on_ground = 0;
                             send(&mut wr, codec, play::serverbound::MOVE_PLAYER_POS_ROT, |w| {
@@ -287,8 +292,16 @@ async fn main() -> anyhow::Result<()> {
                                 w.f64(ny);
                                 w.f64(nz);
                                 w.f32(y_rot);
-                                w.f32(0.0);
+                                w.f32(x_rot);
                                 w.u8(0);
+                            })
+                            .await?;
+                        }
+                        ["start_fall_flying"] => {
+                            send(&mut wr, codec, play::serverbound::PLAYER_COMMAND, |w| {
+                                w.varint(0);
+                                w.varint(6);
+                                w.varint(0);
                             })
                             .await?;
                         }
