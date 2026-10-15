@@ -19,7 +19,7 @@ use crate::world::item::component::{self as dc};
 use crate::world::item::{ItemStack, bone_meal_item, honeycomb_item};
 use crate::world::level::block::entity::beehive_block_entity::BeeReleaseStatus;
 use crate::world::level::block::respawn_anchor_block::CHARGE;
-use crate::world::level::block::{self, beehive_block, respawn_anchor_block};
+use crate::world::level::block::{self, beehive_block, carved_pumpkin_block, respawn_anchor_block};
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::level::BlockGetter;
 
@@ -123,11 +123,12 @@ impl DispenseItemBehavior {
             FlintAndSteel => flint_and_steel_dispense_item_behavior::execute(level, source, dispensed, success),
             BoneMeal => execute_bone_meal(level, source, dispensed, success),
             Tnt => execute_tnt(level, source, dispensed, success),
-            WitherSkeletonSkull | CarvedPumpkin => {
+            WitherSkeletonSkull => {
                 let mut dispensed = dispensed;
                 *success = equipment_dispense_item_behavior::dispense_equipment(level, source, &mut dispensed);
                 dispensed
             }
+            CarvedPumpkin => execute_carved_pumpkin(level, source, dispensed, success),
             ShulkerBox => shulker_box_dispense_behavior::execute(level, source, dispensed, success),
             GlassBottle => execute_glass_bottle(level, source, dispensed, success),
             Glowstone => execute_glowstone(level, source, dispensed, success),
@@ -181,6 +182,18 @@ fn execute_bucket(level: &mut ServerLevel, source: &BlockSource, dispensed: Item
         Some(pickup) => consume_with_remainder(level, source, dispensed, ItemStack::new(pickup.item, 1)),
         None => default_dispense_item_behavior::execute(level, source, dispensed),
     }
+}
+
+fn execute_carved_pumpkin(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack, success: &mut bool) -> ItemStack {
+    let target = target(source);
+    if level.block_state(target).is_air() && carved_pumpkin_block::can_spawn_golem(level, target) {
+        level.set_block(target, blocks::CARVED_PUMPKIN.default_state(), UPDATE_ALL);
+        dispensed.shrink(1);
+        *success = true;
+    } else {
+        *success = equipment_dispense_item_behavior::dispense_equipment(level, source, &mut dispensed);
+    }
+    dispensed
 }
 
 fn execute_bone_meal(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack, success: &mut bool) -> ItemStack {

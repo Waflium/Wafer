@@ -61,7 +61,7 @@ pub mod candle_cake_block;
 mod carpet_block;
 mod cauldron_block;
 mod cartography_table_block;
-mod carved_pumpkin_block;
+pub mod carved_pumpkin_block;
 mod chain_block;
 mod concrete_powder_block;
 mod cross_collision_block;
