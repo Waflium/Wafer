@@ -31,6 +31,7 @@ pub mod ender_eye_item;
 pub mod flint_and_steel_item;
 pub mod food_on_a_stick_item;
 pub mod throwable_potion_item;
+pub mod trading;
 pub mod trident_item;
 mod item_stack;
 pub mod honeycomb_item;

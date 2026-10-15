@@ -69,6 +69,17 @@ impl DoorBlock {
     }
 }
 
+pub fn is_open(state: BlockState) -> bool {
+    state.get(OPEN)
+}
+
+pub fn set_open(source_entity: Option<EntityId>, level: &mut ServerLevel, state: BlockState, pos: BlockPos, should_open: bool) {
+    if is_door(state) && state.get(OPEN) != should_open {
+        level.set_block(pos, state.set(OPEN, should_open), UPDATE_CLIENTS | UPDATE_IMMEDIATE);
+        DoorBlock::new(state.block()).play_sound(source_entity, level, pos, should_open);
+    }
+}
+
 fn is_door(state: BlockState) -> bool {
     state.block().is_instance_of("DoorBlock")
 }

@@ -95,6 +95,9 @@ impl DataComponentGetter for EntityComponents<'_> {
                 MobKind::Frog(_) if ty == dc::FROG_VARIANT => {
                     return Some(Cow::Owned(Nbt::String(variant_utils::variant_name(frog::VARIANT_REGISTRY, frog::get_variant(&mob.entity)).to_string())));
                 }
+                MobKind::Villager(_) if ty == dc::VILLAGER_VARIANT => {
+                    return Some(Cow::Owned(super::npc::villager::villager::get_villager_variant(mob)));
+                }
                 _ => {}
             }
         }

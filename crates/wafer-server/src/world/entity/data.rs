@@ -77,6 +77,7 @@ pub enum DataValue {
     CatSoundVariant(i32),
     ArmadilloState(i32),
     FrogVariant(i32),
+    VillagerData(super::npc::villager::villager_data::VillagerData),
 }
 
 impl DataValue {
@@ -111,6 +112,7 @@ impl DataValue {
             DataValue::CatSoundVariant(_) => 22,
             DataValue::ArmadilloState(_) => 36,
             DataValue::FrogVariant(_) => 27,
+            DataValue::VillagerData(_) => 18,
         }
     }
 
@@ -161,6 +163,7 @@ impl DataValue {
             DataValue::CatVariant(id) | DataValue::CatSoundVariant(id) => w.varint(*id),
             DataValue::ArmadilloState(id) => w.varint(*id),
             DataValue::FrogVariant(id) => w.varint(*id),
+            DataValue::VillagerData(data) => data.write(w),
         }
     }
 }

@@ -534,7 +534,23 @@ impl ServerLevel {
         }
     }
 
+    pub fn on_item_pickup(&mut self, id: EntityId, item_entity: EntityId) {
+        let Some(super::LevelEntity::Item(item)) = self.entities.get(&item_entity) else { return };
+        let item_stack = item.item.clone();
+        let owner = item.thrower.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid)).filter(|&owner| self.is_player(owner));
+        if let Some(owner) = owner {
+            crate::advancements::triggers::criteria_triggers::THROWN_ITEM_PICKED_UP_BY_ENTITY.trigger(self, owner, &item_stack, id);
+        }
+    }
+
     pub fn set_last_hurt_by_mob(&mut self, id: EntityId, hurt_by: Option<EntityId>) {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Villager(_)) => self.villager_set_last_hurt_by_mob(id, hurt_by),
+            _ => self.living_entity_set_last_hurt_by_mob(id, hurt_by),
+        }
+    }
+
+    pub fn living_entity_set_last_hurt_by_mob(&mut self, id: EntityId, hurt_by: Option<EntityId>) {
         let uuid = hurt_by.map(|hurt_by| self.entity(hurt_by).uuid);
         let tick_count = self.entity(id).tick_count;
         let living = self.living_mut(id);
@@ -1335,6 +1351,8 @@ impl ServerLevel {
             self.wolf_die(id, source);
         } else if self.is_cat(id) {
             self.tamable_animal_die(id, source);
+        } else if self.is_villager(id) {
+            self.villager_die(id, source);
         } else {
             self.living_entity_die(id, source);
         }
@@ -1477,6 +1495,7 @@ impl ServerLevel {
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => self.ageable_water_creature_get_base_experience_reward(id),
             Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_)) => self.water_animal_get_base_experience_reward(id),
+            Some(MobKind::Villager(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1965,6 +1984,7 @@ impl ServerLevel {
             Some(MobKind::Pufferfish(_)) => self.pufferfish_ai_step(id),
             Some(MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_ai_step(id),
             Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
+            Some(MobKind::Villager(_)) => self.ageable_mob_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -2968,6 +2988,8 @@ impl ServerLevel {
     pub fn stop_sleeping(&mut self, id: EntityId) {
         if self.is_player(id) {
             self.stop_sleep_in_bed(id, true, true);
+        } else if self.is_villager(id) {
+            self.villager_stop_sleeping(id);
         } else {
             self.living_entity_stop_sleeping(id);
         }

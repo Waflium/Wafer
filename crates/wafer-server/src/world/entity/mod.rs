@@ -87,7 +87,10 @@ impl LevelEntity {
         match self {
             LevelEntity::Mob(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) => match self.entity().custom_name() {
                 Some(name) => name,
-                None => description(wafer_data::registry::ENTITY_TYPE[self.entity().entity_type as usize]),
+                None => match self {
+                    LevelEntity::Mob(mob) if matches!(mob.kind, mob::MobKind::Villager(_)) => npc::villager::villager::get_type_name(mob),
+                    _ => description(wafer_data::registry::ENTITY_TYPE[self.entity().entity_type as usize]),
+                },
             },
             LevelEntity::Item(item) => crate::network::chat::Component::translatable(item.item.item.info().description_id),
             LevelEntity::LightningBolt(_) => crate::network::chat::Component::translatable("entity.minecraft.lightning_bolt"),

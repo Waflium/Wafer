@@ -116,6 +116,7 @@ impl ServerLevel {
             MobKind::Axolotl(_) => self.axolotl_get_breed_offspring(id, partner),
             MobKind::Frog(_) => self.frog_get_breed_offspring(id, partner),
             MobKind::Tadpole(_) => None,
+            MobKind::Villager(_) => self.villager_get_breed_offspring(id, partner),
         }
     }
 
@@ -177,6 +178,9 @@ impl ServerLevel {
         let Some(mob) = self.mob_mut(id) else { return };
         if mob.set_age(age) {
             self.refresh_mob_dimensions(id);
+            if self.is_villager(id) {
+                self.villager_age_boundary_reached(id);
+            }
         }
     }
 

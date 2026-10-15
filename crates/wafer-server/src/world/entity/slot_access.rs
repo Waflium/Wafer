@@ -21,6 +21,7 @@ pub enum LevelSlot {
     Crafting(EntityId, usize),
     Inventory(EntityId, usize),
     EnderChest(EntityId, usize),
+    VillagerInventory(EntityId, usize),
     Item(EntityId),
     Container(ContainerRef, usize),
     ChestedHorseChest(EntityId),
@@ -83,6 +84,12 @@ impl ServerLevel {
         {
             return Some(inventory_slot);
         }
+        if self.is_abstract_villager(id) {
+            let inventory_slot = slot - super::npc::villager::abstract_villager::VILLAGER_SLOT_OFFSET;
+            if inventory_slot >= 0 && (inventory_slot as usize) < self.abstract_villager(id).inventory.get_container_size() {
+                return Some(LevelSlot::VillagerInventory(id, inventory_slot as usize));
+            }
+        }
         if self.is_living(id) {
             return get_equipment_slot(slot).map(|slot| LevelSlot::Equipment { entity: id, slot });
         }
@@ -112,6 +119,7 @@ impl ServerLevel {
             }
             LevelSlot::Inventory(player, index) => self.player(player).inventory.get_item(index),
             LevelSlot::EnderChest(player, index) => self.player(player).ender_chest_inventory.items.get(index).cloned().unwrap_or_else(ItemStack::empty),
+            LevelSlot::VillagerInventory(villager, index) => self.abstract_villager(villager).inventory.get_item(index).clone(),
             LevelSlot::Item(id) => match self.entities.get(&id) {
                 Some(LevelEntity::Item(item)) => item.item.clone(),
                 _ => ItemStack::empty(),
@@ -147,6 +155,7 @@ impl ServerLevel {
             }
             LevelSlot::Inventory(player, index) => self.player_mut(player).inventory.slots[inventory_slot(index)] = (!item_stack.is_empty()).then_some(item_stack),
             LevelSlot::EnderChest(player, index) => self.set_item(ContainerRef::PlayerEnderChest(player), index, item_stack),
+            LevelSlot::VillagerInventory(villager, index) => self.abstract_villager_mut(villager).inventory.set_item(index, item_stack),
             LevelSlot::Item(id) => {
                 if let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) {
                     item.set_item(item_stack);
@@ -176,6 +185,7 @@ impl ServerLevel {
             }
             LevelSlot::Inventory(player, index) => self.player_mut(player).inventory.slots[inventory_slot(index)] = Some(item_stack),
             LevelSlot::EnderChest(player, index) => self.put_item(ContainerRef::PlayerEnderChest(player), index, item_stack),
+            LevelSlot::VillagerInventory(villager, index) => self.abstract_villager_mut(villager).inventory.items[index] = item_stack,
             LevelSlot::Item(id) => {
                 if let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) {
                     item.item = item_stack;

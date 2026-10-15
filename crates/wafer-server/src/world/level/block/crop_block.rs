@@ -104,6 +104,19 @@ pub struct CropBlock;
 
 impl Crop for CropBlock {}
 
+pub fn as_crop(block: Block) -> Option<&'static dyn Crop> {
+    if !block.is_instance_of("CropBlock") {
+        return None;
+    }
+    Some(if block.is_instance_of("BeetrootBlock") {
+        &super::beetroot_block::BeetrootBlock
+    } else if block.is_instance_of("TorchflowerCropBlock") {
+        &super::torchflower_crop_block::TorchflowerCropBlock
+    } else {
+        &CropBlock
+    })
+}
+
 impl Vegetation for CropBlock {
     fn may_place_on(&self, state: BlockState, _level: &mut dyn LevelReader, _pos: BlockPos) -> bool {
         may_place_on_crop_support(state)

@@ -85,6 +85,17 @@ pub fn empty(level: &mut ServerLevel, pos: BlockPos) {
     level.set_block(pos, new_state, UPDATE_ALL);
 }
 
+pub fn insert_item(source_entity: Option<EntityId>, state: BlockState, level: &mut ServerLevel, item_stack: &mut ItemStack, pos: BlockPos) -> BlockState {
+    let fill_level = state.get(LEVEL_COMPOSTER);
+    if fill_level < 7 && item_stack.has(dc::COMPOSTABLE) {
+        let new_state = add_layer(source_entity, state, level, pos, item_stack);
+        item_stack.shrink(1);
+        new_state
+    } else {
+        state
+    }
+}
+
 pub fn insert_through_container(level: &mut ServerLevel, pos: BlockPos, contents: &ItemStack) {
     if !contents.is_empty() && contents.has(dc::COMPOSTABLE) {
         let state = level.block_state(pos);

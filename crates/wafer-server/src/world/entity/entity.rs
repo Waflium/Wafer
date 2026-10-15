@@ -2556,6 +2556,7 @@ impl ServerLevel {
                     super::mob::MobKind::Axolotl(_) => "Axolotl",
                     super::mob::MobKind::Frog(_) => "Frog",
                     super::mob::MobKind::Tadpole(_) => "Tadpole",
+                    super::mob::MobKind::Villager(_) => "Villager",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

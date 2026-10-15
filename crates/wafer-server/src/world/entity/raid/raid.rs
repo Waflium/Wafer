@@ -20,6 +20,22 @@ impl Raid {
         match *self {}
     }
 
+    pub fn is_victory(&self) -> bool {
+        match *self {}
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        match *self {}
+    }
+
+    pub fn has_first_wave_spawned(&self) -> bool {
+        match *self {}
+    }
+
+    pub fn is_between_waves(&self) -> bool {
+        match *self {}
+    }
+
     pub fn get_leader(&self, _wave: i32) -> Option<EntityId> {
         match *self {}
     }

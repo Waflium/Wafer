@@ -110,6 +110,7 @@ impl ServerLevel {
             MobKind::Axolotl(_) => axolotl::axolotl::is_food(item_stack),
             MobKind::Frog(_) => frog::frog::is_food(item_stack),
             MobKind::Tadpole(_) => false,
+            MobKind::Villager(_) => false,
         }
     }
 

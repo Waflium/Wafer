@@ -370,6 +370,7 @@ impl ServerLevel {
             "minecraft:axolotl" => LevelEntity::Mob(Box::new(super::animal::axolotl::axolotl::Axolotl::create())),
             "minecraft:frog" => LevelEntity::Mob(Box::new(super::animal::frog::frog::Frog::create())),
             "minecraft:tadpole" => LevelEntity::Mob(Box::new(super::animal::frog::tadpole::Tadpole::create())),
+            "minecraft:villager" => LevelEntity::Mob(Box::new(super::npc::villager::villager::Villager::create())),
             "minecraft:zombie" => LevelEntity::Mob(Box::new(super::monster::zombie::zombie::Zombie::create())),
             "minecraft:husk" => LevelEntity::Mob(Box::new(super::monster::zombie::husk::Husk::create())),
             "minecraft:creeper" => LevelEntity::Mob(Box::new(super::monster::creeper::Creeper::create())),
@@ -464,6 +465,11 @@ impl ServerLevel {
         moved_up: bool,
     ) -> Option<LevelEntity> {
         let mut entity = ServerLevel::create_entity(entity_type)?;
+        if let LevelEntity::Mob(mob) = &mut entity
+            && let super::mob::MobKind::Villager(_) = mob.kind
+        {
+            self.villager_register_brain_goals_detached(mob, Vec3::ZERO);
+        }
         let y_off = if try_move_down {
             entity.entity_mut().set_pos(Vec3::new(spawn_pos.x as f64 + 0.5, (spawn_pos.y + 1) as f64, spawn_pos.z as f64 + 0.5));
             self.get_y_offset(spawn_pos, moved_up, &entity.entity().bounding_box())
