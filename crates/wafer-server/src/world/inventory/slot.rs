@@ -48,6 +48,7 @@ pub enum SlotKind {
     CartographyMap,
     CartographyAdditional,
     CartographyResult,
+    MerchantResult { remove_count: i32 },
 }
 
 #[derive(Clone, Debug)]
@@ -160,7 +161,8 @@ impl ServerLevel {
             | SlotKind::ItemCombinerResult
             | SlotKind::GrindstoneResult
             | SlotKind::LoomResult
-            | SlotKind::CartographyResult => false,
+            | SlotKind::CartographyResult
+            | SlotKind::MerchantResult { .. } => false,
             SlotKind::CartographyMap => cartography_table_menu::map_slot_may_place(stack),
             SlotKind::CartographyAdditional => cartography_table_menu::additional_slot_may_place(stack),
             SlotKind::GrindstoneInput => grindstone_menu::may_place(stack),
@@ -187,6 +189,9 @@ impl ServerLevel {
             let has_item = self.slot_has_item(menu, player, index);
             return self.item_combiner_menu_may_pickup(menu, player, has_item);
         }
+        if let SlotKind::MerchantResult { .. } = menu.slots[index].kind {
+            return self.merchant_result_slot_may_pickup(menu);
+        }
         if let SlotKind::Armor(_) | SlotKind::MountArmor(..) = menu.slots[index].kind {
             let item_stack = self.slot_get(menu, player, index);
             if !item_stack.is_empty() && !self.player(player).game_mode.game_type.is_creative() && crate::world::item::enchantment::enchantment_helper::has_prevent_armor_change(&item_stack) {
@@ -200,10 +205,10 @@ impl ServerLevel {
         if menu.slots[index].kind == SlotKind::NonInteractiveResult {
             return ItemStack::empty();
         }
-        if let SlotKind::FurnaceResult { .. } | SlotKind::Result { .. } = menu.slots[index].kind {
+        if let SlotKind::FurnaceResult { .. } | SlotKind::Result { .. } | SlotKind::MerchantResult { .. } = menu.slots[index].kind {
             let current = self.slot_get(menu, player, index);
             if !current.is_empty()
-                && let SlotKind::FurnaceResult { remove_count } | SlotKind::Result { remove_count, .. } = &mut menu.slots[index].kind
+                && let SlotKind::FurnaceResult { remove_count } | SlotKind::Result { remove_count, .. } | SlotKind::MerchantResult { remove_count } = &mut menu.slots[index].kind
             {
                 *remove_count += amount.min(current.count);
             }
@@ -239,6 +244,7 @@ impl ServerLevel {
                 self.slot_set_changed(menu, player, index);
             }
             SlotKind::Result { .. } => self.result_slot_on_take(menu, player, index, carried),
+            SlotKind::MerchantResult { .. } => self.merchant_result_slot_on_take(menu, player, index, carried),
             SlotKind::CartographyResult => {
                 self.cartography_table_result_slot_on_take(menu, player, carried);
                 self.slot_set_changed(menu, player, index);
@@ -267,6 +273,13 @@ impl ServerLevel {
 
     pub fn slot_on_quick_craft(&mut self, menu: &mut AbstractContainerMenu, player: EntityId, index: usize, picked: &ItemStack, original: &ItemStack) {
         let count = original.count - picked.count;
+        if count > 0
+            && let SlotKind::MerchantResult { remove_count } = &mut menu.slots[index].kind
+        {
+            *remove_count += count;
+            self.merchant_result_slot_check_take_achievements(menu, player, index, &mut original.clone());
+            return;
+        }
         if count > 0
             && let SlotKind::FurnaceResult { remove_count } | SlotKind::Result { remove_count, .. } = &mut menu.slots[index].kind
         {

@@ -26,6 +26,7 @@ pub enum MenuProvider {
     Loom(BlockPos),
     CartographyTable(BlockPos),
     ChestVehicle(EntityId),
+    Merchant(EntityId),
 }
 
 fn menu_kind(entity: &BlockEntity) -> Option<MenuKind> {
@@ -139,6 +140,7 @@ impl ServerLevel {
             MenuProvider::CartographyTable(pos) => {
                 Some((AbstractContainerMenu::cartography_table(container_id, pos), Component::translatable("container.cartography_table")))
             }
+            MenuProvider::Merchant(trader) => Some((AbstractContainerMenu::merchant(container_id, trader), self.display_name(trader))),
             MenuProvider::ChestVehicle(entity) => {
                 if self.container_entity(entity).is_some_and(|container| container.has_loot_table()) && spectator {
                     return None;

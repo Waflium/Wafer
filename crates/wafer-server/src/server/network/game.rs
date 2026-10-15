@@ -219,6 +219,10 @@ impl ServerLevel {
                 r.varint()?;
                 self.do_close_container(id);
             }
+            serverbound::SELECT_TRADE => {
+                let item = r.varint()?;
+                self.handle_select_trade(id, item);
+            }
             serverbound::PICK_ITEM_FROM_BLOCK => {
                 let pos = r.position()?;
                 let include_data = r.bool()?;

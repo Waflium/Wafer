@@ -61,6 +61,7 @@ pub enum MenuKind {
     Loom,
     CartographyTable,
     HorseInventory { mount: EntityId, inventory_columns: usize, inventory_version: u32 },
+    Merchant,
 }
 
 impl MenuKind {
@@ -88,6 +89,7 @@ impl MenuKind {
             MenuKind::Grindstone => "minecraft:grindstone",
             MenuKind::Loom => "minecraft:loom",
             MenuKind::CartographyTable => "minecraft:cartography_table",
+            MenuKind::Merchant => "minecraft:merchant",
         }
     }
 }
@@ -221,6 +223,7 @@ pub struct AbstractContainerMenu {
     pub anvil: Option<AnvilMenu>,
     pub loom: Option<LoomMenu>,
     pub cartography_table: Option<CartographyTableMenu>,
+    pub merchant: Option<super::merchant_menu::MerchantMenu>,
     pub placing_recipe: bool,
     pub slots: Vec<Slot>,
     last_slots: Vec<ItemStack>,
@@ -252,6 +255,7 @@ impl AbstractContainerMenu {
             anvil: None,
             loom: None,
             cartography_table: None,
+            merchant: None,
             placing_recipe: false,
             slots: Vec::new(),
             last_slots: Vec::new(),
@@ -358,6 +362,12 @@ impl AbstractContainerMenu {
                 menu.add_slot(Slot::new(SlotContainer::Menu(cartography_table_menu::RESULT_CONTAINER), 2, SlotKind::CartographyResult));
             }
             MenuKind::HorseInventory { mount, inventory_columns, .. } => horse_inventory_menu::add_mount_slots(&mut menu, mount, inventory_columns),
+            MenuKind::Merchant => {
+                menu.containers.push(MenuContainer::Simple(SimpleContainer::new(SimpleContainerKind::Plain, 3)));
+                menu.add_slot(Slot::new(SlotContainer::Menu(super::merchant_container::CONTAINER), 0, SlotKind::Normal));
+                menu.add_slot(Slot::new(SlotContainer::Menu(super::merchant_container::CONTAINER), 1, SlotKind::Normal));
+                menu.add_slot(Slot::new(SlotContainer::Menu(super::merchant_container::CONTAINER), 2, SlotKind::MerchantResult { remove_count: 0 }));
+            }
         }
         for i in 9..36 {
             menu.add_slot(Slot::new(SlotContainer::Inventory, i, SlotKind::Normal));
@@ -512,6 +522,9 @@ impl ServerLevel {
     }
 
     fn can_take_item_for_pick_all(menu: &AbstractContainerMenu, index: usize) -> bool {
+        if menu.kind == MenuKind::Merchant {
+            return false;
+        }
         match menu.slots[index].kind {
             SlotKind::Result { .. } | SlotKind::StonecutterResult | SlotKind::CartographyResult => false,
             SlotKind::ItemCombinerResult => menu.kind != MenuKind::Smithing,
@@ -551,6 +564,10 @@ impl ServerLevel {
     }
 
     pub fn menu_container_set_item(&mut self, menu: &mut AbstractContainerMenu, player: EntityId, c: usize, slot: usize, mut stack: ItemStack) {
+        if menu.kind == MenuKind::Merchant {
+            self.merchant_container_set_item(menu, slot, stack);
+            return;
+        }
         match &mut menu.containers[c] {
             MenuContainer::Simple(container) => {
                 stack.limit_size(container.get_max_stack_size().min(stack.max_stack_size()));
@@ -566,6 +583,9 @@ impl ServerLevel {
     }
 
     pub fn menu_container_remove_item(&mut self, menu: &mut AbstractContainerMenu, player: EntityId, c: usize, slot: usize, count: i32) -> ItemStack {
+        if menu.kind == MenuKind::Merchant {
+            return self.merchant_container_remove_item(menu, slot, count);
+        }
         if let MenuContainer::Result(container) = &mut menu.containers[c] {
             return std::mem::replace(&mut container.item, ItemStack::empty());
         }
@@ -585,6 +605,10 @@ impl ServerLevel {
     }
 
     pub fn menu_container_set_changed(&mut self, menu: &mut AbstractContainerMenu, player: EntityId, c: usize) {
+        if menu.kind == MenuKind::Merchant {
+            self.merchant_container_update_sell_item(menu);
+            return;
+        }
         let slots_changed = match menu.containers[c] {
             MenuContainer::Simple(_) if menu.kind == MenuKind::Loom => c == loom_menu::INPUT_CONTAINER,
             MenuContainer::Simple(_) => {
@@ -1013,6 +1037,7 @@ impl ServerLevel {
             MenuKind::Grindstone => self.grindstone_menu_quick_move_stack(menu, player, index, &mut stack),
             MenuKind::Loom => self.loom_menu_quick_move_stack(menu, player, index, &mut stack),
             MenuKind::CartographyTable => self.cartography_table_menu_quick_move_stack(menu, player, index, &mut stack),
+            MenuKind::Merchant => self.merchant_menu_quick_move_stack(menu, player, index, &mut stack, &clicked),
             MenuKind::Stonecutter => {
                 if index == stonecutter_menu::RESULT_SLOT {
                     self.move_item_stack_to(menu, player, &mut stack, stonecutter_menu::INV_SLOT_START, stonecutter_menu::USE_ROW_SLOT_END, true)
@@ -1099,6 +1124,7 @@ impl ServerLevel {
                 | MenuKind::Grindstone
                 | MenuKind::Loom
                 | MenuKind::CartographyTable
+                | MenuKind::Merchant
         ) {
             if stack.count == clicked.count {
                 return ItemStack::empty();
@@ -1258,6 +1284,7 @@ impl ServerLevel {
             MenuKind::Loom => self.still_valid_access(menu.access, player, wafer_data::blocks::LOOM),
             MenuKind::CartographyTable => self.still_valid_access(menu.access, player, wafer_data::blocks::CARTOGRAPHY_TABLE),
             MenuKind::HorseInventory { mount, inventory_version, .. } => self.abstract_mount_inventory_menu_still_valid(menu, player, mount, inventory_version),
+            MenuKind::Merchant => self.merchant_menu_still_valid(menu, player),
             MenuKind::Anvil => menu.access.is_none_or(|pos| {
                 crate::world::level::BlockGetter::block_state(self, pos).block().is(&wafer_data::block_tags::ANVIL) && self.is_within_block_interaction_range(player, pos, 4.0)
             }),
@@ -1296,6 +1323,7 @@ impl ServerLevel {
             MenuKind::Grindstone => self.grindstone_menu_removed(menu, player),
             MenuKind::Loom => self.loom_menu_removed(menu, player),
             MenuKind::CartographyTable => self.cartography_table_menu_removed(menu, player),
+            MenuKind::Merchant => self.merchant_menu_removed(menu, player),
             _ => {}
         }
     }
