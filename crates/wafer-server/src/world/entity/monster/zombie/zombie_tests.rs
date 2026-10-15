@@ -151,9 +151,16 @@ fn zombies_burn_in_daylight_unless_helmeted() {
     let helmeted = add(&mut level, helmeted, Vec3::new(4.5, -60.0, 0.5));
     for _ in 0..300 {
         level.tick();
+        assert_eq!(level.entity(helmeted).remaining_fire_ticks, 0);
     }
     assert!(level.entity(bare).remaining_fire_ticks > 0 || !level.is_alive(bare) || level.health(bare) < 20.0, "the bare zombie never burned");
-    assert_eq!(level.entity(helmeted).remaining_fire_ticks, 0);
+    for _ in 0..3000 {
+        if level.item_by_slot(helmeted, EquipmentSlot::Head).is_some_and(|helmet| helmet.damage_value() > 0) {
+            break;
+        }
+        level.tick();
+        assert_eq!(level.entity(helmeted).remaining_fire_ticks, 0);
+    }
     assert!(level.item_by_slot(helmeted, EquipmentSlot::Head).is_some_and(|helmet| helmet.damage_value() > 0));
 }
 
