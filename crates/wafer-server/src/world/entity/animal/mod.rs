@@ -17,8 +17,10 @@ use crate::world::{InteractionHand, InteractionResult};
 
 pub mod ageable_water_creature;
 pub mod armadillo;
+pub mod axolotl;
 pub mod chicken;
 pub mod cow;
+pub mod frog;
 pub mod goat;
 pub mod equine;
 #[cfg(test)]
@@ -105,6 +107,9 @@ impl ServerLevel {
             MobKind::Cat(_) => feline::cat::is_food(item_stack),
             MobKind::Ocelot(_) => feline::ocelot::is_food(item_stack),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => equine::abstract_horse::is_food(item_stack),
+            MobKind::Axolotl(_) => axolotl::axolotl::is_food(item_stack),
+            MobKind::Frog(_) => frog::frog::is_food(item_stack),
+            MobKind::Tadpole(_) => false,
         }
     }
 
@@ -119,6 +124,8 @@ impl ServerLevel {
             self.cat_play_eating_sound(id);
         } else if let MobKind::Armadillo(_) = mob.kind {
             self.armadillo_play_eating_sound(id);
+        } else if let MobKind::Frog(_) = mob.kind {
+            self.frog_play_eating_sound(id);
         }
     }
 
@@ -127,19 +134,26 @@ impl ServerLevel {
         if self.is_food(id, &item_stack) {
             let age = self.mob(id).expect("an animal").ageable().expect("an animal").age;
             if age == 0 && self.can_fall_in_love(id) {
-                self.use_player_item(player, hand, &mut item_stack);
+                self.animal_use_player_item(id, player, hand, &mut item_stack);
                 self.set_in_love(id, Some(player));
                 self.play_eating_sound(id);
                 return InteractionResult::SUCCESS_SERVER;
             }
             if self.can_age_up(id) {
-                self.use_player_item(player, hand, &mut item_stack);
+                self.animal_use_player_item(id, player, hand, &mut item_stack);
                 self.age_up(id, get_speed_up_seconds_when_feeding(-age), true);
                 self.play_eating_sound(id);
                 return InteractionResult::SUCCESS;
             }
         }
         self.ageable_mob_mob_interact(id, player, hand)
+    }
+
+    fn animal_use_player_item(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, item_stack: &mut ItemStack) {
+        match self.mob(id).expect("an animal").kind {
+            MobKind::Axolotl(_) => self.axolotl_use_player_item(player, hand, item_stack),
+            _ => self.use_player_item(player, hand, item_stack),
+        }
     }
 
     pub fn can_fall_in_love(&self, id: EntityId) -> bool {
@@ -195,6 +209,13 @@ impl ServerLevel {
     }
 
     pub fn spawn_child_from_breeding(&mut self, id: EntityId, partner: EntityId) {
+        match self.mob(id).expect("an animal").kind {
+            MobKind::Frog(_) => self.frog_spawn_child_from_breeding(id, partner),
+            _ => self.animal_spawn_child_from_breeding(id, partner),
+        }
+    }
+
+    pub fn animal_spawn_child_from_breeding(&mut self, id: EntityId, partner: EntityId) {
         let Some(mut offspring) = self.get_breed_offspring(id, partner) else { return };
         offspring.set_baby(true);
         let e = self.entity(id);

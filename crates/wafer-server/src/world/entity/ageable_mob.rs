@@ -113,6 +113,9 @@ impl ServerLevel {
             MobKind::Horse(_) => self.horse_get_breed_offspring(id, partner),
             MobKind::Donkey(_) => self.donkey_get_breed_offspring(id, partner),
             MobKind::Mule(_) => self.mule_get_breed_offspring(id, partner),
+            MobKind::Axolotl(_) => self.axolotl_get_breed_offspring(id, partner),
+            MobKind::Frog(_) => self.frog_get_breed_offspring(id, partner),
+            MobKind::Tadpole(_) => None,
         }
     }
 
@@ -229,7 +232,7 @@ impl ServerLevel {
         }
     }
 
-    fn fudge_position_after_size_change(&mut self, id: EntityId, previous: super::EntityDimensions) -> bool {
+    pub fn fudge_position_after_size_change(&mut self, id: EntityId, previous: super::EntityDimensions) -> bool {
         let context = crate::world::phys::shapes::collision_context::CollisionContext::of(self, id);
         let e = self.entity(id);
         match self.free_position_after_size_change(&context, e.position(), e.dimensions, previous) {

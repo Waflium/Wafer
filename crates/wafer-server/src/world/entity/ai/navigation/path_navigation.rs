@@ -17,6 +17,7 @@ pub enum PathNavigationKind {
     Ground,
     Amphibious,
     WaterBound,
+    Frog,
 }
 
 pub struct PathNavigation {
@@ -90,6 +91,7 @@ impl PathNavigation {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_create_path_finder(max_visited_nodes),
             PathNavigationKind::Amphibious => self.amphibious_path_navigation_create_path_finder(max_visited_nodes),
+            PathNavigationKind::Frog => self.frog_path_navigation_create_path_finder(max_visited_nodes),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_create_path_finder(max_visited_nodes),
         }
     }
@@ -97,7 +99,7 @@ impl PathNavigation {
     pub fn can_update_path(&self, level: &ServerLevel, mob: EntityId) -> bool {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_can_update_path(level, mob),
-            PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_update_path(),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.amphibious_path_navigation_can_update_path(),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_update_path(level, mob),
         }
     }
@@ -105,7 +107,7 @@ impl PathNavigation {
     pub fn get_temp_mob_pos(&self, level: &ServerLevel, mob: EntityId) -> Vec3 {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_get_temp_mob_pos(level, mob),
-            PathNavigationKind::Amphibious => self.amphibious_path_navigation_get_temp_mob_pos(level, mob),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.amphibious_path_navigation_get_temp_mob_pos(level, mob),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_temp_mob_pos(level, mob),
         }
     }
@@ -113,14 +115,14 @@ impl PathNavigation {
     pub fn trim_path(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_trim_path(level, mob),
-            PathNavigationKind::Amphibious | PathNavigationKind::WaterBound => self.path_navigation_trim_path(level),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::WaterBound => self.path_navigation_trim_path(level),
         }
     }
 
     pub fn can_navigate_ground(&self) -> bool {
         match self.kind {
             PathNavigationKind::Ground => self.ground_path_navigation_can_navigate_ground(),
-            PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_navigate_ground(),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.amphibious_path_navigation_can_navigate_ground(),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_navigate_ground(),
         }
     }
@@ -222,7 +224,7 @@ impl PathNavigation {
     pub fn create_path(&mut self, level: &ServerLevel, mob: EntityId, pos: BlockPos, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_create_path(level, mob, pos, reach_range)
-        } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::WaterBound) {
+        } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::WaterBound) {
             self.path_navigation_create_path(level, mob, pos, reach_range)
         } else {
             self.ground_path_navigation_create_path(level, mob, pos, reach_range)
@@ -232,7 +234,7 @@ impl PathNavigation {
     pub fn create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_create_path_to_entity(level, mob, target, reach_range)
-        } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::WaterBound) {
+        } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::WaterBound) {
             self.path_navigation_create_path_to_entity(level, mob, target, reach_range)
         } else {
             self.ground_path_navigation_create_path_to_entity(level, mob, target, reach_range)
@@ -319,7 +321,7 @@ impl PathNavigation {
     fn get_ground_y(&self, level: &ServerLevel, target: Vec3) -> f64 {
         match self.kind {
             PathNavigationKind::Ground => self.path_navigation_get_ground_y(level, target),
-            PathNavigationKind::Amphibious => self.amphibious_path_navigation_get_ground_y(target),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.amphibious_path_navigation_get_ground_y(target),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_ground_y(target),
         }
     }
@@ -459,7 +461,7 @@ impl PathNavigation {
     fn can_move_directly(&self, level: &mut ServerLevel, mob: EntityId, start_pos: Vec3, stop_pos: Vec3) -> bool {
         match self.kind {
             PathNavigationKind::Ground => self.path_navigation_can_move_directly(start_pos, stop_pos),
-            PathNavigationKind::Amphibious => self.amphibious_path_navigation_can_move_directly(level, mob, start_pos, stop_pos),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.amphibious_path_navigation_can_move_directly(level, mob, start_pos, stop_pos),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_move_directly(level, mob, start_pos, stop_pos),
         }
     }
@@ -469,13 +471,20 @@ impl PathNavigation {
     }
 
     pub fn can_cut_corner(&self, path_type: PathType) -> bool {
+        match self.kind {
+            PathNavigationKind::Frog => self.frog_path_navigation_can_cut_corner(path_type),
+            _ => self.path_navigation_can_cut_corner(path_type),
+        }
+    }
+
+    pub fn path_navigation_can_cut_corner(&self, path_type: PathType) -> bool {
         path_type != PathType::FireInNeighbor && path_type != PathType::DamagingInNeighbor && path_type != PathType::WalkableDoor
     }
 
     pub fn is_stable_destination(&self, level: &ServerLevel, pos: BlockPos) -> bool {
         match self.kind {
             PathNavigationKind::Ground => self.path_navigation_is_stable_destination(level, pos),
-            PathNavigationKind::Amphibious => self.amphibious_path_navigation_is_stable_destination(level, pos),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.amphibious_path_navigation_is_stable_destination(level, pos),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_is_stable_destination(level, pos),
         }
     }
@@ -487,7 +496,7 @@ impl PathNavigation {
     pub fn set_can_float(&mut self, can_float: bool) {
         match self.kind {
             PathNavigationKind::Ground => self.path_navigation_set_can_float(can_float),
-            PathNavigationKind::Amphibious => self.amphibious_path_navigation_set_can_float(can_float),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.amphibious_path_navigation_set_can_float(can_float),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_set_can_float(can_float),
         }
     }
@@ -522,7 +531,7 @@ impl PathNavigation {
     pub fn get_max_vertical_distance_to_waypoint(&self) -> f32 {
         match self.kind {
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_max_vertical_distance_to_waypoint(),
-            PathNavigationKind::Ground | PathNavigationKind::Amphibious => self.path_navigation_get_max_vertical_distance_to_waypoint(),
+            PathNavigationKind::Ground | PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.path_navigation_get_max_vertical_distance_to_waypoint(),
         }
     }
 

@@ -1,6 +1,8 @@
 use wafer_data::items;
 use wafer_protocol::nbt::Nbt;
 
+use super::animal::axolotl::axolotl::{self, Axolotl};
+use super::animal::frog::tadpole::{self, Tadpole};
 use super::data::{DataValue, ids};
 use super::mob::{Mob, MobKind};
 use super::{EntityId, RemovalReason, sound_event};
@@ -99,19 +101,25 @@ pub fn can_be_picked_up_with_bucket(item_stack: &ItemStack) -> bool {
 
 impl Mob {
     pub fn is_bucketable(&self) -> bool {
-        self.is_abstract_fish()
+        self.is_abstract_fish() || matches!(self.kind, MobKind::Axolotl(_))
     }
 
     pub fn save_to_bucket_tag(&self, bucket: &mut ItemStack) {
         match self.kind {
             MobKind::Salmon(_) => self.salmon_save_to_bucket_tag(bucket),
             MobKind::TropicalFish(_) => self.tropical_fish_save_to_bucket_tag(bucket),
+            MobKind::Axolotl(_) => Axolotl::save_to_bucket_tag(self, bucket),
+            MobKind::Tadpole(_) => Tadpole::save_to_bucket_tag(self, bucket),
             _ => self.abstract_fish_save_to_bucket_tag(bucket),
         }
     }
 
     pub fn load_from_bucket_tag(&mut self, tag: &Nbt) {
-        self.abstract_fish_load_from_bucket_tag(tag);
+        match self.kind {
+            MobKind::Axolotl(_) => Axolotl::load_from_bucket_tag(self, tag),
+            MobKind::Tadpole(_) => Tadpole::load_from_bucket_tag(self, tag),
+            _ => self.abstract_fish_load_from_bucket_tag(tag),
+        }
     }
 
     pub fn get_bucket_item_stack(&self) -> ItemStack {
@@ -120,12 +128,18 @@ impl Mob {
             MobKind::Salmon(_) => items::SALMON_BUCKET,
             MobKind::Pufferfish(_) => items::PUFFERFISH_BUCKET,
             MobKind::TropicalFish(_) => items::TROPICAL_FISH_BUCKET,
+            MobKind::Axolotl(_) => return axolotl::get_bucket_item_stack(),
+            MobKind::Tadpole(_) => return tadpole::get_bucket_item_stack(),
             _ => unreachable!("not bucketable"),
         };
         ItemStack::new(item, 1)
     }
 
     pub fn get_pickup_sound(&self) -> &'static str {
-        super::animal::fish::abstract_fish::AbstractFish::get_pickup_sound()
+        match self.kind {
+            MobKind::Axolotl(_) => axolotl::get_pickup_sound(),
+            MobKind::Tadpole(_) => tadpole::get_pickup_sound(),
+            _ => super::animal::fish::abstract_fish::AbstractFish::get_pickup_sound(),
+        }
     }
 }

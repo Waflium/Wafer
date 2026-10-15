@@ -76,6 +76,7 @@ pub enum DataValue {
     CatVariant(i32),
     CatSoundVariant(i32),
     ArmadilloState(i32),
+    FrogVariant(i32),
 }
 
 impl DataValue {
@@ -109,6 +110,7 @@ impl DataValue {
             DataValue::CatVariant(_) => 21,
             DataValue::CatSoundVariant(_) => 22,
             DataValue::ArmadilloState(_) => 36,
+            DataValue::FrogVariant(_) => 27,
         }
     }
 
@@ -158,6 +160,7 @@ impl DataValue {
             DataValue::WolfVariant(id) | DataValue::WolfSoundVariant(id) => w.varint(*id),
             DataValue::CatVariant(id) | DataValue::CatSoundVariant(id) => w.varint(*id),
             DataValue::ArmadilloState(id) => w.varint(*id),
+            DataValue::FrogVariant(id) => w.varint(*id),
         }
     }
 }

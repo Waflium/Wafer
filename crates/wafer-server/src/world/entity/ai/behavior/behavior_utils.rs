@@ -1,4 +1,5 @@
 use wafer_core::{BlockPos, Vec3};
+use wafer_data::EquipmentSlot;
 
 use super::entity_tracker::EntityTracker;
 use super::position_tracker::PositionTracker;
@@ -7,6 +8,7 @@ use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::memory::walk_target::WalkTarget;
 use crate::world::entity::ai::util::default_random_pos;
+use crate::world::item::{ItemStack, projectile_weapon_item};
 use crate::world::level::BlockGetter;
 
 pub fn lock_gaze_and_walk_to_each_other(level: &mut ServerLevel, entity1: EntityId, entity2: EntityId, speed_modifier: f32, close_enough_distance: i32) {
@@ -46,6 +48,20 @@ pub fn set_walk_and_look_target_memories(level: &mut ServerLevel, walker: Entity
     let brain = level.get_brain_mut(walker);
     brain.set_memory(memory_module_type::LOOK_TARGET, target);
     brain.set_memory(memory_module_type::WALK_TARGET, walk_target);
+}
+
+pub fn is_within_attack_range(level: &ServerLevel, body: EntityId, target: EntityId, projectile_attack_range_margin: i32) -> bool {
+    let main_hand_item = level.item_by_slot(body, EquipmentSlot::Mainhand).unwrap_or_else(ItemStack::empty);
+    if projectile_weapon_item::is_projectile_weapon(main_hand_item.get_item()) && level.can_use_non_melee_weapon(body, &main_hand_item) {
+        let max_allowed_distance = (projectile_weapon_item::get_default_projectile_range(main_hand_item.get_item()) - projectile_attack_range_margin) as f64;
+        level.entity(body).distance_to_sqr(level.entity(target)) < max_allowed_distance * max_allowed_distance
+    } else {
+        level.is_within_melee_attack_range(body, target)
+    }
+}
+
+pub fn is_breeding(level: &ServerLevel, body: EntityId) -> bool {
+    level.get_brain(body).has_memory_value(memory_module_type::BREED_TARGET)
 }
 
 pub fn find_section_closest_to_village(level: &ServerLevel, center: BlockPos, radius: i32) -> BlockPos {

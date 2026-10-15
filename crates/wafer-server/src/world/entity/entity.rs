@@ -597,6 +597,10 @@ impl Entity {
         self.data.set(ids::AIR_SUPPLY, DataValue::Int(supply));
     }
 
+    pub fn get_max_air_supply(&self) -> i32 {
+        if self.entity_type == super::entity_types::AXOLOTL.id { super::animal::axolotl::axolotl::AXOLOTL_TOTAL_AIR_SUPPLY } else { TOTAL_AIR_SUPPLY }
+    }
+
     pub fn is_freezing(&self) -> bool {
         self.ticks_frozen() > 0
     }
@@ -946,6 +950,8 @@ impl ServerLevel {
                 _ if self.is_drowned(id) => super::monster::zombie::drowned::Drowned::is_pushed_by_fluid(self.mob(id).expect("a drowned")),
                 _ if self.mob(id).is_some_and(super::mob::Mob::is_squid) => super::animal::ageable_water_creature::is_pushed_by_fluid(),
                 _ if self.mob(id).is_some_and(super::mob::Mob::is_water_animal) => super::animal::fish::water_animal::is_pushed_by_fluid(),
+                _ if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) => super::animal::axolotl::axolotl::is_pushed_by_fluid(),
+                _ if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Frog(_))) => super::animal::frog::frog::is_pushed_by_fluid(),
                 _ => true,
             },
         }
@@ -1520,6 +1526,7 @@ impl ServerLevel {
     pub fn calculate_fall_damage(&self, id: EntityId, fall_distance: f64, damage_modifier: f32) -> i32 {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(super::mob::MobKind::Goat(_)) => self.goat_calculate_fall_damage(id, fall_distance, damage_modifier),
+            Some(super::mob::MobKind::Frog(_)) => self.frog_calculate_fall_damage(id, fall_distance, damage_modifier),
             _ => self.living_entity_calculate_fall_damage(id, fall_distance, damage_modifier),
         }
     }
@@ -1712,6 +1719,8 @@ impl ServerLevel {
             if self.is_drowned(id) { super::monster::zombie::drowned::Drowned::get_swim_sound() } else { self.monster_get_swim_sound() }
         } else if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
             super::animal::fish::abstract_fish::AbstractFish::get_swim_sound()
+        } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) {
+            super::animal::axolotl::axolotl::get_swim_sound()
         } else {
             "minecraft:entity.generic.swim"
         };
@@ -1973,6 +1982,7 @@ impl ServerLevel {
         }
         let player = self.is_player(id);
         let monster = self.is_monster(id);
+        let axolotl = self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_)));
         let e = self.entity_mut(id);
         let m = e.delta_movement;
         let speed = (((m.x * m.x * 0.2f32 as f64 + m.y * m.y + m.z * m.z * 0.2f32 as f64).sqrt() as f32) * 0.2).min(1.0);
@@ -1981,6 +1991,7 @@ impl ServerLevel {
             (true, true) => "minecraft:entity.player.splash",
             (true, false) => "minecraft:entity.player.splash.high_speed",
             (false, true) if monster => self.monster_get_swim_splash_sound(),
+            (false, true) if axolotl => super::animal::axolotl::axolotl::get_swim_splash_sound(),
             (false, _) => "minecraft:entity.generic.splash",
         };
         self.entity_play_sound(id, sound_event(sound), speed, pitch);
@@ -2231,6 +2242,8 @@ impl ServerLevel {
     pub fn base_tick(&mut self, id: EntityId) {
         if self.mob(id).is_some_and(super::mob::Mob::is_squid) {
             self.ageable_water_creature_base_tick(id);
+        } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) {
+            self.axolotl_base_tick(id);
         } else if self.mob(id).is_some_and(super::mob::Mob::is_water_animal) {
             self.water_animal_base_tick(id);
         } else if self.is_mob(id) {
@@ -2281,6 +2294,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Horse(_) | super::mob::MobKind::Donkey(_) | super::mob::MobKind::Mule(_)) => {
                     return self.abstract_horse_hurt_server(id, source, damage);
                 }
+                Some(super::mob::MobKind::Axolotl(_)) => return self.axolotl_hurt_server(id, source, damage),
                 _ => {}
             }
             return self.living_entity_hurt_server(id, source, damage);
@@ -2539,6 +2553,9 @@ impl ServerLevel {
                     super::mob::MobKind::Horse(_) => "Horse",
                     super::mob::MobKind::Donkey(_) => "Donkey",
                     super::mob::MobKind::Mule(_) => "Mule",
+                    super::mob::MobKind::Axolotl(_) => "Axolotl",
+                    super::mob::MobKind::Frog(_) => "Frog",
+                    super::mob::MobKind::Tadpole(_) => "Tadpole",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

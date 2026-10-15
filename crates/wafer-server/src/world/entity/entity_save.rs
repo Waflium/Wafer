@@ -111,7 +111,8 @@ impl Entity {
         self.set_old_pos_and_rot();
         self.fall_distance = number(nbt, "fall_distance").unwrap_or(0.0);
         self.remaining_fire_ticks = number(nbt, "Fire").map_or(0, |v| v as i16 as i32);
-        self.set_air_supply(number(nbt, "Air").map_or(super::TOTAL_AIR_SUPPLY, |v| v as i32));
+        let max_air_supply = self.get_max_air_supply();
+        self.set_air_supply(number(nbt, "Air").map_or(max_air_supply, |v| v as i32));
         self.on_ground = flag(nbt, "OnGround");
         self.invulnerable = flag(nbt, "Invulnerable");
         self.invulnerable_time = number(nbt, "invulnerable_time").map_or(0, |v| v as i32);
@@ -366,6 +367,9 @@ impl ServerLevel {
             "minecraft:sheep" => LevelEntity::Mob(Box::new(super::animal::sheep::sheep::Sheep::create())),
             "minecraft:goat" => LevelEntity::Mob(Box::new(super::animal::goat::goat::Goat::create())),
             "minecraft:armadillo" => LevelEntity::Mob(Box::new(super::animal::armadillo::armadillo::Armadillo::create())),
+            "minecraft:axolotl" => LevelEntity::Mob(Box::new(super::animal::axolotl::axolotl::Axolotl::create())),
+            "minecraft:frog" => LevelEntity::Mob(Box::new(super::animal::frog::frog::Frog::create())),
+            "minecraft:tadpole" => LevelEntity::Mob(Box::new(super::animal::frog::tadpole::Tadpole::create())),
             "minecraft:zombie" => LevelEntity::Mob(Box::new(super::monster::zombie::zombie::Zombie::create())),
             "minecraft:husk" => LevelEntity::Mob(Box::new(super::monster::zombie::husk::Husk::create())),
             "minecraft:creeper" => LevelEntity::Mob(Box::new(super::monster::creeper::Creeper::create())),

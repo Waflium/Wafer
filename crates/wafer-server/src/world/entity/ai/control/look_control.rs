@@ -1,10 +1,20 @@
 use wafer_core::mth;
 
 use crate::server::level::ServerLevel;
-use crate::world::entity::EntityId;
+use crate::world::entity::{Entity, EntityId};
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum LookControlKind {
+    #[default]
+    Default,
+    SmoothSwimming(i32),
+    Axolotl(i32),
+    Frog,
+}
 
 #[derive(Default)]
 pub struct LookControl {
+    pub kind: LookControlKind,
     pub y_max_rot_speed: f32,
     pub x_max_rot_angle: f32,
     pub look_at_cooldown: i32,
@@ -25,6 +35,20 @@ impl LookControl {
 
     pub fn is_looking_at_target(&self) -> bool {
         self.look_at_cooldown > 0
+    }
+
+    pub fn get_x_rot_d(&self, e: &Entity) -> Option<f32> {
+        let xd = self.wanted_x - e.x();
+        let yd = self.wanted_y - e.eye_y();
+        let zd = self.wanted_z - e.z();
+        let sd = (xd * xd + zd * zd).sqrt();
+        if !(yd.abs() > 1.0e-5f32 as f64) && !(sd.abs() > 1.0e-5f32 as f64) { None } else { Some((-(mth::atan2(yd, sd) * mth::RAD_TO_DEG as f64)) as f32) }
+    }
+
+    pub fn get_y_rot_d(&self, e: &Entity) -> Option<f32> {
+        let xd = self.wanted_x - e.x();
+        let zd = self.wanted_z - e.z();
+        if !(zd.abs() > 1.0e-5f32 as f64) && !(xd.abs() > 1.0e-5f32 as f64) { None } else { Some((mth::atan2(zd, xd) * mth::RAD_TO_DEG as f64) as f32 - 90.0) }
     }
 }
 
@@ -47,24 +71,35 @@ impl ServerLevel {
     }
 
     pub fn look_control_tick(&mut self, id: EntityId) {
+        match self.mob(id).expect("a mob").ai.look_control.kind {
+            LookControlKind::Default | LookControlKind::Frog => self.look_control_look_control_tick(id),
+            LookControlKind::SmoothSwimming(max_y_rot_from_center) => self.smooth_swimming_look_control_tick(id, max_y_rot_from_center),
+            LookControlKind::Axolotl(max_y_rot_from_center) => self.axolotl_look_control_tick(id, max_y_rot_from_center),
+        }
+    }
+
+    fn reset_x_rot_on_tick(&self, id: EntityId) -> bool {
+        match self.mob(id).expect("a mob").ai.look_control.kind {
+            LookControlKind::Frog => self.frog_look_control_reset_x_rot_on_tick(id),
+            _ => true,
+        }
+    }
+
+    pub fn look_control_look_control_tick(&mut self, id: EntityId) {
+        if self.reset_x_rot_on_tick(id) {
+            self.entity_mut(id).set_x_rot(0.0);
+        }
         let mob = self.mob_mut(id).expect("a mob");
         let navigation_done = mob.ai.navigation.is_done();
         let max_head_y_rot = mob.max_head_y_rot() as f32;
         let look = &mut mob.ai.look_control;
         let e = &mut mob.entity;
-        e.set_x_rot(0.0);
         if look.look_at_cooldown > 0 {
             look.look_at_cooldown -= 1;
-            let xd = look.wanted_x - e.x();
-            let zd = look.wanted_z - e.z();
-            if (zd.abs() > 1.0e-5f32 as f64) || (xd.abs() > 1.0e-5f32 as f64) {
-                let y_rot_d = (mth::atan2(zd, xd) * mth::RAD_TO_DEG as f64) as f32 - 90.0;
+            if let Some(y_rot_d) = look.get_y_rot_d(e) {
                 e.y_head_rot = rotate_towards(e.y_head_rot, y_rot_d, look.y_max_rot_speed);
             }
-            let yd = look.wanted_y - e.eye_y();
-            let sd = (xd * xd + zd * zd).sqrt();
-            if (yd.abs() > 1.0e-5f32 as f64) || (sd.abs() > 1.0e-5f32 as f64) {
-                let x_rot_d = (-(mth::atan2(yd, sd) * mth::RAD_TO_DEG as f64)) as f32;
+            if let Some(x_rot_d) = look.get_x_rot_d(e) {
                 let x_rot = rotate_towards(e.x_rot, x_rot_d, look.x_max_rot_angle);
                 e.set_x_rot(x_rot);
             }

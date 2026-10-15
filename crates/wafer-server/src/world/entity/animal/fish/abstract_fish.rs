@@ -73,15 +73,23 @@ impl AbstractFish {
 
 impl Mob {
     pub fn is_abstract_fish(&self) -> bool {
-        matches!(self.kind, MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_))
+        matches!(self.kind, MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_))
     }
 
     pub fn from_bucket(&self) -> bool {
-        matches!(self.entity.data.get(DATA_FROM_BUCKET), DataValue::Boolean(true))
+        match self.kind {
+            MobKind::Axolotl(_) => crate::world::entity::animal::axolotl::axolotl::from_bucket(&self.entity),
+            MobKind::Tadpole(_) => true,
+            _ => matches!(self.entity.data.get(DATA_FROM_BUCKET), DataValue::Boolean(true)),
+        }
     }
 
     pub fn set_from_bucket(&mut self, from_bucket: bool) {
-        self.entity.data.set(DATA_FROM_BUCKET, DataValue::Boolean(from_bucket));
+        match self.kind {
+            MobKind::Axolotl(_) => crate::world::entity::animal::axolotl::axolotl::set_from_bucket(&mut self.entity, from_bucket),
+            MobKind::Tadpole(_) => {}
+            _ => self.entity.data.set(DATA_FROM_BUCKET, DataValue::Boolean(from_bucket)),
+        }
     }
 
     pub fn abstract_fish_remove_when_far_away(&self) -> bool {
@@ -98,6 +106,7 @@ impl Mob {
             MobKind::Salmon(_) => super::salmon::Salmon::get_flop_sound(),
             MobKind::Pufferfish(_) => super::pufferfish::Pufferfish::get_flop_sound(),
             MobKind::TropicalFish(_) => super::tropical_fish::TropicalFish::get_flop_sound(),
+            MobKind::Tadpole(_) => crate::world::entity::animal::frog::tadpole::get_flop_sound(),
             _ => unreachable!("not a fish"),
         }
     }

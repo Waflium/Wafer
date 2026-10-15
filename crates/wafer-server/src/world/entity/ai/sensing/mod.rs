@@ -1,8 +1,12 @@
 pub mod adult_sensor;
+pub mod axolotl_attackables_sensor;
+pub mod frog_attackables_sensor;
 pub mod hurt_by_sensor;
+pub mod is_in_water_sensor;
 pub mod mob_sensor;
 pub mod nearest_item_sensor;
 pub mod nearest_living_entity_sensor;
+pub mod nearest_visible_living_entity_sensor;
 pub mod player_sensor;
 pub mod sensing;
 pub mod sensor;

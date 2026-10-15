@@ -4,7 +4,8 @@ use wafer_core::random::RandomSource;
 
 use super::mob_sensor::MobSensor;
 use super::sensor_type::{self, SensorType};
-use super::{adult_sensor, hurt_by_sensor, nearest_item_sensor, nearest_living_entity_sensor, player_sensor, tempting_sensor};
+use super::{adult_sensor, axolotl_attackables_sensor, frog_attackables_sensor, hurt_by_sensor, is_in_water_sensor, nearest_item_sensor, nearest_living_entity_sensor, player_sensor, tempting_sensor};
+use crate::world::entity::animal::frog::frog_ai;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type::{self, Erased, MemoryModuleType};
@@ -81,7 +82,11 @@ impl Sensor {
             SensorType::HurtBy => hurt_by_sensor::do_tick(level, body),
             SensorType::ArmadilloScareDetected => sensor_type::ARMADILLO_SCARE_DETECTED.do_tick(level, body),
             SensorType::NearestAdult => adult_sensor::do_tick(level, body),
+            SensorType::AxolotlAttackables => axolotl_attackables_sensor::do_tick(level, body),
             SensorType::FoodTemptations => tempting_sensor::do_tick(level, body, tempting_sensor::for_animal),
+            SensorType::FrogTemptations => tempting_sensor::do_tick(level, body, |_, _, item_stack| frog_ai::get_temptations(item_stack)),
+            SensorType::FrogAttackables => frog_attackables_sensor::do_tick(level, body),
+            SensorType::IsInWater => is_in_water_sensor::do_tick(level, body),
         }
     }
 
@@ -93,7 +98,10 @@ impl Sensor {
             SensorType::HurtBy => hurt_by_sensor::requires(),
             SensorType::ArmadilloScareDetected => MobSensor::requires(),
             SensorType::NearestAdult => adult_sensor::requires(),
-            SensorType::FoodTemptations => tempting_sensor::requires(),
+            SensorType::AxolotlAttackables => axolotl_attackables_sensor::requires(),
+            SensorType::FoodTemptations | SensorType::FrogTemptations => tempting_sensor::requires(),
+            SensorType::FrogAttackables => frog_attackables_sensor::requires(),
+            SensorType::IsInWater => is_in_water_sensor::requires(),
         }
     }
 }

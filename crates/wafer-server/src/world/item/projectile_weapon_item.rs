@@ -22,6 +22,10 @@ pub fn is_projectile_weapon(item: Item) -> bool {
     item.is_instance_of("ProjectileWeaponItem")
 }
 
+pub fn get_default_projectile_range(item: Item) -> i32 {
+    if item.is_instance_of("CrossbowItem") { 8 } else { 15 }
+}
+
 pub fn get_supported_held_projectiles(item: Item) -> fn(&ItemStack) -> bool {
     if item.is_instance_of("CrossbowItem") { arrow_or_firework } else { arrow_only }
 }

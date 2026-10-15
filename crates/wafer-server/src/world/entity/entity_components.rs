@@ -3,7 +3,9 @@ use std::borrow::Cow;
 use wafer_protocol::nbt::Nbt;
 
 use super::EntityId;
+use super::animal::axolotl::axolotl;
 use super::animal::chicken;
+use super::animal::frog::frog;
 use super::animal::cow::{cow, mushroom_cow};
 use super::animal::feline::{cat, cat_sound_variant};
 use super::animal::pig::pig;
@@ -86,6 +88,12 @@ impl DataComponentGetter for EntityComponents<'_> {
                 MobKind::Horse(_) if ty == dc::HORSE_VARIANT => {
                     let variant = super::animal::equine::horse::get_variant(&mob.entity);
                     return Some(Cow::Owned(Nbt::String(variant.get_serialized_name().to_string())));
+                }
+                MobKind::Axolotl(_) if ty == dc::AXOLOTL_VARIANT => {
+                    return Some(Cow::Owned(Nbt::String(axolotl::get_variant(&mob.entity).get_serialized_name().to_string())));
+                }
+                MobKind::Frog(_) if ty == dc::FROG_VARIANT => {
+                    return Some(Cow::Owned(Nbt::String(variant_utils::variant_name(frog::VARIANT_REGISTRY, frog::get_variant(&mob.entity)).to_string())));
                 }
                 _ => {}
             }

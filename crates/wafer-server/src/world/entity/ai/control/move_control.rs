@@ -1,6 +1,7 @@
 use wafer_core::{BlockPos, mth};
 use wafer_data::block_tags;
 
+use super::smooth_swimming_move_control::SmoothSwimmingMoveControl;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::attributes::Attribute;
@@ -19,13 +20,15 @@ pub enum Operation {
     Jumping,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub enum MoveControlKind {
     #[default]
     Default,
     Drowned,
     CubeMob,
     Fish,
+    SmoothSwimming(SmoothSwimmingMoveControl),
+    Axolotl(SmoothSwimmingMoveControl),
 }
 
 #[derive(Default)]

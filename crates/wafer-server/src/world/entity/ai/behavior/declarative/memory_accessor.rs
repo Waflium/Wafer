@@ -31,6 +31,18 @@ impl<F, U: MemoryValueType> MemoryAccessor<F, U> {
     pub fn set_or_erase(self, level: &mut ServerLevel, body: EntityId, value: Option<U::Value>) {
         level.get_brain_mut(body).set_memory_optional(self.memory_type, value);
     }
+
+    pub fn set_with_expiry(self, level: &mut ServerLevel, body: EntityId, value: U::Value, time_to_live: i64) {
+        level.get_brain_mut(body).set_memory_with_expiry(self.memory_type, value, time_to_live);
+    }
+
+    pub fn erase(self, level: &mut ServerLevel, body: EntityId) {
+        level.get_brain_mut(body).erase_memory(self.memory_type);
+    }
+
+    pub fn try_get(self, level: &ServerLevel, body: EntityId) -> Option<U::Value> {
+        level.get_brain(body).get_memory(self.memory_type).cloned()
+    }
 }
 
 impl<U: MemoryValueType> MemoryAccessor<Present, U> {

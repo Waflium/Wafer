@@ -49,6 +49,20 @@ pub struct LongJumpToRandomPos {
     acceptable_landing_spot: fn(&mut ServerLevel, EntityId, BlockPos) -> bool,
 }
 
+pub fn get_jump_candidate(jump_candidates: &mut Vec<PossibleJump>, level: &mut ServerLevel) -> Option<PossibleJump> {
+    let total_weight: i64 = jump_candidates.iter().map(|jump| jump.weight as i64).sum();
+    assert!(total_weight <= i32::MAX as i64, "Sum of weights must be <= 2147483647");
+    if total_weight == 0 {
+        return None;
+    }
+    let mut selection = level.random.next_int_bounded(total_weight as i32);
+    let index = jump_candidates.iter().position(|jump| {
+        selection -= jump.weight;
+        selection < 0
+    })?;
+    Some(jump_candidates.remove(index))
+}
+
 pub fn default_acceptable_landing_spot(level: &mut ServerLevel, body: EntityId, target_pos: BlockPos) -> bool {
     let below = target_pos.below();
     level.block_state(below).is_solid_render() && !goal_utils::has_malus(level, body, target_pos)
@@ -111,9 +125,9 @@ impl LongJumpToRandomPos {
         }
     }
 
-    fn pick_candidate(&mut self, level: &mut ServerLevel, body: EntityId, timestamp: i64) {
+    fn pick_candidate(&mut self, level: &mut ServerLevel, body: EntityId, timestamp: i64, get_jump_candidate: &mut dyn FnMut(&mut Vec<PossibleJump>, &mut ServerLevel) -> Option<PossibleJump>) {
         while !self.jump_candidates.is_empty() {
-            let Some(position) = self.get_jump_candidate(level) else { continue };
+            let Some(position) = get_jump_candidate(&mut self.jump_candidates, level) else { continue };
             let target_pos = position.target_pos;
             if self.is_acceptable_landing_position(level, body, target_pos) {
                 let target_position = Vec3::at_center_of(target_pos);
@@ -128,20 +142,6 @@ impl LongJumpToRandomPos {
                 }
             }
         }
-    }
-
-    fn get_jump_candidate(&mut self, level: &mut ServerLevel) -> Option<PossibleJump> {
-        let total_weight: i64 = self.jump_candidates.iter().map(|jump| jump.weight as i64).sum();
-        assert!(total_weight <= i32::MAX as i64, "Sum of weights must be <= 2147483647");
-        if total_weight == 0 {
-            return None;
-        }
-        let mut selection = level.random.next_int_bounded(total_weight as i32);
-        let index = self.jump_candidates.iter().position(|jump| {
-            selection -= jump.weight;
-            selection < 0
-        })?;
-        Some(self.jump_candidates.remove(index))
     }
 
     fn is_acceptable_landing_position(&self, level: &mut ServerLevel, body: EntityId, target_pos: BlockPos) -> bool {
@@ -206,6 +206,12 @@ impl Behavior for LongJumpToRandomPos {
     }
 
     fn tick(&mut self, level: &mut ServerLevel, body: EntityId, timestamp: i64) {
+        self.tick_with(level, body, timestamp, &mut get_jump_candidate);
+    }
+}
+
+impl LongJumpToRandomPos {
+    pub fn tick_with(&mut self, level: &mut ServerLevel, body: EntityId, timestamp: i64, get_jump_candidate: &mut dyn FnMut(&mut Vec<PossibleJump>, &mut ServerLevel) -> Option<PossibleJump>) {
         match self.chosen_jump {
             Some(chosen_jump) => {
                 if timestamp - self.prepare_jump_start >= PREPARE_JUMP_DURATION {
@@ -222,7 +228,7 @@ impl Behavior for LongJumpToRandomPos {
             }
             None => {
                 self.find_jump_tries -= 1;
-                self.pick_candidate(level, body, timestamp);
+                self.pick_candidate(level, body, timestamp, get_jump_candidate);
             }
         }
     }

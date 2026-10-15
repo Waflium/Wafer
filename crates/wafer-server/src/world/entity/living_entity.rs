@@ -10,7 +10,7 @@ use super::attributes::{Attribute, AttributeMap, AttributeModifier, AttributeSup
 use super::data::{DataValue, Pose, ids};
 use super::mob::{Mob, MobKind};
 use super::using_item::FLAG_SPIN_ATTACK;
-use super::{Entity, EntityId, MoverType, RemovalReason, TOTAL_AIR_SUPPLY, compute_modified_friction, entity_event, flags, sound_event};
+use super::{Entity, EntityId, MoverType, RemovalReason, compute_modified_friction, entity_event, flags, sound_event};
 use crate::advancements::triggers::criteria_triggers;
 use crate::core::holder_set::HolderSet;
 use crate::network::connection::encode;
@@ -817,6 +817,13 @@ impl ServerLevel {
     }
 
     pub fn can_be_seen_as_enemy(&self, id: EntityId) -> bool {
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Axolotl(_))) {
+            return self.axolotl_can_be_seen_as_enemy(id);
+        }
+        self.living_entity_can_be_seen_as_enemy(id)
+    }
+
+    pub fn living_entity_can_be_seen_as_enemy(&self, id: EntityId) -> bool {
         if self.is_player(id) && self.player(id).abilities.invulnerable {
             return false;
         }
@@ -1412,6 +1419,9 @@ impl ServerLevel {
         if self.is_monster(id) {
             return self.monster_should_drop_experience();
         }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Tadpole(_))) {
+            return super::animal::frog::tadpole::should_drop_experience();
+        }
         !self.is_baby(id)
     }
 
@@ -1466,7 +1476,7 @@ impl ServerLevel {
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => self.ageable_water_creature_get_base_experience_reward(id),
             Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_)) => self.mob_get_base_experience_reward(id),
-            Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_)) => self.water_animal_get_base_experience_reward(id),
+            Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_)) => self.water_animal_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1662,15 +1672,15 @@ impl ServerLevel {
                         self.broadcast_entity_event(id, entity_event::DROWN_PARTICLES);
                         self.hurt_server(id, DamageSource::new(damage_types::DROWN), 2.0);
                     }
-                } else if self.entity(id).air_supply() < TOTAL_AIR_SUPPLY && self.should_effects_refill_air_supply(id) {
-                    let supply = (self.entity(id).air_supply() + 4).min(TOTAL_AIR_SUPPLY);
+                } else if self.entity(id).air_supply() < self.entity(id).get_max_air_supply() && self.should_effects_refill_air_supply(id) {
+                    let supply = (self.entity(id).air_supply() + 4).min(self.entity(id).get_max_air_supply());
                     self.entity_mut(id).set_air_supply(supply);
                 }
                 if self.vehicle(id).is_some_and(|vehicle| self.dismounts_underwater(vehicle)) {
                     self.stop_riding(id);
                 }
-            } else if self.entity(id).air_supply() < TOTAL_AIR_SUPPLY {
-                let supply = (self.entity(id).air_supply() + 4).min(TOTAL_AIR_SUPPLY);
+            } else if self.entity(id).air_supply() < self.entity(id).get_max_air_supply() {
+                let supply = (self.entity(id).air_supply() + 4).min(self.entity(id).get_max_air_supply());
                 self.entity_mut(id).set_air_supply(supply);
             }
         }
@@ -1954,6 +1964,7 @@ impl ServerLevel {
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::TropicalFish(_)) => self.abstract_fish_ai_step(id),
             Some(MobKind::Pufferfish(_)) => self.pufferfish_ai_step(id),
             Some(MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_ai_step(id),
+            Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -2473,6 +2484,10 @@ impl ServerLevel {
     fn travel_in_water(&mut self, id: EntityId, input: Vec3, base_gravity: f64, is_falling: bool, old_y: f64) {
         if self.is_drowned(id) {
             self.drowned_travel_in_water(id, input, base_gravity, is_falling, old_y);
+        } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::Axolotl(_))) {
+            self.axolotl_travel_in_water(id, input, base_gravity, is_falling, old_y);
+        } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::Frog(_))) {
+            self.frog_travel_in_water(id, input, base_gravity, is_falling, old_y);
         } else if self.mob(id).is_some_and(Mob::is_abstract_fish) {
             self.abstract_fish_travel_in_water(id, input, base_gravity, is_falling, old_y);
         } else {

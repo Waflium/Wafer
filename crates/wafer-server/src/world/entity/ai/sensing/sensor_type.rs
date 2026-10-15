@@ -18,7 +18,11 @@ pub enum SensorType {
     HurtBy,
     ArmadilloScareDetected,
     NearestAdult,
+    AxolotlAttackables,
     FoodTemptations,
+    FrogTemptations,
+    FrogAttackables,
+    IsInWater,
 }
 
 impl SensorType {
@@ -30,7 +34,11 @@ impl SensorType {
             SensorType::HurtBy => "minecraft:hurt_by",
             SensorType::ArmadilloScareDetected => "minecraft:armadillo_scare_detected",
             SensorType::NearestAdult => "minecraft:nearest_adult",
+            SensorType::AxolotlAttackables => "minecraft:axolotl_attackables",
             SensorType::FoodTemptations => "minecraft:food_temptations",
+            SensorType::FrogTemptations => "minecraft:frog_temptations",
+            SensorType::FrogAttackables => "minecraft:frog_attackables",
+            SensorType::IsInWater => "minecraft:is_in_water",
         }
     }
 

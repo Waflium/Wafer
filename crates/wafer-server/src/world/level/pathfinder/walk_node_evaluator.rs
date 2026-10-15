@@ -9,6 +9,7 @@ use super::node_evaluator::{NodeEvaluator, is_burning_block};
 use super::path_type::PathType;
 use super::pathfinding_context::PathfindingContext;
 use super::target::Target;
+use crate::world::entity::animal::frog::frog::FrogNodeEvaluator;
 use crate::world::entity::mob::Mob;
 use crate::world::level::block::door_block;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
@@ -20,11 +21,16 @@ pub struct WalkNodeEvaluator {
     collision_cache: FastMap<[u64; 6], bool>,
     reusable_neighbors: [Option<u32>; 4],
     pub amphibious: Option<AmphibiousNodeEvaluator>,
+    pub frog: Option<FrogNodeEvaluator>,
 }
 
 impl WalkNodeEvaluator {
     pub fn amphibious(prefers_shallow_swimming: bool) -> WalkNodeEvaluator {
         WalkNodeEvaluator { amphibious: Some(AmphibiousNodeEvaluator::new(prefers_shallow_swimming)), ..WalkNodeEvaluator::default() }
+    }
+
+    pub fn frog(prefers_shallow_swimming: bool) -> WalkNodeEvaluator {
+        WalkNodeEvaluator { frog: Some(FrogNodeEvaluator), ..WalkNodeEvaluator::amphibious(prefers_shallow_swimming) }
     }
 
     fn is_amphibious(&self) -> bool {
@@ -61,7 +67,9 @@ impl WalkNodeEvaluator {
     }
 
     pub fn get_start(&mut self, context: &PathfindingContext) -> Option<u32> {
-        if self.is_amphibious() { self.amphibious_node_evaluator_get_start(context) } else { self.walk_node_evaluator_get_start(context) }
+        if self.frog.is_some() {
+            self.frog_node_evaluator_get_start(context)
+        } else if self.is_amphibious() { self.amphibious_node_evaluator_get_start(context) } else { self.walk_node_evaluator_get_start(context) }
     }
 
     pub fn walk_node_evaluator_get_start(&mut self, context: &PathfindingContext) -> Option<u32> {
@@ -469,7 +477,13 @@ impl WalkNodeEvaluator {
 
 impl WalkNodeEvaluator {
     pub fn get_path_type(&self, context: &PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
-        if self.is_amphibious() { self.amphibious_node_evaluator_get_path_type(context, x, y, z) } else { self.walk_node_evaluator_get_path_type(context, x, y, z) }
+        if self.frog.is_some() {
+            self.frog_node_evaluator_get_path_type(context, x, y, z)
+        } else if self.is_amphibious() {
+            self.amphibious_node_evaluator_get_path_type(context, x, y, z)
+        } else {
+            self.walk_node_evaluator_get_path_type(context, x, y, z)
+        }
     }
 
     pub fn walk_node_evaluator_get_path_type(&self, context: &PathfindingContext, x: i32, y: i32, z: i32) -> PathType {

@@ -35,7 +35,7 @@ pub fn check_surface_water_animal_spawn_rules(level: &mut (impl ServerLevelAcces
 
 impl Mob {
     pub fn is_water_animal(&self) -> bool {
-        matches!(self.kind, MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_))
+        matches!(self.kind, MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_))
     }
 }
 

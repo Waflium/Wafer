@@ -98,6 +98,10 @@ impl BlockPos {
         self.dist_sqr(o) < mth::square(distance)
     }
 
+    pub fn differs_horizontally(self, other: BlockPos) -> bool {
+        self.x != other.x || self.z != other.z
+    }
+
     pub fn closer_to_center_than(self, pos: Vec3, distance: f64) -> bool {
         self.dist_to_center_sqr(pos.x, pos.y, pos.z) < mth::square(distance)
     }
