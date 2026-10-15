@@ -3,6 +3,7 @@ pub mod behavior;
 pub mod brain;
 pub mod control;
 pub mod goal;
+pub mod gossip;
 pub mod memory;
 pub mod navigation;
 pub mod sensing;

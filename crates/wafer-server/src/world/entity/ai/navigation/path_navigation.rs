@@ -137,6 +137,12 @@ impl PathNavigation {
         self.update_pathfinder_max_visited_nodes(level, mob);
     }
 
+    pub fn set_required_path_length_detached(&mut self, follow_range: f64, length: f32) {
+        self.required_path_length = length;
+        let max_visited_nodes = mth::floor_f((follow_range as f32).max(self.required_path_length) * 16.0);
+        self.path_finder.set_max_visited_nodes(max_visited_nodes);
+    }
+
     fn get_max_path_length(&self, level: &ServerLevel, mob: EntityId) -> f32 {
         (level.attribute_value(mob, Attribute::FollowRange) as f32).max(self.required_path_length)
     }
@@ -174,6 +180,10 @@ impl PathNavigation {
 
     pub fn path_navigation_create_path(&mut self, level: &ServerLevel, mob: EntityId, pos: BlockPos, reach_range: i32) -> Option<Path> {
         self.create_path_from_targets(level, mob, &[pos], 8, false, reach_range)
+    }
+
+    pub fn create_path_to_targets(&mut self, level: &ServerLevel, mob: EntityId, targets: &[BlockPos], reach_range: i32) -> Option<Path> {
+        self.create_path_from_targets(level, mob, targets, 8, false, reach_range)
     }
 
     pub fn create_path_with_max_path_length(&mut self, level: &ServerLevel, mob: EntityId, pos: BlockPos, reach_range: i32, max_path_length: i32) -> Option<Path> {

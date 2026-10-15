@@ -103,6 +103,69 @@ impl PoiManager {
         self.get_in_range(predicate, center, radius, occupancy).len()
     }
 
+    pub fn find_all(&mut self, predicate: &dyn Fn(PoiType) -> bool, mut filter: impl FnMut(BlockPos) -> bool, center: BlockPos, radius: i32, occupancy: Occupancy) -> Vec<BlockPos> {
+        self.get_in_range(predicate, center, radius, occupancy).into_iter().map(|record| record.pos).filter(|&pos| filter(pos)).collect()
+    }
+
+    pub fn find(&mut self, predicate: &dyn Fn(PoiType) -> bool, mut filter: impl FnMut(BlockPos) -> bool, center: BlockPos, radius: i32, occupancy: Occupancy) -> Option<BlockPos> {
+        self.get_in_range(predicate, center, radius, occupancy).into_iter().map(|record| record.pos).find(|&pos| filter(pos))
+    }
+
+    pub fn find_all_with_type(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        mut filter: impl FnMut(BlockPos) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Vec<(PoiType, BlockPos)> {
+        self.get_in_range(predicate, center, radius, occupancy).into_iter().filter(|record| filter(record.pos)).map(|record| (record.poi_type, record.pos)).collect()
+    }
+
+    pub fn find_all_closest_first_with_type(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        filter: impl FnMut(BlockPos) -> bool,
+        center: BlockPos,
+        radius: i32,
+        occupancy: Occupancy,
+    ) -> Vec<(PoiType, BlockPos)> {
+        let mut found = self.find_all_with_type(predicate, filter, center, radius, occupancy);
+        found.sort_by(|a, b| a.1.dist_sqr(center).total_cmp(&b.1.dist_sqr(center)));
+        found
+    }
+
+    pub fn take(&mut self, predicate: &dyn Fn(PoiType) -> bool, filter: impl Fn(PoiType, BlockPos) -> bool, center: BlockPos, radius: i32) -> Option<BlockPos> {
+        let record = self.get_in_range(predicate, center, radius, Occupancy::HasSpace).into_iter().find(|record| filter(record.poi_type, record.pos))?;
+        let key = block_section_key(record.pos);
+        if let Some(section) = self.storage.get_or_load(key)
+            && let Some(record) = section.record_mut(record.pos)
+            && record.acquire_ticket()
+        {
+            self.storage.set_dirty(key);
+        }
+        Some(record.pos)
+    }
+
+    pub fn get_random(
+        &mut self,
+        predicate: &dyn Fn(PoiType) -> bool,
+        filter: impl Fn(BlockPos) -> bool,
+        occupancy: Occupancy,
+        center: BlockPos,
+        radius: i32,
+        random: &mut impl wafer_core::random::RandomSource,
+    ) -> Option<BlockPos> {
+        let mut collect = self.get_in_range(predicate, center, radius, occupancy);
+        let mut i = collect.len();
+        while i > 1 {
+            let swap_to = random.next_int_bounded(i as i32) as usize;
+            collect.swap(i - 1, swap_to);
+            i -= 1;
+        }
+        collect.into_iter().map(|record| record.pos).find(|&pos| filter(pos))
+    }
+
     pub fn find_closest(
         &mut self,
         predicate: &dyn Fn(PoiType) -> bool,

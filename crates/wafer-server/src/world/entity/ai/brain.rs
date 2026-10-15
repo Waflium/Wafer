@@ -35,6 +35,8 @@ pub struct Brain {
     active_activities: Vec<Activity>,
     default_activity: Activity,
     last_schedule_update: i64,
+    ticking: bool,
+    refresh_requested: bool,
 }
 
 impl Default for Brain {
@@ -96,6 +98,8 @@ impl Brain {
             active_activities: Vec::new(),
             default_activity: Activity::IDLE,
             last_schedule_update: -9999,
+            ticking: false,
+            refresh_requested: false,
         };
         brain.set_core_activities(vec![Activity::CORE]);
         brain.use_default_activity();
@@ -332,6 +336,19 @@ impl Brain {
         }
     }
 
+    pub fn update_activity_from_schedule_detached(&mut self, level: &ServerLevel, game_time: i64, pos: Vec3) {
+        if game_time - self.last_schedule_update > SCHEDULE_UPDATE_DELAY {
+            let scheduled_activity = match self.schedule {
+                Some(schedule) => level.environment_attributes().get_value(schedule, pos),
+                None => Activity::IDLE,
+            };
+            self.last_schedule_update = game_time;
+            if !self.active_activities.contains(&scheduled_activity) {
+                self.set_active_activity_if_possible(scheduled_activity);
+            }
+        }
+    }
+
     pub fn set_active_activity_to_first_valid(&mut self, activities: &[Activity]) {
         for &activity in activities {
             if self.activity_requirements_are_met(activity) {
@@ -399,8 +416,58 @@ impl Brain {
     pub fn tick(level: &mut ServerLevel, body: EntityId) {
         level.get_brain_mut(body).forget_outdated_memories();
         Brain::tick_sensors(level, body);
-        Brain::start_each_non_running_behavior(level, body);
-        Brain::tick_each_running_behavior(level, body);
+        let brain = level.get_brain_mut(body);
+        brain.ticking = true;
+        let mut behaviors = std::mem::take(&mut brain.available_behaviors_by_priority);
+        let mut retired_activities = None;
+        Brain::start_each_non_running_behavior(level, body, &mut behaviors, &mut retired_activities);
+        Brain::tick_each_running_behavior(level, body, &mut behaviors, &mut retired_activities);
+        if let Some(brain) = level.get_brain_mut_if_present(body) {
+            brain.ticking = false;
+            if retired_activities.is_none() {
+                brain.available_behaviors_by_priority = behaviors;
+            }
+        }
+    }
+
+    pub fn is_ticking(&self) -> bool {
+        self.ticking
+    }
+
+    pub fn request_refresh(&mut self) {
+        self.refresh_requested = true;
+    }
+
+    fn is_activity_active(level: &ServerLevel, body: EntityId, retired_activities: &Option<Vec<Activity>>, activity: Activity) -> bool {
+        match retired_activities {
+            Some(activities) => activities.contains(&activity),
+            None => level.get_brain_if_present(body).is_some_and(|brain| brain.active_activities.contains(&activity)),
+        }
+    }
+
+    fn refresh_if_requested(level: &mut ServerLevel, body: EntityId, behaviors: &mut [(i32, BehaviorsByActivity)], retired_activities: &mut Option<Vec<Activity>>, timestamp: i64) {
+        let Some(brain) = level.get_brain_mut_if_present(body) else { return };
+        if !brain.refresh_requested {
+            return;
+        }
+        brain.refresh_requested = false;
+        let old_activities = brain.active_activities.clone();
+        if retired_activities.is_none() {
+            for (_, by_activity) in behaviors.iter_mut() {
+                for (_, list) in by_activity.iter_mut() {
+                    for behavior in list.iter_mut() {
+                        if behavior.get_status() == Status::Running {
+                            behavior.do_stop(level, body, timestamp);
+                        }
+                    }
+                }
+            }
+        }
+        level.villager_rebuild_brain(body);
+        if let Some(brain) = level.get_brain_mut_if_present(body) {
+            brain.ticking = true;
+        }
+        *retired_activities = Some(retired_activities.take().unwrap_or(old_activities));
     }
 
     fn tick_sensors(level: &mut ServerLevel, body: EntityId) {
@@ -434,36 +501,37 @@ impl Brain {
         });
     }
 
-    fn start_each_non_running_behavior(level: &mut ServerLevel, body: EntityId) {
+    fn start_each_non_running_behavior(level: &mut ServerLevel, body: EntityId, behaviors: &mut [(i32, BehaviorsByActivity)], retired_activities: &mut Option<Vec<Activity>>) {
         let time = level.game_time;
-        Brain::with_behaviors(level, body, |level, behaviors| {
-            for (_, behaviours_by_activities) in behaviors {
-                for (activity, list) in behaviours_by_activities {
-                    if level.get_brain_if_present(body).is_some_and(|brain| brain.active_activities.contains(activity)) {
-                        for behavior in list {
-                            if behavior.get_status() == Status::Stopped && level.get_brain_if_present(body).is_some() {
-                                behavior.try_start(level, body, time);
-                            }
+        for p in 0..behaviors.len() {
+            for a in 0..behaviors[p].1.len() {
+                let activity = behaviors[p].1[a].0;
+                if Brain::is_activity_active(level, body, retired_activities, activity) {
+                    for b in 0..behaviors[p].1[a].1.len() {
+                        let behavior = &mut behaviors[p].1[a].1[b];
+                        if behavior.get_status() == Status::Stopped && level.get_brain_if_present(body).is_some() {
+                            behavior.try_start(level, body, time);
+                            Brain::refresh_if_requested(level, body, behaviors, retired_activities, time);
                         }
                     }
                 }
             }
-        });
+        }
     }
 
-    fn tick_each_running_behavior(level: &mut ServerLevel, body: EntityId) {
+    fn tick_each_running_behavior(level: &mut ServerLevel, body: EntityId, behaviors: &mut [(i32, BehaviorsByActivity)], retired_activities: &mut Option<Vec<Activity>>) {
         let timestamp = level.game_time;
-        Brain::with_behaviors(level, body, |level, behaviors| {
-            for (_, behaviours_by_activities) in behaviors {
-                for (_, list) in behaviours_by_activities {
-                    for behavior in list {
-                        if behavior.get_status() == Status::Running && level.get_brain_if_present(body).is_some() {
-                            behavior.tick_or_stop(level, body, timestamp);
-                        }
+        for p in 0..behaviors.len() {
+            for a in 0..behaviors[p].1.len() {
+                for b in 0..behaviors[p].1[a].1.len() {
+                    let behavior = &mut behaviors[p].1[a].1[b];
+                    if behavior.get_status() == Status::Running && level.get_brain_if_present(body).is_some() {
+                        behavior.tick_or_stop(level, body, timestamp);
+                        Brain::refresh_if_requested(level, body, behaviors, retired_activities, timestamp);
                     }
                 }
             }
-        });
+        }
     }
 
     fn with_behaviors(level: &mut ServerLevel, body: EntityId, f: impl FnOnce(&mut ServerLevel, &mut Vec<(i32, BehaviorsByActivity)>)) {

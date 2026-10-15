@@ -16,6 +16,28 @@ pub fn lock_gaze_and_walk_to_each_other(level: &mut ServerLevel, entity1: Entity
     set_walk_and_look_target_memories_to_each_other(level, entity1, entity2, speed_modifier, close_enough_distance);
 }
 
+pub fn target_is_valid(level: &mut ServerLevel, body: EntityId, memory: crate::world::entity::ai::memory::memory_module_type::MemoryModuleType<crate::world::entity::ai::memory::memory_value::EntityValue>, target_type: &crate::world::entity::entity_type::EntityType) -> bool {
+    let Some(entity) = level.get_brain(body).get_memory(memory).copied() else { return false };
+    level.entity_ref(entity).is_some_and(|e| e.entity_type == target_type.id) && level.is_alive(entity) && entity_is_visible(level, body, entity)
+}
+
+pub fn throw_item(level: &mut ServerLevel, thrower: EntityId, item: crate::world::item::ItemStack, target_pos: Vec3) {
+    throw_item_with(level, thrower, item, target_pos, Vec3::new(0.3f32 as f64, 0.3f32 as f64, 0.3f32 as f64), 0.3);
+}
+
+pub fn throw_item_with(level: &mut ServerLevel, thrower: EntityId, item: crate::world::item::ItemStack, target_pos: Vec3, throw_velocity: Vec3, hand_y_distance_from_eye: f32) {
+    let e = level.entity(thrower);
+    let y_hand_pos = e.eye_y() - hand_y_distance_from_eye as f64;
+    let (x, z, position, uuid) = (e.x(), e.z(), e.position(), e.uuid);
+    let mut item_entity = crate::world::entity::ItemEntity::new(Vec3::new(x, y_hand_pos, z), item);
+    item_entity.thrower = Some(uuid);
+    let throw_vector = target_pos.subtract(position).normalize();
+    let throw_vector = Vec3::new(throw_vector.x * throw_velocity.x, throw_vector.y * throw_velocity.y, throw_vector.z * throw_velocity.z);
+    item_entity.entity.set_delta_movement(throw_vector);
+    item_entity.set_default_pickup_delay();
+    level.add_fresh_entity(crate::world::entity::LevelEntity::Item(item_entity));
+}
+
 pub fn entity_is_visible(level: &mut ServerLevel, body: EntityId, target_entity: EntityId) -> bool {
     match level.get_brain(body).get_memory(memory_module_type::NEAREST_VISIBLE_LIVING_ENTITIES).cloned() {
         Some(visible_entities) => visible_entities.contains(level, target_entity),
@@ -41,6 +63,10 @@ fn set_walk_and_look_target_memories_to_each_other(level: &mut ServerLevel, enti
 pub fn set_walk_and_look_target_memories_to_entity(level: &mut ServerLevel, walker: EntityId, target_entity: EntityId, speed_modifier: f32, close_enough_distance: i32) {
     let tracker = EntityTracker::new(level, target_entity, true);
     set_walk_and_look_target_memories(level, walker, PositionTracker::Entity(tracker), speed_modifier, close_enough_distance);
+}
+
+pub fn set_walk_and_look_target_memories_to_pos(level: &mut ServerLevel, walker: EntityId, target_pos: BlockPos, speed_modifier: f32, close_enough_distance: i32) {
+    set_walk_and_look_target_memories(level, walker, PositionTracker::BlockPos(super::block_pos_tracker::BlockPosTracker::new(target_pos)), speed_modifier, close_enough_distance);
 }
 
 pub fn set_walk_and_look_target_memories(level: &mut ServerLevel, walker: EntityId, target: PositionTracker, speed_modifier: f32, close_enough_distance: i32) {

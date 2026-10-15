@@ -74,6 +74,10 @@ pub fn set_shuffle_seed(seed: i64) {
 }
 
 pub fn shuffle(list: &mut [i32]) {
+    shuffle_list(list);
+}
+
+pub fn shuffle_list<T>(list: &mut [T]) {
     SHUFFLE_RANDOM.with(|random| {
         let mut random = random.borrow_mut();
         for i in (2..=list.len()).rev() {

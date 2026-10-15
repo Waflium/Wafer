@@ -83,7 +83,7 @@ impl<T: Behavior + 'static> BehaviorControl for T {
             let state = self.behavior_mut();
             state.status = Status::Running;
             let (min_duration, max_duration) = (state.min_duration, state.max_duration);
-            let duration = min_duration + level.random.next_int_bounded(max_duration + 1 - min_duration);
+            let duration = min_duration.wrapping_add(level.random.next_int_bounded(max_duration.wrapping_add(1).wrapping_sub(min_duration)));
             self.behavior_mut().end_timestamp = timestamp + duration as i64;
             self.start(level, body, timestamp);
             true

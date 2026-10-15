@@ -3,8 +3,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use wafer_core::random::RandomSource;
 
 use super::mob_sensor::MobSensor;
+use super::nearest_bed_sensor::NearestBedSensor;
 use super::sensor_type::{self, SensorType};
-use super::{adult_sensor, axolotl_attackables_sensor, frog_attackables_sensor, hurt_by_sensor, is_in_water_sensor, nearest_item_sensor, nearest_living_entity_sensor, player_sensor, tempting_sensor};
+use super::{
+    adult_sensor, axolotl_attackables_sensor, frog_attackables_sensor, golem_sensor, hurt_by_sensor, is_in_water_sensor, nearest_bed_sensor, nearest_item_sensor, nearest_living_entity_sensor, player_sensor, secondary_poi_sensor,
+    tempting_sensor, villager_babies_sensor, villager_hostiles_sensor,
+};
 use crate::world::entity::animal::frog::frog_ai;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
@@ -41,6 +45,7 @@ pub struct Sensor {
     sensor_type: SensorType,
     scan_rate: i32,
     time_to_tick: i64,
+    nearest_bed: Option<Box<NearestBedSensor>>,
 }
 
 impl Sensor {
@@ -49,7 +54,8 @@ impl Sensor {
     }
 
     pub fn with_scan_rate(sensor_type: SensorType, scan_rate: i32) -> Sensor {
-        Sensor { sensor_type, scan_rate, time_to_tick: 0 }
+        let nearest_bed = (sensor_type == SensorType::NearestBed).then(Box::default);
+        Sensor { sensor_type, scan_rate, time_to_tick: 0, nearest_bed }
     }
 
     pub fn get_type(&self) -> SensorType {
@@ -87,6 +93,11 @@ impl Sensor {
             SensorType::FrogTemptations => tempting_sensor::do_tick(level, body, |_, _, item_stack| frog_ai::get_temptations(item_stack)),
             SensorType::FrogAttackables => frog_attackables_sensor::do_tick(level, body),
             SensorType::IsInWater => is_in_water_sensor::do_tick(level, body),
+            SensorType::NearestBed => self.nearest_bed.as_mut().expect("a nearest bed sensor").do_tick(level, body),
+            SensorType::VillagerHostiles => villager_hostiles_sensor::do_tick(level, body),
+            SensorType::VillagerBabies => villager_babies_sensor::do_tick(level, body),
+            SensorType::SecondaryPois => secondary_poi_sensor::do_tick(level, body),
+            SensorType::GolemDetected => golem_sensor::do_tick(level, body),
         }
     }
 
@@ -102,6 +113,11 @@ impl Sensor {
             SensorType::FoodTemptations | SensorType::FrogTemptations => tempting_sensor::requires(),
             SensorType::FrogAttackables => frog_attackables_sensor::requires(),
             SensorType::IsInWater => is_in_water_sensor::requires(),
+            SensorType::NearestBed => nearest_bed_sensor::requires(),
+            SensorType::VillagerHostiles => villager_hostiles_sensor::requires(),
+            SensorType::VillagerBabies => villager_babies_sensor::requires(),
+            SensorType::SecondaryPois => secondary_poi_sensor::requires(),
+            SensorType::GolemDetected => golem_sensor::requires(),
         }
     }
 }

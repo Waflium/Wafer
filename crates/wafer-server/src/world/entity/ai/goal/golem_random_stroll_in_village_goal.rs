@@ -41,8 +41,16 @@ fn get_position_towards_anywhere(level: &mut ServerLevel, mob: EntityId) -> Opti
     land_random_pos::get_pos(level, mob, RANDOM_POS_XY_DISTANCE, RANDOM_POS_Y_DISTANCE)
 }
 
-fn get_position_towards_villager_who_wants_golem(_level: &mut ServerLevel, _mob: EntityId) -> Option<Vec3> {
-    None
+fn get_position_towards_villager_who_wants_golem(level: &mut ServerLevel, mob: EntityId) -> Option<Vec3> {
+    let area = level.entity(mob).bounding_box().inflate(32.0, 32.0, 32.0);
+    let game_time = level.game_time;
+    let villagers = level.get_living_entities(&area, |level, entity| level.is_villager(entity) && level.wants_to_spawn_golem(entity, game_time));
+    if villagers.is_empty() {
+        return None;
+    }
+    let villager = villagers[level.random.next_int_bounded(villagers.len() as i32) as usize];
+    let target_pos = level.entity(villager).position();
+    land_random_pos::get_pos_towards(level, mob, RANDOM_POS_XY_DISTANCE, RANDOM_POS_Y_DISTANCE, target_pos)
 }
 
 fn get_position_towards_poi(level: &mut ServerLevel, mob: EntityId) -> Option<Vec3> {

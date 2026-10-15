@@ -46,12 +46,20 @@ pub fn move_up_out_of_solid(pos: BlockPos, max_y: i32, solidity_tester: impl Fn(
     on_ground_pos
 }
 
-pub fn generate_random_pos(level: &mut ServerLevel, mob: EntityId, mut pos_supplier: impl FnMut(&mut ServerLevel) -> Option<BlockPos>) -> Option<Vec3> {
+pub fn generate_random_pos(level: &mut ServerLevel, mob: EntityId, pos_supplier: impl FnMut(&mut ServerLevel) -> Option<BlockPos>) -> Option<Vec3> {
+    generate_random_pos_weighted(level, pos_supplier, |level, pos| level.get_walk_target_value(mob, pos) as f64)
+}
+
+pub fn generate_random_pos_weighted(
+    level: &mut ServerLevel,
+    mut pos_supplier: impl FnMut(&mut ServerLevel) -> Option<BlockPos>,
+    mut position_weight: impl FnMut(&mut ServerLevel, BlockPos) -> f64,
+) -> Option<Vec3> {
     let mut best_weight = f64::NEG_INFINITY;
     let mut best_pos = None;
     for _ in 0..10 {
         if let Some(pos) = pos_supplier(level) {
-            let value = level.get_walk_target_value(mob, pos) as f64;
+            let value = position_weight(level, pos);
             if value > best_weight {
                 best_weight = value;
                 best_pos = Some(pos);
