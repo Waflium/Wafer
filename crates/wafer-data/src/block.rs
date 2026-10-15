@@ -120,6 +120,7 @@ pub(crate) mod flags {
     pub const FLUID_FALLING: u32 = 1 << 19;
     pub const SUFFOCATING_BY_TAG: u32 = 1 << 20;
     pub const PATHFINDABLE_LAND: u32 = 1 << 21;
+    pub const PATHFINDABLE_WATER: u32 = 1 << 22;
     pub const SHAPE_OFFSET: u32 = 1 << 23;
     pub const COLLISION_OFFSET: u32 = 1 << 24;
     pub const SUPPORT_OFFSET: u32 = 1 << 25;
@@ -335,6 +336,9 @@ impl BlockState {
     }
     pub fn is_pathfindable_land(self) -> bool {
         self.flag(flags::PATHFINDABLE_LAND)
+    }
+    pub fn is_pathfindable_water(self) -> bool {
+        self.flag(flags::PATHFINDABLE_WATER)
     }
 
     pub fn light_emission(self) -> u8 {

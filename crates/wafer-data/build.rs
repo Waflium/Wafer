@@ -482,6 +482,9 @@ fn blocks(
             if state["pathfindable_land"] == true {
                 flags |= 1 << 21;
             }
+            if state["pathfindable_water"] == true {
+                flags |= 1 << 22;
+            }
             for (bit, key) in ["shape_offset", "collision_offset", "support_offset"].iter().enumerate() {
                 if state[*key] == true {
                     flags |= 1 << (23 + bit);

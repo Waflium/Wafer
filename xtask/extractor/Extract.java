@@ -315,6 +315,7 @@ public final class Extract {
         st.addProperty("collision_full_block", state.isCollisionShapeFullBlock(EMPTY, ORIGIN));
         st.addProperty("offset", state.hasOffsetFunction());
         st.addProperty("pathfindable_land", state.isPathfindable(PathComputationType.LAND));
+        st.addProperty("pathfindable_water", state.isPathfindable(PathComputationType.WATER));
         st.addProperty("push_reaction", state.getPistonPushReaction().name());
         st.addProperty("map_color", state.getMapColor(EMPTY, ORIGIN).id);
         st.addProperty("instrument", state.instrument().getSerializedName());
