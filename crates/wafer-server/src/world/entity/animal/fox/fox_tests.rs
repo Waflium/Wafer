@@ -161,6 +161,43 @@ fn bred_foxes_trust_the_players_who_fed_their_parents() {
 }
 
 #[test]
+fn foxes_defend_trusted_players_from_their_attackers() {
+    let (mut level, player, id) = setup(Vec3::new(0.5, -60.0, 36.5));
+    level.difficulty = crate::world::difficulty::Difficulty::Normal;
+    let player_uuid = level.entity(player).uuid;
+    level.entity_mut(id).data.set(fox::DATA_TRUSTED_ID_0, crate::world::entity::data::DataValue::OptionalLivingEntityReference(Some(player_uuid)));
+    let LevelEntity::Mob(mut zombie) = ServerLevel::create_entity("minecraft:zombie").unwrap() else { unreachable!() };
+    zombie.entity.set_pos(Vec3::new(1.5, -60.0, 41.5));
+    let zombie = {
+        let zombie_id = zombie.entity.id;
+        level.add_fresh_entity(LevelEntity::Mob(zombie));
+        zombie_id
+    };
+    for _ in 0..5 {
+        level.tick();
+    }
+    level.set_last_hurt_mob(zombie, player);
+    let (zombie_uuid, tick_count) = (level.entity(zombie).uuid, level.entity(player).tick_count);
+    let living = level.living_mut(player);
+    living.last_hurt_by_mob = Some(zombie_uuid);
+    living.last_hurt_by_mob_timestamp = tick_count;
+    level.entity_mut(id).random = wafer_core::random::LegacyRandomSource::new(5);
+    level.entity_mut(zombie).random = wafer_core::random::LegacyRandomSource::new(6);
+    let mut defended = false;
+    for _ in 0..80 {
+        level.tick();
+        if level.get_target(id) == Some(zombie) {
+            defended = true;
+            break;
+        }
+    }
+    assert!(defended, "the fox never turned on the zombie");
+    assert!(fox::is_defending(level.entity(id)));
+    level.set_target(id, None);
+    assert!(!fox::is_defending(level.entity(id)));
+}
+
+#[test]
 fn foxes_pick_up_items_and_spit_out_what_they_held() {
     let (mut level, _player, id) = setup(Vec3::new(0.5, -60.0, 0.5));
     level.set_item_slot(id, EquipmentSlot::Mainhand, ItemStack::new(items::FEATHER, 1));

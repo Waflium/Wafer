@@ -1,0 +1,90 @@
+cmd gamerule spawn_mobs false
+cmd gamerule advance_time false
+cmd gamerule advance_weather false
+cmd gamerule natural_health_regeneration false
+cmd gamerule random_tick_speed 0
+cmd weather clear
+cmd difficulty normal
+cmd tp WaferProbe 0.5 -60 0.5 0 0
+sleep 1000
+cmd tick freeze
+sleep 300
+label stalk
+gamerule mob_drops false
+time 1000
+summon f minecraft:fox 0.5 -60 -30.5 11
+summon k minecraft:chicken 10.5 -60 -30.5 19
+seedlevel 7
+steps 160 f,k
+discard
+label faceplant
+gamerule mob_drops false
+time 1000
+fill -6 -60 -56 16 -60 -44 minecraft:snow
+summon f minecraft:fox 0.5 -60 -50.5 13
+summon k minecraft:chicken 9.5 -60 -50.5 21 NoAI:1b
+seedlevel 7
+steps 120 f
+discard
+gamerule mob_drops true
+label sleep
+time 1000
+fill -2 -60 -72 2 -59 -68 minecraft:stone
+fill -1 -60 -71 1 -60 -69 minecraft:air
+summon f minecraft:fox 0.5 -60 -69.5 23
+seedlevel 7
+steps 200 f
+time 14000
+steps 40 f
+discard
+label berries
+time 1000
+setblock 3 -60 -90 minecraft:sweet_berry_bush[age=3]
+summon f minecraft:fox 0.5 -60 -90.5 31
+seedlevel 7
+steps 400 f
+items
+discard
+label eat
+time 1000
+summon f minecraft:fox 0.5 -60 -110.5 33
+mouth f minecraft:sweet_berries 1
+seedlevel 7
+steps 640 f
+discard
+label pickup
+time 1000
+summon f minecraft:fox 0.5 -60 -130.5 37 CanPickUpLoot:1b
+item 4.5 -60 -130.5 minecraft:chicken 3
+seedlevel 7
+steps 160 f
+items
+discard
+label breed
+time 1000
+summon a minecraft:fox 0.5 -60 -150.5 41
+summon b minecraft:fox 3.5 -60 -150.5 43
+love a
+love b
+seedlevel 7
+steps 60 a,b
+babies
+discard
+label nbt
+summon f minecraft:fox 0.5 -60 -170.5 47 Type:"snow",Sleeping:1b,Sitting:1b,Crouching:0b,Trusted:[[I;1,2,3,4],[I;5,6,7,8]]
+nbt f
+summon g minecraft:fox 3.5 -60 -170.5 49
+nbt g
+mouth g minecraft:emerald 1
+nbt g
+kill g
+items
+discard
+label pick
+time 1000
+setblock 33 -60 10 minecraft:sweet_berry_bush[age=3]
+summon f minecraft:fox 33.5 -60 10.5 51
+seedlevel 7
+steps 120 f
+items
+discard
