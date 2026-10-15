@@ -10,7 +10,7 @@ pub mod properties;
 mod registries;
 mod tag;
 
-pub use block::{Block, BlockInfo, BlockProperty, BlockState, PushReaction, SoundType, SupportType, VoxelShape};
+pub use block::{Block, BlockInfo, BlockProperty, BlockState, OffsetType, PushReaction, SoundType, SupportType, VoxelShape};
 pub use block_entity::BlockEntityType;
 pub use fluid::{Fluid, FluidState};
 pub use game_rules::{GameRule, GameRuleType};

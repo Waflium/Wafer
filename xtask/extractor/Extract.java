@@ -40,7 +40,6 @@ import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -243,6 +242,9 @@ public final class Extract {
             b.addProperty("description_id", block.getDescriptionId());
             b.add("loot_table", block.getLootTable().map(k -> (JsonElement) new JsonPrimitive(k.identifier().toString())).orElse(JsonNull.INSTANCE));
             b.add("behaviour", behaviourFields(block));
+            b.addProperty("offset_type", offsetType(block.defaultBlockState()));
+            b.addProperty("max_horizontal_offset", (float) invoke(block, "getMaxHorizontalOffset"));
+            b.addProperty("max_vertical_offset", (float) invoke(block, "getMaxVerticalOffset"));
 
             JsonArray classes = new JsonArray();
             for (Class<?> c = block.getClass(); c != Object.class; c = c.getSuperclass()) {
@@ -333,13 +335,106 @@ public final class Extract {
         }
         st.add("face_sturdy", sturdy);
 
-        Vec3 offset = state.getOffset(ORIGIN);
-        st.add("shape", boxes(state.getShape(EMPTY, ORIGIN, CollisionContext.empty()).move(offset.reverse())));
-        st.add("collision", boxes(state.getCollisionShape(EMPTY, ORIGIN)));
+        positionalShape(st, state, "shape", pos -> state.getShape(EMPTY, pos, CollisionContext.empty()));
+        positionalShape(st, state, "collision", pos -> state.getCollisionShape(EMPTY, pos));
         st.add("occlusion", boxes(state.getOcclusionShape()));
-        st.add("support", boxes(state.getBlockSupportShape(EMPTY, ORIGIN)));
-        st.add("interaction", boxes(state.getInteractionShape(EMPTY, ORIGIN)));
+        positionalShape(st, state, "support", pos -> state.getBlockSupportShape(EMPTY, pos));
+        positionalShape(st, state, "interaction", pos -> state.getInteractionShape(EMPTY, pos));
+        if (state.hasOffsetFunction()) {
+            for (BlockPos pos : EXACT_OFFSET_POSITIONS) {
+                for (Direction direction : Direction.values()) {
+                    for (SupportType type : SupportType.values()) {
+                        boolean unused = type == SupportType.CENTER && direction.getAxis().isHorizontal();
+                        if (!unused && state.isFaceSturdy(EMPTY, pos, direction, type) != state.isFaceSturdy(EMPTY, ORIGIN, direction, type)) {
+                            throw new IllegalStateException(state + " face sturdiness depends on its offset");
+                        }
+                    }
+                }
+                if (state.isCollisionShapeFullBlock(EMPTY, pos) != state.isCollisionShapeFullBlock(EMPTY, ORIGIN)) {
+                    throw new IllegalStateException(state + " full block collision depends on its offset");
+                }
+            }
+        }
         return st;
+    }
+
+    private static final BlockPos[] EXACT_OFFSET_POSITIONS = exactOffsetPositions();
+
+    private static BlockPos[] exactOffsetPositions() {
+        BlockPos[] found = new BlockPos[2];
+        long firstSeed = 0;
+        for (int x = 0; x < 4096; x++) {
+            for (int z = 0; z < 4096; z++) {
+                long seed = net.minecraft.util.Mth.getSeed(x, 0, z);
+                boolean exact = ((seed & 15L) == 0 || (seed & 15L) == 15) && ((seed >> 8 & 15L) == 0 || (seed >> 8 & 15L) == 15) && (seed >> 4 & 15L) == 15L;
+                if (!exact) {
+                    continue;
+                }
+                if (found[0] == null) {
+                    found[0] = new BlockPos(x, 0, z);
+                    firstSeed = seed;
+                } else if ((seed & 15L) != (firstSeed & 15L) && (seed >> 8 & 15L) != (firstSeed >> 8 & 15L)) {
+                    found[1] = new BlockPos(x, 0, z);
+                    return found;
+                }
+            }
+        }
+        throw new IllegalStateException("no exact offset positions");
+    }
+
+    private static void positionalShape(JsonObject st, BlockState state, String name, java.util.function.Function<BlockPos, VoxelShape> getter) {
+        if (!state.hasOffsetFunction()) {
+            st.add(name, boxes(getter.apply(ORIGIN)));
+            st.addProperty(name + "_offset", false);
+            return;
+        }
+        BlockPos first = EXACT_OFFSET_POSITIONS[0];
+        BlockPos second = EXACT_OFFSET_POSITIONS[1];
+        JsonArray atOrigin = boxes(getter.apply(ORIGIN));
+        JsonArray atFirst = boxes(getter.apply(first));
+        JsonArray atSecond = boxes(getter.apply(second));
+        if (atOrigin.equals(atFirst) && atOrigin.equals(atSecond)) {
+            st.add(name, atOrigin);
+            st.addProperty(name + "_offset", false);
+            return;
+        }
+        JsonArray raw = boxes(getter.apply(first).move(state.getOffset(first).reverse()));
+        if (!raw.equals(boxes(getter.apply(second).move(state.getOffset(second).reverse())))) {
+            throw new IllegalStateException(state + " " + name + " is not moved by its offset");
+        }
+        VoxelShape expectedOrigin = getter.apply(first).move(state.getOffset(first).reverse()).move(state.getOffset(ORIGIN));
+        if (!boxes(expectedOrigin).equals(atOrigin)) {
+            throw new IllegalStateException(state + " " + name + " at the origin is not moved by its offset");
+        }
+        st.add(name, raw);
+        st.addProperty(name + "_offset", true);
+    }
+
+    private static Object referenceOffsetFunction(BlockBehaviour.OffsetType type) {
+        return field(BlockBehaviour.Properties.class, BlockBehaviour.Properties.of().offsetType(type), "offsetFunction");
+    }
+
+    private static String offsetType(BlockState state) {
+        Object function = stateField(state, "offsetFunction");
+        if (function == null) {
+            return "none";
+        }
+        for (BlockBehaviour.OffsetType type : new BlockBehaviour.OffsetType[] {BlockBehaviour.OffsetType.XZ, BlockBehaviour.OffsetType.XYZ}) {
+            if (function.getClass() == referenceOffsetFunction(type).getClass()) {
+                return type.name().toLowerCase(java.util.Locale.ROOT);
+            }
+        }
+        throw new IllegalStateException(state + " has an unknown offset function");
+    }
+
+    private static Object invoke(Object target, String name) {
+        try {
+            java.lang.reflect.Method method = BlockBehaviour.class.getDeclaredMethod(name);
+            method.setAccessible(true);
+            return method.invoke(target);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private static JsonArray boxes(VoxelShape shape) {

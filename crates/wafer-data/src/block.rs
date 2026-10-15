@@ -1,4 +1,6 @@
-use wafer_core::{AABB, Direction};
+use std::borrow::Cow;
+
+use wafer_core::{AABB, BlockPos, Direction, Vec3, mth};
 
 use crate::fluid::{Fluid, FluidState};
 use crate::properties::{NoteBlockInstrument, Property, PropertyId, PropertyValue};
@@ -43,6 +45,16 @@ pub struct BlockInfo {
     pub classes: &'static [&'static str],
     pub fields: &'static str,
     pub properties: &'static [BlockProperty],
+    pub offset_type: OffsetType,
+    pub max_horizontal_offset: f32,
+    pub max_vertical_offset: f32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum OffsetType {
+    None,
+    Xz,
+    Xyz,
 }
 
 pub struct BlockProperty {
@@ -108,6 +120,9 @@ pub(crate) mod flags {
     pub const FLUID_FALLING: u32 = 1 << 19;
     pub const SUFFOCATING_BY_TAG: u32 = 1 << 20;
     pub const PATHFINDABLE_LAND: u32 = 1 << 21;
+    pub const SHAPE_OFFSET: u32 = 1 << 23;
+    pub const COLLISION_OFFSET: u32 = 1 << 24;
+    pub const SUPPORT_OFFSET: u32 = 1 << 25;
 }
 
 impl Block {
@@ -146,6 +161,14 @@ impl Block {
 
     pub fn count() -> usize {
         BLOCKS.len()
+    }
+
+    pub fn get_max_horizontal_offset(self) -> f32 {
+        self.info().max_horizontal_offset
+    }
+
+    pub fn get_max_vertical_offset(self) -> f32 {
+        self.info().max_vertical_offset
     }
 
     pub fn property_by_name(self, name: &str) -> Option<(&'static str, &'static [&'static str])> {
@@ -254,6 +277,61 @@ impl BlockState {
     }
     pub fn has_offset_function(self) -> bool {
         self.flag(flags::HAS_OFFSET)
+    }
+
+    pub fn get_offset(self, pos: BlockPos) -> Vec3 {
+        let block = self.block();
+        match block.info().offset_type {
+            OffsetType::None => Vec3::ZERO,
+            OffsetType::Xz => {
+                let seed = mth::get_seed(pos.x, 0, pos.z);
+                let max_horizontal_offset = block.get_max_horizontal_offset();
+                let x = mth::clamp((((seed & 15) as f32 / 15.0) as f64 - 0.5) * 0.5, -max_horizontal_offset as f64, max_horizontal_offset as f64);
+                let z = mth::clamp((((seed >> 8 & 15) as f32 / 15.0) as f64 - 0.5) * 0.5, -max_horizontal_offset as f64, max_horizontal_offset as f64);
+                Vec3::new(x, 0.0, z)
+            }
+            OffsetType::Xyz => {
+                let seed = mth::get_seed(pos.x, 0, pos.z);
+                let y = (((seed >> 4 & 15) as f32 / 15.0) as f64 - 1.0) * block.get_max_vertical_offset() as f64;
+                let max_horizontal_offset = block.get_max_horizontal_offset();
+                let x = mth::clamp((((seed & 15) as f32 / 15.0) as f64 - 0.5) * 0.5, -max_horizontal_offset as f64, max_horizontal_offset as f64);
+                let z = mth::clamp((((seed >> 8 & 15) as f32 / 15.0) as f64 - 0.5) * 0.5, -max_horizontal_offset as f64, max_horizontal_offset as f64);
+                Vec3::new(x, y, z)
+            }
+        }
+    }
+
+    fn offset_if(self, flag: u32, pos: BlockPos) -> Vec3 {
+        if self.flag(flag) { self.get_offset(pos) } else { Vec3::ZERO }
+    }
+
+    pub fn shape_offset(self, pos: BlockPos) -> Vec3 {
+        self.offset_if(flags::SHAPE_OFFSET, pos)
+    }
+
+    pub fn collision_offset(self, pos: BlockPos) -> Vec3 {
+        self.offset_if(flags::COLLISION_OFFSET, pos)
+    }
+
+    pub fn support_offset(self, pos: BlockPos) -> Vec3 {
+        self.offset_if(flags::SUPPORT_OFFSET, pos)
+    }
+
+    fn moved_by_offset(self, shape: &'static wafer_core::shapes::VoxelShape, flag: u32, pos: BlockPos) -> Cow<'static, wafer_core::shapes::VoxelShape> {
+        if self.flag(flag) && !shape.is_empty() {
+            let offset = self.get_offset(pos);
+            Cow::Owned(shape.moved(offset.x, offset.y, offset.z))
+        } else {
+            Cow::Borrowed(shape)
+        }
+    }
+
+    pub fn get_shape(self, pos: BlockPos) -> Cow<'static, wafer_core::shapes::VoxelShape> {
+        self.moved_by_offset(self.voxel_shape(), flags::SHAPE_OFFSET, pos)
+    }
+
+    pub fn get_collision_shape(self, pos: BlockPos) -> Cow<'static, wafer_core::shapes::VoxelShape> {
+        self.moved_by_offset(self.collision_voxel_shape(), flags::COLLISION_OFFSET, pos)
     }
     pub fn is_pathfindable_land(self) -> bool {
         self.flag(flags::PATHFINDABLE_LAND)
@@ -442,8 +520,9 @@ impl std::fmt::Debug for BlockState {
 #[cfg(test)]
 mod tests {
     use crate::properties::{HALF, HORIZONTAL_FACING, Half, SLAB_TYPE, SNOWY, STAIRS_SHAPE, SlabType, StairsShape, WATERLOGGED};
+    use super::{Block, BlockState, OffsetType};
     use crate::{SupportType, blocks};
-    use wafer_core::Direction;
+    use wafer_core::{BlockPos, Direction, Vec3};
 
     #[test]
     fn properties_get_and_set() {
@@ -475,5 +554,77 @@ mod tests {
         assert!(slab.is_face_sturdy(Direction::Down, SupportType::Full));
         assert!(blocks::WATER.default_state().fluid_state().is_source());
         assert!(blocks::AIR.default_state().is_air());
+    }
+
+    const EXTREMES: [i32; 17] = [-30000000, -29999999, -16777217, -1048577, -65536, -4097, -1, 0, 1, 4096, 65535, 1048576, 16777216, 29999999, 30000000, i32::MIN, i32::MAX];
+
+    fn positions() -> Vec<BlockPos> {
+        let mut out = Vec::new();
+        for x in -64..=64 {
+            for z in -64..=64 {
+                out.push(BlockPos::new(x, (x * 7 + z * 13) % 300, z));
+            }
+        }
+        for x in EXTREMES {
+            for z in EXTREMES {
+                out.push(BlockPos::new(x, 64, z));
+            }
+        }
+        out
+    }
+
+    fn mix(hash: i64, value: f64) -> i64 {
+        ((hash ^ value.to_bits() as i64).wrapping_mul(0x9E3779B97F4A7C15u64 as i64)).rotate_left(27)
+    }
+
+    fn shape_hash(mut hash: i64, shape: &wafer_core::shapes::VoxelShape) -> i64 {
+        for b in shape.to_aabbs() {
+            hash = mix(mix(mix(mix(mix(mix(hash, b.min_x), b.min_y), b.min_z), b.max_x), b.max_y), b.max_z);
+        }
+        hash.wrapping_mul(31).wrapping_add(7)
+    }
+
+    #[test]
+    fn offsets_match_vanilla() {
+        let positions = positions();
+        let mut offset_blocks = 0;
+        for line in include_str!("offset_oracle.txt").lines() {
+            let parts: Vec<&str> = line.split(' ').collect();
+            let expected = u64::from_str_radix(parts[2], 16).unwrap() as i64;
+            match parts[0] {
+                "offset" => {
+                    let state = Block::by_name(parts[1]).unwrap().default_state();
+                    let hash = positions.iter().fold(0, |hash, &pos| {
+                        let offset = state.get_offset(pos);
+                        mix(mix(mix(hash, offset.x), offset.y), offset.z)
+                    });
+                    assert_eq!(hash, expected, "{}", parts[1]);
+                    offset_blocks += 1;
+                }
+                _ => {
+                    let state = BlockState(parts[1].parse().unwrap());
+                    let shapes = positions.iter().fold(0, |hash, &pos| shape_hash(hash, &state.get_shape(pos)));
+                    let collisions = positions.iter().fold(0, |hash, &pos| shape_hash(hash, &state.get_collision_shape(pos)));
+                    assert_eq!(shapes, expected, "shape of {state:?}");
+                    assert_eq!(collisions, u64::from_str_radix(parts[3], 16).unwrap() as i64, "collision of {state:?}");
+                }
+            }
+        }
+        assert_eq!(offset_blocks, (0..Block::count()).filter(|&b| Block(b as u16).default_state().has_offset_function()).count());
+        for state in (0..BlockState::count()).map(|id| BlockState(id as u16)) {
+            assert_eq!(state.has_offset_function(), state.block().info().offset_type != OffsetType::None, "{state:?}");
+        }
+    }
+
+    #[test]
+    fn bamboo_collision_moves_by_offset() {
+        let bamboo = blocks::BAMBOO.default_state();
+        let pos = BlockPos::new(3, 64, -7);
+        let offset = bamboo.get_offset(pos);
+        assert_ne!(offset, Vec3::ZERO);
+        let shape = bamboo.get_collision_shape(pos);
+        assert_eq!(shape.min(wafer_core::Axis::X), 6.5 / 16.0 + offset.x);
+        assert_eq!(shape.min(wafer_core::Axis::Z), 6.5 / 16.0 + offset.z);
+        assert_eq!(blocks::SHORT_GRASS.default_state().get_shape(pos).min(wafer_core::Axis::X), 2.0 / 16.0);
     }
 }

@@ -412,7 +412,8 @@ fn blocks(
             "BlockInfo {{ name: {name:?}, description_id: {:?}, destroy_time: {}, explosion_resistance: {}, friction: {}, speed_factor: {}, jump_factor: {}, \
              bounce_restitution: {}, fall_distance_reduction: {}, has_collision: {}, dynamic_shape: {}, item: Item({}), first_state: {first}, \
              state_count: {}, default_state: BlockState({}), loot_table: {:?}, sound: SoundType {{ volume: {}, pitch: {}, break_sound: {}, \
-             step_sound: {}, place_sound: {}, hit_sound: {}, fall_sound: {} }}, classes: &{:?}, fields: {:?}, properties: &[{}] }},",
+             step_sound: {}, place_sound: {}, hit_sound: {}, fall_sound: {} }}, classes: &{:?}, fields: {:?}, properties: &[{}], \
+             offset_type: OffsetType::{}, max_horizontal_offset: {}, max_vertical_offset: {} }},",
             block["description_id"].as_str().unwrap(),
             f32_literal(&block["hardness"]),
             f32_literal(&block["blast_resistance"]),
@@ -437,6 +438,9 @@ fn blocks(
             block["classes"].as_array().unwrap().iter().map(|c| c.as_str().unwrap()).collect::<Vec<_>>(),
             block["fields"].to_string(),
             block_props.join(", "),
+            variant_name(block["offset_type"].as_str().unwrap()),
+            f32_literal(&block["max_horizontal_offset"]),
+            f32_literal(&block["max_vertical_offset"]),
         )?;
         writeln!(block_consts, "pub const {}: Block = Block({index});", const_name(name))?;
 
@@ -477,6 +481,14 @@ fn blocks(
             }
             if state["pathfindable_land"] == true {
                 flags |= 1 << 21;
+            }
+            for (bit, key) in ["shape_offset", "collision_offset", "support_offset"].iter().enumerate() {
+                if state[*key] == true {
+                    flags |= 1 << (23 + bit);
+                }
+            }
+            if state["interaction_offset"] == true {
+                bail!("{name} has an interaction shape moved by its offset");
             }
             let mut sturdy = 0u32;
             for (bit, v) in state["face_sturdy"].as_array().unwrap().iter().enumerate() {
