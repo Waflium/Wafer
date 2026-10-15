@@ -29,6 +29,7 @@ pub mod snowball_item;
 pub mod enchantment;
 pub mod ender_eye_item;
 pub mod flint_and_steel_item;
+pub mod food_on_a_stick_item;
 pub mod throwable_potion_item;
 pub mod trident_item;
 mod item_stack;
@@ -207,6 +208,9 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     }
     if stack.item.is_instance_of("BoatItem") {
         return boat_item::use_item(level, player, hand);
+    }
+    if stack.item.is_instance_of("FoodOnAStickItem") {
+        return food_on_a_stick_item::use_item(level, player, hand);
     }
     match bucket_item::BucketItem::for_item(stack.item) {
         Some(bucket) => bucket.use_item(level, player, hand),

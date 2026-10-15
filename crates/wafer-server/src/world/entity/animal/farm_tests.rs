@@ -196,6 +196,26 @@ fn shears_take_a_pigs_saddle_off() {
 }
 
 #[test]
+fn carrots_on_sticks_steer_and_boost_saddled_pigs() {
+    let (mut level, player, pig) = setup(Pig::create(), ItemStack::new(items::SADDLE, 1));
+    assert_eq!(interact(&mut level, player, pig), InteractionResult::SUCCESS);
+    level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, Some(ItemStack::new(items::CARROT_ON_A_STICK, 1)));
+    assert_eq!(interact(&mut level, player, pig), InteractionResult::SUCCESS);
+    assert_eq!(level.vehicle(player), Some(pig));
+    assert_eq!(level.controlling_passenger(pig), Some(player));
+    assert_eq!(level.use_item(player, InteractionHand::MainHand), InteractionResult::SUCCESS_SERVER);
+    let boost_time = match level.entity(pig).data.get(super::pig::pig::DATA_BOOST_TIME) {
+        crate::world::entity::data::DataValue::Int(boost_time) => *boost_time,
+        _ => 0,
+    };
+    assert!((140..=980).contains(&boost_time), "{boost_time}");
+    assert_eq!(held(&level, player).map(|stack| stack.damage_value()), Some(7));
+    assert_eq!(level.use_item(player, InteractionHand::MainHand), InteractionResult::Pass);
+    level.player_mut(player).set_item_in_hand(InteractionHand::MainHand, None);
+    assert_eq!(level.controlling_passenger(pig), None);
+}
+
+#[test]
 fn baby_pigs_cannot_be_saddled() {
     let mut mob = Pig::create();
     mob.set_baby(true);

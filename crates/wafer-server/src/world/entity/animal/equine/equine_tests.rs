@@ -137,6 +137,37 @@ fn saddled_tamed_horses_are_controlled_by_their_rider() {
 }
 
 #[test]
+fn ridden_horses_take_fall_damage_from_client_moves() {
+    let mut server = testing::server();
+    let player = testing::server_player(&mut server, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+    let level = &mut server.levels[0];
+    level.handle_player_loaded(player);
+    let mut mob = Horse::create();
+    mob.entity.set_pos(Vec3::new(0.5, -60.0, 2.5));
+    let horse = mob.entity.id;
+    level.add_fresh_entity(LevelEntity::Mob(Box::new(mob)));
+    level.tame_with_name(horse, player);
+    level.set_item_slot(horse, EquipmentSlot::Saddle, ItemStack::new(items::SADDLE, 1));
+    level.start_riding(player, horse, true, true);
+    level.player_mut(player).movement.awaiting_position_from_client = None;
+    level.tick_player(player);
+    for i in 1..=10 {
+        level.handle_move_vehicle(player, Vec3::new(0.5, -60.0 + i as f64 * 1.2, 2.5), 0.0, 0.0, false);
+        level.tick();
+        level.tick_player(player);
+    }
+    assert_eq!(level.entity(horse).y(), -48.0);
+    for i in 1..=6 {
+        level.handle_move_vehicle(player, Vec3::new(0.5, -48.0 - i as f64 * 2.0, 2.5), 0.0, 0.0, i == 6);
+        level.tick();
+        level.tick_player(player);
+    }
+    assert_eq!(level.entity(horse).y(), -60.0);
+    assert_eq!(level.entity(horse).fall_distance, 0.0);
+    assert_eq!(level.health(horse), 50.0);
+}
+
+#[test]
 fn sneaking_owners_open_the_horse_inventory() {
     let (mut level, player, donkey) = setup(Donkey::create());
     level.tame_with_name(donkey, player);

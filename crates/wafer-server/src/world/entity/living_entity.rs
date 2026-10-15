@@ -1970,6 +1970,8 @@ impl ServerLevel {
     pub fn tick_ridden_by(&mut self, id: EntityId, controller: EntityId, ridden_input: Vec3) {
         if self.is_abstract_horse(id) {
             self.abstract_horse_tick_ridden(id, controller, ridden_input);
+        } else if self.is_pig(id) {
+            self.pig_tick_ridden(id, controller, ridden_input);
         } else {
             self.living_entity_tick_ridden(id, controller, ridden_input);
         }
@@ -1978,11 +1980,23 @@ impl ServerLevel {
     pub fn living_entity_tick_ridden(&mut self, _id: EntityId, _controller: EntityId, _ridden_input: Vec3) {}
 
     pub fn get_ridden_input(&self, id: EntityId, controller: EntityId, self_input: Vec3) -> Vec3 {
-        if self.is_abstract_horse(id) { self.abstract_horse_get_ridden_input(id, controller, self_input) } else { self_input }
+        if self.is_abstract_horse(id) {
+            self.abstract_horse_get_ridden_input(id, controller, self_input)
+        } else if self.is_pig(id) {
+            self.pig_get_ridden_input(id, controller, self_input)
+        } else {
+            self_input
+        }
     }
 
     pub fn get_ridden_speed(&self, id: EntityId, controller: EntityId) -> f32 {
-        if self.is_abstract_horse(id) { self.abstract_horse_get_ridden_speed(id, controller) } else { self.living(id).speed }
+        if self.is_abstract_horse(id) {
+            self.abstract_horse_get_ridden_speed(id, controller)
+        } else if self.is_pig(id) {
+            self.pig_get_ridden_speed(id, controller)
+        } else {
+            self.living(id).speed
+        }
     }
 
     fn server_ai_step(&mut self, id: EntityId) {

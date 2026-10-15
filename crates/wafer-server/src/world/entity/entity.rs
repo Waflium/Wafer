@@ -3041,6 +3041,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_get_controlling_passenger(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Pig(_)) => self.pig_get_controlling_passenger(id),
             Some(LevelEntity::Mob(_)) => self.mob_get_controlling_passenger(id),
             _ => None,
         }

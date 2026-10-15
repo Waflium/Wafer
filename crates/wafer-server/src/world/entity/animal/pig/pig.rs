@@ -18,7 +18,9 @@ use crate::world::entity::ai::goal::random_look_around_goal::RandomLookAroundGoa
 use crate::world::entity::ai::goal::tempt_goal::TemptGoal;
 use crate::world::entity::ai::goal::water_avoiding_random_stroll_goal::WaterAvoidingRandomStrollGoal;
 use crate::world::entity::animal::Animal;
-use crate::world::entity::attributes::PIG_ATTRIBUTES;
+use crate::world::entity::attributes::{Attribute, PIG_ATTRIBUTES};
+use crate::world::entity::item_based_steering::ItemBasedSteering;
+use wafer_core::Vec3;
 use crate::world::entity::conversion_params::ConversionParams;
 use crate::world::entity::data::{DataValue, ageable_mob_defaults};
 use crate::world::entity::living_entity::LivingEntity;
@@ -29,6 +31,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
 
+pub const DATA_BOOST_TIME: usize = 18;
 pub const DATA_VARIANT_ID: usize = 19;
 pub const DATA_SOUND_VARIANT_ID: usize = 20;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 0.9).with_passenger_attachments(&[wafer_core::Vec3::new(0.0, 0.86875, 0.0)]);
@@ -39,6 +42,14 @@ pub const SOUND_VARIANT_REGISTRY: &str = "minecraft:pig_sound_variant";
 #[derive(Default)]
 pub struct Pig {
     pub animal: Animal,
+    steering: ItemBasedSteering,
+}
+
+fn pig(mob: &Mob) -> &Pig {
+    match &mob.kind {
+        MobKind::Pig(pig) => pig,
+        _ => unreachable!("not a pig"),
+    }
 }
 
 pub struct PigSoundSet {
@@ -138,9 +149,14 @@ impl Pig {
 }
 
 impl ServerLevel {
+    pub fn is_pig(&self, id: EntityId) -> bool {
+        self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::Pig(_)))
+    }
+
     pub fn pig_mob_interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand) -> InteractionResult {
         let has_food = is_food(&self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty));
         if !has_food && self.is_saddled(id) && !self.is_vehicle(id) && !self.player(player).is_secondary_use_active() {
+            self.start_riding(player, id, false, true);
             return InteractionResult::SUCCESS;
         }
         let interaction_result = self.animal_mob_interact(id, player, hand);
@@ -155,6 +171,45 @@ impl ServerLevel {
             return result;
         }
         interaction_result
+    }
+
+    pub fn pig_get_controlling_passenger(&self, id: EntityId) -> Option<EntityId> {
+        if self.is_saddled(id)
+            && let Some(player) = self.first_passenger(id).filter(|&passenger| self.is_player(passenger))
+            && self.is_holding(player, items::CARROT_ON_A_STICK)
+        {
+            return Some(player);
+        }
+        self.mob_get_controlling_passenger(id)
+    }
+
+    pub fn pig_tick_ridden(&mut self, id: EntityId, controller: EntityId, ridden_input: Vec3) {
+        self.living_entity_tick_ridden(id, controller, ridden_input);
+        let (y_rot, x_rot) = (self.entity(controller).y_rot, self.entity(controller).x_rot);
+        let mob = self.mob_mut(id).expect("a pig");
+        mob.entity.set_rot(y_rot, x_rot * 0.5);
+        let y_rot = mob.entity.y_rot;
+        mob.entity.y_rot_o = y_rot;
+        mob.entity.y_head_rot = y_rot;
+        mob.living.y_body_rot = y_rot;
+        let Mob { entity, kind: MobKind::Pig(pig), .. } = mob else { unreachable!("not a pig") };
+        pig.steering.tick_boost(entity, DATA_BOOST_TIME);
+    }
+
+    pub fn pig_get_ridden_input(&self, _id: EntityId, _controller: EntityId, _self_input: Vec3) -> Vec3 {
+        Vec3::new(0.0, 0.0, 1.0)
+    }
+
+    pub fn pig_get_ridden_speed(&self, id: EntityId, _controller: EntityId) -> f32 {
+        let mob = self.mob(id).expect("a pig");
+        let boost_factor = pig(mob).steering.boost_factor(&mob.entity, DATA_BOOST_TIME);
+        (self.attribute_value(id, Attribute::MovementSpeed) * 0.225 * boost_factor as f64) as f32
+    }
+
+    pub fn pig_boost(&mut self, id: EntityId) -> bool {
+        let mob = self.mob_mut(id).expect("a pig");
+        let Mob { entity, kind: MobKind::Pig(pig), .. } = mob else { unreachable!("not a pig") };
+        pig.steering.boost(entity, DATA_BOOST_TIME)
     }
 
     pub fn pig_can_use_slot(&self, id: EntityId, slot: EquipmentSlot) -> bool {

@@ -30,6 +30,8 @@ pub mod equipment_user;
 pub mod experience_orb;
 pub mod fluid_interaction;
 pub mod has_custom_inventory_screen;
+pub mod item_based_steering;
+pub mod item_steerable;
 pub mod inside_block;
 pub mod item;
 pub mod lightning_bolt;
