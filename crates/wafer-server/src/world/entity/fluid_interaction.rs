@@ -180,7 +180,7 @@ impl ServerLevel {
         let mut has_fluid = false;
         for chunk_z in z0 >> 4..=z1 >> 4 {
             for chunk_x in x0 >> 4..=x1 >> 4 {
-                let Some(chunk) = self.chunks.loaded_chunk(ChunkPos::new(chunk_x, chunk_z)) else { return false };
+                let Some(chunk) = self.chunks.chunk_without_loading(ChunkPos::new(chunk_x, chunk_z)) else { return false };
                 let min_section = chunk.min_y() >> 4;
                 for section_y in y0 >> 4..=y1 >> 4 {
                     let index = section_y - min_section;

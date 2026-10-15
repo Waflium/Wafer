@@ -1,4 +1,5 @@
 use wafer_core::hash_map::{FastMap, FastSet};
+use std::cell::Cell;
 use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
@@ -87,7 +88,7 @@ pub struct ChunkCache {
     structure_starts_available: Vec<(ChunkPos, FastMap<StructureHolder, i32>)>,
     world_gen_chunk_entities: Vec<Vec<wafer_protocol::nbt::Nbt>>,
     full_status_changes: VecDeque<(ChunkPos, FullChunkStatus)>,
-    last_chunk_pos: [Option<ChunkPos>; 4],
+    last_chunk: Cell<[Option<(ChunkPos, bool)>; 4]>,
     server_view_distance: i32,
     live_futures: usize,
     pub block_entity_tickers: BlockEntityTickers,
@@ -142,7 +143,7 @@ impl ChunkCache {
             structure_starts_available: Vec::new(),
             world_gen_chunk_entities: Vec::new(),
             full_status_changes: VecDeque::new(),
-            last_chunk_pos: [None; 4],
+            last_chunk: Cell::new([None; 4]),
             server_view_distance: 0,
             live_futures: 0,
             tick_deadline: None,
@@ -287,16 +288,38 @@ impl ChunkCache {
     }
 
     pub fn chunk(&mut self, pos: ChunkPos) -> &mut LevelChunk {
-        if !self.last_chunk_pos.contains(&Some(pos)) {
+        if self.cached_chunk(pos, true).is_none() {
             let future = self.chunk_future_main_thread(pos, ChunkStatus::Full, true);
             self.managed_block(future);
             if !self.holders.futures.is_success(future) {
                 panic!("Chunk not there when requested: {pos:?}");
             }
-            self.last_chunk_pos.copy_within(0..3, 1);
-            self.last_chunk_pos[0] = Some(pos);
+            self.store_in_cache(pos, true);
         }
         self.chunks.get_mut(&pos).expect("full chunk")
+    }
+
+    pub fn chunk_without_loading(&self, pos: ChunkPos) -> Option<&LevelChunk> {
+        let present = match self.cached_chunk(pos, false) {
+            Some(present) => present,
+            None => {
+                let present = self.is_full(pos.pack());
+                self.store_in_cache(pos, present);
+                present
+            }
+        };
+        if present { self.chunks.get(&pos) } else { None }
+    }
+
+    fn cached_chunk(&self, pos: ChunkPos, load_or_generate: bool) -> Option<bool> {
+        self.last_chunk.get().into_iter().flatten().find(|&(p, present)| p == pos && (present || !load_or_generate)).map(|(_, present)| present)
+    }
+
+    fn store_in_cache(&self, pos: ChunkPos, present: bool) {
+        let mut last_chunk = self.last_chunk.get();
+        last_chunk.copy_within(0..3, 1);
+        last_chunk[0] = Some((pos, present));
+        self.last_chunk.set(last_chunk);
     }
 
     pub fn get_chunk_structures(&mut self, pos: ChunkPos, status: ChunkStatus) -> &ChunkStructures {
@@ -454,7 +477,7 @@ impl ChunkCache {
     }
 
     fn clear_cache(&mut self) {
-        self.last_chunk_pos = [None; 4];
+        self.last_chunk.set([None; 4]);
     }
 
     pub fn poll_task(&mut self) -> bool {
@@ -1691,6 +1714,27 @@ mod tests {
         assert!(cache.chunk_if_present(ChunkPos::new(7, -3)).is_none());
         assert_eq!(cache.ticket_level(ChunkPos::new(16, -3)), Some(44));
         assert_eq!(cache.ticket_level(ChunkPos::new(17, -3)), None);
+    }
+
+    #[test]
+    fn chunks_looked_up_without_loading_are_cached_without_tickets() {
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), None);
+        let pos = ChunkPos::new(5, -3);
+        let has_unknown_ticket = |cache: &ChunkCache| cache.distance_manager.ticket_storage.tickets(pos.pack()).iter().any(|t| t.ty == super::TicketType::Unknown);
+        cache.update_chunk_forced(pos, true);
+        cache.block_state(BlockPos::new(80, -61, -40));
+        assert!(has_unknown_ticket(&cache));
+        cache.purge_stale_tickets();
+        cache.purge_stale_tickets();
+        assert!(!has_unknown_ticket(&cache));
+        cache.clear_cache();
+        assert!(cache.chunk_without_loading(pos).is_some());
+        assert!(cache.chunk_without_loading(ChunkPos::new(40, 40)).is_none());
+        assert_eq!(cache.block_state(BlockPos::new(80, -61, -40)), blocks::GRASS_BLOCK.default_state());
+        assert!(!has_unknown_ticket(&cache));
+        cache.clear_cache();
+        cache.block_state(BlockPos::new(80, -61, -40));
+        assert!(has_unknown_ticket(&cache));
     }
 
     #[test]

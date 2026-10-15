@@ -89,7 +89,7 @@ impl ServerLevel {
     }
 
     fn for_each_block_collision(&self, box_: &AABB, context: &CollisionContext, only_suffocating_blocks: bool, always_collide_with_fluid: bool, visit: impl FnMut(BlockPos, Collider<'static>) -> bool) -> bool {
-        for_each_block_collision(|pos| self.chunks.loaded_chunk(pos), box_, context, only_suffocating_blocks, always_collide_with_fluid, visit)
+        for_each_block_collision(|pos| self.chunks.chunk_without_loading(pos), box_, context, only_suffocating_blocks, always_collide_with_fluid, visit)
     }
 }
 
