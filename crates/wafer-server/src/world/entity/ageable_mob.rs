@@ -101,6 +101,9 @@ impl ServerLevel {
             MobKind::Enderman(_) => None,
             MobKind::Witch(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
+            MobKind::Bat(_) => None,
+            MobKind::Squid(_) => self.squid_get_breed_offspring(id, partner),
+            MobKind::GlowSquid(_) => self.glow_squid_get_breed_offspring(id, partner),
         }
     }
 

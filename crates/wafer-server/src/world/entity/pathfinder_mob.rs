@@ -27,6 +27,7 @@ impl ServerLevel {
             MobKind::Enderman(_) => crate::world::entity::monster::enderman::Enderman::get_walk_target_value(),
             MobKind::Witch(_) => self.monster_get_walk_target_value(pos),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => get_walk_target_value(),
+            MobKind::Squid(_) | MobKind::GlowSquid(_) => get_walk_target_value(),
             _ => self.animal_get_walk_target_value(pos),
         }
     }

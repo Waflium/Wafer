@@ -154,12 +154,13 @@ impl BlockBehaviour for TripWireBlock {
         state: BlockState,
         level: &mut ServerLevel,
         pos: BlockPos,
-        _entity: EntityId,
+        entity: EntityId,
         _effects: &mut InsideBlockEffects,
         _is_precise: bool,
     ) {
         if !state.get(POWERED) && !level.has_scheduled_tick(pos, self.block) {
-            self.check_pressed_by(level, pos, true);
+            let should_be_pressed = !level.is_ignoring_block_triggers(entity);
+            self.check_pressed_by(level, pos, should_be_pressed);
         }
     }
 

@@ -45,6 +45,7 @@ const TICKS_REQUIRED_TO_FREEZE: i32 = 140;
 pub struct LivingEntity {
     pub attributes: AttributeMap,
     pub y_body_rot: f32,
+    pub y_body_rot_o: f32,
     pub no_action_time: i32,
     pub last_hurt_by_player: Option<u128>,
     pub last_hurt_by_player_memory_time: i32,
@@ -94,6 +95,7 @@ impl LivingEntity {
         LivingEntity {
             attributes: AttributeMap::new(attributes),
             y_body_rot: 0.0,
+            y_body_rot_o: 0.0,
             no_action_time: 0,
             last_hurt_by_player: None,
             last_hurt_by_player_memory_time: 0,
@@ -1243,6 +1245,13 @@ impl ServerLevel {
     }
 
     pub fn voice_pitch(&mut self, id: EntityId) -> f32 {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Bat(_)) => self.bat_voice_pitch(id),
+            _ => self.living_entity_voice_pitch(id),
+        }
+    }
+
+    pub fn living_entity_voice_pitch(&mut self, id: EntityId) -> f32 {
         if self.is_player(id) {
             return 1.0;
         }
@@ -1421,6 +1430,8 @@ impl ServerLevel {
             Some(MobKind::Enderman(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Witch(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => self.ageable_water_creature_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1545,6 +1556,13 @@ impl ServerLevel {
         if self.is_mob(id) {
             self.body_rotation_control_tick(id);
         }
+        let living = self.living_mut(id);
+        while living.y_body_rot - living.y_body_rot_o < -180.0 {
+            living.y_body_rot_o -= 360.0;
+        }
+        while living.y_body_rot - living.y_body_rot_o >= 180.0 {
+            living.y_body_rot_o += 360.0;
+        }
         if self.is_sleeping(id) {
             self.entity_mut(id).set_x_rot(0.0);
         }
@@ -1578,7 +1596,7 @@ impl ServerLevel {
                 if can_drown {
                     let supply = self.decrease_air_supply(id, self.entity(id).air_supply());
                     self.entity_mut(id).set_air_supply(supply);
-                    if self.entity(id).air_supply() <= -20 {
+                    if self.should_take_drowning_damage(id) {
                         self.entity_mut(id).set_air_supply(0);
                         self.broadcast_entity_event(id, entity_event::DROWN_PARTICLES);
                         self.hurt_server(id, DamageSource::new(damage_types::DROWN), 2.0);
@@ -1627,6 +1645,12 @@ impl ServerLevel {
             }
         }
         self.tick_effects(id);
+        let living = self.living_mut(id);
+        living.y_body_rot_o = living.y_body_rot;
+    }
+
+    pub fn should_take_drowning_damage(&self, id: EntityId) -> bool {
+        self.entity(id).air_supply() <= -20
     }
 
     fn decrease_air_supply(&mut self, id: EntityId, supply: i32) -> i32 {
@@ -1848,6 +1872,9 @@ impl ServerLevel {
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Wolf(_)) => self.wolf_ai_step(id),
+            Some(MobKind::Bat(_)) => self.mob_ai_step(id),
+            Some(MobKind::Squid(_)) => self.squid_ai_step(id),
+            Some(MobKind::GlowSquid(_)) => self.glow_squid_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -2013,6 +2040,8 @@ impl ServerLevel {
     fn push_entities(&mut self, id: EntityId) {
         if self.is_player(id) {
             self.server_player_push_entities(id);
+        } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Bat(_))) {
+            self.bat_push_entities(id);
         } else {
             self.living_entity_push_entities(id);
         }
@@ -2129,6 +2158,8 @@ impl ServerLevel {
     pub fn travel(&mut self, id: EntityId, input: Vec3) {
         if self.is_player(id) {
             self.player_travel(id, input);
+        } else if self.mob(id).is_some_and(Mob::is_squid) {
+            self.squid_travel(id, input);
         } else {
             self.living_entity_travel(id, input);
         }

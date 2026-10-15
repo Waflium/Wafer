@@ -24,6 +24,10 @@ use super::monster::witch::{self, Witch};
 use super::raid::raider::{self, Raider};
 use super::monster::cubemob::magma_cube::{self, MagmaCube};
 use super::monster::cubemob::slime::{self, Slime};
+use super::ambient::bat::{self, Bat};
+use super::animal::squid::glow_squid::GlowSquid;
+use super::animal::squid::squid::{self as squid, Squid};
+use super::animal::ageable_water_creature;
 use super::entity_spawn_reason::EntitySpawnReason;
 use super::spawn_group_data::SpawnGroupData;
 use crate::world::attribute::environment_attributes;
@@ -111,6 +115,9 @@ pub enum MobKind {
     Slime(Slime),
     MagmaCube(MagmaCube),
     Wolf(Wolf),
+    Bat(Bat),
+    Squid(Squid),
+    GlowSquid(GlowSquid),
 }
 
 pub struct Mob {
@@ -185,6 +192,8 @@ impl Mob {
             MobKind::Slime(_) => Slime::register_goals(&mut self.ai),
             MobKind::MagmaCube(_) => MagmaCube::register_goals(&mut self.ai),
             MobKind::Wolf(_) => Wolf::register_goals(&mut self.ai, self.living.attributes.value(Attribute::FollowRange)),
+            MobKind::Bat(_) => {}
+            MobKind::Squid(_) | MobKind::GlowSquid(_) => Squid::register_goals(&mut self.ai),
         }
     }
 
@@ -243,8 +252,11 @@ impl Mob {
     }
 
     pub fn client_tracking_range(&self) -> i32 {
-        if self.is_zombie()
+        if matches!(self.kind, MobKind::Bat(_)) {
+            5
+        } else if self.is_zombie()
             || matches!(self.kind, MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Enderman(_) | MobKind::Witch(_) | MobKind::MagmaCube(_))
+            || matches!(self.kind, MobKind::Squid(_))
             || self.is_spider()
             || self.is_abstract_skeleton()
         {
@@ -252,6 +264,10 @@ impl Mob {
         } else {
             10
         }
+    }
+
+    pub fn track_deltas(&self) -> bool {
+        !matches!(self.kind, MobKind::Bat(_))
     }
 
     fn create_navigation(&self) -> PathNavigation {
@@ -310,6 +326,7 @@ impl Mob {
             MobKind::Enderman(_) => true,
             MobKind::Witch(witch) => witch.raider.remove_when_far_away(dist_sqr),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => true,
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => true,
             _ => super::animal::remove_when_far_away(dist_sqr),
         }
     }
@@ -434,6 +451,9 @@ impl Mob {
     }
 
     pub fn ageable(&self) -> Option<&AgeableMob> {
+        if self.is_squid() {
+            return Some(&squid::squid(self).ageable_water_creature.ageable);
+        }
         match self.abstract_cube_mob() {
             Some(cube_mob) => Some(&cube_mob.ageable),
             None => self.animal().map(|animal| &animal.ageable),
@@ -441,6 +461,9 @@ impl Mob {
     }
 
     pub fn ageable_mut(&mut self) -> Option<&mut AgeableMob> {
+        if self.is_squid() {
+            return Some(&mut squid::squid_mut(self).ageable_water_creature.ageable);
+        }
         if self.is_cube_mob() {
             return self.abstract_cube_mob_mut().map(|cube_mob| &mut cube_mob.ageable);
         }
@@ -459,6 +482,7 @@ impl Mob {
             MobKind::Enderman(_) => None,
             MobKind::Witch(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => None,
         }
     }
 
@@ -474,6 +498,7 @@ impl Mob {
             MobKind::Enderman(_) => None,
             MobKind::Witch(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => None,
         }
     }
 
@@ -533,6 +558,7 @@ impl Mob {
             MobKind::Enderman(_) => {}
             MobKind::Witch(_) => {}
             MobKind::Slime(_) | MobKind::MagmaCube(_) => {}
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => {}
         }
         self.apply_implicit_component_if_present(components, dc::CUSTOM_NAME);
         self.apply_implicit_component_if_present(components, dc::CUSTOM_DATA);
@@ -647,6 +673,9 @@ impl Mob {
             MobKind::MagmaCube(_) => magma_cube::DIMENSIONS.scale(self.get_size() as f32),
             MobKind::Wolf(_) if self.is_baby() => wolf::BABY_DIMENSIONS,
             MobKind::Wolf(_) => wolf::DIMENSIONS,
+            MobKind::Bat(_) => bat::DIMENSIONS,
+            MobKind::Squid(_) | MobKind::GlowSquid(_) if self.is_baby() => squid::BABY_DIMENSIONS,
+            MobKind::Squid(_) | MobKind::GlowSquid(_) => squid::DIMENSIONS,
         }
     }
 
@@ -674,6 +703,9 @@ impl Mob {
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return self.abstract_cube_mob_get_passenger_attachment_point(),
             MobKind::Wolf(_) if baby => (0.0, 0.4375f32 as f64, 0.0),
             MobKind::Wolf(_) => (0.0, 0.81875, -0.0625),
+            MobKind::Bat(_) => (0.0, 0.9f32 as f64, 0.0),
+            MobKind::Squid(_) | MobKind::GlowSquid(_) if baby => (0.0, 0.5f32 as f64, 0.0),
+            MobKind::Squid(_) | MobKind::GlowSquid(_) => (0.0, 0.8f32 as f64, 0.0),
         };
         let scale = self.living.attributes.value(Attribute::Scale) as f32 as f64;
         wafer_core::Vec3::new(x * scale, y * scale, z * scale)
@@ -804,6 +836,9 @@ impl Mob {
             MobKind::Witch(witch) => witch.raider.add_additional_save_data(out),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_add_additional_save_data(out),
             MobKind::Wolf(_) => Wolf::add_additional_save_data(self, out),
+            MobKind::Bat(_) => Bat::add_additional_save_data(self, out),
+            MobKind::Squid(_) => {}
+            MobKind::GlowSquid(_) => GlowSquid::add_additional_save_data(self, out),
         }
     }
 
@@ -923,6 +958,7 @@ impl Mob {
             MobKind::Witch(witch) => witch.raider.read_additional_save_data(nbt),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_read_was_on_ground(nbt),
             MobKind::Wolf(_) => {}
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => {}
         }
         match self.kind {
             MobKind::Wolf(_) => Wolf::read_additional_save_data(self, nbt),
@@ -930,6 +966,8 @@ impl Mob {
             MobKind::Skeleton(_) => Skeleton::read_additional_save_data(self, nbt),
             MobKind::Bogged(_) => Bogged::read_additional_save_data(self, nbt),
             MobKind::Endermite(_) => Endermite::read_additional_save_data(self, nbt),
+            MobKind::Bat(_) => Bat::read_additional_save_data(self, nbt),
+            MobKind::GlowSquid(_) => GlowSquid::read_additional_save_data(self, nbt),
             _ => {}
         }
         if matches!(self.kind, MobKind::Creeper(_)) {
@@ -982,6 +1020,9 @@ impl Mob {
             MobKind::Witch(_) => Witch::get_ambient_sound(),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return None,
             MobKind::Wolf(_) => unreachable!("wolves pick their ambient sound with their random"),
+            MobKind::Bat(_) => unreachable!("bats pick their ambient sound with their random"),
+            MobKind::Squid(_) => Squid::get_ambient_sound(),
+            MobKind::GlowSquid(_) => GlowSquid::get_ambient_sound(),
         })
     }
 
@@ -1005,6 +1046,9 @@ impl Mob {
             MobKind::Slime(_) => Slime::get_hurt_sound(self),
             MobKind::MagmaCube(_) => MagmaCube::get_hurt_sound(self),
             MobKind::Wolf(_) => Wolf::get_hurt_sound(self),
+            MobKind::Bat(_) => Bat::get_hurt_sound(),
+            MobKind::Squid(_) => Squid::get_hurt_sound(),
+            MobKind::GlowSquid(_) => GlowSquid::get_hurt_sound(),
         }
     }
 
@@ -1028,6 +1072,9 @@ impl Mob {
             MobKind::Slime(_) => Slime::get_death_sound(self),
             MobKind::MagmaCube(_) => MagmaCube::get_death_sound(self),
             MobKind::Wolf(_) => Wolf::get_death_sound(self),
+            MobKind::Bat(_) => Bat::get_death_sound(),
+            MobKind::Squid(_) => Squid::get_death_sound(),
+            MobKind::GlowSquid(_) => GlowSquid::get_death_sound(),
         }
     }
 
@@ -1050,6 +1097,7 @@ impl Mob {
             MobKind::Witch(_) => return None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return None,
             MobKind::Wolf(_) => Wolf::get_step_sound(self),
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => return None,
         })
     }
 
@@ -1057,6 +1105,8 @@ impl Mob {
         match &self.kind {
             MobKind::Cow(_) | MobKind::MushroomCow(_) | MobKind::Wolf(_) => 0.4,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_get_sound_volume(),
+            MobKind::Bat(_) => Bat::get_sound_volume(),
+            MobKind::Squid(_) | MobKind::GlowSquid(_) => Squid::get_sound_volume(),
             _ => 1.0,
         }
     }
@@ -1074,7 +1124,13 @@ impl Mob {
     }
 
     pub fn ambient_sound_interval(&self) -> i32 {
-        if self.animal().is_some() { 120 } else { 80 }
+        if self.is_squid() {
+            ageable_water_creature::get_ambient_sound_interval()
+        } else if self.animal().is_some() {
+            120
+        } else {
+            80
+        }
     }
 
     pub fn save_equipment(&self) -> Option<Nbt> {
@@ -1179,6 +1235,8 @@ impl ServerLevel {
             MobKind::Witch(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.ageable_mob_mob_interact(id, player, hand),
             MobKind::Wolf(_) => self.wolf_mob_interact(id, player, hand),
+            MobKind::Bat(_) => self.mob_mob_interact(id, player, hand),
+            MobKind::Squid(_) | MobKind::GlowSquid(_) => self.ageable_mob_mob_interact(id, player, hand),
         }
     }
 
@@ -1340,6 +1398,7 @@ impl ServerLevel {
     fn get_ambient_sound(&mut self, id: EntityId) -> Option<&'static str> {
         match self.mob(id).expect("a mob").kind {
             MobKind::Wolf(_) => Some(self.wolf_get_ambient_sound(id)),
+            MobKind::Bat(_) => self.bat_get_ambient_sound(id),
             _ => self.mob(id).expect("a mob").get_ambient_sound(),
         }
     }
@@ -1826,6 +1885,8 @@ impl ServerLevel {
             Some(MobKind::Enderman(_)) => self.enderman_custom_server_ai_step(id),
             Some(MobKind::Witch(_)) => {}
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => {}
+            Some(MobKind::Bat(_)) => self.bat_custom_server_ai_step(id),
+            Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => {}
             Some(_) => self.animal_custom_server_ai_step(id),
         }
     }
@@ -2097,6 +2158,8 @@ pub fn finalize_spawn(
         MobKind::Witch(_) => return raider::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Slime(_) => return slime::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::MagmaCube(_) => return magma_cube::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
+        MobKind::Bat(_) => {}
+        MobKind::Squid(_) | MobKind::GlowSquid(_) => return squid::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
     }
     let group_data = if mob.ageable().is_some() { ageable_mob::finalize_spawn(level, mob, group_data) } else { group_data };
     mob_finalize_spawn(level, mob, difficulty, spawn_reason, group_data)
@@ -2140,18 +2203,23 @@ pub fn get_walk_target_value(mob: &Mob, pos: BlockPos, level: &mut (impl ServerL
         MobKind::Enderman(_) => Enderman::get_walk_target_value(),
         MobKind::Witch(_) => super::monster::monster::get_walk_target_value(pos, level),
         MobKind::Slime(_) | MobKind::MagmaCube(_) => super::pathfinder_mob::get_walk_target_value(),
+        MobKind::Squid(_) | MobKind::GlowSquid(_) => super::pathfinder_mob::get_walk_target_value(),
         _ => super::animal::get_walk_target_value(pos, level),
     }
 }
 
 pub fn check_spawn_rules(mob: &Mob, level: &mut (impl ServerLevelAccessor + ?Sized), _spawn_reason: EntitySpawnReason) -> bool {
-    get_walk_target_value(mob, mob.entity.block_position(), level) >= 0.0
+    match mob.kind {
+        MobKind::Bat(_) => true,
+        _ => get_walk_target_value(mob, mob.entity.block_position(), level) >= 0.0,
+    }
 }
 
 pub fn check_spawn_obstruction(mob: &Mob, level: &mut (impl ServerLevelAccessor + ?Sized)) -> bool {
     let bounding_box = mob.entity.bounding_box();
     match mob.kind {
         MobKind::Drowned(_) => level.is_unobstructed(&bounding_box),
+        MobKind::Squid(_) | MobKind::GlowSquid(_) => ageable_water_creature::check_spawn_obstruction(mob, level),
         _ => !level.contains_any_liquid(&bounding_box) && level.is_unobstructed(&bounding_box),
     }
 }

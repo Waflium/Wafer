@@ -866,6 +866,7 @@ impl ServerLevel {
     fn default_gravity(&self, id: EntityId) -> f64 {
         use super::projectile::projectile::ProjectileKind;
         match self.entities.get(&id) {
+            Some(super::LevelEntity::Mob(mob)) if mob.is_squid() => super::animal::squid::squid::Squid::get_default_gravity(),
             None | Some(super::LevelEntity::Mob(_)) => self.attribute_value(id, Attribute::Gravity),
             Some(super::LevelEntity::ExperienceOrb(_)) => 0.03,
             Some(super::LevelEntity::Projectile(projectile)) => match projectile.kind {
@@ -920,6 +921,7 @@ impl ServerLevel {
             Some(super::LevelEntity::Projectile(projectile)) if matches!(projectile.kind, super::projectile::projectile::ProjectileKind::FireworkRocket(_)) => MovementEmission::All,
             Some(super::LevelEntity::AreaEffectCloud(_)) => MovementEmission::All,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Silverfish(_) | super::mob::MobKind::Endermite(_)) => MovementEmission::Events,
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Bat(_)) || mob.is_squid() => MovementEmission::Events,
             _ if self.is_living(id) => MovementEmission::All,
             _ if self.is_vehicle_entity(id) => MovementEmission::Events,
             _ => MovementEmission::None,
@@ -932,6 +934,7 @@ impl ServerLevel {
             None => match self.as_projectile(id) {
                 Some(projectile) if projectile.abstract_arrow().is_some() => self.abstract_arrow_is_pushed_by_fluid(id),
                 _ if self.is_drowned(id) => super::monster::zombie::drowned::Drowned::is_pushed_by_fluid(self.mob(id).expect("a drowned")),
+                _ if self.mob(id).is_some_and(super::mob::Mob::is_squid) => super::animal::ageable_water_creature::is_pushed_by_fluid(),
                 _ => true,
             },
         }
@@ -1350,6 +1353,10 @@ impl ServerLevel {
     pub fn check_fall_damage(&mut self, id: EntityId, ya: f64, on_ground: bool, on_state: BlockState, pos: BlockPos) {
         if self.is_boat(id) {
             self.abstract_boat_check_fall_damage(id, ya, on_ground);
+            return;
+        }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Bat(_))) {
+            self.bat_check_fall_damage(id);
             return;
         }
         let living = self.is_living(id);
@@ -2156,7 +2163,9 @@ impl ServerLevel {
     }
 
     pub fn base_tick(&mut self, id: EntityId) {
-        if self.is_mob(id) {
+        if self.mob(id).is_some_and(super::mob::Mob::is_squid) {
+            self.ageable_water_creature_base_tick(id);
+        } else if self.is_mob(id) {
             self.mob_base_tick(id);
         } else if self.is_living(id) {
             self.living_entity_base_tick(id);
@@ -2192,6 +2201,12 @@ impl ServerLevel {
             }
             if self.mob(id).and_then(super::mob::Mob::raider).is_some() {
                 return self.raider_hurt_server(id, source, damage);
+            }
+            match self.mob(id).map(|mob| &mob.kind) {
+                Some(super::mob::MobKind::Bat(_)) => return self.bat_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::GlowSquid(_)) => return self.glow_squid_hurt_server(id, source, damage),
+                _ => {}
             }
             return self.living_entity_hurt_server(id, source, damage);
         }
@@ -2421,6 +2436,9 @@ impl ServerLevel {
                     super::mob::MobKind::Slime(_) => "Slime",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",
                     super::mob::MobKind::Wolf(_) => "Wolf",
+                    super::mob::MobKind::Bat(_) => "Bat",
+                    super::mob::MobKind::Squid(_) => "Squid",
+                    super::mob::MobKind::GlowSquid(_) => "GlowSquid",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",
@@ -3293,6 +3311,7 @@ impl ServerLevel {
     pub fn is_pushable_immutable(&self, id: EntityId) -> bool {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_) | LevelEntity::Minecart(_)) => true,
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Bat(_)) => self.bat_is_pushable(id),
             _ if self.is_living(id) => self.is_alive(id) && !self.is_spectator(id) && !self.on_climbable_peek(id),
             _ => false,
         }
@@ -3348,8 +3367,17 @@ impl ServerLevel {
         self.entity_mut(id).push(xa, ya, za);
     }
 
+    pub fn is_ignoring_block_triggers(&self, id: EntityId) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(super::mob::MobKind::Bat(_)) => self.bat_is_ignoring_block_triggers(id),
+            _ => false,
+        }
+    }
+
     pub fn is_pushable(&mut self, id: EntityId) -> bool {
-        if self.is_living(id) {
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Bat(_))) {
+            self.bat_is_pushable(id)
+        } else if self.is_living(id) {
             self.living_entity_is_pushable(id)
         } else {
             matches!(self.entities.get(&id), Some(LevelEntity::Boat(_) | LevelEntity::Minecart(_)))

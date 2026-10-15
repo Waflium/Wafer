@@ -5,6 +5,7 @@ pub const SHAKE_WETNESS: u8 = 8;
 pub const EAT_GRASS: u8 = 10;
 pub const WITCH_HAT_MAGIC: u8 = 15;
 pub const IN_LOVE_HEARTS: u8 = 18;
+pub const SQUID_ANIM_SYNCH: u8 = 19;
 pub const SILVERFISH_MERGE_ANIM: u8 = 20;
 pub const PROTECTED_FROM_DEATH: u8 = 35;
 pub const TELEPORT: u8 = 46;

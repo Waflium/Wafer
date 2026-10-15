@@ -43,6 +43,7 @@ use crate::world::entity::monster::silverfish::{SilverfishMergeWithStoneGoal, Si
 use super::target::reset_universal_anger_target_goal::ResetUniversalAngerTargetGoal;
 use crate::world::entity::monster::enderman::{EndermanFreezeWhenLookedAt, EndermanLeaveBlockGoal, EndermanLookForPlayerGoal, EndermanTakeBlockGoal};
 use crate::world::entity::monster::cubemob::abstract_cube_mob::{CubeMobAttackGoal, CubeMobFloatGoal, CubeMobKeepOnJumpingGoal, CubeMobRandomDirectionGoal};
+use crate::world::entity::animal::squid::squid::{SquidFleeGoal, SquidRandomMovementGoal};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -117,6 +118,8 @@ pub enum Goal {
     OwnerHurtByTarget(OwnerHurtByTargetGoal),
     OwnerHurtTarget(OwnerHurtTargetGoal),
     NonTameRandomTarget(NonTameRandomTargetGoal),
+    SquidRandomMovement(SquidRandomMovementGoal),
+    SquidFlee(SquidFleeGoal),
 }
 
 impl Goal {
@@ -178,6 +181,8 @@ impl Goal {
             Goal::OwnerHurtByTarget(goal) => goal.can_use(level, mob),
             Goal::OwnerHurtTarget(goal) => goal.can_use(level, mob),
             Goal::NonTameRandomTarget(goal) => goal.can_use(level, mob),
+            Goal::SquidRandomMovement(goal) => goal.can_use(),
+            Goal::SquidFlee(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -239,6 +244,8 @@ impl Goal {
             Goal::OwnerHurtByTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
             Goal::OwnerHurtTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
             Goal::NonTameRandomTarget(goal) => goal.can_continue_to_use(level, mob),
+            Goal::SquidRandomMovement(goal) => goal.can_use(),
+            Goal::SquidFlee(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -298,6 +305,8 @@ impl Goal {
             Goal::OwnerHurtByTarget(goal) => goal.start(level, mob),
             Goal::OwnerHurtTarget(goal) => goal.start(level, mob),
             Goal::NonTameRandomTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
+            Goal::SquidRandomMovement(_) => {}
+            Goal::SquidFlee(goal) => goal.start(),
         }
     }
 
@@ -349,6 +358,7 @@ impl Goal {
             Goal::OwnerHurtByTarget(goal) => goal.target_goal.stop(level, mob),
             Goal::OwnerHurtTarget(goal) => goal.target_goal.stop(level, mob),
             Goal::NonTameRandomTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
+            Goal::SquidRandomMovement(_) | Goal::SquidFlee(_) => {}
         }
     }
 
@@ -372,6 +382,7 @@ impl Goal {
                 | Goal::RangedAttack(_)
                 | Goal::CubeMobAttack(_)
                 | Goal::CubeMobFloat(_)
+                | Goal::SquidFlee(_)
         )
     }
 
@@ -396,6 +407,8 @@ impl Goal {
             Goal::CubeMobFloat(goal) => goal.tick(level, mob),
             Goal::CubeMobKeepOnJumping(goal) => goal.tick(level, mob),
             Goal::CubeMobRandomDirection(goal) => goal.tick(level, mob),
+            Goal::SquidRandomMovement(goal) => goal.tick(level, mob),
+            Goal::SquidFlee(goal) => goal.tick(level, mob),
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.tick(level, mob),
             Goal::RangedBowAttack(goal) => goal.tick(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.tick(level, mob),
@@ -468,6 +481,7 @@ impl Goal {
             Goal::FollowOwner(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::Beg(_) => Flag::Look.bit(),
             Goal::OwnerHurtByTarget(_) | Goal::OwnerHurtTarget(_) | Goal::NonTameRandomTarget(_) => Flag::Target.bit(),
+            Goal::SquidRandomMovement(_) | Goal::SquidFlee(_) => 0,
         }
     }
 

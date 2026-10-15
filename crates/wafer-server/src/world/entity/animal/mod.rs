@@ -15,12 +15,14 @@ use crate::world::item::ItemStack;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::{InteractionHand, InteractionResult};
 
+pub mod ageable_water_creature;
 pub mod chicken;
 pub mod cow;
 #[cfg(test)]
 mod farm_tests;
 pub mod pig;
 pub mod sheep;
+pub mod squid;
 pub mod wolf;
 
 #[derive(Default)]
@@ -89,6 +91,7 @@ impl ServerLevel {
             MobKind::Enderman(_) => false,
             MobKind::Witch(_) => false,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => false,
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => false,
         }
     }
 
