@@ -16,15 +16,26 @@ pub struct AvoidEntityGoal {
     max_dist: f32,
     path: Option<Path>,
     avoid_class: &'static str,
+    predicate_on_avoid_entity: fn(EntityId, &ServerLevel) -> bool,
 }
 
 impl AvoidEntityGoal {
     pub fn new(avoid_class: &'static str, max_dist: f32, walk_speed_modifier: f64, sprint_speed_modifier: f64) -> AvoidEntityGoal {
-        AvoidEntityGoal { walk_speed_modifier, sprint_speed_modifier, to_avoid: None, max_dist, path: None, avoid_class }
+        AvoidEntityGoal::with_predicate_on_avoid_entity(avoid_class, max_dist, walk_speed_modifier, sprint_speed_modifier, predicate_on_avoid_entity)
     }
 
-    fn avoid_entity_targeting(&self) -> TargetingConditions<'static> {
-        TargetingConditions::for_combat().range(self.max_dist as f64).selector(&predicate_on_avoid_entity)
+    pub fn with_predicate_on_avoid_entity(
+        avoid_class: &'static str,
+        max_dist: f32,
+        walk_speed_modifier: f64,
+        sprint_speed_modifier: f64,
+        predicate_on_avoid_entity: fn(EntityId, &ServerLevel) -> bool,
+    ) -> AvoidEntityGoal {
+        AvoidEntityGoal { walk_speed_modifier, sprint_speed_modifier, to_avoid: None, max_dist, path: None, avoid_class, predicate_on_avoid_entity }
+    }
+
+    fn avoid_entity_targeting(&self) -> TargetingConditions<'_> {
+        TargetingConditions::for_combat().range(self.max_dist as f64).selector(&self.predicate_on_avoid_entity)
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
@@ -35,7 +46,9 @@ impl AvoidEntityGoal {
         entities.retain(|&entity| wafer_data::registry::ENTITY_TYPE[level.entity(entity).entity_type as usize] == avoid_class);
         let e = level.entity(mob);
         let (x, y, z) = (e.x(), e.y(), e.z());
-        self.to_avoid = level.get_nearest_entity(&entities, &self.avoid_entity_targeting(), Some(mob), x, y, z);
+        let avoid_entity_targeting = self.avoid_entity_targeting();
+        let to_avoid = level.get_nearest_entity(&entities, &avoid_entity_targeting, Some(mob), x, y, z);
+        self.to_avoid = to_avoid;
         let Some(to_avoid) = self.to_avoid else { return false };
         let avoid_pos = level.entity(to_avoid).position();
         let Some(pos) = default_random_pos::get_pos_away(level, mob, 16, 7, avoid_pos) else { return false };

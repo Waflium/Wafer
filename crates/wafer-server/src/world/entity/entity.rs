@@ -352,6 +352,10 @@ impl Entity {
         }
     }
 
+    pub fn has_custom_name(&self) -> bool {
+        matches!(self.data.get(data::ids::CUSTOM_NAME), DataValue::OptionalComponent(Some(_)))
+    }
+
     pub fn set_custom_name(&mut self, name: Option<Nbt>) {
         self.data.set(data::ids::CUSTOM_NAME, DataValue::OptionalComponent(name));
     }
@@ -936,6 +940,7 @@ impl ServerLevel {
                 Some(projectile) if projectile.abstract_arrow().is_some() => self.abstract_arrow_is_pushed_by_fluid(id),
                 _ if self.is_drowned(id) => super::monster::zombie::drowned::Drowned::is_pushed_by_fluid(self.mob(id).expect("a drowned")),
                 _ if self.mob(id).is_some_and(super::mob::Mob::is_squid) => super::animal::ageable_water_creature::is_pushed_by_fluid(),
+                _ if self.mob(id).is_some_and(super::mob::Mob::is_water_animal) => super::animal::fish::water_animal::is_pushed_by_fluid(),
                 _ => true,
             },
         }
@@ -1642,6 +1647,9 @@ impl ServerLevel {
             self.iron_golem_play_step_sound(id, pos);
             return;
         }
+        if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
+            return;
+        }
         if let Some(sound) = self.mob(id).and_then(|mob| mob.get_step_sound()) {
             self.entity_play_sound(id, sound_event(sound), 0.15, 1.0);
             return;
@@ -1683,6 +1691,8 @@ impl ServerLevel {
             "minecraft:entity.player.swim"
         } else if self.is_monster(id) {
             if self.is_drowned(id) { super::monster::zombie::drowned::Drowned::get_swim_sound() } else { self.monster_get_swim_sound() }
+        } else if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
+            super::animal::fish::abstract_fish::AbstractFish::get_swim_sound()
         } else {
             "minecraft:entity.generic.swim"
         };
@@ -2202,6 +2212,8 @@ impl ServerLevel {
     pub fn base_tick(&mut self, id: EntityId) {
         if self.mob(id).is_some_and(super::mob::Mob::is_squid) {
             self.ageable_water_creature_base_tick(id);
+        } else if self.mob(id).is_some_and(super::mob::Mob::is_water_animal) {
+            self.water_animal_base_tick(id);
         } else if self.is_mob(id) {
             self.mob_base_tick(id);
         } else if self.is_living(id) {
@@ -2479,6 +2491,10 @@ impl ServerLevel {
                     super::mob::MobKind::GlowSquid(_) => "GlowSquid",
                     super::mob::MobKind::IronGolem(_) => "IronGolem",
                     super::mob::MobKind::SnowGolem(_) => "SnowGolem",
+                    super::mob::MobKind::Cod(_) => "Cod",
+                    super::mob::MobKind::Salmon(_) => "Salmon",
+                    super::mob::MobKind::Pufferfish(_) => "Pufferfish",
+                    super::mob::MobKind::TropicalFish(_) => "TropicalFish",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

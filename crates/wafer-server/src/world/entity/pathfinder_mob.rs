@@ -29,6 +29,7 @@ impl ServerLevel {
             MobKind::Slime(_) | MobKind::MagmaCube(_) => get_walk_target_value(),
             MobKind::Squid(_) | MobKind::GlowSquid(_) => get_walk_target_value(),
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => get_walk_target_value(),
+            MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => get_walk_target_value(),
             _ => self.animal_get_walk_target_value(pos),
         }
     }

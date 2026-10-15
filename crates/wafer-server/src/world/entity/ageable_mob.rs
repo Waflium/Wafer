@@ -105,6 +105,7 @@ impl ServerLevel {
             MobKind::Squid(_) => self.squid_get_breed_offspring(id, partner),
             MobKind::GlowSquid(_) => self.glow_squid_get_breed_offspring(id, partner),
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => None,
+            MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => None,
         }
     }
 

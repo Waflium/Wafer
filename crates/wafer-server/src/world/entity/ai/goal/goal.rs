@@ -49,6 +49,9 @@ use super::move_back_to_village_goal::MoveBackToVillageGoal;
 use super::move_towards_target_goal::MoveTowardsTargetGoal;
 use super::offer_flower_goal::OfferFlowerGoal;
 use super::target::defend_village_target_goal::DefendVillageTargetGoal;
+use super::follow_flock_leader_goal::FollowFlockLeaderGoal;
+use crate::world::entity::animal::fish::abstract_fish::FishSwimGoal;
+use crate::world::entity::animal::fish::pufferfish::PufferfishPuffGoal;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -130,6 +133,9 @@ pub enum Goal {
     GolemRandomStrollInVillage(GolemRandomStrollInVillageGoal),
     OfferFlower(OfferFlowerGoal),
     DefendVillageTarget(DefendVillageTargetGoal),
+    FishSwim(FishSwimGoal),
+    FollowFlockLeader(FollowFlockLeaderGoal),
+    PufferfishPuff(PufferfishPuffGoal),
 }
 
 impl Goal {
@@ -198,6 +204,9 @@ impl Goal {
             Goal::GolemRandomStrollInVillage(goal) => goal.can_use(level, mob),
             Goal::OfferFlower(goal) => goal.can_use(level, mob),
             Goal::DefendVillageTarget(goal) => goal.can_use(level, mob),
+            Goal::FishSwim(goal) => goal.can_use(level, mob),
+            Goal::FollowFlockLeader(goal) => goal.can_use(level, mob),
+            Goal::PufferfishPuff(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -266,6 +275,9 @@ impl Goal {
             Goal::GolemRandomStrollInVillage(goal) => goal.random_stroll_goal.can_continue_to_use(level, mob),
             Goal::OfferFlower(goal) => goal.can_continue_to_use(),
             Goal::DefendVillageTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
+            Goal::FishSwim(goal) => goal.random_swimming_goal.random_stroll_goal.can_continue_to_use(level, mob),
+            Goal::FollowFlockLeader(goal) => goal.can_continue_to_use(level, mob),
+            Goal::PufferfishPuff(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -332,6 +344,9 @@ impl Goal {
             Goal::GolemRandomStrollInVillage(goal) => goal.random_stroll_goal.start(level, mob),
             Goal::OfferFlower(goal) => goal.start(level, mob),
             Goal::DefendVillageTarget(goal) => goal.start(level, mob),
+            Goal::FishSwim(goal) => goal.random_swimming_goal.random_stroll_goal.start(level, mob),
+            Goal::FollowFlockLeader(goal) => goal.start(),
+            Goal::PufferfishPuff(goal) => goal.start(level, mob),
         }
     }
 
@@ -389,6 +404,9 @@ impl Goal {
             Goal::GolemRandomStrollInVillage(goal) => goal.random_stroll_goal.stop(level, mob),
             Goal::OfferFlower(goal) => goal.stop(level, mob),
             Goal::DefendVillageTarget(goal) => goal.target_goal.stop(level, mob),
+            Goal::FishSwim(goal) => goal.random_swimming_goal.random_stroll_goal.stop(level, mob),
+            Goal::FollowFlockLeader(goal) => goal.stop(level, mob),
+            Goal::PufferfishPuff(goal) => goal.stop(level, mob),
         }
     }
 
@@ -467,6 +485,8 @@ impl Goal {
             Goal::FollowOwner(goal) => goal.tick(level, mob),
             Goal::Beg(goal) => goal.tick(level, mob),
             Goal::SitWhenOrderedTo(_) | Goal::OwnerHurtByTarget(_) | Goal::OwnerHurtTarget(_) | Goal::NonTameRandomTarget(_) => {}
+            Goal::FishSwim(_) | Goal::PufferfishPuff(_) => {}
+            Goal::FollowFlockLeader(goal) => goal.tick(level, mob),
         }
     }
 
@@ -517,6 +537,8 @@ impl Goal {
             Goal::Beg(_) => Flag::Look.bit(),
             Goal::OwnerHurtByTarget(_) | Goal::OwnerHurtTarget(_) | Goal::NonTameRandomTarget(_) => Flag::Target.bit(),
             Goal::SquidRandomMovement(_) | Goal::SquidFlee(_) => 0,
+            Goal::FishSwim(_) => Flag::Move.bit(),
+            Goal::FollowFlockLeader(_) | Goal::PufferfishPuff(_) => 0,
         }
     }
 

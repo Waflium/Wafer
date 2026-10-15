@@ -208,11 +208,7 @@ fn test(predicate: SpawnPredicate, entity_type: &EntityType, level: &mut (impl W
                 && (EntitySpawnReason::is_spawner(spawn_reason) || level.fluid_state(pos).is(&fluid_tags::WATER))
                 && level.fluid_state(pos.below()).is(&fluid_tags::WATER)
         }
-        P::TropicalFishCheckTropicalFishSpawnRules => {
-            level.fluid_state(pos.below()).is(&fluid_tags::WATER)
-                && level.block_state(pos.above()).is_block(blocks::WATER)
-                && (level.get_biome(pos).is("minecraft:allows_tropical_fish_spawns_at_any_height") || water_animal_check_surface_water_animal_spawn_rules(level, pos))
-        }
+        P::TropicalFishCheckTropicalFishSpawnRules => super::animal::fish::tropical_fish::check_tropical_fish_spawn_rules(level, pos),
         P::ArmadilloCheckArmadilloSpawnRules => spawnable_on_and_bright(level, pos, &block_tags::ARMADILLO_SPAWNABLE_ON),
         P::BatCheckBatSpawnRules => bat_check_bat_spawn_rules(entity_type, level, spawn_reason, pos),
         P::MonsterCheckAnyLightMonsterSpawnRules => monster::check_any_light_monster_spawn_rules(entity_type, level, spawn_reason, pos),

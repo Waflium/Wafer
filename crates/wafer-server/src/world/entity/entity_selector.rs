@@ -9,6 +9,10 @@ pub fn no_creative_or_spectator(level: &ServerLevel, entity: EntityId) -> bool {
     !(level.is_player(entity) && (level.is_spectator(entity) || level.player(entity).game_mode.game_type.is_creative()))
 }
 
+pub fn no_spectators(level: &ServerLevel, entity: EntityId) -> bool {
+    !level.is_spectator(entity)
+}
+
 pub fn not_riding(level: &ServerLevel, entity: EntityId, input: EntityId) -> bool {
     let mut input = input;
     while let Some(vehicle) = level.vehicle(input) {

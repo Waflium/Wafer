@@ -385,6 +385,10 @@ impl ServerLevel {
             "minecraft:glow_squid" => LevelEntity::Mob(Box::new(super::animal::squid::glow_squid::GlowSquid::create())),
             "minecraft:iron_golem" => LevelEntity::Mob(Box::new(super::animal::golem::iron_golem::IronGolem::create())),
             "minecraft:snow_golem" => LevelEntity::Mob(Box::new(super::animal::golem::snow_golem::SnowGolem::create())),
+            "minecraft:cod" => LevelEntity::Mob(Box::new(super::animal::fish::cod::Cod::create())),
+            "minecraft:salmon" => LevelEntity::Mob(Box::new(super::animal::fish::salmon::Salmon::create())),
+            "minecraft:pufferfish" => LevelEntity::Mob(Box::new(super::animal::fish::pufferfish::Pufferfish::create())),
+            "minecraft:tropical_fish" => LevelEntity::Mob(Box::new(super::animal::fish::tropical_fish::TropicalFish::create())),
             "minecraft:snowball" => LevelEntity::Projectile(Box::new(throwableitemprojectile::snowball::Snowball::of_type())),
             "minecraft:egg" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_egg::ThrownEgg::of_type())),
             "minecraft:ender_pearl" => LevelEntity::Projectile(Box::new(throwableitemprojectile::thrown_enderpearl::ThrownEnderpearl::of_type())),
@@ -429,6 +433,25 @@ impl ServerLevel {
         try_move_down: bool,
         moved_up: bool,
     ) -> Option<EntityId> {
+        let entity = self.create_entity_type_from_stack(entity_type, item_stack, spawn_pos, spawn_reason, try_move_down, moved_up)?;
+        let id = entity.entity().id;
+        let is_mob = matches!(entity, LevelEntity::Mob(_));
+        self.add_fresh_entity_with_passengers(entity);
+        if is_mob {
+            self.play_ambient_sound(id);
+        }
+        Some(id)
+    }
+
+    pub fn create_entity_type_from_stack(
+        &mut self,
+        entity_type: &str,
+        item_stack: Option<&ItemStack>,
+        spawn_pos: BlockPos,
+        spawn_reason: EntitySpawnReason,
+        try_move_down: bool,
+        moved_up: bool,
+    ) -> Option<LevelEntity> {
         let mut entity = ServerLevel::create_entity(entity_type)?;
         let y_off = if try_move_down {
             entity.entity_mut().set_pos(Vec3::new(spawn_pos.x as f64 + 0.5, (spawn_pos.y + 1) as f64, spawn_pos.z as f64 + 0.5));
@@ -452,13 +475,7 @@ impl ServerLevel {
                 entity = self.reassess_weapon_goal_detached(entity);
             }
         }
-        let id = entity.entity().id;
-        let is_mob = matches!(entity, LevelEntity::Mob(_));
-        self.add_fresh_entity_with_passengers(entity);
-        if is_mob {
-            self.play_ambient_sound(id);
-        }
-        Some(id)
+        Some(entity)
     }
 
     pub fn save_entity(&self, id: EntityId) -> Option<Nbt> {

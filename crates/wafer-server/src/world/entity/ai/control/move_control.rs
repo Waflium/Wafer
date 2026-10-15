@@ -25,6 +25,7 @@ pub enum MoveControlKind {
     Default,
     Drowned,
     CubeMob,
+    Fish,
 }
 
 #[derive(Default)]

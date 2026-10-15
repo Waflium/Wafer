@@ -61,6 +61,18 @@ impl DataComponentGetter for EntityComponents<'_> {
                 MobKind::Sheep(_) if ty == dc::SHEEP_COLOR => {
                     return Some(Cow::Owned(Nbt::String(sheep::get_color(&mob.entity).name.to_string())));
                 }
+                MobKind::Salmon(_) if ty == dc::SALMON_SIZE => {
+                    return Some(Cow::Owned(Nbt::String(mob.get_salmon_variant().get_serialized_name().to_string())));
+                }
+                MobKind::TropicalFish(_) if ty == dc::TROPICAL_FISH_PATTERN => {
+                    return Some(Cow::Owned(Nbt::String(mob.get_tropical_fish_pattern().get_serialized_name().to_string())));
+                }
+                MobKind::TropicalFish(_) if ty == dc::TROPICAL_FISH_BASE_COLOR => {
+                    return Some(Cow::Owned(Nbt::String(mob.get_tropical_fish_base_color().name.to_string())));
+                }
+                MobKind::TropicalFish(_) if ty == dc::TROPICAL_FISH_PATTERN_COLOR => {
+                    return Some(Cow::Owned(Nbt::String(mob.get_tropical_fish_pattern_color().name.to_string())));
+                }
                 _ => {}
             }
         }

@@ -1444,6 +1444,7 @@ impl ServerLevel {
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => self.ageable_water_creature_get_base_experience_reward(id),
             Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_)) => self.water_animal_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -1899,6 +1900,8 @@ impl ServerLevel {
             Some(MobKind::GlowSquid(_)) => self.glow_squid_ai_step(id),
             Some(MobKind::IronGolem(_)) => self.iron_golem_ai_step(id),
             Some(MobKind::SnowGolem(_)) => self.snow_golem_ai_step(id),
+            Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::TropicalFish(_)) => self.abstract_fish_ai_step(id),
+            Some(MobKind::Pufferfish(_)) => self.pufferfish_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -2340,6 +2343,8 @@ impl ServerLevel {
     fn travel_in_water(&mut self, id: EntityId, input: Vec3, base_gravity: f64, is_falling: bool, old_y: f64) {
         if self.is_drowned(id) {
             self.drowned_travel_in_water(id, input, base_gravity, is_falling, old_y);
+        } else if self.mob(id).is_some_and(Mob::is_abstract_fish) {
+            self.abstract_fish_travel_in_water(id, input, base_gravity, is_falling, old_y);
         } else {
             self.living_entity_travel_in_water(id, input, base_gravity, is_falling, old_y);
         }

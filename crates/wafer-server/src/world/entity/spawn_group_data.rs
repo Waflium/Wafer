@@ -1,5 +1,7 @@
 use super::ageable_mob::AgeableMobGroupData;
 use super::animal::wolf::wolf::WolfPackData;
+use super::animal::fish::abstract_schooling_fish::SchoolSpawnGroupData;
+use super::animal::fish::tropical_fish::TropicalFishGroupData;
 use super::monster::spider::spider::SpiderEffectsGroupData;
 use super::monster::zombie::husk::HuskGroupData;
 use super::monster::zombie::zombie::ZombieGroupData;
@@ -11,6 +13,8 @@ pub enum SpawnGroupData {
     Husk(HuskGroupData),
     SpiderEffects(SpiderEffectsGroupData),
     WolfPack(WolfPackData),
+    School(SchoolSpawnGroupData),
+    TropicalFish(TropicalFishGroupData),
 }
 
 impl SpawnGroupData {
