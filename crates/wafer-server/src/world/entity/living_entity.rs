@@ -5,6 +5,7 @@ use wafer_data::properties::{HORIZONTAL_FACING, OCCUPIED, OPEN};
 use wafer_protocol::nbt::Nbt;
 use wafer_data::{BlockState, EquipmentSlot, EquipmentSlotGroup, MobEffect, block_tags, blocks, damage_type_tags, damage_types, entity_type_tags, fluid_tags, game_rule, item_tags, items, mob_effects};
 
+use super::ai::brain::Brain;
 use super::attributes::{Attribute, AttributeMap, AttributeModifier, AttributeSupplier, Operation, PLAYER_ATTRIBUTES, SPEED_MODIFIER_SPRINTING};
 use super::data::{DataValue, Pose, ids};
 use super::mob::{Mob, MobKind};
@@ -85,6 +86,8 @@ pub struct LivingEntity {
     pub effects_dirty: bool,
     pub effects_mod_count: u32,
     pub locator_bar_icon: Icon,
+    pub discard_friction: bool,
+    pub brain: Brain,
 }
 
 impl LivingEntity {
@@ -136,6 +139,8 @@ impl LivingEntity {
             effects_dirty: true,
             effects_mod_count: 0,
             locator_bar_icon: Icon::new(),
+            discard_friction: false,
+            brain: Brain::new(),
         }
     }
 
@@ -1712,6 +1717,9 @@ impl ServerLevel {
             self.trigger_on_death_mob_effects(id, reason);
         }
         self.set_removed(id, reason);
+        if let Some(brain) = self.get_brain_mut_if_present(id) {
+            brain.clear_memories();
+        }
         self.get_waypoint_manager().untrack_waypoint(self, id);
     }
 
@@ -1878,6 +1886,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_ai_step(id),
+            Some(MobKind::Goat(_)) => self.goat_ai_step(id),
             Some(
                 MobKind::Zombie(_)
                 | MobKind::Husk(_)
@@ -2205,7 +2214,7 @@ impl ServerLevel {
         self.attribute_value(id, Attribute::JumpStrength) as f32 * 1.0 * self.block_jump_factor(id) + self.jump_boost_power(id)
     }
 
-    fn jump_boost_power(&self, id: EntityId) -> f32 {
+    pub fn jump_boost_power(&self, id: EntityId) -> f32 {
         match self.living(id).effect(mob_effects::JUMP_BOOST) {
             Some(jump_boost) => 0.1 * (jump_boost.amplifier as f32 + 1.0),
             None => 0.0,
@@ -2320,6 +2329,10 @@ impl ServerLevel {
             Some(levitation) => movement.y + (0.05 * (levitation.amplifier + 1) as f64 - movement.y) * 0.2,
             None => movement.y - self.effective_gravity(id),
         };
+        if self.living(id).discard_friction {
+            self.entity_mut(id).set_delta_movement(Vec3::new(movement.x, movement_y, movement.z));
+            return;
+        }
         let air_drag_modifier = self.attribute_value(id, Attribute::AirDragModifier) as f32;
         let air_drag = compute_modified_friction(0.91, air_drag_modifier);
         let friction = block_friction * air_drag;
@@ -2828,6 +2841,9 @@ impl ServerLevel {
     pub fn set_entity_pose(&mut self, id: EntityId, pose: Pose) {
         if self.is_player(id) {
             self.set_player_pose(id, pose);
+        } else if self.is_mob(id) && self.entity(id).pose() != pose {
+            self.entity_mut(id).set_pose(pose);
+            self.refresh_mob_dimensions(id);
         } else {
             self.entity_mut(id).set_pose(pose);
         }

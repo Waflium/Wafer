@@ -1,9 +1,52 @@
 use wafer_core::{BlockPos, Vec3};
 
+use super::entity_tracker::EntityTracker;
+use super::position_tracker::PositionTracker;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::entity::ai::memory::memory_module_type;
+use crate::world::entity::ai::memory::walk_target::WalkTarget;
 use crate::world::entity::ai::util::default_random_pos;
 use crate::world::level::BlockGetter;
+
+pub fn lock_gaze_and_walk_to_each_other(level: &mut ServerLevel, entity1: EntityId, entity2: EntityId, speed_modifier: f32, close_enough_distance: i32) {
+    look_at_each_other(level, entity1, entity2);
+    set_walk_and_look_target_memories_to_each_other(level, entity1, entity2, speed_modifier, close_enough_distance);
+}
+
+pub fn entity_is_visible(level: &mut ServerLevel, body: EntityId, target_entity: EntityId) -> bool {
+    match level.get_brain(body).get_memory(memory_module_type::NEAREST_VISIBLE_LIVING_ENTITIES).cloned() {
+        Some(visible_entities) => visible_entities.contains(level, target_entity),
+        None => false,
+    }
+}
+
+fn look_at_each_other(level: &mut ServerLevel, entity1: EntityId, entity2: EntityId) {
+    look_at_entity(level, entity1, entity2);
+    look_at_entity(level, entity2, entity1);
+}
+
+pub fn look_at_entity(level: &mut ServerLevel, looker: EntityId, target_entity: EntityId) {
+    let tracker = EntityTracker::new(level, target_entity, true);
+    level.get_brain_mut(looker).set_memory(memory_module_type::LOOK_TARGET, PositionTracker::Entity(tracker));
+}
+
+fn set_walk_and_look_target_memories_to_each_other(level: &mut ServerLevel, entity1: EntityId, entity2: EntityId, speed_modifier: f32, close_enough_distance: i32) {
+    set_walk_and_look_target_memories_to_entity(level, entity1, entity2, speed_modifier, close_enough_distance);
+    set_walk_and_look_target_memories_to_entity(level, entity2, entity1, speed_modifier, close_enough_distance);
+}
+
+pub fn set_walk_and_look_target_memories_to_entity(level: &mut ServerLevel, walker: EntityId, target_entity: EntityId, speed_modifier: f32, close_enough_distance: i32) {
+    let tracker = EntityTracker::new(level, target_entity, true);
+    set_walk_and_look_target_memories(level, walker, PositionTracker::Entity(tracker), speed_modifier, close_enough_distance);
+}
+
+pub fn set_walk_and_look_target_memories(level: &mut ServerLevel, walker: EntityId, target: PositionTracker, speed_modifier: f32, close_enough_distance: i32) {
+    let walk_target = WalkTarget::new(target.clone(), speed_modifier, close_enough_distance);
+    let brain = level.get_brain_mut(walker);
+    brain.set_memory(memory_module_type::LOOK_TARGET, target);
+    brain.set_memory(memory_module_type::WALK_TARGET, walk_target);
+}
 
 pub fn find_section_closest_to_village(level: &ServerLevel, center: BlockPos, radius: i32) -> BlockPos {
     let dist_to_village = level.sections_to_village(center);

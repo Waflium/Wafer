@@ -1467,6 +1467,11 @@ impl ServerLevel {
             && self.world_border.is_within_bounds((pos.min_block_x() + 15) as f64, (pos.min_block_z() + 15) as f64)
     }
 
+    #[cfg(test)]
+    pub fn spawning_chunk_count(&mut self) -> usize {
+        self.collect_spawning_chunks().len()
+    }
+
     fn collect_spawning_chunks(&mut self) -> Vec<ChunkPos> {
         let candidates = self.chunks.distance_manager.spawn_candidate_chunks();
         candidates

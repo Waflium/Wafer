@@ -318,7 +318,7 @@ impl ServerPlayer {
         if let DataValue::OptionalBlockPos(Some(pos)) = self.entity.data.get(ids::SLEEPING_POS) {
             nbt.push(("sleeping_pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z])));
         }
-        nbt.push(("Brain".into(), Nbt::Compound(vec![("memories".into(), Nbt::Compound(Vec::new()))])));
+        nbt.push(("Brain".into(), self.living.brain.pack().to_nbt()));
         if let Some(player) = self.living.last_hurt_by_player {
             nbt.push(("last_hurt_by_player".into(), crate::world::level::storage::uuid_ints(player)));
             nbt.push(("last_hurt_by_player_memory_time".into(), Nbt::Int(self.living.last_hurt_by_player_memory_time)));

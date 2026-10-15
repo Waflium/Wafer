@@ -174,6 +174,10 @@ impl PathNavigation {
         self.create_path_from_targets(level, mob, &[pos], 8, false, reach_range)
     }
 
+    pub fn create_path_with_max_path_length(&mut self, level: &ServerLevel, mob: EntityId, pos: BlockPos, reach_range: i32, max_path_length: i32) -> Option<Path> {
+        self.create_path_with_max_length(level, mob, &[pos], 8, false, reach_range, max_path_length as f32)
+    }
+
     fn path_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
         let pos = level.entity(target).block_position();
         self.create_path_from_targets(level, mob, &[pos], 16, true, reach_range)

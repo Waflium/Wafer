@@ -1510,6 +1510,13 @@ impl ServerLevel {
     }
 
     pub fn calculate_fall_damage(&self, id: EntityId, fall_distance: f64, damage_modifier: f32) -> i32 {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(super::mob::MobKind::Goat(_)) => self.goat_calculate_fall_damage(id, fall_distance, damage_modifier),
+            _ => self.living_entity_calculate_fall_damage(id, fall_distance, damage_modifier),
+        }
+    }
+
+    pub fn living_entity_calculate_fall_damage(&self, id: EntityId, fall_distance: f64, damage_modifier: f32) -> i32 {
         if entity_type_tags::FALL_DAMAGE_IMMUNE.contains(self.entity(id).entity_type as usize) {
             return 0;
         }
@@ -2470,6 +2477,7 @@ impl ServerLevel {
                     super::mob::MobKind::MushroomCow(_) => "MushroomCow",
                     super::mob::MobKind::Pig(_) => "Pig",
                     super::mob::MobKind::Sheep(_) => "Sheep",
+                    super::mob::MobKind::Goat(_) => "Goat",
                     super::mob::MobKind::Zombie(_) => "Zombie",
                     super::mob::MobKind::Husk(_) => "Husk",
                     super::mob::MobKind::Creeper(_) => "Creeper",

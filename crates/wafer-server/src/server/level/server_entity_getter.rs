@@ -73,6 +73,23 @@ impl ServerLevel {
         result
     }
 
+    pub fn get_living_entities(&self, area: &AABB, predicate: impl Fn(&ServerLevel, EntityId) -> bool) -> Vec<EntityId> {
+        let mut found = Vec::new();
+        self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
+            for &id in section.entities() {
+                if self.is_living(id)
+                    && let Some(entity) = self.entity_ref(id)
+                    && !entity.is_removed()
+                    && entity.bounding_box().intersects(area)
+                    && predicate(self, id)
+                {
+                    found.push(id);
+                }
+            }
+        });
+        found
+    }
+
     pub fn get_entities_of_class_same_kind(&self, mob: EntityId, bb: &AABB) -> Vec<EntityId> {
         let mut entities = self.get_entities(None, bb);
         entities.retain(|&entity| self.is_same_mob_class(mob, entity));

@@ -87,6 +87,7 @@ impl ServerLevel {
             MobKind::Pig(_) => self.pig_get_breed_offspring(id, partner),
             MobKind::Sheep(_) => self.sheep_get_breed_offspring(id, partner),
             MobKind::Wolf(_) => self.wolf_get_breed_offspring(id, partner),
+            MobKind::Goat(_) => self.goat_get_breed_offspring(id, partner),
             MobKind::Zombie(_)
             | MobKind::Husk(_)
             | MobKind::Drowned(_)

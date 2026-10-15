@@ -1,6 +1,9 @@
+pub mod activity_data;
 pub mod behavior;
+pub mod brain;
 pub mod control;
 pub mod goal;
+pub mod memory;
 pub mod navigation;
 pub mod sensing;
 pub mod targeting;

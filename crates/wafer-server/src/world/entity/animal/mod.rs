@@ -18,6 +18,7 @@ use crate::world::{InteractionHand, InteractionResult};
 pub mod ageable_water_creature;
 pub mod chicken;
 pub mod cow;
+pub mod goat;
 #[cfg(test)]
 mod farm_tests;
 pub mod golem;
@@ -79,6 +80,7 @@ impl ServerLevel {
             MobKind::Pig(_) => pig::pig::is_food(item_stack),
             MobKind::Sheep(_) => sheep::sheep::is_food(item_stack),
             MobKind::Wolf(_) => wolf::wolf::is_food(item_stack),
+            MobKind::Goat(_) => goat::goat::is_food(item_stack),
             MobKind::Zombie(_)
             | MobKind::Husk(_)
             | MobKind::Drowned(_)
@@ -104,6 +106,8 @@ impl ServerLevel {
         if let MobKind::Pig(_) = mob.kind {
             let sound = super::sound_event(&pig::pig::Pig::get_sound_set(mob).eat_sound);
             self.make_sound(id, sound);
+        } else if let MobKind::Goat(_) = mob.kind {
+            self.goat_play_eating_sound(id);
         }
     }
 
