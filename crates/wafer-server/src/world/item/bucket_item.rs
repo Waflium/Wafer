@@ -4,6 +4,7 @@ use wafer_data::{Fluid, Item, fluid_tags, items, registry, registry_id};
 
 use super::ItemStack;
 use super::item_utils::{self, has_infinite_materials};
+use super::mob_bucket_item::MobBucketItem;
 use crate::server::level::game_mode::GameType;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::attribute::environment_attributes;
@@ -18,12 +19,14 @@ use crate::world::{InteractionHand, InteractionResult};
 
 pub struct BucketItem {
     content: Fluid,
+    pub mob_bucket_item: Option<MobBucketItem>,
 }
 
 impl BucketItem {
     pub fn for_item(item: Item) -> Option<BucketItem> {
         let info = item.info();
-        if info.classes.first() != Some(&"BucketItem") {
+        let class = info.classes.first();
+        if class != Some(&"BucketItem") && class != Some(&"MobBucketItem") {
             return None;
         }
         let fields: serde_json::Value = serde_json::from_str(info.fields).unwrap_or_default();
@@ -32,12 +35,33 @@ impl BucketItem {
             Some("minecraft:lava") => Fluid::Lava,
             _ => Fluid::Empty,
         };
-        Some(BucketItem { content })
+        let mob_bucket_item = if class == Some(&"MobBucketItem") { Some(MobBucketItem::for_item(item, &fields)?) } else { None };
+        Some(BucketItem { content, mob_bucket_item })
+    }
+
+    pub fn content(&self) -> Fluid {
+        self.content
+    }
+
+    pub fn check_extra_content(&self, level: &mut ServerLevel, _user: Option<EntityId>, item_stack: &ItemStack, pos: BlockPos) {
+        if let Some(mob_bucket_item) = &self.mob_bucket_item {
+            mob_bucket_item.check_extra_content(level, item_stack, pos);
+        }
+    }
+
+    fn get_fluid_context(&self) -> ClipFluid {
+        if self.mob_bucket_item.is_some() {
+            ClipFluid::None
+        } else if self.content == Fluid::Empty {
+            ClipFluid::SourceOnly
+        } else {
+            ClipFluid::None
+        }
     }
 
     pub fn use_item(&self, level: &mut ServerLevel, player: EntityId, hand: InteractionHand) -> (InteractionResult, Option<ItemStack>) {
         let Some(item_stack) = level.player(player).item_in_hand(hand) else { return (InteractionResult::Pass, None) };
-        let fluid = if self.content == Fluid::Empty { ClipFluid::SourceOnly } else { ClipFluid::None };
+        let fluid = self.get_fluid_context();
         let Some(hit) = player_pov_hit_result(level, player, fluid) else { return (InteractionResult::Pass, None) };
         let pos = hit.block_pos;
         let direction = hit.direction;
@@ -49,6 +73,7 @@ impl BucketItem {
         let place_pos =
             if block::of(clicked).is_liquid_block_container(clicked) && self.content == Fluid::Water { pos } else { direction_offset_pos };
         if self.empty_contents(level, Some(player), place_pos, Some(hit)) {
+            self.check_extra_content(level, Some(player), &item_stack, place_pos);
             if self.content != Fluid::Empty {
                 crate::advancements::triggers::criteria_triggers::PLACED_BLOCK.trigger(level, player, place_pos, &item_stack);
             }
@@ -78,6 +103,14 @@ impl BucketItem {
     }
 
     pub fn empty_contents(&self, level: &mut ServerLevel, user: Option<EntityId>, pos: BlockPos, hit: Option<BlockHitResult>) -> bool {
+        if self.mob_bucket_item.is_some() {
+            self.mob_bucket_item_empty_contents(level, user, pos, hit)
+        } else {
+            self.bucket_item_empty_contents(level, user, pos, hit)
+        }
+    }
+
+    pub fn bucket_item_empty_contents(&self, level: &mut ServerLevel, user: Option<EntityId>, pos: BlockPos, hit: Option<BlockHitResult>) -> bool {
         let Some(flowing) = material::flowing(self.content) else { return false };
         let state = level.block_state(pos);
         let behaviour = block::of(state);
@@ -112,7 +145,14 @@ impl BucketItem {
         true
     }
 
-    fn play_empty_sound(&self, level: &mut ServerLevel, user: Option<EntityId>, pos: BlockPos) {
+    pub fn play_empty_sound(&self, level: &mut ServerLevel, user: Option<EntityId>, pos: BlockPos) {
+        match &self.mob_bucket_item {
+            Some(mob_bucket_item) => mob_bucket_item.play_empty_sound(level, user, pos),
+            None => self.bucket_item_play_empty_sound(level, user, pos),
+        }
+    }
+
+    fn bucket_item_play_empty_sound(&self, level: &mut ServerLevel, user: Option<EntityId>, pos: BlockPos) {
         let name = if self.content.is(&fluid_tags::LAVA) { "minecraft:item.bucket.empty_lava" } else { "minecraft:item.bucket.empty" };
         level.play_sound(user, pos, registry_id(registry::SOUND_EVENT, name), SoundSource::Blocks, 1.0, 1.0);
     }

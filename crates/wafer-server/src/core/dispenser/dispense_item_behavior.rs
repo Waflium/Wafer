@@ -59,7 +59,13 @@ fn registered(item: Item) -> Option<DispenseItemBehavior> {
         | items::SPLASH_POTION
         | items::LINGERING_POTION
         | items::FIREWORK_ROCKET => Projectile,
-        items::LAVA_BUCKET | items::WATER_BUCKET | items::POWDER_SNOW_BUCKET => FilledBucket,
+        items::LAVA_BUCKET
+        | items::WATER_BUCKET
+        | items::POWDER_SNOW_BUCKET
+        | items::SALMON_BUCKET
+        | items::COD_BUCKET
+        | items::PUFFERFISH_BUCKET
+        | items::TROPICAL_FISH_BUCKET => FilledBucket,
         items::BUCKET => Bucket,
         items::FLINT_AND_STEEL => FlintAndSteel,
         items::BONE_MEAL => BoneMeal,
@@ -162,9 +168,16 @@ fn empty_contents(level: &mut ServerLevel, item: Item, pos: wafer_core::BlockPos
     false
 }
 
+fn check_extra_content(level: &mut ServerLevel, dispensed: &ItemStack, pos: wafer_core::BlockPos) {
+    if let Some(bucket) = BucketItem::for_item(dispensed.item) {
+        bucket.check_extra_content(level, None, dispensed, pos);
+    }
+}
+
 fn execute_filled_bucket(level: &mut ServerLevel, source: &BlockSource, dispensed: ItemStack) -> ItemStack {
     let target = target(source);
     if empty_contents(level, dispensed.item, target) {
+        check_extra_content(level, &dispensed, target);
         consume_with_remainder(level, source, dispensed, ItemStack::new(items::BUCKET, 1))
     } else {
         DispenseItemBehavior::Default.dispense(level, source, dispensed)

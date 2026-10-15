@@ -7,6 +7,7 @@ pub mod block_item;
 pub mod boat_item;
 pub mod bow_item;
 pub mod bucket_item;
+pub mod mob_bucket_item;
 pub mod bone_meal_item;
 pub mod component;
 pub mod context;
