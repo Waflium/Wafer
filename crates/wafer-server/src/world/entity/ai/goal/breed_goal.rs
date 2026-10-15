@@ -9,7 +9,7 @@ pub type PartnerClass = fn(&ServerLevel, EntityId) -> bool;
 
 pub struct BreedGoal {
     partner_class: Option<PartnerClass>,
-    partner: Option<EntityId>,
+    pub partner: Option<EntityId>,
     love_time: i32,
     speed_modifier: f64,
 }
@@ -42,6 +42,10 @@ impl BreedGoal {
     }
 
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        self.tick_with(level, mob, BreedGoal::breed);
+    }
+
+    pub fn tick_with(&mut self, level: &mut ServerLevel, mob: EntityId, breed: fn(&BreedGoal, &mut ServerLevel, EntityId, EntityId)) {
         let partner = self.partner.expect("a partner");
         let max_head_x_rot = level.mob(mob).expect("a mob").get_max_head_x_rot() as f32;
         level.set_look_at_entity(mob, partner, 10.0, max_head_x_rot);
@@ -49,7 +53,7 @@ impl BreedGoal {
         level.get_navigation(mob, |navigation, level| navigation.move_to_entity(level, mob, partner, speed_modifier));
         self.love_time += 1;
         if self.love_time >= reduced_tick_delay(60) && level.entity(mob).distance_to_sqr(level.entity(partner)) < 9.0 {
-            self.breed(level, mob, partner);
+            breed(self, level, mob, partner);
         }
     }
 

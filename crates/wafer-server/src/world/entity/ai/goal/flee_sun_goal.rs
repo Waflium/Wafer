@@ -33,7 +33,7 @@ impl FleeSunGoal {
         }
     }
 
-    fn set_wanted_pos(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
+    pub fn set_wanted_pos(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
         let Some(pos) = self.get_hide_pos(level, mob) else { return false };
         self.wanted_x = pos.x;
         self.wanted_y = pos.y;

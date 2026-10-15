@@ -46,7 +46,7 @@ impl AbstractFish {
         goal_selector.add_goal(0, Goal::Panic(PanicGoal::new(1.25)));
         goal_selector.add_goal(
             2,
-            Goal::AvoidEntity(AvoidEntityGoal::with_predicate_on_avoid_entity("minecraft:player", 8.0, 1.6, 1.4, |target, level| {
+            Goal::AvoidEntity(AvoidEntityGoal::with_predicate_on_avoid_entity("minecraft:player", 8.0, 1.6, 1.4, |_, target, level| {
                 entity_selector::no_spectators(level, target)
             })),
         );

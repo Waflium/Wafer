@@ -24,6 +24,8 @@ pub enum TargetType {
     Mob,
     Rabbit,
     Chicken,
+    AbstractFish,
+    LivingEntity,
 }
 
 impl TargetType {
@@ -41,6 +43,8 @@ impl TargetType {
             TargetType::Mob => level.is_mob(entity),
             TargetType::Rabbit => is_type(level, entity, &["minecraft:rabbit"]),
             TargetType::Chicken => is_type(level, entity, &["minecraft:chicken"]),
+            TargetType::AbstractFish => level.mob(entity).is_some_and(|mob| mob.is_abstract_fish()),
+            TargetType::LivingEntity => level.is_living(entity),
         }
     }
 }
@@ -54,7 +58,7 @@ pub type Selector = fn(EntityId, EntityId, &ServerLevel) -> bool;
 pub struct NearestAttackableTargetGoal {
     pub target_goal: TargetGoal,
     target_type: TargetType,
-    random_interval: i32,
+    pub random_interval: i32,
     pub target: Option<EntityId>,
     pub selector: Option<Selector>,
 }
@@ -106,5 +110,9 @@ impl NearestAttackableTargetGoal {
 
     pub fn set_target(&mut self, target: Option<EntityId>) {
         self.target = target;
+    }
+
+    pub fn target_type(&self) -> TargetType {
+        self.target_type
     }
 }

@@ -39,7 +39,7 @@ pub struct PathNavigation {
     max_visited_nodes_multiplier: f32,
     pub path_finder: PathFinder,
     is_stuck: bool,
-    required_path_length: f32,
+    pub required_path_length: f32,
     pub avoid_sun: bool,
     pub can_path_to_targets_below_surface: bool,
     pub wall_climber_navigation: Option<WallClimberNavigation>,

@@ -34,6 +34,7 @@ pub mod remove_block_goal;
 pub mod restrict_sun_goal;
 pub mod run_around_like_crazy_goal;
 pub mod sit_when_ordered_to_goal;
+pub mod stroll_through_village_goal;
 pub mod swell_goal;
 pub mod target;
 pub mod tempt_goal;

@@ -145,7 +145,7 @@ mod bonemealable_block;
 mod bush_block;
 mod cactus_block;
 mod cactus_flower_block;
-mod cave_vines;
+pub mod cave_vines;
 mod cave_vines_block;
 mod cave_vines_plant_block;
 mod cocoa_block;

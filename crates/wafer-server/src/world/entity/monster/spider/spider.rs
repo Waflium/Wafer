@@ -131,7 +131,7 @@ impl Spider {
         goal_selector.add_goal(1, Goal::Float(float_goal));
         goal_selector.add_goal(
             2,
-            Goal::AvoidEntity(AvoidEntityGoal::with_predicate_on_avoid_entity("minecraft:armadillo", 6.0, 1.0, 1.2, |entity, level| !armadillo::is_scared(level.entity(entity)))),
+            Goal::AvoidEntity(AvoidEntityGoal::with_predicate_on_avoid_entity("minecraft:armadillo", 6.0, 1.0, 1.2, |_mob, entity, level| !armadillo::is_scared(level.entity(entity)))),
         );
         goal_selector.add_goal(3, Goal::LeapAtTarget(LeapAtTargetGoal::new(0.4)));
         goal_selector.add_goal(4, Goal::SpiderAttack(SpiderAttackGoal::new()));

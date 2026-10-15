@@ -83,6 +83,10 @@ impl MeleeAttackGoal {
     }
 
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        self.tick_with(level, mob, MeleeAttackGoal::check_and_perform_attack);
+    }
+
+    pub fn tick_with(&mut self, level: &mut ServerLevel, mob: EntityId, check_and_perform_attack: fn(&mut MeleeAttackGoal, &mut ServerLevel, EntityId, EntityId)) {
         let Some(target) = level.get_target(mob) else { return };
         level.set_look_at_entity(mob, target, 30.0, 30.0);
         self.ticks_until_next_path_recalculation = (self.ticks_until_next_path_recalculation - 1).max(0);
@@ -108,7 +112,7 @@ impl MeleeAttackGoal {
             self.ticks_until_next_path_recalculation = self.adjusted_tick_delay(self.ticks_until_next_path_recalculation);
         }
         self.ticks_until_next_attack = (self.ticks_until_next_attack - 1).max(0);
-        self.check_and_perform_attack(level, mob, target);
+        check_and_perform_attack(self, level, mob, target);
     }
 
     fn adjusted_tick_delay(&self, ticks: i32) -> i32 {
@@ -123,7 +127,7 @@ impl MeleeAttackGoal {
         }
     }
 
-    fn reset_attack_cooldown(&mut self) {
+    pub fn reset_attack_cooldown(&mut self) {
         self.ticks_until_next_attack = self.adjusted_tick_delay(20);
     }
 
@@ -131,7 +135,7 @@ impl MeleeAttackGoal {
         self.ticks_until_next_attack <= 0
     }
 
-    fn can_perform_attack(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId) -> bool {
+    pub fn can_perform_attack(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId) -> bool {
         self.is_time_to_attack() && level.is_within_melee_attack_range(mob, target) && level.sensing_has_line_of_sight(mob, target)
     }
 

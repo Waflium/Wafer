@@ -74,11 +74,15 @@ impl MoveToBlockGoal {
     }
 
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId, accepted_distance: f64) {
+        self.tick_with(level, mob, accepted_distance, MoveToBlockGoal::should_recalculate_path);
+    }
+
+    pub fn tick_with(&mut self, level: &mut ServerLevel, mob: EntityId, accepted_distance: f64, should_recalculate_path: fn(&MoveToBlockGoal) -> bool) {
         let move_to_target = self.get_move_to_target();
         if !move_to_target.closer_to_center_than(level.entity(mob).position(), accepted_distance) {
             self.reached_target = false;
             self.try_ticks += 1;
-            if self.should_recalculate_path() {
+            if should_recalculate_path(self) {
                 let speed_modifier = self.speed_modifier;
                 level.get_navigation(mob, |navigation, level| {
                     navigation.move_to(level, mob, move_to_target.x as f64 + 0.5, move_to_target.y as f64, move_to_target.z as f64 + 0.5, speed_modifier)

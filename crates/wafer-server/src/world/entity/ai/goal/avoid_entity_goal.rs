@@ -5,9 +5,11 @@ use crate::world::entity::ai::util::default_random_pos;
 use crate::world::entity::entity_selector;
 use crate::world::level::pathfinder::path::Path;
 
-fn predicate_on_avoid_entity(target: EntityId, level: &ServerLevel) -> bool {
+fn predicate_on_avoid_entity(_mob: EntityId, target: EntityId, level: &ServerLevel) -> bool {
     entity_selector::no_creative_or_spectator(level, target)
 }
+
+pub type PredicateOnAvoidEntity = fn(EntityId, EntityId, &ServerLevel) -> bool;
 
 pub struct AvoidEntityGoal {
     walk_speed_modifier: f64,
@@ -16,7 +18,7 @@ pub struct AvoidEntityGoal {
     max_dist: f32,
     path: Option<Path>,
     avoid_class: &'static str,
-    predicate_on_avoid_entity: fn(EntityId, &ServerLevel) -> bool,
+    predicate_on_avoid_entity: PredicateOnAvoidEntity,
 }
 
 impl AvoidEntityGoal {
@@ -29,13 +31,9 @@ impl AvoidEntityGoal {
         max_dist: f32,
         walk_speed_modifier: f64,
         sprint_speed_modifier: f64,
-        predicate_on_avoid_entity: fn(EntityId, &ServerLevel) -> bool,
+        predicate_on_avoid_entity: PredicateOnAvoidEntity,
     ) -> AvoidEntityGoal {
         AvoidEntityGoal { walk_speed_modifier, sprint_speed_modifier, to_avoid: None, max_dist, path: None, avoid_class, predicate_on_avoid_entity }
-    }
-
-    fn avoid_entity_targeting(&self) -> TargetingConditions<'_> {
-        TargetingConditions::for_combat().range(self.max_dist as f64).selector(&self.predicate_on_avoid_entity)
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
@@ -46,7 +44,9 @@ impl AvoidEntityGoal {
         entities.retain(|&entity| wafer_data::registry::ENTITY_TYPE[level.entity(entity).entity_type as usize] == avoid_class);
         let e = level.entity(mob);
         let (x, y, z) = (e.x(), e.y(), e.z());
-        let avoid_entity_targeting = self.avoid_entity_targeting();
+        let predicate_on_avoid_entity = self.predicate_on_avoid_entity;
+        let selector = move |target: EntityId, level: &ServerLevel| predicate_on_avoid_entity(mob, target, level);
+        let avoid_entity_targeting = TargetingConditions::for_combat().range(self.max_dist as f64).selector(&selector);
         let to_avoid = level.get_nearest_entity(&entities, &avoid_entity_targeting, Some(mob), x, y, z);
         self.to_avoid = to_avoid;
         let Some(to_avoid) = self.to_avoid else { return false };

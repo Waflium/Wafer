@@ -8,6 +8,10 @@ use crate::world::entity::EntityId;
 use crate::world::level::block;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
 
+pub fn has_glow_berries(state: BlockState) -> bool {
+    state.try_get(BERRIES) == Some(true)
+}
+
 pub fn use_vine(source_entity: Option<EntityId>, state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> InteractionResult {
     if !state.get(BERRIES) {
         return InteractionResult::Pass;

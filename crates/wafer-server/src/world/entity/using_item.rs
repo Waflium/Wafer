@@ -154,7 +154,7 @@ impl ServerLevel {
         self.stop_using_item(id);
     }
 
-    fn finish_using_item(&mut self, id: EntityId, stack: ItemStack) -> ItemStack {
+    pub fn finish_using_item(&mut self, id: EntityId, stack: ItemStack) -> ItemStack {
         let before = stack.clone();
         let result = match &stack.item.info().consumable {
             Some(consumable) => self.on_consume(id, stack, consumable),
@@ -178,14 +178,14 @@ impl ServerLevel {
     }
 
     fn convert_into_remainder(&mut self, id: EntityId, remainder: ItemStackTemplate, result: ItemStack, before: &ItemStack) -> ItemStack {
-        if self.player(id).abilities.instabuild || result.count >= before.count {
+        if self.has_infinite_materials(id) || result.count >= before.count {
             return result;
         }
         let remainder = remainder.create().unwrap_or_else(|| ItemStack::new(wafer_data::items::AIR, 0));
         if result.is_empty() {
             return remainder;
         }
-        if !remainder.is_empty() {
+        if !remainder.is_empty() && self.is_player(id) {
             let left = self.player_mut(id).pick_up(remainder.clone());
             if left > 0 {
                 self.player_drop(id, remainder.copy_with_count(left), false, Prediction::Predicted);
@@ -250,9 +250,7 @@ impl ServerLevel {
         for effect in consumable.on_consume_effects {
             self.apply_consume_effect(id, effect);
         }
-        if !self.player(id).abilities.instabuild {
-            stack.count -= 1;
-        }
+        stack.consume(1, self, Some(id));
         stack
     }
 

@@ -187,6 +187,10 @@ pub fn wrap_degrees(angle: f32) -> f32 {
     a
 }
 
+pub fn rot_lerp(a: f32, from: f32, to: f32) -> f32 {
+    from + a * wrap_degrees(to - from)
+}
+
 pub fn wrap_degrees_d(angle: f64) -> f64 {
     let mut a = angle % 360.0;
     if a >= 180.0 {
