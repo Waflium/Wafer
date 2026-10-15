@@ -193,6 +193,26 @@ pub fn if_dimension_run(server: &mut Server, context: &CommandContext, source: &
     conditional(server, context, source, level == source.level)
 }
 
+fn test_biome(server: &Server, context: &CommandContext, source: &CommandSourceStack) -> Result<bool, CommandSyntaxException> {
+    let pos = crate::commands::arguments::coordinates::get_loaded_block_pos(server, context, source, "pos")?;
+    let (tag, id) = context.get_resource_or_tag("biome");
+    let biome = server.levels[source.level].get_biome(pos);
+    Ok(match tag {
+        true => crate::commands::arguments::registry_tag("minecraft:worldgen/biome", id).is_some_and(|ids| ids.contains(&(biome.0 as i32))),
+        false => biome.name() == id,
+    })
+}
+
+pub fn if_biome(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Sources {
+    let result = test_biome(server, context, source)?;
+    expect(context, source, result)
+}
+
+pub fn if_biome_run(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    let result = test_biome(server, context, source)?;
+    conditional(server, context, source, result)
+}
+
 static ERROR_AREA_TOO_LARGE: crate::commands::brigadier::Dynamic2CommandExceptionType =
     crate::commands::brigadier::Dynamic2CommandExceptionType(|max, count| tr("commands.execute.blocks.toobig", vec![max, count]));
 

@@ -123,6 +123,8 @@ pub fn executors() -> Vec<(String, CommandFn)> {
 }
 
 static EXECUTORS: &[(&str, CommandFn)] = &[
+    ("execute if biome pos biome", execute_command::if_biome_run),
+    ("execute unless biome pos biome", execute_command::if_biome_run),
     ("execute if block pos block", execute_command::if_block_run),
     ("execute if blocks start end destination all", execute_command::if_blocks_run),
     ("execute if blocks start end destination masked", execute_command::if_blocks_run),
@@ -387,6 +389,8 @@ pub fn modifiers() -> Vec<(String, ModifierFn)> {
 }
 
 static MODIFIERS: &[(&str, ModifierFn)] = &[
+    ("execute if biome pos biome", execute_command::if_biome),
+    ("execute unless biome pos biome", execute_command::if_biome),
     ("execute if block pos block", execute_command::if_block),
     ("execute if blocks start end destination all", execute_command::if_blocks),
     ("execute if blocks start end destination masked", execute_command::if_blocks),
@@ -513,6 +517,26 @@ mod tests {
         assert_eq!(run(&mut server, "execute unless blocks 0 -64 0 2 -60 2 5 -63 5 all"), ["Test passed"]);
         run(&mut server, "execute at @a run setworldspawn");
         assert_eq!((server.spawn.pos.x, server.spawn.pos.y, server.spawn.pos.z), (5, -60, 5));
+    }
+
+    #[test]
+    fn execute_if_biome_matches_vanilla() {
+        let mut server = testing::server();
+        crate::server::level::testing::server_player(&mut server, wafer_core::Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        server.tick();
+        assert_eq!(run(&mut server, "execute if biome 0 -60 0 minecraft:plains"), ["Test passed"]);
+        assert_eq!(run(&mut server, "execute unless biome 0 -60 0 minecraft:plains"), ["Test failed"]);
+        assert_eq!(run(&mut server, "execute if biome 0 -60 0 minecraft:desert"), ["Test failed"]);
+        assert_eq!(run(&mut server, "execute unless biome 0 -60 0 minecraft:desert"), ["Test passed"]);
+        assert_eq!(run(&mut server, "execute if biome 0 -60 0 #minecraft:is_ocean"), ["Test failed"]);
+        assert_eq!(run(&mut server, "execute unless biome 0 -60 0 #minecraft:is_ocean"), ["Test passed"]);
+        assert_eq!(run(&mut server, "execute if biome 0 -60 0 #minecraft:is_overworld"), ["Test passed"]);
+        assert_eq!(run(&mut server, "execute if biome 0 -60 0 minecraft:nope"), ["Can't find element 'minecraft:nope' of type 'minecraft:worldgen/biome'", "...craft:nope<--[HERE]"]);
+        assert_eq!(run(&mut server, "execute if biome 0 -60 0 #minecraft:nope"), ["Can't find tag 'minecraft:nope' of type 'minecraft:worldgen/biome'", "...craft:nope<--[HERE]"]);
+        assert_eq!(run(&mut server, "execute if biome 100000 -60 0 minecraft:plains"), ["That position is not loaded"]);
+        assert_eq!(run(&mut server, "execute if biome 0 500 0 minecraft:plains"), ["That position is out of this world!"]);
+        assert_eq!(run(&mut server, "execute if biome 0 -60 0 minecraft:plains run seed").len(), 1);
+        assert_eq!(run(&mut server, "execute unless biome 0 -60 0 minecraft:plains run seed").len(), 0);
     }
 
     #[test]
