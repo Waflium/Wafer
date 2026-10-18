@@ -1,11 +1,11 @@
 use wafer_core::random::LegacyRandomSource;
 use wafer_core::{BlockPos, ChunkPos, Vec3};
-use wafer_data::packets::play::clientbound;
+use wafer_data::packets::play::{clientbound, serverbound};
 use wafer_data::{blocks, damage_types, game_rule, items};
-use wafer_protocol::Reader;
+use wafer_protocol::{Reader, Writer};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::network::connection::Outbound;
+use crate::network::connection::{Outbound, Packet};
 use crate::server::level::{ServerLevel, testing};
 use crate::world::InteractionHand;
 use crate::world::damagesource::DamageSource;
@@ -245,6 +245,53 @@ fn eating_takes_its_time() {
     level.player_mut(id).inventory.slots[slot] = Some(ItemStack::new(items::GOLDEN_APPLE, 1));
     level.use_item(id, InteractionHand::MainHand);
     assert!(level.is_using_item(id));
+}
+
+fn send(level: &mut ServerLevel, id: EntityId, packet_id: i32, body: impl FnOnce(&mut Writer)) {
+    let mut w = Writer::new();
+    body(&mut w);
+    level.handle_game_packet(id, &Packet { id: packet_id, data: w.into_inner() }).unwrap();
+}
+
+#[test]
+fn eating_while_sprinting_finishes() {
+    let (mut level, id, mut packets) = setup();
+    level.player_mut(id).movement.awaiting_position_from_client = None;
+    level.player_mut(id).food_data = FoodData { food_level: 10, saturation_level: 0.0, ..FoodData::default() };
+    let slot = level.player(id).inventory.selected_slot();
+    level.player_mut(id).inventory.slots[slot] = Some(ItemStack::new(items::BREAD, 2));
+    send(&mut level, id, serverbound::PLAYER_COMMAND, |w| {
+        w.varint(id);
+        w.varint(1);
+        w.varint(0);
+    });
+    send(&mut level, id, serverbound::PLAYER_INPUT, |w| w.u8(1 | 64));
+    send(&mut level, id, serverbound::USE_ITEM, |w| {
+        w.varint(0);
+        w.varint(1);
+        w.f32(0.0);
+        w.f32(0.0);
+    });
+    assert!(level.is_using_item(id));
+    packet_ids(&mut packets);
+    let mut z = 0.5;
+    for _ in 0..32 {
+        z += 0.06;
+        send(&mut level, id, serverbound::MOVE_PLAYER_POS, |w| {
+            w.f64(0.5);
+            w.f64(-60.0);
+            w.f64(z);
+            w.u8(1);
+        });
+        send(&mut level, id, serverbound::CLIENT_TICK_END, |_| {});
+        tick(&mut level, id);
+    }
+    assert!(level.entity(id).is_sprinting());
+    assert_eq!(level.entity(id).z(), z);
+    assert!(!level.is_using_item(id));
+    assert_eq!(level.player(id).food_data.food_level, 15);
+    assert_eq!(level.player(id).inventory.slots[slot], Some(ItemStack::new(items::BREAD, 1)));
+    assert!(packet_ids(&mut packets).contains(&clientbound::ENTITY_EVENT));
 }
 
 #[test]
