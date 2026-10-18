@@ -218,6 +218,25 @@ fn axolotls_and_tadpoles_go_into_buckets_like_vanilla() {
     }
 }
 
+#[test]
+fn grown_tadpoles_turn_into_frogs_when_loaded() {
+    use crate::world::item::component as dc;
+    let (mut level, _player) = duel_level();
+    pool(&mut level);
+    let nbt = parse_snbt(r#"{id:"minecraft:tadpole",Pos:[0.5d,-58.0d,0.5d],Age:24000,CustomName:"t"}"#).unwrap();
+    let tadpole = level.load_entity(&nbt).unwrap();
+    assert!(tadpole.entity().is_removed());
+    let frog = level.entities.values().find(|e| wafer_data::registry::ENTITY_TYPE[e.entity().entity_type as usize] == "minecraft:frog").unwrap();
+    assert_eq!(frog.entity().position(), Vec3::new(0.5, -58.0 - 0.09999999403953552, 0.5));
+    assert!(!level.add_fresh_entity(tadpole));
+
+    let mut bucket = ItemStack::new(items::TADPOLE_BUCKET, 1);
+    bucket.set(dc::BUCKET_ENTITY_DATA, Some(parse_snbt("{Age:24000}").unwrap()));
+    let frog = release(&mut level, &bucket, "minecraft:frog");
+    assert_eq!(save(&level, frog).get("PersistenceRequired"), Some(&Nbt::Byte(1)));
+    assert!(!level.entities.values().any(|e| wafer_data::registry::ENTITY_TYPE[e.entity().entity_type as usize] == "minecraft:tadpole"));
+}
+
 fn release(level: &mut ServerLevel, bucket: &ItemStack, entity_type: &str) -> EntityId {
     let before: Vec<EntityId> = level.entities.keys().copied().collect();
     let mob_bucket = item::mob_bucket_item::MobBucketItem::for_item(bucket.get_item(), &serde_json::json!({"emptySound": "minecraft:item.bucket.empty_fish"})).unwrap();

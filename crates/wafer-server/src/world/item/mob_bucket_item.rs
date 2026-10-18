@@ -7,6 +7,7 @@ use super::bucket_item::BucketItem;
 use super::component as dc;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::mob::MobKind;
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 
@@ -42,16 +43,23 @@ impl MobBucketItem {
         let Some(mut entity) = level.create_entity_type_from_stack(self.entity_type, Some(item_stack), spawn_pos, EntitySpawnReason::Bucket, true, false) else {
             return;
         };
+        let mut age_loaded = false;
         if let LevelEntity::Mob(mob) = &mut entity
             && mob.is_bucketable()
         {
             let entity_data = item_stack.get(dc::BUCKET_ENTITY_DATA).cloned().unwrap_or(Nbt::Compound(Vec::new()));
             mob.load_from_bucket_tag(&entity_data);
+            age_loaded = matches!(mob.kind, MobKind::Tadpole(_)) && matches!(entity_data.get("Age"), Some(Nbt::Int(_)));
             mob.set_from_bucket(true);
+        }
+        if age_loaded {
+            entity = level.tadpole_set_age_detached(entity);
         }
         let id = entity.entity().id;
         level.add_fresh_entity_with_passengers(entity);
-        level.play_ambient_sound(id);
+        if level.mob(id).is_some() {
+            level.play_ambient_sound(id);
+        }
     }
 }
 

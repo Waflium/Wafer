@@ -635,7 +635,7 @@ mod tests {
     fn summon() {
         let mut server = testing::server();
         assert_eq!(run(&mut server, "summon tnt 0 -60 0 {fuse:5}"), ["Summoned new Primed TNT"]);
-        assert_eq!(run(&mut server, "summon item 0 -60 0"), ["Unable to summon entity due to duplicate UUIDs"]);
+        assert_eq!(run(&mut server, "summon item 0 -60 0"), ["Summoned new Air"]);
         assert_eq!(run(&mut server, "summon item 0 -60 0 {Item:{id:\"stone\",count:2}}"), ["Summoned new Stone"]);
         assert_eq!(run(&mut server, "summon player"), ["Can't summon entity of type minecraft:player"]);
         assert_eq!(run(&mut server, "summon tnt 0 30000001 0"), ["Invalid position for summon"]);

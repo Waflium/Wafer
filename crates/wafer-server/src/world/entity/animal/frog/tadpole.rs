@@ -18,7 +18,7 @@ use crate::world::entity::data::{DataValue, ids};
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::living_entity::LivingEntity;
 use crate::world::entity::mob::{Mob, MobKind};
-use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
+use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
@@ -242,6 +242,18 @@ impl ServerLevel {
             level.fudge_position_after_size_change(frog, previous);
             level.entity_play_sound(id, sound_event("minecraft:entity.tadpole.grow_up"), 0.15, 1.0);
         });
+    }
+
+    pub fn tadpole_read_level_dependent_save_data(&mut self, id: EntityId) {
+        let age = tadpole(self.mob(id).expect("a tadpole")).age;
+        self.tadpole_set_age(id, age);
+    }
+
+    pub fn tadpole_set_age_detached(&mut self, entity: LevelEntity) -> LevelEntity {
+        let id = entity.entity().id;
+        self.entities.insert(id, entity);
+        self.tadpole_read_level_dependent_save_data(id);
+        self.entities.shift_remove(&id).expect("the tadpole")
     }
 
     fn get_ticks_left_until_adult(&self, id: EntityId) -> i32 {

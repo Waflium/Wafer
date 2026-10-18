@@ -116,7 +116,7 @@ pub fn summonable_entity_type(context: &CommandContext, name: &str) -> Result<St
     Ok(id)
 }
 
-pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_type: &str, pos: Vec3, nbt: &Nbt, finalize: bool) -> Result<EntityId, CommandSyntaxException> {
+pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_type: &str, pos: Vec3, nbt: &Nbt, finalize: bool) -> Result<(EntityId, Component), CommandSyntaxException> {
     if !is_in_spawnable_bounds(BlockPos::containing(pos.x, pos.y, pos.z)) {
         return Err(INVALID_POSITION.create());
     }
@@ -145,19 +145,21 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
         let (entity, _) = level.finalize_spawn_detached(entity, &difficulty, EntitySpawnReason::Command, None);
         loaded.insert(0, entity);
     }
-    if loaded.iter().any(|e| level.entity_manager.is_loaded(e.entity().uuid)) || loaded[0].entity().is_removed() {
+    if loaded.iter().any(|e| level.entity_manager.is_loaded(e.entity().uuid)) {
         return Err(ERROR_DUPLICATE_UUID.create());
     }
     let id = loaded[0].entity().id;
+    let (entity, name) = level.display_name_detached(loaded.remove(0));
+    loaded.insert(0, entity);
     for entity in loaded {
         level.add_fresh_entity_with_passengers(entity);
     }
-    Ok(id)
+    Ok((id, name))
 }
 
 fn spawn_entity(server: &mut Server, source: &CommandSourceStack, entity_type: &str, pos: Vec3, nbt: &Nbt, finalize: bool) -> Result<i32, CommandSyntaxException> {
-    let id = create_entity(server, source, entity_type, pos, nbt, finalize)?;
-    source.send_success(server, || Component::translatable_with("commands.summon.success", vec![Arg::Component(server.entity_display_name(id))]), true);
+    let (_, name) = create_entity(server, source, entity_type, pos, nbt, finalize)?;
+    source.send_success(server, || Component::translatable_with("commands.summon.success", vec![Arg::Component(name)]), true);
     Ok(1)
 }
 

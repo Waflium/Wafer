@@ -6,7 +6,7 @@ use wafer_data::{DamageScaling, DamageType, Tag};
 
 use crate::network::chat::Component;
 use crate::server::level::ServerLevel;
-use crate::world::entity::EntityId;
+use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::scores::player_team::PlayerTeam;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -105,6 +105,13 @@ impl ServerLevel {
             Some(p) => self.player_display_name(&p.profile.name, p.profile.uuid),
             None => self.entities.get(&id).map_or_else(Component::empty, |e| e.display_name(self.team_of(id).as_deref())),
         }
+    }
+
+    pub fn display_name_detached(&mut self, entity: LevelEntity) -> (LevelEntity, Component) {
+        let id = entity.entity().id;
+        self.entities.insert(id, entity);
+        let name = self.display_name(id);
+        (self.entities.shift_remove(&id).expect("the entity"), name)
     }
 
     pub fn player_display_name(&self, name: &str, uuid: u128) -> Component {
