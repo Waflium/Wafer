@@ -144,6 +144,12 @@ unsafe extern "system" fn console_ctrl_handler(ctrl_type: u32) -> windows_sys::c
     }
 }
 
+static OVERWORLD_CREATED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_overworld_created() {
+    OVERWORLD_CREATED.store(true, std::sync::atomic::Ordering::Release);
+}
+
 pub fn start_console_thread(events: mpsc::UnboundedSender<Event>) {
     let _ = std::thread::Builder::new().name("Server console handler".into()).spawn(move || {
         let stdin = io::stdin();
@@ -154,7 +160,8 @@ pub fn start_console_thread(events: mpsc::UnboundedSender<Event>) {
                 Ok(0) => return,
                 Ok(_) => {
                     let command = line.trim_end_matches(['\n', '\r']).to_string();
-                    if events.send(Event::Console(command)).is_err() {
+                    let has_level = OVERWORLD_CREATED.load(std::sync::atomic::Ordering::Acquire);
+                    if events.send(Event::Console(command, has_level)).is_err() {
                         return;
                     }
                 }

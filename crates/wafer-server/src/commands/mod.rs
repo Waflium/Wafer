@@ -153,6 +153,21 @@ pub fn perform_prefixed_command(server: &mut Server, source: &CommandSourceStack
     perform_command(server, parse, command, source);
 }
 
+pub fn perform_prefixed_command_without_level(server: &mut Server, source: &CommandSourceStack, command: &str) {
+    let command = command.strip_prefix('/').unwrap_or(command);
+    let units: Vec<u16> = command.encode_utf16().collect();
+    let parse = brigadier::parse(StringReader::new(&units), source);
+    if finish_parsing(server, parse, command, source).is_some() {
+        source.send_failure(
+            server,
+            unexpected_error(
+                "Cannot invoke \"net.minecraft.server.level.ServerLevel.getGameRules()\" because the return value of \"net.minecraft.commands.CommandSourceStack.getLevel()\" is null",
+            )
+            .message,
+        );
+    }
+}
+
 pub fn perform_command(server: &mut Server, parse: ParseResults, command: &str, source: &CommandSourceStack) {
     let Some(chain) = finish_parsing(server, parse, command, source) else { return };
     execute_command_in_context(server, |context| context.queue_initial_command_execution(chain, source, CommandResultCallback::EMPTY));

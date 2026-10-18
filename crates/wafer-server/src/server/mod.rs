@@ -145,7 +145,7 @@ pub enum Event {
     Join { conn: ConnId, profile: Profile, cookie: CommonListenerCookie, out: Outbound, address: std::net::SocketAddr },
     Packet { conn: ConnId, packet: Packet },
     Left { conn: ConnId, reason: Component },
-    Console(String),
+    Console(String, bool),
     Verify { profile: Profile, address: std::net::SocketAddr, reply: tokio::sync::oneshot::Sender<Verdict> },
     PrepareSpawn { uuid: u128, name: String, reply: tokio::sync::oneshot::Sender<()> },
     PrepareSpawnClosed { uuid: u128 },
@@ -200,7 +200,7 @@ pub struct Server {
     pending_logins: Vec<PendingLogin>,
     prepare_spawn_tasks: Vec<PrepareSpawnTask>,
     tasks: VecDeque<Task>,
-    console_inputs: Vec<(String, CommandSourceStack)>,
+    console_inputs: Vec<(String, CommandSourceStack, bool)>,
     pub rcon_buffer: std::cell::RefCell<String>,
     random: LegacyRandomSource,
     status: Arc<RwLock<Option<Arc<str>>>>,
@@ -298,6 +298,7 @@ impl Server {
             (data.seed, data.game_time, data.generator, data.game_type, data.difficulty, data.difficulty_locked, data.hardcore);
         let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, generator, generate_structures, seed);
         overworld.chunks.game_rules = game_rules.clone();
+        dedicated::set_overworld_created();
         if new_world {
             load_listener.start(level::progress::Stage::PrepareGlobalSpawn, 0);
         }
@@ -874,7 +875,7 @@ impl Server {
             Event::Verify { profile, address, reply } => self.pending_logins.push(PendingLogin { profile, address, reply, waiting_for_dupe: false }),
             Event::PrepareSpawn { uuid, name, reply } => self.start_prepare_spawn(uuid, &name, reply),
             Event::PrepareSpawnClosed { uuid } => self.prepare_spawn_tasks.retain(|t| t.uuid != uuid),
-            Event::Console(line) => self.console_inputs.push((line, CommandSourceStack::server(self))),
+            Event::Console(line, has_level) => self.console_inputs.push((line, CommandSourceStack::server(self), has_level)),
             Event::Halt => self.halt(),
             Event::Rcon { command, reply } => self.tasks.push_back(Task::Rcon { command, reply }),
         }
@@ -1088,8 +1089,12 @@ impl Server {
     }
 
     fn handle_console_inputs(&mut self) {
-        for (line, source) in std::mem::take(&mut self.console_inputs) {
-            crate::commands::perform_prefixed_command(self, &source, &line);
+        for (line, source, has_level) in std::mem::take(&mut self.console_inputs) {
+            if has_level {
+                crate::commands::perform_prefixed_command(self, &source, &line);
+            } else {
+                crate::commands::perform_prefixed_command_without_level(self, &source, &line);
+            }
         }
     }
 
