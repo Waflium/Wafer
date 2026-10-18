@@ -316,8 +316,12 @@ impl ItemStack {
     }
 
     pub fn item_name(&self) -> Component {
-        let info = self.item.info();
+        let item = self.get_item();
+        let info = item.info();
         let class = |c: &str| info.classes.contains(&c);
+        if class("AirItem") {
+            return super::component::item_components(item).get(dc::ITEM_NAME).map_or_else(Component::empty, values::text);
+        }
         if class("CompassItem") && self.has(dc::LODESTONE_TRACKER) {
             return Component::translatable("item.minecraft.lodestone_compass");
         }
