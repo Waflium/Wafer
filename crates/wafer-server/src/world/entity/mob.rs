@@ -2595,6 +2595,9 @@ impl ServerLevel {
     }
 
     pub fn read_level_dependent_save_data(&mut self, id: EntityId, input: &Nbt) {
+        if self.is_thrown_enderpearl(id) {
+            self.thrown_enderpearl_register_to_current_owner(id);
+        }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Enderman(_) | MobKind::Wolf(_) | MobKind::IronGolem(_) | MobKind::ZombifiedPiglin(_))) {
             self.read_persistent_anger_save_data(id, input);
         }

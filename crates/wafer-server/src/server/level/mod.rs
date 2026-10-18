@@ -12,6 +12,8 @@ pub mod game_mode;
 #[cfg(test)]
 mod natural_spawner_tests;
 pub mod server_player;
+#[cfg(test)]
+mod server_player_tests;
 pub mod player_spawn_finder;
 pub mod progress;
 mod precipitation;
