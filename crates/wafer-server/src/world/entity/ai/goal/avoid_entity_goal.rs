@@ -11,19 +11,38 @@ fn predicate_on_avoid_entity(_mob: EntityId, target: EntityId, level: &ServerLev
 
 pub type PredicateOnAvoidEntity = fn(EntityId, EntityId, &ServerLevel) -> bool;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AvoidClass {
+    EntityType(&'static str),
+    Monster,
+}
+
+impl AvoidClass {
+    fn is_instance(self, level: &ServerLevel, entity: EntityId) -> bool {
+        match self {
+            AvoidClass::EntityType(entity_type) => wafer_data::registry::ENTITY_TYPE[level.entity(entity).entity_type as usize] == entity_type,
+            AvoidClass::Monster => level.is_monster(entity),
+        }
+    }
+}
+
 pub struct AvoidEntityGoal {
     walk_speed_modifier: f64,
     sprint_speed_modifier: f64,
     pub to_avoid: Option<EntityId>,
     max_dist: f32,
     path: Option<Path>,
-    avoid_class: &'static str,
+    avoid_class: AvoidClass,
     predicate_on_avoid_entity: PredicateOnAvoidEntity,
 }
 
 impl AvoidEntityGoal {
     pub fn new(avoid_class: &'static str, max_dist: f32, walk_speed_modifier: f64, sprint_speed_modifier: f64) -> AvoidEntityGoal {
-        AvoidEntityGoal::with_predicate_on_avoid_entity(avoid_class, max_dist, walk_speed_modifier, sprint_speed_modifier, predicate_on_avoid_entity)
+        AvoidEntityGoal::of_class(AvoidClass::EntityType(avoid_class), max_dist, walk_speed_modifier, sprint_speed_modifier)
+    }
+
+    pub fn of_class(avoid_class: AvoidClass, max_dist: f32, walk_speed_modifier: f64, sprint_speed_modifier: f64) -> AvoidEntityGoal {
+        AvoidEntityGoal { walk_speed_modifier, sprint_speed_modifier, to_avoid: None, max_dist, path: None, avoid_class, predicate_on_avoid_entity }
     }
 
     pub fn with_predicate_on_avoid_entity(
@@ -33,7 +52,7 @@ impl AvoidEntityGoal {
         sprint_speed_modifier: f64,
         predicate_on_avoid_entity: PredicateOnAvoidEntity,
     ) -> AvoidEntityGoal {
-        AvoidEntityGoal { walk_speed_modifier, sprint_speed_modifier, to_avoid: None, max_dist, path: None, avoid_class, predicate_on_avoid_entity }
+        AvoidEntityGoal { predicate_on_avoid_entity, ..AvoidEntityGoal::new(avoid_class, max_dist, walk_speed_modifier, sprint_speed_modifier) }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
@@ -41,7 +60,7 @@ impl AvoidEntityGoal {
         let area = level.entity(mob).bounding_box().inflate(max_dist, 3.0, max_dist);
         let avoid_class = self.avoid_class;
         let mut entities = level.get_entities(None, &area);
-        entities.retain(|&entity| wafer_data::registry::ENTITY_TYPE[level.entity(entity).entity_type as usize] == avoid_class);
+        entities.retain(|&entity| avoid_class.is_instance(level, entity));
         let e = level.entity(mob);
         let (x, y, z) = (e.x(), e.y(), e.z());
         let predicate_on_avoid_entity = self.predicate_on_avoid_entity;

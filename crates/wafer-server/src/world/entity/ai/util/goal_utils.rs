@@ -23,7 +23,7 @@ pub fn is_restricted(level: &ServerLevel, restrict: bool, mob: EntityId, pos: Bl
 }
 
 pub fn is_not_stable(level: &ServerLevel, mob: EntityId, pos: BlockPos) -> bool {
-    !level.mob(mob).expect("a mob").ai.navigation.is_stable_destination(level, pos)
+    !level.mob(mob).expect("a mob").ai.navigation.is_stable_destination(level, mob, pos)
 }
 
 pub fn is_water(level: &ServerLevel, pos: BlockPos) -> bool {

@@ -7,10 +7,10 @@ use crate::world::entity::ai::util::default_random_pos;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 
 pub struct PanicGoal {
-    speed_modifier: f64,
-    pos_x: f64,
-    pos_y: f64,
-    pos_z: f64,
+    pub speed_modifier: f64,
+    pub pos_x: f64,
+    pub pos_y: f64,
+    pub pos_z: f64,
     is_running: bool,
     panic_causing_damage_types: &'static Tag,
 }
@@ -39,11 +39,11 @@ impl PanicGoal {
         self.find_random_position(level, mob)
     }
 
-    fn should_panic(&self, level: &ServerLevel, mob: EntityId) -> bool {
+    pub fn should_panic(&self, level: &ServerLevel, mob: EntityId) -> bool {
         level.get_last_damage_source(mob).is_some_and(|source| source.is(self.panic_causing_damage_types))
     }
 
-    fn find_random_position(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
+    pub fn find_random_position(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
         let Some(pos) = default_random_pos::get_pos(level, mob, 5, 4) else { return false };
         self.pos_x = pos.x;
         self.pos_y = pos.y;
@@ -69,7 +69,7 @@ impl PanicGoal {
         !level.mob(mob).expect("a mob").ai.navigation.is_done()
     }
 
-    fn look_for_water(&self, level: &ServerLevel, mob: EntityId, xz_dist: i32) -> Option<BlockPos> {
+    pub fn look_for_water(&self, level: &ServerLevel, mob: EntityId, xz_dist: i32) -> Option<BlockPos> {
         let mob_position = level.entity(mob).block_position();
         let region = PathNavigationRegion::new(level);
         if !region.get_block_state(mob_position).collision_voxel_shape().is_empty() {

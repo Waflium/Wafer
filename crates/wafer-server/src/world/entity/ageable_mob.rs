@@ -119,6 +119,8 @@ impl ServerLevel {
             MobKind::Tadpole(_) => None,
             MobKind::Villager(_) => self.villager_get_breed_offspring(id, partner),
             MobKind::Fox(_) => self.fox_get_breed_offspring(id, partner),
+            MobKind::Rabbit(_) => self.rabbit_get_breed_offspring(id, partner),
+            MobKind::Turtle(_) => self.turtle_get_breed_offspring(id, partner),
         }
     }
 
@@ -182,6 +184,8 @@ impl ServerLevel {
             self.refresh_mob_dimensions(id);
             if self.is_villager(id) {
                 self.villager_age_boundary_reached(id);
+            } else if self.is_turtle(id) {
+                self.turtle_age_boundary_reached(id);
             }
         }
     }

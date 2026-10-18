@@ -13,7 +13,6 @@ use super::monster::monster;
 use super::spawn_placement_types::SpawnPlacementType;
 use crate::world::attribute::environment_attributes;
 use crate::world::difficulty::Difficulty;
-use crate::world::level::block::turtle_egg_block;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::worldgen_random::WorldgenRandom;
 use crate::world::level::light_layer::LightLayer;
@@ -259,7 +258,7 @@ fn test(predicate: SpawnPredicate, entity_type: &EntityType, level: &mut (impl W
                 animal::is_bright_enough_to_spawn(level, pos) && level.block_state(pos.below()).is(&block_tags::POLAR_BEARS_SPAWNABLE_ON_ALTERNATE)
             }
         }
-        P::RabbitCheckRabbitSpawnRules => spawnable_on_and_bright(level, pos, &block_tags::RABBITS_SPAWNABLE_ON),
+        P::RabbitCheckRabbitSpawnRules => super::animal::rabbit::rabbit::check_rabbit_spawn_rules(level, pos),
         P::SkeletonHorseCheckSkeletonHorseSpawnRules => {
             if !EntitySpawnReason::is_spawner(spawn_reason) {
                 animal::check_animal_spawn_rules(entity_type, level, spawn_reason, pos)
@@ -288,9 +287,7 @@ fn test(predicate: SpawnPredicate, entity_type: &EntityType, level: &mut (impl W
             }
             level.block_state(check_pos).is_air()
         }
-        P::TurtleCheckTurtleSpawnRules => {
-            pos.y < level.get_sea_level() + 4 && turtle_egg_block::on_sand(level, pos) && animal::is_bright_enough_to_spawn(level, pos)
-        }
+        P::TurtleCheckTurtleSpawnRules => super::animal::turtle::turtle::check_turtle_spawn_rules(level, pos),
         P::WolfCheckWolfSpawnRules => spawnable_on_and_bright(level, pos, &block_tags::WOLVES_SPAWNABLE_ON),
         P::ZombifiedPiglinCheckZombifiedPiglinSpawnRules => {
             level.get_difficulty() != Difficulty::Peaceful && !level.block_state(pos.below()).is_block(blocks::NETHER_WART_BLOCK)

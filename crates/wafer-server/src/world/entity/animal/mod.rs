@@ -30,8 +30,12 @@ pub mod fish;
 pub mod feline;
 pub mod fox;
 pub mod pig;
+pub mod rabbit;
+#[cfg(test)]
+mod rabbit_turtle_oracle_tests;
 pub mod sheep;
 pub mod squid;
+pub mod turtle;
 pub mod wolf;
 
 #[derive(Default)]
@@ -114,6 +118,8 @@ impl ServerLevel {
             MobKind::Tadpole(_) => false,
             MobKind::Villager(_) => false,
             MobKind::Fox(_) => fox::fox::is_food(item_stack),
+            MobKind::Rabbit(_) => rabbit::rabbit::is_food(item_stack),
+            MobKind::Turtle(_) => turtle::turtle::is_food(item_stack),
         }
     }
 
@@ -165,6 +171,7 @@ impl ServerLevel {
     pub fn can_fall_in_love(&self, id: EntityId) -> bool {
         match self.mob(id).expect("an animal").kind {
             MobKind::Armadillo(_) => self.armadillo_can_fall_in_love(id),
+            MobKind::Turtle(_) => self.turtle_can_fall_in_love(id),
             _ => self.animal_can_fall_in_love(id),
         }
     }

@@ -971,6 +971,7 @@ impl ServerLevel {
                 _ if self.mob(id).is_some_and(super::mob::Mob::is_water_animal) => super::animal::fish::water_animal::is_pushed_by_fluid(),
                 _ if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) => super::animal::axolotl::axolotl::is_pushed_by_fluid(),
                 _ if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Frog(_))) => super::animal::frog::frog::is_pushed_by_fluid(),
+                _ if self.is_turtle(id) => super::animal::turtle::turtle::Turtle::is_pushed_by_fluid(),
                 _ => true,
             },
         }
@@ -1004,6 +1005,7 @@ impl ServerLevel {
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Ghast(_)) => super::monster::ghast::Ghast::get_sound_source(),
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Rabbit(_)) => super::animal::rabbit::rabbit::Rabbit::get_sound_source(mob),
             Some(_) => SoundSource::Neutral,
         }
     }
@@ -1646,16 +1648,24 @@ impl ServerLevel {
                 produced |= self.vibration_and_sound_effects_from_block(id, supporting_pos, supporting_state, false, movement);
             }
             if produced {
-                let e = self.entity_mut(id);
-                e.next_step = (e.move_dist as i32 + 1) as f32;
+                let next_step = self.next_step(id);
+                self.entity_mut(id).next_step = next_step;
             } else if self.entity(id).is_in_water() {
-                let e = self.entity_mut(id);
-                e.next_step = (e.move_dist as i32 + 1) as f32;
+                let next_step = self.next_step(id);
+                self.entity_mut(id).next_step = next_step;
                 if emission.emits_sounds() {
                     self.water_swim_sound(id);
                 }
             }
         }
+    }
+
+    fn next_step(&self, id: EntityId) -> f32 {
+        if self.is_turtle(id) { super::animal::turtle::turtle::Turtle::next_step(self.entity(id)) } else { self.entity_next_step(id) }
+    }
+
+    fn entity_next_step(&self, id: EntityId) -> f32 {
+        (self.entity(id).move_dist as i32 + 1) as f32
     }
 
     fn vibration_and_sound_effects_from_block(&mut self, id: EntityId, pos: BlockPos, state: BlockState, should_sound: bool, movement: Vec3) -> bool {
@@ -1736,6 +1746,19 @@ impl ServerLevel {
         let e = self.entity_mut(id);
         let m = e.delta_movement;
         let speed = (((m.x * m.x * 0.2f32 as f64 + m.y * m.y + m.z * m.z * 0.2f32 as f64).sqrt() as f32) * 0.35).min(1.0);
+        self.play_swim_sound(id, speed);
+    }
+
+    fn play_swim_sound(&mut self, id: EntityId, volume: f32) {
+        if self.is_turtle(id) {
+            self.entity_play_swim_sound(id, volume * 1.5);
+        } else {
+            self.entity_play_swim_sound(id, volume);
+        }
+    }
+
+    fn entity_play_swim_sound(&mut self, id: EntityId, speed: f32) {
+        let e = self.entity_mut(id);
         let pitch = 1.0 + (e.random.next_float() - e.random.next_float()) * 0.4;
         let sound = if self.is_player(id) {
             "minecraft:entity.player.swim"
@@ -1745,6 +1768,8 @@ impl ServerLevel {
             super::animal::fish::abstract_fish::AbstractFish::get_swim_sound()
         } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) {
             super::animal::axolotl::axolotl::get_swim_sound()
+        } else if self.is_turtle(id) {
+            super::animal::turtle::turtle::Turtle::get_swim_sound()
         } else {
             "minecraft:entity.generic.swim"
         };
@@ -2066,6 +2091,7 @@ impl ServerLevel {
     fn can_spawn_sprint_particle(&mut self, id: EntityId) -> bool {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(super::mob::MobKind::IronGolem(_)) => self.iron_golem_can_spawn_sprint_particle(id),
+            Some(super::mob::MobKind::Rabbit(_)) => super::animal::rabbit::rabbit::Rabbit::can_spawn_sprint_particle(),
             _ => self.entity_can_spawn_sprint_particle(id),
         }
     }
@@ -2594,6 +2620,8 @@ impl ServerLevel {
                     super::mob::MobKind::Tadpole(_) => "Tadpole",
                     super::mob::MobKind::Villager(_) => "Villager",
                     super::mob::MobKind::Fox(_) => "Fox",
+                    super::mob::MobKind::Rabbit(_) => "Rabbit",
+                    super::mob::MobKind::Turtle(_) => "Turtle",
                 },
                 Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                     ProjectileKind::Snowball(_) => "Snowball",

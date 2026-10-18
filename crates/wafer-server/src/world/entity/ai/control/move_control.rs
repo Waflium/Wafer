@@ -31,6 +31,8 @@ pub enum MoveControlKind {
     Axolotl(SmoothSwimmingMoveControl),
     Fox,
     Ghast,
+    Rabbit,
+    Turtle,
 }
 
 #[derive(Default)]
@@ -85,6 +87,14 @@ pub fn rotlerp(a: f32, b: f32, max: f32) -> f32 {
 }
 
 impl ServerLevel {
+    pub fn set_wanted_position(&mut self, id: EntityId, x: f64, y: f64, z: f64, speed_modifier: f64) {
+        let mob = self.mob_mut(id).expect("a mob");
+        match mob.ai.move_control.kind {
+            MoveControlKind::Rabbit => crate::world::entity::animal::rabbit::rabbit::Rabbit::move_control_set_wanted_position(mob, x, y, z, speed_modifier),
+            _ => mob.ai.move_control.set_wanted_position(x, y, z, speed_modifier),
+        }
+    }
+
     pub fn move_control_tick(&mut self, id: EntityId) {
         let speed_attribute = self.attribute_value(id, Attribute::MovementSpeed);
         let mob = self.mob_mut(id).expect("a mob");

@@ -32,6 +32,7 @@ impl ServerLevel {
             MobKind::Squid(_) | MobKind::GlowSquid(_) => get_walk_target_value(),
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => get_walk_target_value(),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => get_walk_target_value(),
+            MobKind::Turtle(_) => self.turtle_get_walk_target_value(id, pos),
             _ => self.animal_get_walk_target_value(pos),
         }
     }
@@ -46,6 +47,6 @@ impl ServerLevel {
         if !brain.is_brain_dead() && brain.has_memory_value(super::ai::memory::memory_module_type::IS_PANICKING) {
             return brain.get_memory(super::ai::memory::memory_module_type::IS_PANICKING).is_some();
         }
-        mob.ai.goal_selector.get_available_goals().iter().any(|wrapped_goal| wrapped_goal.is_running() && matches!(wrapped_goal.get_goal(), Goal::Panic(_) | Goal::TamableAnimalPanic(_) | Goal::FoxPanic(_)))
+        mob.ai.goal_selector.get_available_goals().iter().any(|wrapped_goal| wrapped_goal.is_running() && matches!(wrapped_goal.get_goal(), Goal::Panic(_) | Goal::TamableAnimalPanic(_) | Goal::FoxPanic(_) | Goal::RabbitPanic(_) | Goal::TurtlePanic(_)))
     }
 }

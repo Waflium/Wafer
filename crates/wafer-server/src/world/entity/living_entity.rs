@@ -1997,6 +1997,8 @@ impl ServerLevel {
             Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
             Some(MobKind::Villager(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Fox(_)) => self.fox_ai_step(id),
+            Some(MobKind::Rabbit(_)) => self.rabbit_ai_step(id),
+            Some(MobKind::Turtle(_)) => self.turtle_ai_step(id),
             Some(_) => self.animal_ai_step(id),
             None => self.living_entity_ai_step(id),
         }
@@ -2361,12 +2363,20 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Slime(_)) => self.abstract_cube_mob_jump_from_ground(id),
             Some(MobKind::MagmaCube(_)) => self.magma_cube_jump_from_ground(id),
+            Some(MobKind::Rabbit(_)) => self.rabbit_jump_from_ground(id),
             _ if self.is_player(id) => self.server_player_jump_from_ground(id),
             _ => self.living_entity_jump_from_ground(id),
         }
     }
 
     pub fn get_jump_power(&mut self, id: EntityId) -> f32 {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Rabbit(_)) => self.rabbit_get_jump_power(id),
+            _ => self.living_entity_get_jump_power(id),
+        }
+    }
+
+    pub fn living_entity_get_jump_power(&mut self, id: EntityId) -> f32 {
         self.get_jump_power_with_multiplier(id, 1.0)
     }
 
@@ -2543,6 +2553,8 @@ impl ServerLevel {
             self.frog_travel_in_water(id, input, base_gravity, is_falling, old_y);
         } else if self.mob(id).is_some_and(Mob::is_abstract_fish) {
             self.abstract_fish_travel_in_water(id, input, base_gravity, is_falling, old_y);
+        } else if self.is_turtle(id) {
+            self.turtle_travel_in_water(id, input);
         } else {
             self.living_entity_travel_in_water(id, input, base_gravity, is_falling, old_y);
         }

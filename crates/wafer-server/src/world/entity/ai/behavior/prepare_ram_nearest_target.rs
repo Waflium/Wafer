@@ -123,7 +123,7 @@ impl PrepareRamNearestTarget {
 }
 
 fn is_walkable_block(level: &ServerLevel, body: EntityId, target_pos: BlockPos) -> bool {
-    level.mob(body).expect("a mob").ai.navigation.is_stable_destination(level, target_pos) && !goal_utils::has_malus(level, body, target_pos)
+    level.mob(body).expect("a mob").ai.navigation.is_stable_destination(level, body, target_pos) && !goal_utils::has_malus(level, body, target_pos)
 }
 
 impl Behavior for PrepareRamNearestTarget {

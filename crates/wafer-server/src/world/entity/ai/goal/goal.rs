@@ -67,6 +67,10 @@ use crate::world::entity::animal::fox::fox::{
 use super::move_towards_restriction_goal::MoveTowardsRestrictionGoal;
 use crate::world::entity::monster::blaze::BlazeAttackGoal;
 use crate::world::entity::monster::ghast::{self, GhastShootFireballGoal, RandomFloatAroundGoal};
+use crate::world::entity::animal::rabbit::rabbit::{RabbitAvoidEntityGoal, RabbitPanicGoal, RaidGardenGoal};
+use crate::world::entity::animal::turtle::turtle::{
+    TurtleBreedGoal, TurtleGoHomeGoal, TurtleGoToWaterGoal, TurtleLayEggGoal, TurtlePanicGoal, TurtleRandomStrollGoal, TurtleTravelGoal,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -183,6 +187,16 @@ pub enum Goal {
     RandomFloatAround(RandomFloatAroundGoal),
     GhastLook,
     GhastShootFireball(GhastShootFireballGoal),
+    RabbitPanic(RabbitPanicGoal),
+    RabbitAvoidEntity(RabbitAvoidEntityGoal),
+    RaidGarden(RaidGardenGoal),
+    TurtlePanic(TurtlePanicGoal),
+    TurtleBreed(TurtleBreedGoal),
+    TurtleLayEgg(TurtleLayEggGoal),
+    TurtleGoToWater(TurtleGoToWaterGoal),
+    TurtleGoHome(TurtleGoHomeGoal),
+    TurtleTravel(TurtleTravelGoal),
+    TurtleRandomStroll(TurtleRandomStrollGoal),
 }
 
 impl Goal {
@@ -286,6 +300,16 @@ impl Goal {
             Goal::RandomFloatAround(goal) => goal.can_use(level, mob),
             Goal::GhastLook => true,
             Goal::GhastShootFireball(goal) => goal.can_use(level, mob),
+            Goal::RabbitPanic(goal) => goal.panic_goal.can_use(level, mob),
+            Goal::RabbitAvoidEntity(goal) => goal.can_use(level, mob),
+            Goal::RaidGarden(goal) => goal.can_use(level, mob),
+            Goal::TurtlePanic(goal) => goal.can_use(level, mob),
+            Goal::TurtleBreed(goal) => goal.can_use(level, mob),
+            Goal::TurtleLayEgg(goal) => goal.can_use(level, mob),
+            Goal::TurtleGoToWater(goal) => goal.can_use(level, mob),
+            Goal::TurtleGoHome(goal) => goal.can_use(level, mob),
+            Goal::TurtleTravel(goal) => goal.can_use(level, mob),
+            Goal::TurtleRandomStroll(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -389,6 +413,16 @@ impl Goal {
             Goal::RandomFloatAround(_) => false,
             Goal::GhastLook => true,
             Goal::GhastShootFireball(goal) => goal.can_use(level, mob),
+            Goal::RabbitPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
+            Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.can_continue_to_use(level, mob),
+            Goal::RaidGarden(goal) => goal.can_continue_to_use(level),
+            Goal::TurtlePanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
+            Goal::TurtleBreed(goal) => goal.breed_goal.can_continue_to_use(level, mob),
+            Goal::TurtleLayEgg(goal) => goal.can_continue_to_use(level, mob),
+            Goal::TurtleGoToWater(goal) => goal.can_continue_to_use(level, mob),
+            Goal::TurtleGoHome(goal) => goal.can_continue_to_use(level, mob),
+            Goal::TurtleTravel(goal) => goal.can_continue_to_use(level, mob),
+            Goal::TurtleRandomStroll(goal) => goal.random_stroll_goal.can_continue_to_use(level, mob),
         }
     }
 
@@ -490,6 +524,16 @@ impl Goal {
             Goal::RandomFloatAround(goal) => goal.start(level, mob),
             Goal::GhastLook => {}
             Goal::GhastShootFireball(goal) => goal.start(),
+            Goal::RabbitPanic(goal) => goal.panic_goal.start(level, mob),
+            Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
+            Goal::RaidGarden(goal) => goal.move_to_block_goal.start(level, mob),
+            Goal::TurtlePanic(goal) => goal.panic_goal.start(level, mob),
+            Goal::TurtleBreed(_) => {}
+            Goal::TurtleLayEgg(goal) => goal.move_to_block_goal.start(level, mob),
+            Goal::TurtleGoToWater(goal) => goal.move_to_block_goal.start(level, mob),
+            Goal::TurtleGoHome(goal) => goal.start(level, mob),
+            Goal::TurtleTravel(goal) => goal.start(level, mob),
+            Goal::TurtleRandomStroll(goal) => goal.random_stroll_goal.start(level, mob),
         }
     }
 
@@ -575,6 +619,14 @@ impl Goal {
             Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) | Goal::GhastLook => {}
             Goal::BlazeAttack(goal) => goal.stop(level, mob),
             Goal::GhastShootFireball(goal) => goal.stop(level, mob),
+            Goal::RabbitPanic(goal) => goal.panic_goal.stop(),
+            Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.stop(),
+            Goal::RaidGarden(_) | Goal::TurtleLayEgg(_) | Goal::TurtleGoToWater(_) => {}
+            Goal::TurtlePanic(goal) => goal.panic_goal.stop(),
+            Goal::TurtleBreed(goal) => goal.breed_goal.stop(),
+            Goal::TurtleGoHome(goal) => goal.stop(level, mob),
+            Goal::TurtleTravel(goal) => goal.stop(level, mob),
+            Goal::TurtleRandomStroll(goal) => goal.random_stroll_goal.stop(level, mob),
         }
     }
 
@@ -609,6 +661,9 @@ impl Goal {
                 | Goal::BlazeAttack(_)
                 | Goal::GhastLook
                 | Goal::GhastShootFireball(_)
+                | Goal::RaidGarden(_)
+                | Goal::TurtleLayEgg(_)
+                | Goal::TurtleGoToWater(_)
         )
     }
 
@@ -694,6 +749,15 @@ impl Goal {
             Goal::BlazeAttack(goal) => goal.tick(level, mob),
             Goal::GhastLook => ghast::ghast_look_goal_tick(level, mob),
             Goal::GhastShootFireball(goal) => goal.tick(level, mob),
+            Goal::RabbitPanic(goal) => goal.tick(level, mob),
+            Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
+            Goal::RaidGarden(goal) => goal.tick(level, mob),
+            Goal::TurtlePanic(_) | Goal::TurtleRandomStroll(_) => {}
+            Goal::TurtleBreed(goal) => goal.tick(level, mob),
+            Goal::TurtleLayEgg(goal) => goal.tick(level, mob, adjusted_tick_delay(200)),
+            Goal::TurtleGoToWater(goal) => goal.tick(level, mob),
+            Goal::TurtleGoHome(goal) => goal.tick(level, mob),
+            Goal::TurtleTravel(goal) => goal.tick(level, mob),
         }
     }
 
@@ -764,6 +828,10 @@ impl Goal {
             Goal::BlazeAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::GhastLook => Flag::Look.bit(),
             Goal::GhastShootFireball(_) => 0,
+            Goal::RabbitPanic(_) | Goal::RabbitAvoidEntity(_) | Goal::TurtlePanic(_) | Goal::TurtleRandomStroll(_) => Flag::Move.bit(),
+            Goal::RaidGarden(_) | Goal::TurtleLayEgg(_) | Goal::TurtleGoToWater(_) => Flag::Move.bit() | Flag::Jump.bit(),
+            Goal::TurtleBreed(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::TurtleGoHome(_) | Goal::TurtleTravel(_) => 0,
         }
     }
 

@@ -26,6 +26,7 @@ pub enum TargetType {
     Chicken,
     AbstractFish,
     LivingEntity,
+    Wolf,
 }
 
 impl TargetType {
@@ -45,6 +46,7 @@ impl TargetType {
             TargetType::Chicken => is_type(level, entity, &["minecraft:chicken"]),
             TargetType::AbstractFish => level.mob(entity).is_some_and(|mob| mob.is_abstract_fish()),
             TargetType::LivingEntity => level.is_living(entity),
+            TargetType::Wolf => is_type(level, entity, &["minecraft:wolf"]),
         }
     }
 }

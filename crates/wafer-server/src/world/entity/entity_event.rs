@@ -1,3 +1,4 @@
+pub const JUMP: u8 = 1;
 pub const DEATH: u8 = 3;
 pub const TAMING_FAILED: u8 = 6;
 pub const TAMING_SUCCEEDED: u8 = 7;
