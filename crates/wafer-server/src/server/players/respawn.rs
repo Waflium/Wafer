@@ -54,7 +54,7 @@ impl Server {
         p.varint(player.game_mode.game_type.id());
         p.varint(player.game_mode.previous_game_type.map_or(0, |g| g.id() + 1));
         p.bool(false);
-        p.bool(level.chunks.generator.is_flat());
+        p.bool(self.overworld().chunks.generator.is_flat());
         write_death_location(p, &player.last_death_location);
         p.varint(player.entity.portal_cooldown);
         p.varint(level.chunks.generator.sea_level());
