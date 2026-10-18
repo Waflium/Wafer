@@ -6,6 +6,7 @@ use wafer_data::{BlockState, Fluid, damage_types, game_rule, registry, registry_
 
 use crate::server::level::ServerLevel;
 use crate::world::damagesource::DamageSource;
+use crate::world::entity::attributes::Attribute;
 use crate::world::entity::sound_event;
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
@@ -287,7 +288,8 @@ impl ServerLevel {
             if self.entity_ref(id).is_none() {
                 continue;
             }
-            let knockback = direction.scale((1.0 - dist) * exposure as f64);
+            let knockback_resistance = if self.is_living(id) { self.attribute_value(id, Attribute::ExplosionKnockbackResistance) } else { 0.0 };
+            let knockback = direction.scale((1.0 - dist) * exposure as f64 * (1.0 - knockback_resistance));
             let e = self.entity_mut(id);
             if knockback.x.is_finite() && knockback.y.is_finite() && knockback.z.is_finite() {
                 let delta = e.delta_movement.add(knockback.x, knockback.y, knockback.z);
