@@ -77,6 +77,38 @@ pub struct SpawnProtection {
     pub ops: Vec<(u128, i32)>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct OtherLevelPlayer {
+    pub uuid: u128,
+    pub id: EntityId,
+    pub alive: bool,
+    pub won_game: bool,
+    pub accepting_messages: bool,
+    pub can_use_portal: bool,
+    pub seen_credits: bool,
+    pub position: Vec3,
+    pub y_rot: f32,
+    pub x_rot: f32,
+}
+
+impl OtherLevelPlayer {
+    pub fn of(level: &ServerLevel, id: EntityId) -> OtherLevelPlayer {
+        let player = level.player(id);
+        OtherLevelPlayer {
+            uuid: player.entity.uuid,
+            id,
+            alive: level.is_alive(id),
+            won_game: player.won_game,
+            accepting_messages: !player.disconnected,
+            can_use_portal: level.can_use_portal(id, true),
+            seen_credits: player.seen_credits,
+            position: player.entity.position(),
+            y_rot: player.entity.y_rot,
+            x_rot: player.entity.x_rot,
+        }
+    }
+}
+
 pub const RAIN_DELAY: (i32, i32) = (12000, 180000);
 pub const RAIN_DURATION: (i32, i32) = (12000, 24000);
 pub const THUNDER_DELAY: (i32, i32) = (12000, 180000);
@@ -130,6 +162,9 @@ pub struct ServerLevel {
     pub world_border: WorldBorder,
     pub raids: crate::world::entity::raid::raids::Raids,
     pub pending_portal_teleport: Option<crate::world::level::block::portal::PendingPortalTeleport>,
+    pub pending_ender_pearl_teleport: Option<crate::world::entity::projectile::throwableitemprojectile::thrown_enderpearl::PendingEnderPearlTeleport>,
+    pub other_level_players: Vec<OtherLevelPlayer>,
+    pub other_level_ender_pearls: Vec<(u128, EntityId, bool)>,
     pub global_level_events: Vec<(i32, BlockPos, i32)>,
     pub pending_system_broadcasts: Vec<crate::network::chat::Component>,
     pub pending_broadcasts: Vec<Vec<u8>>,
@@ -252,6 +287,9 @@ impl ServerLevel {
             world_border: WorldBorder::new(Settings::DEFAULT, None),
             raids: crate::world::entity::raid::raids::Raids::load(None),
             pending_portal_teleport: None,
+            pending_ender_pearl_teleport: None,
+            other_level_players: Vec::new(),
+            other_level_ender_pearls: Vec::new(),
             global_level_events: Vec::new(),
             pending_system_broadcasts: Vec::new(),
             pending_broadcasts: Vec::new(),
@@ -1200,6 +1238,7 @@ impl ServerLevel {
         self.tick_after_time(runs);
         while self.tick_entities() {
             self.pending_portal_teleport = None;
+            self.pending_ender_pearl_teleport = None;
         }
         self.tick_after_entities();
     }
@@ -1350,7 +1389,7 @@ impl ServerLevel {
                     }
                 }
             }
-            if self.pending_portal_teleport.is_some() {
+            if self.pending_portal_teleport.is_some() || self.pending_ender_pearl_teleport.is_some() {
                 self.entity_tick_range = Some((i + 1, end));
                 return true;
             }
@@ -1644,6 +1683,7 @@ impl ServerLevel {
     fn tick_player_entity(&mut self, id: EntityId) {
         self.player_mut(id).movement.tick_client_load_timeout();
         self.tick_game_mode(id);
+        self.player_mut(id).warden_spawn_tracker.tick();
         let living = &mut self.player_mut(id).living;
         if living.damage_cooldown_time > 0 {
             living.damage_cooldown_time -= 1;

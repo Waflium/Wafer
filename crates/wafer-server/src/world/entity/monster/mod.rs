@@ -21,6 +21,7 @@ pub mod silverfish;
 mod silverfish_tests;
 pub mod skeleton;
 pub mod spider;
+pub mod warden;
 pub mod witch;
 #[cfg(test)]
 mod witch_tests;

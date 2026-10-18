@@ -634,6 +634,7 @@ impl Server {
     }
 
     pub fn save_everything(&mut self, silent: bool, flush: bool, force: bool) -> bool {
+        self.flush_other_level_ender_pearls();
         for player in self.players() {
             self.save_player(player);
         }
@@ -730,6 +731,7 @@ impl Server {
         resources.update_components_and_static_registry_tags();
         resources.finalize_recipe_loading();
         crate::world::level::levelgen::structure::templatesystem::structure_template_manager::on_resource_manager_reload(&resource_manager);
+        self.flush_other_level_ender_pearls();
         for player in self.players() {
             self.save_player(player);
         }
@@ -749,6 +751,7 @@ impl Server {
         self.notification_manager.server_shutting_down();
         info!("Stopping server");
         info!("Saving players");
+        self.flush_other_level_ender_pearls();
         for player in self.players() {
             self.save_player(player);
         }
@@ -822,8 +825,12 @@ impl Server {
     }
 
     fn save_player(&self, player: &ServerPlayer) {
-        let nbt = self.entity_level(player.entity.id).save_player(player.entity.id);
+        let nbt = self.save_player_with_ender_pearls(player.entity.id);
         self.save_player_data(&nbt, player);
+    }
+
+    fn save_player_with_ender_pearls(&self, id: EntityId) -> Nbt {
+        self.entity_level(id).save_player_with_ender_pearls(id, &|pearl| self.level_of(pearl).map(|level| &self.levels[level]))
     }
 
     fn save_player_data(&self, nbt: &Nbt, player: &ServerPlayer) {
@@ -1045,6 +1052,7 @@ impl Server {
         let joined = NameAndId { id: player.profile.uuid, name: player.profile.name.clone() };
         self.notification_manager.player_joined(&joined);
         if let Some(nbt) = &saved {
+            self.load_and_spawn_ender_pearls(nbt);
             self.levels[level_index].load_and_spawn_parent_vehicle(id, nbt);
         }
     }
@@ -1345,7 +1353,9 @@ impl Server {
         level.eject_passengers(id);
         level.remove_player_menus(id);
         level.award_stat(id, crate::stats::stats::LEAVE_GAME, 1);
-        let saved = level.save_player(id);
+        self.flush_other_level_ender_pearls();
+        let saved = self.save_player_with_ender_pearls(id);
+        let level = &mut self.levels[level_index];
         if level.is_passenger(id) {
             let vehicle = level.root_vehicle(id);
             if level.has_exactly_one_player_passenger(vehicle) {
@@ -1357,6 +1367,8 @@ impl Server {
             }
         }
         level.un_ride(id);
+        self.remove_ender_pearls(id);
+        let level = &self.levels[level_index];
         let leaving = level.player(id);
         let reason = leaving.disconnect_reason.clone().or_else(|| reason.map(|r| r.get_string())).unwrap_or_else(|| "Disconnected".into());
         info!("{} lost connection: {reason}", leaving.profile.name);
@@ -1494,11 +1506,15 @@ impl Server {
             TimerQueue::tick(self, time);
         }
         self.levels[index].tick_after_time(runs);
+        self.update_other_level_players(index);
         while self.levels[index].tick_entities() {
             self.handle_pending_portal_teleport(index);
+            self.handle_pending_ender_pearl_teleport(index);
+            self.update_other_level_players(index);
             self.send_global_level_events();
         }
         self.levels[index].tick_after_entities();
+        self.flush_other_level_ender_pearls();
         self.send_global_level_events();
     }
 

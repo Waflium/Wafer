@@ -2601,6 +2601,9 @@ impl ServerLevel {
     }
 
     pub fn read_level_dependent_save_data_detached(&mut self, mut entity: LevelEntity, input: &Nbt) -> LevelEntity {
+        if crate::world::entity::projectile::throwableitemprojectile::thrown_enderpearl::is_thrown_enderpearl(&entity) {
+            self.thrown_enderpearl_register_detached(&entity);
+        }
         if let LevelEntity::Mob(mob) = &mut entity
             && let MobKind::Villager(_) = mob.kind
         {

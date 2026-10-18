@@ -1405,6 +1405,12 @@ impl ServerLevel {
             self.ghast_check_fall_damage(id);
             return;
         }
+        if self.players.get(&id).is_some_and(|p| p.spawn_extra_particles_on_fall) && on_ground && self.entity(id).fall_distance > 0.0 {
+            let centered = Vec3::at_center_of(pos).add(0.0, 0.5, 0.0);
+            let particles = mth::clamp(50.0 * self.entity(id).fall_distance, 0.0, 200.0) as i32;
+            self.send_block_particles(on_state, centered.x, centered.y, centered.z, particles, (0.3f32 as f64, 0.3f32 as f64, 0.3f32 as f64), 0.15f32 as f64);
+            self.player_mut(id).spawn_extra_particles_on_fall = false;
+        }
         let living = self.is_living(id);
         if living && !self.entity(id).is_in_water() {
             self.update_fluid_interaction(id);
@@ -2731,6 +2737,9 @@ impl ServerLevel {
             Some(LevelEntity::PrimedTnt(tnt)) => tnt.used_portal = true,
             _ => {}
         }
+        if self.is_thrown_enderpearl(id) {
+            self.thrown_enderpearl_teleported(id);
+        }
         id
     }
 
@@ -2807,13 +2816,12 @@ impl ServerLevel {
     }
 
     pub fn can_teleport(&self, id: EntityId, from: &str, to: &str) -> bool {
-        let is_pearl = self.as_projectile(id).is_some_and(|projectile| matches!(projectile.kind, super::projectile::projectile::ProjectileKind::ThrownEnderpearl(_)));
-        if is_pearl
+        if self.is_thrown_enderpearl(id)
             && from == crate::server::THE_END
             && to == crate::server::OVERWORLD
-            && let Some(player) = self.projectile_get_owner(id).and_then(|owner| self.players.get(&owner))
+            && let Some(seen_credits) = self.thrown_enderpearl_can_teleport(id)
         {
-            return player.seen_credits;
+            return seen_credits;
         }
         true
     }
@@ -2974,6 +2982,9 @@ impl crate::server::Server {
             level.merge_with_neighbours(new_id);
         }
         self.teleport_spectators(old_entity.id, transition, old_level);
+        if self.levels[transition.new_level].is_thrown_enderpearl(new_id) {
+            self.levels[transition.new_level].thrown_enderpearl_teleported(new_id);
+        }
         Some(new_id)
     }
 

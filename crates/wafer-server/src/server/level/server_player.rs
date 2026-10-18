@@ -34,7 +34,9 @@ use crate::world::inventory::abstract_container_menu::AbstractContainerMenu;
 use crate::world::item::component as dc;
 use crate::world::item::{Inventory, ItemStack, OFFHAND, inventory_slot, map_item, protocol_slot};
 use crate::world::level::saveddata::maps::map_id::MapId;
+use crate::world::entity::monster::warden::warden_spawn_tracker::WardenSpawnTracker;
 use crate::world::entity::player::abilities::Abilities;
+use crate::world::level::block::entity::int_value;
 use crate::world::entity::player::player_model_part::PlayerModelPart;
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};
 use crate::world::level::storage::RespawnData;
@@ -92,6 +94,8 @@ pub struct ServerPlayer {
     pub is_changing_dimension: bool,
     pub seen_credits: bool,
     pub won_game: bool,
+    pub spawn_extra_particles_on_fall: bool,
+    pub warden_spawn_tracker: WardenSpawnTracker,
     pub entered_nether_position: Option<Vec3>,
     pub levitation_start_pos: Option<Vec3>,
     pub levitation_start_time: i32,
@@ -141,7 +145,7 @@ pub struct ServerPlayer {
     pub post_effects: Vec<String>,
     pub post_effects_dirty: bool,
     pub camera: Option<EntityId>,
-    pub ender_pearls: Vec<u128>,
+    pub ender_pearls: Vec<EntityId>,
     pub cooldowns: crate::world::item::item_cooldowns::ItemCooldowns,
 }
 
@@ -175,6 +179,8 @@ impl ServerPlayer {
             is_changing_dimension: false,
             seen_credits: false,
             won_game: false,
+            spawn_extra_particles_on_fall: false,
+            warden_spawn_tracker: WardenSpawnTracker::default(),
             entered_nether_position: None,
             levitation_start_pos: None,
             levitation_start_time: 0,
@@ -361,6 +367,7 @@ impl ServerPlayer {
                 Nbt::Compound(vec![("dimension".into(), s(dimension)), ("pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z]))]),
             ));
         }
+        nbt.push(("warden_spawn_tracker".into(), self.warden_spawn_tracker.to_nbt()));
         nbt.push(("playerGameType".into(), Nbt::Int(self.game_mode.game_type.id())));
         if let Some(previous) = self.game_mode.previous_game_type {
             nbt.push(("previousPlayerGameType".into(), Nbt::Int(previous.id())));
@@ -378,6 +385,7 @@ impl ServerPlayer {
             }
             nbt.push(("respawn".into(), Nbt::Compound(fields)));
         }
+        nbt.push(("spawn_extra_particles_on_fall".into(), Nbt::Byte(self.spawn_extra_particles_on_fall as i8)));
         nbt.push(("post_effects".into(), Nbt::List(self.post_effects.iter().map(|p| s(p)).collect())));
         Nbt::Compound(nbt)
     }
@@ -398,11 +406,13 @@ impl ServerPlayer {
             let forced = r.get("forced").and_then(Nbt::as_i64).is_some_and(|f| f != 0);
             Some(RespawnConfig { respawn_data: RespawnData::from_nbt(r)?, forced })
         });
+        self.warden_spawn_tracker = nbt.get("warden_spawn_tracker").and_then(WardenSpawnTracker::from_nbt).unwrap_or_default();
         let number = |key: &str| nbt.get(key).and_then(Nbt::as_f64);
         self.entered_nether_position = nbt.get("entered_nether_pos").map(Nbt::as_list).filter(|p| p.len() == 3).and_then(|p| {
             Some(Vec3::new(p[0].as_f64()?, p[1].as_f64()?, p[2].as_f64()?))
         });
         self.seen_credits = number("seenCredits").is_some_and(|v| v != 0.0);
+        self.spawn_extra_particles_on_fall = nbt.get("spawn_extra_particles_on_fall").and_then(int_value).is_some_and(|v| v as i8 != 0);
         if let Some(post_effects) = nbt.get("post_effects").and_then(|list| {
             list.as_list().iter().map(|p| p.as_str().and_then(crate::commands::arguments::parse_identifier)).collect::<Option<Vec<String>>>()
         }) {
@@ -608,11 +618,19 @@ impl ServerLevel {
     }
 
     pub fn save_player(&self, id: EntityId) -> Nbt {
+        self.save_player_with_ender_pearls(id, &|_| None)
+    }
+
+    pub fn save_player_with_ender_pearls<'a>(&'a self, id: EntityId, other_level_pearl: &dyn Fn(EntityId) -> Option<&'a ServerLevel>) -> Nbt {
         let Nbt::Compound(mut fields) = self.player(id).to_nbt(self.dimension) else { unreachable!("player data is a compound") };
         self.save_vehicle_position(id, &mut fields);
         if let Some(root_vehicle) = self.save_parent_vehicle(id) {
             let index = fields.iter().position(|(k, _)| k == crate::stats::server_recipe_book::RECIPE_BOOK_TAG).unwrap_or(fields.len());
             fields.insert(index, ("RootVehicle".into(), root_vehicle));
+        }
+        if let Some(ender_pearls) = self.save_ender_pearls(id, other_level_pearl) {
+            let index = fields.iter().position(|(k, _)| k == "post_effects").unwrap_or(fields.len());
+            fields.insert(index, ("ender_pearls".into(), ender_pearls));
         }
         Nbt::Compound(fields)
     }
