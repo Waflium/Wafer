@@ -1,27 +1,24 @@
 use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, Axis, BlockPos, Direction, Vec3};
-use wafer_data::{BlockState, block_tags, blocks};
+use wafer_data::{BlockState, block_tags};
 use wafer_data::properties::OPEN;
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::data::Pose;
+use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::{EntityDimensions, EntityId};
 use crate::world::level::BlockGetter;
-use crate::world::level::pathfinder::node_evaluator::is_burning_block;
 use crate::world::phys::shapes::collision_context::CollisionContext;
 
 #[derive(Clone, Copy)]
 pub struct DismountType {
     pub dimensions: EntityDimensions,
-    pub fire_immune: bool,
+    pub entity_type: &'static EntityType,
     pub is_player: bool,
 }
 
 pub fn is_block_dangerous(entity_type: DismountType, state: BlockState) -> bool {
-    if !entity_type.fire_immune && is_burning_block(state) {
-        return true;
-    }
-    state.is_block(blocks::WITHER_ROSE) || state.is_block(blocks::SWEET_BERRY_BUSH) || state.is_block(blocks::CACTUS) || state.is_block(blocks::POWDER_SNOW)
+    entity_type.entity_type.is_block_dangerous(state)
 }
 
 pub fn is_block_floor_valid(block_floor_height: f64) -> bool {

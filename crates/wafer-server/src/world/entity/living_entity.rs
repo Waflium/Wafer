@@ -3051,7 +3051,7 @@ impl ServerLevel {
     pub fn dismount_type(&self, id: EntityId) -> crate::world::entity::vehicle::dismount_helper::DismountType {
         crate::world::entity::vehicle::dismount_helper::DismountType {
             dimensions: if self.is_player(id) { super::player::player::get_default_dimensions(Pose::Standing) } else { self.entity(id).dimensions },
-            fire_immune: self.fire_immune(id),
+            entity_type: super::entity_type::EntityType::by_id(self.entity(id).entity_type),
             is_player: self.is_player(id),
         }
     }

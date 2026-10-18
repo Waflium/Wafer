@@ -148,7 +148,7 @@ impl Server {
         let (pos, yaw, pitch, forced) = (respawn_data.pos, respawn_data.yaw, respawn_data.pitch, respawn_config.forced);
         let block_state = level.block_state(pos);
         let block = block_state.block();
-        let player_type = DismountType { dimensions: get_default_dimensions(Pose::Standing), fire_immune: false, is_player: true };
+        let player_type = DismountType { dimensions: get_default_dimensions(Pose::Standing), entity_type: &crate::world::entity::entity_types::PLAYER, is_player: true };
         if block.is_instance_of("RespawnAnchorBlock") && (forced || block_state.get(RESPAWN_ANCHOR_CHARGES) > 0) && respawn_anchor_block::can_set_spawn(level, pos) {
             let stand_up_position = respawn_anchor_block::find_stand_up_position(player_type, level, pos);
             if !forced && consume_spawn_block && stand_up_position.is_some() {
