@@ -103,6 +103,7 @@ impl ServerLevel {
             | MobKind::Silverfish(_)
             | MobKind::Endermite(_) => None,
             MobKind::Enderman(_) => None,
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => None,
             MobKind::Witch(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
             MobKind::Bat(_) => None,

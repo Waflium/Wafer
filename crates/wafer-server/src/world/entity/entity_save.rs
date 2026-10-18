@@ -221,6 +221,8 @@ impl LevelEntity {
                         projectile.thrown_trident_add_additional_save_data(out);
                     }
                     ProjectileKind::FireworkRocket(_) => projectile.firework_add_additional_save_data(out),
+                    ProjectileKind::SmallFireball(_) => projectile.fireball_add_additional_save_data(out),
+                    ProjectileKind::LargeFireball(_) => projectile.large_fireball_add_additional_save_data(out),
                     _ => projectile.throwable_item_projectile_add_additional_save_data(out),
                 }
             }
@@ -291,6 +293,8 @@ impl LevelEntity {
                         projectile.thrown_trident_read_additional_save_data(nbt);
                     }
                     ProjectileKind::FireworkRocket(_) => projectile.firework_read_additional_save_data(nbt),
+                    ProjectileKind::SmallFireball(_) => projectile.fireball_read_additional_save_data(nbt),
+                    ProjectileKind::LargeFireball(_) => projectile.large_fireball_read_additional_save_data(nbt),
                     _ => projectile.throwable_item_projectile_read_additional_save_data(nbt),
                 }
             }
@@ -412,6 +416,11 @@ impl ServerLevel {
             "minecraft:spectral_arrow" => LevelEntity::Projectile(Box::new(super::projectile::arrow::spectral_arrow::SpectralArrow::of_type())),
             "minecraft:trident" => LevelEntity::Projectile(Box::new(super::projectile::arrow::thrown_trident::ThrownTrident::of_type())),
             "minecraft:firework_rocket" => LevelEntity::Projectile(Box::new(super::projectile::firework_rocket_entity::FireworkRocketEntity::of_type())),
+            "minecraft:small_fireball" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::small_fireball::SmallFireball::of_type())),
+            "minecraft:fireball" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::large_fireball::LargeFireball::of_type())),
+            "minecraft:blaze" => LevelEntity::Mob(Box::new(super::monster::blaze::Blaze::create())),
+            "minecraft:ghast" => LevelEntity::Mob(Box::new(super::monster::ghast::Ghast::create())),
+            "minecraft:zombified_piglin" => LevelEntity::Mob(Box::new(super::monster::zombie::zombified_piglin::ZombifiedPiglin::create())),
             "minecraft:area_effect_cloud" => LevelEntity::AreaEffectCloud(Box::new(super::area_effect_cloud::AreaEffectCloud::of_type())),
             "minecraft:minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart::Minecart::create())),
             _ => {

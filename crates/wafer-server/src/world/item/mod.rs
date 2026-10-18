@@ -19,6 +19,7 @@ pub mod egg_item;
 pub mod empty_map_item;
 pub mod enderpearl_item;
 pub mod experience_bottle_item;
+pub mod fire_charge_item;
 pub mod firework_rocket_item;
 pub mod glow_ink_sac_item;
 pub mod ink_sac_item;

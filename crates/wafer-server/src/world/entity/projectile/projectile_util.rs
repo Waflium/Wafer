@@ -1,4 +1,4 @@
-use wafer_core::{AABB, Vec3};
+use wafer_core::{AABB, Vec3, mth};
 use wafer_data::{EquipmentSlot, Item, items};
 
 use super::projectile::Projectile;
@@ -26,6 +26,32 @@ pub fn get_mob_arrow(level: &mut ServerLevel, mob: EntityId, projectile: &ItemSt
 }
 
 impl ServerLevel {
+    pub fn rotate_towards_movement(&mut self, projectile: EntityId, rotation_speed: f32) {
+        let e = self.entity_mut(projectile);
+        let movement = e.delta_movement;
+        if movement.length_sqr() != 0.0 {
+            let sd = movement.horizontal_distance();
+            e.set_y_rot((mth::atan2(movement.z, movement.x) * mth::RAD_TO_DEG as f64) as f32 + 90.0);
+            e.set_x_rot((mth::atan2(sd, movement.y) * mth::RAD_TO_DEG as f64) as f32 - 90.0);
+            while e.x_rot - e.x_rot_o < -180.0 {
+                e.x_rot_o -= 360.0;
+            }
+            while e.x_rot - e.x_rot_o >= 180.0 {
+                e.x_rot_o += 360.0;
+            }
+            while e.y_rot - e.y_rot_o < -180.0 {
+                e.y_rot_o -= 360.0;
+            }
+            while e.y_rot - e.y_rot_o >= 180.0 {
+                e.y_rot_o += 360.0;
+            }
+            let x_rot = mth::lerp_f(rotation_speed, e.x_rot_o, e.x_rot);
+            e.set_x_rot(x_rot);
+            let y_rot = mth::lerp_f(rotation_speed, e.y_rot_o, e.y_rot);
+            e.set_y_rot(y_rot);
+        }
+    }
+
     pub fn get_hit_result_on_move_vector(&mut self, source: EntityId, matching: impl Fn(&ServerLevel, EntityId) -> bool) -> HitResult {
         self.get_hit_result_on_move_vector_with_clip(source, matching, ClipBlock::Collider)
     }

@@ -8,6 +8,9 @@ use super::arrow::arrow::Arrow;
 use super::arrow::spectral_arrow::SpectralArrow;
 use super::arrow::thrown_trident::ThrownTrident;
 use super::firework_rocket_entity::FireworkRocketEntity;
+use super::hurtingprojectile::abstract_hurting_projectile::AbstractHurtingProjectile;
+use super::hurtingprojectile::large_fireball::LargeFireball;
+use super::hurtingprojectile::small_fireball::SmallFireball;
 use super::projectile_deflection::ProjectileDeflection;
 use super::throwableitemprojectile::snowball::Snowball;
 use super::throwableitemprojectile::thrown_egg::ThrownEgg;
@@ -42,6 +45,8 @@ pub enum ProjectileKind {
     SpectralArrow(SpectralArrow),
     ThrownTrident(ThrownTrident),
     FireworkRocket(FireworkRocketEntity),
+    SmallFireball(SmallFireball),
+    LargeFireball(LargeFireball),
 }
 
 pub struct Projectile {
@@ -77,6 +82,26 @@ impl Projectile {
             ProjectileKind::ThrownTrident(trident) => Some(&mut trident.abstract_arrow),
             _ => None,
         }
+    }
+
+    pub fn abstract_hurting_projectile(&self) -> Option<&AbstractHurtingProjectile> {
+        match &self.kind {
+            ProjectileKind::SmallFireball(fireball) => Some(&fireball.abstract_hurting_projectile),
+            ProjectileKind::LargeFireball(fireball) => Some(&fireball.abstract_hurting_projectile),
+            _ => None,
+        }
+    }
+
+    pub fn abstract_hurting_projectile_mut(&mut self) -> Option<&mut AbstractHurtingProjectile> {
+        match &mut self.kind {
+            ProjectileKind::SmallFireball(fireball) => Some(&mut fireball.abstract_hurting_projectile),
+            ProjectileKind::LargeFireball(fireball) => Some(&mut fireball.abstract_hurting_projectile),
+            _ => None,
+        }
+    }
+
+    pub fn is_fireball(&self) -> bool {
+        matches!(self.kind, ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_))
     }
 
     pub fn is_throwable_item_projectile(&self) -> bool {
@@ -218,6 +243,7 @@ impl ServerLevel {
             ProjectileKind::SpectralArrow(_) => self.abstract_arrow_tick(id),
             ProjectileKind::ThrownTrident(_) => self.thrown_trident_tick(id),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_tick(id),
+            ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) => self.abstract_hurting_projectile_tick(id),
             _ => self.throwable_projectile_tick(id),
         }
     }
@@ -329,10 +355,17 @@ impl ServerLevel {
         self.projectile(id).abstract_arrow().is_some()
     }
 
-    pub fn deflect(&mut self, id: EntityId, deflection: ProjectileDeflection, deflecting_entity: Option<EntityId>, new_owner: Option<EntityReference>, _by_attack: bool, power: Vec3) -> bool {
+    pub fn deflect(&mut self, id: EntityId, deflection: ProjectileDeflection, deflecting_entity: Option<EntityId>, new_owner: Option<EntityReference>, by_attack: bool, power: Vec3) -> bool {
         deflection.deflect(self, id, deflecting_entity, power);
         self.projectile_set_owner_reference(id, new_owner);
+        self.on_deflection(id, by_attack);
         true
+    }
+
+    fn on_deflection(&mut self, id: EntityId, by_attack: bool) {
+        if self.projectile(id).abstract_hurting_projectile().is_some() {
+            self.abstract_hurting_projectile_on_deflection(id, by_attack);
+        }
     }
 
     pub fn entity_deflection(&self, entity: EntityId, _projectile: EntityId) -> ProjectileDeflection {
@@ -349,6 +382,8 @@ impl ServerLevel {
             ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::ThrownTrident(_) | ProjectileKind::FireworkRocket(_) => {
                 self.projectile_base_on_hit(id, hit_result)
             }
+            ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit(id, hit_result),
+            ProjectileKind::LargeFireball(_) => self.large_fireball_on_hit(id, hit_result),
         }
     }
 
@@ -386,6 +421,8 @@ impl ServerLevel {
             ProjectileKind::ThrownTrident(_) => self.thrown_trident_on_hit_entity(id, hit_result),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_on_hit_entity(id),
             ProjectileKind::ThrownExperienceBottle(_) | ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => {}
+            ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit_entity(id, hit_result),
+            ProjectileKind::LargeFireball(_) => self.large_fireball_on_hit_entity(id, hit_result),
         }
     }
 
@@ -394,6 +431,7 @@ impl ServerLevel {
             ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::ThrownTrident(_) => self.abstract_arrow_on_hit_block(id, hit_result),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_on_hit_block(id, hit_result),
             ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => self.abstract_thrown_potion_on_hit_block(id, hit_result),
+            ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit_block(id, hit_result),
             _ => self.projectile_base_on_hit_block(id, hit_result),
         }
     }
@@ -406,6 +444,9 @@ impl ServerLevel {
     pub fn can_hit_entity(&self, id: EntityId, entity: EntityId) -> bool {
         if self.projectile(id).abstract_arrow().is_some() {
             return self.abstract_arrow_can_hit_entity(id, entity);
+        }
+        if self.projectile(id).abstract_hurting_projectile().is_some() {
+            return self.abstract_hurting_projectile_can_hit_entity(id, entity);
         }
         self.projectile_base_can_hit_entity(id, entity)
     }
@@ -455,6 +496,9 @@ impl ServerLevel {
     }
 
     pub fn projectile_hurt_server(&mut self, id: EntityId, source: &DamageSource) -> bool {
+        if self.projectile(id).abstract_hurting_projectile().is_some() {
+            return false;
+        }
         if !self.is_invulnerable_to_base(id, source) {
             self.entity_mut(id).sync_velocity = true;
         }

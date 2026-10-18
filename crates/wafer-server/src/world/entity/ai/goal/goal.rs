@@ -64,6 +64,9 @@ use crate::world::entity::animal::fox::fox::{
     DefendTrustedTargetGoal, FaceplantGoal, FoxBreedGoal, FoxEatBerriesGoal, FoxFloatGoal, FoxFollowParentGoal, FoxLookAtPlayerGoal, FoxMeleeAttackGoal, FoxPanicGoal,
     FoxPounceGoal, FoxSearchForItemsGoal, FoxStrollThroughVillageGoal, PerchAndSearchGoal, SeekShelterGoal, SleepGoal, StalkPreyGoal,
 };
+use super::move_towards_restriction_goal::MoveTowardsRestrictionGoal;
+use crate::world::entity::monster::blaze::BlazeAttackGoal;
+use crate::world::entity::monster::ghast::{self, GhastShootFireballGoal, RandomFloatAroundGoal};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Flag {
@@ -175,6 +178,11 @@ pub enum Goal {
     FoxLookAtPlayer(FoxLookAtPlayerGoal),
     PerchAndSearch(PerchAndSearchGoal),
     DefendTrustedTarget(DefendTrustedTargetGoal),
+    MoveTowardsRestriction(MoveTowardsRestrictionGoal),
+    BlazeAttack(BlazeAttackGoal),
+    RandomFloatAround(RandomFloatAroundGoal),
+    GhastLook,
+    GhastShootFireball(GhastShootFireballGoal),
 }
 
 impl Goal {
@@ -273,6 +281,11 @@ impl Goal {
             Goal::FoxLookAtPlayer(goal) => goal.can_use(level, mob),
             Goal::PerchAndSearch(goal) => goal.can_use(level, mob),
             Goal::DefendTrustedTarget(goal) => goal.can_use(level, mob),
+            Goal::MoveTowardsRestriction(goal) => goal.can_use(level, mob),
+            Goal::BlazeAttack(goal) => goal.can_use(level, mob),
+            Goal::RandomFloatAround(goal) => goal.can_use(level, mob),
+            Goal::GhastLook => true,
+            Goal::GhastShootFireball(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -371,6 +384,11 @@ impl Goal {
             Goal::FoxLookAtPlayer(goal) => goal.can_continue_to_use(level, mob),
             Goal::PerchAndSearch(goal) => goal.can_continue_to_use(),
             Goal::DefendTrustedTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
+            Goal::MoveTowardsRestriction(goal) => goal.can_continue_to_use(level, mob),
+            Goal::BlazeAttack(goal) => goal.can_use(level, mob),
+            Goal::RandomFloatAround(_) => false,
+            Goal::GhastLook => true,
+            Goal::GhastShootFireball(goal) => goal.can_use(level, mob),
         }
     }
 
@@ -467,6 +485,11 @@ impl Goal {
             Goal::FoxLookAtPlayer(goal) => goal.look_at_player_goal.start(level, mob),
             Goal::PerchAndSearch(goal) => goal.start(level, mob),
             Goal::DefendTrustedTarget(goal) => goal.start(level, mob),
+            Goal::MoveTowardsRestriction(goal) => goal.start(level, mob),
+            Goal::BlazeAttack(goal) => goal.start(),
+            Goal::RandomFloatAround(goal) => goal.start(level, mob),
+            Goal::GhastLook => {}
+            Goal::GhastShootFireball(goal) => goal.start(),
         }
     }
 
@@ -549,6 +572,9 @@ impl Goal {
             Goal::FoxLookAtPlayer(goal) => goal.look_at_player_goal.stop(),
             Goal::PerchAndSearch(goal) => goal.stop(level, mob),
             Goal::DefendTrustedTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
+            Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) | Goal::GhastLook => {}
+            Goal::BlazeAttack(goal) => goal.stop(level, mob),
+            Goal::GhastShootFireball(goal) => goal.stop(level, mob),
         }
     }
 
@@ -580,6 +606,9 @@ impl Goal {
                 | Goal::FoxFloat(_)
                 | Goal::FoxMeleeAttack(_)
                 | Goal::FoxEatBerries(_)
+                | Goal::BlazeAttack(_)
+                | Goal::GhastLook
+                | Goal::GhastShootFireball(_)
         )
     }
 
@@ -661,6 +690,10 @@ impl Goal {
             Goal::FoxSearchForItems(goal) => goal.tick(level, mob),
             Goal::FoxLookAtPlayer(goal) => goal.look_at_player_goal.tick(level, mob),
             Goal::PerchAndSearch(goal) => goal.tick(level, mob),
+            Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) => {}
+            Goal::BlazeAttack(goal) => goal.tick(level, mob),
+            Goal::GhastLook => ghast::ghast_look_goal_tick(level, mob),
+            Goal::GhastShootFireball(goal) => goal.tick(level, mob),
         }
     }
 
@@ -727,6 +760,10 @@ impl Goal {
             Goal::FoxFollowParent(_) => 0,
             Goal::FoxLookAtPlayer(_) => Flag::Look.bit(),
             Goal::DefendTrustedTarget(_) => Flag::Target.bit(),
+            Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) => Flag::Move.bit(),
+            Goal::BlazeAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::GhastLook => Flag::Look.bit(),
+            Goal::GhastShootFireball(_) => 0,
         }
     }
 

@@ -10,6 +10,8 @@ use crate::world::damagesource::DamageSource;
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::attributes::Attribute;
 use crate::world::entity::data::Pose;
+use crate::world::entity::entity_reference::EntityReference;
+use crate::world::entity::projectile::projectile_deflection::ProjectileDeflection;
 use crate::world::entity::{EntityDimensions, EntityId, RemovalReason, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, codec as component_codec};
@@ -233,6 +235,9 @@ impl ServerLevel {
         let magic_boost = attack_strength_scale * (self.get_enchanted_damage(id, entity, base_damage, &damage_source) - base_damage);
         base_damage *= self.base_damage_scale_factor(id);
         self.reset_only_attack_strength_ticker(id);
+        if self.deflect_projectile(id, entity) {
+            return;
+        }
         if base_damage > 0.0 || magic_boost > 0.0 {
             let full_strength_attack = attack_strength_scale > 0.9;
             let knockback_attack = if self.entity(id).is_sprinting() && full_strength_attack {
@@ -266,6 +271,18 @@ impl ServerLevel {
             }
         }
         self.post_piercing_attack(id);
+    }
+
+    fn deflect_projectile(&mut self, id: EntityId, entity: EntityId) -> bool {
+        if wafer_data::entity_type_tags::REDIRECTABLE_PROJECTILE.contains(self.entity(entity).entity_type as usize)
+            && self.is_projectile(entity)
+            && self.deflect(entity, ProjectileDeflection::AimDeflect, Some(id), Some(EntityReference::of(self.entity(id).uuid)), true, Vec3::new(1.0, 1.0, 1.0))
+        {
+            self.play_server_side_sound(id, "minecraft:entity.player.attack.nodamage");
+            true
+        } else {
+            false
+        }
     }
 
     fn can_critical_attack(&mut self, id: EntityId, entity: EntityId) -> bool {

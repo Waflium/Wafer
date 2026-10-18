@@ -6,14 +6,15 @@ use crate::server::level::ServerLevel;
 use crate::server::level::events::SOUND_FIREWORK_SHOOT;
 use crate::world::entity::projectile::projectile::Projectile;
 use crate::world::item::ItemStack;
-use crate::world::item::{arrow_item, experience_bottle_item, firework_rocket_item, throwable_potion_item};
+use crate::world::item::{arrow_item, experience_bottle_item, fire_charge_item, firework_rocket_item, throwable_potion_item};
 use crate::world::entity::projectile::throwableitemprojectile::snowball::Snowball;
 use crate::world::entity::projectile::throwableitemprojectile::thrown_egg::ThrownEgg;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PositionFunction {
     Default,
     EntityJustOutsideOfBlockPos,
+    DispensePosition(f64),
 }
 
 impl PositionFunction {
@@ -24,6 +25,10 @@ impl PositionFunction {
                 source.center().add(0.7 * facing.step_x() as f64, 0.7 * facing.step_y() as f64 + 0.1, 0.7 * facing.step_z() as f64)
             }
             PositionFunction::EntityJustOutsideOfBlockPos => firework_rocket_item::get_entity_just_outside_of_block_pos(source, direction),
+            PositionFunction::DispensePosition(scale) => {
+                let facing = source.facing();
+                source.center().add(scale * facing.step_x() as f64, scale * facing.step_y() as f64, scale * facing.step_z() as f64)
+            }
         }
     }
 }
@@ -53,6 +58,8 @@ pub fn as_projectile(level: &mut ServerLevel, position: Vec3, item_stack: &ItemS
         throwable_potion_item::as_projectile(item, position, item_stack)
     } else if classes.contains(&"FireworkRocketItem") {
         firework_rocket_item::as_projectile(position, item_stack, direction)
+    } else if classes.contains(&"FireChargeItem") {
+        fire_charge_item::as_projectile(level, position, item_stack, direction)
     } else {
         arrow_item::as_projectile(level, item, position, item_stack)
     }
@@ -64,6 +71,8 @@ pub fn create_dispense_config(item: Item) -> DispenseConfig {
         DispenseConfig { uncertainty: DispenseConfig::DEFAULT.uncertainty * 0.5, power: DispenseConfig::DEFAULT.power * 1.25, ..DispenseConfig::DEFAULT }
     } else if classes.contains(&"FireworkRocketItem") {
         DispenseConfig { position_function: PositionFunction::EntityJustOutsideOfBlockPos, uncertainty: 1.0, power: 0.5, override_dispense_event: Some(SOUND_FIREWORK_SHOOT) }
+    } else if classes.contains(&"FireChargeItem") {
+        fire_charge_item::create_dispense_config()
     } else {
         DispenseConfig::DEFAULT
     }

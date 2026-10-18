@@ -1,6 +1,7 @@
 pub mod arrow;
 pub mod eye_of_ender;
 pub mod firework_rocket_entity;
+pub mod hurtingprojectile;
 #[allow(clippy::module_inception)]
 pub mod projectile;
 pub mod projectile_deflection;

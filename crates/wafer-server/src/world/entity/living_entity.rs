@@ -1484,7 +1484,8 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
-            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_)) => self.zombie_get_base_experience_reward(id),
+            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
+            Some(MobKind::Blaze(_) | MobKind::Ghast(_)) => self.mob_get_base_experience_reward(id),
             Some(
                 MobKind::Creeper(_)
                 | MobKind::Spider(_)
@@ -1979,6 +1980,9 @@ impl ServerLevel {
             ) => self.monster_ai_step(id),
             Some(MobKind::Endermite(_)) => self.endermite_ai_step(id),
             Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),
+            Some(MobKind::Blaze(_)) => self.blaze_ai_step(id),
+            Some(MobKind::Ghast(_)) => self.mob_ai_step(id),
+            Some(MobKind::ZombifiedPiglin(_)) => self.monster_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Wolf(_)) => self.wolf_ai_step(id),
@@ -2397,9 +2401,30 @@ impl ServerLevel {
             self.player_travel(id, input);
         } else if self.mob(id).is_some_and(Mob::is_squid) {
             self.squid_travel(id, input);
+        } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Ghast(_))) {
+            self.ghast_travel(id, input);
         } else {
             self.living_entity_travel(id, input);
         }
+    }
+
+    pub fn travel_flying(&mut self, id: EntityId, input: Vec3, speed: f32) {
+        self.travel_flying_with(id, input, 0.02, 0.02, speed);
+    }
+
+    pub fn travel_flying_with(&mut self, id: EntityId, input: Vec3, water_speed: f32, lava_speed: f32, air_speed: f32) {
+        let (speed, inertia) = if self.entity(id).is_in_water() {
+            (water_speed, 0.8f32 as f64)
+        } else if self.entity(id).is_in_lava() {
+            (lava_speed, 0.5)
+        } else {
+            (air_speed, 0.91f32 as f64)
+        };
+        self.entity_mut(id).move_relative(speed, input);
+        let delta = self.entity(id).delta_movement;
+        self.move_entity(id, MoverType::SelfMove, delta);
+        let e = self.entity_mut(id);
+        e.set_delta_movement(e.delta_movement.scale(inertia));
     }
 
     pub fn living_entity_travel(&mut self, id: EntityId, input: Vec3) {
@@ -2681,6 +2706,7 @@ impl ServerLevel {
         match self.mob(id) {
             Some(mob) if mob.is_spider() => super::monster::spider::spider::Spider::on_climbable(mob),
             Some(mob) if mob.abstract_horse().is_some() => super::animal::equine::abstract_horse::on_climbable(),
+            Some(mob) if matches!(mob.kind, MobKind::Ghast(_)) => super::monster::ghast::Ghast::on_climbable(),
             _ => self.living_entity_on_climbable(id),
         }
     }

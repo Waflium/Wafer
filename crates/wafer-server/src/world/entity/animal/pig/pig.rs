@@ -220,6 +220,9 @@ impl ServerLevel {
         if self.difficulty != Difficulty::Peaceful {
             let params = ConversionParams::single(self, id, false, true);
             let zombified_piglin = self.convert_to(id, "minecraft:zombified_piglin", params, |level, zombified_piglin| {
+                let mut random = std::mem::replace(&mut level.entity_mut(id).random, wafer_core::random::LegacyRandomSource::new(0));
+                level.zombified_piglin_populate_default_equipment_slots(zombified_piglin, &mut random);
+                level.entity_mut(id).random = random;
                 level.mob_mut(zombified_piglin).expect("a zombified piglin").persistence_required = true;
             });
             if zombified_piglin.is_none() {

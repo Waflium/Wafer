@@ -849,12 +849,22 @@ impl ServerLevel {
     }
 
     pub fn is_on_fire(&self, id: EntityId) -> bool {
+        match self.mob(id) {
+            Some(mob) if matches!(mob.kind, super::mob::MobKind::Blaze(_)) => super::monster::blaze::Blaze::is_on_fire(&mob.entity),
+            _ => self.entity_is_on_fire(id),
+        }
+    }
+
+    pub fn entity_is_on_fire(&self, id: EntityId) -> bool {
         !self.fire_immune(id) && self.entity(id).remaining_fire_ticks > 0
     }
 
     pub fn get_entity_light_level_dependent_magic_value(&self, id: EntityId) -> f32 {
         if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::MagmaCube(_))) {
             return super::monster::cubemob::magma_cube::MagmaCube::get_light_level_dependent_magic_value();
+        }
+        if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Blaze(_))) {
+            return super::monster::blaze::Blaze::get_light_level_dependent_magic_value();
         }
         let e = self.entity(id);
         let block_pos = e.block_position();
@@ -899,6 +909,7 @@ impl ServerLevel {
                 | ProjectileKind::SpectralArrow(_)
                 | ProjectileKind::ThrownTrident(_) => 0.05,
                 ProjectileKind::FireworkRocket(_) => 0.0,
+                ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) => 0.0,
                 _ => 0.03,
             },
             Some(super::LevelEntity::AreaEffectCloud(_)) => 0.0,
@@ -992,6 +1003,7 @@ impl ServerLevel {
             Some(super::LevelEntity::ExperienceOrb(_)) => SoundSource::Ambient,
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_get_sound_source(),
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Ghast(_)) => super::monster::ghast::Ghast::get_sound_source(),
             Some(_) => SoundSource::Neutral,
         }
     }
@@ -1385,6 +1397,10 @@ impl ServerLevel {
         }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Bat(_))) {
             self.bat_check_fall_damage(id);
+            return;
+        }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Ghast(_))) {
+            self.ghast_check_fall_damage(id);
             return;
         }
         let living = self.is_living(id);
@@ -1801,6 +1817,12 @@ impl ServerLevel {
     }
 
     pub fn play_entity_on_fire_extinguished_sound(&mut self, id: EntityId) {
+        if !self.as_projectile(id).is_some_and(|projectile| projectile.is_fireball()) {
+            self.entity_play_entity_on_fire_extinguished_sound(id);
+        }
+    }
+
+    pub fn entity_play_entity_on_fire_extinguished_sound(&mut self, id: EntityId) {
         let source = self.sound_source(id);
         let e = self.entity_mut(id);
         let pitch = 1.6 + (e.random.next_float() - e.random.next_float()) * 0.4;
@@ -2276,7 +2298,7 @@ impl ServerLevel {
             return self.server_player_hurt_server(id, source, damage);
         }
         if self.is_mob(id) {
-            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::Husk(_) | super::mob::MobKind::Drowned(_))) {
+            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::Husk(_) | super::mob::MobKind::Drowned(_) | super::mob::MobKind::ZombifiedPiglin(_))) {
                 return self.zombie_hurt_server(id, source, damage);
             }
             if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Silverfish(_))) {
@@ -2296,6 +2318,7 @@ impl ServerLevel {
             }
             match self.mob(id).map(|mob| &mob.kind) {
                 Some(super::mob::MobKind::Bat(_)) => return self.bat_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Ghast(_)) => return self.ghast_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::GlowSquid(_)) => return self.glow_squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::IronGolem(_)) => return self.iron_golem_hurt_server(id, source, damage),
@@ -2328,6 +2351,8 @@ impl ServerLevel {
     pub fn is_invulnerable_to(&mut self, id: EntityId, source: &DamageSource) -> bool {
         if self.is_player(id) {
             self.server_player_is_invulnerable_to(id, source)
+        } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Ghast(_))) {
+            self.ghast_is_invulnerable_to(id, source)
         } else if self.is_living(id) {
             self.living_entity_is_invulnerable_to(id, source)
         } else {
@@ -2543,6 +2568,9 @@ impl ServerLevel {
                     super::mob::MobKind::Silverfish(_) => "Silverfish",
                     super::mob::MobKind::Endermite(_) => "Endermite",
                     super::mob::MobKind::Enderman(_) => "Enderman",
+                    super::mob::MobKind::Blaze(_) => "Blaze",
+                    super::mob::MobKind::Ghast(_) => "Ghast",
+                    super::mob::MobKind::ZombifiedPiglin(_) => "ZombifiedPiglin",
                     super::mob::MobKind::Witch(_) => "Witch",
                     super::mob::MobKind::Slime(_) => "Slime",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",
@@ -2578,6 +2606,8 @@ impl ServerLevel {
                     ProjectileKind::SpectralArrow(_) => "SpectralArrow",
                     ProjectileKind::ThrownTrident(_) => "ThrownTrident",
                     ProjectileKind::FireworkRocket(_) => "FireworkRocketEntity",
+                    ProjectileKind::SmallFireball(_) => "SmallFireball",
+                    ProjectileKind::LargeFireball(_) => "LargeFireball",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",
                 Some(LevelEntity::Minecart(_)) => "Minecart",

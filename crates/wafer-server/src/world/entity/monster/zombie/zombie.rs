@@ -30,6 +30,7 @@ use crate::world::entity::mob::{Mob, MobKind, RANDOM_SPAWN_BONUS_ID};
 use crate::world::entity::monster::monster;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::monster::zombie::drowned::Drowned;
+use crate::world::entity::monster::zombie::zombified_piglin::ZombifiedPiglin;
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::spawn_placements;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
@@ -120,6 +121,7 @@ pub fn zombie(mob: &Mob) -> &Zombie {
         MobKind::Zombie(zombie) => zombie,
         MobKind::Husk(husk) => &husk.zombie,
         MobKind::Drowned(drowned) => &drowned.zombie,
+        MobKind::ZombifiedPiglin(zombified_piglin) => &zombified_piglin.zombie,
         _ => unreachable!("not a zombie"),
     }
 }
@@ -129,6 +131,7 @@ pub fn zombie_mut(mob: &mut Mob) -> &mut Zombie {
         MobKind::Zombie(zombie) => zombie,
         MobKind::Husk(husk) => &mut husk.zombie,
         MobKind::Drowned(drowned) => &mut drowned.zombie,
+        MobKind::ZombifiedPiglin(zombified_piglin) => &mut zombified_piglin.zombie,
         _ => unreachable!("not a zombie"),
     }
 }
@@ -138,6 +141,7 @@ fn drowning_tracker(kind: &mut MobKind) -> &mut ConversionTracker {
         MobKind::Zombie(zombie) => &mut zombie.drowning_tracker,
         MobKind::Husk(husk) => &mut husk.zombie.drowning_tracker,
         MobKind::Drowned(drowned) => &mut drowned.zombie.drowning_tracker,
+        MobKind::ZombifiedPiglin(zombified_piglin) => &mut zombified_piglin.zombie.drowning_tracker,
         _ => unreachable!("not a zombie"),
     }
 }
@@ -179,6 +183,7 @@ impl Zombie {
         goal_selector.add_goal(8, Goal::RandomLookAround(RandomLookAroundGoal::default()));
         match kind {
             MobKind::Drowned(_) => Drowned::add_behaviour_goals(ai),
+            MobKind::ZombifiedPiglin(_) => ZombifiedPiglin::add_behaviour_goals(ai),
             _ => Zombie::add_behaviour_goals(ai),
         }
     }
@@ -241,6 +246,7 @@ impl Zombie {
     pub fn converts_in_water(mob: &Mob) -> bool {
         match mob.kind {
             MobKind::Drowned(_) => Drowned::converts_in_water(mob),
+            MobKind::ZombifiedPiglin(_) => false,
             _ => true,
         }
     }
@@ -528,6 +534,13 @@ impl ServerLevel {
     }
 
     fn randomize_reinforcements_chance(&mut self, id: EntityId) {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::ZombifiedPiglin(_)) => self.zombified_piglin_randomize_reinforcements_chance(id),
+            _ => self.zombie_randomize_reinforcements_chance(id),
+        }
+    }
+
+    fn zombie_randomize_reinforcements_chance(&mut self, id: EntityId) {
         let mob = self.mob_mut(id).expect("a zombie");
         let base_value = mob.entity.random.next_double() * 0.1f32 as f64;
         mob.living.attributes.instance(Attribute::SpawnReinforcements).expect("zombies have a reinforcement chance").set_base_value(base_value);

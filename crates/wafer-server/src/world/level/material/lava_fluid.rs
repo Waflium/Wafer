@@ -12,7 +12,6 @@ use crate::world::level::block::base_fire_block;
 use crate::world::level::update_flags::UPDATE_ALL;
 
 const LAVA_SOURCE_CONVERSION: bool = false;
-const FIRE_SPREAD_RADIUS_AROUND_PLAYER: i32 = 128;
 
 pub struct LavaFluid;
 
@@ -138,7 +137,7 @@ impl FlowingFluid for LavaFluid {
 
 impl ServerLevel {
     pub fn can_spread_fire_around(&self, pos: BlockPos) -> bool {
-        let radius = FIRE_SPREAD_RADIUS_AROUND_PLAYER;
+        let radius = self.game_rules.get_int(wafer_data::game_rule::FIRE_SPREAD_RADIUS_AROUND_PLAYER);
         let target = Vec3::at_lower_corner_of(pos);
         radius == -1
             || self.players.values().any(|p| p.game_mode.game_type != GameType::Spectator && p.entity.position().distance_to(target) < radius as f64)

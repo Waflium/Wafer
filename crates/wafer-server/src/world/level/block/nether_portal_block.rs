@@ -11,7 +11,10 @@ use crate::util::block_util::{FoundRectangle, get_largest_rectangle_around};
 use crate::world::attribute::environment_attributes::NETHER_PORTAL_SPAWNS_PIGLINS;
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::EntityId;
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::entity_types;
 use crate::world::entity::inside_block::InsideBlockEffects;
+use crate::world::level::block::state::block_behaviour::is_valid_spawn;
 use crate::world::entity::relative::relative;
 use crate::world::level::block::portal::{Portal, PortalEntity};
 use crate::world::level::portal::portal_forcer;
@@ -33,6 +36,14 @@ impl BlockBehaviour for NetherPortalBlock {
             let mut pos = pos;
             while level.block_state(pos).is_block(blocks::NETHER_PORTAL) {
                 pos = pos.below();
+            }
+            if is_valid_spawn(level.block_state(pos), &entity_types::ZOMBIFIED_PIGLIN)
+                && let Some(entity) = level.spawn_entity_type(entity_types::ZOMBIFIED_PIGLIN.get_key(), pos.above(), EntitySpawnReason::Structure)
+            {
+                level.set_portal_cooldown(entity);
+                if let Some(vehicle) = level.vehicle(entity) {
+                    level.set_portal_cooldown(vehicle);
+                }
             }
         }
     }

@@ -70,7 +70,14 @@ impl ServerLevel {
         self.game_rules.get_bool(game_rule::MOB_DROPS)
     }
 
-    pub fn is_preventing_player_rest(&self, _id: EntityId, _player: EntityId) -> bool {
+    pub fn is_preventing_player_rest(&self, id: EntityId, player: EntityId) -> bool {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(crate::world::entity::mob::MobKind::ZombifiedPiglin(_)) => self.zombified_piglin_is_preventing_player_rest(id, player),
+            _ => self.monster_is_preventing_player_rest(id, player),
+        }
+    }
+
+    pub fn monster_is_preventing_player_rest(&self, _id: EntityId, _player: EntityId) -> bool {
         true
     }
 
