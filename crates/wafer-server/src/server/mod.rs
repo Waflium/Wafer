@@ -1034,21 +1034,7 @@ impl Server {
         let player = level.player_mut(id);
         player.send_post_effects();
         level.init_inventory_menu(id);
-        let player = level.player_mut(id);
-        if let Some(values) = player.entity.data.pack_dirty() {
-            player.connection.send(clientbound::SET_ENTITY_DATA, |p| crate::world::entity::data::write_values(p, id, &values));
-        }
-        let food = player.food_data;
-        player.connection.send(clientbound::SET_HEALTH, |p| {
-            p.f32(player.health);
-            p.varint(food.food_level);
-            p.f32(food.saturation_level);
-        });
-        player.last_sent_health = player.health;
-        player.last_sent_food = food.food_level;
-        player.last_food_saturation_zero = food.saturation_level == 0.0;
-        player.send_experience();
-        player.last_sent_exp = player.experience.total;
+        let player = level.player(id);
         let joined = NameAndId { id: player.profile.uuid, name: player.profile.name.clone() };
         self.notification_manager.player_joined(&joined);
         if let Some(nbt) = &saved {
