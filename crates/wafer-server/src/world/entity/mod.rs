@@ -133,7 +133,7 @@ impl LevelEntity {
             LevelEntity::EyeOfEnder(_) => TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(4), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EndCrystal(_) => TrackingConfig { range: 16 * 16, update_interval: UpdateInterval::Never, track_deltas: false, stepped: false, is_item: false },
             LevelEntity::ExperienceOrb(_) => TrackingConfig { range: 6 * 16, update_interval: UpdateInterval::Periodic(20), track_deltas: true, stepped: false, is_item: false },
-            LevelEntity::Mob(mob) => TrackingConfig { range: mob.client_tracking_range() * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: mob.track_deltas(), stepped: false, is_item: false },
+            LevelEntity::Mob(mob) => TrackingConfig { range: mob.client_tracking_range() * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: mob.track_deltas(), stepped: true, is_item: false },
             LevelEntity::Projectile(projectile) => {
                 let update_interval = if projectile.abstract_arrow().is_some() { 20 } else { 10 };
                 TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(update_interval), track_deltas: true, stepped: false, is_item: false }
