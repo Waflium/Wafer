@@ -3,7 +3,7 @@ use wafer_server::logging;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let server_main = std::thread::Builder::new()
-        .name("ServerMain".into())
+        .name("main".into())
         .spawn(move || {
             logging::init("logs");
             wafer_server::server::main::main(args);
