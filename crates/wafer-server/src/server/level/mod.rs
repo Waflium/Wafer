@@ -56,6 +56,7 @@ use crate::world::level::local_mob_cap_calculator::LocalMobCapCalculator;
 use crate::world::level::natural_spawner;
 use crate::world::level::pathfinder::path_type_cache::PathTypeCache;
 use crate::world::level::saveddata::weather_data::WeatherData;
+use game_mode::GameType;
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::level::saveddata::maps::map_item_saved_data::MapItemSavedData;
 use crate::world::level::storage::saved_data_storage::SavedDataStorage;
@@ -160,6 +161,7 @@ pub struct ServerLevel {
     pub allow_flight: bool,
     pub entity_broadcast_range_percentage: i32,
     pub weather: Rc<Cell<WeatherData>>,
+    pub default_game_type: Rc<Cell<GameType>>,
     pub scoreboard: Rc<RefCell<Scoreboard>>,
     pub world_border: WorldBorder,
     pub raids: crate::world::entity::raid::raids::Raids,
@@ -257,6 +259,7 @@ impl ServerLevel {
             respawn_data: crate::world::level::storage::RespawnData::of("minecraft:overworld", BlockPos::ZERO, 0.0, 0.0),
             custom_spawners: Vec::new(),
             weather: Rc::default(),
+            default_game_type: Rc::default(),
             rain_level: 0.0,
             o_rain_level: 0.0,
             thunder_level: 0.0,

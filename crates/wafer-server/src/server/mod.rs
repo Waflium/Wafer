@@ -211,7 +211,7 @@ pub struct Server {
     pub console_log: std::cell::RefCell<Vec<String>>,
     pub spawn: RespawnData,
     effective_respawn_data: RespawnData,
-    pub default_game_type: GameType,
+    pub default_game_type: Rc<Cell<GameType>>,
     pub difficulty: Difficulty,
     pub difficulty_locked: bool,
     pub hardcore: bool,
@@ -328,6 +328,7 @@ impl Server {
             level.index = index;
         }
         let weather = Rc::new(Cell::new(weather));
+        let default_game_type = Rc::new(Cell::new(game_type));
         let scoreboard_save_data = ScoreboardSaveData::load(world_dir.as_ref().map(WorldDir::data_folder));
         let scoreboard = Rc::new(RefCell::new(Scoreboard::default()));
         scoreboard.borrow_mut().load(scoreboard_save_data.data());
@@ -341,6 +342,7 @@ impl Server {
             level.game_rules = game_rules.clone();
             level.chunks.game_rules = game_rules.clone();
             level.weather = weather.clone();
+            level.default_game_type = default_game_type.clone();
             level.scoreboard = scoreboard.clone();
             level.command_storage = command_storage.clone();
             level.random_sequences = random_sequences.clone();
@@ -397,7 +399,7 @@ impl Server {
             console_log: Default::default(),
             effective_respawn_data: spawn.clone(),
             spawn,
-            default_game_type: game_type,
+            default_game_type,
             difficulty,
             difficulty_locked,
             hardcore,
@@ -579,7 +581,7 @@ impl Server {
     }
 
     pub fn forced_game_type(&self) -> Option<GameType> {
-        self.config.force_game_mode.then_some(self.default_game_type)
+        self.config.force_game_mode.then_some(self.default_game_type.get())
     }
 
     pub fn enforce_game_type_for_players(&mut self, game_type: Option<GameType>) -> i32 {
@@ -589,7 +591,7 @@ impl Server {
     }
 
     fn calculate_game_mode_for_new_player(&self, loaded: Option<GameType>) -> GameType {
-        self.forced_game_type().unwrap_or(loaded.unwrap_or(self.default_game_type))
+        self.forced_game_type().unwrap_or(loaded.unwrap_or(self.default_game_type.get()))
     }
 
     pub fn set_respawn_data(&mut self, data: RespawnData) {
@@ -662,7 +664,7 @@ impl Server {
             seed: self.seed,
             game_time: self.overworld().game_time,
             spawn: self.spawn.clone(),
-            game_type: self.default_game_type,
+            game_type: self.default_game_type.get(),
             difficulty: self.difficulty,
             difficulty_locked: self.difficulty_locked,
             hardcore: self.hardcore,

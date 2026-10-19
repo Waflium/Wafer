@@ -44,7 +44,7 @@ impl Server {
             Some((r[0].as_f64()? as f32, r[1].as_f64()? as f32))
         });
         let spawn_level = saved_dimension.and_then(|dimension| self.get_level(dimension)).unwrap_or_else(|| self.get_level(&self.spawn.dimension).unwrap_or(0));
-        let adventure = self.default_game_type == GameType::Adventure;
+        let adventure = self.default_game_type.get() == GameType::Adventure;
         let spawn_pos = self.spawn.pos;
         let position = saved_position.unwrap_or_else(|| self.levels[spawn_level].find_spawn(spawn_pos, adventure));
         let (y_rot, x_rot) = saved_rotation.unwrap_or((self.spawn.yaw, self.spawn.pitch));

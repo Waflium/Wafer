@@ -136,7 +136,7 @@ impl Server {
     pub fn set_game_mode(&mut self, game_mode: GameType) {
         self.config.game_mode = game_mode;
         self.update_property("gamemode", game_mode.name().to_string());
-        self.default_game_type = game_mode;
+        self.default_game_type.set(game_mode);
         self.enforce_game_type_for_players(self.forced_game_type());
     }
 

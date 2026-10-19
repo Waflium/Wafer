@@ -280,9 +280,10 @@ impl ServerLevel {
 
     pub fn can_break_block_in_adventure_mode(&mut self, id: EntityId, pos: BlockPos) -> bool {
         let owner = self.projectile_get_owner(id);
+        let world_game_mode = self.default_game_type.get();
         let adventure_owner = match owner.and_then(|owner| self.players.get(&owner)) {
             Some(player) => player.game_mode.game_type == GameType::Adventure,
-            None => owner.is_some(),
+            None => owner.is_some() || world_game_mode == GameType::Adventure,
         };
         if !adventure_owner {
             return true;

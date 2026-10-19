@@ -173,7 +173,7 @@ impl Server {
     fn default_respawn(&mut self, missing_respawn_block: bool) -> RespawnTransition {
         let level = self.find_respawn_dimension();
         let spawn = self.respawn_data().clone();
-        let adjusted = self.levels[level].find_spawn(spawn.pos, self.default_game_type == GameType::Adventure);
+        let adjusted = self.levels[level].find_spawn(spawn.pos, self.default_game_type.get() == GameType::Adventure);
         let position = Vec3::at_bottom_center_of(BlockPos::containing(adjusted.x, adjusted.y, adjusted.z));
         RespawnTransition { level, position, y_rot: spawn.yaw, x_rot: spawn.pitch, missing_respawn_block }
     }

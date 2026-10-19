@@ -140,7 +140,7 @@ fn defaultgamemode() {
     let mut server = server();
     let alice = join(&mut server, "Alice", ORIGIN);
     assert_eq!(run(&mut server, "defaultgamemode adventure"), ["The default game mode is now Adventure Mode"]);
-    assert_eq!(server.default_game_type, GameType::Adventure);
+    assert_eq!(server.default_game_type.get(), GameType::Adventure);
     assert_eq!(server.levels[0].player(alice.id).game_mode.game_type, GameType::Survival);
     server.config.force_game_mode = true;
     let console = CommandSourceStack::server(&server);
