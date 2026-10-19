@@ -48,6 +48,19 @@ pub fn write_dat(path: &Path, nbt: &Nbt) -> io::Result<()> {
     fs::rename(tmp, path)
 }
 
+fn read_level_data_tag_raw(data_file: &Path) -> Result<Nbt, String> {
+    let bytes = fs::read(data_file).map_err(|e| crate::server::dedicated::settings::java_io_exception(&e, data_file))?;
+    if bytes.len() < 2 {
+        return Err("java.io.EOFException".into());
+    }
+    if !bytes.starts_with(&[0x1f, 0x8b]) {
+        return Err("java.util.zip.ZipException: Not in GZIP format".into());
+    }
+    let mut decompressed = Vec::new();
+    GzDecoder::new(&bytes[..]).read_to_end(&mut decompressed).map_err(|_| "java.io.EOFException: Unexpected end of ZLIB input stream".to_string())?;
+    decode_nbt(&decompressed).map_err(|e| format!("java.io.IOException: {e}"))
+}
+
 fn save_level_dat(dir: &WorldDir, root: &Nbt) -> io::Result<()> {
     fs::create_dir_all(&dir.root)?;
     let data_file = dir.root.join(format!("level{}.dat", rand::random::<u64>()));
@@ -92,6 +105,38 @@ impl WorldDir {
     }
     pub fn old_level_dat(&self) -> PathBuf {
         self.root.join("level.dat_old")
+    }
+    pub fn corrupted_level_dat(&self) -> PathBuf {
+        self.root.join(format!("level.dat_corrupted_{}", chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")))
+    }
+    pub fn has_world_data(&self) -> bool {
+        self.level_dat().exists() || self.old_level_dat().exists()
+    }
+    pub fn unfixed_data_tag_with_fallback(&self) -> Result<Nbt, String> {
+        match read_level_data_tag_raw(&self.level_dat()) {
+            Ok(root) => Ok(root),
+            Err(e) => {
+                warn!("Failed to load world data from {}
+{e}", self.level_dat().display());
+                info!("Attempting to use fallback {}", self.old_level_dat().display());
+                let root = read_level_data_tag_raw(&self.old_level_dat())?;
+                self.restore_level_data_from_old();
+                Ok(root)
+            }
+        }
+    }
+    fn restore_level_data_from_old(&self) {
+        let (target, backup) = (self.level_dat(), self.corrupted_level_dat());
+        if target.exists() {
+            let _ = fs::remove_file(&backup);
+            if fs::rename(&target, &backup).is_err() {
+                return;
+            }
+        }
+        if fs::remove_file(&target).is_err() && target.exists() {
+            return;
+        }
+        let _ = fs::rename(self.old_level_dat(), &target);
     }
     pub fn player_advancements(&self, uuid: u128) -> PathBuf {
         self.root.join("players/advancements").join(format!("{}.json", format_uuid(uuid)))
@@ -239,7 +284,10 @@ impl WorldData {
     }
 
     pub fn load(dir: &WorldDir) -> io::Result<Option<WorldData>> {
-        let Some(level) = read_dat(&dir.level_dat())? else { return Ok(None) };
+        if !dir.has_world_data() {
+            return Ok(None);
+        }
+        let level = dir.unfixed_data_tag_with_fallback().map_err(|e| invalid(&e))?;
         let level = level.get("Data").ok_or_else(|| invalid("level.dat has no Data"))?;
         let data_version = level.get("DataVersion").and_then(Nbt::as_i64).unwrap_or(0);
         if data_version != WORLD_VERSION as i64 {
