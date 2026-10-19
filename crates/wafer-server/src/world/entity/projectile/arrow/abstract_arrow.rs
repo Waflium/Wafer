@@ -449,7 +449,7 @@ impl ServerLevel {
         let arrow = self.abstract_arrow_mut(id);
         arrow.life += 1;
         if arrow.life >= 1200 {
-            self.entity_mut(id).discard();
+            self.discard(id);
         }
     }
 
@@ -480,7 +480,7 @@ impl ServerLevel {
             let ignore = arrow.piercing_ignore_entity_ids.get_or_insert_with(|| Vec::with_capacity(5));
             arrow.pierced_and_killed_entities.get_or_insert_with(|| Vec::with_capacity(5));
             if ignore.len() >= pierce_level as usize + 1 {
-                self.entity_mut(id).discard();
+                self.discard(id);
                 return;
             }
             if !ignore.contains(&entity) {
@@ -536,7 +536,7 @@ impl ServerLevel {
             let pitch = 1.2 / (random.next_float() * 0.2 + 0.9);
             self.entity_play_sound(id, sound, 1.0, pitch);
             if self.projectile(id).get_pierce_level() <= 0 {
-                self.entity_mut(id).discard();
+                self.discard(id);
             }
         } else if self.projectile_receives_side_effects_on_hit(entity, false) {
             self.set_remaining_fire_ticks(entity, remaining_fire_ticks);
@@ -547,7 +547,7 @@ impl ServerLevel {
                     let item = self.projectile(id).get_pickup_item();
                     self.spawn_at_location(id, item, 0.1);
                 }
-                self.entity_mut(id).discard();
+                self.discard(id);
             }
         }
     }
@@ -658,7 +658,7 @@ impl ServerLevel {
         let projectile = self.projectile(id);
         if (projectile.is_in_ground() || projectile.is_no_physics()) && self.abstract_arrow(id).shake_time <= 0 && self.try_pickup(id, player) {
             self.take(player, id, 1);
-            self.entity_mut(id).discard();
+            self.discard(id);
         }
     }
 

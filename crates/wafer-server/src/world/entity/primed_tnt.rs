@@ -94,7 +94,7 @@ impl ServerLevel {
         let fuse = tnt.fuse() - 1;
         tnt.set_fuse(fuse);
         if fuse <= 0 {
-            tnt.entity.discard();
+            self.discard(id);
             self.explode_primed_tnt(id);
         } else {
             self.update_fluid_interaction(id);

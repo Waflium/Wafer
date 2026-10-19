@@ -62,6 +62,6 @@ impl ServerLevel {
 
     pub fn small_fireball_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
         self.projectile_base_on_hit(id, hit_result);
-        self.entity_mut(id).discard();
+        self.discard(id);
     }
 }

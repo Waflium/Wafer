@@ -215,7 +215,7 @@ impl ServerLevel {
     fn firework_explode(&mut self, id: EntityId) {
         self.broadcast_entity_event(id, EVENT_FIREWORKS_EXPLODE);
         self.deal_explosion_damage(id);
-        self.entity_mut(id).discard();
+        self.discard(id);
     }
 
     pub fn firework_rocket_on_hit_entity(&mut self, id: EntityId) {

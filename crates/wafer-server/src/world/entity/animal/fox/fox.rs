@@ -630,7 +630,7 @@ impl ServerLevel {
             item.item.count = item_stack.count;
         }
         self.take(id, entity, item_stack.count);
-        self.entity_mut(entity).discard();
+        self.discard(entity);
         fox_mut(self.mob_mut(id).expect("a fox")).ticks_since_eaten = 0;
     }
 

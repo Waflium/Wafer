@@ -60,7 +60,7 @@ impl ServerLevel {
                 self.level_event(None, SOUND_SPELL_POTION_SPLASH, block_position, 0);
             }
         }
-        self.entity_mut(id).discard();
+        self.discard(id);
     }
 
     fn affect_entities_around(&mut self, id: EntityId, potion: &PotionContents) {

@@ -670,9 +670,9 @@ impl ServerLevel {
         }
         if !self.is_passenger(id) {
             warn!("Couldn't reattach entity to player");
-            self.entity_mut(vehicle).discard();
+            self.discard(vehicle);
             for entity in self.indirect_passengers(vehicle) {
-                self.entity_mut(entity).discard();
+                self.discard(entity);
             }
         }
     }

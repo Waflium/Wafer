@@ -136,7 +136,7 @@ impl ServerLevel {
         item.entity.sync_velocity = true;
         item.health = (item.health as f32 - damage) as i32;
         if item.health <= 0 {
-            item.entity.discard();
+            self.discard(id);
         }
         true
     }
@@ -151,7 +151,7 @@ impl ServerLevel {
     pub fn tick_item(&mut self, id: EntityId) {
         let Some(item) = self.item_entity(id) else { return };
         if item.item.is_empty() {
-            item.entity.discard();
+            self.discard(id);
             return;
         }
         self.entity_base_tick(id);
@@ -216,7 +216,7 @@ impl ServerLevel {
         }
         let Some(item) = self.item_entity(id) else { return };
         if item.age >= LIFETIME {
-            item.entity.discard();
+            self.discard(id);
         }
     }
 }

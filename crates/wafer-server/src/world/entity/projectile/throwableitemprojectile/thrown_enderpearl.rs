@@ -183,7 +183,7 @@ impl ServerLevel {
                     }
                     self.thrown_enderpearl_play_sound(teleport_pos);
                 }
-                self.entity_mut(id).discard();
+                self.discard(id);
             }
             Some(Owner::OtherLevelPlayer(player)) => {
                 let teleport_pos = self.entity(id).old_position();
@@ -192,9 +192,9 @@ impl ServerLevel {
                     let set_portal_cooldown = self.is_on_portal_cooldown(id);
                     self.pending_ender_pearl_teleport = Some(PendingEnderPearlTeleport { player: player.id, set_portal_cooldown, teleport_pos });
                 }
-                self.entity_mut(id).discard();
+                self.discard(id);
             }
-            None => self.entity_mut(id).discard(),
+            None => self.discard(id),
         }
     }
 
@@ -231,7 +231,7 @@ impl ServerLevel {
             None => false,
         };
         if dead && self.game_rules.get_bool(game_rule::ENDER_PEARLS_VANISH_ON_DEATH) {
-            self.entity_mut(id).discard();
+            self.discard(id);
         } else {
             self.throwable_projectile_tick(id);
         }

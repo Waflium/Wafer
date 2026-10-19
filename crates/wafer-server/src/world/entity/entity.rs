@@ -2208,11 +2208,15 @@ impl ServerLevel {
         }
     }
 
+    pub fn discard(&mut self, id: EntityId) {
+        self.remove(id, RemovalReason::Discarded);
+    }
+
     fn on_below_world(&mut self, id: EntityId) {
         if self.is_living(id) {
             self.hurt(id, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::OUT_OF_WORLD), 4.0);
         } else {
-            self.entity_mut(id).discard();
+            self.discard(id);
         }
     }
 
@@ -3317,6 +3321,12 @@ impl ServerLevel {
         }
         for passenger in self.passengers(id).to_vec() {
             self.stop_riding(passenger);
+        }
+        if !self.is_player(id) && self.entity_manager.has_callback(id) {
+            self.entity_removed(id, Some(reason));
+            if self.as_projectile(id).is_some_and(|projectile| matches!(projectile.kind, crate::world::entity::projectile::projectile::ProjectileKind::ThrownEnderpearl(_))) {
+                self.thrown_enderpearl_on_removal(id, Some(reason));
+            }
         }
     }
 

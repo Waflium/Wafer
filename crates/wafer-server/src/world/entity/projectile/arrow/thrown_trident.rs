@@ -136,12 +136,12 @@ impl ServerLevel {
                     let item = self.projectile(id).get_pickup_item();
                     self.spawn_at_location(id, item, 0.1);
                 }
-                self.entity_mut(id).discard();
+                self.discard(id);
             } else {
                 let owner_eye_position = self.entity(current_owner).eye_position();
                 let owner_width = self.entity(current_owner).dimensions.width;
                 if !self.is_player(current_owner) && self.entity(id).position().distance_to(owner_eye_position) < owner_width as f64 + 1.0 {
-                    self.entity_mut(id).discard();
+                    self.discard(id);
                     return;
                 }
                 let projectile = self.projectile_mut(id);

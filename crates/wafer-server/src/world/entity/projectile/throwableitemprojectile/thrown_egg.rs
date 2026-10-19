@@ -53,6 +53,6 @@ impl ServerLevel {
             }
         }
         self.broadcast_entity_event(id, EVENT_BREAK);
-        self.entity_mut(id).discard();
+        self.discard(id);
     }
 }

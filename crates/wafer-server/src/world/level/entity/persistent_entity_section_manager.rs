@@ -110,6 +110,10 @@ impl PersistentEntitySectionManager {
         result
     }
 
+    pub fn has_callback(&self, id: EntityId) -> bool {
+        self.callbacks.contains_key(&id)
+    }
+
     pub fn is_loaded(&self, uuid: u128) -> bool {
         self.known_uuids.contains(&uuid)
     }
@@ -423,6 +427,7 @@ impl ServerLevel {
         if status.is_accessible() {
             self.stop_tracking(id);
         }
+        self.removed_entities.push(id);
         if self.is_living(id) {
             self.get_waypoint_manager().untrack_waypoint(self, id);
         }

@@ -33,7 +33,7 @@ impl ServerLevel {
             self.take(mob, item_entity, count - remainder.count);
             let Some(LevelEntity::Item(item)) = self.entities.get_mut(&item_entity) else { return };
             if remainder.is_empty() {
-                item.entity.discard();
+                self.discard(item_entity);
             } else {
                 item.item.count = remainder.count;
             }

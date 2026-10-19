@@ -99,8 +99,8 @@ impl ServerLevel {
         eye.life += 1;
         if eye.life > 80 {
             self.entity_play_sound(id, sound_event("minecraft:entity.ender_eye.death"), 1.0, 1.0);
+            self.discard(id);
             let eye = self.eye_of_ender(id);
-            eye.entity.discard();
             let (position, survive_after_death, item) = (eye.entity.position(), eye.survive_after_death, eye.get_item());
             if survive_after_death {
                 self.add_fresh_entity(LevelEntity::Item(ItemEntity::new(position, item)));

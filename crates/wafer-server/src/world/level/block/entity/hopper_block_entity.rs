@@ -211,7 +211,7 @@ impl ServerLevel {
         let Some(LevelEntity::Item(entity)) = self.entities.get_mut(&item) else { return false };
         if result.is_empty() {
             entity.set_item(ItemStack::empty());
-            entity.entity.discard();
+            self.discard(item);
             if remove_now {
                 self.remove_entity(item);
             }

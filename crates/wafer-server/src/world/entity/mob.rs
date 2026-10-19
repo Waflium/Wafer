@@ -2121,7 +2121,7 @@ impl ServerLevel {
             let Some(LevelEntity::Item(item)) = self.entities.get_mut(&entity) else { return };
             item.item.shrink(equipped_with_stack.count);
             if item.item.is_empty() {
-                item.entity.discard();
+                self.discard(entity);
             }
         }
     }

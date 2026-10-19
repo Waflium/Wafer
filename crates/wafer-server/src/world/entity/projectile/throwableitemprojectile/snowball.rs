@@ -39,6 +39,6 @@ impl ServerLevel {
     pub fn snowball_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
         self.projectile_base_on_hit(id, hit_result);
         self.broadcast_entity_event(id, EVENT_BREAK);
-        self.entity_mut(id).discard();
+        self.discard(id);
     }
 }

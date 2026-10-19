@@ -221,7 +221,7 @@ impl ServerLevel {
         let cloud = self.area_effect_cloud(id);
         let tick_count = cloud.entity.tick_count;
         if cloud.duration != INFINITE_DURATION && tick_count - cloud.wait_time >= cloud.duration {
-            cloud.entity.discard();
+            self.discard(id);
             return;
         }
         let is_waiting = cloud.is_waiting();
@@ -236,7 +236,7 @@ impl ServerLevel {
         if cloud.radius_per_tick != 0.0 {
             radius += cloud.radius_per_tick;
             if radius < MINIMAL_RADIUS {
-                cloud.entity.discard();
+                self.discard(id);
                 return;
             }
             cloud.set_radius(radius);
@@ -280,7 +280,7 @@ impl ServerLevel {
             if cloud.radius_on_use != 0.0 {
                 radius += cloud.radius_on_use;
                 if radius < MINIMAL_RADIUS {
-                    cloud.entity.discard();
+                    self.discard(id);
                     return;
                 }
                 cloud.set_radius(radius);
@@ -288,7 +288,7 @@ impl ServerLevel {
             if cloud.duration_on_use != 0 && cloud.duration != INFINITE_DURATION {
                 cloud.duration += cloud.duration_on_use;
                 if cloud.duration <= 0 {
-                    cloud.entity.discard();
+                    self.discard(id);
                     return;
                 }
             }

@@ -49,6 +49,6 @@ impl ServerLevel {
                 self.award_experience_with_direction(hit_result.get_location(), reverse, xp_count);
             }
         }
-        self.entity_mut(id).discard();
+        self.discard(id);
     }
 }

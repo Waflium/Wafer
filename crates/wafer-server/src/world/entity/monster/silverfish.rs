@@ -166,7 +166,7 @@ impl SilverfishMergeWithStoneGoal {
             if infested_block::is_compatible_host_block(block_state) {
                 level.set_block(pos, infested_block::infested_state_by_host(block_state), UPDATE_ALL);
                 level.spawn_anim(mob);
-                level.entity_mut(mob).discard();
+                level.discard(mob);
             }
         }
     }

@@ -80,7 +80,7 @@ impl ServerLevel {
                 for player in players {
                     crate::advancements::triggers::criteria_triggers::LIGHTNING_STRIKE.trigger(self, player, id, &viewers);
                 }
-                self.lightning_bolt(id).entity.discard();
+                self.discard(id);
             } else if bolt.life < -bolt.entity.random.next_int_bounded(10) {
                 bolt.flashes -= 1;
                 bolt.life = 1;

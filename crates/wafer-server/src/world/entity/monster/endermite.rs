@@ -112,7 +112,7 @@ impl ServerLevel {
             endermite.life += 1;
         }
         if endermite.life >= MAX_LIFE {
-            mob.entity.discard();
+            self.discard(id);
         }
     }
 }

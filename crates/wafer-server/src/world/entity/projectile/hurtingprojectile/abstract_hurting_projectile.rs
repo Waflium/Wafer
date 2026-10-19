@@ -67,7 +67,7 @@ impl ServerLevel {
         self.abstract_hurting_projectile_apply_inertia(id);
         let pos = self.entity(id).block_position();
         if !self.has_chunk_at(pos) {
-            self.entity_mut(id).discard();
+            self.discard(id);
             return;
         }
         let clip_type = self.abstract_hurting_projectile_get_clip_type(id);

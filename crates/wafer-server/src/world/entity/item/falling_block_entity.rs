@@ -143,7 +143,7 @@ impl ServerLevel {
     pub fn tick_falling_block(&mut self, id: EntityId) {
         let falling = self.falling_block(id);
         if falling.block_state.is_air() {
-            falling.entity.discard();
+            self.discard(id);
             return;
         }
         let block = falling.block_state.block();
@@ -177,7 +177,7 @@ impl ServerLevel {
                     if self.falling_block(id).drop_item && self.game_rules.get_bool(game_rule::ENTITY_DROPS) {
                         self.spawn_at_location(id, ItemStack::new(block.item(), 1), 0.0);
                     }
-                    self.falling_block(id).entity.discard();
+                    self.discard(id);
                 }
             } else {
                 let current_state = self.block_state(pos);
@@ -206,7 +206,7 @@ impl ServerLevel {
                                     p.position(pos.x, pos.y, pos.z);
                                     p.varint(placed.id() as i32);
                                 }));
-                                self.falling_block(id).entity.discard();
+                                self.discard(id);
                                 block::behaviour(block).on_land(self, pos, block_state, current_state, id);
                                 let falling = self.falling_block(id);
                                 if let Some(Nbt::Compound(block_data)) = falling.block_data.clone()
@@ -224,19 +224,19 @@ impl ServerLevel {
                                     self.block_entity_set_changed(pos);
                                 }
                             } else if self.falling_block(id).drop_item && self.game_rules.get_bool(game_rule::ENTITY_DROPS) {
-                                self.falling_block(id).entity.discard();
+                                self.discard(id);
                                 self.call_on_broken_after_fall(id, block, pos);
                                 self.spawn_at_location(id, ItemStack::new(block.item(), 1), 0.0);
                             }
                         } else {
-                            self.falling_block(id).entity.discard();
+                            self.discard(id);
                             if self.falling_block(id).drop_item && self.game_rules.get_bool(game_rule::ENTITY_DROPS) {
                                 self.call_on_broken_after_fall(id, block, pos);
                                 self.spawn_at_location(id, ItemStack::new(block.item(), 1), 0.0);
                             }
                         }
                     } else {
-                        self.falling_block(id).entity.discard();
+                        self.discard(id);
                         self.call_on_broken_after_fall(id, block, pos);
                     }
                 }

@@ -71,7 +71,7 @@ impl ServerLevel {
         let position = self.entity(id).position();
         let indirect_source = self.projectile_get_owner(id).filter(|&owner| self.is_living(owner));
         self.explode(Some(id), indirect_source, None, position, explosion_power as f32, grief, ExplosionInteraction::Mob);
-        self.entity_mut(id).discard();
+        self.discard(id);
     }
 
     pub fn large_fireball_on_hit_entity(&mut self, id: EntityId, hit_result: EntityHitResult) {

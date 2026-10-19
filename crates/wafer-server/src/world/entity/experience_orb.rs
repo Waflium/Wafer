@@ -187,7 +187,7 @@ impl ServerLevel {
         let Some(orb) = self.experience_orb(id) else { return };
         orb.age += 1;
         if orb.age >= LIFETIME {
-            orb.entity.discard();
+            self.discard(id);
         }
     }
 
@@ -201,7 +201,7 @@ impl ServerLevel {
             }
             this.count += that.count;
             this.age = this.age.min(that.age);
-            that.entity.discard();
+            self.discard(other);
             self.remove_entity(other);
         }
     }
@@ -265,7 +265,7 @@ impl ServerLevel {
         let orb = self.experience_orb(id).expect("touched orb");
         orb.count -= 1;
         if orb.count == 0 {
-            orb.entity.discard();
+            self.discard(id);
             self.remove_entity(id);
         }
     }
@@ -296,7 +296,7 @@ impl ServerLevel {
         orb.entity.sync_velocity = true;
         orb.health = (orb.health as f32 - damage) as i32;
         if orb.health <= 0 {
-            orb.entity.discard();
+            self.discard(id);
         }
         true
     }

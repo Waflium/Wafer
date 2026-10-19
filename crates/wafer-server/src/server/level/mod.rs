@@ -186,6 +186,7 @@ pub struct ServerLevel {
     pub entities: FastIndexMap<EntityId, LevelEntity>,
     pub entity_manager: PersistentEntitySectionManager,
     pub(crate) tick_list: EntityTickList,
+    pub(crate) removed_entities: Vec<EntityId>,
     waypoint_manager: RefCell<ServerWaypointManager>,
     pub random: LegacyRandomSource,
     pub sleep_status: crate::server::players::sleep_status::SleepStatus,
@@ -270,6 +271,7 @@ impl ServerLevel {
             entities: FastIndexMap::default(),
             entity_manager: PersistentEntitySectionManager::new(entity_storage),
             tick_list: EntityTickList::default(),
+            removed_entities: Vec::new(),
             waypoint_manager: RefCell::default(),
             random: LegacyRandomSource::create(),
             sleep_status: Default::default(),
@@ -1179,10 +1181,15 @@ impl ServerLevel {
             self.set_removed(id, reason);
         }
         self.entity_removed(id, reason);
-        if self.as_projectile(id).is_some_and(|projectile| matches!(projectile.kind, crate::world::entity::projectile::projectile::ProjectileKind::ThrownEnderpearl(_))) {
-            self.thrown_enderpearl_on_removal(id, reason);
-        }
         self.entities.swap_remove(&id);
+    }
+
+    fn remove_untracked_entities(&mut self) {
+        for id in std::mem::take(&mut self.removed_entities) {
+            if self.entities.get(&id).is_some_and(|e| e.entity().is_removed()) {
+                self.entities.swap_remove(&id);
+            }
+        }
     }
 
     pub fn close(&mut self) {
@@ -1405,6 +1412,7 @@ impl ServerLevel {
             self.tick_list.end_iteration();
             self.tick_block_entities();
         }
+        self.remove_untracked_entities();
         self.tick_entity_manager();
     }
 
@@ -1870,9 +1878,11 @@ impl ServerLevel {
         let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) else { return };
         item.item.count = left;
         if left == 0 {
-            item.entity.discard();
+            self.discard(id);
+            let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) else { return };
             item.item.count = original;
         }
+        let Some(LevelEntity::Item(item)) = self.entities.get(&id) else { return };
         let (picked, thrower) = (item.item.clone(), item.thrower);
         if left == 0 {
             self.remove_entity(id);
