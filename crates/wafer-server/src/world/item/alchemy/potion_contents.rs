@@ -9,6 +9,14 @@ pub struct PotionContents<'a> {
     tag: &'a Nbt,
 }
 
+impl PotionContents<'_> {
+    pub fn create_item_stack(item: wafer_data::Item, potion: &str) -> crate::world::item::ItemStack {
+        let mut item_stack = crate::world::item::ItemStack::new(item, 1);
+        item_stack.set(crate::world::item::component::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String(potion.into()))])));
+        item_stack
+    }
+}
+
 impl<'a> PotionContents<'a> {
     pub fn new(tag: &'a Nbt) -> PotionContents<'a> {
         PotionContents { tag }

@@ -5,6 +5,7 @@ pub mod arrow_item;
 pub mod banner_item;
 pub mod block_item;
 pub mod boat_item;
+pub mod bottle_item;
 pub mod bow_item;
 pub mod bucket_item;
 pub mod mob_bucket_item;
@@ -208,6 +209,9 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     if stack.item.is_instance_of("FireworkRocketItem") {
         return firework_rocket_item::use_item(level, player, hand);
 
+    }
+    if stack.item.is_instance_of("BottleItem") {
+        return bottle_item::use_item(level, player, hand);
     }
     if stack.item.is_instance_of("BoatItem") {
         return boat_item::use_item(level, player, hand);
