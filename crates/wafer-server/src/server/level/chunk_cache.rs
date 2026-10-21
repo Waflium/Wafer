@@ -63,6 +63,7 @@ pub struct ChunkCache {
     pub difficulty: Difficulty,
     pub game_rules: GameRules,
     pub region_level_data: RegionLevelData,
+    pub unloaded_block_entities: Vec<(BlockPos, crate::world::level::block::entity::BlockEntity)>,
     static_environment_attributes: EnvironmentAttributeSystem,
     pub spawn_enemies: bool,
     pub last_spawn_state: Option<SpawnState>,
@@ -118,6 +119,7 @@ impl ChunkCache {
             difficulty: Difficulty::Easy,
             game_rules: GameRules::default(),
             region_level_data: RegionLevelData::default(),
+            unloaded_block_entities: Vec::new(),
             static_environment_attributes: EnvironmentAttributeSystem::builder().add_static_layers(dimension).build(),
             spawn_enemies: true,
             last_spawn_state: None,
@@ -1524,8 +1526,11 @@ impl ChunkCache {
                 let light = self.light_to_save(chunk_pos);
                 let block_ticks = self.block_ticks.pack(chunk_pos, self.game_time);
                 let fluid_ticks = self.fluid_ticks.pack(chunk_pos, self.game_time);
+                self.unloaded_block_entities.extend(chunk.block_entities.map.take_all_in_order());
                 let save = ChunkToSave { chunk, status: ChunkStatus::Full, block_entities, game_time: self.game_time, block_ticks, fluid_ticks, light };
                 self.io.as_ref().unwrap().write_chunk(save);
+            } else {
+                self.unloaded_block_entities.extend(chunk.block_entities.map.take_all_in_order());
             }
             self.block_ticks.remove_container(chunk_pos);
             self.fluid_ticks.remove_container(chunk_pos);

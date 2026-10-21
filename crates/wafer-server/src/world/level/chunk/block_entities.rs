@@ -52,6 +52,10 @@ impl BlockEntityMap {
         self.map.keys().collect()
     }
 
+    pub fn take_all_in_order(&mut self) -> Vec<(BlockPos, BlockEntity)> {
+        self.keys_in_order().into_iter().filter_map(|pos| self.map.remove(pos).map(|entity| (pos, entity))).collect()
+    }
+
     pub fn values_mut(&mut self) -> impl Iterator<Item = &mut BlockEntity> {
         self.map.values_mut()
     }

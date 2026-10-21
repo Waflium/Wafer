@@ -70,8 +70,10 @@ impl DataAccessor {
             DataAccessor::Storage(id) => server.command_storage.borrow_mut().set(id, into_fields(tag)),
             DataAccessor::Block(level, pos) => {
                 let level = &mut server.levels[*level];
-                let Some(entity) = level.get_block_entity(*pos) else { return Err(ERROR_NOT_A_BLOCK_ENTITY.create()) };
-                entity.load_with_components(&tag);
+                if level.get_block_entity(*pos).is_none() {
+                    return Err(ERROR_NOT_A_BLOCK_ENTITY.create());
+                }
+                level.block_entity_load_with_components(*pos, &tag);
                 level.block_entity_set_changed(*pos);
                 let state = crate::world::level::BlockGetter::block_state(level, *pos);
                 level.send_block_updated(*pos, state, state);

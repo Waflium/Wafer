@@ -32,8 +32,16 @@ impl JukeboxBlockEntity {
         JukeboxSong::from_stack(&self.item).map_or(0, |song| song.comparator_output)
     }
 
+    fn read_song_item(input: &Nbt) -> ItemStack {
+        input.get(SONG_ITEM_TAG_ID).and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(ItemStack::empty)
+    }
+
+    pub fn load_stops_song(&self, input: &Nbt) -> bool {
+        !self.item.is_empty() && !ItemStack::is_same_item_same_components(&Self::read_song_item(input), &self.item)
+    }
+
     pub fn load_additional(&mut self, input: &Nbt) {
-        let new_item = input.get(SONG_ITEM_TAG_ID).and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(ItemStack::empty);
+        let new_item = Self::read_song_item(input);
         if !self.item.is_empty() && !ItemStack::is_same_item_same_components(&new_item, &self.item) {
             self.jukebox_song_player.clear_song();
         }
@@ -56,6 +64,17 @@ impl JukeboxBlockEntity {
 }
 
 impl ServerLevel {
+    pub fn block_entity_load_with_components(&mut self, pos: BlockPos, input: &Nbt) {
+        if let Some(super::BlockEntity { kind: BlockEntityKind::Jukebox(jukebox), .. }) = self.get_block_entity(pos)
+            && jukebox.load_stops_song(input)
+        {
+            self.jukebox_song_player_stop(pos);
+        }
+        if let Some(entity) = self.get_block_entity(pos) {
+            entity.load_with_components(input);
+        }
+    }
+
     pub fn jukebox(&mut self, pos: BlockPos) -> Option<&mut JukeboxBlockEntity> {
         match &mut self.get_block_entity(pos)?.kind {
             BlockEntityKind::Jukebox(jukebox) => Some(jukebox),

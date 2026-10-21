@@ -1334,6 +1334,13 @@ impl ServerLevel {
         self.chunks.run_distance_manager_updates();
         self.process_chunk_events();
         self.chunks.tick_unloads(self.no_save, true);
+        self.unload_block_entities();
+    }
+
+    fn unload_block_entities(&mut self) {
+        for (pos, entity) in std::mem::take(&mut self.chunks.unloaded_block_entities) {
+            self.block_entity_set_removed(pos, &entity);
+        }
     }
 
     pub fn tick_after_time(&mut self, runs: bool) {
@@ -1353,6 +1360,7 @@ impl ServerLevel {
         self.broadcast_changed_chunks();
         self.tick_chunk_map();
         self.chunks.tick_unloads(self.no_save, false);
+        self.unload_block_entities();
         if runs {
             self.run_block_events();
         }
