@@ -45,6 +45,10 @@ impl ServerLevel {
         !self.mob(id).expect("a pathfinder mob").ai.navigation.is_done()
     }
 
+    pub fn is_pathfinder_mob(&self, id: EntityId) -> bool {
+        self.mob(id).is_some_and(|mob| !matches!(mob.kind, MobKind::Ghast(_) | MobKind::Slime(_) | MobKind::MagmaCube(_) | MobKind::Bat(_)))
+    }
+
     pub fn is_panicking(&self, id: EntityId) -> bool {
         let mob = self.mob(id).expect("a pathfinder mob");
         let brain = &mob.living.brain;

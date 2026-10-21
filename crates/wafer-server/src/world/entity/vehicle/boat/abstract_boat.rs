@@ -56,6 +56,7 @@ pub struct AbstractBoat {
     is_above_bubble_column: bool,
     bubble_column_direction_is_down: bool,
     drop_item: Item,
+    pub leash_data: Option<crate::world::entity::leashable::LeashData>,
 }
 
 impl AbstractBoat {
@@ -79,6 +80,7 @@ impl AbstractBoat {
             is_above_bubble_column: false,
             bubble_column_direction_is_down: false,
             drop_item,
+            leash_data: None,
         }
     }
 

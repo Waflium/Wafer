@@ -56,6 +56,9 @@ impl DataAccessor {
                     level.thrown_enderpearl_deregister_from_current_owner(*id);
                 }
                 let previous_cube_size = level.mob(*id).filter(|mob| mob.is_cube_mob()).map(crate::world::entity::mob::Mob::get_size);
+                if level.is_leashable(*id) && level.get_leash_data(*id).is_some() && crate::world::entity::leashable::LeashData::read(&tag).is_none() {
+                    level.remove_leash(*id);
+                }
                 let Some(entity) = level.entities.get_mut(id) else { return Err(ERROR_NO_PLAYERS.create()) };
                 let uuid = entity.entity().uuid;
                 let previous_dimensions = entity.entity().dimensions;

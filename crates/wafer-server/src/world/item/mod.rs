@@ -142,6 +142,12 @@ fn item_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand,
         Some(&"FireworkRocketItem") => return firework_rocket_item::use_on(level, player, hand, hit, stack),
         Some(&"PotionItem") => return potion_item::use_on(level, player, hand, hit, stack),
         Some(&"ShearsItem") => return shears_item::use_on(level, player, hand, hit, stack),
+        Some(&"LeadItem") => {
+            if crate::world::level::BlockGetter::block_state(level, hit.block_pos).is(&wafer_data::block_tags::FENCES) {
+                return crate::world::entity::decoration::leash_fence_knot_entity::bind_player_mobs(level, player, hit.block_pos);
+            }
+            return InteractionResult::Pass;
+        }
         Some(&"MapItem") => {
             if let Some(result) = map_item::use_on(level, &hit, &stack) {
                 return result;

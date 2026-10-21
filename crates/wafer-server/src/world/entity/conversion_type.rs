@@ -28,6 +28,9 @@ impl ConversionType {
         {
             level.stop_riding(root_passenger);
         }
+        if self == ConversionType::SplitOnDeath && level.get_leash_holder(from).is_some() {
+            level.drop_leash(from);
+        }
         if self == ConversionType::Single {
             let root_passenger = level.first_passenger(from);
             let e = level.entity(from);
@@ -70,6 +73,9 @@ impl ConversionType {
             level.set_on_ground(to, on_ground);
             if let DataValue::OptionalBlockPos(Some(_)) = sleeping_pos {
                 level.entity_mut(to).data.set(ids::SLEEPING_POS, sleeping_pos);
+            }
+            if let Some(leash_holder) = level.get_leash_holder(from) {
+                level.set_leashed_to(to, leash_holder, true);
             }
         }
         convert_common(level, from, to, params);

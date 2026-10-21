@@ -1775,6 +1775,7 @@ impl ServerLevel {
             Some(LevelEntity::LightningBolt(_)) => self.tick_lightning_bolt(id),
             Some(LevelEntity::EyeOfEnder(_)) => self.tick_eye_of_ender(id),
             Some(LevelEntity::EvokerFangs(_)) => self.tick_evoker_fangs(id),
+            Some(LevelEntity::LeashKnot(_)) => self.tick_leash_fence_knot(id),
             Some(LevelEntity::EndCrystal(_)) => self.tick_end_crystal(id),
             Some(LevelEntity::PrimedTnt(_)) => self.tick_primed_tnt(id),
             Some(LevelEntity::FallingBlock(_)) => self.tick_falling_block(id),

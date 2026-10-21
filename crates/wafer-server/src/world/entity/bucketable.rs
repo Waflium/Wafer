@@ -91,6 +91,7 @@ pub fn bucket_mob_pickup(level: &mut ServerLevel, player: EntityId, hand: Intera
     let result = item_utils::create_filled_result(level, player, hand, item_stack, bucket, false);
     level.player_mut(player).set_item_in_hand(hand, Some(result));
     criteria_triggers::FILLED_BUCKET.trigger(level, player, &triggered);
+    level.drop_leash(pickup_entity);
     level.remove(pickup_entity, RemovalReason::Discarded);
     Some(InteractionResult::SUCCESS)
 }

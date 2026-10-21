@@ -11,6 +11,7 @@ pub mod conversion_tracker;
 pub mod conversion_type;
 pub mod crackiness;
 pub mod data;
+pub mod decoration;
 #[cfg(test)]
 mod entity_data_layout_tests;
 #[cfg(test)]
@@ -36,6 +37,9 @@ pub mod item_based_steering;
 pub mod item_steerable;
 pub mod inside_block;
 pub mod item;
+pub mod leashable;
+#[cfg(test)]
+mod leashable_tests;
 pub mod lightning_bolt;
 pub mod living_entity;
 pub mod mob;
@@ -75,6 +79,7 @@ pub enum LevelEntity {
     LightningBolt(lightning_bolt::LightningBolt),
     EyeOfEnder(projectile::eye_of_ender::EyeOfEnder),
     EvokerFangs(projectile::evoker_fangs::EvokerFangs),
+    LeashKnot(decoration::leash_fence_knot_entity::LeashFenceKnotEntity),
     EndCrystal(boss::enderdragon::end_crystal::EndCrystal),
     PrimedTnt(primed_tnt::PrimedTnt),
     FallingBlock(item::falling_block_entity::FallingBlockEntity),
@@ -125,6 +130,7 @@ impl LevelEntity {
             LevelEntity::FallingBlock(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(20), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::LightningBolt(_) => TrackingConfig { range: 16 * 16, update_interval: UpdateInterval::Never, track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EyeOfEnder(_) => TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(4), track_deltas: true, stepped: false, is_item: false },
+            LevelEntity::LeashKnot(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Never, track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EvokerFangs(_) => TrackingConfig { range: 6 * 16, update_interval: UpdateInterval::Periodic(2), track_deltas: false, stepped: false, is_item: false },
             LevelEntity::EndCrystal(_) => TrackingConfig { range: 16 * 16, update_interval: UpdateInterval::Never, track_deltas: false, stepped: false, is_item: false },
             LevelEntity::ExperienceOrb(_) => TrackingConfig { range: 6 * 16, update_interval: UpdateInterval::Periodic(20), track_deltas: true, stepped: false, is_item: false },
@@ -152,6 +158,7 @@ impl LevelEntity {
             LevelEntity::LightningBolt(bolt) => &bolt.entity,
             LevelEntity::EyeOfEnder(eye) => &eye.entity,
             LevelEntity::EvokerFangs(fangs) => &fangs.entity,
+            LevelEntity::LeashKnot(knot) => &knot.entity,
             LevelEntity::EndCrystal(crystal) => &crystal.entity,
             LevelEntity::PrimedTnt(tnt) => &tnt.entity,
             LevelEntity::FallingBlock(falling) => &falling.entity,
@@ -170,6 +177,7 @@ impl LevelEntity {
             LevelEntity::LightningBolt(bolt) => &mut bolt.entity,
             LevelEntity::EyeOfEnder(eye) => &mut eye.entity,
             LevelEntity::EvokerFangs(fangs) => &mut fangs.entity,
+            LevelEntity::LeashKnot(knot) => &mut knot.entity,
             LevelEntity::EndCrystal(crystal) => &mut crystal.entity,
             LevelEntity::PrimedTnt(tnt) => &mut tnt.entity,
             LevelEntity::FallingBlock(falling) => &mut falling.entity,

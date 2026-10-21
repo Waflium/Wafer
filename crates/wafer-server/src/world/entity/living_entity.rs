@@ -1876,6 +1876,9 @@ impl ServerLevel {
     }
 
     pub fn remove(&mut self, id: EntityId, reason: RemovalReason) {
+        if self.is_boat(id) && reason.should_destroy() && self.is_leashed(id) {
+            self.drop_leash(id);
+        }
         if self.is_player(id) {
             self.player_remove(id, reason);
         } else if self.mob(id).is_some_and(|mob| mob.is_cube_mob()) {

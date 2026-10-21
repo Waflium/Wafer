@@ -149,6 +149,7 @@ impl LevelEntity {
             LevelEntity::LightningBolt(_) => None,
             LevelEntity::EyeOfEnder(_) => Some("minecraft:eye_of_ender"),
             LevelEntity::EvokerFangs(_) => Some("minecraft:evoker_fangs"),
+            LevelEntity::LeashKnot(_) => None,
             LevelEntity::EndCrystal(_) => Some("minecraft:end_crystal"),
             LevelEntity::Projectile(projectile) => Some(wafer_data::registry::ENTITY_TYPE[projectile.entity.entity_type as usize]),
             LevelEntity::AreaEffectCloud(_) => Some("minecraft:area_effect_cloud"),
@@ -203,6 +204,7 @@ impl LevelEntity {
             LevelEntity::LightningBolt(_) => {}
             LevelEntity::EyeOfEnder(eye) => out.push(("Item".into(), eye.get_item().to_nbt())),
             LevelEntity::EvokerFangs(fangs) => fangs.add_additional_save_data(out),
+            LevelEntity::LeashKnot(_) => {}
             LevelEntity::EndCrystal(crystal) => {
                 if let Some(target) = crystal.get_beam_target() {
                     out.push(("beam_target".into(), Nbt::IntArray(vec![target.x, target.y, target.z])));
@@ -232,6 +234,7 @@ impl LevelEntity {
             LevelEntity::Mob(mob) => mob.save(out),
             LevelEntity::Minecart(minecart) => minecart.add_additional_save_data(out),
             LevelEntity::Boat(boat) => {
+                crate::world::entity::leashable::LeashData::write(boat.leash_data.as_ref(), out);
                 if let Some(container) = &boat.container {
                     container.add_chest_vehicle_save_data(out);
                 }
@@ -270,6 +273,7 @@ impl LevelEntity {
             LevelEntity::FallingBlock(falling) => falling.read_additional_save_data(nbt),
             LevelEntity::LightningBolt(_) => {}
             LevelEntity::EvokerFangs(fangs) => fangs.read_additional_save_data(nbt),
+            LevelEntity::LeashKnot(_) => {}
             LevelEntity::EyeOfEnder(eye) => {
                 let item = nbt.get("Item").and_then(|i| ItemStack::from_nbt(i).ok()).unwrap_or_else(ItemStack::empty);
                 eye.set_item(&item);
@@ -305,6 +309,7 @@ impl LevelEntity {
             LevelEntity::Mob(mob) => mob.load(nbt),
             LevelEntity::Minecart(minecart) => minecart.read_additional_save_data(nbt),
             LevelEntity::Boat(boat) => {
+                boat.leash_data = crate::world::entity::leashable::LeashData::read(nbt);
                 if let Some(container) = &mut boat.container {
                     container.read_chest_vehicle_save_data(nbt);
                 }

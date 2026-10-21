@@ -427,7 +427,11 @@ impl ServerLevel {
                 }
                 let entity = self.entity_ref(tracked).unwrap();
                 let mut packets = vec![encode(clientbound::BUNDLE_DELIMITER, |_| {})];
-                packets.extend(self.chunk_map.tracked.get(tracked).unwrap().server_entity.pairing_packets(entity, self.add_entity_data(tracked)));
+                let block_pos = match self.entities.get(&tracked) {
+                    Some(LevelEntity::LeashKnot(knot)) => Some(knot.block_attached.pos),
+                    _ => None,
+                };
+                packets.extend(self.chunk_map.tracked.get(tracked).unwrap().server_entity.pairing_packets(entity, self.add_entity_data(tracked), block_pos));
                 packets.extend(self.extra_pairing_packets(tracked));
                 packets.push(encode(clientbound::BUNDLE_DELIMITER, |_| {}));
                 let connection = &self.player(player).connection;
@@ -484,6 +488,9 @@ impl ServerLevel {
         }
         if let Some(vehicle) = self.vehicle(tracked) {
             packets.push(crate::world::entity::set_passengers_packet(vehicle, self.passengers(vehicle)));
+        }
+        if self.is_leashable(tracked) && self.is_leashed(tracked) {
+            packets.push(crate::world::entity::leashable::set_entity_link_packet(tracked, self.get_leash_holder(tracked)));
         }
         packets
     }

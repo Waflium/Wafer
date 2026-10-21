@@ -1187,6 +1187,10 @@ impl ServerLevel {
     }
 
     pub fn entity_move(&mut self, id: EntityId, mover: MoverType, delta: Vec3) {
+        if self.is_block_attached_entity(id) {
+            self.block_attached_entity_move(id, delta);
+            return;
+        }
         let e = self.entity_mut(id);
         if e.no_physics {
             let to = e.position().add_vec(delta);
@@ -2180,6 +2184,9 @@ impl ServerLevel {
         let on_fire = e.remaining_fire_ticks > 0;
         e.set_shared_flag(flags::ON_FIRE, on_fire);
         e.first_tick = false;
+        if self.is_leashable(id) {
+            self.tick_leash(id);
+        }
     }
 
     pub fn on_above_bubble_column(&mut self, id: EntityId, drag_down: bool, pos: BlockPos) {
@@ -2397,6 +2404,7 @@ impl ServerLevel {
             Some(LevelEntity::FallingBlock(_)) => self.falling_block_hurt_server(id, source),
             Some(LevelEntity::EndCrystal(_)) => self.end_crystal_hurt_server(id, source),
             Some(LevelEntity::Projectile(_)) => self.projectile_hurt_server(id, &source),
+            Some(LevelEntity::LeashKnot(_)) => self.block_attached_entity_hurt_server(id, source),
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => self.vehicle_entity_hurt_server(id, source, damage),
             _ => false,
         }
@@ -2439,6 +2447,7 @@ impl ServerLevel {
 
     pub fn interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {
         match self.entities.get(&id) {
+            Some(LevelEntity::LeashKnot(_)) => return self.leash_fence_knot_interact(id, player, hand, location),
             Some(LevelEntity::Minecart(_)) => return self.minecart_interact(id, player, hand, location),
             Some(LevelEntity::Boat(boat)) if boat.container.is_some() => return self.abstract_chest_boat_interact(id, player, hand, location),
             Some(LevelEntity::Boat(_)) => return self.abstract_boat_interact(id, player, hand, location),
@@ -2466,7 +2475,30 @@ impl ServerLevel {
     }
 
     pub fn entity_interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, _location: Vec3) -> InteractionResult {
-        let held_item = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
+        if self.player(player).is_secondary_use_active() && self.is_leashable(id) && self.can_be_leashed(id) && self.is_alive(id) && !(self.is_living(id) && self.is_baby(id)) {
+            let mobs_to_leash = {
+                let center = self.entity(id).bounding_box().center();
+                self.leashable_in_area(center, |level, leashable| level.get_leash_holder(leashable) == Some(player))
+            };
+            if !mobs_to_leash.is_empty() {
+                let mut any_leashed = false;
+                for mob in mobs_to_leash {
+                    if self.can_have_a_leash_attached_to(mob, id) {
+                        self.set_leashed_to(mob, id, true);
+                        any_leashed = true;
+                    }
+                }
+                if any_leashed {
+                    self.entity_play_sound(id, sound_event("minecraft:item.lead.tied"), 1.0, 1.0);
+                    return InteractionResult::SUCCESS_SERVER.without_item();
+                }
+            }
+        }
+        let mut held_item = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
+        if held_item.is(wafer_data::items::SHEARS) && self.shear_off_all_leash_connections(id, Some(player)) {
+            self.hurt_and_break(player, hand.as_equipment_slot(), 1);
+            return InteractionResult::SUCCESS;
+        }
         if self.is_mob(id)
             && held_item.is(wafer_data::items::SHEARS)
             && self.can_shear_equipment(id, player)
@@ -2474,6 +2506,28 @@ impl ServerLevel {
             && self.attempt_to_shear_equipment(id, player, hand)
         {
             return InteractionResult::SUCCESS;
+        }
+        if self.is_alive(id) && self.is_leashable(id) {
+            if self.get_leash_holder(id) == Some(player) {
+                if self.has_infinite_materials(player) {
+                    self.remove_leash(id);
+                } else {
+                    self.drop_leash(id);
+                }
+                self.entity_play_sound(id, sound_event("minecraft:item.lead.untied"), 1.0, 1.0);
+                return InteractionResult::SUCCESS.without_item();
+            }
+            let mut item_stack = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
+            if item_stack.is(wafer_data::items::LEAD) && !self.get_leash_holder(id).is_some_and(|holder| self.is_player(holder)) && self.can_have_a_leash_attached_to(id, player) {
+                if self.is_leashed(id) {
+                    self.drop_leash(id);
+                }
+                self.set_leashed_to(id, player, true);
+                self.entity_play_sound(id, sound_event("minecraft:item.lead.tied"), 1.0, 1.0);
+                item_stack.shrink(1);
+                self.player_mut(player).set_item_in_hand(hand, Some(item_stack));
+                return InteractionResult::SUCCESS_SERVER;
+            }
         }
         InteractionResult::Pass
     }
@@ -2535,6 +2589,10 @@ impl ServerLevel {
     }
 
     pub fn kill(&mut self, id: EntityId) {
+        if self.is_block_attached_entity(id) {
+            self.block_attached_entity_kill(id, Some(id));
+            return;
+        }
         self.hurt_server(id, DamageSource::new(damage_types::GENERIC_KILL), f32::MAX);
     }
 
@@ -2839,6 +2897,9 @@ impl ServerLevel {
 
     fn remove_after_changing_dimensions(&mut self, id: EntityId) {
         self.entity_mut(id).removal = Some(RemovalReason::ChangedDimension);
+        if self.is_leashable(id) {
+            self.remove_leash(id);
+        }
         if self.is_living(id) {
             self.get_waypoint_manager().untrack_waypoint(self, id);
         }
@@ -3291,6 +3352,9 @@ impl ServerLevel {
             let packet = set_passengers_packet(entity_to_ride, self.passengers(entity_to_ride));
             self.player(id).connection.send_raw(packet);
         }
+        if self.is_mob(id) && self.is_leashed(id) {
+            self.drop_leash(id);
+        }
         true
     }
 
@@ -3657,6 +3721,10 @@ impl ServerLevel {
     }
 
     pub fn entity_push(&mut self, id: EntityId, xa: f64, ya: f64, za: f64) {
+        if self.is_block_attached_entity(id) {
+            self.block_attached_entity_push(id, xa, ya, za);
+            return;
+        }
         self.entity_mut(id).push(xa, ya, za);
     }
 

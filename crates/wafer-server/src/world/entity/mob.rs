@@ -199,6 +199,7 @@ pub enum MobKind {
 }
 
 pub struct Mob {
+    pub leash_data: Option<super::leashable::LeashData>,
     pub entity: Entity,
     pub living: LivingEntity,
     pub health: f32,
@@ -222,6 +223,7 @@ pub struct Mob {
 impl Mob {
     pub fn new(entity: Entity, living: LivingEntity, kind: MobKind) -> Mob {
         let mut mob = Mob {
+            leash_data: None,
             entity,
             living,
             health: 1.0,
@@ -587,6 +589,15 @@ impl Mob {
 
     pub fn has_home(&self) -> bool {
         self.home_radius != -1
+    }
+
+    pub fn set_home_to(&mut self, new_center: BlockPos, radius: i32) {
+        self.home_position = new_center;
+        self.home_radius = radius;
+    }
+
+    pub fn clear_home(&mut self) {
+        self.home_radius = -1;
     }
 
     pub fn is_within_home(&self, pos: BlockPos) -> bool {
@@ -1269,6 +1280,7 @@ impl Mob {
         if !drop_chances.is_empty() {
             out.push(("drop_chances".into(), Nbt::Compound(drop_chances)));
         }
+        super::leashable::LeashData::write(self.leash_data.as_ref(), out);
         if self.home_radius > -1 {
             out.push(("home_radius".into(), Nbt::Int(self.home_radius)));
             out.push(("home_pos".into(), Nbt::IntArray(vec![self.home_position.x, self.home_position.y, self.home_position.z])));
@@ -1445,6 +1457,7 @@ impl Mob {
                 }
             }
         }
+        self.leash_data = super::leashable::LeashData::read(nbt);
         self.home_radius = int("home_radius").unwrap_or(-1);
         if self.home_radius >= 0 {
             self.home_position = match nbt.get("home_pos") {
@@ -2146,6 +2159,9 @@ impl ServerLevel {
         mob.living.yya = 0.0;
         mob.set_speed(0.0);
         mob.entity.set_delta_movement(wafer_core::Vec3::ZERO);
+        if let Some(leash_data) = mob.leash_data.as_mut() {
+            leash_data.angular_momentum = 0.0;
+        }
     }
 
     pub fn mob_tick(&mut self, id: EntityId) {
@@ -2781,7 +2797,7 @@ impl ServerLevel {
     }
 
     pub fn mob_requires_custom_persistence(&self, id: EntityId) -> bool {
-        self.is_passenger(id)
+        self.is_passenger(id) || self.is_leashed(id)
     }
 
     pub fn read_level_dependent_save_data(&mut self, id: EntityId, input: &Nbt) {

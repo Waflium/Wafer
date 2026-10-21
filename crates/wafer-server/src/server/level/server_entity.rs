@@ -400,16 +400,27 @@ impl ServerEntity {
         }
     }
 
-    pub fn pairing_packets(&self, entity: &Entity, data: i32) -> Vec<Vec<u8>> {
+    pub fn pairing_packets(&self, entity: &Entity, data: i32, block_pos: Option<wafer_core::BlockPos>) -> Vec<Vec<u8>> {
         let mut packets = vec![encode(clientbound::ADD_ENTITY, |p| {
             p.varint(entity.id);
             p.uuid(entity.uuid);
             p.varint(entity.entity_type);
-            write_vec3(p, self.position_base);
-            p.lp_vec3(self.last_sent_movement.x, self.last_sent_movement.y, self.last_sent_movement.z);
-            p.u8(mth::pack_degrees(mth::unpack_degrees(self.last_sent_x_rot)) as u8);
-            p.u8(mth::pack_degrees(mth::unpack_degrees(self.last_sent_y_rot)) as u8);
-            p.u8(mth::pack_degrees(mth::unpack_degrees(self.last_sent_y_head_rot)) as u8);
+            match block_pos {
+                Some(pos) => {
+                    write_vec3(p, Vec3::new(pos.x as f64, pos.y as f64, pos.z as f64));
+                    p.lp_vec3(entity.delta_movement.x, entity.delta_movement.y, entity.delta_movement.z);
+                    p.u8(mth::pack_degrees(entity.x_rot) as u8);
+                    p.u8(mth::pack_degrees(entity.y_rot) as u8);
+                    p.u8(mth::pack_degrees(entity.y_head_rot) as u8);
+                }
+                None => {
+                    write_vec3(p, self.position_base);
+                    p.lp_vec3(self.last_sent_movement.x, self.last_sent_movement.y, self.last_sent_movement.z);
+                    p.u8(mth::pack_degrees(mth::unpack_degrees(self.last_sent_x_rot)) as u8);
+                    p.u8(mth::pack_degrees(mth::unpack_degrees(self.last_sent_y_rot)) as u8);
+                    p.u8(mth::pack_degrees(mth::unpack_degrees(self.last_sent_y_head_rot)) as u8);
+                }
+            }
             p.varint(data);
         })];
         if let Some(values) = &self.tracked_data_values {

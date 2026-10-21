@@ -27,6 +27,10 @@ impl FenceBlock {
 }
 
 impl BlockBehaviour for FenceBlock {
+    fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: crate::world::entity::EntityId, _hit: &super::BlockHitResult) -> crate::world::InteractionResult {
+        crate::world::entity::decoration::leash_fence_knot_entity::bind_player_mobs(level, player, pos)
+    }
+
     fn rotate(&self, state: BlockState, rotation: Rotation) -> BlockState {
         cross_collision_block::rotate(state, rotation)
     }
