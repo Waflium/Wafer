@@ -17,6 +17,25 @@ pub enum Portal {
     EndGateway,
 }
 
+pub fn of(state: wafer_data::BlockState) -> Option<Portal> {
+    if state.is_block(wafer_data::blocks::NETHER_PORTAL) {
+        Some(Portal::NetherPortal)
+    } else if state.is_block(wafer_data::blocks::END_PORTAL) {
+        Some(Portal::EndPortal)
+    } else if state.is_block(wafer_data::blocks::END_GATEWAY) {
+        Some(Portal::EndGateway)
+    } else {
+        None
+    }
+}
+
+pub struct PendingSpectatorPortalUse {
+    pub player: EntityId,
+    pub portal: Portal,
+    pub pos: BlockPos,
+    pub packets: Vec<Vec<u8>>,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Transition {
     Confusion,

@@ -1423,6 +1423,7 @@ impl Server {
         for id in self.player_ids() {
             self.entity_level_mut(id).tick_connection_start(id);
             if let Some(level) = self.level_of(id) {
+                self.handle_pending_spectator_portal_use(level);
                 self.handle_pending_portal_teleport(level);
             }
             let connected = self.entity_level_mut(id).tick_connection_end(id);

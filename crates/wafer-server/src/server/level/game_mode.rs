@@ -448,6 +448,10 @@ impl ServerLevel {
                 self.open_menu(player, menu_provider);
                 return InteractionResult::CONSUME;
             }
+            if let Some(portal) = crate::world::level::block::portal::of(state) {
+                self.pending_spectator_portal_use = Some(crate::world::level::block::portal::PendingSpectatorPortalUse { player, portal, pos, packets: Vec::new() });
+                return InteractionResult::CONSUME;
+            }
             return InteractionResult::Pass;
         }
         let p = self.player(player);

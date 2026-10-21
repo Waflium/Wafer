@@ -438,10 +438,14 @@ impl ServerLevel {
         }
         for p in [pos, pos.relative(direction)] {
             let state = crate::world::level::BlockGetter::block_state(self, p);
-            self.player(id).connection.send(clientbound::BLOCK_UPDATE, |w| {
+            let packet = crate::network::connection::encode(clientbound::BLOCK_UPDATE, |w| {
                 w.position(p.x, p.y, p.z);
                 w.varint(state.id() as i32);
             });
+            match &mut self.pending_spectator_portal_use {
+                Some(pending) if pending.player == id => pending.packets.push(packet),
+                _ => self.player(id).connection.send_raw(packet),
+            }
         }
     }
 

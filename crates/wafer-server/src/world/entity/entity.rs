@@ -3006,6 +3006,29 @@ impl crate::server::Server {
         }
     }
 
+    pub fn handle_pending_spectator_portal_use(&mut self, level: usize) {
+        let Some(pending) = self.levels[level].pending_spectator_portal_use.take() else { return };
+        let entity = self.levels[level].portal_entity(pending.player);
+        match pending.portal.get_portal_destination(self, level, &entity, pending.pos) {
+            Some(transition) => {
+                if self.levels[level].get_camera(pending.player) != pending.player {
+                    self.set_camera(pending.player, None);
+                }
+                let portal_teleport = PendingPortalTeleport { entity, portal: pending.portal, entry_position: pending.pos, removed: false };
+                self.teleport_to_portal_destination(level, &portal_teleport, transition);
+            }
+            None => {
+                let message = crate::network::chat::Component::translatable("spectator.cannot_teleport").with_color(crate::network::chat::ChatFormatting::Red);
+                self.levels[level].player(pending.player).send_overlay_message(&message);
+            }
+        }
+        if let Some(player) = self.get_player(pending.player) {
+            for packet in pending.packets {
+                player.connection.send_raw(packet);
+            }
+        }
+    }
+
     fn teleport_to_portal_destination(&mut self, level: usize, pending: &PendingPortalTeleport, transition: TeleportTransition) -> bool {
         let id = pending.entity.id;
         let (from, to) = (self.levels[level].dimension, self.levels[transition.new_level].dimension);
