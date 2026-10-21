@@ -179,6 +179,7 @@ pub struct Server {
     pub player_list: Vec<EntityId>,
     player_names_array: Arc<RwLock<Arc<[String]>>>,
     connections: HashMap<ConnId, EntityId>,
+    lost_connections: HashMap<ConnId, Component>,
     pub clocks: ServerClockManager,
     pub game_rules: GameRules,
     pub weather: Rc<Cell<WeatherData>>,
@@ -368,6 +369,7 @@ impl Server {
             player_list: Vec::new(),
             player_names_array: Arc::default(),
             connections: HashMap::new(),
+            lost_connections: HashMap::new(),
             clocks,
             game_rules,
             weather,
@@ -883,7 +885,11 @@ impl Server {
                     self.remove_player(conn, None);
                 }
             }
-            Event::Left { conn, reason } => self.remove_player(conn, Some(reason)),
+            Event::Left { conn, reason } => {
+                if self.connections.contains_key(&conn) {
+                    self.lost_connections.insert(conn, reason);
+                }
+            }
             Event::Verify { profile, address, user_name, reply } => self.pending_logins.push(PendingLogin { profile, address, user_name, reply, waiting_for_dupe: false }),
             Event::PrepareSpawn { uuid, name, reply } => self.start_prepare_spawn(uuid, &name, reply),
             Event::PrepareSpawnClosed { uuid } => self.prepare_spawn_tasks.retain(|t| t.uuid != uuid),
@@ -1335,6 +1341,7 @@ impl Server {
     }
 
     fn remove_player(&mut self, conn: ConnId, reason: Option<Component>) {
+        self.lost_connections.remove(&conn);
         let Some(id) = self.connections.remove(&conn) else { return };
         let Some(level_index) = self.level_of(id) else { return };
         let level = &mut self.levels[level_index];
@@ -1431,6 +1438,13 @@ impl Server {
             self.tick_level(index);
         }
         for id in self.player_ids() {
+            if !self.lost_connections.is_empty()
+                && let Some(conn) = self.connections.iter().find(|&(_, &p)| p == id).map(|(&c, _)| c)
+                && let Some(reason) = self.lost_connections.remove(&conn)
+            {
+                self.remove_player(conn, Some(reason));
+                continue;
+            }
             self.entity_level_mut(id).tick_connection_start(id);
             if let Some(level) = self.level_of(id) {
                 self.handle_pending_spectator_portal_use(level);
