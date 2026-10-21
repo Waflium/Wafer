@@ -9,6 +9,7 @@ use crate::world::entity::relative::PositionMoveRotation;
 use crate::world::level::biome::{self, Precipitation};
 use crate::world::level::block;
 use crate::world::level::chunk::{Biome, ChunkGenerator, HeightmapType};
+use crate::world::level::levelgen::density_function::SamplerContext;
 use crate::world::level::light_layer::LightLayer;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::level::BlockGetter;
@@ -26,7 +27,7 @@ impl ServerLevel {
         }
         match &self.chunks.generator {
             ChunkGenerator::Flat(flat) => flat.biome,
-            ChunkGenerator::Noise(noise) => noise.chunk_biomes(chunk, self.chunks.dimension).get(quart_x, quart_y, quart_z),
+            ChunkGenerator::Noise(noise) => noise.get_noise_biome(&mut SamplerContext::cached(), quart_x, quart_y, quart_z),
         }
     }
 
