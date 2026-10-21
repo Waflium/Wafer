@@ -120,7 +120,7 @@ impl Entity {
         if let Some(uuid) = nbt.get("UUID").and_then(uuid_from_nbt) {
             self.uuid = uuid;
         }
-        self.data.set(ids::CUSTOM_NAME, DataValue::OptionalComponent(nbt.get("CustomName").cloned()));
+        self.set_custom_name(nbt.get("CustomName").cloned());
         self.data.set(ids::CUSTOM_NAME_VISIBLE, DataValue::Boolean(flag(nbt, "CustomNameVisible")));
         self.data.set(ids::SILENT, DataValue::Boolean(flag(nbt, "Silent")));
         self.data.set(ids::NO_GRAVITY, DataValue::Boolean(flag(nbt, "NoGravity")));

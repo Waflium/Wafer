@@ -85,31 +85,22 @@ pub enum LevelEntity {
 impl LevelEntity {
     pub fn name(&self) -> crate::network::chat::Component {
         match self {
-            LevelEntity::Mob(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) => match self.entity().custom_name() {
-                Some(name) => name,
-                None => match self {
-                    LevelEntity::Mob(mob) if matches!(mob.kind, mob::MobKind::Villager(_)) => npc::villager::villager::get_type_name(mob),
-                    _ => description(wafer_data::registry::ENTITY_TYPE[self.entity().entity_type as usize]),
-                },
+            LevelEntity::Item(item) => item.entity.custom_name().unwrap_or_else(|| item.item.item_name()),
+            _ => match self.entity().custom_name() {
+                Some(custom_name) => remove_action(custom_name),
+                None => self.type_name(),
             },
-            LevelEntity::Item(item) => crate::network::chat::Component::translatable(item.item.item.info().description_id),
-            LevelEntity::LightningBolt(_) => crate::network::chat::Component::translatable("entity.minecraft.lightning_bolt"),
-            LevelEntity::EyeOfEnder(_) => crate::network::chat::Component::translatable("entity.minecraft.eye_of_ender"),
-            LevelEntity::EndCrystal(_) => crate::network::chat::Component::translatable("entity.minecraft.end_crystal"),
-            LevelEntity::PrimedTnt(_) => crate::network::chat::Component::translatable("entity.minecraft.tnt"),
+        }
+    }
+
+    fn type_name(&self) -> crate::network::chat::Component {
+        match self {
+            LevelEntity::Mob(mob) if matches!(mob.kind, mob::MobKind::Villager(_)) => npc::villager::villager::get_type_name(mob),
             LevelEntity::FallingBlock(falling) => crate::network::chat::Component::translatable_with(
                 "entity.minecraft.falling_block_type",
                 vec![crate::network::chat::Arg::Component(crate::network::chat::Component::translatable(falling.get_block_state().block().info().description_id))],
             ),
-            LevelEntity::ExperienceOrb(_) => crate::network::chat::Component::translatable("entity.minecraft.experience_orb"),
-            LevelEntity::Projectile(projectile) => match projectile.entity.custom_name() {
-                Some(name) => name,
-                None => description(wafer_data::registry::ENTITY_TYPE[projectile.entity.entity_type as usize]),
-            },
-            LevelEntity::AreaEffectCloud(cloud) => match cloud.entity.custom_name() {
-                Some(name) => name,
-                None => description(wafer_data::registry::ENTITY_TYPE[cloud.entity.entity_type as usize]),
-            },
+            _ => description(wafer_data::registry::ENTITY_TYPE[self.entity().entity_type as usize]),
         }
     }
 
@@ -209,6 +200,14 @@ impl LevelEntity {
 
 pub fn can_summon(entity_type: &str) -> bool {
     !matches!(entity_type, "minecraft:player" | "minecraft:fishing_bobber")
+}
+
+fn remove_action(component: crate::network::chat::Component) -> crate::network::chat::Component {
+    crate::network::chat::Component {
+        contents: component.contents,
+        style: crate::network::chat::Style { click_event: None, ..component.style },
+        siblings: component.siblings.into_iter().map(remove_action).collect(),
+    }
 }
 
 pub fn description(entity_type: &str) -> crate::network::chat::Component {
