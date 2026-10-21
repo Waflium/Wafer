@@ -242,6 +242,7 @@ pub fn create_inventory(mob: &mut Mob) {
 pub fn get_inventory_columns(mob: &Mob) -> i32 {
     match mob.kind {
         MobKind::Donkey(_) | MobKind::Mule(_) => super::abstract_chested_horse::get_inventory_columns(mob),
+        MobKind::Llama(_) | MobKind::TraderLlama(_) => super::llama::get_inventory_columns(mob),
         _ => 0,
     }
 }
@@ -249,7 +250,7 @@ pub fn get_inventory_columns(mob: &Mob) -> i32 {
 pub fn randomize_attributes(mob: &mut Mob, random: &mut (impl RandomSource + ?Sized)) {
     match mob.kind {
         MobKind::Horse(_) => super::horse::randomize_attributes(mob, random),
-        MobKind::Donkey(_) | MobKind::Mule(_) => super::abstract_chested_horse::randomize_attributes(mob, random),
+        MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) => super::abstract_chested_horse::randomize_attributes(mob, random),
         MobKind::SkeletonHorse(_) => super::skeleton_horse::randomize_attributes(mob, random),
         MobKind::ZombieHorse(_) => super::zombie_horse::randomize_attributes(mob, random),
         _ => {}
@@ -340,6 +341,18 @@ pub fn is_mob_controlled() -> bool {
 }
 
 impl ServerLevel {
+    pub fn get_max_temper(&self, id: EntityId) -> i32 {
+        if self.is_llama(id) { super::llama::get_max_temper() } else { get_max_temper() }
+    }
+
+    pub fn can_perform_rearing(&self, id: EntityId) -> bool {
+        !self.is_llama(id) && can_perform_rearing()
+    }
+
+    pub fn can_eat_grass(&self, id: EntityId) -> bool {
+        !self.is_llama(id) && can_eat_grass()
+    }
+
     pub fn is_mob_controlled(&self, id: EntityId) -> bool {
         if self.is_zombie_horse(id) { self.zombie_horse_is_mob_controlled(id) } else { is_mob_controlled() }
     }
@@ -422,7 +435,7 @@ impl ServerLevel {
     }
 
     pub fn modify_temper(&mut self, id: EntityId, amount: i32) -> i32 {
-        let temper = mth::clamp_i(self.get_temper(id) + amount, 0, get_max_temper());
+        let temper = mth::clamp_i(self.get_temper(id) + amount, 0, self.get_max_temper(id));
         abstract_horse_mut(self.mob_mut(id).expect("an abstract horse")).temper = temper;
         temper
     }
@@ -484,6 +497,7 @@ impl ServerLevel {
             MobKind::Donkey(_) => Some(super::donkey::get_eating_sound()),
             MobKind::Mule(_) => Some(super::mule::get_eating_sound()),
             MobKind::ZombieHorse(_) => Some(super::zombie_horse::get_eating_sound()),
+            MobKind::Llama(_) | MobKind::TraderLlama(_) => Some(super::llama::get_eating_sound()),
             _ => None,
         }
     }
@@ -495,6 +509,7 @@ impl ServerLevel {
             MobKind::Donkey(_) => Some(super::donkey::get_angry_sound()),
             MobKind::Mule(_) => Some(super::mule::get_angry_sound()),
             MobKind::ZombieHorse(_) => Some(super::zombie_horse::get_angry_sound()),
+            MobKind::Llama(_) | MobKind::TraderLlama(_) => Some(super::llama::get_angry_sound()),
             _ => None,
         }
     }
@@ -540,7 +555,7 @@ impl ServerLevel {
     }
 
     pub fn fed_food(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, item_stack: &mut ItemStack) -> InteractionResult {
-        let ate_food = self.handle_eating(id, player, item_stack);
+        let ate_food = if self.is_llama(id) { self.llama_handle_eating(id, player, item_stack) } else { self.handle_eating(id, player, item_stack) };
         if ate_food {
             item_stack.consume(1, self, Some(player));
             self.player_mut(player).update_item_in_hand(hand, item_stack);
@@ -658,7 +673,7 @@ impl ServerLevel {
         if self.entity_mut(id).random.next_int_bounded(900) == 0 && self.living(id).death_time == 0 {
             self.heal(id, 1.0);
         }
-        if can_eat_grass() {
+        if self.can_eat_grass(id) {
             if !self.is_eating(id) && !self.is_vehicle(id) && self.entity_mut(id).random.next_int_bounded(300) == 0 && {
                 let below = self.entity(id).block_position().below();
                 self.block_state(below).is_block(blocks::GRASS_BLOCK)
@@ -678,6 +693,9 @@ impl ServerLevel {
     }
 
     fn follow_mommy(&mut self, id: EntityId) {
+        if self.is_llama(id) && !self.llama_follow_mommy_allowed(id) {
+            return;
+        }
         if !(is_bred(self.entity(id)) && self.is_baby(id) && !self.is_eating(id)) {
             return;
         }
@@ -823,7 +841,7 @@ impl ServerLevel {
     }
 
     pub fn stand_if_possible(&mut self, id: EntityId) {
-        if can_perform_rearing() {
+        if self.can_perform_rearing(id) {
             self.set_standing(id, 20);
         }
     }

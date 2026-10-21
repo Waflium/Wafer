@@ -7,7 +7,7 @@ use crate::world::entity::ai::goal::target::nearest_attackable_target_goal::Targ
 use crate::world::entity::ai::targeting::targeting_conditions::TargetingConditions;
 
 pub struct LookAtPlayerGoal {
-    look_at: Option<EntityId>,
+    pub look_at: Option<EntityId>,
     look_distance: f32,
     look_time: i32,
     probability: f32,

@@ -42,6 +42,7 @@ pub fn abstract_chested_horse(mob: &Mob) -> &AbstractChestedHorse {
     match &mob.kind {
         MobKind::Donkey(donkey) => &donkey.abstract_chested_horse,
         MobKind::Mule(mule) => &mule.abstract_chested_horse,
+        MobKind::Llama(llama) | MobKind::TraderLlama(llama) => &llama.abstract_chested_horse,
         _ => unreachable!("not an abstract chested horse"),
     }
 }
@@ -93,7 +94,7 @@ impl AbstractChestedHorse {
 
 impl ServerLevel {
     pub fn is_abstract_chested_horse(&self, id: EntityId) -> bool {
-        self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::Donkey(_) | MobKind::Mule(_)))
+        self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::Llama(_) | MobKind::TraderLlama(_)))
     }
 
     pub fn has_chest(&self, id: EntityId) -> bool {
@@ -139,7 +140,7 @@ impl ServerLevel {
         if !self.is_vehicle(id) && !should_open_inventory && (!self.is_baby(id) || !self.is_holding(player, items::GOLDEN_DANDELION)) {
             let mut item_stack = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
             if !item_stack.is_empty() {
-                if abstract_horse::is_food(&item_stack) {
+                if self.is_food(id, &item_stack) {
                     return self.fed_food(id, player, hand, &mut item_stack);
                 }
                 if !self.is_tamed(id) {
@@ -164,6 +165,10 @@ impl ServerLevel {
     }
 
     fn play_chest_equips_sound(&mut self, id: EntityId) {
+        if self.is_llama(id) {
+            self.llama_play_chest_equips_sound(id);
+            return;
+        }
         let sound = if self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::Mule(_))) { "minecraft:entity.mule.chest" } else { "minecraft:entity.donkey.chest" };
         let random = &mut self.entity_mut(id).random;
         let pitch = (random.next_float() - random.next_float()) * 0.2 + 1.0;

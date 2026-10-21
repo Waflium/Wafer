@@ -47,6 +47,7 @@ pub enum ProjectileKind {
     FireworkRocket(FireworkRocketEntity),
     SmallFireball(SmallFireball),
     LargeFireball(LargeFireball),
+    LlamaSpit(super::llama_spit::LlamaSpit),
 }
 
 pub struct Projectile {
@@ -244,6 +245,7 @@ impl ServerLevel {
             ProjectileKind::ThrownTrident(_) => self.thrown_trident_tick(id),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_tick(id),
             ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) => self.abstract_hurting_projectile_tick(id),
+            ProjectileKind::LlamaSpit(_) => self.llama_spit_tick(id),
             _ => self.throwable_projectile_tick(id),
         }
     }
@@ -380,7 +382,7 @@ impl ServerLevel {
             ProjectileKind::ThrownEnderpearl(_) => self.thrown_enderpearl_on_hit(id, hit_result),
             ProjectileKind::ThrownExperienceBottle(_) => self.thrown_experience_bottle_on_hit(id, hit_result),
             ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => self.abstract_thrown_potion_on_hit(id, hit_result),
-            ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::ThrownTrident(_) | ProjectileKind::FireworkRocket(_) => {
+            ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::ThrownTrident(_) | ProjectileKind::FireworkRocket(_) | ProjectileKind::LlamaSpit(_) => {
                 self.projectile_base_on_hit(id, hit_result)
             }
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit(id, hit_result),
@@ -424,6 +426,7 @@ impl ServerLevel {
             ProjectileKind::ThrownExperienceBottle(_) | ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => {}
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit_entity(id, hit_result),
             ProjectileKind::LargeFireball(_) => self.large_fireball_on_hit_entity(id, hit_result),
+            ProjectileKind::LlamaSpit(_) => self.llama_spit_on_hit_entity(id, hit_result),
         }
     }
 
@@ -433,6 +436,7 @@ impl ServerLevel {
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_on_hit_block(id, hit_result),
             ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => self.abstract_thrown_potion_on_hit_block(id, hit_result),
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit_block(id, hit_result),
+            ProjectileKind::LlamaSpit(_) => self.llama_spit_on_hit_block(id, hit_result),
             _ => self.projectile_base_on_hit_block(id, hit_result),
         }
     }

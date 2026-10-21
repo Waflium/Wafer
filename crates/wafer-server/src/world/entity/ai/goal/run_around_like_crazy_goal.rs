@@ -46,7 +46,7 @@ impl RunAroundLikeCrazyGoal {
         let Some(passenger) = level.first_passenger(mob) else { return };
         if level.is_player(passenger) {
             let temper = level.get_temper(mob);
-            let max_temper = abstract_horse::get_max_temper();
+            let max_temper = level.get_max_temper(mob);
             if max_temper > 0 && level.entity_mut(mob).random.next_int_bounded(max_temper) < temper {
                 level.tame_with_name(mob, passenger);
                 return;

@@ -584,6 +584,10 @@ impl Entity {
         matches!(self.data.get(ids::NO_GRAVITY), DataValue::Boolean(true))
     }
 
+    pub fn is_invisible(&self) -> bool {
+        self.shared_flag(flags::INVISIBLE)
+    }
+
     pub fn set_no_gravity(&mut self, no_gravity: bool) {
         self.data.set(ids::NO_GRAVITY, DataValue::Boolean(no_gravity));
     }
@@ -918,6 +922,7 @@ impl ServerLevel {
                 | ProjectileKind::ThrownTrident(_) => 0.05,
                 ProjectileKind::FireworkRocket(_) => 0.0,
                 ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) => 0.0,
+                ProjectileKind::LlamaSpit(_) => 0.06,
                 _ => 0.03,
             },
             Some(super::LevelEntity::AreaEffectCloud(_)) => 0.0,
@@ -1491,6 +1496,9 @@ impl ServerLevel {
         }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Creeper(_))) {
             return self.creeper_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
+        }
+        if self.is_llama(id) {
+            return self.llama_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
         if self.is_abstract_horse(id) {
             return self.abstract_horse_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
@@ -2389,7 +2397,9 @@ impl ServerLevel {
                     | super::mob::MobKind::Donkey(_)
                     | super::mob::MobKind::Mule(_)
                     | super::mob::MobKind::SkeletonHorse(_)
-                    | super::mob::MobKind::ZombieHorse(_),
+                    | super::mob::MobKind::ZombieHorse(_)
+                    | super::mob::MobKind::Llama(_)
+                    | super::mob::MobKind::TraderLlama(_),
                 ) => {
                     return self.abstract_horse_hurt_server(id, source, damage);
                 }
@@ -2731,6 +2741,9 @@ impl ServerLevel {
                     super::mob::MobKind::Mule(_) => "Mule",
                     super::mob::MobKind::SkeletonHorse(_) => "SkeletonHorse",
                     super::mob::MobKind::ZombieHorse(_) => "ZombieHorse",
+                    super::mob::MobKind::Llama(_) => "Llama",
+                    super::mob::MobKind::TraderLlama(_) => "TraderLlama",
+                    super::mob::MobKind::WanderingTrader(_) => "WanderingTrader",
                     super::mob::MobKind::Axolotl(_) => "Axolotl",
                     super::mob::MobKind::Frog(_) => "Frog",
                     super::mob::MobKind::Tadpole(_) => "Tadpole",
@@ -2751,6 +2764,7 @@ impl ServerLevel {
                     ProjectileKind::ThrownTrident(_) => "ThrownTrident",
                     ProjectileKind::FireworkRocket(_) => "FireworkRocketEntity",
                     ProjectileKind::SmallFireball(_) => "SmallFireball",
+                    ProjectileKind::LlamaSpit(_) => "LlamaSpit",
                     ProjectileKind::LargeFireball(_) => "LargeFireball",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",

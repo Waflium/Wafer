@@ -1,6 +1,7 @@
 pub mod arrow;
 pub mod evoker_fangs;
 pub mod eye_of_ender;
+pub mod llama_spit;
 pub mod firework_rocket_entity;
 pub mod hurtingprojectile;
 #[allow(clippy::module_inception)]

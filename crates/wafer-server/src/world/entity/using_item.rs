@@ -113,7 +113,7 @@ impl ServerLevel {
         if let Some(consumable) = stack.get(dc::CONSUMABLE).map(Consumable::from_nbt)
             && consumable.should_emit_particles_and_sounds(remaining)
         {
-            self.emit_particles_and_sounds(id, &consumable, 5);
+            self.emit_particles_and_sounds(id, &stack, &consumable, 5);
         }
         let before = stack.clone();
         crate::world::item::on_use_tick(self, id, &mut stack, remaining);
@@ -224,7 +224,7 @@ impl ServerLevel {
     }
 
     pub fn on_consume(&mut self, id: EntityId, mut stack: ItemStack, consumable: &Consumable) -> ItemStack {
-        self.emit_particles_and_sounds(id, consumable, 16);
+        self.emit_particles_and_sounds(id, &stack, consumable, 16);
         if self.is_player(id) {
             self.award_stat(id, crate::stats::stats::ITEM_USED.get(stack.get_item().0), 1);
             crate::advancements::triggers::criteria_triggers::CONSUME_ITEM.trigger(self, id, &stack);
@@ -342,7 +342,7 @@ impl ServerLevel {
         false
     }
 
-    fn emit_particles_and_sounds(&mut self, id: EntityId, consumable: &Consumable, particle_count: i32) {
+    fn emit_particles_and_sounds(&mut self, id: EntityId, stack: &ItemStack, consumable: &Consumable, particle_count: i32) {
         let e = self.entity_mut(id);
         let random = &mut e.random;
         let eat_volume = if random.next_boolean() { 0.5 } else { 1.0 };
@@ -357,6 +357,11 @@ impl ServerLevel {
                 }
             }
         }
-        self.entity_play_sound(id, consumable.sound.clone(), volume, pitch);
+        let sound: crate::sounds::sound_event::SoundEvent = if self.is_wandering_trader(id) {
+            super::sound_event(crate::world::entity::npc::wanderingtrader::wandering_trader::WanderingTrader::get_consume_sound(stack)).into()
+        } else {
+            consumable.sound.clone()
+        };
+        self.entity_play_sound(id, sound, volume, pitch);
     }
 }

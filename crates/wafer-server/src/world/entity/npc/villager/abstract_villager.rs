@@ -79,6 +79,7 @@ impl Mob {
     pub fn abstract_villager(&self) -> Option<&AbstractVillager> {
         match &self.kind {
             MobKind::Villager(villager) => Some(&villager.abstract_villager),
+            MobKind::WanderingTrader(trader) => Some(&trader.abstract_villager),
             _ => None,
         }
     }
@@ -86,6 +87,7 @@ impl Mob {
     pub fn abstract_villager_mut(&mut self) -> Option<&mut AbstractVillager> {
         match &mut self.kind {
             MobKind::Villager(villager) => Some(&mut villager.abstract_villager),
+            MobKind::WanderingTrader(trader) => Some(&mut trader.abstract_villager),
             _ => None,
         }
     }
@@ -132,8 +134,10 @@ impl ServerLevel {
     }
 
     pub fn update_trades(&mut self, id: EntityId) {
-        if let Some(MobKind::Villager(_)) = self.mob(id).map(|mob| &mob.kind) {
-            self.villager_update_trades(id);
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Villager(_)) => self.villager_update_trades(id),
+            Some(MobKind::WanderingTrader(_)) => self.wandering_trader_update_trades(id),
+            _ => {}
         }
     }
 
@@ -151,13 +155,15 @@ impl ServerLevel {
     }
 
     fn reward_trade_xp(&mut self, id: EntityId, offer: &crate::world::item::trading::merchant_offer::MerchantOffer) {
-        if let Some(MobKind::Villager(_)) = self.mob(id).map(|mob| &mob.kind) {
-            self.villager_reward_trade_xp(id, offer);
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Villager(_)) => self.villager_reward_trade_xp(id, offer),
+            Some(MobKind::WanderingTrader(_)) => self.wandering_trader_reward_trade_xp(id, offer),
+            _ => {}
         }
     }
 
-    pub fn show_progress_bar(&self, _id: EntityId) -> bool {
-        true
+    pub fn show_progress_bar(&self, id: EntityId) -> bool {
+        !self.is_wandering_trader(id)
     }
 
     pub fn notify_trade_updated(&mut self, id: EntityId, item_stack: &ItemStack) {
@@ -165,13 +171,17 @@ impl ServerLevel {
         let interval = mob.ambient_sound_interval();
         if mob.ambient_sound_time > -interval + 20 {
             self.mob_mut(id).expect("an abstract villager").ambient_sound_time = -interval;
-            let sound = get_trade_updated_sound(!item_stack.is_empty());
+            let sound = if self.is_wandering_trader(id) {
+                crate::world::entity::npc::wanderingtrader::wandering_trader::WanderingTrader::get_trade_updated_sound(!item_stack.is_empty())
+            } else {
+                get_trade_updated_sound(!item_stack.is_empty())
+            };
             self.make_sound(id, sound_event(sound));
         }
     }
 
-    pub fn get_notify_trade_sound(&self, _id: EntityId) -> &'static str {
-        "minecraft:entity.villager.yes"
+    pub fn get_notify_trade_sound(&self, id: EntityId) -> &'static str {
+        if self.is_wandering_trader(id) { crate::world::entity::npc::wanderingtrader::wandering_trader::WanderingTrader::get_notify_trade_sound() } else { "minecraft:entity.villager.yes" }
     }
 
     pub fn play_celebrate_sound(&mut self, id: EntityId) {

@@ -119,6 +119,8 @@ impl ServerLevel {
             MobKind::Ocelot(_) => feline::ocelot::is_food(item_stack),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) => equine::abstract_horse::is_food(item_stack),
             MobKind::ZombieHorse(_) => equine::zombie_horse::is_food(item_stack),
+            MobKind::Llama(_) | MobKind::TraderLlama(_) => equine::llama::is_food(item_stack),
+            MobKind::WanderingTrader(_) => false,
             MobKind::Axolotl(_) => axolotl::axolotl::is_food(item_stack),
             MobKind::Frog(_) => frog::frog::is_food(item_stack),
             MobKind::Tadpole(_) => false,
@@ -216,6 +218,7 @@ impl ServerLevel {
             MobKind::Horse(_) => self.horse_can_mate(id, partner),
             MobKind::Donkey(_) => self.donkey_can_mate(id, partner),
             MobKind::Mule(_) => false,
+            MobKind::Llama(_) | MobKind::TraderLlama(_) => self.llama_can_mate(id, partner),
             _ => self.animal_can_mate(id, partner),
         }
     }

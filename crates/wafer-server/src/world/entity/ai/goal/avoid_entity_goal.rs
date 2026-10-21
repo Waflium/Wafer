@@ -15,6 +15,7 @@ pub type PredicateOnAvoidEntity = fn(EntityId, EntityId, &ServerLevel) -> bool;
 pub enum AvoidClass {
     EntityType(&'static str),
     Monster,
+    Zombie,
 }
 
 impl AvoidClass {
@@ -22,6 +23,7 @@ impl AvoidClass {
         match self {
             AvoidClass::EntityType(entity_type) => wafer_data::registry::ENTITY_TYPE[level.entity(entity).entity_type as usize] == entity_type,
             AvoidClass::Monster => level.is_monster(entity),
+            AvoidClass::Zombie => level.mob(entity).is_some_and(|mob| mob.is_zombie()),
         }
     }
 }

@@ -137,7 +137,8 @@ impl LevelEntity {
             LevelEntity::Mob(mob) => TrackingConfig { range: mob.client_tracking_range() * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: mob.track_deltas(), stepped: true, is_item: false },
             LevelEntity::Projectile(projectile) => {
                 let update_interval = if projectile.abstract_arrow().is_some() { 20 } else { 10 };
-                TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(update_interval), track_deltas: true, stepped: false, is_item: false }
+                let track_deltas = !matches!(projectile.kind, projectile::projectile::ProjectileKind::LlamaSpit(_));
+                TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(update_interval), track_deltas, stepped: false, is_item: false }
             }
             LevelEntity::AreaEffectCloud(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Never, track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Minecart(_) => TrackingConfig { range: 8 * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },

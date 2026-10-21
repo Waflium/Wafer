@@ -11,16 +11,18 @@ use crate::world::entity::EntityId;
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::level::saveddata::maps::map_index::{self, MapIndex};
 use crate::world::level::saveddata::maps::map_item_saved_data::MapItemSavedData;
+use crate::world::level::saveddata::wandering_trader_data::{self, WanderingTraderData};
 
 pub struct SavedDataStorage {
     data_folder: Option<PathBuf>,
     maps: HashMap<MapId, Option<Rc<RefCell<MapItemSavedData>>>>,
     map_index: Option<Option<MapIndex>>,
+    wandering_trader: Option<WanderingTraderData>,
 }
 
 impl SavedDataStorage {
     pub fn new(data_folder: Option<PathBuf>) -> SavedDataStorage {
-        SavedDataStorage { data_folder, maps: HashMap::new(), map_index: None }
+        SavedDataStorage { data_folder, maps: HashMap::new(), map_index: None, wandering_trader: None }
     }
 
     fn get_data_file(&self, id: &str) -> Option<PathBuf> {
@@ -71,6 +73,14 @@ impl SavedDataStorage {
         index.as_mut().unwrap()
     }
 
+    pub fn wandering_trader_data(&mut self) -> &mut WanderingTraderData {
+        if self.wandering_trader.is_none() {
+            let data = self.read_saved_data(wandering_trader_data::TYPE, |tag| Ok(WanderingTraderData::decode(tag))).unwrap_or_else(WanderingTraderData::new_dirty);
+            self.wandering_trader = Some(data);
+        }
+        self.wandering_trader.as_mut().unwrap()
+    }
+
     pub fn player_removed(&self, player: EntityId) {
         for data in self.maps.values().flatten() {
             data.borrow_mut().player_removed(player);
@@ -93,6 +103,12 @@ impl SavedDataStorage {
         {
             to_save.push((map_index::TYPE.to_string(), index.encode()));
             index.dirty = false;
+        }
+        if let Some(data) = &mut self.wandering_trader
+            && data.dirty
+        {
+            to_save.push((wandering_trader_data::TYPE.to_string(), data.encode()));
+            data.dirty = false;
         }
         for (id, data) in to_save {
             let Some(file) = self.get_data_file(&id) else { continue };

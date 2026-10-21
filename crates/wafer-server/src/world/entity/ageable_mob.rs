@@ -121,6 +121,8 @@ impl ServerLevel {
             MobKind::Mule(_) => self.mule_get_breed_offspring(id, partner),
             MobKind::SkeletonHorse(_) => self.skeleton_horse_get_breed_offspring(id, partner),
             MobKind::ZombieHorse(_) => self.zombie_horse_get_breed_offspring(id, partner),
+            MobKind::Llama(_) | MobKind::TraderLlama(_) => self.llama_get_breed_offspring(id, partner),
+            MobKind::WanderingTrader(_) => None,
             MobKind::Axolotl(_) => self.axolotl_get_breed_offspring(id, partner),
             MobKind::Frog(_) => self.frog_get_breed_offspring(id, partner),
             MobKind::Tadpole(_) => None,

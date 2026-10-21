@@ -455,7 +455,7 @@ impl ServerLevel {
     pub fn can_use_slot(&self, id: EntityId, slot: EquipmentSlot) -> bool {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Pig(_)) => self.pig_can_use_slot(id, slot),
-            Some(MobKind::Horse(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_)) => true,
+            Some(MobKind::Horse(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_)) => true,
             Some(MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_can_use_slot(id, slot),
             _ => true,
         }
@@ -2114,6 +2114,9 @@ impl ServerLevel {
             Some(MobKind::Pufferfish(_)) => self.pufferfish_ai_step(id),
             Some(MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::ZombieHorse(_)) => self.abstract_horse_ai_step(id),
             Some(MobKind::SkeletonHorse(_)) => self.skeleton_horse_ai_step(id),
+            Some(MobKind::Llama(_)) => self.abstract_horse_ai_step(id),
+            Some(MobKind::TraderLlama(_)) => self.trader_llama_ai_step(id),
+            Some(MobKind::WanderingTrader(_)) => self.wandering_trader_ai_step(id),
             Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
             Some(MobKind::Villager(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Fox(_)) => self.fox_ai_step(id),
@@ -2142,6 +2145,8 @@ impl ServerLevel {
     pub fn is_immobile(&self, id: EntityId) -> bool {
         if self.is_player(id) {
             self.living_entity_is_immobile(id) || self.is_sleeping(id)
+        } else if self.is_llama(id) {
+            self.llama_is_immobile(id)
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_is_immobile(id)
         } else if self.is_ravager(id) {

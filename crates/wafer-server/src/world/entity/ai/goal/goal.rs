@@ -10,6 +10,12 @@ use super::melee_attack_goal::MeleeAttackGoal;
 use super::panic_goal::PanicGoal;
 use super::random_look_around_goal::RandomLookAroundGoal;
 use super::ranged_bow_attack_goal::RangedBowAttackGoal;
+use super::llama_follow_caravan_goal::LlamaFollowCaravanGoal;
+use super::look_at_trading_player_goal::LookAtTradingPlayerGoal;
+use super::trade_with_player_goal::TradeWithPlayerGoal;
+use super::use_item_goal::UseItemGoal;
+use crate::world::entity::animal::equine::trader_llama::TraderLlamaDefendWanderingTraderGoal;
+use crate::world::entity::npc::wanderingtrader::wandering_trader::WanderToPositionGoal;
 use super::ranged_crossbow_attack_goal::RangedCrossbowAttackGoal;
 use crate::world::entity::monster::illager::illusioner::{IllusionerBlindnessSpellGoal, IllusionerMirrorSpellGoal};
 use crate::world::entity::monster::illager::spellcaster_illager::SpellcasterCastingSpellGoal;
@@ -136,6 +142,14 @@ pub enum Goal {
     PolarBearMeleeAttack(PolarBearMeleeAttackGoal),
     PolarBearHurtByTarget(PolarBearHurtByTargetGoal),
     PolarBearAttackPlayers(PolarBearAttackPlayersGoal),
+    LlamaFollowCaravan(LlamaFollowCaravanGoal),
+    LlamaHurtByTarget(HurtByTargetGoal),
+    TraderLlamaDefendWanderingTarget(TraderLlamaDefendWanderingTraderGoal),
+    UseItem(UseItemGoal),
+    TradeWithPlayer(TradeWithPlayerGoal),
+    LookAtTradingPlayer(LookAtTradingPlayerGoal),
+    WanderToPosition(WanderToPositionGoal),
+    Interact(LookAtPlayerGoal),
     AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
     RandomStroll(RandomStrollGoal),
     DrownedGoToWater(DrownedGoToWaterGoal),
@@ -239,7 +253,14 @@ impl Goal {
             Goal::FollowParent(goal) => goal.can_use(level, mob),
             Goal::EatBlock(goal) => goal.can_use(level, mob),
             Goal::WaterAvoidingRandomStroll(goal) => goal.can_use(level, mob),
-            Goal::LookAtPlayer(goal) => goal.can_use(level, mob),
+            Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.can_use(level, mob),
+            Goal::LlamaFollowCaravan(goal) => goal.can_use(level, mob),
+            Goal::LlamaHurtByTarget(goal) => goal.can_use(level, mob),
+            Goal::TraderLlamaDefendWanderingTarget(goal) => goal.can_use(level, mob),
+            Goal::UseItem(goal) => goal.can_use(level, mob),
+            Goal::TradeWithPlayer(goal) => goal.can_use(level, mob),
+            Goal::LookAtTradingPlayer(goal) => goal.can_use(level, mob),
+            Goal::WanderToPosition(goal) => goal.can_use(level, mob),
             Goal::RandomLookAround(goal) => goal.can_use(level, mob),
             Goal::MeleeAttack(goal) => goal.can_use(level, mob),
             Goal::ZombieAttack(goal) => goal.melee_attack_goal.can_use(level, mob),
@@ -373,7 +394,14 @@ impl Goal {
             Goal::FollowParent(goal) => goal.can_continue_to_use(level, mob),
             Goal::EatBlock(goal) => goal.can_continue_to_use(),
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.can_continue_to_use(level, mob),
-            Goal::LookAtPlayer(goal) => goal.can_continue_to_use(level, mob),
+            Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.can_continue_to_use(level, mob),
+            Goal::LlamaFollowCaravan(goal) => goal.can_continue_to_use(level, mob),
+            Goal::LlamaHurtByTarget(goal) => level.llama_hurt_by_target_can_continue_to_use(goal, mob),
+            Goal::TraderLlamaDefendWanderingTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
+            Goal::UseItem(goal) => goal.can_continue_to_use(level, mob),
+            Goal::TradeWithPlayer(goal) => goal.can_use(level, mob),
+            Goal::LookAtTradingPlayer(goal) => goal.look_at_player_goal.can_continue_to_use(level, mob),
+            Goal::WanderToPosition(goal) => goal.can_use(level, mob),
             Goal::RandomLookAround(goal) => goal.can_continue_to_use(),
             Goal::MeleeAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::ZombieAttack(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
@@ -510,7 +538,14 @@ impl Goal {
             Goal::FollowParent(goal) => goal.start(),
             Goal::EatBlock(goal) => goal.start(level, mob),
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.start(level, mob),
-            Goal::LookAtPlayer(goal) => goal.start(level, mob),
+            Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.start(level, mob),
+            Goal::LlamaFollowCaravan(_) => {}
+            Goal::LlamaHurtByTarget(goal) => goal.start(level, mob),
+            Goal::TraderLlamaDefendWanderingTarget(goal) => goal.start(level, mob),
+            Goal::UseItem(goal) => goal.start(level, mob),
+            Goal::TradeWithPlayer(goal) => goal.start(level, mob),
+            Goal::LookAtTradingPlayer(goal) => goal.look_at_player_goal.start(level, mob),
+            Goal::WanderToPosition(_) => {}
             Goal::RandomLookAround(goal) => goal.start(level, mob),
             Goal::MeleeAttack(goal) => goal.start(level, mob),
             Goal::ZombieAttack(goal) => goal.start(level, mob),
@@ -638,7 +673,14 @@ impl Goal {
             Goal::FollowParent(goal) => goal.stop(),
             Goal::EatBlock(goal) => goal.stop(),
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.stop(level, mob),
-            Goal::LookAtPlayer(goal) => goal.stop(),
+            Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.stop(),
+            Goal::LlamaFollowCaravan(goal) => goal.stop(level, mob),
+            Goal::LlamaHurtByTarget(goal) => goal.target_goal.stop(level, mob),
+            Goal::TraderLlamaDefendWanderingTarget(goal) => goal.target_goal.stop(level, mob),
+            Goal::UseItem(goal) => goal.stop(level, mob),
+            Goal::TradeWithPlayer(goal) => goal.stop(level, mob),
+            Goal::LookAtTradingPlayer(goal) => goal.look_at_player_goal.stop(),
+            Goal::WanderToPosition(goal) => goal.stop(level, mob),
             Goal::MeleeAttack(goal) => goal.stop(level, mob),
             Goal::ZombieAttack(goal) => goal.stop(level, mob),
             Goal::ZombieAttackTurtleEgg(goal) => goal.remove_block_goal.stop(level, mob),
@@ -792,7 +834,11 @@ impl Goal {
             Goal::Tempt(goal) => goal.tick(level, mob),
             Goal::FollowParent(goal) => goal.tick(level, mob),
             Goal::EatBlock(goal) => goal.tick(level, mob),
-            Goal::LookAtPlayer(goal) => goal.tick(level, mob),
+            Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.tick(level, mob),
+            Goal::LlamaFollowCaravan(goal) => goal.tick(level, mob),
+            Goal::LlamaHurtByTarget(_) | Goal::TraderLlamaDefendWanderingTarget(_) | Goal::UseItem(_) | Goal::TradeWithPlayer(_) => {}
+            Goal::LookAtTradingPlayer(goal) => goal.look_at_player_goal.tick(level, mob),
+            Goal::WanderToPosition(goal) => goal.tick(level, mob),
             Goal::RandomLookAround(goal) => goal.tick(level, mob),
             Goal::MeleeAttack(goal) => goal.tick(level, mob),
             Goal::ZombieAttack(goal) => goal.tick(level, mob),
@@ -917,7 +963,12 @@ impl Goal {
             Goal::FollowParent(_) | Goal::BreakDoor(_) | Goal::RestrictSun(_) | Goal::DrownedSwimUp(_) => 0,
             Goal::EatBlock(_) => Flag::Move.bit() | Flag::Look.bit() | Flag::Jump.bit(),
             Goal::ZombieAttackTurtleEgg(_) | Goal::DrownedGoToBeach(_) => Flag::Move.bit() | Flag::Jump.bit(),
-            Goal::LookAtPlayer(_) => Flag::Look.bit(),
+            Goal::LookAtPlayer(_) | Goal::LookAtTradingPlayer(_) => Flag::Look.bit(),
+            Goal::Interact(_) => Flag::Look.bit() | Flag::Move.bit(),
+            Goal::LlamaFollowCaravan(_) | Goal::WanderToPosition(_) => Flag::Move.bit(),
+            Goal::LlamaHurtByTarget(_) | Goal::TraderLlamaDefendWanderingTarget(_) => Flag::Target.bit(),
+            Goal::UseItem(_) => 0,
+            Goal::TradeWithPlayer(_) => Flag::Jump.bit() | Flag::Move.bit(),
             Goal::NearestAttackableTarget(_) | Goal::HurtByTarget(_) => Flag::Target.bit(),
             Goal::LeapAtTarget(_) => Flag::Jump.bit() | Flag::Move.bit(),
             Goal::SpiderAttack(_) => Flag::Move.bit() | Flag::Look.bit(),

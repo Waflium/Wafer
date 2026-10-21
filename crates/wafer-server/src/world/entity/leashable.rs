@@ -176,7 +176,7 @@ impl ServerLevel {
             MobKind::Turtle(_) => false,
             MobKind::Wolf(_) => !self.is_angry(id),
             MobKind::Cat(_) => true,
-            MobKind::Villager(_) => false,
+            MobKind::Villager(_) | MobKind::WanderingTrader(_) => false,
             MobKind::ZombieHorse(_) => self.is_tamed(id) || !self.is_mob_controlled(id),
             _ => !self.is_enemy(id),
         }
@@ -338,12 +338,12 @@ impl ServerLevel {
         true
     }
 
-    fn follow_leash_speed(&self, _id: EntityId) -> f64 {
-        1.0
+    fn follow_leash_speed(&self, id: EntityId) -> f64 {
+        if self.is_llama(id) { crate::world::entity::animal::equine::llama::follow_leash_speed() } else { 1.0 }
     }
 
     pub fn support_quad_leash(&self, id: EntityId) -> bool {
-        self.is_abstract_horse(id) || self.is_boat(id)
+        !self.is_llama(id) && self.is_abstract_horse(id) || self.is_boat(id)
     }
 
     pub fn support_quad_leash_as_holder(&self, _id: EntityId) -> bool {

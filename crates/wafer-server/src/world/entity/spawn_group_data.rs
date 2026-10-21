@@ -1,6 +1,7 @@
 use super::ageable_mob::AgeableMobGroupData;
 use super::animal::axolotl::axolotl::AxolotlGroupData;
 use super::animal::equine::horse::HorseGroupData;
+use super::animal::equine::llama::LlamaGroupData;
 use super::animal::fox::fox::FoxGroupData;
 use super::animal::rabbit::rabbit::RabbitGroupData;
 use super::animal::wolf::wolf::WolfPackData;
@@ -20,6 +21,7 @@ pub enum SpawnGroupData {
     School(SchoolSpawnGroupData),
     TropicalFish(TropicalFishGroupData),
     Horse(HorseGroupData),
+    Llama(LlamaGroupData),
     Axolotl(AxolotlGroupData),
     Fox(FoxGroupData),
     Rabbit(RabbitGroupData),
@@ -31,6 +33,7 @@ impl SpawnGroupData {
             SpawnGroupData::AgeableMob(data) => Some(data),
             SpawnGroupData::WolfPack(data) => Some(&mut data.ageable_mob_group_data),
             SpawnGroupData::Horse(data) => Some(&mut data.ageable_mob_group_data),
+            SpawnGroupData::Llama(data) => Some(&mut data.ageable_mob_group_data),
             SpawnGroupData::Axolotl(data) => Some(&mut data.ageable_mob_group_data),
             SpawnGroupData::Fox(data) => Some(&mut data.ageable_mob_group_data),
             SpawnGroupData::Rabbit(data) => Some(&mut data.ageable_mob_group_data),

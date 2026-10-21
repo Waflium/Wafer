@@ -14,13 +14,17 @@ impl ServerLevel {
             self.pillager_perform_ranged_attack(id);
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Illusioner(_))) {
             self.illusioner_perform_ranged_attack(id, target, power);
+        } else if self.is_llama(id) {
+            self.llama_perform_ranged_attack(id, target);
         } else {
             self.abstract_skeleton_perform_ranged_attack(id, target, power);
         }
     }
 
     pub fn ranged_attack_uncertainty(&self, id: EntityId) -> f32 {
-        if self.is_drowned(id) {
+        if self.is_llama(id) {
+            self.llama_ranged_attack_uncertainty()
+        } else if self.is_drowned(id) {
             self.drowned_ranged_attack_uncertainty(id)
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Witch(_))) {
             self.witch_ranged_attack_uncertainty()
