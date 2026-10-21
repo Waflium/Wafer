@@ -148,6 +148,7 @@ impl LevelEntity {
             LevelEntity::ExperienceOrb(_) => Some("minecraft:experience_orb"),
             LevelEntity::LightningBolt(_) => None,
             LevelEntity::EyeOfEnder(_) => Some("minecraft:eye_of_ender"),
+            LevelEntity::EvokerFangs(_) => Some("minecraft:evoker_fangs"),
             LevelEntity::EndCrystal(_) => Some("minecraft:end_crystal"),
             LevelEntity::Projectile(projectile) => Some(wafer_data::registry::ENTITY_TYPE[projectile.entity.entity_type as usize]),
             LevelEntity::AreaEffectCloud(_) => Some("minecraft:area_effect_cloud"),
@@ -201,6 +202,7 @@ impl LevelEntity {
             LevelEntity::FallingBlock(falling) => falling.add_additional_save_data(out),
             LevelEntity::LightningBolt(_) => {}
             LevelEntity::EyeOfEnder(eye) => out.push(("Item".into(), eye.get_item().to_nbt())),
+            LevelEntity::EvokerFangs(fangs) => fangs.add_additional_save_data(out),
             LevelEntity::EndCrystal(crystal) => {
                 if let Some(target) = crystal.get_beam_target() {
                     out.push(("beam_target".into(), Nbt::IntArray(vec![target.x, target.y, target.z])));
@@ -267,6 +269,7 @@ impl LevelEntity {
             }
             LevelEntity::FallingBlock(falling) => falling.read_additional_save_data(nbt),
             LevelEntity::LightningBolt(_) => {}
+            LevelEntity::EvokerFangs(fangs) => fangs.read_additional_save_data(nbt),
             LevelEntity::EyeOfEnder(eye) => {
                 let item = nbt.get("Item").and_then(|i| ItemStack::from_nbt(i).ok()).unwrap_or_else(ItemStack::empty);
                 eye.set_item(&item);
@@ -363,6 +366,7 @@ impl ServerLevel {
             "minecraft:experience_orb" => LevelEntity::ExperienceOrb(super::experience_orb::ExperienceOrb::of_type()),
             "minecraft:lightning_bolt" => LevelEntity::LightningBolt(super::lightning_bolt::LightningBolt::new(Vec3::ZERO)),
             "minecraft:eye_of_ender" => LevelEntity::EyeOfEnder(super::projectile::eye_of_ender::EyeOfEnder::of_type()),
+            "minecraft:evoker_fangs" => LevelEntity::EvokerFangs(super::projectile::evoker_fangs::EvokerFangs::of_type()),
             "minecraft:end_crystal" => LevelEntity::EndCrystal(super::boss::enderdragon::end_crystal::EndCrystal::of_type()),
             "minecraft:chicken" => LevelEntity::Mob(Box::new(super::animal::chicken::Chicken::create())),
             "minecraft:cow" => LevelEntity::Mob(Box::new(super::animal::cow::cow::Cow::create())),
@@ -379,6 +383,8 @@ impl ServerLevel {
             "minecraft:husk" => LevelEntity::Mob(Box::new(super::monster::zombie::husk::Husk::create())),
             "minecraft:vindicator" => LevelEntity::Mob(Box::new(super::monster::illager::vindicator::Vindicator::create())),
             "minecraft:pillager" => LevelEntity::Mob(Box::new(super::monster::illager::pillager::Pillager::create())),
+            "minecraft:evoker" => LevelEntity::Mob(Box::new(super::monster::illager::evoker::Evoker::create())),
+            "minecraft:vex" => LevelEntity::Mob(Box::new(super::monster::vex::Vex::create())),
             "minecraft:giant" => LevelEntity::Mob(Box::new(super::monster::giant::Giant::create())),
             "minecraft:wither_skeleton" => LevelEntity::Mob(Box::new(super::monster::skeleton::wither_skeleton::WitherSkeleton::create())),
             "minecraft:zombie_villager" => LevelEntity::Mob(Box::new(super::monster::zombie::zombie_villager::ZombieVillager::create())),

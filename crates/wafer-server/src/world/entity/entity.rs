@@ -584,6 +584,10 @@ impl Entity {
         matches!(self.data.get(ids::NO_GRAVITY), DataValue::Boolean(true))
     }
 
+    pub fn set_no_gravity(&mut self, no_gravity: bool) {
+        self.data.set(ids::NO_GRAVITY, DataValue::Boolean(no_gravity));
+    }
+
     pub fn ticks_frozen(&self) -> i32 {
         match self.data.get(ids::TICKS_FROZEN) {
             DataValue::Int(v) => *v,
@@ -866,6 +870,9 @@ impl ServerLevel {
         }
         if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Blaze(_))) {
             return super::monster::blaze::Blaze::get_light_level_dependent_magic_value();
+        }
+        if self.is_vex(id) {
+            return super::monster::vex::Vex::get_light_level_dependent_magic_value();
         }
         let e = self.entity(id);
         let block_pos = e.block_position();
@@ -1815,6 +1822,9 @@ impl ServerLevel {
     }
 
     fn is_affected_by_blocks(&self, id: EntityId) -> bool {
+        if self.is_vex(id) {
+            return self.vex_is_affected_by_blocks(id);
+        }
         self.entity_ref(id).is_some_and(|e| !e.is_removed() && !e.no_physics)
     }
 
@@ -2481,6 +2491,8 @@ impl ServerLevel {
     pub fn considers_entity_as_ally(&self, id: EntityId, other: EntityId) -> bool {
         if self.is_tamable_animal(id) {
             self.tamable_animal_considers_entity_as_ally(id, other)
+        } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Evoker(_))) {
+            self.evoker_considers_entity_as_ally(id, other)
         } else if self.is_abstract_illager(id) {
             self.abstract_illager_considers_entity_as_ally(id, other)
         } else {
@@ -2623,6 +2635,8 @@ impl ServerLevel {
                     super::mob::MobKind::Witch(_) => "Witch",
                     super::mob::MobKind::Vindicator(_) => "Vindicator",
                     super::mob::MobKind::Pillager(_) => "Pillager",
+                    super::mob::MobKind::Evoker(_) => "Evoker",
+                    super::mob::MobKind::Vex(_) => "Vex",
                     super::mob::MobKind::Slime(_) => "Slime",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",
                     super::mob::MobKind::Wolf(_) => "Wolf",

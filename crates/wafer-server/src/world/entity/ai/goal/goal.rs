@@ -11,6 +11,8 @@ use super::panic_goal::PanicGoal;
 use super::random_look_around_goal::RandomLookAroundGoal;
 use super::ranged_bow_attack_goal::RangedBowAttackGoal;
 use super::ranged_crossbow_attack_goal::RangedCrossbowAttackGoal;
+use crate::world::entity::monster::illager::evoker::{EvokerAttackSpellGoal, EvokerCastingSpellGoal, EvokerSummonSpellGoal, EvokerWololoSpellGoal};
+use crate::world::entity::monster::vex::{VexChargeAttackGoal, VexCopyOwnerTargetGoal, VexRandomMoveGoal};
 use super::random_stroll_goal::RandomStrollGoal;
 use super::restrict_sun_goal::RestrictSunGoal;
 use super::swell_goal::SwellGoal;
@@ -116,6 +118,13 @@ pub enum Goal {
     SpiderTarget(SpiderTargetGoal),
     RangedBowAttack(RangedBowAttackGoal),
     RangedCrossbowAttack(RangedCrossbowAttackGoal),
+    EvokerCastingSpell(EvokerCastingSpellGoal),
+    EvokerSummonSpell(EvokerSummonSpellGoal),
+    EvokerAttackSpell(EvokerAttackSpellGoal),
+    EvokerWololoSpell(EvokerWololoSpellGoal),
+    VexChargeAttack(VexChargeAttackGoal),
+    VexRandomMove(VexRandomMoveGoal),
+    VexCopyOwnerTarget(VexCopyOwnerTargetGoal),
     AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
     RandomStroll(RandomStrollGoal),
     DrownedGoToWater(DrownedGoToWaterGoal),
@@ -317,6 +326,13 @@ impl Goal {
             Goal::RandomFloatAround(goal) => goal.can_use(level, mob),
             Goal::GhastLook => true,
             Goal::GhastShootFireball(goal) => goal.can_use(level, mob),
+            Goal::EvokerCastingSpell(goal) => goal.casting_spell_goal.can_use(level, mob),
+            Goal::EvokerSummonSpell(goal) => goal.can_use(level, mob),
+            Goal::EvokerAttackSpell(goal) => goal.use_spell_goal.can_use(level, mob),
+            Goal::EvokerWololoSpell(goal) => goal.can_use(level, mob),
+            Goal::VexChargeAttack(goal) => goal.can_use(level, mob),
+            Goal::VexRandomMove(goal) => goal.can_use(level, mob),
+            Goal::VexCopyOwnerTarget(goal) => goal.can_use(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.can_use(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::RaidGarden(goal) => goal.can_use(level, mob),
@@ -437,6 +453,13 @@ impl Goal {
             Goal::RandomFloatAround(_) => false,
             Goal::GhastLook => true,
             Goal::GhastShootFireball(goal) => goal.can_use(level, mob),
+            Goal::EvokerCastingSpell(goal) => goal.casting_spell_goal.can_use(level, mob),
+            Goal::EvokerSummonSpell(goal) => goal.use_spell_goal.can_continue_to_use(level, mob),
+            Goal::EvokerAttackSpell(goal) => goal.use_spell_goal.can_continue_to_use(level, mob),
+            Goal::EvokerWololoSpell(goal) => goal.can_continue_to_use(level, mob),
+            Goal::VexChargeAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::VexRandomMove(_) => false,
+            Goal::VexCopyOwnerTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.can_continue_to_use(level, mob),
             Goal::RaidGarden(goal) => goal.can_continue_to_use(level),
@@ -554,6 +577,13 @@ impl Goal {
             Goal::RandomFloatAround(goal) => goal.start(level, mob),
             Goal::GhastLook => {}
             Goal::GhastShootFireball(goal) => goal.start(),
+            Goal::EvokerCastingSpell(goal) => goal.casting_spell_goal.start(level, mob),
+            Goal::EvokerSummonSpell(goal) => goal.start(level, mob),
+            Goal::EvokerAttackSpell(goal) => goal.start(level, mob),
+            Goal::EvokerWololoSpell(goal) => goal.start(level, mob),
+            Goal::VexChargeAttack(goal) => goal.start(level, mob),
+            Goal::VexRandomMove(_) => {}
+            Goal::VexCopyOwnerTarget(goal) => goal.start(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.start(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::RaidGarden(goal) => goal.move_to_block_goal.start(level, mob),
@@ -653,6 +683,11 @@ impl Goal {
             Goal::PerchAndSearch(goal) => goal.stop(level, mob),
             Goal::DefendTrustedTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) | Goal::GhastLook => {}
+            Goal::EvokerCastingSpell(goal) => goal.casting_spell_goal.stop(level, mob),
+            Goal::EvokerSummonSpell(_) | Goal::EvokerAttackSpell(_) | Goal::VexRandomMove(_) => {}
+            Goal::EvokerWololoSpell(goal) => goal.stop(level, mob),
+            Goal::VexChargeAttack(goal) => goal.stop(level, mob),
+            Goal::VexCopyOwnerTarget(goal) => goal.target_goal.stop(level, mob),
             Goal::BlazeAttack(goal) => goal.stop(level, mob),
             Goal::GhastShootFireball(goal) => goal.stop(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.stop(),
@@ -698,6 +733,7 @@ impl Goal {
                 | Goal::BlazeAttack(_)
                 | Goal::GhastLook
                 | Goal::GhastShootFireball(_)
+                | Goal::VexChargeAttack(_)
                 | Goal::RaidGarden(_)
                 | Goal::TurtleLayEgg(_)
                 | Goal::TurtleGoToWater(_)
@@ -793,6 +829,13 @@ impl Goal {
             Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) => {}
             Goal::BlazeAttack(goal) => goal.tick(level, mob),
             Goal::GhastLook => ghast::ghast_look_goal_tick(level, mob),
+            Goal::EvokerCastingSpell(goal) => goal.tick(level, mob),
+            Goal::EvokerSummonSpell(goal) => goal.tick(level, mob),
+            Goal::EvokerAttackSpell(goal) => goal.tick(level, mob),
+            Goal::EvokerWololoSpell(goal) => goal.tick(level, mob),
+            Goal::VexChargeAttack(goal) => goal.tick(level, mob),
+            Goal::VexRandomMove(goal) => goal.tick(level, mob),
+            Goal::VexCopyOwnerTarget(_) => {}
             Goal::GhastShootFireball(goal) => goal.tick(level, mob),
             Goal::RabbitPanic(goal) => goal.tick(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
@@ -877,6 +920,9 @@ impl Goal {
             Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) => Flag::Move.bit(),
             Goal::BlazeAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::GhastLook => Flag::Look.bit(),
+            Goal::EvokerCastingSpell(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::EvokerSummonSpell(_) | Goal::EvokerAttackSpell(_) | Goal::EvokerWololoSpell(_) | Goal::VexCopyOwnerTarget(_) => 0,
+            Goal::VexChargeAttack(_) | Goal::VexRandomMove(_) => Flag::Move.bit(),
             Goal::GhastShootFireball(_) => 0,
             Goal::RabbitPanic(_) | Goal::RabbitAvoidEntity(_) | Goal::TurtlePanic(_) | Goal::TurtleRandomStroll(_) => Flag::Move.bit(),
             Goal::RaidGarden(_) | Goal::TurtleLayEgg(_) | Goal::TurtleGoToWater(_) => Flag::Move.bit() | Flag::Jump.bit(),

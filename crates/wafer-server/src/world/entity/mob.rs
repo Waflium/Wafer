@@ -12,7 +12,9 @@ use super::monster::skeleton::skeleton::Skeleton;
 use super::monster::skeleton::stray::Stray;
 use super::monster::zombie::drowned::{self, Drowned};
 use super::monster::zombie::husk::{self, Husk};
+use super::monster::illager::evoker::{self, Evoker};
 use super::monster::illager::pillager::{self, Pillager};
+use super::monster::vex::{self, Vex};
 use super::monster::illager::vindicator::{self, Vindicator};
 use super::monster::giant::{self, Giant};
 use super::monster::skeleton::wither_skeleton::{self, WitherSkeleton};
@@ -141,6 +143,8 @@ pub enum MobKind {
     Husk(Husk),
     Vindicator(Vindicator),
     Pillager(Pillager),
+    Evoker(Evoker),
+    Vex(Vex),
     Giant(Giant),
     WitherSkeleton(WitherSkeleton),
     ZombieVillager(ZombieVillager),
@@ -262,6 +266,8 @@ impl Mob {
             MobKind::Witch(_) => Witch::register_goals(&mut self.ai),
             MobKind::Vindicator(_) => Vindicator::register_goals(&mut self.ai),
             MobKind::Pillager(_) => Pillager::register_goals(&mut self.ai),
+            MobKind::Evoker(_) => Evoker::register_goals(&mut self.ai),
+            MobKind::Vex(_) => Vex::register_goals(&mut self.ai),
             MobKind::Slime(_) => Slime::register_goals(&mut self.ai),
             MobKind::MagmaCube(_) => MagmaCube::register_goals(&mut self.ai),
             MobKind::Wolf(_) => Wolf::register_goals(&mut self.ai, self.living.attributes.value(Attribute::FollowRange)),
@@ -403,7 +409,7 @@ impl Mob {
     }
 
     pub fn is_abstract_illager(&self) -> bool {
-        matches!(self.kind, MobKind::Vindicator(_) | MobKind::Pillager(_))
+        matches!(self.kind, MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_))
     }
 
     pub fn set_custom_name(&mut self, name: Option<Nbt>) {
@@ -425,7 +431,7 @@ impl Mob {
         } else if matches!(self.kind, MobKind::Bat(_)) {
             5
         } else if self.is_zombie()
-            || matches!(self.kind, MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Enderman(_) | MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::MagmaCube(_))
+            || matches!(self.kind, MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Enderman(_) | MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Vex(_) | MobKind::MagmaCube(_))
             || matches!(self.kind, MobKind::Squid(_))
             || matches!(self.kind, MobKind::SnowGolem(_))
             || matches!(self.kind, MobKind::Cat(_))
@@ -511,6 +517,7 @@ impl Mob {
             MobKind::Witch(witch) => witch.raider.remove_when_far_away(dist_sqr),
             MobKind::Vindicator(vindicator) => vindicator.raider.remove_when_far_away(dist_sqr),
             MobKind::Pillager(pillager) => pillager.raider.remove_when_far_away(dist_sqr),
+            MobKind::Evoker(evoker) => evoker.spellcaster_illager.raider.remove_when_far_away(dist_sqr),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => true,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => true,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => abstract_golem::remove_when_far_away(dist_sqr),
@@ -631,6 +638,7 @@ impl Mob {
             MobKind::Witch(witch) => Some(&witch.raider),
             MobKind::Vindicator(vindicator) => Some(&vindicator.raider),
             MobKind::Pillager(pillager) => Some(&pillager.raider),
+            MobKind::Evoker(evoker) => Some(&evoker.spellcaster_illager.raider),
             _ => None,
         }
     }
@@ -640,6 +648,7 @@ impl Mob {
             MobKind::Witch(witch) => Some(&mut witch.raider),
             MobKind::Vindicator(vindicator) => Some(&mut vindicator.raider),
             MobKind::Pillager(pillager) => Some(&mut pillager.raider),
+            MobKind::Evoker(evoker) => Some(&mut evoker.spellcaster_illager.raider),
             _ => None,
         }
     }
@@ -655,7 +664,7 @@ impl Mob {
     pub fn can_be_leader(&self) -> bool {
         match self.kind {
             MobKind::Witch(_) => Witch::can_be_leader(),
-            MobKind::Vindicator(_) | MobKind::Pillager(_) => true,
+            MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) => true,
             _ => true,
         }
     }
@@ -710,7 +719,7 @@ impl Mob {
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => None,
             MobKind::Enderman(_) => None,
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => None,
-            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) => None,
+            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Vex(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => None,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => None,
@@ -743,7 +752,7 @@ impl Mob {
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => None,
             MobKind::Enderman(_) => None,
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => None,
-            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) => None,
+            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Vex(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => None,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => None,
@@ -815,7 +824,7 @@ impl Mob {
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => {}
             MobKind::Enderman(_) => {}
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => {}
-            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) => {}
+            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Vex(_) => {}
             MobKind::Slime(_) | MobKind::MagmaCube(_) => {}
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => {}
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => {}
@@ -1059,6 +1068,8 @@ impl Mob {
             MobKind::Witch(_) => witch::DIMENSIONS,
             MobKind::Vindicator(_) => vindicator::DIMENSIONS,
             MobKind::Pillager(_) => pillager::DIMENSIONS,
+            MobKind::Evoker(_) => evoker::DIMENSIONS,
+            MobKind::Vex(_) => vex::DIMENSIONS,
             MobKind::Slime(_) => slime::DIMENSIONS.scale(self.get_size() as f32),
             MobKind::MagmaCube(_) => magma_cube::DIMENSIONS.scale(self.get_size() as f32),
             MobKind::Wolf(_) if self.is_baby() => wolf::BABY_DIMENSIONS,
@@ -1126,7 +1137,8 @@ impl Mob {
             MobKind::ZombifiedPiglin(_) if baby => (0.0, 0.98f32 as f64, 0.0),
             MobKind::ZombifiedPiglin(_) => (0.0, 2.0f32 as f64, 0.0),
             MobKind::Witch(_) => (0.0, 2.2625f32 as f64, 0.0),
-            MobKind::Vindicator(_) | MobKind::Pillager(_) => (0.0, 2.0, 0.0),
+            MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) => (0.0, 2.0, 0.0),
+            MobKind::Vex(_) => (0.0, 0.7375f32 as f64, 0.0),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return self.abstract_cube_mob_get_passenger_attachment_point(),
             MobKind::Wolf(_) if baby => (0.0, 0.4375f32 as f64, 0.0),
             MobKind::Wolf(_) => (0.0, 0.81875, -0.0625),
@@ -1290,6 +1302,8 @@ impl Mob {
             MobKind::Witch(witch) => witch.raider.add_additional_save_data(out),
             MobKind::Vindicator(_) => Vindicator::add_additional_save_data(self, out),
             MobKind::Pillager(_) => Pillager::add_additional_save_data(self, out),
+            MobKind::Evoker(evoker) => evoker.spellcaster_illager.add_additional_save_data(out),
+            MobKind::Vex(_) => Vex::add_additional_save_data(self, out),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_add_additional_save_data(out),
             MobKind::Wolf(_) => Wolf::add_additional_save_data(self, out),
             MobKind::Bat(_) => Bat::add_additional_save_data(self, out),
@@ -1455,6 +1469,8 @@ impl Mob {
             MobKind::Witch(witch) => witch.raider.read_additional_save_data(nbt),
             MobKind::Vindicator(_) => Vindicator::read_additional_save_data(self, nbt),
             MobKind::Pillager(_) => Pillager::read_additional_save_data(self, nbt),
+            MobKind::Evoker(evoker) => evoker.spellcaster_illager.read_additional_save_data(nbt),
+            MobKind::Vex(_) => Vex::read_additional_save_data(self, nbt),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_read_was_on_ground(nbt),
             MobKind::Wolf(_) => {}
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => {}
@@ -1568,6 +1584,8 @@ impl Mob {
             MobKind::Witch(_) => Witch::get_ambient_sound(),
             MobKind::Vindicator(_) => Vindicator::get_ambient_sound(),
             MobKind::Pillager(_) => Pillager::get_ambient_sound(),
+            MobKind::Evoker(_) => Evoker::get_ambient_sound(),
+            MobKind::Vex(_) => Vex::get_ambient_sound(),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return None,
             MobKind::Wolf(_) => unreachable!("wolves pick their ambient sound with their random"),
             MobKind::Bat(_) => unreachable!("bats pick their ambient sound with their random"),
@@ -1620,6 +1638,8 @@ impl Mob {
             MobKind::Witch(_) => Witch::get_hurt_sound(),
             MobKind::Vindicator(_) => Vindicator::get_hurt_sound(),
             MobKind::Pillager(_) => Pillager::get_hurt_sound(),
+            MobKind::Evoker(_) => Evoker::get_hurt_sound(),
+            MobKind::Vex(_) => Vex::get_hurt_sound(),
             MobKind::Slime(_) => Slime::get_hurt_sound(self),
             MobKind::MagmaCube(_) => MagmaCube::get_hurt_sound(self),
             MobKind::Wolf(_) => Wolf::get_hurt_sound(self),
@@ -1673,6 +1693,8 @@ impl Mob {
             MobKind::Witch(_) => Witch::get_death_sound(),
             MobKind::Vindicator(_) => Vindicator::get_death_sound(),
             MobKind::Pillager(_) => Pillager::get_death_sound(),
+            MobKind::Evoker(_) => Evoker::get_death_sound(),
+            MobKind::Vex(_) => Vex::get_death_sound(),
             MobKind::Slime(_) => Slime::get_death_sound(self),
             MobKind::MagmaCube(_) => MagmaCube::get_death_sound(self),
             MobKind::Wolf(_) => Wolf::get_death_sound(self),
@@ -1722,7 +1744,7 @@ impl Mob {
             MobKind::Enderman(_) => return None,
             MobKind::Blaze(_) | MobKind::Ghast(_) => return None,
             MobKind::ZombifiedPiglin(_) => Zombie::get_step_sound(self),
-            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) => return None,
+            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Vex(_) => return None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return None,
             MobKind::Wolf(_) => Wolf::get_step_sound(self),
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => return None,
@@ -1888,7 +1910,7 @@ impl ServerLevel {
             MobKind::Bogged(_) => self.bogged_mob_interact(id, player, hand),
             MobKind::Enderman(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => self.mob_mob_interact(id, player, hand),
-            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) => self.mob_mob_interact(id, player, hand),
+            MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Vex(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.ageable_mob_mob_interact(id, player, hand),
             MobKind::Wolf(_) => self.wolf_mob_interact(id, player, hand),
             MobKind::Bat(_) => self.mob_mob_interact(id, player, hand),
@@ -2562,6 +2584,7 @@ impl ServerLevel {
             MoveControlKind::Axolotl(control) => self.axolotl_move_control_tick(id, control),
             MoveControlKind::Fox => self.fox_move_control_tick(id),
             MoveControlKind::Ghast => self.ghast_move_control_tick(id),
+            MoveControlKind::Vex => self.vex_move_control_tick(id),
             MoveControlKind::Rabbit => self.rabbit_move_control_tick(id),
             MoveControlKind::Turtle => self.turtle_move_control_tick(id),
         }
@@ -2648,6 +2671,8 @@ impl ServerLevel {
             Some(MobKind::Witch(_)) => {}
             Some(MobKind::Vindicator(_)) => self.vindicator_custom_server_ai_step(id),
             Some(MobKind::Pillager(_)) => {}
+            Some(MobKind::Evoker(_)) => self.spellcaster_illager_custom_server_ai_step(id),
+            Some(MobKind::Vex(_)) => {}
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => {}
             Some(MobKind::Bat(_)) => self.bat_custom_server_ai_step(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => {}
@@ -2667,7 +2692,7 @@ impl ServerLevel {
     pub fn requires_custom_persistence(&self, id: EntityId) -> bool {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Enderman(_)) => self.enderman_requires_custom_persistence(id),
-            Some(MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_)) => self.raider_requires_custom_persistence(id),
+            Some(MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_)) => self.raider_requires_custom_persistence(id),
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_)) => self.abstract_fish_requires_custom_persistence(id),
             Some(MobKind::Axolotl(_)) => self.axolotl_requires_custom_persistence(id),
             _ => self.mob_requires_custom_persistence(id),
@@ -2757,6 +2782,7 @@ impl ServerLevel {
             MobKind::ZombieVillager(_) => self.zombie_villager_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Vindicator(_) => self.vindicator_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Pillager(_) => self.pillager_finalize_spawn(id, difficulty, spawn_reason, group_data),
+            MobKind::Vex(_) => self.vex_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Husk(_) => self.husk_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::ZombifiedPiglin(_) => self.zombie_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Drowned(_) => self.drowned_finalize_spawn(id, difficulty, spawn_reason, group_data),
@@ -2978,7 +3004,8 @@ pub fn finalize_spawn(
         MobKind::CaveSpider(_) => return group_data,
         MobKind::Enderman(_) => {}
         MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => {}
-        MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) => return raider::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
+        MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) => return raider::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
+        MobKind::Vex(_) => {}
         MobKind::Slime(_) => return slime::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::MagmaCube(_) => return magma_cube::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Bat(_) => {}
@@ -3046,7 +3073,7 @@ pub fn get_walk_target_value(mob: &Mob, pos: BlockPos, level: &mut (impl ServerL
         MobKind::Enderman(_) => Enderman::get_walk_target_value(),
         MobKind::Blaze(_) | MobKind::ZombifiedPiglin(_) => super::monster::monster::get_walk_target_value(pos, level),
         MobKind::Ghast(_) => super::pathfinder_mob::get_walk_target_value(),
-        MobKind::Witch(_) | MobKind::Vindicator(_) => super::monster::monster::get_walk_target_value(pos, level),
+        MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Evoker(_) | MobKind::Vex(_) => super::monster::monster::get_walk_target_value(pos, level),
         MobKind::Pillager(_) => Pillager::get_walk_target_value(),
         MobKind::Slime(_) | MobKind::MagmaCube(_) => super::pathfinder_mob::get_walk_target_value(),
         MobKind::Squid(_) | MobKind::GlowSquid(_) => super::pathfinder_mob::get_walk_target_value(),
