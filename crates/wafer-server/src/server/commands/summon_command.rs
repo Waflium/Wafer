@@ -11,6 +11,7 @@ use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::entity::{EntityId, LevelEntity};
 
 static ERROR_FAILED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.failed");
+static ERROR_FAILED_PEACEFUL: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.failed.peaceful");
 static ERROR_DUPLICATE_UUID: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.failed.uuid");
 static INVALID_POSITION: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.invalidPosition");
 static ERROR_NOT_SUMMONABLE_ENTITY: DynamicCommandExceptionType = DynamicCommandExceptionType(|value| tr("entity.not_summonable", vec![value]));
@@ -119,6 +120,11 @@ pub fn summonable_entity_type(context: &CommandContext, name: &str) -> Result<St
 pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_type: &str, pos: Vec3, nbt: &Nbt, finalize: bool) -> Result<(EntityId, Component), CommandSyntaxException> {
     if !is_in_spawnable_bounds(BlockPos::containing(pos.x, pos.y, pos.z)) {
         return Err(INVALID_POSITION.create());
+    }
+    if server.levels[source.level].difficulty == crate::world::difficulty::Difficulty::Peaceful
+        && crate::world::entity::entity_type::EntityType::by_name(entity_type).is_some_and(|ty| !ty.is_allowed_in_peaceful())
+    {
+        return Err(ERROR_FAILED_PEACEFUL.create());
     }
     if !MODELLED.contains(&entity_type) {
         let hover = Component::literal(format!("{entity_type} entities are not implemented in Wafer yet"));
