@@ -14,6 +14,7 @@ impl ServerLevel {
         match self.mob(id).expect("a pathfinder mob").kind {
             MobKind::MushroomCow(_) => self.mushroom_cow_get_walk_target_value(pos),
             MobKind::Zombie(_)
+            | MobKind::ZombieVillager(_)
             | MobKind::Husk(_)
             | MobKind::Drowned(_)
             | MobKind::Creeper(_)

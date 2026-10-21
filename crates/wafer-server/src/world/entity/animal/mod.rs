@@ -93,6 +93,7 @@ impl ServerLevel {
             MobKind::Goat(_) => goat::goat::is_food(item_stack),
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),
             MobKind::Zombie(_)
+            | MobKind::ZombieVillager(_)
             | MobKind::Husk(_)
             | MobKind::Drowned(_)
             | MobKind::Creeper(_)

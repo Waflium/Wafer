@@ -104,6 +104,9 @@ impl DataComponentGetter for EntityComponents<'_> {
                 MobKind::Villager(_) if ty == dc::VILLAGER_VARIANT => {
                     return Some(Cow::Owned(super::npc::villager::villager::get_villager_variant(mob)));
                 }
+                MobKind::ZombieVillager(_) if ty == dc::VILLAGER_VARIANT => {
+                    return Some(Cow::Owned(super::monster::zombie::zombie_villager::get_villager_variant(mob)));
+                }
                 _ => {}
             }
         }

@@ -236,3 +236,25 @@ fn baby_zombies_drop_experience() {
     assert!(orbs > 0);
     assert!(zombie::is_baby(level.entity(baby)));
 }
+
+#[test]
+fn zombies_infect_villagers_on_hard() {
+    let mut level = testing::level();
+    level.difficulty = Difficulty::Hard;
+    let zombie = add(&mut level, Zombie::create(), Vec3::new(0.5, -60.0, 0.5));
+    let villager = add(&mut level, crate::world::entity::npc::villager::villager::Villager::create(), Vec3::new(0.5, -60.0, 2.5));
+    let data = crate::world::entity::npc::villager::villager_data::VillagerData::new(
+        crate::world::entity::npc::villager::villager_type::VillagerType::SNOW,
+        crate::world::entity::npc::villager::villager_profession::ProfessionId::MASON,
+        3,
+    );
+    level.set_villager_data(villager, data);
+    let source = crate::world::damagesource::DamageSource { causing_entity: Some(zombie), direct_entity: Some(zombie), ..crate::world::damagesource::DamageSource::new(wafer_data::damage_types::MOB_ATTACK) };
+    level.hurt_server(villager, source, 100.0);
+    let converted = level.entities.values().find_map(|entity| match entity {
+        LevelEntity::Mob(mob) if matches!(mob.kind, crate::world::entity::mob::MobKind::ZombieVillager(_)) => Some(super::zombie_villager::get_villager_data(mob)),
+        _ => None,
+    });
+    assert_eq!(converted, Some(data));
+    assert!(level.entity_ref(villager).is_none_or(|e| e.is_removed()));
+}

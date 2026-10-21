@@ -1777,6 +1777,7 @@ impl ServerLevel {
             Some(LevelEntity::ExperienceOrb(_)) => self.tick_experience_orb(id),
             Some(LevelEntity::Projectile(_)) => self.projectile_tick(id),
             Some(LevelEntity::AreaEffectCloud(_)) => self.tick_area_effect_cloud(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::ZombieVillager(_)) => self.zombie_villager_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.is_zombie() => self.zombie_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Creeper(_)) => self.creeper_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.is_spider() => self.spider_tick(id),

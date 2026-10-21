@@ -1339,6 +1339,7 @@ impl ServerLevel {
     pub fn voice_pitch(&mut self, id: EntityId) -> f32 {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Bat(_)) => self.bat_voice_pitch(id),
+            Some(MobKind::ZombieVillager(_)) => self.zombie_villager_voice_pitch(id),
             _ => self.living_entity_voice_pitch(id),
         }
     }
@@ -1429,6 +1430,9 @@ impl ServerLevel {
         }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Creeper(_))) {
             return self.creeper_killed_entity(id, entity, source);
+        }
+        if self.mob(id).is_some_and(Mob::is_zombie) {
+            return self.zombie_killed_entity(id, entity, source);
         }
         self.entity_killed_entity(id, entity, source)
     }
@@ -1527,7 +1531,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
-            Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
+            Some(MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
             Some(MobKind::Blaze(_) | MobKind::Ghast(_)) => self.mob_get_base_experience_reward(id),
             Some(
                 MobKind::Creeper(_)
@@ -2063,6 +2067,7 @@ impl ServerLevel {
             Some(MobKind::Goat(_)) => self.goat_ai_step(id),
             Some(
                 MobKind::Zombie(_)
+                | MobKind::ZombieVillager(_)
                 | MobKind::Husk(_)
                 | MobKind::Drowned(_)
                 | MobKind::Creeper(_)

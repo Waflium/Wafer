@@ -120,6 +120,7 @@ pub fn zombie(mob: &Mob) -> &Zombie {
     match &mob.kind {
         MobKind::Zombie(zombie) => zombie,
         MobKind::Husk(husk) => &husk.zombie,
+        MobKind::ZombieVillager(zombie_villager) => &zombie_villager.zombie,
         MobKind::Drowned(drowned) => &drowned.zombie,
         MobKind::ZombifiedPiglin(zombified_piglin) => &zombified_piglin.zombie,
         _ => unreachable!("not a zombie"),
@@ -130,6 +131,7 @@ pub fn zombie_mut(mob: &mut Mob) -> &mut Zombie {
     match &mut mob.kind {
         MobKind::Zombie(zombie) => zombie,
         MobKind::Husk(husk) => &mut husk.zombie,
+        MobKind::ZombieVillager(zombie_villager) => &mut zombie_villager.zombie,
         MobKind::Drowned(drowned) => &mut drowned.zombie,
         MobKind::ZombifiedPiglin(zombified_piglin) => &mut zombified_piglin.zombie,
         _ => unreachable!("not a zombie"),
@@ -140,6 +142,7 @@ fn drowning_tracker(kind: &mut MobKind) -> &mut ConversionTracker {
     match kind {
         MobKind::Zombie(zombie) => &mut zombie.drowning_tracker,
         MobKind::Husk(husk) => &mut husk.zombie.drowning_tracker,
+        MobKind::ZombieVillager(zombie_villager) => &mut zombie_villager.zombie.drowning_tracker,
         MobKind::Drowned(drowned) => &mut drowned.zombie.drowning_tracker,
         MobKind::ZombifiedPiglin(zombified_piglin) => &mut zombified_piglin.zombie.drowning_tracker,
         _ => unreachable!("not a zombie"),
@@ -246,7 +249,7 @@ impl Zombie {
     pub fn converts_in_water(mob: &Mob) -> bool {
         match mob.kind {
             MobKind::Drowned(_) => Drowned::converts_in_water(mob),
-            MobKind::ZombifiedPiglin(_) => false,
+            MobKind::ZombifiedPiglin(_) | MobKind::ZombieVillager(_) => false,
             _ => true,
         }
     }
@@ -256,19 +259,35 @@ impl Zombie {
     }
 
     pub fn get_ambient_sound(mob: &Mob) -> &'static str {
-        if matches!(mob.kind, MobKind::Husk(_)) { "minecraft:entity.husk.ambient" } else { "minecraft:entity.zombie.ambient" }
+        match mob.kind {
+            MobKind::Husk(_) => "minecraft:entity.husk.ambient",
+            MobKind::ZombieVillager(_) => "minecraft:entity.zombie_villager.ambient",
+            _ => "minecraft:entity.zombie.ambient",
+        }
     }
 
     pub fn get_hurt_sound(mob: &Mob) -> &'static str {
-        if matches!(mob.kind, MobKind::Husk(_)) { "minecraft:entity.husk.hurt" } else { "minecraft:entity.zombie.hurt" }
+        match mob.kind {
+            MobKind::Husk(_) => "minecraft:entity.husk.hurt",
+            MobKind::ZombieVillager(_) => "minecraft:entity.zombie_villager.hurt",
+            _ => "minecraft:entity.zombie.hurt",
+        }
     }
 
     pub fn get_death_sound(mob: &Mob) -> &'static str {
-        if matches!(mob.kind, MobKind::Husk(_)) { "minecraft:entity.husk.death" } else { "minecraft:entity.zombie.death" }
+        match mob.kind {
+            MobKind::Husk(_) => "minecraft:entity.husk.death",
+            MobKind::ZombieVillager(_) => "minecraft:entity.zombie_villager.death",
+            _ => "minecraft:entity.zombie.death",
+        }
     }
 
     pub fn get_step_sound(mob: &Mob) -> &'static str {
-        if matches!(mob.kind, MobKind::Husk(_)) { "minecraft:entity.husk.step" } else { "minecraft:entity.zombie.step" }
+        match mob.kind {
+            MobKind::Husk(_) => "minecraft:entity.husk.step",
+            MobKind::ZombieVillager(_) => "minecraft:entity.zombie_villager.step",
+            _ => "minecraft:entity.zombie.step",
+        }
     }
 
     pub fn get_conversion_sound(mob: &Mob) -> i32 {

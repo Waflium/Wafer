@@ -2338,7 +2338,7 @@ impl ServerLevel {
             return self.server_player_hurt_server(id, source, damage);
         }
         if self.is_mob(id) {
-            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::Husk(_) | super::mob::MobKind::Drowned(_) | super::mob::MobKind::ZombifiedPiglin(_))) {
+            if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::ZombieVillager(_) | super::mob::MobKind::Husk(_) | super::mob::MobKind::Drowned(_) | super::mob::MobKind::ZombifiedPiglin(_))) {
                 return self.zombie_hurt_server(id, source, damage);
             }
             if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Silverfish(_))) {
@@ -2598,6 +2598,7 @@ impl ServerLevel {
                     super::mob::MobKind::Armadillo(_) => "Armadillo",
                     super::mob::MobKind::Zombie(_) => "Zombie",
                     super::mob::MobKind::Husk(_) => "Husk",
+                    super::mob::MobKind::ZombieVillager(_) => "ZombieVillager",
                     super::mob::MobKind::Creeper(_) => "Creeper",
                     super::mob::MobKind::Spider(_) => "Spider",
                     super::mob::MobKind::CaveSpider(_) => "CaveSpider",
