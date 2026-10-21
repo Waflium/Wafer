@@ -1031,6 +1031,8 @@ impl ServerLevel {
             self.award_stat(id, stats::MINECART_ONE_CM, distance);
         } else if self.is_boat(vehicle) {
             self.award_stat(id, stats::BOAT_ONE_CM, distance);
+        } else if self.is_pig(vehicle) {
+            self.award_stat(id, stats::PIG_ONE_CM, distance);
         }
     }
 
