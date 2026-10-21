@@ -1539,6 +1539,7 @@ impl ServerLevel {
                 | MobKind::CaveSpider(_)
                 | MobKind::Skeleton(_)
                 | MobKind::Stray(_)
+                | MobKind::WitherSkeleton(_)
                 | MobKind::Bogged(_)
                 | MobKind::Silverfish(_)
                 | MobKind::Endermite(_),
@@ -2075,6 +2076,7 @@ impl ServerLevel {
                 | MobKind::CaveSpider(_)
                 | MobKind::Skeleton(_)
                 | MobKind::Stray(_)
+                | MobKind::WitherSkeleton(_)
                 | MobKind::Bogged(_)
                 | MobKind::Silverfish(_),
             ) => self.monster_ai_step(id),
@@ -2874,7 +2876,11 @@ impl ServerLevel {
     }
 
     pub fn can_be_affected(&self, id: EntityId, effect: &MobEffectInstance) -> bool {
-        if self.mob(id).is_some_and(super::mob::Mob::is_spider) { self.spider_can_be_affected(id, effect) } else { self.living_entity_can_be_affected(id, effect) }
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Spider(_) | MobKind::CaveSpider(_)) => self.spider_can_be_affected(id, effect),
+            Some(MobKind::WitherSkeleton(_)) => self.wither_skeleton_can_be_affected(id, effect),
+            _ => self.living_entity_can_be_affected(id, effect),
+        }
     }
 
     pub fn living_entity_can_be_affected(&self, id: EntityId, effect: &MobEffectInstance) -> bool {

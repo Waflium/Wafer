@@ -2604,6 +2604,7 @@ impl ServerLevel {
                     super::mob::MobKind::CaveSpider(_) => "CaveSpider",
                     super::mob::MobKind::Skeleton(_) => "Skeleton",
                     super::mob::MobKind::Stray(_) => "Stray",
+                    super::mob::MobKind::WitherSkeleton(_) => "WitherSkeleton",
                     super::mob::MobKind::Bogged(_) => "Bogged",
                     super::mob::MobKind::Drowned(_) => "Drowned",
                     super::mob::MobKind::Silverfish(_) => "Silverfish",

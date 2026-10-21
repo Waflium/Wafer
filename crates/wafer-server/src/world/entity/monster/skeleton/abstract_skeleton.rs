@@ -73,6 +73,7 @@ pub fn abstract_skeleton_mut(mob: &mut Mob) -> &mut AbstractSkeleton {
     match &mut mob.kind {
         MobKind::Skeleton(skeleton) => &mut skeleton.abstract_skeleton,
         MobKind::Stray(stray) => &mut stray.abstract_skeleton,
+        MobKind::WitherSkeleton(wither_skeleton) => &mut wither_skeleton.abstract_skeleton,
         MobKind::Bogged(bogged) => &mut bogged.abstract_skeleton,
         _ => unreachable!("not a skeleton"),
     }
@@ -208,6 +209,7 @@ impl ServerLevel {
     pub fn get_arrow(&mut self, id: EntityId, projectile: &ItemStack, power: f32, firing_weapon: Option<&ItemStack>) -> Projectile {
         match self.mob(id).expect("a skeleton").kind {
             MobKind::Stray(_) => self.stray_get_arrow(id, projectile, power, firing_weapon),
+            MobKind::WitherSkeleton(_) => self.wither_skeleton_get_arrow(id, projectile, power, firing_weapon),
             MobKind::Bogged(_) => self.bogged_get_arrow(id, projectile, power, firing_weapon),
             _ => self.abstract_skeleton_get_arrow(id, projectile, power, firing_weapon),
         }

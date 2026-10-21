@@ -5,3 +5,4 @@ pub mod skeleton;
 #[cfg(test)]
 mod skeleton_tests;
 pub mod stray;
+pub mod wither_skeleton;
