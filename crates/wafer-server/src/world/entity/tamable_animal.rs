@@ -124,7 +124,7 @@ pub struct TamableAnimalPanicGoal {
 }
 
 impl TamableAnimalPanicGoal {
-    pub fn new(speed_modifier: f64, panic_causing_damage_types: &'static Tag) -> TamableAnimalPanicGoal {
+    pub fn new(speed_modifier: f64, panic_causing_damage_types: fn(&ServerLevel, EntityId) -> &'static Tag) -> TamableAnimalPanicGoal {
         TamableAnimalPanicGoal { panic_goal: PanicGoal::with_damage_types(speed_modifier, panic_causing_damage_types) }
     }
 

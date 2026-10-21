@@ -15,6 +15,7 @@ use crate::world::entity::monster::illager::illusioner::{IllusionerBlindnessSpel
 use crate::world::entity::monster::illager::spellcaster_illager::SpellcasterCastingSpellGoal;
 use crate::world::entity::monster::illager::evoker::{EvokerAttackSpellGoal, EvokerCastingSpellGoal, EvokerSummonSpellGoal, EvokerWololoSpellGoal};
 use crate::world::entity::animal::equine::skeleton_horse::SkeletonTrapGoal;
+use crate::world::entity::animal::polarbear::polar_bear::{PolarBearAttackPlayersGoal, PolarBearHurtByTargetGoal, PolarBearMeleeAttackGoal};
 use crate::world::entity::monster::vex::{VexChargeAttackGoal, VexCopyOwnerTargetGoal, VexRandomMoveGoal};
 use super::random_stroll_goal::RandomStrollGoal;
 use super::restrict_sun_goal::RestrictSunGoal;
@@ -132,6 +133,9 @@ pub enum Goal {
     VexRandomMove(VexRandomMoveGoal),
     VexCopyOwnerTarget(VexCopyOwnerTargetGoal),
     SkeletonTrap(SkeletonTrapGoal),
+    PolarBearMeleeAttack(PolarBearMeleeAttackGoal),
+    PolarBearHurtByTarget(PolarBearHurtByTargetGoal),
+    PolarBearAttackPlayers(PolarBearAttackPlayersGoal),
     AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
     RandomStroll(RandomStrollGoal),
     DrownedGoToWater(DrownedGoToWaterGoal),
@@ -344,6 +348,9 @@ impl Goal {
             Goal::VexRandomMove(goal) => goal.can_use(level, mob),
             Goal::VexCopyOwnerTarget(goal) => goal.can_use(level, mob),
             Goal::SkeletonTrap(goal) => goal.can_use(level, mob),
+            Goal::PolarBearMeleeAttack(goal) => goal.melee_attack_goal.can_use(level, mob),
+            Goal::PolarBearHurtByTarget(goal) => goal.hurt_by_target_goal.can_use(level, mob),
+            Goal::PolarBearAttackPlayers(goal) => goal.can_use(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.can_use(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::RaidGarden(goal) => goal.can_use(level, mob),
@@ -475,6 +482,9 @@ impl Goal {
             Goal::VexRandomMove(_) => false,
             Goal::VexCopyOwnerTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
             Goal::SkeletonTrap(goal) => goal.can_use(level, mob),
+            Goal::PolarBearMeleeAttack(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
+            Goal::PolarBearHurtByTarget(goal) => goal.hurt_by_target_goal.target_goal.can_continue_to_use(level, mob),
+            Goal::PolarBearAttackPlayers(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.can_continue_to_use(level, mob),
             Goal::RaidGarden(goal) => goal.can_continue_to_use(level),
@@ -603,6 +613,9 @@ impl Goal {
             Goal::VexRandomMove(_) => {}
             Goal::VexCopyOwnerTarget(goal) => goal.start(level, mob),
             Goal::SkeletonTrap(_) => {}
+            Goal::PolarBearMeleeAttack(goal) => goal.melee_attack_goal.start(level, mob),
+            Goal::PolarBearHurtByTarget(goal) => goal.start(level, mob),
+            Goal::PolarBearAttackPlayers(goal) => goal.nearest_attackable_target_goal.start(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.start(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::RaidGarden(goal) => goal.move_to_block_goal.start(level, mob),
@@ -710,6 +723,9 @@ impl Goal {
             Goal::VexChargeAttack(goal) => goal.stop(level, mob),
             Goal::VexCopyOwnerTarget(goal) => goal.target_goal.stop(level, mob),
             Goal::SkeletonTrap(_) => {}
+            Goal::PolarBearMeleeAttack(goal) => goal.stop(level, mob),
+            Goal::PolarBearHurtByTarget(goal) => goal.hurt_by_target_goal.target_goal.stop(level, mob),
+            Goal::PolarBearAttackPlayers(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::BlazeAttack(goal) => goal.stop(level, mob),
             Goal::GhastShootFireball(goal) => goal.stop(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.stop(),
@@ -756,6 +772,7 @@ impl Goal {
                 | Goal::GhastLook
                 | Goal::GhastShootFireball(_)
                 | Goal::VexChargeAttack(_)
+                | Goal::PolarBearMeleeAttack(_)
                 | Goal::RaidGarden(_)
                 | Goal::TurtleLayEgg(_)
                 | Goal::TurtleGoToWater(_)
@@ -862,6 +879,8 @@ impl Goal {
             Goal::VexRandomMove(goal) => goal.tick(level, mob),
             Goal::VexCopyOwnerTarget(_) => {}
             Goal::SkeletonTrap(goal) => goal.tick(level, mob),
+            Goal::PolarBearMeleeAttack(goal) => goal.tick(level, mob),
+            Goal::PolarBearHurtByTarget(_) | Goal::PolarBearAttackPlayers(_) => {}
             Goal::GhastShootFireball(goal) => goal.tick(level, mob),
             Goal::RabbitPanic(goal) => goal.tick(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
@@ -949,6 +968,8 @@ impl Goal {
             Goal::EvokerCastingSpell(_) | Goal::SpellcasterCastingSpell(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::IllusionerMirrorSpell(_) | Goal::IllusionerBlindnessSpell(_) => 0,
             Goal::EvokerSummonSpell(_) | Goal::EvokerAttackSpell(_) | Goal::EvokerWololoSpell(_) | Goal::VexCopyOwnerTarget(_) | Goal::SkeletonTrap(_) => 0,
+            Goal::PolarBearMeleeAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::PolarBearHurtByTarget(_) | Goal::PolarBearAttackPlayers(_) => Flag::Target.bit(),
             Goal::VexChargeAttack(_) | Goal::VexRandomMove(_) => Flag::Move.bit(),
             Goal::GhastShootFireball(_) => 0,
             Goal::RabbitPanic(_) | Goal::RabbitAvoidEntity(_) | Goal::TurtlePanic(_) | Goal::TurtleRandomStroll(_) => Flag::Move.bit(),

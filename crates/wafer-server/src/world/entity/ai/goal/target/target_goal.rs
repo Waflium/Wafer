@@ -18,11 +18,12 @@ pub struct TargetGoal {
     unseen_ticks: i32,
     pub target_mob: Option<EntityId>,
     pub unseen_memory_ticks: i32,
+    pub follow_distance_scale: f64,
 }
 
 impl TargetGoal {
     pub fn new(must_see: bool, must_reach: bool) -> TargetGoal {
-        TargetGoal { must_see, must_reach, reach_cache: EMPTY_REACH_CACHE, reach_cache_time: 0, unseen_ticks: 0, target_mob: None, unseen_memory_ticks: 60 }
+        TargetGoal { must_see, must_reach, reach_cache: EMPTY_REACH_CACHE, reach_cache_time: 0, unseen_ticks: 0, target_mob: None, unseen_memory_ticks: 60, follow_distance_scale: 1.0 }
     }
 
     pub fn can_continue_to_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
@@ -35,7 +36,7 @@ impl TargetGoal {
         {
             return false;
         }
-        let within = get_follow_distance(level, mob);
+        let within = self.get_follow_distance(level, mob);
         if level.entity(mob).distance_to_sqr(level.entity(target)) > within * within {
             return false;
         }
@@ -96,6 +97,10 @@ impl TargetGoal {
         let xx = last.x - target_pos.x;
         let zz = last.z - target_pos.z;
         (xx * xx + zz * zz) as f64 <= 2.25
+    }
+
+    pub fn get_follow_distance(&self, level: &ServerLevel, mob: EntityId) -> f64 {
+        get_follow_distance(level, mob) * self.follow_distance_scale
     }
 
     pub fn set_unseen_memory_ticks(&mut self, unseen_memory_ticks: i32) {

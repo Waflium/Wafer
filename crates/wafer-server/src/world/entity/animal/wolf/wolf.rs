@@ -228,7 +228,7 @@ impl Wolf {
         let float_goal = FloatGoal::new(&mut ai.navigation);
         let goal_selector = &mut ai.goal_selector;
         goal_selector.add_goal(1, Goal::Float(float_goal));
-        goal_selector.add_goal(1, Goal::TamableAnimalPanic(TamableAnimalPanicGoal::new(1.5, &damage_type_tags::PANIC_ENVIRONMENTAL_CAUSES)));
+        goal_selector.add_goal(1, Goal::TamableAnimalPanic(TamableAnimalPanicGoal::new(1.5, |_, _| &damage_type_tags::PANIC_ENVIRONMENTAL_CAUSES)));
         goal_selector.add_goal(2, Goal::SitWhenOrderedTo(SitWhenOrderedToGoal));
         goal_selector.add_goal(3, Goal::WolfAvoidEntity(WolfAvoidEntityGoal::new("minecraft:llama", 24.0, 1.5, 1.5)));
         goal_selector.add_goal(4, Goal::LeapAtTarget(LeapAtTargetGoal::new(0.4)));

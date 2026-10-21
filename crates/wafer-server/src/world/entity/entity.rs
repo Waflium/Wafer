@@ -2627,6 +2627,7 @@ impl ServerLevel {
                     super::mob::MobKind::Pig(_) => "Pig",
                     super::mob::MobKind::Sheep(_) => "Sheep",
                     super::mob::MobKind::Goat(_) => "Goat",
+                    super::mob::MobKind::PolarBear(_) => "PolarBear",
                     super::mob::MobKind::Armadillo(_) => "Armadillo",
                     super::mob::MobKind::Zombie(_) => "Zombie",
                     super::mob::MobKind::Husk(_) => "Husk",

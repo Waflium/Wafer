@@ -30,6 +30,7 @@ pub mod fish;
 pub mod feline;
 pub mod fox;
 pub mod pig;
+pub mod polarbear;
 pub mod rabbit;
 #[cfg(test)]
 mod rabbit_turtle_oracle_tests;
@@ -91,6 +92,7 @@ impl ServerLevel {
             MobKind::Sheep(_) => sheep::sheep::is_food(item_stack),
             MobKind::Wolf(_) => wolf::wolf::is_food(item_stack),
             MobKind::Goat(_) => goat::goat::is_food(item_stack),
+            MobKind::PolarBear(_) => false,
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),
             MobKind::Zombie(_)
             | MobKind::ZombieVillager(_)

@@ -2,7 +2,7 @@ use wafer_core::AABB;
 use wafer_core::random::RandomSource;
 use wafer_data::registry;
 
-use super::target_goal::{TargetGoal, get_follow_distance};
+use super::target_goal::TargetGoal;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::goal::goal::reduced_tick_delay;
@@ -28,6 +28,7 @@ pub enum TargetType {
     LivingEntity,
     Wolf,
     AbstractPiglin,
+    Fox,
 }
 
 impl TargetType {
@@ -49,6 +50,7 @@ impl TargetType {
             TargetType::LivingEntity => level.is_living(entity),
             TargetType::Wolf => is_type(level, entity, &["minecraft:wolf"]),
             TargetType::AbstractPiglin => is_type(level, entity, &["minecraft:piglin", "minecraft:piglin_brute"]),
+            TargetType::Fox => is_type(level, entity, &["minecraft:fox"]),
         }
     }
 }
@@ -89,7 +91,7 @@ impl NearestAttackableTargetGoal {
     }
 
     pub fn find_target(&mut self, level: &mut ServerLevel, mob: EntityId) {
-        let follow_distance = get_follow_distance(level, mob);
+        let follow_distance = self.target_goal.get_follow_distance(level, mob);
         let selector = self.selector.map(|selector| move |target: EntityId, level: &ServerLevel| selector(mob, target, level));
         let mut target_conditions = TargetingConditions::for_combat().range(follow_distance);
         if let Some(selector) = &selector {

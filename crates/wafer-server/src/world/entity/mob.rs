@@ -17,6 +17,7 @@ use super::monster::illager::illusioner::{self, Illusioner};
 use super::monster::illager::pillager::{self, Pillager};
 use super::animal::equine::skeleton_horse::{self, SkeletonHorse};
 use super::animal::equine::zombie_horse::{self, ZombieHorse};
+use super::animal::polarbear::polar_bear::{self, PolarBear};
 use super::monster::ravager::{self, Ravager};
 use super::monster::vex::{self, Vex};
 use super::monster::illager::vindicator::{self, Vindicator};
@@ -142,6 +143,7 @@ pub enum MobKind {
     Pig(Pig),
     Sheep(Sheep),
     Goat(Goat),
+    PolarBear(PolarBear),
     Armadillo(Armadillo),
     Zombie(Zombie),
     Husk(Husk),
@@ -259,6 +261,7 @@ impl Mob {
             MobKind::Pig(_) => Pig::register_goals(&mut self.ai),
             MobKind::Sheep(_) => Sheep::register_goals(&mut self.ai),
             MobKind::Goat(_) => {}
+            MobKind::PolarBear(_) => PolarBear::register_goals(&mut self.ai),
             MobKind::Armadillo(_) => {}
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_) => Zombie::register_goals(&mut self.ai, &self.kind),
             MobKind::Blaze(_) => Blaze::register_goals(&mut self.ai),
@@ -351,6 +354,7 @@ impl Mob {
             MobKind::Enderman(enderman) => Some(enderman),
             MobKind::Wolf(wolf) => Some(wolf),
             MobKind::IronGolem(iron_golem) => Some(iron_golem),
+            MobKind::PolarBear(polar_bear) => Some(polar_bear),
             MobKind::ZombifiedPiglin(zombified_piglin) => Some(zombified_piglin),
             _ => None,
         }
@@ -361,6 +365,7 @@ impl Mob {
             MobKind::Enderman(enderman) => Some((enderman, &mut self.entity)),
             MobKind::Wolf(wolf) => Some((wolf, &mut self.entity)),
             MobKind::IronGolem(iron_golem) => Some((iron_golem, &mut self.entity)),
+            MobKind::PolarBear(polar_bear) => Some((polar_bear, &mut self.entity)),
             MobKind::ZombifiedPiglin(zombified_piglin) => Some((zombified_piglin, &mut self.entity)),
             _ => None,
         }
@@ -440,7 +445,7 @@ impl Mob {
     }
 
     pub fn client_tracking_range(&self) -> i32 {
-        if matches!(self.kind, MobKind::Tadpole(_) | MobKind::Ravager(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_)) {
+        if matches!(self.kind, MobKind::Tadpole(_) | MobKind::Ravager(_) | MobKind::PolarBear(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_)) {
             10
         } else if self.is_abstract_fish() {
             4
@@ -738,6 +743,7 @@ impl Mob {
             MobKind::Sheep(sheep) => Some(&sheep.animal),
             MobKind::Wolf(wolf) => Some(&wolf.tamable_animal.animal),
             MobKind::Goat(goat) => Some(&goat.animal),
+            MobKind::PolarBear(polar_bear) => Some(&polar_bear.animal),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => self.abstract_horse().map(|horse| &horse.animal),
             MobKind::Armadillo(armadillo) => Some(&armadillo.animal),
             MobKind::Axolotl(axolotl) => Some(&axolotl.animal),
@@ -769,6 +775,7 @@ impl Mob {
             MobKind::Sheep(sheep) => Some(&mut sheep.animal),
             MobKind::Wolf(wolf) => Some(&mut wolf.tamable_animal.animal),
             MobKind::Goat(goat) => Some(&mut goat.animal),
+            MobKind::PolarBear(polar_bear) => Some(&mut polar_bear.animal),
             MobKind::Horse(horse) => Some(&mut horse.abstract_horse.animal),
             MobKind::Donkey(donkey) => Some(&mut donkey.abstract_chested_horse.abstract_horse.animal),
             MobKind::Mule(mule) => Some(&mut mule.abstract_chested_horse.abstract_horse.animal),
@@ -848,7 +855,7 @@ impl Mob {
                 self.apply_implicit_component_if_present(components, dc::WOLF_SOUND_VARIANT);
                 self.apply_implicit_component_if_present(components, dc::WOLF_COLLAR);
             }
-            MobKind::Goat(_) => {}
+            MobKind::Goat(_) | MobKind::PolarBear(_) => {}
             MobKind::Armadillo(_) => {}
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => {}
             MobKind::Enderman(_) => {}
@@ -1074,6 +1081,8 @@ impl Mob {
             MobKind::Sheep(_) if self.is_baby() => sheep::BABY_DIMENSIONS,
             MobKind::Sheep(_) => sheep::DIMENSIONS,
             MobKind::Goat(_) => goat::get_default_dimensions(self.is_baby(), self.entity.pose()),
+            MobKind::PolarBear(_) if self.is_baby() => polar_bear::BABY_DIMENSIONS,
+            MobKind::PolarBear(_) => polar_bear::DIMENSIONS,
             MobKind::Armadillo(_) => armadillo::get_default_dimensions(self.is_baby()),
             MobKind::Zombie(_) if self.is_baby() => zombie::BABY_DIMENSIONS,
             MobKind::Zombie(_) => zombie::DIMENSIONS,
@@ -1152,6 +1161,8 @@ impl Mob {
             MobKind::Pig(_) => (0.0, 0.86875f32 as f64, 0.0),
             MobKind::Sheep(_) if baby => (0.0, 0.5625f32 as f64, 0.0),
             MobKind::Sheep(_) => (0.0, 1.2375f32 as f64, 0.0),
+            MobKind::PolarBear(_) if baby => (0.0, 0.625, 0.0),
+            MobKind::PolarBear(_) => (0.0, 1.4f32 as f64, 0.0),
             MobKind::Goat(_) if baby => (0.0, 0.53125f32 as f64, 0.0),
             MobKind::Goat(_) => (0.0, 1.1125f32 as f64, 0.0),
             MobKind::Armadillo(_) => (0.0, self.default_dimensions().height as f64, 0.0),
@@ -1313,6 +1324,7 @@ impl Mob {
                 out.push(("Color".into(), Nbt::Byte(sheep::get_color(&self.entity).id as i8)));
             }
             MobKind::Goat(_) => Goat::add_additional_save_data(self, out),
+            MobKind::PolarBear(_) => PolarBear::add_additional_save_data(self, out),
             MobKind::Armadillo(_) => Armadillo::add_additional_save_data(self, out),
             MobKind::ZombieVillager(_) => ZombieVillager::add_additional_save_data(self, out),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) => {
@@ -1487,7 +1499,7 @@ impl Mob {
                 let color = nbt.get("Color").and_then(Nbt::as_i64).map_or(DyeColor::VALUES[0], |id| DyeColor::by_id(id as i8 as i32));
                 sheep::set_color(&mut self.entity, color);
             }
-            MobKind::Goat(_) => {}
+            MobKind::Goat(_) | MobKind::PolarBear(_) => {}
             MobKind::Armadillo(_) => {}
             MobKind::Chicken(chicken) => {
                 let variant = nbt.get("variant").and_then(Nbt::as_str).and_then(chicken::variant_id);
@@ -1562,6 +1574,7 @@ impl Mob {
             MobKind::Bat(_) => Bat::read_additional_save_data(self, nbt),
             MobKind::GlowSquid(_) => GlowSquid::read_additional_save_data(self, nbt),
             MobKind::Goat(_) => Goat::read_additional_save_data(self, nbt),
+            MobKind::PolarBear(_) => {}
             MobKind::Armadillo(_) => Armadillo::read_additional_save_data(self, nbt),
             MobKind::Fox(_) => Fox::read_additional_save_data(self, nbt),
             MobKind::Rabbit(_) => Rabbit::read_additional_save_data(self, nbt),
@@ -1609,6 +1622,7 @@ impl Mob {
             MobKind::Pig(_) => &Pig::get_sound_set(self).ambient_sound,
             MobKind::Sheep(_) => "minecraft:entity.sheep.ambient",
             MobKind::Goat(_) => goat::get_ambient_sound(&self.entity),
+            MobKind::PolarBear(_) => polar_bear::get_ambient_sound(self),
             MobKind::Armadillo(_) => return armadillo::get_ambient_sound(&self.entity),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) => Zombie::get_ambient_sound(self),
             MobKind::Drowned(_) => Drowned::get_ambient_sound(self),
@@ -1667,6 +1681,7 @@ impl Mob {
             MobKind::Pig(_) => &Pig::get_sound_set(self).hurt_sound,
             MobKind::Sheep(_) => "minecraft:entity.sheep.hurt",
             MobKind::Goat(_) => goat::get_hurt_sound(&self.entity),
+            MobKind::PolarBear(_) => polar_bear::get_hurt_sound(),
             MobKind::Armadillo(_) => armadillo::get_hurt_sound(&self.entity),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) => Zombie::get_hurt_sound(self),
             MobKind::Drowned(_) => Drowned::get_hurt_sound(self),
@@ -1726,6 +1741,7 @@ impl Mob {
             MobKind::Pig(_) => &Pig::get_sound_set(self).death_sound,
             MobKind::Sheep(_) => "minecraft:entity.sheep.death",
             MobKind::Goat(_) => goat::get_death_sound(&self.entity),
+            MobKind::PolarBear(_) => polar_bear::get_death_sound(),
             MobKind::Armadillo(_) => armadillo::get_death_sound(),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) => Zombie::get_death_sound(self),
             MobKind::Drowned(_) => Drowned::get_death_sound(self),
@@ -1785,6 +1801,7 @@ impl Mob {
             MobKind::Pig(_) => &Pig::get_sound_set(self).step_sound,
             MobKind::Sheep(_) => "minecraft:entity.sheep.step",
             MobKind::Goat(_) => goat::get_step_sound(),
+            MobKind::PolarBear(_) => polar_bear::get_step_sound(),
             MobKind::Armadillo(_) => armadillo::get_step_sound(),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) => Zombie::get_step_sound(self),
             MobKind::Drowned(_) => Drowned::get_step_sound(self),
@@ -1959,6 +1976,7 @@ impl ServerLevel {
             MobKind::Pig(_) => self.pig_mob_interact(id, player, hand),
             MobKind::Sheep(_) => self.sheep_mob_interact(id, player, hand),
             MobKind::Goat(_) => self.goat_mob_interact(id, player, hand),
+            MobKind::PolarBear(_) => self.animal_mob_interact(id, player, hand),
             MobKind::Armadillo(_) => self.armadillo_mob_interact(id, player, hand),
             MobKind::ZombieVillager(_) => self.zombie_villager_mob_interact(id, player, hand),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => {
@@ -2776,7 +2794,7 @@ impl ServerLevel {
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::ZombieVillager(_))) {
             self.zombie_villager_read_level_dependent_save_data(id, input);
         }
-        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Enderman(_) | MobKind::Wolf(_) | MobKind::IronGolem(_) | MobKind::ZombifiedPiglin(_))) {
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Enderman(_) | MobKind::Wolf(_) | MobKind::IronGolem(_) | MobKind::ZombifiedPiglin(_) | MobKind::PolarBear(_))) {
             self.read_persistent_anger_save_data(id, input);
         }
     }
@@ -3053,6 +3071,7 @@ pub fn finalize_spawn(
         MobKind::Pig(_) => pig::finalize_spawn(level, mob),
         MobKind::Sheep(_) => sheep::finalize_spawn(level, mob),
         MobKind::Goat(_) => goat::finalize_spawn(level, mob),
+        MobKind::PolarBear(_) => group_data = polar_bear::finalize_spawn(level, group_data),
         MobKind::Armadillo(_) => {}
         MobKind::Zombie(_)
         | MobKind::ZombieVillager(_)

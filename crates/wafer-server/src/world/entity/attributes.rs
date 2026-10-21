@@ -442,6 +442,19 @@ pub static WOLF_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static POLAR_BEAR_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange, AttackDamage,
+        ],
+        &[(FollowRange, 20.0), (TemptRange, 10.0), (MaxHealth, 30.0), (MovementSpeed, 0.25), (AttackDamage, 6.0)],
+    )
+};
+
 pub static GOAT_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

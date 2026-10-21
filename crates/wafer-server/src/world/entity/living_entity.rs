@@ -2131,6 +2131,7 @@ impl ServerLevel {
     pub fn get_water_slow_down(&self, id: EntityId) -> f32 {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::SkeletonHorse(_)) => super::animal::equine::skeleton_horse::get_water_slow_down(),
+            Some(MobKind::PolarBear(_)) => super::animal::polarbear::polar_bear::get_water_slow_down(),
             _ => 0.8,
         }
     }

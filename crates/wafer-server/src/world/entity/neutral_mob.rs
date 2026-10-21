@@ -60,6 +60,7 @@ impl ServerLevel {
             Some(MobKind::Wolf(_)) => self.wolf_start_persistent_anger_timer(id),
             Some(MobKind::IronGolem(_)) => self.iron_golem_start_persistent_anger_timer(id),
             Some(MobKind::ZombifiedPiglin(_)) => self.zombified_piglin_start_persistent_anger_timer(id),
+            Some(MobKind::PolarBear(_)) => self.polar_bear_start_persistent_anger_timer(id),
             _ => unreachable!("not a neutral mob"),
         }
     }

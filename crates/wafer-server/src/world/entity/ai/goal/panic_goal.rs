@@ -12,15 +12,15 @@ pub struct PanicGoal {
     pub pos_y: f64,
     pub pos_z: f64,
     is_running: bool,
-    panic_causing_damage_types: &'static Tag,
+    panic_causing_damage_types: fn(&ServerLevel, EntityId) -> &'static Tag,
 }
 
 impl PanicGoal {
     pub fn new(speed_modifier: f64) -> PanicGoal {
-        PanicGoal::with_damage_types(speed_modifier, &damage_type_tags::PANIC_CAUSES)
+        PanicGoal::with_damage_types(speed_modifier, |_, _| &damage_type_tags::PANIC_CAUSES)
     }
 
-    pub fn with_damage_types(speed_modifier: f64, panic_causing_damage_types: &'static Tag) -> PanicGoal {
+    pub fn with_damage_types(speed_modifier: f64, panic_causing_damage_types: fn(&ServerLevel, EntityId) -> &'static Tag) -> PanicGoal {
         PanicGoal { speed_modifier, pos_x: 0.0, pos_y: 0.0, pos_z: 0.0, is_running: false, panic_causing_damage_types }
     }
 
@@ -40,7 +40,7 @@ impl PanicGoal {
     }
 
     pub fn should_panic(&self, level: &ServerLevel, mob: EntityId) -> bool {
-        level.get_last_damage_source(mob).is_some_and(|source| source.is(self.panic_causing_damage_types))
+        level.get_last_damage_source(mob).is_some_and(|source| source.is((self.panic_causing_damage_types)(level, mob)))
     }
 
     pub fn find_random_position(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {

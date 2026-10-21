@@ -131,7 +131,7 @@ impl MeleeAttackGoal {
         self.ticks_until_next_attack = self.adjusted_tick_delay(20);
     }
 
-    fn is_time_to_attack(&self) -> bool {
+    pub fn is_time_to_attack(&self) -> bool {
         self.ticks_until_next_attack <= 0
     }
 
