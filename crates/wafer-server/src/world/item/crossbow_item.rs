@@ -78,13 +78,83 @@ pub fn is_charged(item_stack: &ItemStack) -> bool {
     !charged_projectiles(item_stack).is_empty()
 }
 
-pub fn shot_vector(level: &ServerLevel, shooter: EntityId, angle: f32, _target_override: Option<EntityId>) -> [f32; 3] {
+pub fn shot_vector(level: &ServerLevel, shooter: EntityId, projectile_y: f64, angle: f32, target_override: Option<EntityId>) -> [f32; 3] {
     let e = level.entity(shooter);
+    if let Some(target_override) = target_override {
+        let t = level.entity(target_override);
+        let xd = t.x() - e.x();
+        let zd = t.z() - e.z();
+        let distance_to_target = (xd * xd + zd * zd).sqrt();
+        let yd = t.get_y(0.3333333333333333) - projectile_y + distance_to_target * 0.2f32 as f64;
+        return get_projectile_shot_vector(level, shooter, [xd as f32, yd as f32, zd as f32], angle);
+    }
     let (x_rot, y_rot) = (e.x_rot, e.y_head_rot);
     let up_vector = calculate_view_vector(x_rot - 90.0, y_rot);
     let view_vec = calculate_view_vector(x_rot, y_rot);
     let quaternion = Quaternionf::set_angle_axis(angle * (std::f64::consts::PI / 180.0) as f32, up_vector.x as f32, up_vector.y as f32, up_vector.z as f32);
     quaternion.transform(view_vec.x as f32, view_vec.y as f32, view_vec.z as f32)
+}
+
+fn get_projectile_shot_vector(level: &ServerLevel, body: EntityId, original_vector: [f32; 3], angle: f32) -> [f32; 3] {
+    let view_vec = normalize(original_vector);
+    let mut right_vector_pre_rot = cross(view_vec, [0.0, 1.0, 0.0]);
+    if length_squared(right_vector_pre_rot) <= 1.0E-7 {
+        let e = level.entity(body);
+        let up = calculate_view_vector(e.x_rot - 90.0, e.y_head_rot);
+        right_vector_pre_rot = cross(view_vec, [up.x as f32, up.y as f32, up.z as f32]);
+    }
+    let view_vec3f = rotate_axis(view_vec, (std::f64::consts::PI / 2.0) as f32, right_vector_pre_rot);
+    rotate_axis(view_vec, angle * (std::f64::consts::PI / 180.0) as f32, view_vec3f)
+}
+
+fn length_squared([x, y, z]: [f32; 3]) -> f32 {
+    x * x + (y * y + z * z)
+}
+
+fn normalize(v: [f32; 3]) -> [f32; 3] {
+    let scalar = 1.0 / (length_squared(v) as f64).sqrt() as f32;
+    [v[0] * scalar, v[1] * scalar, v[2] * scalar]
+}
+
+fn cross([x, y, z]: [f32; 3], [vx, vy, vz]: [f32; 3]) -> [f32; 3] {
+    [y * vz + -z * vy, z * vx + -x * vz, x * vy + -y * vx]
+}
+
+fn abs_equals_one(v: f32) -> bool {
+    (v.to_bits() & 0x7FFFFFFF) == 0x3F800000
+}
+
+fn rotate_axis(v: [f32; 3], angle: f32, [a_x, a_y, a_z]: [f32; 3]) -> [f32; 3] {
+    let [x, y, z] = v;
+    if a_y == 0.0 && a_z == 0.0 && abs_equals_one(a_x) {
+        let angle = a_x * angle;
+        let sin = (angle as f64).sin() as f32;
+        let cos = cos_from_sin(sin, angle);
+        return [x, y * cos - z * sin, y * sin + z * cos];
+    }
+    if a_x == 0.0 && a_z == 0.0 && abs_equals_one(a_y) {
+        let angle = a_y * angle;
+        let sin = (angle as f64).sin() as f32;
+        let cos = cos_from_sin(sin, angle);
+        return [x * cos + z * sin, y, -x * sin + z * cos];
+    }
+    if a_x == 0.0 && a_y == 0.0 && abs_equals_one(a_z) {
+        let angle = a_z * angle;
+        let sin = (angle as f64).sin() as f32;
+        let cos = cos_from_sin(sin, angle);
+        return [x * cos - y * sin, x * sin + y * cos, z];
+    }
+    let hangle = angle * 0.5;
+    let sin_angle = (hangle as f64).sin() as f32;
+    let (qx, qy, qz) = (a_x * sin_angle, a_y * sin_angle, a_z * sin_angle);
+    let qw = cos_from_sin(sin_angle, hangle);
+    let (w2, x2, y2, z2) = (qw * qw, qx * qx, qy * qy, qz * qz);
+    let (zw, xy, xz, yw, yz, xw) = (qz * qw, qx * qy, qx * qz, qy * qw, qy * qz, qx * qw);
+    [
+        (w2 + x2 - z2 - y2) * x + (-zw + xy - zw + xy) * y + (yw + xz + xz + yw) * z,
+        (xy + zw + zw + xy) * x + (y2 - z2 + w2 - x2) * y + (yz + yz - xw - xw) * z,
+        (xz - yw + xz - yw) * x + (yz + yz + xw + xw) * y + (z2 - y2 - x2 + w2) * z,
+    ]
 }
 
 pub fn play_shoot_sound(level: &mut ServerLevel, shooter: EntityId, index: usize) {

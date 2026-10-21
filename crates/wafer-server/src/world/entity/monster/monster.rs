@@ -1,12 +1,13 @@
 use wafer_core::BlockPos;
-use wafer_data::{EquipmentSlot, game_rule};
+use wafer_data::game_rule;
 
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::entity::EntityId;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::mob;
-use crate::world::item::{ItemStack, projectile_weapon_item};
+use crate::world::item::ItemStack;
+use crate::world::item::projectile_weapon_item::{self, HeldProjectile, ProjectileSlot};
 use crate::world::level::dimension::dimension_type;
 use crate::world::level::light_layer::LightLayer;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
@@ -81,14 +82,14 @@ impl ServerLevel {
         true
     }
 
-    pub fn monster_get_projectile(&self, id: EntityId, held_weapon: &ItemStack) -> ItemStack {
+    pub fn monster_get_projectile(&self, id: EntityId, held_weapon: &ItemStack) -> HeldProjectile {
         let item = held_weapon.get_item();
         if !projectile_weapon_item::is_projectile_weapon(item) {
-            return ItemStack::empty();
+            return HeldProjectile::empty();
         }
         let supported_projectiles = projectile_weapon_item::get_supported_held_projectiles(item);
-        let held_projectile = [EquipmentSlot::Offhand, EquipmentSlot::Mainhand].into_iter().find_map(|slot| self.item_by_slot(id, slot).filter(|stack| supported_projectiles(stack)));
-        held_projectile.unwrap_or_else(|| ItemStack::new(wafer_data::items::ARROW, 1))
+        let held_projectile = self.get_held_projectile(id, supported_projectiles);
+        if held_projectile.is_empty() { HeldProjectile { stack: ItemStack::new(wafer_data::items::ARROW, 1), slot: ProjectileSlot::Created } } else { held_projectile }
     }
 }
 

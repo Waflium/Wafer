@@ -193,7 +193,7 @@ impl ServerLevel {
     pub fn abstract_skeleton_perform_ranged_attack(&mut self, id: EntityId, target: EntityId, power: f32) {
         let hand = projectile_util::get_weapon_holding_hand(self, id, items::BOW);
         let bow_item = self.get_item_in_hand(id, hand).unwrap_or_else(ItemStack::empty);
-        let projectile = self.monster_get_projectile(id, &bow_item);
+        let projectile = self.monster_get_projectile(id, &bow_item).stack;
         let arrow = self.get_arrow(id, &projectile, power, Some(&bow_item));
         let (e, t) = (self.entity(id), self.entity(target));
         let xd = t.x() - e.x();

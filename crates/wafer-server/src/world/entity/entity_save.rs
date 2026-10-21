@@ -378,6 +378,7 @@ impl ServerLevel {
             "minecraft:zombie" => LevelEntity::Mob(Box::new(super::monster::zombie::zombie::Zombie::create())),
             "minecraft:husk" => LevelEntity::Mob(Box::new(super::monster::zombie::husk::Husk::create())),
             "minecraft:vindicator" => LevelEntity::Mob(Box::new(super::monster::illager::vindicator::Vindicator::create())),
+            "minecraft:pillager" => LevelEntity::Mob(Box::new(super::monster::illager::pillager::Pillager::create())),
             "minecraft:giant" => LevelEntity::Mob(Box::new(super::monster::giant::Giant::create())),
             "minecraft:wither_skeleton" => LevelEntity::Mob(Box::new(super::monster::skeleton::wither_skeleton::WitherSkeleton::create())),
             "minecraft:zombie_villager" => LevelEntity::Mob(Box::new(super::monster::zombie::zombie_villager::ZombieVillager::create())),

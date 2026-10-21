@@ -10,6 +10,7 @@ use super::melee_attack_goal::MeleeAttackGoal;
 use super::panic_goal::PanicGoal;
 use super::random_look_around_goal::RandomLookAroundGoal;
 use super::ranged_bow_attack_goal::RangedBowAttackGoal;
+use super::ranged_crossbow_attack_goal::RangedCrossbowAttackGoal;
 use super::random_stroll_goal::RandomStrollGoal;
 use super::restrict_sun_goal::RestrictSunGoal;
 use super::swell_goal::SwellGoal;
@@ -114,6 +115,7 @@ pub enum Goal {
     SpiderAttack(SpiderAttackGoal),
     SpiderTarget(SpiderTargetGoal),
     RangedBowAttack(RangedBowAttackGoal),
+    RangedCrossbowAttack(RangedCrossbowAttackGoal),
     AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
     RandomStroll(RandomStrollGoal),
     DrownedGoToWater(DrownedGoToWaterGoal),
@@ -233,6 +235,7 @@ impl Goal {
             Goal::SpiderAttack(goal) => goal.can_use(level, mob),
             Goal::SpiderTarget(goal) => goal.can_use(level, mob),
             Goal::RangedBowAttack(goal) => goal.can_use(level, mob),
+            Goal::RangedCrossbowAttack(goal) => goal.can_use(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_use(level, mob),
             Goal::RandomStroll(goal) => goal.can_use(level, mob, RandomStrollGoal::get_position),
             Goal::DrownedGoToWater(goal) => goal.can_use(level, mob),
@@ -352,6 +355,7 @@ impl Goal {
             Goal::SpiderAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
             Goal::RangedBowAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::RangedCrossbowAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
             Goal::RandomStroll(goal) => goal.can_continue_to_use(level, mob),
             Goal::DrownedGoToWater(goal) => goal.can_continue_to_use(level, mob),
@@ -474,6 +478,7 @@ impl Goal {
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.start(level, mob),
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
             Goal::RangedBowAttack(goal) => goal.start(level, mob),
+            Goal::RangedCrossbowAttack(_) => {}
             Goal::AbstractSkeletonMelee(goal) => goal.start(level, mob),
             Goal::RandomStroll(goal) => goal.start(level, mob),
             Goal::DrownedGoToWater(goal) => goal.start(level, mob),
@@ -585,6 +590,7 @@ impl Goal {
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.stop(level, mob),
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::RangedBowAttack(goal) => goal.stop(level, mob),
+            Goal::RangedCrossbowAttack(goal) => goal.stop(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.stop(level, mob),
             Goal::RandomStroll(goal) => goal.stop(level, mob),
             Goal::DrownedGoToWater(_) | Goal::DrownedGoToBeach(_) => {}
@@ -672,6 +678,7 @@ impl Goal {
                 | Goal::Swell(_)
                 | Goal::SpiderAttack(_)
                 | Goal::RangedBowAttack(_)
+                | Goal::RangedCrossbowAttack(_)
                 | Goal::AbstractSkeletonMelee(_)
                 | Goal::DrownedTridentAttack(_)
                 | Goal::DrownedAttack(_)
@@ -737,6 +744,7 @@ impl Goal {
             Goal::OcelotTempt(goal) => goal.tempt_goal.tick(level, mob),
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.tick(level, mob),
             Goal::RangedBowAttack(goal) => goal.tick(level, mob),
+            Goal::RangedCrossbowAttack(goal) => goal.tick(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.tick(level, mob),
             Goal::RandomStroll(_) | Goal::DrownedGoToWater(_) => {}
             Goal::DrownedTridentAttack(goal) => goal.ranged_attack_goal.tick(level, mob),
@@ -814,6 +822,7 @@ impl Goal {
             | Goal::MeleeAttack(_)
             | Goal::ZombieAttack(_)
             | Goal::RangedBowAttack(_)
+            | Goal::RangedCrossbowAttack(_)
             | Goal::AbstractSkeletonMelee(_)
             | Goal::DrownedTridentAttack(_)
             | Goal::DrownedAttack(_) => Flag::Move.bit() | Flag::Look.bit(),

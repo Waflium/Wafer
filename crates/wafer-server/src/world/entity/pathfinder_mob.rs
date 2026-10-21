@@ -29,6 +29,7 @@ impl ServerLevel {
             MobKind::Giant(_) => self.giant_get_walk_target_value(pos),
             MobKind::Enderman(_) => crate::world::entity::monster::enderman::Enderman::get_walk_target_value(),
             MobKind::Witch(_) | MobKind::Vindicator(_) => self.monster_get_walk_target_value(pos),
+            MobKind::Pillager(_) => super::monster::illager::pillager::Pillager::get_walk_target_value(),
             MobKind::Blaze(_) | MobKind::ZombifiedPiglin(_) => self.monster_get_walk_target_value(pos),
             MobKind::Ghast(_) => get_walk_target_value(),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => get_walk_target_value(),

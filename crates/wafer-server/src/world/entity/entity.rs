@@ -2622,6 +2622,7 @@ impl ServerLevel {
                     super::mob::MobKind::ZombifiedPiglin(_) => "ZombifiedPiglin",
                     super::mob::MobKind::Witch(_) => "Witch",
                     super::mob::MobKind::Vindicator(_) => "Vindicator",
+                    super::mob::MobKind::Pillager(_) => "Pillager",
                     super::mob::MobKind::Slime(_) => "Slime",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",
                     super::mob::MobKind::Wolf(_) => "Wolf",

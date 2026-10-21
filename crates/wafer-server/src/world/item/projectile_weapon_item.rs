@@ -37,6 +37,7 @@ pub fn get_all_supported_projectiles(_item: Item) -> fn(&ItemStack) -> bool {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ProjectileSlot {
     Inventory(usize),
+    Equipment(EquipmentSlot),
     Created,
 }
 
@@ -57,16 +58,29 @@ impl HeldProjectile {
 
 impl ServerLevel {
     pub fn get_held_projectile(&self, entity: EntityId, valid: fn(&ItemStack) -> bool) -> HeldProjectile {
-        let player = self.player(entity);
         for hand in [InteractionHand::OffHand, InteractionHand::MainHand] {
-            if let Some(stack) = player.item_in_hand(hand).filter(|stack| valid(stack)) {
-                return HeldProjectile { stack, slot: ProjectileSlot::Inventory(player.hand_slot(hand)) };
+            if let Some(stack) = self.get_item_in_hand(entity, hand).filter(|stack| valid(stack)) {
+                let slot = match self.players.get(&entity) {
+                    Some(player) => ProjectileSlot::Inventory(player.hand_slot(hand)),
+                    None => ProjectileSlot::Equipment(hand.as_equipment_slot()),
+                };
+                return HeldProjectile { stack, slot };
             }
         }
         HeldProjectile::empty()
     }
 
-    pub fn get_projectile(&self, player: EntityId, held_weapon: &ItemStack) -> HeldProjectile {
+    pub fn get_projectile(&self, entity: EntityId, held_weapon: &ItemStack) -> HeldProjectile {
+        if self.is_player(entity) {
+            self.player_get_projectile(entity, held_weapon)
+        } else if self.is_monster(entity) {
+            self.monster_get_projectile(entity, held_weapon)
+        } else {
+            HeldProjectile::empty()
+        }
+    }
+
+    fn player_get_projectile(&self, player: EntityId, held_weapon: &ItemStack) -> HeldProjectile {
         let item = held_weapon.get_item();
         if !is_projectile_weapon(item) {
             return HeldProjectile::empty();
@@ -113,9 +127,13 @@ impl ServerLevel {
             return copy;
         }
         let used = projectile.stack.split(ammo_to_use);
-        if let ProjectileSlot::Inventory(slot) = projectile.slot {
-            let stack = projectile.stack.clone();
-            self.player_mut(holder).inventory.slots[slot] = (!stack.is_empty()).then_some(stack);
+        match projectile.slot {
+            ProjectileSlot::Inventory(slot) => {
+                let stack = projectile.stack.clone();
+                self.player_mut(holder).inventory.slots[slot] = (!stack.is_empty()).then_some(stack);
+            }
+            ProjectileSlot::Equipment(slot) => self.set_item_slot(holder, slot, projectile.stack.clone()),
+            ProjectileSlot::Created => {}
         }
         used
     }
@@ -168,7 +186,7 @@ impl ServerLevel {
         target_override: Option<EntityId>,
     ) {
         if weapon.is_instance_of("CrossbowItem") {
-            let [x, y, z] = crossbow_item::shot_vector(self, shooter, angle, target_override);
+            let [x, y, z] = crossbow_item::shot_vector(self, shooter, projectile_entity.entity.y(), angle, target_override);
             self.spawn_projectile(projectile_entity, projectile, |p| p.shoot(x as f64, y as f64, z as f64, power, uncertainty));
             crossbow_item::play_shoot_sound(self, shooter, index);
         } else {

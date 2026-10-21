@@ -10,6 +10,8 @@ impl ServerLevel {
             self.witch_perform_ranged_attack(id, target, power);
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::SnowGolem(_))) {
             self.snow_golem_perform_ranged_attack(id, target, power);
+        } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Pillager(_))) {
+            self.pillager_perform_ranged_attack(id);
         } else {
             self.abstract_skeleton_perform_ranged_attack(id, target, power);
         }

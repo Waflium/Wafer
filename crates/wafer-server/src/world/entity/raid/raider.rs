@@ -204,6 +204,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(crate::world::entity::mob::MobKind::Witch(_)) => crate::world::entity::monster::witch::Witch::get_celebrate_sound(),
             Some(crate::world::entity::mob::MobKind::Vindicator(_)) => crate::world::entity::monster::illager::vindicator::Vindicator::get_celebrate_sound(),
+            Some(crate::world::entity::mob::MobKind::Pillager(_)) => crate::world::entity::monster::illager::pillager::Pillager::get_celebrate_sound(),
             _ => unreachable!("not a raider"),
         }
     }
