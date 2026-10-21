@@ -20,6 +20,7 @@ pub mod spawn_util;
 pub mod special_dates;
 pub mod string_util;
 pub mod tick_throttler;
+pub mod top_k_selector;
 pub mod time_util;
 pub mod tri_state;
 pub mod uri;

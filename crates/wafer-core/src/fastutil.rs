@@ -290,6 +290,11 @@ impl<K: OpenHashKey, V> OpenHashMap<K, V> {
         self.value.iter_mut().filter_map(Option::as_mut)
     }
 
+    pub fn stream_keys(&self) -> impl Iterator<Item = K> + '_ {
+        let null = self.contains_null_key.then_some(self.n);
+        null.into_iter().chain((0..self.n).filter(|&pos| self.key[pos] != K::NULL)).map(|pos| self.key[pos])
+    }
+
     pub fn stream_values(&self) -> impl Iterator<Item = &V> + '_ {
         let null = self.contains_null_key.then_some(self.n);
         null.into_iter().chain((0..self.n).filter(|&pos| self.key[pos] != K::NULL)).map(|pos| self.value[pos].as_ref().unwrap())
@@ -393,6 +398,10 @@ impl LongOpenHashSet {
 
     pub fn iter(&self) -> impl Iterator<Item = i64> + '_ {
         self.0.keys()
+    }
+
+    pub fn stream(&self) -> impl Iterator<Item = i64> + '_ {
+        self.0.stream_keys()
     }
 
     pub fn retain(&mut self, mut keep: impl FnMut(i64) -> bool) {

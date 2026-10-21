@@ -1,6 +1,7 @@
-use indexmap::IndexSet;
-
 use wafer_core::ChunkPos;
+use wafer_core::fastutil::LongOpenHashSet;
+
+use crate::util::top_k_selector;
 
 const MIN_CHUNKS_PER_TICK: f32 = 0.01;
 const MAX_CHUNKS_PER_TICK: f32 = 64.0;
@@ -8,7 +9,7 @@ const START_CHUNKS_PER_TICK: f32 = 9.0;
 const MAX_UNACKNOWLEDGED_BATCHES: i32 = 10;
 
 pub struct PlayerChunkSender {
-    pending: IndexSet<ChunkPos>,
+    pending: LongOpenHashSet,
     desired_chunks_per_tick: f32,
     batch_quota: f32,
     unacknowledged_batches: i32,
@@ -18,7 +19,7 @@ pub struct PlayerChunkSender {
 impl Default for PlayerChunkSender {
     fn default() -> Self {
         PlayerChunkSender {
-            pending: IndexSet::new(),
+            pending: LongOpenHashSet::new(),
             desired_chunks_per_tick: START_CHUNKS_PER_TICK,
             batch_quota: 0.0,
             unacknowledged_batches: 0,
@@ -29,15 +30,15 @@ impl Default for PlayerChunkSender {
 
 impl PlayerChunkSender {
     pub fn mark_chunk_pending_to_send(&mut self, pos: ChunkPos) {
-        self.pending.insert(pos);
+        self.pending.add(pos.pack());
     }
 
     pub fn drop_chunk(&mut self, pos: ChunkPos) -> bool {
-        self.pending.shift_remove(&pos)
+        self.pending.remove(pos.pack())
     }
 
     pub fn is_pending(&self, pos: ChunkPos) -> bool {
-        self.pending.contains(&pos)
+        self.pending.contains(pos.pack())
     }
 
     pub fn next_batch(&mut self, player_chunk: ChunkPos, ready: impl Fn(ChunkPos) -> bool) -> Vec<ChunkPos> {
@@ -49,16 +50,18 @@ impl PlayerChunkSender {
         if self.batch_quota < 1.0 || self.pending.is_empty() {
             return Vec::new();
         }
-        let max = self.batch_quota.floor() as usize;
+        let max_batch_size = self.batch_quota.floor() as usize;
         let distance = |c: &ChunkPos| (c.x - player_chunk.x).pow(2) + (c.z - player_chunk.z).pow(2);
-        let mut chunks: Vec<ChunkPos> = self.pending.iter().copied().collect();
-        chunks.sort_by_key(distance);
-        if chunks.len() > max {
-            chunks.truncate(max);
-        }
-        chunks.retain(|&c| ready(c));
+        let pending = self.pending.stream().map(ChunkPos::unpack);
+        let chunks: Vec<ChunkPos> = if self.pending.len() > max_batch_size {
+            top_k_selector::least(max_batch_size, pending, |a, b| distance(a).cmp(&distance(b))).into_iter().filter(|&c| ready(c)).collect()
+        } else {
+            let mut chunks: Vec<ChunkPos> = pending.filter(|&c| ready(c)).collect();
+            chunks.sort_by_key(distance);
+            chunks
+        };
         for c in &chunks {
-            self.pending.shift_remove(c);
+            self.pending.remove(c.pack());
         }
         if chunks.is_empty() {
             return chunks;
