@@ -10,6 +10,7 @@ pub mod bucket_item;
 pub mod mob_bucket_item;
 pub mod bone_meal_item;
 pub mod component;
+pub mod consume_effects;
 pub mod context;
 pub mod crafting;
 pub mod crossbow_item;
@@ -221,8 +222,8 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
 }
 
 pub(super) fn default_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, stack: ItemStack) -> (InteractionResult, Option<ItemStack>) {
-    if let Some(consumable) = &stack.item.info().consumable {
-        return level.start_consuming(player, hand, stack.clone(), consumable);
+    if let Some(consumable) = stack.get(component::CONSUMABLE).map(component::values::Consumable::from_nbt) {
+        return level.start_consuming(player, hand, stack.clone(), &consumable);
     }
     if let Some(equippable) = stack.get(component::EQUIPPABLE).map(component::values::Equippable::from_nbt)
         && equippable.swappable
@@ -305,7 +306,7 @@ pub fn get_use_duration(stack: &ItemStack) -> i32 {
     if stack.item.is_instance_of("TridentItem") {
         return trident_item::USE_DURATION;
     }
-    match &stack.item.info().consumable {
+    match stack.get(component::CONSUMABLE).map(component::values::Consumable::from_nbt) {
         Some(consumable) => consumable.consume_ticks(),
         None => {
             if !stack.has(component::BLOCKS_ATTACKS) && !stack.has(component::KINETIC_WEAPON) {

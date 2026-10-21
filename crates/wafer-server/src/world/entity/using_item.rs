@@ -1,6 +1,6 @@
 use wafer_core::random::RandomSource;
 use wafer_data::packets::play::clientbound;
-use wafer_data::{ConsumeEffect, Consumable, EquipmentSlot, FoodProperties, ItemUseAnimation, MobEffect, mob_effects};
+use wafer_data::{EquipmentSlot, ItemUseAnimation, MobEffect, mob_effects};
 use wafer_protocol::nbt::Nbt;
 
 use super::EntityId;
@@ -11,7 +11,9 @@ use crate::util::Prediction;
 use crate::world::effect::MobEffectInstance;
 use crate::world::item::ItemStack;
 use crate::world::item::alchemy::potion_contents::PotionContents;
-use crate::world::item::component::{self as dc, values::ItemStackTemplate};
+use crate::world::item::component::values::{Consumable, FoodProperties, ItemStackTemplate};
+use crate::world::item::component::{self as dc};
+use crate::world::item::consume_effects::ConsumeEffect;
 use crate::world::{InteractionHand, InteractionResult};
 
 const FLAG_IS_USING: i8 = 1;
@@ -56,10 +58,10 @@ impl ServerLevel {
         if self.living_entity_flags(id) & FLAG_OFF_HAND > 0 { InteractionHand::OffHand } else { InteractionHand::MainHand }
     }
 
-    pub fn start_consuming(&mut self, id: EntityId, hand: InteractionHand, stack: ItemStack, consumable: &'static Consumable) -> (InteractionResult, Option<ItemStack>) {
-        let can_consume = match stack.item.info().food {
-            Some(food) => self.can_eat(id, food.can_always_eat),
-            None => true,
+    pub fn start_consuming(&mut self, id: EntityId, hand: InteractionHand, stack: ItemStack, consumable: &Consumable) -> (InteractionResult, Option<ItemStack>) {
+        let can_consume = match stack.get(dc::FOOD).map(FoodProperties::from_nbt) {
+            Some(food) if self.is_player(id) => self.can_eat(id, food.can_always_eat),
+            _ => true,
         };
         if !can_consume {
             return (InteractionResult::Fail, None);
@@ -108,10 +110,10 @@ impl ServerLevel {
             crate::advancements::triggers::criteria_triggers::USING_ITEM.trigger(self, id, &stack);
         }
         let remaining = self.living(id).use_item_remaining;
-        if let Some(consumable) = &stack.item.info().consumable
+        if let Some(consumable) = stack.get(dc::CONSUMABLE).map(Consumable::from_nbt)
             && consumable.should_emit_particles_and_sounds(remaining)
         {
-            self.emit_particles_and_sounds(id, consumable, 5);
+            self.emit_particles_and_sounds(id, &consumable, 5);
         }
         let before = stack.clone();
         crate::world::item::on_use_tick(self, id, &mut stack, remaining);
@@ -156,8 +158,8 @@ impl ServerLevel {
 
     pub fn finish_using_item(&mut self, id: EntityId, stack: ItemStack) -> ItemStack {
         let before = stack.clone();
-        let result = match &stack.item.info().consumable {
-            Some(consumable) => self.on_consume(id, stack, consumable),
+        let result = match stack.get(dc::CONSUMABLE).map(Consumable::from_nbt) {
+            Some(consumable) => self.on_consume(id, stack, &consumable),
             None => stack,
         };
         self.apply_after_use_component_side_effects(id, result, before)
@@ -230,7 +232,7 @@ impl ServerLevel {
             self.award_stat(id, crate::stats::stats::ITEM_USED.get(stack.get_item().0), 1);
             crate::advancements::triggers::criteria_triggers::CONSUME_ITEM.trigger(self, id, &stack);
         }
-        if let Some(food) = stack.item.info().food {
+        if let Some(food) = stack.get(dc::FOOD).map(FoodProperties::from_nbt) {
             self.food_properties_on_consume(id, &food, consumable);
         }
         if let Some(potion_contents) = stack.get(dc::POTION_CONTENTS) {
@@ -247,7 +249,7 @@ impl ServerLevel {
         if let Some(ominous_bottle_amplifier) = stack.get(dc::OMINOUS_BOTTLE_AMPLIFIER).and_then(Nbt::as_i64) {
             self.add_effect(id, MobEffectInstance::with(mob_effects::BAD_OMEN, 120000, ominous_bottle_amplifier as i32, false, false, true), None);
         }
-        for effect in consumable.on_consume_effects {
+        for effect in &consumable.on_consume_effects {
             self.apply_consume_effect(id, effect);
         }
         stack.consume(1, self, Some(id));
@@ -258,7 +260,7 @@ impl ServerLevel {
         let e = self.entity_mut(id);
         let pitch = triangle(&mut e.random, 1.0, 0.4);
         let (x, y, z) = (e.x(), e.y(), e.z());
-        self.play_sound_at(None, x, y, z, sound_event(consumable.sound), SoundSource::Neutral, 1.0, pitch);
+        self.play_sound_at(None, x, y, z, consumable.sound.clone(), SoundSource::Neutral, 1.0, pitch);
         if self.is_player(id) {
             self.player_mut(id).food_data.eat(food);
             let e = self.entity_mut(id);
@@ -285,13 +287,13 @@ impl ServerLevel {
                 if self.entity_mut(id).random.next_float() >= *probability {
                     return;
                 }
-                for effect in effects.iter() {
-                    self.add_effect(id, MobEffectInstance::from_template(effect), None);
+                for effect in effects {
+                    self.add_effect(id, effect.clone(), None);
                 }
             }
             ConsumeEffect::RemoveEffects { effects } => {
-                for &effect in effects.iter() {
-                    self.remove_effect(id, effect);
+                for &effect in effects.contents() {
+                    self.remove_effect(id, MobEffect(effect as u8));
                 }
             }
             ConsumeEffect::ClearAllEffects => {
@@ -300,7 +302,7 @@ impl ServerLevel {
             ConsumeEffect::PlaySound { sound } => {
                 let e = self.entity(id);
                 let (x, y, z) = (e.x(), e.y(), e.z());
-                self.play_sound_at(None, x, y, z, sound_event(sound), SoundSource::Neutral, 1.0, 1.0);
+                self.play_sound_at(None, x, y, z, sound.clone(), SoundSource::Neutral, 1.0, 1.0);
             }
             ConsumeEffect::TeleportRandomly { .. } => {}
         }
@@ -321,6 +323,6 @@ impl ServerLevel {
                 }
             }
         }
-        self.entity_play_sound(id, sound_event(consumable.sound), volume, pitch);
+        self.entity_play_sound(id, consumable.sound.clone(), volume, pitch);
     }
 }

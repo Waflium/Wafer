@@ -226,6 +226,10 @@ fn damage_effects() {
     assert_eq!(level.player(id).health, 12.0);
 }
 
+fn consumable(item: wafer_data::Item) -> crate::world::item::component::values::Consumable {
+    ItemStack::new(item, 1).get(crate::world::item::component::CONSUMABLE).map(crate::world::item::component::values::Consumable::from_nbt).unwrap()
+}
+
 #[test]
 fn food_milk_honey_and_totems() {
     let (mut level, id, _packets) = setup();
@@ -239,11 +243,11 @@ fn food_milk_honey_and_totems() {
     assert_eq!(effects, [(mob_effects::REGENERATION, 1, 100), (mob_effects::ABSORPTION, 0, 2400)]);
     assert_eq!(level.absorption_amount(id), 4.0);
     give(&mut level, id, mob_effects::POISON, 100, 0);
-    for effect in items::HONEY_BOTTLE.info().consumable.as_ref().unwrap().on_consume_effects {
+    for effect in &consumable(items::HONEY_BOTTLE).on_consume_effects {
         level.apply_consume_effect(id, effect);
     }
     assert!(!level.has_effect(id, mob_effects::POISON) && level.has_effect(id, mob_effects::REGENERATION));
-    for effect in items::MILK_BUCKET.info().consumable.as_ref().unwrap().on_consume_effects {
+    for effect in &consumable(items::MILK_BUCKET).on_consume_effects {
         level.apply_consume_effect(id, effect);
     }
     assert!(level.player(id).living.active_effects.is_empty());

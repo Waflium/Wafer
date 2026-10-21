@@ -1,4 +1,3 @@
-use wafer_data::FoodProperties;
 use wafer_data::damage_types;
 use wafer_data::game_rule;
 use wafer_protocol::nbt::Nbt;
@@ -39,7 +38,7 @@ impl FoodData {
         self.saturation_level = if value < 0.0 { 0.0 } else { value.min(max) };
     }
 
-    pub fn eat(&mut self, food: &FoodProperties) {
+    pub fn eat(&mut self, food: &crate::world::item::component::values::FoodProperties) {
         self.add(food.nutrition, food.saturation);
     }
 

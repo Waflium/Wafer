@@ -1,12 +1,14 @@
 #![allow(dead_code)]
 
-use wafer_data::{Block, Rarity};
+use wafer_data::{Block, ItemUseAnimation, Rarity};
 use wafer_protocol::nbt::Nbt;
 
 use super::codec::{as_f32, as_f64, as_i32, as_i64};
 use super::types::compound;
 use crate::commands::arguments::registry_tag;
 use crate::network::chat::Component;
+use crate::sounds::sound_event::SoundEvent;
+use crate::world::item::consume_effects::ConsumeEffect;
 
 fn string(v: Option<&Nbt>) -> Option<String> {
     v.and_then(Nbt::as_str).map(str::to_string)
@@ -100,28 +102,51 @@ impl FoodProperties {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Consumable {
     pub consume_seconds: f32,
-    pub animation: String,
-    pub sound: Nbt,
+    pub animation: ItemUseAnimation,
+    pub sound: SoundEvent,
     pub has_consume_particles: bool,
-    pub on_consume_effects: Vec<Nbt>,
+    pub on_consume_effects: Vec<ConsumeEffect>,
+}
+
+fn item_use_animation(name: &str) -> ItemUseAnimation {
+    match name {
+        "none" => ItemUseAnimation::None,
+        "drink" => ItemUseAnimation::Drink,
+        "block" => ItemUseAnimation::Block,
+        "bow" => ItemUseAnimation::Bow,
+        "trident" => ItemUseAnimation::Trident,
+        "crossbow" => ItemUseAnimation::Crossbow,
+        "spyglass" => ItemUseAnimation::Spyglass,
+        "toot_horn" => ItemUseAnimation::TootHorn,
+        "brush" => ItemUseAnimation::Brush,
+        "bundle" => ItemUseAnimation::Bundle,
+        "spear" => ItemUseAnimation::Spear,
+        _ => ItemUseAnimation::Eat,
+    }
 }
 
 impl Consumable {
     pub fn from_nbt(v: &Nbt) -> Consumable {
         Consumable {
             consume_seconds: f32_or(v.get("consume_seconds"), 1.6),
-            animation: string(v.get("animation")).unwrap_or_else(|| "eat".into()),
-            sound: v.get("sound").cloned().unwrap_or_else(|| Nbt::String("minecraft:entity.generic.eat".into())),
+            animation: string(v.get("animation")).map_or(ItemUseAnimation::Eat, |name| item_use_animation(&name)),
+            sound: v.get("sound").and_then(SoundEvent::from_nbt).unwrap_or_else(|| crate::world::entity::sound_event("minecraft:entity.generic.eat").into()),
             has_consume_particles: bool_or(v.get("has_consume_particles"), true),
-            on_consume_effects: v.get("on_consume_effects").map(|e| e.as_list().to_vec()).unwrap_or_default(),
+            on_consume_effects: ConsumeEffect::list_from_nbt(v.get("on_consume_effects")),
         }
     }
 
     pub fn consume_ticks(&self) -> i32 {
         (self.consume_seconds * 20.0) as i32
+    }
+
+    pub fn should_emit_particles_and_sounds(&self, use_item_remaining_ticks: i32) -> bool {
+        let item_used_for_ticks = self.consume_ticks() - use_item_remaining_ticks;
+        let wait_ticks_before_use_effects = (self.consume_ticks() as f32 * 0.21875) as i32;
+        item_used_for_ticks > wait_ticks_before_use_effects && use_item_remaining_ticks % 4 == 0
     }
 }
 

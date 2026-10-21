@@ -145,7 +145,7 @@ fn fall_damage_is_applied_on_landing() {
 #[test]
 fn eating_fills_food_and_saturation() {
     let mut food = FoodData { food_level: 10, saturation_level: 0.0, ..FoodData::default() };
-    let beef = items::COOKED_BEEF.info().food.unwrap();
+    let beef = crate::world::item::ItemStack::new(items::COOKED_BEEF, 1).get(crate::world::item::component::FOOD).map(crate::world::item::component::values::FoodProperties::from_nbt).unwrap();
     food.eat(&beef);
     assert_eq!((food.food_level, food.saturation_level), (18, 12.8));
     food.eat(&beef);

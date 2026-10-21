@@ -1324,7 +1324,8 @@ impl ServerLevel {
         }
         for slot in [EquipmentSlot::Mainhand, EquipmentSlot::Offhand] {
             let Some(mut stack) = self.item_by_slot(id, slot) else { continue };
-            let Some(death_effects) = stack.item.info().death_protection else { continue };
+            let Some(death_protection) = stack.get(crate::world::item::component::DEATH_PROTECTION) else { continue };
+            let death_effects = crate::world::item::consume_effects::ConsumeEffect::list_from_nbt(death_protection.get("death_effects"));
             let protection_item = stack.copy();
             stack.shrink(1);
             self.set_item_slot(id, slot, stack);
@@ -1333,7 +1334,7 @@ impl ServerLevel {
                 criteria_triggers::USED_TOTEM.trigger(self, id, &protection_item);
             }
             self.set_health(id, 1.0);
-            for effect in death_effects {
+            for effect in &death_effects {
                 self.apply_consume_effect(id, effect);
             }
             self.broadcast_entity_event(id, entity_event::PROTECTED_FROM_DEATH);
