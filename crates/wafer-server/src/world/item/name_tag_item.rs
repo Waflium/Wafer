@@ -10,9 +10,12 @@ pub fn interact_living_entity(level: &mut ServerLevel, item_stack: &mut ItemStac
         return InteractionResult::Pass;
     }
     if level.is_alive(target) {
-        level.entity_mut(target).set_custom_name(Some(custom_name));
-        if let Some(mob) = level.mob_mut(target) {
-            mob.persistence_required = true;
+        match level.mob_mut(target) {
+            Some(mob) => {
+                mob.set_custom_name(Some(custom_name));
+                mob.persistence_required = true;
+            }
+            None => level.entity_mut(target).set_custom_name(Some(custom_name)),
         }
         item_stack.shrink(1);
     }

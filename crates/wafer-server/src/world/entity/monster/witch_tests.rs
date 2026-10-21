@@ -29,6 +29,8 @@ fn goal_names(goals: &[crate::world::entity::ai::goal::wrapped_goal::WrappedGoal
             let name = match wrapped.get_goal() {
                 Goal::LongDistancePatrol(_) => "long_distance_patrol",
                 Goal::ObtainRaidLeaderBanner(_) => "obtain_raid_leader_banner",
+                Goal::PathfindToRaid(_) => "pathfind_to_raid",
+                Goal::RaiderMoveThroughVillage(_) => "raider_move_through_village",
                 Goal::RaiderCelebration(_) => "raider_celebration",
                 Goal::Float(_) => "float",
                 Goal::RangedAttack(_) => "ranged_attack",
@@ -69,6 +71,8 @@ fn witches_have_vanillas_attributes_and_goals() {
         vec![
             (4, "long_distance_patrol"),
             (1, "obtain_raid_leader_banner"),
+            (3, "pathfind_to_raid"),
+            (4, "raider_move_through_village"),
             (5, "raider_celebration"),
             (1, "float"),
             (2, "ranged_attack"),

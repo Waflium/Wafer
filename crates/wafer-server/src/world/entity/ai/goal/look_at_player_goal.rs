@@ -3,6 +3,7 @@ use wafer_core::random::RandomSource;
 use super::goal::reduced_tick_delay;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::entity::ai::goal::target::nearest_attackable_target_goal::TargetType;
 use crate::world::entity::ai::targeting::targeting_conditions::TargetingConditions;
 
 pub struct LookAtPlayerGoal {
@@ -11,11 +12,21 @@ pub struct LookAtPlayerGoal {
     look_time: i32,
     probability: f32,
     only_horizontal: bool,
+    look_at_type: Option<TargetType>,
 }
 
 impl LookAtPlayerGoal {
     pub fn new(look_distance: f32) -> LookAtPlayerGoal {
-        LookAtPlayerGoal { look_at: None, look_distance, look_time: 0, probability: 0.02, only_horizontal: false }
+        LookAtPlayerGoal { look_at: None, look_distance, look_time: 0, probability: 0.02, only_horizontal: false, look_at_type: None }
+    }
+
+    pub fn of_type(look_at_type: TargetType, look_distance: f32) -> LookAtPlayerGoal {
+        LookAtPlayerGoal { look_at_type: Some(look_at_type), ..LookAtPlayerGoal::new(look_distance) }
+    }
+
+    pub fn with_probability(mut self, probability: f32) -> LookAtPlayerGoal {
+        self.probability = probability;
+        self
     }
 
     fn look_at_context(&self) -> TargetingConditions<'static> {
@@ -31,8 +42,18 @@ impl LookAtPlayerGoal {
         }
         let e = level.entity(mob);
         let (x, y, z) = (e.x(), e.eye_y(), e.z());
-        let selector = move |target: EntityId, level: &ServerLevel| crate::world::entity::entity_selector::not_riding(level, mob, target);
-        self.look_at = level.get_nearest_player(&self.look_at_context().selector(&selector), Some(mob), x, y, z);
+        match self.look_at_type {
+            None => {
+                let selector = move |target: EntityId, level: &ServerLevel| crate::world::entity::entity_selector::not_riding(level, mob, target);
+                self.look_at = level.get_nearest_player(&self.look_at_context().selector(&selector), Some(mob), x, y, z);
+            }
+            Some(look_at_type) => {
+                let distance = self.look_distance as f64;
+                let area = level.entity(mob).bounding_box().inflate(distance, 3.0, distance);
+                let entities: Vec<EntityId> = level.get_entities(None, &area).into_iter().filter(|&entity| look_at_type.is_instance(level, entity)).collect();
+                self.look_at = level.get_nearest_entity(&entities, &self.look_at_context(), Some(mob), x, y, z);
+            }
+        }
         self.look_at.is_some()
     }
 

@@ -23,6 +23,7 @@ pub mod move_to_block_goal;
 pub mod move_towards_restriction_goal;
 pub mod move_towards_target_goal;
 pub mod offer_flower_goal;
+pub mod open_door_goal;
 pub mod ocelot_attack_goal;
 pub mod panic_goal;
 pub mod random_look_around_goal;

@@ -2479,7 +2479,13 @@ impl ServerLevel {
     }
 
     pub fn considers_entity_as_ally(&self, id: EntityId, other: EntityId) -> bool {
-        if self.is_tamable_animal(id) { self.tamable_animal_considers_entity_as_ally(id, other) } else { self.entity_considers_entity_as_ally(id, other) }
+        if self.is_tamable_animal(id) {
+            self.tamable_animal_considers_entity_as_ally(id, other)
+        } else if self.is_abstract_illager(id) {
+            self.abstract_illager_considers_entity_as_ally(id, other)
+        } else {
+            self.entity_considers_entity_as_ally(id, other)
+        }
     }
 
     pub fn is_stepping_carefully(&self, id: EntityId) -> bool {
@@ -2615,6 +2621,7 @@ impl ServerLevel {
                     super::mob::MobKind::Ghast(_) => "Ghast",
                     super::mob::MobKind::ZombifiedPiglin(_) => "ZombifiedPiglin",
                     super::mob::MobKind::Witch(_) => "Witch",
+                    super::mob::MobKind::Vindicator(_) => "Vindicator",
                     super::mob::MobKind::Slime(_) => "Slime",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",
                     super::mob::MobKind::Wolf(_) => "Wolf",

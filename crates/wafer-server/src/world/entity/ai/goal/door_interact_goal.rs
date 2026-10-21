@@ -33,6 +33,15 @@ impl DoorInteractGoal {
         block_state.get(OPEN)
     }
 
+    pub fn set_open(&self, level: &mut ServerLevel, mob: EntityId, open: bool) {
+        if self.has_door {
+            let block_state = level.block_state(self.door_pos);
+            if block_state.block().is_instance_of("DoorBlock") {
+                door_block::set_open(Some(mob), level, block_state, self.door_pos, open);
+            }
+        }
+    }
+
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
         if !level.entity(mob).horizontal_collision {
             return false;

@@ -45,6 +45,8 @@ impl Raider {
     pub fn register_goals(ai: &mut MobAi) {
         PatrollingMonster::register_goals(ai);
         ai.goal_selector.add_goal(1, Goal::ObtainRaidLeaderBanner(ObtainRaidLeaderBannerGoal::default()));
+        ai.goal_selector.add_goal(3, Goal::PathfindToRaid(PathfindToRaidGoal));
+        ai.goal_selector.add_goal(4, Goal::RaiderMoveThroughVillage(RaiderMoveThroughVillageGoal::new()));
         ai.goal_selector.add_goal(5, Goal::RaiderCelebration(RaiderCelebration));
     }
 
@@ -201,6 +203,7 @@ impl ServerLevel {
     pub fn get_celebrate_sound(&self, id: EntityId) -> &'static str {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(crate::world::entity::mob::MobKind::Witch(_)) => crate::world::entity::monster::witch::Witch::get_celebrate_sound(),
+            Some(crate::world::entity::mob::MobKind::Vindicator(_)) => crate::world::entity::monster::illager::vindicator::Vindicator::get_celebrate_sound(),
             _ => unreachable!("not a raider"),
         }
     }
@@ -310,6 +313,113 @@ impl RaiderCelebration {
         }
         if !level.is_passenger(mob) && level.entity_mut(mob).random.next_int_bounded(reduced_tick_delay(50)) == 0 {
             level.mob_mut(mob).expect("a raider").ai.jump_control.jump();
+        }
+    }
+}
+
+pub struct HoldGroundAttackGoal {
+    hostile_radius_sqr: f32,
+}
+
+impl HoldGroundAttackGoal {
+    pub fn new(hostile_radius: f32) -> HoldGroundAttackGoal {
+        HoldGroundAttackGoal { hostile_radius_sqr: hostile_radius * hostile_radius }
+    }
+
+    fn shout_targeting() -> crate::world::entity::ai::targeting::targeting_conditions::TargetingConditions<'static> {
+        crate::world::entity::ai::targeting::targeting_conditions::TargetingConditions::for_non_combat().range(8.0).ignore_line_of_sight().ignore_invisibility_testing()
+    }
+
+    fn nearby_raiders(level: &mut ServerLevel, mob: EntityId) -> Vec<EntityId> {
+        let area = level.entity(mob).bounding_box().inflate(8.0, 8.0, 8.0);
+        let candidates: Vec<EntityId> = level.get_entities(None, &area).into_iter().filter(|&entity| level.mob(entity).and_then(Mob::raider).is_some()).collect();
+        let shout_targeting = HoldGroundAttackGoal::shout_targeting();
+        candidates.into_iter().filter(|&entity| shout_targeting.test(level, Some(mob), entity)).collect()
+    }
+
+    pub fn can_use(&self, level: &ServerLevel, mob: EntityId) -> bool {
+        let last_hurt_by_mob = level.get_last_hurt_by_mob(mob);
+        let raider = level.raider(mob);
+        raider.get_current_raid().is_none()
+            && raider.patrolling_monster.is_patrolling()
+            && level.get_target(mob).is_some()
+            && !level.mob(mob).expect("a raider").is_aggressive()
+            && last_hurt_by_mob.is_none_or(|entity| !level.is_player(entity))
+    }
+
+    pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        level.mob_mut(mob).expect("a raider").ai.navigation.stop();
+        let target = level.get_target(mob);
+        for entity in HoldGroundAttackGoal::nearby_raiders(level, mob) {
+            level.set_target(entity, target);
+        }
+    }
+
+    pub fn stop(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        if let Some(target) = level.get_target(mob) {
+            for entity in HoldGroundAttackGoal::nearby_raiders(level, mob) {
+                level.set_target(entity, Some(target));
+                level.mob_mut(entity).expect("a raider").set_aggressive(true);
+            }
+            level.mob_mut(mob).expect("a raider").set_aggressive(true);
+        }
+    }
+
+    pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        let Some(target) = level.get_target(mob) else { return };
+        if level.entity(mob).distance_to_sqr(level.entity(target)) > self.hostile_radius_sqr as f64 {
+            level.set_look_at_entity(mob, target, 30.0, 30.0);
+            if level.entity_mut(mob).random.next_int_bounded(50) == 0 {
+                level.play_ambient_sound(mob);
+            }
+        } else {
+            level.mob_mut(mob).expect("a raider").set_aggressive(true);
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct PathfindToRaidGoal;
+
+impl PathfindToRaidGoal {
+    pub fn can_use(&self, level: &ServerLevel, mob: EntityId) -> bool {
+        if level.get_target(mob).is_some() || level.has_controlling_passenger(mob) {
+            return false;
+        }
+        match level.raider(mob).get_current_raid() {
+            Some(raid) => match *raid {},
+            None => false,
+        }
+    }
+
+    pub fn can_continue_to_use(&self, level: &ServerLevel, mob: EntityId) -> bool {
+        match level.raider(mob).get_current_raid() {
+            Some(raid) => match *raid {},
+            None => false,
+        }
+    }
+}
+
+pub struct RaiderMoveThroughVillageGoal {
+    visited: Vec<wafer_core::BlockPos>,
+}
+
+impl RaiderMoveThroughVillageGoal {
+    pub fn new() -> RaiderMoveThroughVillageGoal {
+        RaiderMoveThroughVillageGoal { visited: Vec::new() }
+    }
+
+    fn update_visited(&mut self) {
+        if self.visited.len() > 2 {
+            self.visited.remove(0);
+        }
+    }
+
+    pub fn can_use(&mut self, level: &ServerLevel, mob: EntityId) -> bool {
+        self.update_visited();
+        match level.raider(mob).get_current_raid() {
+            Some(raid) => match *raid {},
+            None => false,
         }
     }
 }
