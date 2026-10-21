@@ -311,14 +311,12 @@ impl LevelEntity {
     }
 }
 
-pub fn apply_default_stack_config(entity: &mut LevelEntity, item_stack: &ItemStack) {
+pub fn apply_default_stack_config(entity: &mut LevelEntity, item_stack: &ItemStack) -> Option<Nbt> {
     match &mut *entity {
         LevelEntity::Mob(mob) => mob.apply_components_from_item_stack(item_stack),
         other => other.entity_mut().apply_components_from_item_stack(item_stack),
     }
-    if let Some(entity_data) = item_stack.get(crate::world::item::component::ENTITY_DATA) {
-        update_custom_entity_tag(entity, entity_data);
-    }
+    update_custom_entity_tag(entity, item_stack.get(crate::world::item::component::ENTITY_DATA)?)
 }
 
 fn start_riding_while_loading(loaded: &mut [LevelEntity], passenger: usize, vehicle: usize) {
@@ -334,24 +332,26 @@ fn only_op_can_set_nbt(entity_type: &str) -> bool {
     matches!(entity_type, "minecraft:falling_block" | "minecraft:command_block_minecart" | "minecraft:spawner_minecart")
 }
 
-fn update_custom_entity_tag(entity: &mut LevelEntity, entity_data: &Nbt) {
-    let Nbt::Compound(fields) = entity_data else { return };
+fn update_custom_entity_tag(entity: &mut LevelEntity, entity_data: &Nbt) -> Option<Nbt> {
+    let Nbt::Compound(fields) = entity_data else { return None };
     let entity_type = wafer_data::registry::ENTITY_TYPE[entity.entity().entity_type as usize];
     if fields.iter().find(|(k, _)| k == "id").and_then(|(_, v)| v.as_str()) != Some(entity_type) {
-        return;
+        return None;
     }
     if only_op_can_set_nbt(entity_type) {
-        return;
+        return None;
     }
     let unsafe_data: Vec<(String, Nbt)> = fields.iter().filter(|(k, _)| k != "id").cloned().collect();
     let mut tag = Vec::new();
     entity.save_without_id(&mut tag);
     let uuid = entity.entity().uuid;
     crate::nbt::merge(&mut tag, &unsafe_data);
-    if let Err(e) = entity.load(&Nbt::Compound(tag)) {
+    let tag = Nbt::Compound(tag);
+    if let Err(e) = entity.load(&tag) {
         error!("{e}");
     }
     entity.entity_mut().uuid = uuid;
+    Some(tag)
 }
 
 impl ServerLevel {
@@ -498,11 +498,11 @@ impl ServerLevel {
             let difficulty = self.current_difficulty_at(entity.entity().block_position());
             entity = self.finalize_spawn_detached(entity, &difficulty, spawn_reason, None).0;
         }
-        if let Some(item_stack) = item_stack {
-            apply_default_stack_config(&mut entity, item_stack);
-            if item_stack.has(crate::world::item::component::ENTITY_DATA) {
-                entity = self.reassess_weapon_goal_detached(entity);
-            }
+        if let Some(item_stack) = item_stack
+            && let Some(tag) = apply_default_stack_config(&mut entity, item_stack)
+        {
+            entity = self.reassess_weapon_goal_detached(entity);
+            entity = self.read_level_dependent_save_data_detached(entity, &tag);
         }
         Some(entity)
     }
