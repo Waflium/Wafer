@@ -160,11 +160,11 @@ async fn run(r: &mut PacketReader, w: &mut PacketWriter, context: &ListenerConte
     };
 
     let (reply, verdict) = oneshot::channel();
-    events.send(Event::Verify { profile: profile.clone(), address, reply })?;
+    events.send(Event::Verify { profile: profile.clone(), address, user_name: user.name(), reply })?;
     let session_id = match verdict.await? {
         Verdict::Accept { session_id } => session_id,
         Verdict::Disconnect(reason) => {
-            disconnect(w, user, SERVER_THREAD, reason).await?;
+            w.send(clientbound::LOGIN_DISCONNECT, |p| p.string(&reason.to_json())).await?;
             return Ok(None);
         }
     };

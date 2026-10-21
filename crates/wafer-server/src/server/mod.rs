@@ -146,7 +146,7 @@ pub enum Event {
     Packet { conn: ConnId, packet: Packet },
     Left { conn: ConnId, reason: Component },
     Console(String, bool),
-    Verify { profile: Profile, address: std::net::SocketAddr, reply: tokio::sync::oneshot::Sender<Verdict> },
+    Verify { profile: Profile, address: std::net::SocketAddr, user_name: String, reply: tokio::sync::oneshot::Sender<Verdict> },
     PrepareSpawn { uuid: u128, name: String, reply: tokio::sync::oneshot::Sender<()> },
     PrepareSpawnClosed { uuid: u128 },
     Halt,
@@ -167,6 +167,7 @@ pub(crate) enum Task {
 struct PendingLogin {
     profile: Profile,
     address: std::net::SocketAddr,
+    user_name: String,
     reply: tokio::sync::oneshot::Sender<Verdict>,
     waiting_for_dupe: bool,
 }
@@ -198,6 +199,7 @@ pub struct Server {
     tick_times_nanos: [i64; 100],
     aggregated_tick_times_nanos: i64,
     pending_logins: Vec<PendingLogin>,
+    login_disconnections_to_report: usize,
     prepare_spawn_tasks: Vec<PrepareSpawnTask>,
     tasks: VecDeque<Task>,
     console_inputs: Vec<(String, CommandSourceStack, bool)>,
@@ -386,6 +388,7 @@ impl Server {
             tick_times_nanos: [0; 100],
             aggregated_tick_times_nanos: 0,
             pending_logins: Vec::new(),
+            login_disconnections_to_report: 0,
             prepare_spawn_tasks: Vec::new(),
             tasks: VecDeque::new(),
             console_inputs: Vec::new(),
@@ -881,7 +884,7 @@ impl Server {
                 }
             }
             Event::Left { conn, reason } => self.remove_player(conn, Some(reason)),
-            Event::Verify { profile, address, reply } => self.pending_logins.push(PendingLogin { profile, address, reply, waiting_for_dupe: false }),
+            Event::Verify { profile, address, user_name, reply } => self.pending_logins.push(PendingLogin { profile, address, user_name, reply, waiting_for_dupe: false }),
             Event::PrepareSpawn { uuid, name, reply } => self.start_prepare_spawn(uuid, &name, reply),
             Event::PrepareSpawnClosed { uuid } => self.prepare_spawn_tasks.retain(|t| t.uuid != uuid),
             Event::Console(line, has_level) => self.console_inputs.push((line, CommandSourceStack::server(self), has_level)),
@@ -1136,10 +1139,17 @@ impl Server {
     }
 
     fn tick_logins(&mut self) {
+        for _ in 0..std::mem::take(&mut self.login_disconnections_to_report) {
+            warn!("handleDisconnection() called twice");
+        }
         for mut login in std::mem::take(&mut self.pending_logins) {
             if !login.waiting_for_dupe {
                 if let Some(reason) = self.can_player_login(&login.profile, &login.address) {
+                    let reason_text = reason.get_string();
+                    info!("Disconnecting {}: {reason_text}", login.user_name);
+                    info!("{} lost connection: {reason_text}", login.user_name);
                     let _ = login.reply.send(Verdict::Disconnect(reason));
+                    self.login_disconnections_to_report += 1;
                     continue;
                 }
                 login.waiting_for_dupe = self.disconnect_all_players_with_profile(login.profile.uuid);
