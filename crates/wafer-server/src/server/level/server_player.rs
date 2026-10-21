@@ -98,6 +98,8 @@ pub struct ServerPlayer {
     pub spawn_extra_particles_on_fall: bool,
     pub warden_spawn_tracker: WardenSpawnTracker,
     pub entered_nether_position: Option<Vec3>,
+    pub current_explosion_impact_pos: Option<Vec3>,
+    pub current_explosion_cause: Option<EntityId>,
     pub levitation_start_pos: Option<Vec3>,
     pub levitation_start_time: i32,
     pub sleep_counter: i32,
@@ -215,6 +217,8 @@ impl ServerPlayer {
             spawn_extra_particles_on_fall: false,
             warden_spawn_tracker: WardenSpawnTracker::default(),
             entered_nether_position: None,
+            current_explosion_impact_pos: None,
+            current_explosion_cause: None,
             levitation_start_pos: None,
             levitation_start_time: 0,
             sleep_counter: 0,
@@ -409,6 +413,9 @@ impl ServerPlayer {
         if let Some(pos) = self.entered_nether_position {
             nbt.push(("entered_nether_pos".into(), Nbt::List(vec![Nbt::Double(pos.x), Nbt::Double(pos.y), Nbt::Double(pos.z)])));
         }
+        if let Some(pos) = self.current_explosion_impact_pos {
+            nbt.push(("last_explosion_impact_pos".into(), Nbt::List(vec![Nbt::Double(pos.x), Nbt::Double(pos.y), Nbt::Double(pos.z)])));
+        }
         nbt.push((crate::stats::server_recipe_book::RECIPE_BOOK_TAG.into(), self.recipe_book.pack()));
         nbt.push(("Dimension".into(), s(dimension)));
         if let Some(respawn) = &self.respawn_config {
@@ -442,6 +449,9 @@ impl ServerPlayer {
         self.warden_spawn_tracker = nbt.get("warden_spawn_tracker").and_then(WardenSpawnTracker::from_nbt).unwrap_or_default();
         let number = |key: &str| nbt.get(key).and_then(Nbt::as_f64);
         self.entered_nether_position = nbt.get("entered_nether_pos").map(Nbt::as_list).filter(|p| p.len() == 3).and_then(|p| {
+            Some(Vec3::new(p[0].as_f64()?, p[1].as_f64()?, p[2].as_f64()?))
+        });
+        self.current_explosion_impact_pos = nbt.get("last_explosion_impact_pos").map(Nbt::as_list).filter(|p| p.len() == 3).and_then(|p| {
             Some(Vec3::new(p[0].as_f64()?, p[1].as_f64()?, p[2].as_f64()?))
         });
         self.seen_credits = number("seenCredits").is_some_and(|v| v != 0.0);
@@ -1022,6 +1032,35 @@ impl ServerLevel {
         } else if self.is_boat(vehicle) {
             self.award_stat(id, stats::BOAT_ONE_CM, distance);
         }
+    }
+
+    pub fn track_start_falling_position(&mut self, id: EntityId) {
+        let p = self.player_mut(id);
+        if p.entity.fall_distance > 0.0 && p.starting_to_fall_position.is_none() {
+            let starting_to_fall_position = p.entity.position();
+            p.starting_to_fall_position = Some(starting_to_fall_position);
+            if let Some(current_explosion_impact_pos) = p.current_explosion_impact_pos
+                && current_explosion_impact_pos.y <= starting_to_fall_position.y
+            {
+                let current_explosion_cause = p.current_explosion_cause;
+                criteria_triggers::FALL_AFTER_EXPLOSION.trigger(self, id, current_explosion_impact_pos, current_explosion_cause);
+            }
+            let p = self.player_mut(id);
+            p.current_explosion_impact_pos = None;
+            p.current_explosion_cause = None;
+        }
+    }
+
+    pub fn entity_on_explosion_hit(&mut self, id: EntityId, explosion_caused_by: Option<EntityId>) {
+        if !self.is_player(id) {
+            return;
+        }
+        let ignore_fall_damage = explosion_caused_by.is_some_and(|cause| self.entity(cause).entity_type == registry_id(registry::ENTITY_TYPE, "minecraft:wind_charge"));
+        let p = self.player_mut(id);
+        let position = p.entity.position();
+        p.current_explosion_impact_pos = Some(position);
+        p.current_explosion_cause = explosion_caused_by;
+        p.living.set_ignore_fall_damage_from_current_impulse(ignore_fall_damage, position);
     }
 
     pub fn track_entered_or_exited_lava_on_vehicle(&mut self, id: EntityId) {

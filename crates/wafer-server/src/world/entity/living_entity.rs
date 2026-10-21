@@ -146,6 +146,19 @@ impl LivingEntity {
         }
     }
 
+    pub fn set_ignore_fall_damage_from_current_impulse(&mut self, ignore_fall_damage: bool, new_impulse_impact_pos: Vec3) {
+        if ignore_fall_damage {
+            self.apply_post_impulse_grace_time(40);
+            self.current_impulse_impact_pos = Some(new_impulse_impact_pos);
+        } else {
+            self.current_impulse_context_reset_grace_time = 0;
+        }
+    }
+
+    pub fn apply_post_impulse_grace_time(&mut self, ticks: i32) {
+        self.current_impulse_context_reset_grace_time = self.current_impulse_context_reset_grace_time.max(ticks);
+    }
+
     pub fn reset_current_impulse_context(&mut self) {
         self.current_impulse_context_reset_grace_time = 0;
         self.current_impulse_impact_pos = None;

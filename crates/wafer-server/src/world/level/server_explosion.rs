@@ -87,7 +87,30 @@ impl ServerExplosion {
     }
 }
 
+impl BlockInteraction {
+    fn should_affect_blocklike_entities(self) -> bool {
+        matches!(self, BlockInteraction::Destroy | BlockInteraction::DestroyWithDecay)
+    }
+}
+
 impl ServerLevel {
+    fn should_affect_blocklike_entities(&self, explosion: &ServerExplosion) -> bool {
+        let mob_griefing_enabled = self.game_rules.get_bool(game_rule::MOB_GRIEFING);
+        let is_not_wind_charge = explosion.source.is_none_or(|source| {
+            let entity_type = self.entity(source).entity_type;
+            entity_type != registry_id(registry::ENTITY_TYPE, "minecraft:breeze_wind_charge") && entity_type != registry_id(registry::ENTITY_TYPE, "minecraft:wind_charge")
+        });
+        if mob_griefing_enabled { is_not_wind_charge } else { explosion.block_interaction.should_affect_blocklike_entities() && is_not_wind_charge }
+    }
+
+    fn ignore_explosion(&self, id: EntityId, explosion: &ServerExplosion) -> bool {
+        match self.entities.get(&id) {
+            Some(LevelEntity::Item(_)) => !self.should_affect_blocklike_entities(explosion),
+            Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => explosion.indirect_source.is_some_and(|indirect| self.is_mob(indirect)) && !self.game_rules.get_bool(game_rule::MOB_GRIEFING),
+            _ => false,
+        }
+    }
+
     fn destroy_type(&self, rule: wafer_data::GameRule) -> BlockInteraction {
         if self.game_rules.get_bool(rule) { BlockInteraction::DestroyWithDecay } else { BlockInteraction::Destroy }
     }
@@ -271,7 +294,7 @@ impl ServerLevel {
             mth::floor(c.z + r) as f64,
         );
         for id in self.get_entities(explosion.source, &area) {
-            if self.entity_ref(id).is_none() {
+            if self.entity_ref(id).is_none() || self.ignore_explosion(id, explosion) {
                 continue;
             }
             let dist = self.entity(id).position().distance_to_sqr(c).sqrt() / double_radius as f64;
@@ -284,7 +307,9 @@ impl ServerLevel {
             let exposure = self.seen_percent(c, id);
             let pow = (1.0 - dist) * exposure as f64;
             let damage = ((pow * pow + pow) / 2.0 * 7.0 * double_radius as f64 + 1.0) as f32;
-            self.hurt_server(id, explosion.damage_source.clone(), damage);
+            if explosion.source.is_none_or(|source| self.do_teams_allow_damage(source, id)) {
+                self.hurt_server(id, explosion.damage_source.clone(), damage);
+            }
             if self.entity_ref(id).is_none() {
                 continue;
             }
@@ -296,12 +321,17 @@ impl ServerLevel {
                 e.set_delta_movement(delta);
                 e.needs_sync = true;
             }
-            if let Some(player) = self.players.get(&id)
+            let redirectable = wafer_data::tag("minecraft:entity_type", "minecraft:redirectable_projectile").contains(&self.entity(id).entity_type);
+            if redirectable && self.is_projectile(id) {
+                let owner = explosion.damage_source.causing_entity.map(|owner| crate::world::entity::entity_reference::EntityReference::of(self.entity(owner).uuid));
+                self.projectile_set_owner_reference(id, owner);
+            } else if let Some(player) = self.players.get(&id)
                 && !self.is_spectator(id)
                 && !(player.game_mode.game_type.is_creative() && player.abilities.flying)
             {
                 explosion.hit_players.push((id, knockback));
             }
+            self.entity_on_explosion_hit(id, explosion.source);
         }
     }
 

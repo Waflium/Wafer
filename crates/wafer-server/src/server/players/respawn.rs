@@ -225,6 +225,8 @@ impl Server {
         player.ender_chest_inventory = old.ender_chest_inventory;
         player.seen_credits = old.seen_credits;
         player.entered_nether_position = old.entered_nether_position;
+        player.current_explosion_impact_pos = old.current_explosion_impact_pos;
+        player.current_explosion_cause = old.current_explosion_cause;
         player.recipe_book.copy_over_data(&old.recipe_book);
         player.last_sent_exp = -1;
         player.last_sent_health = -1.0;

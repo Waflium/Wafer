@@ -1710,10 +1710,7 @@ impl ServerLevel {
             let duration = self.entity(id).tick_count - self.player(id).levitation_start_time;
             criteria_triggers::LEVITATION.trigger(self, id, levitation_start_pos, duration);
         }
-        let p = self.player_mut(id);
-        if p.entity.fall_distance > 0.0 && p.starting_to_fall_position.is_none() {
-            p.starting_to_fall_position = Some(p.entity.position());
-        }
+        self.track_start_falling_position(id);
         self.track_entered_or_exited_lava_on_vehicle(id);
         let p = self.player_mut(id);
         p.update_player_attributes();
