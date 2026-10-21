@@ -75,7 +75,7 @@ public final class Extract {
         write(out.resolve("properties.json"), properties());
         var commands = new net.minecraft.commands.Commands(
                 net.minecraft.commands.Commands.CommandSelection.DEDICATED,
-                net.minecraft.commands.Commands.createValidationContext(net.minecraft.data.registries.VanillaRegistries.createWorldLookup()));
+                net.minecraft.commands.CommandBuildContext.simple(net.minecraft.data.registries.VanillaRegistries.createWorldLookup(), net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS));
         write(out.resolve("commands.json"), commands(commands.getDispatcher()));
         commandPackets(commands.getDispatcher(), out);
         write(out.resolve("game_rules.json"), gameRules());
