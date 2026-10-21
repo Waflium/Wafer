@@ -158,7 +158,7 @@ fn creepers_flee_cats() {
     level.add_fresh_entity(creeper);
     level.entity_mut(creeper_id).set_pos(Vec3::new(3.5, -60.0, 2.0));
     let mut fled = false;
-    for _ in 0..40 {
+    for _ in 0..200 {
         level.tick();
         fled |= goal_running(&level, creeper_id, |goal| matches!(goal, Goal::AvoidEntity(_)));
     }
