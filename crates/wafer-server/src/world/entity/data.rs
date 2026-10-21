@@ -81,7 +81,7 @@ pub enum DataValue {
 }
 
 impl DataValue {
-    fn serializer_id(&self) -> i32 {
+    pub fn serializer_id(&self) -> i32 {
         match self {
             DataValue::Byte(_) => 0,
             DataValue::Int(_) => 1,
@@ -186,6 +186,10 @@ impl SynchedEntityData {
             items: defaults.into_iter().map(|v| DataItem { initial: v.clone(), value: v, dirty: false, set_to_default: true }).collect(),
             is_dirty: false,
         }
+    }
+
+    pub fn serializer_ids(&self) -> impl Iterator<Item = i32> + '_ {
+        self.items.iter().map(|item| item.value.serializer_id())
     }
 
     pub fn get(&self, id: usize) -> &DataValue {

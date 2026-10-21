@@ -12,6 +12,8 @@ pub mod conversion_type;
 pub mod crackiness;
 pub mod data;
 #[cfg(test)]
+mod entity_data_layout_tests;
+#[cfg(test)]
 mod effect_tests;
 #[allow(clippy::module_inception)]
 mod entity;

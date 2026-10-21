@@ -48,10 +48,10 @@ use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
 
-pub const DATA_TRUSTED_ID_0: usize = 18;
-pub const DATA_TRUSTED_ID_1: usize = 19;
-pub const DATA_TYPE_ID: usize = 20;
-pub const DATA_FLAGS_ID: usize = 21;
+pub const DATA_TYPE_ID: usize = 18;
+pub const DATA_FLAGS_ID: usize = 19;
+pub const DATA_TRUSTED_ID_0: usize = 20;
+pub const DATA_TRUSTED_ID_1: usize = 21;
 const FLAG_SITTING: u8 = 1;
 pub const FLAG_CROUCHING: u8 = 4;
 pub const FLAG_INTERESTED: u8 = 8;
@@ -390,10 +390,10 @@ impl Fox {
     pub fn create() -> Mob {
         let mut data = ageable_mob_defaults();
         data.extend([
-            DataValue::OptionalLivingEntityReference(None),
-            DataValue::OptionalLivingEntityReference(None),
             DataValue::Int(Variant::DEFAULT.get_id()),
             DataValue::Byte(0),
+            DataValue::OptionalLivingEntityReference(None),
+            DataValue::OptionalLivingEntityReference(None),
         ]);
         let entity = Entity::new(registry_id(registry::ENTITY_TYPE, "minecraft:fox"), DIMENSIONS, data);
         let mut mob = Mob::new(entity, LivingEntity::new(&FOX_ATTRIBUTES), MobKind::Fox(Fox::default()));
