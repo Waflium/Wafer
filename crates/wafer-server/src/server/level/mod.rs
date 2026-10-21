@@ -1890,7 +1890,11 @@ impl ServerLevel {
             self.remove_entity(id);
         }
         self.award_stat(player, crate::stats::stats::ITEM_PICKED_UP.get(picked_up_item.0), original);
-        if let Some(thrower) = thrower.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid)) {
+        let thrower = thrower.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid));
+        if let Some(thrower) = thrower.filter(|&thrower| self.is_player(thrower)) {
+            criteria_triggers::THROWN_ITEM_PICKED_UP_BY_ENTITY.trigger(self, thrower, &picked, player);
+        }
+        if let Some(thrower) = thrower {
             criteria_triggers::THROWN_ITEM_PICKED_UP_BY_PLAYER.trigger(self, player, &picked, thrower);
         }
     }
