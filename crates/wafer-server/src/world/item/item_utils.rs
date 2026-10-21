@@ -1,11 +1,16 @@
 use crate::server::level::ServerLevel;
 use crate::server::level::game_mode::GameType;
-use crate::world::InteractionHand;
+use crate::world::{InteractionHand, InteractionResult};
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 
 pub fn has_infinite_materials(level: &ServerLevel, player: EntityId) -> bool {
     level.player(player).game_mode.game_type == GameType::Creative
+}
+
+pub fn start_using_instantly(level: &mut ServerLevel, player: EntityId, hand: InteractionHand) -> (InteractionResult, Option<ItemStack>) {
+    level.start_using_item(player, hand);
+    (InteractionResult::CONSUME, None)
 }
 
 pub fn create_filled_result(

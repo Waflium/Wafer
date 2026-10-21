@@ -158,10 +158,7 @@ impl ServerLevel {
 
     pub fn finish_using_item(&mut self, id: EntityId, stack: ItemStack) -> ItemStack {
         let before = stack.clone();
-        let result = match stack.get(dc::CONSUMABLE).map(Consumable::from_nbt) {
-            Some(consumable) => self.on_consume(id, stack, &consumable),
-            None => stack,
-        };
+        let result = crate::world::item::finish_using_item(stack, self, id);
         self.apply_after_use_component_side_effects(id, result, before)
     }
 
@@ -226,7 +223,7 @@ impl ServerLevel {
         living.use_item_remaining = 0;
     }
 
-    fn on_consume(&mut self, id: EntityId, mut stack: ItemStack, consumable: &Consumable) -> ItemStack {
+    pub fn on_consume(&mut self, id: EntityId, mut stack: ItemStack, consumable: &Consumable) -> ItemStack {
         self.emit_particles_and_sounds(id, consumable, 16);
         if self.is_player(id) {
             self.award_stat(id, crate::stats::stats::ITEM_USED.get(stack.get_item().0), 1);

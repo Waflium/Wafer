@@ -80,6 +80,7 @@ fn main() -> anyhow::Result<()> {
     block_entity_types(&mut out, &read_json(&extracted.join("block_entity_types.json"))?, &builtin)?;
     embed_json(&mut out, &data, "enchantment", "ENCHANTMENTS")?;
     embed_json(&mut out, &data, "jukebox_song", "JUKEBOX_SONGS")?;
+    embed_json(&mut out, &data, "instrument", "INSTRUMENTS")?;
     embed_json(&mut out, &data, "timeline", "TIMELINES")?;
     embed_json(&mut out, &data, "chicken_variant", "CHICKEN_VARIANTS")?;
     embed_json(&mut out, &data, "chicken_sound_variant", "CHICKEN_SOUND_VARIANTS")?;

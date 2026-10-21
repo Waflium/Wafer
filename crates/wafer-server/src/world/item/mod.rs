@@ -29,6 +29,7 @@ pub mod projectile_item;
 pub mod projectile_weapon_item;
 pub mod sign_applicator;
 pub mod snowball_item;
+pub mod spyglass_item;
 pub mod enchantment;
 pub mod ender_eye_item;
 pub mod flint_and_steel_item;
@@ -38,7 +39,10 @@ pub mod trading;
 pub mod trident_item;
 mod item_stack;
 pub mod honeycomb_item;
+pub mod instrument;
+pub mod instrument_item;
 pub mod item_cooldowns;
+pub mod knowledge_book_item;
 pub mod item_provider;
 pub mod item_utils;
 pub mod jukebox_playable;
@@ -210,6 +214,15 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
         return firework_rocket_item::use_item(level, player, hand);
 
     }
+    if stack.item.is_instance_of("SpyglassItem") {
+        return spyglass_item::use_item(level, player, hand);
+    }
+    if stack.item.is_instance_of("InstrumentItem") {
+        return instrument_item::use_item(level, player, hand);
+    }
+    if stack.item.is_instance_of("KnowledgeBookItem") {
+        return knowledge_book_item::use_item(level, player, hand);
+    }
     if stack.item.is_instance_of("BottleItem") {
         return bottle_item::use_item(level, player, hand);
     }
@@ -310,6 +323,12 @@ pub fn get_use_duration(stack: &ItemStack) -> i32 {
     if stack.item.is_instance_of("TridentItem") {
         return trident_item::USE_DURATION;
     }
+    if stack.item.is_instance_of("SpyglassItem") {
+        return spyglass_item::USE_DURATION;
+    }
+    if stack.item.is_instance_of("InstrumentItem") {
+        return instrument_item::get_use_duration(stack);
+    }
     match stack.get(component::CONSUMABLE).map(component::values::Consumable::from_nbt) {
         Some(consumable) => consumable.consume_ticks(),
         None => {
@@ -332,7 +351,20 @@ pub fn release_using(level: &mut ServerLevel, stack: &ItemStack, entity: EntityI
     if stack.item.is_instance_of("TridentItem") {
         return trident_item::release_using(level, stack, entity, remaining_time);
     }
+    if stack.item.is_instance_of("SpyglassItem") {
+        return spyglass_item::release_using(level, entity);
+    }
     false
+}
+
+pub fn finish_using_item(item_stack: ItemStack, level: &mut ServerLevel, entity: EntityId) -> ItemStack {
+    if item_stack.item.is_instance_of("SpyglassItem") {
+        return spyglass_item::finish_using_item(item_stack, level, entity);
+    }
+    match item_stack.get(component::CONSUMABLE).map(component::values::Consumable::from_nbt) {
+        Some(consumable) => level.on_consume(entity, item_stack, &consumable),
+        None => item_stack,
+    }
 }
 
 pub fn on_use_tick(level: &mut ServerLevel, entity: EntityId, stack: &mut ItemStack, ticks_remaining: i32) {
