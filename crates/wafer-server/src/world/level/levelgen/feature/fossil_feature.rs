@@ -9,7 +9,7 @@ use crate::world::level::block::rotation::Rotation;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
 use crate::world::level::levelgen::structure::BoundingBox;
-use crate::world::level::levelgen::structure::templatesystem::structure_place_settings::StructurePlaceSettings;
+use crate::world::level::levelgen::structure::templatesystem::structure_place_settings::{PlaceRandom, StructurePlaceSettings};
 use crate::world::level::levelgen::structure::templatesystem::structure_processor::StructureProcessorListHolder;
 use crate::world::level::levelgen::structure::templatesystem::structure_template_manager;
 
@@ -60,7 +60,7 @@ impl FossilFeature {
             level.get_max_y(),
             chunk_pos.min_block_z() + 15 + 16,
         );
-        let mut settings = StructurePlaceSettings { rotation, bounding_box: Some(bounding_box), random: true, ..StructurePlaceSettings::default() };
+        let mut settings = StructurePlaceSettings { rotation, bounding_box: Some(bounding_box), random: PlaceRandom::Given, ..StructurePlaceSettings::default() };
         let size = fossil_base.get_size_rotated(rotation);
         let low_corner = origin.offset(-size.x / 2, 0, -size.z / 2);
         let mut lowest_surface_y = origin.y;

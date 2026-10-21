@@ -6,7 +6,7 @@ use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::random::WeightedList;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
-use crate::world::level::levelgen::structure::templatesystem::structure_place_settings::StructurePlaceSettings;
+use crate::world::level::levelgen::structure::templatesystem::structure_place_settings::{PlaceRandom, StructurePlaceSettings};
 use crate::world::level::levelgen::structure::templatesystem::structure_processor::StructureProcessorListHolder;
 use crate::world::level::levelgen::structure::templatesystem::structure_template::StructureTemplate;
 use crate::world::level::levelgen::structure::templatesystem::structure_template_manager;
@@ -52,7 +52,7 @@ impl TemplateFeature {
         let pos = origin.offset(offset_x.x, offset_x.y, offset_x.z).offset(offset_z.x, offset_z.y, offset_z.z);
         let settings = StructurePlaceSettings {
             rotation,
-            random: true,
+            random: PlaceRandom::Given,
             processors: self.processors.as_ref().map_or_else(Vec::new, |processors| processors.value().list.iter().collect()),
             ..StructurePlaceSettings::default()
         };

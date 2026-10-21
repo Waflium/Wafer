@@ -1,3 +1,5 @@
+use std::cell::{RefCell, RefMut};
+
 use wafer_core::random::{LegacyRandomSource, RandomSource};
 use wafer_core::{BlockPos, mth};
 
@@ -13,7 +15,7 @@ pub struct StructurePlaceSettings<'p> {
     pub rotation_pivot: BlockPos,
     pub bounding_box: Option<BoundingBox>,
     pub apply_waterlogging: bool,
-    pub random: bool,
+    pub random: PlaceRandom,
     pub processors: Vec<&'p StructureProcessor>,
     pub known_shape: bool,
 }
@@ -26,15 +28,22 @@ impl Default for StructurePlaceSettings<'_> {
             rotation_pivot: BlockPos::new(0, 0, 0),
             bounding_box: None,
             apply_waterlogging: true,
-            random: false,
+            random: PlaceRandom::Positional,
             processors: Vec::new(),
             known_shape: false,
         }
     }
 }
 
+pub enum PlaceRandom {
+    Positional,
+    Given,
+    Own(RefCell<LegacyRandomSource>),
+}
+
 pub enum SettingsRandom<'r, R> {
     Given(&'r mut R),
+    Own(RefMut<'r, LegacyRandomSource>),
     Positional(LegacyRandomSource),
 }
 
@@ -42,6 +51,7 @@ impl<R: RandomSource> RandomSource for SettingsRandom<'_, R> {
     fn set_seed(&mut self, seed: i64) {
         match self {
             SettingsRandom::Given(random) => random.set_seed(seed),
+            SettingsRandom::Own(random) => random.set_seed(seed),
             SettingsRandom::Positional(random) => random.set_seed(seed),
         }
     }
@@ -49,6 +59,7 @@ impl<R: RandomSource> RandomSource for SettingsRandom<'_, R> {
     fn next_int(&mut self) -> i32 {
         match self {
             SettingsRandom::Given(random) => random.next_int(),
+            SettingsRandom::Own(random) => random.next_int(),
             SettingsRandom::Positional(random) => random.next_int(),
         }
     }
@@ -56,6 +67,7 @@ impl<R: RandomSource> RandomSource for SettingsRandom<'_, R> {
     fn next_int_bounded(&mut self, bound: i32) -> i32 {
         match self {
             SettingsRandom::Given(random) => random.next_int_bounded(bound),
+            SettingsRandom::Own(random) => random.next_int_bounded(bound),
             SettingsRandom::Positional(random) => random.next_int_bounded(bound),
         }
     }
@@ -63,6 +75,7 @@ impl<R: RandomSource> RandomSource for SettingsRandom<'_, R> {
     fn next_long(&mut self) -> i64 {
         match self {
             SettingsRandom::Given(random) => random.next_long(),
+            SettingsRandom::Own(random) => random.next_long(),
             SettingsRandom::Positional(random) => random.next_long(),
         }
     }
@@ -70,6 +83,7 @@ impl<R: RandomSource> RandomSource for SettingsRandom<'_, R> {
     fn next_boolean(&mut self) -> bool {
         match self {
             SettingsRandom::Given(random) => random.next_boolean(),
+            SettingsRandom::Own(random) => random.next_boolean(),
             SettingsRandom::Positional(random) => random.next_boolean(),
         }
     }
@@ -77,6 +91,7 @@ impl<R: RandomSource> RandomSource for SettingsRandom<'_, R> {
     fn next_float(&mut self) -> f32 {
         match self {
             SettingsRandom::Given(random) => random.next_float(),
+            SettingsRandom::Own(random) => random.next_float(),
             SettingsRandom::Positional(random) => random.next_float(),
         }
     }
@@ -84,6 +99,7 @@ impl<R: RandomSource> RandomSource for SettingsRandom<'_, R> {
     fn next_double(&mut self) -> f64 {
         match self {
             SettingsRandom::Given(random) => random.next_double(),
+            SettingsRandom::Own(random) => random.next_double(),
             SettingsRandom::Positional(random) => random.next_double(),
         }
     }
@@ -91,17 +107,18 @@ impl<R: RandomSource> RandomSource for SettingsRandom<'_, R> {
     fn next_gaussian(&mut self) -> f64 {
         match self {
             SettingsRandom::Given(random) => random.next_gaussian(),
+            SettingsRandom::Own(random) => random.next_gaussian(),
             SettingsRandom::Positional(random) => random.next_gaussian(),
         }
     }
 }
 
 impl StructurePlaceSettings<'_> {
-    pub fn get_random<'r, R: RandomSource>(&self, pos: BlockPos, random: &'r mut R) -> SettingsRandom<'r, R> {
-        if self.random {
-            SettingsRandom::Given(random)
-        } else {
-            SettingsRandom::Positional(LegacyRandomSource::new(mth::get_seed(pos.x, pos.y, pos.z)))
+    pub fn get_random<'r, R: RandomSource>(&'r self, pos: BlockPos, random: &'r mut R) -> SettingsRandom<'r, R> {
+        match &self.random {
+            PlaceRandom::Given => SettingsRandom::Given(random),
+            PlaceRandom::Own(own) => SettingsRandom::Own(own.borrow_mut()),
+            PlaceRandom::Positional => SettingsRandom::Positional(LegacyRandomSource::new(mth::get_seed(pos.x, pos.y, pos.z))),
         }
     }
 

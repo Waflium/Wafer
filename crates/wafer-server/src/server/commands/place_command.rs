@@ -20,7 +20,7 @@ use crate::world::level::levelgen::structure::pools::jigsaw_placement::{self, Di
 use crate::world::level::levelgen::structure::pools::structure_template_pool::TemplatePoolHolder;
 use crate::world::level::levelgen::structure::structure::{GenerationContext, StructureHolder};
 use crate::world::level::levelgen::structure::structures::Piece;
-use crate::world::level::levelgen::structure::templatesystem::structure_place_settings::StructurePlaceSettings;
+use crate::world::level::levelgen::structure::templatesystem::structure_place_settings::{PlaceRandom, StructurePlaceSettings};
 use crate::world::level::levelgen::structure::templatesystem::structure_processor::StructureProcessor;
 use crate::world::level::levelgen::structure::templatesystem::structure_template_manager;
 
@@ -218,7 +218,7 @@ pub fn place_template(
     let mut place_settings = StructurePlaceSettings { mirror, rotation, known_shape: strict, ..StructurePlaceSettings::default() };
     if integrity < 1.0 {
         place_settings.processors = vec![&block_rot_processor];
-        place_settings.random = true;
+        place_settings.random = PlaceRandom::Own(std::cell::RefCell::new(create_random(seed as i64)));
     }
     let mut random = create_random(seed as i64);
     if !structure_template.place_in_world(level, pos, pos, &place_settings, &mut random, 2 | if strict { 816 } else { 0 }) {
