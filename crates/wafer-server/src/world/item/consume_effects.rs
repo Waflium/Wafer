@@ -9,7 +9,7 @@ pub enum ConsumeEffect {
     ApplyEffects { effects: Vec<MobEffectInstance>, probability: f32 },
     RemoveEffects { effects: HolderSet },
     ClearAllEffects,
-    TeleportRandomly { diameter: f32 },
+    TeleportRandomly { diameter: f32, directional_particles: bool },
     PlaySound { sound: SoundEvent },
 }
 
@@ -23,7 +23,10 @@ impl ConsumeEffect {
             },
             "minecraft:remove_effects" => ConsumeEffect::RemoveEffects { effects: HolderSet::decode("minecraft:mob_effect", tag.get("effects")?).ok()? },
             "minecraft:clear_all_effects" => ConsumeEffect::ClearAllEffects,
-            "minecraft:teleport_randomly" => ConsumeEffect::TeleportRandomly { diameter: float("diameter", 16.0) },
+            "minecraft:teleport_randomly" => ConsumeEffect::TeleportRandomly {
+                diameter: float("diameter", 16.0),
+                directional_particles: tag.get("directional_particles").and_then(Nbt::as_i64).is_none_or(|v| v != 0),
+            },
             "minecraft:play_sound" => ConsumeEffect::PlaySound { sound: SoundEvent::from_nbt(tag.get("sound")?)? },
             _ => return None,
         })

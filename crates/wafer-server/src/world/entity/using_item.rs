@@ -304,8 +304,45 @@ impl ServerLevel {
                 let (x, y, z) = (e.x(), e.y(), e.z());
                 self.play_sound_at(None, x, y, z, sound.clone(), SoundSource::Neutral, 1.0, 1.0);
             }
-            ConsumeEffect::TeleportRandomly { .. } => {}
+            ConsumeEffect::TeleportRandomly { diameter, directional_particles } => {
+                self.teleport_randomly(id, *diameter, *directional_particles);
+            }
         }
+    }
+
+    fn teleport_randomly(&mut self, id: EntityId, diameter: f32, directional_particles: bool) -> bool {
+        let min_y = self.chunks.min_y();
+        let max_y = min_y + self.dimension_type().logical_height as i32 - 1;
+        let does_not_teleport_to = wafer_data::tag("minecraft:block", "minecraft:consumable_does_not_teleport_to");
+        for _ in 0..16 {
+            let e = self.entity_mut(id);
+            let xx = e.x() + (e.random.next_double() - 0.5) * diameter as f64;
+            let yy = (e.y() + (e.random.next_double() - 0.5) * diameter as f64).clamp(min_y as f64, max_y as f64);
+            let zz = e.z() + (e.random.next_double() - 0.5) * diameter as f64;
+            if self.is_passenger(id) {
+                self.stop_riding(id);
+            }
+            let old_pos = self.entity(id).position();
+            if self.random_teleport(id, xx, yy, zz, true, &|state| does_not_teleport_to.contains(&(state.block().0 as i32))) {
+                let (sound, source) = match self.mob(id).map(|mob| &mob.kind) {
+                    Some(crate::world::entity::mob::MobKind::Fox(_)) => ("minecraft:entity.fox.teleport", SoundSource::Neutral),
+                    _ => ("minecraft:item.chorus_fruit.teleport", SoundSource::Players),
+                };
+                let e = self.entity(id);
+                let (x, y, z) = (e.x(), e.y(), e.z());
+                self.play_sound_at(None, x, y, z, sound_event(sound), source, 1.0, 1.0);
+                if directional_particles {
+                    let origin = wafer_core::BlockPos::containing_vec(old_pos);
+                    let target = self.entity(id).block_position();
+                    let packed_difference = crate::util::block_util::clamped_pack_difference_in_position(origin, target, 127, 127, 127);
+                    self.level_event(None, crate::server::level::events::PARTICLES_CONSUME_EFFECT_TELEPORT, origin, packed_difference);
+                }
+                self.reset_fall_distance(id);
+                self.living_mut(id).reset_current_impulse_context();
+                return true;
+            }
+        }
+        false
     }
 
     fn emit_particles_and_sounds(&mut self, id: EntityId, consumable: &Consumable, particle_count: i32) {
