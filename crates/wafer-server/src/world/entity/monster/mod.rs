@@ -21,6 +21,7 @@ pub mod ranged_attack_mob;
 pub mod silverfish;
 #[cfg(test)]
 mod silverfish_tests;
+pub mod ravager;
 pub mod skeleton;
 pub mod spider;
 pub mod warden;
@@ -28,4 +29,6 @@ pub mod vex;
 pub mod witch;
 #[cfg(test)]
 mod witch_tests;
+#[cfg(test)]
+mod ravager_tests;
 pub mod zombie;

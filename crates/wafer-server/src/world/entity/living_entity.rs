@@ -8,6 +8,7 @@ use wafer_data::{BlockState, EquipmentSlot, EquipmentSlotGroup, MobEffect, block
 use super::ai::brain::Brain;
 use super::attributes::{Attribute, AttributeMap, AttributeModifier, AttributeSupplier, Operation, PLAYER_ATTRIBUTES, SPEED_MODIFIER_SPRINTING};
 use super::data::{DataValue, Pose, ids};
+use super::monster::ravager::Ravager;
 use super::mob::{Mob, MobKind};
 use super::using_item::FLAG_SPIN_ATTACK;
 use super::{Entity, EntityId, MoverType, RemovalReason, compute_modified_friction, entity_event, flags, sound_event};
@@ -760,6 +761,9 @@ impl ServerLevel {
     }
 
     pub fn has_line_of_sight(&mut self, id: EntityId, target: EntityId) -> bool {
+        if self.is_ravager(id) && !Ravager::has_line_of_sight(self.mob(id).expect("a ravager")) {
+            return false;
+        }
         let eye_height = self.entity(target).eye_y();
         self.has_line_of_sight_with(id, target, ClipBlock::Collider, ClipFluid::None, eye_height)
     }
@@ -1121,6 +1125,10 @@ impl ServerLevel {
     }
 
     fn blocked_by_item(&mut self, id: EntityId, defender: EntityId, fully_blocked: bool) {
+        if self.is_ravager(id) {
+            self.ravager_blocked_by_item(id, defender);
+            return;
+        }
         if !fully_blocked {
             let (d, e) = (self.entity(defender), self.entity(id));
             let (xd, zd) = (d.x() - e.x(), d.z() - e.z());
@@ -1547,7 +1555,7 @@ impl ServerLevel {
                 | MobKind::Giant(_),
             ) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Enderman(_)) => self.mob_get_base_experience_reward(id),
-            Some(MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => self.ageable_water_creature_get_base_experience_reward(id),
@@ -2089,6 +2097,7 @@ impl ServerLevel {
             Some(MobKind::Ghast(_)) => self.mob_ai_step(id),
             Some(MobKind::ZombifiedPiglin(_)) => self.monster_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
+            Some(MobKind::Ravager(_)) => self.ravager_ai_step(id),
             Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.raider_ai_step(id),
             Some(MobKind::Vex(_)) => self.monster_ai_step(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
@@ -2123,6 +2132,8 @@ impl ServerLevel {
             self.living_entity_is_immobile(id) || self.is_sleeping(id)
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_is_immobile(id)
+        } else if self.is_ravager(id) {
+            self.living_entity_is_immobile(id) || Ravager::is_immobile(self.mob(id).expect("a ravager"))
         } else {
             self.living_entity_is_immobile(id)
         }
