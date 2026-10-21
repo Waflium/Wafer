@@ -1,4 +1,4 @@
-use wafer_core::{BlockPos, Direction};
+use wafer_core::{AABB, BlockPos, Direction};
 use wafer_data::{Block, BlockState, Fluid, SupportType, Tag, block_tags, fluid_tags};
 use serde_json::Value;
 
@@ -95,6 +95,7 @@ pub enum BlockPredicate {
     AllOf(Vec<BlockPredicate>),
     AnyOf(Vec<BlockPredicate>),
     Not(Box<BlockPredicate>),
+    Unobstructed,
     True,
 }
 
@@ -135,6 +136,7 @@ impl BlockPredicate {
             "all_of" => BlockPredicate::AllOf(list("predicates")?),
             "any_of" => BlockPredicate::AnyOf(list("predicates")?),
             "not" => BlockPredicate::Not(Box::new(BlockPredicate::parse(json.get("predicate").ok_or("missing predicate")?)?)),
+            "unobstructed" => BlockPredicate::Unobstructed,
             "true" => BlockPredicate::True,
             other => return Err(format!("unknown block predicate {other}")),
         })
@@ -171,6 +173,7 @@ impl BlockPredicate {
             BlockPredicate::AllOf(predicates) => predicates.iter().all(|p| p.test(level, origin)),
             BlockPredicate::AnyOf(predicates) => predicates.iter().any(|p| p.test(level, origin)),
             BlockPredicate::Not(predicate) => !predicate.test(level, origin),
+            BlockPredicate::Unobstructed => level.is_unobstructed(&AABB::of_block(origin)),
             BlockPredicate::True => true,
         }
     }

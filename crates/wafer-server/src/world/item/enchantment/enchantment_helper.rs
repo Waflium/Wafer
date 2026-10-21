@@ -325,6 +325,41 @@ impl ServerLevel {
             .collect()
     }
 
+    pub fn run_location_changed_effects(&mut self, entity: EntityId) {
+        for slot in EquipmentSlot::VALUES {
+            let Some(piece) = self.item_by_slot(entity, slot) else { continue };
+            self.run_location_changed_effects_on_item(&piece, entity, slot);
+        }
+    }
+
+    pub fn run_location_changed_effects_on_item(&mut self, stack: &ItemStack, entity: EntityId, slot: EquipmentSlot) {
+        for (enchantment, level, item) in self.run_iteration_on_item_in_slot(stack, slot, entity) {
+            enchantment.run_location_changed_effects(self, level, &item, entity);
+        }
+    }
+
+    pub fn stop_all_location_based_effects(&mut self, entity: EntityId) {
+        for slot in EquipmentSlot::VALUES {
+            let Some(piece) = self.item_by_slot(entity, slot) else { continue };
+            self.stop_location_based_effects_on_item(&piece, entity, slot);
+        }
+    }
+
+    pub fn stop_location_based_effects_on_item(&mut self, stack: &ItemStack, entity: EntityId, slot: EquipmentSlot) {
+        for (enchantment, level, item) in self.run_iteration_on_item_in_slot(stack, slot, entity) {
+            enchantment.stop_location_based_effects(self, level, &item, entity);
+        }
+    }
+
+    pub fn tick_enchantment_effects(&mut self, entity: EntityId) {
+        for slot in EquipmentSlot::VALUES {
+            let Some(piece) = self.item_by_slot(entity, slot) else { continue };
+            for (enchantment, level, item) in self.run_iteration_on_item_in_slot(&piece, slot, entity) {
+                enchantment.tick(self, level, &item, entity);
+            }
+        }
+    }
+
     pub fn process_durability_change(&mut self, item_stack: &ItemStack, amount: i32) -> i32 {
         let mut modified_amount = amount as f32;
         run_iteration_on_item(item_stack, |enchantment, level| enchantment.modify_durability_change(self, level, item_stack, &mut modified_amount));

@@ -1,11 +1,14 @@
+use wafer_core::Vec3;
 use wafer_protocol::nbt::Nbt;
 
 use super::enchantment_attribute_effect::EnchantmentAttributeEffect;
 use super::enchantment_entity_effect::EnchantmentEntityEffect;
+use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
+use crate::world::entity::EntityId;
+use crate::world::item::enchantment::enchanted_item_in_use::EnchantedItemInUse;
+use crate::world::item::enchantment::enchantment_helper::equipment_slot_name;
 
-#[allow(dead_code)]
-#[derive(Debug)]
 pub enum EnchantmentLocationBasedEffect {
     AllOf(Vec<EnchantmentLocationBasedEffect>),
     Attribute(EnchantmentAttributeEffect),
@@ -20,5 +23,50 @@ impl EnchantmentLocationBasedEffect {
             "minecraft:attribute" => EnchantmentLocationBasedEffect::Attribute(EnchantmentAttributeEffect::decode(tag)?),
             _ => EnchantmentLocationBasedEffect::Entity(EnchantmentEntityEffect::decode(tag)?),
         })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn on_changed_block(&self, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId, position: Vec3, became_active: bool) {
+        match self {
+            EnchantmentLocationBasedEffect::AllOf(effects) => {
+                for effect in effects {
+                    effect.on_changed_block(level, enchantment_level, item, entity, position, became_active);
+                }
+            }
+            EnchantmentLocationBasedEffect::Attribute(effect) => {
+                if became_active
+                    && level.is_living(entity)
+                    && let Some(slot) = item.in_slot
+                {
+                    let modifier = effect.get_modifier(enchantment_level, equipment_slot_name(slot));
+                    if let Some(instance) = level.living_mut(entity).attributes.instance(effect.attribute) {
+                        instance.remove_modifier(&modifier.id);
+                        instance.add_transient_modifier(modifier);
+                    }
+                }
+            }
+            EnchantmentLocationBasedEffect::Entity(effect) => effect.apply(level, enchantment_level, item, entity, position),
+        }
+    }
+
+    pub fn on_deactivated(&self, level: &mut ServerLevel, item: &EnchantedItemInUse, entity: EntityId, position: Vec3, enchantment_level: i32) {
+        match self {
+            EnchantmentLocationBasedEffect::AllOf(effects) => {
+                for effect in effects {
+                    effect.on_deactivated(level, item, entity, position, enchantment_level);
+                }
+            }
+            EnchantmentLocationBasedEffect::Attribute(effect) => {
+                if level.is_living(entity)
+                    && let Some(slot) = item.in_slot
+                {
+                    let modifier = effect.get_modifier(enchantment_level, equipment_slot_name(slot));
+                    if let Some(instance) = level.living_mut(entity).attributes.instance(effect.attribute) {
+                        instance.remove_modifier(&modifier.id);
+                    }
+                }
+            }
+            EnchantmentLocationBasedEffect::Entity(_) => {}
+        }
     }
 }

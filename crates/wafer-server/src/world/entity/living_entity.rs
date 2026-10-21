@@ -64,6 +64,8 @@ pub struct LivingEntity {
     pub last_climbable_pos: Option<BlockPos>,
     pub current_impulse_impact_pos: Option<Vec3>,
     pub current_impulse_context_reset_grace_time: i32,
+    pub last_pos: Option<BlockPos>,
+    active_location_dependent_enchantments: [Vec<(&'static enchantment::Enchantment, Vec<usize>)>; 8],
     pub hurt_time: i32,
     pub hurt_duration: i32,
     pub death_time: i32,
@@ -118,6 +120,8 @@ impl LivingEntity {
             last_climbable_pos: None,
             current_impulse_impact_pos: None,
             current_impulse_context_reset_grace_time: 0,
+            last_pos: None,
+            active_location_dependent_enchantments: Default::default(),
             hurt_time: 0,
             hurt_duration: 0,
             death_time: 0,
@@ -157,6 +161,31 @@ impl LivingEntity {
 
     pub fn apply_post_impulse_grace_time(&mut self, ticks: i32) {
         self.current_impulse_context_reset_grace_time = self.current_impulse_context_reset_grace_time.max(ticks);
+    }
+
+    pub fn active_location_dependent_effects(&self, slot: EquipmentSlot, enchantment: &'static enchantment::Enchantment) -> Option<&Vec<usize>> {
+        self.active_location_dependent_enchantments[slot as usize].iter().find(|(e, _)| std::ptr::eq(*e, enchantment)).map(|(_, effects)| effects)
+    }
+
+    pub fn add_active_location_dependent_effect(&mut self, slot: EquipmentSlot, enchantment: &'static enchantment::Enchantment, effect: usize) {
+        let active = &mut self.active_location_dependent_enchantments[slot as usize];
+        match active.iter_mut().find(|(e, _)| std::ptr::eq(*e, enchantment)) {
+            Some((_, effects)) => effects.push(effect),
+            None => active.push((enchantment, vec![effect])),
+        }
+    }
+
+    pub fn remove_active_location_dependent_effect(&mut self, slot: EquipmentSlot, enchantment: &'static enchantment::Enchantment, effect: usize) -> bool {
+        let Some((_, effects)) = self.active_location_dependent_enchantments[slot as usize].iter_mut().find(|(e, _)| std::ptr::eq(*e, enchantment)) else { return false };
+        let Some(index) = effects.iter().position(|&e| e == effect) else { return false };
+        effects.remove(index);
+        true
+    }
+
+    pub fn remove_active_location_dependent_enchantment(&mut self, slot: EquipmentSlot, enchantment: &'static enchantment::Enchantment) -> Option<Vec<usize>> {
+        let active = &mut self.active_location_dependent_enchantments[slot as usize];
+        let index = active.iter().position(|(e, _)| std::ptr::eq(*e, enchantment))?;
+        Some(active.remove(index).1)
     }
 
     pub fn reset_current_impulse_context(&mut self) {
@@ -1724,6 +1753,7 @@ impl ServerLevel {
 
     pub fn living_entity_base_tick(&mut self, id: EntityId) {
         self.living_mut(id).swing_state.tick();
+        self.tick_enchantment_effects(id);
         self.entity_base_tick(id);
         if self.is_alive(id) {
             if self.is_in_wall(id) {
@@ -1760,6 +1790,11 @@ impl ServerLevel {
             } else if self.entity(id).air_supply() < self.entity(id).get_max_air_supply() {
                 let supply = (self.entity(id).air_supply() + 4).min(self.entity(id).get_max_air_supply());
                 self.entity_mut(id).set_air_supply(supply);
+            }
+            let pos = self.entity(id).block_position();
+            if self.living(id).last_pos != Some(pos) {
+                self.living_mut(id).last_pos = Some(pos);
+                self.on_changed_block(id, pos);
             }
         }
         let player = self.is_player(id);
@@ -1909,6 +1944,7 @@ impl ServerLevel {
                         instance.add_transient_modifier(modifier);
                     }
                 });
+                self.run_location_changed_effects_on_item(current, id, *slot);
             }
         }
         let last = self.living(id).last_equipment_items.clone();
@@ -1945,6 +1981,14 @@ impl ServerLevel {
                 instance.remove_modifier(&modifier.id);
             }
         });
+        self.stop_location_based_effects_on_item(previous, id, slot);
+    }
+
+    pub fn on_changed_block(&mut self, id: EntityId, _pos: BlockPos) {
+        if self.is_player(id) && self.is_spectator(id) {
+            return;
+        }
+        self.run_location_changed_effects(id);
     }
 
     pub fn refresh_dirty_attributes(&mut self, id: EntityId) {

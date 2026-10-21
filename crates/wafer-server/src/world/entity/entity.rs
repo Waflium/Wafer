@@ -1419,6 +1419,7 @@ impl ServerLevel {
             self.update_fluid_interaction(id);
         }
         if living && on_ground && self.entity(id).fall_distance > 0.0 {
+            self.on_changed_block(id, pos);
             let fall_power = self.entity(id).fall_distance + 1.0e-6 - self.attribute_value(id, Attribute::SafeFallDistance);
             let power = mth::floor(fall_power).max(0) as f64;
             if power > 0.0 && !on_state.is_air() {

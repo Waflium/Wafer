@@ -4,6 +4,10 @@ use wafer_data::{DamageType, MobEffect, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder_set::HolderSet;
+use crate::core::particles::particle_options::ParticleOptions;
+use crate::world::level::levelgen::blockpredicates::block_predicate::{BlockPredicate, parse_offset};
+use crate::world::level::levelgen::feature::stateproviders::block_state_provider::BlockStateProviderHolder;
+use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::level::is_in_spawnable_bounds;
 use crate::server::level::ServerLevel;
 use crate::sounds::sound_event::SoundEvent;
@@ -17,7 +21,6 @@ use crate::world::item::enchantment::enchanted_item_in_use::EnchantedItemInUse;
 use crate::world::item::enchantment::level_based_value::LevelBasedValue;
 
 #[allow(dead_code)]
-#[derive(Debug)]
 pub enum EnchantmentEntityEffect {
     AllOf(Vec<EnchantmentEntityEffect>),
     ApplyMobEffect { to_apply: HolderSet, min_duration: LevelBasedValue, max_duration: LevelBasedValue, min_amplifier: LevelBasedValue, max_amplifier: LevelBasedValue },
@@ -29,11 +32,88 @@ pub enum EnchantmentEntityEffect {
     ApplyExhaustion { amount: LevelBasedValue },
     PlaySound { sound_events: Vec<SoundEvent>, volume: FloatProvider, pitch: FloatProvider },
     ReplaceBlock(Nbt),
-    ReplaceDisk(Nbt),
+    ReplaceDisk { radius: LevelBasedValue, height: LevelBasedValue, offset: (i32, i32, i32), predicate: Option<BlockPredicate>, block_state: BlockStateProviderHolder },
     RunFunction(String),
     SetBlockProperties(Nbt),
-    SpawnParticles(Nbt),
+    SpawnParticles {
+        particle: ParticleOptions,
+        horizontal_position: PositionSource,
+        vertical_position: PositionSource,
+        horizontal_velocity: VelocitySource,
+        vertical_velocity: VelocitySource,
+        speed: FloatProvider,
+    },
     SummonEntity { entity_types: HolderSet, join_team: bool },
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum PositionSourceType {
+    EntityPosition,
+    BoundingBox,
+}
+
+impl PositionSourceType {
+    fn get_coordinate(self, position: f64, center: f64, bounding_box_span: f32, random: &mut impl RandomSource) -> f64 {
+        match self {
+            PositionSourceType::EntityPosition => position,
+            PositionSourceType::BoundingBox => center + (random.next_double() - 0.5) * bounding_box_span as f64,
+        }
+    }
+}
+
+pub struct PositionSource {
+    kind: PositionSourceType,
+    offset: f32,
+    scale: f32,
+}
+
+impl PositionSource {
+    fn decode(tag: &Nbt) -> DataResult<PositionSource> {
+        let kind = codec::decode_field(tag, "type", |t| match codec::string(t)? {
+            "entity_position" => Ok(PositionSourceType::EntityPosition),
+            "in_bounding_box" => Ok(PositionSourceType::BoundingBox),
+            other => Err(format!("Unknown element name:{other}")),
+        })?;
+        let offset = codec::decode_or(tag, "offset", 0.0, codec::float)?;
+        let scale = codec::decode_or(tag, "scale", 1.0, |t| {
+            let scale = codec::float(t)?;
+            if scale > 0.0 { Ok(scale) } else { Err(format!("Value must be positive: {scale}")) }
+        })?;
+        if kind == PositionSourceType::EntityPosition && scale != 1.0 {
+            return Err("Cannot scale an entity position coordinate source".into());
+        }
+        Ok(PositionSource { kind, offset, scale })
+    }
+
+    fn get_coordinate(&self, position: f64, center: f64, bounding_box_span: f32, random: &mut impl RandomSource) -> f64 {
+        self.kind.get_coordinate(position, center, bounding_box_span * self.scale, random) + self.offset as f64
+    }
+}
+
+pub struct VelocitySource {
+    movement_scale: f32,
+    base: FloatProvider,
+}
+
+impl VelocitySource {
+    fn decode(tag: &Nbt) -> DataResult<VelocitySource> {
+        Ok(VelocitySource {
+            movement_scale: codec::decode_or(tag, "movement_scale", 0.0, codec::float)?,
+            base: codec::decode_or(tag, "base", FloatProvider::Constant(0.0), |t| Ok(FloatProvider::parse(&codec::to_json(t))?))?,
+        })
+    }
+
+    fn get_velocity(&self, movement: f64, random: &mut impl RandomSource) -> f64 {
+        movement * self.movement_scale as f64 + self.base.sample(random) as f64
+    }
+}
+
+fn particle_options(tag: &Nbt) -> DataResult<ParticleOptions> {
+    let ty = codec::decode_field(tag, "type", codec::identifier)?;
+    let Some(&particle_type) = registry::PARTICLE_TYPE.iter().find(|&&name| name == ty) else {
+        return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:particle_type]: {ty}"));
+    };
+    crate::core::particles::particle_types::parse(particle_type, tag)
 }
 
 fn float_provider(tag: &Nbt, min: f32, max: f32) -> DataResult<FloatProvider> {
@@ -93,10 +173,23 @@ impl EnchantmentEntityEffect {
                 pitch: codec::decode_field(tag, "pitch", |t| float_provider(t, 1.0e-5, 2.0))?,
             },
             "minecraft:replace_block" => EnchantmentEntityEffect::ReplaceBlock(tag.clone()),
-            "minecraft:replace_disk" => EnchantmentEntityEffect::ReplaceDisk(tag.clone()),
+            "minecraft:replace_disk" => EnchantmentEntityEffect::ReplaceDisk {
+                radius: value("radius")?,
+                height: value("height")?,
+                offset: codec::decode_or(tag, "offset", (0, 0, 0), |t| parse_offset(&serde_json::json!({ "offset": codec::to_json(t) })))?,
+                predicate: codec::decode_optional(tag, "predicate", |t| BlockPredicate::parse(&codec::to_json(t)))?,
+                block_state: codec::decode_field(tag, "block_state", |t| BlockStateProviderHolder::parse(&codec::to_json(t)))?,
+            },
             "minecraft:run_function" => EnchantmentEntityEffect::RunFunction(codec::decode_field(tag, "function", codec::identifier)?),
             "minecraft:set_block_properties" => EnchantmentEntityEffect::SetBlockProperties(tag.clone()),
-            "minecraft:spawn_particles" => EnchantmentEntityEffect::SpawnParticles(tag.clone()),
+            "minecraft:spawn_particles" => EnchantmentEntityEffect::SpawnParticles {
+                particle: codec::decode_field(tag, "particle", particle_options)?,
+                horizontal_position: codec::decode_field(tag, "horizontal_position", PositionSource::decode)?,
+                vertical_position: codec::decode_field(tag, "vertical_position", PositionSource::decode)?,
+                horizontal_velocity: codec::decode_field(tag, "horizontal_velocity", VelocitySource::decode)?,
+                vertical_velocity: codec::decode_field(tag, "vertical_velocity", VelocitySource::decode)?,
+                speed: codec::decode_or(tag, "speed", FloatProvider::Constant(0.0), |t| Ok(FloatProvider::parse(&codec::to_json(t))?))?,
+            },
             "minecraft:summon_entity" => EnchantmentEntityEffect::SummonEntity {
                 entity_types: codec::decode_field(tag, "entity", |t| HolderSet::decode("minecraft:entity_type", t))?,
                 join_team: codec::decode_or(tag, "join_team", false, codec::bool_value)?,
@@ -178,13 +271,36 @@ impl EnchantmentEntityEffect {
                 let (y_rot, x_rot) = (e.y_rot, e.x_rot);
                 e.snap_to(position.x, position.y, position.z, y_rot, x_rot);
             }
+            EnchantmentEntityEffect::ReplaceDisk { radius, height, offset, predicate, block_state } => {
+                let center_block = BlockPos::containing(position.x, position.y, position.z).offset(offset.0, offset.1, offset.2);
+                let dist = radius.calculate(enchantment_level) as i32;
+                let height = height.calculate(enchantment_level) as i32;
+                for pos in BlockPos::between_closed(center_block.offset(-dist, 0, -dist), center_block.offset(dist, (height - 1).min(0), dist)) {
+                    if pos.dist_to_center_sqr(position.x, pos.y as f64 + 0.5, position.z) < (dist * dist) as f64 && predicate.as_ref().is_none_or(|p| p.test(level, pos)) {
+                        let mut random = std::mem::replace(&mut level.entity_mut(entity).random, wafer_core::random::LegacyRandomSource::new(0));
+                        let state = block_state.value().get_state(level, &mut random, pos);
+                        level.entity_mut(entity).random = random;
+                        level.set_block(pos, state, UPDATE_ALL);
+                    }
+                }
+            }
+            EnchantmentEntityEffect::SpawnParticles { particle, horizontal_position, vertical_position, horizontal_velocity, vertical_velocity, speed } => {
+                let movement = level.known_movement(entity);
+                let e = level.entity_mut(entity);
+                let (bb_width, bb_height) = (e.dimensions.width, e.dimensions.height);
+                let random = &mut e.random;
+                let x = horizontal_position.get_coordinate(position.x, position.x, bb_width, random);
+                let y = vertical_position.get_coordinate(position.y, position.y + (bb_height / 2.0) as f64, bb_height, random);
+                let z = horizontal_position.get_coordinate(position.z, position.z, bb_width, random);
+                let dist = (horizontal_velocity.get_velocity(movement.x, random), vertical_velocity.get_velocity(movement.y, random), horizontal_velocity.get_velocity(movement.z, random));
+                let speed = speed.sample(random) as f64;
+                level.send_particles(particle.particle_type, |w| particle.write_options(w), x, y, z, 0, dist, speed);
+            }
             EnchantmentEntityEffect::Explode(_)
             | EnchantmentEntityEffect::ApplyImpulse(_)
             | EnchantmentEntityEffect::ReplaceBlock(_)
-            | EnchantmentEntityEffect::ReplaceDisk(_)
             | EnchantmentEntityEffect::RunFunction(_)
-            | EnchantmentEntityEffect::SetBlockProperties(_)
-            | EnchantmentEntityEffect::SpawnParticles(_) => {}
+            | EnchantmentEntityEffect::SetBlockProperties(_) => {}
         }
     }
 }

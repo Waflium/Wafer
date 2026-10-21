@@ -166,6 +166,7 @@ impl ServerLevel {
     }
 
     pub fn set_game_mode(&mut self, player: EntityId, game_type: GameType) -> bool {
+        let was_spectator = self.is_spectator(player);
         if !self.change_game_mode_for_player(player, game_type) {
             return false;
         }
@@ -176,8 +177,12 @@ impl ServerLevel {
         if game_type == GameType::Spectator {
             self.stop_riding(player);
             self.stop_using_item(player);
+            self.stop_all_location_based_effects(player);
         } else {
             self.set_camera(player, Some(player));
+            if was_spectator {
+                self.run_location_changed_effects(player);
+            }
         }
         self.on_update_abilities(player);
         self.update_effect_visibility(player);

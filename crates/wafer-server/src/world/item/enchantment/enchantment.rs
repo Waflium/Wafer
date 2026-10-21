@@ -152,6 +152,16 @@ fn block_hit_context(level: &mut ServerLevel, enchantment_level: i32, entity: En
     LootContextBuilder::new(params).create(None)
 }
 
+fn location_context(level: &mut ServerLevel, enchantment_level: i32, entity: EntityId, active: bool) -> LootContext<'_> {
+    let position = level.entity(entity).position();
+    let mut params = LootParams::new(level);
+    params.this_entity = Some(entity);
+    params.origin = Some(position);
+    params.enchantment_level = Some(enchantment_level);
+    params.enchantment_active = Some(active);
+    LootContextBuilder::new(params).create(None)
+}
+
 fn entity_context(level: &mut ServerLevel, enchantment_level: i32, entity: EntityId, position: Vec3) -> LootContext<'_> {
     let mut params = LootParams::new(level);
     params.this_entity = Some(entity);
@@ -344,6 +354,56 @@ impl Enchantment {
             let matches = effect.matches(&mut block_hit_context(level, enchantment_level, projectile, position, hit_block));
             if matches {
                 effect.effect.apply(level, enchantment_level, weapon, projectile, position);
+            }
+        }
+    }
+
+    pub fn tick(&'static self, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId) {
+        let origin = level.entity(entity).position();
+        for effect in &self.effects.tick {
+            let matches = effect.matches(&mut entity_context(level, enchantment_level, entity, origin));
+            if matches {
+                let position = level.entity(entity).position();
+                effect.effect.apply(level, enchantment_level, item, entity, position);
+            }
+        }
+    }
+
+    pub fn run_location_changed_effects(&'static self, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId) {
+        let Some(slot) = item.in_slot else { return };
+        if !self.matching_slot(slot) {
+            if let Some(effects) = level.living_mut(entity).remove_active_location_dependent_enchantment(slot, self) {
+                for index in effects {
+                    let position = level.entity(entity).position();
+                    self.effects.location_changed[index].effect.on_deactivated(level, item, entity, position, enchantment_level);
+                }
+            }
+            return;
+        }
+        for (index, filtered_effect) in self.effects.location_changed.iter().enumerate() {
+            let was_active = level.living(entity).active_location_dependent_effects(slot, self).is_some_and(|effects| effects.contains(&index));
+            if filtered_effect.matches(&mut location_context(level, enchantment_level, entity, was_active)) {
+                if !was_active {
+                    level.living_mut(entity).add_active_location_dependent_effect(slot, self, index);
+                }
+                let position = level.entity(entity).position();
+                filtered_effect.effect.on_changed_block(level, enchantment_level, item, entity, position, !was_active);
+            } else if was_active && level.living_mut(entity).remove_active_location_dependent_effect(slot, self, index) {
+                let position = level.entity(entity).position();
+                filtered_effect.effect.on_deactivated(level, item, entity, position, enchantment_level);
+            }
+        }
+        if level.living(entity).active_location_dependent_effects(slot, self).is_some_and(|effects| effects.is_empty()) {
+            level.living_mut(entity).remove_active_location_dependent_enchantment(slot, self);
+        }
+    }
+
+    pub fn stop_location_based_effects(&'static self, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId) {
+        let Some(slot) = item.in_slot else { return };
+        if let Some(effects) = level.living_mut(entity).remove_active_location_dependent_enchantment(slot, self) {
+            for index in effects {
+                let position = level.entity(entity).position();
+                self.effects.location_changed[index].effect.on_deactivated(level, item, entity, position, enchantment_level);
             }
         }
     }
