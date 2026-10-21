@@ -1,5 +1,6 @@
 pub mod abstract_illager;
 pub mod evoker;
+pub mod illusioner;
 pub mod pillager;
 pub mod spellcaster_illager;
 pub mod vindicator;

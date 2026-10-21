@@ -11,6 +11,8 @@ use super::panic_goal::PanicGoal;
 use super::random_look_around_goal::RandomLookAroundGoal;
 use super::ranged_bow_attack_goal::RangedBowAttackGoal;
 use super::ranged_crossbow_attack_goal::RangedCrossbowAttackGoal;
+use crate::world::entity::monster::illager::illusioner::{IllusionerBlindnessSpellGoal, IllusionerMirrorSpellGoal};
+use crate::world::entity::monster::illager::spellcaster_illager::SpellcasterCastingSpellGoal;
 use crate::world::entity::monster::illager::evoker::{EvokerAttackSpellGoal, EvokerCastingSpellGoal, EvokerSummonSpellGoal, EvokerWololoSpellGoal};
 use crate::world::entity::monster::vex::{VexChargeAttackGoal, VexCopyOwnerTargetGoal, VexRandomMoveGoal};
 use super::random_stroll_goal::RandomStrollGoal;
@@ -118,7 +120,10 @@ pub enum Goal {
     SpiderTarget(SpiderTargetGoal),
     RangedBowAttack(RangedBowAttackGoal),
     RangedCrossbowAttack(RangedCrossbowAttackGoal),
+    SpellcasterCastingSpell(SpellcasterCastingSpellGoal),
     EvokerCastingSpell(EvokerCastingSpellGoal),
+    IllusionerMirrorSpell(IllusionerMirrorSpellGoal),
+    IllusionerBlindnessSpell(IllusionerBlindnessSpellGoal),
     EvokerSummonSpell(EvokerSummonSpellGoal),
     EvokerAttackSpell(EvokerAttackSpellGoal),
     EvokerWololoSpell(EvokerWololoSpellGoal),
@@ -327,6 +332,9 @@ impl Goal {
             Goal::GhastLook => true,
             Goal::GhastShootFireball(goal) => goal.can_use(level, mob),
             Goal::EvokerCastingSpell(goal) => goal.casting_spell_goal.can_use(level, mob),
+            Goal::SpellcasterCastingSpell(goal) => goal.can_use(level, mob),
+            Goal::IllusionerMirrorSpell(goal) => goal.can_use(level, mob),
+            Goal::IllusionerBlindnessSpell(goal) => goal.can_use(level, mob),
             Goal::EvokerSummonSpell(goal) => goal.can_use(level, mob),
             Goal::EvokerAttackSpell(goal) => goal.use_spell_goal.can_use(level, mob),
             Goal::EvokerWololoSpell(goal) => goal.can_use(level, mob),
@@ -454,6 +462,9 @@ impl Goal {
             Goal::GhastLook => true,
             Goal::GhastShootFireball(goal) => goal.can_use(level, mob),
             Goal::EvokerCastingSpell(goal) => goal.casting_spell_goal.can_use(level, mob),
+            Goal::SpellcasterCastingSpell(goal) => goal.can_use(level, mob),
+            Goal::IllusionerMirrorSpell(goal) => goal.use_spell_goal.can_continue_to_use(level, mob),
+            Goal::IllusionerBlindnessSpell(goal) => goal.use_spell_goal.can_continue_to_use(level, mob),
             Goal::EvokerSummonSpell(goal) => goal.use_spell_goal.can_continue_to_use(level, mob),
             Goal::EvokerAttackSpell(goal) => goal.use_spell_goal.can_continue_to_use(level, mob),
             Goal::EvokerWololoSpell(goal) => goal.can_continue_to_use(level, mob),
@@ -578,6 +589,9 @@ impl Goal {
             Goal::GhastLook => {}
             Goal::GhastShootFireball(goal) => goal.start(),
             Goal::EvokerCastingSpell(goal) => goal.casting_spell_goal.start(level, mob),
+            Goal::SpellcasterCastingSpell(goal) => goal.start(level, mob),
+            Goal::IllusionerMirrorSpell(goal) => goal.start(level, mob),
+            Goal::IllusionerBlindnessSpell(goal) => goal.start(level, mob),
             Goal::EvokerSummonSpell(goal) => goal.start(level, mob),
             Goal::EvokerAttackSpell(goal) => goal.start(level, mob),
             Goal::EvokerWololoSpell(goal) => goal.start(level, mob),
@@ -684,6 +698,8 @@ impl Goal {
             Goal::DefendTrustedTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) | Goal::GhastLook => {}
             Goal::EvokerCastingSpell(goal) => goal.casting_spell_goal.stop(level, mob),
+            Goal::SpellcasterCastingSpell(goal) => goal.stop(level, mob),
+            Goal::IllusionerMirrorSpell(_) | Goal::IllusionerBlindnessSpell(_) => {}
             Goal::EvokerSummonSpell(_) | Goal::EvokerAttackSpell(_) | Goal::VexRandomMove(_) => {}
             Goal::EvokerWololoSpell(goal) => goal.stop(level, mob),
             Goal::VexChargeAttack(goal) => goal.stop(level, mob),
@@ -830,6 +846,9 @@ impl Goal {
             Goal::BlazeAttack(goal) => goal.tick(level, mob),
             Goal::GhastLook => ghast::ghast_look_goal_tick(level, mob),
             Goal::EvokerCastingSpell(goal) => goal.tick(level, mob),
+            Goal::SpellcasterCastingSpell(goal) => goal.tick(level, mob),
+            Goal::IllusionerMirrorSpell(goal) => goal.tick(level, mob),
+            Goal::IllusionerBlindnessSpell(goal) => goal.tick(level, mob),
             Goal::EvokerSummonSpell(goal) => goal.tick(level, mob),
             Goal::EvokerAttackSpell(goal) => goal.tick(level, mob),
             Goal::EvokerWololoSpell(goal) => goal.tick(level, mob),
@@ -920,7 +939,8 @@ impl Goal {
             Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) => Flag::Move.bit(),
             Goal::BlazeAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::GhastLook => Flag::Look.bit(),
-            Goal::EvokerCastingSpell(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::EvokerCastingSpell(_) | Goal::SpellcasterCastingSpell(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::IllusionerMirrorSpell(_) | Goal::IllusionerBlindnessSpell(_) => 0,
             Goal::EvokerSummonSpell(_) | Goal::EvokerAttackSpell(_) | Goal::EvokerWololoSpell(_) | Goal::VexCopyOwnerTarget(_) => 0,
             Goal::VexChargeAttack(_) | Goal::VexRandomMove(_) => Flag::Move.bit(),
             Goal::GhastShootFireball(_) => 0,

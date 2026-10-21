@@ -206,6 +206,7 @@ impl ServerLevel {
             Some(crate::world::entity::mob::MobKind::Vindicator(_)) => crate::world::entity::monster::illager::vindicator::Vindicator::get_celebrate_sound(),
             Some(crate::world::entity::mob::MobKind::Pillager(_)) => crate::world::entity::monster::illager::pillager::Pillager::get_celebrate_sound(),
             Some(crate::world::entity::mob::MobKind::Evoker(_)) => crate::world::entity::monster::illager::evoker::Evoker::get_celebrate_sound(),
+            Some(crate::world::entity::mob::MobKind::Illusioner(_)) => crate::world::entity::monster::illager::illusioner::Illusioner::get_celebrate_sound(),
             _ => unreachable!("not a raider"),
         }
     }

@@ -855,7 +855,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::IronGolem(_)) => self.iron_golem_can_attack(id, target),
-            Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_)) => self.abstract_illager_can_attack(id, target),
+            Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.abstract_illager_can_attack(id, target),
             Some(_) => self.mob_can_attack(id, target),
             None => self.living_entity_can_attack(id, target),
         }
@@ -1547,7 +1547,7 @@ impl ServerLevel {
                 | MobKind::Giant(_),
             ) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Enderman(_)) => self.mob_get_base_experience_reward(id),
-            Some(MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Vex(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => self.ageable_water_creature_get_base_experience_reward(id),
@@ -2089,7 +2089,7 @@ impl ServerLevel {
             Some(MobKind::Ghast(_)) => self.mob_ai_step(id),
             Some(MobKind::ZombifiedPiglin(_)) => self.monster_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
-            Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_)) => self.raider_ai_step(id),
+            Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.raider_ai_step(id),
             Some(MobKind::Vex(_)) => self.monster_ai_step(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Wolf(_)) => self.wolf_ai_step(id),

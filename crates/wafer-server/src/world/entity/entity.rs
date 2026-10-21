@@ -2636,6 +2636,7 @@ impl ServerLevel {
                     super::mob::MobKind::Vindicator(_) => "Vindicator",
                     super::mob::MobKind::Pillager(_) => "Pillager",
                     super::mob::MobKind::Evoker(_) => "Evoker",
+                    super::mob::MobKind::Illusioner(_) => "Illusioner",
                     super::mob::MobKind::Vex(_) => "Vex",
                     super::mob::MobKind::Slime(_) => "Slime",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",

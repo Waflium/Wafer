@@ -72,3 +72,14 @@ fn vexes_starve_when_their_life_runs_out() {
     assert_eq!(level.health(vex), 13.0);
     assert!(level.entity(vex).is_no_gravity());
 }
+
+#[test]
+fn illusioners_have_vanillas_attributes_and_goals() {
+    let illusioner = super::illusioner::Illusioner::create();
+    assert_eq!(illusioner.living.attributes.value(Attribute::MaxHealth), 32.0);
+    assert_eq!(illusioner.living.attributes.value(Attribute::FollowRange), 18.0);
+    assert_eq!(illusioner.xp_reward, 5);
+    let priorities: Vec<i32> = illusioner.ai.goal_selector.get_available_goals().iter().map(|wrapped| wrapped.get_priority()).collect();
+    assert_eq!(priorities, vec![4, 1, 3, 4, 5, 0, 1, 3, 4, 5, 6, 8, 9, 10]);
+    assert!(matches!(illusioner.ai.goal_selector.get_available_goals()[10].get_goal(), Goal::RangedBowAttack(_)));
+}

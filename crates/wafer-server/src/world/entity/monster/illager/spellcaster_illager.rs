@@ -37,6 +37,7 @@ pub struct SpellcasterIllager {
 pub fn spellcaster_illager(mob: &Mob) -> &SpellcasterIllager {
     match &mob.kind {
         MobKind::Evoker(evoker) => &evoker.spellcaster_illager,
+        MobKind::Illusioner(illusioner) => &illusioner.spellcaster_illager,
         _ => unreachable!("a spellcaster illager"),
     }
 }
@@ -44,6 +45,7 @@ pub fn spellcaster_illager(mob: &Mob) -> &SpellcasterIllager {
 pub fn spellcaster_illager_mut(mob: &mut Mob) -> &mut SpellcasterIllager {
     match &mut mob.kind {
         MobKind::Evoker(evoker) => &mut evoker.spellcaster_illager,
+        MobKind::Illusioner(illusioner) => &mut illusioner.spellcaster_illager,
         _ => unreachable!("a spellcaster illager"),
     }
 }
@@ -88,6 +90,7 @@ impl ServerLevel {
     pub fn get_casting_sound_event(&self, id: EntityId) -> &'static str {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Evoker(_)) => super::evoker::Evoker::get_casting_sound_event(),
+            Some(MobKind::Illusioner(_)) => super::illusioner::Illusioner::get_casting_sound_event(),
             _ => unreachable!("not a spellcaster illager"),
         }
     }
