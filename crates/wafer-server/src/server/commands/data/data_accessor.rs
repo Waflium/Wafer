@@ -55,8 +55,10 @@ impl DataAccessor {
                 if level.is_thrown_enderpearl(*id) {
                     level.thrown_enderpearl_deregister_from_current_owner(*id);
                 }
+                let previous_cube_size = level.mob(*id).filter(|mob| mob.is_cube_mob()).map(crate::world::entity::mob::Mob::get_size);
                 let Some(entity) = level.entities.get_mut(id) else { return Err(ERROR_NO_PLAYERS.create()) };
                 let uuid = entity.entity().uuid;
+                let previous_dimensions = entity.entity().dimensions;
                 if let Err(e) = entity.load(&tag) {
                     error!("{e}");
                 }
@@ -64,6 +66,7 @@ impl DataAccessor {
                 if level.mob(*id).is_some_and(crate::world::entity::mob::Mob::is_abstract_skeleton) {
                     level.reassess_weapon_goal(*id);
                 }
+                level.on_dimensions_loaded(*id, previous_dimensions, previous_cube_size);
                 level.read_level_dependent_save_data(*id, &tag);
                 level.entity_moved(*id);
             }

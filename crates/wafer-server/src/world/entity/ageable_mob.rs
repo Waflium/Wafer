@@ -1,3 +1,4 @@
+use wafer_core::random::RandomSource;
 use wafer_data::{entity_type_tags, items};
 
 use super::EntityId;
@@ -239,6 +240,21 @@ impl ServerLevel {
         let small = new.width <= 4.0 && new.height <= 4.0;
         if !e.first_tick && !e.no_physics && small && (new.width > old.width || new.height > old.height) {
             self.fudge_position_after_size_change(id, old);
+        }
+    }
+
+    pub fn on_dimensions_loaded(&mut self, id: EntityId, previous: super::EntityDimensions, previous_cube_size: Option<i32>) {
+        if let Some(previous_size) = previous_cube_size {
+            if self.mob(id).is_some_and(|mob| mob.get_size() != previous_size) && self.entity(id).is_in_water() && self.entity_mut(id).random.next_int_bounded(20) == 0 {
+                self.do_water_splash_effect(id);
+            }
+            return;
+        }
+        let e = self.entity(id);
+        let new = e.dimensions;
+        let small = new.width <= 4.0 && new.height <= 4.0;
+        if !e.first_tick && !e.no_physics && small && (new.width > previous.width || new.height > previous.height) && !self.is_player(id) {
+            self.fudge_position_after_size_change(id, previous);
         }
     }
 
