@@ -66,10 +66,7 @@ impl ServerLevel {
 
     fn send_chest_locked_notifications(&mut self, at: Vec3, player: EntityId, display_name: Component) {
         let message = Component::translatable_with("container.isLocked", vec![Arg::Component(display_name)]);
-        self.player(player).connection.send(clientbound::SYSTEM_CHAT, |p| {
-            message.write(p);
-            p.bool(true);
-        });
+        self.player(player).send_overlay_message(&message);
         self.play_sound_at(None, at.x, at.y, at.z, registry_id(registry::SOUND_EVENT, "minecraft:block.chest.locked"), SoundSource::Blocks, 1.0, 1.0);
     }
 
@@ -250,10 +247,7 @@ impl ServerLevel {
         let Some((mut menu, title)) = self.create_menu(provider, container_id, player) else {
             if self.is_spectator(player) {
                 let message = Component::translatable("container.spectatorCantOpen").with_color(ChatFormatting::Red);
-                self.player(player).connection.send(clientbound::SYSTEM_CHAT, |p| {
-                    message.write(p);
-                    p.bool(true);
-                });
+                self.player(player).send_overlay_message(&message);
             }
             return false;
         };

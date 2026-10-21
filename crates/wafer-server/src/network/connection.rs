@@ -1,17 +1,18 @@
 use std::io;
 
 use anyhow::bail;
-use wafer_protocol::{Codec, Reader, Writer};
+use wafer_protocol::{ALWAYS_ENCODABLE_LEN, Codec, Reader, Writer};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
 use tokio::time::{Instant, Sleep};
 
-use super::chat::Component;
+use super::chat::{Arg, Component};
 use super::encryption::{Decryptor, Encryptor};
 
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
@@ -133,7 +134,11 @@ pub fn split(stream: TcpStream) -> io::Result<(PacketReader, PacketWriter)> {
 }
 
 #[derive(Clone)]
-pub struct Outbound(mpsc::UnboundedSender<Vec<u8>>);
+pub struct Outbound {
+    sender: mpsc::UnboundedSender<Vec<u8>>,
+    codec: Codec,
+    io_thread: Arc<str>,
+}
 
 impl Outbound {
     pub fn send(&self, id: i32, body: impl FnOnce(&mut Writer)) {
@@ -144,7 +149,22 @@ impl Outbound {
     }
 
     pub fn send_raw(&self, packet: Vec<u8>) {
-        let _ = self.0.send(packet);
+        let _ = self.sender.send(packet);
+    }
+
+    pub fn send_with_fallback(&self, id: i32, body: impl FnOnce(&mut Writer), fallback: impl FnOnce() -> Option<Vec<u8>>) {
+        let packet = encode(id, body);
+        if packet.len() > ALWAYS_ENCODABLE_LEN
+            && let Err(cause) = self.codec.try_encode(&packet)
+        {
+            if let Some(fallback) = fallback() {
+                let name = wafer_data::packet_name("play", "clientbound", id).unwrap_or_default();
+                warn!(thread: &self.io_thread, "Failed to deliver packet, sending fallback clientbound/{name}\n{}", cause.join("\n"));
+                self.send_raw(fallback);
+            }
+            return;
+        }
+        self.send_raw(packet);
     }
 }
 
@@ -165,43 +185,64 @@ pub fn disconnection_reason(error: &anyhow::Error) -> Component {
 pub fn spawn_io(
     mut r: PacketReader,
     mut w: PacketWriter,
-    on_packet: impl Fn(Result<Packet, Component>) + Send + 'static,
+    io_thread: Arc<str>,
+    on_packet: impl Fn(Result<Packet, Component>) + Send + Sync + 'static,
 ) -> Outbound {
-    let (tx, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let (sender, mut rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let codec = w.codec;
+    let on_packet = Arc::new(on_packet);
+    let on_read = on_packet.clone();
     tokio::spawn(async move {
         loop {
             match r.recv().await {
-                Ok(packet) => on_packet(Ok(packet)),
-                Err(e) => return on_packet(Err(disconnection_reason(&e))),
+                Ok(packet) => on_read(Ok(packet)),
+                Err(e) => return on_read(Err(disconnection_reason(&e))),
             }
         }
     });
     tokio::spawn(async move {
         while let Some(first) = rx.recv().await {
-            let mut frames = w.codec.encode(&first);
-            while let Ok(packet) = rx.try_recv() {
-                frames.extend(w.codec.encode(&packet));
+            let mut frames = Vec::new();
+            let mut fault = None;
+            let mut next = Some(first);
+            while let Some(packet) = next.take().or_else(|| rx.try_recv().ok()) {
+                match w.codec.try_encode(&packet) {
+                    Ok(frame) => frames.extend(frame),
+                    Err(cause) => {
+                        fault = Some(cause);
+                        break;
+                    }
+                }
+            }
+            let reason = fault.map(|cause| Component::translatable_with("disconnect.genericReason", vec![Arg::String(format!("Internal Exception: {}", cause[0]))]));
+            if let Some(reason) = &reason {
+                frames.extend(w.codec.encode(&encode(wafer_data::packets::play::clientbound::DISCONNECT, |p| reason.write(p))));
             }
             if let Some(encryptor) = &mut w.encryptor {
                 encryptor.apply(&mut frames);
             }
-            if w.half.write_all(&frames).await.is_err() {
+            let written = w.half.write_all(&frames).await.is_ok();
+            if let Some(reason) = reason {
+                on_packet(Err(reason));
+                break;
+            }
+            if !written {
                 break;
             }
         }
         let _ = w.half.shutdown().await;
     });
-    Outbound(tx)
+    Outbound { sender, codec, io_thread }
 }
 
 #[cfg(test)]
 impl Outbound {
     pub fn detached() -> Outbound {
-        Outbound(mpsc::unbounded_channel().0)
+        Outbound::capture().0
     }
 
     pub fn capture() -> (Outbound, mpsc::UnboundedReceiver<Vec<u8>>) {
-        let (tx, rx) = mpsc::unbounded_channel();
-        (Outbound(tx), rx)
+        let (sender, rx) = mpsc::unbounded_channel();
+        (Outbound { sender, codec: Codec::default(), io_thread: Arc::from("Netty NIO IO #1") }, rx)
     }
 }

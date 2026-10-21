@@ -8,6 +8,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use crate::{Reader, Writer};
 
 const MAX_UNCOMPRESSED_LEN: usize = 1 << 23;
+const MAX_VARINT21_BYTES: usize = 3;
+pub const ALWAYS_ENCODABLE_LEN: usize = 1 << 20;
 
 fn invalid(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, msg.to_owned())
@@ -87,6 +89,19 @@ impl Codec {
         Ok(packet)
     }
 
+    pub fn try_encode(&self, packet: &[u8]) -> Result<Vec<u8>, Vec<String>> {
+        if self.threshold.is_some() && packet.len() > MAX_UNCOMPRESSED_LEN {
+            let cause = format!("java.lang.IllegalArgumentException: Packet too big (is {}, should be less than {MAX_UNCOMPRESSED_LEN})", packet.len());
+            return Err(vec![format!("io.netty.handler.codec.EncoderException: {cause}"), format!("Caused by: {cause}")]);
+        }
+        let frame = self.encode(packet);
+        let header_len = frame.iter().position(|&b| b & 0x80 == 0).map_or(frame.len(), |i| i + 1);
+        if header_len > MAX_VARINT21_BYTES {
+            return Err(vec![format!("io.netty.handler.codec.EncoderException: Packet too large: size {} is over 8", frame.len() - header_len)]);
+        }
+        Ok(frame)
+    }
+
     pub fn encode(&self, packet: &[u8]) -> Vec<u8> {
         let mut body = Writer::new();
         match self.threshold {
@@ -126,6 +141,21 @@ mod tests {
         assert_eq!(roundtrip(codec, &small).await, small);
         assert_eq!(roundtrip(codec, &large).await, large);
         assert_eq!(&codec.encode(&small)[..2], &[11, 0]);
+    }
+
+    #[test]
+    fn fails_like_the_vanilla_pipeline() {
+        let too_big = vec![0u8; (1 << 23) + 1];
+        assert_eq!(
+            Codec { threshold: Some(256) }.try_encode(&too_big).unwrap_err(),
+            [
+                "io.netty.handler.codec.EncoderException: java.lang.IllegalArgumentException: Packet too big (is 8388609, should be less than 8388608)",
+                "Caused by: java.lang.IllegalArgumentException: Packet too big (is 8388609, should be less than 8388608)",
+            ]
+        );
+        assert_eq!(Codec::default().try_encode(&vec![1u8; 2097152]).unwrap_err(), ["io.netty.handler.codec.EncoderException: Packet too large: size 2097152 is over 8"]);
+        assert!(Codec::default().try_encode(&vec![1u8; 2097151]).is_ok());
+        assert!(Codec { threshold: Some(256) }.try_encode(&vec![1u8; 1 << 23]).is_ok());
     }
 
     #[tokio::test]

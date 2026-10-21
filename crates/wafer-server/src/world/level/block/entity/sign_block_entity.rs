@@ -198,10 +198,7 @@ impl ServerLevel {
             .any(|message| matches!(message.style.click_event, Some(ClickEvent::RunCommand(_)) | Some(ClickEvent::Other { action: "show_dialog" | "custom", .. })));
         if !allow_op_features && has_any_click_command {
             let message = Component::translatable("sign.click_actions_disabled").with_color(ChatFormatting::Red);
-            self.player(player).connection.send(wafer_data::packets::play::clientbound::SYSTEM_CHAT, |w| {
-                message.write(w);
-                w.bool(true);
-            });
+            self.player(player).send_overlay_message(&message);
         }
         has_any_click_command
     }

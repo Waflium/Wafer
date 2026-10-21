@@ -1015,10 +1015,7 @@ impl Server {
         };
         self.send_system_message(&message);
         for other in self.players() {
-            other.connection.send(clientbound::SYSTEM_CHAT, |p| {
-                message.write(p);
-                p.bool(false);
-            });
+            other.send_system_message(&message, false);
             other.connection.send(clientbound::PLAYER_INFO_UPDATE, |p| {
                 p.u8(0xFF);
                 p.varint(1);
@@ -1273,10 +1270,7 @@ impl Server {
         if player.client.chat_visibility == ChatVisibility::Hidden && !overlay {
             return;
         }
-        player.connection.send(clientbound::SYSTEM_CHAT, |p| {
-            message.write(p);
-            p.bool(overlay);
-        });
+        player.send_system_message(message, overlay);
     }
 
     pub fn entity_name(&self, id: EntityId) -> String {
@@ -1364,10 +1358,7 @@ impl Server {
         self.invalidate_status();
         self.send_system_message(&message);
         for other in self.players().filter(|other| other.entity.id != id) {
-            other.connection.send(clientbound::SYSTEM_CHAT, |p| {
-                message.write(p);
-                p.bool(false);
-            });
+            other.send_system_message(&message, false);
         }
         let Some(player) = self.levels[level_index].remove_player(id) else { return };
         self.data_storage.borrow().player_removed(id);

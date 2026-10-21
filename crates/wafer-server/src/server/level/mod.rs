@@ -527,26 +527,17 @@ impl ServerLevel {
     pub fn send_spawn_protection_message(&self, player: EntityId, pos: BlockPos) {
         use crate::network::chat::{Arg, ChatFormatting, Component};
         let message = Component::translatable_with("build.spawn_protection", vec![Arg::String(format!("{}, {}, {}", pos.x, pos.y, pos.z))]).with_color(ChatFormatting::Red);
-        self.player(player).connection.send(clientbound::SYSTEM_CHAT, |p| {
-            message.write(p);
-            p.bool(true);
-        });
+        self.player(player).send_overlay_message(&message);
     }
 
     pub fn send_overlay_message(&self, player: EntityId, message: &crate::network::chat::Component) {
-        self.player(player).connection.send(clientbound::SYSTEM_CHAT, |p| {
-            message.write(p);
-            p.bool(true);
-        });
+        self.player(player).send_overlay_message(message);
     }
 
     pub fn send_build_limit_message(&self, player: EntityId, too_high: bool, limit: i32) {
         use crate::network::chat::{Arg, ChatFormatting, Component};
         let message = Component::translatable_with(if too_high { "build.tooHigh" } else { "build.tooLow" }, vec![Arg::Int(limit)]).with_color(ChatFormatting::Red);
-        self.player(player).connection.send(clientbound::SYSTEM_CHAT, |p| {
-            message.write(p);
-            p.bool(true);
-        });
+        self.player(player).send_overlay_message(&message);
     }
 
     pub fn set_chunk_forced(&mut self, x: i32, z: i32, forced: bool) -> bool {

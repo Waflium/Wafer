@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 
-use wafer_data::packets::play::clientbound;
-
 use crate::commands::arguments::selector::entity_selector::java_equals_ignore_case;
 use crate::network::chat::Component;
-use crate::network::configuration::ChatVisibility;
 use crate::network::login::Profile;
 use crate::server::Server;
 use crate::server::level::ServerLevel;
@@ -89,13 +86,7 @@ impl ServerLevel {
     pub fn broadcast_system_message(&mut self, message: &Component) {
         info!("System chat: {}", message.get_string());
         for p in self.players.values() {
-            if p.client.chat_visibility == ChatVisibility::Hidden {
-                continue;
-            }
-            p.connection.send(clientbound::SYSTEM_CHAT, |w| {
-                message.write(w);
-                w.bool(false);
-            });
+            p.send_system_message(message, false);
         }
         self.pending_system_broadcasts.push(message.clone());
     }

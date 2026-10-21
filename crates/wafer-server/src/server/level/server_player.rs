@@ -11,6 +11,7 @@ use super::chunk_map::ChunkTrackingView;
 use crate::advancements::triggers::criteria_triggers;
 use super::game_mode::ServerPlayerGameMode;
 use crate::network::chat::remote_chat_session::RemoteChatSession;
+use crate::network::chat::{Arg, ChatFormatting, Component};
 use crate::network::configuration::ClientInfo;
 use crate::network::connection::Outbound;
 use crate::network::login::Profile;
@@ -150,6 +151,38 @@ pub struct ServerPlayer {
 }
 
 impl ServerPlayer {
+    pub fn send_overlay_message(&self, message: &Component) {
+        self.send_system_message(message, true);
+    }
+
+    pub fn send_system_message(&self, message: &Component, overlay: bool) {
+        if !self.accepts_system_messages(overlay) {
+            return;
+        }
+        let fallback = || {
+            self.accepts_system_messages(false).then(|| {
+                let contents = Component::literal(message.get_string_with_limit(256)).with_color(ChatFormatting::Yellow);
+                let message = Component::translatable_with("multiplayer.message_not_delivered", vec![Arg::Component(contents)]).with_color(ChatFormatting::Red);
+                crate::network::connection::encode(clientbound::SYSTEM_CHAT, |w| {
+                    message.write(w);
+                    w.bool(false);
+                })
+            })
+        };
+        self.connection.send_with_fallback(
+            clientbound::SYSTEM_CHAT,
+            |w| {
+                message.write(w);
+                w.bool(overlay);
+            },
+            fallback,
+        );
+    }
+
+    fn accepts_system_messages(&self, overlay: bool) -> bool {
+        if self.client.chat_visibility == crate::network::configuration::ChatVisibility::Hidden { overlay } else { true }
+    }
+
     pub fn update_options(&mut self, info: ClientInfo) {
         self.requested_view_distance = info.view_distance as i32;
         self.entity.data.set(ids::PLAYER_MODE_CUSTOMISATION, DataValue::Byte(info.skin_parts as i8));
@@ -841,10 +874,25 @@ impl ServerLevel {
     pub fn server_player_die(&mut self, id: EntityId, source: DamageSource) {
         if self.game_rules.get_bool(game_rule::SHOW_DEATH_MESSAGES) {
             let message = self.death_message(id);
-            self.player(id).connection.send(clientbound::PLAYER_COMBAT_KILL, |p| {
-                p.varint(id);
-                message.write(p);
-            });
+            let display_name = self.display_name(id);
+            let fallback = || {
+                let truncated_death_message = message.get_string_with_limit(256);
+                let explanation = Component::translatable_with("death.attack.message_too_long", vec![Arg::Component(Component::literal(truncated_death_message).with_color(ChatFormatting::Yellow))]);
+                let fake_death_message = Component::translatable_with("death.attack.even_more_magic", vec![Arg::Component(display_name)])
+                    .with_hover(crate::network::chat::HoverEvent::ShowText(Box::new(explanation)));
+                Some(crate::network::connection::encode(clientbound::PLAYER_COMBAT_KILL, |p| {
+                    p.varint(id);
+                    fake_death_message.write(p);
+                }))
+            };
+            self.player(id).connection.send_with_fallback(
+                clientbound::PLAYER_COMBAT_KILL,
+                |p| {
+                    p.varint(id);
+                    message.write(p);
+                },
+                fallback,
+            );
             match self.team_of(id).map(|t| t.death_message_visibility()) {
                 None | Some(Visibility::Always) => self.broadcast_system_message(&message),
                 Some(Visibility::HideForOtherTeams) => self.broadcast_system_to_team(id, &message),
@@ -1136,14 +1184,7 @@ impl ServerLevel {
     }
 
     pub fn send_system_message(&self, id: EntityId, message: &crate::network::chat::Component) {
-        let p = self.player(id);
-        if p.client.chat_visibility == crate::network::configuration::ChatVisibility::Hidden {
-            return;
-        }
-        p.connection.send(clientbound::SYSTEM_CHAT, |w| {
-            message.write(w);
-            w.bool(false);
-        });
+        self.player(id).send_system_message(message, false);
     }
 
     pub fn get_camera(&self, id: EntityId) -> EntityId {

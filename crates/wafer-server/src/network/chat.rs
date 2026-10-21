@@ -459,6 +459,18 @@ impl Component {
         self.to_nbt().write(w);
     }
 
+    pub fn get_string_with_limit(&self, limit: usize) -> String {
+        let mut string = self.get_string();
+        let mut length = 0;
+        if let Some((end, _)) = string.char_indices().find(|&(_, c)| {
+            length += c.len_utf16();
+            length > limit
+        }) {
+            string.truncate(end);
+        }
+        string
+    }
+
     pub fn get_string(&self) -> String {
         let mut out = String::new();
         self.append_string(&mut out);

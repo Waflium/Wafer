@@ -57,16 +57,31 @@ pub struct ListenerContext {
     pub server_activity_monitor: Arc<ServerActivityMonitor>,
 }
 
+fn event_loop_type(use_native_transport: bool) -> &'static str {
+    if use_native_transport && cfg!(target_os = "macos") && cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+        "Kqueue"
+    } else if use_native_transport && cfg!(target_os = "linux") && cfg!(any(target_arch = "x86_64", target_arch = "aarch64")) {
+        "Epoll"
+    } else {
+        "NIO"
+    }
+}
+
 pub async fn accept_connections(listener: TcpListener, context: Arc<ListenerContext>) {
+    let event_loop_type = event_loop_type(context.config.use_native_transport);
+    let event_loops = std::thread::available_parallelism().map_or(1, |n| n.get()) * 2;
+    let mut channels = 0;
     while let Ok((stream, _)) = listener.accept().await {
+        channels += 1;
+        let io_thread: Arc<str> = Arc::from(format!("Netty {event_loop_type} IO #{}", channels % event_loops));
         let context = context.clone();
         tokio::spawn(async move {
-            let _ = handle_connection(stream, &context).await;
+            let _ = handle_connection(stream, &context, io_thread).await;
         });
     }
 }
 
-async fn handle_connection(stream: TcpStream, context: &ListenerContext) -> anyhow::Result<()> {
+async fn handle_connection(stream: TcpStream, context: &ListenerContext, io_thread: Arc<str>) -> anyhow::Result<()> {
     let address = stream.peer_addr()?;
     let (mut r, mut w) = connection::split(stream)?;
     if context.settings.replies_to_status() && super::legacy_query_handler::handle(&mut r, &mut w, context).await? {
@@ -85,28 +100,28 @@ async fn handle_connection(stream: TcpStream, context: &ListenerContext) -> anyh
                 _ => Ok(()),
             }
         }
-        2 => begin_login(r, w, context, address, protocol, false).await,
+        2 => begin_login(r, w, context, address, protocol, false, io_thread).await,
         3 if !context.settings.accepts_transfers() => {
             let reason = Component::translatable("multiplayer.disconnect.transfers_disabled");
             w.send(login::clientbound::LOGIN_DISCONNECT, |p| p.string(&reason.to_json())).await?;
             Ok(())
         }
-        3 => begin_login(r, w, context, address, protocol, true).await,
+        3 => begin_login(r, w, context, address, protocol, true, io_thread).await,
         intent => bail!("unknown handshake intent {intent}"),
     }
 }
 
-async fn begin_login(r: PacketReader, mut w: PacketWriter, context: &ListenerContext, address: SocketAddr, protocol: i32, transferred: bool) -> anyhow::Result<()> {
+async fn begin_login(r: PacketReader, mut w: PacketWriter, context: &ListenerContext, address: SocketAddr, protocol: i32, transferred: bool, io_thread: Arc<str>) -> anyhow::Result<()> {
     if protocol != PROTOCOL_VERSION {
         let key = if protocol < 754 { "multiplayer.disconnect.outdated_client" } else { "multiplayer.disconnect.incompatible" };
         let reason = Component::translatable_with(key, vec![Arg::String(VERSION_NAME.to_string())]);
         w.send(login::clientbound::LOGIN_DISCONNECT, |p| p.string(&reason.to_json())).await?;
         return Ok(());
     }
-    login_phase(r, w, context, address, transferred).await
+    login_phase(r, w, context, address, transferred, io_thread).await
 }
 
-async fn login_phase(mut r: PacketReader, mut w: PacketWriter, context: &ListenerContext, address: SocketAddr, transferred: bool) -> anyhow::Result<()> {
+async fn login_phase(mut r: PacketReader, mut w: PacketWriter, context: &ListenerContext, address: SocketAddr, transferred: bool, io_thread: Arc<str>) -> anyhow::Result<()> {
     let events = &context.events;
     let Some(profile) = super::login::login(&mut r, &mut w, context, address).await? else {
         return Ok(());
@@ -117,7 +132,7 @@ async fn login_phase(mut r: PacketReader, mut w: PacketWriter, context: &Listene
     };
     let conn = NEXT_CONN_ID.fetch_add(1, Ordering::Relaxed);
     let packets = events.clone();
-    let out = connection::spawn_io(r, w, move |packet| {
+    let out = connection::spawn_io(r, w, io_thread, move |packet| {
         let _ = packets.send(match packet {
             Ok(packet) => Event::Packet { conn, packet },
             Err(reason) => Event::Left { conn, reason },
