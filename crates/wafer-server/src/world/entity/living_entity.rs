@@ -1648,8 +1648,29 @@ impl ServerLevel {
         if !self.is_living(id) {
             return;
         }
+        let e = self.entity(id);
+        let (xd, zd) = (e.x() - e.xo.x, e.z() - e.xo.z);
+        let side_dist = (xd * xd + zd * zd) as f32;
+        let mut y_body_rot_t = self.living(id).y_body_rot;
+        if side_dist > 0.0025000002 {
+            let walk_direction = mth::atan2(zd, xd) as f32 * (180.0 / std::f32::consts::PI) - 90.0;
+            let diff_between_direction_and_facing = (mth::wrap_degrees(e.y_rot) - walk_direction).abs();
+            y_body_rot_t = if 95.0 < diff_between_direction_and_facing && diff_between_direction_and_facing < 265.0 { walk_direction - 180.0 } else { walk_direction };
+        }
+        if self.living(id).swing_state.animation > 0.0 {
+            y_body_rot_t = e.y_rot;
+        }
         if self.is_mob(id) {
             self.mob_tick_head_turn(id);
+        } else {
+            self.living_entity_tick_head_turn(id, y_body_rot_t);
+        }
+        let e = self.entity_mut(id);
+        while e.y_rot - e.y_rot_o < -180.0 {
+            e.y_rot_o -= 360.0;
+        }
+        while e.y_rot - e.y_rot_o >= 180.0 {
+            e.y_rot_o += 360.0;
         }
         let living = self.living_mut(id);
         while living.y_body_rot - living.y_body_rot_o < -180.0 {
@@ -1669,6 +1690,22 @@ impl ServerLevel {
         if living.current_impulse_context_reset_grace_time > 0 {
             living.current_impulse_context_reset_grace_time -= 1;
         }
+    }
+
+    fn living_entity_tick_head_turn(&mut self, id: EntityId, y_body_rot_t: f32) {
+        let max_head_rotation = self.get_max_head_rotation_relative_to_body(id);
+        let y_rot = self.entity(id).y_rot;
+        let living = self.living_mut(id);
+        let y_body_rot_d = mth::wrap_degrees(y_body_rot_t - living.y_body_rot);
+        living.y_body_rot += y_body_rot_d * 0.3;
+        let head_diff = mth::wrap_degrees(y_rot - living.y_body_rot);
+        if head_diff.abs() > max_head_rotation {
+            living.y_body_rot += head_diff - mth::sign(head_diff as f64) as f32 * max_head_rotation;
+        }
+    }
+
+    fn get_max_head_rotation_relative_to_body(&self, id: EntityId) -> f32 {
+        if self.is_player(id) && self.get_item_blocking_with(id).is_some() { 15.0 } else { 50.0 }
     }
 
     pub fn living_entity_base_tick(&mut self, id: EntityId) {
