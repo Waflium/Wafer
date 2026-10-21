@@ -418,14 +418,14 @@ impl ServerLevel {
         }
     }
 
-    fn get_equip_sound(&self, id: EntityId, slot: EquipmentSlot, equippable: &crate::world::item::component::values::Equippable) -> Option<i32> {
+    fn get_equip_sound(&self, id: EntityId, slot: EquipmentSlot, equippable: &crate::world::item::component::values::Equippable) -> Option<crate::sounds::sound_event::SoundEvent> {
         if slot == EquipmentSlot::Saddle && matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Pig(_))) {
-            return Some(sound_event("minecraft:entity.pig.saddle"));
+            return Some(sound_event("minecraft:entity.pig.saddle").into());
         }
         if slot == EquipmentSlot::Saddle && self.is_abstract_horse(id) {
-            return self.get_equip_sound_for_saddle(id);
+            return self.get_equip_sound_for_saddle(id).map(Into::into);
         }
-        equippable.equip_sound.as_str().and_then(|name| wafer_data::registry::SOUND_EVENT.iter().position(|&s| s == name)).map(|sound| sound as i32)
+        crate::sounds::sound_event::SoundEvent::from_nbt(&equippable.equip_sound)
     }
 
     pub fn get_equipment_slot_for_item(&self, id: EntityId, item_stack: &ItemStack) -> EquipmentSlot {

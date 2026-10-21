@@ -1,10 +1,9 @@
 use wafer_core::{Vec3, mth};
-use wafer_data::registry;
-use wafer_protocol::nbt::Nbt;
 
 use super::ItemStack;
 use super::enchantment::enchantment_helper;
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::sounds::sound_event::SoundEvent;
 use crate::world::entity::projectile::arrow::abstract_arrow::Pickup;
 use crate::world::entity::projectile::arrow::thrown_trident::ThrownTrident;
 use crate::world::entity::{EntityId, MoverType, sound_event};
@@ -15,12 +14,8 @@ pub const BASE_DAMAGE: f32 = 8.0;
 pub const PROJECTILE_SHOOT_POWER: f32 = 2.5;
 pub const USE_DURATION: i32 = 72000;
 
-fn trident_sound(item_stack: &ItemStack) -> i32 {
-    let sound = enchantment_helper::pick_highest_trident_sound(item_stack).and_then(|sound| match sound {
-        Nbt::String(id) => crate::commands::arguments::parse_identifier(&id),
-        other => other.get("sound_id").and_then(Nbt::as_str).and_then(crate::commands::arguments::parse_identifier),
-    });
-    sound.and_then(|name| registry::SOUND_EVENT.iter().position(|&s| s == name)).map_or_else(|| sound_event("minecraft:item.trident.throw"), |id| id as i32)
+fn trident_sound(item_stack: &ItemStack) -> SoundEvent {
+    enchantment_helper::pick_highest_trident_sound(item_stack).and_then(|sound| SoundEvent::from_nbt(&sound)).unwrap_or_else(|| sound_event("minecraft:item.trident.throw").into())
 }
 
 pub fn release_using(level: &mut ServerLevel, item_stack: &ItemStack, entity: EntityId, remaining_time: i32) -> bool {

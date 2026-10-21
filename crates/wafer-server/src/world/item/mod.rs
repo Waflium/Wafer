@@ -242,12 +242,11 @@ pub(super) fn default_use(level: &mut ServerLevel, player: EntityId, hand: Inter
 }
 
 fn make_sound(level: &mut ServerLevel, kinetic_weapon: &wafer_protocol::nbt::Nbt, causer: EntityId) {
-    let Some(sound) = kinetic_weapon.get("sound").and_then(wafer_protocol::nbt::Nbt::as_str) else { return };
-    let Some(sound) = wafer_data::registry::SOUND_EVENT.iter().position(|&s| s == sound) else { return };
+    let Some(sound) = kinetic_weapon.get("sound").and_then(crate::sounds::sound_event::SoundEvent::from_nbt) else { return };
     let source = level.sound_source(causer);
     let e = level.entity(causer);
     let (x, y, z) = (e.x(), e.y(), e.z());
-    level.play_sound_at(Some(causer), x, y, z, sound as i32, source, 1.0, 1.0);
+    level.play_sound_at(Some(causer), x, y, z, sound, source, 1.0, 1.0);
 }
 
 fn swap_with_equipment_slot(

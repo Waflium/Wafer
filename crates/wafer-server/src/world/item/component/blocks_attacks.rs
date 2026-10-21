@@ -1,11 +1,11 @@
 use wafer_core::mth;
 use wafer_core::random::RandomSource;
-use wafer_data::registry;
 use wafer_protocol::nbt::Nbt;
 
 use super::codec::as_f32;
 use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
+use crate::sounds::sound_event::SoundEvent;
 use crate::stats::stats;
 use crate::world::InteractionHand;
 use crate::world::damagesource::DamageSource;
@@ -18,8 +18,8 @@ pub struct BlocksAttacks {
     pub damage_reductions: Vec<DamageReduction>,
     pub item_damage: ItemDamageFunction,
     pub bypassed_by: Option<HolderSet>,
-    pub block_sound: Option<i32>,
-    pub disable_sound: Option<i32>,
+    pub block_sound: Option<SoundEvent>,
+    pub disable_sound: Option<SoundEvent>,
 }
 
 pub struct DamageReduction {
@@ -39,12 +39,8 @@ fn damage_types(v: Option<&Nbt>) -> Option<HolderSet> {
     v.and_then(|types| HolderSet::decode("minecraft:damage_type", types).ok())
 }
 
-fn sound(v: Option<&Nbt>) -> Option<i32> {
-    let name = match v? {
-        Nbt::String(name) => name.as_str(),
-        holder => holder.get("sound_id").and_then(Nbt::as_str)?,
-    };
-    registry::SOUND_EVENT.iter().position(|&s| s == name).map(|id| id as i32)
+fn sound(v: Option<&Nbt>) -> Option<SoundEvent> {
+    v.and_then(SoundEvent::from_nbt)
 }
 
 impl BlocksAttacks {
@@ -65,7 +61,7 @@ impl BlocksAttacks {
     }
 
     pub fn on_blocked(&self, level: &mut ServerLevel, user: EntityId) {
-        if let Some(sound) = self.block_sound {
+        if let Some(sound) = self.block_sound.clone() {
             let e = level.entity(user);
             let (x, y, z) = (e.x(), e.y(), e.z());
             let source = level.sound_source(user);
@@ -81,7 +77,7 @@ impl BlocksAttacks {
                 player.cooldowns.add_cooldown(blocking_with, cooldown_ticks, &player.connection);
             }
             level.stop_using_item(user);
-            if let Some(sound) = self.disable_sound {
+            if let Some(sound) = self.disable_sound.clone() {
                 let e = level.entity(user);
                 let (x, y, z) = (e.x(), e.y(), e.z());
                 let source = level.sound_source(user);

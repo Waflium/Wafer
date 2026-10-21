@@ -10,6 +10,7 @@ use super::component::{self as dc, bundle_contents};
 use super::enchantment::enchantment_helper;
 use crate::advancements::triggers::criteria_triggers;
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::sounds::sound_event::SoundEvent;
 use crate::world::entity::projectile::firework_rocket_entity::FireworkRocketEntity;
 use crate::world::entity::projectile::projectile::Projectile;
 use crate::world::entity::{EntityId, sound_event};
@@ -194,20 +195,20 @@ pub fn on_use_tick(level: &mut ServerLevel, entity: EntityId, item_stack: &mut I
     if tick_percent >= START_SOUND_PERCENT && !START_SOUND_PLAYED.load(Ordering::Relaxed) {
         START_SOUND_PLAYED.store(true, Ordering::Relaxed);
         if let Some(sound) = &sounds.start {
-            level.play_sound_at(None, x, y, z, sound_event(sound), SoundSource::Players, 0.5, 1.0);
+            level.play_sound_at(None, x, y, z, sound.clone(), SoundSource::Players, 0.5, 1.0);
         }
     }
     if tick_percent >= MID_SOUND_PERCENT && !MID_LOAD_SOUND_PLAYED.load(Ordering::Relaxed) {
         MID_LOAD_SOUND_PLAYED.store(true, Ordering::Relaxed);
         if let Some(sound) = &sounds.mid {
-            level.play_sound_at(None, x, y, z, sound_event(sound), SoundSource::Players, 0.5, 1.0);
+            level.play_sound_at(None, x, y, z, sound.clone(), SoundSource::Players, 0.5, 1.0);
         }
     }
     if tick_percent >= 1.0 && !is_charged(item_stack) && try_load_projectiles(level, entity, item_stack) {
         if let Some(sound) = &sounds.end {
             let source = level.sound_source(entity);
             let pitch = 1.0 / (level.random.next_float() * 0.5 + 1.0) + 0.2;
-            level.play_sound_at(None, x, y, z, sound_event(sound), source, 1.0, pitch);
+            level.play_sound_at(None, x, y, z, sound.clone(), source, 1.0, pitch);
         }
     }
 }
@@ -218,26 +219,21 @@ pub fn get_charge_duration(level: &mut ServerLevel, crossbow: &ItemStack, user: 
 }
 
 struct ChargingSounds {
-    start: Option<String>,
-    mid: Option<String>,
-    end: Option<String>,
+    start: Option<SoundEvent>,
+    mid: Option<SoundEvent>,
+    end: Option<SoundEvent>,
 }
 
 fn get_charging_sounds(item_stack: &ItemStack) -> ChargingSounds {
     match enchantment_helper::pick_highest_crossbow_charging_sounds(item_stack) {
         Some(sounds) => {
-            let sound = |key: &str| {
-                sounds.get(key).and_then(|sound| match sound {
-                    Nbt::String(id) => crate::commands::arguments::parse_identifier(id),
-                    other => other.get("sound_id").and_then(Nbt::as_str).and_then(crate::commands::arguments::parse_identifier),
-                })
-            };
+            let sound = |key: &str| sounds.get(key).and_then(SoundEvent::from_nbt);
             ChargingSounds { start: sound("start"), mid: sound("mid"), end: sound("end") }
         }
         None => ChargingSounds {
-            start: Some("minecraft:item.crossbow.loading_start".into()),
-            mid: Some("minecraft:item.crossbow.loading_middle".into()),
-            end: Some("minecraft:item.crossbow.loading_end".into()),
+            start: Some(sound_event("minecraft:item.crossbow.loading_start").into()),
+            mid: Some(sound_event("minecraft:item.crossbow.loading_middle").into()),
+            end: Some(sound_event("minecraft:item.crossbow.loading_end").into()),
         },
     }
 }

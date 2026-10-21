@@ -7,6 +7,7 @@ use wafer_data::{Block, BlockState, item_tags, registry, registry_id};
 use super::{BlockBehaviour, BlockHitResult};
 use crate::network::connection::encode;
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::sounds::sound_event::SoundEvent;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
@@ -151,7 +152,7 @@ impl BlockBehaviour for NoteBlock {
         if has_custom_sound(instrument) {
             let Some(sound_id) = self.get_custom_sound_id(level, pos) else { return false };
             let seed = level.random.next_long();
-            level.play_seeded_direct_sound(None, pos, &sound_id, SoundSource::Records, NOTE_VOLUME, pitch, seed);
+            level.play_seeded_sound(None, pos, SoundEvent::Direct { location: sound_id, fixed_range: None }, SoundSource::Records, NOTE_VOLUME, pitch, seed);
             return true;
         }
         let sound = registry_id(registry::SOUND_EVENT, sound_event(instrument));
@@ -171,12 +172,11 @@ impl NoteBlock {
 }
 
 impl ServerLevel {
-    pub fn play_seeded_direct_sound(&mut self, except: Option<EntityId>, pos: BlockPos, sound_id: &str, source: SoundSource, volume: f32, pitch: f32, seed: i64) {
+    pub fn play_seeded_sound(&mut self, except: Option<EntityId>, pos: BlockPos, sound: impl Into<SoundEvent>, source: SoundSource, volume: f32, pitch: f32, seed: i64) {
         let (x, y, z) = (pos.x as f64 + 0.5, pos.y as f64 + 0.5, pos.z as f64 + 0.5);
+        let sound = sound.into();
         let packet = encode(clientbound::SOUND, |p| {
-            p.varint(0);
-            p.string(sound_id);
-            p.bool(false);
+            sound.write(p);
             p.varint(source as i32);
             p.i32((x * 8.0) as i32);
             p.i32((y * 8.0) as i32);
@@ -185,23 +185,7 @@ impl ServerLevel {
             p.f32(pitch);
             p.i64(seed);
         });
-        let range = if volume > 1.0 { 16.0 * volume } else { 16.0 } as f64;
-        self.broadcast_near(except, x, y, z, range, &packet);
-    }
-
-    pub fn play_seeded_sound(&mut self, except: Option<EntityId>, pos: BlockPos, sound: i32, source: SoundSource, volume: f32, pitch: f32, seed: i64) {
-        let (x, y, z) = (pos.x as f64 + 0.5, pos.y as f64 + 0.5, pos.z as f64 + 0.5);
-        let packet = encode(clientbound::SOUND, |p| {
-            p.varint(sound + 1);
-            p.varint(source as i32);
-            p.i32((x * 8.0) as i32);
-            p.i32((y * 8.0) as i32);
-            p.i32((z * 8.0) as i32);
-            p.f32(volume);
-            p.f32(pitch);
-            p.i64(seed);
-        });
-        let range = if volume > 1.0 { 16.0 * volume } else { 16.0 } as f64;
+        let range = sound.get_range(volume) as f64;
         self.broadcast_near(except, x, y, z, range, &packet);
     }
 }

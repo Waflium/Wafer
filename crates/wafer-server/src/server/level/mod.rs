@@ -991,11 +991,12 @@ impl ServerLevel {
         self.broadcast_near(source, pos.x as f64, pos.y as f64, pos.z as f64, 64.0, &packet);
     }
 
-    pub fn play_sound(&mut self, except: Option<EntityId>, pos: BlockPos, sound: i32, source: SoundSource, volume: f32, pitch: f32) {
+    pub fn play_sound(&mut self, except: Option<EntityId>, pos: BlockPos, sound: impl Into<crate::sounds::sound_event::SoundEvent>, source: SoundSource, volume: f32, pitch: f32) {
         let seed = self.thread_safe_random.next_long();
         let (x, y, z) = (pos.x as f64 + 0.5, pos.y as f64 + 0.5, pos.z as f64 + 0.5);
+        let sound = sound.into();
         let packet = encode(clientbound::SOUND, |p| {
-            p.varint(sound + 1);
+            sound.write(p);
             p.varint(source as i32);
             p.i32((x * 8.0) as i32);
             p.i32((y * 8.0) as i32);
@@ -1004,7 +1005,7 @@ impl ServerLevel {
             p.f32(pitch);
             p.i64(seed);
         });
-        let range = if volume > 1.0 { 16.0 * volume } else { 16.0 } as f64;
+        let range = sound.get_range(volume) as f64;
         self.broadcast_near(except, x, y, z, range, &packet);
     }
 

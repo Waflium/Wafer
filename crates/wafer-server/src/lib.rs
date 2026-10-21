@@ -10,6 +10,7 @@ mod tags;
 mod network;
 mod recipebook;
 pub mod server;
+mod sounds;
 mod stats;
 mod util;
 mod world;

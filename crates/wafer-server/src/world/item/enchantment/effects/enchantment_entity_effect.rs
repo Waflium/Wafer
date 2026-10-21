@@ -6,6 +6,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::core::holder_set::HolderSet;
 use crate::world::level::is_in_spawnable_bounds;
 use crate::server::level::ServerLevel;
+use crate::sounds::sound_event::SoundEvent;
 use crate::util::codec::{self, DataResult};
 use crate::util::java_round_f;
 use crate::util::valueproviders::FloatProvider;
@@ -26,7 +27,7 @@ pub enum EnchantmentEntityEffect {
     Ignite { duration: LevelBasedValue },
     ApplyImpulse(Nbt),
     ApplyExhaustion { amount: LevelBasedValue },
-    PlaySound { sound_events: Vec<i32>, volume: FloatProvider, pitch: FloatProvider },
+    PlaySound { sound_events: Vec<SoundEvent>, volume: FloatProvider, pitch: FloatProvider },
     ReplaceBlock(Nbt),
     ReplaceDisk(Nbt),
     RunFunction(String),
@@ -49,12 +50,14 @@ fn float_provider(tag: &Nbt, min: f32, max: f32) -> DataResult<FloatProvider> {
     Ok(provider)
 }
 
-fn sound_event(tag: &Nbt) -> DataResult<i32> {
-    let id = match tag {
-        Nbt::String(_) => codec::identifier(tag)?,
-        _ => codec::decode_field(tag, "sound_id", codec::identifier)?,
-    };
-    Ok(registry_id(registry::SOUND_EVENT, &id))
+fn sound_event(tag: &Nbt) -> DataResult<SoundEvent> {
+    Ok(match tag {
+        Nbt::String(_) => SoundEvent::Reference(registry_id(registry::SOUND_EVENT, &codec::identifier(tag)?)),
+        _ => SoundEvent::Direct {
+            location: codec::decode_field(tag, "sound_id", codec::identifier)?,
+            fixed_range: tag.get("range").and_then(Nbt::as_f64).map(|range| range as f32),
+        },
+    })
 }
 
 impl EnchantmentEntityEffect {
@@ -149,7 +152,7 @@ impl EnchantmentEntityEffect {
                 let source = level.sound_source(entity);
                 let random = &mut level.entity_mut(entity).random;
                 let (volume, pitch) = (volume.sample(random), pitch.sample(random));
-                level.play_sound_at(None, position.x, position.y, position.z, sound_events[index], source, volume, pitch);
+                level.play_sound_at(None, position.x, position.y, position.z, sound_events[index].clone(), source, volume, pitch);
             }
             EnchantmentEntityEffect::SummonEntity { entity_types, join_team } => {
                 let block_pos = BlockPos::containing(position.x, position.y, position.z);
