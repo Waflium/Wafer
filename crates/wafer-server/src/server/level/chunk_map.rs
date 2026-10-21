@@ -419,7 +419,7 @@ impl ServerLevel {
         let effective_range = self.get_effective_range(tracked);
         let visible_range = (effective_range.min(self.player_view_distance(player) * 16)) as f64;
         let (dx, dz) = (player_pos.x - entity_pos.x, player_pos.z - entity_pos.z);
-        let visible = dx * dx + dz * dz <= visible_range * visible_range && self.is_chunk_tracked(player, entity_chunk.x, entity_chunk.z);
+        let visible = dx * dx + dz * dz <= visible_range * visible_range && self.broadcast_to_player(tracked, player) && self.is_chunk_tracked(player, entity_chunk.x, entity_chunk.z);
         if visible {
             if self.chunk_map.tracked.get_mut(tracked).unwrap().seen_by.insert(player) {
                 if self.is_living(tracked) {
@@ -436,6 +436,16 @@ impl ServerLevel {
         } else {
             self.remove_tracking_player(tracked, player);
         }
+    }
+
+    fn broadcast_to_player(&self, entity: EntityId, player: EntityId) -> bool {
+        if !self.is_player(entity) {
+            return true;
+        }
+        if self.is_spectator(player) {
+            return self.get_camera(entity) == entity;
+        }
+        !self.is_spectator(entity)
     }
 
     fn get_effective_range(&self, tracked: EntityId) -> i32 {
