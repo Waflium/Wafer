@@ -15,6 +15,8 @@ use super::monster::zombie::husk::{self, Husk};
 use super::monster::illager::evoker::{self, Evoker};
 use super::monster::illager::illusioner::{self, Illusioner};
 use super::monster::illager::pillager::{self, Pillager};
+use super::animal::equine::skeleton_horse::{self, SkeletonHorse};
+use super::animal::equine::zombie_horse::{self, ZombieHorse};
 use super::monster::ravager::{self, Ravager};
 use super::monster::vex::{self, Vex};
 use super::monster::illager::vindicator::{self, Vindicator};
@@ -149,6 +151,8 @@ pub enum MobKind {
     Illusioner(Illusioner),
     Vex(Vex),
     Ravager(Ravager),
+    SkeletonHorse(SkeletonHorse),
+    ZombieHorse(ZombieHorse),
     Giant(Giant),
     WitherSkeleton(WitherSkeleton),
     ZombieVillager(ZombieVillager),
@@ -285,7 +289,9 @@ impl Mob {
             MobKind::Pufferfish(_) => Pufferfish::register_goals(&mut self.ai),
             MobKind::Cat(_) => Cat::register_goals(&mut self.ai, self.living.attributes.value(Attribute::FollowRange)),
             MobKind::Ocelot(_) => Ocelot::register_goals(&mut self.ai),
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => AbstractHorse::register_goals(&mut self.ai),
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => AbstractHorse::register_goals(&mut self.ai, AbstractHorse::add_behaviour_goals),
+            MobKind::SkeletonHorse(_) => AbstractHorse::register_goals(&mut self.ai, |_| {}),
+            MobKind::ZombieHorse(_) => AbstractHorse::register_goals(&mut self.ai, ZombieHorse::add_behaviour_goals),
             MobKind::Axolotl(_) | MobKind::Frog(_) => {}
             MobKind::Tadpole(_) => AbstractFish::register_goals(&mut self.ai),
             MobKind::Villager(_) => {}
@@ -385,6 +391,8 @@ impl Mob {
             MobKind::Horse(horse) => Some(&horse.abstract_horse),
             MobKind::Donkey(donkey) => Some(&donkey.abstract_chested_horse.abstract_horse),
             MobKind::Mule(mule) => Some(&mule.abstract_chested_horse.abstract_horse),
+            MobKind::SkeletonHorse(horse) => Some(&horse.abstract_horse),
+            MobKind::ZombieHorse(horse) => Some(&horse.abstract_horse),
             _ => None,
         }
     }
@@ -394,6 +402,8 @@ impl Mob {
             MobKind::Horse(horse) => Some(&mut horse.abstract_horse),
             MobKind::Donkey(donkey) => Some(&mut donkey.abstract_chested_horse.abstract_horse),
             MobKind::Mule(mule) => Some(&mut mule.abstract_chested_horse.abstract_horse),
+            MobKind::SkeletonHorse(horse) => Some(&mut horse.abstract_horse),
+            MobKind::ZombieHorse(horse) => Some(&mut horse.abstract_horse),
             _ => None,
         }
     }
@@ -430,7 +440,7 @@ impl Mob {
     }
 
     pub fn client_tracking_range(&self) -> i32 {
-        if matches!(self.kind, MobKind::Tadpole(_) | MobKind::Ravager(_)) {
+        if matches!(self.kind, MobKind::Tadpole(_) | MobKind::Ravager(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_)) {
             10
         } else if self.is_abstract_fish() {
             4
@@ -519,6 +529,7 @@ impl Mob {
 
     pub fn remove_when_far_away(&self, dist_sqr: f64) -> bool {
         match &self.kind {
+            MobKind::ZombieHorse(_) => true,
             MobKind::Chicken(chicken) => chicken::remove_when_far_away(chicken),
             MobKind::ZombieVillager(_) => zombie_villager::remove_when_far_away(self),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => true,
@@ -547,7 +558,7 @@ impl Mob {
             MobKind::Wolf(_) => 8,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::TropicalFish(_) => self.abstract_schooling_fish_get_max_spawn_cluster_size(),
             MobKind::Pufferfish(_) | MobKind::Tadpole(_) => self.abstract_fish_get_max_spawn_cluster_size(),
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => abstract_horse::get_max_spawn_cluster_size(),
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => abstract_horse::get_max_spawn_cluster_size(),
             MobKind::Ghast(_) => Ghast::get_max_spawn_cluster_size(),
             MobKind::Pillager(_) => Pillager::get_max_spawn_cluster_size(),
             _ => self.mob_get_max_spawn_cluster_size(),
@@ -727,7 +738,7 @@ impl Mob {
             MobKind::Sheep(sheep) => Some(&sheep.animal),
             MobKind::Wolf(wolf) => Some(&wolf.tamable_animal.animal),
             MobKind::Goat(goat) => Some(&goat.animal),
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => self.abstract_horse().map(|horse| &horse.animal),
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => self.abstract_horse().map(|horse| &horse.animal),
             MobKind::Armadillo(armadillo) => Some(&armadillo.animal),
             MobKind::Axolotl(axolotl) => Some(&axolotl.animal),
             MobKind::Frog(frog) => Some(&frog.animal),
@@ -761,6 +772,8 @@ impl Mob {
             MobKind::Horse(horse) => Some(&mut horse.abstract_horse.animal),
             MobKind::Donkey(donkey) => Some(&mut donkey.abstract_chested_horse.abstract_horse.animal),
             MobKind::Mule(mule) => Some(&mut mule.abstract_chested_horse.abstract_horse.animal),
+            MobKind::SkeletonHorse(horse) => Some(&mut horse.abstract_horse.animal),
+            MobKind::ZombieHorse(horse) => Some(&mut horse.abstract_horse.animal),
             MobKind::Armadillo(armadillo) => Some(&mut armadillo.animal),
             MobKind::Axolotl(axolotl) => Some(&mut axolotl.animal),
             MobKind::Frog(frog) => Some(&mut frog.animal),
@@ -862,7 +875,7 @@ impl Mob {
             MobKind::Horse(_) => {
                 self.apply_implicit_component_if_present(components, dc::HORSE_VARIANT);
             }
-            MobKind::Donkey(_) | MobKind::Mule(_) => {}
+            MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => {}
             MobKind::Axolotl(_) => {
                 self.apply_implicit_component_if_present(components, dc::AXOLOTL_VARIANT);
             }
@@ -1107,6 +1120,10 @@ impl Mob {
             MobKind::Ocelot(_) => ocelot::DIMENSIONS,
             MobKind::Horse(_) if self.is_baby() => horse::baby_dimensions(),
             MobKind::Horse(_) => horse::DIMENSIONS,
+            MobKind::SkeletonHorse(_) if self.is_baby() => skeleton_horse::baby_dimensions(),
+            MobKind::SkeletonHorse(_) => skeleton_horse::DIMENSIONS,
+            MobKind::ZombieHorse(_) if self.is_baby() => zombie_horse::baby_dimensions(),
+            MobKind::ZombieHorse(_) => zombie_horse::DIMENSIONS,
             MobKind::Donkey(_) if self.is_baby() => donkey::baby_dimensions(),
             MobKind::Donkey(_) => donkey::DIMENSIONS,
             MobKind::Mule(_) if self.is_baby() => mule::baby_dimensions(),
@@ -1172,7 +1189,7 @@ impl Mob {
             MobKind::Ocelot(_) => (0.0, 0.6375f32 as f64, 0.0),
             MobKind::Fox(_) if baby => (0.0, 0.375f32 as f64, 0.0),
             MobKind::Fox(_) => (0.0, 0.6375, -0.25),
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::Rabbit(_) | MobKind::Turtle(_) => {
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Rabbit(_) | MobKind::Turtle(_) => {
                 let point = self.default_dimensions().attachments.get(super::entity_attachments::EntityAttachment::Passenger, 0, 0.0);
                 (point.x, point.y, point.z)
             }
@@ -1348,6 +1365,8 @@ impl Mob {
             MobKind::Cat(_) => Cat::add_additional_save_data(self, out),
             MobKind::Ocelot(_) => Ocelot::add_additional_save_data(self, out),
             MobKind::Horse(_) => Horse::add_additional_save_data(self, out),
+            MobKind::SkeletonHorse(_) => SkeletonHorse::add_additional_save_data(self, out),
+            MobKind::ZombieHorse(_) => AbstractHorse::add_additional_save_data(self, out),
             MobKind::Donkey(_) | MobKind::Mule(_) => AbstractChestedHorse::add_additional_save_data(self, out),
             MobKind::Axolotl(_) => Axolotl::add_additional_save_data(self, out),
             MobKind::Frog(_) => Frog::add_additional_save_data(self, out),
@@ -1512,7 +1531,7 @@ impl Mob {
                 TropicalFish::read_additional_save_data(self, nbt);
             }
             MobKind::Cat(_) | MobKind::Ocelot(_) => {}
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => {}
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => {}
             MobKind::Axolotl(_) => Axolotl::read_additional_save_data(self, nbt),
             MobKind::Frog(_) => Frog::read_additional_save_data(self, nbt),
             MobKind::Tadpole(_) => {
@@ -1528,6 +1547,8 @@ impl Mob {
             MobKind::Cat(_) => Cat::read_additional_save_data(self, nbt),
             MobKind::Ocelot(_) => Ocelot::read_additional_save_data(self, nbt),
             MobKind::Horse(_) => Horse::read_additional_save_data(self, nbt),
+            MobKind::SkeletonHorse(_) => SkeletonHorse::read_additional_save_data(self, nbt),
+            MobKind::ZombieHorse(_) => AbstractHorse::read_additional_save_data(self, nbt),
             MobKind::Donkey(_) | MobKind::Mule(_) => AbstractChestedHorse::read_additional_save_data(self, nbt),
             MobKind::ZombieVillager(_) => ZombieVillager::read_additional_save_data(self, nbt),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_) => Zombie::read_additional_save_data(self, nbt),
@@ -1627,6 +1648,8 @@ impl Mob {
             MobKind::Horse(_) => horse::get_ambient_sound(self),
             MobKind::Donkey(_) => donkey::get_ambient_sound(),
             MobKind::Mule(_) => mule::get_ambient_sound(),
+            MobKind::SkeletonHorse(_) => skeleton_horse::get_ambient_sound(self),
+            MobKind::ZombieHorse(_) => zombie_horse::get_ambient_sound(),
             MobKind::Axolotl(_) => axolotl::get_ambient_sound(&self.entity),
             MobKind::Frog(_) => frog::get_ambient_sound(),
             MobKind::Tadpole(_) => return None,
@@ -1684,6 +1707,8 @@ impl Mob {
             MobKind::Horse(_) => horse::get_hurt_sound(self),
             MobKind::Donkey(_) => donkey::get_hurt_sound(),
             MobKind::Mule(_) => mule::get_hurt_sound(),
+            MobKind::SkeletonHorse(_) => skeleton_horse::get_hurt_sound(),
+            MobKind::ZombieHorse(_) => zombie_horse::get_hurt_sound(),
             MobKind::Axolotl(_) => axolotl::get_hurt_sound(),
             MobKind::Frog(_) => frog::get_hurt_sound(),
             MobKind::Tadpole(_) => tadpole::get_hurt_sound(),
@@ -1741,6 +1766,8 @@ impl Mob {
             MobKind::Horse(_) => horse::get_death_sound(self),
             MobKind::Donkey(_) => donkey::get_death_sound(),
             MobKind::Mule(_) => mule::get_death_sound(),
+            MobKind::SkeletonHorse(_) => skeleton_horse::get_death_sound(),
+            MobKind::ZombieHorse(_) => zombie_horse::get_death_sound(),
             MobKind::Axolotl(_) => axolotl::get_death_sound(),
             MobKind::Frog(_) => frog::get_death_sound(),
             MobKind::Tadpole(_) => tadpole::get_death_sound(),
@@ -1781,7 +1808,7 @@ impl Mob {
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => return None,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => return None,
             MobKind::Cat(_) | MobKind::Ocelot(_) => return None,
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => return None,
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => return None,
             MobKind::Axolotl(_) | MobKind::Tadpole(_) => return None,
             MobKind::Frog(_) => frog::get_step_sound(),
             MobKind::Villager(_) => return None,
@@ -1797,7 +1824,7 @@ impl Mob {
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_get_sound_volume(),
             MobKind::Bat(_) => Bat::get_sound_volume(),
             MobKind::Squid(_) | MobKind::GlowSquid(_) => Squid::get_sound_volume(),
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => abstract_horse::get_sound_volume(),
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => abstract_horse::get_sound_volume(),
             MobKind::Ghast(_) => Ghast::get_sound_volume(),
             _ => 1.0,
         }
@@ -1827,7 +1854,7 @@ impl Mob {
             MobKind::IronGolem(_) => IronGolem::get_ambient_sound_interval(),
             MobKind::SnowGolem(_) => SnowGolem::get_ambient_sound_interval(),
             MobKind::Ocelot(_) => Ocelot::get_ambient_sound_interval(),
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => abstract_horse::get_ambient_sound_interval(),
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => abstract_horse::get_ambient_sound_interval(),
             MobKind::Turtle(_) => Turtle::get_ambient_sound_interval(),
             _ if self.is_squid() => ageable_water_creature::get_ambient_sound_interval(),
             _ if self.is_water_animal() => water_animal::get_ambient_sound_interval(),
@@ -1952,6 +1979,8 @@ impl ServerLevel {
             MobKind::Cat(_) => self.cat_mob_interact(id, player, hand),
             MobKind::Ocelot(_) => self.ocelot_mob_interact(id, player, hand),
             MobKind::Horse(_) => self.horse_mob_interact(id, player, hand),
+            MobKind::SkeletonHorse(_) => self.skeleton_horse_mob_interact(id, player, hand),
+            MobKind::ZombieHorse(_) => self.zombie_horse_mob_interact(id, player, hand),
             MobKind::Donkey(_) | MobKind::Mule(_) => self.abstract_chested_horse_mob_interact(id, player, hand),
             MobKind::Axolotl(_) => self.axolotl_mob_interact(id, player, hand),
             MobKind::Frog(_) => self.animal_mob_interact(id, player, hand),
@@ -2189,8 +2218,8 @@ impl ServerLevel {
         }
     }
 
-    fn sun_protection_slot(&self, _id: EntityId) -> EquipmentSlot {
-        EquipmentSlot::Head
+    fn sun_protection_slot(&self, id: EntityId) -> EquipmentSlot {
+        if self.is_zombie_horse(id) { zombie_horse::sun_protection_slot() } else { EquipmentSlot::Head }
     }
 
     fn burn_undead(&mut self, id: EntityId) {
@@ -2817,6 +2846,7 @@ impl ServerLevel {
             MobKind::Vindicator(_) => self.vindicator_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Pillager(_) => self.pillager_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Vex(_) => self.vex_finalize_spawn(id, difficulty, spawn_reason, group_data),
+            MobKind::ZombieHorse(_) => self.zombie_horse_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Illusioner(_) => self.illusioner_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::Husk(_) => self.husk_finalize_spawn(id, difficulty, spawn_reason, group_data),
             MobKind::ZombifiedPiglin(_) => self.zombie_finalize_spawn(id, difficulty, spawn_reason, group_data),
@@ -3050,7 +3080,7 @@ pub fn finalize_spawn(
         MobKind::Cat(_) => return cat::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Ocelot(_) => return ocelot::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Horse(_) => group_data = horse::finalize_spawn(level, mob, group_data),
-        MobKind::Donkey(_) | MobKind::Mule(_) => group_data = abstract_horse::finalize_spawn(level, mob, group_data),
+        MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => group_data = abstract_horse::finalize_spawn(level, mob, group_data),
         MobKind::Axolotl(_) => {
             if spawn_reason == EntitySpawnReason::Bucket {
                 return group_data;

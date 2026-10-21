@@ -1767,7 +1767,10 @@ impl ServerLevel {
     }
 
     fn play_swim_sound(&mut self, id: EntityId, volume: f32) {
-        if self.is_turtle(id) {
+        if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::SkeletonHorse(_))) {
+            let volume = self.skeleton_horse_swim_sound_volume(id, volume);
+            self.entity_play_swim_sound(id, volume);
+        } else if self.is_turtle(id) {
             self.entity_play_swim_sound(id, volume * 1.5);
         } else {
             self.entity_play_swim_sound(id, volume);
@@ -1787,6 +1790,8 @@ impl ServerLevel {
             super::animal::axolotl::axolotl::get_swim_sound()
         } else if self.is_turtle(id) {
             super::animal::turtle::turtle::Turtle::get_swim_sound()
+        } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::SkeletonHorse(_))) {
+            self.skeleton_horse_get_swim_sound(id)
         } else {
             "minecraft:entity.generic.swim"
         };
@@ -2372,7 +2377,13 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::GlowSquid(_)) => return self.glow_squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::IronGolem(_)) => return self.iron_golem_hurt_server(id, source, damage),
-                Some(super::mob::MobKind::Horse(_) | super::mob::MobKind::Donkey(_) | super::mob::MobKind::Mule(_)) => {
+                Some(
+                    super::mob::MobKind::Horse(_)
+                    | super::mob::MobKind::Donkey(_)
+                    | super::mob::MobKind::Mule(_)
+                    | super::mob::MobKind::SkeletonHorse(_)
+                    | super::mob::MobKind::ZombieHorse(_),
+                ) => {
                     return self.abstract_horse_hurt_server(id, source, damage);
                 }
                 Some(super::mob::MobKind::Axolotl(_)) => return self.axolotl_hurt_server(id, source, damage),
@@ -2435,6 +2446,9 @@ impl ServerLevel {
         }
         if !self.is_mob(id) {
             return self.entity_interact(id, player, hand, location);
+        }
+        if self.is_zombie_horse(id) {
+            self.mob_mut(id).expect("a zombie horse").persistence_required = true;
         }
         if !self.is_alive(id) {
             return InteractionResult::Pass;
@@ -2656,6 +2670,8 @@ impl ServerLevel {
                     super::mob::MobKind::Horse(_) => "Horse",
                     super::mob::MobKind::Donkey(_) => "Donkey",
                     super::mob::MobKind::Mule(_) => "Mule",
+                    super::mob::MobKind::SkeletonHorse(_) => "SkeletonHorse",
+                    super::mob::MobKind::ZombieHorse(_) => "ZombieHorse",
                     super::mob::MobKind::Axolotl(_) => "Axolotl",
                     super::mob::MobKind::Frog(_) => "Frog",
                     super::mob::MobKind::Tadpole(_) => "Tadpole",

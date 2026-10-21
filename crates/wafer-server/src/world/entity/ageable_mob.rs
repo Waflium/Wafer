@@ -118,6 +118,8 @@ impl ServerLevel {
             MobKind::Horse(_) => self.horse_get_breed_offspring(id, partner),
             MobKind::Donkey(_) => self.donkey_get_breed_offspring(id, partner),
             MobKind::Mule(_) => self.mule_get_breed_offspring(id, partner),
+            MobKind::SkeletonHorse(_) => self.skeleton_horse_get_breed_offspring(id, partner),
+            MobKind::ZombieHorse(_) => self.zombie_horse_get_breed_offspring(id, partner),
             MobKind::Axolotl(_) => self.axolotl_get_breed_offspring(id, partner),
             MobKind::Frog(_) => self.frog_get_breed_offspring(id, partner),
             MobKind::Tadpole(_) => None,
@@ -179,6 +181,9 @@ impl ServerLevel {
 
     pub fn can_age_up(&self, id: EntityId) -> bool {
         let mob = self.mob(id).expect("an ageable mob");
+        if matches!(mob.kind, MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_)) {
+            return false;
+        }
         mob.is_baby() && !mob.is_age_locked()
     }
 

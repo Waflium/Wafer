@@ -20,7 +20,7 @@ impl RunAroundLikeCrazyGoal {
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        if !abstract_horse::is_mob_controlled() && !level.is_tamed(mob) && level.is_vehicle(mob) {
+        if !level.is_mob_controlled(mob) && !level.is_tamed(mob) && level.is_vehicle(mob) {
             let Some(pos) = default_random_pos::get_pos(level, mob, 5, 4) else { return false };
             self.pos_x = pos.x;
             self.pos_y = pos.y;

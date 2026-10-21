@@ -224,3 +224,28 @@ fn horses_and_donkeys_breed_mules_with_mixed_attributes() {
     assert!((15.0..=30.0).contains(&health), "{health}");
     assert!(mule.item_by_slot(EquipmentSlot::Saddle).is_none());
 }
+
+#[test]
+fn skeleton_and_zombie_horses_have_vanillas_attributes() {
+    use crate::world::entity::attributes::Attribute;
+    let skeleton_horse = super::skeleton_horse::SkeletonHorse::create();
+    assert_eq!(skeleton_horse.living.attributes.value(Attribute::MaxHealth), 15.0);
+    assert_eq!(skeleton_horse.living.attributes.value(Attribute::MovementSpeed), 0.2f32 as f64);
+    let zombie_horse = super::zombie_horse::ZombieHorse::create();
+    assert_eq!(zombie_horse.living.attributes.value(Attribute::MaxHealth), 25.0);
+    let priorities: Vec<i32> = zombie_horse.ai.goal_selector.get_available_goals().iter().map(|wrapped| wrapped.get_priority()).collect();
+    assert_eq!(priorities, vec![1, 2, 4, 6, 7, 8, 9, 0, 3]);
+    let priorities: Vec<i32> = skeleton_horse.ai.goal_selector.get_available_goals().iter().map(|wrapped| wrapped.get_priority()).collect();
+    assert_eq!(priorities, vec![1, 2, 4, 6, 7, 8, 9]);
+}
+
+#[test]
+fn skeleton_trap_horses_keep_their_trap_goal_until_triggered() {
+    use wafer_protocol::nbt::Nbt;
+    let mut horse = super::skeleton_horse::SkeletonHorse::create();
+    horse.load(&Nbt::Compound(vec![("SkeletonTrap".into(), Nbt::Byte(1)), ("SkeletonTrapTime".into(), Nbt::Int(5))]));
+    assert!(super::skeleton_horse::SkeletonHorse::is_trap(&horse));
+    assert_eq!(horse.ai.goal_selector.get_available_goals().last().unwrap().get_priority(), 1);
+    super::skeleton_horse::SkeletonHorse::set_trap(&mut horse, false);
+    assert_eq!(horse.ai.goal_selector.get_available_goals().len(), 7);
+}

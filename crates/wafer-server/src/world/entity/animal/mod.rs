@@ -115,7 +115,8 @@ impl ServerLevel {
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => false,
             MobKind::Cat(_) => feline::cat::is_food(item_stack),
             MobKind::Ocelot(_) => feline::ocelot::is_food(item_stack),
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => equine::abstract_horse::is_food(item_stack),
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) => equine::abstract_horse::is_food(item_stack),
+            MobKind::ZombieHorse(_) => equine::zombie_horse::is_food(item_stack),
             MobKind::Axolotl(_) => axolotl::axolotl::is_food(item_stack),
             MobKind::Frog(_) => frog::frog::is_food(item_stack),
             MobKind::Tadpole(_) => false,
@@ -175,6 +176,7 @@ impl ServerLevel {
         match self.mob(id).expect("an animal").kind {
             MobKind::Armadillo(_) => self.armadillo_can_fall_in_love(id),
             MobKind::Turtle(_) => self.turtle_can_fall_in_love(id),
+            MobKind::ZombieHorse(_) => false,
             _ => self.animal_can_fall_in_love(id),
         }
     }

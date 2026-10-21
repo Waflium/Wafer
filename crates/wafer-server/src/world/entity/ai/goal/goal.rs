@@ -14,6 +14,7 @@ use super::ranged_crossbow_attack_goal::RangedCrossbowAttackGoal;
 use crate::world::entity::monster::illager::illusioner::{IllusionerBlindnessSpellGoal, IllusionerMirrorSpellGoal};
 use crate::world::entity::monster::illager::spellcaster_illager::SpellcasterCastingSpellGoal;
 use crate::world::entity::monster::illager::evoker::{EvokerAttackSpellGoal, EvokerCastingSpellGoal, EvokerSummonSpellGoal, EvokerWololoSpellGoal};
+use crate::world::entity::animal::equine::skeleton_horse::SkeletonTrapGoal;
 use crate::world::entity::monster::vex::{VexChargeAttackGoal, VexCopyOwnerTargetGoal, VexRandomMoveGoal};
 use super::random_stroll_goal::RandomStrollGoal;
 use super::restrict_sun_goal::RestrictSunGoal;
@@ -130,6 +131,7 @@ pub enum Goal {
     VexChargeAttack(VexChargeAttackGoal),
     VexRandomMove(VexRandomMoveGoal),
     VexCopyOwnerTarget(VexCopyOwnerTargetGoal),
+    SkeletonTrap(SkeletonTrapGoal),
     AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
     RandomStroll(RandomStrollGoal),
     DrownedGoToWater(DrownedGoToWaterGoal),
@@ -341,6 +343,7 @@ impl Goal {
             Goal::VexChargeAttack(goal) => goal.can_use(level, mob),
             Goal::VexRandomMove(goal) => goal.can_use(level, mob),
             Goal::VexCopyOwnerTarget(goal) => goal.can_use(level, mob),
+            Goal::SkeletonTrap(goal) => goal.can_use(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.can_use(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::RaidGarden(goal) => goal.can_use(level, mob),
@@ -471,6 +474,7 @@ impl Goal {
             Goal::VexChargeAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::VexRandomMove(_) => false,
             Goal::VexCopyOwnerTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
+            Goal::SkeletonTrap(goal) => goal.can_use(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.can_continue_to_use(level, mob),
             Goal::RaidGarden(goal) => goal.can_continue_to_use(level),
@@ -598,6 +602,7 @@ impl Goal {
             Goal::VexChargeAttack(goal) => goal.start(level, mob),
             Goal::VexRandomMove(_) => {}
             Goal::VexCopyOwnerTarget(goal) => goal.start(level, mob),
+            Goal::SkeletonTrap(_) => {}
             Goal::RabbitPanic(goal) => goal.panic_goal.start(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::RaidGarden(goal) => goal.move_to_block_goal.start(level, mob),
@@ -704,6 +709,7 @@ impl Goal {
             Goal::EvokerWololoSpell(goal) => goal.stop(level, mob),
             Goal::VexChargeAttack(goal) => goal.stop(level, mob),
             Goal::VexCopyOwnerTarget(goal) => goal.target_goal.stop(level, mob),
+            Goal::SkeletonTrap(_) => {}
             Goal::BlazeAttack(goal) => goal.stop(level, mob),
             Goal::GhastShootFireball(goal) => goal.stop(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.stop(),
@@ -855,6 +861,7 @@ impl Goal {
             Goal::VexChargeAttack(goal) => goal.tick(level, mob),
             Goal::VexRandomMove(goal) => goal.tick(level, mob),
             Goal::VexCopyOwnerTarget(_) => {}
+            Goal::SkeletonTrap(goal) => goal.tick(level, mob),
             Goal::GhastShootFireball(goal) => goal.tick(level, mob),
             Goal::RabbitPanic(goal) => goal.tick(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
@@ -941,7 +948,7 @@ impl Goal {
             Goal::GhastLook => Flag::Look.bit(),
             Goal::EvokerCastingSpell(_) | Goal::SpellcasterCastingSpell(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::IllusionerMirrorSpell(_) | Goal::IllusionerBlindnessSpell(_) => 0,
-            Goal::EvokerSummonSpell(_) | Goal::EvokerAttackSpell(_) | Goal::EvokerWololoSpell(_) | Goal::VexCopyOwnerTarget(_) => 0,
+            Goal::EvokerSummonSpell(_) | Goal::EvokerAttackSpell(_) | Goal::EvokerWololoSpell(_) | Goal::VexCopyOwnerTarget(_) | Goal::SkeletonTrap(_) => 0,
             Goal::VexChargeAttack(_) | Goal::VexRandomMove(_) => Flag::Move.bit(),
             Goal::GhastShootFireball(_) => 0,
             Goal::RabbitPanic(_) | Goal::RabbitAvoidEntity(_) | Goal::TurtlePanic(_) | Goal::TurtleRandomStroll(_) => Flag::Move.bit(),

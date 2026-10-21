@@ -1603,6 +1603,9 @@ impl ServerLevel {
                 let is_trap = self.game_rules.get_bool(wafer_data::game_rule::SPAWN_MOBS)
                     && self.random.next_double() < difficulty.effective_difficulty as f64 * 0.01
                     && !self.block_state(target.below()).is(&wafer_data::block_tags::LIGHTNING_RODS);
+                if is_trap {
+                    self.strike_skeleton_trap(target);
+                }
                 self.strike_lightning(target, is_trap);
             }
         }

@@ -401,6 +401,8 @@ impl ServerLevel {
             "minecraft:enderman" => LevelEntity::Mob(Box::new(super::monster::enderman::Enderman::create())),
             "minecraft:witch" => LevelEntity::Mob(Box::new(super::monster::witch::Witch::create())),
             "minecraft:ravager" => LevelEntity::Mob(Box::new(super::monster::ravager::Ravager::create())),
+            "minecraft:skeleton_horse" => LevelEntity::Mob(Box::new(super::animal::equine::skeleton_horse::SkeletonHorse::create())),
+            "minecraft:zombie_horse" => LevelEntity::Mob(Box::new(super::animal::equine::zombie_horse::ZombieHorse::create())),
             "minecraft:slime" => LevelEntity::Mob(Box::new(super::monster::cubemob::slime::Slime::create())),
             "minecraft:magma_cube" => LevelEntity::Mob(Box::new(super::monster::cubemob::magma_cube::MagmaCube::create())),
             "minecraft:wolf" => LevelEntity::Mob(Box::new(super::animal::wolf::wolf::Wolf::create())),

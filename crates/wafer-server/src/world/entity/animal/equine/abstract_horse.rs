@@ -250,6 +250,8 @@ pub fn randomize_attributes(mob: &mut Mob, random: &mut (impl RandomSource + ?Si
     match mob.kind {
         MobKind::Horse(_) => super::horse::randomize_attributes(mob, random),
         MobKind::Donkey(_) | MobKind::Mule(_) => super::abstract_chested_horse::randomize_attributes(mob, random),
+        MobKind::SkeletonHorse(_) => super::skeleton_horse::randomize_attributes(mob, random),
+        MobKind::ZombieHorse(_) => super::zombie_horse::randomize_attributes(mob, random),
         _ => {}
     }
 }
@@ -266,7 +268,7 @@ impl AbstractHorse {
         create_inventory(mob);
     }
 
-    pub fn register_goals(ai: &mut MobAi) {
+    pub fn register_goals(ai: &mut MobAi, add_behaviour_goals: fn(&mut MobAi)) {
         let goal_selector = &mut ai.goal_selector;
         goal_selector.add_goal(1, Goal::RunAroundLikeCrazy(RunAroundLikeCrazyGoal::new(1.2)));
         goal_selector.add_goal(2, Goal::Breed(BreedGoal::with_partner_class(1.0, ServerLevel::is_abstract_horse)));
@@ -275,10 +277,10 @@ impl AbstractHorse {
         goal_selector.add_goal(7, Goal::LookAtPlayer(LookAtPlayerGoal::new(6.0)));
         goal_selector.add_goal(8, Goal::RandomLookAround(RandomLookAroundGoal::default()));
         goal_selector.add_goal(9, Goal::RandomStand(RandomStandGoal::new(get_ambient_stand_interval())));
-        AbstractHorse::add_behaviour_goals(ai);
+        add_behaviour_goals(ai);
     }
 
-    fn add_behaviour_goals(ai: &mut MobAi) {
+    pub fn add_behaviour_goals(ai: &mut MobAi) {
         let float_goal = FloatGoal::new(&mut ai.navigation);
         let goal_selector = &mut ai.goal_selector;
         goal_selector.add_goal(0, Goal::Float(float_goal));
@@ -337,6 +339,12 @@ pub fn is_mob_controlled() -> bool {
     false
 }
 
+impl ServerLevel {
+    pub fn is_mob_controlled(&self, id: EntityId) -> bool {
+        if self.is_zombie_horse(id) { self.zombie_horse_is_mob_controlled(id) } else { is_mob_controlled() }
+    }
+}
+
 pub fn on_climbable() -> bool {
     false
 }
@@ -364,7 +372,7 @@ impl MountPanicGoal {
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        !is_mob_controlled() && self.panic_goal.can_use(level, mob)
+        !level.is_mob_controlled(mob) && self.panic_goal.can_use(level, mob)
     }
 }
 
@@ -475,6 +483,7 @@ impl ServerLevel {
             MobKind::Horse(_) => Some(super::horse::get_eating_sound(mob)),
             MobKind::Donkey(_) => Some(super::donkey::get_eating_sound()),
             MobKind::Mule(_) => Some(super::mule::get_eating_sound()),
+            MobKind::ZombieHorse(_) => Some(super::zombie_horse::get_eating_sound()),
             _ => None,
         }
     }
@@ -485,6 +494,7 @@ impl ServerLevel {
             MobKind::Horse(_) => Some(super::horse::get_angry_sound(mob)),
             MobKind::Donkey(_) => Some(super::donkey::get_angry_sound()),
             MobKind::Mule(_) => Some(super::mule::get_angry_sound()),
+            MobKind::ZombieHorse(_) => Some(super::zombie_horse::get_angry_sound()),
             _ => None,
         }
     }
@@ -905,6 +915,9 @@ impl ServerLevel {
     }
 
     pub fn play_jump_sound(&mut self, id: EntityId) {
+        if self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::SkeletonHorse(_))) && self.skeleton_horse_play_jump_sound(id) {
+            return;
+        }
         let sound = match self.mob(id).expect("an abstract horse").kind {
             MobKind::Donkey(_) => "minecraft:entity.donkey.jump",
             MobKind::Mule(_) => "minecraft:entity.mule.jump",

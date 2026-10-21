@@ -455,7 +455,7 @@ impl ServerLevel {
     pub fn can_use_slot(&self, id: EntityId, slot: EquipmentSlot) -> bool {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Pig(_)) => self.pig_can_use_slot(id, slot),
-            Some(MobKind::Horse(_)) => true,
+            Some(MobKind::Horse(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_)) => true,
             Some(MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_can_use_slot(id, slot),
             _ => true,
         }
@@ -2109,7 +2109,8 @@ impl ServerLevel {
             Some(MobKind::SnowGolem(_)) => self.snow_golem_ai_step(id),
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::TropicalFish(_)) => self.abstract_fish_ai_step(id),
             Some(MobKind::Pufferfish(_)) => self.pufferfish_ai_step(id),
-            Some(MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_ai_step(id),
+            Some(MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::ZombieHorse(_)) => self.abstract_horse_ai_step(id),
+            Some(MobKind::SkeletonHorse(_)) => self.skeleton_horse_ai_step(id),
             Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
             Some(MobKind::Villager(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Fox(_)) => self.fox_ai_step(id),
@@ -2125,6 +2126,13 @@ impl ServerLevel {
             return true;
         }
         self.is_local_instance_authoritative(id) && self.mob(id).is_none_or(|mob| !mob.is_no_ai())
+    }
+
+    pub fn get_water_slow_down(&self, id: EntityId) -> f32 {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::SkeletonHorse(_)) => super::animal::equine::skeleton_horse::get_water_slow_down(),
+            _ => 0.8,
+        }
     }
 
     pub fn is_immobile(&self, id: EntityId) -> bool {
@@ -2680,7 +2688,7 @@ impl ServerLevel {
 
     pub fn living_entity_travel_in_water(&mut self, id: EntityId, input: Vec3, base_gravity: f64, is_falling: bool, old_y: f64) {
         let e = self.entity(id);
-        let mut slow_down = if e.is_sprinting() { 0.9f32 } else { 0.8 };
+        let mut slow_down = if e.is_sprinting() { 0.9f32 } else { self.get_water_slow_down(id) };
         let mut speed = 0.02f32;
         let mut water_walker = self.attribute_value(id, Attribute::WaterMovementEfficiency) as f32;
         if !e.on_ground {
