@@ -2609,6 +2609,7 @@ impl ServerLevel {
                     super::mob::MobKind::Drowned(_) => "Drowned",
                     super::mob::MobKind::Silverfish(_) => "Silverfish",
                     super::mob::MobKind::Endermite(_) => "Endermite",
+                    super::mob::MobKind::Giant(_) => "Giant",
                     super::mob::MobKind::Enderman(_) => "Enderman",
                     super::mob::MobKind::Blaze(_) => "Blaze",
                     super::mob::MobKind::Ghast(_) => "Ghast",

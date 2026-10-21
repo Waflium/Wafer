@@ -7,6 +7,7 @@ pub mod enderman;
 #[cfg(test)]
 mod enderman_tests;
 pub mod endermite;
+pub mod giant;
 #[cfg(test)]
 mod endermite_tests;
 pub mod enemy;

@@ -1542,7 +1542,8 @@ impl ServerLevel {
                 | MobKind::WitherSkeleton(_)
                 | MobKind::Bogged(_)
                 | MobKind::Silverfish(_)
-                | MobKind::Endermite(_),
+                | MobKind::Endermite(_)
+                | MobKind::Giant(_),
             ) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Enderman(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Witch(_)) => self.mob_get_base_experience_reward(id),
@@ -2078,7 +2079,8 @@ impl ServerLevel {
                 | MobKind::Stray(_)
                 | MobKind::WitherSkeleton(_)
                 | MobKind::Bogged(_)
-                | MobKind::Silverfish(_),
+                | MobKind::Silverfish(_)
+                | MobKind::Giant(_),
             ) => self.monster_ai_step(id),
             Some(MobKind::Endermite(_)) => self.endermite_ai_step(id),
             Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),

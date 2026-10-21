@@ -104,7 +104,8 @@ impl ServerLevel {
             | MobKind::WitherSkeleton(_)
             | MobKind::Bogged(_)
             | MobKind::Silverfish(_)
-            | MobKind::Endermite(_) => None,
+            | MobKind::Endermite(_)
+            | MobKind::Giant(_) => None,
             MobKind::Enderman(_) => None,
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => None,
             MobKind::Witch(_) => None,
