@@ -54,6 +54,7 @@ pub mod jukebox_song_player;
 pub mod mace_item;
 pub mod map_item;
 pub mod minecart_item;
+pub mod armor_stand_item;
 pub mod hanging_entity_item;
 pub mod name_tag_item;
 pub mod potion_item;
@@ -142,6 +143,7 @@ fn item_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand,
         }
         Some(&"SpawnEggItem") => return spawn_egg_item::use_on(level, player, hand, hit, stack),
         Some(&"MinecartItem") => return minecart_item::use_on(level, player, hand, hit, stack),
+        Some(&"ArmorStandItem") => return armor_stand_item::use_on(level, player, hand, hit, stack),
         Some(&"HangingEntityItem" | &"ItemFrameItem") => return hanging_entity_item::use_on(level, player, hand, hit, stack),
         Some(&"HoneycombItem") => return honeycomb_item::use_on(level, player, hand, hit, stack),
         Some(&"EnderEyeItem") => return ender_eye_item::use_on(level, player, hand, hit, stack),

@@ -155,6 +155,7 @@ impl LevelEntity {
             LevelEntity::Marker(_) => Some("minecraft:marker"),
             LevelEntity::Interaction(_) => Some("minecraft:interaction"),
             LevelEntity::OminousItemSpawner(_) => Some("minecraft:ominous_item_spawner"),
+            LevelEntity::ArmorStand(_) => Some("minecraft:armor_stand"),
             LevelEntity::Display(display) => Some(match display.kind {
                 super::display::DisplayKind::BlockDisplay => "minecraft:block_display",
                 super::display::DisplayKind::ItemDisplay => "minecraft:item_display",
@@ -217,6 +218,7 @@ impl LevelEntity {
             LevelEntity::LeashKnot(_) | LevelEntity::Marker(_) => {}
             LevelEntity::Interaction(interaction) => interaction.add_additional_save_data(out),
             LevelEntity::OminousItemSpawner(spawner) => spawner.add_additional_save_data(out),
+            LevelEntity::ArmorStand(stand) => stand.add_additional_save_data(out),
             LevelEntity::Display(display) => display.add_additional_save_data(out),
             LevelEntity::Painting(painting) => painting.add_additional_save_data(out),
             LevelEntity::ItemFrame(frame) => frame.add_additional_save_data(out),
@@ -296,6 +298,7 @@ impl LevelEntity {
             LevelEntity::LeashKnot(_) | LevelEntity::Marker(_) => {}
             LevelEntity::Interaction(interaction) => interaction.read_additional_save_data(nbt),
             LevelEntity::OminousItemSpawner(spawner) => spawner.read_additional_save_data(nbt),
+            LevelEntity::ArmorStand(stand) => stand.read_additional_save_data(nbt),
             LevelEntity::Display(display) => display.read_additional_save_data(nbt),
             LevelEntity::Painting(painting) => painting.read_additional_save_data(nbt),
             LevelEntity::ItemFrame(frame) => frame.read_additional_save_data(nbt),
@@ -409,6 +412,7 @@ impl ServerLevel {
             "minecraft:item_display" => LevelEntity::Display(super::display::Display::create_item_display()),
             "minecraft:text_display" => LevelEntity::Display(super::display::Display::create_text_display()),
             "minecraft:interaction" => LevelEntity::Interaction(super::interaction::Interaction::create()),
+            "minecraft:armor_stand" => LevelEntity::ArmorStand(Box::new(super::decoration::armor_stand::ArmorStand::of_type())),
             "minecraft:ominous_item_spawner" => LevelEntity::OminousItemSpawner(Box::new(super::ominous_item_spawner::OminousItemSpawner::of_type())),
             "minecraft:marker" => LevelEntity::Marker(super::marker::Marker::create()),
             "minecraft:evoker_fangs" => LevelEntity::EvokerFangs(super::projectile::evoker_fangs::EvokerFangs::of_type()),

@@ -59,7 +59,7 @@ fn vindicator_mut(mob: &mut Mob) -> &mut Vindicator {
 }
 
 fn attackable_selector(_mob: EntityId, target: EntityId, level: &ServerLevel) -> bool {
-    level.is_attackable(target)
+    level.attackable(target)
 }
 
 impl Vindicator {

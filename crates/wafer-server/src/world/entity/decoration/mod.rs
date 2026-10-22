@@ -1,3 +1,6 @@
+pub mod armor_stand;
+#[cfg(test)]
+mod armor_stand_tests;
 pub mod block_attached_entity;
 pub mod hanging_entity;
 #[cfg(test)]

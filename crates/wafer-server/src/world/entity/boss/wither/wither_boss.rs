@@ -54,7 +54,7 @@ pub struct WitherBoss {
 }
 
 fn living_entity_selector(_mob: EntityId, target: EntityId, level: &ServerLevel) -> bool {
-    !entity_type_tags::WITHER_FRIENDS.contains(level.entity(target).entity_type as usize) && level.is_attackable(target)
+    !entity_type_tags::WITHER_FRIENDS.contains(level.entity(target).entity_type as usize) && level.attackable(target)
 }
 
 fn targeting_conditions(selector: &dyn Fn(EntityId, &ServerLevel) -> bool) -> TargetingConditions<'_> {

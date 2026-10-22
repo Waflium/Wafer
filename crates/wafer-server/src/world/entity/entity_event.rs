@@ -33,3 +33,4 @@ pub const POOF: u8 = 60;
 pub const BODY_BREAK: u8 = 65;
 pub const DROWN_PARTICLES: u8 = 67;
 pub const SADDLE_BREAK: u8 = 68;
+pub const ARMORSTAND_WOBBLE: u8 = 32;

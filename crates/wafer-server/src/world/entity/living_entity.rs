@@ -11,7 +11,7 @@ use super::data::{DataValue, Pose, ids};
 use super::monster::ravager::Ravager;
 use super::mob::{Mob, MobKind};
 use super::using_item::FLAG_SPIN_ATTACK;
-use super::{Entity, EntityId, MoverType, RemovalReason, compute_modified_friction, entity_event, flags, sound_event};
+use super::{Entity, EntityId, LevelEntity, MoverType, RemovalReason, compute_modified_friction, entity_event, flags, sound_event};
 use crate::advancements::triggers::criteria_triggers;
 use crate::core::holder_set::HolderSet;
 use crate::network::connection::encode;
@@ -361,7 +361,10 @@ impl ServerLevel {
     pub fn living(&self, id: EntityId) -> &LivingEntity {
         match self.players.get(&id) {
             Some(p) => &p.living,
-            None => &self.mob(id).expect("a living entity").living,
+            None => match self.entities.get(&id) {
+                Some(LevelEntity::ArmorStand(stand)) => &stand.living,
+                _ => &self.mob(id).expect("a living entity").living,
+            },
         }
     }
 
@@ -369,16 +372,23 @@ impl ServerLevel {
         if self.players.contains_key(&id) {
             return &mut self.player_mut(id).living;
         }
+        if self.is_armor_stand(id) {
+            let Some(LevelEntity::ArmorStand(stand)) = self.entities.get_mut(&id) else { unreachable!("an armor stand") };
+            return &mut stand.living;
+        }
         &mut self.mob_mut(id).expect("a living entity").living
     }
 
     pub fn entity_and_living(&self, id: EntityId) -> (&Entity, &LivingEntity) {
         match self.players.get(&id) {
             Some(p) => (&p.entity, &p.living),
-            None => {
-                let mob = self.mob(id).expect("a living entity");
-                (&mob.entity, &mob.living)
-            }
+            None => match self.entities.get(&id) {
+                Some(LevelEntity::ArmorStand(stand)) => (&stand.entity, &stand.living),
+                _ => {
+                    let mob = self.mob(id).expect("a living entity");
+                    (&mob.entity, &mob.living)
+                }
+            },
         }
     }
 
@@ -387,6 +397,10 @@ impl ServerLevel {
             let p = self.player_mut(id);
             return (&mut p.entity, &mut p.living);
         }
+        if self.is_armor_stand(id) {
+            let Some(LevelEntity::ArmorStand(stand)) = self.entities.get_mut(&id) else { unreachable!("an armor stand") };
+            return (&mut stand.entity, &mut stand.living);
+        }
         let mob = self.mob_mut(id).expect("a living entity");
         (&mut mob.entity, &mut mob.living)
     }
@@ -394,7 +408,10 @@ impl ServerLevel {
     pub fn health(&self, id: EntityId) -> f32 {
         match self.players.get(&id) {
             Some(p) => p.health,
-            None => self.mob(id).expect("a living entity").health,
+            None => match self.armor_stand(id) {
+                Some(stand) => stand.health,
+                None => self.mob(id).expect("a living entity").health,
+            },
         }
     }
 
@@ -402,11 +419,17 @@ impl ServerLevel {
         if let Some(mob) = self.mob(id) {
             return mob.item_by_slot(slot).cloned();
         }
+        if let Some(stand) = self.armor_stand(id) {
+            return stand.item_by_slot(slot).cloned();
+        }
         let index = self.equipment_inventory_slot(id, slot)?;
         self.player(id).inventory.slots[index].clone().filter(|s| !s.is_empty())
     }
 
     pub fn get_item_in_hand(&self, id: EntityId, hand: InteractionHand) -> Option<ItemStack> {
+        if let Some(stand) = self.armor_stand(id) {
+            return stand.item_by_slot(hand.as_equipment_slot()).cloned();
+        }
         match self.mob(id) {
             Some(mob) => mob.item_by_slot(hand.as_equipment_slot()).cloned(),
             None => self.player(id).item_in_hand(hand),
@@ -506,6 +529,10 @@ impl ServerLevel {
             mob.equipment[slot as usize] = Some(item_stack).filter(|s| !s.is_empty());
             return;
         }
+        if let Some(stand) = self.armor_stand_mut(id) {
+            stand.equipment[slot as usize] = Some(item_stack).filter(|s| !s.is_empty());
+            return;
+        }
         let Some(index) = self.equipment_inventory_slot(id, slot) else { return };
         let p = self.player_mut(id);
         p.inventory.slots[index] = Some(item_stack).filter(|s| !s.is_empty());
@@ -533,8 +560,12 @@ impl ServerLevel {
         self.entity_mut(id).data.set(ids::STINGER_COUNT, DataValue::Int(count));
     }
 
+    pub fn attackable(&self, id: EntityId) -> bool {
+        !self.is_armor_stand(id)
+    }
+
     pub fn is_affected_by_potions(&self, id: EntityId) -> bool {
-        !self.is_dead_or_dying(id)
+        !self.is_armor_stand(id) && !self.is_dead_or_dying(id)
     }
 
     pub fn is_sensitive_to_water(&self, id: EntityId) -> bool {
@@ -801,6 +832,9 @@ impl ServerLevel {
         if let Some(mob) = self.mob(id) {
             return mob.absorption;
         }
+        if let Some(stand) = self.armor_stand(id) {
+            return stand.absorption;
+        }
         match self.player(id).entity.data.get(ids::PLAYER_ABSORPTION) {
             DataValue::Float(v) => *v,
             _ => 0.0,
@@ -813,6 +847,10 @@ impl ServerLevel {
             mob.absorption = amount;
             return;
         }
+        if let Some(stand) = self.armor_stand_mut(id) {
+            stand.absorption = amount;
+            return;
+        }
         self.player_mut(id).entity.data.set(ids::PLAYER_ABSORPTION, DataValue::Float(amount));
     }
 
@@ -821,6 +859,11 @@ impl ServerLevel {
         if let Some(mob) = self.mob_mut(id) {
             mob.health = health;
             mob.entity.data.set(ids::HEALTH, DataValue::Float(health));
+            return;
+        }
+        if let Some(stand) = self.armor_stand_mut(id) {
+            stand.health = health;
+            stand.entity.data.set(ids::HEALTH, DataValue::Float(health));
             return;
         }
         let p = self.player_mut(id);
@@ -983,6 +1026,9 @@ impl ServerLevel {
     }
 
     pub fn can_be_seen_by_anyone(&self, id: EntityId) -> bool {
+        if self.is_armor_stand(id) {
+            return self.armor_stand_can_be_seen_by_anyone(id);
+        }
         !self.is_spectator(id) && self.is_alive(id)
     }
 
@@ -998,6 +1044,9 @@ impl ServerLevel {
     pub fn item_by_slot_ref(&self, id: EntityId, slot: EquipmentSlot) -> Option<&ItemStack> {
         if let Some(mob) = self.mob(id) {
             return mob.item_by_slot(slot);
+        }
+        if let Some(stand) = self.armor_stand(id) {
+            return stand.item_by_slot(slot);
         }
         let index = self.equipment_inventory_slot(id, slot)?;
         self.player(id).inventory.slots[index].as_ref().filter(|s| !s.is_empty())
@@ -1231,6 +1280,9 @@ impl ServerLevel {
     }
 
     fn get_death_sound(&self, id: EntityId) -> i32 {
+        if self.is_armor_stand(id) {
+            return sound_event(super::decoration::armor_stand::get_death_sound());
+        }
         match self.mob(id) {
             Some(mob) => sound_event(mob.get_death_sound()),
             None => sound_event("minecraft:entity.player.death"),
@@ -1246,6 +1298,9 @@ impl ServerLevel {
     }
 
     fn get_hurt_sound(&self, id: EntityId, source: &DamageSource) -> i32 {
+        if self.is_armor_stand(id) {
+            return sound_event(super::decoration::armor_stand::get_hurt_sound());
+        }
         match self.mob(id) {
             Some(_) if self.is_wolf(id) => sound_event(self.wolf_get_hurt_sound(id, source)),
             Some(mob) => sound_event(mob.get_hurt_sound()),
@@ -1835,6 +1890,8 @@ impl ServerLevel {
         }
         if self.is_mob(id) {
             self.mob_tick_head_turn(id);
+        } else if self.is_armor_stand(id) {
+            self.armor_stand_tick_head_turn(id);
         } else {
             self.living_entity_tick_head_turn(id, y_body_rot_t);
         }
@@ -2264,6 +2321,9 @@ impl ServerLevel {
         if self.is_player(id) {
             return true;
         }
+        if let Some(stand) = self.armor_stand(id) {
+            return self.is_local_instance_authoritative(id) && stand.has_physics();
+        }
         self.is_local_instance_authoritative(id) && self.mob(id).is_none_or(|mob| !mob.is_no_ai())
     }
 
@@ -2540,6 +2600,9 @@ impl ServerLevel {
     }
 
     fn push_entities(&mut self, id: EntityId) {
+        if self.is_armor_stand(id) {
+            return self.armor_stand_push_entities(id);
+        }
         if self.is_player(id) {
             self.server_player_push_entities(id);
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Bat(_))) {
@@ -2575,6 +2638,9 @@ impl ServerLevel {
     }
 
     fn do_push(&mut self, id: EntityId, entity: EntityId) {
+        if self.is_armor_stand(id) {
+            return;
+        }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::IronGolem(_)) => self.iron_golem_do_push(id, entity),
             Some(MobKind::Parrot(_)) if self.is_player(entity) => {}
@@ -2683,6 +2749,12 @@ impl ServerLevel {
     }
 
     pub fn travel(&mut self, id: EntityId, input: Vec3) {
+        if let Some(stand) = self.armor_stand(id) {
+            if stand.has_physics() {
+                self.living_entity_travel(id, input);
+            }
+            return;
+        }
         if self.is_player(id) {
             self.player_travel(id, input);
         } else if self.mob(id).is_some_and(Mob::is_squid) {

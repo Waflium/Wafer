@@ -97,7 +97,7 @@ impl DamageSource {
 
 impl ServerLevel {
     pub fn is_living(&self, id: EntityId) -> bool {
-        self.is_player(id) || self.is_mob(id)
+        self.is_player(id) || self.is_mob(id) || self.is_armor_stand(id)
     }
 
     pub fn display_name(&self, id: EntityId) -> Component {

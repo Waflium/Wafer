@@ -46,6 +46,7 @@ pub enum DispenseItemBehavior {
     Minecart,
     Boat,
     Chest,
+    ArmorStand,
 }
 
 fn registered(item: Item) -> Option<DispenseItemBehavior> {
@@ -84,6 +85,7 @@ fn registered(item: Item) -> Option<DispenseItemBehavior> {
         items::HONEYCOMB => Honeycomb,
         items::POTION => Potion,
         items::CHEST => Chest,
+        items::ARMOR_STAND => ArmorStand,
         items::MINECART | items::CHEST_MINECART | items::FURNACE_MINECART | items::TNT_MINECART | items::HOPPER_MINECART | items::COMMAND_BLOCK_MINECART => Minecart,
         _ if item.is_instance_of("BoatItem") => Boat,
         _ if item.info().block.is_some_and(|block| block.is_instance_of("ShulkerBoxBlock")) => ShulkerBox,
@@ -152,8 +154,24 @@ impl DispenseItemBehavior {
             Minecart => minecart_dispense_item_behavior::execute(level, source, dispensed),
             Boat => boat_dispense_item_behavior::execute(level, source, dispensed),
             Chest => execute_chest(level, source, dispensed),
+            ArmorStand => execute_armor_stand(level, source, dispensed),
         }
     }
+}
+
+fn execute_armor_stand(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack) -> ItemStack {
+    let direction = source.facing();
+    let pos = source.pos.relative(direction);
+    let Some(mut entity) = level.create_entity_type_from_stack("minecraft:armor_stand", None, pos, crate::world::entity::entity_spawn_reason::EntitySpawnReason::Dispenser, false, false) else {
+        return dispensed;
+    };
+    entity.entity_mut().set_y_rot(direction.to_y_rot());
+    if let Some(tag) = crate::world::entity::entity_save::apply_default_stack_config(&mut entity, &dispensed) {
+        entity = level.read_level_dependent_save_data_detached(entity, &tag);
+    }
+    crate::world::level::server_level_accessor::ServerLevelAccessor::add_fresh_entity_with_passengers(level, entity);
+    dispensed.shrink(1);
+    dispensed
 }
 
 fn execute_chest(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack) -> ItemStack {

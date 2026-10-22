@@ -136,6 +136,7 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:wither_skull",
     "minecraft:dragon_fireball",
     "minecraft:ominous_item_spawner",
+    "minecraft:armor_stand",
     "minecraft:area_effect_cloud",
     "minecraft:minecart",
     "minecraft:acacia_boat",

@@ -174,6 +174,7 @@ impl ServerLevel {
 
     fn ignore_explosion(&self, id: EntityId, explosion: &ServerExplosion) -> bool {
         match self.entities.get(&id) {
+            Some(LevelEntity::ArmorStand(_)) => self.armor_stand_ignore_explosion(id, self.should_affect_blocklike_entities(explosion)),
             Some(LevelEntity::Item(_)) => !self.should_affect_blocklike_entities(explosion),
             Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => {
                 explosion.source.is_some_and(|direct_entity| self.entity(direct_entity).is_in_water()) || !self.should_affect_blocklike_entities(explosion)

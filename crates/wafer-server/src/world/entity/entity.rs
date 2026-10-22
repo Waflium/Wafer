@@ -1030,7 +1030,7 @@ impl ServerLevel {
         use super::projectile::projectile::ProjectileKind;
         match self.entities.get(&id) {
             Some(super::LevelEntity::Mob(mob)) if mob.is_squid() => super::animal::squid::squid::Squid::get_default_gravity(),
-            None | Some(super::LevelEntity::Mob(_)) => self.attribute_value(id, Attribute::Gravity),
+            None | Some(super::LevelEntity::Mob(_) | super::LevelEntity::ArmorStand(_)) => self.attribute_value(id, Attribute::Gravity),
             Some(super::LevelEntity::ExperienceOrb(_)) => 0.03,
             Some(super::LevelEntity::Projectile(projectile)) => match projectile.kind {
                 ProjectileKind::ThrownExperienceBottle(_) => 0.07,
@@ -1040,7 +1040,7 @@ impl ServerLevel {
                 | ProjectileKind::SpectralArrow(_)
                 | ProjectileKind::ThrownTrident(_) => 0.05,
                 ProjectileKind::FireworkRocket(_) => 0.0,
-                ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) | ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => 0.0,
+                ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) | ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) | ProjectileKind::WitherSkull(_) | ProjectileKind::DragonFireball(_) => 0.0,
                 ProjectileKind::FishingHook(_) => super::projectile::fishing_hook::GRAVITY as f64,
                 ProjectileKind::ShulkerBullet(_) => super::projectile::shulker_bullet::GRAVITY,
                 ProjectileKind::LlamaSpit(_) => 0.06,
@@ -1721,6 +1721,10 @@ impl ServerLevel {
     }
 
     pub fn fall_sounds(&self, id: EntityId) -> (&'static str, &'static str) {
+        if self.is_armor_stand(id) {
+            let fall = super::decoration::armor_stand::get_fall_sound();
+            return (fall, fall);
+        }
         if self.is_player(id) {
             ("minecraft:entity.player.small_fall", "minecraft:entity.player.big_fall")
         } else if self.is_monster(id) {
@@ -2563,6 +2567,9 @@ impl ServerLevel {
     }
 
     pub fn hurt_server(&mut self, id: EntityId, source: DamageSource, damage: f32) -> bool {
+        if self.is_armor_stand(id) {
+            return self.armor_stand_hurt_server(id, source, damage);
+        }
         if self.is_player(id) {
             return self.server_player_hurt_server(id, source, damage);
         }
@@ -2673,6 +2680,7 @@ impl ServerLevel {
 
     pub fn interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {
         match self.entities.get(&id) {
+            Some(LevelEntity::ArmorStand(_)) => return self.armor_stand_interact(id, player, hand, location),
             Some(LevelEntity::LeashKnot(_)) => return self.leash_fence_knot_interact(id, player, hand, location),
             Some(LevelEntity::ItemFrame(_)) => return self.item_frame_interact(id, player, hand),
             Some(LevelEntity::Interaction(_)) => return self.interaction_interact(id, player),
@@ -2761,6 +2769,9 @@ impl ServerLevel {
     }
 
     pub fn blocks_building(&self, id: EntityId) -> bool {
+        if let Some(stand) = self.armor_stand(id) {
+            return !stand.is_marker();
+        }
         self.is_living(id) || matches!(self.entities.get(&id), Some(LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_)))
     }
 
@@ -4027,6 +4038,7 @@ impl ServerLevel {
 
     pub fn skip_attack_interaction(&mut self, id: EntityId, source: EntityId) -> bool {
         match self.entities.get(&id) {
+            Some(LevelEntity::ArmorStand(_)) => self.armor_stand_skip_attack_interaction(id, source),
             Some(LevelEntity::Interaction(_)) => self.interaction_skip_attack_interaction(id, source),
             Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => self.block_attached_entity_skip_attack_interaction(id, source),
             _ => false,
@@ -4036,6 +4048,7 @@ impl ServerLevel {
     pub fn get_piston_push_reaction(&self, id: EntityId) -> wafer_data::PushReaction {
         match self.entities.get(&id) {
             Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_) | LevelEntity::Interaction(_) | LevelEntity::Display(_) | LevelEntity::OminousItemSpawner(_)) => wafer_data::PushReaction::IgnoreEntity,
+            Some(LevelEntity::ArmorStand(stand)) if stand.is_marker() => wafer_data::PushReaction::IgnoreEntity,
             _ => wafer_data::PushReaction::PushPull,
         }
     }
@@ -4050,6 +4063,9 @@ impl ServerLevel {
         if let Some(LevelEntity::OminousItemSpawner(_)) = self.entities.get(&id) {
             return super::ominous_item_spawner::OminousItemSpawner::is_ignoring_block_triggers();
         }
+        if let Some(LevelEntity::ArmorStand(stand)) = self.entities.get(&id) {
+            return stand.is_marker();
+        }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(super::mob::MobKind::Bat(_)) => self.bat_is_ignoring_block_triggers(id),
             _ => false,
@@ -4057,6 +4073,9 @@ impl ServerLevel {
     }
 
     pub fn is_pushable(&mut self, id: EntityId) -> bool {
+        if self.is_armor_stand(id) {
+            return false;
+        }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Bat(_))) {
             self.bat_is_pushable(id)
         } else if self.is_abstract_horse(id) {
@@ -4075,6 +4094,7 @@ impl ServerLevel {
             return !self.is_spectator(id) && !self.entity(id).is_removed();
         }
         match self.entities.get(&id) {
+            Some(LevelEntity::ArmorStand(stand)) => !stand.entity.is_removed() && !stand.is_marker(),
             None | Some(LevelEntity::Mob(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) | LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_)) => {
                 !self.entity(id).is_removed()
             }
