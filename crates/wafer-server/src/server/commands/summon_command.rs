@@ -65,6 +65,7 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:skeleton_horse",
     "minecraft:zombie_horse",
     "minecraft:vex",
+    "minecraft:phantom",
     "minecraft:slime",
     "minecraft:magma_cube",
     "minecraft:wolf",

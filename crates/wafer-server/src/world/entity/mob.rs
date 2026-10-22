@@ -155,6 +155,7 @@ pub enum MobKind {
     Evoker(Evoker),
     Illusioner(Illusioner),
     Vex(Vex),
+    Phantom(crate::world::entity::monster::phantom::Phantom),
     Ravager(Ravager),
     SkeletonHorse(SkeletonHorse),
     ZombieHorse(ZombieHorse),
@@ -274,6 +275,7 @@ impl Mob {
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_) => Zombie::register_goals(&mut self.ai, &self.kind),
             MobKind::Blaze(_) => Blaze::register_goals(&mut self.ai),
             MobKind::Ghast(_) => Ghast::register_goals(&mut self.ai),
+            MobKind::Phantom(_) => crate::world::entity::monster::phantom::Phantom::register_goals(&mut self.ai),
             MobKind::Creeper(_) => Creeper::register_goals(&mut self.ai),
             MobKind::Spider(_) | MobKind::CaveSpider(_) => Spider::register_goals(&mut self.ai),
             MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Bogged(_) => AbstractSkeleton::register_goals(&mut self.ai),
@@ -466,7 +468,7 @@ impl Mob {
         } else if matches!(self.kind, MobKind::Bat(_)) {
             5
         } else if self.is_zombie()
-            || matches!(self.kind, MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Enderman(_) | MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::MagmaCube(_))
+            || matches!(self.kind, MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Enderman(_) | MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::MagmaCube(_) | MobKind::Phantom(_))
             || matches!(self.kind, MobKind::Squid(_))
             || matches!(self.kind, MobKind::SnowGolem(_))
             || matches!(self.kind, MobKind::Cat(_))
@@ -568,7 +570,7 @@ impl Mob {
             MobKind::Ocelot(_) => ocelot::remove_when_far_away(self),
             MobKind::Axolotl(_) => !axolotl::from_bucket(&self.entity) && !self.entity.has_custom_name(),
             MobKind::Villager(_) => false,
-            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => true,
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => true,
             _ => super::animal::remove_when_far_away(dist_sqr),
         }
     }
@@ -775,7 +777,7 @@ impl Mob {
             MobKind::Tadpole(_) => None,
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => None,
             MobKind::Enderman(_) => None,
-            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => None,
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => None,
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => None,
@@ -812,7 +814,7 @@ impl Mob {
             MobKind::Tadpole(_) => None,
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => None,
             MobKind::Enderman(_) => None,
-            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => None,
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => None,
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => None,
@@ -884,7 +886,7 @@ impl Mob {
             MobKind::Armadillo(_) => {}
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => {}
             MobKind::Enderman(_) => {}
-            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => {}
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => {}
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => {}
             MobKind::Slime(_) | MobKind::MagmaCube(_) => {}
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => {}
@@ -1137,6 +1139,7 @@ impl Mob {
             MobKind::Enderman(_) => enderman::DIMENSIONS,
             MobKind::Blaze(_) => blaze::DIMENSIONS,
             MobKind::Ghast(_) => ghast::DIMENSIONS,
+            MobKind::Phantom(_) => crate::world::entity::monster::phantom::Phantom::get_default_dimensions(self),
             MobKind::ZombifiedPiglin(_) => ZombifiedPiglin::get_default_dimensions(self),
             MobKind::Witch(_) => witch::DIMENSIONS,
             MobKind::Ravager(_) => ravager::DIMENSIONS,
@@ -1218,6 +1221,10 @@ impl Mob {
             MobKind::Enderman(_) => (0.0, 2.80625f32 as f64, 0.0),
             MobKind::Blaze(_) => (0.0, 1.8f32 as f64, 0.0),
             MobKind::Ghast(_) => (0.0, 4.0625f32 as f64, 0.0),
+            MobKind::Phantom(_) => {
+                let point = self.default_dimensions().attachments.get(super::entity_attachments::EntityAttachment::Passenger, 0, 0.0);
+                (point.x, point.y, point.z)
+            }
             MobKind::ZombifiedPiglin(_) if baby => (0.0, 0.98f32 as f64, 0.0),
             MobKind::ZombifiedPiglin(_) => (0.0, 2.0f32 as f64, 0.0),
             MobKind::Witch(_) => (0.0, 2.2625f32 as f64, 0.0),
@@ -1381,6 +1388,7 @@ impl Mob {
             MobKind::Enderman(_) => Enderman::add_additional_save_data(self, out),
             MobKind::Blaze(_) => {}
             MobKind::Ghast(_) => Ghast::add_additional_save_data(self, out),
+            MobKind::Phantom(_) => crate::world::entity::monster::phantom::Phantom::add_additional_save_data(self, out),
             MobKind::ZombifiedPiglin(_) => {
                 let is_afflicted = self.entity.is_eye_in_fluid(&wafer_data::fluid_tags::WATER);
                 Zombie::add_additional_save_data(self, is_afflicted, out);
@@ -1560,7 +1568,7 @@ impl Mob {
             }
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => {}
             MobKind::Enderman(_) => {}
-            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => {}
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => {}
             MobKind::Witch(witch) => witch.raider.read_additional_save_data(nbt),
             MobKind::Ravager(_) => Ravager::read_additional_save_data(self, nbt),
             MobKind::Vindicator(_) => Vindicator::read_additional_save_data(self, nbt),
@@ -1611,6 +1619,7 @@ impl Mob {
             MobKind::ZombieVillager(_) => ZombieVillager::read_additional_save_data(self, nbt),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_) => Zombie::read_additional_save_data(self, nbt),
             MobKind::Ghast(_) => Ghast::read_additional_save_data(self, nbt),
+            MobKind::Phantom(_) => crate::world::entity::monster::phantom::Phantom::read_additional_save_data(self, nbt),
             MobKind::IronGolem(_) => IronGolem::read_additional_save_data(self, nbt),
             MobKind::SnowGolem(_) => SnowGolem::read_additional_save_data(self, nbt),
             MobKind::Skeleton(_) => Skeleton::read_additional_save_data(self, nbt),
@@ -1684,6 +1693,7 @@ impl Mob {
             MobKind::Enderman(_) => Enderman::get_ambient_sound(self),
             MobKind::Blaze(_) => Blaze::get_ambient_sound(),
             MobKind::Ghast(_) => Ghast::get_ambient_sound(),
+            MobKind::Phantom(_) => crate::world::entity::monster::phantom::Phantom::get_ambient_sound(),
             MobKind::ZombifiedPiglin(_) => unreachable!("zombified piglins pick their ambient sound with their anger"),
             MobKind::Witch(_) => Witch::get_ambient_sound(),
             MobKind::Ravager(_) => Ravager::get_ambient_sound(),
@@ -1751,6 +1761,7 @@ impl Mob {
             MobKind::Enderman(_) => Enderman::get_hurt_sound(),
             MobKind::Blaze(_) => Blaze::get_hurt_sound(),
             MobKind::Ghast(_) => Ghast::get_hurt_sound(),
+            MobKind::Phantom(_) => crate::world::entity::monster::phantom::Phantom::get_hurt_sound(),
             MobKind::ZombifiedPiglin(_) => ZombifiedPiglin::get_hurt_sound(),
             MobKind::Witch(_) => Witch::get_hurt_sound(),
             MobKind::Ravager(_) => Ravager::get_hurt_sound(),
@@ -1813,6 +1824,7 @@ impl Mob {
             MobKind::Enderman(_) => Enderman::get_death_sound(),
             MobKind::Blaze(_) => Blaze::get_death_sound(),
             MobKind::Ghast(_) => Ghast::get_death_sound(),
+            MobKind::Phantom(_) => crate::world::entity::monster::phantom::Phantom::get_death_sound(),
             MobKind::ZombifiedPiglin(_) => ZombifiedPiglin::get_death_sound(),
             MobKind::Witch(_) => Witch::get_death_sound(),
             MobKind::Ravager(_) => Ravager::get_death_sound(),
@@ -1873,7 +1885,7 @@ impl Mob {
             MobKind::Endermite(_) => Endermite::get_step_sound(),
             MobKind::Giant(_) => return None,
             MobKind::Enderman(_) => return None,
-            MobKind::Blaze(_) | MobKind::Ghast(_) => return None,
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::Phantom(_) => return None,
             MobKind::ZombifiedPiglin(_) => Zombie::get_step_sound(self),
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) => return None,
             MobKind::Ravager(_) => Ravager::get_step_sound(),
@@ -2045,7 +2057,7 @@ impl ServerLevel {
             MobKind::Creeper(_) => self.creeper_mob_interact(id, player, hand),
             MobKind::Bogged(_) => self.bogged_mob_interact(id, player, hand),
             MobKind::Enderman(_) => self.mob_mob_interact(id, player, hand),
-            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => self.mob_mob_interact(id, player, hand),
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.ageable_mob_mob_interact(id, player, hand),
             MobKind::Wolf(_) => self.wolf_mob_interact(id, player, hand),
@@ -2197,6 +2209,7 @@ impl ServerLevel {
     pub fn mob_tick_head_turn(&mut self, id: EntityId) {
         match self.mob(id).expect("a mob").kind {
             MobKind::Armadillo(_) => self.armadillo_body_rotation_control_client_tick(id),
+            MobKind::Phantom(_) => self.phantom_body_rotation_control_client_tick(id),
             _ => self.body_rotation_control_tick(id),
         }
     }
@@ -2731,6 +2744,7 @@ impl ServerLevel {
             MoveControlKind::Fox => self.fox_move_control_tick(id),
             MoveControlKind::Ghast => self.ghast_move_control_tick(id),
             MoveControlKind::Vex => self.vex_move_control_tick(id),
+            MoveControlKind::Phantom => self.phantom_move_control_tick(id),
             MoveControlKind::Rabbit => self.rabbit_move_control_tick(id),
             MoveControlKind::Turtle => self.turtle_move_control_tick(id),
         }
@@ -2812,7 +2826,7 @@ impl ServerLevel {
             | None => {}
             Some(MobKind::Enderman(_)) => self.enderman_custom_server_ai_step(id),
             Some(MobKind::Blaze(_)) => self.blaze_custom_server_ai_step(id),
-            Some(MobKind::Ghast(_)) => {}
+            Some(MobKind::Ghast(_) | MobKind::Phantom(_)) => {}
             Some(MobKind::ZombifiedPiglin(_)) => self.zombified_piglin_custom_server_ai_step(id),
             Some(MobKind::Witch(_) | MobKind::Ravager(_)) => {}
             Some(MobKind::Vindicator(_)) => self.vindicator_custom_server_ai_step(id),
@@ -3153,6 +3167,7 @@ pub fn finalize_spawn(
         MobKind::CaveSpider(_) => return group_data,
         MobKind::Enderman(_) => {}
         MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => {}
+        MobKind::Phantom(_) => return super::monster::phantom::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Ravager(_) => return raider::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Vex(_) => {}
         MobKind::Slime(_) => return slime::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
@@ -3224,7 +3239,7 @@ pub fn get_walk_target_value(mob: &Mob, pos: BlockPos, level: &mut (impl ServerL
         MobKind::Silverfish(_) => silverfish::get_walk_target_value(pos, level),
         MobKind::Enderman(_) => Enderman::get_walk_target_value(),
         MobKind::Blaze(_) | MobKind::ZombifiedPiglin(_) => super::monster::monster::get_walk_target_value(pos, level),
-        MobKind::Ghast(_) => super::pathfinder_mob::get_walk_target_value(),
+        MobKind::Ghast(_) | MobKind::Phantom(_) => super::pathfinder_mob::get_walk_target_value(),
         MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => super::monster::monster::get_walk_target_value(pos, level),
         MobKind::Pillager(_) => Pillager::get_walk_target_value(),
         MobKind::Slime(_) | MobKind::MagmaCube(_) => super::pathfinder_mob::get_walk_target_value(),

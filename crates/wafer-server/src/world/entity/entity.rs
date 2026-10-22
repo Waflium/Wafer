@@ -1018,6 +1018,7 @@ impl ServerLevel {
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Ghast(_)) => super::monster::ghast::Ghast::get_sound_source(),
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Phantom(_)) => super::monster::phantom::Phantom::get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Rabbit(_)) => super::animal::rabbit::rabbit::Rabbit::get_sound_source(mob),
             Some(_) => SoundSource::Neutral,
         }
@@ -1422,6 +1423,10 @@ impl ServerLevel {
         }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Ghast(_))) {
             self.ghast_check_fall_damage(id);
+            return;
+        }
+        if self.is_phantom(id) {
+            self.phantom_check_fall_damage(id);
             return;
         }
         if self.players.get(&id).is_some_and(|p| p.spawn_extra_particles_on_fall) && on_ground && self.entity(id).fall_distance > 0.0 {
@@ -2722,6 +2727,7 @@ impl ServerLevel {
                     super::mob::MobKind::Evoker(_) => "Evoker",
                     super::mob::MobKind::Illusioner(_) => "Illusioner",
                     super::mob::MobKind::Vex(_) => "Vex",
+                    super::mob::MobKind::Phantom(_) => "Phantom",
                     super::mob::MobKind::Slime(_) => "Slime",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",
                     super::mob::MobKind::Wolf(_) => "Wolf",

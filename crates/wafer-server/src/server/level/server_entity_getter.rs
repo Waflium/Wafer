@@ -23,6 +23,18 @@ impl ServerLevel {
         result
     }
 
+    pub fn get_nearby_players(&mut self, target_conditions: &TargetingConditions, source: EntityId, bb: &AABB) -> Vec<EntityId> {
+        let mut found_players = Vec::new();
+        for i in 0..self.players.len() {
+            let player = *self.players.get_index(i).expect("a player").0;
+            let e = self.entity(player);
+            if bb.contains(e.x(), e.y(), e.z()) && target_conditions.test(self, Some(source), player) {
+                found_players.push(player);
+            }
+        }
+        found_players
+    }
+
     pub fn get_nearest_player_to(&self, x: f64, y: f64, z: f64, range: f64, filter_out_creative: bool) -> Option<EntityId> {
         let mut best = -1.0;
         let mut result = None;

@@ -34,6 +34,7 @@ pub enum MoveControlKind {
     Rabbit,
     Turtle,
     Vex,
+    Phantom,
 }
 
 #[derive(Default)]

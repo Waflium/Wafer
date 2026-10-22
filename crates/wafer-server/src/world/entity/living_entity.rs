@@ -1541,7 +1541,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
-            Some(MobKind::Blaze(_) | MobKind::Ghast(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::Phantom(_)) => self.mob_get_base_experience_reward(id),
             Some(
                 MobKind::Creeper(_)
                 | MobKind::Spider(_)
@@ -2097,7 +2097,7 @@ impl ServerLevel {
             Some(MobKind::Endermite(_)) => self.endermite_ai_step(id),
             Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),
             Some(MobKind::Blaze(_)) => self.blaze_ai_step(id),
-            Some(MobKind::Ghast(_)) => self.mob_ai_step(id),
+            Some(MobKind::Ghast(_) | MobKind::Phantom(_)) => self.mob_ai_step(id),
             Some(MobKind::ZombifiedPiglin(_)) => self.monster_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(MobKind::Ravager(_)) => self.ravager_ai_step(id),
@@ -2548,6 +2548,8 @@ impl ServerLevel {
             self.squid_travel(id, input);
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Ghast(_))) {
             self.ghast_travel(id, input);
+        } else if self.is_phantom(id) {
+            self.phantom_travel(id, input);
         } else {
             self.living_entity_travel(id, input);
         }
@@ -2854,6 +2856,7 @@ impl ServerLevel {
             Some(mob) if mob.is_spider() => super::monster::spider::spider::Spider::on_climbable(mob),
             Some(mob) if mob.abstract_horse().is_some() => super::animal::equine::abstract_horse::on_climbable(),
             Some(mob) if matches!(mob.kind, MobKind::Ghast(_)) => super::monster::ghast::Ghast::on_climbable(),
+            Some(mob) if matches!(mob.kind, MobKind::Phantom(_)) => super::monster::phantom::Phantom::on_climbable(),
             _ => self.living_entity_on_climbable(id),
         }
     }

@@ -13,6 +13,7 @@ pub mod geode_layer_settings;
 pub mod heightproviders;
 pub mod material;
 pub mod patrol_spawner;
+pub mod phantom_spawner;
 pub mod placement;
 pub mod random_state;
 pub mod structure;

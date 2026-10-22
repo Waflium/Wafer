@@ -17,6 +17,7 @@ pub mod monster;
 #[cfg(test)]
 mod nether_mob_tests;
 pub mod patrolling_monster;
+pub mod phantom;
 pub mod ranged_attack_mob;
 pub mod silverfish;
 #[cfg(test)]
@@ -32,3 +33,5 @@ mod witch_tests;
 #[cfg(test)]
 mod ravager_tests;
 pub mod zombie;
+#[cfg(test)]
+mod phantom_tests;

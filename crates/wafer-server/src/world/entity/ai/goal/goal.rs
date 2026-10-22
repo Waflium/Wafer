@@ -14,6 +14,7 @@ use super::llama_follow_caravan_goal::LlamaFollowCaravanGoal;
 use super::look_at_trading_player_goal::LookAtTradingPlayerGoal;
 use super::trade_with_player_goal::TradeWithPlayerGoal;
 use super::use_item_goal::UseItemGoal;
+use crate::world::entity::monster::phantom::{PhantomAttackPlayerTargetGoal, PhantomAttackStrategyGoal, PhantomCircleAroundAnchorGoal, PhantomSweepAttackGoal};
 use crate::world::entity::animal::equine::trader_llama::TraderLlamaDefendWanderingTraderGoal;
 use crate::world::entity::npc::wanderingtrader::wandering_trader::WanderToPositionGoal;
 use super::ranged_crossbow_attack_goal::RangedCrossbowAttackGoal;
@@ -149,6 +150,10 @@ pub enum Goal {
     TradeWithPlayer(TradeWithPlayerGoal),
     LookAtTradingPlayer(LookAtTradingPlayerGoal),
     WanderToPosition(WanderToPositionGoal),
+    PhantomAttackStrategy(PhantomAttackStrategyGoal),
+    PhantomSweepAttack(PhantomSweepAttackGoal),
+    PhantomCircleAroundAnchor(PhantomCircleAroundAnchorGoal),
+    PhantomAttackPlayerTarget(PhantomAttackPlayerTargetGoal),
     Interact(LookAtPlayerGoal),
     AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
     RandomStroll(RandomStrollGoal),
@@ -254,6 +259,10 @@ impl Goal {
             Goal::EatBlock(goal) => goal.can_use(level, mob),
             Goal::WaterAvoidingRandomStroll(goal) => goal.can_use(level, mob),
             Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.can_use(level, mob),
+            Goal::PhantomAttackStrategy(goal) => goal.can_use(level, mob),
+            Goal::PhantomSweepAttack(goal) => goal.can_use(level, mob),
+            Goal::PhantomCircleAroundAnchor(goal) => goal.can_use(level, mob),
+            Goal::PhantomAttackPlayerTarget(goal) => goal.can_use(level, mob),
             Goal::LlamaFollowCaravan(goal) => goal.can_use(level, mob),
             Goal::LlamaHurtByTarget(goal) => goal.can_use(level, mob),
             Goal::TraderLlamaDefendWanderingTarget(goal) => goal.can_use(level, mob),
@@ -395,6 +404,10 @@ impl Goal {
             Goal::EatBlock(goal) => goal.can_continue_to_use(),
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.can_continue_to_use(level, mob),
             Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.can_continue_to_use(level, mob),
+            Goal::PhantomAttackStrategy(goal) => goal.can_use(level, mob),
+            Goal::PhantomSweepAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::PhantomCircleAroundAnchor(goal) => goal.can_use(level, mob),
+            Goal::PhantomAttackPlayerTarget(goal) => goal.can_continue_to_use(level, mob),
             Goal::LlamaFollowCaravan(goal) => goal.can_continue_to_use(level, mob),
             Goal::LlamaHurtByTarget(goal) => level.llama_hurt_by_target_can_continue_to_use(goal, mob),
             Goal::TraderLlamaDefendWanderingTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
@@ -539,6 +552,9 @@ impl Goal {
             Goal::EatBlock(goal) => goal.start(level, mob),
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.start(level, mob),
             Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.start(level, mob),
+            Goal::PhantomAttackStrategy(goal) => goal.start(level, mob),
+            Goal::PhantomCircleAroundAnchor(goal) => goal.start(level, mob),
+            Goal::PhantomSweepAttack(_) | Goal::PhantomAttackPlayerTarget(_) => {}
             Goal::LlamaFollowCaravan(_) => {}
             Goal::LlamaHurtByTarget(goal) => goal.start(level, mob),
             Goal::TraderLlamaDefendWanderingTarget(goal) => goal.start(level, mob),
@@ -674,6 +690,9 @@ impl Goal {
             Goal::EatBlock(goal) => goal.stop(),
             Goal::WaterAvoidingRandomStroll(goal) => goal.random_stroll_goal.stop(level, mob),
             Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.stop(),
+            Goal::PhantomAttackStrategy(goal) => goal.stop(level, mob),
+            Goal::PhantomSweepAttack(goal) => goal.stop(level, mob),
+            Goal::PhantomCircleAroundAnchor(_) | Goal::PhantomAttackPlayerTarget(_) => {}
             Goal::LlamaFollowCaravan(goal) => goal.stop(level, mob),
             Goal::LlamaHurtByTarget(goal) => goal.target_goal.stop(level, mob),
             Goal::TraderLlamaDefendWanderingTarget(goal) => goal.target_goal.stop(level, mob),
@@ -835,6 +854,10 @@ impl Goal {
             Goal::FollowParent(goal) => goal.tick(level, mob),
             Goal::EatBlock(goal) => goal.tick(level, mob),
             Goal::LookAtPlayer(goal) | Goal::Interact(goal) => goal.tick(level, mob),
+            Goal::PhantomAttackStrategy(goal) => goal.tick(level, mob),
+            Goal::PhantomSweepAttack(goal) => goal.tick(level, mob),
+            Goal::PhantomCircleAroundAnchor(goal) => goal.tick(level, mob),
+            Goal::PhantomAttackPlayerTarget(_) => {}
             Goal::LlamaFollowCaravan(goal) => goal.tick(level, mob),
             Goal::LlamaHurtByTarget(_) | Goal::TraderLlamaDefendWanderingTarget(_) | Goal::UseItem(_) | Goal::TradeWithPlayer(_) => {}
             Goal::LookAtTradingPlayer(goal) => goal.look_at_player_goal.tick(level, mob),
@@ -964,6 +987,8 @@ impl Goal {
             Goal::EatBlock(_) => Flag::Move.bit() | Flag::Look.bit() | Flag::Jump.bit(),
             Goal::ZombieAttackTurtleEgg(_) | Goal::DrownedGoToBeach(_) => Flag::Move.bit() | Flag::Jump.bit(),
             Goal::LookAtPlayer(_) | Goal::LookAtTradingPlayer(_) => Flag::Look.bit(),
+            Goal::PhantomSweepAttack(_) | Goal::PhantomCircleAroundAnchor(_) => Flag::Move.bit(),
+            Goal::PhantomAttackStrategy(_) | Goal::PhantomAttackPlayerTarget(_) => 0,
             Goal::Interact(_) => Flag::Look.bit() | Flag::Move.bit(),
             Goal::LlamaFollowCaravan(_) | Goal::WanderToPosition(_) => Flag::Move.bit(),
             Goal::LlamaHurtByTarget(_) | Goal::TraderLlamaDefendWanderingTarget(_) => Flag::Target.bit(),

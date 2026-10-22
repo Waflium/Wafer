@@ -109,7 +109,7 @@ impl ServerLevel {
             | MobKind::Endermite(_)
             | MobKind::Giant(_) => false,
             MobKind::Enderman(_) => false,
-            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) => false,
+            MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => false,
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => false,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => false,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => false,

@@ -31,7 +31,7 @@ impl ServerLevel {
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => self.monster_get_walk_target_value(pos),
             MobKind::Pillager(_) => super::monster::illager::pillager::Pillager::get_walk_target_value(),
             MobKind::Blaze(_) | MobKind::ZombifiedPiglin(_) => self.monster_get_walk_target_value(pos),
-            MobKind::Ghast(_) => get_walk_target_value(),
+            MobKind::Ghast(_) | MobKind::Phantom(_) => get_walk_target_value(),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => get_walk_target_value(),
             MobKind::Squid(_) | MobKind::GlowSquid(_) => get_walk_target_value(),
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => get_walk_target_value(),
@@ -46,7 +46,7 @@ impl ServerLevel {
     }
 
     pub fn is_pathfinder_mob(&self, id: EntityId) -> bool {
-        self.mob(id).is_some_and(|mob| !matches!(mob.kind, MobKind::Ghast(_) | MobKind::Slime(_) | MobKind::MagmaCube(_) | MobKind::Bat(_)))
+        self.mob(id).is_some_and(|mob| !matches!(mob.kind, MobKind::Ghast(_) | MobKind::Slime(_) | MobKind::MagmaCube(_) | MobKind::Bat(_) | MobKind::Phantom(_)))
     }
 
     pub fn is_panicking(&self, id: EntityId) -> bool {

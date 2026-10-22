@@ -2,6 +2,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::npc::cat_spawner::CatSpawner;
 
 pub enum CustomSpawner {
+    Phantom(crate::world::level::levelgen::phantom_spawner::PhantomSpawner),
     Patrol(crate::world::level::levelgen::patrol_spawner::PatrolSpawner),
     Cat(CatSpawner),
     VillageSiege(crate::world::entity::ai::village::village_siege::VillageSiege),
@@ -11,6 +12,7 @@ pub enum CustomSpawner {
 impl CustomSpawner {
     pub fn tick(&mut self, level: &mut ServerLevel, spawn_enemies: bool) {
         match self {
+            CustomSpawner::Phantom(spawner) => spawner.tick(level, spawn_enemies),
             CustomSpawner::Patrol(spawner) => spawner.tick(level, spawn_enemies),
             CustomSpawner::Cat(spawner) => spawner.tick(level, spawn_enemies),
             CustomSpawner::VillageSiege(spawner) => spawner.tick(level, spawn_enemies),

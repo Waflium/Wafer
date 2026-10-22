@@ -11,6 +11,7 @@ pub enum LookControlKind {
     Axolotl(i32),
     Frog,
     Fox,
+    Phantom,
 }
 
 #[derive(Default)]
@@ -77,6 +78,7 @@ impl ServerLevel {
             LookControlKind::SmoothSwimming(max_y_rot_from_center) => self.smooth_swimming_look_control_tick(id, max_y_rot_from_center),
             LookControlKind::Axolotl(max_y_rot_from_center) => self.axolotl_look_control_tick(id, max_y_rot_from_center),
             LookControlKind::Fox => self.fox_look_control_tick(id),
+            LookControlKind::Phantom => {}
         }
     }
 
