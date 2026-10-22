@@ -1,4 +1,4 @@
-use wafer_core::{Vec3, mth};
+use wafer_core::Vec3;
 use wafer_data::packets::play::clientbound;
 
 use crate::commands::source::{Anchor, CommandSourceStack};
@@ -33,7 +33,7 @@ impl LookAt {
             LookAt::Entity { entity, anchor } => (anchor_apply(level, anchor, entity), Some((entity, anchor))),
             LookAt::Position(pos) => (pos, None),
         };
-        look_at(level, target, from, pos);
+        level.entity_look_at(target, from, pos);
         if let Some(player) = level.players.get(&target) {
             player.connection.send(clientbound::PLAYER_LOOK_AT, |w| {
                 w.varint(anchor_id(from));
@@ -50,15 +50,3 @@ impl LookAt {
     }
 }
 
-fn look_at(level: &mut ServerLevel, id: EntityId, anchor: Anchor, pos: Vec3) {
-    let from = anchor_apply(level, anchor, id);
-    let (xd, yd, zd) = (pos.x - from.x, pos.y - from.y, pos.z - from.z);
-    let sd = (xd * xd + zd * zd).sqrt();
-    let living = level.is_living(id);
-    let e = level.entity_mut(id);
-    e.set_x_rot(mth::wrap_degrees((-(mth::atan2(yd, sd) * mth::RAD_TO_DEG as f64)) as f32));
-    e.set_y_rot(mth::wrap_degrees((mth::atan2(zd, xd) * mth::RAD_TO_DEG as f64) as f32 - 90.0));
-    if living {
-        e.y_head_rot = e.y_rot;
-    }
-}

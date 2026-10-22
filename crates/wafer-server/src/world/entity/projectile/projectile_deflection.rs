@@ -10,12 +10,20 @@ pub enum ProjectileDeflection {
     Reverse,
     AimDeflect,
     MomentumDeflect,
+    Breeze,
 }
 
 impl ProjectileDeflection {
     pub fn deflect(self, level: &mut ServerLevel, projectile: EntityId, entity: Option<EntityId>, power: Vec3) {
         match self {
             ProjectileDeflection::None => {}
+            ProjectileDeflection::Breeze => {
+                if let Some(entity) = entity {
+                    let source = level.sound_source(entity);
+                    level.play_sound_from_entity(None, entity, crate::world::entity::sound_event("minecraft:entity.breeze.deflect"), source, 1.0, 1.0);
+                }
+                ProjectileDeflection::Reverse.deflect(level, projectile, entity, power);
+            }
             ProjectileDeflection::Reverse => {
                 let p = level.entity_mut(projectile);
                 let rotation = 170.0 + p.random.next_float() * 20.0;

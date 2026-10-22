@@ -95,7 +95,7 @@ impl ServerLevel {
             MobKind::Goat(_) => goat::goat::is_food(item_stack),
             MobKind::Hoglin(_) => crate::world::entity::monster::hoglin::hoglin::is_food(item_stack),
             MobKind::Panda(_) => panda::panda::is_food(item_stack),
-            MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) => false,
+            MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => false,
             MobKind::PolarBear(_) => false,
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),
             MobKind::Zombie(_)

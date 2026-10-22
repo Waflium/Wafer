@@ -382,7 +382,10 @@ impl ServerLevel {
         }
     }
 
-    pub fn entity_deflection(&self, entity: EntityId, _projectile: EntityId) -> ProjectileDeflection {
+    pub fn entity_deflection(&self, entity: EntityId, projectile: EntityId) -> ProjectileDeflection {
+        if matches!(self.mob(entity).map(|mob| &mob.kind), Some(crate::world::entity::mob::MobKind::Breeze(_))) {
+            return self.breeze_deflection(entity, projectile);
+        }
         if entity_type_tags::DEFLECTS_PROJECTILES.contains(self.entity(entity).entity_type as usize) { ProjectileDeflection::Reverse } else { ProjectileDeflection::None }
     }
 

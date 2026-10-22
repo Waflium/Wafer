@@ -32,6 +32,7 @@ pub enum SensorType {
     HoglinSpecificSensor,
     PiglinSpecificSensor,
     PiglinBruteSpecificSensor,
+    BreezeAttackEntitySensor,
 }
 
 impl SensorType {
@@ -56,6 +57,7 @@ impl SensorType {
             SensorType::HoglinSpecificSensor => "minecraft:hoglin_specific_sensor",
             SensorType::PiglinSpecificSensor => "minecraft:piglin_specific_sensor",
             SensorType::PiglinBruteSpecificSensor => "minecraft:piglin_brute_specific_sensor",
+            SensorType::BreezeAttackEntitySensor => "minecraft:breeze_attack_entity_sensor",
         }
     }
 

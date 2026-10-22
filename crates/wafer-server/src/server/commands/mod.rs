@@ -40,7 +40,7 @@ mod kick_command;
 mod kill_command;
 pub mod list_players_command;
 mod locate_command;
-mod look_at;
+pub mod look_at;
 mod loot_command;
 #[cfg(test)]
 mod loot_command_tests;

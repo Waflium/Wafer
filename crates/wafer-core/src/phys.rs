@@ -78,6 +78,11 @@ impl Vec3 {
         dx * dx + dy * dy + dz * dz
     }
 
+    pub fn closer_than_xz_y(self, v: Vec3, distance_xz: f64, distance_y: f64) -> bool {
+        let (dx, dy, dz) = (v.x - self.x, v.y - self.y, v.z - self.z);
+        dx * dx + dz * dz < distance_xz * distance_xz && dy.abs() < distance_y
+    }
+
     pub fn closer_than(self, v: Vec3, distance: f64) -> bool {
         self.distance_to_sqr(v) < distance * distance
     }

@@ -1,5 +1,6 @@
 pub mod adult_sensor;
 pub mod axolotl_attackables_sensor;
+pub mod breeze_attack_entity_sensor;
 pub mod frog_attackables_sensor;
 pub mod golem_sensor;
 pub mod hoglin_specific_sensor;

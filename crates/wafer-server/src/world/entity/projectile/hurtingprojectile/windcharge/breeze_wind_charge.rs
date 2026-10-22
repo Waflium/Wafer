@@ -21,6 +21,14 @@ impl BreezeWindCharge {
     pub fn of_type() -> Projectile {
         Projectile::new(ENTITY_TYPE, DIMENSIONS, entity_defaults(), ProjectileKind::BreezeWindCharge(BreezeWindCharge::default()))
     }
+
+    pub fn from_breeze(level: &ServerLevel, breeze: EntityId) -> Projectile {
+        let mut projectile = BreezeWindCharge::of_type();
+        let e = level.entity(breeze);
+        projectile.entity.set_pos(Vec3::new(e.x(), level.breeze_get_firing_y_position(breeze), e.z()));
+        projectile.owner = Some(crate::world::entity::entity_reference::EntityReference::of(e.uuid));
+        projectile
+    }
 }
 
 impl ServerLevel {

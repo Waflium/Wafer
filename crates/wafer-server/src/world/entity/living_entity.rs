@@ -929,6 +929,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::IronGolem(_)) => self.iron_golem_can_attack(id, target),
+            Some(MobKind::Breeze(_)) => self.breeze_can_attack(id, target),
             Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.abstract_illager_can_attack(id, target),
             Some(_) => self.mob_can_attack(id, target),
             None => self.living_entity_can_attack(id, target),
@@ -1620,7 +1621,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Hoglin(_)) => self.mob(id).expect("a hoglin").xp_reward,
-            Some(MobKind::Zoglin(_) | MobKind::PiglinBrute(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Zoglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Piglin(_)) => self.mob(id).expect("a piglin").xp_reward,
             Some(MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
             Some(MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::Phantom(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.mob_get_base_experience_reward(id),
@@ -2187,7 +2188,7 @@ impl ServerLevel {
             Some(MobKind::Blaze(_)) => self.blaze_ai_step(id),
             Some(MobKind::Ghast(_) | MobKind::Phantom(_)) => self.mob_ai_step(id),
             Some(MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.guardian_ai_step(id),
-            Some(MobKind::ZombifiedPiglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_)) => self.monster_ai_step(id),
+            Some(MobKind::ZombifiedPiglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_)) => self.monster_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(MobKind::Ravager(_)) => self.ravager_ai_step(id),
             Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.raider_ai_step(id),

@@ -669,6 +669,9 @@ impl Entity {
     }
 
     pub fn fluid_jump_threshold(&self) -> f64 {
+        if self.entity_type == super::entity_types::BREEZE.id {
+            return self.dimensions.eye_height as f64;
+        }
         if (self.dimensions.eye_height as f64) < 0.4 { 0.0 } else { 0.4 }
     }
 
@@ -878,6 +881,28 @@ impl ServerLevel {
         self.clear_fire(id);
     }
 
+    pub fn entity_look_at(&mut self, id: EntityId, anchor: crate::commands::source::Anchor, pos: Vec3) {
+        let from = crate::server::commands::look_at::anchor_apply(self, anchor, id);
+        let (xd, yd, zd) = (pos.x - from.x, pos.y - from.y, pos.z - from.z);
+        let sd = (xd * xd + zd * zd).sqrt();
+        let living = self.is_living(id);
+        let e = self.entity_mut(id);
+        e.set_x_rot(mth::wrap_degrees((-(mth::atan2(yd, sd) * mth::RAD_TO_DEG as f64)) as f32));
+        e.set_y_rot(mth::wrap_degrees((mth::atan2(zd, xd) * mth::RAD_TO_DEG as f64) as f32 - 90.0));
+        if living {
+            e.y_head_rot = e.y_rot;
+        }
+        e.x_rot_o = e.x_rot;
+        e.y_rot_o = e.y_rot;
+        if living {
+            let y_head_rot = e.y_head_rot;
+            let living = self.living_mut(id);
+            living.y_head_rot_o = y_head_rot;
+            living.y_body_rot = y_head_rot;
+            living.y_body_rot_o = living.y_body_rot;
+        }
+    }
+
     pub fn known_speed(&self, id: EntityId) -> Vec3 {
         if let Some(player) = self.players.get(&id) {
             return match self.vehicle(id) {
@@ -1039,7 +1064,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(super::LevelEntity::Projectile(projectile)) if matches!(projectile.kind, super::projectile::projectile::ProjectileKind::FireworkRocket(_)) => MovementEmission::All,
             Some(super::LevelEntity::AreaEffectCloud(_)) => MovementEmission::All,
-            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Silverfish(_) | super::mob::MobKind::Endermite(_)) => MovementEmission::Events,
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Silverfish(_) | super::mob::MobKind::Endermite(_) | super::mob::MobKind::Breeze(_)) => MovementEmission::Events,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Bat(_)) || mob.is_squid() => MovementEmission::Events,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Guardian(_) | super::mob::MobKind::ElderGuardian(_)) => MovementEmission::Events,
             _ if self.is_living(id) => MovementEmission::All,
@@ -1584,6 +1609,9 @@ impl ServerLevel {
         }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Creeper(_))) {
             return self.creeper_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
+        }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Breeze(_))) {
+            self.breeze_on_cause_fall_damage(id, fall_distance);
         }
         if self.is_llama(id) {
             return self.llama_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
@@ -2532,6 +2560,8 @@ impl ServerLevel {
             self.server_player_is_invulnerable_to(id, source)
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Ghast(_))) {
             self.ghast_is_invulnerable_to(id, source)
+        } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Breeze(_))) {
+            self.breeze_is_invulnerable_to(id, source)
         } else if self.is_living(id) {
             self.living_entity_is_invulnerable_to(id, source)
         } else {
@@ -2813,6 +2843,7 @@ impl ServerLevel {
                     super::mob::MobKind::Zoglin(_) => "Zoglin",
                     super::mob::MobKind::Piglin(_) => "Piglin",
                     super::mob::MobKind::PiglinBrute(_) => "PiglinBrute",
+                    super::mob::MobKind::Breeze(_) => "Breeze",
                     super::mob::MobKind::WitherSkeleton(_) => "WitherSkeleton",
                     super::mob::MobKind::Bogged(_) => "Bogged",
                     super::mob::MobKind::Drowned(_) => "Drowned",
