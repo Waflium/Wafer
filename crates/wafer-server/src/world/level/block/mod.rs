@@ -384,6 +384,10 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn was_exploded(&self, level: &mut ServerLevel, pos: BlockPos, explosion: &crate::world::level::server_explosion::ServerExplosion) {}
 
+    fn on_explosion_hit(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, explosion: &crate::world::level::server_explosion::ServerExplosion, stacks: &mut Vec<(BlockPos, crate::world::item::ItemStack)>) {
+        level.block_on_explosion_hit(state, pos, explosion, stacks);
+    }
+
     fn handle_precipitation(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, precipitation: Precipitation) {}
 
     fn random_tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {}

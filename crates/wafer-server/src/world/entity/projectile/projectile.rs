@@ -48,6 +48,8 @@ pub enum ProjectileKind {
     SmallFireball(SmallFireball),
     LargeFireball(LargeFireball),
     LlamaSpit(super::llama_spit::LlamaSpit),
+    WindCharge(super::hurtingprojectile::windcharge::wind_charge::WindCharge),
+    BreezeWindCharge(super::hurtingprojectile::windcharge::breeze_wind_charge::BreezeWindCharge),
 }
 
 pub struct Projectile {
@@ -89,6 +91,8 @@ impl Projectile {
         match &self.kind {
             ProjectileKind::SmallFireball(fireball) => Some(&fireball.abstract_hurting_projectile),
             ProjectileKind::LargeFireball(fireball) => Some(&fireball.abstract_hurting_projectile),
+            ProjectileKind::WindCharge(wind_charge) => Some(&wind_charge.abstract_wind_charge.abstract_hurting_projectile),
+            ProjectileKind::BreezeWindCharge(wind_charge) => Some(&wind_charge.abstract_wind_charge.abstract_hurting_projectile),
             _ => None,
         }
     }
@@ -97,6 +101,8 @@ impl Projectile {
         match &mut self.kind {
             ProjectileKind::SmallFireball(fireball) => Some(&mut fireball.abstract_hurting_projectile),
             ProjectileKind::LargeFireball(fireball) => Some(&mut fireball.abstract_hurting_projectile),
+            ProjectileKind::WindCharge(wind_charge) => Some(&mut wind_charge.abstract_wind_charge.abstract_hurting_projectile),
+            ProjectileKind::BreezeWindCharge(wind_charge) => Some(&mut wind_charge.abstract_wind_charge.abstract_hurting_projectile),
             _ => None,
         }
     }
@@ -246,6 +252,8 @@ impl ServerLevel {
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_tick(id),
             ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) => self.abstract_hurting_projectile_tick(id),
             ProjectileKind::LlamaSpit(_) => self.llama_spit_tick(id),
+            ProjectileKind::WindCharge(_) => self.wind_charge_tick(id),
+            ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_tick(id),
             _ => self.throwable_projectile_tick(id),
         }
     }
@@ -359,6 +367,9 @@ impl ServerLevel {
     }
 
     pub fn deflect(&mut self, id: EntityId, deflection: ProjectileDeflection, deflecting_entity: Option<EntityId>, new_owner: Option<EntityReference>, by_attack: bool, power: Vec3) -> bool {
+        if !self.wind_charge_can_deflect(id) {
+            return false;
+        }
         deflection.deflect(self, id, deflecting_entity, power);
         self.projectile_set_owner_reference(id, new_owner);
         self.on_deflection(id, by_attack);
@@ -387,6 +398,7 @@ impl ServerLevel {
             }
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit(id, hit_result),
             ProjectileKind::LargeFireball(_) => self.large_fireball_on_hit(id, hit_result),
+            ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit(id, hit_result),
         }
     }
 
@@ -427,6 +439,7 @@ impl ServerLevel {
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit_entity(id, hit_result),
             ProjectileKind::LargeFireball(_) => self.large_fireball_on_hit_entity(id, hit_result),
             ProjectileKind::LlamaSpit(_) => self.llama_spit_on_hit_entity(id, hit_result),
+            ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit_entity(id, hit_result),
         }
     }
 
@@ -437,6 +450,7 @@ impl ServerLevel {
             ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => self.abstract_thrown_potion_on_hit_block(id, hit_result),
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit_block(id, hit_result),
             ProjectileKind::LlamaSpit(_) => self.llama_spit_on_hit_block(id, hit_result),
+            ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit_block(id, hit_result),
             _ => self.projectile_base_on_hit_block(id, hit_result),
         }
     }
@@ -449,6 +463,9 @@ impl ServerLevel {
     pub fn can_hit_entity(&self, id: EntityId, entity: EntityId) -> bool {
         if self.projectile(id).abstract_arrow().is_some() {
             return self.abstract_arrow_can_hit_entity(id, entity);
+        }
+        if self.projectile(id).is_abstract_wind_charge() {
+            return self.abstract_wind_charge_can_hit_entity(id, entity);
         }
         if self.projectile(id).abstract_hurting_projectile().is_some() {
             return self.abstract_hurting_projectile_can_hit_entity(id, entity);

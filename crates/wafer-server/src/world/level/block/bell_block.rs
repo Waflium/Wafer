@@ -65,6 +65,13 @@ impl BellBlock {
 }
 
 impl BlockBehaviour for BellBlock {
+    fn on_explosion_hit(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, explosion: &crate::world::level::server_explosion::ServerExplosion, stacks: &mut Vec<(BlockPos, crate::world::item::ItemStack)>) {
+        if explosion.can_trigger_blocks(level) {
+            self.attempt_to_ring(None, level, pos, None);
+        }
+        level.block_on_explosion_hit(state, pos, explosion, stacks);
+    }
+
     fn on_projectile_hit(&self, level: &mut ServerLevel, state: BlockState, hit_result: &BlockHitResult, projectile: EntityId) {
         let player_owner = level.projectile_get_owner(projectile).filter(|&owner| level.is_player(owner));
         self.on_hit(level, state, hit_result, player_owner, true);

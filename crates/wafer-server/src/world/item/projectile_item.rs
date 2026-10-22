@@ -6,7 +6,7 @@ use crate::server::level::ServerLevel;
 use crate::server::level::events::SOUND_FIREWORK_SHOOT;
 use crate::world::entity::projectile::projectile::Projectile;
 use crate::world::item::ItemStack;
-use crate::world::item::{arrow_item, experience_bottle_item, fire_charge_item, firework_rocket_item, throwable_potion_item};
+use crate::world::item::{arrow_item, experience_bottle_item, fire_charge_item, firework_rocket_item, throwable_potion_item, wind_charge_item};
 use crate::world::entity::projectile::throwableitemprojectile::snowball::Snowball;
 use crate::world::entity::projectile::throwableitemprojectile::thrown_egg::ThrownEgg;
 
@@ -60,6 +60,8 @@ pub fn as_projectile(level: &mut ServerLevel, position: Vec3, item_stack: &ItemS
         firework_rocket_item::as_projectile(position, item_stack, direction)
     } else if classes.contains(&"FireChargeItem") {
         fire_charge_item::as_projectile(level, position, item_stack, direction)
+    } else if classes.contains(&"WindChargeItem") {
+        wind_charge_item::as_projectile(level, position, direction)
     } else {
         arrow_item::as_projectile(level, item, position, item_stack)
     }
@@ -73,6 +75,8 @@ pub fn create_dispense_config(item: Item) -> DispenseConfig {
         DispenseConfig { position_function: PositionFunction::EntityJustOutsideOfBlockPos, uncertainty: 1.0, power: 0.5, override_dispense_event: Some(SOUND_FIREWORK_SHOOT) }
     } else if classes.contains(&"FireChargeItem") {
         fire_charge_item::create_dispense_config()
+    } else if classes.contains(&"WindChargeItem") {
+        wind_charge_item::create_dispense_config()
     } else {
         DispenseConfig::DEFAULT
     }

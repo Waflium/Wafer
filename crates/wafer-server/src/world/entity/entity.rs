@@ -267,7 +267,15 @@ impl Entity {
             return;
         }
         self.set_pos_raw(pos);
-        self.bb = self.dimensions.make_bounding_box(pos);
+        self.bb = self.make_bounding_box(pos);
+    }
+
+    pub fn make_bounding_box(&self, position: Vec3) -> AABB {
+        if self.entity_type == super::entity_types::WIND_CHARGE.id || self.entity_type == super::entity_types::BREEZE_WIND_CHARGE.id {
+            super::projectile::hurtingprojectile::windcharge::abstract_wind_charge::make_bounding_box(self.dimensions, position)
+        } else {
+            self.dimensions.make_bounding_box(position)
+        }
     }
 
     pub fn set_pos_raw(&mut self, pos: Vec3) {
@@ -986,7 +994,7 @@ impl ServerLevel {
                 | ProjectileKind::SpectralArrow(_)
                 | ProjectileKind::ThrownTrident(_) => 0.05,
                 ProjectileKind::FireworkRocket(_) => 0.0,
-                ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) => 0.0,
+                ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) | ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => 0.0,
                 ProjectileKind::LlamaSpit(_) => 0.06,
                 _ => 0.03,
             },
@@ -2067,12 +2075,11 @@ impl ServerLevel {
 
     fn check_inside_blocks_between(&mut self, id: EntityId, from: Vec3, to: Vec3, visited: &mut FastSet<BlockPos>, max_iterations: i32) -> i32 {
         let e = self.entity_mut(id);
-        let dimensions = e.dimensions;
-        let deflated = dimensions.make_bounding_box(to).deflate_all(1.0e-5f32 as f64);
+        let deflated = e.make_bounding_box(to).deflate_all(1.0e-5f32 as f64);
         let moved_far = from.distance_to_sqr(to) > mth::square(0.9999900000002526);
         let mut effects = std::mem::take(&mut e.inside_effects);
         let mut iterations = 0;
-        let box_from = dimensions.make_bounding_box(from);
+        let box_from = self.entity(id).make_bounding_box(from);
         let travel = to.subtract(from);
         for_each_block_intersected_between(from, to, &deflated, |pos, iteration| {
             if !self.is_alive(id) {
@@ -2870,6 +2877,8 @@ impl ServerLevel {
                     ProjectileKind::SmallFireball(_) => "SmallFireball",
                     ProjectileKind::LlamaSpit(_) => "LlamaSpit",
                     ProjectileKind::LargeFireball(_) => "LargeFireball",
+                    ProjectileKind::WindCharge(_) => "WindCharge",
+                    ProjectileKind::BreezeWindCharge(_) => "BreezeWindCharge",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",
                 Some(LevelEntity::Minecart(minecart)) => match minecart.kind {
@@ -3791,6 +3800,7 @@ impl ServerLevel {
     pub fn can_collide_with(&self, id: EntityId, entity: EntityId) -> bool {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_) | LevelEntity::Minecart(_)) => super::vehicle::boat::abstract_boat::can_vehicle_collide(self, id, entity),
+            _ if self.is_wind_charge(id) && !self.abstract_wind_charge_can_collide_with(entity) => false,
             _ => self.can_be_collided_with(entity, Some(id)) && !self.is_passenger_of_same_vehicle(id, entity),
         }
     }
@@ -3851,9 +3861,16 @@ impl ServerLevel {
         }
     }
 
+    pub fn push_from_explosion(&mut self, id: EntityId, impulse: Vec3) {
+        self.entity_push(id, impulse.x, impulse.y, impulse.z);
+    }
+
     pub fn entity_push(&mut self, id: EntityId, xa: f64, ya: f64, za: f64) {
         if self.is_block_attached_entity(id) {
             self.block_attached_entity_push(id, xa, ya, za);
+            return;
+        }
+        if self.is_wind_charge(id) || self.as_projectile(id).is_some_and(|projectile| projectile.abstract_arrow().is_some() && projectile.is_in_ground()) {
             return;
         }
         self.entity_mut(id).push(xa, ya, za);

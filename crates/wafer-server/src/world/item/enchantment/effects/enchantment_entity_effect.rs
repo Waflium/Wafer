@@ -9,6 +9,7 @@ use crate::world::level::levelgen::blockpredicates::block_predicate::{BlockPredi
 use crate::world::level::levelgen::feature::stateproviders::block_state_provider::BlockStateProviderHolder;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::level::is_in_spawnable_bounds;
+use crate::world::level::server_explosion::{ExplosionDamageCalculator, ExplosionInteraction, ExplosionParticleInfo};
 use crate::server::level::ServerLevel;
 use crate::sounds::sound_event::SoundEvent;
 use crate::util::codec::{self, DataResult};
@@ -36,7 +37,20 @@ pub enum EnchantmentEntityEffect {
     ApplyMobEffect { to_apply: HolderSet, min_duration: LevelBasedValue, max_duration: LevelBasedValue, min_amplifier: LevelBasedValue, max_amplifier: LevelBasedValue },
     ChangeItemDamage { amount: LevelBasedValue },
     DamageEntity { min_damage: LevelBasedValue, max_damage: LevelBasedValue, damage_type: DamageType },
-    Explode(Nbt),
+    Explode {
+        attribute_to_user: bool,
+        damage_type: Option<DamageType>,
+        knockback_multiplier: Option<LevelBasedValue>,
+        immune_blocks: Option<HolderSet>,
+        offset: Vec3,
+        radius: LevelBasedValue,
+        create_fire: bool,
+        block_interaction: ExplosionInteraction,
+        small_particle: ParticleOptions,
+        large_particle: ParticleOptions,
+        block_particles: Vec<(ExplosionParticleInfo, i32)>,
+        sound: SoundEvent,
+    },
     Ignite { duration: LevelBasedValue },
     ApplyImpulse { direction: Vec3, coordinate_scale: Vec3, magnitude: LevelBasedValue },
     ApplyExhaustion { amount: LevelBasedValue },
@@ -140,6 +154,32 @@ fn float_provider(tag: &Nbt, min: f32, max: f32) -> DataResult<FloatProvider> {
     Ok(provider)
 }
 
+fn damage_type(tag: &Nbt) -> DataResult<DamageType> {
+    let id = codec::identifier(tag)?;
+    DamageType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:damage_type]: {id}"))
+}
+
+fn explosion_interaction(tag: &Nbt) -> DataResult<ExplosionInteraction> {
+    let name = codec::string(tag)?;
+    Ok(match name {
+        "none" => ExplosionInteraction::None,
+        "block" => ExplosionInteraction::Block,
+        "mob" => ExplosionInteraction::Mob,
+        "tnt" => ExplosionInteraction::Tnt,
+        "trigger" => ExplosionInteraction::Trigger,
+        other => return Err(format!("Unknown element name:{other}")),
+    })
+}
+
+fn explosion_particle_info(tag: &Nbt) -> DataResult<(ExplosionParticleInfo, i32)> {
+    let info = ExplosionParticleInfo {
+        particle: codec::decode_field(tag, "particle", particle_options)?,
+        scaling: codec::decode_or(tag, "scaling", 1.0, codec::float)?,
+        speed: codec::decode_or(tag, "speed", 1.0, codec::float)?,
+    };
+    Ok((info, codec::decode_field(tag, "weight", codec::int)?))
+}
+
 fn sound_event(tag: &Nbt) -> DataResult<SoundEvent> {
     Ok(match tag {
         Nbt::String(_) => SoundEvent::Reference(registry_id(registry::SOUND_EVENT, &codec::identifier(tag)?)),
@@ -173,7 +213,20 @@ impl EnchantmentEntityEffect {
                     DamageType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:damage_type]: {id}"))
                 })?,
             },
-            "minecraft:explode" => EnchantmentEntityEffect::Explode(tag.clone()),
+            "minecraft:explode" => EnchantmentEntityEffect::Explode {
+                attribute_to_user: codec::decode_or(tag, "attribute_to_user", false, codec::bool_value)?,
+                damage_type: codec::decode_optional(tag, "damage_type", damage_type)?,
+                knockback_multiplier: codec::decode_optional(tag, "knockback_multiplier", LevelBasedValue::decode)?,
+                immune_blocks: codec::decode_optional(tag, "immune_blocks", |t| HolderSet::decode("minecraft:block", t))?,
+                offset: codec::decode_or(tag, "offset", Vec3::ZERO, vec3)?,
+                radius: value("radius")?,
+                create_fire: codec::decode_or(tag, "create_fire", false, codec::bool_value)?,
+                block_interaction: codec::decode_field(tag, "block_interaction", explosion_interaction)?,
+                small_particle: codec::decode_field(tag, "small_particle", particle_options)?,
+                large_particle: codec::decode_field(tag, "large_particle", particle_options)?,
+                block_particles: codec::decode_or(tag, "block_particles", Vec::new(), |t| codec::list_of(t, explosion_particle_info))?,
+                sound: codec::decode_field(tag, "sound", sound_event)?,
+            },
             "minecraft:ignite" => EnchantmentEntityEffect::Ignite { duration: value("duration")? },
             "minecraft:apply_impulse" => EnchantmentEntityEffect::ApplyImpulse {
                 direction: codec::decode_field(tag, "direction", vec3)?,
@@ -328,8 +381,40 @@ impl EnchantmentEntityEffect {
                     level.living_mut(entity).apply_post_impulse_grace_time(POST_IMPULSE_CONTEXT_RESET_GRACE_TIME_TICKS);
                 }
             }
-            EnchantmentEntityEffect::Explode(_)
-            | EnchantmentEntityEffect::ReplaceBlock(_)
+            EnchantmentEntityEffect::Explode {
+                attribute_to_user,
+                damage_type,
+                knockback_multiplier,
+                immune_blocks,
+                offset,
+                radius,
+                create_fire,
+                block_interaction,
+                small_particle,
+                large_particle,
+                block_particles,
+                sound,
+            } => {
+                let pos = position.add_vec(*offset);
+                let source = attribute_to_user.then_some(entity);
+                let damage_source = damage_type.map(|ty| {
+                    if *attribute_to_user {
+                        DamageSource { causing_entity: Some(entity), direct_entity: Some(entity), ..DamageSource::new(ty) }
+                    } else {
+                        DamageSource { damage_source_position: Some(pos), ..DamageSource::new(ty) }
+                    }
+                });
+                let calculator = ExplosionDamageCalculator::Simple {
+                    explodes_blocks: *block_interaction != ExplosionInteraction::None,
+                    damages_entities: damage_type.is_some(),
+                    knockback_multiplier: knockback_multiplier.as_ref().map(|value| value.calculate(enchantment_level)),
+                    immune_blocks: immune_blocks.clone(),
+                };
+                let indirect_source = source.filter(|&source| level.is_living(source));
+                let radius = radius.calculate(enchantment_level).max(0.0);
+                level.explode_with_particles(source, indirect_source, damage_source, calculator, pos, radius, *create_fire, *block_interaction, small_particle, large_particle, block_particles, sound);
+            }
+            EnchantmentEntityEffect::ReplaceBlock(_)
             | EnchantmentEntityEffect::RunFunction(_)
             | EnchantmentEntityEffect::SetBlockProperties(_) => {}
         }

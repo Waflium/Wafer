@@ -40,6 +40,15 @@ pub fn connects_to_direction(state: BlockState, direction: Direction) -> bool {
 }
 
 impl BlockBehaviour for FenceGateBlock {
+    fn on_explosion_hit(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, explosion: &crate::world::level::server_explosion::ServerExplosion, stacks: &mut Vec<(BlockPos, crate::world::item::ItemStack)>) {
+        if explosion.can_trigger_blocks(level) && !state.get(POWERED) {
+            let open = state.get(OPEN);
+            level.set_block_simple(pos, state.set(OPEN, !open));
+            self.play_sound(None, level, pos, !open);
+        }
+        level.block_on_explosion_hit(state, pos, explosion, stacks);
+    }
+
     fn rotate(&self, state: BlockState, rotation: Rotation) -> BlockState {
         horizontal_directional_block::rotate(state, rotation)
     }

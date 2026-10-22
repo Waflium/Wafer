@@ -4,7 +4,11 @@ use wafer_core::{AABB, BlockPos, Vec3, mth};
 use wafer_data::packets::play::clientbound;
 use wafer_data::{BlockState, Fluid, damage_types, game_rule, registry, registry_id};
 
+use crate::core::holder_set::HolderSet;
+use crate::core::particles::particle_options::ParticleOptions;
+use crate::core::particles::particle_types;
 use crate::server::level::ServerLevel;
+use crate::sounds::sound_event::SoundEvent;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::attributes::Attribute;
 use crate::world::entity::sound_event;
@@ -48,16 +52,17 @@ pub struct ServerExplosion {
     hit_players: Vec<(EntityId, Vec3)>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum ExplosionDamageCalculator {
     Default,
+    Simple { explodes_blocks: bool, damages_entities: bool, knockback_multiplier: Option<f32>, immune_blocks: Option<HolderSet> },
     RespawnAnchor { pos: BlockPos, in_water: bool },
     UsedPortal,
     TntMinecart { primed: bool },
 }
 
 impl ExplosionDamageCalculator {
-    fn get_block_explosion_resistance(self, level: &mut ServerLevel, test_pos: BlockPos, state: wafer_data::BlockState, fluid: Fluid) -> Option<f32> {
+    fn get_block_explosion_resistance(&self, level: &mut ServerLevel, test_pos: BlockPos, state: wafer_data::BlockState, fluid: Fluid) -> Option<f32> {
         let resistance = self.get_base_block_explosion_resistance(test_pos, state, fluid);
         match self {
             ExplosionDamageCalculator::TntMinecart { primed: true } if resistance.is_some() && is_rail_or_below_rail(level, test_pos, state) => Some(0.0),
@@ -65,8 +70,9 @@ impl ExplosionDamageCalculator {
         }
     }
 
-    fn get_base_block_explosion_resistance(self, test_pos: BlockPos, state: wafer_data::BlockState, fluid: Fluid) -> Option<f32> {
-        match self {
+    fn get_base_block_explosion_resistance(&self, test_pos: BlockPos, state: wafer_data::BlockState, fluid: Fluid) -> Option<f32> {
+        match *self {
+            ExplosionDamageCalculator::Simple { immune_blocks: Some(ref immune_blocks), .. } => immune_blocks.contains(state.block().0 as i32).then_some(3600000.0),
             ExplosionDamageCalculator::RespawnAnchor { pos, in_water: true } if test_pos == pos => Some(wafer_data::blocks::WATER.info().explosion_resistance),
             ExplosionDamageCalculator::UsedPortal if state.is_block(wafer_data::blocks::NETHER_PORTAL) => None,
             _ if state.is_air() && fluid == Fluid::Empty => None,
@@ -74,13 +80,50 @@ impl ExplosionDamageCalculator {
         }
     }
 
-    fn should_block_explode(self, level: &mut ServerLevel, pos: BlockPos, state: wafer_data::BlockState) -> bool {
-        match self {
+    fn should_block_explode(&self, level: &mut ServerLevel, pos: BlockPos, state: wafer_data::BlockState) -> bool {
+        match *self {
+            ExplosionDamageCalculator::Simple { explodes_blocks, .. } => explodes_blocks,
             ExplosionDamageCalculator::UsedPortal => !state.is_block(wafer_data::blocks::NETHER_PORTAL),
             ExplosionDamageCalculator::TntMinecart { primed: true } => !is_rail_or_below_rail(level, pos, state),
             _ => true,
         }
     }
+}
+
+impl ExplosionDamageCalculator {
+    fn should_damage_entity(&self) -> bool {
+        match *self {
+            ExplosionDamageCalculator::Simple { damages_entities, .. } => damages_entities,
+            _ => true,
+        }
+    }
+
+    fn get_knockback_multiplier(&self, level: &ServerLevel, entity: EntityId) -> f32 {
+        match *self {
+            ExplosionDamageCalculator::Simple { knockback_multiplier, .. } => {
+                let creative_flying = level.players.get(&entity).is_some_and(|player| player.abilities.flying);
+                if creative_flying { 0.0 } else { knockback_multiplier.unwrap_or(1.0) }
+            }
+            _ => 1.0,
+        }
+    }
+
+    fn get_entity_damage_amount(&self, level: &ServerLevel, explosion: &ServerExplosion, entity: EntityId, exposure: f32) -> f32 {
+        let double_radius = explosion.radius * 2.0;
+        let dist = level.entity(entity).position().distance_to_sqr(explosion.center).sqrt() / double_radius as f64;
+        let pow = (1.0 - dist) * exposure as f64;
+        ((pow * pow + pow) / 2.0 * 7.0 * double_radius as f64 + 1.0) as f32
+    }
+}
+
+pub struct ExplosionParticleInfo {
+    pub particle: ParticleOptions,
+    pub scaling: f32,
+    pub speed: f32,
+}
+
+fn simple_particle(particle_type: &'static str) -> ParticleOptions {
+    particle_types::parse(particle_type, &wafer_protocol::nbt::Nbt::Compound(Vec::new())).expect("a simple particle")
 }
 
 fn is_rail_or_below_rail(level: &mut ServerLevel, pos: BlockPos, state: wafer_data::BlockState) -> bool {
@@ -94,6 +137,16 @@ fn fluid_explosion_resistance(fluid: Fluid) -> f32 {
 impl ServerExplosion {
     pub fn is_small(&self) -> bool {
         self.radius < LARGE_EXPLOSION_RADIUS || !self.interacts_with_blocks()
+    }
+
+    pub fn can_trigger_blocks(&self, level: &ServerLevel) -> bool {
+        if self.block_interaction != BlockInteraction::TriggerBlock {
+            return false;
+        }
+        match self.source {
+            Some(source) if level.entity(source).entity_type == registry_id(registry::ENTITY_TYPE, "minecraft:breeze_wind_charge") => level.game_rules.get_bool(game_rule::MOB_GRIEFING),
+            _ => true,
+        }
     }
 
     fn interacts_with_blocks(&self) -> bool {
@@ -158,6 +211,42 @@ impl ServerLevel {
         fire: bool,
         interaction: ExplosionInteraction,
     ) {
+        let block_particles = vec![
+            (ExplosionParticleInfo { particle: simple_particle("minecraft:poof"), scaling: 0.5, speed: 1.0 }, 1),
+            (ExplosionParticleInfo { particle: simple_particle("minecraft:smoke"), scaling: 1.0, speed: 1.0 }, 1),
+        ];
+        self.explode_with_particles(
+            source,
+            indirect_source,
+            damage_source,
+            damage_calculator,
+            center,
+            radius,
+            fire,
+            interaction,
+            &simple_particle("minecraft:explosion"),
+            &simple_particle("minecraft:explosion_emitter"),
+            &block_particles,
+            &SoundEvent::Reference(sound_event("minecraft:entity.generic.explode")),
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn explode_with_particles(
+        &mut self,
+        source: Option<EntityId>,
+        indirect_source: Option<EntityId>,
+        damage_source: Option<DamageSource>,
+        damage_calculator: ExplosionDamageCalculator,
+        center: Vec3,
+        radius: f32,
+        fire: bool,
+        interaction: ExplosionInteraction,
+        small_explosion_particles: &ParticleOptions,
+        large_explosion_particles: &ParticleOptions,
+        block_particles: &[(ExplosionParticleInfo, i32)],
+        explosion_sound: &SoundEvent,
+    ) {
         let block_interaction = match interaction {
             ExplosionInteraction::None => BlockInteraction::Keep,
             ExplosionInteraction::Block => self.destroy_type(game_rule::BLOCK_EXPLOSION_DROP_DECAY),
@@ -170,7 +259,7 @@ impl ServerLevel {
         let damage_source = damage_source.unwrap_or_else(|| default_damage_source(source, indirect_source));
         let mut explosion = ServerExplosion { source, indirect_source, damage_source, center, radius, fire, block_interaction, damage_calculator, hit_players: Vec::new() };
         let block_count = self.run_explosion(&mut explosion);
-        let particle = registry_id(registry::PARTICLE_TYPE, if explosion.is_small() { "minecraft:explosion" } else { "minecraft:explosion_emitter" });
+        let explosion_particle = if explosion.is_small() { small_explosion_particles } else { large_explosion_particles };
         let play_sound = source.is_none_or(|s| !self.entity(s).is_silent());
         let ids: Vec<EntityId> = self.players.keys().copied().collect();
         for id in ids {
@@ -190,14 +279,14 @@ impl ServerLevel {
                     w.f64(k.y);
                     w.f64(k.z);
                 }
-                w.varint(particle);
-                w.varint(sound_event("minecraft:entity.generic.explode") + 1);
-                w.varint(2);
-                for (name, scaling) in [("minecraft:poof", 0.5f32), ("minecraft:smoke", 1.0)] {
-                    w.varint(registry_id(registry::PARTICLE_TYPE, name));
-                    w.f32(scaling);
-                    w.f32(1.0);
-                    w.varint(1);
+                explosion_particle.write(w);
+                explosion_sound.write(w);
+                w.varint(block_particles.len() as i32);
+                for (info, weight) in block_particles {
+                    info.particle.write(w);
+                    w.f32(info.scaling);
+                    w.f32(info.speed);
+                    w.varint(*weight);
                 }
                 w.bool(play_sound);
             });
@@ -241,7 +330,7 @@ impl ServerLevel {
                         if !self.is_in_world_bounds(pos) {
                             break;
                         }
-                        let damage_calculator = explosion.damage_calculator;
+                        let damage_calculator = &explosion.damage_calculator;
                         if let Some(resistance) = damage_calculator.get_block_explosion_resistance(self, pos, state, fluid.fluid) {
                             remaining_power -= (resistance + 0.3) * 0.3;
                         }
@@ -322,23 +411,20 @@ impl ServerLevel {
             let is_tnt = matches!(self.entities.get(&id), Some(LevelEntity::PrimedTnt(_)));
             let origin = if is_tnt { self.entity(id).position() } else { self.entity(id).eye_position() };
             let direction = origin.subtract(c).normalize();
-            let exposure = self.seen_percent(c, id);
-            let pow = (1.0 - dist) * exposure as f64;
-            let damage = ((pow * pow + pow) / 2.0 * 7.0 * double_radius as f64 + 1.0) as f32;
-            if explosion.source.is_none_or(|source| self.do_teams_allow_damage(source, id)) {
+            let should_damage_entity = explosion.damage_calculator.should_damage_entity();
+            let knockback_multiplier = explosion.damage_calculator.get_knockback_multiplier(self, id);
+            let exposure = if !should_damage_entity && knockback_multiplier == 0.0 { 0.0 } else { self.seen_percent(c, id) };
+            if should_damage_entity && explosion.source.is_none_or(|source| self.do_teams_allow_damage(source, id)) {
+                let damage = explosion.damage_calculator.get_entity_damage_amount(self, explosion, id, exposure);
                 self.hurt_server(id, explosion.damage_source.clone(), damage);
             }
             if self.entity_ref(id).is_none() {
                 continue;
             }
             let knockback_resistance = if self.is_living(id) { self.attribute_value(id, Attribute::ExplosionKnockbackResistance) } else { 0.0 };
-            let knockback = direction.scale((1.0 - dist) * exposure as f64 * (1.0 - knockback_resistance));
-            let e = self.entity_mut(id);
-            if knockback.x.is_finite() && knockback.y.is_finite() && knockback.z.is_finite() {
-                let delta = e.delta_movement.add(knockback.x, knockback.y, knockback.z);
-                e.set_delta_movement(delta);
-                e.needs_sync = true;
-            }
+            let knockback_power = (1.0 - dist) * exposure as f64 * knockback_multiplier as f64 * (1.0 - knockback_resistance);
+            let knockback = direction.scale(knockback_power);
+            self.push_from_explosion(id, knockback);
             let redirectable = wafer_data::tag("minecraft:entity_type", "minecraft:redirectable_projectile").contains(&self.entity(id).entity_type);
             if redirectable && self.is_projectile(id) {
                 let owner = explosion.damage_source.causing_entity.map(|owner| crate::world::entity::entity_reference::EntityReference::of(self.entity(owner).uuid));
@@ -366,6 +452,10 @@ impl ServerLevel {
     }
 
     fn on_explosion_hit(&mut self, state: BlockState, pos: BlockPos, explosion: &ServerExplosion, stacks: &mut Vec<(BlockPos, ItemStack)>) {
+        block::of(state).on_explosion_hit(state, self, pos, explosion, stacks);
+    }
+
+    pub fn block_on_explosion_hit(&mut self, state: BlockState, pos: BlockPos, explosion: &ServerExplosion, stacks: &mut Vec<(BlockPos, ItemStack)>) {
         if state.is_air() || explosion.block_interaction == BlockInteraction::TriggerBlock {
             return;
         }

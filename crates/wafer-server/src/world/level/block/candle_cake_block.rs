@@ -37,6 +37,13 @@ fn candle_hit(hit: &BlockHitResult) -> bool {
 pub struct CandleCakeBlock;
 
 impl BlockBehaviour for CandleCakeBlock {
+    fn on_explosion_hit(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, explosion: &crate::world::level::server_explosion::ServerExplosion, stacks: &mut Vec<(BlockPos, crate::world::item::ItemStack)>) {
+        if explosion.can_trigger_blocks(level) && state.get(wafer_data::properties::LIT) {
+            super::abstract_candle_block::extinguish(state, level, pos);
+        }
+        level.block_on_explosion_hit(state, pos, explosion, stacks);
+    }
+
     fn on_projectile_hit(&self, level: &mut ServerLevel, state: BlockState, hit_result: &super::BlockHitResult, projectile: EntityId) {
         if level.is_on_fire(projectile) && !state.get(LIT) {
             super::abstract_candle_block::set_lit(level, state, hit_result.block_pos, true);

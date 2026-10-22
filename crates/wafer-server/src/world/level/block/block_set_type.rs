@@ -11,6 +11,7 @@ pub fn fields(block: Block) -> Value {
 
 pub struct BlockSetType {
     pub can_open_by_hand: bool,
+    pub can_open_by_wind_charge: bool,
     pub door_close: i32,
     pub door_open: i32,
     pub trapdoor_close: i32,
@@ -21,6 +22,7 @@ impl BlockSetType {
     pub fn from_json(json: &Value) -> BlockSetType {
         BlockSetType {
             can_open_by_hand: json["canOpenByHand"].as_bool().expect("canOpenByHand"),
+            can_open_by_wind_charge: json["canOpenByWindCharge"].as_bool().expect("canOpenByWindCharge"),
             door_close: sound(&json["doorClose"]),
             door_open: sound(&json["doorOpen"]),
             trapdoor_close: sound(&json["trapdoorClose"]),

@@ -25,6 +25,10 @@ impl WeatheringCopperDoorBlock {
 }
 
 impl BlockBehaviour for WeatheringCopperDoorBlock {
+    fn on_explosion_hit(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, explosion: &crate::world::level::server_explosion::ServerExplosion, stacks: &mut Vec<(BlockPos, crate::world::item::ItemStack)>) {
+        self.door.on_explosion_hit(state, level, pos, explosion, stacks);
+    }
+
     fn rotate(&self, state: BlockState, rotation: Rotation) -> BlockState {
         self.door.rotate(state, rotation)
     }

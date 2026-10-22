@@ -118,6 +118,8 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:firework_rocket",
     "minecraft:small_fireball",
     "minecraft:fireball",
+    "minecraft:wind_charge",
+    "minecraft:breeze_wind_charge",
     "minecraft:blaze",
     "minecraft:ghast",
     "minecraft:zombified_piglin",

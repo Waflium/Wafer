@@ -62,7 +62,8 @@ fn registered(item: Item) -> Option<DispenseItemBehavior> {
         | items::SPLASH_POTION
         | items::LINGERING_POTION
         | items::FIREWORK_ROCKET
-        | items::FIRE_CHARGE => Projectile,
+        | items::FIRE_CHARGE
+        | items::WIND_CHARGE => Projectile,
         items::LAVA_BUCKET
         | items::WATER_BUCKET
         | items::POWDER_SNOW_BUCKET

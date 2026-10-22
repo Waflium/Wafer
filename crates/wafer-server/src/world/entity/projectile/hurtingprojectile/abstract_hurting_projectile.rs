@@ -110,16 +110,16 @@ impl ServerLevel {
         self.projectile_base_can_hit_entity(id, entity) && !self.entity(entity).no_physics
     }
 
-    fn should_burn(&self, _id: EntityId) -> bool {
-        true
+    fn should_burn(&self, id: EntityId) -> bool {
+        !self.projectile(id).is_abstract_wind_charge()
     }
 
-    fn get_inertia(&self, _id: EntityId) -> f32 {
-        0.95
+    fn get_inertia(&self, id: EntityId) -> f32 {
+        if self.projectile(id).is_abstract_wind_charge() { 1.0 } else { 0.95 }
     }
 
-    fn get_liquid_inertia(&self, _id: EntityId) -> f32 {
-        0.8
+    fn get_liquid_inertia(&self, id: EntityId) -> f32 {
+        if self.projectile(id).is_abstract_wind_charge() { self.get_inertia(id) } else { 0.8 }
     }
 
     pub fn abstract_hurting_projectile_on_deflection(&mut self, id: EntityId, by_attack: bool) {

@@ -240,6 +240,7 @@ impl LevelEntity {
                     ProjectileKind::FireworkRocket(_) => projectile.firework_add_additional_save_data(out),
                     ProjectileKind::SmallFireball(_) => projectile.fireball_add_additional_save_data(out),
                     ProjectileKind::LargeFireball(_) => projectile.large_fireball_add_additional_save_data(out),
+                    ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => projectile.abstract_hurting_projectile_add_additional_save_data(out),
                     _ => projectile.throwable_item_projectile_add_additional_save_data(out),
                 }
             }
@@ -319,6 +320,7 @@ impl LevelEntity {
                     ProjectileKind::FireworkRocket(_) => projectile.firework_read_additional_save_data(nbt),
                     ProjectileKind::SmallFireball(_) => projectile.fireball_read_additional_save_data(nbt),
                     ProjectileKind::LargeFireball(_) => projectile.large_fireball_read_additional_save_data(nbt),
+                    ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => projectile.abstract_hurting_projectile_read_additional_save_data(nbt),
                     _ => projectile.throwable_item_projectile_read_additional_save_data(nbt),
                 }
             }
@@ -479,6 +481,8 @@ impl ServerLevel {
             "minecraft:trident" => LevelEntity::Projectile(Box::new(super::projectile::arrow::thrown_trident::ThrownTrident::of_type())),
             "minecraft:firework_rocket" => LevelEntity::Projectile(Box::new(super::projectile::firework_rocket_entity::FireworkRocketEntity::of_type())),
             "minecraft:small_fireball" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::small_fireball::SmallFireball::of_type())),
+            "minecraft:wind_charge" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::windcharge::wind_charge::WindCharge::of_type())),
+            "minecraft:breeze_wind_charge" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::windcharge::breeze_wind_charge::BreezeWindCharge::of_type())),
             "minecraft:fireball" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::large_fireball::LargeFireball::of_type())),
             "minecraft:blaze" => LevelEntity::Mob(Box::new(super::monster::blaze::Blaze::create())),
             "minecraft:ghast" => LevelEntity::Mob(Box::new(super::monster::ghast::Ghast::create())),

@@ -30,6 +30,7 @@ pub mod projectile_item;
 pub mod projectile_weapon_item;
 pub mod sign_applicator;
 pub mod snowball_item;
+pub mod wind_charge_item;
 pub mod spyglass_item;
 pub mod enchantment;
 pub mod ender_eye_item;
@@ -207,6 +208,9 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     }
     if stack.item.is_instance_of("SnowballItem") {
         return snowball_item::use_item(level, player, hand);
+    }
+    if stack.item.is_instance_of("WindChargeItem") {
+        return wind_charge_item::use_item(level, player, hand);
     }
     if stack.item.is_instance_of("EggItem") {
         return egg_item::use_item(level, player, hand);
