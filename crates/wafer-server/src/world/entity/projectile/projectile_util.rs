@@ -96,6 +96,14 @@ impl ServerLevel {
         if !entity_hit.is_empty() { Either::Right(entity_hit) } else { Either::Left(hit_result) }
     }
 
+    pub fn get_hit_result_on_view_vector(&mut self, source: EntityId, matching: impl Fn(&ServerLevel, EntityId) -> bool, distance: f64) -> HitResult {
+        let e = self.entity(source);
+        let y_rot = if self.is_living(source) { self.living(source).y_head_rot_o } else { e.y_rot_o };
+        let view_vector = calculate_view_vector(e.x_rot_o, y_rot).scale(distance);
+        let from = e.eye_position();
+        self.get_hit_result(from, source, matching, view_vector, 0.0, ClipBlock::Collider)
+    }
+
     pub fn get_hit_result_on_move_vector(&mut self, source: EntityId, matching: impl Fn(&ServerLevel, EntityId) -> bool) -> HitResult {
         self.get_hit_result_on_move_vector_with_clip(source, matching, ClipBlock::Collider)
     }

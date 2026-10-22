@@ -21,6 +21,7 @@ pub mod respawn_anchor_block;
 mod rooted_dirt_block;
 mod slime_block;
 mod web_block;
+pub mod brushable_block;
 pub mod falling_block;
 mod bamboo_sapling_block;
 mod bamboo_stalk_block;
@@ -696,6 +697,7 @@ fn for_class(class: &str, block: Block) -> Option<Box<dyn BlockBehaviour>> {
         "SpawnerBlock" => Box::new(spawner_block::SpawnerBlock),
         "SculkSensorBlock" => Box::new(sculk_sensor_block::SculkSensorBlock),
         "SculkShriekerBlock" => Box::new(sculk_shrieker_block::SculkShriekerBlock),
+        "BrushableBlock" => Box::new(brushable_block::BrushableBlock::new(block)),
         "SculkCatalystBlock" => Box::new(sculk_catalyst_block::SculkCatalystBlock),
 
         "LiquidBlock" => Box::new(liquid_block::LiquidBlock::new(block)),

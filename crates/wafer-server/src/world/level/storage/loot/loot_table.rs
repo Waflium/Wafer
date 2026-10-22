@@ -89,6 +89,11 @@ impl LootTable {
         self.get_random_items_raw(&mut context, &mut create_stack_splitter(&mut output));
     }
 
+    pub fn get_random_items_seeded(&self, params: LootParams, optional_loot_table_seed: i64) -> Vec<ItemStack> {
+        let mut context = LootContextBuilder::new(params).with_optional_random_seed(optional_loot_table_seed).create(self.random_sequence.as_deref());
+        self.get_random_items_in(&mut context)
+    }
+
     pub fn get_random_items(&self, params: LootParams) -> Vec<ItemStack> {
         let mut context = LootContextBuilder::new(params).create(self.random_sequence.as_deref());
         self.get_random_items_in(&mut context)

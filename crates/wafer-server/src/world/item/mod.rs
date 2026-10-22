@@ -10,6 +10,7 @@ pub mod bow_item;
 pub mod bucket_item;
 pub mod mob_bucket_item;
 pub mod bone_meal_item;
+pub mod brush_item;
 pub mod component;
 pub mod consume_effects;
 pub mod context;
@@ -134,6 +135,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
 fn item_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> InteractionResult {
     match stack.item.info().classes.first() {
         Some(&"BoneMealItem") => return bone_meal_item::use_on(level, player, hand, hit, stack),
+        Some(&"BrushItem") => return brush_item::use_on(level, player, hand),
         Some(&"FlintAndSteelItem") => {
             let ctx = BlockPlaceContext::new(level, Some(player), hand, stack, hit);
             return flint_and_steel_item::flint_and_steel_use_on(level, player, hand, &ctx);
@@ -328,6 +330,9 @@ pub fn can_destroy_block(level: &ServerLevel, item_stack: Option<&ItemStack>, us
 }
 
 pub fn get_use_duration(stack: &ItemStack) -> i32 {
+    if stack.item.is_instance_of("BrushItem") {
+        return brush_item::USE_DURATION;
+    }
     if stack.item.is_instance_of("BowItem") {
         return bow_item::USE_DURATION;
     }
@@ -402,6 +407,9 @@ pub fn get_item_damage_source(level: &ServerLevel, item_stack: &ItemStack, attac
 }
 
 pub fn on_use_tick(level: &mut ServerLevel, entity: EntityId, stack: &mut ItemStack, ticks_remaining: i32) {
+    if stack.item.is_instance_of("BrushItem") {
+        brush_item::on_use_tick(level, entity, stack, ticks_remaining);
+    }
     if stack.item.is_instance_of("CrossbowItem") {
         crossbow_item::on_use_tick(level, entity, stack, ticks_remaining);
     }
