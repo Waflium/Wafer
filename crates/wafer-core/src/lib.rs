@@ -1,6 +1,7 @@
 pub mod bit_storage;
 pub mod fastutil;
 pub mod hash_map;
+pub mod joml;
 mod interval;
 mod direction;
 pub mod math;

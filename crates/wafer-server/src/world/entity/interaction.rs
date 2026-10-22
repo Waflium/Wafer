@@ -7,6 +7,7 @@ use super::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::server::level::ServerLevel;
 use crate::world::InteractionResult;
 use crate::world::entity::entity_save::uuid_from_nbt;
+use crate::world::level::block::entity::{byte_or, float_or};
 use crate::world::level::storage::uuid_ints;
 
 const DATA_WIDTH_ID: usize = 8;
@@ -92,12 +93,11 @@ impl Interaction {
     }
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
-        let float = |key: &str, default: f32| input.get(key).and_then(Nbt::as_f64).map_or(default, |v| v as f32);
-        self.set_width(float("width", DEFAULT_WIDTH));
-        self.set_height(float("height", DEFAULT_HEIGHT));
+        self.set_width(float_or(input, "width", DEFAULT_WIDTH));
+        self.set_height(float_or(input, "height", DEFAULT_HEIGHT));
         self.attack = input.get("attack").and_then(PlayerAction::from_nbt);
         self.interaction = input.get("interaction").and_then(PlayerAction::from_nbt);
-        let response = input.get("response").and_then(Nbt::as_i64).map_or(DEFAULT_RESPONSE, |v| v != 0);
+        let response = byte_or(input, "response", DEFAULT_RESPONSE as i8) != 0;
         self.entity.data.set(DATA_RESPONSE_ID, DataValue::Boolean(response));
         let bounding_box = self.get_dimensions().make_bounding_box(self.entity.position());
         self.entity.set_bounding_box(bounding_box);

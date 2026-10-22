@@ -13,6 +13,7 @@ pub mod bone_meal_item;
 pub mod component;
 pub mod consume_effects;
 pub mod context;
+pub mod item_display_context;
 pub mod crafting;
 pub mod crossbow_item;
 pub mod dye_color;

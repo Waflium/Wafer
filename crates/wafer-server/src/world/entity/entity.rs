@@ -2468,6 +2468,7 @@ impl ServerLevel {
             Some(LevelEntity::Projectile(_)) => self.projectile_hurt_server(id, &source),
             Some(LevelEntity::LeashKnot(_)) => self.block_attached_entity_hurt_server(id, source),
             Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) => super::marker::Marker::hurt_server(),
+            Some(LevelEntity::Display(_)) => super::display::Display::hurt_server(),
             Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_hurt_server(id, source, damage),
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => self.vehicle_entity_hurt_server(id, source, damage),
             _ => false,
@@ -3830,7 +3831,7 @@ impl ServerLevel {
 
     pub fn get_piston_push_reaction(&self, id: EntityId) -> wafer_data::PushReaction {
         match self.entities.get(&id) {
-            Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_) | LevelEntity::Interaction(_)) => wafer_data::PushReaction::IgnoreEntity,
+            Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_) | LevelEntity::Interaction(_) | LevelEntity::Display(_)) => wafer_data::PushReaction::IgnoreEntity,
             _ => wafer_data::PushReaction::PushPull,
         }
     }
@@ -3838,6 +3839,9 @@ impl ServerLevel {
     pub fn is_ignoring_block_triggers(&self, id: EntityId) -> bool {
         if let Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) = self.entities.get(&id) {
             return super::marker::Marker::is_ignoring_block_triggers();
+        }
+        if let Some(LevelEntity::Display(_)) = self.entities.get(&id) {
+            return super::display::Display::is_ignoring_block_triggers();
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(super::mob::MobKind::Bat(_)) => self.bat_is_ignoring_block_triggers(id),

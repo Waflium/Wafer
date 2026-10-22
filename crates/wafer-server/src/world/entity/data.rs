@@ -80,6 +80,8 @@ pub enum DataValue {
     ArmadilloState(i32),
     FrogVariant(i32),
     VillagerData(super::npc::villager::villager_data::VillagerData),
+    Vector3(wafer_core::joml::Vector3f),
+    Quaternion(wafer_core::joml::Quaternionf),
 }
 
 impl DataValue {
@@ -117,6 +119,8 @@ impl DataValue {
             DataValue::ArmadilloState(_) => 36,
             DataValue::FrogVariant(_) => 27,
             DataValue::VillagerData(_) => 18,
+            DataValue::Vector3(_) => 39,
+            DataValue::Quaternion(_) => 40,
         }
     }
 
@@ -170,6 +174,17 @@ impl DataValue {
             DataValue::ArmadilloState(id) => w.varint(*id),
             DataValue::FrogVariant(id) => w.varint(*id),
             DataValue::VillagerData(data) => data.write(w),
+            DataValue::Vector3(v) => {
+                w.f32(v.x);
+                w.f32(v.y);
+                w.f32(v.z);
+            }
+            DataValue::Quaternion(q) => {
+                w.f32(q.x);
+                w.f32(q.y);
+                w.f32(q.z);
+                w.f32(q.w);
+            }
         }
     }
 }
@@ -200,6 +215,18 @@ impl SynchedEntityData {
 
     pub fn get(&self, id: usize) -> &DataValue {
         &self.items[id].value
+    }
+
+    pub fn get_mut(&mut self, id: usize) -> &mut DataValue {
+        &mut self.items[id].value
+    }
+
+    pub fn set_forced(&mut self, id: usize, value: DataValue) {
+        let item = &mut self.items[id];
+        item.set_to_default = value == item.initial;
+        item.value = value;
+        item.dirty = true;
+        self.is_dirty = true;
     }
 
     pub fn set(&mut self, id: usize, value: DataValue) {

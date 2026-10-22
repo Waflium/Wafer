@@ -37,6 +37,9 @@ pub mod item_based_steering;
 pub mod item_steerable;
 pub mod inside_block;
 pub mod interaction;
+pub mod display;
+#[cfg(test)]
+mod display_tests;
 #[cfg(test)]
 mod interaction_tests;
 pub mod item;
@@ -94,6 +97,7 @@ pub enum LevelEntity {
     Boat(Box<vehicle::boat::abstract_boat::AbstractBoat>),
     Marker(marker::Marker),
     Interaction(interaction::Interaction),
+    Display(display::Display),
 }
 
 impl LevelEntity {
@@ -137,6 +141,7 @@ impl LevelEntity {
             LevelEntity::LightningBolt(_) => TrackingConfig { range: 16 * 16, update_interval: UpdateInterval::Never, track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EyeOfEnder(_) => TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(4), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Interaction(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },
+            LevelEntity::Display(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(1), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Marker(_) => TrackingConfig { range: 0, update_interval: UpdateInterval::Periodic(1), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::LeashKnot(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Never, track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EvokerFangs(_) => TrackingConfig { range: 6 * 16, update_interval: UpdateInterval::Periodic(2), track_deltas: false, stepped: false, is_item: false },
@@ -170,6 +175,7 @@ impl LevelEntity {
             LevelEntity::LeashKnot(knot) => &knot.entity,
             LevelEntity::Marker(marker) => &marker.entity,
             LevelEntity::Interaction(interaction) => &interaction.entity,
+            LevelEntity::Display(display) => &display.entity,
             LevelEntity::EndCrystal(crystal) => &crystal.entity,
             LevelEntity::PrimedTnt(tnt) => &tnt.entity,
             LevelEntity::FallingBlock(falling) => &falling.entity,
@@ -191,6 +197,7 @@ impl LevelEntity {
             LevelEntity::LeashKnot(knot) => &mut knot.entity,
             LevelEntity::Marker(marker) => &mut marker.entity,
             LevelEntity::Interaction(interaction) => &mut interaction.entity,
+            LevelEntity::Display(display) => &mut display.entity,
             LevelEntity::EndCrystal(crystal) => &mut crystal.entity,
             LevelEntity::PrimedTnt(tnt) => &mut tnt.entity,
             LevelEntity::FallingBlock(falling) => &mut falling.entity,

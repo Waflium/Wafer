@@ -268,6 +268,7 @@ impl ExecutionContext {
             });
             let Some(entry) = next else { break };
             entry.execute(server);
+            server.resolve_pending_display_texts();
             let overflow = ExecutionContext::with(|context| {
                 if context.queue_overflow {
                     return true;

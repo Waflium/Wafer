@@ -665,10 +665,26 @@ pub fn int_value(tag: &Nbt) -> Option<i32> {
         Nbt::Short(v) => v as i32,
         Nbt::Int(v) => v,
         Nbt::Long(v) => v as i32,
-        Nbt::Float(v) => v as i32,
-        Nbt::Double(v) => v as i32,
+        Nbt::Float(v) => v.floor() as i32,
+        Nbt::Double(v) => v.floor() as i32,
         _ => return None,
     })
+}
+
+pub fn byte_value(tag: &Nbt) -> Option<i8> {
+    Some(match *tag {
+        Nbt::Float(v) => (v.floor() as i32 & 0xFF) as i8,
+        Nbt::Double(v) => (v.floor() as i32 & 0xFF) as i8,
+        _ => tag.as_i64()? as i8,
+    })
+}
+
+pub fn byte_or(input: &Nbt, key: &str, default: i8) -> i8 {
+    input.get(key).and_then(byte_value).unwrap_or(default)
+}
+
+pub fn float_or(input: &Nbt, key: &str, default: f32) -> f32 {
+    input.get(key).and_then(float_value).unwrap_or(default)
 }
 
 pub fn float_value(tag: &Nbt) -> Option<f32> {
