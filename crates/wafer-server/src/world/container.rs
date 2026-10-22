@@ -1,3 +1,4 @@
+use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction};
 use wafer_data::BlockState;
 
@@ -599,7 +600,17 @@ impl ServerLevel {
     pub fn get_container_at(&mut self, pos: BlockPos) -> Option<ContainerRef> {
         use crate::world::level::BlockGetter;
         let state = self.block_state(pos);
-        self.get_block_container(pos, state)
+        self.get_container_at_with(pos, state, pos.x as f64 + 0.5, pos.y as f64 + 0.5, pos.z as f64 + 0.5)
+    }
+
+    pub fn get_container_at_with(&mut self, pos: BlockPos, state: BlockState, x: f64, y: f64, z: f64) -> Option<ContainerRef> {
+        self.get_block_container(pos, state).or_else(|| self.get_entity_container(x, y, z))
+    }
+
+    fn get_entity_container(&mut self, x: f64, y: f64, z: f64) -> Option<ContainerRef> {
+        let area = wafer_core::AABB::new(x - 0.5, y - 0.5, z - 0.5, x + 0.5, y + 0.5, z + 0.5);
+        let entities: Vec<EntityId> = self.get_entities(None, &area).into_iter().filter(|&entity| self.is_container_entity(entity) && self.is_alive(entity)).collect();
+        if entities.is_empty() { None } else { Some(ContainerRef::ChestVehicle(entities[self.random.next_int_bounded(entities.len() as i32) as usize])) }
     }
 
     pub fn get_redstone_signal_from_container(&mut self, container: Option<ContainerRef>) -> i32 {

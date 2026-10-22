@@ -98,6 +98,10 @@ impl Vec3 {
         Vec3::new(self.x, 0.0, self.z)
     }
 
+    pub fn projected_on(self, onto: Vec3) -> Vec3 {
+        if onto.length_sqr() == 0.0 { onto } else { onto.scale(self.dot(onto)).scale(1.0 / onto.length_sqr()) }
+    }
+
     pub fn offset_random(self, random: &mut impl RandomSource, offset: f32) -> Vec3 {
         let x = (random.next_float() - 0.5) * offset;
         let y = (random.next_float() - 0.5) * offset;

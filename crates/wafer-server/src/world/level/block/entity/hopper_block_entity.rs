@@ -4,6 +4,7 @@ use wafer_data::{BlockState, block_tags};
 use wafer_protocol::nbt::Nbt;
 
 use super::base_container_block_entity::{BaseContainerBlockEntity, save_all_items};
+use super::hopper::Hopper;
 use super::{BlockEntityKind, int_or};
 use crate::server::level::ServerLevel;
 use crate::world::container::ContainerRef;
@@ -99,7 +100,7 @@ impl ServerLevel {
         }
         if !full {
             changed |= match action {
-                SuckAction::Container => self.suck_in_items(pos),
+                SuckAction::Container => self.suck_in_items(Hopper::Block(pos)),
                 SuckAction::Item(item) => self.hopper_add_item_entity(ContainerRef::block(self, pos), item, false),
             };
         }
@@ -160,11 +161,11 @@ impl ServerLevel {
         true
     }
 
-    fn suck_in_items(&mut self, pos: BlockPos) -> bool {
-        let this = ContainerRef::block(self, pos);
-        let above = pos.above();
+    pub fn suck_in_items(&mut self, hopper: Hopper) -> bool {
+        let this = hopper.container(self);
+        let above = BlockPos::containing(hopper.get_level_x(self), hopper.get_level_y(self) + 1.0, hopper.get_level_z(self));
         let above_state = self.block_state(above);
-        if let Some(container) = self.get_source_container(pos, above, above_state) {
+        if let Some(container) = self.get_source_container(hopper, above, above_state) {
             for slot in self.get_slots(container, Direction::Down) {
                 if self.try_take_in_item_from_slot(this, container, slot, Direction::Down) {
                     return true;
@@ -172,9 +173,9 @@ impl ServerLevel {
             }
             return false;
         }
-        let is_blocked = above_state.is_collision_shape_full_block() && !above_state.is(&block_tags::DOES_NOT_BLOCK_HOPPERS);
+        let is_blocked = hopper.is_grid_aligned() && above_state.is_collision_shape_full_block() && !above_state.is(&block_tags::DOES_NOT_BLOCK_HOPPERS);
         if !is_blocked {
-            for item in self.get_items_at_and_above(pos) {
+            for item in self.get_items_at_and_above(hopper) {
                 if self.hopper_add_item_entity(this, item, true) {
                     return true;
                 }
@@ -278,13 +279,13 @@ impl ServerLevel {
         stack
     }
 
-    fn get_source_container(&mut self, hopper: BlockPos, pos: BlockPos, state: BlockState) -> Option<ContainerRef> {
-        let _ = hopper;
-        self.get_block_container(pos, state)
+    fn get_source_container(&mut self, hopper: Hopper, pos: BlockPos, state: BlockState) -> Option<ContainerRef> {
+        let (x, y, z) = (hopper.get_level_x(self), hopper.get_level_y(self) + 1.0, hopper.get_level_z(self));
+        self.get_container_at_with(pos, state, x, y, z)
     }
 
-    fn get_items_at_and_above(&self, pos: BlockPos) -> Vec<EntityId> {
-        let area = SUCK_AABB.move_by(pos.x as f64, pos.y as f64, pos.z as f64);
+    fn get_items_at_and_above(&self, hopper: Hopper) -> Vec<EntityId> {
+        let area = hopper.get_suck_aabb().move_by(hopper.get_level_x(self) - 0.5, hopper.get_level_y(self) - 0.5, hopper.get_level_z(self) - 0.5);
         self.entities
             .iter()
             .filter(|(_, e)| !e.entity().is_removed() && e.as_item().is_some() && e.entity().bounding_box().intersects(&area))

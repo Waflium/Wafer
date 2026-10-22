@@ -1399,7 +1399,7 @@ impl Server {
         }
     }
 
-    fn tick(&mut self) {
+    pub(crate) fn tick(&mut self) {
         let start = Instant::now();
         let empty_tick_threshold = self.config.pause_when_empty_seconds * 20;
         if empty_tick_threshold > 0 {

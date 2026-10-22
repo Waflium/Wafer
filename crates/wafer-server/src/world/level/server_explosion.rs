@@ -53,10 +53,19 @@ pub enum ExplosionDamageCalculator {
     Default,
     RespawnAnchor { pos: BlockPos, in_water: bool },
     UsedPortal,
+    TntMinecart { primed: bool },
 }
 
 impl ExplosionDamageCalculator {
-    fn get_block_explosion_resistance(self, test_pos: BlockPos, state: wafer_data::BlockState, fluid: Fluid) -> Option<f32> {
+    fn get_block_explosion_resistance(self, level: &mut ServerLevel, test_pos: BlockPos, state: wafer_data::BlockState, fluid: Fluid) -> Option<f32> {
+        let resistance = self.get_base_block_explosion_resistance(test_pos, state, fluid);
+        match self {
+            ExplosionDamageCalculator::TntMinecart { primed: true } if resistance.is_some() && is_rail_or_below_rail(level, test_pos, state) => Some(0.0),
+            _ => resistance,
+        }
+    }
+
+    fn get_base_block_explosion_resistance(self, test_pos: BlockPos, state: wafer_data::BlockState, fluid: Fluid) -> Option<f32> {
         match self {
             ExplosionDamageCalculator::RespawnAnchor { pos, in_water: true } if test_pos == pos => Some(wafer_data::blocks::WATER.info().explosion_resistance),
             ExplosionDamageCalculator::UsedPortal if state.is_block(wafer_data::blocks::NETHER_PORTAL) => None,
@@ -65,12 +74,17 @@ impl ExplosionDamageCalculator {
         }
     }
 
-    fn should_block_explode(self, state: wafer_data::BlockState) -> bool {
+    fn should_block_explode(self, level: &mut ServerLevel, pos: BlockPos, state: wafer_data::BlockState) -> bool {
         match self {
             ExplosionDamageCalculator::UsedPortal => !state.is_block(wafer_data::blocks::NETHER_PORTAL),
+            ExplosionDamageCalculator::TntMinecart { primed: true } => !is_rail_or_below_rail(level, pos, state),
             _ => true,
         }
     }
+}
+
+fn is_rail_or_below_rail(level: &mut ServerLevel, pos: BlockPos, state: wafer_data::BlockState) -> bool {
+    state.is(&wafer_data::block_tags::RAILS) || level.block_state(pos.above()).is(&wafer_data::block_tags::RAILS)
 }
 
 fn fluid_explosion_resistance(fluid: Fluid) -> f32 {
@@ -224,10 +238,11 @@ impl ServerLevel {
                         if !self.is_in_world_bounds(pos) {
                             break;
                         }
-                        if let Some(resistance) = explosion.damage_calculator.get_block_explosion_resistance(pos, state, fluid.fluid) {
+                        let damage_calculator = explosion.damage_calculator;
+                        if let Some(resistance) = damage_calculator.get_block_explosion_resistance(self, pos, state, fluid.fluid) {
                             remaining_power -= (resistance + 0.3) * 0.3;
                         }
-                        if remaining_power > 0.0 && explosion.damage_calculator.should_block_explode(state) && seen.insert(pos) {
+                        if remaining_power > 0.0 && damage_calculator.should_block_explode(self, pos, state) && seen.insert(pos) {
                             to_blow.push(pos);
                         }
                         xp += xd * 0.3f32 as f64;

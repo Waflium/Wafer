@@ -107,6 +107,9 @@ impl ServerLevel {
             Some(LevelEntity::Boat(boat)) if boat.container.is_some() && (0..abstract_chest_boat::CONTAINER_SIZE as i32).contains(&slot) => {
                 Some(LevelSlot::Container(ContainerRef::ChestVehicle(id), slot as usize))
             }
+            Some(LevelEntity::Minecart(minecart)) if minecart.container.as_ref().is_some_and(|container| (0..container.size() as i32).contains(&slot)) => {
+                Some(LevelSlot::Container(ContainerRef::ChestVehicle(id), slot as usize))
+            }
             _ => None,
         }
     }

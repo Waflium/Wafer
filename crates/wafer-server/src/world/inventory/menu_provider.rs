@@ -8,7 +8,8 @@ use crate::advancements::predicates::item_predicate::ItemPredicate;
 use crate::network::chat::{Arg, ChatFormatting, Component};
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::container::ContainerRef;
-use crate::world::entity::EntityId;
+use crate::world::entity::vehicle::minecart::abstract_minecart::MinecartKind;
+use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::crafting::recipe_type::RecipeType;
 use crate::world::level::block::chest_block;
 use crate::world::level::block::entity::{BlockEntity, BlockEntityKind};
@@ -143,10 +144,14 @@ impl ServerLevel {
                     return None;
                 }
                 self.unpack_chest_vehicle_loot_table(entity, Some(player));
-                let title = self.entities.get(&entity)?.name();
+                let title = self.display_name(entity);
                 let container = ContainerRef::ChestVehicle(entity);
                 self.container_start_open(container, player);
-                Some((AbstractContainerMenu::new(container_id, MenuKind::Chest { rows: 3 }, Some(container)), title))
+                let kind = match self.entities.get(&entity) {
+                    Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, MinecartKind::Hopper(_)) => MenuKind::Hopper,
+                    _ => MenuKind::Chest { rows: 3 },
+                };
+                Some((AbstractContainerMenu::new(container_id, kind, Some(container)), title))
             }
             MenuProvider::DoubleChest { first, second } => {
                 let name = self.double_chest_name(first, second);

@@ -80,8 +80,11 @@ impl ServerLevel {
         true
     }
 
-    fn should_source_destroy(&self, _id: EntityId, _source: &DamageSource) -> bool {
-        false
+    fn should_source_destroy(&self, id: EntityId, source: &DamageSource) -> bool {
+        match self.entities.get(&id) {
+            Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, crate::world::entity::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_should_source_destroy(source),
+            _ => false,
+        }
     }
 
     pub fn destroy(&mut self, id: EntityId, drop_item: Item) {
@@ -98,6 +101,10 @@ impl ServerLevel {
     }
 
     fn destroy_by_source(&mut self, id: EntityId, source: &DamageSource) {
+        if self.is_minecart(id) {
+            self.abstract_minecart_destroy(id, source);
+            return;
+        }
         if self.is_container_entity(id) {
             self.abstract_chest_boat_destroy(id, source);
             return;

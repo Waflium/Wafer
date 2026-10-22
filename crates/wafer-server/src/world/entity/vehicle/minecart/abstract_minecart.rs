@@ -4,10 +4,19 @@ use wafer_data::{BlockState, Item, block_tags, blocks, items, registry, registry
 use wafer_protocol::nbt::Nbt;
 
 use super::minecart::Minecart;
+use super::minecart_chest::{self, MinecartChest};
+use super::minecart_furnace::MinecartFurnace;
+use super::minecart_hopper::{self, MinecartHopper};
+use super::minecart_spawner::MinecartSpawner;
+use super::minecart_tnt::MinecartTnt;
 use super::old_minecart_behavior::OldMinecartBehavior;
 use crate::server::level::ServerLevel;
 use crate::world::entity::data::{DataValue, Pose};
+use crate::world::damagesource::DamageSource;
+use crate::world::entity::vehicle::container_entity::ContainerEntity;
 use crate::world::entity::vehicle::dismount_helper;
+use crate::world::entity::RemovalReason;
+use crate::world::{InteractionHand, InteractionResult};
 use crate::world::entity::vehicle::vehicle_entity::{self, vehicle_entity_defaults};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, MoverType};
 use crate::world::level::BlockGetter;
@@ -23,6 +32,21 @@ pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.98, 0.7).w
 
 pub enum MinecartKind {
     Minecart(Minecart),
+    Chest(MinecartChest),
+    Furnace(MinecartFurnace),
+    Hopper(MinecartHopper),
+    Tnt(MinecartTnt),
+    Spawner(MinecartSpawner),
+}
+
+impl MinecartKind {
+    fn get_default_display_offset(&self) -> i32 {
+        match self {
+            MinecartKind::Chest(_) => MinecartChest::get_default_display_offset(),
+            MinecartKind::Hopper(_) => MinecartHopper::get_default_display_offset(),
+            _ => 6,
+        }
+    }
 }
 
 pub struct AbstractMinecart {
@@ -31,6 +55,7 @@ pub struct AbstractMinecart {
     flipped: bool,
     pub behavior: OldMinecartBehavior,
     pub kind: MinecartKind,
+    pub container: Option<ContainerEntity>,
 }
 
 pub fn exits(shape: RailShape) -> ([i32; 3], [i32; 3]) {
@@ -61,9 +86,17 @@ impl AbstractMinecart {
     pub fn new(entity_type: &str, kind: MinecartKind) -> AbstractMinecart {
         let mut data = vehicle_entity_defaults();
         data.push(DataValue::OptionalBlockState(None));
-        data.push(DataValue::Int(Self::default_display_offset()));
+        data.push(DataValue::Int(kind.get_default_display_offset()));
+        if let MinecartKind::Furnace(_) = kind {
+            data.push(DataValue::Boolean(false));
+        }
         let entity = Entity::new(registry_id(registry::ENTITY_TYPE, entity_type), DIMENSIONS, data);
-        AbstractMinecart { entity, on_rails: false, flipped: DEFAULT_FLIPPED_ROTATION, behavior: OldMinecartBehavior::default(), kind }
+        let container = match kind {
+            MinecartKind::Chest(_) => Some(ContainerEntity::new(minecart_chest::CONTAINER_SIZE)),
+            MinecartKind::Hopper(_) => Some(ContainerEntity::new(minecart_hopper::CONTAINER_SIZE)),
+            _ => None,
+        };
+        AbstractMinecart { entity, on_rails: false, flipped: DEFAULT_FLIPPED_ROTATION, behavior: OldMinecartBehavior::default(), kind, container }
     }
 
     pub fn set_initial_pos(&mut self, x: f64, y: f64, z: f64) {
@@ -89,24 +122,24 @@ impl AbstractMinecart {
 
     pub fn get_drop_item(&self) -> Item {
         match &self.kind {
-            MinecartKind::Minecart(_) => items::MINECART,
+            MinecartKind::Minecart(_) | MinecartKind::Spawner(_) => items::MINECART,
+            MinecartKind::Chest(_) => items::CHEST_MINECART,
+            MinecartKind::Furnace(_) => items::FURNACE_MINECART,
+            MinecartKind::Hopper(_) => items::HOPPER_MINECART,
+            MinecartKind::Tnt(_) => items::TNT_MINECART,
         }
     }
 
     pub fn get_pick_result(&self) -> Item {
-        match &self.kind {
-            MinecartKind::Minecart(_) => items::MINECART,
-        }
+        self.get_drop_item()
     }
 
     pub fn is_rideable(&self) -> bool {
-        match &self.kind {
-            MinecartKind::Minecart(_) => true,
-        }
+        matches!(self.kind, MinecartKind::Minecart(_))
     }
 
     pub fn is_furnace(&self) -> bool {
-        false
+        matches!(self.kind, MinecartKind::Furnace(_))
     }
 
     fn get_custom_display_block_state(&self) -> Option<BlockState> {
@@ -119,12 +152,8 @@ impl AbstractMinecart {
     pub fn get_display_offset(&self) -> i32 {
         match self.entity.data.get(DATA_ID_DISPLAY_OFFSET) {
             DataValue::Int(v) => *v,
-            _ => Self::default_display_offset(),
+            _ => self.kind.get_default_display_offset(),
         }
-    }
-
-    fn default_display_offset() -> i32 {
-        6
     }
 
     pub fn set_custom_display_block_state(&mut self, state: Option<BlockState>) {
@@ -137,9 +166,19 @@ impl AbstractMinecart {
 
     pub fn read_additional_save_data(&mut self, nbt: &Nbt) {
         self.set_custom_display_block_state(nbt.get("DisplayState").and_then(state_from_nbt));
-        self.set_display_offset(nbt.get("DisplayOffset").and_then(Nbt::as_i64).map_or(Self::default_display_offset(), |v| v as i32));
+        self.set_display_offset(nbt.get("DisplayOffset").and_then(Nbt::as_i64).map_or(self.kind.get_default_display_offset(), |v| v as i32));
         self.flipped = nbt.get("FlippedRotation").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
         self.entity.first_tick = nbt.get("HasTicked").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        if let Some(container) = &mut self.container {
+            container.read_chest_vehicle_save_data(nbt);
+        }
+        match &self.kind {
+            MinecartKind::Hopper(_) => MinecartHopper::read_additional_save_data(self, nbt),
+            MinecartKind::Furnace(_) => MinecartFurnace::read_additional_save_data(self, nbt),
+            MinecartKind::Tnt(_) => MinecartTnt::read_additional_save_data(self, nbt),
+            MinecartKind::Spawner(_) => MinecartSpawner::read_additional_save_data(self, nbt),
+            MinecartKind::Minecart(_) | MinecartKind::Chest(_) => {}
+        }
     }
 
     pub fn add_additional_save_data(&self, out: &mut Vec<(String, Nbt)>) {
@@ -147,11 +186,21 @@ impl AbstractMinecart {
             out.push(("DisplayState".into(), state_to_nbt(state)));
         }
         let display_offset = self.get_display_offset();
-        if display_offset != Self::default_display_offset() {
+        if display_offset != self.kind.get_default_display_offset() {
             out.push(("DisplayOffset".into(), Nbt::Int(display_offset)));
         }
         out.push(("FlippedRotation".into(), Nbt::Byte(self.flipped as i8)));
         out.push(("HasTicked".into(), Nbt::Byte(self.entity.first_tick as i8)));
+        if let Some(container) = &self.container {
+            container.add_chest_vehicle_save_data(out);
+        }
+        match &self.kind {
+            MinecartKind::Hopper(_) => MinecartHopper::add_additional_save_data(self, out),
+            MinecartKind::Furnace(_) => MinecartFurnace::add_additional_save_data(self, out),
+            MinecartKind::Tnt(_) => MinecartTnt::add_additional_save_data(self, out),
+            MinecartKind::Spawner(_) => MinecartSpawner::add_additional_save_data(self, out),
+            MinecartKind::Minecart(_) | MinecartKind::Chest(_) => {}
+        }
     }
 }
 
@@ -240,6 +289,40 @@ impl ServerLevel {
     pub fn tick_minecart(&mut self, id: EntityId) {
         match &self.minecart(id).kind {
             MinecartKind::Minecart(_) => self.minecart_tick(id),
+            MinecartKind::Chest(_) => self.abstract_minecart_tick(id),
+            MinecartKind::Furnace(_) => self.minecart_furnace_tick(id),
+            MinecartKind::Hopper(_) => self.minecart_hopper_tick(id),
+            MinecartKind::Tnt(_) => self.minecart_tnt_tick(id),
+            MinecartKind::Spawner(_) => self.minecart_spawner_tick(id),
+        }
+    }
+
+    pub fn abstract_minecart_interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {
+        match &self.minecart(id).kind {
+            MinecartKind::Minecart(_) => self.minecart_interact(id, player, hand, location),
+            MinecartKind::Chest(_) => self.minecart_chest_interact(id, player),
+            MinecartKind::Hopper(_) => self.abstract_minecart_container_interact(id, player),
+            MinecartKind::Furnace(_) => self.minecart_furnace_interact(id, player, hand),
+            MinecartKind::Tnt(_) | MinecartKind::Spawner(_) => self.entity_interact(id, player, hand, location),
+        }
+    }
+
+    pub fn abstract_minecart_destroy(&mut self, id: EntityId, source: &DamageSource) {
+        match &self.minecart(id).kind {
+            MinecartKind::Chest(_) | MinecartKind::Hopper(_) => self.abstract_minecart_container_destroy(id, source),
+            MinecartKind::Tnt(_) => self.minecart_tnt_destroy(id, source),
+            MinecartKind::Minecart(_) | MinecartKind::Furnace(_) | MinecartKind::Spawner(_) => {
+                let drop_item = self.vehicle_drop_item(id);
+                self.destroy(id, drop_item);
+            }
+        }
+    }
+
+    pub fn abstract_minecart_remove(&mut self, id: EntityId, reason: RemovalReason) {
+        if self.minecart(id).container.is_some() {
+            self.abstract_minecart_container_remove(id, reason);
+        } else {
+            self.set_removed(id, reason);
         }
     }
 
@@ -288,12 +371,18 @@ impl ServerLevel {
     }
 
     pub fn minecart_max_speed(&self, id: EntityId) -> f64 {
-        self.old_minecart_behavior_max_speed(id)
+        match &self.minecart(id).kind {
+            MinecartKind::Furnace(_) => self.minecart_furnace_max_speed(id),
+            _ => self.old_minecart_behavior_max_speed(id),
+        }
     }
 
     pub fn activate_minecart(&mut self, id: EntityId, xt: i32, yt: i32, zt: i32, state: bool) {
         match &self.minecart(id).kind {
             MinecartKind::Minecart(_) => self.minecart_activate_minecart(id, xt, yt, zt, state),
+            MinecartKind::Hopper(_) => self.minecart_hopper_activate_minecart(id, state),
+            MinecartKind::Tnt(_) => self.minecart_tnt_activate_minecart(id, state),
+            MinecartKind::Chest(_) | MinecartKind::Furnace(_) | MinecartKind::Spawner(_) => {}
         }
     }
 
@@ -359,7 +448,15 @@ impl ServerLevel {
         self.block_state(pos).is_redstone_conductor()
     }
 
-    pub fn apply_natural_slowdown(&self, id: EntityId, movement: Vec3) -> Vec3 {
+    pub fn apply_natural_slowdown(&mut self, id: EntityId, movement: Vec3) -> Vec3 {
+        match &self.minecart(id).kind {
+            MinecartKind::Chest(_) | MinecartKind::Hopper(_) => self.abstract_minecart_container_apply_natural_slowdown(id, movement),
+            MinecartKind::Furnace(_) => self.minecart_furnace_apply_natural_slowdown(id, movement),
+            _ => self.abstract_minecart_apply_natural_slowdown(id, movement),
+        }
+    }
+
+    pub fn abstract_minecart_apply_natural_slowdown(&self, id: EntityId, movement: Vec3) -> Vec3 {
         let slowdown_factor = self.old_minecart_behavior_slowdown_factor(id);
         let new_movement = movement.multiply(slowdown_factor, 0.0, slowdown_factor);
         if self.entity(id).is_in_water() { new_movement.scale(WATER_SLOWDOWN_FACTOR as f64) } else { new_movement }

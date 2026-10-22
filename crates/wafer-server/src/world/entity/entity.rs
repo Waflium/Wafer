@@ -1506,6 +1506,9 @@ impl ServerLevel {
         if self.is_llama(id) {
             return self.llama_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
+        if matches!(self.entities.get(&id), Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_))) {
+            return self.minecart_tnt_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
+        }
         if self.is_abstract_horse(id) {
             return self.abstract_horse_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
@@ -2422,6 +2425,7 @@ impl ServerLevel {
             Some(LevelEntity::EndCrystal(_)) => self.end_crystal_hurt_server(id, source),
             Some(LevelEntity::Projectile(_)) => self.projectile_hurt_server(id, &source),
             Some(LevelEntity::LeashKnot(_)) => self.block_attached_entity_hurt_server(id, source),
+            Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_hurt_server(id, source, damage),
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => self.vehicle_entity_hurt_server(id, source, damage),
             _ => false,
         }
@@ -2465,7 +2469,7 @@ impl ServerLevel {
     pub fn interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {
         match self.entities.get(&id) {
             Some(LevelEntity::LeashKnot(_)) => return self.leash_fence_knot_interact(id, player, hand, location),
-            Some(LevelEntity::Minecart(_)) => return self.minecart_interact(id, player, hand, location),
+            Some(LevelEntity::Minecart(_)) => return self.abstract_minecart_interact(id, player, hand, location),
             Some(LevelEntity::Boat(boat)) if boat.container.is_some() => return self.abstract_chest_boat_interact(id, player, hand, location),
             Some(LevelEntity::Boat(_)) => return self.abstract_boat_interact(id, player, hand, location),
             _ => {}
@@ -2778,7 +2782,14 @@ impl ServerLevel {
                     ProjectileKind::LargeFireball(_) => "LargeFireball",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",
-                Some(LevelEntity::Minecart(_)) => "Minecart",
+                Some(LevelEntity::Minecart(minecart)) => match minecart.kind {
+                    super::vehicle::minecart::abstract_minecart::MinecartKind::Minecart(_) => "Minecart",
+                    super::vehicle::minecart::abstract_minecart::MinecartKind::Chest(_) => "MinecartChest",
+                    super::vehicle::minecart::abstract_minecart::MinecartKind::Furnace(_) => "MinecartFurnace",
+                    super::vehicle::minecart::abstract_minecart::MinecartKind::Hopper(_) => "MinecartHopper",
+                    super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_) => "MinecartTNT",
+                    super::vehicle::minecart::abstract_minecart::MinecartKind::Spawner(_) => "MinecartSpawner",
+                },
                 Some(LevelEntity::Boat(boat)) => match boat.kind {
                     super::vehicle::boat::abstract_boat::BoatKind::Boat => "Boat",
                     super::vehicle::boat::abstract_boat::BoatKind::Raft => "Raft",

@@ -35,6 +35,7 @@ pub struct BaseSpawner {
     max_nearby_entities: i32,
     required_player_range: i32,
     spawn_range: i32,
+    pub entity_owner: Option<crate::world::entity::EntityId>,
 }
 
 impl Default for BaseSpawner {
@@ -49,6 +50,7 @@ impl Default for BaseSpawner {
             max_nearby_entities: DEFAULT_MAX_NEARBY_ENTITIES,
             required_player_range: DEFAULT_REQUIRED_PLAYER_RANGE,
             spawn_range: DEFAULT_SPAWN_RANGE,
+            entity_owner: None,
         }
     }
 }
@@ -272,7 +274,9 @@ impl BaseSpawner {
 
     fn set_next_spawn_data(&mut self, level: Option<&mut ServerLevel>, pos: BlockPos, next_spawn_data: SpawnData) {
         self.next_spawn_data = Some(next_spawn_data);
-        if let Some(level) = level {
+        if self.entity_owner.is_none()
+            && let Some(level) = level
+        {
             let state = level.block_state(pos);
             level.send_block_updated(pos, state, state);
         }
@@ -287,6 +291,9 @@ impl BaseSpawner {
     }
 
     fn broadcast_event(&self, level: &mut ServerLevel, pos: BlockPos, id: i32) {
-        level.block_event(pos, blocks::SPAWNER, id, 0);
+        match self.entity_owner {
+            Some(entity) => level.broadcast_entity_event(entity, id as u8),
+            None => level.block_event(pos, blocks::SPAWNER, id, 0),
+        }
     }
 }

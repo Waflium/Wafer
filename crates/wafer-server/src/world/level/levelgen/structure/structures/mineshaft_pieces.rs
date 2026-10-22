@@ -8,6 +8,8 @@ use wafer_protocol::nbt::Nbt;
 
 use super::Piece;
 use super::mineshaft_structure::Type;
+use crate::server::level::ServerLevel;
+use crate::world::entity::LevelEntity;
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::block;
 use crate::world::level::block::entity::BlockEntityKind;
@@ -243,12 +245,16 @@ impl MineShaftCorridor {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn create_chest(&self, level: &mut impl WorldGenLevel, chunk_bb: &BoundingBox, random: &mut impl RandomSource, x: i32, y: i32, z: i32, _loot_table: &str) -> bool {
+    fn create_chest(&self, level: &mut impl WorldGenLevel, chunk_bb: &BoundingBox, random: &mut impl RandomSource, x: i32, y: i32, z: i32, loot_table: &str) -> bool {
         let pos = self.mine_shaft.piece.get_world_pos(x, y, z);
         if chunk_bb.is_inside(pos) && level.get_block_state(pos).is_air() && !level.get_block_state(pos.below()).is_air() {
             let state = blocks::RAIL.default_state().set(RAIL_SHAPE, if random.next_boolean() { RailShape::NorthSouth } else { RailShape::EastWest });
             self.mine_shaft.place_block(level, state, x, y, z, chunk_bb);
-            let _loot_table_seed = random.next_long();
+            if let Some(LevelEntity::Minecart(mut chest)) = ServerLevel::create_entity("minecraft:chest_minecart") {
+                chest.set_initial_pos(pos.x as f64 + 0.5, pos.y as f64 + 0.5, pos.z as f64 + 0.5);
+                chest.container.as_mut().expect("a chest minecart").set_loot_table(loot_table, random.next_long());
+                level.add_fresh_entity(LevelEntity::Minecart(chest));
+            }
             true
         } else {
             false

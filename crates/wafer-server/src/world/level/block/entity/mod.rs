@@ -18,6 +18,7 @@ pub mod decorated_pot_block_entity;
 mod dispenser_block_entity;
 pub mod enchanting_table_block_entity;
 pub mod ender_chest_block_entity;
+pub mod hopper;
 pub mod hopper_block_entity;
 pub mod jigsaw_block_entity;
 pub mod jukebox_block_entity;

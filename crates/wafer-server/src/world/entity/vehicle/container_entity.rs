@@ -23,6 +23,10 @@ impl ContainerEntity {
         ContainerEntity { item_stacks: vec![ItemStack::empty(); size], loot_table: None, loot_table_seed: 0 }
     }
 
+    pub fn size(&self) -> usize {
+        self.item_stacks.len()
+    }
+
     pub fn get_item_stacks(&mut self) -> &mut Vec<ItemStack> {
         &mut self.item_stacks
     }
@@ -57,6 +61,11 @@ impl ContainerEntity {
         self.item_stacks.iter().all(ItemStack::is_empty)
     }
 
+    pub fn set_loot_table(&mut self, loot_table: &str, seed: i64) {
+        self.loot_table = Some(loot_table.to_string());
+        self.loot_table_seed = seed;
+    }
+
     pub fn has_loot_table(&self) -> bool {
         self.loot_table.is_some()
     }
@@ -66,12 +75,17 @@ impl ServerLevel {
     pub fn container_entity(&mut self, id: EntityId) -> Option<&mut ContainerEntity> {
         match self.entities.get_mut(&id) {
             Some(LevelEntity::Boat(boat)) => boat.container.as_mut(),
+            Some(LevelEntity::Minecart(minecart)) => minecart.container.as_mut(),
             _ => None,
         }
     }
 
     pub fn is_container_entity(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::Boat(boat)) if boat.container.is_some())
+        match self.entities.get(&id) {
+            Some(LevelEntity::Boat(boat)) => boat.container.is_some(),
+            Some(LevelEntity::Minecart(minecart)) => minecart.container.is_some(),
+            _ => false,
+        }
     }
 
     pub fn unpack_chest_vehicle_loot_table(&mut self, id: EntityId, player: Option<EntityId>) {

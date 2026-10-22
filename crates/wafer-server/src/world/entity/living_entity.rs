@@ -1885,6 +1885,8 @@ impl ServerLevel {
             self.abstract_cube_mob_remove(id, reason);
         } else if self.is_living(id) {
             self.living_entity_remove(id, reason);
+        } else if self.is_minecart(id) {
+            self.abstract_minecart_remove(id, reason);
         } else if self.is_container_entity(id) {
             self.abstract_chest_boat_remove(id, reason);
         } else {

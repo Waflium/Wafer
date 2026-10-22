@@ -453,6 +453,11 @@ impl ServerLevel {
             "minecraft:zombified_piglin" => LevelEntity::Mob(Box::new(super::monster::zombie::zombified_piglin::ZombifiedPiglin::create())),
             "minecraft:area_effect_cloud" => LevelEntity::AreaEffectCloud(Box::new(super::area_effect_cloud::AreaEffectCloud::of_type())),
             "minecraft:minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart::Minecart::create())),
+            "minecraft:chest_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_chest::MinecartChest::create())),
+            "minecraft:furnace_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_furnace::MinecartFurnace::create())),
+            "minecraft:hopper_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_hopper::MinecartHopper::create())),
+            "minecraft:tnt_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_tnt::MinecartTnt::create())),
+            "minecraft:spawner_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_spawner::MinecartSpawner::create())),
             _ => {
                 let boat = super::vehicle::boat::boat::create(entity_type)
                     .or_else(|| super::vehicle::boat::raft::create(entity_type))

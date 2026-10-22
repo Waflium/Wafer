@@ -8,6 +8,7 @@ use super::mirror::Mirror;
 use super::rail_state::RailState;
 use super::rotation::Rotation;
 use crate::server::level::ServerLevel;
+use crate::world::container::ContainerRef;
 use crate::world::entity::EntityId;
 use crate::world::entity::inside_block::InsideBlockEffects;
 use crate::world::item::context::BlockPlaceContext;
@@ -115,6 +116,16 @@ impl BlockBehaviour for DetectorRailBlock {
 
     fn own_signal(&self, state: BlockState, _level: &mut dyn LevelReader, _pos: BlockPos) -> i32 {
         if state.get(POWERED) { 15 } else { 0 }
+    }
+
+    fn get_analog_output_signal(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _direction: Direction) -> i32 {
+        if state.get(POWERED) {
+            let entities: Vec<EntityId> = self.get_interacting_minecarts(level, pos).into_iter().filter(|&entity| level.is_container_entity(entity) && level.is_alive(entity)).collect();
+            if let Some(&first) = entities.first() {
+                return level.get_redstone_signal_from_container(Some(ContainerRef::ChestVehicle(first)));
+            }
+        }
+        0
     }
 
     fn get_direct_signal(&self, state: BlockState, _level: &mut dyn LevelReader, _pos: BlockPos, direction: Direction) -> i32 {

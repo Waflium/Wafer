@@ -22,6 +22,7 @@ impl ServerLevel {
     fn minecart_kind_mut(&mut self, id: EntityId) -> &mut Minecart {
         match &mut self.minecart_mut(id).kind {
             MinecartKind::Minecart(minecart) => minecart,
+            _ => unreachable!("a minecart"),
         }
     }
 
