@@ -1082,6 +1082,7 @@ impl ServerLevel {
             Some(crate::world::entity::LevelEntity::EndCrystal(_)) => Some(ItemStack::new(wafer_data::items::END_CRYSTAL, 1)),
             Some(crate::world::entity::LevelEntity::Painting(_)) => Some(ItemStack::new(wafer_data::items::PAINTING, 1)),
             Some(crate::world::entity::LevelEntity::ItemFrame(frame)) => Some(frame.get_pick_result()),
+            Some(crate::world::entity::LevelEntity::Cushion(cushion)) => Some(cushion.get_pick_result()),
             Some(crate::world::entity::LevelEntity::Mob(mob)) => crate::world::item::spawn_egg_item::by_id(mob.entity.entity_type).map(|item| ItemStack::new(item, 1)),
             _ => None,
         }

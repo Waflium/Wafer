@@ -83,6 +83,7 @@ pub enum DataValue {
     Vector3(wafer_core::joml::Vector3f),
     Quaternion(wafer_core::joml::Quaternionf),
     Rotations([f32; 3]),
+    DyeColor(i32),
     Direction(wafer_core::Direction),
     PaintingVariant(i32),
 }
@@ -125,6 +126,7 @@ impl DataValue {
             DataValue::Vector3(_) => 39,
             DataValue::Quaternion(_) => 40,
             DataValue::Rotations(_) => 9,
+            DataValue::DyeColor(_) => 43,
             DataValue::Direction(_) => 12,
             DataValue::PaintingVariant(_) => 34,
         }
@@ -187,6 +189,7 @@ impl DataValue {
             }
             DataValue::Direction(direction) => w.varint(direction.ordinal() as i32),
             DataValue::PaintingVariant(id) => w.varint(*id + 1),
+            DataValue::DyeColor(id) => w.varint(*id),
             DataValue::Rotations(r) => {
                 w.f32(r[0]);
                 w.f32(r[1]);

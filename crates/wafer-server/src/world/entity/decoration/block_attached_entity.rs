@@ -2,7 +2,7 @@ use wafer_core::{BlockPos, Vec3};
 use wafer_data::game_rule;
 use wafer_protocol::nbt::Nbt;
 
-use super::{hanging_entity, item_frame, leash_fence_knot_entity, painting};
+use super::{cushion, hanging_entity, item_frame, leash_fence_knot_entity, painting};
 use crate::server::level::ServerLevel;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::{Entity, EntityId, LevelEntity, RemovalReason};
@@ -14,6 +14,7 @@ pub enum BlockAttachedKind {
     LeashKnot,
     Painting,
     ItemFrame,
+    Cushion,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -35,10 +36,19 @@ pub fn recalculate_bounding_box(entity: &mut Entity) {
         BlockAttachedKind::LeashKnot => leash_fence_knot_entity::recalculate_bounding_box(entity, block_attached.pos),
         BlockAttachedKind::Painting => hanging_entity::recalculate_bounding_box(entity, block_attached.pos, painting::calculate_bounding_box),
         BlockAttachedKind::ItemFrame => hanging_entity::recalculate_bounding_box(entity, block_attached.pos, item_frame::calculate_bounding_box),
+        BlockAttachedKind::Cushion => cushion::recalculate_bounding_box(entity),
     }
 }
 
 pub fn set_pos(entity: &mut Entity, x: f64, y: f64, z: f64) {
+    if entity.block_attached.is_some_and(|block_attached| block_attached.kind == BlockAttachedKind::Cushion) {
+        cushion::set_pos(entity, x, y, z);
+    } else {
+        block_attached_entity_set_pos(entity, x, y, z);
+    }
+}
+
+pub fn block_attached_entity_set_pos(entity: &mut Entity, x: f64, y: f64, z: f64) {
     if let Some(block_attached) = &mut entity.block_attached {
         block_attached.pos = BlockPos::containing(x, y, z);
     }
@@ -78,10 +88,17 @@ impl ServerLevel {
         block_attached.ticks_since_last_check += 1;
         if ticks_since_last_check >= CHECK_INTERVAL {
             self.entity_mut(id).block_attached.as_mut().expect("a block attached entity").ticks_since_last_check = 0;
+            self.block_attached_entity_tick_at_check_interval(id);
             if !self.entity(id).is_removed() && !self.block_attached_entity_survives(id) {
                 self.discard(id);
                 self.block_attached_entity_drop_item(id, None);
             }
+        }
+    }
+
+    fn block_attached_entity_tick_at_check_interval(&mut self, id: EntityId) {
+        if let Some(LevelEntity::Cushion(_)) = self.entities.get(&id) {
+            self.cushion_tick_at_check_interval(id);
         }
     }
 
@@ -90,6 +107,7 @@ impl ServerLevel {
             Some(LevelEntity::LeashKnot(_)) => self.leash_fence_knot_survives(id),
             Some(LevelEntity::Painting(_)) => self.hanging_entity_survives(id),
             Some(LevelEntity::ItemFrame(_)) => self.item_frame_survives(id),
+            Some(LevelEntity::Cushion(_)) => self.cushion_survives(id),
             _ => unreachable!("not a block attached entity"),
         }
     }
@@ -99,6 +117,7 @@ impl ServerLevel {
             Some(LevelEntity::LeashKnot(_)) => self.leash_fence_knot_drop_item(id, caused_by),
             Some(LevelEntity::Painting(_)) => self.painting_drop_item(id, caused_by),
             Some(LevelEntity::ItemFrame(_)) => self.item_frame_drop_item(id, caused_by),
+            Some(LevelEntity::Cushion(_)) => self.cushion_drop_item(id, caused_by),
             _ => unreachable!("not a block attached entity"),
         }
     }

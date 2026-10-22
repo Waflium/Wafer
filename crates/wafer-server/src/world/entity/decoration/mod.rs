@@ -2,6 +2,9 @@ pub mod armor_stand;
 #[cfg(test)]
 mod armor_stand_tests;
 pub mod block_attached_entity;
+pub mod cushion;
+#[cfg(test)]
+mod cushion_tests;
 pub mod hanging_entity;
 #[cfg(test)]
 mod hanging_entity_tests;

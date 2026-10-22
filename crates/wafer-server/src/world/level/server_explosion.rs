@@ -176,7 +176,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::ArmorStand(_)) => self.armor_stand_ignore_explosion(id, self.should_affect_blocklike_entities(explosion)),
             Some(LevelEntity::Item(_)) => !self.should_affect_blocklike_entities(explosion),
-            Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => {
+            Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_) | LevelEntity::Cushion(_)) => {
                 explosion.source.is_some_and(|direct_entity| self.entity(direct_entity).is_in_water()) || !self.should_affect_blocklike_entities(explosion)
             }
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => explosion.indirect_source.is_some_and(|indirect| self.is_mob(indirect)) && !self.game_rules.get_bool(game_rule::MOB_GRIEFING),

@@ -76,7 +76,7 @@ impl ClipShape {
     }
 }
 
-fn voxel_clip(shape: &VoxelShape, offset: Vec3, from: Vec3, to: Vec3, pos: BlockPos) -> Option<BlockHitResult> {
+pub fn voxel_clip(shape: &VoxelShape, offset: Vec3, from: Vec3, to: Vec3, pos: BlockPos) -> Option<BlockHitResult> {
     if shape.is_empty() {
         return None;
     }

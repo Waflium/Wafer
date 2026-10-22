@@ -151,6 +151,7 @@ impl LevelEntity {
             LevelEntity::EvokerFangs(_) => Some("minecraft:evoker_fangs"),
             LevelEntity::LeashKnot(_) => None,
             LevelEntity::Painting(_) => Some("minecraft:painting"),
+            LevelEntity::Cushion(_) => Some("minecraft:cushion"),
             LevelEntity::ItemFrame(frame) => Some(if frame.glow { "minecraft:glow_item_frame" } else { "minecraft:item_frame" }),
             LevelEntity::Marker(_) => Some("minecraft:marker"),
             LevelEntity::Interaction(_) => Some("minecraft:interaction"),
@@ -221,6 +222,7 @@ impl LevelEntity {
             LevelEntity::ArmorStand(stand) => stand.add_additional_save_data(out),
             LevelEntity::Display(display) => display.add_additional_save_data(out),
             LevelEntity::Painting(painting) => painting.add_additional_save_data(out),
+            LevelEntity::Cushion(cushion) => cushion.add_additional_save_data(out),
             LevelEntity::ItemFrame(frame) => frame.add_additional_save_data(out),
             LevelEntity::EndCrystal(crystal) => {
                 if let Some(target) = crystal.get_beam_target() {
@@ -301,6 +303,7 @@ impl LevelEntity {
             LevelEntity::ArmorStand(stand) => stand.read_additional_save_data(nbt),
             LevelEntity::Display(display) => display.read_additional_save_data(nbt),
             LevelEntity::Painting(painting) => painting.read_additional_save_data(nbt),
+            LevelEntity::Cushion(cushion) => cushion.read_additional_save_data(nbt),
             LevelEntity::ItemFrame(frame) => frame.read_additional_save_data(nbt),
             LevelEntity::EyeOfEnder(eye) => {
                 let item = nbt.get("Item").and_then(|i| ItemStack::from_nbt(i).ok()).unwrap_or_else(ItemStack::empty);
@@ -356,6 +359,7 @@ pub fn apply_default_stack_config(entity: &mut LevelEntity, item_stack: &ItemSta
     match &mut *entity {
         LevelEntity::Mob(mob) => mob.apply_components_from_item_stack(item_stack),
         LevelEntity::Painting(painting) => painting.apply_components_from_item_stack(item_stack),
+        LevelEntity::Cushion(cushion) => cushion.apply_components_from_item_stack(item_stack),
         other => other.entity_mut().apply_components_from_item_stack(item_stack),
     }
     update_custom_entity_tag(entity, item_stack.get(crate::world::item::component::ENTITY_DATA)?)
@@ -406,6 +410,7 @@ impl ServerLevel {
             "minecraft:lightning_bolt" => LevelEntity::LightningBolt(super::lightning_bolt::LightningBolt::new(Vec3::ZERO)),
             "minecraft:eye_of_ender" => LevelEntity::EyeOfEnder(super::projectile::eye_of_ender::EyeOfEnder::of_type()),
             "minecraft:painting" => LevelEntity::Painting(super::decoration::painting::Painting::create_empty()),
+            "minecraft:cushion" => LevelEntity::Cushion(super::decoration::cushion::Cushion::of_type()),
             "minecraft:item_frame" => LevelEntity::ItemFrame(super::decoration::item_frame::ItemFrame::create_empty(false)),
             "minecraft:glow_item_frame" => LevelEntity::ItemFrame(super::decoration::item_frame::ItemFrame::create_empty(true)),
             "minecraft:block_display" => LevelEntity::Display(super::display::Display::create_block_display()),

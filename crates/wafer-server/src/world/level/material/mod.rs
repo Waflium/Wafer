@@ -9,6 +9,7 @@ use wafer_core::{AABB, BlockPos, Direction};
 use wafer_data::{BlockState, Fluid, FluidState, fluid_tags};
 
 use crate::server::level::ServerLevel;
+use crate::world::entity::inside_block::{InsideBlockEffectType, InsideBlockEffects};
 use crate::world::level::{BlockGetter, LevelReader};
 pub use flowing_fluid::FlowingFluid;
 use lava_fluid::LavaFluid;
@@ -19,6 +20,16 @@ pub fn flowing(fluid: Fluid) -> Option<&'static dyn FlowingFluid> {
         Fluid::Empty => None,
         Fluid::Water | Fluid::FlowingWater => Some(&WaterFluid),
         Fluid::Lava | Fluid::FlowingLava => Some(&LavaFluid),
+    }
+}
+
+pub fn entity_inside(fluid: FluidState, effects: &mut InsideBlockEffects) {
+    if fluid.is(&fluid_tags::WATER) {
+        effects.apply(InsideBlockEffectType::Extinguish);
+    } else if fluid.is(&fluid_tags::LAVA) {
+        effects.apply(InsideBlockEffectType::ClearFreeze);
+        effects.apply(InsideBlockEffectType::LavaIgnite);
+        effects.run_after(InsideBlockEffectType::LavaIgnite, Box::new(|level, id| level.lava_hurt(id)));
     }
 }
 

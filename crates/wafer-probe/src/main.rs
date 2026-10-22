@@ -504,16 +504,18 @@ async fn main() -> anyhow::Result<()> {
                             })
                             .await?;
                         }
-                        ["use", x, y, z, face] => {
+                        ["use", x, y, z, face, cursor @ ..] => {
                             let (x, y, z, face): (i32, i32, i32, i32) = (x.parse()?, y.parse()?, z.parse()?, face.parse()?);
+                            let cursor: Vec<f32> = cursor.iter().map(|c| c.parse()).collect::<Result<_, _>>()?;
+                            let (cx, cy, cz) = if let [cx, cy, cz] = cursor[..] { (cx, cy, cz) } else { (0.5, 0.5, 0.5) };
                             sequence += 1;
                             send(&mut wr, codec, play::serverbound::USE_ITEM_ON, |w| {
                                 w.varint(0);
                                 w.position(x, y, z);
                                 w.varint(face);
-                                w.f32(0.5);
-                                w.f32(0.5);
-                                w.f32(0.5);
+                                w.f32(cx);
+                                w.f32(cy);
+                                w.f32(cz);
                                 w.bool(false);
                                 w.bool(false);
                                 w.varint(sequence);

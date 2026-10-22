@@ -104,6 +104,7 @@ pub enum LevelEntity {
     OminousItemSpawner(Box<ominous_item_spawner::OminousItemSpawner>),
     ArmorStand(Box<decoration::armor_stand::ArmorStand>),
     Painting(decoration::painting::Painting),
+    Cushion(decoration::cushion::Cushion),
     ItemFrame(decoration::item_frame::ItemFrame),
 }
 
@@ -152,7 +153,7 @@ impl LevelEntity {
             LevelEntity::Interaction(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Display(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(1), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Marker(_) => TrackingConfig { range: 0, update_interval: UpdateInterval::Periodic(1), track_deltas: true, stepped: false, is_item: false },
-            LevelEntity::Painting(_) | LevelEntity::ItemFrame(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Never, track_deltas: false, stepped: false, is_item: false },
+            LevelEntity::Painting(_) | LevelEntity::ItemFrame(_) | LevelEntity::Cushion(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Never, track_deltas: false, stepped: false, is_item: false },
             LevelEntity::LeashKnot(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Never, track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EvokerFangs(_) => TrackingConfig { range: 6 * 16, update_interval: UpdateInterval::Periodic(2), track_deltas: false, stepped: false, is_item: false },
             LevelEntity::EndCrystal(_) => TrackingConfig { range: 16 * 16, update_interval: UpdateInterval::Never, track_deltas: false, stepped: false, is_item: false },
@@ -195,6 +196,7 @@ impl LevelEntity {
             LevelEntity::EvokerFangs(fangs) => &fangs.entity,
             LevelEntity::LeashKnot(knot) => &knot.entity,
             LevelEntity::Painting(painting) => &painting.entity,
+            LevelEntity::Cushion(cushion) => &cushion.entity,
             LevelEntity::ItemFrame(frame) => &frame.entity,
             LevelEntity::Marker(marker) => &marker.entity,
             LevelEntity::OminousItemSpawner(spawner) => &spawner.entity,
@@ -221,6 +223,7 @@ impl LevelEntity {
             LevelEntity::EvokerFangs(fangs) => &mut fangs.entity,
             LevelEntity::LeashKnot(knot) => &mut knot.entity,
             LevelEntity::Painting(painting) => &mut painting.entity,
+            LevelEntity::Cushion(cushion) => &mut cushion.entity,
             LevelEntity::ItemFrame(frame) => &mut frame.entity,
             LevelEntity::Marker(marker) => &mut marker.entity,
             LevelEntity::OminousItemSpawner(spawner) => &mut spawner.entity,

@@ -2091,7 +2091,7 @@ impl ServerLevel {
         self.play_sound_at(None, x, y, z, sound_event("minecraft:entity.generic.extinguish_fire"), source, 0.7, pitch);
     }
 
-    fn apply_inside_effects(&mut self, id: EntityId) {
+    pub fn apply_inside_effects(&mut self, id: EntityId) {
         if self.entity_ref(id).is_none() {
             return;
         }
@@ -2181,6 +2181,19 @@ impl ServerLevel {
         }
     }
 
+    pub fn collided_with_shape_moving_from(&self, id: EntityId, from: Vec3, to: Vec3, aabbs: &[AABB]) -> bool {
+        let bounding_box_at_from = self.entity(id).make_bounding_box(from);
+        let travel_vector = to.subtract(from);
+        bounding_box_at_from.collided_along_vector(travel_vector, aabbs)
+    }
+
+    pub fn collided_with_fluid(&mut self, id: EntityId, fluid_state: wafer_data::FluidState, pos: BlockPos, from: Vec3, to: Vec3) -> bool {
+        match self.fluid_aabb(fluid_state, pos) {
+            Some(fluid_aabb) => self.collided_with_shape_moving_from(id, from, to, &[fluid_aabb]),
+            None => false,
+        }
+    }
+
     fn check_inside_blocks_between(&mut self, id: EntityId, from: Vec3, to: Vec3, visited: &mut FastSet<BlockPos>, max_iterations: i32) -> i32 {
         let e = self.entity_mut(id);
         let deflated = e.make_bounding_box(to).deflate_all(1.0e-5f32 as f64);
@@ -2223,13 +2236,7 @@ impl ServerLevel {
                 }
                 if inside_fluid {
                     effects.advance_step(iteration);
-                    if fluid.is(&fluid_tags::WATER) {
-                        effects.apply(InsideBlockEffectType::Extinguish);
-                    } else if fluid.is(&fluid_tags::LAVA) {
-                        effects.apply(InsideBlockEffectType::ClearFreeze);
-                        effects.apply(InsideBlockEffectType::LavaIgnite);
-                        effects.run_after(InsideBlockEffectType::LavaIgnite, Box::new(|level, id| level.lava_hurt(id)));
-                    }
+                    crate::world::level::material::entity_inside(fluid, &mut effects);
                 }
             }
             true
@@ -2632,6 +2639,7 @@ impl ServerLevel {
             Some(LevelEntity::Projectile(_)) => self.projectile_hurt_server(id, &source),
             Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_)) => self.block_attached_entity_hurt_server(id, source),
             Some(LevelEntity::ItemFrame(_)) => self.item_frame_hurt_server(id, source),
+            Some(LevelEntity::Cushion(_)) => self.cushion_hurt_server(id, source),
             Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) => super::marker::Marker::hurt_server(),
             Some(LevelEntity::OminousItemSpawner(_)) => super::ominous_item_spawner::OminousItemSpawner::hurt_server(),
             Some(LevelEntity::Display(_)) => super::display::Display::hurt_server(),
@@ -2683,6 +2691,7 @@ impl ServerLevel {
             Some(LevelEntity::ArmorStand(_)) => return self.armor_stand_interact(id, player, hand, location),
             Some(LevelEntity::LeashKnot(_)) => return self.leash_fence_knot_interact(id, player, hand, location),
             Some(LevelEntity::ItemFrame(_)) => return self.item_frame_interact(id, player, hand),
+            Some(LevelEntity::Cushion(_)) => return self.cushion_interact(id, player, hand, location),
             Some(LevelEntity::Interaction(_)) => return self.interaction_interact(id, player),
             Some(LevelEntity::Minecart(_)) => return self.abstract_minecart_interact(id, player, hand, location),
             Some(LevelEntity::Boat(boat)) if boat.container.is_some() => return self.abstract_chest_boat_interact(id, player, hand, location),
@@ -3689,6 +3698,9 @@ impl ServerLevel {
     fn remove_passenger(&mut self, id: EntityId, passenger: EntityId) {
         self.entity_mut(id).passengers.retain(|&p| p != passenger);
         self.entity_mut(passenger).boarding_cooldown = 60;
+        if self.is_cushion(id) {
+            self.cushion_remove_passenger(id);
+        }
     }
 
     pub fn eject_passengers(&mut self, id: EntityId) {
@@ -4040,7 +4052,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::ArmorStand(_)) => self.armor_stand_skip_attack_interaction(id, source),
             Some(LevelEntity::Interaction(_)) => self.interaction_skip_attack_interaction(id, source),
-            Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => self.block_attached_entity_skip_attack_interaction(id, source),
+            Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_) | LevelEntity::Cushion(_)) => self.block_attached_entity_skip_attack_interaction(id, source),
             _ => false,
         }
     }
@@ -4098,7 +4110,7 @@ impl ServerLevel {
             None | Some(LevelEntity::Mob(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) | LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_)) => {
                 !self.entity(id).is_removed()
             }
-            Some(LevelEntity::EndCrystal(_) | LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => true,
+            Some(LevelEntity::EndCrystal(_) | LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_) | LevelEntity::Cushion(_)) => true,
             Some(LevelEntity::Projectile(projectile)) => {
                 matches!(projectile.kind, super::projectile::projectile::ProjectileKind::ShulkerBullet(_))
                     || entity_type_tags::REDIRECTABLE_PROJECTILE.contains(projectile.entity.entity_type as usize) && !(projectile.abstract_arrow().is_some() && projectile.is_in_ground())

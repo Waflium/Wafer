@@ -265,18 +265,6 @@ impl ServerLevel {
         path_no_collisions
     }
 
-    fn collided_with_shape_moving_from(&self, id: EntityId, from: Vec3, to: Vec3, aabbs: &[AABB]) -> bool {
-        let bounding_box_at_from = self.entity(id).dimensions.make_bounding_box(from);
-        let travel_vector = to.subtract(from);
-        bounding_box_at_from.collided_along_vector(travel_vector, aabbs)
-    }
-
-    fn collided_with_fluid(&mut self, id: EntityId, fluid_state: wafer_data::FluidState, pos: BlockPos, from: Vec3, to: Vec3) -> bool {
-        match self.fluid_aabb(fluid_state, pos) {
-            Some(fluid_aabb) => self.collided_with_shape_moving_from(id, from, to, &[fluid_aabb]),
-            None => false,
-        }
-    }
 }
 
 pub struct RandomFloatAroundGoal {

@@ -292,6 +292,10 @@ impl AABB {
         self.inflate_all(-amount)
     }
 
+    pub fn next_deflated(&self) -> AABB {
+        AABB::new(self.min_x.next_up(), self.min_y.next_up(), self.min_z.next_up(), self.max_x.next_down(), self.max_y.next_down(), self.max_z.next_down())
+    }
+
     pub fn intersect(&self, o: &AABB) -> AABB {
         AABB::new(
             jmax(self.min_x, o.min_x),

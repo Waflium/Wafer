@@ -107,6 +107,13 @@ impl ServerLevel {
         if self.is_armor_stand(id) {
             return;
         }
+        if self.is_cushion(id) {
+            self.cushion_thunder_hit(id, lightning_bolt);
+            return;
+        }
+        if self.is_block_attached_entity(id) {
+            return;
+        }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::MushroomCow(_)) => self.mushroom_cow_thunder_hit(id, lightning_bolt),
             Some(MobKind::Pig(_)) => self.pig_thunder_hit(id, lightning_bolt),
