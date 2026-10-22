@@ -23,7 +23,7 @@ pub fn can_light(state: BlockState) -> bool {
 impl BlockBehaviour for CandleBlock {
     fn on_explosion_hit(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, explosion: &crate::world::level::server_explosion::ServerExplosion, stacks: &mut Vec<(BlockPos, crate::world::item::ItemStack)>) {
         if explosion.can_trigger_blocks(level) && state.get(wafer_data::properties::LIT) {
-            super::abstract_candle_block::extinguish(state, level, pos);
+            super::abstract_candle_block::extinguish(None, state, level, pos);
         }
         level.block_on_explosion_hit(state, pos, explosion, stacks);
     }
@@ -45,7 +45,7 @@ impl BlockBehaviour for CandleBlock {
         _hit: &BlockHitResult,
     ) -> InteractionResult {
         if item.is_empty() && level.player(player).abilities.may_build && state.get(LIT) {
-            extinguish(state, level, pos);
+            extinguish(Some(player), state, level, pos);
             InteractionResult::SUCCESS
         } else {
             InteractionResult::TryWithEmptyHand
@@ -79,6 +79,7 @@ impl BlockBehaviour for CandleBlock {
             if state.get(LIT) {
                 level.set_block(pos, new_state.set(LIT, false), 11);
                 level.play_sound(pos, registry_id(registry::SOUND_EVENT, "minecraft:block.candle.extinguish"), SoundSource::Blocks, 1.0, 1.0);
+                level.game_event(crate::world::level::gameevent::game_event::BLOCK_CHANGE, wafer_core::Vec3::at_center_of(pos), crate::world::level::gameevent::game_event::Context::of(None));
             } else {
                 level.set_block(pos, new_state, UPDATE_ALL);
             }

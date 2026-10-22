@@ -16,6 +16,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
         level.play_sound(Some(player), pos, sound_event("minecraft:block.growing_plant.crop"), SoundSource::Blocks, 1.0, 1.0);
         let new_state = state.set(AGE_25, 25);
         level.set_block(pos, new_state, UPDATE_ALL);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), Some(new_state)));
         level.hurt_and_break(player, hand.as_equipment_slot(), 1);
         return InteractionResult::SUCCESS;
     }

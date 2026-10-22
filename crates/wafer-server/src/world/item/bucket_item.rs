@@ -43,9 +43,9 @@ impl BucketItem {
         self.content
     }
 
-    pub fn check_extra_content(&self, level: &mut ServerLevel, _user: Option<EntityId>, item_stack: &ItemStack, pos: BlockPos) {
+    pub fn check_extra_content(&self, level: &mut ServerLevel, user: Option<EntityId>, item_stack: &ItemStack, pos: BlockPos) {
         if let Some(mob_bucket_item) = &self.mob_bucket_item {
-            mob_bucket_item.check_extra_content(level, item_stack, pos);
+            mob_bucket_item.check_extra_content(level, user, item_stack, pos);
         }
     }
 
@@ -93,6 +93,7 @@ impl BucketItem {
                     let position = level.player(player).entity.position();
                     level.play_sound_at(Some(player), position.x, position.y, position.z, sound, SoundSource::Players, 1.0, 1.0);
                 }
+                level.game_event_at(Some(player), crate::world::level::gameevent::game_event::FLUID_PICKUP, pos);
                 let filled = taken.clone();
                 let result = item_utils::create_filled_result(level, player, hand, item_stack, taken, true);
                 crate::advancements::triggers::criteria_triggers::FILLED_BUCKET.trigger(level, player, &filled);
@@ -155,6 +156,7 @@ impl BucketItem {
     fn bucket_item_play_empty_sound(&self, level: &mut ServerLevel, user: Option<EntityId>, pos: BlockPos) {
         let name = if self.content.is(&fluid_tags::LAVA) { "minecraft:item.bucket.empty_lava" } else { "minecraft:item.bucket.empty" };
         level.play_sound(user, pos, registry_id(registry::SOUND_EVENT, name), SoundSource::Blocks, 1.0, 1.0);
+        level.game_event_at(user, crate::world::level::gameevent::game_event::FLUID_PLACE, pos);
     }
 }
 

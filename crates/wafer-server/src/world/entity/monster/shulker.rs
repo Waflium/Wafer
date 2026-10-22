@@ -366,6 +366,7 @@ impl ServerLevel {
                 set_attach_face(self.entity_mut(id), attachment_direction);
                 self.entity_play_sound(id, sound_event("minecraft:entity.shulker.teleport"), 1.0, 1.0);
                 self.entity_mut(id).set_pos(Vec3::new(target.x as f64 + 0.5, target.y as f64, target.z as f64 + 0.5));
+                self.game_event_at_with(crate::world::level::gameevent::game_event::TELEPORT, old_pos, crate::world::level::gameevent::game_event::Context::of(Some(id)));
                 let packed_diff = block_util::pack_difference_in_position(old_pos, self.entity(id).block_position(), 8, 8, 8);
                 self.level_event(None, crate::server::level::events::PARTICLES_SHULKER_TELEPORT, old_pos, packed_diff);
                 self.entity_mut(id).data.set(DATA_PEEK_ID, DataValue::Byte(0));
@@ -421,8 +422,10 @@ impl ServerLevel {
         if amount == 0 {
             armor.add_permanent_modifier(AttributeModifier { id: std::borrow::Cow::Borrowed(COVERED_ARMOR_MODIFIER_ID), amount: 20.0, operation: Operation::AddValue });
             self.entity_play_sound(id, sound_event("minecraft:entity.shulker.close"), 1.0, 1.0);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::CONTAINER_CLOSE);
         } else {
             self.entity_play_sound(id, sound_event("minecraft:entity.shulker.open"), 1.0, 1.0);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::CONTAINER_OPEN);
         }
         self.entity_mut(id).data.set(DATA_PEEK_ID, DataValue::Byte(amount as i8));
     }

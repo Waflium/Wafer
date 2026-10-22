@@ -214,6 +214,8 @@ impl ServerLevel {
 
     fn firework_explode(&mut self, id: EntityId) {
         self.broadcast_entity_event(id, EVENT_FIREWORKS_EXPLODE);
+        let owner = self.projectile_get_owner(id);
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::EXPLODE, owner);
         self.deal_explosion_damage(id);
         self.discard(id);
     }

@@ -36,6 +36,7 @@ impl BlockBehaviour for DaylightDetectorBlock {
         }
         let new_state = state.cycle(INVERTED);
         level.set_block(pos, new_state, UPDATE_CLIENTS);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), Some(new_state)));
         update_signal_strength(new_state, level, pos);
         InteractionResult::SUCCESS
     }

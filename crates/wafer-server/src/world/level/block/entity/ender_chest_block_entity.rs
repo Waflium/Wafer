@@ -14,13 +14,13 @@ pub struct EnderChestBlockEntity {
 impl ServerLevel {
     pub fn ender_chest_start_open(&mut self, pos: BlockPos, player: EntityId) {
         if self.get_block_entity(pos).is_some_and(|entity| !entity.is_removed()) && !self.is_spectator(player) {
-            self.increment_openers(pos, crate::server::level::game_mode::BLOCK_INTERACTION_RANGE);
+            self.increment_openers(player, pos, crate::server::level::game_mode::BLOCK_INTERACTION_RANGE);
         }
     }
 
     pub fn ender_chest_stop_open(&mut self, pos: BlockPos, player: EntityId) {
         if self.get_block_entity(pos).is_some_and(|entity| !entity.is_removed()) && !self.is_spectator(player) {
-            self.decrement_openers(pos);
+            self.decrement_openers(player, pos);
         }
     }
 

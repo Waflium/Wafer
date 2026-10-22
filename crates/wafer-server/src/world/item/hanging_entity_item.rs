@@ -68,6 +68,8 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
             let (x, y, z) = (e.x(), e.y(), e.z());
             level.play_sound_at(None, x, y, z, placement_sound(&entity), SoundSource::Neutral, 1.0, 1.0);
         }
+        let position = entity.entity().position();
+        level.game_event_from_entity(Some(player), crate::world::level::gameevent::game_event::ENTITY_PLACE, position);
         level.add_fresh_entity(entity);
         item_in_hand.shrink(1);
         level.player_mut(player).update_item_in_hand(hand, &item_in_hand);

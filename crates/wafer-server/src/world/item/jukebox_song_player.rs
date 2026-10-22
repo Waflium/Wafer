@@ -60,6 +60,8 @@ impl ServerLevel {
         let Some(player) = self.jukebox_song_player(pos) else { return };
         if player.song.is_some() {
             player.clear_song();
+            let block_state = self.chunks.block_entity_ref(pos).map(|entity| entity.block_state());
+            self.game_event_at_with(crate::world::level::gameevent::game_event::JUKEBOX_STOP_PLAY, pos, crate::world::level::gameevent::game_event::Context::of_state(block_state));
             self.level_event(None, SOUND_STOP_JUKEBOX_SONG, pos, 0);
             self.jukebox_on_song_changed(pos);
         }
@@ -72,6 +74,8 @@ impl ServerLevel {
             self.jukebox_song_player_stop(pos);
         } else {
             if player.should_emit_jukebox_playing_event() {
+                let block_state = self.chunks.block_entity_ref(pos).map(|entity| entity.block_state());
+                self.game_event_at_with(crate::world::level::gameevent::game_event::JUKEBOX_PLAY, pos, crate::world::level::gameevent::game_event::Context::of_state(block_state));
                 self.spawn_music_particles(pos);
             }
             if let Some(player) = self.jukebox_song_player(pos) {

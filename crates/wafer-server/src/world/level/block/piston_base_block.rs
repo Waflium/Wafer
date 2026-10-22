@@ -147,6 +147,7 @@ impl PistonBaseBlock {
             let block_entity = if state.has_block_entity() { level.get_block_entity(pos).cloned() } else { None };
             level.drop_resources_with_entity(state, pos, block_entity.as_ref(), None, None);
             level.set_block(pos, blocks::AIR.default_state(), 18);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
             to_update.push(state);
         }
         for i in (0..to_push.len()).rev() {
@@ -233,6 +234,7 @@ impl BlockBehaviour for PistonBaseBlock {
             level.set_block(pos, extended_state, 67);
             let pitch = level.random.next_float() * 0.25 + 0.6;
             level.play_sound(None, pos, sound_event("minecraft:block.piston.extend"), SoundSource::Blocks, 0.5, pitch);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_ACTIVATE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(extended_state)));
         } else if b0 == TRIGGER_CONTRACT || b0 == TRIGGER_DROP {
             if level.piston_moving_block_entity(pos.relative(direction)).is_some() {
                 level.piston_moving_final_tick(pos.relative(direction));
@@ -271,6 +273,7 @@ impl BlockBehaviour for PistonBaseBlock {
             }
             let pitch = level.random.next_float() * 0.15 + 0.6;
             level.play_sound(None, pos, sound_event("minecraft:block.piston.contract"), SoundSource::Blocks, 0.5, pitch);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DEACTIVATE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(moving_piston_state)));
         }
         true
     }

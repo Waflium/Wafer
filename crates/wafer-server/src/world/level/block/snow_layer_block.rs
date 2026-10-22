@@ -40,6 +40,7 @@ impl BlockBehaviour for SnowLayerBlock {
         if level.brightness(LightLayer::Block, pos) > 11 {
             level.drop_resources(state, pos, None, None);
             level.remove_block(pos, false);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
         }
     }
 

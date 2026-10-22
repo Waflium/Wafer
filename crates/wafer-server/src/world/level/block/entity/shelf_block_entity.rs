@@ -86,8 +86,15 @@ impl ServerLevel {
     }
 
     pub fn shelf_set_changed(&mut self, pos: BlockPos) {
+        self.shelf_set_changed_with(pos, Some(crate::world::level::gameevent::game_event::BLOCK_ACTIVATE));
+    }
+
+    pub fn shelf_set_changed_with(&mut self, pos: BlockPos, event: Option<crate::world::level::gameevent::game_event::GameEvent>) {
         let Some(state) = self.chunks.block_entity_ref(pos).map(|entity| entity.block_state()) else { return };
         self.block_entity_set_changed(pos);
+        if let Some(event) = event {
+            self.game_event_at_with(event, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
+        }
         self.send_block_updated(pos, state, state);
     }
 }

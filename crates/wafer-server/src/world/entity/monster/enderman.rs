@@ -232,6 +232,7 @@ impl EndermanLeaveBlockGoal {
             let carried = level.update_from_neighbour_shapes(carried, pos);
             if self.can_place_block(level, mob, pos, carried, target_state, below_state) {
                 level.set_block(pos, carried, UPDATE_ALL);
+                level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_PLACE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(mob), Some(carried)));
                 set_carried_block(level.entity_mut(mob), None);
             }
         }
@@ -373,6 +374,7 @@ impl EndermanTakeBlockGoal {
         let reachable = result.hit.block_pos == pos;
         if block_state.is(&block_tags::ENDERMAN_HOLDABLE) && reachable {
             level.remove_block(pos, false);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(mob), Some(block_state)));
             set_carried_block(level.entity_mut(mob), Some(block_state.block().default_state()));
         }
     }
@@ -465,14 +467,17 @@ impl ServerLevel {
         }
         let old_pos = self.entity(id).position();
         let result = self.random_teleport(id, x, y, z, true, &|state| state.is(&block_tags::ENDERMAN_DOES_NOT_TELEPORT_TO));
-        if result && !self.entity(id).is_silent() {
-            let old_block_pos = BlockPos::containing_vec(old_pos);
-            let packed_diff = block_util::clamped_pack_difference_in_position(old_block_pos, self.entity(id).block_position(), 127, 127, 127);
-            self.level_event(None, PARTICLES_ENDERMAN_TELEPORT, old_block_pos, packed_diff);
-            let (xo, source) = (self.entity(id).xo, self.sound_source(id));
-            let sound = sound_event("minecraft:entity.enderman.teleport");
-            self.play_sound_at(None, xo.x, xo.y, xo.z, sound, source, 1.0, 1.0);
-            self.entity_play_sound(id, sound, 1.0, 1.0);
+        if result {
+            self.game_event(crate::world::level::gameevent::game_event::TELEPORT, old_pos, crate::world::level::gameevent::game_event::Context::of(Some(id)));
+            if !self.entity(id).is_silent() {
+                let old_block_pos = BlockPos::containing_vec(old_pos);
+                let packed_diff = block_util::clamped_pack_difference_in_position(old_block_pos, self.entity(id).block_position(), 127, 127, 127);
+                self.level_event(None, PARTICLES_ENDERMAN_TELEPORT, old_block_pos, packed_diff);
+                let (xo, source) = (self.entity(id).xo, self.sound_source(id));
+                let sound = sound_event("minecraft:entity.enderman.teleport");
+                self.play_sound_at(None, xo.x, xo.y, xo.z, sound, source, 1.0, 1.0);
+                self.entity_play_sound(id, sound, 1.0, 1.0);
+            }
         }
         result
     }

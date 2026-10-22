@@ -511,6 +511,7 @@ impl ServerLevel {
             if eat_counter > 80 && self.entity_mut(id).random.next_int_bounded(20) == 1 {
                 if eat_counter > 100 && self.item_by_slot(id, EquipmentSlot::Mainhand).is_some_and(|item| item.get_item().is(&item_tags::PANDA_EATS_FROM_GROUND)) {
                     self.set_item_slot(id, EquipmentSlot::Mainhand, ItemStack::empty());
+                    self.entity_game_event(id, crate::world::level::gameevent::game_event::EAT);
                     sit(self.entity_mut(id), false);
                 }
                 eat(self.entity_mut(id), false);

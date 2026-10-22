@@ -16,6 +16,8 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
         let (x, y, z) = (e.x(), e.y(), e.z());
         let pitch = 0.4 / (level.random.next_float() * 0.4 + 0.8);
         level.play_sound_at(None, x, y, z, sound_event("minecraft:entity.fishing_bobber.retrieve"), SoundSource::Neutral, 1.0, pitch);
+        let item_stack = level.player(player).item_in_hand(hand).unwrap_or(item_stack);
+        level.cause_use_vibration(&item_stack, player, crate::world::level::gameevent::game_event::ITEM_INTERACT_FINISH);
     } else {
         let e = level.entity(player);
         let (x, y, z) = (e.x(), e.y(), e.z());
@@ -27,6 +29,7 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
         let id = level.spawn_projectile(hook, &item_stack, |_| {});
         level.player_mut(player).fishing = Some(id);
         level.award_stat(player, crate::stats::stats::ITEM_USED.get(item_stack.get_item().0), 1);
+        level.cause_use_vibration(&item_stack, player, crate::world::level::gameevent::game_event::ITEM_INTERACT_START);
     }
     (InteractionResult::SUCCESS, None)
 }

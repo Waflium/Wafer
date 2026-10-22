@@ -15,8 +15,10 @@ pub fn execute(level: &mut ServerLevel, source: &BlockSource, mut dispensed: Ite
     if base_fire_block::can_be_placed_at(level, target_pos, facing) {
         let fire = base_fire_block::get_state(level, target_pos);
         level.set_block(target_pos, fire, UPDATE_ALL);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_PLACE, target_pos);
     } else if campfire_block::can_light(target) || candle_block::can_light(target) || candle_cake_block::can_light(target) {
         level.set_block(target_pos, target.set(LIT, true), UPDATE_ALL);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_CHANGE, target_pos);
     } else if target.block().is_instance_of("TntBlock") {
         if tnt_block::prime(level, target_pos, None, Some(&dispensed)) {
             level.remove_block(target_pos, false);

@@ -53,13 +53,17 @@ fn allays_bring_matching_items_to_their_player() {
     item.pickup_delay = 0;
     level.add_fresh_entity(LevelEntity::Item(item));
     let mut picked_up = false;
+    let mut thrown = false;
     for _ in 0..600 {
         level.tick();
-        picked_up |= !allay::allay(level.mob(allay).expect("an allay")).inventory.is_empty();
+        let empty = allay::allay(level.mob(allay).expect("an allay")).inventory.is_empty();
+        picked_up |= !empty;
+        thrown |= picked_up && empty;
     }
     assert!(picked_up);
-    assert!(allay::allay(level.mob(allay).expect("an allay")).inventory.is_empty());
-    assert_eq!(items_of(&level, items::DIAMOND) + level.player(player).inventory.slots.iter().flatten().filter(|stack| stack.is(items::DIAMOND)).map(|stack| stack.count).sum::<i32>(), 3);
+    assert!(thrown);
+    let carried: i32 = allay::allay(level.mob(allay).expect("an allay")).inventory.items.iter().filter(|stack| stack.is(items::DIAMOND)).map(|stack| stack.count).sum();
+    assert_eq!(items_of(&level, items::DIAMOND) + carried + level.player(player).inventory.slots.iter().flatten().filter(|stack| stack.is(items::DIAMOND)).map(|stack| stack.count).sum::<i32>(), 3);
 }
 
 #[test]

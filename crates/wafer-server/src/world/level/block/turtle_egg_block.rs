@@ -54,6 +54,7 @@ impl TurtleEggBlock {
             level.destroy_block(pos, false, None, UPDATE_LIMIT);
         } else {
             level.set_block(pos, state.set(EGGS, number_of_eggs - 1), UPDATE_CLIENTS);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
             level.level_event(None, PARTICLES_AND_SOUND_DESTROY_BLOCK, pos, state.id() as i32);
         }
     }
@@ -102,10 +103,12 @@ impl BlockBehaviour for TurtleEggBlock {
                 let pitch = 0.9 + level.random.next_float() * 0.2;
                 level.play_sound(None, pos, sound("minecraft:entity.turtle.egg_crack"), SoundSource::Blocks, 0.7, pitch);
                 level.set_block(pos, state.set(HATCH, hatch + 1), UPDATE_CLIENTS);
+                level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
             } else {
                 let pitch = 0.9 + level.random.next_float() * 0.2;
                 level.play_sound(None, pos, sound("minecraft:entity.turtle.egg_hatch"), SoundSource::Blocks, 0.7, pitch);
                 level.remove_block(pos, false);
+                level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
                 for i in 0..state.get(EGGS) {
                     level.level_event(None, PARTICLES_AND_SOUND_DESTROY_BLOCK, pos, state.id() as i32);
                     let mut turtle = Turtle::create();

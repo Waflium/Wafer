@@ -17,9 +17,10 @@ impl PathBlock {
         PathBlock { base_block: block_field(&fields(block), "baseBlock") }
     }
 
-    pub fn turn_to_base_block(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
+    pub fn turn_to_base_block(&self, source_entity: Option<crate::world::entity::EntityId>, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
         let new_state = super::push_entities_up(state, self.base_block.default_state(), level, pos);
         level.set_block(pos, new_state, UPDATE_ALL);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(source_entity, Some(new_state)));
     }
 }
 
@@ -42,7 +43,7 @@ impl BlockBehaviour for PathBlock {
     }
 
     fn tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
-        self.turn_to_base_block(state, level, pos);
+        self.turn_to_base_block(None, state, level, pos);
     }
 
     fn can_survive(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {

@@ -106,6 +106,7 @@ impl EyeblossomBlock {
         }
         let new_type = self.ty.transform();
         level.set_block(pos, new_type.state(), UPDATE_ALL);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
         new_type.spawn_transform_particle(level, pos);
         let min_pos = pos.offset(-EYEBLOSSOM_XZ_RANGE, -EYEBLOSSOM_Y_RANGE, -EYEBLOSSOM_XZ_RANGE);
         let max_pos = pos.offset(EYEBLOSSOM_XZ_RANGE, EYEBLOSSOM_Y_RANGE, EYEBLOSSOM_XZ_RANGE);

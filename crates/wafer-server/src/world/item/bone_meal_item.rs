@@ -19,12 +19,14 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
     let mut bone_meal_stack = stack;
     let original_count = bone_meal_stack.count;
     let result = if grow_crop(&mut bone_meal_stack, level, pos) {
+        level.cause_use_vibration(&bone_meal_stack, player, crate::world::level::gameevent::game_event::ITEM_INTERACT_FINISH);
         level.level_event(None, PARTICLES_AND_SOUND_PLANT_GROWTH, pos, 15);
         InteractionResult::SUCCESS_SERVER
     } else {
         let clicked_state = level.block_state(pos);
         let solid_block_face = clicked_state.is_face_sturdy(hit.direction, SupportType::Full);
         if solid_block_face && grow_water_plant(&mut bone_meal_stack, level, relative, Some(hit.direction)) {
+            level.cause_use_vibration(&bone_meal_stack, player, crate::world::level::gameevent::game_event::ITEM_INTERACT_FINISH);
             level.level_event(None, PARTICLES_AND_SOUND_PLANT_GROWTH, relative, 15);
             InteractionResult::SUCCESS
         } else {

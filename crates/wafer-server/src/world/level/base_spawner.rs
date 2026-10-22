@@ -199,6 +199,7 @@ impl BaseSpawner {
                 return;
             }
             level.level_event(None, events::PARTICLES_MOBBLOCK_SPAWN, pos, 0);
+            level.game_event_at(Some(id), crate::world::level::gameevent::game_event::ENTITY_PLACE, spawn_block_pos);
             if is_mob {
                 level.spawn_anim(id);
             }

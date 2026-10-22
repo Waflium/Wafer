@@ -168,6 +168,10 @@ impl ServerLevel {
                 item_stack = item_stack_clone;
             }
             let interaction_result = crate::world::item::interact_living_entity(self, &mut item_stack, id, entity, hand);
+            if interaction_result.consumes_action() {
+                let position = self.entity(entity).position();
+                self.game_event(crate::world::level::gameevent::game_event::ENTITY_INTERACT, position, crate::world::level::gameevent::game_event::Context::of(Some(id)));
+            }
             if !has_infinite_materials {
                 self.player_mut(id).update_item_in_hand(hand, &item_stack);
             }
@@ -622,6 +626,7 @@ impl ServerLevel {
             if damage < 3.4028235E37 {
                 self.award_stat(id, stats::DAMAGE_TAKEN, crate::util::java_round_f(damage * 10.0));
             }
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_DAMAGE);
         }
     }
 

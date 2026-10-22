@@ -192,6 +192,8 @@ impl ServerLevel {
             e.random.next_float();
             e.random.next_float();
             e.random.next_float();
+            let controlling_passenger = self.controlling_passenger(id);
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::SPLASH, controlling_passenger);
         }
     }
 

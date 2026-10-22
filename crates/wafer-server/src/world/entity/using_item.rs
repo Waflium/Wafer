@@ -88,6 +88,9 @@ impl ServerLevel {
         self.send_to_tracking_players(id, &packet);
         self.set_living_entity_flag(id, FLAG_IS_USING, true);
         self.set_living_entity_flag(id, FLAG_OFF_HAND, hand == InteractionHand::OffHand);
+        if let Some(use_item) = self.living(id).use_item.clone() {
+            self.cause_use_vibration(&use_item, id, crate::world::level::gameevent::game_event::ITEM_INTERACT_START);
+        }
         if self.living(id).use_item.as_ref().is_some_and(|use_item| use_item.has(dc::KINETIC_WEAPON)) {
             self.living_mut(id).recent_kinetic_enemies = Some(Vec::new());
         }
@@ -225,9 +228,19 @@ impl ServerLevel {
         self.stop_using_item(id);
     }
 
+    pub fn cause_use_vibration(&mut self, stack: &ItemStack, causer: EntityId, event: crate::world::level::gameevent::game_event::GameEvent) {
+        if stack.interact_vibrations() {
+            self.entity_game_event(causer, event);
+        }
+    }
+
     pub fn stop_using_item(&mut self, id: EntityId) {
+        let was_using_item = self.is_using_item(id);
         self.living_mut(id).recent_kinetic_enemies = None;
         self.set_living_entity_flag(id, FLAG_IS_USING, false);
+        if was_using_item && let Some(use_item) = self.living(id).use_item.clone() {
+            self.cause_use_vibration(&use_item, id, crate::world::level::gameevent::game_event::ITEM_INTERACT_FINISH);
+        }
         let living = self.living_mut(id);
         living.use_item = None;
         living.use_item_remaining = 0;
@@ -259,6 +272,7 @@ impl ServerLevel {
         for effect in &consumable.on_consume_effects {
             self.apply_consume_effect(id, effect);
         }
+        self.entity_game_event(id, if consumable.animation == ItemUseAnimation::Drink { crate::world::level::gameevent::game_event::DRINK } else { crate::world::level::gameevent::game_event::EAT });
         stack.consume(1, self, Some(id));
         stack
     }
@@ -331,6 +345,7 @@ impl ServerLevel {
             }
             let old_pos = self.entity(id).position();
             if self.random_teleport(id, xx, yy, zz, true, &|state| does_not_teleport_to.contains(&(state.block().0 as i32))) {
+                self.game_event(crate::world::level::gameevent::game_event::TELEPORT, old_pos, crate::world::level::gameevent::game_event::Context::of(Some(id)));
                 let (sound, source) = match self.mob(id).map(|mob| &mob.kind) {
                     Some(crate::world::entity::mob::MobKind::Fox(_)) => ("minecraft:entity.fox.teleport", SoundSource::Neutral),
                     _ => ("minecraft:item.chorus_fruit.teleport", SoundSource::Players),

@@ -36,6 +36,7 @@ impl ServerLevel {
         }
         let result = self.interact_with_container_vehicle(id, player);
         if result.consumes_action() {
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::CONTAINER_OPEN, Some(player));
             crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);
         }
         result
@@ -51,6 +52,12 @@ impl ServerLevel {
             return;
         }
         self.open_menu(player, MenuProvider::ChestVehicle(id));
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::CONTAINER_OPEN, Some(player));
         crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);
+    }
+
+    pub fn abstract_chest_boat_stop_open(&mut self, id: EntityId, container_user: EntityId) {
+        let position = self.entity(id).position();
+        self.game_event(crate::world::level::gameevent::game_event::CONTAINER_CLOSE, position, crate::world::level::gameevent::game_event::Context::of(Some(container_user)));
     }
 }

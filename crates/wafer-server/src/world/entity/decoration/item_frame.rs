@@ -279,6 +279,7 @@ impl ServerLevel {
                 false
             } else if self.should_damage_drop_item(id, &source) {
                 self.item_frame_drop_item_with_frame(id, source.causing_entity, false);
+                self.entity_game_event_by(id, crate::world::level::gameevent::game_event::BLOCK_CHANGE, source.causing_entity);
                 let sound = self.item_frame(id).get_remove_item_sound();
                 self.entity_play_sound(id, sound, 1.0, 1.0);
                 true
@@ -294,6 +295,7 @@ impl ServerLevel {
         let sound = self.item_frame(id).get_break_sound();
         self.entity_play_sound(id, sound, 1.0, 1.0);
         self.item_frame_drop_item_with_frame(id, caused_by, true);
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::BLOCK_CHANGE, caused_by);
     }
 
     fn item_frame_drop_item_with_frame(&mut self, id: EntityId, caused_by: Option<EntityId>, with_frame: bool) {
@@ -362,6 +364,7 @@ impl ServerLevel {
                     return InteractionResult::Fail;
                 }
                 self.item_frame_set_item(id, item_stack.clone(), true);
+                self.entity_game_event_by(id, crate::world::level::gameevent::game_event::BLOCK_CHANGE, Some(player));
                 item_stack.consume(1, self, Some(player));
                 self.player_mut(player).update_item_in_hand(hand, &item_stack);
                 InteractionResult::SUCCESS
@@ -373,6 +376,7 @@ impl ServerLevel {
             self.entity_play_sound(id, sound, 1.0, 1.0);
             let rotation = get_rotation(&self.item_frame(id).entity);
             self.item_frame_set_rotation(id, rotation + 1, true);
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::BLOCK_CHANGE, Some(player));
             InteractionResult::SUCCESS
         }
     }

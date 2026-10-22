@@ -20,9 +20,10 @@ impl FarmlandBlock {
         FarmlandBlock { base_block: block_field(&fields(block), "baseBlock") }
     }
 
-    fn turn_to_base_block(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
+    fn turn_to_base_block(&self, source_entity: Option<EntityId>, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
         let new_state = super::push_entities_up(state, self.base_block.default_state(), level, pos);
         level.set_block(pos, new_state, UPDATE_ALL);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(source_entity, Some(new_state)));
     }
 }
 
@@ -70,7 +71,7 @@ impl BlockBehaviour for FarmlandBlock {
             };
             let dimensions = level.entity(entity).dimensions;
             if can_trample && dimensions.width * dimensions.width * dimensions.height > 0.512 {
-                self.turn_to_base_block(state, level, pos);
+                self.turn_to_base_block(Some(entity), state, level, pos);
             }
         }
         super::block_fall_on(level, state, pos, entity, fall_distance);
@@ -78,7 +79,7 @@ impl BlockBehaviour for FarmlandBlock {
 
     fn tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
         if !self.can_survive(state, level, pos) {
-            self.turn_to_base_block(state, level, pos);
+            self.turn_to_base_block(None, state, level, pos);
         }
     }
 
@@ -88,7 +89,7 @@ impl BlockBehaviour for FarmlandBlock {
             if moisture > 0 {
                 level.set_block(pos, state.set(MOISTURE, moisture - 1), UPDATE_CLIENTS);
             } else if !should_maintain_farmland(level, pos) {
-                self.turn_to_base_block(state, level, pos);
+                self.turn_to_base_block(None, state, level, pos);
             }
         } else if moisture < 7 {
             level.set_block(pos, state.set(MOISTURE, 7), UPDATE_CLIENTS);

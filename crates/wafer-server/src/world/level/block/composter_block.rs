@@ -50,9 +50,9 @@ impl BlockBehaviour for ComposterBlock {
         }
     }
 
-    fn use_without_item(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
+    fn use_without_item(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
         if state.get(LEVEL_COMPOSTER) == 8 {
-            extract_produce(level, pos);
+            extract_produce(Some(player), level, pos);
             InteractionResult::SUCCESS
         } else {
             InteractionResult::Pass
@@ -71,18 +71,19 @@ impl BlockBehaviour for ComposterBlock {
     }
 }
 
-pub fn extract_produce(level: &mut ServerLevel, pos: BlockPos) {
+pub fn extract_produce(source_entity: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos) {
     let item_pos = Vec3::at_lower_corner_with_offset(pos, 0.5, 1.01, 0.5).offset_random_xz(&mut level.random, 0.7);
     let mut entity = ItemEntity::new(item_pos, ItemStack::new(items::BONE_MEAL, 1));
     entity.set_default_pickup_delay();
     level.add_fresh_entity(LevelEntity::Item(entity));
-    empty(level, pos);
+    empty(source_entity, level, pos);
     level.play_sound(None, pos, registry_id(registry::SOUND_EVENT, "minecraft:block.composter.empty"), SoundSource::Blocks, 1.0, 1.0);
 }
 
-pub fn empty(level: &mut ServerLevel, pos: BlockPos) {
+pub fn empty(source_entity: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos) {
     let new_state = level.block_state(pos).set(LEVEL_COMPOSTER, 0);
     level.set_block(pos, new_state, UPDATE_ALL);
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(source_entity, Some(new_state)));
 }
 
 pub fn insert_item(source_entity: Option<EntityId>, state: BlockState, level: &mut ServerLevel, item_stack: &mut ItemStack, pos: BlockPos) -> BlockState {
@@ -118,6 +119,7 @@ fn add_layer(source_entity: Option<EntityId>, state: BlockState, level: &mut Ser
         let new_level = (fill_level + layers_to_add).clamp(0, 7);
         let new_state = state.set(LEVEL_COMPOSTER, new_level);
         level.set_block(pos, new_state, UPDATE_ALL);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(source_entity, Some(new_state)));
         if new_level == 7 {
             level.schedule_tick(pos, state.block(), 20);
         }

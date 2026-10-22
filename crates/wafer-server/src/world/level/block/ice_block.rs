@@ -17,11 +17,13 @@ pub fn melts_into() -> BlockState {
 }
 
 pub fn melt(level: &mut ServerLevel, pos: BlockPos) {
+    let state = level.block_state(pos);
     if level.environment_attributes().get_value_at(environment_attributes::WATER_EVAPORATES, pos) {
         level.remove_block(pos, false);
     } else {
         level.set_block(pos, melts_into(), UPDATE_ALL);
         level.neighbor_changed(pos, melts_into().block());
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
     }
 }
 

@@ -67,6 +67,7 @@ impl ServerLevel {
             let strike = self.lightning_bolt(id).strike_position();
             self.power_lightning_rod(strike);
             self.clear_copper_on_lightning_strike(strike);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::LIGHTNING_STRIKE);
         }
         let bolt = self.lightning_bolt(id);
         bolt.life -= 1;

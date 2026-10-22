@@ -30,6 +30,7 @@ pub fn create(spawn_block: Block) -> OneShot {
                     if level.block_state(spawn_pos).is_air() {
                         let new_state = spawn_block.default_state();
                         level.set_block(spawn_pos, new_state, UPDATE_ALL);
+                        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_PLACE, spawn_pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(body), Some(new_state)));
                         level.play_sound_from_entity(None, body, sound_event("minecraft:entity.frog.lay_spawn"), SoundSource::Blocks, 1.0, 1.0);
                         pregnant.erase(level, body);
                         return true;

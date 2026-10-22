@@ -30,6 +30,7 @@ use crate::world::level::BlockGetter;
 pub const DATA_FLAGS_ID: usize = 16;
 const FLAG_IS_CHARGING: i8 = 1;
 const XP_REWARD: i32 = 3;
+pub const TICKS_PER_FLAP: i32 = 4;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.4, 0.8)
     .with_eye_height(0.51875)
     .with_passenger_attachments(&[Vec3::new(0.0, 0.7375f32 as f64, 0.0)])

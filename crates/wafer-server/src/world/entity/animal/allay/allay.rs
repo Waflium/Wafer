@@ -23,12 +23,18 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::BlockGetter;
 use crate::world::simple_container::{SimpleContainer, SimpleContainerKind};
+use crate::world::level::gameevent::dynamic_game_event_listener::DynamicGameEventListener;
+use crate::world::level::gameevent::game_event::{self, Context, GameEvent};
+use crate::world::level::gameevent::game_event_listener::{EntityListenerKind, GameEventListener};
+use crate::world::level::gameevent::position_source::PositionSource;
+use crate::world::level::gameevent::vibrations::vibration_system::{Data, VibrationUser};
 use crate::world::{InteractionHand, InteractionResult};
 
 pub const ITEM_PICKUP_REACH: (f64, f64, f64) = (1.0, 1.0, 1.0);
 const DEFAULT_DUPLICATION_COOLDOWN: i64 = 0;
 const DUPLICATION_COOLDOWN_TICKS: i64 = 6000;
 pub const MAX_NOTEBLOCK_DISTANCE: i32 = 1024;
+pub const VIBRATION_EVENT_LISTENER_RANGE: i32 = 16;
 const JUKEBOX_PLAY_NOTIFICATION_RADIUS: f64 = 10.0;
 pub const DATA_DANCING: usize = 16;
 pub const DATA_CAN_DUPLICATE: usize = 17;
@@ -43,14 +49,24 @@ pub static BRAIN_PROVIDER: Provider = brain::provider_with_memories(
 );
 
 pub struct Allay {
+    pub dynamic_vibration_listener: DynamicGameEventListener,
+    vibration_data: Data,
+    pub dynamic_jukebox_listener: DynamicGameEventListener,
     pub inventory: SimpleContainer,
     jukebox_pos: Option<BlockPos>,
     duplication_cooldown: i64,
 }
 
-impl Default for Allay {
-    fn default() -> Allay {
-        Allay { inventory: SimpleContainer::new(SimpleContainerKind::Plain, 1), jukebox_pos: None, duplication_cooldown: DEFAULT_DUPLICATION_COOLDOWN }
+impl Allay {
+    fn new(id: EntityId) -> Allay {
+        Allay {
+            dynamic_vibration_listener: DynamicGameEventListener::new(GameEventListener::Entity { entity: id, kind: EntityListenerKind::Vibration }),
+            vibration_data: Data::default(),
+            dynamic_jukebox_listener: DynamicGameEventListener::new(GameEventListener::Entity { entity: id, kind: EntityListenerKind::Jukebox }),
+            inventory: SimpleContainer::new(SimpleContainerKind::Plain, 1),
+            jukebox_pos: None,
+            duplication_cooldown: DEFAULT_DUPLICATION_COOLDOWN,
+        }
     }
 }
 
@@ -125,16 +141,13 @@ fn reset_duplication_cooldown(mob: &mut Mob) {
     set_duplication_cooldown(mob, DUPLICATION_COOLDOWN_TICKS);
 }
 
-fn default_listener() -> Nbt {
-    Nbt::Compound(vec![("selector".into(), Nbt::Compound(vec![("tick".into(), Nbt::Long(-1))])), ("event_delay".into(), Nbt::Int(0))])
-}
-
 impl Allay {
     pub fn create() -> Mob {
         let mut data = mob_defaults();
         data.extend([DataValue::Boolean(false), DataValue::Boolean(true)]);
         let entity = Entity::new(registry_id(registry::ENTITY_TYPE, "minecraft:allay"), DIMENSIONS, data);
-        let mut mob = Mob::new(entity, LivingEntity::new(&ALLAY_ATTRIBUTES), MobKind::Allay(Allay::default()));
+        let id = entity.id;
+        let mut mob = Mob::new(entity, LivingEntity::new(&ALLAY_ATTRIBUTES), MobKind::Allay(Allay::new(id)));
         mob.ai.move_control.kind = MoveControlKind::Flying(MOVE_CONTROL);
         mob.can_pick_up_loot = can_pick_up_loot(&mob);
         mob
@@ -155,18 +168,79 @@ impl Allay {
     pub fn add_additional_save_data(mob: &Mob, output: &mut Vec<(String, Nbt)>) {
         let allay = allay(mob);
         inventory_carrier::write_inventory_to_tag(&allay.inventory, output);
-        output.push(("listener".into(), default_listener()));
+        output.push(("listener".into(), allay.vibration_data.to_nbt()));
         output.push(("DuplicationCooldown".into(), Nbt::Long(allay.duplication_cooldown)));
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         inventory_carrier::read_inventory_from_tag(&mut allay_mut(mob).inventory, input);
+        allay_mut(mob).vibration_data = Data::load(input.get("listener"));
         let duplication_cooldown = input.get("DuplicationCooldown").and_then(Nbt::as_i64).map_or(DEFAULT_DUPLICATION_COOLDOWN, |value| value as i32 as i64);
         set_duplication_cooldown(mob, duplication_cooldown);
     }
 }
 
 impl ServerLevel {
+    pub fn allay_vibration_data(&self, id: EntityId) -> Option<&Data> {
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Allay(allay)) => Some(&allay.vibration_data),
+            _ => None,
+        }
+    }
+
+    pub fn allay_vibration_data_mut(&mut self, id: EntityId) -> Option<&mut Data> {
+        match self.mob_mut(id).map(|mob| &mut mob.kind) {
+            Some(MobKind::Allay(allay)) => Some(&mut allay.vibration_data),
+            _ => None,
+        }
+    }
+
+    pub fn allay_position_source(&self, id: EntityId) -> PositionSource {
+        PositionSource::Entity { entity: id, y_offset: DIMENSIONS.eye_height }
+    }
+
+    pub fn allay_listener_source(&self, id: EntityId, _kind: EntityListenerKind) -> PositionSource {
+        self.allay_position_source(id)
+    }
+
+    pub fn allay_listener_radius(&self, kind: EntityListenerKind) -> i32 {
+        match kind {
+            EntityListenerKind::Vibration => VIBRATION_EVENT_LISTENER_RANGE,
+            EntityListenerKind::Jukebox => game_event::JUKEBOX_PLAY.notification_radius(),
+        }
+    }
+
+    pub fn allay_handle_game_event(&mut self, id: EntityId, kind: EntityListenerKind, event: GameEvent, context: Context, source_position: Vec3) -> bool {
+        match kind {
+            EntityListenerKind::Vibration => self.vibration_listener_handle_game_event(VibrationUser::Allay(id), event, context, source_position),
+            EntityListenerKind::Jukebox if event == game_event::JUKEBOX_PLAY => {
+                self.allay_set_jukebox_playing(id, BlockPos::containing_vec(source_position), true);
+                true
+            }
+            EntityListenerKind::Jukebox if event == game_event::JUKEBOX_STOP_PLAY => {
+                self.allay_set_jukebox_playing(id, BlockPos::containing_vec(source_position), false);
+                true
+            }
+            EntityListenerKind::Jukebox => false,
+        }
+    }
+
+    pub fn allay_can_receive_vibration(&self, id: EntityId, pos: BlockPos) -> bool {
+        if self.mob(id).is_none_or(|mob| mob.is_no_ai()) {
+            return false;
+        }
+        match self.get_brain(id).get_memory(memory_module_type::LIKED_NOTEBLOCK_POSITION) {
+            None => true,
+            Some(global_pos) => global_pos.is_close_enough(self.dimension, self.entity(id).block_position(), MAX_NOTEBLOCK_DISTANCE) && global_pos.pos() == pos,
+        }
+    }
+
+    pub fn allay_on_receive_vibration(&mut self, id: EntityId, pos: BlockPos, event: GameEvent) {
+        if event == game_event::NOTE_BLOCK_PLAY {
+            allay_ai::hear_noteblock(self, id, pos);
+        }
+    }
+
     pub fn is_allay(&self, id: EntityId) -> bool {
         matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Allay(_)))
     }
@@ -214,6 +288,10 @@ impl ServerLevel {
 
     pub fn allay_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
+        if self.mob(id).is_none() {
+            return;
+        }
+        self.vibration_ticker_tick(VibrationUser::Allay(id));
         if self.mob(id).is_none() {
             return;
         }

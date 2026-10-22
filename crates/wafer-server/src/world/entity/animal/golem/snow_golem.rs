@@ -125,6 +125,7 @@ impl ServerLevel {
             let snow_pos = BlockPos::new(xx, yy, zz);
             if self.block_state(snow_pos).is_air() && block::of(snow).can_survive(snow, self, snow_pos) {
                 self.set_block(snow_pos, snow, UPDATE_ALL);
+                self.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_PLACE, snow_pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(id), Some(snow)));
             }
         }
     }
@@ -154,6 +155,7 @@ impl ServerLevel {
         let item_stack = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
         if item_stack.is(items::SHEARS) && self.snow_golem_ready_for_shearing(id) {
             self.snow_golem_shear(id, SoundSource::Players, &item_stack);
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::SHEAR, Some(player));
             self.hurt_and_break(player, hand.as_equipment_slot(), 1);
             InteractionResult::SUCCESS
         } else {

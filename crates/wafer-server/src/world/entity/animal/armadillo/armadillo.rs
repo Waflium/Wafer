@@ -240,6 +240,7 @@ impl ServerLevel {
                 let random = &mut self.entity_mut(id).random;
                 let pitch = (random.next_float() - random.next_float()) * 0.2 + 1.0;
                 self.entity_play_sound(id, sound_event("minecraft:entity.armadillo.scute_drop"), 1.0, pitch);
+                self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_PLACE);
             }
             let mob = self.mob_mut(id).expect("an armadillo");
             let scute_time = pick_next_scute_drop_time(&mut mob.entity.random);
@@ -288,6 +289,7 @@ impl ServerLevel {
         if !is_scared(self.entity(id)) {
             self.stop_in_place(id);
             self.reset_love(id);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
             self.make_sound(id, sound_event("minecraft:entity.armadillo.roll"));
             Armadillo::switch_to_state(self.mob_mut(id).expect("an armadillo"), ArmadilloState::Rolling);
         }
@@ -295,6 +297,7 @@ impl ServerLevel {
 
     pub fn armadillo_roll_out(&mut self, id: EntityId) {
         if is_scared(self.entity(id)) {
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
             self.make_sound(id, sound_event("minecraft:entity.armadillo.unroll_finish"));
             Armadillo::switch_to_state(self.mob_mut(id).expect("an armadillo"), ArmadilloState::Idle);
         }
@@ -317,6 +320,7 @@ impl ServerLevel {
             level.spawn_at_location(id, item_stack, 0.0);
         });
         self.entity_play_sound(id, sound_event("minecraft:entity.armadillo.brush"), 1.0, 1.0);
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_INTERACT);
         true
     }
 

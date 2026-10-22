@@ -649,6 +649,7 @@ impl ServerLevel {
         }
         if item_used {
             self.eating(id);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::EAT);
         }
         item_used
     }

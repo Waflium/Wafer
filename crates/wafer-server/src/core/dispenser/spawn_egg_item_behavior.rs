@@ -15,5 +15,6 @@ pub fn execute(level: &mut ServerLevel, source: &BlockSource, mut dispensed: Ite
         return dispensed;
     }
     dispensed.shrink(1);
+    level.game_event_at(None, crate::world::level::gameevent::game_event::ENTITY_PLACE, source.pos);
     dispensed
 }

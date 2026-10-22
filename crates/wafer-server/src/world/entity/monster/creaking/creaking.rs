@@ -166,6 +166,7 @@ impl ServerLevel {
             }
             creaking_mut(self.mob_mut(id).expect("a creaking")).invulnerability_animation_remaining_ticks = INVULNERABILITY_ANIMATION_DURATION;
             self.broadcast_entity_event(id, 66);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
             if self.get_block_entity(home_pos).is_some_and(|entity| matches!(entity.kind, BlockEntityKind::CreakingHeart(_))) && self.creaking_heart_is_protector(home_pos, id) {
                 if responsible_player.is_some() {
                     self.creaking_heart_creaking_hurt(home_pos);
@@ -206,6 +207,7 @@ impl ServerLevel {
         let can_move = self.creaking_can_move(id);
         let now_can_move = self.creaking_check_can_move(id);
         if now_can_move != can_move {
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
             if now_can_move {
                 self.make_sound(id, sound_event("minecraft:entity.creaking.unfreeze"));
             } else {
@@ -333,12 +335,14 @@ impl ServerLevel {
 
     fn creaking_activate(&mut self, id: EntityId, player: EntityId) {
         self.get_brain_mut(id).set_memory(memory_module_type::ATTACK_TARGET, player);
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
         self.make_sound(id, sound_event("minecraft:entity.creaking.activate"));
         self.entity_mut(id).data.set(DATA_IS_ACTIVE, DataValue::Boolean(true));
     }
 
     fn creaking_deactivate(&mut self, id: EntityId) {
         self.get_brain_mut(id).erase_memory(memory_module_type::ATTACK_TARGET);
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
         self.make_sound(id, sound_event("minecraft:entity.creaking.deactivate"));
         self.entity_mut(id).data.set(DATA_IS_ACTIVE, DataValue::Boolean(false));
     }

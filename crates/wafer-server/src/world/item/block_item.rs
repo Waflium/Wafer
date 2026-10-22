@@ -84,6 +84,7 @@ pub fn place(item: &dyn BlockItemBehaviour, level: &mut ServerLevel, ctx: BlockP
     }
     let sound = placed.sound_type();
     level.play_sound(player, pos, sound.place_sound, SoundSource::Blocks, (sound.volume + 1.0) / 2.0, sound.pitch * 0.8);
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_PLACE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(player, Some(placed)));
     if let Some(player) = player {
         let p = level.player_mut(player);
         if p.game_mode.game_type != GameType::Creative {

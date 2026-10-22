@@ -240,7 +240,7 @@ fn grown_tadpoles_turn_into_frogs_when_loaded() {
 fn release(level: &mut ServerLevel, bucket: &ItemStack, entity_type: &str) -> EntityId {
     let before: Vec<EntityId> = level.entities.keys().copied().collect();
     let mob_bucket = item::mob_bucket_item::MobBucketItem::for_item(bucket.get_item(), &serde_json::json!({"emptySound": "minecraft:item.bucket.empty_fish"})).unwrap();
-    mob_bucket.check_extra_content(level, bucket, BlockPos::new(0, -58, 2));
+    mob_bucket.check_extra_content(level, None, bucket, BlockPos::new(0, -58, 2));
     level
         .entities
         .iter()

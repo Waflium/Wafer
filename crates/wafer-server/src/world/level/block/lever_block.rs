@@ -23,6 +23,7 @@ impl LeverBlock {
         level.set_block_simple(pos, state);
         self.update_neighbours(state, level, pos);
         play_sound(player, level, pos, state);
+        level.game_event_at(player, if state.get(POWERED) { crate::world::level::gameevent::game_event::BLOCK_ACTIVATE } else { crate::world::level::gameevent::game_event::BLOCK_DEACTIVATE }, pos);
     }
 
     fn update_neighbours(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {

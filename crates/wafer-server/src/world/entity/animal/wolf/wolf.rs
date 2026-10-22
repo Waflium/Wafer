@@ -395,6 +395,7 @@ impl ServerLevel {
             let random = &mut self.entity_mut(id).random;
             let pitch = (random.next_float() - random.next_float()) * 0.2 + 1.0;
             self.entity_play_sound(id, sound_event("minecraft:entity.wolf.shake"), volume, pitch);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
         }
         let mob = self.mob_mut(id).expect("a wolf");
         let wolf = wolf_mut(mob);

@@ -39,7 +39,7 @@ pub struct CandleCakeBlock;
 impl BlockBehaviour for CandleCakeBlock {
     fn on_explosion_hit(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, explosion: &crate::world::level::server_explosion::ServerExplosion, stacks: &mut Vec<(BlockPos, crate::world::item::ItemStack)>) {
         if explosion.can_trigger_blocks(level) && state.get(wafer_data::properties::LIT) {
-            super::abstract_candle_block::extinguish(state, level, pos);
+            super::abstract_candle_block::extinguish(None, state, level, pos);
         }
         level.block_on_explosion_hit(state, pos, explosion, stacks);
     }
@@ -56,14 +56,14 @@ impl BlockBehaviour for CandleCakeBlock {
         state: BlockState,
         level: &mut ServerLevel,
         pos: BlockPos,
-        _player: EntityId,
+        player: EntityId,
         _hand: InteractionHand,
         hit: &BlockHitResult,
     ) -> InteractionResult {
         if item.item == items::FLINT_AND_STEEL || item.item == items::FIRE_CHARGE {
             InteractionResult::Pass
         } else if candle_hit(hit) && item.is_empty() && state.get(LIT) {
-            extinguish(state, level, pos);
+            extinguish(Some(player), state, level, pos);
             InteractionResult::SUCCESS
         } else {
             InteractionResult::TryWithEmptyHand

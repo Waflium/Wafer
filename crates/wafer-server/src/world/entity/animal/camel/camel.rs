@@ -355,6 +355,7 @@ impl ServerLevel {
     pub fn camel_handle_start_jump(&mut self, id: EntityId) {
         let sound = get_dashing_sound(self.mob(id).expect("a camel"));
         self.make_sound(id, sound_event(sound));
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
         self.camel_set_dashing(id, true);
     }
 
@@ -438,6 +439,7 @@ impl ServerLevel {
             let pitch = 1.0 + (e.random.next_float() - e.random.next_float()) * 0.2;
             self.play_sound_at(None, x, y, z, sound_event(eating_sound), source, 1.0, pitch);
         }
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::EAT);
         true
     }
 
@@ -512,6 +514,7 @@ impl ServerLevel {
             let sound = get_sit_down_sound(self.mob(id).expect("a camel"));
             self.make_sound(id, sound_event(sound));
             self.set_entity_pose(id, Pose::Sitting);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
             let game_time = self.game_time;
             reset_last_pose_change_tick(self.entity_mut(id), -game_time);
         }
@@ -522,6 +525,7 @@ impl ServerLevel {
             let sound = get_stand_up_sound(self.mob(id).expect("a camel"));
             self.make_sound(id, sound_event(sound));
             self.set_entity_pose(id, Pose::Standing);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
             let game_time = self.game_time;
             reset_last_pose_change_tick(self.entity_mut(id), game_time);
         }
@@ -529,6 +533,7 @@ impl ServerLevel {
 
     pub fn camel_stand_up_instantly(&mut self, id: EntityId) {
         self.set_entity_pose(id, Pose::Standing);
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
         let game_time = self.game_time;
         reset_last_pose_change_tick_to_full_stand(self.entity_mut(id), game_time);
     }

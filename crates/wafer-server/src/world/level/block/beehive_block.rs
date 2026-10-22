@@ -121,6 +121,7 @@ impl BlockBehaviour for BeehiveBlock {
                 let slot = if hand == InteractionHand::MainHand { EquipmentSlot::Mainhand } else { EquipmentSlot::Offhand };
                 level.hurt_and_break(player, slot, 1);
                 hive_emptied = true;
+                level.game_event_at(Some(player), crate::world::level::gameevent::game_event::SHEAR, pos);
             } else if item_stack.is(items::GLASS_BOTTLE) {
                 let creative = has_infinite_materials(level, player);
                 let mut item_stack = item_stack;
@@ -138,6 +139,7 @@ impl BlockBehaviour for BeehiveBlock {
                     }
                 }
                 hive_emptied = true;
+                level.game_event_at(Some(player), crate::world::level::gameevent::game_event::FLUID_PICKUP, pos);
             }
             if hive_emptied {
                 level.award_stat(player, crate::stats::stats::ITEM_USED.get(item.0), 1);

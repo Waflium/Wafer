@@ -237,6 +237,7 @@ impl EvokerAttackSpellGoal {
         if success {
             let owner = level.entity(mob).uuid;
             level.add_fresh_entity(LevelEntity::EvokerFangs(EvokerFangs::new(x, pos.y as f64 + top_offset, z, angle, delay_ticks, owner)));
+            level.game_event(crate::world::level::gameevent::game_event::ENTITY_PLACE, Vec3::new(x, pos.y as f64 + top_offset, z), crate::world::level::gameevent::game_event::Context::of(Some(mob)));
         }
     }
 }
@@ -293,6 +294,7 @@ impl EvokerSummonSpellGoal {
                 level.scoreboard.borrow_mut().add_player_to_team(&name, evoker_team);
             }
             level.add_fresh_entity_with_passengers(LevelEntity::Mob(vex));
+            level.game_event_at_with(crate::world::level::gameevent::game_event::ENTITY_PLACE, pos, crate::world::level::gameevent::game_event::Context::of(Some(mob)));
         }
     }
 }

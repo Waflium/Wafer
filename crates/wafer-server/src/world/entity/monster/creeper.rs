@@ -179,6 +179,7 @@ impl ServerLevel {
             let swell_dir = get_swell_dir(&mob.entity);
             if swell_dir > 0 && creeper_mut(mob).swell == 0 {
                 self.entity_play_sound(id, sound_event("minecraft:entity.creeper.primed"), 1.0, 0.5);
+                self.entity_game_event(id, crate::world::level::gameevent::game_event::PRIME_FUSE);
             }
             let creeper = creeper_mut(self.mob_mut(id).expect("a creeper"));
             creeper.swell += swell_dir;

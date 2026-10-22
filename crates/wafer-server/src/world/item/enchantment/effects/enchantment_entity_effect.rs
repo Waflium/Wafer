@@ -56,7 +56,7 @@ pub enum EnchantmentEntityEffect {
     ApplyExhaustion { amount: LevelBasedValue },
     PlaySound { sound_events: Vec<SoundEvent>, volume: FloatProvider, pitch: FloatProvider },
     ReplaceBlock(Nbt),
-    ReplaceDisk { radius: LevelBasedValue, height: LevelBasedValue, offset: (i32, i32, i32), predicate: Option<BlockPredicate>, block_state: BlockStateProviderHolder },
+    ReplaceDisk { radius: LevelBasedValue, height: LevelBasedValue, offset: (i32, i32, i32), predicate: Option<BlockPredicate>, block_state: BlockStateProviderHolder, trigger_game_event: Option<crate::world::level::gameevent::game_event::GameEvent> },
     RunFunction(String),
     SetBlockProperties(Nbt),
     SpawnParticles {
@@ -246,6 +246,7 @@ impl EnchantmentEntityEffect {
                 offset: codec::decode_or(tag, "offset", (0, 0, 0), |t| parse_offset(&serde_json::json!({ "offset": codec::to_json(t) })))?,
                 predicate: codec::decode_optional(tag, "predicate", |t| BlockPredicate::parse(&codec::to_json(t)))?,
                 block_state: codec::decode_field(tag, "block_state", |t| BlockStateProviderHolder::parse(&codec::to_json(t)))?,
+                trigger_game_event: codec::decode_optional(tag, "trigger_game_event", |t| t.as_str().and_then(crate::commands::arguments::parse_identifier).and_then(|name| crate::world::level::gameevent::game_event::GameEvent::by_name(&name)).ok_or_else(|| "Unknown game event".to_string()))?,
             },
             "minecraft:run_function" => EnchantmentEntityEffect::RunFunction(codec::decode_field(tag, "function", codec::identifier)?),
             "minecraft:set_block_properties" => EnchantmentEntityEffect::SetBlockProperties(tag.clone()),
@@ -338,7 +339,7 @@ impl EnchantmentEntityEffect {
                 let (y_rot, x_rot) = (e.y_rot, e.x_rot);
                 e.snap_to(position.x, position.y, position.z, y_rot, x_rot);
             }
-            EnchantmentEntityEffect::ReplaceDisk { radius, height, offset, predicate, block_state } => {
+            EnchantmentEntityEffect::ReplaceDisk { radius, height, offset, predicate, block_state, trigger_game_event } => {
                 let center_block = BlockPos::containing(position.x, position.y, position.z).offset(offset.0, offset.1, offset.2);
                 let dist = radius.calculate(enchantment_level) as i32;
                 let height = height.calculate(enchantment_level) as i32;
@@ -347,7 +348,11 @@ impl EnchantmentEntityEffect {
                         let mut random = std::mem::replace(&mut level.entity_mut(entity).random, wafer_core::random::LegacyRandomSource::new(0));
                         let state = block_state.value().get_state(level, &mut random, pos);
                         level.entity_mut(entity).random = random;
-                        level.set_block(pos, state, UPDATE_ALL);
+                        if level.set_block(pos, state, UPDATE_ALL)
+                            && let Some(event) = *trigger_game_event
+                        {
+                            level.game_event_at(Some(entity), event, pos);
+                        }
                     }
                 }
             }

@@ -125,6 +125,7 @@ impl ServerLevel {
         if item_stack.is(items::SHEARS) {
             if self.sheep_ready_for_shearing(id) {
                 self.sheep_shear(id, SoundSource::Players, &item_stack);
+                self.entity_game_event_by(id, crate::world::level::gameevent::game_event::SHEAR, Some(player));
                 self.hurt_and_break(player, hand.as_equipment_slot(), 1);
                 return InteractionResult::SUCCESS_SERVER;
             }
@@ -165,6 +166,7 @@ impl ServerLevel {
     }
 
     pub fn sheep_ate(&mut self, id: EntityId) {
+        self.mob_ate(id);
         set_sheared(self.entity_mut(id), false);
         if self.can_age_up(id) {
             self.age_up(id, 60, false);

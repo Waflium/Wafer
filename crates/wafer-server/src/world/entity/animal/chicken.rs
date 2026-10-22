@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use wafer_core::random::RandomSource;
-use wafer_core::Vec3;
+use wafer_core::{Vec3, mth};
 use wafer_data::{SyncedRegistry, item_tags, registry, registry_id};
 use serde_json::Value;
 
@@ -36,11 +36,32 @@ pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.4, 0.7).wi
 pub const BABY_DIMENSIONS: EntityDimensions =
     EntityDimensions::scalable(0.3, 0.4).with_eye_height(0.28125).with_passenger_attachments(&[Vec3::new(0.0, 0.375, 0.0)]);
 
-#[derive(Default)]
 pub struct Chicken {
     pub animal: Animal,
+    pub flap: f32,
+    pub flap_speed: f32,
+    pub o_flap_speed: f32,
+    pub o_flap: f32,
+    pub flapping: f32,
+    next_flap: f32,
     pub egg_time: i32,
     pub is_chicken_jockey: bool,
+}
+
+impl Default for Chicken {
+    fn default() -> Chicken {
+        Chicken {
+            animal: Animal::default(),
+            flap: 0.0,
+            flap_speed: 0.0,
+            o_flap_speed: 0.0,
+            o_flap: 0.0,
+            flapping: 1.0,
+            next_flap: 1.0,
+            egg_time: 0,
+            is_chicken_jockey: false,
+        }
+    }
 }
 
 pub struct SoundSet {
@@ -152,11 +173,24 @@ impl ServerLevel {
         if self.mob(id).is_none() {
             return;
         }
-        let entity = self.entity_mut(id);
+        let mob = self.mob_mut(id).expect("a chicken");
+        let on_ground = mob.entity.on_ground;
+        let chicken = chicken_mut(mob);
+        chicken.o_flap = chicken.flap;
+        chicken.o_flap_speed = chicken.flap_speed;
+        chicken.flap_speed += if on_ground { -1.0 } else { 4.0 } * 0.3;
+        chicken.flap_speed = mth::clamp_f(chicken.flap_speed, 0.0, 1.0);
+        if !on_ground && chicken.flapping < 1.0 {
+            chicken.flapping = 1.0;
+        }
+        chicken.flapping *= 0.9;
+        let flapping = chicken.flapping;
+        let entity = &mut mob.entity;
         let movement = entity.delta_movement;
         if !entity.on_ground && movement.y < 0.0 {
             entity.delta_movement = Vec3::new(movement.x, movement.y * 0.6, movement.z);
         }
+        chicken_mut(mob).flap += flapping * 2.0;
         let alive = self.is_alive(id);
         let mob = self.mob_mut(id).expect("a mob");
         let baby = mob.is_baby();
@@ -171,11 +205,25 @@ impl ServerLevel {
                 let random = &mut self.entity_mut(id).random;
                 let pitch = (random.next_float() - random.next_float()) * 0.2 + 1.0;
                 self.entity_play_sound(id, sound_event("minecraft:entity.chicken.egg"), 1.0, pitch);
+                self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_PLACE);
             }
             let mob = self.mob_mut(id).expect("a mob");
             let egg_time = mob.entity.random.next_int_bounded(6000) + 6000;
             chicken_mut(mob).egg_time = egg_time;
         }
+    }
+
+    pub fn chicken_is_flapping(&self, id: EntityId) -> bool {
+        let mob = self.mob(id).expect("a chicken");
+        let MobKind::Chicken(chicken) = &mob.kind else { unreachable!("not a chicken") };
+        mob.entity.fly_dist > chicken.next_flap
+    }
+
+    pub fn chicken_on_flap(&mut self, id: EntityId) {
+        let mob = self.mob_mut(id).expect("a chicken");
+        let fly_dist = mob.entity.fly_dist;
+        let chicken = chicken_mut(mob);
+        chicken.next_flap = fly_dist + chicken.flap_speed / 2.0;
     }
 
     pub fn chicken_get_breed_offspring(&mut self, id: EntityId, partner: EntityId) -> Option<Box<Mob>> {

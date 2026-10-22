@@ -33,13 +33,14 @@ impl ServerLevel {
         counter_mut(entity).map(|c| (c, state))
     }
 
-    pub fn increment_openers(&mut self, pos: BlockPos, max_interaction_range: f64) {
+    pub fn increment_openers(&mut self, entity: EntityId, pos: BlockPos, max_interaction_range: f64) {
         let Some((counter, state)) = self.openers_counter(pos) else { return };
         let previous = counter.open_count;
         counter.open_count += 1;
         let current = counter.open_count;
         if previous == 0 {
             self.openers_on_open(pos, state);
+            self.game_event_at(Some(entity), crate::world::level::gameevent::game_event::CONTAINER_OPEN, pos);
             self.schedule_tick(pos, state.block(), CHECK_TICK_DELAY);
         }
         self.opener_count_changed(pos, state, previous, current);
@@ -48,13 +49,14 @@ impl ServerLevel {
         }
     }
 
-    pub fn decrement_openers(&mut self, pos: BlockPos) {
+    pub fn decrement_openers(&mut self, entity: EntityId, pos: BlockPos) {
         let Some((counter, state)) = self.openers_counter(pos) else { return };
         let previous = counter.open_count;
         counter.open_count -= 1;
         let current = counter.open_count;
         if current == 0 {
             self.openers_on_close(pos, state);
+            self.game_event_at(Some(entity), crate::world::level::gameevent::game_event::CONTAINER_CLOSE, pos);
             if let Some((counter, _)) = self.openers_counter(pos) {
                 counter.max_interaction_range = 0.0;
             }
@@ -103,8 +105,10 @@ impl ServerLevel {
             let was_open = previous != 0;
             if is_open && !was_open {
                 self.openers_on_open(pos, state);
+                self.game_event_at(None, crate::world::level::gameevent::game_event::CONTAINER_OPEN, pos);
             } else if !is_open {
                 self.openers_on_close(pos, state);
+                self.game_event_at(None, crate::world::level::gameevent::game_event::CONTAINER_CLOSE, pos);
             }
             if let Some((counter, _)) = self.openers_counter(pos) {
                 counter.open_count = open_count;

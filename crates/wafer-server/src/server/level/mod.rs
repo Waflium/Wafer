@@ -702,7 +702,11 @@ impl ServerLevel {
             self.drop_resources_with_entity(state, pos, block_entity.as_ref(), breaker, None);
         }
         let fluid = self.fluid_state(pos);
-        self.set_block_with_limit(pos, legacy_block(fluid), UPDATE_ALL, update_limit)
+        let destroyed = self.set_block_with_limit(pos, legacy_block(fluid), UPDATE_ALL, update_limit);
+        if destroyed {
+            self.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(breaker, Some(state)));
+        }
+        destroyed
     }
 
     pub fn drop_resources(&mut self, state: BlockState, pos: BlockPos, breaker: Option<EntityId>, tool: Option<ItemStack>) {
@@ -1029,8 +1033,8 @@ impl ServerLevel {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn send_particles(&self, particle: &str, options: impl Fn(&mut wafer_protocol::Writer), x: f64, y: f64, z: f64, count: i32, dist: (f64, f64, f64), speed: f64) {
-        self.send_particles_with_speeds(particle, options, x, y, z, count, dist, (speed, speed, speed), 0);
+    pub fn send_particles(&self, particle: &str, options: impl Fn(&mut wafer_protocol::Writer), x: f64, y: f64, z: f64, count: i32, dist: (f64, f64, f64), speed: f64) -> i32 {
+        self.send_particles_with_speeds(particle, options, x, y, z, count, dist, (speed, speed, speed), 0)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1075,7 +1079,7 @@ impl ServerLevel {
         dist: (f64, f64, f64),
         speed: (f64, f64, f64),
         randomization_type: i32,
-    ) {
+    ) -> i32 {
         let packet = encode(clientbound::LEVEL_PARTICLES, |p| {
             p.varint(wafer_data::registry_id(wafer_data::registry::PARTICLE_TYPE, particle));
             options(p);
@@ -1093,6 +1097,7 @@ impl ServerLevel {
             p.varint(count);
             p.varint(randomization_type);
         });
+        let mut sent_count = 0;
         for player in self.players.values() {
             if player.entity.is_removed() {
                 continue;
@@ -1100,8 +1105,10 @@ impl ServerLevel {
             let center = Vec3::at_center_of(player.entity.block_position());
             if center.distance_to_sqr(Vec3::new(x, y, z)) < 32.0 * 32.0 {
                 player.connection.send_raw(packet.clone());
+                sent_count += 1;
             }
         }
+        sent_count
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2110,6 +2117,10 @@ impl crate::world::level::LevelAccessor for ServerLevel {
 
     fn play_sound(&mut self, pos: BlockPos, sound: i32, source: SoundSource, volume: f32, pitch: f32) {
         ServerLevel::play_sound(self, None, pos, sound, source, volume, pitch);
+    }
+
+    fn game_event(&mut self, game_event: crate::world::level::gameevent::game_event::GameEvent, position: Vec3, context: crate::world::level::gameevent::game_event::Context) {
+        ServerLevel::game_event(self, game_event, position, context);
     }
 }
 

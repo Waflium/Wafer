@@ -24,6 +24,7 @@ fn try_shear_beehive(level: &mut ServerLevel, tool: &ItemStack, pos: BlockPos) -
         level.play_sound(None, pos, registry_id(registry::SOUND_EVENT, "minecraft:block.beehive.shear"), SoundSource::Blocks, 1.0, 1.0);
         beehive_block::drop_honeycomb(level, tool, state, None, pos);
         beehive_block::release_bees_and_reset_honey_level(level, state, pos, None, BeeReleaseStatus::BeeReleased);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::SHEAR, pos);
         return true;
     }
     false
@@ -33,6 +34,7 @@ fn try_shear_entity(level: &mut ServerLevel, pos: BlockPos, tool: &ItemStack) ->
     for entity in level.get_entities(None, &AABB::of_block(pos)) {
         if level.is_alive(entity) && level.is_shearable(entity) && level.ready_for_shearing(entity) {
             level.shear(entity, SoundSource::Blocks, tool);
+            level.game_event_at(None, crate::world::level::gameevent::game_event::SHEAR, pos);
             return true;
         }
     }

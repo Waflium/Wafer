@@ -38,6 +38,7 @@ const TOO_FAR_FROM_TARGET: i32 = 16;
 const MAX_LOOK_DISTANCE: f32 = 6.0;
 const MIN_WAIT_DURATION: i32 = 30;
 const MAX_WAIT_DURATION: i32 = 60;
+const TIME_TO_FORGET_NOTEBLOCK: i32 = 600;
 const DISTANCE_TO_WANTED_ITEM: i32 = 32;
 const GIVE_ITEM_TIMEOUT_DURATION: i32 = 20;
 const THROW_VELOCITY: Vec3 = Vec3::new(0.2f32 as f64, 0.3f32 as f64, 0.2f32 as f64);
@@ -101,6 +102,21 @@ fn has_item_to_throw(level: &ServerLevel, allay: EntityId) -> bool {
 
 pub fn update_activity(brain: &mut Brain) {
     brain.set_active_activity_to_first_valid(&[Activity::IDLE]);
+}
+
+pub fn hear_noteblock(level: &mut ServerLevel, allay: EntityId, pos: BlockPos) {
+    let global_pos = GlobalPos::of(level.dimension, pos);
+    let brain = level.get_brain_mut(allay);
+    match brain.get_memory(memory_module_type::LIKED_NOTEBLOCK_POSITION) {
+        None => {
+            brain.set_memory(memory_module_type::LIKED_NOTEBLOCK_POSITION, global_pos);
+            brain.set_memory(memory_module_type::LIKED_NOTEBLOCK_COOLDOWN_TICKS, TIME_TO_FORGET_NOTEBLOCK);
+        }
+        Some(liked_noteblock_pos) if *liked_noteblock_pos == global_pos => {
+            brain.set_memory(memory_module_type::LIKED_NOTEBLOCK_COOLDOWN_TICKS, TIME_TO_FORGET_NOTEBLOCK);
+        }
+        Some(_) => {}
+    }
 }
 
 fn get_item_deposit_position(level: &mut ServerLevel, allay: EntityId) -> Option<PositionTracker> {

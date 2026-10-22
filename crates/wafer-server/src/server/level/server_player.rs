@@ -1000,6 +1000,7 @@ impl ServerLevel {
     }
 
     pub fn server_player_die(&mut self, id: EntityId, source: DamageSource) {
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_DIE);
         if self.game_rules.get_bool(game_rule::SHOW_DEATH_MESSAGES) {
             let message = self.death_message(id);
             let display_name = self.display_name(id);

@@ -66,9 +66,10 @@ pub fn can_set_spawn(level: &ServerLevel, pos: BlockPos) -> bool {
     level.environment_attributes().get_value_at(environment_attributes::RESPAWN_ANCHOR_WORKS, pos)
 }
 
-pub fn charge(level: &mut ServerLevel, pos: BlockPos, state: BlockState) {
+pub fn charge(source_entity: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos, state: BlockState) {
     let new_state = state.set(CHARGE, state.get(CHARGE) + 1);
     level.set_block(pos, new_state, UPDATE_ALL);
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(source_entity, Some(new_state)));
     level.play_sound_at(None, pos.x as f64 + 0.5, pos.y as f64 + 0.5, pos.z as f64 + 0.5, sound_event("minecraft:block.respawn_anchor.charge"), SoundSource::Blocks, 1.0, 1.0);
 }
 
@@ -96,7 +97,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
         _hit: &BlockHitResult,
     ) -> InteractionResult {
         if is_respawn_fuel(&item) && can_be_charged(state) {
-            charge(level, pos, state);
+            charge(Some(player), level, pos, state);
             let mut item = item;
             item.consume(1, level, Some(player));
             level.player_mut(player).update_item_in_hand(hand, &item);

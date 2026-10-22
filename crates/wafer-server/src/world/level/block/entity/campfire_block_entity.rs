@@ -120,6 +120,7 @@ impl ServerLevel {
                     entity.items[slot] = ItemStack::empty();
                 }
                 self.send_block_updated(pos, state, state);
+                self.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
             }
         }
         if changed {
@@ -154,6 +155,8 @@ impl ServerLevel {
             entity.cooking_time[slot] = recipe.cooking_time();
             entity.cooking_progress[slot] = 0;
             entity.items[slot] = consumed;
+            let block_state = self.chunks.block_entity_ref(pos).map(|entity| entity.block_state());
+            self.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(source_entity, block_state));
             self.campfire_mark_updated(pos);
             return true;
         }

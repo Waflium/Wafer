@@ -294,7 +294,7 @@ impl ServerLevel {
 
     pub fn shulker_bullet_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
         self.projectile_base_on_hit(id, hit_result);
-        self.discard(id);
+        self.shulker_bullet_destroy(id);
     }
 
     pub fn shulker_bullet_hurt_server(&mut self, id: EntityId) -> bool {
@@ -302,8 +302,14 @@ impl ServerLevel {
         let e = self.entity(id);
         let (x, y, z) = (e.x(), e.y(), e.z());
         self.send_particles("minecraft:crit", |_| {}, x, y, z, 15, (0.2, 0.2, 0.2), 0.0);
-        self.discard(id);
+        self.shulker_bullet_destroy(id);
         true
+    }
+
+    fn shulker_bullet_destroy(&mut self, id: EntityId) {
+        self.discard(id);
+        let position = self.entity(id).position();
+        self.game_event(crate::world::level::gameevent::game_event::ENTITY_DAMAGE, position, crate::world::level::gameevent::game_event::Context::of(Some(id)));
     }
 }
 

@@ -26,10 +26,12 @@ pub fn eat(level: &mut ServerLevel, pos: BlockPos, state: BlockState, player: En
     level.award_stat(player, crate::stats::stats::EAT_CAKE_SLICE, 1);
     level.player_mut(player).food_data.eat_with_modifier(2, 0.1);
     let bites = state.get(BITES);
+    level.game_event_at(Some(player), crate::world::level::gameevent::game_event::EAT, pos);
     if bites < MAX_BITES {
         level.set_block(pos, state.set(BITES, bites + 1), UPDATE_ALL);
     } else {
         level.remove_block(pos, false);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos);
     }
     InteractionResult::SUCCESS
 }
@@ -56,6 +58,7 @@ impl BlockBehaviour for CakeBlock {
             level.player_mut(player).update_item_in_hand(hand, &item);
             level.play_sound(None, pos, registry_id(registry::SOUND_EVENT, "minecraft:block.cake.add_candle"), SoundSource::Blocks, 1.0, 1.0);
             level.set_block(pos, candle_cake_block::by_candle(candle_block), UPDATE_ALL);
+            level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
             level.award_stat(player, crate::stats::stats::ITEM_USED.get(used_item.0), 1);
             InteractionResult::SUCCESS
         } else {

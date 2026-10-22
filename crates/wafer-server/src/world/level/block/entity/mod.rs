@@ -30,6 +30,7 @@ pub mod piston_moving_block_entity;
 mod oracle_data;
 #[cfg(test)]
 mod oracle_tests;
+pub mod sculk_sensor_block_entity;
 pub mod shelf_block_entity;
 pub mod sign_block_entity;
 pub mod sign_text;
@@ -71,6 +72,7 @@ pub enum BlockEntityTicker {
     Jukebox,
     Conduit,
     CreakingHeart,
+    SculkSensor,
     Beacon,
     BrewingStand,
     CampfireCook,
@@ -107,6 +109,7 @@ pub enum BlockEntityKind {
     Jukebox(jukebox_block_entity::JukeboxBlockEntity),
     Conduit(conduit_block_entity::ConduitBlockEntity),
     CreakingHeart(creaking_heart_block_entity::CreakingHeartBlockEntity),
+    SculkSensor(sculk_sensor_block_entity::SculkSensorBlockEntity),
     Beacon(beacon_block_entity::BeaconBlockEntity),
     EnchantingTable(enchanting_table_block_entity::EnchantingTableBlockEntity),
     Campfire(campfire_block_entity::CampfireBlockEntity),
@@ -164,6 +167,7 @@ impl BlockEntity {
             types::JUKEBOX => BlockEntityKind::Jukebox(jukebox_block_entity::JukeboxBlockEntity::default()),
             types::CONDUIT => BlockEntityKind::Conduit(conduit_block_entity::ConduitBlockEntity::default()),
             types::CREAKING_HEART => BlockEntityKind::CreakingHeart(creaking_heart_block_entity::CreakingHeartBlockEntity::default()),
+            types::SCULK_SENSOR | types::CALIBRATED_SCULK_SENSOR => BlockEntityKind::SculkSensor(sculk_sensor_block_entity::SculkSensorBlockEntity::default()),
             types::BEACON => BlockEntityKind::Beacon(beacon_block_entity::BeaconBlockEntity::default()),
             types::ENCHANTING_TABLE => BlockEntityKind::EnchantingTable(enchanting_table_block_entity::EnchantingTableBlockEntity::default()),
             types::CAMPFIRE => BlockEntityKind::Campfire(campfire_block_entity::CampfireBlockEntity::default()),
@@ -282,6 +286,7 @@ impl BlockEntity {
             BlockEntityKind::Jukebox(jukebox) => jukebox.load_additional(input),
             BlockEntityKind::Conduit(conduit) => conduit.load_additional(input),
             BlockEntityKind::CreakingHeart(heart) => heart.load_additional(input),
+            BlockEntityKind::SculkSensor(sensor) => sensor.load_additional(input),
             BlockEntityKind::Beacon(beacon) => beacon.load_additional(input),
             BlockEntityKind::EnchantingTable(enchanting_table) => enchanting_table.load_additional(input),
             BlockEntityKind::Campfire(campfire) => campfire.load_additional(input),
@@ -327,6 +332,7 @@ impl BlockEntity {
             BlockEntityKind::Jukebox(jukebox) => jukebox.save_additional(output),
             BlockEntityKind::Conduit(conduit) => conduit.save_additional(output),
             BlockEntityKind::CreakingHeart(heart) => heart.save_additional(output),
+            BlockEntityKind::SculkSensor(sensor) => sensor.save_additional(output),
             BlockEntityKind::Beacon(beacon) => beacon.save_additional(output),
             BlockEntityKind::EnchantingTable(enchanting_table) => enchanting_table.save_additional(output),
             BlockEntityKind::Campfire(campfire) => campfire.save_additional(output),
@@ -633,6 +639,13 @@ impl BlockEntity {
         self.get_custom_name().is_some()
     }
 
+    pub fn game_event_listener(&self) -> Option<crate::world::level::gameevent::game_event_listener::GameEventListener> {
+        match self.kind {
+            BlockEntityKind::SculkSensor(_) => Some(crate::world::level::gameevent::game_event_listener::GameEventListener::BlockEntity { pos: self.pos, id: self.id }),
+            _ => None,
+        }
+    }
+
     pub fn ticker(&self, state: BlockState) -> Option<BlockEntityTicker> {
         let block = state.block();
         match self.ty {
@@ -644,6 +657,7 @@ impl BlockEntity {
             types::CONDUIT if block.is_instance_of("ConduitBlock") => Some(BlockEntityTicker::Conduit),
             types::CREAKING_HEART if block.is_instance_of("CreakingHeartBlock") && state.get(wafer_data::properties::CREAKING_HEART_STATE) != wafer_data::properties::CreakingHeartState::Uprooted => Some(BlockEntityTicker::CreakingHeart),
             types::BEACON if block.is_instance_of("BeaconBlock") => Some(BlockEntityTicker::Beacon),
+            types::SCULK_SENSOR | types::CALIBRATED_SCULK_SENSOR if block.is_instance_of("SculkSensorBlock") => Some(BlockEntityTicker::SculkSensor),
             types::BREWING_STAND if block.is_instance_of("BrewingStandBlock") => Some(BlockEntityTicker::BrewingStand),
             types::BELL if block.is_instance_of("BellBlock") => Some(BlockEntityTicker::Bell),
             types::SIGN | types::HANGING_SIGN if block.is_instance_of("SignBlock") => Some(BlockEntityTicker::Sign),

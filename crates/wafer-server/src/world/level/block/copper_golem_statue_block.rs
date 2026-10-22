@@ -23,9 +23,10 @@ fn get_next_pose(pose: CopperGolemPose) -> CopperGolemPose {
 pub struct CopperGolemStatueBlock;
 
 impl CopperGolemStatueBlock {
-    pub fn update_pose(&self, level: &mut ServerLevel, state: BlockState, pos: BlockPos) {
+    pub fn update_pose(&self, level: &mut ServerLevel, state: BlockState, pos: BlockPos, player: EntityId) {
         level.play_sound(None, pos, registry_id(registry::SOUND_EVENT, "minecraft:entity.copper_golem_become_statue"), SoundSource::Blocks, 1.0, 1.0);
         level.set_block(pos, state.set(COPPER_GOLEM_POSE, get_next_pose(state.get(COPPER_GOLEM_POSE))), UPDATE_ALL);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
     }
 }
 
@@ -43,11 +44,11 @@ impl BlockBehaviour for CopperGolemStatueBlock {
         super::rotate(state, mirror.get_rotation(state.get(HORIZONTAL_FACING)))
     }
 
-    fn use_item_on(&self, item_stack: ItemStack, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _player: EntityId, _hand: InteractionHand, _hit: &BlockHitResult) -> InteractionResult {
+    fn use_item_on(&self, item_stack: ItemStack, state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hand: InteractionHand, _hit: &BlockHitResult) -> InteractionResult {
         if item_stack.get_item().is(&item_tags::AXES) {
             return InteractionResult::Pass;
         }
-        self.update_pose(level, state, pos);
+        self.update_pose(level, state, pos, player);
         InteractionResult::SUCCESS
     }
 
@@ -106,7 +107,7 @@ impl BlockBehaviour for WeatheringCopperGolemStatueBlock {
             if item_stack.is(items::HONEYCOMB) {
                 return InteractionResult::Pass;
             }
-            CopperGolemStatueBlock.update_pose(level, state, pos);
+            CopperGolemStatueBlock.update_pose(level, state, pos, player);
             return InteractionResult::SUCCESS;
         }
         if weathering_copper::age(state.block()) == Some(WeatherState::Unaffected) {

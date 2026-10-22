@@ -126,6 +126,7 @@ pub fn maybe_transfer_fluid(state: BlockState, level: &mut ServerLevel, pos: Blo
         let new_state = blocks::CLAY.default_state();
         level.set_block(fluid_info.pos, new_state, UPDATE_ALL);
         level.push_entities_up(fluid_info.source_state, new_state, fluid_info.pos);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, fluid_info.pos, crate::world::level::gameevent::game_event::Context::of_state(Some(new_state)));
         level.level_event(None, DRIPSTONE_DRIP, stalactite_tip_pos, 0);
     } else if let Some(cauldron_pos) = find_fillable_cauldron_below_stalactite_tip(level, stalactite_tip_pos, fluid) {
         level.level_event(None, DRIPSTONE_DRIP, stalactite_tip_pos, 0);

@@ -45,6 +45,8 @@ impl DispenserBlock {
         };
         if slot < 0 {
             level.level_event(None, SOUND_DISPENSER_FAIL, pos, 0);
+            let block_entity_state = level.chunks.block_entity_ref(pos).map(|entity| entity.block_state());
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_ACTIVATE, pos, crate::world::level::gameevent::game_event::Context::of_state(block_entity_state));
             return;
         }
         let source = BlockSource { pos, state };

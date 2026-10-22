@@ -53,13 +53,14 @@ impl BellBlock {
         }
     }
 
-    pub fn attempt_to_ring(&self, _ringing_entity: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos, direction: Option<Direction>) -> bool {
+    pub fn attempt_to_ring(&self, ringing_entity: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos, direction: Option<Direction>) -> bool {
         if !matches!(level.get_block_entity(pos).map(|e| &e.kind), Some(crate::world::level::block::entity::BlockEntityKind::Bell(_))) {
             return false;
         }
         let direction = direction.unwrap_or_else(|| level.block_state(pos).get(HORIZONTAL_FACING));
         level.bell_on_hit(pos, direction);
         level.play_sound(None, pos, registry_id(registry::SOUND_EVENT, "minecraft:block.bell.use"), SoundSource::Blocks, 2.0, 1.0);
+        level.game_event_at(ringing_entity, crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
         true
     }
 }

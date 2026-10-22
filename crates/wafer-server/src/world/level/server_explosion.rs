@@ -297,6 +297,7 @@ impl ServerLevel {
     }
 
     fn run_explosion(&mut self, explosion: &mut ServerExplosion) -> i32 {
+        self.game_event_from_entity(explosion.source, crate::world::level::gameevent::game_event::EXPLODE, explosion.center);
         let to_blow = self.calculate_exploded_positions(explosion);
         self.hurt_entities(explosion);
         if explosion.interacts_with_blocks() {

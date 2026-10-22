@@ -37,9 +37,10 @@ fn place_book(source_entity: Option<EntityId>, level: &mut ServerLevel, pos: Blo
     }
 }
 
-pub fn reset_book_state(_source_entity: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos, state: BlockState, has_book: bool) {
+pub fn reset_book_state(source_entity: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos, state: BlockState, has_book: bool) {
     let new_state = state.set(POWERED, false).set(HAS_BOOK, has_book);
     level.set_block(pos, new_state, UPDATE_ALL);
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(source_entity, Some(new_state)));
     update_below(level, pos, state);
 }
 

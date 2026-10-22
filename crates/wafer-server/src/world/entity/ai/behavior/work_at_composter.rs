@@ -23,7 +23,7 @@ pub fn use_workstation(level: &mut ServerLevel, body: EntityId) {
 
 fn compost_items(level: &mut ServerLevel, body: EntityId, pos: BlockPos, mut block_state: BlockState) {
     if block_state.get(LEVEL_COMPOSTER) == 8 {
-        composter_block::extract_produce(level, pos);
+        composter_block::extract_produce(Some(body), level, pos);
         block_state = block_state.set(LEVEL_COMPOSTER, 0);
     }
     let mut total_items_to_use = 20;

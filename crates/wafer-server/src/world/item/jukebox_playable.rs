@@ -19,6 +19,7 @@ pub fn try_insert_into_jukebox(level: &mut ServerLevel, pos: BlockPos, to_insert
         to_insert.consume(1, level, Some(player));
         if level.jukebox(pos).is_some() {
             level.jukebox_set_the_item(pos, inserted);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), Some(state)));
         }
         level.award_stat(player, crate::stats::stats::PLAY_RECORD, 1);
         InteractionResult::SUCCESS

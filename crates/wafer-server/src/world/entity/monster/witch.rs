@@ -152,6 +152,7 @@ impl ServerLevel {
                             self.add_effect(id, effect, None);
                         }
                     }
+                    self.entity_game_event(id, crate::world::level::gameevent::game_event::DRINK);
                     if let Some(speed) = self.living_mut(id).attributes.instance(Attribute::MovementSpeed) {
                         speed.remove_modifier(SPEED_MODIFIER_DRINKING_ID);
                     }

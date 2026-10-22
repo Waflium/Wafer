@@ -63,7 +63,10 @@ impl ServerLevel {
 
     pub fn block_entity_set_removed(&mut self, pos: BlockPos, entity: &BlockEntity) {
         match entity.kind {
-            BlockEntityKind::Jukebox(_) => self.level_event(None, crate::server::level::events::SOUND_STOP_JUKEBOX_SONG, pos, 0),
+            BlockEntityKind::Jukebox(_) => {
+                self.game_event_at_with(crate::world::level::gameevent::game_event::JUKEBOX_STOP_PLAY, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(entity.block_state())));
+                self.level_event(None, crate::server::level::events::SOUND_STOP_JUKEBOX_SONG, pos, 0);
+            }
             BlockEntityKind::Beacon(_) => self.beacon_play_sound(pos, "minecraft:block.beacon.deactivate"),
             _ => {}
         }
@@ -184,6 +187,11 @@ impl ServerLevel {
             BlockEntityTicker::Jukebox => self.jukebox_tick(pos),
             BlockEntityTicker::Conduit => self.conduit_server_tick(pos, state),
             BlockEntityTicker::CreakingHeart => self.creaking_heart_server_tick(pos, state),
+            BlockEntityTicker::SculkSensor => {
+                if let Some(user) = self.sculk_sensor_vibration_user(pos) {
+                    self.vibration_ticker_tick(user);
+                }
+            }
             BlockEntityTicker::Beacon => self.beacon_tick(pos),
             BlockEntityTicker::BrewingStand => self.brewing_stand_server_tick(pos, state),
             BlockEntityTicker::CampfireCook => self.campfire_cook_tick(pos, state),

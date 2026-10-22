@@ -95,6 +95,7 @@ impl ServerLevel {
         if !attached_mob && !any_dropped {
             return self.entity_interact(id, player, hand, location);
         }
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::BLOCK_ATTACH, Some(player));
         self.entity_play_sound(id, sound_event("minecraft:item.lead.tied"), 1.0, 1.0);
         InteractionResult::SUCCESS
     }
@@ -116,6 +117,7 @@ pub fn bind_player_mobs(level: &mut ServerLevel, player: EntityId, pos: BlockPos
     }
     if any_leashed {
         level.leash_fence_knot_play_placement_sound(active_knot);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_ATTACH, pos, crate::world::level::gameevent::game_event::Context::of(Some(player)));
         return InteractionResult::SUCCESS_SERVER;
     }
     if existing_knot.is_none() {

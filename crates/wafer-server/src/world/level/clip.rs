@@ -322,6 +322,11 @@ impl ServerLevel {
         }
     }
 
+    pub fn is_block_in_line(&mut self, from: Vec3, to: Vec3, is_target_block: impl Fn(BlockState) -> bool) -> bool {
+        traverse_blocks(from, to, |pos| is_target_block(self.block_state(pos)).then_some(true), || false)
+    }
+
+
     pub fn clip(&mut self, ctx: &ClipContext) -> ClipResult {
         let ctx = *ctx;
         traverse_blocks(

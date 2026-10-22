@@ -9,6 +9,7 @@ pub mod border;
 pub mod chunk;
 pub mod data_pack_config;
 pub mod dimension;
+pub mod gameevent;
 pub mod gamerules;
 pub mod clip;
 pub mod custom_spawner;
@@ -101,6 +102,8 @@ pub trait LevelAccessor: LevelReader + ScheduledTickAccess + LevelWriter {
     fn mark_pos_for_post_processing(&mut self, pos: BlockPos);
 
     fn play_sound(&mut self, _pos: BlockPos, _sound: i32, _source: crate::server::level::SoundSource, _volume: f32, _pitch: f32) {}
+
+    fn game_event(&mut self, _game_event: gameevent::game_event::GameEvent, _position: wafer_core::Vec3, _context: gameevent::game_event::Context) {}
 
     fn as_server_level(&mut self) -> Option<&mut crate::server::level::ServerLevel> {
         None

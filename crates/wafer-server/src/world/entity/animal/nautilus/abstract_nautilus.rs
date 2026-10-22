@@ -349,6 +349,7 @@ impl ServerLevel {
     pub fn abstract_nautilus_handle_start_jump(&mut self, id: EntityId) {
         let sound = get_dash_sound(self.mob(id).expect("an abstract nautilus"));
         self.make_sound(id, sound_event(sound));
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
         self.abstract_nautilus_set_dashing(id, true);
     }
 

@@ -268,6 +268,8 @@ pub mod sign_block;
 pub mod suspicious_effect_holder;
 mod speleothem_block;
 #[cfg(test)]
+mod sculk_sensor_tests;
+#[cfg(test)]
 mod speleothem_tests;
 mod sulfur_spike_block;
 mod skull_block;
@@ -560,6 +562,7 @@ pub fn block_player_will_destroy(level: &mut ServerLevel, pos: BlockPos, state: 
     if state.is(&wafer_data::block_tags::GUARDED_BY_PIGLINS) {
         crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(level, player, false);
     }
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), Some(state)));
     state
 }
 

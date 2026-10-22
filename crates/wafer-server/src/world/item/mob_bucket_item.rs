@@ -31,8 +31,9 @@ impl MobBucketItem {
         Some(MobBucketItem { entity_type, empty_sound })
     }
 
-    pub fn check_extra_content(&self, level: &mut ServerLevel, item_stack: &ItemStack, pos: BlockPos) {
+    pub fn check_extra_content(&self, level: &mut ServerLevel, user: Option<EntityId>, item_stack: &ItemStack, pos: BlockPos) {
         self.spawn(level, item_stack, pos);
+        level.game_event_at(user, crate::world::level::gameevent::game_event::ENTITY_PLACE, pos);
     }
 
     pub fn play_empty_sound(&self, level: &mut ServerLevel, user: Option<EntityId>, pos: BlockPos) {

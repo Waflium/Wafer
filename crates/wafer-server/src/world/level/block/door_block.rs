@@ -77,6 +77,7 @@ pub fn set_open(source_entity: Option<EntityId>, level: &mut ServerLevel, state:
     if is_door(state) && state.get(OPEN) != should_open {
         level.set_block(pos, state.set(OPEN, should_open), UPDATE_CLIENTS | UPDATE_IMMEDIATE);
         DoorBlock::new(state.block()).play_sound(source_entity, level, pos, should_open);
+        level.game_event_at(source_entity, if should_open { crate::world::level::gameevent::game_event::BLOCK_OPEN } else { crate::world::level::gameevent::game_event::BLOCK_CLOSE }, pos);
     }
 }
 
@@ -197,6 +198,7 @@ impl BlockBehaviour for DoorBlock {
         let state = state.cycle(OPEN);
         level.set_block(pos, state, UPDATE_CLIENTS | UPDATE_IMMEDIATE);
         self.play_sound(Some(player), level, pos, state.get(OPEN));
+        level.game_event_at(Some(player), if is_open(state) { crate::world::level::gameevent::game_event::BLOCK_OPEN } else { crate::world::level::gameevent::game_event::BLOCK_CLOSE }, pos);
         InteractionResult::SUCCESS
     }
 
@@ -206,6 +208,7 @@ impl BlockBehaviour for DoorBlock {
         if block != state.block() && signal != state.get(POWERED) {
             if signal != state.get(OPEN) {
                 self.play_sound(None, level, pos, signal);
+                level.game_event_at(None, if signal { crate::world::level::gameevent::game_event::BLOCK_OPEN } else { crate::world::level::gameevent::game_event::BLOCK_CLOSE }, pos);
             }
             level.set_block(pos, state.set(POWERED, signal).set(OPEN, signal), UPDATE_CLIENTS);
         }

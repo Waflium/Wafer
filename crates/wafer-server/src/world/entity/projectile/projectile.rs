@@ -272,9 +272,10 @@ impl ServerLevel {
     }
 
     pub fn projectile_base_tick(&mut self, id: EntityId) {
-        let projectile = self.projectile_mut(id);
-        if !projectile.has_been_shot {
-            projectile.has_been_shot = true;
+        if !self.projectile(id).has_been_shot {
+            let owner = self.projectile_get_owner(id);
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::PROJECTILE_SHOOT, owner);
+            self.projectile_mut(id).has_been_shot = true;
         }
         self.check_left_owner(id);
         self.entity_tick(id);
@@ -429,11 +430,16 @@ impl ServerLevel {
                 if entity_type_tags::REDIRECTABLE_PROJECTILE.contains(self.entity(entity_hit).entity_type as usize) && self.is_projectile(entity_hit) {
                     self.on_redirect_projectile(id, entity_hit);
                 }
+                let location = entity_hit_result.location;
                 self.on_hit_entity(id, entity_hit_result);
+                self.game_event(crate::world::level::gameevent::game_event::PROJECTILE_LAND, location, crate::world::level::gameevent::game_event::Context::of(Some(id)));
             }
             Type::Block => {
                 let HitResult::Block { hit, .. } = hit_result else { unreachable!() };
+                let target = hit.block_pos;
                 self.on_hit_block(id, hit);
+                let block_state = self.block_state(target);
+                self.game_event_at_with(crate::world::level::gameevent::game_event::PROJECTILE_LAND, target, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(id), Some(block_state)));
             }
             Type::Miss => {}
         }

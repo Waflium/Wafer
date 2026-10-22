@@ -24,10 +24,13 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
         level.player_mut(player).update_item_in_hand(hand, &item_in_hand);
     }
     level.set_block(pos, waxed_state, UPDATE_ALL_IMMEDIATE);
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), Some(waxed_state)));
     level.level_event(Some(player), PARTICLES_WAX_ON, pos, 0);
     level.play_sound(Some(player), pos, sound_event("minecraft:item.honeycomb.wax_on"), SoundSource::Blocks, 1.0, 1.0);
     if old_state.block().is_instance_of("ChestBlock") && old_state.get(CHEST_TYPE) != ChestType::Single {
         let neighbor_pos = pos.relative(get_connected_direction(old_state));
+        let neighbor_state = level.block_state(neighbor_pos);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, neighbor_pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), Some(neighbor_state)));
         level.level_event(Some(player), PARTICLES_WAX_ON, neighbor_pos, 0);
         level.play_sound(Some(player), pos, sound_event("minecraft:item.honeycomb.wax_on"), SoundSource::Blocks, 1.0, 1.0);
     }

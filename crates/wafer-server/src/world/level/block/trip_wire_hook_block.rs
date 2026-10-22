@@ -102,13 +102,17 @@ fn emit_state(level: &mut ServerLevel, pos: BlockPos, attached: bool, powered: b
     let sound = |name: &str| registry_id(registry::SOUND_EVENT, name);
     if powered && !was_powered {
         level.play_sound(None, pos, sound("minecraft:block.tripwire.click_on"), SoundSource::Blocks, 0.4, 0.6);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_ACTIVATE, pos);
     } else if !powered && was_powered {
         level.play_sound(None, pos, sound("minecraft:block.tripwire.click_off"), SoundSource::Blocks, 0.4, 0.5);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_DEACTIVATE, pos);
     } else if attached && !was_attached {
         level.play_sound(None, pos, sound("minecraft:block.tripwire.attach"), SoundSource::Blocks, 0.4, 0.7);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_ATTACH, pos);
     } else if !attached && was_attached {
         let pitch = 1.2 / (level.random.next_float() * 0.2 + 0.9);
         level.play_sound(None, pos, sound("minecraft:block.tripwire.detach"), SoundSource::Blocks, 0.4, pitch);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_DETACH, pos);
     }
 }
 

@@ -55,6 +55,8 @@ pub fn use_item_on(item_stack: ItemStack, level: &mut ServerLevel, pos: BlockPos
     if can_apply && sign_applicator.try_apply_to_sign(level, pos, text_slot, &item_stack) {
         level.sign_execute_click_commands_if_present(player, pos, text_slot);
         level.award_stat(player, crate::stats::stats::ITEM_USED.get(item_stack.item.0), 1);
+        let sign_state = level.chunks.block_entity_ref(pos).map(|entity| entity.block_state());
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), sign_state));
         if !level.has_infinite_materials(player) {
             let mut item_stack = item_stack;
             item_stack.shrink(1);

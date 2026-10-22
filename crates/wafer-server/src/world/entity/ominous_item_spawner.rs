@@ -122,19 +122,23 @@ impl ServerLevel {
         if item.is_empty() {
             return;
         }
-        if projectile_item::is_projectile_item(item.get_item()) {
-            self.ominous_item_spawner_spawn_projectile(id, &item);
+        let spawned_entity = if projectile_item::is_projectile_item(item.get_item()) {
+            self.ominous_item_spawner_spawn_projectile(id, &item)
         } else {
             let e = self.entity(id);
             let spawned_entity = ItemEntity::new(e.position(), item);
+            let spawned_id = spawned_entity.entity.id;
             self.add_fresh_entity(LevelEntity::Item(spawned_entity));
-        }
+            spawned_id
+        };
         let block_position = self.entity(id).block_position();
         self.level_event(None, crate::server::level::events::PARTICLES_TRIAL_SPAWNER_SPAWN_ITEM, block_position, 1);
+        let position = self.entity(id).position();
+        self.game_event_from_entity(Some(spawned_entity), crate::world::level::gameevent::game_event::ENTITY_PLACE, position);
         ominous_item_spawner_mut(self, id).set_item(ItemStack::empty());
     }
 
-    fn ominous_item_spawner_spawn_projectile(&mut self, id: EntityId, item: &ItemStack) {
+    fn ominous_item_spawner_spawn_projectile(&mut self, id: EntityId, item: &ItemStack) -> EntityId {
         let dispense_config = projectile_item::create_dispense_config(item.get_item());
         if let Some(event) = dispense_config.override_dispense_event {
             let block_position = self.entity(id).block_position();
@@ -154,5 +158,6 @@ impl ServerLevel {
         );
         let owner = Some(EntityReference::of(self.entity(id).uuid));
         self.projectile_set_owner_reference(projectile, owner);
+        projectile
     }
 }

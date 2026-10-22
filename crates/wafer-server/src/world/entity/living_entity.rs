@@ -570,15 +570,25 @@ impl ServerLevel {
         if self.is_spectator(id) || ItemStack::is_same_item_same_components(old_stack, stack) || self.entity(id).first_tick {
             return;
         }
-        let Some(equippable) = stack.get(crate::world::item::component::EQUIPPABLE).map(crate::world::item::component::values::Equippable::from_nbt) else { return };
-        if !self.entity(id).is_silent() && EquipmentSlot::by_name(&equippable.slot) == Some(slot) {
-            let Some(sound) = self.get_equip_sound(id, slot, &equippable) else { return };
+        let equippable = stack.get(crate::world::item::component::EQUIPPABLE).map(crate::world::item::component::values::Equippable::from_nbt);
+        if let Some(equippable) = &equippable
+            && !self.entity(id).is_silent()
+            && EquipmentSlot::by_name(&equippable.slot) == Some(slot)
+            && let Some(sound) = self.get_equip_sound(id, slot, equippable)
+        {
             let source = self.sound_source(id);
             let e = self.entity_mut(id);
             let (x, y, z) = (e.x(), e.y(), e.z());
             let seed = e.random.next_long();
             self.play_seeded_sound_at(None, x, y, z, sound, source, 1.0, 1.0, seed);
         }
+        if self.does_emit_equip_event(id, slot) {
+            self.entity_game_event(id, if equippable.is_some() { crate::world::level::gameevent::game_event::EQUIP } else { crate::world::level::gameevent::game_event::UNEQUIP });
+        }
+    }
+
+    fn does_emit_equip_event(&self, id: EntityId, slot: EquipmentSlot) -> bool {
+        if self.is_player(id) { super::mob::is_humanoid_armor(slot) } else { true }
     }
 
     pub fn can_use_slot(&self, id: EntityId, slot: EquipmentSlot) -> bool {
@@ -1354,6 +1364,7 @@ impl ServerLevel {
             self.set_health(id, health - damage);
             let absorption = self.absorption_amount(id);
             self.set_absorption_amount(id, absorption - damage);
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_DAMAGE);
         }
     }
 
@@ -1690,6 +1701,7 @@ impl ServerLevel {
             if self.is_player(id) {
                 self.award_stat(id, stats::ITEM_USED.get(protection_item.get_item().0), 1);
                 criteria_triggers::USED_TOTEM.trigger(self, id, &protection_item);
+                self.cause_use_vibration(&protection_item, id, crate::world::level::gameevent::game_event::ITEM_INTERACT_FINISH);
             }
             self.set_health(id, 1.0);
             for effect in &death_effects {
@@ -1735,6 +1747,7 @@ impl ServerLevel {
         }
         self.living_mut(id).dead = true;
         if source.causing_entity.is_none_or(|source_entity| self.killed_entity(source_entity, id, &source)) {
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_DIE);
             self.drop_all_death_loot(id, &source);
         }
         self.broadcast_entity_event(id, entity_event::DEATH);
@@ -2727,6 +2740,7 @@ impl ServerLevel {
                 let index = self.entity_mut(id).random.next_int_bounded(slots_with_gliders.len() as i32);
                 self.hurt_and_break(id, slots_with_gliders[index as usize], 1);
             }
+            self.entity_game_event(id, crate::world::level::gameevent::game_event::ELYTRA_GLIDE);
         }
     }
 

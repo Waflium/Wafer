@@ -1085,6 +1085,7 @@ fn tags(
         ("minecraft:fluid", "fluid_tags"),
         ("minecraft:entity_type", "entity_type_tags"),
         ("minecraft:damage_type", "damage_type_tags"),
+        ("minecraft:game_event", "game_event_tags"),
     ];
     let mut typed = String::new();
     let mut typed_registries = Vec::new();

@@ -344,6 +344,7 @@ impl RaidGardenGoal {
                     level.destroy_block(crops_pos, true, Some(mob), 512);
                 } else {
                     level.set_block(crops_pos, block_state.set(AGE_7, carrot_age - 1), UPDATE_CLIENTS);
+                    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, crops_pos, crate::world::level::gameevent::game_event::Context::of(Some(mob)));
                     level.level_event(None, crate::server::level::events::PARTICLES_AND_SOUND_DESTROY_BLOCK, crops_pos, block_state.id() as i32);
                 }
                 rabbit_mut(level.mob_mut(mob).expect("a rabbit")).more_carrot_ticks = MORE_CARROTS_DELAY;

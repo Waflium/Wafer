@@ -78,6 +78,7 @@ impl BlockBehaviour for FlowerPotBlock {
             return InteractionResult::CONSUME;
         }
         level.set_block(pos, new_contents, UPDATE_ALL);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
         level.award_stat(player, crate::stats::stats::POT_FLOWER, 1);
         consume_one(level, player, hand);
         InteractionResult::SUCCESS
@@ -94,6 +95,7 @@ impl BlockBehaviour for FlowerPotBlock {
             level.player_drop(player, plant.copy_with_count(left), false, crate::util::Prediction::Predicted);
         }
         level.set_block(pos, blocks::FLOWER_POT.default_state(), UPDATE_ALL);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
         InteractionResult::SUCCESS
     }
 

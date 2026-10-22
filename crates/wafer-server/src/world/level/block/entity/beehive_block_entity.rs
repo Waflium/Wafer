@@ -316,6 +316,7 @@ impl BeehiveBlockEntity {
             self.saved_flower_pos = Some(bee_saved_flower_pos);
         }
         level.play_sound_at(None, pos.x as f64, pos.y as f64, pos.z as f64, registry_id(registry::SOUND_EVENT, "minecraft:block.beehive.enter"), SoundSource::Blocks, 1.0, 1.0);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(bee), Some(block_entity_state)));
         level.discard(bee);
         level.block_entity_set_changed_static(pos, block_entity_state);
     }
@@ -375,7 +376,11 @@ fn release_occupant(
         e.snap_to(spawn_x, spawn_y, spawn_z, y_rot, x_rot);
     }
     level.play_sound(None, block_pos, registry_id(registry::SOUND_EVENT, "minecraft:block.beehive.exit"), SoundSource::Blocks, 1.0, 1.0);
-    level.add_fresh_entity(entity)
+    let id = entity.entity().id;
+    let added = level.add_fresh_entity(entity);
+    let block_state = level.block_state(block_pos);
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, block_pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(id), Some(block_state)));
+    added
 }
 
 fn tick_occupants(level: &mut ServerLevel, pos: BlockPos, state: BlockState, stored: &mut Vec<BeeData>, saved_flower_pos: Option<BlockPos>) {

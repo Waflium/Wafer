@@ -10,6 +10,7 @@ use crate::server::level::ServerLevel;
 use crate::server::level::chunk_level::FullChunkStatus;
 use crate::world::entity::{EntityId, LevelEntity, RemovalReason};
 use crate::world::level::chunk::storage::RegionStorage;
+use crate::world::level::gameevent::dynamic_game_event_listener::DynamicListenerAction;
 use crate::world::level::chunk::storage::entity_storage::EntityStorage;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -132,10 +133,12 @@ impl ServerLevel {
         if self.is_living(id) && self.is_transmitting_waypoint(id) {
             self.get_waypoint_manager().track_waypoint(self, id);
         }
+        self.update_dynamic_game_event_listener(id, DynamicListenerAction::Add);
     }
 
     fn stop_tracking(&mut self, id: EntityId) {
         self.untrack_entity(id);
+        self.update_dynamic_game_event_listener(id, DynamicListenerAction::Remove);
         let uuid = self.entities[&id].entity().uuid;
         self.entity_manager.visible_entity_storage.remove(id, uuid);
     }
@@ -399,6 +402,9 @@ impl ServerLevel {
 
     fn update_entity_status(&mut self, id: EntityId, previous: Visibility, status: Visibility) {
         if previous == status {
+            if status.is_accessible() {
+                self.update_dynamic_game_event_listener(id, DynamicListenerAction::Move);
+            }
             return;
         }
         let (was_accessible, is_accessible) = (previous.is_accessible(), status.is_accessible());
@@ -412,6 +418,9 @@ impl ServerLevel {
             self.stop_ticking(id);
         } else if !was_ticking && is_ticking {
             self.start_ticking(id);
+        }
+        if is_accessible {
+            self.update_dynamic_game_event_listener(id, DynamicListenerAction::Move);
         }
     }
 

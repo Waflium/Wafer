@@ -249,6 +249,7 @@ impl ServerLevel {
                 self.strong_knockback(id, entity);
             }
         }
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
         self.broadcast_entity_event(id, EVENT_ROAR);
     }
 

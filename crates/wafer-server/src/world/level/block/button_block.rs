@@ -1,4 +1,4 @@
-use wafer_core::{BlockPos, Direction};
+use wafer_core::{AABB, Axis, BlockPos, Direction};
 use wafer_data::properties::POWERED;
 use wafer_data::{Block, BlockState, registry, registry_id};
 
@@ -10,12 +10,14 @@ use super::{BlockBehaviour, BlockHitResult};
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
+use crate::world::entity::inside_block::InsideBlockEffects;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::{LevelAccessor, LevelReader};
 
 pub struct ButtonBlock {
     pub block: Block,
     pub ticks_to_stay_pressed: i32,
+    pub can_button_be_activated_by_arrows: bool,
     pub click_on: i32,
     pub click_off: i32,
 }
@@ -27,6 +29,7 @@ impl ButtonBlock {
         ButtonBlock {
             block,
             ticks_to_stay_pressed: fields["ticksToStayPressed"].as_i64().unwrap_or(20) as i32,
+            can_button_be_activated_by_arrows: fields["type"]["canButtonBeActivatedByArrows"].as_bool().unwrap_or(false),
             click_on: sound("buttonClickOn"),
             click_off: sound("buttonClickOff"),
         }
@@ -37,6 +40,7 @@ impl ButtonBlock {
         self.update_neighbours(state, level, pos);
         level.schedule_tick(pos, self.block, self.ticks_to_stay_pressed);
         self.play_sound(player, level, pos, true);
+        level.game_event_at(player, crate::world::level::gameevent::game_event::BLOCK_ACTIVATE, pos);
     }
 
     fn play_sound(&self, player: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos, pressed: bool) {
@@ -45,12 +49,23 @@ impl ButtonBlock {
     }
 
     fn check_pressed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
-        let should_be_pressed = false;
+        let first_arrow = if self.can_button_be_activated_by_arrows {
+            let shape = state.voxel_shape();
+            let bounds = AABB::new(shape.min(Axis::X), shape.min(Axis::Y), shape.min(Axis::Z), shape.max(Axis::X), shape.max(Axis::Y), shape.max(Axis::Z)).move_to_block(pos);
+            level.get_entities_matching(None, &bounds, |level, entity| level.as_projectile(entity).is_some_and(|projectile| projectile.abstract_arrow().is_some())).first().copied()
+        } else {
+            None
+        };
+        let should_be_pressed = first_arrow.is_some();
         let was_pressed = state.get(POWERED);
         if should_be_pressed != was_pressed {
             level.set_block_simple(pos, state.set(POWERED, should_be_pressed));
             self.update_neighbours(state, level, pos);
             self.play_sound(None, level, pos, should_be_pressed);
+            level.game_event_at(first_arrow, if should_be_pressed { crate::world::level::gameevent::game_event::BLOCK_ACTIVATE } else { crate::world::level::gameevent::game_event::BLOCK_DEACTIVATE }, pos);
+        }
+        if should_be_pressed {
+            level.schedule_tick(pos, self.block, self.ticks_to_stay_pressed);
         }
     }
 
@@ -121,6 +136,12 @@ impl BlockBehaviour for ButtonBlock {
 
     fn tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
         if state.get(POWERED) {
+            self.check_pressed(state, level, pos);
+        }
+    }
+
+    fn entity_inside(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _entity: EntityId, _effects: &mut InsideBlockEffects, _is_precise: bool) {
+        if self.can_button_be_activated_by_arrows && !state.get(POWERED) {
             self.check_pressed(state, level, pos);
         }
     }

@@ -3,12 +3,14 @@ use std::collections::HashMap;
 use wafer_core::fastutil::OpenHashMap;
 use wafer_core::hash_map::FastMap;
 
-use wafer_core::BlockPos;
+use wafer_core::{BlockPos, SectionPos};
 use wafer_protocol::nbt::Nbt;
 
 use super::LevelChunk;
 use crate::util::java_collections::JavaObjectHashSet;
 use crate::world::level::block::entity::{BlockEntity, BlockEntityTicker};
+use crate::world::level::gameevent::euclidean_game_event_listener_registry::EuclideanGameEventListenerRegistry;
+use crate::world::level::gameevent::game_event_listener::GameEventListener;
 
 #[derive(Clone, Default)]
 pub struct BlockEntityMap {
@@ -175,6 +177,7 @@ impl LevelChunk {
     pub fn add_and_register_block_entity(&mut self, entity: BlockEntity, tickers: &mut BlockEntityTickers) {
         let pos = entity.pos();
         if self.set_block_entity(entity) && self.is_in_level() {
+            self.add_game_event_listener(pos);
             self.update_block_entity_ticker(pos, tickers);
         }
     }
@@ -213,6 +216,9 @@ impl LevelChunk {
         if self.is_in_level()
             && let Some(mut entity) = self.block_entities.map.remove(&pos)
         {
+            if let Some(listener) = entity.game_event_listener() {
+                self.unregister_game_event_listener(SectionPos::block_to_section_coord(pos.y), listener);
+            }
             entity.set_removed();
             removed = Some(entity);
         }
@@ -263,7 +269,24 @@ impl LevelChunk {
 
     pub fn register_all_block_entities_after_level_load(&mut self, tickers: &mut BlockEntityTickers) {
         for pos in self.block_entities.map.keys_in_order() {
+            self.add_game_event_listener(pos);
             self.update_block_entity_ticker(pos, tickers);
+        }
+    }
+
+    pub fn get_listener_registry(&mut self, section_y: i32) -> &mut EuclideanGameEventListenerRegistry {
+        self.game_event_listener_registry_sections.entry(section_y).or_default()
+    }
+
+    pub fn unregister_game_event_listener(&mut self, section_y: i32, listener: GameEventListener) {
+        if self.get_listener_registry(section_y).unregister(listener) {
+            self.game_event_listener_registry_sections.remove(&section_y);
+        }
+    }
+
+    fn add_game_event_listener(&mut self, pos: BlockPos) {
+        if let Some(listener) = self.block_entities.map.get(&pos).and_then(BlockEntity::game_event_listener) {
+            self.get_listener_registry(SectionPos::block_to_section_coord(pos.y)).register(listener);
         }
     }
 

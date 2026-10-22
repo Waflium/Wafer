@@ -468,6 +468,7 @@ impl ServerLevel {
         let time = self.game_time;
         if time - self.armor_stand(id).expect("an armor stand").last_hit > WOBBLE_TIME && !should_kill {
             self.broadcast_entity_event(id, entity_event::ARMORSTAND_WOBBLE);
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::ENTITY_DAMAGE, source.causing_entity);
             self.armor_stand_mut(id).expect("an armor stand").last_hit = time;
         } else {
             self.armor_stand_broken_by_player(id, &source);
@@ -502,6 +503,7 @@ impl ServerLevel {
             self.armor_stand_kill(id, source.causing_entity);
         } else {
             self.set_health(id, health);
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::ENTITY_DAMAGE, source.causing_entity);
         }
     }
 
@@ -536,8 +538,9 @@ impl ServerLevel {
         self.play_sound_at(None, x, y, z, sound_event("minecraft:entity.armor_stand.break"), source, 1.0, 1.0);
     }
 
-    pub fn armor_stand_kill(&mut self, id: EntityId, _attributed_to: Option<EntityId>) {
+    pub fn armor_stand_kill(&mut self, id: EntityId, attributed_to: Option<EntityId>) {
         self.remove(id, RemovalReason::Killed);
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::ENTITY_DIE, Some(attributed_to.unwrap_or(id)));
     }
 
     pub fn armor_stand_ignore_explosion(&self, id: EntityId, should_affect_blocklike_entities: bool) -> bool {

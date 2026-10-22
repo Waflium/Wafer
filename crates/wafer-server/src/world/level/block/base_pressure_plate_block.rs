@@ -50,18 +50,18 @@ pub fn can_survive(level: &mut dyn LevelReader, pos: BlockPos) -> bool {
 pub fn tick(plate: &(impl BasePressurePlateBlock + ?Sized), state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
     let signal = plate.get_signal_for_state(state);
     if signal > 0 {
-        check_pressed(plate, level, pos, state, signal);
+        check_pressed(plate, None, level, pos, state, signal);
     }
 }
 
-pub fn entity_inside(plate: &(impl BasePressurePlateBlock + ?Sized), state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
+pub fn entity_inside(plate: &(impl BasePressurePlateBlock + ?Sized), state: BlockState, level: &mut ServerLevel, pos: BlockPos, entity: EntityId) {
     let signal = plate.get_signal_for_state(state);
     if signal == 0 {
-        check_pressed(plate, level, pos, state, signal);
+        check_pressed(plate, Some(entity), level, pos, state, signal);
     }
 }
 
-fn check_pressed(plate: &(impl BasePressurePlateBlock + ?Sized), level: &mut ServerLevel, pos: BlockPos, state: BlockState, old_signal: i32) {
+fn check_pressed(plate: &(impl BasePressurePlateBlock + ?Sized), source_entity: Option<EntityId>, level: &mut ServerLevel, pos: BlockPos, state: BlockState, old_signal: i32) {
     let signal = plate.get_signal_strength(level, pos);
     let was_pressed = old_signal > 0;
     let is_pressed = signal > 0;
@@ -72,8 +72,10 @@ fn check_pressed(plate: &(impl BasePressurePlateBlock + ?Sized), level: &mut Ser
     }
     if !is_pressed && was_pressed {
         level.play_sound(None, pos, plate.sounds().click_off, SoundSource::Blocks, 1.0, 1.0);
+        level.game_event_at(source_entity, crate::world::level::gameevent::game_event::BLOCK_DEACTIVATE, pos);
     } else if is_pressed && !was_pressed {
         level.play_sound(None, pos, plate.sounds().click_on, SoundSource::Blocks, 1.0, 1.0);
+        level.game_event_at(source_entity, crate::world::level::gameevent::game_event::BLOCK_ACTIVATE, pos);
     }
     if is_pressed {
         level.schedule_tick(pos, plate.block(), plate.get_pressed_time());

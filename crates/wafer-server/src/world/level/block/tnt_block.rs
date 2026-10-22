@@ -30,6 +30,7 @@ pub fn prime(level: &mut ServerLevel, pos: BlockPos, source: Option<EntityId>, i
     let (x, y, z) = (tnt.entity.x(), tnt.entity.y(), tnt.entity.z());
     level.add_fresh_entity(LevelEntity::PrimedTnt(tnt));
     level.play_sound_at(None, x, y, z, sound_event("minecraft:entity.tnt.primed"), SoundSource::Blocks, 1.0, 1.0);
+    level.game_event_at(source, crate::world::level::gameevent::game_event::PRIME_FUSE, pos);
     true
 }
 

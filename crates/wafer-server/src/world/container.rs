@@ -3,7 +3,8 @@ use wafer_core::{BlockPos, Direction};
 use wafer_data::BlockState;
 
 use crate::server::level::ServerLevel;
-use crate::world::entity::EntityId;
+use crate::world::entity::vehicle::minecart::abstract_minecart::MinecartKind;
+use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::abstract_furnace_block_entity::AbstractFurnaceBlockEntity;
 use crate::world::level::block::entity::brewing_stand_block_entity::BrewingStandBlockEntity;
@@ -397,7 +398,7 @@ impl ServerLevel {
     pub fn container_set_changed(&mut self, container: ContainerRef) {
         if let ContainerRef::Composter(pos) = container {
             if self.composter_container(pos) == ComposterContainer::Output {
-                crate::world::level::block::composter_block::empty(self, pos);
+                crate::world::level::block::composter_block::empty(None, self, pos);
             }
             return;
         }
@@ -545,9 +546,9 @@ impl ServerLevel {
             match self.get_block_entity(pos).map(|e| &e.kind) {
                 Some(BlockEntityKind::Chest(_) | BlockEntityKind::Barrel(_)) => {
                     let range = self.get_container_interaction_range(player);
-                    self.increment_openers(pos, range);
+                    self.increment_openers(player, pos, range);
                 }
-                Some(BlockEntityKind::ShulkerBox(_)) => self.shulker_box_start_open(pos),
+                Some(BlockEntityKind::ShulkerBox(_)) => self.shulker_box_start_open(pos, player),
                 _ => {}
             }
         }
@@ -561,14 +562,22 @@ impl ServerLevel {
             self.player_mut(owner).ender_chest_inventory.set_active_chest(None);
             return;
         }
+        if let ContainerRef::ChestVehicle(vehicle) = container {
+            match self.entities.get(&vehicle) {
+                Some(LevelEntity::Boat(boat)) if boat.container.is_some() => self.abstract_chest_boat_stop_open(vehicle, player),
+                Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, MinecartKind::Chest(_)) => self.minecart_chest_stop_open(vehicle, player),
+                _ => {}
+            }
+            return;
+        }
         for (pos, _) in container.parts() {
             let Some(entity) = self.get_block_entity(pos) else { continue };
             if entity.is_removed() || self.is_spectator(player) {
                 continue;
             }
             match self.get_block_entity(pos).map(|e| &e.kind) {
-                Some(BlockEntityKind::Chest(_) | BlockEntityKind::Barrel(_)) => self.decrement_openers(pos),
-                Some(BlockEntityKind::ShulkerBox(_)) => self.shulker_box_stop_open(pos),
+                Some(BlockEntityKind::Chest(_) | BlockEntityKind::Barrel(_)) => self.decrement_openers(player, pos),
+                Some(BlockEntityKind::ShulkerBox(_)) => self.shulker_box_stop_open(pos, player),
                 _ => {}
             }
         }

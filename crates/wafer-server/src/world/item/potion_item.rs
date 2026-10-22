@@ -24,6 +24,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
             level.send_particles("minecraft:splash", |_| {}, x, (pos.y + 1) as f64, z, 1, (0.0, 0.0, 0.0), 1.0);
         }
         level.play_sound(None, pos, sound_event("minecraft:item.bottle.empty"), SoundSource::Blocks, 1.0, 1.0);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PLACE, pos);
         level.set_block(pos, blocks::MUD.default_state(), UPDATE_ALL);
         return InteractionResult::SUCCESS;
     }

@@ -390,6 +390,7 @@ impl TurtleLayEggGoal {
                 let eggs = level.entity_mut(mob).random.next_int_bounded(4) + 1;
                 let egg_state = blocks::TURTLE_EGG.default_state().set(EGGS, eggs);
                 level.set_block(egg_pos, egg_state, UPDATE_ALL);
+                level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_PLACE, egg_pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(mob), Some(egg_state)));
                 let m = level.mob_mut(mob).expect("a turtle");
                 set_has_egg(&mut m.entity, false);
                 set_laying_egg(m, false);
@@ -519,6 +520,7 @@ impl ServerLevel {
             if turtle_egg_block::on_sand(self, pos) {
                 let below = self.block_state(pos.below());
                 self.level_event(None, crate::server::level::events::PARTICLES_AND_SOUND_DESTROY_BLOCK, pos, below.id() as i32);
+                self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_ACTION);
             }
         }
     }

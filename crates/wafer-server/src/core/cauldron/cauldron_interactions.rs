@@ -47,6 +47,7 @@ pub fn lower_fill_level(state: BlockState, level: &mut ServerLevel, pos: BlockPo
     let new_level = state.get(LEVEL_CAULDRON) - 1;
     let new_state = if new_level == 0 { blocks::CAULDRON.default_state() } else { state.set(LEVEL_CAULDRON, new_level) };
     level.set_block(pos, new_state, UPDATE_ALL);
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(new_state)));
 }
 
 impl Dispatcher {
@@ -77,6 +78,7 @@ impl Dispatcher {
                 level.award_stat(player, stats::ITEM_USED.get(used_item.0), 1);
                 level.set_block(pos, blocks::WATER_CAULDRON.default_state(), UPDATE_ALL);
                 level.play_sound(None, pos, sound("minecraft:item.bottle.empty"), SoundSource::Blocks, 1.0, 1.0);
+                level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PLACE, pos);
                 InteractionResult::SUCCESS
             }
             Dispatcher::Water if item == items::BUCKET => {
@@ -91,6 +93,7 @@ impl Dispatcher {
                 level.award_stat(player, stats::ITEM_USED.get(used_item.0), 1);
                 lower_fill_level(state, level, pos);
                 level.play_sound(None, pos, sound("minecraft:item.bottle.fill"), SoundSource::Blocks, 1.0, 1.0);
+                level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PICKUP, pos);
                 InteractionResult::SUCCESS
             }
             Dispatcher::Water if item == items::POTION => {
@@ -105,6 +108,7 @@ impl Dispatcher {
                 level.award_stat(player, stats::ITEM_USED.get(item_in_hand_after.0), 1);
                 level.set_block(pos, state.cycle(LEVEL_CAULDRON), UPDATE_ALL);
                 level.play_sound(None, pos, sound("minecraft:item.bottle.empty"), SoundSource::Blocks, 1.0, 1.0);
+                level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PLACE, pos);
                 InteractionResult::SUCCESS
             }
             Dispatcher::Water if item.is(&item_tags::BANNERS) => banner_interaction(state, level, pos, player, hand, item_in_hand),
@@ -146,6 +150,7 @@ fn fill_bucket(
     level.award_stat(player, stats::ITEM_USED.get(item_used.0), 1);
     level.set_block(pos, blocks::CAULDRON.default_state(), UPDATE_ALL);
     level.play_sound(None, pos, sound(sound_event), SoundSource::Blocks, 1.0, 1.0);
+    level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PICKUP, pos);
     InteractionResult::SUCCESS
 }
 
@@ -157,6 +162,7 @@ fn empty_bucket(level: &mut ServerLevel, pos: BlockPos, player: EntityId, hand: 
     level.award_stat(player, stats::ITEM_USED.get(item_used.0), 1);
     level.set_block(pos, new_state, UPDATE_ALL);
     level.play_sound(None, pos, sound(sound_event), SoundSource::Blocks, 1.0, 1.0);
+    level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PLACE, pos);
     InteractionResult::SUCCESS
 }
 

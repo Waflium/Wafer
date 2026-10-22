@@ -71,11 +71,11 @@ impl BlockBehaviour for PressurePlateBlock {
         state: BlockState,
         level: &mut ServerLevel,
         pos: BlockPos,
-        _entity: EntityId,
+        entity: EntityId,
         _effects: &mut InsideBlockEffects,
         _is_precise: bool,
     ) {
-        base::entity_inside(self, state, level, pos);
+        base::entity_inside(self, state, level, pos, entity);
     }
 
     fn affect_neighbors_after_removal(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, moved_by_piston: bool) {

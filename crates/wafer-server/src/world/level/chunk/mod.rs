@@ -9,6 +9,7 @@ pub mod proto_chunk;
 pub mod serialization;
 pub mod storage;
 
+use wafer_core::hash_map::FastMap;
 use wafer_core::{BlockPos, ChunkPos};
 use wafer_data::{BlockState, DimensionType, SyncedRegistry, blocks};
 use wafer_protocol::Writer;
@@ -17,6 +18,7 @@ use wafer_protocol::nbt::Nbt;
 pub use heightmap::{Heightmap, HeightmapType};
 use palette::{PaletteValue, PalettedContainer, Strategy};
 
+use crate::world::level::gameevent::euclidean_game_event_listener_registry::EuclideanGameEventListenerRegistry;
 use crate::world::level::levelgen::structure::structure::StructureHolder;
 use crate::world::level::levelgen::structure::structure_start::StructureStart;
 use crate::world::level::lighting::sky_light_sources::{ChunkBlocks, ChunkSkyLightSources};
@@ -218,6 +220,7 @@ pub struct LevelChunk {
     pub proto: Option<Box<proto_chunk::ProtoChunkData>>,
     pub structures: ChunkStructures,
     pub post_processing: Vec<Vec<u16>>,
+    pub game_event_listener_registry_sections: FastMap<i32, EuclideanGameEventListenerRegistry>,
 }
 
 impl LevelChunk {
@@ -242,6 +245,7 @@ impl LevelChunk {
             loaded: false,
             proto: None,
             structures: ChunkStructures::default(),
+            game_event_listener_registry_sections: FastMap::default(),
         }
     }
 

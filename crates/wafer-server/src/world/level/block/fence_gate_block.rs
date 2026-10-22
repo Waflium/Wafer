@@ -45,6 +45,7 @@ impl BlockBehaviour for FenceGateBlock {
             let open = state.get(OPEN);
             level.set_block_simple(pos, state.set(OPEN, !open));
             self.play_sound(None, level, pos, !open);
+            level.game_event_at_with(if open { crate::world::level::gameevent::game_event::BLOCK_CLOSE } else { crate::world::level::gameevent::game_event::BLOCK_OPEN }, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
         }
         level.block_on_explosion_hit(state, pos, explosion, stacks);
     }
@@ -97,6 +98,7 @@ impl BlockBehaviour for FenceGateBlock {
             level.set_block(pos, state, UPDATE_CLIENTS | UPDATE_IMMEDIATE);
         }
         self.play_sound(Some(player), level, pos, state.get(OPEN));
+        level.game_event_at(Some(player), if state.get(OPEN) { crate::world::level::gameevent::game_event::BLOCK_OPEN } else { crate::world::level::gameevent::game_event::BLOCK_CLOSE }, pos);
         InteractionResult::SUCCESS
     }
 
@@ -106,6 +108,7 @@ impl BlockBehaviour for FenceGateBlock {
             level.set_block(pos, state.set(POWERED, has_power).set(OPEN, has_power), UPDATE_CLIENTS);
             if state.get(OPEN) != has_power {
                 self.play_sound(None, level, pos, has_power);
+                level.game_event_at(None, if has_power { crate::world::level::gameevent::game_event::BLOCK_OPEN } else { crate::world::level::gameevent::game_event::BLOCK_CLOSE }, pos);
             }
         }
     }

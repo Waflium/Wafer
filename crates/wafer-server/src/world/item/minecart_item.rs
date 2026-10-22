@@ -21,6 +21,8 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
     let spawn_pos = Vec3::new(pos.x as f64 + 0.5, pos.y as f64 + 0.0625 + offset, pos.z as f64 + 0.5);
     let Some(cart) = create_minecart(spawn_pos, item_stack.item.name(), &item_stack) else { return InteractionResult::Fail };
     level.add_fresh_entity(cart);
+    let below_state = level.block_state(pos.below());
+    level.game_event_at_with(crate::world::level::gameevent::game_event::ENTITY_PLACE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), Some(below_state)));
     item_stack.shrink(1);
     level.player_mut(player).update_item_in_hand(hand, &item_stack);
     InteractionResult::SUCCESS

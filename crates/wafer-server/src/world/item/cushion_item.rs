@@ -60,6 +60,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
     let e = level.entity(id);
     let (x, y, z) = (e.x(), e.y(), e.z());
     level.play_sound_at(None, x, y, z, registry_id(registry::SOUND_EVENT, "minecraft:entity.cushion.place"), SoundSource::Blocks, 0.75, 0.8);
+    level.entity_game_event_by(id, crate::world::level::gameevent::game_event::ENTITY_PLACE, Some(player));
     item_stack.shrink(1);
     level.player_mut(player).update_item_in_hand(hand, &item_stack);
     InteractionResult::SUCCESS

@@ -232,6 +232,7 @@ impl ServerLevel {
 
     fn creaking_heart_spawn_protector(&mut self, pos: BlockPos) -> Option<EntityId> {
         let spawned_creaking = spawn_util::try_spawn_mob(self, &entity_types::CREAKING, EntitySpawnReason::Spawner, pos, ATTEMPTS_PER_SPAWN, SPAWN_RANGE_XZ, SPAWN_RANGE_Y, Strategy::OnTopOfColliderNoLeaves, true)?;
+        self.entity_game_event(spawned_creaking, crate::world::level::gameevent::game_event::ENTITY_PLACE);
         self.broadcast_entity_event(spawned_creaking, 60);
         self.creaking_set_transient(spawned_creaking, pos);
         Some(spawned_creaking)
@@ -246,6 +247,8 @@ impl ServerLevel {
                 for _ in 0..number_of_clumps {
                     if let Some(block_pos) = self.creaking_heart_spread_resin(pos) {
                         self.play_sound(None, block_pos, sound("minecraft:block.resin.place"), SoundSource::Blocks, 1.0, 1.0);
+                        let heart_state = self.chunks.block_entity_ref(pos).map(|entity| entity.block_state());
+                        self.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_PLACE, block_pos, crate::world::level::gameevent::game_event::Context::of_state(heart_state));
                     }
                 }
             }

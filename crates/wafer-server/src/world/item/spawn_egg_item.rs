@@ -37,6 +37,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
         }
         level.block_entity_set_changed(pos);
         level.send_block_updated(pos, block_state, block_state);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
         if level.player(player).game_mode.game_type != GameType::Creative {
             item_stack.shrink(1);
             level.player_mut(player).update_item_in_hand(hand, &item_stack);
@@ -54,6 +55,7 @@ fn spawn_mob(level: &mut ServerLevel, entity_type: i32, user: Option<EntityId>, 
     let name = registry::ENTITY_TYPE[entity_type as usize];
     if level.spawn_entity_type_from_stack(name, Some(item_stack), spawn_pos, crate::world::entity::entity_spawn_reason::EntitySpawnReason::SpawnItemUse, try_move_down, moved_up).is_some() {
         item_stack.consume(1, level, user);
+        level.game_event_at(user, crate::world::level::gameevent::game_event::ENTITY_PLACE, spawn_pos);
         InteractionResult::SUCCESS
     } else {
         InteractionResult::Fail

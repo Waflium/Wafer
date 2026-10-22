@@ -59,13 +59,14 @@ impl BlockBehaviour for SnifferEggBlock {
         }
     }
 
-    fn on_place(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _old_state: BlockState, _moved_by_piston: bool) {
+    fn on_place(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _old_state: BlockState, _moved_by_piston: bool) {
         let boosted = hatch_boost(level, pos);
         if boosted {
             level.level_event(None, PARTICLES_EGG_CRACK, pos, 0);
         }
         let hatch_time = if boosted { BOOSTED_HATCH_TIME_TICKS } else { REGULAR_HATCH_TIME_TICKS };
         let progression_tick_delay = hatch_time / 3;
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_PLACE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
         let delay = progression_tick_delay + level.random.next_int_bounded(RANDOM_HATCH_OFFSET_TICKS);
         level.schedule_tick(pos, self.block, delay);
     }

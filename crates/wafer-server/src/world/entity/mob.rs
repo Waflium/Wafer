@@ -2495,7 +2495,13 @@ impl ServerLevel {
     pub fn ate(&mut self, id: EntityId) {
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Sheep(_))) {
             self.sheep_ate(id);
+        } else {
+            self.mob_ate(id);
         }
+    }
+
+    pub fn mob_ate(&mut self, id: EntityId) {
+        self.entity_game_event(id, crate::world::level::gameevent::game_event::EAT);
     }
 
     pub fn is_saddled(&self, id: EntityId) -> bool {
@@ -2540,6 +2546,7 @@ impl ServerLevel {
         self.hurt_and_break(player, hand.as_equipment_slot(), 1);
         let equipment_spawn_offset = self.mob(id).expect("a mob").passenger_attachment();
         self.living_set_item_slot(id, slot, ItemStack::empty());
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::SHEAR, Some(player));
         self.spawn_at_location_with_offset(id, item_stack_to_shear.clone(), equipment_spawn_offset);
         crate::advancements::triggers::criteria_triggers::PLAYER_SHEARED_EQUIPMENT.trigger(self, player, &item_stack_to_shear, id);
     }
@@ -3594,7 +3601,7 @@ fn rotlerp(a: f32, b: f32, max: f32) -> f32 {
     a + diff
 }
 
-fn is_humanoid_armor(slot: EquipmentSlot) -> bool {
+pub fn is_humanoid_armor(slot: EquipmentSlot) -> bool {
     matches!(slot, EquipmentSlot::Feet | EquipmentSlot::Legs | EquipmentSlot::Chest | EquipmentSlot::Head)
 }
 

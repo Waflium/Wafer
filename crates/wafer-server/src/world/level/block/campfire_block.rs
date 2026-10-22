@@ -69,6 +69,7 @@ impl BlockBehaviour for CampfireBlock {
         }
         if item_stack.get_item().is(&item_tags::DOUSES_CAMPFIRES) && state.get(LIT) {
             level.level_event(None, SOUND_EXTINGUISH_FIRE, pos, 0);
+            douse(Some(player), level, pos);
             level.set_block(pos, state.set(LIT, false), UPDATE_ALL);
             let slot = if hand == InteractionHand::MainHand { EquipmentSlot::Mainhand } else { EquipmentSlot::Offhand };
             level.hurt_and_break(player, slot, 1);
@@ -108,6 +109,7 @@ impl BlockBehaviour for CampfireBlock {
             let is_lit = state.get(LIT);
             if is_lit {
                 level.play_sound(pos, registry_id(registry::SOUND_EVENT, "minecraft:block.fire.extinguish"), SoundSource::Blocks, 1.0, 1.0);
+                douse(None, level, pos);
             }
             level.set_block(pos, state.set(WATERLOGGED, true).set(LIT, false), UPDATE_ALL);
             let delay = tick_delay(level, fluid_state.fluid);
@@ -149,6 +151,10 @@ pub fn is_smokey_pos(level: &mut ServerLevel, pos: BlockPos) -> bool {
 
 pub fn can_light(state: BlockState) -> bool {
     state.is(&block_tags::CAMPFIRES) && state.has(WATERLOGGED) && state.has(LIT) && !state.get(WATERLOGGED) && !state.get(LIT)
+}
+
+pub fn douse(source: Option<EntityId>, level: &mut dyn LevelAccessor, pos: BlockPos) {
+    level.game_event(crate::world::level::gameevent::game_event::BLOCK_CHANGE, wafer_core::Vec3::at_center_of(pos), crate::world::level::gameevent::game_event::Context::of(source));
 }
 
 pub fn is_lit_campfire(block_state: BlockState) -> bool {

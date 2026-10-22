@@ -79,7 +79,11 @@ fn reset_tilt(state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
 }
 
 fn set_tilt(state: BlockState, level: &mut ServerLevel, pos: BlockPos, tilt: Tilt) {
+    let previous_tilt = state.get(TILT);
     level.set_block(pos, state.set(TILT, tilt), UPDATE_CLIENTS);
+    if tilt != Tilt::Unstable && tilt != previous_tilt {
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
+    }
 }
 
 impl BlockBehaviour for BigDripleafBlock {

@@ -178,11 +178,14 @@ impl BlockTransformer {
                 level.play_sound(player, pos, sound, SoundSource::Blocks, 1.0, 1.0);
             }
             transform_data.particle.send(level, player, pos);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(player, Some(updated_shape)));
             if transform_data.transform_type == TransformType::CopperChest
                 && old_block_state.block().is_instance_of("CopperChestBlock")
                 && old_block_state.get(CHEST_TYPE) != ChestType::Single
             {
                 let neighbor_pos = pos.relative(get_connected_direction(old_block_state));
+                let neighbor_state = level.block_state(neighbor_pos);
+                level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, neighbor_pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(player, Some(neighbor_state)));
                 transform_data.particle.send(level, player, neighbor_pos);
             }
             return InteractionResult::SUCCESS;

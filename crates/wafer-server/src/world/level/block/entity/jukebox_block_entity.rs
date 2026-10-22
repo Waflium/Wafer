@@ -97,6 +97,8 @@ impl ServerLevel {
         let Some(state) = self.jukebox_block_state(pos) else { return };
         if self.block_state(pos) == state {
             self.set_block(pos, state.set(HAS_RECORD, was_inserted), UPDATE_CLIENTS);
+            let block_state = self.jukebox_block_state(pos);
+            self.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(block_state));
         }
     }
 

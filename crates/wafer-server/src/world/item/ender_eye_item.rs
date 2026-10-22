@@ -69,6 +69,7 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
     let mut eye_of_ender = EyeOfEnder::new(x, y + e.dimensions.height as f64 * 0.5, z);
     eye_of_ender.set_item(&item_stack);
     eye_of_ender.signal_to(Vec3::at_lower_corner_of(nearest_map_feature));
+    level.game_event(crate::world::level::gameevent::game_event::PROJECTILE_SHOOT, eye_of_ender.entity.position(), crate::world::level::gameevent::game_event::Context::of(Some(player)));
     level.add_fresh_entity(LevelEntity::EyeOfEnder(eye_of_ender));
     crate::advancements::triggers::criteria_triggers::USED_ENDER_EYE.trigger(level, player, nearest_map_feature);
     let pitch = mth::lerp_f(level.random.next_float(), 0.33, 0.5);

@@ -28,6 +28,7 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
     }
     let this = item_stack.item;
     level.add_fresh_entity(boat);
+    level.game_event_from_entity(Some(player), crate::world::level::gameevent::game_event::ENTITY_PLACE, hit_result.location);
     item_stack.consume(1, level, Some(player));
     level.award_stat(player, crate::stats::stats::ITEM_USED.get(this.0), 1);
     (InteractionResult::SUCCESS, Some(item_stack))

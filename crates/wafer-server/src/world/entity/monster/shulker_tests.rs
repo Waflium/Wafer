@@ -97,7 +97,7 @@ fn opening_shulker_boxes_push_entities_out() {
     level.set_block(pos, blocks::SHULKER_BOX.default_state().set(wafer_data::properties::FACING, wafer_core::Direction::Up), UPDATE_ALL);
     let chicken = level.spawn_entity_type("minecraft:chicken", BlockPos::new(0, -59, 0), crate::world::entity::entity_spawn_reason::EntitySpawnReason::Command).unwrap();
     level.entity_mut(chicken).set_pos(Vec3::new(0.5, -59.0, 0.5));
-    level.shulker_box_start_open(pos);
+    level.shulker_box_start_open(pos, _player);
     level.tick();
     assert!(level.entity(chicken).y() > -59.0, "the chicken was not pushed: {}", level.entity(chicken).y());
 }

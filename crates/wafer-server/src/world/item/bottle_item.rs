@@ -20,6 +20,7 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
     if level.fluid_state(pos).is(&fluid_tags::WATER) {
         let position = level.player(player).entity.position();
         level.play_sound_at(Some(player), position.x, position.y, position.z, sound_event("minecraft:item.bottle.fill"), SoundSource::Neutral, 1.0, 1.0);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::FLUID_PICKUP, pos);
         let water = PotionContents::create_item_stack(items::POTION, "minecraft:water");
         let result = turn_bottle_into_item(level, player, hand, item_stack, water);
         return (InteractionResult::SUCCESS, Some(result));

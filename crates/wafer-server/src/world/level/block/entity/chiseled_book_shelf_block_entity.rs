@@ -88,6 +88,7 @@ impl ServerLevel {
             updated_state = updated_state.set(slot_property, !bookshelf.items[slot].is_empty());
         }
         self.set_block(pos, updated_state, UPDATE_ALL);
+        self.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(updated_state)));
     }
 
     pub fn chiseled_book_shelf_remove_item(&mut self, pos: BlockPos, slot: usize) -> ItemStack {

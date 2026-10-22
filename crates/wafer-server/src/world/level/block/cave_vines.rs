@@ -23,6 +23,8 @@ pub fn use_vine(source_entity: Option<EntityId>, state: BlockState, level: &mut 
     let pitch = mth::random_between(&mut level.random, 0.8, 1.2);
     let sound = registry_id(registry::SOUND_EVENT, "minecraft:block.cave_vines.pick_berries");
     level.play_sound(None, pos, sound, SoundSource::Blocks, 1.0, pitch);
-    level.set_block(pos, state.set(BERRIES, false), UPDATE_CLIENTS);
+    let new_state = state.set(BERRIES, false);
+    level.set_block(pos, new_state, UPDATE_CLIENTS);
+    level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(source_entity, Some(new_state)));
     InteractionResult::SUCCESS
 }

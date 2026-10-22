@@ -24,6 +24,7 @@ use crate::world::level::server_level_accessor::ServerLevelAccessor;
 
 pub const ID_SIZE: usize = 16;
 const XP_REWARD: i32 = 5;
+pub const TICKS_PER_FLAP: i32 = 25;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 0.5)
     .with_eye_height(0.175)
     .with_passenger_attachments(&[Vec3::new(0.0, 0.3375f32 as f64, 0.0)])
@@ -64,6 +65,10 @@ fn phantom_mut(mob: &mut Mob) -> &mut Phantom {
         MobKind::Phantom(phantom) => phantom,
         _ => unreachable!("a phantom"),
     }
+}
+
+pub fn get_unique_flap_tick_offset(id: EntityId) -> i32 {
+    id.wrapping_mul(3)
 }
 
 pub fn get_phantom_size(entity: &Entity) -> i32 {

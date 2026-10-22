@@ -3,7 +3,7 @@ use crate::commands::brigadier::{CommandContext, CommandSyntaxException};
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::Component;
 use crate::server::Server;
-use crate::world::entity::{EntityId, RemovalReason};
+use crate::world::entity::EntityId;
 
 pub fn kill_self(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let entity = source.entity_or_exception()?;
@@ -20,10 +20,9 @@ fn kill(server: &mut Server, source: &CommandSourceStack, victims: &[EntityId]) 
     for &entity in victims {
         tracker.track(server.entity_display_name(entity));
         let level = server.entity_level_mut(entity);
-        if level.is_living(entity) {
-            level.kill(entity);
-        } else {
-            level.remove(entity, RemovalReason::Killed);
+        let living = level.is_living(entity);
+        level.kill(entity);
+        if !living {
             level.remove_entity(entity);
         }
     }

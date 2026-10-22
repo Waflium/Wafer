@@ -135,7 +135,9 @@ impl ServerLevel {
         }
         item.entity.sync_velocity = true;
         item.health = (item.health as f32 - damage) as i32;
-        if item.health <= 0 {
+        let dead = item.health <= 0;
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::ENTITY_DAMAGE, source.causing_entity);
+        if dead {
             self.discard(id);
         }
         true

@@ -28,8 +28,9 @@ fn swap_single_item(level: &mut ServerLevel, item_stack: ItemStack, player: Enti
     let new_inventory_item = if infinite && removed_item.is_empty() { item_stack.copy() } else { removed_item.clone() };
     let p = level.player_mut(player);
     let selected = p.inventory.selected_slot();
+    let interact_vibrations = new_inventory_item.get(crate::world::item::component::USE_EFFECTS).is_none_or(|use_effects| use_effects.get("interact_vibrations").and_then(wafer_protocol::nbt::Nbt::as_i64) != Some(0));
     p.inventory.slots[selected] = (!new_inventory_item.is_empty()).then_some(new_inventory_item);
-    level.shelf_set_changed(pos);
+    level.shelf_set_changed_with(pos, interact_vibrations.then_some(crate::world::level::gameevent::game_event::ITEM_INTERACT_FINISH));
     !removed_item.is_empty()
 }
 
@@ -59,7 +60,7 @@ impl ShelfBlock {
                     }
                 }
             }
-            level.shelf_set_changed(shelf_pos);
+            level.shelf_set_changed_with(shelf_pos, Some(crate::world::level::gameevent::game_event::ENTITY_INTERACT));
         }
         any_swapped
     }
@@ -112,6 +113,7 @@ impl BlockBehaviour for ShelfBlock {
             }
             level.set_block(pos, new_state, UPDATE_ALL);
             play_sound(level, pos, if signal { "minecraft:block.shelf.activate" } else { "minecraft:block.shelf.deactivate" });
+            level.game_event_at_with(if signal { crate::world::level::gameevent::game_event::BLOCK_ACTIVATE } else { crate::world::level::gameevent::game_event::BLOCK_DEACTIVATE }, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(new_state)));
         }
     }
 

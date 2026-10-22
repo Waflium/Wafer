@@ -308,9 +308,18 @@ impl ServerLevel {
 
     pub fn sniffer_tick(&mut self, id: EntityId) {
         if get_state(self.entity(id)) == State::Digging {
+            self.sniffer_emit_digging_particles(id);
             self.sniffer_drop_seed(id);
         }
         self.mob_tick(id);
+    }
+
+    fn sniffer_emit_digging_particles(&mut self, id: EntityId) {
+        let e = self.entity(id);
+        if e.tick_count % 10 == 0 {
+            let head = get_head_block(e);
+            self.game_event_at_with(crate::world::level::gameevent::game_event::ENTITY_ACTION, head, crate::world::level::gameevent::game_event::Context::of(Some(id)));
+        }
     }
 
     pub fn sniffer_mob_interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand) -> InteractionResult {

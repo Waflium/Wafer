@@ -35,6 +35,7 @@ fn remove_book(level: &mut ServerLevel, pos: BlockPos, player: EntityId, slot: u
     if level.player_mut(player).pick_up(retrieved_book.clone()) > 0 {
         level.player_drop(player, retrieved_book, false, Prediction::ServerOnly);
     }
+    level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
 }
 
 pub struct ChiseledBookShelfBlock;

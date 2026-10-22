@@ -32,8 +32,14 @@ impl BlockBehaviour for CauldronBlock {
     fn handle_precipitation(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, precipitation: Precipitation) {
         if should_handle_precipitation(level, precipitation) {
             match precipitation {
-                Precipitation::Rain => drop(level.set_block(pos, blocks::WATER_CAULDRON.default_state(), UPDATE_ALL)),
-                Precipitation::Snow => drop(level.set_block(pos, blocks::POWDER_SNOW_CAULDRON.default_state(), UPDATE_ALL)),
+                Precipitation::Rain => {
+                    level.set_block(pos, blocks::WATER_CAULDRON.default_state(), UPDATE_ALL);
+                    level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
+                }
+                Precipitation::Snow => {
+                    level.set_block(pos, blocks::POWDER_SNOW_CAULDRON.default_state(), UPDATE_ALL);
+                    level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
+                }
                 Precipitation::None => {}
             }
         }
@@ -51,10 +57,12 @@ impl BlockBehaviour for CauldronBlock {
         if fluid == Fluid::Water {
             let new_state = blocks::WATER_CAULDRON.default_state();
             level.set_block(pos, new_state, UPDATE_ALL);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(new_state)));
             level.level_event(None, SOUND_DRIP_WATER_INTO_CAULDRON, pos, 0);
         } else if fluid == Fluid::Lava {
             let new_state = blocks::LAVA_CAULDRON.default_state();
             level.set_block(pos, new_state, UPDATE_ALL);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(new_state)));
             level.level_event(None, SOUND_DRIP_LAVA_INTO_CAULDRON, pos, 0);
         }
     }
@@ -115,7 +123,9 @@ impl BlockBehaviour for LayeredCauldronBlock {
 
     fn handle_precipitation(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, precipitation: Precipitation) {
         if should_handle_precipitation(level, precipitation) && state.get(LEVEL_CAULDRON) != 3 && precipitation == self.precipitation_type {
-            level.set_block(pos, state.cycle(LEVEL_CAULDRON), UPDATE_ALL);
+            let new_state = state.cycle(LEVEL_CAULDRON);
+            level.set_block(pos, new_state, UPDATE_ALL);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(new_state)));
         }
     }
 
@@ -131,6 +141,7 @@ impl BlockBehaviour for LayeredCauldronBlock {
         if state.get(LEVEL_CAULDRON) != 3 {
             let new_state = state.set(LEVEL_CAULDRON, state.get(LEVEL_CAULDRON) + 1);
             level.set_block(pos, new_state, UPDATE_ALL);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(new_state)));
             level.level_event(None, SOUND_DRIP_WATER_INTO_CAULDRON, pos, 0);
         }
     }

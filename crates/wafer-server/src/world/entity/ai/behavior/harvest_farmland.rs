@@ -141,6 +141,7 @@ impl Behavior for HarvestFarmland {
                     {
                         let place = block.default_state();
                         level.set_block(above_farmland_pos, place, UPDATE_ALL);
+                        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_PLACE, above_farmland_pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(body), Some(place)));
                         ok = true;
                     }
                     if ok {

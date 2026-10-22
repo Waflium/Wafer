@@ -468,7 +468,7 @@ impl ServerLevel {
     }
 
     pub fn shear_off_all_leash_connections(&mut self, id: EntityId, player: Option<EntityId>) -> bool {
-        let dropped = self.drop_all_leash_connections(id);
+        let dropped = self.drop_all_leash_connections(id, player);
         if dropped {
             let pos = self.entity(id).block_position();
             let source = match player {
@@ -481,7 +481,7 @@ impl ServerLevel {
         dropped
     }
 
-    pub fn drop_all_leash_connections(&mut self, id: EntityId) -> bool {
+    pub fn drop_all_leash_connections(&mut self, id: EntityId, player: Option<EntityId>) -> bool {
         let leashables = self.leashable_leashed_to(id);
         let mut dropped = !leashables.is_empty();
         if self.is_leashable(id) && self.is_leashed(id) {
@@ -490,6 +490,9 @@ impl ServerLevel {
         }
         for leashable in leashables {
             self.drop_leash(leashable);
+        }
+        if dropped {
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::SHEAR, player);
         }
         dropped
     }

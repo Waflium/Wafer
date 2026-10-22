@@ -42,6 +42,7 @@ pub fn flint_and_steel_use_on(level: &mut ServerLevel, player: EntityId, hand: I
     level.play_sound(Some(player), target, sound_event("minecraft:item.flintandsteel.use"), SoundSource::Blocks, 1.0, pitch);
     let new_state = if target == pos { state.set(LIT, true) } else { base_fire_block::get_state(level, target) };
     level.set_block(target, new_state, UPDATE_ALL_IMMEDIATE);
+    level.game_event_at(Some(player), if target == pos { crate::world::level::gameevent::game_event::BLOCK_CHANGE } else { crate::world::level::gameevent::game_event::BLOCK_PLACE }, pos);
     if target != pos {
         crate::advancements::triggers::criteria_triggers::PLACED_BLOCK.trigger(level, player, target, &ctx.item);
     }
@@ -55,6 +56,7 @@ pub fn fire_charge_use_on(level: &mut ServerLevel, player: EntityId, hand: Inter
     if can_light(state) {
         play_fire_charge_sound(level, pos);
         level.set_block(pos, state.set(LIT, true), UPDATE_ALL);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
     } else {
         pos = pos.relative(ctx.clicked_face());
         if !base_fire_block::can_be_placed_at(level, pos, ctx.horizontal_direction()) {
@@ -63,6 +65,7 @@ pub fn fire_charge_use_on(level: &mut ServerLevel, player: EntityId, hand: Inter
         play_fire_charge_sound(level, pos);
         let fire = base_fire_block::get_state(level, pos);
         level.set_block(pos, fire, UPDATE_ALL);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_PLACE, pos);
     }
     let p = level.player_mut(player);
     let slot = p.hand_slot(hand);

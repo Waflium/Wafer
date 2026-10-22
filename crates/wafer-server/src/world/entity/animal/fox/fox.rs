@@ -958,6 +958,7 @@ impl FoxEatBerriesGoal {
         }
         level.entity_play_sound(mob, sound_event("minecraft:block.sweet_berry_bush.pick_berries"), 1.0, 1.0);
         level.set_block(block_pos, state.set(AGE_3, 1), UPDATE_CLIENTS);
+        level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, block_pos, crate::world::level::gameevent::game_event::Context::of(Some(mob)));
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {

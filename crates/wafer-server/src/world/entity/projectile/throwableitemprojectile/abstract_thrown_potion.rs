@@ -93,9 +93,11 @@ impl ServerLevel {
         if block_state.is(&block_tags::FIRE) {
             self.destroy_block(pos, false, Some(id), 512);
         } else if abstract_candle_block::is_lit(block_state) {
-            abstract_candle_block::extinguish(block_state, self, pos);
+            abstract_candle_block::extinguish(None, block_state, self, pos);
         } else if campfire_block::is_lit_campfire(block_state) {
             self.level_event(None, SOUND_EXTINGUISH_FIRE, pos, 0);
+            let owner = self.projectile_get_owner(id);
+            campfire_block::douse(owner, self, pos);
             self.set_block(pos, block_state.set(LIT, false), UPDATE_ALL);
         }
     }

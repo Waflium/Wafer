@@ -138,6 +138,10 @@ impl ItemStack {
         self.get(ty).is_some()
     }
 
+    pub fn interact_vibrations(&self) -> bool {
+        self.item != items::AIR && self.components.get(dc::USE_EFFECTS).is_some_and(|use_effects| use_effects.get("interact_vibrations").and_then(Nbt::as_i64) != Some(0))
+    }
+
     pub fn attack_animation(&self) -> SwingAnimation {
         self.get(dc::ATTACK_ANIMATION).map_or(SwingAnimation::DEFAULT, SwingAnimation::from_nbt)
     }

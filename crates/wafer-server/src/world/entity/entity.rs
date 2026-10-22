@@ -22,6 +22,7 @@ use crate::server::level::game_mode::GameType;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::attribute::environment_attributes;
 use crate::world::level::BlockGetter;
+use crate::world::level::gameevent::game_event::{self, Context};
 use crate::world::level::block;
 use crate::world::level::block::state::block_behaviour::{self, RenderShape};
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};
@@ -77,6 +78,10 @@ impl MovementEmission {
 
     pub fn emits_sounds(self) -> bool {
         self == MovementEmission::All
+    }
+
+    pub fn emits_events(self) -> bool {
+        self == MovementEmission::Events || self == MovementEmission::All
     }
 }
 
@@ -1085,16 +1090,18 @@ impl ServerLevel {
     }
 
     fn movement_emission(&self, id: EntityId) -> MovementEmission {
+        if let Some(player) = self.players.get(&id) {
+            return if player.abilities_flying() || player.entity.on_ground && player.entity.is_discrete() { MovementEmission::None } else { MovementEmission::All };
+        }
         match self.entities.get(&id) {
-            Some(super::LevelEntity::Projectile(projectile)) if matches!(projectile.kind, super::projectile::projectile::ProjectileKind::FireworkRocket(_)) => MovementEmission::All,
-            Some(super::LevelEntity::AreaEffectCloud(_)) => MovementEmission::All,
+            Some(super::LevelEntity::ExperienceOrb(_) | super::LevelEntity::FallingBlock(_) | super::LevelEntity::Item(_) | super::LevelEntity::PrimedTnt(_) | super::LevelEntity::EndCrystal(_)) => MovementEmission::None,
+            Some(super::LevelEntity::Projectile(projectile)) if projectile.abstract_arrow().is_some() || matches!(projectile.kind, super::projectile::projectile::ProjectileKind::FishingHook(_)) => MovementEmission::None,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Silverfish(_) | super::mob::MobKind::Endermite(_) | super::mob::MobKind::Breeze(_)) => MovementEmission::Events,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Bat(_)) || mob.is_squid() => MovementEmission::Events,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Guardian(_) | super::mob::MobKind::ElderGuardian(_)) => MovementEmission::Events,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Shulker(_)) => MovementEmission::None,
-            _ if self.is_living(id) => MovementEmission::All,
-            _ if self.is_vehicle_entity(id) => MovementEmission::Events,
-            _ => MovementEmission::None,
+            Some(super::LevelEntity::Boat(_) | super::LevelEntity::Minecart(_)) => MovementEmission::Events,
+            _ => MovementEmission::All,
         }
     }
 
@@ -1610,6 +1617,11 @@ impl ServerLevel {
             let fall_distance = e.fall_distance;
             if fall_distance > 0.0 {
                 block::of(on_state).fall_on(self, on_state, pos, id, fall_distance);
+                if let Some(e) = self.entity_ref(id) {
+                    let position = e.position();
+                    let affected_state = e.main_supporting_block_pos.map_or(on_state, |block_pos| self.block_state(block_pos));
+                    self.game_event(game_event::HIT_GROUND, position, Context::of_entity_and_state(Some(id), Some(affected_state)));
+                }
             }
             if self.entity_ref(id).is_some() {
                 self.reset_fall_distance(id);
@@ -1807,6 +1819,7 @@ impl ServerLevel {
             let fall_distance = self.entity(id).fall_distance;
             block::of(effect_state).bounce_on(self, effect_state, pos, id, fall_distance);
             if self.entity_ref(id).is_some() {
+                self.entity_game_event(id, game_event::BOUNCE);
                 self.entity_mut(id).sync_position = true;
             }
         }
@@ -1830,9 +1843,9 @@ impl ServerLevel {
         e.fly_dist += moved_distance;
         if e.move_dist > e.next_step && !supporting_state.is_air() {
             let only_effect_state = supporting_pos == effect_pos;
-            let mut produced = self.vibration_and_sound_effects_from_block(id, effect_pos, effect_state, emission.emits_sounds(), movement);
+            let mut produced = self.vibration_and_sound_effects_from_block(id, effect_pos, effect_state, emission.emits_sounds(), only_effect_state, movement);
             if !only_effect_state {
-                produced |= self.vibration_and_sound_effects_from_block(id, supporting_pos, supporting_state, false, movement);
+                produced |= self.vibration_and_sound_effects_from_block(id, supporting_pos, supporting_state, false, emission.emits_events(), movement);
             }
             if produced {
                 let next_step = self.next_step(id);
@@ -1843,6 +1856,9 @@ impl ServerLevel {
                 if emission.emits_sounds() {
                     self.water_swim_sound(id);
                 }
+                if emission.emits_events() {
+                    self.entity_game_event(id, game_event::SWIM);
+                }
             }
         } else if supporting_state.is_air() {
             self.process_flapping_movement(id);
@@ -1852,22 +1868,31 @@ impl ServerLevel {
     fn process_flapping_movement(&mut self, id: EntityId) {
         if self.is_flapping(id) {
             self.on_flap(id);
+            if self.movement_emission(id).emits_events() {
+                self.entity_game_event(id, game_event::FLAP);
+            }
         }
     }
 
     fn is_flapping(&self, id: EntityId) -> bool {
-        if self.is_parrot(id) {
-            self.parrot_is_flapping(id)
-        } else if self.is_bee(id) {
-            self.bee_is_flapping(id)
-        } else {
-            false
+        let Some(mob) = self.mob(id) else { return false };
+        match mob.kind {
+            super::mob::MobKind::Parrot(_) => self.parrot_is_flapping(id),
+            super::mob::MobKind::Bee(_) => self.bee_is_flapping(id),
+            super::mob::MobKind::Chicken(_) => self.chicken_is_flapping(id),
+            super::mob::MobKind::Bat(_) => !mob.is_resting() && mob.entity.tick_count % 10 == 0,
+            super::mob::MobKind::Allay(_) => !mob.entity.on_ground,
+            super::mob::MobKind::Phantom(_) => (super::monster::phantom::get_unique_flap_tick_offset(id).wrapping_add(mob.entity.tick_count)) % super::monster::phantom::TICKS_PER_FLAP == 0,
+            super::mob::MobKind::Vex(_) => mob.entity.tick_count % super::monster::vex::TICKS_PER_FLAP == 0,
+            _ => false,
         }
     }
 
     fn on_flap(&mut self, id: EntityId) {
         if self.is_parrot(id) {
             self.parrot_on_flap(id);
+        } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Chicken(_))) {
+            self.chicken_on_flap(id);
         }
     }
 
@@ -1889,15 +1914,20 @@ impl ServerLevel {
         (self.entity(id).move_dist as i32 + 1) as f32
     }
 
-    fn vibration_and_sound_effects_from_block(&mut self, id: EntityId, pos: BlockPos, state: BlockState, should_sound: bool, movement: Vec3) -> bool {
+    fn vibration_and_sound_effects_from_block(&mut self, id: EntityId, pos: BlockPos, state: BlockState, should_sound: bool, should_vibrate: bool, movement: Vec3) -> bool {
         if state.is_air() {
             return false;
         }
         let climbable = Self::is_state_climbable(state);
+        let on_rails = matches!(self.entities.get(&id), Some(LevelEntity::Minecart(minecart)) if minecart.is_on_rails());
         let e = self.entity(id);
-        if (e.on_ground || climbable || e.is_crouching() && movement.y == 0.0) && !e.is_swimming() {
+        if (e.on_ground || climbable || e.is_crouching() && movement.y == 0.0 || on_rails) && !e.is_swimming() {
             if should_sound {
                 self.walking_step_sound(id, pos, state);
+            }
+            if should_vibrate {
+                let position = self.entity(id).position();
+                self.game_event(game_event::STEP, position, Context::of_entity_and_state(Some(id), Some(state)));
             }
             return true;
         }
@@ -2331,6 +2361,7 @@ impl ServerLevel {
             e.random.next_double();
             i += 1;
         }
+        self.entity_game_event(id, game_event::SPLASH);
     }
 
     pub fn update_swimming(&mut self, id: EntityId) {
@@ -2741,6 +2772,7 @@ impl ServerLevel {
         }
         let interaction_result = self.check_and_handle_important_interactions(id, player, hand);
         if interaction_result.consumes_action() {
+            self.entity_game_event_by(id, game_event::ENTITY_INTERACT, Some(player));
             return interaction_result;
         }
         let super_reaction = self.entity_interact(id, player, hand, location);
@@ -2748,7 +2780,12 @@ impl ServerLevel {
             return super_reaction;
         }
         let interaction_result = self.mob_interact(id, player, hand);
-        if interaction_result.consumes_action() { interaction_result } else { InteractionResult::Pass }
+        if interaction_result.consumes_action() {
+            self.entity_game_event_by(id, game_event::ENTITY_INTERACT, Some(player));
+            interaction_result
+        } else {
+            InteractionResult::Pass
+        }
     }
 
     pub fn entity_interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, _location: Vec3) -> InteractionResult {
@@ -2766,6 +2803,8 @@ impl ServerLevel {
                     }
                 }
                 if any_leashed {
+                    let pos = self.entity(id).block_position();
+                    self.game_event_at_with(game_event::ENTITY_ACTION, pos, Context::of(Some(player)));
                     self.entity_play_sound(id, sound_event("minecraft:item.lead.tied"), 1.0, 1.0);
                     return InteractionResult::SUCCESS_SERVER.without_item();
                 }
@@ -2791,6 +2830,7 @@ impl ServerLevel {
                 } else {
                     self.drop_leash(id);
                 }
+                self.entity_game_event_by(id, game_event::ENTITY_INTERACT, Some(player));
                 self.entity_play_sound(id, sound_event("minecraft:item.lead.untied"), 1.0, 1.0);
                 return InteractionResult::SUCCESS.without_item();
             }
@@ -2850,6 +2890,13 @@ impl ServerLevel {
         }
     }
 
+    pub fn dampens_vibrations(&self, id: EntityId) -> bool {
+        match self.entities.get(&id) {
+            Some(LevelEntity::Item(item)) => item.item.get_item().is(&wafer_data::item_tags::DAMPENS_VIBRATIONS),
+            _ => false,
+        }
+    }
+
     pub fn is_stepping_carefully(&self, id: EntityId) -> bool {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(super::mob::MobKind::Cat(_)) => self.cat_is_stepping_carefully(id),
@@ -2875,7 +2922,16 @@ impl ServerLevel {
             self.block_attached_entity_kill(id, Some(id));
             return;
         }
-        self.hurt_server(id, DamageSource::new(damage_types::GENERIC_KILL), f32::MAX);
+        if self.is_living(id) {
+            self.hurt_server(id, DamageSource::new(damage_types::GENERIC_KILL), f32::MAX);
+            return;
+        }
+        self.entity_kill(id);
+    }
+
+    pub fn entity_kill(&mut self, id: EntityId) {
+        self.remove(id, RemovalReason::Killed);
+        self.entity_game_event(id, game_event::ENTITY_DIE);
     }
 
     pub fn set_remaining_fire_ticks(&mut self, id: EntityId, ticks: i32) {
@@ -3676,6 +3732,8 @@ impl ServerLevel {
         self.entity_mut(id).vehicle = Some(entity_to_ride);
         self.add_passenger(entity_to_ride, id);
         if send_event_and_triggers {
+            let vehicle_position = self.entity(entity_to_ride).position();
+            self.game_event_from_entity(Some(id), game_event::ENTITY_MOUNT, vehicle_position);
             for passenger in self.indirect_passengers(entity_to_ride) {
                 if self.is_player(passenger) {
                     crate::advancements::triggers::criteria_triggers::START_RIDING_TRIGGER.trigger(self, passenger);
@@ -3783,6 +3841,12 @@ impl ServerLevel {
         if let Some(old) = old_vehicle {
             self.entity_mut(id).vehicle = None;
             self.remove_passenger(old, id);
+            let removal_reason = self.entity(id).removal;
+            if removal_reason.is_none_or(RemovalReason::should_destroy)
+                && let Some(old_position) = self.entity_ref(old).map(Entity::position)
+            {
+                self.game_event_from_entity(Some(id), game_event::ENTITY_DISMOUNT, old_position);
+            }
         }
         if self.is_player(id) {
             self.entity_mut(id).boarding_cooldown = 0;

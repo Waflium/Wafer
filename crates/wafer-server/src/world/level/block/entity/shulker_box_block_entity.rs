@@ -6,6 +6,7 @@ use wafer_protocol::nbt::Nbt;
 use super::base_container_block_entity::{BaseContainerBlockEntity, save_all_items};
 use super::BlockEntityKind;
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::level::update_flags::UPDATE_ALL;
 
@@ -139,7 +140,7 @@ impl ServerLevel {
         }
     }
 
-    pub fn shulker_box_start_open(&mut self, pos: BlockPos) {
+    pub fn shulker_box_start_open(&mut self, pos: BlockPos, user: EntityId) {
         let Some(shulker) = self.shulker_box(pos) else { return };
         if shulker.open_count < 0 {
             shulker.open_count = 0;
@@ -149,18 +150,20 @@ impl ServerLevel {
         let block = self.block_state(pos).block();
         self.block_event(pos, block, EVENT_SET_OPEN_COUNT, open_count);
         if open_count == 1 {
+            self.game_event_at(Some(user), crate::world::level::gameevent::game_event::CONTAINER_OPEN, pos);
             let pitch = self.random.next_float() * 0.1 + 0.9;
             self.play_sound(None, pos, registry_id(registry::SOUND_EVENT, "minecraft:block.shulker_box.open"), SoundSource::Blocks, 0.5, pitch);
         }
     }
 
-    pub fn shulker_box_stop_open(&mut self, pos: BlockPos) {
+    pub fn shulker_box_stop_open(&mut self, pos: BlockPos, user: EntityId) {
         let Some(shulker) = self.shulker_box(pos) else { return };
         shulker.open_count -= 1;
         let open_count = shulker.open_count;
         let block = self.block_state(pos).block();
         self.block_event(pos, block, EVENT_SET_OPEN_COUNT, open_count);
         if open_count <= 0 {
+            self.game_event_at(Some(user), crate::world::level::gameevent::game_event::CONTAINER_CLOSE, pos);
             let pitch = self.random.next_float() * 0.1 + 0.9;
             self.play_sound(None, pos, registry_id(registry::SOUND_EVENT, "minecraft:block.shulker_box.close"), SoundSource::Blocks, 0.5, pitch);
         }

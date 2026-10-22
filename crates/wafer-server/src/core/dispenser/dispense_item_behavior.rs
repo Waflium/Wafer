@@ -221,6 +221,7 @@ fn empty_contents(level: &mut ServerLevel, item: Item, pos: wafer_core::BlockPos
     let Some(block) = item.info().block else { return false };
     if level.is_in_valid_bounds(pos) && level.block_state(pos).is_air() {
         level.set_block(pos, block.default_state(), UPDATE_ALL);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PLACE, pos);
         let fields: serde_json::Value = serde_json::from_str(item.info().fields).unwrap_or_default();
         if let Some(place_sound) = fields["placeSound"].as_str() {
             level.play_sound(None, pos, registry_id(registry::SOUND_EVENT, place_sound), SoundSource::Blocks, 1.0, 1.0);
@@ -254,7 +255,10 @@ fn execute_bucket(level: &mut ServerLevel, source: &BlockSource, dispensed: Item
         return default_dispense_item_behavior::execute(level, source, dispensed);
     }
     match behaviour.pickup_block(None, level, target, block_state).filter(|pickup| !pickup.is_empty()) {
-        Some(pickup) => consume_with_remainder(level, source, dispensed, ItemStack::new(pickup.item, 1)),
+        Some(pickup) => {
+            level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PICKUP, target);
+            consume_with_remainder(level, source, dispensed, ItemStack::new(pickup.item, 1))
+        }
         None => default_dispense_item_behavior::execute(level, source, dispensed),
     }
 }
@@ -265,6 +269,7 @@ fn execute_wither_skeleton_skull(level: &mut ServerLevel, source: &BlockSource, 
     if level.block_state(target).is_air() && crate::world::level::block::wither_skull_block::can_spawn_mob(level, target, &dispensed) {
         let rotation = crate::world::level::block::rotation_segment::convert_to_segment_from_direction(direction);
         level.set_block(target, blocks::WITHER_SKELETON_SKULL.default_state().set(wafer_data::properties::ROTATION_16, rotation), UPDATE_ALL);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_PLACE, target);
         crate::world::level::block::wither_skull_block::check_spawn(level, target);
         dispensed.shrink(1);
         *success = true;
@@ -278,6 +283,7 @@ fn execute_carved_pumpkin(level: &mut ServerLevel, source: &BlockSource, mut dis
     let target = target(source);
     if level.block_state(target).is_air() && carved_pumpkin_block::can_spawn_golem(level, target) {
         level.set_block(target, blocks::CARVED_PUMPKIN.default_state(), UPDATE_ALL);
+        level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_PLACE, target);
         dispensed.shrink(1);
         *success = true;
     } else {
@@ -307,6 +313,7 @@ fn execute_tnt(level: &mut ServerLevel, source: &BlockSource, mut dispensed: Ite
     let (x, y, z) = (tnt.entity.x(), tnt.entity.y(), tnt.entity.z());
     level.add_fresh_entity(LevelEntity::PrimedTnt(tnt));
     level.play_sound_at(None, x, y, z, registry_id(registry::SOUND_EVENT, "minecraft:entity.tnt.primed"), SoundSource::Blocks, 1.0, 1.0);
+    level.game_event_at(None, crate::world::level::gameevent::game_event::ENTITY_PLACE, target);
     dispensed.shrink(1);
     *success = true;
     dispensed
@@ -319,9 +326,11 @@ fn execute_glass_bottle(level: &mut ServerLevel, source: &BlockSource, dispensed
     if state.is(&block_tags::BEEHIVES) && state.has(LEVEL_HONEY) && state.block().is_instance_of("BeehiveBlock") && state.get(LEVEL_HONEY) >= 5 {
         beehive_block::release_bees_and_reset_honey_level(level, state, target, None, BeeReleaseStatus::BeeReleased);
         *success = true;
+        level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PICKUP, source.pos);
         consume_with_remainder(level, source, dispensed, ItemStack::new(items::HONEY_BOTTLE, 1))
     } else if level.fluid_state(target).is(&fluid_tags::WATER) {
         *success = true;
+        level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PICKUP, source.pos);
         consume_with_remainder(level, source, dispensed, water_potion())
     } else {
         default_dispense_item_behavior::execute(level, source, dispensed)
@@ -334,7 +343,7 @@ fn execute_glowstone(level: &mut ServerLevel, source: &BlockSource, mut dispense
     *success = true;
     if block_state.is_block(blocks::RESPAWN_ANCHOR) {
         if block_state.get(CHARGE) != 4 {
-            respawn_anchor_block::charge(level, pos, block_state);
+            respawn_anchor_block::charge(None, level, pos, block_state);
             dispensed.shrink(1);
         } else {
             *success = false;
@@ -376,6 +385,7 @@ fn execute_potion(level: &mut ServerLevel, source: &BlockSource, dispensed: Item
         level.send_particles("minecraft:splash", |_| {}, x, (pos.y + 1) as f64, z, 1, (0.0, 0.0, 0.0), 1.0);
     }
     level.play_sound(None, pos, registry_id(registry::SOUND_EVENT, "minecraft:item.bottle.empty"), SoundSource::Blocks, 1.0, 1.0);
+    level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PLACE, pos);
     level.set_block(target, blocks::MUD.default_state(), UPDATE_ALL);
     consume_with_remainder(level, source, dispensed, ItemStack::new(items::GLASS_BOTTLE, 1))
 }

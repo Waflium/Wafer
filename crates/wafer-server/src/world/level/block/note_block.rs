@@ -82,9 +82,10 @@ impl NoteBlock {
         state.set(NOTEBLOCK_INSTRUMENT, new_below)
     }
 
-    fn play_note(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
+    fn play_note(&self, source: Option<EntityId>, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
         if works_above_note_block(state.get(NOTEBLOCK_INSTRUMENT)) || level.block_state(pos.above()).is_air() {
             level.block_event(pos, self.block, 0, 0);
+            level.game_event_at(source, crate::world::level::gameevent::game_event::NOTE_BLOCK_PLAY, pos);
         }
     }
 }
@@ -110,7 +111,7 @@ impl BlockBehaviour for NoteBlock {
         let signal = level.has_neighbor_signal(pos);
         if signal != state.get(POWERED) {
             if signal {
-                self.play_note(state, level, pos);
+                self.play_note(None, state, level, pos);
             }
             level.set_block_simple(pos, state.set(POWERED, signal));
         }
@@ -136,13 +137,13 @@ impl BlockBehaviour for NoteBlock {
     fn use_without_item(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
         let state = state.cycle(NOTE);
         level.set_block_simple(pos, state);
-        self.play_note(state, level, pos);
+        self.play_note(Some(player), state, level, pos);
         level.award_stat(player, crate::stats::stats::TUNE_NOTEBLOCK, 1);
         InteractionResult::SUCCESS
     }
 
     fn attack(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId) {
-        self.play_note(state, level, pos);
+        self.play_note(Some(player), state, level, pos);
         level.award_stat(player, crate::stats::stats::PLAY_NOTEBLOCK, 1);
     }
 

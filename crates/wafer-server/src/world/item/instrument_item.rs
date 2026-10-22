@@ -34,4 +34,6 @@ fn get_instrument(item_stack: &ItemStack) -> Option<Instrument> {
 fn play(level: &mut ServerLevel, player: EntityId, instrument: &Instrument) {
     let volume = instrument.range / 16.0;
     level.play_sound_from_entity(Some(player), player, instrument.sound_event.clone(), SoundSource::Records, volume, 1.0);
+    let position = level.entity(player).position();
+    level.game_event(crate::world::level::gameevent::game_event::INSTRUMENT_PLAY, position, crate::world::level::gameevent::game_event::Context::of(Some(player)));
 }

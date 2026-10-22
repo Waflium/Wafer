@@ -41,6 +41,7 @@ impl DriedGhastBlock {
         if !self.is_ready_to_spawn(state) {
             level.play_sound(None, position, sound("minecraft:block.dried_ghast.transition"), SoundSource::Blocks, 1.0, 1.0);
             level.set_block(position, state.set(DRIED_GHAST_HYDRATION_LEVELS, self.get_hydration_level(state) + 1), UPDATE_CLIENTS);
+            level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, position, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
         } else {
             self.spawn_ghastling(level, position, state);
         }
@@ -73,6 +74,7 @@ impl BlockBehaviour for DriedGhastBlock {
             let hydration_level = self.get_hydration_level(state);
             if hydration_level > 0 {
                 level.set_block(position, state.set(DRIED_GHAST_HYDRATION_LEVELS, hydration_level - 1), UPDATE_CLIENTS);
+                level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, position, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
             }
         }
     }

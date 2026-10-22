@@ -6,7 +6,6 @@ use super::mirror::Mirror;
 use super::rotation::Rotation;
 use super::{BlockBehaviour, trip_wire_hook_block};
 use crate::server::level::ServerLevel;
-use crate::server::level::events::PARTICLES_AND_SOUND_DESTROY_BLOCK;
 use crate::world::InteractionHand;
 use crate::world::entity::EntityId;
 use crate::world::entity::inside_block::InsideBlockEffects;
@@ -144,9 +143,9 @@ impl BlockBehaviour for TripWireBlock {
         let main_hand = level.player(player).item_in_hand(InteractionHand::MainHand);
         if main_hand.is_some_and(|stack| !stack.is_empty() && stack.item == items::SHEARS) {
             level.set_block(pos, state.set(DISARMED, true), UPDATE_NONE);
+            level.game_event_at(Some(player), crate::world::level::gameevent::game_event::SHEAR, pos);
         }
-        level.level_event(Some(player), PARTICLES_AND_SOUND_DESTROY_BLOCK, pos, state.id() as i32);
-        state
+        super::block_player_will_destroy(level, pos, state, player)
     }
 
     fn entity_inside(

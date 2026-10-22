@@ -122,11 +122,12 @@ impl ServerLevel {
         }
     }
 
-    pub fn block_attached_entity_kill(&mut self, id: EntityId, _attributed_to: Option<EntityId>) {
+    pub fn block_attached_entity_kill(&mut self, id: EntityId, attributed_to: Option<EntityId>) {
         if let Some(LevelEntity::ItemFrame(_)) = self.entities.get(&id) {
             self.item_frame_on_killed(id);
         }
         self.remove(id, RemovalReason::Killed);
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::ENTITY_DIE, Some(attributed_to.unwrap_or(id)));
     }
 
     pub fn block_attached_entity_skip_attack_interaction(&mut self, id: EntityId, source: EntityId) -> bool {

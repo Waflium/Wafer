@@ -36,6 +36,7 @@ impl TrapDoorBlock {
         let pitch = level.random.next_float() * 0.1 + 0.9;
         let sound = if opening { self.set_type.trapdoor_open } else { self.set_type.trapdoor_close };
         level.play_sound(player, pos, sound, SoundSource::Blocks, 1.0, pitch);
+        level.game_event_at(player, if opening { crate::world::level::gameevent::game_event::BLOCK_OPEN } else { crate::world::level::gameevent::game_event::BLOCK_CLOSE }, pos);
     }
 }
 

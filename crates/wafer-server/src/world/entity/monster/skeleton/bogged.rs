@@ -76,6 +76,7 @@ impl ServerLevel {
         let item_stack = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
         if item_stack.is(items::SHEARS) && self.bogged_ready_for_shearing(id) {
             self.bogged_shear(id, SoundSource::Players, &item_stack);
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::SHEAR, Some(player));
             self.hurt_and_break(player, hand.as_equipment_slot(), 1);
             InteractionResult::SUCCESS
         } else {

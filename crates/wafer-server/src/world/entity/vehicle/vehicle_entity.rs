@@ -69,6 +69,7 @@ impl ServerLevel {
         e.sync_velocity = true;
         let damage = get_damage(e) + damage * 10.0;
         set_damage(e, damage);
+        self.entity_game_event_by(id, crate::world::level::gameevent::game_event::ENTITY_DAMAGE, source.causing_entity);
         let creative_player = source.is_creative_player(self);
         if (creative_player || !(get_damage(self.entity(id)) > 40.0)) && !self.should_source_destroy(id, &source) {
             if creative_player {

@@ -148,6 +148,7 @@ impl ServerLevel {
         }
         if item_stack.is(items::SHEARS) && self.mushroom_cow_ready_for_shearing(id) {
             self.mushroom_cow_shear(id, SoundSource::Players, &item_stack);
+            self.entity_game_event_by(id, crate::world::level::gameevent::game_event::SHEAR, Some(player));
             self.hurt_and_break(player, hand.as_equipment_slot(), 1);
             return InteractionResult::SUCCESS;
         }

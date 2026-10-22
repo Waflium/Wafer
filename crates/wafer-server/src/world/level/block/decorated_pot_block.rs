@@ -83,18 +83,20 @@ impl BlockBehaviour for DecoratedPotBlock {
             level.play_sound(None, pos, sound("minecraft:block.decorated_pot.insert"), SoundSource::Blocks, 1.0, 0.7 + 0.5 * pitch_bend);
             level.send_particles("minecraft:dust_plume", |_| {}, pos.x as f64 + 0.5, pos.y as f64 + 1.2, pos.z as f64 + 0.5, 7, (0.0, 0.0, 0.0), 0.0);
             level.block_entity_set_changed(pos);
+            level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
             InteractionResult::SUCCESS
         } else {
             InteractionResult::TryWithEmptyHand
         }
     }
 
-    fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
+    fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
         if level.decorated_pot(pos).is_none() {
             return InteractionResult::Pass;
         }
         level.play_sound(None, pos, sound("minecraft:block.decorated_pot.insert_fail"), SoundSource::Blocks, 1.0, 1.0);
         level.decorated_pot_wobble(pos, WobbleStyle::Negative);
+        level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
         InteractionResult::SUCCESS
     }
 
