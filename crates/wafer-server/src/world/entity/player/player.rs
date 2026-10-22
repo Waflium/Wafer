@@ -260,7 +260,7 @@ impl ServerLevel {
             let was_hurt = self.hurt_server(entity, damage_source, total_damage);
             if was_hurt {
                 let knockback = self.get_knockback(id, entity, &damage_source) + if knockback_attack { 0.5 } else { 0.0 };
-                self.cause_extra_knockback(id, entity, knockback, old_movement);
+                self.cause_extra_knockback(id, entity, knockback, old_movement, &damage_source, total_damage, true);
                 if sweep_attack {
                     self.do_sweep_attack(id, entity, base_damage, &damage_source, attack_strength_scale);
                 }
@@ -296,9 +296,9 @@ impl ServerLevel {
         let old_movement = self.entity(target).delta_movement;
         let was_hurt = deals_damage && self.hurt_server(target, damage_source, total_damage);
         if deals_knockback {
-            self.cause_extra_knockback(id, target, 0.4, old_movement);
+            self.cause_extra_knockback(id, target, 0.4, old_movement, &damage_source, total_damage, false);
             let knockback = self.get_knockback(id, target, &damage_source);
-            self.cause_extra_knockback(id, target, knockback, old_movement);
+            self.cause_extra_knockback(id, target, knockback, old_movement, &damage_source, total_damage, true);
         }
         let mut dismounted = false;
         if dismounts && self.is_passenger(target) && !wafer_data::entity_type_tags::CANNOT_BE_DISMOUNTED_BY_ITEM_USAGE.contains(self.entity(target).entity_type as usize) {
@@ -398,12 +398,13 @@ impl ServerLevel {
         }
     }
 
-    fn cause_extra_knockback(&mut self, id: EntityId, entity: EntityId, knockback_amount: f32, old_movement: Vec3) {
+    #[allow(clippy::too_many_arguments)]
+    fn cause_extra_knockback(&mut self, id: EntityId, entity: EntityId, knockback_amount: f32, old_movement: Vec3, damage_source: &DamageSource, damage: f32, comes_from_effect: bool) {
         if knockback_amount > 0.0 {
             let y_rot = self.entity(id).y_rot * mth::DEG_TO_RAD;
             let (sin, cos) = (mth::sin(y_rot as f64) as f64, mth::cos(y_rot as f64) as f64);
             if self.is_living(entity) {
-                self.knockback(entity, knockback_amount as f64, sin, -cos);
+                self.knockback(entity, knockback_amount as f64, sin, -cos, damage_source, damage, comes_from_effect);
             } else {
                 self.entity_mut(entity).push(-sin * knockback_amount as f64, 0.1, cos * knockback_amount as f64);
             }
@@ -434,7 +435,7 @@ impl ServerLevel {
                 if self.hurt_server(nearby, *damage_source, enchanted_damage) {
                     let y_rot = self.entity(id).y_rot * mth::DEG_TO_RAD;
                     let (sin, cos) = (mth::sin(y_rot as f64) as f64, mth::cos(y_rot as f64) as f64);
-                    self.knockback(nearby, 0.4f32 as f64, sin, -cos);
+                    self.knockback(nearby, 0.4f32 as f64, sin, -cos, damage_source, enchanted_damage, false);
                     self.do_post_attack_effects(nearby, damage_source);
                 }
             }

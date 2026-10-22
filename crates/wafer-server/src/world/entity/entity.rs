@@ -695,6 +695,9 @@ impl Entity {
     }
 
     pub fn fluid_jump_threshold(&self) -> f64 {
+        if self.entity_type == super::entity_types::SULFUR_CUBE.id {
+            return self.dimensions.height as f64 * 0.2;
+        }
         if self.entity_type == super::entity_types::BREEZE.id {
             return self.dimensions.eye_height as f64;
         }
@@ -944,6 +947,9 @@ impl ServerLevel {
     }
 
     pub fn is_invulnerable_to_piercing_weapon(&self, id: EntityId) -> bool {
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) {
+            return self.entity(id).is_invulnerable() && !self.mob(id).expect("a sulfur cube").sulfur_cube_is_primed();
+        }
         self.entity(id).is_invulnerable()
     }
 
@@ -995,7 +1001,7 @@ impl ServerLevel {
     }
 
     pub fn get_entity_light_level_dependent_magic_value(&self, id: EntityId) -> f32 {
-        if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::MagmaCube(_))) {
+        if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::MagmaCube(_) | super::mob::MobKind::SulfurCube(_))) {
             return super::monster::cubemob::magma_cube::MagmaCube::get_light_level_dependent_magic_value();
         }
         if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Blaze(_))) {
@@ -1030,6 +1036,9 @@ impl ServerLevel {
     }
 
     pub fn max_up_step(&self, id: EntityId) -> f32 {
+        if let Some(step) = self.mob(id).and_then(|mob| mob.sulfur_cube().and(mob.sulfur_cube_max_up_step())) {
+            return step;
+        }
         if self.is_living(id) { self.attribute_value(id, Attribute::StepHeight) as f32 } else { 0.0 }
     }
 
@@ -1151,6 +1160,7 @@ impl ServerLevel {
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Hoglin(_) | super::mob::MobKind::Shulker(_)) => SoundSource::Hostile,
             Some(super::LevelEntity::Projectile(projectile)) if matches!(projectile.kind, super::projectile::projectile::ProjectileKind::ShulkerBullet(_)) => SoundSource::Hostile,
+            Some(super::LevelEntity::Mob(mob)) if mob.sulfur_cube().is_some() => SoundSource::Neutral,
             Some(super::LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Ghast(_)) => super::monster::ghast::Ghast::get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Phantom(_)) => super::monster::phantom::Phantom::get_sound_source(),
@@ -1898,7 +1908,7 @@ impl ServerLevel {
     }
 
     pub fn omnidirectional_air_mover(&self, id: EntityId) -> bool {
-        self.is_parrot(id) || self.is_bee(id)
+        self.is_parrot(id) || self.is_bee(id) || self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some() && mob.has_body_item())
     }
 
     fn next_step(&self, id: EntityId) -> f32 {
@@ -1954,6 +1964,9 @@ impl ServerLevel {
 
     fn play_step_sound(&mut self, id: EntityId, pos: BlockPos, state: BlockState) {
         if self.is_bee(id) {
+            return;
+        }
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some() && mob.has_body_item()) {
             return;
         }
         if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::IronGolem(_))) {
@@ -2668,6 +2681,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Bat(_)) => return self.bat_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Ghast(_)) => return self.ghast_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Creaking(_)) => return self.creaking_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::SulfurCube(_)) => return self.sulfur_cube_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Warden(_)) => return self.warden_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Guardian(_) | super::mob::MobKind::ElderGuardian(_)) => return self.guardian_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
@@ -3077,6 +3091,7 @@ impl ServerLevel {
                     super::mob::MobKind::Guardian(_) => "Guardian",
                     super::mob::MobKind::ElderGuardian(_) => "ElderGuardian",
                     super::mob::MobKind::Slime(_) => "Slime",
+                    super::mob::MobKind::SulfurCube(_) => "SulfurCube",
                     super::mob::MobKind::MagmaCube(_) => "MagmaCube",
                     super::mob::MobKind::Wolf(_) => "Wolf",
                     super::mob::MobKind::Bat(_) => "Bat",

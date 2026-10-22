@@ -78,7 +78,8 @@ pub fn load_default_data_from_bucket_tag(entity: &mut Mob, tag: &Nbt) {
 
 pub fn bucket_mob_pickup(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, pickup_entity: EntityId) -> Option<InteractionResult> {
     let item_stack = level.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
-    if !(can_be_picked_up_with_bucket(&item_stack) && level.is_alive(pickup_entity)) {
+    let can_be_picked_up = if level.mob(pickup_entity).is_some_and(|mob| mob.sulfur_cube().is_some()) { item_stack.get_item() == items::BUCKET } else { can_be_picked_up_with_bucket(&item_stack) };
+    if !(can_be_picked_up && level.is_alive(pickup_entity)) {
         return None;
     }
     let mob = level.mob(pickup_entity).expect("a bucketable mob");
@@ -102,7 +103,7 @@ pub fn can_be_picked_up_with_bucket(item_stack: &ItemStack) -> bool {
 
 impl Mob {
     pub fn is_bucketable(&self) -> bool {
-        self.is_abstract_fish() || matches!(self.kind, MobKind::Axolotl(_))
+        self.is_abstract_fish() || matches!(self.kind, MobKind::Axolotl(_) | MobKind::SulfurCube(_))
     }
 
     pub fn save_to_bucket_tag(&self, bucket: &mut ItemStack) {
@@ -111,6 +112,7 @@ impl Mob {
             MobKind::TropicalFish(_) => self.tropical_fish_save_to_bucket_tag(bucket),
             MobKind::Axolotl(_) => Axolotl::save_to_bucket_tag(self, bucket),
             MobKind::Tadpole(_) => Tadpole::save_to_bucket_tag(self, bucket),
+            MobKind::SulfurCube(_) => self.sulfur_cube_save_to_bucket_tag(bucket),
             _ => self.abstract_fish_save_to_bucket_tag(bucket),
         }
     }
@@ -119,6 +121,7 @@ impl Mob {
         match self.kind {
             MobKind::Axolotl(_) => Axolotl::load_from_bucket_tag(self, tag),
             MobKind::Tadpole(_) => Tadpole::load_from_bucket_tag(self, tag),
+            MobKind::SulfurCube(_) => self.sulfur_cube_load_from_bucket_tag(tag),
             _ => self.abstract_fish_load_from_bucket_tag(tag),
         }
     }
@@ -131,6 +134,7 @@ impl Mob {
             MobKind::TropicalFish(_) => items::TROPICAL_FISH_BUCKET,
             MobKind::Axolotl(_) => return axolotl::get_bucket_item_stack(),
             MobKind::Tadpole(_) => return tadpole::get_bucket_item_stack(),
+            MobKind::SulfurCube(_) => items::SULFUR_CUBE_BUCKET,
             _ => unreachable!("not bucketable"),
         };
         ItemStack::new(item, 1)
@@ -140,6 +144,7 @@ impl Mob {
         match self.kind {
             MobKind::Axolotl(_) => axolotl::get_pickup_sound(),
             MobKind::Tadpole(_) => tadpole::get_pickup_sound(),
+            MobKind::SulfurCube(_) => "minecraft:item.bucket.fill_sulfur_cube",
             _ => super::animal::fish::abstract_fish::AbstractFish::get_pickup_sound(),
         }
     }

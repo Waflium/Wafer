@@ -496,6 +496,7 @@ impl ServerLevel {
             "minecraft:zombie_horse" => LevelEntity::Mob(Box::new(super::animal::equine::zombie_horse::ZombieHorse::create())),
             "minecraft:slime" => LevelEntity::Mob(Box::new(super::monster::cubemob::slime::Slime::create())),
             "minecraft:magma_cube" => LevelEntity::Mob(Box::new(super::monster::cubemob::magma_cube::MagmaCube::create())),
+            "minecraft:sulfur_cube" => LevelEntity::Mob(Box::new(super::monster::cubemob::sulfur_cube::SulfurCube::create())),
             "minecraft:wolf" => LevelEntity::Mob(Box::new(super::animal::wolf::wolf::Wolf::create())),
             "minecraft:bat" => LevelEntity::Mob(Box::new(super::ambient::bat::Bat::create())),
             "minecraft:squid" => LevelEntity::Mob(Box::new(super::animal::squid::squid::Squid::create())),

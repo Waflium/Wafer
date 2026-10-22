@@ -17,6 +17,7 @@ pub enum LookControlKind {
     Camel,
     HappyGhast,
     Creaking,
+    SulfurCube,
 }
 
 #[derive(Default)]
@@ -94,6 +95,11 @@ impl ServerLevel {
             }
             LookControlKind::Bee => {
                 if !self.is_angry(id) {
+                    self.look_control_look_control_tick(id);
+                }
+            }
+            LookControlKind::SulfurCube => {
+                if !self.sulfur_cube_look_control_tick(id) {
                     self.look_control_look_control_tick(id);
                 }
             }

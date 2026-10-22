@@ -47,6 +47,7 @@ pub enum DispenseItemBehavior {
     Boat,
     Chest,
     ArmorStand,
+    SulfurCubeBlock,
 }
 
 fn registered(item: Item) -> Option<DispenseItemBehavior> {
@@ -71,7 +72,8 @@ fn registered(item: Item) -> Option<DispenseItemBehavior> {
         | items::SALMON_BUCKET
         | items::COD_BUCKET
         | items::PUFFERFISH_BUCKET
-        | items::TROPICAL_FISH_BUCKET => FilledBucket,
+        | items::TROPICAL_FISH_BUCKET
+        | items::SULFUR_CUBE_BUCKET => FilledBucket,
         items::BUCKET => Bucket,
         items::FLINT_AND_STEEL => FlintAndSteel,
         items::BONE_MEAL => BoneMeal,
@@ -99,6 +101,8 @@ pub fn get_dispense_method(item_stack: &ItemStack) -> DispenseItemBehavior {
     }
     if item_stack.has(dc::EQUIPPABLE) {
         DispenseItemBehavior::Equipment
+    } else if crate::world::entity::monster::cubemob::sulfur_cube::is_swallowable_item(item_stack) {
+        DispenseItemBehavior::SulfurCubeBlock
     } else if item_stack.item.info().classes.contains(&"SpawnEggItem") && item_stack.has(dc::ENTITY_DATA) {
         DispenseItemBehavior::SpawnEgg
     } else {
@@ -155,6 +159,7 @@ impl DispenseItemBehavior {
             Boat => boat_dispense_item_behavior::execute(level, source, dispensed),
             Chest => execute_chest(level, source, dispensed),
             ArmorStand => execute_armor_stand(level, source, dispensed),
+            SulfurCubeBlock => execute_sulfur_cube_block(level, source, dispensed),
         }
     }
 }
@@ -388,4 +393,12 @@ fn execute_potion(level: &mut ServerLevel, source: &BlockSource, dispensed: Item
     level.game_event_at(None, crate::world::level::gameevent::game_event::FLUID_PLACE, pos);
     level.set_block(target, blocks::MUD.default_state(), UPDATE_ALL);
     consume_with_remainder(level, source, dispensed, ItemStack::new(items::GLASS_BOTTLE, 1))
+}
+
+fn execute_sulfur_cube_block(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack) -> ItemStack {
+    if level.sulfur_cube_dispense_block(target(source), &mut dispensed) {
+        dispensed
+    } else {
+        default_dispense_item_behavior::execute(level, source, dispensed)
+    }
 }

@@ -73,6 +73,7 @@ pub mod slot_access;
 pub mod spawn_group_data;
 pub mod spawn_placement_types;
 pub mod spawn_placements;
+pub mod sulfur_cube_archetype;
 pub mod tamable_animal;
 #[cfg(test)]
 mod survival_tests;

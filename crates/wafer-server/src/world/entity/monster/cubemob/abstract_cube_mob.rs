@@ -66,7 +66,11 @@ pub fn get_size(entity: &Entity) -> i32 {
 
 impl AbstractCubeMob {
     pub fn create_with(entity_type: &str, dimensions: EntityDimensions, attributes: &'static AttributeSupplier, kind: MobKind) -> Mob {
-        let entity = Entity::new(registry_id(registry::ENTITY_TYPE, entity_type), dimensions, abstract_cube_mob_defaults());
+        AbstractCubeMob::create_with_data(entity_type, dimensions, attributes, kind, abstract_cube_mob_defaults())
+    }
+
+    pub fn create_with_data(entity_type: &str, dimensions: EntityDimensions, attributes: &'static AttributeSupplier, kind: MobKind, data: Vec<DataValue>) -> Mob {
+        let entity = Entity::new(registry_id(registry::ENTITY_TYPE, entity_type), dimensions, data);
         let mut mob = Mob::new(entity, LivingEntity::new(attributes), kind);
         mob.entity.dimensions = mob.dimensions();
         mob.ai.move_control.kind = MoveControlKind::CubeMob;
@@ -86,13 +90,14 @@ impl AbstractCubeMob {
 
 impl Mob {
     pub fn is_cube_mob(&self) -> bool {
-        matches!(self.kind, MobKind::Slime(_) | MobKind::MagmaCube(_))
+        matches!(self.kind, MobKind::Slime(_) | MobKind::MagmaCube(_) | MobKind::SulfurCube(_))
     }
 
     pub fn abstract_cube_mob(&self) -> Option<&AbstractCubeMob> {
         match &self.kind {
             MobKind::Slime(slime) => Some(&slime.abstract_cube_mob),
             MobKind::MagmaCube(magma_cube) => Some(&magma_cube.abstract_cube_mob),
+            MobKind::SulfurCube(sulfur_cube) => Some(&sulfur_cube.abstract_cube_mob),
             _ => None,
         }
     }
@@ -101,6 +106,7 @@ impl Mob {
         match &mut self.kind {
             MobKind::Slime(slime) => Some(&mut slime.abstract_cube_mob),
             MobKind::MagmaCube(magma_cube) => Some(&mut magma_cube.abstract_cube_mob),
+            MobKind::SulfurCube(sulfur_cube) => Some(&mut sulfur_cube.abstract_cube_mob),
             _ => None,
         }
     }
@@ -117,6 +123,7 @@ impl Mob {
         match self.kind {
             MobKind::Slime(_) => self.slime_set_size(size, update_health),
             MobKind::MagmaCube(_) => self.magma_cube_set_size(size, update_health),
+            MobKind::SulfurCube(_) => self.sulfur_cube_set_size(size, update_health),
             _ => false,
         }
     }
@@ -141,6 +148,10 @@ impl Mob {
     }
 
     fn set_cube_mob_health(&mut self, actual_size: i32) {
+        if self.sulfur_cube().is_some() {
+            self.sulfur_cube_set_cube_mob_health(actual_size);
+            return;
+        }
         self.living.attributes.instance(Attribute::MaxHealth).expect("cube mobs have a max health").set_base_value((actual_size * actual_size) as f64);
     }
 
@@ -171,6 +182,7 @@ impl Mob {
         match self.kind {
             MobKind::Slime(_) => Slime::get_particle_type(),
             MobKind::MagmaCube(_) => MagmaCube::get_particle_type(),
+            MobKind::SulfurCube(_) => super::sulfur_cube::SulfurCube::get_particle_type(),
             _ => None,
         }
     }
@@ -178,6 +190,7 @@ impl Mob {
     pub fn get_squish_sound(&self) -> &'static str {
         match self.kind {
             MobKind::MagmaCube(_) => MagmaCube::get_squish_sound(self),
+            MobKind::SulfurCube(_) => super::sulfur_cube::SulfurCube::get_squish_sound(self),
             _ => Slime::get_squish_sound(self),
         }
     }
@@ -185,6 +198,7 @@ impl Mob {
     pub fn get_jump_sound(&self) -> &'static str {
         match self.kind {
             MobKind::MagmaCube(_) => MagmaCube::get_jump_sound(),
+            MobKind::SulfurCube(_) => super::sulfur_cube::SulfurCube::get_jump_sound(self),
             _ => Slime::get_jump_sound(self),
         }
     }
@@ -318,9 +332,15 @@ impl ServerLevel {
         let (x, y, z) = (e.x(), e.y(), e.z());
         let y_rot = e.random.next_float() * 360.0;
         self.entity_mut(cube_mob).snap_to(x + xd as f64, y + 0.5, z + zd as f64, y_rot, 0.0);
+        if self.mob(cube_mob).is_some_and(|mob| mob.sulfur_cube().is_some()) {
+            self.mob_mut(cube_mob).expect("a sulfur cube").set_baby(true);
+        }
     }
 
     fn get_split_count(&mut self, id: EntityId) -> i32 {
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) {
+            return self.sulfur_cube_get_split_count(id);
+        }
         2 + self.entity_mut(id).random.next_int_bounded(3)
     }
 
@@ -328,6 +348,13 @@ impl ServerLevel {
         self.living_entity_push(id, entity);
         if registry::ENTITY_TYPE[self.entity(entity).entity_type as usize] == "minecraft:iron_golem" && self.can_deal_damage(id) {
             self.deal_damage(id, entity);
+        }
+    }
+
+    pub fn cube_mob_player_touch(&mut self, id: EntityId, player: EntityId) {
+        self.abstract_cube_mob_player_touch(id, player);
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) {
+            self.sulfur_cube_player_touch(id, player);
         }
     }
 
@@ -354,6 +381,7 @@ impl ServerLevel {
     pub fn can_deal_damage(&self, id: EntityId) -> bool {
         match self.mob(id).expect("a cube mob").kind {
             MobKind::MagmaCube(_) => self.magma_cube_can_deal_damage(id),
+            MobKind::SulfurCube(_) => false,
             _ => self.abstract_cube_mob_can_deal_damage(id),
         }
     }
@@ -386,6 +414,9 @@ impl ServerLevel {
     }
 
     pub fn cube_mob_move_control_tick(&mut self, id: EntityId) {
+        if self.sulfur_cube_has_body_item(id) {
+            return;
+        }
         let movement_speed = self.attribute_value(id, Attribute::MovementSpeed);
         let mob = self.mob_mut(id).expect("a cube mob");
         let wanted_y_rot = mob.abstract_cube_mob().expect("a cube mob").move_control.y_rot;
@@ -428,13 +459,13 @@ impl ServerLevel {
         }
     }
 
-    fn set_wanted_movement(&mut self, id: EntityId, speed_modifier: f64) {
+    pub fn set_wanted_movement(&mut self, id: EntityId, speed_modifier: f64) {
         let move_control = &mut self.mob_mut(id).expect("a cube mob").ai.move_control;
         move_control.speed_modifier = speed_modifier;
         move_control.operation = Operation::MoveTo;
     }
 
-    fn set_direction(&mut self, id: EntityId, y_rot: f32, is_aggressive: bool) {
+    pub fn set_direction(&mut self, id: EntityId, y_rot: f32, is_aggressive: bool) {
         self.mob_mut(id).expect("a cube mob").abstract_cube_mob_mut().expect("a cube mob").move_control.set_direction(y_rot, is_aggressive);
     }
 }

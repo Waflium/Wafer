@@ -1881,6 +1881,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Skeleton(_)) => self.skeleton_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Silverfish(_)) => self.silverfish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Endermite(_)) => self.endermite_tick(id),
+            Some(LevelEntity::Mob(mob)) if mob.sulfur_cube().is_some() => self.sulfur_cube_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Wolf(_)) => self.wolf_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Armadillo(_)) => self.armadillo_tick(id),
@@ -1952,7 +1953,7 @@ impl ServerLevel {
                         self.remove_entity(id);
                     }
                 }
-                Some(LevelEntity::Mob(mob)) if !mob.entity.is_removed() && mob.is_cube_mob() => self.abstract_cube_mob_player_touch(id, player),
+                Some(LevelEntity::Mob(mob)) if !mob.entity.is_removed() && mob.is_cube_mob() => self.cube_mob_player_touch(id, player),
                 Some(LevelEntity::Mob(mob)) if !mob.entity.is_removed() && matches!(mob.kind, crate::world::entity::mob::MobKind::Pufferfish(_)) => {
                     self.pufferfish_player_touch(id, player)
                 }

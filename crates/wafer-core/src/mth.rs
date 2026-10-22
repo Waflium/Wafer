@@ -25,6 +25,17 @@ pub fn cos(i: f64) -> f32 {
     SIN[((i * SIN_SCALE + 16384.0) as i64 & 0xFFFF) as usize]
 }
 
+pub fn wrap_degrees_90(angle: f32) -> f32 {
+    let mut normalized_angle = angle % 90.0;
+    if normalized_angle >= 45.0 {
+        normalized_angle -= 90.0;
+    }
+    if normalized_angle < -45.0 {
+        normalized_angle += 90.0;
+    }
+    normalized_angle
+}
+
 pub fn sqrt(x: f32) -> f32 {
     (x as f64).sqrt() as f32
 }

@@ -25,6 +25,7 @@ impl MobBucketItem {
             items::TROPICAL_FISH_BUCKET => "minecraft:tropical_fish",
             items::AXOLOTL_BUCKET => "minecraft:axolotl",
             items::TADPOLE_BUCKET => "minecraft:tadpole",
+            items::SULFUR_CUBE_BUCKET => "minecraft:sulfur_cube",
             _ => return None,
         };
         let empty_sound = fields["emptySound"].as_str()?.to_string();

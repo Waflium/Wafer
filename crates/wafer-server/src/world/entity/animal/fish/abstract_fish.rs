@@ -80,6 +80,7 @@ impl Mob {
         match self.kind {
             MobKind::Axolotl(_) => crate::world::entity::animal::axolotl::axolotl::from_bucket(&self.entity),
             MobKind::Tadpole(_) => true,
+            MobKind::SulfurCube(_) => self.sulfur_cube_from_bucket(),
             _ => matches!(self.entity.data.get(DATA_FROM_BUCKET), DataValue::Boolean(true)),
         }
     }
@@ -88,6 +89,7 @@ impl Mob {
         match self.kind {
             MobKind::Axolotl(_) => crate::world::entity::animal::axolotl::axolotl::set_from_bucket(&mut self.entity, from_bucket),
             MobKind::Tadpole(_) => {}
+            MobKind::SulfurCube(_) => self.sulfur_cube_set_from_bucket(from_bucket),
             _ => self.entity.data.set(DATA_FROM_BUCKET, DataValue::Boolean(from_bucket)),
         }
     }

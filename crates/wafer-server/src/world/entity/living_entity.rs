@@ -601,6 +601,7 @@ impl ServerLevel {
             Some(MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::Camel(_) | MobKind::CamelHusk(_)) => self.abstract_horse_can_use_slot(id, slot),
             Some(MobKind::Nautilus(_) | MobKind::ZombieNautilus(_)) => self.abstract_nautilus_can_use_slot(id, slot),
             Some(MobKind::HappyGhast(_)) => self.happy_ghast_can_use_slot(id, slot),
+            Some(MobKind::SulfurCube(_)) if slot == EquipmentSlot::Body => self.is_alive(id) && !self.is_baby(id),
             _ => true,
         }
     }
@@ -622,6 +623,9 @@ impl ServerLevel {
     }
 
     pub fn get_equipment_slot_for_item(&self, id: EntityId, item_stack: &ItemStack) -> EquipmentSlot {
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) && crate::world::entity::monster::cubemob::sulfur_cube::is_swallowable_item(item_stack) {
+            return EquipmentSlot::Body;
+        }
         let equippable = item_stack.get(crate::world::item::component::EQUIPPABLE).map(crate::world::item::component::values::Equippable::from_nbt);
         match equippable.and_then(|equippable| EquipmentSlot::by_name(&equippable.slot)) {
             Some(slot) if self.can_use_slot(id, slot) => slot,
@@ -630,6 +634,9 @@ impl ServerLevel {
     }
 
     pub fn is_equippable_in_slot(&self, id: EntityId, item_stack: &ItemStack, slot: EquipmentSlot) -> bool {
+        if slot == EquipmentSlot::Body && self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) {
+            return crate::world::entity::monster::cubemob::sulfur_cube::is_swallowable_item(item_stack);
+        }
         let Some(equippable) = item_stack.get(crate::world::item::component::EQUIPPABLE).map(crate::world::item::component::values::Equippable::from_nbt) else {
             return slot == EquipmentSlot::Mainhand && self.can_use_slot(id, EquipmentSlot::Mainhand);
         };
@@ -832,9 +839,9 @@ impl ServerLevel {
         let dealt_damage = deals_damage && self.hurt_server(target, damage_source, post_enchantment_damage);
         affected |= dealt_damage;
         if deals_knockback {
-            self.living_entity_cause_extra_knockback(id, target, 0.4, old_movement);
+            self.living_entity_cause_extra_knockback(id, target, 0.4, old_movement, &damage_source, post_enchantment_damage, false);
             let knockback = self.get_knockback(id, target, &damage_source);
-            self.living_entity_cause_extra_knockback(id, target, knockback, old_movement);
+            self.living_entity_cause_extra_knockback(id, target, knockback, old_movement, &damage_source, post_enchantment_damage, true);
         }
         if dismounts && self.is_passenger(target) && !entity_type_tags::CANNOT_BE_DISMOUNTED_BY_ITEM_USAGE.contains(self.entity(target).entity_type as usize) {
             affected = true;
@@ -1140,11 +1147,12 @@ impl ServerLevel {
         if self.is_player(target) && self.difficulty == Difficulty::Peaceful { false } else { self.can_be_seen_as_enemy(target) }
     }
 
-    pub fn living_entity_cause_extra_knockback(&mut self, id: EntityId, target: EntityId, knockback: f32, _old_movement: Vec3) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn living_entity_cause_extra_knockback(&mut self, id: EntityId, target: EntityId, knockback: f32, _old_movement: Vec3, damage_source: &DamageSource, damage: f32, comes_from_effect: bool) {
         if knockback > 0.0 && self.is_living(target) {
             let y_rot = self.entity(id).y_rot * mth::DEG_TO_RAD;
             let (sin, cos) = (mth::sin(y_rot as f64) as f64, mth::cos(y_rot as f64) as f64);
-            self.knockback(target, knockback as f64, sin, -cos);
+            self.knockback(target, knockback as f64, sin, -cos, damage_source, damage, comes_from_effect);
             let e = self.entity_mut(id);
             e.set_delta_movement(e.delta_movement.multiply(0.6, 1.0, 0.6));
         }
@@ -1288,7 +1296,7 @@ impl ServerLevel {
             }
             let fully_blocked = blocked && damage <= 0.0;
             if !source.is(&damage_type_tags::NO_KNOCKBACK) && !fully_blocked {
-                self.deal_default_knockback(id, &source, blocked);
+                self.deal_default_knockback(id, &source, damage, blocked);
             }
         }
         if self.is_dead_or_dying(id) {
@@ -1411,8 +1419,8 @@ impl ServerLevel {
         self.living(id).last_hurt_by_player.and_then(|uuid| self.get_player_by_uuid(uuid))
     }
 
-    fn block_using_item(&mut self, id: EntityId, attacker: EntityId, fully_blocked: bool) {
-        self.blocked_by_item(attacker, id, fully_blocked);
+    fn block_using_item(&mut self, id: EntityId, attacker: EntityId, source: &DamageSource, damage: f32, fully_blocked: bool) {
+        self.blocked_by_item(attacker, id, source, damage, fully_blocked);
         if self.is_player(id) {
             let item_blocking_with = self.get_item_blocking_with(id);
             let blocks_attacks = item_blocking_with.as_ref().and_then(|item| item.get(dc::BLOCKS_ATTACKS)).map(BlocksAttacks::from_nbt);
@@ -1425,7 +1433,7 @@ impl ServerLevel {
         }
     }
 
-    fn blocked_by_item(&mut self, id: EntityId, defender: EntityId, fully_blocked: bool) {
+    fn blocked_by_item(&mut self, id: EntityId, defender: EntityId, source: &DamageSource, damage: f32, fully_blocked: bool) {
         if self.is_ravager(id) {
             self.ravager_blocked_by_item(id, defender);
             return;
@@ -1438,7 +1446,7 @@ impl ServerLevel {
         if !fully_blocked {
             let (d, e) = (self.entity(defender), self.entity(id));
             let (xd, zd) = (d.x() - e.x(), d.z() - e.z());
-            self.knockback(defender, 0.5, xd, zd);
+            self.knockback(defender, 0.5, xd, zd, source, damage, false);
         }
     }
 
@@ -1576,7 +1584,7 @@ impl ServerLevel {
         self.send_to_tracking_players_and_self(id, &packet);
     }
 
-    fn deal_default_knockback(&mut self, id: EntityId, source: &DamageSource, blocked: bool) {
+    pub fn deal_default_knockback(&mut self, id: EntityId, source: &DamageSource, damage: f32, blocked: bool) {
         let (xd, zd) = match source.direct_entity.filter(|&direct| self.is_projectile(direct)) {
             Some(projectile) => {
                 let (x, z) = self.calculate_horizontal_hurt_knockback_direction(projectile, id);
@@ -1590,7 +1598,7 @@ impl ServerLevel {
                 None => (0.0, 0.0),
             },
         };
-        self.knockback(id, 0.4f32 as f64, xd, zd);
+        self.knockback(id, 0.4f32 as f64, xd, zd, source, damage, false);
         if !blocked {
             self.indicate_damage(id, xd, zd);
         }
@@ -1625,13 +1633,17 @@ impl ServerLevel {
             && !source.is(&damage_type_tags::IS_PROJECTILE)
             && let Some(living_entity) = source.direct_entity.filter(|&direct| self.is_living(direct))
         {
-            self.block_using_item(id, living_entity, damage_blocked >= damage);
+            self.block_using_item(id, living_entity, source, damage, damage_blocked >= damage);
         }
         damage_blocked
     }
 
-    pub fn knockback(&mut self, id: EntityId, power: f64, mut xd: f64, mut zd: f64) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn knockback(&mut self, id: EntityId, power: f64, mut xd: f64, mut zd: f64, source: &DamageSource, damage: f32, comes_from_effect: bool) {
         if self.is_creaking(id) && !self.creaking_can_move(id) {
+            return;
+        }
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) && self.sulfur_cube_knockback(id, power, xd, zd, source, damage, comes_from_effect) {
             return;
         }
         let power = power * (1.0 - self.attribute_value(id, Attribute::KnockbackResistance));
@@ -1905,6 +1917,7 @@ impl ServerLevel {
             Some(MobKind::Enderman(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::SulfurCube(_)) => self.sulfur_cube_get_base_experience_reward(id),
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_)) => self.ageable_water_creature_get_base_experience_reward(id),
             Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Shulker(_) | MobKind::Allay(_)) => self.mob_get_base_experience_reward(id),
@@ -2321,10 +2334,14 @@ impl ServerLevel {
         }
     }
 
-    pub fn detect_equipment_updates(&mut self, id: EntityId) {
+    pub fn collect_equipment_changes(&mut self, id: EntityId, last_equipment_items: &[Option<ItemStack>]) -> Vec<(EquipmentSlot, Option<ItemStack>)> {
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) {
+            let previous = last_equipment_items[EquipmentSlot::Body as usize].clone().unwrap_or_else(ItemStack::empty);
+            self.sulfur_cube_collect_equipment_changes(id, &previous);
+        }
         let mut changed: Vec<(EquipmentSlot, Option<ItemStack>)> = Vec::new();
         for slot in EquipmentSlot::VALUES {
-            let previous = self.living(id).last_equipment_items[slot as usize].clone();
+            let previous = last_equipment_items[slot as usize].clone();
             let current = self.item_by_slot(id, slot);
             if self.equipment_has_changed(id, previous.as_ref(), current.as_ref()) {
                 changed.push((slot, current.clone()));
@@ -2332,9 +2349,6 @@ impl ServerLevel {
                     self.stop_location_based_effects(id, &previous, slot);
                 }
             }
-        }
-        if changed.is_empty() {
-            return;
         }
         for (slot, current) in &changed {
             if let Some(current) = current
@@ -2348,6 +2362,15 @@ impl ServerLevel {
                 });
                 self.run_location_changed_effects_on_item(current, id, *slot);
             }
+        }
+        changed
+    }
+
+    pub fn detect_equipment_updates(&mut self, id: EntityId) {
+        let last_equipment_items = self.living(id).last_equipment_items.clone();
+        let mut changed = self.collect_equipment_changes(id, &last_equipment_items);
+        if changed.is_empty() {
+            return;
         }
         let last = self.living(id).last_equipment_items.clone();
         let main = changed.iter().find(|c| c.0 == EquipmentSlot::Mainhand).map(|c| c.1.clone());
@@ -2493,7 +2516,7 @@ impl ServerLevel {
             Some(MobKind::Ravager(_)) => self.ravager_ai_step(id),
             Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.raider_ai_step(id),
             Some(MobKind::Vex(_)) => self.monster_ai_step(id),
-            Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
+            Some(MobKind::Slime(_) | MobKind::MagmaCube(_) | MobKind::SulfurCube(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Wolf(_)) => self.wolf_ai_step(id),
             Some(MobKind::Bat(_) | MobKind::Shulker(_) | MobKind::CopperGolem(_)) => self.mob_ai_step(id),
             Some(MobKind::Allay(_)) => self.allay_ai_step(id),
@@ -2872,6 +2895,10 @@ impl ServerLevel {
             Some(MobKind::IronGolem(_)) => self.iron_golem_do_push(id, entity),
             Some(MobKind::Warden(_)) => self.warden_do_push(id, entity),
             Some(MobKind::Parrot(_)) if self.is_player(entity) => {}
+            Some(MobKind::SulfurCube(_)) => {
+                self.living_entity_do_push(id, entity);
+                self.sulfur_cube_do_push(id, entity);
+            }
             _ => self.living_entity_do_push(id, entity),
         }
     }
@@ -2931,7 +2958,7 @@ impl ServerLevel {
 
     pub fn jump_from_ground(&mut self, id: EntityId) {
         match self.mob(id).map(|mob| &mob.kind) {
-            Some(MobKind::Slime(_)) => self.abstract_cube_mob_jump_from_ground(id),
+            Some(MobKind::Slime(_) | MobKind::SulfurCube(_)) => self.abstract_cube_mob_jump_from_ground(id),
             Some(MobKind::MagmaCube(_)) => self.magma_cube_jump_from_ground(id),
             Some(MobKind::Rabbit(_)) => self.rabbit_jump_from_ground(id),
             Some(MobKind::Sniffer(_)) => self.sniffer_jump_from_ground(id),
@@ -3135,6 +3162,9 @@ impl ServerLevel {
             self.travel_in_water(id, input, base_gravity, is_falling, old_y);
         } else {
             self.travel_in_lava(id, input, base_gravity, is_falling, old_y);
+        }
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) {
+            self.sulfur_cube_travel_in_fluid(id);
         }
     }
 
@@ -3669,6 +3699,9 @@ impl ServerLevel {
     }
 
     pub fn can_breathe_underwater(&self, id: EntityId) -> bool {
+        if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some() && mob.has_body_item()) {
+            return true;
+        }
         if self.is_happy_ghast(id) && self.happy_ghast_can_breathe_underwater(id) {
             return true;
         }

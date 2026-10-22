@@ -30,6 +30,7 @@ pub struct TemptGoal {
     can_scare: bool,
     stop_distance: f64,
     for_non_pathfinders: bool,
+    sulfur_cube: bool,
 }
 
 impl TemptGoal {
@@ -48,11 +49,16 @@ impl TemptGoal {
             can_scare,
             stop_distance: DEFAULT_STOP_DISTANCE,
             for_non_pathfinders: false,
+            sulfur_cube: false,
         }
     }
 
     pub fn for_non_pathfinders(speed_modifier: f64, items: fn(&ServerLevel, EntityId, &ItemStack) -> bool, can_scare: bool, stop_distance: f64) -> TemptGoal {
         TemptGoal { items: TemptItems::ForMob(items), stop_distance, for_non_pathfinders: true, ..TemptGoal::new(speed_modifier, |_| false, can_scare) }
+    }
+
+    pub fn for_sulfur_cube(speed_modifier: f64, items: fn(&ServerLevel, EntityId, &ItemStack) -> bool, can_scare: bool, stop_distance: f64) -> TemptGoal {
+        TemptGoal { sulfur_cube: true, ..TemptGoal::for_non_pathfinders(speed_modifier, items, can_scare, stop_distance) }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
@@ -128,6 +134,10 @@ impl TemptGoal {
     }
 
     fn stop_navigation(&self, level: &mut ServerLevel, mob: EntityId) {
+        if self.sulfur_cube {
+            level.sulfur_cube_tempt_stop_navigation(mob);
+            return;
+        }
         if self.for_non_pathfinders {
             level.mob_mut(mob).expect("a mob").ai.move_control.set_wait();
             return;
@@ -137,6 +147,10 @@ impl TemptGoal {
 
     fn navigate_towards(&self, level: &mut ServerLevel, mob: EntityId, player: EntityId) {
         let speed_modifier = self.speed_modifier;
+        if self.sulfur_cube {
+            level.sulfur_cube_tempt_navigate_towards(mob, player);
+            return;
+        }
         if self.for_non_pathfinders {
             let eye_position = level.entity(player).eye_position();
             let m = level.mob_mut(mob).expect("a mob");

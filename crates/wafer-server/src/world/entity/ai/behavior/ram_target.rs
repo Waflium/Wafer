@@ -109,7 +109,7 @@ impl Behavior for RamTarget {
             let blocked_damage = level.apply_item_blocking(ram_target, &source, damage);
             let blocking_factor = if blocked_damage > 0.0 { 0.5 } else { 1.0 };
             let knockback_force = (self.get_knockback_force)(level, body);
-            level.knockback(ram_target, (blocking_factor * speed_factor) as f64 * knockback_force, self.ram_direction.x, self.ram_direction.z);
+            level.knockback(ram_target, (blocking_factor * speed_factor) as f64 * knockback_force, self.ram_direction.x, self.ram_direction.z, &source, damage, false);
             self.finish_ram(level, body);
             let sound = (self.get_impact_sound)(level, body);
             level.play_sound_from_entity(None, body, sound_event(sound), SoundSource::Neutral, 1.0, 1.0);

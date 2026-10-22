@@ -185,6 +185,28 @@ impl Vec3 {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct Vec2 {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Vec2 {
+    pub const fn new(x: f32, y: f32) -> Vec2 {
+        Vec2 { x, y }
+    }
+
+    pub fn scale(self, s: f32) -> Vec2 {
+        Vec2::new(self.x * s, self.y * s)
+    }
+
+    pub fn rotate(self, angle_radians: f64) -> Vec2 {
+        let cosine = crate::mth::cos(angle_radians);
+        let sine = crate::mth::sin(angle_radians);
+        Vec2::new(self.x * cosine - self.y * sine, self.y * cosine + self.x * sine)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AABB {
     pub min_x: f64,

@@ -96,6 +96,7 @@ fn main() -> anyhow::Result<()> {
     embed_json(&mut out, &data, "zombie_nautilus_variant", "ZOMBIE_NAUTILUS_VARIANTS")?;
     embed_json(&mut out, &data, "painting_variant", "PAINTING_VARIANTS")?;
     embed_json(&mut out, &data, "trial_spawner", "TRIAL_SPAWNER_CONFIGS")?;
+    embed_json(&mut out, &data, "sulfur_cube_archetype", "SULFUR_CUBE_ARCHETYPES")?;
     embed_json(&mut out, &data, "worldgen/biome", "BIOMES")?;
     embed_json(&mut out, &data, "worldgen/density_function", "DENSITY_FUNCTIONS")?;
     embed_json(&mut out, &data, "worldgen/noise", "NOISES")?;

@@ -183,6 +183,7 @@ impl ServerLevel {
             MobKind::CamelHusk(_) => self.camel_husk_can_be_leashed(id),
             MobKind::Nautilus(_) => self.nautilus_can_be_leashed(id),
             MobKind::ZombieNautilus(_) => self.zombie_nautilus_can_be_leashed(id),
+            MobKind::SulfurCube(_) => mob.has_body_item(),
             _ => !self.is_enemy(id),
         }
     }

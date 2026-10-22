@@ -64,8 +64,10 @@ impl ChargeAttack {
         let movement_slowdown_level = living.effect(mob_effects::SLOWNESS).map_or(0, |effect| effect.amplifier + 1);
         let speed_boost_power = 0.25 * (movement_speed_level - movement_slowdown_level) as f32;
         let speed_factor = mth::clamp_f(self.speed * level.attribute_value(body, Attribute::MovementSpeed) as f32, 0.2, 2.0) + speed_boost_power;
+        let damage_source = DamageSource { causing_entity: Some(body), direct_entity: Some(body), ..DamageSource::new(damage_types::MOB_ATTACK) };
+        let damage = level.attribute_value(body, Attribute::AttackDamage) as f32;
         let old_movement = level.entity(body).delta_movement;
-        level.living_entity_cause_extra_knockback(body, target, speed_factor * self.knockback_force, old_movement);
+        level.living_entity_cause_extra_knockback(body, target, speed_factor * self.knockback_force, old_movement, &damage_source, damage, false);
     }
 }
 

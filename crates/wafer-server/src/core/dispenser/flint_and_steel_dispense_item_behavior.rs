@@ -12,7 +12,8 @@ pub fn execute(level: &mut ServerLevel, source: &BlockSource, mut dispensed: Ite
     let facing = source.facing();
     let target_pos = source.pos.relative(facing);
     let target = level.block_state(target_pos);
-    if base_fire_block::can_be_placed_at(level, target_pos, facing) {
+    if level.try_ignite_explosive_entities(target_pos) {
+    } else if base_fire_block::can_be_placed_at(level, target_pos, facing) {
         let fire = base_fire_block::get_state(level, target_pos);
         level.set_block(target_pos, fire, UPDATE_ALL);
         level.game_event_at(None, crate::world::level::gameevent::game_event::BLOCK_PLACE, target_pos);
