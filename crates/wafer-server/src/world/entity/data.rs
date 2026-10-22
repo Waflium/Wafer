@@ -78,6 +78,8 @@ pub enum DataValue {
     CatVariant(i32),
     CatSoundVariant(i32),
     ArmadilloState(i32),
+    CopperGolemState(i32),
+    WeatheringCopperState(i32),
     FrogVariant(i32),
     VillagerData(super::npc::villager::villager_data::VillagerData),
     Vector3(wafer_core::joml::Vector3f),
@@ -124,6 +126,8 @@ impl DataValue {
             DataValue::CatVariant(_) => 21,
             DataValue::CatSoundVariant(_) => 22,
             DataValue::ArmadilloState(_) => 36,
+            DataValue::CopperGolemState(_) => 37,
+            DataValue::WeatheringCopperState(_) => 38,
             DataValue::FrogVariant(_) => 27,
             DataValue::VillagerData(_) => 18,
             DataValue::Vector3(_) => 39,
@@ -185,7 +189,7 @@ impl DataValue {
             }
             DataValue::WolfVariant(id) | DataValue::WolfSoundVariant(id) => w.varint(*id),
             DataValue::CatVariant(id) | DataValue::CatSoundVariant(id) => w.varint(*id),
-            DataValue::ArmadilloState(id) => w.varint(*id),
+            DataValue::ArmadilloState(id) | DataValue::CopperGolemState(id) | DataValue::WeatheringCopperState(id) => w.varint(*id),
             DataValue::FrogVariant(id) => w.varint(*id),
             DataValue::VillagerData(data) => data.write(w),
             DataValue::Vector3(v) => {

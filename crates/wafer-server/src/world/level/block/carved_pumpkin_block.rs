@@ -5,6 +5,8 @@ use wafer_data::properties::HORIZONTAL_FACING;
 use wafer_data::{Block, BlockState, block_tags, blocks};
 
 use super::BlockBehaviour;
+use super::chest_block;
+use super::weathering_copper::{self, WeatherState};
 use super::horizontal_directional_block;
 use super::mirror::Mirror;
 use super::rotation::Rotation;
@@ -13,6 +15,7 @@ use crate::advancements::triggers::criteria_triggers;
 use crate::server::level::ServerLevel;
 use crate::server::level::events::PARTICLES_AND_SOUND_DESTROY_BLOCK;
 use crate::world::entity::LevelEntity;
+use crate::world::entity::animal::golem::copper_golem::CopperGolem;
 use crate::world::entity::animal::golem::iron_golem::{self, IronGolem};
 use crate::world::entity::animal::golem::snow_golem::SnowGolem;
 use crate::world::entity::mob::Mob;
@@ -57,6 +60,10 @@ static IRON_GOLEM_FULL: LazyLock<BlockPattern> = LazyLock::new(|| {
 static COPPER_GOLEM_BASE: LazyLock<BlockPattern> =
     LazyLock::new(|| BlockPatternBuilder::start().aisle(&[" ", "#"]).where_('#', has_state(|state| state.is(&block_tags::COPPER))).build());
 
+static COPPER_GOLEM_FULL: LazyLock<BlockPattern> = LazyLock::new(|| {
+    BlockPatternBuilder::start().aisle(&["^", "#"]).where_('^', pumpkins_predicate()).where_('#', has_state(|state| state.is(&block_tags::COPPER))).build()
+});
+
 pub fn can_spawn_golem(level: &mut ServerLevel, top_pos: BlockPos) -> bool {
     SNOW_GOLEM_BASE.find(level, top_pos).is_some() || IRON_GOLEM_BASE.find(level, top_pos).is_some() || COPPER_GOLEM_BASE.find(level, top_pos).is_some()
 }
@@ -73,7 +80,30 @@ fn try_spawn_golem(level: &mut ServerLevel, top_pos: BlockPos) {
         iron_golem::set_player_created(&mut iron_golem.entity, true);
         let spawn_pos = iron_golem_match.get_block(1, 2, 0);
         spawn_golem_in_world(level, &iron_golem_match, iron_golem, spawn_pos);
+        return;
     }
+    if let Some(copper_golem_match) = COPPER_GOLEM_FULL.find(level, top_pos) {
+        let copper_golem = CopperGolem::create();
+        let id = copper_golem.entity.id;
+        let pumpkin_block = copper_golem_match.get_block(0, 0, 0);
+        let copper_block = copper_golem_match.get_block(0, 1, 0);
+        let (pumpkin_state, copper_state) = (level.block_state(pumpkin_block), level.block_state(copper_block));
+        spawn_golem_in_world(level, &copper_golem_match, copper_golem, pumpkin_block);
+        replace_copper_block_with_chest(level, copper_block, copper_state, pumpkin_state);
+        level.copper_golem_spawn(id, get_weather_state_from_pattern(copper_state));
+    }
+}
+
+fn get_weather_state_from_pattern(state: BlockState) -> WeatherState {
+    weathering_copper::age(state.block())
+        .or_else(|| wafer_data::WAXABLES.iter().find(|&&(_, waxed)| waxed == state.block()).and_then(|&(unwaxed, _)| weathering_copper::age(unwaxed)))
+        .unwrap_or(WeatherState::Unaffected)
+}
+
+fn replace_copper_block_with_chest(level: &mut ServerLevel, copper_pos: BlockPos, copper_state: BlockState, pumpkin_state: BlockState) {
+    let facing = pumpkin_state.get(HORIZONTAL_FACING);
+    let block_state = chest_block::get_from_copper_block(copper_state.block(), facing, level, copper_pos);
+    level.set_block(copper_pos, block_state, UPDATE_CLIENTS);
 }
 
 fn spawn_golem_in_world(level: &mut ServerLevel, golem_match: &BlockPatternMatch, mut golem: Mob, spawn_pos: BlockPos) {

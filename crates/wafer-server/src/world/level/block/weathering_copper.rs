@@ -17,7 +17,30 @@ pub enum WeatherState {
 }
 
 impl WeatherState {
-    fn by_name(name: &str) -> Option<WeatherState> {
+    pub const VALUES: [WeatherState; 4] = [WeatherState::Unaffected, WeatherState::Exposed, WeatherState::Weathered, WeatherState::Oxidized];
+
+    pub fn by_id(id: i32) -> WeatherState {
+        WeatherState::VALUES[id.clamp(0, 3) as usize]
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            WeatherState::Unaffected => "unaffected",
+            WeatherState::Exposed => "exposed",
+            WeatherState::Weathered => "weathered",
+            WeatherState::Oxidized => "oxidized",
+        }
+    }
+
+    pub fn next(self) -> WeatherState {
+        WeatherState::by_id(self as i32 + 1)
+    }
+
+    pub fn previous(self) -> WeatherState {
+        WeatherState::by_id(self as i32 - 1)
+    }
+
+    pub fn by_name(name: &str) -> Option<WeatherState> {
         Some(match name {
             "unaffected" => WeatherState::Unaffected,
             "exposed" => WeatherState::Exposed,
@@ -31,8 +54,10 @@ impl WeatherState {
 static AGES: LazyLock<Vec<Option<WeatherState>>> = LazyLock::new(|| {
     (0..Block::count())
         .map(|id| {
-            let fields: serde_json::Value = serde_json::from_str(Block(id as u16).info().fields).unwrap_or_default();
-            fields["weatherState"].as_str().and_then(WeatherState::by_name)
+            let block = Block(id as u16);
+            let fields: serde_json::Value = serde_json::from_str(block.info().fields).unwrap_or_default();
+            let field = if block.is_instance_of("WeatheringCopperGolemStatueBlock") { "weatheringState" } else { "weatherState" };
+            fields[field].as_str().and_then(WeatherState::by_name)
         })
         .collect()
 });

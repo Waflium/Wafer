@@ -69,7 +69,14 @@ impl ServerLevel {
         let id = entity.id();
         let search = AABB::of_block(pos).inflate(range, range, range);
         let players: Vec<EntityId> = self.players.values().filter(|p| p.entity.bounding_box().intersects(&search)).map(|p| p.entity.id).collect();
-        players.into_iter().filter(|&p| !self.is_spectator(p) && self.is_own_container(p, pos, id)).collect()
+        let mut users: Vec<EntityId> = players.into_iter().filter(|&p| !self.is_spectator(p) && self.is_own_container(p, pos, id)).collect();
+        let copper_golems = self.get_entities_matching(None, &search, |level, entity| level.is_copper_golem(entity));
+        users.extend(copper_golems.into_iter().filter(|&golem| self.copper_golem_has_container_open(golem, pos)));
+        users
+    }
+
+    pub fn get_container_interaction_range(&self, user: EntityId) -> f64 {
+        if self.is_copper_golem(user) { self.copper_golem_get_container_interaction_range() } else { crate::server::level::game_mode::BLOCK_INTERACTION_RANGE }
     }
 
     fn is_own_container(&self, player: EntityId, pos: BlockPos, id: u64) -> bool {
@@ -87,8 +94,9 @@ impl ServerLevel {
         let Some((_, state)) = self.openers_counter(pos) else { return };
         let users = self.get_entities_with_container_open(pos);
         let open_count = users.len() as i32;
+        let max_interaction_range = users.iter().fold(0.0, |max: f64, &user| self.get_container_interaction_range(user).max(max));
         let Some((counter, _)) = self.openers_counter(pos) else { return };
-        counter.max_interaction_range = if users.is_empty() { 0.0 } else { crate::server::level::game_mode::BLOCK_INTERACTION_RANGE };
+        counter.max_interaction_range = max_interaction_range;
         let previous = counter.open_count;
         if previous != open_count {
             let is_open = open_count != 0;

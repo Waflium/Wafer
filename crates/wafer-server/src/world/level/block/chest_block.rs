@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use wafer_core::{BlockPos, Direction};
 use wafer_data::properties::{CHEST_TYPE, ChestType, HORIZONTAL_FACING, WATERLOGGED};
-use wafer_data::{Block, BlockState, block_tags, registry, registry_id};
+use wafer_data::{Block, BlockState, block_tags, blocks, registry, registry_id};
 
 use super::mirror::Mirror;
 use super::rotation::Rotation;
@@ -63,7 +63,7 @@ pub enum Combined {
     Double(BlockPos, BlockPos),
 }
 
-fn is_chest_blocked_at(level: &mut ServerLevel, pos: BlockPos) -> bool {
+pub fn is_chest_blocked_at(level: &mut ServerLevel, pos: BlockPos) -> bool {
     is_blocked_chest_by_block(level, pos) || is_cat_sitting_on_chest(level, pos)
 }
 
@@ -213,6 +213,24 @@ fn unwax(block: Block, state: BlockState) -> BlockState {
         Some(&(unwaxed, _)) => weathering_copper::with_properties_of(unwaxed, state),
         None => state,
     }
+}
+
+const COPPER_TO_COPPER_CHEST_MAPPING: [(Block, Block); 8] = [
+    (blocks::COPPER_BLOCK, blocks::COPPER_CHEST),
+    (blocks::EXPOSED_COPPER, blocks::EXPOSED_COPPER_CHEST),
+    (blocks::WEATHERED_COPPER, blocks::WEATHERED_COPPER_CHEST),
+    (blocks::OXIDIZED_COPPER, blocks::OXIDIZED_COPPER_CHEST),
+    (blocks::WAXED_COPPER_BLOCK, blocks::WAXED_COPPER_CHEST),
+    (blocks::WAXED_EXPOSED_COPPER, blocks::WAXED_EXPOSED_COPPER_CHEST),
+    (blocks::WAXED_WEATHERED_COPPER, blocks::WAXED_WEATHERED_COPPER_CHEST),
+    (blocks::WAXED_OXIDIZED_COPPER, blocks::WAXED_OXIDIZED_COPPER_CHEST),
+];
+
+pub fn get_from_copper_block(copper_block: Block, facing: Direction, level: &mut ServerLevel, pos: BlockPos) -> BlockState {
+    let block = COPPER_TO_COPPER_CHEST_MAPPING.iter().find(|&&(copper, _)| copper == copper_block).map_or(blocks::COPPER_CHEST, |&(_, chest)| chest);
+    let chest_type = ChestBlock::new(block).get_chest_type(level, pos, facing);
+    let state = block.default_state().set(HORIZONTAL_FACING, facing).set(CHEST_TYPE, chest_type);
+    least_oxidized_chest_of_connected_blocks(state, level, pos)
 }
 
 fn least_oxidized_chest_of_connected_blocks(state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> BlockState {

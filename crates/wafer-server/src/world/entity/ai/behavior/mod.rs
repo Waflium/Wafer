@@ -75,6 +75,7 @@ pub mod stroll_to_poi;
 pub mod stroll_to_poi_list;
 pub mod swim;
 pub mod trade_with_villager;
+pub mod transport_items_between_containers;
 pub mod trigger_gate;
 pub mod try_find_land;
 pub mod try_find_land_near_liquid;

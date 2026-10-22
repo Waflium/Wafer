@@ -120,6 +120,7 @@ impl ServerLevel {
             Some(MobKind::Creeper(_)) => self.creeper_thunder_hit(id, lightning_bolt),
             Some(MobKind::Villager(_)) => self.villager_thunder_hit(id, lightning_bolt),
             Some(MobKind::Turtle(_)) => self.turtle_thunder_hit(id, lightning_bolt),
+            Some(MobKind::CopperGolem(_)) => self.copper_golem_thunder_hit(id, lightning_bolt),
             _ => self.entity_thunder_hit(id, lightning_bolt),
         }
     }

@@ -1322,6 +1322,8 @@ impl ServerLevel {
             self.armadillo_actually_hurt(id, source, damage);
         } else if self.is_camel(id) {
             self.camel_actually_hurt(id, source, damage);
+        } else if self.is_copper_golem(id) {
+            self.copper_golem_actually_hurt(id, source, damage);
         } else if self.mob(id).is_some_and(|mob| mob.animal().is_some()) {
             self.animal_actually_hurt(id, source, damage);
         } else {
@@ -1828,6 +1830,8 @@ impl ServerLevel {
             self.abstract_chested_horse_drop_equipment(id);
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_drop_equipment(id);
+        } else if self.is_copper_golem(id) {
+            self.copper_golem_drop_equipment(id);
         }
     }
 
@@ -1874,7 +1878,7 @@ impl ServerLevel {
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_)) => self.ageable_water_creature_get_base_experience_reward(id),
-            Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::Shulker(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Shulker(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_)) => self.water_animal_get_base_experience_reward(id),
             Some(MobKind::Villager(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
@@ -2453,7 +2457,7 @@ impl ServerLevel {
             Some(MobKind::Vex(_)) => self.monster_ai_step(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Wolf(_)) => self.wolf_ai_step(id),
-            Some(MobKind::Bat(_) | MobKind::Shulker(_)) => self.mob_ai_step(id),
+            Some(MobKind::Bat(_) | MobKind::Shulker(_) | MobKind::CopperGolem(_)) => self.mob_ai_step(id),
             Some(MobKind::Squid(_)) => self.squid_ai_step(id),
             Some(MobKind::GlowSquid(_)) => self.glow_squid_ai_step(id),
             Some(MobKind::IronGolem(_)) => self.iron_golem_ai_step(id),

@@ -1215,6 +1215,19 @@ pub static SHULKER_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static COPPER_GOLEM_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange,
+        ],
+        &[(FollowRange, 16.0), (MovementSpeed, 0.2f32 as f64), (StepHeight, 1.0), (MaxHealth, 12.0)],
+    )
+};
+
 pub static SNOW_GOLEM_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

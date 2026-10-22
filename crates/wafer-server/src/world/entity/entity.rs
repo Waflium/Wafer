@@ -1927,6 +1927,10 @@ impl ServerLevel {
             self.iron_golem_play_step_sound(id, pos);
             return;
         }
+        if self.is_copper_golem(id) {
+            self.copper_golem_play_step_sound(id);
+            return;
+        }
         if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
             return;
         }
@@ -3005,6 +3009,7 @@ impl ServerLevel {
                     super::mob::MobKind::Squid(_) => "Squid",
                     super::mob::MobKind::GlowSquid(_) => "GlowSquid",
                     super::mob::MobKind::IronGolem(_) => "IronGolem",
+                    super::mob::MobKind::CopperGolem(_) => "CopperGolem",
                     super::mob::MobKind::SnowGolem(_) => "SnowGolem",
                     super::mob::MobKind::Cod(_) => "Cod",
                     super::mob::MobKind::Salmon(_) => "Salmon",

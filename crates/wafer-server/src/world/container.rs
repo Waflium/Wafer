@@ -544,7 +544,8 @@ impl ServerLevel {
             }
             match self.get_block_entity(pos).map(|e| &e.kind) {
                 Some(BlockEntityKind::Chest(_) | BlockEntityKind::Barrel(_)) => {
-                    self.increment_openers(pos, crate::server::level::game_mode::BLOCK_INTERACTION_RANGE);
+                    let range = self.get_container_interaction_range(player);
+                    self.increment_openers(pos, range);
                 }
                 Some(BlockEntityKind::ShulkerBox(_)) => self.shulker_box_start_open(pos),
                 _ => {}
@@ -570,6 +571,15 @@ impl ServerLevel {
                 Some(BlockEntityKind::ShulkerBox(_)) => self.shulker_box_stop_open(pos),
                 _ => {}
             }
+        }
+    }
+
+    pub fn container_get_entities_with_container_open(&mut self, container: ContainerRef) -> Vec<EntityId> {
+        match container {
+            ContainerRef::Block { pos, .. } if matches!(self.get_block_entity(pos).map(|entity| &entity.kind), Some(BlockEntityKind::Chest(_) | BlockEntityKind::Barrel(_))) => {
+                self.get_entities_with_container_open(pos)
+            }
+            _ => Vec::new(),
         }
     }
 

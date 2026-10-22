@@ -47,7 +47,7 @@ impl ServerLevel {
             MobKind::Guardian(_) | MobKind::ElderGuardian(_) => self.guardian_get_walk_target_value(pos),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => get_walk_target_value(),
             MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => get_walk_target_value(),
-            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::Shulker(_) => get_walk_target_value(),
+            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Shulker(_) => get_walk_target_value(),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => get_walk_target_value(),
             MobKind::Turtle(_) => self.turtle_get_walk_target_value(id, pos),
             MobKind::Hoglin(_) => self.hoglin_get_walk_target_value(id, pos),

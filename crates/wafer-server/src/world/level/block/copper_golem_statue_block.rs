@@ -8,7 +8,7 @@ use super::simple_waterlogged_block::schedule_water_tick;
 use super::weathering_copper::{self, WeatherState};
 use super::{BlockBehaviour, BlockHitResult};
 use crate::server::level::{ServerLevel, SoundSource};
-use crate::world::entity::EntityId;
+use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, values::block_state_properties_nbt};
 use crate::world::item::context::BlockPlaceContext;
@@ -110,8 +110,11 @@ impl BlockBehaviour for WeatheringCopperGolemStatueBlock {
             return InteractionResult::SUCCESS;
         }
         if weathering_copper::age(state.block()) == Some(WeatherState::Unaffected) {
-            let slot = if hand == InteractionHand::MainHand { wafer_data::EquipmentSlot::Mainhand } else { wafer_data::EquipmentSlot::Offhand };
-            level.hurt_and_break(player, slot, 1);
+            let copper_golem = level.copper_golem_statue_remove_statue(pos, state);
+            level.hurt_and_break(player, hand.as_equipment_slot(), 1);
+            level.add_fresh_entity(LevelEntity::Mob(Box::new(copper_golem)));
+            level.remove_block(pos, false);
+            return InteractionResult::SUCCESS;
         }
         InteractionResult::Pass
     }

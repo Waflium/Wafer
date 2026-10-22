@@ -500,6 +500,7 @@ impl ServerLevel {
             "minecraft:squid" => LevelEntity::Mob(Box::new(super::animal::squid::squid::Squid::create())),
             "minecraft:glow_squid" => LevelEntity::Mob(Box::new(super::animal::squid::glow_squid::GlowSquid::create())),
             "minecraft:iron_golem" => LevelEntity::Mob(Box::new(super::animal::golem::iron_golem::IronGolem::create())),
+            "minecraft:copper_golem" => LevelEntity::Mob(Box::new(super::animal::golem::copper_golem::CopperGolem::create())),
             "minecraft:snow_golem" => LevelEntity::Mob(Box::new(super::animal::golem::snow_golem::SnowGolem::create())),
             "minecraft:cod" => LevelEntity::Mob(Box::new(super::animal::fish::cod::Cod::create())),
             "minecraft:salmon" => LevelEntity::Mob(Box::new(super::animal::fish::salmon::Salmon::create())),
