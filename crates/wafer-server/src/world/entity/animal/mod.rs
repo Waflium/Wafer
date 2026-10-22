@@ -18,6 +18,7 @@ use crate::world::{InteractionHand, InteractionResult};
 pub mod ageable_water_creature;
 pub mod dolphin;
 pub mod parrot;
+pub mod allay;
 pub mod armadillo;
 pub mod bee;
 pub mod camel;
@@ -151,7 +152,7 @@ impl ServerLevel {
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_) => false,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => false,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => false,
-            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) => false,
+            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => false,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => false,
             MobKind::Cat(_) => feline::cat::is_food(item_stack),
             MobKind::Parrot(_) => false,

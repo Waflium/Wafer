@@ -90,6 +90,10 @@ impl BlockPos {
         dx * dx + dy * dy + dz * dz
     }
 
+    pub fn dist_chessboard(self, o: BlockPos) -> i32 {
+        (self.x - o.x).abs().max((self.y - o.y).abs()).max((self.z - o.z).abs())
+    }
+
     pub fn dist_manhattan(self, o: BlockPos) -> i32 {
         (self.x - o.x).abs() + (self.y - o.y).abs() + (self.z - o.z).abs()
     }

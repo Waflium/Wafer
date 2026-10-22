@@ -1553,7 +1553,7 @@ impl ServerLevel {
         if self.is_strider(id) && self.strider_check_fall_damage(id) {
             return;
         }
-        if self.is_parrot(id) || self.is_bee(id) {
+        if self.is_parrot(id) || self.is_bee(id) || self.is_allay(id) {
             return;
         }
         if self.is_boat(id) {
@@ -1929,6 +1929,9 @@ impl ServerLevel {
         }
         if self.is_copper_golem(id) {
             self.copper_golem_play_step_sound(id);
+            return;
+        }
+        if self.is_allay(id) {
             return;
         }
         if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
@@ -2631,6 +2634,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::GlowSquid(_)) => return self.glow_squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::IronGolem(_)) => return self.iron_golem_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Allay(_)) => return self.allay_hurt_server(id, source, damage),
                 Some(
                     super::mob::MobKind::Horse(_)
                     | super::mob::MobKind::Donkey(_)
@@ -2839,6 +2843,8 @@ impl ServerLevel {
             self.evoker_considers_entity_as_ally(id, other)
         } else if self.is_abstract_illager(id) {
             self.abstract_illager_considers_entity_as_ally(id, other)
+        } else if self.is_allay(id) {
+            self.allay_considers_entity_as_ally(id, other)
         } else {
             self.entity_considers_entity_as_ally(id, other)
         }
@@ -3010,6 +3016,7 @@ impl ServerLevel {
                     super::mob::MobKind::GlowSquid(_) => "GlowSquid",
                     super::mob::MobKind::IronGolem(_) => "IronGolem",
                     super::mob::MobKind::CopperGolem(_) => "CopperGolem",
+                    super::mob::MobKind::Allay(_) => "Allay",
                     super::mob::MobKind::SnowGolem(_) => "SnowGolem",
                     super::mob::MobKind::Cod(_) => "Cod",
                     super::mob::MobKind::Salmon(_) => "Salmon",

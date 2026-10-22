@@ -349,7 +349,7 @@ impl ServerLevel {
     }
 
     fn should_stay_close_to_leash_holder(&self, id: EntityId) -> bool {
-        !self.is_happy_ghast(id)
+        !self.is_happy_ghast(id) && !self.is_allay(id)
     }
 
     fn follow_leash_speed(&self, id: EntityId) -> f64 {

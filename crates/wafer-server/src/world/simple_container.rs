@@ -86,6 +86,10 @@ impl SimpleContainer {
         self.items.iter().any(|target_stack| target_stack.is_empty() || ItemStack::is_same_item_same_components(target_stack, item_stack) && target_stack.count < target_stack.max_stack_size())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.items.iter().all(ItemStack::is_empty)
+    }
+
     pub fn has_any_matching(&self, predicate: impl Fn(&ItemStack) -> bool) -> bool {
         self.items.iter().any(|item| !item.is_empty() && predicate(item))
     }

@@ -12,6 +12,10 @@ impl GlobalPos {
         GlobalPos { dimension: dimension.to_string(), pos }
     }
 
+    pub fn is_close_enough(&self, dimension: &str, pos: BlockPos, max_distance: i32) -> bool {
+        self.dimension == dimension && self.pos.dist_chessboard(pos) <= max_distance
+    }
+
     pub fn dimension(&self) -> &str {
         &self.dimension
     }

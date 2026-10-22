@@ -1832,6 +1832,8 @@ impl ServerLevel {
             self.abstract_horse_drop_equipment(id);
         } else if self.is_copper_golem(id) {
             self.copper_golem_drop_equipment(id);
+        } else if self.is_allay(id) {
+            self.allay_drop_equipment(id);
         }
     }
 
@@ -1878,7 +1880,7 @@ impl ServerLevel {
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_)) => self.ageable_water_creature_get_base_experience_reward(id),
-            Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Shulker(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Shulker(_) | MobKind::Allay(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_)) => self.water_animal_get_base_experience_reward(id),
             Some(MobKind::Villager(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
@@ -2283,12 +2285,21 @@ impl ServerLevel {
         }
     }
 
+    fn equipment_has_changed(&self, id: EntityId, previous: Option<&ItemStack>, current: Option<&ItemStack>) -> bool {
+        if self.is_allay(id) {
+            let empty = ItemStack::empty();
+            crate::world::entity::animal::allay::allay::equipment_has_changed(previous.unwrap_or(&empty), current.unwrap_or(&empty))
+        } else {
+            previous != current
+        }
+    }
+
     pub fn detect_equipment_updates(&mut self, id: EntityId) {
         let mut changed: Vec<(EquipmentSlot, Option<ItemStack>)> = Vec::new();
         for slot in EquipmentSlot::VALUES {
             let previous = self.living(id).last_equipment_items[slot as usize].clone();
             let current = self.item_by_slot(id, slot);
-            if previous != current {
+            if self.equipment_has_changed(id, previous.as_ref(), current.as_ref()) {
                 changed.push((slot, current.clone()));
                 if let Some(previous) = previous {
                     self.stop_location_based_effects(id, &previous, slot);
@@ -2458,6 +2469,7 @@ impl ServerLevel {
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Wolf(_)) => self.wolf_ai_step(id),
             Some(MobKind::Bat(_) | MobKind::Shulker(_) | MobKind::CopperGolem(_)) => self.mob_ai_step(id),
+            Some(MobKind::Allay(_)) => self.allay_ai_step(id),
             Some(MobKind::Squid(_)) => self.squid_ai_step(id),
             Some(MobKind::GlowSquid(_)) => self.glow_squid_ai_step(id),
             Some(MobKind::IronGolem(_)) => self.iron_golem_ai_step(id),
@@ -2955,6 +2967,8 @@ impl ServerLevel {
             self.camel_travel(id, input);
         } else if self.is_happy_ghast(id) {
             self.happy_ghast_travel(id, input);
+        } else if self.is_allay(id) {
+            self.allay_travel(id, input);
         } else {
             self.living_entity_travel(id, input);
         }

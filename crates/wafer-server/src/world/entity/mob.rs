@@ -207,6 +207,7 @@ pub enum MobKind {
     GlowSquid(GlowSquid),
     IronGolem(IronGolem),
     CopperGolem(super::animal::golem::copper_golem::CopperGolem),
+    Allay(super::animal::allay::allay::Allay),
     SnowGolem(SnowGolem),
     Cod(Cod),
     Salmon(Salmon),
@@ -328,7 +329,7 @@ impl Mob {
             MobKind::Dolphin(_) => super::animal::dolphin::dolphin::Dolphin::register_goals(&mut self.ai),
             MobKind::IronGolem(_) => IronGolem::register_goals(&mut self.ai),
             MobKind::SnowGolem(_) => SnowGolem::register_goals(&mut self.ai),
-            MobKind::CopperGolem(_) => {}
+            MobKind::CopperGolem(_) | MobKind::Allay(_) => {}
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::TropicalFish(_) => AbstractSchoolingFish::register_goals(&mut self.ai, &mut self.entity.random),
             MobKind::Pufferfish(_) => Pufferfish::register_goals(&mut self.ai),
             MobKind::Cat(_) => Cat::register_goals(&mut self.ai, self.living.attributes.value(Attribute::FollowRange)),
@@ -374,6 +375,7 @@ impl Mob {
             MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::HappyGhast::make_brain(self, packed_brain),
             MobKind::Creaking(_) => super::monster::creaking::creaking::Creaking::make_brain(self, packed_brain),
             MobKind::CopperGolem(_) => super::animal::golem::copper_golem::CopperGolem::make_brain(self, packed_brain),
+            MobKind::Allay(_) => super::animal::allay::allay::Allay::make_brain(self, packed_brain),
             MobKind::Axolotl(_) => Axolotl::make_brain(self, packed_brain),
             MobKind::Frog(_) => Frog::make_brain(self, packed_brain),
             MobKind::Tadpole(_) => Tadpole::make_brain(self, packed_brain),
@@ -548,6 +550,17 @@ impl Mob {
         matches!(self.kind, MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Parched(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_))
     }
 
+    pub fn can_pick_up_loot(&self) -> bool {
+        match self.kind {
+            MobKind::Allay(_) => super::animal::allay::allay::can_pick_up_loot(self),
+            _ => self.can_pick_up_loot,
+        }
+    }
+
+    pub fn update_interval(&self) -> i32 {
+        if matches!(self.kind, MobKind::Allay(_)) { 2 } else { 3 }
+    }
+
     pub fn client_tracking_range(&self) -> i32 {
         if matches!(self.kind, MobKind::Tadpole(_) | MobKind::Ravager(_) | MobKind::PolarBear(_) | MobKind::Panda(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) | MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) | MobKind::HappyGhast(_) | MobKind::WanderingTrader(_) | MobKind::Breeze(_) | MobKind::Strider(_) | MobKind::CopperGolem(_)) {
             10
@@ -559,7 +572,7 @@ impl Mob {
             || matches!(self.kind, MobKind::Creaking(_) | MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Enderman(_) | MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::MagmaCube(_) | MobKind::Phantom(_) | MobKind::Guardian(_) | MobKind::Hoglin(_) | MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_))
             || matches!(self.kind, MobKind::Squid(_))
             || matches!(self.kind, MobKind::SnowGolem(_))
-            || matches!(self.kind, MobKind::Cat(_) | MobKind::Parrot(_) | MobKind::Bee(_))
+            || matches!(self.kind, MobKind::Cat(_) | MobKind::Parrot(_) | MobKind::Bee(_) | MobKind::Allay(_))
             || matches!(self.kind, MobKind::Mule(_))
             || matches!(self.kind, MobKind::Fox(_))
             || matches!(self.kind, MobKind::Blaze(_))
@@ -589,6 +602,7 @@ impl Mob {
             MobKind::Turtle(_) => Turtle::create_navigation(follow_range_base),
             MobKind::Parrot(_) => PathNavigation::of_kind(PathNavigationKind::Flying, follow_range_base),
             MobKind::Bee(_) => super::animal::bee::bee::Bee::create_navigation(follow_range_base),
+            MobKind::Allay(_) => super::animal::allay::allay::Allay::create_navigation(follow_range_base),
             MobKind::Wither(_) => super::boss::wither::wither_boss::WitherBoss::create_navigation(follow_range_base),
             MobKind::Strider(_) => PathNavigation::of_kind(PathNavigationKind::Strider, follow_range_base),
             _ => PathNavigation::new(follow_range_base),
@@ -680,6 +694,7 @@ impl Mob {
             MobKind::Slime(_) | MobKind::MagmaCube(_) => true,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => true,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Shulker(_) => abstract_golem::remove_when_far_away(dist_sqr),
+            MobKind::Allay(_) => false,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => self.abstract_fish_remove_when_far_away(),
             MobKind::Cat(_) => cat::remove_when_far_away(self),
             MobKind::Ocelot(_) => ocelot::remove_when_far_away(self),
@@ -918,7 +933,7 @@ impl Mob {
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => None,
-            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) => None,
+            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => None,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => None,
             MobKind::Cat(cat) => Some(&cat.tamable_animal.animal),
             MobKind::Parrot(parrot) => Some(&parrot.shoulder_riding_entity.tamable_animal.animal),
@@ -966,7 +981,7 @@ impl Mob {
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => None,
-            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) => None,
+            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => None,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => None,
             MobKind::Cat(cat) => Some(&mut cat.tamable_animal.animal),
             MobKind::Parrot(parrot) => Some(&mut parrot.shoulder_riding_entity.tamable_animal.animal),
@@ -1054,7 +1069,7 @@ impl Mob {
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_) => {}
             MobKind::Slime(_) | MobKind::MagmaCube(_) => {}
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => {}
-            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) => {}
+            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => {}
             MobKind::Salmon(_) => {
                 self.apply_implicit_component_if_present(components, dc::SALMON_SIZE);
             }
@@ -1371,6 +1386,7 @@ impl Mob {
             MobKind::IronGolem(_) => iron_golem::DIMENSIONS,
             MobKind::SnowGolem(_) => snow_golem::DIMENSIONS,
             MobKind::CopperGolem(_) => super::animal::golem::copper_golem::DIMENSIONS,
+            MobKind::Allay(_) => super::animal::allay::allay::DIMENSIONS,
             MobKind::Cod(_) => cod::DIMENSIONS,
             MobKind::Salmon(_) => salmon::DIMENSIONS.scale(self.get_salmon_scale()),
             MobKind::Pufferfish(_) => Pufferfish::get_default_dimensions(self),
@@ -1478,7 +1494,7 @@ impl Mob {
             MobKind::Dolphin(_) => (0.0, 0.6f32 as f64, 0.0),
             MobKind::IronGolem(_) => (0.0, 2.7f32 as f64, 0.0),
             MobKind::SnowGolem(_) => (0.0, 1.9f32 as f64, 0.0),
-            MobKind::CopperGolem(_) => (0.0, (0.75f32 * super::animal::golem::copper_golem::DIMENSIONS.eye_height) as f64, 0.0),
+            MobKind::CopperGolem(_) | MobKind::Allay(_) => (0.0, self.default_dimensions().height as f64, 0.0),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => (0.0, self.default_dimensions().height as f64, 0.0),
             MobKind::Cat(_) | MobKind::Ocelot(_) if baby => (0.0, 0.3125f32 as f64, 0.0),
             MobKind::Cat(_) => (0.0, 0.5125f32 as f64, 0.0),
@@ -1546,7 +1562,7 @@ impl Mob {
         if living.locator_bar_icon.has_data() {
             out.push(("locator_bar_icon".into(), living.locator_bar_icon.to_nbt()));
         }
-        out.push(("CanPickUpLoot".into(), Nbt::Byte(self.can_pick_up_loot as i8)));
+        out.push(("CanPickUpLoot".into(), Nbt::Byte(self.can_pick_up_loot() as i8)));
         out.push(("PersistenceRequired".into(), Nbt::Byte(self.persistence_required as i8)));
         let drop_chances: Vec<(String, Nbt)> = EquipmentSlot::VALUES
             .into_iter()
@@ -1662,6 +1678,7 @@ impl Mob {
             MobKind::IronGolem(_) => IronGolem::add_additional_save_data(self, out),
             MobKind::SnowGolem(_) => SnowGolem::add_additional_save_data(self, out),
             MobKind::CopperGolem(_) => super::animal::golem::copper_golem::CopperGolem::add_additional_save_data(self, out),
+            MobKind::Allay(_) => super::animal::allay::allay::Allay::add_additional_save_data(self, out),
             MobKind::Cod(_) => AbstractFish::add_additional_save_data(self, out),
             MobKind::Salmon(_) => {
                 AbstractFish::add_additional_save_data(self, out);
@@ -1844,7 +1861,7 @@ impl Mob {
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_read_was_on_ground(nbt),
             MobKind::Wolf(_) => {}
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => {}
-            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) => {}
+            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => {}
             MobKind::Cod(_) => AbstractFish::read_additional_save_data(self, nbt),
             MobKind::Salmon(_) => {
                 AbstractFish::read_additional_save_data(self, nbt);
@@ -1896,6 +1913,7 @@ impl Mob {
             MobKind::IronGolem(_) => IronGolem::read_additional_save_data(self, nbt),
             MobKind::SnowGolem(_) => SnowGolem::read_additional_save_data(self, nbt),
             MobKind::CopperGolem(_) => super::animal::golem::copper_golem::CopperGolem::read_additional_save_data(self, nbt),
+            MobKind::Allay(_) => super::animal::allay::allay::Allay::read_additional_save_data(self, nbt),
             MobKind::Skeleton(_) => Skeleton::read_additional_save_data(self, nbt),
             MobKind::Bogged(_) => Bogged::read_additional_save_data(self, nbt),
             MobKind::Endermite(_) => Endermite::read_additional_save_data(self, nbt),
@@ -2003,6 +2021,7 @@ impl Mob {
             MobKind::IronGolem(_) => return None,
             MobKind::SnowGolem(_) => SnowGolem::get_ambient_sound(),
             MobKind::CopperGolem(_) => return None,
+            MobKind::Allay(_) => super::animal::allay::allay::get_ambient_sound(self),
             MobKind::Cod(_) => Cod::get_ambient_sound(),
             MobKind::Salmon(_) => Salmon::get_ambient_sound(),
             MobKind::Pufferfish(_) => return None,
@@ -2093,6 +2112,7 @@ impl Mob {
             MobKind::IronGolem(_) => IronGolem::get_hurt_sound(),
             MobKind::SnowGolem(_) => SnowGolem::get_hurt_sound(),
             MobKind::CopperGolem(_) => super::animal::golem::copper_golem::get_hurt_sound(&self.entity),
+            MobKind::Allay(_) => super::animal::allay::allay::get_hurt_sound(),
             MobKind::Cod(_) => Cod::get_hurt_sound(),
             MobKind::Salmon(_) => Salmon::get_hurt_sound(),
             MobKind::Pufferfish(_) => Pufferfish::get_hurt_sound(),
@@ -2177,6 +2197,7 @@ impl Mob {
             MobKind::IronGolem(_) => IronGolem::get_death_sound(),
             MobKind::SnowGolem(_) => SnowGolem::get_death_sound(),
             MobKind::CopperGolem(_) => super::animal::golem::copper_golem::get_death_sound(&self.entity),
+            MobKind::Allay(_) => super::animal::allay::allay::get_death_sound(),
             MobKind::Cod(_) => Cod::get_death_sound(),
             MobKind::Salmon(_) => Salmon::get_death_sound(),
             MobKind::Pufferfish(_) => Pufferfish::get_death_sound(),
@@ -2245,7 +2266,7 @@ impl Mob {
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return None,
             MobKind::Wolf(_) => Wolf::get_step_sound(self),
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => return None,
-            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) => return None,
+            MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => return None,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => return None,
             MobKind::Cat(_) | MobKind::Ocelot(_) => return None,
             MobKind::Parrot(_) => super::animal::parrot::parrot::get_step_sound(),
@@ -2271,6 +2292,7 @@ impl Mob {
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_get_sound_volume(),
             MobKind::Bat(_) => Bat::get_sound_volume(),
             MobKind::Bee(_) => super::animal::bee::bee::get_sound_volume(),
+            MobKind::Allay(_) => super::animal::allay::allay::get_sound_volume(),
             MobKind::Squid(_) | MobKind::GlowSquid(_) => Squid::get_sound_volume(),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) => abstract_horse::get_sound_volume(),
             MobKind::Ghast(_) => Ghast::get_sound_volume(),
@@ -2441,6 +2463,7 @@ impl ServerLevel {
             MobKind::IronGolem(_) => self.iron_golem_mob_interact(id, player, hand),
             MobKind::SnowGolem(_) => self.snow_golem_mob_interact(id, player, hand),
             MobKind::CopperGolem(_) => self.copper_golem_mob_interact(id, player, hand),
+            MobKind::Allay(_) => self.allay_mob_interact(id, player, hand),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => self.abstract_fish_mob_interact(id, player, hand),
             MobKind::Cat(_) => self.cat_mob_interact(id, player, hand),
             MobKind::Parrot(_) => self.parrot_mob_interact(id, player, hand),
@@ -2710,7 +2733,7 @@ impl ServerLevel {
             self.burn_undead(id);
         }
         let mob = self.mob(id).expect("a mob");
-        if mob.can_pick_up_loot && self.is_alive(id) && !mob.living.dead && self.game_rules.get_bool(game_rule::MOB_GRIEFING) {
+        if mob.can_pick_up_loot() && self.is_alive(id) && !mob.living.dead && self.game_rules.get_bool(game_rule::MOB_GRIEFING) {
             let (x, y, z) = self.get_pickup_reach(id);
             let area = self.entity(id).bounding_box().inflate(x, y, z);
             for entity in self.items_in(&area, None) {
@@ -2765,8 +2788,8 @@ impl ServerLevel {
         false
     }
 
-    fn get_pickup_reach(&self, _id: EntityId) -> (f64, f64, f64) {
-        ITEM_PICKUP_REACH
+    fn get_pickup_reach(&self, id: EntityId) -> (f64, f64, f64) {
+        if self.is_allay(id) { super::animal::allay::allay::ITEM_PICKUP_REACH } else { ITEM_PICKUP_REACH }
     }
 
     pub fn pick_up_item(&mut self, id: EntityId, entity: EntityId) {
@@ -2784,6 +2807,8 @@ impl ServerLevel {
             self.panda_pick_up_item(id, entity);
         } else if self.is_dolphin(id) {
             self.dolphin_pick_up_item(id, entity);
+        } else if self.is_allay(id) {
+            self.allay_pick_up_item(id, entity);
         } else {
             self.mob_pick_up_item(id, entity);
         }
@@ -2938,6 +2963,7 @@ impl ServerLevel {
             Some(MobKind::PiglinBrute(_)) => self.piglin_brute_wants_to_pick_up(id, item_stack),
             Some(MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Parched(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_)) => self.abstract_skeleton_wants_to_pick_up(id, item_stack),
             Some(MobKind::Villager(_)) => self.villager_wants_to_pick_up(id, item_stack),
+            Some(MobKind::Allay(_)) => self.allay_wants_to_pick_up(id, item_stack),
             _ => self.mob_wants_to_pick_up(id, item_stack),
         }
     }
@@ -3279,6 +3305,7 @@ impl ServerLevel {
             Some(MobKind::Breeze(_)) => self.breeze_custom_server_ai_step(id),
             Some(MobKind::Creaking(_)) => self.creaking_custom_server_ai_step(id),
             Some(MobKind::CopperGolem(_)) => self.copper_golem_custom_server_ai_step(id),
+            Some(MobKind::Allay(_)) => self.allay_custom_server_ai_step(id),
             Some(MobKind::Armadillo(_)) => self.armadillo_custom_server_ai_step(id),
             Some(MobKind::Sniffer(_)) => self.sniffer_custom_server_ai_step(id),
             Some(MobKind::Camel(_) | MobKind::CamelHusk(_)) => self.camel_custom_server_ai_step(id),
@@ -3679,7 +3706,7 @@ pub fn finalize_spawn(
         MobKind::MagmaCube(_) => return magma_cube::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Bat(_) => {}
         MobKind::Squid(_) | MobKind::GlowSquid(_) => return squid::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
-        MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) => {}
+        MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => {}
         MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => {}
         MobKind::Cat(_) => return cat::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Parrot(_) => group_data = super::animal::parrot::parrot::finalize_spawn(level, mob, group_data),
@@ -3794,7 +3821,7 @@ pub fn get_walk_target_value(mob: &Mob, pos: BlockPos, level: &mut (impl ServerL
         MobKind::Pillager(_) => Pillager::get_walk_target_value(),
         MobKind::Slime(_) | MobKind::MagmaCube(_) => super::pathfinder_mob::get_walk_target_value(),
         MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => super::pathfinder_mob::get_walk_target_value(),
-        MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) => super::pathfinder_mob::get_walk_target_value(),
+        MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => super::pathfinder_mob::get_walk_target_value(),
         MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => super::pathfinder_mob::get_walk_target_value(),
         MobKind::Axolotl(_) => axolotl::get_walk_target_value(),
         MobKind::Villager(_) | MobKind::WanderingTrader(_) => super::pathfinder_mob::get_walk_target_value(),

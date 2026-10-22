@@ -455,6 +455,19 @@ pub static STRIDER_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static ALLAY_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, FlyingSpeed, AttackDamage,
+        ],
+        &[(FollowRange, 16.0), (MaxHealth, 20.0), (FlyingSpeed, 0.1f32 as f64), (MovementSpeed, 0.1f32 as f64), (AttackDamage, 2.0)],
+    )
+};
+
 pub static PARROT_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

@@ -31,7 +31,7 @@ pub fn create_with(predicate: impl Fn(&ServerLevel, EntityId) -> bool + 'static,
                 && predicate(level, body)
                 && closer
                 && level.world_border.is_within_bounds_pos(item_pos)
-                && level.mob(body).is_some_and(|mob| mob.can_pick_up_loot)
+                && level.mob(body).is_some_and(|mob| mob.can_pick_up_loot())
             {
                 let target = WalkTarget::new(PositionTracker::Entity(EntityTracker::new(level, item, false)), speed_modifier, 0);
                 let look = PositionTracker::Entity(EntityTracker::new(level, item, true));
