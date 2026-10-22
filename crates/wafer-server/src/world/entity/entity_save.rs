@@ -157,6 +157,7 @@ impl LevelEntity {
             LevelEntity::Interaction(_) => Some("minecraft:interaction"),
             LevelEntity::OminousItemSpawner(_) => Some("minecraft:ominous_item_spawner"),
             LevelEntity::ArmorStand(_) => Some("minecraft:armor_stand"),
+            LevelEntity::Mannequin(_) => Some("minecraft:mannequin"),
             LevelEntity::Display(display) => Some(match display.kind {
                 super::display::DisplayKind::BlockDisplay => "minecraft:block_display",
                 super::display::DisplayKind::ItemDisplay => "minecraft:item_display",
@@ -220,6 +221,7 @@ impl LevelEntity {
             LevelEntity::Interaction(interaction) => interaction.add_additional_save_data(out),
             LevelEntity::OminousItemSpawner(spawner) => spawner.add_additional_save_data(out),
             LevelEntity::ArmorStand(stand) => stand.add_additional_save_data(out),
+            LevelEntity::Mannequin(mannequin) => mannequin.add_additional_save_data(out),
             LevelEntity::Display(display) => display.add_additional_save_data(out),
             LevelEntity::Painting(painting) => painting.add_additional_save_data(out),
             LevelEntity::Cushion(cushion) => cushion.add_additional_save_data(out),
@@ -301,6 +303,7 @@ impl LevelEntity {
             LevelEntity::Interaction(interaction) => interaction.read_additional_save_data(nbt),
             LevelEntity::OminousItemSpawner(spawner) => spawner.read_additional_save_data(nbt),
             LevelEntity::ArmorStand(stand) => stand.read_additional_save_data(nbt),
+            LevelEntity::Mannequin(mannequin) => mannequin.read_additional_save_data(nbt),
             LevelEntity::Display(display) => display.read_additional_save_data(nbt),
             LevelEntity::Painting(painting) => painting.read_additional_save_data(nbt),
             LevelEntity::Cushion(cushion) => cushion.read_additional_save_data(nbt),
@@ -360,6 +363,7 @@ pub fn apply_default_stack_config(entity: &mut LevelEntity, item_stack: &ItemSta
         LevelEntity::Mob(mob) => mob.apply_components_from_item_stack(item_stack),
         LevelEntity::Painting(painting) => painting.apply_components_from_item_stack(item_stack),
         LevelEntity::Cushion(cushion) => cushion.apply_components_from_item_stack(item_stack),
+        LevelEntity::Mannequin(mannequin) => mannequin.apply_components_from_item_stack(item_stack),
         other => other.entity_mut().apply_components_from_item_stack(item_stack),
     }
     update_custom_entity_tag(entity, item_stack.get(crate::world::item::component::ENTITY_DATA)?)
@@ -418,6 +422,7 @@ impl ServerLevel {
             "minecraft:text_display" => LevelEntity::Display(super::display::Display::create_text_display()),
             "minecraft:interaction" => LevelEntity::Interaction(super::interaction::Interaction::create()),
             "minecraft:armor_stand" => LevelEntity::ArmorStand(Box::new(super::decoration::armor_stand::ArmorStand::of_type())),
+            "minecraft:mannequin" => LevelEntity::Mannequin(Box::new(super::decoration::mannequin::Mannequin::of_type())),
             "minecraft:ominous_item_spawner" => LevelEntity::OminousItemSpawner(Box::new(super::ominous_item_spawner::OminousItemSpawner::of_type())),
             "minecraft:marker" => LevelEntity::Marker(super::marker::Marker::create()),
             "minecraft:evoker_fangs" => LevelEntity::EvokerFangs(super::projectile::evoker_fangs::EvokerFangs::of_type()),

@@ -50,7 +50,7 @@ use crate::stats::stats;
 use crate::stats::stats_counter::StatsCounter;
 use crate::world::food::constants::{EXHAUSTION_SPRINT, EXHAUSTION_SWIM};
 
-pub const DIMENSIONS: EntityDimensions = crate::world::entity::player::player::STANDING_DIMENSIONS;
+pub const DIMENSIONS: EntityDimensions = crate::world::entity::avatar::STANDING_DIMENSIONS;
 const GAME_EVENT_WIN_GAME: u8 = 4;
 
 const CREATIVE_BLOCK_INTERACTION_RANGE_MODIFIER: AttributeModifier =

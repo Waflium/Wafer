@@ -609,6 +609,8 @@ impl ServerLevel {
             Some(p) => (&mut p.entity, Some(&mut p.living.attributes)),
             None => match self.entities.get_mut(&id) {
                 Some(LevelEntity::Mob(mob)) => (&mut mob.entity, Some(&mut mob.living.attributes)),
+                Some(LevelEntity::ArmorStand(stand)) => (&mut stand.entity, Some(&mut stand.living.attributes)),
+                Some(LevelEntity::Mannequin(mannequin)) => (&mut mannequin.entity, Some(&mut mannequin.living.attributes)),
                 Some(e) => (e.entity_mut(), None),
                 None => return,
             },

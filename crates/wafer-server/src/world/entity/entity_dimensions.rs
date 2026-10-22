@@ -8,11 +8,16 @@ pub struct EntityDimensions {
     pub height: f32,
     pub eye_height: f32,
     pub attachments: EntityAttachments,
+    pub fixed: bool,
 }
 
 impl EntityDimensions {
     pub const fn scalable(width: f32, height: f32) -> EntityDimensions {
-        EntityDimensions { width, height, eye_height: height * 0.85, attachments: EntityAttachments::create_default(height) }
+        EntityDimensions { width, height, eye_height: height * 0.85, attachments: EntityAttachments::create_default(height), fixed: false }
+    }
+
+    pub const fn fixed(width: f32, height: f32) -> EntityDimensions {
+        EntityDimensions { width, height, eye_height: height * 0.85, attachments: EntityAttachments::create_default(height), fixed: true }
     }
 
     pub const fn with_eye_height(self, eye_height: f32) -> EntityDimensions {
@@ -28,7 +33,7 @@ impl EntityDimensions {
     }
 
     pub fn scale(self, scale_factor: f32) -> EntityDimensions {
-        if scale_factor == 1.0 {
+        if self.fixed || scale_factor == 1.0 {
             return self;
         }
         EntityDimensions {
@@ -36,11 +41,12 @@ impl EntityDimensions {
             height: self.height * scale_factor,
             eye_height: self.eye_height * scale_factor,
             attachments: self.attachments.scale(scale_factor, scale_factor, scale_factor),
+            fixed: false,
         }
     }
 
     pub fn scale_xy(self, width_factor: f32, height_factor: f32) -> EntityDimensions {
-        if width_factor == 1.0 && height_factor == 1.0 {
+        if self.fixed || width_factor == 1.0 && height_factor == 1.0 {
             return self;
         }
         EntityDimensions {
@@ -48,6 +54,7 @@ impl EntityDimensions {
             height: self.height * height_factor,
             eye_height: self.eye_height * height_factor,
             attachments: self.attachments.scale(width_factor, height_factor, width_factor),
+            fixed: false,
         }
     }
 

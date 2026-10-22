@@ -10,4 +10,7 @@ pub mod hanging_entity;
 mod hanging_entity_tests;
 pub mod item_frame;
 pub mod leash_fence_knot_entity;
+pub mod mannequin;
+#[cfg(test)]
+mod mannequin_tests;
 pub mod painting;

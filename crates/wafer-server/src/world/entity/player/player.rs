@@ -9,10 +9,11 @@ use crate::util::Prediction;
 use crate::world::damagesource::DamageSource;
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::attributes::Attribute;
+use crate::world::entity::avatar::get_default_dimensions;
 use crate::world::entity::data::Pose;
 use crate::world::entity::entity_reference::EntityReference;
 use crate::world::entity::projectile::projectile_deflection::ProjectileDeflection;
-use crate::world::entity::{EntityDimensions, EntityId, RemovalReason, sound_event};
+use crate::world::entity::{EntityId, RemovalReason, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, codec as component_codec};
 use crate::world::level::BlockGetter;
@@ -22,20 +23,6 @@ use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 use crate::world::attribute::bed_rule::BedRule;
 use crate::network::chat::Component;
 use crate::world::{InteractionHand, InteractionResult};
-
-pub const DEFAULT_VEHICLE_ATTACHMENT: Vec3 = Vec3::new(0.0, 0.6, 0.0);
-pub const STANDING_DIMENSIONS: EntityDimensions =
-    EntityDimensions::scalable(0.6, 1.8).with_eye_height(1.62).with_vehicle_attachment(&[DEFAULT_VEHICLE_ATTACHMENT]);
-
-pub fn get_default_dimensions(pose: Pose) -> EntityDimensions {
-    match pose {
-        Pose::Sleeping => EntityDimensions::scalable(0.2, 0.2).with_eye_height(0.2),
-        Pose::FallFlying | Pose::Swimming | Pose::SpinAttack => EntityDimensions::scalable(0.6, 0.6).with_eye_height(0.4),
-        Pose::Crouching => EntityDimensions::scalable(0.6, 1.5).with_eye_height(1.27).with_vehicle_attachment(&[DEFAULT_VEHICLE_ATTACHMENT]),
-        Pose::Dying => EntityDimensions::scalable(0.2, 0.2).with_eye_height(1.62),
-        _ => STANDING_DIMENSIONS,
-    }
-}
 
 impl ServerLevel {
     pub fn player_tick(&mut self, id: EntityId) {

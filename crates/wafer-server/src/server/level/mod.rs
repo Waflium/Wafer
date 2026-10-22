@@ -1808,6 +1808,7 @@ impl ServerLevel {
             Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) => {}
             Some(LevelEntity::OminousItemSpawner(_)) => self.tick_ominous_item_spawner(id),
             Some(LevelEntity::ArmorStand(_)) => self.tick_armor_stand(id),
+            Some(LevelEntity::Mannequin(_)) => self.tick_mannequin(id),
             Some(LevelEntity::Display(_)) => self.tick_display(id),
             Some(LevelEntity::EndCrystal(_)) => self.tick_end_crystal(id),
             Some(LevelEntity::PrimedTnt(_)) => self.tick_primed_tnt(id),

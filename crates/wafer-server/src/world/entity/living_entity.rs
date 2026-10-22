@@ -281,6 +281,89 @@ impl SwingState {
     }
 }
 
+pub fn add_additional_save_data(entity: &Entity, living: &LivingEntity, health: f32, absorption: f32, equipment: &[Option<ItemStack>; 8], output: &mut Vec<(String, Nbt)>) {
+    output.push(("Health".into(), Nbt::Float(health)));
+    output.push(("HurtTime".into(), Nbt::Short(living.hurt_time as i16)));
+    output.push(("DeathTime".into(), Nbt::Short(living.death_time as i16)));
+    output.push(("AbsorptionAmount".into(), Nbt::Float(absorption)));
+    output.push(("current_impulse_context_reset_grace_time".into(), Nbt::Int(living.current_impulse_context_reset_grace_time)));
+    if let Some(pos) = living.current_impulse_impact_pos {
+        output.push(("current_explosion_impact_pos".into(), Nbt::List(vec![Nbt::Double(pos.x), Nbt::Double(pos.y), Nbt::Double(pos.z)])));
+    }
+    output.push(("attributes".into(), living.attributes.to_nbt()));
+    if !living.active_effects.is_empty() {
+        output.push(("active_effects".into(), Nbt::List(living.active_effects.iter().map(|e| e.to_nbt()).collect())));
+    }
+    output.push(("FallFlying".into(), Nbt::Byte(entity.is_fall_flying() as i8)));
+    if let DataValue::OptionalBlockPos(Some(pos)) = entity.data.get(ids::SLEEPING_POS) {
+        output.push(("sleeping_pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z])));
+    }
+    output.push(("Brain".into(), living.brain.pack().to_nbt()));
+    if let Some(player) = living.last_hurt_by_player {
+        output.push(("last_hurt_by_player".into(), crate::world::level::storage::uuid_ints(player)));
+        output.push(("last_hurt_by_player_memory_time".into(), Nbt::Int(living.last_hurt_by_player_memory_time)));
+    }
+    if let Some(mob) = living.last_hurt_by_mob {
+        output.push(("last_hurt_by_mob".into(), crate::world::level::storage::uuid_ints(mob)));
+        output.push(("ticks_since_last_hurt_by_mob".into(), Nbt::Int(entity.tick_count - living.last_hurt_by_mob_timestamp)));
+    }
+    let slots: Vec<(String, Nbt)> = EquipmentSlot::VALUES
+        .into_iter()
+        .filter_map(|slot| equipment[slot as usize].as_ref().filter(|stack| !stack.is_empty()).map(|stack| (super::mob::slot_name(slot).to_string(), stack.to_nbt())))
+        .collect();
+    if !slots.is_empty() {
+        output.push(("equipment".into(), Nbt::Compound(slots)));
+    }
+    if living.locator_bar_icon.has_data() {
+        output.push(("locator_bar_icon".into(), living.locator_bar_icon.to_nbt()));
+    }
+}
+
+pub fn read_additional_save_data(entity: &mut Entity, living: &mut LivingEntity, health: &mut f32, absorption: &mut f32, equipment: &mut [Option<ItemStack>; 8], nbt: &Nbt) {
+    let float = |key: &str| nbt.get(key).and_then(Nbt::as_f64).map(|v| v as f32);
+    let int = |key: &str| nbt.get(key).and_then(crate::world::level::block::entity::int_value);
+    let boolean = |key: &str| nbt.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+    let short = |key: &str| nbt.get(key).and_then(Nbt::as_i64).map_or(0, |v| v as i16 as i32);
+    *absorption = float("AbsorptionAmount").unwrap_or(0.0).max(0.0);
+    if let Some(attributes) = nbt.get("attributes") {
+        living.attributes.load(attributes);
+    }
+    living.active_effects.clear();
+    for effect in nbt.get("active_effects").map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(MobEffectInstance::from_nbt) {
+        match living.active_effects.binary_search_by_key(&effect.effect, |e| e.effect) {
+            Ok(index) => living.active_effects[index] = effect,
+            Err(index) => living.active_effects.insert(index, effect),
+        }
+        living.effects_dirty = true;
+    }
+    let max_health = living.attributes.value(Attribute::MaxHealth) as f32;
+    *health = float("Health").unwrap_or(max_health).clamp(0.0, max_health);
+    entity.data.set(ids::HEALTH, DataValue::Float(*health));
+    living.hurt_time = short("HurtTime");
+    living.death_time = short("DeathTime");
+    entity.set_shared_flag(flags::FALL_FLYING, boolean("FallFlying"));
+    living.last_hurt_by_player = nbt.get("last_hurt_by_player").and_then(super::entity_save::uuid_from_nbt);
+    living.last_hurt_by_player_memory_time = int("last_hurt_by_player_memory_time").unwrap_or(0);
+    living.last_hurt_by_mob = nbt.get("last_hurt_by_mob").and_then(super::entity_save::uuid_from_nbt);
+    living.last_hurt_by_mob_timestamp = entity.tick_count - int("ticks_since_last_hurt_by_mob").unwrap_or(0);
+    *equipment = Default::default();
+    if let Some(Nbt::Compound(slots)) = nbt.get("equipment") {
+        for (name, stack) in slots {
+            if let Some(slot) = EquipmentSlot::by_name(name)
+                && let Ok(stack) = ItemStack::from_nbt(stack)
+            {
+                equipment[slot as usize] = Some(stack);
+            }
+        }
+    }
+    living.locator_bar_icon = nbt.get("locator_bar_icon").and_then(Icon::from_nbt).unwrap_or_default();
+    living.current_impulse_context_reset_grace_time = int("current_impulse_context_reset_grace_time").unwrap_or(0);
+    living.current_impulse_impact_pos = match nbt.get("current_explosion_impact_pos") {
+        Some(Nbt::List(v)) if v.len() == 3 => Some(Vec3::new(v[0].as_f64().unwrap_or(0.0), v[1].as_f64().unwrap_or(0.0), v[2].as_f64().unwrap_or(0.0))),
+        _ => None,
+    };
+}
+
 pub fn get_comfortable_fall_distance(allowed_damage: f32) -> i32 {
     mth::floor_f(allowed_damage + 3.0)
 }
@@ -363,6 +446,7 @@ impl ServerLevel {
             Some(p) => &p.living,
             None => match self.entities.get(&id) {
                 Some(LevelEntity::ArmorStand(stand)) => &stand.living,
+                Some(LevelEntity::Mannequin(mannequin)) => &mannequin.living,
                 _ => &self.mob(id).expect("a living entity").living,
             },
         }
@@ -376,6 +460,10 @@ impl ServerLevel {
             let Some(LevelEntity::ArmorStand(stand)) = self.entities.get_mut(&id) else { unreachable!("an armor stand") };
             return &mut stand.living;
         }
+        if self.is_mannequin(id) {
+            let Some(LevelEntity::Mannequin(mannequin)) = self.entities.get_mut(&id) else { unreachable!("a mannequin") };
+            return &mut mannequin.living;
+        }
         &mut self.mob_mut(id).expect("a living entity").living
     }
 
@@ -384,6 +472,7 @@ impl ServerLevel {
             Some(p) => (&p.entity, &p.living),
             None => match self.entities.get(&id) {
                 Some(LevelEntity::ArmorStand(stand)) => (&stand.entity, &stand.living),
+                Some(LevelEntity::Mannequin(mannequin)) => (&mannequin.entity, &mannequin.living),
                 _ => {
                     let mob = self.mob(id).expect("a living entity");
                     (&mob.entity, &mob.living)
@@ -401,6 +490,10 @@ impl ServerLevel {
             let Some(LevelEntity::ArmorStand(stand)) = self.entities.get_mut(&id) else { unreachable!("an armor stand") };
             return (&mut stand.entity, &mut stand.living);
         }
+        if self.is_mannequin(id) {
+            let Some(LevelEntity::Mannequin(mannequin)) = self.entities.get_mut(&id) else { unreachable!("a mannequin") };
+            return (&mut mannequin.entity, &mut mannequin.living);
+        }
         let mob = self.mob_mut(id).expect("a living entity");
         (&mut mob.entity, &mut mob.living)
     }
@@ -410,7 +503,10 @@ impl ServerLevel {
             Some(p) => p.health,
             None => match self.armor_stand(id) {
                 Some(stand) => stand.health,
-                None => self.mob(id).expect("a living entity").health,
+                None => match self.mannequin(id) {
+                    Some(mannequin) => mannequin.health,
+                    None => self.mob(id).expect("a living entity").health,
+                },
             },
         }
     }
@@ -422,6 +518,9 @@ impl ServerLevel {
         if let Some(stand) = self.armor_stand(id) {
             return stand.item_by_slot(slot).cloned();
         }
+        if let Some(mannequin) = self.mannequin(id) {
+            return mannequin.item_by_slot(slot).cloned();
+        }
         let index = self.equipment_inventory_slot(id, slot)?;
         self.player(id).inventory.slots[index].clone().filter(|s| !s.is_empty())
     }
@@ -429,6 +528,9 @@ impl ServerLevel {
     pub fn get_item_in_hand(&self, id: EntityId, hand: InteractionHand) -> Option<ItemStack> {
         if let Some(stand) = self.armor_stand(id) {
             return stand.item_by_slot(hand.as_equipment_slot()).cloned();
+        }
+        if let Some(mannequin) = self.mannequin(id) {
+            return mannequin.item_by_slot(hand.as_equipment_slot()).cloned();
         }
         match self.mob(id) {
             Some(mob) => mob.item_by_slot(hand.as_equipment_slot()).cloned(),
@@ -531,6 +633,10 @@ impl ServerLevel {
         }
         if let Some(stand) = self.armor_stand_mut(id) {
             stand.equipment[slot as usize] = Some(item_stack).filter(|s| !s.is_empty());
+            return;
+        }
+        if let Some(mannequin) = self.mannequin_mut(id) {
+            mannequin.equipment[slot as usize] = Some(item_stack).filter(|s| !s.is_empty());
             return;
         }
         let Some(index) = self.equipment_inventory_slot(id, slot) else { return };
@@ -835,6 +941,9 @@ impl ServerLevel {
         if let Some(stand) = self.armor_stand(id) {
             return stand.absorption;
         }
+        if let Some(mannequin) = self.mannequin(id) {
+            return mannequin.absorption;
+        }
         match self.player(id).entity.data.get(ids::PLAYER_ABSORPTION) {
             DataValue::Float(v) => *v,
             _ => 0.0,
@@ -851,6 +960,10 @@ impl ServerLevel {
             stand.absorption = amount;
             return;
         }
+        if let Some(mannequin) = self.mannequin_mut(id) {
+            mannequin.absorption = amount;
+            return;
+        }
         self.player_mut(id).entity.data.set(ids::PLAYER_ABSORPTION, DataValue::Float(amount));
     }
 
@@ -864,6 +977,11 @@ impl ServerLevel {
         if let Some(stand) = self.armor_stand_mut(id) {
             stand.health = health;
             stand.entity.data.set(ids::HEALTH, DataValue::Float(health));
+            return;
+        }
+        if let Some(mannequin) = self.mannequin_mut(id) {
+            mannequin.health = health;
+            mannequin.entity.data.set(ids::HEALTH, DataValue::Float(health));
             return;
         }
         let p = self.player_mut(id);
@@ -1047,6 +1165,9 @@ impl ServerLevel {
         }
         if let Some(stand) = self.armor_stand(id) {
             return stand.item_by_slot(slot);
+        }
+        if let Some(mannequin) = self.mannequin(id) {
+            return mannequin.item_by_slot(slot);
         }
         let index = self.equipment_inventory_slot(id, slot)?;
         self.player(id).inventory.slots[index].as_ref().filter(|s| !s.is_empty())
@@ -1283,6 +1404,9 @@ impl ServerLevel {
         if self.is_armor_stand(id) {
             return sound_event(super::decoration::armor_stand::get_death_sound());
         }
+        if self.is_mannequin(id) {
+            return sound_event("minecraft:entity.generic.death");
+        }
         match self.mob(id) {
             Some(mob) => sound_event(mob.get_death_sound()),
             None => sound_event("minecraft:entity.player.death"),
@@ -1300,6 +1424,9 @@ impl ServerLevel {
     fn get_hurt_sound(&self, id: EntityId, source: &DamageSource) -> i32 {
         if self.is_armor_stand(id) {
             return sound_event(super::decoration::armor_stand::get_hurt_sound());
+        }
+        if self.is_mannequin(id) {
+            return sound_event("minecraft:entity.generic.hurt");
         }
         match self.mob(id) {
             Some(_) if self.is_wolf(id) => sound_event(self.wolf_get_hurt_sound(id, source)),
@@ -1580,7 +1707,7 @@ impl ServerLevel {
             self.drop_all_death_loot(id, &source);
         }
         self.broadcast_entity_event(id, entity_event::DEATH);
-        self.entity_mut(id).set_pose(Pose::Dying);
+        self.set_entity_pose(id, Pose::Dying);
     }
 
     pub fn killed_entity(&mut self, id: EntityId, entity: EntityId, source: &DamageSource) -> bool {
@@ -2324,6 +2451,9 @@ impl ServerLevel {
         if let Some(stand) = self.armor_stand(id) {
             return self.is_local_instance_authoritative(id) && stand.has_physics();
         }
+        if let Some(mannequin) = self.mannequin(id) {
+            return !mannequin.get_immovable() && self.is_local_instance_authoritative(id);
+        }
         self.is_local_instance_authoritative(id) && self.mob(id).is_none_or(|mob| !mob.is_no_ai())
     }
 
@@ -2344,6 +2474,8 @@ impl ServerLevel {
             self.abstract_horse_is_immobile(id)
         } else if self.is_ravager(id) {
             self.living_entity_is_immobile(id) || Ravager::is_immobile(self.mob(id).expect("a ravager"))
+        } else if let Some(mannequin) = self.mannequin(id) {
+            mannequin.get_immovable() || self.living_entity_is_immobile(id)
         } else {
             self.living_entity_is_immobile(id)
         }
@@ -3423,7 +3555,7 @@ impl ServerLevel {
 
     pub fn dismount_type(&self, id: EntityId) -> crate::world::entity::vehicle::dismount_helper::DismountType {
         crate::world::entity::vehicle::dismount_helper::DismountType {
-            dimensions: if self.is_player(id) { super::player::player::get_default_dimensions(Pose::Standing) } else { self.entity(id).dimensions },
+            dimensions: if self.is_player(id) { super::avatar::get_default_dimensions(Pose::Standing) } else { self.entity(id).dimensions },
             entity_type: super::entity_type::EntityType::by_id(self.entity(id).entity_type),
             is_player: self.is_player(id),
         }
@@ -3435,6 +3567,9 @@ impl ServerLevel {
         } else if self.is_mob(id) && self.entity(id).pose() != pose {
             self.entity_mut(id).set_pose(pose);
             self.refresh_mob_dimensions(id);
+        } else if self.is_mannequin(id) && self.entity(id).pose() != pose {
+            self.entity_mut(id).set_pose(pose);
+            self.mannequin_refresh_dimensions(id);
         } else {
             self.entity_mut(id).set_pose(pose);
         }

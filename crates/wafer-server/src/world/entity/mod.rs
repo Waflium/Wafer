@@ -4,6 +4,7 @@ pub mod ambient;
 pub mod animal;
 pub mod area_effect_cloud;
 pub mod attributes;
+pub mod avatar;
 pub mod boss;
 pub mod bucketable;
 pub mod conversion_params;
@@ -103,6 +104,7 @@ pub enum LevelEntity {
     Display(display::Display),
     OminousItemSpawner(Box<ominous_item_spawner::OminousItemSpawner>),
     ArmorStand(Box<decoration::armor_stand::ArmorStand>),
+    Mannequin(Box<decoration::mannequin::Mannequin>),
     Painting(decoration::painting::Painting),
     Cushion(decoration::cushion::Cushion),
     ItemFrame(decoration::item_frame::ItemFrame),
@@ -148,6 +150,7 @@ impl LevelEntity {
             LevelEntity::FallingBlock(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(20), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::LightningBolt(_) => TrackingConfig { range: 16 * 16, update_interval: UpdateInterval::Never, track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EyeOfEnder(_) => TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(4), track_deltas: true, stepped: false, is_item: false },
+            LevelEntity::Mannequin(_) => TrackingConfig { range: 32 * 16, update_interval: UpdateInterval::Periodic(2), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::ArmorStand(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::OminousItemSpawner(_) => TrackingConfig { range: 8 * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Interaction(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },
@@ -201,6 +204,7 @@ impl LevelEntity {
             LevelEntity::Marker(marker) => &marker.entity,
             LevelEntity::OminousItemSpawner(spawner) => &spawner.entity,
             LevelEntity::ArmorStand(stand) => &stand.entity,
+            LevelEntity::Mannequin(mannequin) => &mannequin.entity,
             LevelEntity::Interaction(interaction) => &interaction.entity,
             LevelEntity::Display(display) => &display.entity,
             LevelEntity::EndCrystal(crystal) => &crystal.entity,
@@ -228,6 +232,7 @@ impl LevelEntity {
             LevelEntity::Marker(marker) => &mut marker.entity,
             LevelEntity::OminousItemSpawner(spawner) => &mut spawner.entity,
             LevelEntity::ArmorStand(stand) => &mut stand.entity,
+            LevelEntity::Mannequin(mannequin) => &mut mannequin.entity,
             LevelEntity::Interaction(interaction) => &mut interaction.entity,
             LevelEntity::Display(display) => &mut display.entity,
             LevelEntity::EndCrystal(crystal) => &mut crystal.entity,

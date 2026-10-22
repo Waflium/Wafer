@@ -1030,7 +1030,7 @@ impl ServerLevel {
         use super::projectile::projectile::ProjectileKind;
         match self.entities.get(&id) {
             Some(super::LevelEntity::Mob(mob)) if mob.is_squid() => super::animal::squid::squid::Squid::get_default_gravity(),
-            None | Some(super::LevelEntity::Mob(_) | super::LevelEntity::ArmorStand(_)) => self.attribute_value(id, Attribute::Gravity),
+            None | Some(super::LevelEntity::Mob(_) | super::LevelEntity::ArmorStand(_) | super::LevelEntity::Mannequin(_)) => self.attribute_value(id, Attribute::Gravity),
             Some(super::LevelEntity::ExperienceOrb(_)) => 0.03,
             Some(super::LevelEntity::Projectile(projectile)) => match projectile.kind {
                 ProjectileKind::ThrownExperienceBottle(_) => 0.07,
@@ -2580,6 +2580,9 @@ impl ServerLevel {
         if self.is_player(id) {
             return self.server_player_hurt_server(id, source, damage);
         }
+        if self.is_mannequin(id) {
+            return self.living_entity_hurt_server(id, source, damage);
+        }
         if self.is_mob(id) {
             if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Zombie(_) | super::mob::MobKind::ZombieVillager(_) | super::mob::MobKind::Husk(_) | super::mob::MobKind::Drowned(_) | super::mob::MobKind::ZombifiedPiglin(_))) {
                 return self.zombie_hurt_server(id, source, damage);
@@ -3851,7 +3854,7 @@ impl ServerLevel {
     }
 
     pub fn dimensions_for_pose(&self, id: EntityId, pose: data::Pose) -> EntityDimensions {
-        if self.is_player(id) { super::player::player::get_default_dimensions(pose) } else { self.entity(id).dimensions }
+        if self.is_player(id) { super::avatar::get_default_dimensions(pose) } else { self.entity(id).dimensions }
     }
 
     pub fn local_bounds_for_pose(&self, id: EntityId, pose: data::Pose) -> AABB {
@@ -4107,7 +4110,7 @@ impl ServerLevel {
         }
         match self.entities.get(&id) {
             Some(LevelEntity::ArmorStand(stand)) => !stand.entity.is_removed() && !stand.is_marker(),
-            None | Some(LevelEntity::Mob(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) | LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_)) => {
+            None | Some(LevelEntity::Mob(_) | LevelEntity::Mannequin(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) | LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_)) => {
                 !self.entity(id).is_removed()
             }
             Some(LevelEntity::EndCrystal(_) | LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_) | LevelEntity::Cushion(_)) => true,

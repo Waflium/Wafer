@@ -8,7 +8,7 @@ use crate::server::level::server_player::{RespawnConfig, ServerPlayer};
 use crate::server::{GAME_EVENT_LEVEL_CHUNKS_LOAD_START, OVERWORLD, Server, hashed_seed};
 use crate::world::entity::attributes::Attribute;
 use crate::world::entity::data::{DataValue, Pose, ids};
-use crate::world::entity::player::player::get_default_dimensions;
+use crate::world::entity::avatar::get_default_dimensions;
 use crate::world::entity::vehicle::dismount_helper::DismountType;
 use crate::world::entity::living_entity::update_mob_effect;
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};

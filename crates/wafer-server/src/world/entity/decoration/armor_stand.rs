@@ -6,7 +6,7 @@ use crate::server::level::ServerLevel;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::attributes::{ARMOR_STAND_ATTRIBUTES, Attribute};
 use crate::world::entity::data::{DataValue, ids, living_entity_defaults};
-use crate::world::entity::living_entity::LivingEntity;
+use crate::world::entity::living_entity::{self, LivingEntity};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, RemovalReason, entity_event, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc};
@@ -248,40 +248,7 @@ impl ArmorStand {
     }
 
     pub fn add_additional_save_data(&self, output: &mut Vec<(String, Nbt)>) {
-        let living = &self.living;
-        output.push(("Health".into(), Nbt::Float(self.health)));
-        output.push(("HurtTime".into(), Nbt::Short(living.hurt_time as i16)));
-        output.push(("DeathTime".into(), Nbt::Short(living.death_time as i16)));
-        output.push(("AbsorptionAmount".into(), Nbt::Float(self.absorption)));
-        output.push(("current_impulse_context_reset_grace_time".into(), Nbt::Int(living.current_impulse_context_reset_grace_time)));
-        if let Some(pos) = living.current_impulse_impact_pos {
-            output.push(("current_explosion_impact_pos".into(), Nbt::List(vec![Nbt::Double(pos.x), Nbt::Double(pos.y), Nbt::Double(pos.z)])));
-        }
-        output.push(("attributes".into(), living.attributes.to_nbt()));
-        if !living.active_effects.is_empty() {
-            output.push(("active_effects".into(), Nbt::List(living.active_effects.iter().map(|e| e.to_nbt()).collect())));
-        }
-        output.push(("FallFlying".into(), Nbt::Byte(self.entity.is_fall_flying() as i8)));
-        if let DataValue::OptionalBlockPos(Some(pos)) = self.entity.data.get(ids::SLEEPING_POS) {
-            output.push(("sleeping_pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z])));
-        }
-        output.push(("Brain".into(), living.brain.pack().to_nbt()));
-        if let Some(player) = living.last_hurt_by_player {
-            output.push(("last_hurt_by_player".into(), crate::world::level::storage::uuid_ints(player)));
-            output.push(("last_hurt_by_player_memory_time".into(), Nbt::Int(living.last_hurt_by_player_memory_time)));
-        }
-        if let Some(mob) = living.last_hurt_by_mob {
-            output.push(("last_hurt_by_mob".into(), crate::world::level::storage::uuid_ints(mob)));
-            output.push(("ticks_since_last_hurt_by_mob".into(), Nbt::Int(self.entity.tick_count - living.last_hurt_by_mob_timestamp)));
-        }
-        let slots: Vec<(String, Nbt)> =
-            EquipmentSlot::VALUES.into_iter().filter_map(|slot| self.item_by_slot(slot).map(|stack| (crate::world::entity::mob::slot_name(slot).to_string(), stack.to_nbt()))).collect();
-        if !slots.is_empty() {
-            output.push(("equipment".into(), Nbt::Compound(slots)));
-        }
-        if living.locator_bar_icon.has_data() {
-            output.push(("locator_bar_icon".into(), living.locator_bar_icon.to_nbt()));
-        }
+        living_entity::add_additional_save_data(&self.entity, &self.living, self.health, self.absorption, &self.equipment, output);
         output.push(("Invisible".into(), Nbt::Byte(self.is_invisible() as i8)));
         output.push(("Small".into(), Nbt::Byte(self.is_small() as i8)));
         output.push(("ShowArms".into(), Nbt::Byte(self.show_arms() as i8)));
@@ -299,50 +266,12 @@ impl ArmorStand {
     }
 
     pub fn read_additional_save_data(&mut self, nbt: &Nbt) {
-        let float = |key: &str| nbt.get(key).and_then(Nbt::as_f64).map(|v| v as f32);
         let int = |key: &str| nbt.get(key).and_then(crate::world::level::block::entity::int_value);
         let boolean = |key: &str| nbt.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
-        let short = |key: &str| nbt.get(key).and_then(Nbt::as_i64).map_or(0, |v| v as i16 as i32);
         let y_rot = self.entity.y_rot;
         self.set_y_head_rot(y_rot);
         self.set_y_body_rot(y_rot);
-        self.absorption = float("AbsorptionAmount").unwrap_or(0.0).max(0.0);
-        if let Some(attributes) = nbt.get("attributes") {
-            self.living.attributes.load(attributes);
-        }
-        self.living.active_effects.clear();
-        for effect in nbt.get("active_effects").map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(crate::world::effect::mob_effect_instance::MobEffectInstance::from_nbt) {
-            match self.living.active_effects.binary_search_by_key(&effect.effect, |e| e.effect) {
-                Ok(index) => self.living.active_effects[index] = effect,
-                Err(index) => self.living.active_effects.insert(index, effect),
-            }
-            self.living.effects_dirty = true;
-        }
-        let max_health = self.living.attributes.value(Attribute::MaxHealth) as f32;
-        self.set_health(float("Health").unwrap_or(max_health));
-        self.living.hurt_time = short("HurtTime");
-        self.living.death_time = short("DeathTime");
-        self.entity.set_shared_flag(crate::world::entity::flags::FALL_FLYING, boolean("FallFlying"));
-        self.living.last_hurt_by_player = nbt.get("last_hurt_by_player").and_then(crate::world::entity::entity_save::uuid_from_nbt);
-        self.living.last_hurt_by_player_memory_time = int("last_hurt_by_player_memory_time").unwrap_or(0);
-        self.living.last_hurt_by_mob = nbt.get("last_hurt_by_mob").and_then(crate::world::entity::entity_save::uuid_from_nbt);
-        self.living.last_hurt_by_mob_timestamp = self.entity.tick_count - int("ticks_since_last_hurt_by_mob").unwrap_or(0);
-        self.equipment = Default::default();
-        if let Some(Nbt::Compound(slots)) = nbt.get("equipment") {
-            for (name, stack) in slots {
-                if let Some(slot) = EquipmentSlot::by_name(name)
-                    && let Ok(stack) = ItemStack::from_nbt(stack)
-                {
-                    self.equipment[slot as usize] = Some(stack);
-                }
-            }
-        }
-        self.living.locator_bar_icon = nbt.get("locator_bar_icon").and_then(crate::world::waypoints::waypoint::Icon::from_nbt).unwrap_or_default();
-        self.living.current_impulse_context_reset_grace_time = int("current_impulse_context_reset_grace_time").unwrap_or(0);
-        self.living.current_impulse_impact_pos = match nbt.get("current_explosion_impact_pos") {
-            Some(Nbt::List(v)) if v.len() == 3 => Some(Vec3::new(v[0].as_f64().unwrap_or(0.0), v[1].as_f64().unwrap_or(0.0), v[2].as_f64().unwrap_or(0.0))),
-            _ => None,
-        };
+        living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut self.health, &mut self.absorption, &mut self.equipment, nbt);
         self.set_invisible(boolean("Invisible"));
         self.set_small(boolean("Small"));
         self.set_show_arms(boolean("ShowArms"));
