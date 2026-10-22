@@ -2786,11 +2786,15 @@ impl ServerLevel {
         let weapon_item = self.get_weapon_item(id);
         let damage_source = self.get_damage_source(&weapon_item, id);
         dmg = self.modify_damage(&weapon_item, target, &damage_source, dmg);
+        dmg += crate::world::item::get_attack_damage_bonus(self, &weapon_item, target, &damage_source);
         let old_movement = self.entity(target).delta_movement;
         let was_hurt = self.hurt_server(target, damage_source, dmg);
         if was_hurt {
             let knockback = self.get_knockback(id, target, &damage_source);
             self.living_entity_cause_extra_knockback(id, target, knockback, old_movement);
+            if self.is_living(target) {
+                crate::world::item::hurt_enemy(self, &weapon_item, target, id);
+            }
             self.do_post_attack_effects(target, &damage_source);
             self.set_last_hurt_mob(id, target);
             self.play_attack_sound(id);
@@ -2804,12 +2808,12 @@ impl ServerLevel {
     }
 
     pub fn get_damage_source(&self, item_stack: &ItemStack, attacker: EntityId) -> DamageSource {
-        let ty = item_stack
-            .get(dc::DAMAGE_TYPE)
-            .and_then(Nbt::as_str)
-            .and_then(wafer_data::DamageType::by_name)
-            .unwrap_or(damage_types::MOB_ATTACK);
-        DamageSource { causing_entity: Some(attacker), direct_entity: Some(attacker), ..DamageSource::new(ty) }
+        let ty = item_stack.get(dc::DAMAGE_TYPE).and_then(Nbt::as_str).and_then(wafer_data::DamageType::by_name);
+        match ty {
+            Some(ty) => DamageSource { causing_entity: Some(attacker), direct_entity: Some(attacker), ..DamageSource::new(ty) },
+            None => crate::world::item::get_item_damage_source(self, item_stack, attacker)
+                .unwrap_or(DamageSource { causing_entity: Some(attacker), direct_entity: Some(attacker), ..DamageSource::new(damage_types::MOB_ATTACK) }),
+        }
     }
 
     pub fn swing_for_attack(&mut self, id: EntityId, hand: InteractionHand) {

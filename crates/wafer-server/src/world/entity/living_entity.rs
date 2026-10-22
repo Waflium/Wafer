@@ -669,6 +669,9 @@ impl ServerLevel {
             affected = true;
             self.stop_riding(target);
         }
+        if self.is_living(target) {
+            crate::world::item::hurt_enemy(self, &weapon_item, target, id);
+        }
         if dealt_damage {
             self.do_post_attack_effects(target, &damage_source);
         }

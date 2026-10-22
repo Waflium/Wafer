@@ -203,8 +203,12 @@ impl ServerLevel {
     }
 
     fn create_attack_source(&self, id: EntityId, attacking_item_stack: &ItemStack) -> DamageSource {
-        let ty = attacking_item_stack.get(dc::DAMAGE_TYPE).and_then(Nbt::as_str).and_then(DamageType::by_name).unwrap_or(damage_types::PLAYER_ATTACK);
-        DamageSource { causing_entity: Some(id), direct_entity: Some(id), ..DamageSource::new(ty) }
+        let ty = attacking_item_stack.get(dc::DAMAGE_TYPE).and_then(Nbt::as_str).and_then(DamageType::by_name);
+        match ty {
+            Some(ty) => DamageSource { causing_entity: Some(id), direct_entity: Some(id), ..DamageSource::new(ty) },
+            None => crate::world::item::get_item_damage_source(self, attacking_item_stack, id)
+                .unwrap_or(DamageSource { causing_entity: Some(id), direct_entity: Some(id), ..DamageSource::new(damage_types::PLAYER_ATTACK) }),
+        }
     }
 
     fn cannot_attack(&mut self, id: EntityId, entity: EntityId) -> bool {
@@ -250,6 +254,7 @@ impl ServerLevel {
             } else {
                 false
             };
+            base_damage += crate::world::item::get_attack_damage_bonus(self, &attacking_item_stack, entity, &damage_source);
             let critical_attack = full_strength_attack && self.can_critical_attack(id, entity);
             if critical_attack {
                 base_damage *= 1.5;
@@ -381,14 +386,19 @@ impl ServerLevel {
 
     fn item_attack_interaction(&mut self, id: EntityId, entity: EntityId, attacking_item_stack: &ItemStack, damage_source: &DamageSource, apply_to_target: bool) {
         let hurt_target = entity;
-        let item_hurt_enemy = self.is_living(hurt_target) && attacking_item_stack.has(dc::WEAPON);
-        if item_hurt_enemy {
-            self.award_stat(id, stats::ITEM_USED.get(attacking_item_stack.item.0), 1);
+        let mut item_hurt_enemy = false;
+        if self.is_living(hurt_target) {
+            crate::world::item::hurt_enemy(self, attacking_item_stack, hurt_target, id);
+            item_hurt_enemy = attacking_item_stack.has(dc::WEAPON);
+            if item_hurt_enemy {
+                self.award_stat(id, stats::ITEM_USED.get(attacking_item_stack.item.0), 1);
+            }
         }
         if apply_to_target {
             self.do_post_attack_effects_with_item_source(entity, damage_source, Some(attacking_item_stack));
         }
         if !attacking_item_stack.is_empty() && self.is_living(hurt_target) && item_hurt_enemy {
+            crate::world::item::post_hurt_enemy(self, attacking_item_stack, id);
             let item_damage_per_attack = attacking_item_stack.get(dc::WEAPON).and_then(|weapon| weapon.get("item_damage_per_attack")).map_or(1, component_codec::as_i32);
             self.hurt_and_break(id, EquipmentSlot::Mainhand, item_damage_per_attack);
         }

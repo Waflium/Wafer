@@ -49,6 +49,7 @@ pub mod item_utils;
 pub mod jukebox_playable;
 pub mod jukebox_song;
 pub mod jukebox_song_player;
+pub mod mace_item;
 pub mod map_item;
 pub mod minecart_item;
 pub mod hanging_entity_item;
@@ -366,6 +367,26 @@ pub fn finish_using_item(item_stack: ItemStack, level: &mut ServerLevel, entity:
         Some(consumable) => level.on_consume(entity, item_stack, &consumable),
         None => item_stack,
     }
+}
+
+pub fn hurt_enemy(level: &mut ServerLevel, item_stack: &ItemStack, mob: EntityId, attacker: EntityId) {
+    if mace_item::is_mace(item_stack) {
+        mace_item::hurt_enemy(level, mob, attacker);
+    }
+}
+
+pub fn post_hurt_enemy(level: &mut ServerLevel, item_stack: &ItemStack, attacker: EntityId) {
+    if mace_item::is_mace(item_stack) {
+        mace_item::post_hurt_enemy(level, attacker);
+    }
+}
+
+pub fn get_attack_damage_bonus(level: &mut ServerLevel, item_stack: &ItemStack, victim: EntityId, damage_source: &crate::world::damagesource::DamageSource) -> f32 {
+    if mace_item::is_mace(item_stack) { mace_item::get_attack_damage_bonus(level, victim, damage_source) } else { 0.0 }
+}
+
+pub fn get_item_damage_source(level: &ServerLevel, item_stack: &ItemStack, attacker: EntityId) -> Option<crate::world::damagesource::DamageSource> {
+    if mace_item::is_mace(item_stack) { mace_item::get_item_damage_source(level, attacker) } else { None }
 }
 
 pub fn on_use_tick(level: &mut ServerLevel, entity: EntityId, stack: &mut ItemStack, ticks_remaining: i32) {
