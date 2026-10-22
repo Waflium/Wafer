@@ -2,12 +2,17 @@ use std::sync::Arc;
 
 use wafer_core::random::RandomSource;
 use wafer_core::shapes::BitSetDiscreteVoxelShape;
-use wafer_core::{BlockPos, Direction};
+use wafer_core::{Axis, BlockPos, Direction, Vec3, mth};
 use wafer_data::{BlockState, blocks};
 use wafer_protocol::nbt::Nbt;
 
 use super::structure_place_settings::StructurePlaceSettings;
-use crate::server::level::UPDATE_SHAPE_ORDER;
+use crate::server::level::{ServerLevel, UPDATE_SHAPE_ORDER};
+use crate::world::entity::decoration::block_attached_entity::BlockAttachedKind;
+use crate::world::entity::decoration::hanging_entity;
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::entity_type::EntityType;
+use crate::world::entity::{Entity, LevelEntity, neutral_mob};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::block;
 use crate::world::level::block::mirror::Mirror;
@@ -16,7 +21,14 @@ use crate::world::level::levelgen::structure::BoundingBox;
 
 pub struct StructureTemplate {
     palettes: Vec<Palette>,
+    entity_info_list: Vec<StructureEntityInfo>,
     size: BlockPos,
+}
+
+pub struct StructureEntityInfo {
+    pub pos: Vec3,
+    pub block_pos: BlockPos,
+    pub nbt: Nbt,
 }
 
 pub struct Palette {
@@ -135,7 +147,7 @@ fn int_list(tag: Option<&Nbt>) -> [i32; 3] {
 }
 
 impl StructureTemplate {
-    pub const EMPTY: StructureTemplate = StructureTemplate { palettes: Vec::new(), size: BlockPos::ZERO };
+    pub const EMPTY: StructureTemplate = StructureTemplate { palettes: Vec::new(), entity_info_list: Vec::new(), size: BlockPos::ZERO };
 
     pub fn get_size(&self) -> BlockPos {
         self.size
@@ -171,7 +183,7 @@ impl StructureTemplate {
             return false;
         }
         let block_info_list = settings.get_random_palette(&self.palettes, position, random).blocks();
-        if block_info_list.is_empty() || self.size.x < 1 || self.size.y < 1 || self.size.z < 1 {
+        if !(!block_info_list.is_empty() || !settings.ignore_entities && !self.entity_info_list.is_empty()) || self.size.x < 1 || self.size.y < 1 || self.size.z < 1 {
             return false;
         }
         let bounding_box = settings.bounding_box;
@@ -265,7 +277,37 @@ impl StructureTemplate {
                 }
             }
         }
+        if !settings.ignore_entities {
+            self.place_entities(level, position, settings.mirror, settings.rotation, settings.rotation_pivot, bounding_box, settings.finalize_entities);
+        }
         true
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn place_entities(&self, level: &mut impl WorldGenLevel, position: BlockPos, mirror: Mirror, rotation: Rotation, pivot: BlockPos, bounding_box: Option<BoundingBox>, finalize_entities: bool) {
+        for entity_info in &self.entity_info_list {
+            let block_pos = transform(entity_info.block_pos, mirror, rotation, pivot).offset(position.x, position.y, position.z);
+            if bounding_box.is_some_and(|bounding_box| !bounding_box.is_inside(block_pos)) {
+                continue;
+            }
+            let Nbt::Compound(mut tag) = entity_info.nbt.clone() else { continue };
+            let pos = transform_vec(entity_info.pos, mirror, rotation, pivot).add(position.x as f64, position.y as f64, position.z as f64);
+            set_tag(&mut tag, "Pos", Nbt::List(vec![Nbt::Double(pos.x), Nbt::Double(pos.y), Nbt::Double(pos.z)]));
+            tag.retain(|(key, _)| key != "UUID");
+            if tag.iter().any(|(key, _)| key == "block_pos") {
+                set_tag(&mut tag, "block_pos", Nbt::IntArray(vec![block_pos.x, block_pos.y, block_pos.z]));
+            }
+            let Some(mut entity) = create_entity_ignore_exception(level, &Nbt::Compound(tag)) else { continue };
+            let mut y_rot = entity_rotate(entity.entity_mut(), rotation);
+            y_rot += entity_mirror(entity.entity_mut(), mirror) - entity.entity().y_rot;
+            let x_rot = entity.entity().x_rot;
+            entity.entity_mut().snap_to(pos.x, pos.y, pos.z, y_rot, x_rot);
+            if finalize_entities && let LevelEntity::Mob(mob) = &mut entity {
+                let difficulty = level.get_current_difficulty_at(BlockPos::containing(pos.x, pos.y, pos.z));
+                crate::world::entity::mob::finalize_spawn(level, mob, &difficulty, EntitySpawnReason::Structure, None);
+            }
+            level.add_fresh_entity_with_passengers(entity);
+        }
     }
 
     pub fn get_jigsaws(&self, position: BlockPos, rotation: Rotation) -> Vec<JigsawBlockInfo> {
@@ -319,7 +361,25 @@ impl StructureTemplate {
             Some(Nbt::List(palette_list_list)) => palette_list_list.iter().map(|palette_list| load_palette(palette_list.as_list(), block_list)).collect(),
             _ => vec![load_palette(tag.get("palette").map(Nbt::as_list).unwrap_or(&[]), block_list)],
         };
-        StructureTemplate { palettes, size }
+        let entity_info_list = tag
+            .get("entities")
+            .map(Nbt::as_list)
+            .unwrap_or(&[])
+            .iter()
+            .filter(|entity_tag| matches!(entity_tag, Nbt::Compound(_)))
+            .filter_map(|entity_tag| {
+                let pos_tag = entity_tag.get("pos").map(Nbt::as_list).unwrap_or(&[]);
+                let double = |i: usize| match pos_tag.get(i) {
+                    Some(Nbt::Double(v)) => *v,
+                    _ => 0.0,
+                };
+                let pos = Vec3::new(double(0), double(1), double(2));
+                let [x, y, z] = int_list(entity_tag.get("blockPos"));
+                let nbt = entity_tag.get("nbt").filter(|nbt| matches!(nbt, Nbt::Compound(_))).cloned()?;
+                Some(StructureEntityInfo { pos, block_pos: BlockPos::new(x, y, z), nbt })
+            })
+            .collect();
+        StructureTemplate { palettes, entity_info_list, size }
     }
 }
 
@@ -400,6 +460,88 @@ pub fn process_block_infos<R: RandomSource>(
         processor.finalize_processing(level, position, reference_pos, &original_block_info_list, &mut processed_block_info_list, settings, random);
     }
     processed_block_info_list
+}
+
+fn set_tag(tag: &mut Vec<(String, Nbt)>, key: &str, value: Nbt) {
+    match tag.iter_mut().find(|(k, _)| k == key) {
+        Some((_, existing)) => *existing = value,
+        None => tag.push((key.into(), value)),
+    }
+}
+
+fn create_entity_ignore_exception(level: &mut impl WorldGenLevel, tag: &Nbt) -> Option<LevelEntity> {
+    let id = tag.get("id").and_then(Nbt::as_str);
+    let entity_type = id.and_then(EntityType::by_name).filter(|ty| ty.can_spawn(level.get_difficulty()));
+    let Some(mut entity) = entity_type.and(id).and_then(ServerLevel::create_entity) else {
+        warn!("Skipping Entity with id {}", id.unwrap_or("[invalid]"));
+        return None;
+    };
+    entity.load(tag).ok()?;
+    if let LevelEntity::Mob(mob) = &mut entity
+        && let Some((neutral_mob, entity)) = mob.neutral_mob_mut()
+    {
+        let end_time = tag.get(neutral_mob::TAG_ANGER_END_TIME).and_then(Nbt::as_i64).unwrap_or(neutral_mob::NO_ANGER_END_TIME);
+        neutral_mob.set_persistent_anger_end_time(entity, end_time);
+    }
+    Some(entity)
+}
+
+fn entity_rotate(entity: &mut Entity, rotation: Rotation) -> f32 {
+    if entity.block_attached.is_some_and(|attached| attached.kind != BlockAttachedKind::LeashKnot && attached.kind != BlockAttachedKind::Cushion) {
+        let direction = hanging_entity::get_direction(entity);
+        if direction.axis() != Axis::Y {
+            hanging_entity::set_direction(entity, rotation.rotate(direction));
+        }
+        let angle = mth::wrap_degrees(entity.y_rot);
+        return match rotation {
+            Rotation::Clockwise180 => angle + 180.0,
+            Rotation::Counterclockwise90 => angle + 90.0,
+            Rotation::Clockwise90 => angle + 270.0,
+            Rotation::None => angle,
+        };
+    }
+    let angle = mth::wrap_degrees(entity.y_rot);
+    match rotation {
+        Rotation::Clockwise180 => angle + 180.0,
+        Rotation::Counterclockwise90 => angle + 270.0,
+        Rotation::Clockwise90 => angle + 90.0,
+        Rotation::None => angle,
+    }
+}
+
+fn entity_mirror(entity: &mut Entity, mirror: Mirror) -> f32 {
+    if entity.block_attached.is_some_and(|attached| attached.kind != BlockAttachedKind::LeashKnot && attached.kind != BlockAttachedKind::Cushion) {
+        let rotation = mirror.get_rotation(hanging_entity::get_direction(entity));
+        return entity_rotate(entity, rotation);
+    }
+    let angle = mth::wrap_degrees(entity.y_rot);
+    match mirror {
+        Mirror::FrontBack => -angle,
+        Mirror::LeftRight => 180.0 - angle,
+        Mirror::None => angle,
+    }
+}
+
+pub fn transform_vec(pos: Vec3, mirror: Mirror, rotation: Rotation, pivot: BlockPos) -> Vec3 {
+    let (mut x, y, mut z) = (pos.x, pos.y, pos.z);
+    let was_mirrored = match mirror {
+        Mirror::LeftRight => {
+            z = 1.0 - z;
+            true
+        }
+        Mirror::FrontBack => {
+            x = 1.0 - x;
+            true
+        }
+        Mirror::None => false,
+    };
+    let (pivot_x, pivot_z) = (pivot.x as f64, pivot.z as f64);
+    match rotation {
+        Rotation::Counterclockwise90 => Vec3::new(pivot_x - pivot_z + z, y, pivot_x + pivot_z + 1.0 - x),
+        Rotation::Clockwise90 => Vec3::new(pivot_x + pivot_z + 1.0 - z, y, pivot_z - pivot_x + x),
+        Rotation::Clockwise180 => Vec3::new(pivot_x + pivot_x + 1.0 - x, y, pivot_z + pivot_z + 1.0 - z),
+        Rotation::None => if was_mirrored { Vec3::new(x, y, z) } else { pos },
+    }
 }
 
 pub fn transform(pos: BlockPos, mirror: Mirror, rotation: Rotation, pivot: BlockPos) -> BlockPos {

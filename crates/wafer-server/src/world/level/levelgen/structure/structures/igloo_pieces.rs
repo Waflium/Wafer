@@ -59,7 +59,7 @@ pub struct IglooPiece {
 }
 
 fn make_settings(rotation: Rotation, template_location: &str) -> TemplatePlaceSettings {
-    TemplatePlaceSettings { mirror: Mirror::None, rotation, rotation_pivot: pivot(template_location), apply_waterlogging: false, processors: &*STRUCTURE_BLOCK }
+    TemplatePlaceSettings { mirror: Mirror::None, rotation, rotation_pivot: pivot(template_location), apply_waterlogging: false, ignore_entities: false, processors: &*STRUCTURE_BLOCK }
 }
 
 fn make_position(template_location: &str, position: BlockPos, depth: i32) -> BlockPos {

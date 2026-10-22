@@ -87,7 +87,7 @@ pub struct ShipwreckPiece {
 }
 
 fn make_settings(rotation: Rotation) -> TemplatePlaceSettings {
-    TemplatePlaceSettings { mirror: Mirror::None, rotation, rotation_pivot: PIVOT, apply_waterlogging: true, processors: &*STRUCTURE_AND_AIR }
+    TemplatePlaceSettings { mirror: Mirror::None, rotation, rotation_pivot: PIVOT, apply_waterlogging: true, ignore_entities: false, processors: &*STRUCTURE_AND_AIR }
 }
 
 impl ShipwreckPiece {

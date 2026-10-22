@@ -125,7 +125,7 @@ fn pivot(template: &StructureTemplate) -> BlockPos {
 }
 
 fn make_settings(mirror: Mirror, rotation: Rotation, vertical_placement: VerticalPlacement, pivot: BlockPos, properties: &Properties) -> TemplatePlaceSettings {
-    TemplatePlaceSettings { mirror, rotation, rotation_pivot: pivot, apply_waterlogging: true, processors: processors(vertical_placement, properties) }
+    TemplatePlaceSettings { mirror, rotation, rotation_pivot: pivot, apply_waterlogging: true, ignore_entities: false, processors: processors(vertical_placement, properties) }
 }
 
 fn processors(vertical_placement: VerticalPlacement, properties: &Properties) -> &'static [StructureProcessor] {

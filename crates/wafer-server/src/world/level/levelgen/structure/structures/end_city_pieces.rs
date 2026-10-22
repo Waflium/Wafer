@@ -1,10 +1,14 @@
 use std::sync::LazyLock;
 
-use wafer_core::BlockPos;
+use wafer_core::{BlockPos, Direction, Vec3};
 use wafer_core::random::RandomSource;
-use wafer_data::blocks;
+use wafer_data::{blocks, items};
 use wafer_protocol::nbt::Nbt;
 
+use crate::server::level::ServerLevel;
+use crate::world::entity::decoration::item_frame::ItemFrame;
+use crate::world::entity::{LevelEntity, entity_types};
+use crate::world::item::ItemStack;
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::feature::monster_room_feature::set_block_entity_loot_table;
@@ -235,7 +239,7 @@ pub struct EndCityPiece {
 
 fn make_settings(overwrite: bool, rotation: Rotation) -> TemplatePlaceSettings {
     let processors: &'static [StructureProcessor] = if overwrite { &*STRUCTURE_BLOCK } else { &*STRUCTURE_AND_AIR };
-    TemplatePlaceSettings { mirror: Mirror::None, rotation, rotation_pivot: BlockPos::ZERO, apply_waterlogging: true, processors }
+    TemplatePlaceSettings { mirror: Mirror::None, rotation, rotation_pivot: BlockPos::ZERO, apply_waterlogging: true, ignore_entities: true, processors }
 }
 
 fn make_identifier(template_name: &str) -> String {
@@ -261,18 +265,32 @@ impl EndCityPiece {
         tag.push(("OW".into(), Nbt::Byte(std::ptr::eq(self.template.place_settings.processors.as_ptr(), STRUCTURE_BLOCK.as_ptr()) as i8)));
     }
 
-    fn handle_data_marker(marker_id: &str, position: BlockPos, level: &mut impl WorldGenLevel, random: &mut impl RandomSource, chunk_bb: &BoundingBox) {
+    fn handle_data_marker(rotation: Rotation, marker_id: &str, position: BlockPos, level: &mut impl WorldGenLevel, random: &mut impl RandomSource, chunk_bb: &BoundingBox) {
         if marker_id.starts_with("Chest") {
             let chest_position = position.below();
             if chunk_bb.is_inside(chest_position) {
                 set_block_entity_loot_table(level, random, chest_position, END_CITY_TREASURE);
             }
+        } else if chunk_bb.is_inside(position) && crate::world::level::is_in_spawnable_bounds(position) {
+            if marker_id.starts_with("Sentry") {
+                if entity_types::SHULKER.can_spawn(level.get_difficulty())
+                    && let Some(mut sentry) = ServerLevel::create_entity("minecraft:shulker")
+                {
+                    sentry.entity_mut().set_pos(Vec3::new(position.x as f64 + 0.5, position.y as f64, position.z as f64 + 0.5));
+                    level.add_fresh_entity(sentry);
+                }
+            } else if marker_id.starts_with("Elytra") {
+                let mut item_frame = ItemFrame::new(false, position, rotation.rotate(Direction::South));
+                item_frame.set_item_data(ItemStack::new(items::ELYTRA, 1));
+                level.add_fresh_entity(LevelEntity::ItemFrame(item_frame));
+            }
         }
     }
 
     pub fn post_process(&mut self, level: &mut impl WorldGenLevel, random: &mut impl RandomSource, chunk_bb: &BoundingBox, reference_pos: BlockPos) {
+        let rotation = self.template.place_settings.rotation;
         self.template.post_process(level, random, chunk_bb, reference_pos, |marker_id, position, level, random, chunk_bb| {
-            EndCityPiece::handle_data_marker(marker_id, position, level, random, chunk_bb)
+            EndCityPiece::handle_data_marker(rotation, marker_id, position, level, random, chunk_bb)
         });
     }
 }

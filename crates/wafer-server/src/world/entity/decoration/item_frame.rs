@@ -116,7 +116,7 @@ impl ItemFrame {
         create_bounding_box(self.entity.block_attached_pos(), hanging_entity::get_direction(&self.entity), false)
     }
 
-    fn set_item_data(&mut self, item_stack: ItemStack) {
+    pub fn set_item_data(&mut self, item_stack: ItemStack) {
         let item_stack = if item_stack.is_empty() { None } else { Some(item_stack.copy_with_count(1)) };
         let added = item_stack.is_some();
         self.entity.data.set(DATA_ITEM, DataValue::ItemStack(item_stack));

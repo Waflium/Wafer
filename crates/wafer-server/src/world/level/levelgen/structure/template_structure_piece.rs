@@ -19,6 +19,7 @@ pub struct TemplatePlaceSettings {
     pub rotation: Rotation,
     pub rotation_pivot: BlockPos,
     pub apply_waterlogging: bool,
+    pub ignore_entities: bool,
     pub processors: &'static [StructureProcessor],
 }
 
@@ -30,6 +31,7 @@ impl TemplatePlaceSettings {
             rotation_pivot: self.rotation_pivot,
             bounding_box,
             apply_waterlogging: self.apply_waterlogging,
+            ignore_entities: self.ignore_entities,
             processors: self.processors.iter().collect(),
             ..StructurePlaceSettings::default()
         }

@@ -18,6 +18,8 @@ pub struct StructurePlaceSettings<'p> {
     pub random: PlaceRandom,
     pub processors: Vec<&'p StructureProcessor>,
     pub known_shape: bool,
+    pub ignore_entities: bool,
+    pub finalize_entities: bool,
 }
 
 impl Default for StructurePlaceSettings<'_> {
@@ -31,6 +33,8 @@ impl Default for StructurePlaceSettings<'_> {
             random: PlaceRandom::Positional,
             processors: Vec::new(),
             known_shape: false,
+            ignore_entities: false,
+            finalize_entities: false,
         }
     }
 }

@@ -10,7 +10,9 @@ use super::Piece;
 use super::ocean_ruin_structure::{OceanRuinStructure, Type};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::valueproviders::IntProvider;
-use crate::world::entity::entity_types;
+use crate::server::level::ServerLevel;
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::{LevelEntity, entity_types, mob};
 use crate::world::level::block::entity::BlockEntityKind;
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
@@ -199,7 +201,7 @@ fn make_settings(rotation: Rotation, integrity: f32, biome_type: Type) -> Templa
         Some(index) => &SETTINGS_PROCESSORS[biome_type as usize][index],
         None => Box::leak(Box::new(processors(integrity, biome_type))),
     };
-    TemplatePlaceSettings { mirror: Mirror::None, rotation, rotation_pivot: BlockPos::ZERO, apply_waterlogging: true, processors }
+    TemplatePlaceSettings { mirror: Mirror::None, rotation, rotation_pivot: BlockPos::ZERO, apply_waterlogging: true, ignore_entities: false, processors }
 }
 
 impl OceanRuinPiece {
@@ -254,7 +256,15 @@ impl OceanRuinPiece {
                 base.loot_table = Some(if is_large { UNDERWATER_RUIN_BIG } else { UNDERWATER_RUIN_SMALL }.to_owned());
                 base.loot_table_seed = random.next_long();
             }
-        } else if marker_id == "drowned" && entity_types::DROWNED.can_spawn(level.get_difficulty()) {
+        } else if marker_id == "drowned"
+            && entity_types::DROWNED.can_spawn(level.get_difficulty())
+            && let Some(LevelEntity::Mob(mut drowned)) = ServerLevel::create_entity("minecraft:drowned")
+        {
+            drowned.persistence_required = true;
+            drowned.entity.snap_to(position.x as f64 + 0.5, position.y as f64, position.z as f64 + 0.5, 0.0, 0.0);
+            let difficulty = level.get_current_difficulty_at(position);
+            mob::finalize_spawn(level, &mut drowned, &difficulty, EntitySpawnReason::Structure, None);
+            level.add_fresh_entity_with_passengers(LevelEntity::Mob(drowned));
             if position.y > level.get_sea_level() {
                 level.set_block(position, blocks::AIR.default_state(), 2);
             } else {

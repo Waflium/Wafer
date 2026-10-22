@@ -8,7 +8,9 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::shuffle;
-use crate::world::entity::entity_types;
+use crate::server::level::ServerLevel;
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::{LevelEntity, entity_types, mob};
 use crate::world::level::LevelAccessor;
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
@@ -1021,7 +1023,7 @@ fn make_location(template_name: &str) -> String {
 }
 
 fn make_settings(mirror: Mirror, rotation: Rotation) -> TemplatePlaceSettings {
-    TemplatePlaceSettings { mirror, rotation, rotation_pivot: BlockPos::ZERO, apply_waterlogging: true, processors: &*STRUCTURE_BLOCK }
+    TemplatePlaceSettings { mirror, rotation, rotation_pivot: BlockPos::ZERO, apply_waterlogging: true, ignore_entities: true, processors: &*STRUCTURE_BLOCK }
 }
 
 impl WoodlandMansionPiece {
@@ -1078,16 +1080,22 @@ impl WoodlandMansionPiece {
             }
             piece.create_chest(level, chunk_bb, random, position, WOODLAND_MANSION, Some(chest_state));
         } else {
-            let entity_type = match marker_id {
-                "Mage" => &entity_types::EVOKER,
-                "Warrior" => &entity_types::VINDICATOR,
-                "Group of Allays" => {
-                    LevelAccessor::get_random(level).next_int_bounded(3);
-                    &entity_types::ALLAY
-                }
+            let (entity_type, name, count) = match marker_id {
+                "Mage" => (&entity_types::EVOKER, "minecraft:evoker", 1),
+                "Warrior" => (&entity_types::VINDICATOR, "minecraft:vindicator", 1),
+                "Group of Allays" => (&entity_types::ALLAY, "minecraft:allay", LevelAccessor::get_random(level).next_int_bounded(3) + 1),
                 _ => return,
             };
-            if entity_type.can_spawn(level.get_difficulty()) {
+            for _ in 0..count {
+                if !entity_type.can_spawn(level.get_difficulty()) {
+                    continue;
+                }
+                let Some(LevelEntity::Mob(mut mob)) = ServerLevel::create_entity(name) else { continue };
+                mob.persistence_required = true;
+                mob.entity.snap_to(position.x as f64 + 0.5, position.y as f64, position.z as f64 + 0.5, 0.0, 0.0);
+                let difficulty = level.get_current_difficulty_at(mob.entity.block_position());
+                mob::finalize_spawn(level, &mut mob, &difficulty, EntitySpawnReason::Structure, None);
+                level.add_fresh_entity_with_passengers(LevelEntity::Mob(mob));
                 level.set_block(position, blocks::AIR.default_state(), 2);
             }
         }

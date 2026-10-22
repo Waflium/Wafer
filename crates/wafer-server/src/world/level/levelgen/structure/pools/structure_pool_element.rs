@@ -82,6 +82,8 @@ impl SinglePoolElement {
             bounding_box: Some(*chunk_bb),
             rotation,
             known_shape: true,
+            ignore_entities: false,
+            finalize_entities: true,
             apply_waterlogging: self.override_liquid_settings.unwrap_or(apply_waterlogging),
             ..StructurePlaceSettings::default()
         };
