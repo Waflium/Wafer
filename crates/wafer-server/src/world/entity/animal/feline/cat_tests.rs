@@ -151,7 +151,8 @@ fn kittens_of_tamed_cats_belong_to_the_owner() {
 
 #[test]
 fn creepers_flee_cats() {
-    let (mut level, _player, cat) = setup();
+    let (mut level, player, cat) = setup();
+    level.player_mut(player).game_mode.game_type = crate::server::level::game_mode::GameType::Creative;
     level.mob_mut(cat).unwrap().set_no_ai(true);
     let creeper = ServerLevel::create_entity("minecraft:creeper").unwrap();
     let creeper_id = creeper.entity().id;
