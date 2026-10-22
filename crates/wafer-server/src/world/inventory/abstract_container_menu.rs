@@ -39,6 +39,7 @@ pub const THROW: i32 = 4;
 pub const QUICK_CRAFT: i32 = 5;
 pub const PICKUP_ALL: i32 = 6;
 pub const SLOT_CLICKED_OUTSIDE: i32 = -999;
+pub const PLAYER_INVENTORY: usize = usize::MAX;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MenuKind {
@@ -506,7 +507,7 @@ impl ServerLevel {
         self.player(player).carried.clone().unwrap_or_else(ItemStack::empty)
     }
 
-    fn set_carried(&mut self, player: EntityId, stack: ItemStack) {
+    pub fn set_carried(&mut self, player: EntityId, stack: ItemStack) {
         self.player_mut(player).carried = (!stack.is_empty()).then_some(stack);
     }
 
@@ -622,6 +623,21 @@ impl ServerLevel {
         if slots_changed {
             self.menu_slots_changed(menu, player, c);
         }
+    }
+
+    pub fn menu_set_selected_bundle_item_index(&mut self, menu: &mut AbstractContainerMenu, player: EntityId, slot_index: i32, selected_item_index: i32) {
+        if slot_index >= 0 && (slot_index as usize) < menu.slots.len() {
+            let mut item_stack = self.slot_get(menu, player, slot_index as usize);
+            crate::world::item::bundle_item::toggle_selected_item(&mut item_stack, selected_item_index);
+            self.slot_put(menu, player, slot_index as usize, item_stack);
+        }
+    }
+
+    fn try_item_click_behaviour_override(&mut self, menu: &mut AbstractContainerMenu, player: EntityId, primary: bool, slot: usize, clicked: &mut ItemStack, carried: &mut ItemStack) -> bool {
+        if carried.item.is_instance_of("BundleItem") && crate::world::item::bundle_item::override_stacked_on_other(self, menu, player, carried, slot, primary) {
+            return true;
+        }
+        clicked.item.is_instance_of("BundleItem") && crate::world::item::bundle_item::override_other_stacked_on_me(self, menu, player, clicked, carried, slot, primary)
     }
 
     pub fn menu_slots_changed(&mut self, menu: &mut AbstractContainerMenu, player: EntityId, c: usize) {
@@ -740,9 +756,10 @@ impl ServerLevel {
                     return Ok(());
                 }
                 let i = slot_at(menu, slot_index)?;
-                let clicked = self.slot_get(menu, player, i);
+                let mut clicked = self.slot_get(menu, player, i);
                 let mut carried = self.carried(player);
-                if clicked.is_empty() {
+                if self.try_item_click_behaviour_override(menu, player, primary, i, &mut clicked, &mut carried) {
+                } else if clicked.is_empty() {
                     if !carried.is_empty() {
                         let amount = if primary { carried.count } else { 1 };
                         let rest = self.slot_safe_insert(menu, player, i, carried, amount);

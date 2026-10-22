@@ -138,6 +138,12 @@ impl ServerLevel {
         let dead = item.health <= 0;
         self.entity_game_event_by(id, crate::world::level::gameevent::game_event::ENTITY_DAMAGE, source.causing_entity);
         if dead {
+            if let Some(mut item) = self.item_entity(id).map(|item| std::mem::replace(&mut item.item, ItemStack::empty())) {
+                crate::world::item::on_destroyed(self, id, &mut item);
+                if let Some(item_entity) = self.item_entity(id) {
+                    item_entity.item = item;
+                }
+            }
             self.discard(id);
         }
         true

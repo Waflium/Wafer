@@ -326,3 +326,10 @@ mod tests {
         assert!(level.block_state(ground.above()).is_air());
     }
 }
+
+pub fn on_destroyed(level: &mut ServerLevel, entity: EntityId, item: &mut ItemStack) {
+    if let Some(container) = item.set(dc::CONTAINER, Some(Nbt::List(Vec::new()))) {
+        let contents = crate::world::item::component::item_container_contents::item_copies(&container).into_iter().filter(|stack| !stack.is_empty()).collect();
+        super::item_utils::on_container_destroyed(level, entity, contents);
+    }
+}

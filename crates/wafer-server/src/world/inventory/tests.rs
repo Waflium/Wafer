@@ -72,3 +72,27 @@ fn closing_the_inventory_returns_the_grid() {
     assert!(menu_slot(&mut level, player, 2).is_empty());
     assert!(level.player(player).inventory.slots.iter().flatten().any(|stack| *stack == ItemStack::new(items::DIRT, 1)));
 }
+
+#[test]
+fn bundles_take_items_and_give_back_the_selected_one() {
+    let (mut level, player) = level_with_player();
+    level.player_mut(player).inventory.slots[36] = Some(ItemStack::new(items::BUNDLE, 1));
+    level.player_mut(player).inventory.slots[37] = Some(ItemStack::new(items::DIRT, 10));
+    level.player_mut(player).inventory.slots[38] = Some(ItemStack::new(items::EGG, 16));
+    click(&mut level, player, 36, 0, PICKUP);
+    click(&mut level, player, 37, 0, PICKUP);
+    click(&mut level, player, 38, 0, PICKUP);
+    click(&mut level, player, 36, 0, PICKUP);
+    assert!(menu_slot(&mut level, player, 37).is_empty());
+    assert_eq!(menu_slot(&mut level, player, 38), ItemStack::new(items::EGG, 3));
+    let mut menu = level.player_mut(player).inventory_menu.take().unwrap();
+    level.menu_set_selected_bundle_item_index(&mut menu, player, 36, 1);
+    level.player_mut(player).inventory_menu = Some(menu);
+    click(&mut level, player, 36, 1, PICKUP);
+    assert_eq!(level.player(player).carried, Some(ItemStack::new(items::DIRT, 10)));
+    click(&mut level, player, 36, 0, PICKUP);
+    assert_eq!(level.player(player).carried, None);
+    let bundle = menu_slot(&mut level, player, 36);
+    let contents = crate::world::item::component::bundle_contents::item_copies(bundle.get(crate::world::item::component::BUNDLE_CONTENTS).unwrap());
+    assert_eq!(contents, vec![ItemStack::new(items::DIRT, 10), ItemStack::new(items::EGG, 13)]);
+}

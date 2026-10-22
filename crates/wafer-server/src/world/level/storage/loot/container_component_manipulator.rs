@@ -103,8 +103,11 @@ impl ComponentSlotCollection<'_> {
                 (growable_mutable_container::growable_replace_slot_items(&mut mutable, items, slot_selector), mutable.to_immutable())
             }
             ContainerComponentManipulator::BundleContents => {
-                let mut mutable = bundle_contents::as_mutable(&current_value);
-                (mutable.replace_slot_items(items, slot_selector), mutable.to_immutable())
+                let mut mutable = bundle_contents::as_mutable(&current_value, self.item_stack.bundle_selected_item());
+                let slots_replaced = mutable.replace_slot_items(items, slot_selector);
+                let contents = mutable.to_immutable();
+                self.item_stack.set_bundle_contents(contents, mutable.selected_item());
+                return slots_replaced;
             }
             ContainerComponentManipulator::ChargedProjectiles => {
                 let mut mutable = charged_projectiles::as_mutable(&current_value);
@@ -124,9 +127,11 @@ impl ComponentSlotCollection<'_> {
                 mutable.to_immutable()
             }
             ContainerComponentManipulator::BundleContents => {
-                let mut mutable = bundle_contents::as_mutable(&current_value);
+                let mut mutable = bundle_contents::as_mutable(&current_value, self.item_stack.bundle_selected_item());
                 mutable.modify_slots(level, consumer, slot_selector);
-                mutable.to_immutable()
+                let contents = mutable.to_immutable();
+                self.item_stack.set_bundle_contents(contents, mutable.selected_item());
+                return;
             }
             ContainerComponentManipulator::ChargedProjectiles => {
                 let mut mutable = charged_projectiles::as_mutable(&current_value);

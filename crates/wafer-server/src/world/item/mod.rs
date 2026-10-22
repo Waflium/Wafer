@@ -11,6 +11,7 @@ pub mod bucket_item;
 pub mod mob_bucket_item;
 pub mod bone_meal_item;
 pub mod brush_item;
+pub mod bundle_item;
 pub mod component;
 pub mod consume_effects;
 pub mod context;
@@ -241,6 +242,9 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     if stack.item.is_instance_of("SpyglassItem") {
         return spyglass_item::use_item(level, player, hand);
     }
+    if stack.item.is_instance_of("BundleItem") {
+        return bundle_item::use_item(level, player, hand);
+    }
     if stack.item.is_instance_of("InstrumentItem") {
         return instrument_item::use_item(level, player, hand);
     }
@@ -333,6 +337,9 @@ pub fn get_use_duration(stack: &ItemStack) -> i32 {
     if stack.item.is_instance_of("BrushItem") {
         return brush_item::USE_DURATION;
     }
+    if stack.item.is_instance_of("BundleItem") {
+        return bundle_item::TICKS_MAX_THROW_DURATION;
+    }
     if stack.item.is_instance_of("BowItem") {
         return bow_item::USE_DURATION;
     }
@@ -410,8 +417,19 @@ pub fn on_use_tick(level: &mut ServerLevel, entity: EntityId, stack: &mut ItemSt
     if stack.item.is_instance_of("BrushItem") {
         brush_item::on_use_tick(level, entity, stack, ticks_remaining);
     }
+    if stack.item.is_instance_of("BundleItem") {
+        bundle_item::on_use_tick(level, entity, stack, ticks_remaining);
+    }
     if stack.item.is_instance_of("CrossbowItem") {
         crossbow_item::on_use_tick(level, entity, stack, ticks_remaining);
+    }
+}
+
+pub fn on_destroyed(level: &mut ServerLevel, entity: EntityId, item: &mut ItemStack) {
+    if item.item.is_instance_of("BundleItem") {
+        bundle_item::on_destroyed(level, entity, item);
+    } else if item.item.is_instance_of("BlockItem") {
+        block_item::on_destroyed(level, entity, item);
     }
 }
 

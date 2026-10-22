@@ -296,6 +296,17 @@ impl ServerLevel {
                 let title = if r.bool()? { Some(r.string(32)?.to_owned()) } else { None };
                 self.handle_edit_book(id, slot, pages, title);
             }
+            serverbound::BUNDLE_ITEM_SELECTED => {
+                let slot_id = r.varint()?;
+                let selected_item_index = r.varint()?;
+                if selected_item_index < 0 && selected_item_index != -1 {
+                    anyhow::bail!("Invalid selectedItemIndex: {selected_item_index}");
+                }
+                if let Some(mut menu) = self.take_container_menu(id) {
+                    self.menu_set_selected_bundle_item_index(&mut menu, id, slot_id, selected_item_index);
+                    self.restore_container_menu(id, menu);
+                }
+            }
             serverbound::SEEN_ADVANCEMENTS => {
                 let action = r.varint()?;
                 if action == 0 {

@@ -45,11 +45,19 @@ pub fn template_of(item: &ItemStack) -> Nbt {
     ItemStackTemplate { item: item.get_item().name().to_string(), count: item.count, components: item.components_patch().to_nbt() }.to_nbt()
 }
 
-pub fn as_mutable(contents: &Nbt) -> Mutable {
+pub fn as_mutable(contents: &Nbt, selected_item: i32) -> Mutable {
     match weight(contents) {
-        Some(weight) => Mutable { items: item_copies(contents), weight, needs_flattening: false },
+        Some(weight) => Mutable { items: item_copies(contents), weight, selected_item, needs_flattening: false },
         None => Mutable::new(),
     }
+}
+
+pub fn is_empty(contents: &Nbt) -> bool {
+    values::templates(contents).is_empty()
+}
+
+pub fn weight_safe(contents: &Nbt) -> Fraction {
+    weight(contents).unwrap_or(Fraction::ONE)
 }
 
 fn get_stacked_weight(weight: Fraction, count: i32) -> Fraction {
@@ -74,12 +82,17 @@ fn get_weight_with_added_items(weight: Fraction, items_to_add: &ItemStack) -> Op
 pub struct Mutable {
     items: Vec<ItemStack>,
     weight: Fraction,
+    selected_item: i32,
     needs_flattening: bool,
 }
 
 impl Mutable {
     pub fn new() -> Mutable {
-        Mutable { items: Vec::new(), weight: Fraction::ZERO, needs_flattening: false }
+        Mutable { items: Vec::new(), weight: Fraction::ZERO, selected_item: -1, needs_flattening: false }
+    }
+
+    pub fn selected_item(&self) -> i32 {
+        self.selected_item
     }
 
     fn find_stack_index_within_range(&self, items_to_add: &ItemStack, min_inclusive: usize, max_exclusive: usize) -> Option<usize> {
@@ -150,6 +163,29 @@ impl Mutable {
             None => self.items.insert(0, items_to_add.split(amount_to_add)),
         }
         amount_to_add
+    }
+
+    pub fn get_max_amount_to_add_for(&self, item: &ItemStack) -> Option<i32> {
+        self.get_max_amount_to_add(get_weight(item)?)
+    }
+
+    pub fn toggle_selected_item(&mut self, selected_item: i32) {
+        self.selected_item = if self.selected_item != selected_item && !self.index_is_outside_allowed_bounds(selected_item) { selected_item } else { -1 };
+    }
+
+    fn index_is_outside_allowed_bounds(&self, selected_item: i32) -> bool {
+        selected_item < 0 || selected_item as usize >= self.items.len()
+    }
+
+    pub fn remove_one(&mut self) -> Option<ItemStack> {
+        if self.items.is_empty() {
+            return None;
+        }
+        let remove_index = if self.index_is_outside_allowed_bounds(self.selected_item) { 0 } else { self.selected_item as usize };
+        let stack = self.items.remove(remove_index).copy();
+        self.weight = self.weight.subtract(get_stacked_weight_of(&stack)).expect("Fraction overflow");
+        self.toggle_selected_item(-1);
+        Some(stack)
     }
 
     pub fn to_immutable(&mut self) -> Nbt {

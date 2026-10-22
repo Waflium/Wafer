@@ -16,6 +16,7 @@ pub struct ItemStack {
     pub item: Item,
     pub count: i32,
     components: PatchedDataComponentMap,
+    bundle_selected_item: i32,
 }
 
 impl PartialEq for ItemStack {
@@ -35,11 +36,11 @@ pub fn rarity_color(rarity: Rarity) -> ChatFormatting {
 
 impl ItemStack {
     pub fn new(item: Item, count: i32) -> ItemStack {
-        ItemStack { item, count, components: PatchedDataComponentMap::new(item_components(item)) }
+        ItemStack { item, count, components: PatchedDataComponentMap::new(item_components(item)), bundle_selected_item: -1 }
     }
 
     pub fn with_patch(item: Item, count: i32, patch: &DataComponentPatch) -> ItemStack {
-        ItemStack { item, count, components: PatchedDataComponentMap::from_patch(item_components(item), patch) }
+        ItemStack { item, count, components: PatchedDataComponentMap::from_patch(item_components(item), patch), bundle_selected_item: -1 }
     }
 
     pub fn from_template(item: Item, count: i32, patch: &DataComponentPatch) -> Option<ItemStack> {
@@ -170,23 +171,44 @@ impl ItemStack {
     }
 
     pub fn set(&mut self, ty: DataComponentType, value: Option<Nbt>) -> Option<Nbt> {
+        if ty == dc::BUNDLE_CONTENTS {
+            self.bundle_selected_item = -1;
+        }
         self.components.set(ty, value)
     }
 
     pub fn set_value(&mut self, ty: DataComponentType, value: Nbt) -> Option<Nbt> {
         let value = ty.decode(&value).unwrap_or(value);
-        self.components.set(ty, Some(value))
+        self.set(ty, Some(value))
     }
 
     pub fn remove(&mut self, ty: DataComponentType) -> Option<Nbt> {
+        if ty == dc::BUNDLE_CONTENTS {
+            self.bundle_selected_item = -1;
+        }
         self.components.remove(ty)
     }
 
+    pub fn set_bundle_contents(&mut self, contents: Nbt, selected_item: i32) {
+        self.components.set(dc::BUNDLE_CONTENTS, Some(contents));
+        self.bundle_selected_item = selected_item;
+    }
+
+    pub fn bundle_selected_item(&self) -> i32 {
+        self.bundle_selected_item
+    }
+
     pub fn apply_components(&mut self, patch: &DataComponentPatch) {
+        if patch.get(dc::BUNDLE_CONTENTS).is_some() {
+            self.bundle_selected_item = -1;
+        }
         self.components.apply_patch(patch);
     }
 
     pub fn apply_components_and_validate(&mut self, patch: &DataComponentPatch) -> Result<(), String> {
+        if patch.get(dc::BUNDLE_CONTENTS).is_some() {
+            self.bundle_selected_item = -1;
+        }
         let old = self.components.as_patch().clone();
         self.components.apply_patch(patch);
         let result = self.validate_strict();
@@ -394,7 +416,7 @@ impl ItemStack {
     }
 
     pub fn transmute_copy(&self, item: Item, count: i32) -> ItemStack {
-        ItemStack::with_patch(item, count, self.components_patch())
+        ItemStack { bundle_selected_item: self.bundle_selected_item, ..ItemStack::with_patch(item, count, self.components_patch()) }
     }
 
     pub fn is_same_item(a: &ItemStack, b: &ItemStack) -> bool {

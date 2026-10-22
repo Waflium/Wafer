@@ -43,3 +43,11 @@ pub fn create_filled_result(
     }
     item_stack
 }
+
+pub fn on_container_destroyed(level: &mut ServerLevel, container: EntityId, contents: Vec<ItemStack>) {
+    let e = level.entity(container);
+    let pos = wafer_core::Vec3::new(e.x(), e.y(), e.z());
+    for stack in contents {
+        level.add_fresh_entity(crate::world::entity::LevelEntity::Item(crate::world::entity::item::ItemEntity::new(pos, stack)));
+    }
+}

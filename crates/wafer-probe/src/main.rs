@@ -370,6 +370,14 @@ async fn main() -> anyhow::Result<()> {
                             })
                             .await?;
                         }
+                        ["bundle_select", slot, index] => {
+                            let (slot, index): (i32, i32) = (slot.parse()?, index.parse()?);
+                            send(&mut wr, codec, play::serverbound::BUNDLE_ITEM_SELECTED, |w| {
+                                w.varint(slot);
+                                w.varint(index);
+                            })
+                            .await?;
+                        }
                         ["place_recipe", recipe, use_max_items] => {
                             let (recipe, use_max_items): (i32, bool) = (recipe.parse()?, use_max_items.parse()?);
                             send(&mut wr, codec, play::serverbound::PLACE_RECIPE, |w| {
