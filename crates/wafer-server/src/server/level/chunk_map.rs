@@ -362,6 +362,9 @@ impl ServerLevel {
     }
 
     pub fn track_entity(&mut self, id: EntityId, config: TrackingConfig) {
+        if config.range == 0 {
+            return;
+        }
         let entity = self.entity_ref(id).expect("tracked entity exists");
         let is_arrow = self.as_projectile(id).is_some_and(|projectile| projectile.abstract_arrow().is_some());
         let server_entity = ServerEntity::new(entity, config.update_interval, config.track_deltas, config.stepped, config.is_item, is_arrow);

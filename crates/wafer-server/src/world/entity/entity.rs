@@ -2425,6 +2425,7 @@ impl ServerLevel {
             Some(LevelEntity::EndCrystal(_)) => self.end_crystal_hurt_server(id, source),
             Some(LevelEntity::Projectile(_)) => self.projectile_hurt_server(id, &source),
             Some(LevelEntity::LeashKnot(_)) => self.block_attached_entity_hurt_server(id, source),
+            Some(LevelEntity::Marker(_)) => super::marker::Marker::hurt_server(),
             Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_hurt_server(id, source, damage),
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => self.vehicle_entity_hurt_server(id, source, damage),
             _ => false,
@@ -3401,12 +3402,16 @@ impl ServerLevel {
     pub fn can_add_passenger(&self, id: EntityId, _passenger: EntityId) -> bool {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_can_add_passenger(id),
+            Some(LevelEntity::Marker(_)) => super::marker::Marker::can_add_passenger(),
             _ => self.passengers(id).is_empty(),
         }
     }
 
-    fn could_accept_passenger(&self, _id: EntityId) -> bool {
-        true
+    fn could_accept_passenger(&self, id: EntityId) -> bool {
+        match self.entities.get(&id) {
+            Some(LevelEntity::Marker(_)) => super::marker::Marker::could_accept_passenger(),
+            _ => true,
+        }
     }
 
     fn add_passenger(&mut self, id: EntityId, passenger: EntityId) {
@@ -3764,6 +3769,9 @@ impl ServerLevel {
     }
 
     pub fn is_ignoring_block_triggers(&self, id: EntityId) -> bool {
+        if let Some(LevelEntity::Marker(_)) = self.entities.get(&id) {
+            return super::marker::Marker::is_ignoring_block_triggers();
+        }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(super::mob::MobKind::Bat(_)) => self.bat_is_ignoring_block_triggers(id),
             _ => false,
