@@ -973,7 +973,7 @@ impl ServerLevel {
     }
 
     pub fn is_on_fire(&self, id: EntityId) -> bool {
-        if self.is_shulker_bullet(id) {
+        if self.is_shulker_bullet(id) || self.is_wither_skull(id) {
             return false;
         }
         match self.mob(id) {
@@ -2509,6 +2509,9 @@ impl ServerLevel {
     }
 
     pub fn make_stuck_in_block(&mut self, id: EntityId, state: BlockState, speed_multiplier: Vec3) {
+        if self.is_wither(id) {
+            return;
+        }
         if self.mob(id).is_some_and(super::mob::Mob::is_spider) {
             self.spider_make_stuck_in_block(id, state, speed_multiplier);
         } else {
@@ -2606,6 +2609,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Parrot(_)) => return self.parrot_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Bee(_)) => return self.bee_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Shulker(_)) => return self.shulker_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Wither(_)) => return self.wither_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Zoglin(_)) => return self.zoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Piglin(_)) => return self.piglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::PiglinBrute(_)) => return self.piglin_brute_hurt_server(id, source, damage),
@@ -2963,6 +2967,7 @@ impl ServerLevel {
                     super::mob::MobKind::Parrot(_) => "Parrot",
                     super::mob::MobKind::Bee(_) => "Bee",
                     super::mob::MobKind::Shulker(_) => "Shulker",
+                    super::mob::MobKind::Wither(_) => "WitherBoss",
                     super::mob::MobKind::Ocelot(_) => "Ocelot",
                     super::mob::MobKind::Horse(_) => "Horse",
                     super::mob::MobKind::Donkey(_) => "Donkey",
@@ -2997,6 +3002,7 @@ impl ServerLevel {
                     ProjectileKind::WindCharge(_) => "WindCharge",
                     ProjectileKind::FishingHook(_) => "FishingHook",
                     ProjectileKind::ShulkerBullet(_) => "ShulkerBullet",
+                    ProjectileKind::WitherSkull(_) => "WitherSkull",
                     ProjectileKind::BreezeWindCharge(_) => "BreezeWindCharge",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",
@@ -3176,6 +3182,9 @@ impl ServerLevel {
     }
 
     pub fn can_use_portal(&self, id: EntityId, ignore_passenger: bool) -> bool {
+        if self.is_wither(id) {
+            return false;
+        }
         if self.as_projectile(id).is_some_and(super::projectile::projectile::Projectile::is_throwable_item_projectile) {
             return true;
         }
@@ -3621,6 +3630,9 @@ impl ServerLevel {
     }
 
     fn can_ride(&self, id: EntityId, _vehicle: EntityId) -> bool {
+        if self.is_wither(id) {
+            return false;
+        }
         let e = self.entity(id);
         !e.is_shift_key_down() && e.boarding_cooldown <= 0
     }

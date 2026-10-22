@@ -137,11 +137,7 @@ impl DispenseItemBehavior {
             FlintAndSteel => flint_and_steel_dispense_item_behavior::execute(level, source, dispensed, success),
             BoneMeal => execute_bone_meal(level, source, dispensed, success),
             Tnt => execute_tnt(level, source, dispensed, success),
-            WitherSkeletonSkull => {
-                let mut dispensed = dispensed;
-                *success = equipment_dispense_item_behavior::dispense_equipment(level, source, &mut dispensed);
-                dispensed
-            }
+            WitherSkeletonSkull => execute_wither_skeleton_skull(level, source, dispensed, success),
             CarvedPumpkin => execute_carved_pumpkin(level, source, dispensed, success),
             ShulkerBox => shulker_box_dispense_behavior::execute(level, source, dispensed, success),
             GlassBottle => execute_glass_bottle(level, source, dispensed, success),
@@ -243,6 +239,21 @@ fn execute_bucket(level: &mut ServerLevel, source: &BlockSource, dispensed: Item
         Some(pickup) => consume_with_remainder(level, source, dispensed, ItemStack::new(pickup.item, 1)),
         None => default_dispense_item_behavior::execute(level, source, dispensed),
     }
+}
+
+fn execute_wither_skeleton_skull(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack, success: &mut bool) -> ItemStack {
+    let direction = source.facing();
+    let target = source.pos.relative(direction);
+    if level.block_state(target).is_air() && crate::world::level::block::wither_skull_block::can_spawn_mob(level, target, &dispensed) {
+        let rotation = crate::world::level::block::rotation_segment::convert_to_segment_from_direction(direction);
+        level.set_block(target, blocks::WITHER_SKELETON_SKULL.default_state().set(wafer_data::properties::ROTATION_16, rotation), UPDATE_ALL);
+        crate::world::level::block::wither_skull_block::check_spawn(level, target);
+        dispensed.shrink(1);
+        *success = true;
+    } else {
+        *success = equipment_dispense_item_behavior::dispense_equipment(level, source, &mut dispensed);
+    }
+    dispensed
 }
 
 fn execute_carved_pumpkin(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack, success: &mut bool) -> ItemStack {

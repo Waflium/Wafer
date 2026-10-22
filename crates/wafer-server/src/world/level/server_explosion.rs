@@ -59,6 +59,7 @@ pub enum ExplosionDamageCalculator {
     RespawnAnchor { pos: BlockPos, in_water: bool },
     UsedPortal,
     TntMinecart { primed: bool },
+    WitherSkull { dangerous: bool },
 }
 
 impl ExplosionDamageCalculator {
@@ -66,6 +67,7 @@ impl ExplosionDamageCalculator {
         let resistance = self.get_base_block_explosion_resistance(test_pos, state, fluid);
         match self {
             ExplosionDamageCalculator::TntMinecart { primed: true } if resistance.is_some() && is_rail_or_below_rail(level, test_pos, state) => Some(0.0),
+            ExplosionDamageCalculator::WitherSkull { dangerous } => resistance.map(|resistance| crate::world::entity::projectile::hurtingprojectile::wither_skull::get_block_explosion_resistance(*dangerous, state, resistance)),
             _ => resistance,
         }
     }

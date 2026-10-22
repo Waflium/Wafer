@@ -4,6 +4,9 @@ use crate::world::entity::mob::MobKind;
 
 impl ServerLevel {
     pub fn perform_ranged_attack(&mut self, id: EntityId, target: EntityId, power: f32) {
+        if self.is_wither(id) {
+            return self.wither_perform_ranged_attack(id, target);
+        }
         if self.is_drowned(id) {
             self.drowned_perform_ranged_attack(id, target, power);
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Witch(_))) {

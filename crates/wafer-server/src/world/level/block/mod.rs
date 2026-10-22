@@ -213,6 +213,7 @@ pub mod vine_block;
 mod weeping_vines_block;
 mod weeping_vines_plant_block;
 pub mod wither_rose_block;
+pub mod wither_skull_block;
 mod amethyst_block;
 mod amethyst_cluster_block;
 mod banner_block;
@@ -879,6 +880,8 @@ fn for_class(class: &str, block: Block) -> Option<Box<dyn BlockBehaviour>> {
         "ShelfBlock" => Box::new(shelf_block::ShelfBlock),
         "PointedDripstoneBlock" => Box::new(pointed_dripstone_block::PointedDripstoneBlock::new(block)),
         "SulfurSpikeBlock" => Box::new(sulfur_spike_block::SulfurSpikeBlock::new(block)),
+        "WitherSkullBlock" => Box::new(wither_skull_block::WitherSkullBlock),
+        "WitherWallSkullBlock" => Box::new(wither_skull_block::WitherWallSkullBlock),
         "SkullBlock" => Box::new(skull_block::SkullBlock),
         "StandingSignBlock" => Box::new(standing_sign_block::StandingSignBlock),
         "VaultBlock" => Box::new(vault_block::VaultBlock),

@@ -1404,7 +1404,9 @@ impl ServerLevel {
                 if entity.entity().is_removed() {
                     self.remove_entity(id);
                 } else if !self.tick_rate_manager.is_entity_frozen() {
-                    if self.is_mob(id) {
+                    if self.is_wither(id) {
+                        self.wither_check_despawn(id);
+                    } else if self.is_mob(id) {
                         self.check_mob_despawn(id);
                     } else if self.is_shulker_bullet(id) {
                         self.shulker_bullet_check_despawn(id);

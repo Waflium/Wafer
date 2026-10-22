@@ -1580,6 +1580,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Enderman(_)) => self.enderman_drop_custom_death_loot(id, source, killed_by_player),
             Some(MobKind::Piglin(_)) => self.piglin_drop_custom_death_loot(id, source, killed_by_player),
+            Some(MobKind::Wither(_)) => self.wither_drop_custom_death_loot(id, source, killed_by_player),
             Some(_) => self.mob_drop_custom_death_loot(id, source, killed_by_player),
             None => {}
         }
@@ -2251,6 +2252,7 @@ impl ServerLevel {
             Some(MobKind::Fox(_)) => self.fox_ai_step(id),
             Some(MobKind::Parrot(_)) => self.parrot_ai_step(id),
             Some(MobKind::Bee(_)) => self.bee_ai_step(id),
+            Some(MobKind::Wither(_)) => self.wither_ai_step(id),
             Some(MobKind::Rabbit(_)) => self.rabbit_ai_step(id),
             Some(MobKind::Turtle(_)) => self.turtle_ai_step(id),
             Some(_) => self.animal_ai_step(id),
@@ -3038,6 +3040,9 @@ impl ServerLevel {
     }
 
     pub fn add_effect(&mut self, id: EntityId, new_effect: MobEffectInstance, source: Option<EntityId>) -> bool {
+        if self.is_wither(id) {
+            return false;
+        }
         if !self.can_be_affected(id, &new_effect) {
             return false;
         }
@@ -3068,6 +3073,7 @@ impl ServerLevel {
             Some(MobKind::Spider(_) | MobKind::CaveSpider(_)) => self.spider_can_be_affected(id, effect),
             Some(MobKind::WitherSkeleton(_)) => self.wither_skeleton_can_be_affected(id, effect),
             Some(MobKind::Parched(_)) => self.parched_can_be_affected(id, effect),
+            Some(MobKind::Wither(_)) => self.wither_can_be_affected(id, effect),
             _ => self.living_entity_can_be_affected(id, effect),
         }
     }

@@ -243,6 +243,7 @@ impl LevelEntity {
                     ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => projectile.abstract_hurting_projectile_add_additional_save_data(out),
                     ProjectileKind::FishingHook(_) => {}
                     ProjectileKind::ShulkerBullet(_) => super::projectile::shulker_bullet::ShulkerBullet::add_additional_save_data(projectile, out),
+                    ProjectileKind::WitherSkull(_) => projectile.wither_skull_add_additional_save_data(out),
                     _ => projectile.throwable_item_projectile_add_additional_save_data(out),
                 }
             }
@@ -325,6 +326,7 @@ impl LevelEntity {
                     ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => projectile.abstract_hurting_projectile_read_additional_save_data(nbt),
                     ProjectileKind::FishingHook(_) => {}
                     ProjectileKind::ShulkerBullet(_) => super::projectile::shulker_bullet::ShulkerBullet::read_additional_save_data(projectile, nbt),
+                    ProjectileKind::WitherSkull(_) => projectile.wither_skull_read_additional_save_data(nbt),
                     _ => projectile.throwable_item_projectile_read_additional_save_data(nbt),
                 }
             }
@@ -456,6 +458,8 @@ impl ServerLevel {
             "minecraft:llama" => LevelEntity::Mob(Box::new(super::animal::equine::llama::Llama::create())),
             "minecraft:trader_llama" => LevelEntity::Mob(Box::new(super::animal::equine::trader_llama::TraderLlama::create())),
             "minecraft:wandering_trader" => LevelEntity::Mob(Box::new(super::npc::wanderingtrader::wandering_trader::WanderingTrader::create())),
+            "minecraft:wither_skull" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::wither_skull::WitherSkull::of_type())),
+            "minecraft:wither" => LevelEntity::Mob(Box::new(super::boss::wither::wither_boss::WitherBoss::create())),
             "minecraft:shulker_bullet" => LevelEntity::Projectile(Box::new(super::projectile::shulker_bullet::ShulkerBullet::of_type())),
             "minecraft:shulker" => LevelEntity::Mob(Box::new(super::monster::shulker::Shulker::create())),
             "minecraft:llama_spit" => LevelEntity::Projectile(Box::new(super::projectile::llama_spit::LlamaSpit::of_type())),

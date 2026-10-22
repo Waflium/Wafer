@@ -20,8 +20,9 @@ use crate::world::entity::ai::goal::land_on_owners_shoulder_goal::LandOnOwnersSh
 use crate::world::entity::ai::goal::look_at_player_goal::LookAtPlayerGoal;
 use crate::world::entity::ai::goal::panic_goal::PanicGoal;
 use crate::world::entity::ai::goal::sit_when_ordered_to_goal::SitWhenOrderedToGoal;
+use crate::world::entity::ai::goal::water_avoiding_random_flying_goal;
 use crate::world::entity::ai::goal::water_avoiding_random_stroll_goal::WaterAvoidingRandomStrollGoal;
-use crate::world::entity::ai::util::{air_and_water_random_pos, hover_random_pos, land_random_pos};
+use crate::world::entity::ai::util::land_random_pos;
 use crate::world::entity::animal::Animal;
 use crate::world::entity::attributes::PARROT_ATTRIBUTES;
 use crate::world::entity::data::DataValue;
@@ -29,7 +30,7 @@ use crate::world::entity::living_entity::LivingEntity;
 use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::tamable_animal::{TamableAnimalPanicGoal, tamable_animal_defaults};
-use crate::world::entity::{Entity, EntityDimensions, EntityId, calculate_view_vector, entity_event, sound_event};
+use crate::world::entity::{Entity, EntityDimensions, EntityId, entity_event, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
@@ -408,15 +409,7 @@ fn get_position(level: &mut ServerLevel, mob: EntityId, probability: f32) -> Opt
     if level.entity_mut(mob).random.next_float() >= probability {
         pos = get_tree_pos(level, mob);
     }
-    pos.or_else(|| water_avoiding_random_flying_goal_get_position(level, mob))
-}
-
-fn water_avoiding_random_flying_goal_get_position(level: &mut ServerLevel, mob: EntityId) -> Option<Vec3> {
-    let e = level.entity(mob);
-    let wander_direction = calculate_view_vector(e.x_rot_o, level.living(mob).y_head_rot_o);
-    let max_xz_radians = std::f32::consts::FRAC_PI_2;
-    hover_random_pos::get_pos(level, mob, 8, 7, wander_direction.x, wander_direction.z, max_xz_radians, 3, 1)
-        .or_else(|| air_and_water_random_pos::get_pos(level, mob, 8, 4, -2, wander_direction.x, wander_direction.z, max_xz_radians as f64))
+    pos.or_else(|| water_avoiding_random_flying_goal::get_position(level, mob))
 }
 
 fn get_tree_pos(level: &mut ServerLevel, mob: EntityId) -> Option<Vec3> {

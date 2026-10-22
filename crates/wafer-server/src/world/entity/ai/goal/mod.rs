@@ -52,6 +52,7 @@ pub mod tempt_goal;
 pub mod trade_with_player_goal;
 pub mod try_find_liquid_goal;
 pub mod use_item_goal;
+pub mod water_avoiding_random_flying_goal;
 pub mod water_avoiding_random_stroll_goal;
 pub mod wrapped_goal;
 pub mod zombie_attack_goal;

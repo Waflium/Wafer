@@ -255,6 +255,8 @@ pub enum Goal {
     ShulkerPeek(crate::world::entity::monster::shulker::ShulkerPeekGoal),
     ShulkerNearestAttack(crate::world::entity::monster::shulker::ShulkerNearestAttackGoal),
     ShulkerDefenseAttack(crate::world::entity::monster::shulker::ShulkerDefenseAttackGoal),
+    WitherDoNothing,
+    WaterAvoidingRandomFlying(super::water_avoiding_random_flying_goal::WaterAvoidingRandomFlyingGoal),
     OcelotAttack(OcelotAttackGoal),
     OcelotAvoidEntity(OcelotAvoidEntityGoal),
     OcelotTempt(OcelotTemptGoal),
@@ -422,6 +424,8 @@ impl Goal {
             Goal::ShulkerPeek(goal) => goal.can_use(level, mob),
             Goal::ShulkerNearestAttack(goal) => goal.can_use(level, mob),
             Goal::ShulkerDefenseAttack(goal) => goal.can_use(level, mob),
+            Goal::WitherDoNothing => crate::world::entity::boss::wither::wither_boss::get_invulnerable_ticks(level.entity(mob)) > 0,
+            Goal::WaterAvoidingRandomFlying(goal) => goal.can_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.can_use(level, mob),
@@ -605,6 +609,8 @@ impl Goal {
             Goal::ShulkerPeek(goal) => goal.can_continue_to_use(level, mob),
             Goal::ShulkerNearestAttack(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
             Goal::ShulkerDefenseAttack(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
+            Goal::WitherDoNothing => crate::world::entity::boss::wither::wither_boss::get_invulnerable_ticks(level.entity(mob)) > 0,
+            Goal::WaterAvoidingRandomFlying(goal) => goal.water_avoiding_random_stroll_goal.random_stroll_goal.can_continue_to_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotTempt(goal) => goal.can_continue_to_use(level, mob),
@@ -789,6 +795,8 @@ impl Goal {
             Goal::ShulkerPeek(goal) => goal.start(level, mob),
             Goal::ShulkerNearestAttack(goal) => goal.nearest_attackable_target_goal.start(level, mob),
             Goal::ShulkerDefenseAttack(goal) => goal.nearest_attackable_target_goal.start(level, mob),
+            Goal::WitherDoNothing => {}
+            Goal::WaterAvoidingRandomFlying(goal) => goal.water_avoiding_random_stroll_goal.random_stroll_goal.start(level, mob),
             Goal::OcelotAttack(_) => {}
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.start(level),
@@ -878,6 +886,8 @@ impl Goal {
             Goal::ShulkerPeek(goal) => goal.stop(level, mob),
             Goal::ShulkerNearestAttack(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::ShulkerDefenseAttack(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
+            Goal::WitherDoNothing => {}
+            Goal::WaterAvoidingRandomFlying(goal) => goal.water_avoiding_random_stroll_goal.random_stroll_goal.stop(level, mob),
             Goal::Panic(goal) => goal.stop(),
             Goal::Breed(goal) => goal.stop(),
             Goal::Tempt(goal) => goal.stop(level, mob),
@@ -1116,6 +1126,7 @@ impl Goal {
             Goal::ShulkerAttack(goal) => goal.tick(level, mob),
             Goal::ShulkerPeek(goal) => goal.tick(),
             Goal::ShulkerNearestAttack(_) | Goal::ShulkerDefenseAttack(_) => {}
+            Goal::WitherDoNothing | Goal::WaterAvoidingRandomFlying(_) => {}
             Goal::BeeEnterHive(_) | Goal::ValidateHive(_) | Goal::ValidateFlower(_) | Goal::BeeLocateHive(_) | Goal::BeeWander(_) | Goal::BeeHurtByOther(_) | Goal::BeeBecomeAngryTarget(_) => {}
             Goal::OcelotAttack(goal) => goal.tick(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
@@ -1288,6 +1299,8 @@ impl Goal {
             Goal::ShulkerAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::ShulkerPeek(_) => 0,
             Goal::ShulkerNearestAttack(_) | Goal::ShulkerDefenseAttack(_) => Flag::Target.bit(),
+            Goal::WitherDoNothing => Flag::Move.bit() | Flag::Jump.bit() | Flag::Look.bit(),
+            Goal::WaterAvoidingRandomFlying(goal) => goal.water_avoiding_random_stroll_goal.random_stroll_goal.flags,
             Goal::RunAroundLikeCrazy(_) | Goal::MountPanic(_) => Flag::Move.bit(),
             Goal::RandomStand(_) => 0,
             Goal::FoxFloat(_) => Flag::Jump.bit(),

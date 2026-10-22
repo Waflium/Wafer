@@ -52,6 +52,7 @@ pub enum ProjectileKind {
     BreezeWindCharge(super::hurtingprojectile::windcharge::breeze_wind_charge::BreezeWindCharge),
     FishingHook(super::fishing_hook::FishingHook),
     ShulkerBullet(super::shulker_bullet::ShulkerBullet),
+    WitherSkull(super::hurtingprojectile::wither_skull::WitherSkull),
 }
 
 pub struct Projectile {
@@ -93,6 +94,7 @@ impl Projectile {
         match &self.kind {
             ProjectileKind::SmallFireball(fireball) => Some(&fireball.abstract_hurting_projectile),
             ProjectileKind::LargeFireball(fireball) => Some(&fireball.abstract_hurting_projectile),
+            ProjectileKind::WitherSkull(skull) => Some(&skull.abstract_hurting_projectile),
             ProjectileKind::WindCharge(wind_charge) => Some(&wind_charge.abstract_wind_charge.abstract_hurting_projectile),
             ProjectileKind::BreezeWindCharge(wind_charge) => Some(&wind_charge.abstract_wind_charge.abstract_hurting_projectile),
             _ => None,
@@ -103,6 +105,7 @@ impl Projectile {
         match &mut self.kind {
             ProjectileKind::SmallFireball(fireball) => Some(&mut fireball.abstract_hurting_projectile),
             ProjectileKind::LargeFireball(fireball) => Some(&mut fireball.abstract_hurting_projectile),
+            ProjectileKind::WitherSkull(skull) => Some(&mut skull.abstract_hurting_projectile),
             ProjectileKind::WindCharge(wind_charge) => Some(&mut wind_charge.abstract_wind_charge.abstract_hurting_projectile),
             ProjectileKind::BreezeWindCharge(wind_charge) => Some(&mut wind_charge.abstract_wind_charge.abstract_hurting_projectile),
             _ => None,
@@ -255,7 +258,7 @@ impl ServerLevel {
             ProjectileKind::SpectralArrow(_) => self.abstract_arrow_tick(id),
             ProjectileKind::ThrownTrident(_) => self.thrown_trident_tick(id),
             ProjectileKind::FireworkRocket(_) => self.firework_rocket_tick(id),
-            ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) => self.abstract_hurting_projectile_tick(id),
+            ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) | ProjectileKind::WitherSkull(_) => self.abstract_hurting_projectile_tick(id),
             ProjectileKind::LlamaSpit(_) => self.llama_spit_tick(id),
             ProjectileKind::WindCharge(_) => self.wind_charge_tick(id),
             ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_tick(id),
@@ -410,6 +413,7 @@ impl ServerLevel {
             ProjectileKind::LargeFireball(_) => self.large_fireball_on_hit(id, hit_result),
             ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit(id, hit_result),
             ProjectileKind::ShulkerBullet(_) => self.shulker_bullet_on_hit(id, hit_result),
+            ProjectileKind::WitherSkull(_) => self.wither_skull_on_hit(id, hit_result),
         }
     }
 
@@ -456,6 +460,7 @@ impl ServerLevel {
             ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit_entity(id, hit_result),
             ProjectileKind::FishingHook(_) => self.fishing_hook_on_hit_entity(id, hit_result),
             ProjectileKind::ShulkerBullet(_) => self.shulker_bullet_on_hit_entity(id, hit_result),
+            ProjectileKind::WitherSkull(_) => self.wither_skull_on_hit_entity(id, hit_result),
         }
     }
 

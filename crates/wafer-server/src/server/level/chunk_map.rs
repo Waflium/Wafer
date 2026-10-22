@@ -392,6 +392,7 @@ impl ServerLevel {
         }
         if let Some(tracked) = self.chunk_map.tracked.remove(id) {
             for viewer in tracked.seen_by {
+                self.stop_seen_by_player(id, viewer);
                 if let Some(p) = self.players.get(&viewer) {
                     p.connection.send_raw(remove_entities(&[id]));
                 }
@@ -403,6 +404,7 @@ impl ServerLevel {
         if let Some(t) = self.chunk_map.tracked.get_mut(tracked)
             && t.seen_by.shift_remove(&player)
         {
+            self.stop_seen_by_player(tracked, player);
             self.player(player).connection.send_raw(remove_entities(&[tracked]));
         }
     }
@@ -440,9 +442,22 @@ impl ServerLevel {
                 packets.push(encode(clientbound::BUNDLE_DELIMITER, |_| {}));
                 let connection = &self.player(player).connection;
                 packets.into_iter().for_each(|p| connection.send_raw(p));
+                self.start_seen_by_player(tracked, player);
             }
         } else {
             self.remove_tracking_player(tracked, player);
+        }
+    }
+
+    fn start_seen_by_player(&mut self, id: EntityId, player: EntityId) {
+        if self.is_wither(id) {
+            self.wither_start_seen_by_player(id, player);
+        }
+    }
+
+    fn stop_seen_by_player(&mut self, id: EntityId, player: EntityId) {
+        if self.is_wither(id) {
+            self.wither_stop_seen_by_player(id, player);
         }
     }
 
