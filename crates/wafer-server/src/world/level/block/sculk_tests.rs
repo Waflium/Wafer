@@ -80,3 +80,20 @@ fn sculk_catalysts_take_experience_from_dying_mobs() {
     }
     assert!(!server.levels[0].entities.values().any(|entity| matches!(entity, crate::world::entity::LevelEntity::ExperienceOrb(_))));
 }
+
+#[test]
+fn sculk_shriekers_warn_players_and_answer_with_darkness() {
+    let mut server = server();
+    run(&mut server, "difficulty easy");
+    run(&mut server, "setblock 2 -60 0 sculk_shrieker[can_summon=true]");
+    let player = testing::player(&mut server.levels[0], wafer_core::Vec3::new(2.5, -60.0, 4.5), 0.0, 0.0);
+    let shrieker = BlockPos::new(2, -60, 0);
+    server.levels[0].sculk_shrieker_try_shriek(shrieker, Some(player));
+    assert!(server.levels[0].block_state(shrieker).get(wafer_data::properties::SHRIEKING));
+    assert_eq!(server.levels[0].player(player).warden_spawn_tracker.get_warning_level(), 1);
+    for _ in 0..91 {
+        server.tick();
+    }
+    assert!(!server.levels[0].block_state(shrieker).get(wafer_data::properties::SHRIEKING));
+    assert!(server.levels[0].has_effect(player, wafer_data::mob_effects::DARKNESS));
+}

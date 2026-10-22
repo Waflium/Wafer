@@ -123,7 +123,7 @@ impl ServerLevel {
         let can_receive = match user {
             VibrationUser::SculkSensor { pos: block_pos, id } => self.sculk_sensor_can_receive_vibration(block_pos, id, pos, game_event::STEP, Context::of_state(Some(on_state))),
             VibrationUser::CalibratedSculkSensor { pos: block_pos, id } => self.calibrated_sculk_sensor_can_receive_vibration(block_pos, id, pos, game_event::STEP, Context::of_state(Some(on_state))),
-            VibrationUser::Allay(_) => false,
+            VibrationUser::SculkShrieker { .. } | VibrationUser::Allay(_) => false,
         };
         if can_receive {
             let position: Vec3 = self.entity(entity).position();

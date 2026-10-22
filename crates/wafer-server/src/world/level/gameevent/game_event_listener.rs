@@ -57,7 +57,9 @@ impl ServerLevel {
 
 impl ServerLevel {
     fn block_entity_vibration_user(&self, pos: BlockPos, id: u64) -> Option<VibrationUser> {
-        self.sculk_sensor_vibration_user(pos).filter(|user| matches!(user, VibrationUser::SculkSensor { id: user_id, .. } | VibrationUser::CalibratedSculkSensor { id: user_id, .. } if *user_id == id))
+        self.sculk_sensor_vibration_user(pos)
+            .or_else(|| self.sculk_shrieker_vibration_user(pos))
+            .filter(|user| matches!(user, VibrationUser::SculkSensor { id: user_id, .. } | VibrationUser::CalibratedSculkSensor { id: user_id, .. } | VibrationUser::SculkShrieker { id: user_id, .. } if *user_id == id))
     }
 
     fn is_catalyst_listener(&self, pos: BlockPos, id: u64) -> bool {

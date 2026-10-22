@@ -80,6 +80,10 @@ impl ServerLevel {
             BlockEntityKind::Jukebox(_) => return self.jukebox_pop_out_the_item(pos),
             BlockEntityKind::Campfire(_) => return self.campfire_pre_remove_side_effects(pos),
             BlockEntityKind::CreakingHeart(_) => return self.creaking_heart_pre_remove_side_effects(pos),
+            BlockEntityKind::SculkShrieker(_) => {
+                let state = entity.block_state();
+                return self.sculk_shrieker_pre_remove_side_effects(pos, state);
+            }
             BlockEntityKind::PistonMoving(_) => return self.piston_moving_final_tick(pos),
             BlockEntityKind::ChiseledBookShelf(_) => {
                 return crate::world::containers::drop_contents(self, pos, ContainerRef::ChiseledBookShelf(pos));
@@ -193,6 +197,11 @@ impl ServerLevel {
                 }
             }
             BlockEntityTicker::SculkCatalyst => self.sculk_catalyst_server_tick(pos),
+            BlockEntityTicker::SculkShrieker => {
+                if let Some(user) = self.sculk_shrieker_vibration_user(pos) {
+                    self.vibration_ticker_tick(user);
+                }
+            }
             BlockEntityTicker::Beacon => self.beacon_tick(pos),
             BlockEntityTicker::BrewingStand => self.brewing_stand_server_tick(pos, state),
             BlockEntityTicker::CampfireCook => self.campfire_cook_tick(pos, state),

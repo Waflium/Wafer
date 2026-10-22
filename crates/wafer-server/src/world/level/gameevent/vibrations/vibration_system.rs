@@ -85,6 +85,7 @@ impl Data {
 pub enum VibrationUser {
     SculkSensor { pos: BlockPos, id: u64 },
     CalibratedSculkSensor { pos: BlockPos, id: u64 },
+    SculkShrieker { pos: BlockPos, id: u64 },
     Allay(EntityId),
 }
 
@@ -108,6 +109,7 @@ impl ServerLevel {
     pub fn vibration_data(&self, user: VibrationUser) -> Option<&Data> {
         match user {
             VibrationUser::SculkSensor { pos, id } | VibrationUser::CalibratedSculkSensor { pos, id } => self.sculk_sensor_vibration_data(pos, id),
+            VibrationUser::SculkShrieker { pos, id } => self.sculk_shrieker_vibration_data(pos, id),
             VibrationUser::Allay(id) => self.allay_vibration_data(id),
         }
     }
@@ -115,6 +117,7 @@ impl ServerLevel {
     pub fn vibration_data_mut(&mut self, user: VibrationUser) -> Option<&mut Data> {
         match user {
             VibrationUser::SculkSensor { pos, id } | VibrationUser::CalibratedSculkSensor { pos, id } => self.sculk_sensor_vibration_data_mut(pos, id),
+            VibrationUser::SculkShrieker { pos, id } => self.sculk_shrieker_vibration_data_mut(pos, id),
             VibrationUser::Allay(id) => self.allay_vibration_data_mut(id),
         }
     }
@@ -123,13 +126,14 @@ impl ServerLevel {
         match user {
             VibrationUser::SculkSensor { .. } => crate::world::level::block::entity::sculk_sensor_block_entity::LISTENER_RANGE,
             VibrationUser::CalibratedSculkSensor { .. } => crate::world::level::block::entity::sculk_sensor_block_entity::CALIBRATED_LISTENER_RANGE,
+            VibrationUser::SculkShrieker { .. } => crate::world::level::block::entity::sculk_shrieker_block_entity::LISTENER_RADIUS,
             VibrationUser::Allay(_) => crate::world::entity::animal::allay::allay::VIBRATION_EVENT_LISTENER_RANGE,
         }
     }
 
     pub fn vibration_user_position_source(&self, user: VibrationUser) -> PositionSource {
         match user {
-            VibrationUser::SculkSensor { pos, .. } | VibrationUser::CalibratedSculkSensor { pos, .. } => PositionSource::Block(pos),
+            VibrationUser::SculkSensor { pos, .. } | VibrationUser::CalibratedSculkSensor { pos, .. } | VibrationUser::SculkShrieker { pos, .. } => PositionSource::Block(pos),
             VibrationUser::Allay(id) => self.allay_position_source(id),
         }
     }
@@ -138,6 +142,7 @@ impl ServerLevel {
         match user {
             VibrationUser::SculkSensor { pos: block_pos, id } => self.sculk_sensor_can_receive_vibration(block_pos, id, pos, event, context),
             VibrationUser::CalibratedSculkSensor { pos: block_pos, id } => self.calibrated_sculk_sensor_can_receive_vibration(block_pos, id, pos, event, context),
+            VibrationUser::SculkShrieker { pos: block_pos, .. } => self.sculk_shrieker_can_receive_vibration(block_pos, context),
             VibrationUser::Allay(id) => self.allay_can_receive_vibration(id, pos),
         }
     }
@@ -147,6 +152,7 @@ impl ServerLevel {
             VibrationUser::SculkSensor { pos: block_pos, id } | VibrationUser::CalibratedSculkSensor { pos: block_pos, id } => {
                 self.sculk_sensor_on_receive_vibration(user, block_pos, id, pos, event, source_entity, projectile_owner, receiving_distance)
             }
+            VibrationUser::SculkShrieker { pos: block_pos, .. } => self.sculk_shrieker_on_receive_vibration(block_pos, source_entity, projectile_owner),
             VibrationUser::Allay(id) => self.allay_on_receive_vibration(id, pos, event),
         }
     }
@@ -154,6 +160,7 @@ impl ServerLevel {
     fn vibration_user_listenable_events(&self, user: VibrationUser) -> &'static Tag {
         match user {
             VibrationUser::SculkSensor { .. } | VibrationUser::CalibratedSculkSensor { .. } => &game_event_tags::VIBRATIONS,
+            VibrationUser::SculkShrieker { .. } => &game_event_tags::SHRIEKER_CAN_LISTEN,
             VibrationUser::Allay(_) => &game_event_tags::ALLAY_CAN_LISTEN,
         }
     }
@@ -163,7 +170,7 @@ impl ServerLevel {
     }
 
     fn vibration_user_requires_adjacent_chunks_to_be_ticking(&self, user: VibrationUser) -> bool {
-        matches!(user, VibrationUser::SculkSensor { .. } | VibrationUser::CalibratedSculkSensor { .. })
+        matches!(user, VibrationUser::SculkSensor { .. } | VibrationUser::CalibratedSculkSensor { .. } | VibrationUser::SculkShrieker { .. })
     }
 
     fn vibration_user_calculate_travel_time_in_ticks(&self, _user: VibrationUser, distance_to_destination: f32) -> i32 {
@@ -172,7 +179,7 @@ impl ServerLevel {
 
     fn vibration_user_on_data_changed(&mut self, user: VibrationUser) {
         match user {
-            VibrationUser::SculkSensor { pos, .. } | VibrationUser::CalibratedSculkSensor { pos, .. } => self.block_entity_set_changed(pos),
+            VibrationUser::SculkSensor { pos, .. } | VibrationUser::CalibratedSculkSensor { pos, .. } | VibrationUser::SculkShrieker { pos, .. } => self.block_entity_set_changed(pos),
             VibrationUser::Allay(_) => {}
         }
     }
