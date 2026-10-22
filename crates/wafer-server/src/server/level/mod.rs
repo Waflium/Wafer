@@ -1806,6 +1806,7 @@ impl ServerLevel {
             Some(LevelEntity::LeashKnot(_)) => self.tick_leash_fence_knot(id),
             Some(LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => self.block_attached_entity_tick(id),
             Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) => {}
+            Some(LevelEntity::OminousItemSpawner(_)) => self.tick_ominous_item_spawner(id),
             Some(LevelEntity::Display(_)) => self.tick_display(id),
             Some(LevelEntity::EndCrystal(_)) => self.tick_end_crystal(id),
             Some(LevelEntity::PrimedTnt(_)) => self.tick_primed_tnt(id),

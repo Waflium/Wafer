@@ -2626,6 +2626,7 @@ impl ServerLevel {
             Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_)) => self.block_attached_entity_hurt_server(id, source),
             Some(LevelEntity::ItemFrame(_)) => self.item_frame_hurt_server(id, source),
             Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) => super::marker::Marker::hurt_server(),
+            Some(LevelEntity::OminousItemSpawner(_)) => super::ominous_item_spawner::OminousItemSpawner::hurt_server(),
             Some(LevelEntity::Display(_)) => super::display::Display::hurt_server(),
             Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_hurt_server(id, source, damage),
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => self.vehicle_entity_hurt_server(id, source, damage),
@@ -3003,6 +3004,7 @@ impl ServerLevel {
                     ProjectileKind::FishingHook(_) => "FishingHook",
                     ProjectileKind::ShulkerBullet(_) => "ShulkerBullet",
                     ProjectileKind::WitherSkull(_) => "WitherSkull",
+                    ProjectileKind::DragonFireball(_) => "DragonFireball",
                     ProjectileKind::BreezeWindCharge(_) => "BreezeWindCharge",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",
@@ -3641,6 +3643,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_can_add_passenger(id),
             Some(LevelEntity::Marker(_)) => super::marker::Marker::can_add_passenger(),
+            Some(LevelEntity::OminousItemSpawner(_)) => super::ominous_item_spawner::OminousItemSpawner::can_add_passenger(),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_can_add_passenger(id),
             _ => self.passengers(id).is_empty(),
         }
@@ -3649,6 +3652,7 @@ impl ServerLevel {
     fn could_accept_passenger(&self, id: EntityId) -> bool {
         match self.entities.get(&id) {
             Some(LevelEntity::Marker(_)) => super::marker::Marker::could_accept_passenger(),
+            Some(LevelEntity::OminousItemSpawner(_)) => super::ominous_item_spawner::OminousItemSpawner::could_accept_passenger(),
             _ => true,
         }
     }
@@ -4031,7 +4035,7 @@ impl ServerLevel {
 
     pub fn get_piston_push_reaction(&self, id: EntityId) -> wafer_data::PushReaction {
         match self.entities.get(&id) {
-            Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_) | LevelEntity::Interaction(_) | LevelEntity::Display(_)) => wafer_data::PushReaction::IgnoreEntity,
+            Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_) | LevelEntity::Interaction(_) | LevelEntity::Display(_) | LevelEntity::OminousItemSpawner(_)) => wafer_data::PushReaction::IgnoreEntity,
             _ => wafer_data::PushReaction::PushPull,
         }
     }
@@ -4042,6 +4046,9 @@ impl ServerLevel {
         }
         if let Some(LevelEntity::Display(_)) = self.entities.get(&id) {
             return super::display::Display::is_ignoring_block_triggers();
+        }
+        if let Some(LevelEntity::OminousItemSpawner(_)) = self.entities.get(&id) {
+            return super::ominous_item_spawner::OminousItemSpawner::is_ignoring_block_triggers();
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(super::mob::MobKind::Bat(_)) => self.bat_is_ignoring_block_triggers(id),

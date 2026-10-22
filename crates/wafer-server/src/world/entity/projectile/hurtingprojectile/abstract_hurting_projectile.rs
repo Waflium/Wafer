@@ -111,7 +111,7 @@ impl ServerLevel {
     }
 
     fn should_burn(&self, id: EntityId) -> bool {
-        !self.projectile(id).is_abstract_wind_charge() && !self.is_wither_skull(id)
+        !self.projectile(id).is_abstract_wind_charge() && !self.is_wither_skull(id) && !self.is_dragon_fireball(id)
     }
 
     fn get_inertia(&self, id: EntityId) -> f32 {

@@ -23,6 +23,7 @@ fn shulkers_snap_to_block_centres_and_grow_when_peeking() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(30.5, -60.0, 30.5), 0.0, 0.0);
     let id = add_shulker(&mut level, Vec3::new(2.3, -59.8, 4.9));
+    level.mob_mut(id).unwrap().set_no_ai(true);
     let e = level.entity(id);
     assert_eq!(e.position(), Vec3::new(2.5, -60.0, 4.5));
     let bb = e.bounding_box();

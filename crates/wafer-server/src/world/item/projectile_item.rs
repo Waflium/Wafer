@@ -62,9 +62,20 @@ pub fn as_projectile(level: &mut ServerLevel, position: Vec3, item_stack: &ItemS
         fire_charge_item::as_projectile(level, position, item_stack, direction)
     } else if classes.contains(&"WindChargeItem") {
         wind_charge_item::as_projectile(level, position, direction)
+    } else if classes.contains(&"TridentItem") {
+        let mut trident = crate::world::entity::projectile::arrow::thrown_trident::ThrownTrident::at(level, position.x, position.y, position.z, &item_stack.copy_with_count(1));
+        trident.abstract_arrow_mut().expect("an arrow").pickup = crate::world::entity::projectile::arrow::abstract_arrow::Pickup::Allowed;
+        trident
     } else {
         arrow_item::as_projectile(level, item, position, item_stack)
     }
+}
+
+pub fn is_projectile_item(item: Item) -> bool {
+    let classes = item.info().classes;
+    ["ArrowItem", "SnowballItem", "EggItem", "ExperienceBottleItem", "ThrowablePotionItem", "FireworkRocketItem", "FireChargeItem", "WindChargeItem", "TridentItem"]
+        .iter()
+        .any(|class| classes.contains(class))
 }
 
 pub fn create_dispense_config(item: Item) -> DispenseConfig {

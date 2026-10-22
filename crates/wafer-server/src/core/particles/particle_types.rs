@@ -8,7 +8,7 @@ use super::particle_options::ParticleOptions;
 use crate::util::hash_ops::{self, HashCode};
 use crate::world::item::component::codec::{self, Codec, Custom, Dispatch, RangeError, Selector, Stream};
 use crate::world::item::component::custom;
-use crate::world::item::component::types::{Pair, def, f, float, i, positive_int, record, req, rgb_color, argb_color, var_int};
+use crate::world::item::component::types::{Pair, always, def, f, float, i, positive_int, record, req, rgb_color, argb_color, var_int};
 
 fn block_particle_option() -> Pair {
     record(vec![req("block_state", (Codec::Custom(Box::new(BlockStateCodec)), Stream::Custom))])
@@ -43,7 +43,7 @@ fn item_particle_option() -> Pair {
 }
 
 fn power_particle_option() -> Pair {
-    record(vec![def("power", float(Codec::float()), f(1.0))])
+    record(vec![always("power", float(Codec::float()), f(1.0))])
 }
 
 fn sculk_charge_particle_options() -> Pair {
