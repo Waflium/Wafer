@@ -27,12 +27,17 @@ struct EntityProperties {
 pub struct CollisionContext {
     descending: bool,
     placement: bool,
+    position: bool,
     entity_bottom: f64,
     entity: Option<EntityProperties>,
 }
 
 impl CollisionContext {
-    pub const EMPTY: CollisionContext = CollisionContext { descending: false, placement: false, entity_bottom: -f64::MAX, entity: None };
+    pub const EMPTY: CollisionContext = CollisionContext { descending: false, placement: false, position: false, entity_bottom: -f64::MAX, entity: None };
+
+    pub fn position_context(y: f64) -> CollisionContext {
+        CollisionContext { position: true, entity_bottom: y, ..CollisionContext::EMPTY }
+    }
 
     pub fn of(level: &ServerLevel, entity: EntityId) -> CollisionContext {
         CollisionContext::new(level, entity, false, level.entity(entity).y())
@@ -40,7 +45,7 @@ impl CollisionContext {
 
     pub fn of_detached(entity: &Entity) -> CollisionContext {
         let properties = EntityProperties { fall_distance: entity.fall_distance, is_falling_block: false, can_walk_on_powder_snow: false, liquid_collision_shape: None, can_stand_on_lava: false };
-        CollisionContext { descending: entity.is_shift_key_down(), placement: false, entity_bottom: entity.y(), entity: Some(properties) }
+        CollisionContext { descending: entity.is_shift_key_down(), placement: false, position: false, entity_bottom: entity.y(), entity: Some(properties) }
     }
 
     pub fn placement_context(level: &ServerLevel, player: Option<EntityId>) -> CollisionContext {
@@ -63,7 +68,7 @@ impl CollisionContext {
             liquid_collision_shape: level.get_liquid_collision_shape(entity),
             can_stand_on_lava: level.mob(entity).is_some_and(|mob| mob.can_stand_on_fluid(wafer_data::Fluid::Lava)),
         };
-        CollisionContext { descending: e.is_shift_key_down(), placement, entity_bottom, entity: Some(properties) }
+        CollisionContext { descending: e.is_shift_key_down(), placement, position: false, entity_bottom, entity: Some(properties) }
     }
 
     pub fn is_descending(&self) -> bool {
@@ -79,7 +84,7 @@ impl CollisionContext {
     }
 
     fn is_above_max_y(&self, max_y: f64, pos: BlockPos, default_value: bool) -> bool {
-        if self.entity.is_none() && !self.placement {
+        if self.entity.is_none() && !self.placement && !self.position {
             return default_value;
         }
         self.entity_bottom > pos.y as f64 + max_y - 1.0e-5f32 as f64

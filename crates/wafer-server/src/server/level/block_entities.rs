@@ -209,6 +209,16 @@ impl ServerLevel {
             BlockEntityTicker::Bell => self.bell_server_tick(pos),
             BlockEntityTicker::Vault => self.vault_server_tick(pos, state),
             BlockEntityTicker::TrialSpawner => self.trial_spawner_server_tick(pos, state),
+            BlockEntityTicker::PotentSulfurWet => self.potent_sulfur_server_nausea_effect_tick(pos),
+            BlockEntityTicker::PotentSulfurDormant => {
+                self.potent_sulfur_server_waiting_countdown_tick(pos, state);
+                self.potent_sulfur_server_nausea_effect_tick(pos);
+            }
+            BlockEntityTicker::PotentSulfurErupting => {
+                self.potent_sulfur_launch_entity_tick(pos);
+                self.potent_sulfur_server_waiting_countdown_tick(pos, state);
+            }
+            BlockEntityTicker::PotentSulfurContinuous => self.potent_sulfur_launch_entity_tick(pos),
             BlockEntityTicker::Crafter => self.crafter_server_tick(pos, state),
             BlockEntityTicker::Sign => self.sign_tick(pos),
             BlockEntityTicker::EndGateway => self.end_gateway_portal_tick(pos, state),

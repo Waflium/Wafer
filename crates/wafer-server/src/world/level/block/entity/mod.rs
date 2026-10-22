@@ -26,6 +26,7 @@ pub mod jigsaw_block_entity;
 pub mod jukebox_block_entity;
 pub mod lectern_block_entity;
 pub mod piston_moving_block_entity;
+pub mod potent_sulfur_block_entity;
 #[cfg(test)]
 mod oracle_data;
 #[cfg(test)]
@@ -86,6 +87,10 @@ pub enum BlockEntityTicker {
     Sign,
     Vault,
     TrialSpawner,
+    PotentSulfurWet,
+    PotentSulfurDormant,
+    PotentSulfurErupting,
+    PotentSulfurContinuous,
     Crafter,
     EndGateway,
     Spawner,
@@ -132,6 +137,7 @@ pub enum BlockEntityKind {
     EnderChest(ender_chest_block_entity::EnderChestBlockEntity),
     Vault(vault::vault_block_entity::VaultBlockEntity),
     TrialSpawner(trial_spawner_block_entity::TrialSpawnerBlockEntity),
+    PotentSulfur(potent_sulfur_block_entity::PotentSulfurBlockEntity),
     Empty,
     BrewingStand(brewing_stand_block_entity::BrewingStandBlockEntity),
     EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity),
@@ -193,6 +199,7 @@ impl BlockEntity {
             types::ENDER_CHEST => BlockEntityKind::EnderChest(ender_chest_block_entity::EnderChestBlockEntity::default()),
             types::VAULT => BlockEntityKind::Vault(vault::vault_block_entity::VaultBlockEntity::default()),
             types::TRIAL_SPAWNER => BlockEntityKind::TrialSpawner(trial_spawner_block_entity::TrialSpawnerBlockEntity::default()),
+            types::POTENT_SULFUR => BlockEntityKind::PotentSulfur(potent_sulfur_block_entity::PotentSulfurBlockEntity::default()),
             types::COPPER_GOLEM_STATUE | types::DAYLIGHT_DETECTOR | types::END_PORTAL => BlockEntityKind::Empty,
             types::BREWING_STAND => BlockEntityKind::BrewingStand(brewing_stand_block_entity::BrewingStandBlockEntity::default()),
             types::END_GATEWAY => BlockEntityKind::EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity::default()),
@@ -314,6 +321,7 @@ impl BlockEntity {
             BlockEntityKind::Sign(sign) => sign.load_additional(input),
             BlockEntityKind::Vault(vault) => vault.load_additional(input),
             BlockEntityKind::TrialSpawner(trial_spawner) => trial_spawner.load_additional(input),
+            BlockEntityKind::PotentSulfur(potent_sulfur) => potent_sulfur.load_additional(input),
             BlockEntityKind::BrewingStand(brewing_stand) => brewing_stand.load_additional(input),
             BlockEntityKind::EndGateway(gateway) => gateway.load_additional(input),
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.load_additional(input, state),
@@ -363,6 +371,7 @@ impl BlockEntity {
             BlockEntityKind::Sign(sign) => sign.save_additional(output),
             BlockEntityKind::Vault(vault) => vault.save_additional(output),
             BlockEntityKind::TrialSpawner(trial_spawner) => trial_spawner.save_additional(output),
+            BlockEntityKind::PotentSulfur(potent_sulfur) => potent_sulfur.save_additional(output),
             BlockEntityKind::BrewingStand(brewing_stand) => brewing_stand.save_additional(output),
             BlockEntityKind::EndGateway(gateway) => gateway.save_additional(output),
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.save_additional(output),
@@ -686,6 +695,13 @@ impl BlockEntity {
             types::SIGN | types::HANGING_SIGN if block.is_instance_of("SignBlock") => Some(BlockEntityTicker::Sign),
             types::VAULT if block.is_instance_of("VaultBlock") => Some(BlockEntityTicker::Vault),
             types::TRIAL_SPAWNER if block.is_instance_of("TrialSpawnerBlock") => Some(BlockEntityTicker::TrialSpawner),
+            types::POTENT_SULFUR if block.is_instance_of("PotentSulfurBlock") => match state.get(wafer_data::properties::POTENT_SULFUR_STATE) {
+                wafer_data::properties::PotentSulfurState::Dry => None,
+                wafer_data::properties::PotentSulfurState::Wet => Some(BlockEntityTicker::PotentSulfurWet),
+                wafer_data::properties::PotentSulfurState::Dormant => Some(BlockEntityTicker::PotentSulfurDormant),
+                wafer_data::properties::PotentSulfurState::Erupting => Some(BlockEntityTicker::PotentSulfurErupting),
+                wafer_data::properties::PotentSulfurState::Continuous => Some(BlockEntityTicker::PotentSulfurContinuous),
+            },
             types::CRAFTER if block.is_instance_of("CrafterBlock") => Some(BlockEntityTicker::Crafter),
             types::END_GATEWAY if block.is_instance_of("EndGatewayBlock") => Some(BlockEntityTicker::EndGateway),
             types::MOB_SPAWNER if block.is_instance_of("SpawnerBlock") => Some(BlockEntityTicker::Spawner),

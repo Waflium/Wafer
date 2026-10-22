@@ -110,6 +110,7 @@ pub mod scaffolding_block;
 mod sculk_catalyst_block;
 mod sculk_sensor_block;
 mod sculk_shrieker_block;
+mod potent_sulfur_block;
 pub mod simple_waterlogged_block;
 mod slab_block;
 mod smithing_table_block;
@@ -272,6 +273,8 @@ mod speleothem_block;
 mod sculk_tests;
 #[cfg(test)]
 mod trial_spawner_tests;
+#[cfg(test)]
+mod potent_sulfur_tests;
 #[cfg(test)]
 mod speleothem_tests;
 mod sulfur_spike_block;
@@ -699,6 +702,7 @@ fn for_class(class: &str, block: Block) -> Option<Box<dyn BlockBehaviour>> {
         "SpawnerBlock" => Box::new(spawner_block::SpawnerBlock),
         "SculkSensorBlock" => Box::new(sculk_sensor_block::SculkSensorBlock),
         "SculkShriekerBlock" => Box::new(sculk_shrieker_block::SculkShriekerBlock),
+        "PotentSulfurBlock" => Box::new(potent_sulfur_block::PotentSulfurBlock),
         "BrushableBlock" => Box::new(brushable_block::BrushableBlock::new(block)),
         "SculkCatalystBlock" => Box::new(sculk_catalyst_block::SculkCatalystBlock),
 
