@@ -75,6 +75,7 @@ pub struct LivingEntity {
     pub last_hurt: f32,
     pub dead: bool,
     pub last_damage_source: Option<DamageSource>,
+    pub skip_drop_experience: bool,
     pub last_damage_stamp: i64,
     pub combat_tracker: CombatTracker,
     pub hurt_dir: f32,
@@ -133,6 +134,7 @@ impl LivingEntity {
             last_hurt: 0.0,
             dead: false,
             last_damage_source: None,
+            skip_drop_experience: false,
             last_damage_stamp: 0,
             combat_tracker: Default::default(),
             hurt_dir: 0.0,
@@ -1819,7 +1821,7 @@ impl ServerLevel {
         !self.is_baby(id) && self.game_rules.get_bool(game_rule::MOB_DROPS)
     }
 
-    fn should_drop_experience(&self, id: EntityId) -> bool {
+    pub fn should_drop_experience(&self, id: EntityId) -> bool {
         if self.is_monster(id) {
             return self.monster_should_drop_experience();
         }
@@ -1852,14 +1854,22 @@ impl ServerLevel {
 
     fn drop_experience(&mut self, id: EntityId, killer: Option<EntityId>) {
         let living = self.living(id);
-        if self.is_always_experience_dropper(id) || living.last_hurt_by_player_memory_time > 0 && self.should_drop_experience(id) && self.game_rules.get_bool(game_rule::MOB_DROPS) {
+        if !living.skip_drop_experience && (self.is_always_experience_dropper(id) || living.last_hurt_by_player_memory_time > 0 && self.should_drop_experience(id) && self.game_rules.get_bool(game_rule::MOB_DROPS)) {
             let reward = self.get_experience_reward(id, killer);
             let pos = self.entity(id).position();
             self.award_experience(pos, reward);
         }
     }
 
-    fn get_experience_reward(&mut self, id: EntityId, killer: Option<EntityId>) -> i32 {
+    pub fn skip_drop_experience(&mut self, id: EntityId) {
+        self.living_mut(id).skip_drop_experience = true;
+    }
+
+    pub fn was_experience_consumed(&self, id: EntityId) -> bool {
+        self.living(id).skip_drop_experience
+    }
+
+    pub fn get_experience_reward(&mut self, id: EntityId, killer: Option<EntityId>) -> i32 {
         let base = self.get_base_experience_reward(id);
         self.process_mob_experience(killer, base)
     }

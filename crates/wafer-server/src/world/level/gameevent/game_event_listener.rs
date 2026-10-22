@@ -5,6 +5,7 @@ use super::position_source::PositionSource;
 use super::vibrations::vibration_system::VibrationUser;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::level::block::entity::{BlockEntityKind, sculk_catalyst_block_entity};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DeliveryMode {
@@ -59,15 +60,25 @@ impl ServerLevel {
         self.sculk_sensor_vibration_user(pos).filter(|user| matches!(user, VibrationUser::SculkSensor { id: user_id, .. } | VibrationUser::CalibratedSculkSensor { id: user_id, .. } if *user_id == id))
     }
 
+    fn is_catalyst_listener(&self, pos: BlockPos, id: u64) -> bool {
+        self.chunks.block_entity_ref(pos).is_some_and(|entity| entity.id() == id && matches!(entity.kind, BlockEntityKind::SculkCatalyst(_)))
+    }
+
     fn block_entity_game_event_listener_radius(&self, pos: BlockPos, id: u64) -> i32 {
+        if self.is_catalyst_listener(pos, id) {
+            return sculk_catalyst_block_entity::LISTENER_RADIUS;
+        }
         self.block_entity_vibration_user(pos, id).map_or(0, |user| self.vibration_user_listener_radius(user))
     }
 
-    fn block_entity_game_event_listener_delivery_mode(&self, _pos: BlockPos, _id: u64) -> DeliveryMode {
-        DeliveryMode::Unspecified
+    fn block_entity_game_event_listener_delivery_mode(&self, pos: BlockPos, id: u64) -> DeliveryMode {
+        if self.is_catalyst_listener(pos, id) { DeliveryMode::ByDistance } else { DeliveryMode::Unspecified }
     }
 
     fn block_entity_handle_game_event(&mut self, pos: BlockPos, id: u64, event: GameEvent, context: Context, source_position: Vec3) -> bool {
+        if self.is_catalyst_listener(pos, id) {
+            return self.catalyst_listener_handle_game_event(pos, id, event, context, source_position);
+        }
         match self.block_entity_vibration_user(pos, id) {
             Some(user) => self.vibration_listener_handle_game_event(user, event, context, source_position),
             None => false,

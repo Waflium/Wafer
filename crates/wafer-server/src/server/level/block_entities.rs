@@ -192,6 +192,7 @@ impl ServerLevel {
                     self.vibration_ticker_tick(user);
                 }
             }
+            BlockEntityTicker::SculkCatalyst => self.sculk_catalyst_server_tick(pos),
             BlockEntityTicker::Beacon => self.beacon_tick(pos),
             BlockEntityTicker::BrewingStand => self.brewing_stand_server_tick(pos, state),
             BlockEntityTicker::CampfireCook => self.campfire_cook_tick(pos, state),

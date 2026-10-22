@@ -268,7 +268,7 @@ pub mod sign_block;
 pub mod suspicious_effect_holder;
 mod speleothem_block;
 #[cfg(test)]
-mod sculk_sensor_tests;
+mod sculk_tests;
 #[cfg(test)]
 mod speleothem_tests;
 mod sulfur_spike_block;

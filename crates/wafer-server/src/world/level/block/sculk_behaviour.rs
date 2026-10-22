@@ -6,6 +6,7 @@ use wafer_data::{Block, BlockState, Fluid, block_tags, blocks};
 use super::multiface_block::{self, get_face_property, has_any_face, has_face};
 use super::multiface_spreader::{DEFAULT_SPREAD_ORDER, MultifaceSpreader, SpreadConfig, SpreadType};
 use super::sculk_spreader::{ChargeCursor, SculkSpreader};
+use crate::server::level::SoundSource;
 use crate::world::level::world_gen_level::WorldGenLevel;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -139,6 +140,10 @@ fn attempt_place_sculk<R: RandomSource>(spreader: &SculkSpreader, level: &mut im
             if support_state.is(spreader.replaceable_blocks) {
                 let default_sculk = blocks::SCULK.default_state();
                 level.set_block_and_update(support_pos, default_sculk);
+                if let Some(level) = level.as_server_level() {
+                    super::push_entities_up(support_state, default_sculk, level, support_pos);
+                }
+                level.play_sound(support_pos, crate::world::entity::sound_event("minecraft:block.sculk.spread"), SoundSource::Blocks, 1.0, 1.0);
                 VEIN_SPREADER.spread_all(default_sculk, level, support_pos, spreader.is_world_generation);
                 let skip = support.opposite();
                 for vein_blocks in Direction::VALUES {
@@ -170,6 +175,7 @@ fn sculk_attempt_use_charge<R: RandomSource>(cursor: &ChargeCursor, level: &mut 
             let growth_placement = charge_pos.above();
             let growth_state = get_random_growth_state(level, growth_placement, random, spreader.is_world_generation);
             level.set_block_and_update(growth_placement, growth_state);
+            level.play_sound(charge_pos, growth_state.sound_type().place_sound, SoundSource::Blocks, 1.0, 1.0);
         }
         (charge - xp_per_growth_spawn).max(0)
     } else if random.next_int_bounded(spreader.additional_decay_rate) != 0 {

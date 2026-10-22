@@ -1,14 +1,22 @@
 use std::sync::LazyLock;
 
+use wafer_core::fastutil::OpenHashMap;
 use wafer_core::random::RandomSource;
 use wafer_core::{AxisDirection, BlockPos, Direction, Axis};
 use wafer_data::{Tag, block_tags};
+use wafer_protocol::nbt::Nbt;
 
 use super::multiface_block;
 use super::sculk_behaviour::{self, SculkBehaviour};
+use crate::server::level::SoundSource;
+use crate::server::level::events::PARTICLES_SCULK_CHARGE;
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util;
 
+pub const MAX_CHARGE: i32 = 1000;
+const MAX_CURSORS: usize = 32;
+
+#[derive(Clone)]
 pub struct SculkSpreader {
     pub is_world_generation: bool,
     pub replaceable_blocks: &'static Tag,
@@ -20,6 +28,18 @@ pub struct SculkSpreader {
 }
 
 impl SculkSpreader {
+    pub fn create_level_spreader() -> SculkSpreader {
+        SculkSpreader {
+            is_world_generation: false,
+            replaceable_blocks: &block_tags::SCULK_REPLACEABLE,
+            growth_spawn_cost: 10,
+            no_growth_radius: 4,
+            charge_decay_rate: 10,
+            additional_decay_rate: 5,
+            cursors: Vec::new(),
+        }
+    }
+
     pub fn create_world_gen_spreader() -> SculkSpreader {
         SculkSpreader {
             is_world_generation: true,
@@ -36,16 +56,31 @@ impl SculkSpreader {
         self.cursors.clear();
     }
 
+    pub fn load(&mut self, input: &Nbt) {
+        self.cursors.clear();
+        let Some(Nbt::List(cursors)) = input.get("cursors") else { return };
+        if cursors.len() > MAX_CURSORS {
+            return;
+        }
+        for cursor in cursors.iter().filter_map(ChargeCursor::from_nbt) {
+            self.add_cursor(cursor);
+        }
+    }
+
+    pub fn save(&self, output: &mut Vec<(String, Nbt)>) {
+        output.push(("cursors".into(), Nbt::List(self.cursors.iter().map(ChargeCursor::to_nbt).collect())));
+    }
+
     pub fn add_cursors(&mut self, start_pos: BlockPos, mut charge: i32) {
         while charge > 0 {
-            let current_charge = charge.min(1000);
+            let current_charge = charge.min(MAX_CHARGE);
             self.add_cursor(ChargeCursor::new(start_pos, current_charge));
             charge -= current_charge;
         }
     }
 
     fn add_cursor(&mut self, cursor: ChargeCursor) {
-        if self.cursors.len() < 32 {
+        if self.cursors.len() < MAX_CURSORS {
             self.cursors.push(cursor);
         }
     }
@@ -57,15 +92,20 @@ impl SculkSpreader {
         let mut cursors = std::mem::take(&mut self.cursors);
         let mut processed_cursors: Vec<ChargeCursor> = Vec::with_capacity(cursors.len());
         let mut mergeable_cursors: Vec<(BlockPos, usize)> = Vec::new();
+        let mut charge_map: OpenHashMap<BlockPos, i32> = OpenHashMap::new();
         for mut cursor in cursors.drain(..) {
             if cursor.is_pos_unreasonable(origin_pos) {
                 continue;
             }
             cursor.update(level, origin_pos, random, self, spread_veins);
             if cursor.charge <= 0 {
+                if let Some(level) = level.as_server_level() {
+                    level.level_event(None, PARTICLES_SCULK_CHARGE, cursor.pos, 0);
+                }
                 continue;
             }
             let pos = cursor.pos;
+            *charge_map.get_or_insert_with(pos, || 0) += cursor.charge;
             match mergeable_cursors.iter_mut().find(|(p, _)| *p == pos) {
                 None => {
                     mergeable_cursors.push((pos, processed_cursors.len()));
@@ -73,7 +113,7 @@ impl SculkSpreader {
                 }
                 Some(entry) => {
                     let existing_charge = processed_cursors[entry.1].charge;
-                    if !self.is_world_generation && cursor.charge + existing_charge <= 1000 {
+                    if !self.is_world_generation && cursor.charge + existing_charge <= MAX_CHARGE {
                         let existing = &mut processed_cursors[entry.1];
                         existing.charge += cursor.charge;
                         existing.update_delay = existing.update_delay.min(cursor.update_delay);
@@ -84,6 +124,17 @@ impl SculkSpreader {
                             entry.1 = processed_cursors.len() - 1;
                         }
                     }
+                }
+            }
+        }
+        if let Some(level) = level.as_server_level() {
+            for (pos, &charge) in charge_map.iter() {
+                let faces = mergeable_cursors.iter().find(|(p, _)| *p == pos).and_then(|&(_, index)| processed_cursors[index].facings);
+                if charge > 0
+                    && let Some(faces) = faces
+                {
+                    let num_particles = ((charge as f64).ln_1p() / 2.3f32 as f64) as i32 + 1;
+                    level.level_event(None, PARTICLES_SCULK_CHARGE, pos, (num_particles << 6) + faces as i32);
                 }
             }
         }
@@ -105,6 +156,7 @@ static NON_CORNER_NEIGHBOURS: LazyLock<Vec<(i32, i32, i32)>> = LazyLock::new(|| 
     list
 });
 
+#[derive(Clone)]
 pub struct ChargeCursor {
     pub pos: BlockPos,
     pub charge: i32,
@@ -118,12 +170,59 @@ impl ChargeCursor {
         ChargeCursor { pos, charge, update_delay: 0, decay_delay: 1, facings: None }
     }
 
+    fn from_nbt(nbt: &Nbt) -> Option<ChargeCursor> {
+        let pos = match nbt.get("pos")? {
+            Nbt::IntArray(p) if p.len() == 3 => BlockPos::new(p[0], p[1], p[2]),
+            _ => return None,
+        };
+        let int = |name: &str, default: i64, max: i64| match nbt.get(name) {
+            None => Some(default as i32),
+            Some(value) => value.as_i64().filter(|value| (0..=max).contains(value)).map(|value| value as i32),
+        };
+        let charge = int("charge", 0, MAX_CHARGE as i64)?;
+        let decay_delay = int("decay_delay", 1, 1)?;
+        let update_delay = int("update_delay", 0, i32::MAX as i64)?;
+        let facings = match nbt.get("facings") {
+            Some(Nbt::List(names)) => names.iter().map(|name| name.as_str().and_then(Direction::by_name)).collect::<Option<Vec<Direction>>>().map(|directions| directions.into_iter().fold(0u8, |faces, direction| faces | 1 << direction.ordinal())),
+            _ => None,
+        };
+        Some(ChargeCursor { pos, charge, update_delay, decay_delay, facings })
+    }
+
+    fn to_nbt(&self) -> Nbt {
+        let mut fields = vec![("pos".to_string(), Nbt::IntArray(vec![self.pos.x, self.pos.y, self.pos.z]))];
+        if self.charge != 0 {
+            fields.push(("charge".into(), Nbt::Int(self.charge)));
+        }
+        if self.decay_delay != 1 {
+            fields.push(("decay_delay".into(), Nbt::Int(self.decay_delay)));
+        }
+        if self.update_delay != 0 {
+            fields.push(("update_delay".into(), Nbt::Int(self.update_delay)));
+        }
+        if let Some(faces) = self.facings {
+            let names = Direction::VALUES.into_iter().filter(|direction| faces & 1 << direction.ordinal() != 0).map(|direction| Nbt::String(direction.name().into())).collect();
+            fields.push(("facings".into(), Nbt::List(names)));
+        }
+        Nbt::Compound(fields)
+    }
+
     fn is_pos_unreasonable(&self, origin_pos: BlockPos) -> bool {
         (self.pos.x - origin_pos.x).abs().max((self.pos.y - origin_pos.y).abs()).max((self.pos.z - origin_pos.z).abs()) > 1024
     }
 
-    fn update<R: RandomSource>(&mut self, level: &mut impl WorldGenLevel, origin_pos: BlockPos, random: &mut R, spreader: &SculkSpreader, spread_veins: bool) {
+    fn should_update(&self, level: &mut impl WorldGenLevel, pos: BlockPos, is_world_gen: bool) -> bool {
         if self.charge <= 0 {
+            false
+        } else if is_world_gen {
+            true
+        } else {
+            level.as_server_level().is_some_and(|level| level.in_block_ticking_range(pos.chunk()))
+        }
+    }
+
+    fn update<R: RandomSource>(&mut self, level: &mut impl WorldGenLevel, origin_pos: BlockPos, random: &mut R, spreader: &SculkSpreader, spread_veins: bool) {
+        if !self.should_update(level, origin_pos, spreader.is_world_generation) {
             return;
         }
         if self.update_delay > 0 {
@@ -132,9 +231,12 @@ impl ChargeCursor {
         }
         let mut current_state = level.get_block_state(self.pos);
         let mut sculk_behaviour = SculkBehaviour::get_block_behaviour(current_state);
-        if spread_veins && sculk_behaviour.attempt_spread_vein(level, self.pos, current_state, self.facings, spreader.is_world_generation) && sculk_behaviour.can_change_block_state_on_spread() {
-            current_state = level.get_block_state(self.pos);
-            sculk_behaviour = SculkBehaviour::get_block_behaviour(current_state);
+        if spread_veins && sculk_behaviour.attempt_spread_vein(level, self.pos, current_state, self.facings, spreader.is_world_generation) {
+            if sculk_behaviour.can_change_block_state_on_spread() {
+                current_state = level.get_block_state(self.pos);
+                sculk_behaviour = SculkBehaviour::get_block_behaviour(current_state);
+            }
+            level.play_sound(self.pos, crate::world::entity::sound_event("minecraft:block.sculk.spread"), SoundSource::Blocks, 1.0, 1.0);
         }
         self.charge = sculk_behaviour.attempt_use_charge(self, level, origin_pos, random, spreader, spread_veins);
         if self.charge <= 0 {

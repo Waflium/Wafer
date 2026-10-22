@@ -57,3 +57,26 @@ fn sculk_sensors_hear_note_blocks_and_cool_down() {
     }
     assert_eq!(phase(&mut server, sensor), SculkSensorPhase::Inactive);
 }
+
+#[test]
+fn sculk_catalysts_take_experience_from_dying_mobs() {
+    let mut server = server();
+    run(&mut server, "difficulty easy");
+    run(&mut server, "setblock 0 -61 0 sculk_catalyst");
+    run(&mut server, "summon zombie 3 -60 0 {NoAI:1b}");
+    run(&mut server, "kill @e[type=zombie]");
+    let level = &mut server.levels[0];
+    assert!(level.block_state(BlockPos::new(0, -61, 0)).get(wafer_data::properties::BLOOM));
+    let mut output = Vec::new();
+    if let Some(entity) = level.chunks.block_entity_ref(BlockPos::new(0, -61, 0))
+        && let crate::world::level::block::entity::BlockEntityKind::SculkCatalyst(catalyst) = &entity.kind
+    {
+        catalyst.save_additional(&mut output);
+    }
+    let cursors = output.iter().find(|(name, _)| name == "cursors").map(|(_, nbt)| format!("{nbt:?}")).unwrap_or_default();
+    assert!(cursors.contains("Int(5)"), "{cursors}");
+    for _ in 0..30 {
+        server.tick();
+    }
+    assert!(!server.levels[0].entities.values().any(|entity| matches!(entity, crate::world::entity::LevelEntity::ExperienceOrb(_))));
+}
