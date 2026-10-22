@@ -45,6 +45,7 @@ pub enum DispenseItemBehavior {
     Projectile,
     Minecart,
     Boat,
+    Chest,
 }
 
 fn registered(item: Item) -> Option<DispenseItemBehavior> {
@@ -81,6 +82,7 @@ fn registered(item: Item) -> Option<DispenseItemBehavior> {
         items::BRUSH => Brush,
         items::HONEYCOMB => Honeycomb,
         items::POTION => Potion,
+        items::CHEST => Chest,
         items::MINECART | items::CHEST_MINECART | items::FURNACE_MINECART | items::TNT_MINECART | items::HOPPER_MINECART | items::COMMAND_BLOCK_MINECART => Minecart,
         _ if item.is_instance_of("BoatItem") => Boat,
         _ if item.info().block.is_some_and(|block| block.is_instance_of("ShulkerBoxBlock")) => ShulkerBox,
@@ -152,8 +154,28 @@ impl DispenseItemBehavior {
             Projectile => projectile_dispense_behavior::execute(level, source, dispensed),
             Minecart => minecart_dispense_item_behavior::execute(level, source, dispensed),
             Boat => boat_dispense_item_behavior::execute(level, source, dispensed),
+            Chest => execute_chest(level, source, dispensed),
         }
     }
+}
+
+fn execute_chest(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack) -> ItemStack {
+    let pos = source.pos.relative(source.facing());
+    let horses: Vec<_> = level
+        .get_entities(None, &wafer_core::AABB::of_block(pos))
+        .into_iter()
+        .filter(|&entity| level.is_abstract_chested_horse(entity) && level.is_alive(entity) && !level.has_chest(entity))
+        .collect();
+    for horse in horses {
+        if level.is_tamed(horse)
+            && let Some(slot) = level.get_slot(horse, 499)
+            && level.level_slot_set(&slot, dispensed.clone())
+        {
+            dispensed.shrink(1);
+            return dispensed;
+        }
+    }
+    default_dispense_item_behavior::execute(level, source, dispensed)
 }
 
 fn execute_brush(level: &mut ServerLevel, source: &BlockSource, mut dispensed: ItemStack, success: &mut bool) -> ItemStack {
