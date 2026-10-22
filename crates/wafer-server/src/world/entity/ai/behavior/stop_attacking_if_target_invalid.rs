@@ -6,16 +6,20 @@ use crate::world::entity::ai::memory::memory_module_type;
 
 const TIMEOUT_TO_GET_WITHIN_ATTACK_RANGE: i64 = 200;
 
-pub type StopAttackCondition = fn(&ServerLevel, EntityId) -> bool;
+pub type StopAttackCondition = fn(&mut ServerLevel, EntityId, EntityId) -> bool;
 
 pub type TargetErasedCallback = fn(&mut ServerLevel, EntityId, EntityId);
 
 pub fn create() -> OneShot {
-    create_with(|_, _| false, |_, _, _| {}, true)
+    create_with(|_, _, _| false, |_, _, _| {}, true)
+}
+
+pub fn create_when(stop_attacking_when: StopAttackCondition) -> OneShot {
+    create_with(stop_attacking_when, |_, _, _| {}, true)
 }
 
 pub fn create_with_callback(on_target_erased: TargetErasedCallback) -> OneShot {
-    create_with(|_, _| false, on_target_erased, true)
+    create_with(|_, _, _| false, on_target_erased, true)
 }
 
 pub fn create_with(stop_attacking_when: StopAttackCondition, on_target_erased: TargetErasedCallback, can_grow_tired_of_trying_to_reach_target: bool) -> OneShot {
@@ -28,7 +32,7 @@ pub fn create_with(stop_attacking_when: StopAttackCondition, on_target_erased: T
                 && level.can_attack(body, target)
                 && (!can_grow_tired_of_trying_to_reach_target || !is_tired_of_trying_to_reach_target(level, cant_reach_since.try_get(level, body)))
                 && level.is_alive(target)
-                && !stop_attacking_when(level, target)
+                && !stop_attacking_when(level, body, target)
             {
                 return true;
             }

@@ -23,6 +23,7 @@ pub enum LevelSlot {
     EnderChest(EntityId, usize),
     VillagerInventory(EntityId, usize),
     PillagerInventory(EntityId, usize),
+    PiglinInventory(EntityId, usize),
     Item(EntityId),
     ItemDisplay(EntityId),
     ItemFrame(EntityId),
@@ -101,6 +102,14 @@ impl ServerLevel {
                 return Some(LevelSlot::PillagerInventory(id, inventory_slot as usize));
             }
         }
+        if let Some(mob) = self.mob(id)
+            && let super::mob::MobKind::Piglin(piglin) = &mob.kind
+        {
+            let inventory_slot = slot - super::monster::piglin::piglin::INVENTORY_SLOT_OFFSET;
+            if inventory_slot >= 0 && (inventory_slot as usize) < piglin.inventory.get_container_size() {
+                return Some(LevelSlot::PiglinInventory(id, inventory_slot as usize));
+            }
+        }
         if self.is_living(id) {
             return get_equipment_slot(slot).map(|slot| LevelSlot::Equipment { entity: id, slot });
         }
@@ -137,6 +146,7 @@ impl ServerLevel {
             LevelSlot::EnderChest(player, index) => self.player(player).ender_chest_inventory.items.get(index).cloned().unwrap_or_else(ItemStack::empty),
             LevelSlot::VillagerInventory(villager, index) => self.abstract_villager(villager).inventory.get_item(index).clone(),
             LevelSlot::PillagerInventory(pillager, index) => super::monster::illager::pillager::pillager(self.mob(pillager).expect("a pillager")).inventory.get_item(index).clone(),
+            LevelSlot::PiglinInventory(piglin, index) => super::monster::piglin::piglin::piglin(self.mob(piglin).expect("a piglin")).inventory.get_item(index).clone(),
             LevelSlot::Item(id) => match self.entities.get(&id) {
                 Some(LevelEntity::Item(item)) => item.item.clone(),
                 _ => ItemStack::empty(),
@@ -182,6 +192,7 @@ impl ServerLevel {
             LevelSlot::EnderChest(player, index) => self.set_item(ContainerRef::PlayerEnderChest(player), index, item_stack),
             LevelSlot::VillagerInventory(villager, index) => self.abstract_villager_mut(villager).inventory.set_item(index, item_stack),
             LevelSlot::PillagerInventory(pillager, index) => super::monster::illager::pillager::pillager_mut(self.mob_mut(pillager).expect("a pillager")).inventory.set_item(index, item_stack),
+            LevelSlot::PiglinInventory(piglin, index) => super::monster::piglin::piglin::piglin_mut(self.mob_mut(piglin).expect("a piglin")).inventory.set_item(index, item_stack),
             LevelSlot::Item(id) => {
                 if let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) {
                     item.set_item(item_stack);
@@ -223,6 +234,7 @@ impl ServerLevel {
             LevelSlot::EnderChest(player, index) => self.put_item(ContainerRef::PlayerEnderChest(player), index, item_stack),
             LevelSlot::VillagerInventory(villager, index) => self.abstract_villager_mut(villager).inventory.items[index] = item_stack,
             LevelSlot::PillagerInventory(pillager, index) => super::monster::illager::pillager::pillager_mut(self.mob_mut(pillager).expect("a pillager")).inventory.items[index] = item_stack,
+            LevelSlot::PiglinInventory(piglin, index) => super::monster::piglin::piglin::piglin_mut(self.mob_mut(piglin).expect("a piglin")).inventory.items[index] = item_stack,
             LevelSlot::Item(id) => {
                 if let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) {
                     item.item = item_stack;

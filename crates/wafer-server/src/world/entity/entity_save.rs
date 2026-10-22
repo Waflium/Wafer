@@ -431,6 +431,8 @@ impl ServerLevel {
             "minecraft:panda" => LevelEntity::Mob(Box::new(super::animal::panda::panda::Panda::create())),
             "minecraft:hoglin" => LevelEntity::Mob(Box::new(super::monster::hoglin::hoglin::Hoglin::create())),
             "minecraft:zoglin" => LevelEntity::Mob(Box::new(super::monster::zoglin::Zoglin::create())),
+            "minecraft:piglin" => LevelEntity::Mob(Box::new(super::monster::piglin::piglin::Piglin::create())),
+            "minecraft:piglin_brute" => LevelEntity::Mob(Box::new(super::monster::piglin::piglin_brute::PiglinBrute::create())),
             "minecraft:parched" => LevelEntity::Mob(Box::new(super::monster::skeleton::parched::Parched::create())),
             "minecraft:bogged" => LevelEntity::Mob(Box::new(super::monster::skeleton::bogged::Bogged::create())),
             "minecraft:drowned" => LevelEntity::Mob(Box::new(super::monster::zombie::drowned::Drowned::create())),

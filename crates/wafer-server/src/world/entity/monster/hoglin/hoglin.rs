@@ -216,6 +216,21 @@ impl ServerLevel {
         !hoglin_ai::is_pacified(self, id) && self.animal_can_fall_in_love(id)
     }
 
+    pub fn hoglin_get_walk_target_value(&self, id: EntityId, pos: BlockPos) -> f32 {
+        if hoglin_ai::is_pos_near_nearest_repellent(self.mob(id).expect("a hoglin"), pos) {
+            -1.0
+        } else if crate::world::level::path_navigation_region::PathNavigationRegion::new(self).get_block_state(pos.below()).is_block(blocks::CRIMSON_NYLIUM) {
+            10.0
+        } else {
+            0.0
+        }
+    }
+
+    pub fn hoglin_can_be_hunted(&self, id: EntityId) -> bool {
+        let mob = self.mob(id).expect("a hoglin");
+        is_adult(mob) && !hoglin(mob).cannot_be_hunted
+    }
+
     pub fn hoglin_get_ambient_sound(&self, id: EntityId) -> Option<&'static str> {
         hoglin_ai::get_sound_for_current_activity(self, id)
     }

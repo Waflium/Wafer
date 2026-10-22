@@ -790,6 +790,32 @@ pub static ZOGLIN_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static PIGLIN_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage,
+        ],
+        &[(FollowRange, 16.0), (MaxHealth, 16.0), (MovementSpeed, 0.35f32 as f64), (AttackDamage, 5.0)],
+    )
+};
+
+pub static PIGLIN_BRUTE_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage,
+        ],
+        &[(FollowRange, 12.0), (MaxHealth, 50.0), (MovementSpeed, 0.35f32 as f64), (AttackDamage, 7.0)],
+    )
+};
+
 pub static PARCHED_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

@@ -94,6 +94,12 @@ impl SimpleContainer {
         self.items.iter().filter(|stack| stack.get_item() == item).map(|stack| stack.count).sum()
     }
 
+    pub fn remove_all_items(&mut self) -> Vec<ItemStack> {
+        let list = self.items.iter().filter(|item| !item.is_empty()).cloned().collect();
+        self.clear_content();
+        list
+    }
+
     pub fn clear_content(&mut self) {
         self.items.iter_mut().for_each(|item| *item = ItemStack::empty());
     }

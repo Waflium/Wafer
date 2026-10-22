@@ -27,6 +27,7 @@ impl BlockBehaviour for BarrelBlock {
         if matches!(level.get_block_entity(pos).map(|e| &e.kind), Some(BlockEntityKind::Barrel(_))) {
             level.open_menu(player, MenuProvider::BlockEntity(pos));
             level.award_stat(player, crate::stats::stats::OPEN_BARREL, 1);
+            crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(level, player, true);
         }
         InteractionResult::SUCCESS
     }

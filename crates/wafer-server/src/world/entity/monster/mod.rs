@@ -21,6 +21,7 @@ pub mod elder_guardian;
 pub mod guardian;
 pub mod patrolling_monster;
 pub mod phantom;
+pub mod piglin;
 pub mod ranged_attack_mob;
 pub mod silverfish;
 #[cfg(test)]

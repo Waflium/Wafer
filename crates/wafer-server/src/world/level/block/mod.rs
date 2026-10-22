@@ -551,6 +551,9 @@ pub fn base_entity_block_get_menu_provider(level: &mut ServerLevel, pos: BlockPo
 
 pub fn block_player_will_destroy(level: &mut ServerLevel, pos: BlockPos, state: BlockState, player: EntityId) -> BlockState {
     level.level_event(Some(player), crate::server::level::events::PARTICLES_AND_SOUND_DESTROY_BLOCK, pos, state.id() as i32);
+    if state.is(&wafer_data::block_tags::GUARDED_BY_PIGLINS) {
+        crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(level, player, false);
+    }
     state
 }
 

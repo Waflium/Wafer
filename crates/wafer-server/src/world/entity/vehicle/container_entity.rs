@@ -107,9 +107,12 @@ impl ServerLevel {
         loot_table.fill(ContainerRef::ChestVehicle(id), params, loot_table_seed);
     }
 
-    pub fn chest_vehicle_destroyed(&mut self, id: EntityId, _source: &DamageSource) {
+    pub fn chest_vehicle_destroyed(&mut self, id: EntityId, source: &DamageSource) {
         if self.game_rules.get_bool(game_rule::ENTITY_DROPS) {
             containers::drop_contents_for_entity(self, id, ContainerRef::ChestVehicle(id));
+            if let Some(player) = source.direct_entity.filter(|&entity| self.is_player(entity)) {
+                crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);
+            }
         }
     }
 

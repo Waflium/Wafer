@@ -34,7 +34,11 @@ impl ServerLevel {
         if self.can_add_passenger(id, player) && !self.player(player).is_secondary_use_active() {
             return InteractionResult::Pass;
         }
-        self.interact_with_container_vehicle(id, player)
+        let result = self.interact_with_container_vehicle(id, player);
+        if result.consumes_action() {
+            crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);
+        }
+        result
     }
 
     pub fn open_custom_inventory_screen(&mut self, id: EntityId, player: EntityId) {
@@ -43,5 +47,6 @@ impl ServerLevel {
             return;
         }
         self.open_menu(player, MenuProvider::ChestVehicle(id));
+        crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);
     }
 }

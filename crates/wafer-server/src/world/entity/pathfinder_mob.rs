@@ -31,7 +31,7 @@ impl ServerLevel {
             MobKind::Enderman(_) => crate::world::entity::monster::enderman::Enderman::get_walk_target_value(),
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => self.monster_get_walk_target_value(pos),
             MobKind::Pillager(_) => super::monster::illager::pillager::Pillager::get_walk_target_value(),
-            MobKind::Blaze(_) | MobKind::ZombifiedPiglin(_) => self.monster_get_walk_target_value(pos),
+            MobKind::Blaze(_) | MobKind::ZombifiedPiglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) => self.monster_get_walk_target_value(pos),
             MobKind::Ghast(_) | MobKind::Phantom(_) => get_walk_target_value(),
             MobKind::Guardian(_) | MobKind::ElderGuardian(_) => self.guardian_get_walk_target_value(pos),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => get_walk_target_value(),
@@ -39,6 +39,9 @@ impl ServerLevel {
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => get_walk_target_value(),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => get_walk_target_value(),
             MobKind::Turtle(_) => self.turtle_get_walk_target_value(id, pos),
+            MobKind::Hoglin(_) => self.hoglin_get_walk_target_value(id, pos),
+            MobKind::Zoglin(_) => self.monster_get_walk_target_value(pos),
+            MobKind::Tadpole(_) | MobKind::Axolotl(_) | MobKind::Villager(_) | MobKind::WanderingTrader(_) => get_walk_target_value(),
             _ => self.animal_get_walk_target_value(pos),
         }
     }

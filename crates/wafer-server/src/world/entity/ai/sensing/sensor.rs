@@ -41,6 +41,14 @@ fn attack_target_conditions_ignore_invisibility_testing() -> TargetingConditions
     TargetingConditions::for_combat().range(targeting_range()).ignore_invisibility_testing()
 }
 
+fn attack_target_conditions_ignore_line_of_sight() -> TargetingConditions<'static> {
+    TargetingConditions::for_combat().range(targeting_range()).ignore_line_of_sight()
+}
+
+fn attack_target_conditions_ignore_invisibility_and_line_of_sight() -> TargetingConditions<'static> {
+    TargetingConditions::for_combat().range(targeting_range()).ignore_line_of_sight().ignore_invisibility_testing()
+}
+
 pub struct Sensor {
     sensor_type: SensorType,
     scan_rate: i32,
@@ -94,6 +102,8 @@ impl Sensor {
             SensorType::FrogAttackables => frog_attackables_sensor::do_tick(level, body),
             SensorType::IsInWater => is_in_water_sensor::do_tick(level, body),
             SensorType::HoglinSpecificSensor => super::hoglin_specific_sensor::do_tick(level, body),
+            SensorType::PiglinSpecificSensor => super::piglin_specific_sensor::do_tick(level, body),
+            SensorType::PiglinBruteSpecificSensor => super::piglin_brute_specific_sensor::do_tick(level, body),
             SensorType::NearestBed => self.nearest_bed.as_mut().expect("a nearest bed sensor").do_tick(level, body),
             SensorType::VillagerHostiles => villager_hostiles_sensor::do_tick(level, body),
             SensorType::VillagerBabies => villager_babies_sensor::do_tick(level, body),
@@ -115,6 +125,8 @@ impl Sensor {
             SensorType::FrogAttackables => frog_attackables_sensor::requires(),
             SensorType::IsInWater => is_in_water_sensor::requires(),
             SensorType::HoglinSpecificSensor => super::hoglin_specific_sensor::requires(),
+            SensorType::PiglinSpecificSensor => super::piglin_specific_sensor::requires(),
+            SensorType::PiglinBruteSpecificSensor => super::piglin_brute_specific_sensor::requires(),
             SensorType::NearestBed => nearest_bed_sensor::requires(),
             SensorType::VillagerHostiles => villager_hostiles_sensor::requires(),
             SensorType::VillagerBabies => villager_babies_sensor::requires(),
@@ -134,6 +146,14 @@ pub fn is_entity_targetable(level: &mut ServerLevel, body: EntityId, entity: Ent
         target_conditions_ignore_invisibility_testing().test(level, Some(body), entity)
     } else {
         target_conditions().test(level, Some(body), entity)
+    }
+}
+
+pub fn is_entity_attackable_ignoring_line_of_sight(level: &mut ServerLevel, body: EntityId, target: EntityId) -> bool {
+    if level.get_brain(body).is_memory_value(memory_module_type::ATTACK_TARGET, &target) {
+        attack_target_conditions_ignore_invisibility_and_line_of_sight().test(level, Some(body), target)
+    } else {
+        attack_target_conditions_ignore_line_of_sight().test(level, Some(body), target)
     }
 }
 

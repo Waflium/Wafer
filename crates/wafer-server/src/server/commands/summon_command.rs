@@ -121,6 +121,8 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:blaze",
     "minecraft:ghast",
     "minecraft:zombified_piglin",
+    "minecraft:piglin",
+    "minecraft:piglin_brute",
     "minecraft:area_effect_cloud",
     "minecraft:minecart",
     "minecraft:acacia_boat",

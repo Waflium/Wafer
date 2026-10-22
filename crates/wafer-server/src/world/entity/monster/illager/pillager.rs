@@ -133,10 +133,10 @@ impl Pillager {
 
 impl ServerLevel {
     pub fn set_charging_crossbow(&mut self, id: EntityId, is_charging: bool) {
-        if let Some(mob) = self.mob_mut(id)
-            && let MobKind::Pillager(_) = mob.kind
-        {
-            mob.entity.data.set(IS_CHARGING_CROSSBOW, DataValue::Boolean(is_charging));
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Pillager(_)) => self.entity_mut(id).data.set(IS_CHARGING_CROSSBOW, DataValue::Boolean(is_charging)),
+            Some(MobKind::Piglin(_)) => self.piglin_set_charging_crossbow(id, is_charging),
+            _ => {}
         }
     }
 

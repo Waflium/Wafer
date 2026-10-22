@@ -300,6 +300,7 @@ impl BlockBehaviour for ChestBlock {
         if let Some(provider) = provider {
             level.open_menu(player, provider);
             level.award_stat(player, self.get_open_chest_stat(), 1);
+            crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(level, player, true);
         }
         InteractionResult::SUCCESS
     }

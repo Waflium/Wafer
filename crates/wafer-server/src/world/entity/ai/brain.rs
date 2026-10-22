@@ -62,6 +62,10 @@ pub const fn provider(sensor_types: &'static [SensorType], activities: fn(&Mob) 
     Provider { memory_types: &[], sensor_types, activities }
 }
 
+pub const fn provider_with_memories(memory_types: &'static [MemoryModuleType<Erased>], sensor_types: &'static [SensorType], activities: fn(&Mob) -> Vec<ActivityData>) -> Provider {
+    Provider { memory_types, sensor_types, activities }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Packed {
     pub memories: MemoryMap,

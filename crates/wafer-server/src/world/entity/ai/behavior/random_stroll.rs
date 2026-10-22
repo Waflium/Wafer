@@ -26,6 +26,10 @@ pub fn stroll_from_water(speed_modifier: f32, may_stroll_from_water: bool) -> On
     )
 }
 
+pub fn stroll_within(speed_modifier: f32, max_horizontal_distance: i32, max_vertical_distance: i32) -> OneShot {
+    stroll_fly_or_swim(speed_modifier, move |level, body| land_random_pos::get_pos(level, body, max_horizontal_distance, max_vertical_distance), |_, _| true)
+}
+
 pub fn swim(speed_modifier: f32) -> OneShot {
     stroll_fly_or_swim(speed_modifier, get_target_swim_pos, |level, body| level.entity(body).is_in_water())
 }

@@ -19,6 +19,10 @@ impl MinecartChest {
 
 impl ServerLevel {
     pub fn minecart_chest_interact(&mut self, id: EntityId, player: EntityId) -> InteractionResult {
-        self.interact_with_container_vehicle(id, player)
+        let result = self.interact_with_container_vehicle(id, player);
+        if result.consumes_action() {
+            crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);
+        }
+        result
     }
 }

@@ -50,6 +50,10 @@ fn look_at_each_other(level: &mut ServerLevel, entity1: EntityId, entity2: Entit
     look_at_entity(level, entity2, entity1);
 }
 
+pub fn can_see(level: &mut ServerLevel, entity: EntityId, target: EntityId) -> bool {
+    entity_is_visible(level, entity, target)
+}
+
 pub fn look_at_entity(level: &mut ServerLevel, looker: EntityId, target_entity: EntityId) {
     let tracker = EntityTracker::new(level, target_entity, true);
     level.get_brain_mut(looker).set_memory(memory_module_type::LOOK_TARGET, PositionTracker::Entity(tracker));
@@ -143,4 +147,9 @@ pub fn get_target_nearest_me(level: &ServerLevel, body: EntityId, target1: Entit
     let body_position = level.entity(body).position();
     let (pos1, pos2) = (level.entity(target1).position(), level.entity(target2).position());
     if body_position.distance_to_sqr(pos1) < body_position.distance_to_sqr(pos2) { target1 } else { target2 }
+}
+
+pub fn get_living_entity_from_uuid_memory(level: &ServerLevel, body: EntityId, memory_type: crate::world::entity::ai::memory::memory_module_type::MemoryModuleType<u128>) -> Option<EntityId> {
+    let uuid = level.get_brain(body).get_memory(memory_type).copied()?;
+    crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(level).filter(|&entity| level.is_living(entity))
 }

@@ -2470,6 +2470,8 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Hoglin(_)) => return self.hoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Panda(_)) => return self.panda_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Zoglin(_)) => return self.zoglin_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Piglin(_)) => return self.piglin_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::PiglinBrute(_)) => return self.piglin_brute_hurt_server(id, source, damage),
                 _ => {}
             }
             return self.living_entity_hurt_server(id, source, damage);
@@ -2781,6 +2783,8 @@ impl ServerLevel {
                     super::mob::MobKind::Hoglin(_) => "Hoglin",
                     super::mob::MobKind::Panda(_) => "Panda",
                     super::mob::MobKind::Zoglin(_) => "Zoglin",
+                    super::mob::MobKind::Piglin(_) => "Piglin",
+                    super::mob::MobKind::PiglinBrute(_) => "PiglinBrute",
                     super::mob::MobKind::WitherSkeleton(_) => "WitherSkeleton",
                     super::mob::MobKind::Bogged(_) => "Bogged",
                     super::mob::MobKind::Drowned(_) => "Drowned",
@@ -3410,6 +3414,7 @@ impl ServerLevel {
     }
 
     pub fn start_riding(&mut self, id: EntityId, entity_to_ride: EntityId, force: bool, send_event_and_triggers: bool) -> bool {
+        let entity_to_ride = if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Piglin(_))) { self.piglin_get_entity_to_ride(id, entity_to_ride) } else { entity_to_ride };
         if self.vehicle(id) == Some(entity_to_ride) {
             return false;
         }

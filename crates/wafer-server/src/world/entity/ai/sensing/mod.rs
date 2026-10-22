@@ -10,6 +10,8 @@ pub mod nearest_bed_sensor;
 pub mod nearest_item_sensor;
 pub mod nearest_living_entity_sensor;
 pub mod nearest_visible_living_entity_sensor;
+pub mod piglin_brute_specific_sensor;
+pub mod piglin_specific_sensor;
 pub mod player_sensor;
 pub mod secondary_poi_sensor;
 pub mod sensing;
