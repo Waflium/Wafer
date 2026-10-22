@@ -1055,7 +1055,7 @@ impl ServerLevel {
             Some(LevelEntity::Boat(_)) => 1.0,
             Some(LevelEntity::Minecart(_)) => 0.95,
             Some(LevelEntity::Projectile(projectile)) if !matches!(projectile.kind, super::projectile::projectile::ProjectileKind::FireworkRocket(_)) => 0.99,
-            _ if self.is_living(id) => compute_modified_friction(0.98, self.attribute_value(id, Attribute::AirDragModifier) as f32),
+            _ if self.is_living(id) => compute_modified_friction(if self.omnidirectional_air_mover(id) { 0.91 } else { 0.98 }, self.attribute_value(id, Attribute::AirDragModifier) as f32),
             _ => 0.98,
         }
     }
@@ -1528,6 +1528,9 @@ impl ServerLevel {
         if self.is_strider(id) && self.strider_check_fall_damage(id) {
             return;
         }
+        if self.is_parrot(id) {
+            return;
+        }
         if self.is_boat(id) {
             self.abstract_boat_check_fall_damage(id, ya, on_ground);
             return;
@@ -1812,7 +1815,29 @@ impl ServerLevel {
                     self.water_swim_sound(id);
                 }
             }
+        } else if supporting_state.is_air() {
+            self.process_flapping_movement(id);
         }
+    }
+
+    fn process_flapping_movement(&mut self, id: EntityId) {
+        if self.is_flapping(id) {
+            self.on_flap(id);
+        }
+    }
+
+    fn is_flapping(&self, id: EntityId) -> bool {
+        if self.is_parrot(id) { self.parrot_is_flapping(id) } else { false }
+    }
+
+    fn on_flap(&mut self, id: EntityId) {
+        if self.is_parrot(id) {
+            self.parrot_on_flap(id);
+        }
+    }
+
+    pub fn omnidirectional_air_mover(&self, id: EntityId) -> bool {
+        self.is_parrot(id)
     }
 
     fn next_step(&self, id: EntityId) -> f32 {
@@ -2546,6 +2571,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Axolotl(_)) => return self.axolotl_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Hoglin(_)) => return self.hoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Panda(_)) => return self.panda_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Parrot(_)) => return self.parrot_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Zoglin(_)) => return self.zoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Piglin(_)) => return self.piglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::PiglinBrute(_)) => return self.piglin_brute_hurt_server(id, source, damage),
@@ -2900,6 +2926,7 @@ impl ServerLevel {
                     super::mob::MobKind::Pufferfish(_) => "Pufferfish",
                     super::mob::MobKind::TropicalFish(_) => "TropicalFish",
                     super::mob::MobKind::Cat(_) => "Cat",
+                    super::mob::MobKind::Parrot(_) => "Parrot",
                     super::mob::MobKind::Ocelot(_) => "Ocelot",
                     super::mob::MobKind::Horse(_) => "Horse",
                     super::mob::MobKind::Donkey(_) => "Donkey",
@@ -3971,6 +3998,8 @@ impl ServerLevel {
             self.bat_is_pushable(id)
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_is_pushable(id)
+        } else if self.is_parrot(id) {
+            true
         } else if self.is_living(id) {
             self.living_entity_is_pushable(id)
         } else {

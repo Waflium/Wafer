@@ -22,6 +22,7 @@ pub struct WalkNodeEvaluator {
     reusable_neighbors: [Option<u32>; 4],
     pub amphibious: Option<AmphibiousNodeEvaluator>,
     pub frog: Option<FrogNodeEvaluator>,
+    pub fly: Option<super::fly_node_evaluator::FlyNodeEvaluator>,
 }
 
 impl WalkNodeEvaluator {
@@ -31,6 +32,10 @@ impl WalkNodeEvaluator {
 
     pub fn frog(prefers_shallow_swimming: bool) -> WalkNodeEvaluator {
         WalkNodeEvaluator { frog: Some(FrogNodeEvaluator), ..WalkNodeEvaluator::amphibious(prefers_shallow_swimming) }
+    }
+
+    pub fn fly() -> WalkNodeEvaluator {
+        WalkNodeEvaluator { fly: Some(super::fly_node_evaluator::FlyNodeEvaluator::default()), ..WalkNodeEvaluator::default() }
     }
 
     fn is_amphibious(&self) -> bool {
@@ -67,7 +72,9 @@ impl WalkNodeEvaluator {
     }
 
     pub fn get_start(&mut self, context: &PathfindingContext) -> Option<u32> {
-        if self.frog.is_some() {
+        if self.fly.is_some() {
+            self.fly_node_evaluator_get_start(context)
+        } else if self.frog.is_some() {
             self.frog_node_evaluator_get_start(context)
         } else if self.is_amphibious() { self.amphibious_node_evaluator_get_start(context) } else { self.walk_node_evaluator_get_start(context) }
     }
@@ -131,11 +138,19 @@ impl WalkNodeEvaluator {
     }
 
     pub fn get_target(&mut self, x: f64, y: f64, z: f64) -> Target {
-        if self.is_amphibious() { self.amphibious_node_evaluator_get_target(x, y, z) } else { self.node_evaluator.get_target_node_at(x, y, z) }
+        if self.fly.is_some() {
+            self.fly_node_evaluator_get_target(x, y, z)
+        } else if self.is_amphibious() {
+            self.amphibious_node_evaluator_get_target(x, y, z)
+        } else {
+            self.node_evaluator.get_target_node_at(x, y, z)
+        }
     }
 
     pub fn get_neighbors(&mut self, context: &PathfindingContext, neighbors: &mut [u32; 32], pos: u32) -> usize {
-        if self.is_amphibious() {
+        if self.fly.is_some() {
+            self.fly_node_evaluator_get_neighbors(context, neighbors, pos)
+        } else if self.is_amphibious() {
             self.amphibious_node_evaluator_get_neighbors(context, neighbors, pos)
         } else {
             self.walk_node_evaluator_get_neighbors(context, neighbors, pos)
@@ -483,7 +498,9 @@ impl WalkNodeEvaluator {
 
 impl WalkNodeEvaluator {
     pub fn get_path_type(&self, context: &PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
-        if self.frog.is_some() {
+        if self.fly.is_some() {
+            self.fly_node_evaluator_get_path_type(context, x, y, z)
+        } else if self.frog.is_some() {
             self.frog_node_evaluator_get_path_type(context, x, y, z)
         } else if self.is_amphibious() {
             self.amphibious_node_evaluator_get_path_type(context, x, y, z)

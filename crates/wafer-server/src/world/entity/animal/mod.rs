@@ -17,6 +17,7 @@ use crate::world::{InteractionHand, InteractionResult};
 
 pub mod ageable_water_creature;
 pub mod dolphin;
+pub mod parrot;
 pub mod armadillo;
 pub mod axolotl;
 pub mod chicken;
@@ -147,6 +148,7 @@ impl ServerLevel {
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => false,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => false,
             MobKind::Cat(_) => feline::cat::is_food(item_stack),
+            MobKind::Parrot(_) => false,
             MobKind::Ocelot(_) => feline::ocelot::is_food(item_stack),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) => equine::abstract_horse::is_food(item_stack),
             MobKind::ZombieHorse(_) => equine::zombie_horse::is_food(item_stack),
@@ -247,6 +249,7 @@ impl ServerLevel {
         match self.mob(id).expect("an animal").kind {
             MobKind::Wolf(_) => self.wolf_can_mate(id, partner),
             MobKind::Cat(_) => self.cat_can_mate(id, partner),
+            MobKind::Parrot(_) => false,
             MobKind::Horse(_) => self.horse_can_mate(id, partner),
             MobKind::Donkey(_) => self.donkey_can_mate(id, partner),
             MobKind::Mule(_) => false,

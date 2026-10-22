@@ -293,7 +293,7 @@ impl ServerLevel {
         self.is_ordered_to_sit(id) || self.is_passenger(id) || self.may_be_leashed(id) || self.get_owner(id).is_some_and(|owner| self.is_spectator(owner))
     }
 
-    fn can_fly_to_owner(&self, _id: EntityId) -> bool {
-        false
+    fn can_fly_to_owner(&self, id: EntityId) -> bool {
+        self.is_parrot(id)
     }
 }

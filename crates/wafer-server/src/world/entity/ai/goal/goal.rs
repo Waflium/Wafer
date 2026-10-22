@@ -236,6 +236,9 @@ pub enum Goal {
     DolphinSwimWithPlayer(crate::world::entity::animal::dolphin::dolphin::DolphinSwimWithPlayerGoal),
     DolphinMoveToItem(crate::world::entity::animal::dolphin::dolphin::MoveToItemGoal),
     DolphinPlayWithItems(crate::world::entity::animal::dolphin::dolphin::PlayWithItemsGoal),
+    ParrotWander(crate::world::entity::animal::parrot::parrot::ParrotWanderGoal),
+    LandOnOwnersShoulder(super::land_on_owners_shoulder_goal::LandOnOwnersShoulderGoal),
+    FollowMob(super::follow_mob_goal::FollowMobGoal),
     OcelotAttack(OcelotAttackGoal),
     OcelotAvoidEntity(OcelotAvoidEntityGoal),
     OcelotTempt(OcelotTemptGoal),
@@ -384,6 +387,9 @@ impl Goal {
             Goal::DolphinSwimWithPlayer(goal) => goal.can_use(level, mob),
             Goal::DolphinMoveToItem(goal) => goal.can_use(level, mob),
             Goal::DolphinPlayWithItems(goal) => goal.can_use(level, mob),
+            Goal::ParrotWander(goal) => goal.can_use(level, mob),
+            Goal::LandOnOwnersShoulder(goal) => goal.can_use(level, mob),
+            Goal::FollowMob(goal) => goal.can_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.can_use(level, mob),
@@ -551,6 +557,9 @@ impl Goal {
             Goal::DolphinSwimWithPlayer(goal) => goal.can_continue_to_use(level, mob),
             Goal::DolphinMoveToItem(goal) => goal.can_use(level, mob),
             Goal::DolphinPlayWithItems(goal) => goal.can_use(level, mob),
+            Goal::ParrotWander(goal) => goal.water_avoiding_random_stroll_goal.random_stroll_goal.can_continue_to_use(level, mob),
+            Goal::LandOnOwnersShoulder(goal) => goal.can_use(level, mob),
+            Goal::FollowMob(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotTempt(goal) => goal.can_continue_to_use(level, mob),
@@ -615,7 +624,10 @@ impl Goal {
     }
 
     pub fn is_interruptable(&self) -> bool {
-        !matches!(self, Goal::FoxPounce(_) | Goal::PandaRoll(_) | Goal::BreathAir(_) | Goal::DolphinJump(_) | Goal::DolphinSwimToTreasure(_))
+        match self {
+            Goal::LandOnOwnersShoulder(goal) => goal.is_interruptable(),
+            _ => !matches!(self, Goal::FoxPounce(_) | Goal::PandaRoll(_) | Goal::BreathAir(_) | Goal::DolphinJump(_) | Goal::DolphinSwimToTreasure(_)),
+        }
     }
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
@@ -713,6 +725,9 @@ impl Goal {
             Goal::DolphinSwimWithPlayer(goal) => goal.start(level, mob),
             Goal::DolphinMoveToItem(goal) => goal.start(level, mob),
             Goal::DolphinPlayWithItems(_) => {}
+            Goal::ParrotWander(goal) => goal.water_avoiding_random_stroll_goal.random_stroll_goal.start(level, mob),
+            Goal::LandOnOwnersShoulder(goal) => goal.start(),
+            Goal::FollowMob(goal) => goal.start(level, mob),
             Goal::OcelotAttack(_) => {}
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.start(level),
@@ -788,6 +803,9 @@ impl Goal {
             Goal::DolphinSwimWithPlayer(goal) => goal.stop(level, mob),
             Goal::DolphinMoveToItem(goal) => goal.stop(level, mob),
             Goal::DolphinPlayWithItems(goal) => goal.stop(level, mob),
+            Goal::ParrotWander(goal) => goal.water_avoiding_random_stroll_goal.random_stroll_goal.stop(level, mob),
+            Goal::LandOnOwnersShoulder(_) => {}
+            Goal::FollowMob(goal) => goal.stop(level, mob),
             Goal::Panic(goal) => goal.stop(),
             Goal::Breed(goal) => goal.stop(),
             Goal::Tempt(goal) => goal.stop(level, mob),
@@ -1012,6 +1030,9 @@ impl Goal {
             Goal::DolphinSwimWithPlayer(goal) => goal.tick(level, mob),
             Goal::DolphinMoveToItem(goal) => goal.tick(level, mob),
             Goal::DolphinPlayWithItems(goal) => goal.tick(level, mob),
+            Goal::ParrotWander(_) => {}
+            Goal::LandOnOwnersShoulder(goal) => goal.tick(level, mob),
+            Goal::FollowMob(goal) => goal.tick(level, mob),
             Goal::OcelotAttack(goal) => goal.tick(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.tick(level, mob),
@@ -1173,6 +1194,9 @@ impl Goal {
             Goal::RandomSwimming(goal) => goal.random_stroll_goal.flags,
             Goal::DolphinJump(_) => Flag::Move.bit() | Flag::Jump.bit(),
             Goal::DolphinMoveToItem(_) => Flag::Move.bit(),
+            Goal::ParrotWander(goal) => goal.water_avoiding_random_stroll_goal.random_stroll_goal.flags,
+            Goal::LandOnOwnersShoulder(_) => 0,
+            Goal::FollowMob(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::RunAroundLikeCrazy(_) | Goal::MountPanic(_) => Flag::Move.bit(),
             Goal::RandomStand(_) => 0,
             Goal::FoxFloat(_) => Flag::Jump.bit(),

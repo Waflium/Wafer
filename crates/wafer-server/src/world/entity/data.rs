@@ -356,4 +356,6 @@ pub mod ids {
     pub const PLAYER_MODE_CUSTOMISATION: usize = 16;
     pub const PLAYER_ABSORPTION: usize = 17;
     pub const PLAYER_SCORE: usize = 18;
+    pub const PLAYER_SHOULDER_PARROT_LEFT: usize = 19;
+    pub const PLAYER_SHOULDER_PARROT_RIGHT: usize = 20;
 }

@@ -10,7 +10,7 @@ pub const PROBABILITY: f32 = 0.001;
 
 pub struct WaterAvoidingRandomStrollGoal {
     pub random_stroll_goal: RandomStrollGoal,
-    probability: f32,
+    pub probability: f32,
 }
 
 impl WaterAvoidingRandomStrollGoal {

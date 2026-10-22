@@ -20,6 +20,7 @@ pub enum PathNavigationKind {
     Frog,
     Turtle,
     Strider,
+    Flying,
 }
 
 pub struct PathNavigation {
@@ -34,7 +35,7 @@ pub struct PathNavigation {
     last_timeout_check: i64,
     timeout_limit: f64,
     max_distance_to_waypoint: f32,
-    has_delayed_recomputation: bool,
+    pub has_delayed_recomputation: bool,
     time_last_recompute: i64,
     target_pos: Option<BlockPos>,
     reach_range: i32,
@@ -95,6 +96,7 @@ impl PathNavigation {
             PathNavigationKind::Amphibious | PathNavigationKind::Turtle => self.amphibious_path_navigation_create_path_finder(max_visited_nodes),
             PathNavigationKind::Frog => self.frog_path_navigation_create_path_finder(max_visited_nodes),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_create_path_finder(max_visited_nodes),
+            PathNavigationKind::Flying => self.flying_path_navigation_create_path_finder(max_visited_nodes),
         }
     }
 
@@ -103,6 +105,7 @@ impl PathNavigation {
             PathNavigationKind::Ground | PathNavigationKind::Strider => self.ground_path_navigation_can_update_path(level, mob),
             PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle => self.amphibious_path_navigation_can_update_path(),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_update_path(level, mob),
+            PathNavigationKind::Flying => self.flying_path_navigation_can_update_path(level, mob),
         }
     }
 
@@ -111,13 +114,14 @@ impl PathNavigation {
             PathNavigationKind::Ground | PathNavigationKind::Strider => self.ground_path_navigation_get_temp_mob_pos(level, mob),
             PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle => self.amphibious_path_navigation_get_temp_mob_pos(level, mob),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_temp_mob_pos(level, mob),
+            PathNavigationKind::Flying => level.entity(mob).position(),
         }
     }
 
     pub fn trim_path(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self.kind {
             PathNavigationKind::Ground | PathNavigationKind::Strider => self.ground_path_navigation_trim_path(level, mob),
-            PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle | PathNavigationKind::WaterBound => self.path_navigation_trim_path(level),
+            PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle | PathNavigationKind::WaterBound | PathNavigationKind::Flying => self.path_navigation_trim_path(level),
         }
     }
 
@@ -126,6 +130,7 @@ impl PathNavigation {
             PathNavigationKind::Ground | PathNavigationKind::Strider => self.ground_path_navigation_can_navigate_ground(),
             PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle => self.amphibious_path_navigation_can_navigate_ground(),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_navigate_ground(),
+            PathNavigationKind::Flying => false,
         }
     }
 
@@ -236,7 +241,7 @@ impl PathNavigation {
     pub fn create_path(&mut self, level: &ServerLevel, mob: EntityId, pos: BlockPos, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_create_path(level, mob, pos, reach_range)
-        } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle | PathNavigationKind::WaterBound) {
+        } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle | PathNavigationKind::WaterBound | PathNavigationKind::Flying) {
             self.path_navigation_create_path(level, mob, pos, reach_range)
         } else {
             self.ground_path_navigation_create_path(level, mob, pos, reach_range)
@@ -246,6 +251,9 @@ impl PathNavigation {
     pub fn create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_create_path_to_entity(level, mob, target, reach_range)
+        } else if self.kind == PathNavigationKind::Flying {
+            let pos = level.entity(target).block_position();
+            self.create_path(level, mob, pos, reach_range)
         } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle | PathNavigationKind::WaterBound) {
             self.path_navigation_create_path_to_entity(level, mob, target, reach_range)
         } else {
@@ -299,6 +307,8 @@ impl PathNavigation {
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
         if self.wall_climber_navigation.is_some() {
             self.wall_climber_navigation_tick(level, mob);
+        } else if self.kind == PathNavigationKind::Flying {
+            self.flying_path_navigation_tick(level, mob);
         } else {
             self.path_navigation_tick(level, mob);
         }
@@ -335,10 +345,11 @@ impl PathNavigation {
             PathNavigationKind::Ground | PathNavigationKind::Strider => self.path_navigation_get_ground_y(level, target),
             PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle => self.amphibious_path_navigation_get_ground_y(target),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_ground_y(target),
+            PathNavigationKind::Flying => self.path_navigation_get_ground_y(level, target),
         }
     }
 
-    fn path_navigation_get_ground_y(&self, level: &ServerLevel, target: Vec3) -> f64 {
+    pub fn path_navigation_get_ground_y(&self, level: &ServerLevel, target: Vec3) -> f64 {
         let block_pos = BlockPos::containing_vec(target);
         let region = PathNavigationRegion::new(level);
         if region.get_block_state(block_pos.below()).is_air() {
@@ -348,7 +359,7 @@ impl PathNavigation {
         }
     }
 
-    fn follow_the_path(&mut self, level: &mut ServerLevel, mob: EntityId) {
+    pub fn follow_the_path(&mut self, level: &mut ServerLevel, mob: EntityId) {
         let mob_pos = self.get_temp_mob_pos(level, mob);
         let e = level.entity(mob);
         let width = e.dimensions.width;
@@ -475,6 +486,7 @@ impl PathNavigation {
             PathNavigationKind::Ground | PathNavigationKind::Strider => self.path_navigation_can_move_directly(start_pos, stop_pos),
             PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle => self.amphibious_path_navigation_can_move_directly(level, mob, start_pos, stop_pos),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_can_move_directly(level, mob, start_pos, stop_pos),
+            PathNavigationKind::Flying => is_clear_for_movement_between(level, mob, start_pos, stop_pos, true),
         }
     }
 
@@ -500,6 +512,7 @@ impl PathNavigation {
             PathNavigationKind::Amphibious | PathNavigationKind::Frog => self.amphibious_path_navigation_is_stable_destination(level, pos),
             PathNavigationKind::Turtle => self.turtle_path_navigation_is_stable_destination(level, mob, pos),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_is_stable_destination(level, pos),
+            PathNavigationKind::Flying => self.flying_path_navigation_is_stable_destination(level, mob, pos),
         }
     }
 
@@ -516,10 +529,11 @@ impl PathNavigation {
             PathNavigationKind::Ground | PathNavigationKind::Strider => self.path_navigation_set_can_float(can_float),
             PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle => self.amphibious_path_navigation_set_can_float(can_float),
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_set_can_float(can_float),
+            PathNavigationKind::Flying => self.path_navigation_set_can_float(can_float),
         }
     }
 
-    fn path_navigation_set_can_float(&mut self, can_float: bool) {
+    pub fn path_navigation_set_can_float(&mut self, can_float: bool) {
         self.path_finder.node_evaluator.node_evaluator_mut().can_float = can_float;
     }
 
@@ -549,7 +563,7 @@ impl PathNavigation {
     pub fn get_max_vertical_distance_to_waypoint(&self) -> f32 {
         match self.kind {
             PathNavigationKind::WaterBound => self.water_bound_path_navigation_get_max_vertical_distance_to_waypoint(),
-            PathNavigationKind::Ground | PathNavigationKind::Strider | PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle => self.path_navigation_get_max_vertical_distance_to_waypoint(),
+            PathNavigationKind::Ground | PathNavigationKind::Strider | PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle | PathNavigationKind::Flying => self.path_navigation_get_max_vertical_distance_to_waypoint(),
         }
     }
 

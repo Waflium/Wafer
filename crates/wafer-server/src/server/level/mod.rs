@@ -1825,6 +1825,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Panda(_)) => self.panda_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Strider(_)) => self.strider_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Dolphin(_)) => self.dolphin_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Parrot(_)) => self.parrot_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_schooling_fish().is_some() => self.abstract_schooling_fish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Pufferfish(_)) => self.pufferfish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Cat(_)) => self.cat_tick(id),

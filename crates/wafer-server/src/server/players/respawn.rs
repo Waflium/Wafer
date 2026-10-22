@@ -232,6 +232,8 @@ impl Server {
         player.last_sent_health = -1.0;
         player.last_sent_food = -1;
         player.chunk_tracking_view = old.chunk_tracking_view;
+        player.set_shoulder_entity_left(old.shoulder_entity_left.clone());
+        player.set_shoulder_entity_right(old.shoulder_entity_right.clone());
         player.last_death_location = old.last_death_location.clone();
         player.living.locator_bar_icon.copy_from(&old.living.locator_bar_icon);
         if !transition.missing_respawn_block {

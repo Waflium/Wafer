@@ -1430,6 +1430,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Bat(_)) => self.bat_voice_pitch(id),
             Some(MobKind::ZombieVillager(_)) => self.zombie_villager_voice_pitch(id),
+            Some(MobKind::Parrot(_)) => self.parrot_voice_pitch(id),
             _ => self.living_entity_voice_pitch(id),
         }
     }
@@ -2224,6 +2225,7 @@ impl ServerLevel {
             Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
             Some(MobKind::Villager(_) | MobKind::Dolphin(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Fox(_)) => self.fox_ai_step(id),
+            Some(MobKind::Parrot(_)) => self.parrot_ai_step(id),
             Some(MobKind::Rabbit(_)) => self.rabbit_ai_step(id),
             Some(MobKind::Turtle(_)) => self.turtle_ai_step(id),
             Some(_) => self.animal_ai_step(id),
@@ -2548,6 +2550,7 @@ impl ServerLevel {
     fn do_push(&mut self, id: EntityId, entity: EntityId) {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::IronGolem(_)) => self.iron_golem_do_push(id, entity),
+            Some(MobKind::Parrot(_)) if self.is_player(entity) => {}
             _ => self.living_entity_do_push(id, entity),
         }
     }
@@ -2783,7 +2786,7 @@ impl ServerLevel {
         let air_drag_modifier = self.attribute_value(id, Attribute::AirDragModifier) as f32;
         let air_drag = compute_modified_friction(0.91, air_drag_modifier);
         let friction = block_friction * air_drag;
-        let vertical_friction = compute_modified_friction(0.98, air_drag_modifier);
+        let vertical_friction = if self.omnidirectional_air_mover(id) { air_drag } else { compute_modified_friction(0.98, air_drag_modifier) };
         let e = self.entity_mut(id);
         e.set_delta_movement(Vec3::new(movement.x * friction as f64, movement_y * vertical_friction as f64, movement.z * friction as f64));
     }

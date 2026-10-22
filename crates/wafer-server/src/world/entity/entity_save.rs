@@ -140,7 +140,7 @@ impl Entity {
 }
 
 impl LevelEntity {
-    fn encode_id(&self) -> Option<&'static str> {
+    pub fn encode_id(&self) -> Option<&'static str> {
         match self {
             LevelEntity::Item(_) => Some("minecraft:item"),
             LevelEntity::PrimedTnt(_) => Some("minecraft:tnt"),
@@ -438,6 +438,7 @@ impl ServerLevel {
             "minecraft:breeze" => LevelEntity::Mob(Box::new(super::monster::breeze::breeze::Breeze::create())),
             "minecraft:strider" => LevelEntity::Mob(Box::new(super::monster::strider::Strider::create())),
             "minecraft:dolphin" => LevelEntity::Mob(Box::new(super::animal::dolphin::dolphin::Dolphin::create())),
+            "minecraft:parrot" => LevelEntity::Mob(Box::new(super::animal::parrot::parrot::Parrot::create())),
             "minecraft:piglin" => LevelEntity::Mob(Box::new(super::monster::piglin::piglin::Piglin::create())),
             "minecraft:piglin_brute" => LevelEntity::Mob(Box::new(super::monster::piglin::piglin_brute::PiglinBrute::create())),
             "minecraft:parched" => LevelEntity::Mob(Box::new(super::monster::skeleton::parched::Parched::create())),

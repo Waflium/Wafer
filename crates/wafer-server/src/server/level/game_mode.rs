@@ -175,6 +175,7 @@ impl ServerLevel {
             w.f32(game_type.id() as f32);
         });
         if game_type == GameType::Spectator {
+            self.remove_entities_on_shoulder(player);
             self.stop_riding(player);
             self.stop_using_item(player);
             self.stop_all_location_based_effects(player);

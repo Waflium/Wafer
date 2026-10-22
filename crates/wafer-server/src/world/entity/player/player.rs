@@ -220,6 +220,9 @@ impl ServerLevel {
         living.auto_spin_attack_ticks = activation_ticks;
         living.auto_spin_attack_dmg = dmg;
         living.auto_spin_attack_item_stack = Some(item_stack_used);
+        if self.is_player(id) {
+            self.remove_entities_on_shoulder(id);
+        }
         self.set_living_entity_flag(id, crate::world::entity::using_item::FLAG_SPIN_ATTACK, true);
     }
 
@@ -484,6 +487,7 @@ impl ServerLevel {
             self.touch_entities(id);
             self.touch_experience_orbs(id);
         }
+        self.handle_shoulder_entities(id);
     }
 
     pub fn tick_regeneration(&mut self, id: EntityId) {
@@ -581,6 +585,7 @@ impl ServerLevel {
         if self.is_dead_or_dying(id) {
             return false;
         }
+        self.remove_entities_on_shoulder(id);
         if source.scales_with_difficulty(self) {
             match self.difficulty {
                 Difficulty::Peaceful => damage = 0.0,

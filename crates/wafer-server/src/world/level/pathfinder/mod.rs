@@ -1,5 +1,6 @@
 pub mod amphibious_node_evaluator;
 pub mod binary_heap;
+pub mod fly_node_evaluator;
 pub mod node;
 pub mod node_evaluator;
 pub mod path;

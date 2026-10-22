@@ -128,6 +128,7 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:breeze",
     "minecraft:strider",
     "minecraft:dolphin",
+    "minecraft:parrot",
     "minecraft:area_effect_cloud",
     "minecraft:minecart",
     "minecraft:acacia_boat",

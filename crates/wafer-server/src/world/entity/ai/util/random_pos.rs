@@ -90,3 +90,22 @@ pub fn generate_random_pos_toward_direction(level: &mut ServerLevel, mob: Entity
     let e = &m.entity;
     BlockPos::containing(xt + e.x(), direction.y as f64 + e.y(), zt + e.z())
 }
+
+pub fn move_up_to_above_solid(pos: BlockPos, above_solid_amount: i32, max_y: i32, solidity_tester: impl Fn(BlockPos) -> bool) -> BlockPos {
+    if !solidity_tester(pos) {
+        return pos;
+    }
+    let mut mutable_pos = pos.above();
+    while mutable_pos.y <= max_y && solidity_tester(mutable_pos) {
+        mutable_pos = mutable_pos.above();
+    }
+    let first_non_solid_y = mutable_pos.y;
+    while mutable_pos.y <= max_y && mutable_pos.y - first_non_solid_y < above_solid_amount {
+        mutable_pos = mutable_pos.above();
+        if solidity_tester(mutable_pos) {
+            mutable_pos = mutable_pos.below();
+            break;
+        }
+    }
+    mutable_pos
+}

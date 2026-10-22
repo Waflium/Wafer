@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::time::Instant;
 
+use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::packets::play::clientbound;
 use wafer_data::{WORLD_VERSION, items, registry, registry_id};
@@ -150,7 +151,35 @@ pub struct ServerPlayer {
     pub camera: Option<EntityId>,
     pub ender_pearls: Vec<EntityId>,
     pub fishing: Option<EntityId>,
+    pub shoulder_entity_left: Nbt,
+    pub shoulder_entity_right: Nbt,
+    pub time_entity_sat_on_shoulder: i64,
     pub cooldowns: crate::world::item::item_cooldowns::ItemCooldowns,
+}
+
+pub fn is_empty_compound(tag: &Nbt) -> bool {
+    matches!(tag, Nbt::Compound(fields) if fields.is_empty())
+}
+
+fn extract_parrot_variant(tag: &Nbt) -> Option<u32> {
+    if is_empty_compound(tag) || tag.get("id").and_then(Nbt::as_str) != Some("minecraft:parrot") {
+        return None;
+    }
+    tag.get("Variant").and_then(Nbt::as_i64).map(|variant| crate::world::entity::animal::parrot::parrot::Variant::by_id(variant as i32) as u32)
+}
+
+impl ServerPlayer {
+    pub fn set_shoulder_entity_left(&mut self, tag: Nbt) {
+        let variant = extract_parrot_variant(&tag);
+        self.shoulder_entity_left = tag;
+        self.entity.data.set(ids::PLAYER_SHOULDER_PARROT_LEFT, DataValue::OptionalUnsignedInt(variant));
+    }
+
+    pub fn set_shoulder_entity_right(&mut self, tag: Nbt) {
+        let variant = extract_parrot_variant(&tag);
+        self.shoulder_entity_right = tag;
+        self.entity.data.set(ids::PLAYER_SHOULDER_PARROT_RIGHT, DataValue::OptionalUnsignedInt(variant));
+    }
 }
 
 impl ServerPlayer {
@@ -270,6 +299,9 @@ impl ServerPlayer {
             camera: None,
             ender_pearls: Vec::new(),
             fishing: None,
+            shoulder_entity_left: Nbt::Compound(Vec::new()),
+            shoulder_entity_right: Nbt::Compound(Vec::new()),
+            time_entity_sat_on_shoulder: 0,
             cooldowns: Default::default(),
         };
         player.update_options(client);
@@ -429,6 +461,12 @@ impl ServerPlayer {
         }
         nbt.push(("spawn_extra_particles_on_fall".into(), Nbt::Byte(self.spawn_extra_particles_on_fall as i8)));
         nbt.push(("post_effects".into(), Nbt::List(self.post_effects.iter().map(|p| s(p)).collect())));
+        if !is_empty_compound(&self.shoulder_entity_left) {
+            nbt.push(("ShoulderEntityLeft".into(), self.shoulder_entity_left.clone()));
+        }
+        if !is_empty_compound(&self.shoulder_entity_right) {
+            nbt.push(("ShoulderEntityRight".into(), self.shoulder_entity_right.clone()));
+        }
         Nbt::Compound(nbt)
     }
 
@@ -463,6 +501,9 @@ impl ServerPlayer {
         }) {
             self.post_effects.extend(post_effects);
         }
+        let compound = |key: &str| nbt.get(key).filter(|tag| matches!(tag, Nbt::Compound(_))).cloned().unwrap_or(Nbt::Compound(Vec::new()));
+        self.set_shoulder_entity_left(compound("ShoulderEntityLeft"));
+        self.set_shoulder_entity_right(compound("ShoulderEntityRight"));
         if let Some(attributes) = nbt.get("attributes") {
             self.living.attributes.load(attributes);
         }
@@ -883,6 +924,81 @@ impl ServerLevel {
         self.game_rules.get_bool(game_rule::PVP) && self.do_teams_allow_damage(id, target)
     }
 
+    pub fn handle_shoulder_entities(&mut self, id: EntityId) {
+        let left = self.player(id).shoulder_entity_left.clone();
+        self.play_shoulder_entity_ambient_sound(id, &left);
+        let right = self.player(id).shoulder_entity_right.clone();
+        self.play_shoulder_entity_ambient_sound(id, &right);
+        let p = self.player(id);
+        if p.entity.fall_distance > 0.5 || p.entity.is_in_water() || p.abilities_flying() || self.is_sleeping(id) || p.entity.is_in_powder_snow {
+            self.remove_entities_on_shoulder(id);
+        }
+    }
+
+    fn play_shoulder_entity_ambient_sound(&mut self, id: EntityId, shoulder_entity_tag: &Nbt) {
+        if is_empty_compound(shoulder_entity_tag) || shoulder_entity_tag.get("Silent").and_then(Nbt::as_i64).is_some_and(|silent| silent != 0) {
+            return;
+        }
+        if self.entity_mut(id).random.next_int_bounded(200) != 0 {
+            return;
+        }
+        if shoulder_entity_tag.get("id").and_then(Nbt::as_str) == Some("minecraft:parrot") && !crate::world::entity::animal::parrot::parrot::imitate_nearby_mobs(self, id) {
+            let e = self.entity(id);
+            let (x, y, z) = (e.x(), e.y(), e.z());
+            let sound = crate::world::entity::animal::parrot::parrot::get_ambient(self);
+            let source = self.sound_source(id);
+            let pitch = crate::world::entity::animal::parrot::parrot::get_pitch(&mut self.entity_mut(id).random);
+            self.play_sound_at(None, x, y, z, crate::world::entity::sound_event(sound), source, 1.0, pitch);
+        }
+    }
+
+    pub fn set_entity_on_shoulder_of(&mut self, id: EntityId, entity_tag: Nbt) -> bool {
+        let e = self.entity(id);
+        if self.is_passenger(id) || !e.on_ground || e.is_in_water() || e.is_in_powder_snow {
+            return false;
+        }
+        let game_time = self.game_time;
+        let p = self.player_mut(id);
+        if is_empty_compound(&p.shoulder_entity_left) {
+            p.set_shoulder_entity_left(entity_tag);
+            p.time_entity_sat_on_shoulder = game_time;
+            true
+        } else if is_empty_compound(&p.shoulder_entity_right) {
+            p.set_shoulder_entity_right(entity_tag);
+            p.time_entity_sat_on_shoulder = game_time;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn remove_entities_on_shoulder(&mut self, id: EntityId) {
+        if self.player(id).time_entity_sat_on_shoulder + 20 < self.game_time {
+            let left = std::mem::replace(&mut self.player_mut(id).shoulder_entity_left, Nbt::Compound(Vec::new()));
+            self.respawn_entity_on_shoulder(id, &left);
+            self.player_mut(id).set_shoulder_entity_left(Nbt::Compound(Vec::new()));
+            let right = std::mem::replace(&mut self.player_mut(id).shoulder_entity_right, Nbt::Compound(Vec::new()));
+            self.respawn_entity_on_shoulder(id, &right);
+            self.player_mut(id).set_shoulder_entity_right(Nbt::Compound(Vec::new()));
+        }
+    }
+
+    fn respawn_entity_on_shoulder(&mut self, id: EntityId, tag: &Nbt) {
+        if is_empty_compound(tag) {
+            return;
+        }
+        let Some(mut entity) = self.load_entity(tag) else { return };
+        let e = self.entity(id);
+        let (x, y, z, uuid) = (e.x(), e.y(), e.z(), e.uuid);
+        if let crate::world::entity::LevelEntity::Mob(mob) = &mut entity
+            && mob.tamable_animal().is_some()
+        {
+            crate::world::entity::tamable_animal::set_owner_reference(&mut mob.entity, Some(crate::world::entity::entity_reference::EntityReference::of(uuid)));
+        }
+        entity.entity_mut().set_pos(Vec3::new(x, y + 0.7f32 as f64, z));
+        self.add_fresh_entity(entity);
+    }
+
     pub fn server_player_die(&mut self, id: EntityId, source: DamageSource) {
         if self.game_rules.get_bool(game_rule::SHOW_DEATH_MESSAGES) {
             let message = self.death_message(id);
@@ -917,6 +1033,7 @@ impl ServerLevel {
                 crate::network::chat::Component::empty().write(p);
             });
         }
+        self.remove_entities_on_shoulder(id);
         if self.game_rules.get_bool(game_rule::FORGIVE_DEAD_PLAYERS) {
             self.tell_neutral_mobs_that_i_died(id);
         }

@@ -37,6 +37,7 @@ pub enum MoveControlKind {
     Vex,
     Phantom,
     Guardian,
+    Flying(super::flying_move_control::FlyingMoveControl),
 }
 
 #[derive(Default)]

@@ -429,6 +429,19 @@ pub static STRIDER_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static PARROT_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange, FlyingSpeed, AttackDamage,
+        ],
+        &[(FollowRange, 16.0), (TemptRange, 10.0), (MaxHealth, 6.0), (FlyingSpeed, 0.4f32 as f64), (MovementSpeed, 0.2f32 as f64), (AttackDamage, 3.0)],
+    )
+};
+
 pub static SHEEP_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(
