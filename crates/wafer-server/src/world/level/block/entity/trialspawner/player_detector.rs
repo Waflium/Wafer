@@ -1,7 +1,8 @@
-use wafer_core::BlockPos;
+use wafer_core::{BlockPos, Vec3};
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum PlayerDetector {
@@ -25,13 +26,25 @@ impl EntitySelector {
 }
 
 impl PlayerDetector {
-    pub fn detect(self, level: &ServerLevel, selector: EntitySelector, spawner_pos: BlockPos, required_player_range: f64) -> Vec<u128> {
+    pub fn detect(self, level: &mut ServerLevel, selector: EntitySelector, spawner_pos: BlockPos, required_player_range: f64, require_line_of_sight: bool) -> Vec<u128> {
         let players = selector.get_players(level, |level, p| {
             let player = level.player(p);
             player.entity.block_position().closer_than(spawner_pos, required_player_range)
                 && (self == PlayerDetector::IncludingCreativePlayers || !player.game_mode.game_type.is_creative())
                 && !level.is_spectator(p)
         });
-        players.into_iter().map(|player| level.player(player).entity.uuid).collect()
+        let mut uuids = Vec::with_capacity(players.len());
+        for player in players {
+            let eye_position = level.entity(player).eye_position();
+            if !require_line_of_sight || in_line_of_sight(level, Vec3::at_center_of(spawner_pos), eye_position) {
+                uuids.push(level.player(player).entity.uuid);
+            }
+        }
+        uuids
     }
+}
+
+fn in_line_of_sight(level: &mut ServerLevel, origin: Vec3, dest: Vec3) -> bool {
+    let hit_result = level.clip(&ClipContext { from: dest, to: origin, block: ClipBlock::Visual, fluid: ClipFluid::None, is_player: false });
+    hit_result.hit.block_pos == BlockPos::containing_vec(origin) || hit_result.miss
 }

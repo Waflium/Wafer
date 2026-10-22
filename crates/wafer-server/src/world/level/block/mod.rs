@@ -271,6 +271,8 @@ mod speleothem_block;
 #[cfg(test)]
 mod sculk_tests;
 #[cfg(test)]
+mod trial_spawner_tests;
+#[cfg(test)]
 mod speleothem_tests;
 mod sulfur_spike_block;
 mod skull_block;

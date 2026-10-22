@@ -59,14 +59,14 @@ fn short_value(tag: &Nbt) -> Option<i32> {
     super::block::entity::int_value(tag).map(|v| v as i16 as i32)
 }
 
-fn read_spawn_pos(entity_tag: &Nbt) -> Option<Vec3> {
+pub fn read_spawn_pos(entity_tag: &Nbt) -> Option<Vec3> {
     match entity_tag.get("Pos").map(crate::util::codec::list)?.ok()?[..] {
         [ref x, ref y, ref z] => Some(Vec3::new(crate::util::codec::double(x).ok()?, crate::util::codec::double(y).ok()?, crate::util::codec::double(z).ok()?)),
         _ => None,
     }
 }
 
-fn entity_type_by(entity_tag: &Nbt) -> Option<&'static EntityType> {
+pub fn entity_type_by(entity_tag: &Nbt) -> Option<&'static EntityType> {
     let id = entity_tag.get("id").and_then(Nbt::as_str)?;
     EntityType::by_name(id).filter(|_| crate::server::commands::summon_command::MODELLED.contains(&id))
 }

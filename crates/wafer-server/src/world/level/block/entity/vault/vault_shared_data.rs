@@ -71,9 +71,9 @@ impl VaultSharedData {
         &self.connected_players
     }
 
-    pub fn update_connected_players_within_range(&mut self, level: &ServerLevel, pos: BlockPos, server_data: &VaultServerData, config: &VaultConfig, limit: f64) {
+    pub fn update_connected_players_within_range(&mut self, level: &mut ServerLevel, pos: BlockPos, server_data: &VaultServerData, config: &VaultConfig, limit: f64) {
         let mut current_connected_players = JavaObjectHashSet::default();
-        for uuid in config.player_detector.detect(level, config.entity_selector, pos, limit) {
+        for uuid in config.player_detector.detect(level, config.entity_selector, pos, limit, false) {
             if !server_data.get_rewarded_players().contains(&uuid) {
                 current_connected_players.insert(uuid);
             }

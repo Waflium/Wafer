@@ -208,6 +208,7 @@ impl ServerLevel {
             BlockEntityTicker::CampfireCooldown => self.campfire_cooldown_tick(pos, state),
             BlockEntityTicker::Bell => self.bell_server_tick(pos),
             BlockEntityTicker::Vault => self.vault_server_tick(pos, state),
+            BlockEntityTicker::TrialSpawner => self.trial_spawner_server_tick(pos, state),
             BlockEntityTicker::Crafter => self.crafter_server_tick(pos, state),
             BlockEntityTicker::Sign => self.sign_tick(pos),
             BlockEntityTicker::EndGateway => self.end_gateway_portal_tick(pos, state),

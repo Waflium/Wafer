@@ -37,6 +37,7 @@ pub mod shelf_block_entity;
 pub mod sign_block_entity;
 pub mod sign_text;
 pub mod the_end_gateway_block_entity;
+pub mod trial_spawner_block_entity;
 pub mod shulker_box_block_entity;
 pub mod skull_block_entity;
 pub mod spawner_block_entity;
@@ -84,6 +85,7 @@ pub enum BlockEntityTicker {
     Bell,
     Sign,
     Vault,
+    TrialSpawner,
     Crafter,
     EndGateway,
     Spawner,
@@ -129,6 +131,7 @@ pub enum BlockEntityKind {
     Sign(sign_block_entity::SignBlockEntity),
     EnderChest(ender_chest_block_entity::EnderChestBlockEntity),
     Vault(vault::vault_block_entity::VaultBlockEntity),
+    TrialSpawner(trial_spawner_block_entity::TrialSpawnerBlockEntity),
     Empty,
     BrewingStand(brewing_stand_block_entity::BrewingStandBlockEntity),
     EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity),
@@ -189,6 +192,7 @@ impl BlockEntity {
             types::SIGN | types::HANGING_SIGN => BlockEntityKind::Sign(sign_block_entity::SignBlockEntity::default()),
             types::ENDER_CHEST => BlockEntityKind::EnderChest(ender_chest_block_entity::EnderChestBlockEntity::default()),
             types::VAULT => BlockEntityKind::Vault(vault::vault_block_entity::VaultBlockEntity::default()),
+            types::TRIAL_SPAWNER => BlockEntityKind::TrialSpawner(trial_spawner_block_entity::TrialSpawnerBlockEntity::default()),
             types::COPPER_GOLEM_STATUE | types::DAYLIGHT_DETECTOR | types::END_PORTAL => BlockEntityKind::Empty,
             types::BREWING_STAND => BlockEntityKind::BrewingStand(brewing_stand_block_entity::BrewingStandBlockEntity::default()),
             types::END_GATEWAY => BlockEntityKind::EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity::default()),
@@ -309,6 +313,7 @@ impl BlockEntity {
             BlockEntityKind::Bell(_) | BlockEntityKind::EnderChest(_) | BlockEntityKind::Empty => {}
             BlockEntityKind::Sign(sign) => sign.load_additional(input),
             BlockEntityKind::Vault(vault) => vault.load_additional(input),
+            BlockEntityKind::TrialSpawner(trial_spawner) => trial_spawner.load_additional(input),
             BlockEntityKind::BrewingStand(brewing_stand) => brewing_stand.load_additional(input),
             BlockEntityKind::EndGateway(gateway) => gateway.load_additional(input),
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.load_additional(input, state),
@@ -357,6 +362,7 @@ impl BlockEntity {
             BlockEntityKind::Bell(_) | BlockEntityKind::EnderChest(_) | BlockEntityKind::Empty => {}
             BlockEntityKind::Sign(sign) => sign.save_additional(output),
             BlockEntityKind::Vault(vault) => vault.save_additional(output),
+            BlockEntityKind::TrialSpawner(trial_spawner) => trial_spawner.save_additional(output),
             BlockEntityKind::BrewingStand(brewing_stand) => brewing_stand.save_additional(output),
             BlockEntityKind::EndGateway(gateway) => gateway.save_additional(output),
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.save_additional(output),
@@ -431,6 +437,9 @@ impl BlockEntity {
         if let BlockEntityKind::Vault(vault) = &self.kind {
             return vault.get_update_tag();
         }
+        if let BlockEntityKind::TrialSpawner(trial_spawner) = &self.kind {
+            return trial_spawner.get_update_tag(self.block_state);
+        }
         match self.update_tag_kind() {
             UpdateTag::CustomOnly => self.save_custom_only(),
             UpdateTag::WithoutMetadata => self.save_without_metadata(),
@@ -440,7 +449,7 @@ impl BlockEntity {
 
     pub fn has_update_packet(&self) -> bool {
         !matches!(self.kind, BlockEntityKind::PistonMoving(_))
-            && (matches!(self.kind, BlockEntityKind::Spawner(_) | BlockEntityKind::Brushable(_) | BlockEntityKind::Campfire(_) | BlockEntityKind::Shelf(_) | BlockEntityKind::Vault(_))
+            && (matches!(self.kind, BlockEntityKind::Spawner(_) | BlockEntityKind::Brushable(_) | BlockEntityKind::Campfire(_) | BlockEntityKind::Shelf(_) | BlockEntityKind::Vault(_) | BlockEntityKind::TrialSpawner(_))
                 || !matches!(self.update_tag_kind(), UpdateTag::None))
     }
 
@@ -676,6 +685,7 @@ impl BlockEntity {
             types::BELL if block.is_instance_of("BellBlock") => Some(BlockEntityTicker::Bell),
             types::SIGN | types::HANGING_SIGN if block.is_instance_of("SignBlock") => Some(BlockEntityTicker::Sign),
             types::VAULT if block.is_instance_of("VaultBlock") => Some(BlockEntityTicker::Vault),
+            types::TRIAL_SPAWNER if block.is_instance_of("TrialSpawnerBlock") => Some(BlockEntityTicker::TrialSpawner),
             types::CRAFTER if block.is_instance_of("CrafterBlock") => Some(BlockEntityTicker::Crafter),
             types::END_GATEWAY if block.is_instance_of("EndGatewayBlock") => Some(BlockEntityTicker::EndGateway),
             types::MOB_SPAWNER if block.is_instance_of("SpawnerBlock") => Some(BlockEntityTicker::Spawner),

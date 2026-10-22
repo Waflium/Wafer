@@ -20,7 +20,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
     let pos = hit.block_pos;
     let clicked_face = hit.direction;
     let block_state = level.block_state(pos);
-    if level.get_block_entity(pos).is_some_and(|block_entity| matches!(block_entity.kind, BlockEntityKind::Spawner(_))) {
+    if level.get_block_entity(pos).is_some_and(|block_entity| matches!(block_entity.kind, BlockEntityKind::Spawner(_) | BlockEntityKind::TrialSpawner(_))) {
         if !level.game_rules.get_bool(game_rule::SPAWNER_BLOCKS_WORK) {
             level.send_system_message(player, &crate::network::chat::Component::translatable("advMode.notEnabled.spawner"));
             return InteractionResult::Fail;
@@ -34,8 +34,17 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
                 Some(entity_data) if is_op => spawner_holder.spawner.set_entity_data(&entity_data, &mut level.random),
                 _ => spawner_holder.spawner.set_entity_id(registry::ENTITY_TYPE[entity_type as usize], &mut level.random),
             }
+            level.block_entity_set_changed(pos);
+        } else {
+            match entity_data {
+                Some(entity_data) if is_op => {
+                    let (data_type, data) = crate::world::item::component::values::typed_entity_data(&entity_data);
+                    let data_type = crate::commands::arguments::parse_identifier(&data_type).unwrap_or(data_type);
+                    level.trial_spawner_set_entity_data(pos, &data_type, Some(&data));
+                }
+                _ => level.trial_spawner_set_entity_data(pos, registry::ENTITY_TYPE[entity_type as usize], None),
+            }
         }
-        level.block_entity_set_changed(pos);
         level.send_block_updated(pos, block_state, block_state);
         level.game_event_at(Some(player), crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos);
         if level.player(player).game_mode.game_type != GameType::Creative {

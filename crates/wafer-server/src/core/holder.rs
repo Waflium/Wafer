@@ -12,6 +12,7 @@ pub trait RegistryElement: Sized + Send + Sync + 'static {
     fn lookup(key: &str) -> Option<&'static Self>;
 }
 
+#[derive(Clone)]
 pub enum Holder<T: RegistryElement> {
     Direct(Box<T>),
     Reference(String, OnceLock<&'static T>),
