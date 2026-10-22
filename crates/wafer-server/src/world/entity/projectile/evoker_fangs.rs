@@ -61,6 +61,13 @@ impl ServerLevel {
         }
     }
 
+    pub fn evoker_fangs_owner(&self, id: EntityId) -> Option<EntityId> {
+        match self.entities.get(&id) {
+            Some(LevelEntity::EvokerFangs(fangs)) => EntityReference::get_living_entity(fangs.owner, self),
+            _ => None,
+        }
+    }
+
     fn evoker_fangs_get_owner(&mut self, id: EntityId) -> Option<EntityId> {
         let owner = self.evoker_fangs(id).owner;
         EntityReference::get_living_entity(owner, self)

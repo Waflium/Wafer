@@ -205,6 +205,13 @@ fn dimensions(radius: f32) -> EntityDimensions {
 }
 
 impl ServerLevel {
+    pub fn area_effect_cloud_get_owner(&self, id: EntityId) -> Option<EntityId> {
+        match self.entities.get(&id) {
+            Some(LevelEntity::AreaEffectCloud(cloud)) => EntityReference::get_living_entity(cloud.owner, self),
+            _ => None,
+        }
+    }
+
     fn area_effect_cloud(&mut self, id: EntityId) -> &mut AreaEffectCloud {
         match self.entities.get_mut(&id) {
             Some(LevelEntity::AreaEffectCloud(cloud)) => cloud,

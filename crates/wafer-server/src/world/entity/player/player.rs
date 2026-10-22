@@ -203,8 +203,8 @@ impl ServerLevel {
         DamageSource { causing_entity: Some(id), direct_entity: Some(id), ..DamageSource::new(ty) }
     }
 
-    fn cannot_attack(&self, entity: EntityId) -> bool {
-        !self.is_attackable(entity)
+    fn cannot_attack(&mut self, id: EntityId, entity: EntityId) -> bool {
+        !self.is_attackable(entity) || self.skip_attack_interaction(entity, id)
     }
 
     pub fn start_auto_spin_attack(&mut self, id: EntityId, activation_ticks: i32, dmg: f32, item_stack_used: ItemStack) {
@@ -225,7 +225,7 @@ impl ServerLevel {
     }
 
     pub fn player_attack(&mut self, id: EntityId, entity: EntityId) {
-        if self.cannot_attack(entity) {
+        if self.cannot_attack(id, entity) {
             return;
         }
         let mut base_damage = if self.is_auto_spin_attack(id) { self.living(id).auto_spin_attack_dmg } else { self.attribute_value(id, Attribute::AttackDamage) as f32 };

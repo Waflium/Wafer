@@ -2467,7 +2467,7 @@ impl ServerLevel {
             Some(LevelEntity::EndCrystal(_)) => self.end_crystal_hurt_server(id, source),
             Some(LevelEntity::Projectile(_)) => self.projectile_hurt_server(id, &source),
             Some(LevelEntity::LeashKnot(_)) => self.block_attached_entity_hurt_server(id, source),
-            Some(LevelEntity::Marker(_)) => super::marker::Marker::hurt_server(),
+            Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) => super::marker::Marker::hurt_server(),
             Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_hurt_server(id, source, damage),
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => self.vehicle_entity_hurt_server(id, source, damage),
             _ => false,
@@ -2512,6 +2512,7 @@ impl ServerLevel {
     pub fn interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {
         match self.entities.get(&id) {
             Some(LevelEntity::LeashKnot(_)) => return self.leash_fence_knot_interact(id, player, hand, location),
+            Some(LevelEntity::Interaction(_)) => return self.interaction_interact(id, player),
             Some(LevelEntity::Minecart(_)) => return self.abstract_minecart_interact(id, player, hand, location),
             Some(LevelEntity::Boat(boat)) if boat.container.is_some() => return self.abstract_chest_boat_interact(id, player, hand, location),
             Some(LevelEntity::Boat(_)) => return self.abstract_boat_interact(id, player, hand, location),
@@ -3811,15 +3812,31 @@ impl ServerLevel {
         self.entity_mut(id).push(xa, ya, za);
     }
 
+    pub fn skip_attack_interaction(&mut self, id: EntityId, source: EntityId) -> bool {
+        match self.entities.get(&id) {
+            Some(LevelEntity::Interaction(_)) => self.interaction_skip_attack_interaction(id, source),
+            Some(LevelEntity::LeashKnot(_)) if self.is_player(source) => {
+                let pos = self.entity(id).block_position();
+                if !self.may_interact(source, pos) {
+                    true
+                } else {
+                    let damage_source = crate::world::damagesource::DamageSource { causing_entity: Some(source), direct_entity: Some(source), ..crate::world::damagesource::DamageSource::new(wafer_data::damage_types::PLAYER_ATTACK) };
+                    self.block_attached_entity_hurt_server(id, damage_source)
+                }
+            }
+            _ => false,
+        }
+    }
+
     pub fn get_piston_push_reaction(&self, id: EntityId) -> wafer_data::PushReaction {
         match self.entities.get(&id) {
-            Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_)) => wafer_data::PushReaction::IgnoreEntity,
+            Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_) | LevelEntity::Interaction(_)) => wafer_data::PushReaction::IgnoreEntity,
             _ => wafer_data::PushReaction::PushPull,
         }
     }
 
     pub fn is_ignoring_block_triggers(&self, id: EntityId) -> bool {
-        if let Some(LevelEntity::Marker(_)) = self.entities.get(&id) {
+        if let Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) = self.entities.get(&id) {
             return super::marker::Marker::is_ignoring_block_triggers();
         }
         match self.mob(id).map(|mob| &mob.kind) {

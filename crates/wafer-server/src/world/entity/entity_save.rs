@@ -151,6 +151,7 @@ impl LevelEntity {
             LevelEntity::EvokerFangs(_) => Some("minecraft:evoker_fangs"),
             LevelEntity::LeashKnot(_) => None,
             LevelEntity::Marker(_) => Some("minecraft:marker"),
+            LevelEntity::Interaction(_) => Some("minecraft:interaction"),
             LevelEntity::EndCrystal(_) => Some("minecraft:end_crystal"),
             LevelEntity::Projectile(projectile) => Some(wafer_data::registry::ENTITY_TYPE[projectile.entity.entity_type as usize]),
             LevelEntity::AreaEffectCloud(_) => Some("minecraft:area_effect_cloud"),
@@ -206,6 +207,7 @@ impl LevelEntity {
             LevelEntity::EyeOfEnder(eye) => out.push(("Item".into(), eye.get_item().to_nbt())),
             LevelEntity::EvokerFangs(fangs) => fangs.add_additional_save_data(out),
             LevelEntity::LeashKnot(_) | LevelEntity::Marker(_) => {}
+            LevelEntity::Interaction(interaction) => interaction.add_additional_save_data(out),
             LevelEntity::EndCrystal(crystal) => {
                 if let Some(target) = crystal.get_beam_target() {
                     out.push(("beam_target".into(), Nbt::IntArray(vec![target.x, target.y, target.z])));
@@ -275,6 +277,7 @@ impl LevelEntity {
             LevelEntity::LightningBolt(_) => {}
             LevelEntity::EvokerFangs(fangs) => fangs.read_additional_save_data(nbt),
             LevelEntity::LeashKnot(_) | LevelEntity::Marker(_) => {}
+            LevelEntity::Interaction(interaction) => interaction.read_additional_save_data(nbt),
             LevelEntity::EyeOfEnder(eye) => {
                 let item = nbt.get("Item").and_then(|i| ItemStack::from_nbt(i).ok()).unwrap_or_else(ItemStack::empty);
                 eye.set_item(&item);
@@ -372,6 +375,7 @@ impl ServerLevel {
             "minecraft:experience_orb" => LevelEntity::ExperienceOrb(super::experience_orb::ExperienceOrb::of_type()),
             "minecraft:lightning_bolt" => LevelEntity::LightningBolt(super::lightning_bolt::LightningBolt::new(Vec3::ZERO)),
             "minecraft:eye_of_ender" => LevelEntity::EyeOfEnder(super::projectile::eye_of_ender::EyeOfEnder::of_type()),
+            "minecraft:interaction" => LevelEntity::Interaction(super::interaction::Interaction::create()),
             "minecraft:marker" => LevelEntity::Marker(super::marker::Marker::create()),
             "minecraft:evoker_fangs" => LevelEntity::EvokerFangs(super::projectile::evoker_fangs::EvokerFangs::of_type()),
             "minecraft:end_crystal" => LevelEntity::EndCrystal(super::boss::enderdragon::end_crystal::EndCrystal::of_type()),

@@ -53,6 +53,26 @@ pub fn on_controller(server: &mut Server, _context: &CommandContext, source: &Co
     expand_entity_relation(server, source, |level, entity| level.controlling_passenger(entity).into_iter().collect())
 }
 
+pub fn on_owner(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Sources {
+    expand_entity_relation(server, source, |level, entity| if level.is_ownable_entity(entity) { level.get_owner(entity).into_iter().collect() } else { Vec::new() })
+}
+
+pub fn on_leasher(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Sources {
+    expand_entity_relation(server, source, |level, entity| level.get_leash_holder(entity).into_iter().collect())
+}
+
+pub fn on_target(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Sources {
+    expand_entity_relation(server, source, |level, entity| level.targeting_get_target(entity).into_iter().collect())
+}
+
+pub fn on_attacker(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Sources {
+    expand_entity_relation(server, source, |level, entity| level.get_last_attacker(entity).into_iter().collect())
+}
+
+pub fn on_origin(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Sources {
+    expand_entity_relation(server, source, |level, entity| level.traceable_get_owner(entity).into_iter().collect())
+}
+
 pub fn on_passengers(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Sources {
     expand_entity_relation(server, source, |level, entity| level.passengers(entity).to_vec())
 }
