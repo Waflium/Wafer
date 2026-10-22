@@ -84,6 +84,31 @@ impl ServerLevel {
                 true
             }
             mob_effects::ABSORPTION => self.absorption_amount(id) > 0.0,
+            mob_effects::BAD_OMEN => {
+                if self.is_player(id) && !self.is_spectator(id) && self.difficulty != crate::world::difficulty::Difficulty::Peaceful {
+                    let pos = self.entity(id).block_position();
+                    if self.is_village(pos) {
+                        let raid = self.get_raid_at(pos);
+                        if raid.is_none_or(|raid| raid.get_raid_omen_level() < raid.get_max_raid_omen_level()) {
+                            self.add_effect(id, crate::world::effect::MobEffectInstance::new(mob_effects::RAID_OMEN, 600, amplifier), None);
+                            self.player_mut(id).raid_omen_position = Some(pos);
+                            return false;
+                        }
+                    }
+                }
+                true
+            }
+            mob_effects::RAID_OMEN => {
+                if self.is_player(id)
+                    && !self.is_spectator(id)
+                    && let Some(raid_omen_position) = self.player(id).raid_omen_position
+                {
+                    self.create_or_extend_raid(id, raid_omen_position);
+                    self.player_mut(id).raid_omen_position = None;
+                    return false;
+                }
+                true
+            }
             mob_effects::SATURATION => {
                 if let Some(player) = self.players.get_mut(&id) {
                     player.food_data.eat_with_modifier(amplifier + 1, 1.0);

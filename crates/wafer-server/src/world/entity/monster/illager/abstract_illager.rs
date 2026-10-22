@@ -14,7 +14,7 @@ impl RaiderOpenDoorGoal {
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        self.open_door_goal.door_interact_goal.can_use(level, mob) && level.raider(mob).has_active_raid()
+        self.open_door_goal.door_interact_goal.can_use(level, mob) && level.raider_has_active_raid(mob)
     }
 }
 

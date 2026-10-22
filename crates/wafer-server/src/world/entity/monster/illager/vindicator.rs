@@ -157,7 +157,7 @@ impl ServerLevel {
     }
 
     pub fn vindicator_populate_default_equipment_slots(&mut self, id: EntityId) {
-        if self.raider(id).get_current_raid().is_none() {
+        if self.raider(id).get_current_raid_id().is_none() {
             self.living_set_item_slot(id, EquipmentSlot::Mainhand, ItemStack::new(items::IRON_AXE, 1));
         }
     }
@@ -173,11 +173,11 @@ impl VindicatorBreakDoorGoal {
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        level.raider(mob).has_active_raid() && level.entity_mut(mob).random.next_int_bounded(reduced_tick_delay(10)) == 0 && self.break_door_goal.can_use(level, mob)
+        level.raider_has_active_raid(mob) && level.entity_mut(mob).random.next_int_bounded(reduced_tick_delay(10)) == 0 && self.break_door_goal.can_use(level, mob)
     }
 
     pub fn can_continue_to_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        level.raider(mob).has_active_raid() && self.break_door_goal.can_continue_to_use(level, mob)
+        level.raider_has_active_raid(mob) && self.break_door_goal.can_continue_to_use(level, mob)
     }
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {

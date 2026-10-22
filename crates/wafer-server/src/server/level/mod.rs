@@ -1421,7 +1421,7 @@ impl ServerLevel {
     pub fn tick_after_block_ticks(&mut self, runs: bool) {
         if runs {
             self.tick_fluid_ticks();
-            self.raids.tick();
+            self.raids_tick();
         }
         if runs {
             self.chunks.purge_stale_tickets();

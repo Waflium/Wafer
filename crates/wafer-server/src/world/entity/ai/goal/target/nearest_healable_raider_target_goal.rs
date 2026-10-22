@@ -29,7 +29,7 @@ impl NearestHealableRaiderTargetGoal {
         if self.cooldown > 0 || !level.entity_mut(mob).random.next_boolean() {
             return false;
         }
-        if !level.raider(mob).has_active_raid() {
+        if !level.raider_has_active_raid(mob) {
             return false;
         }
         self.nearest_attackable_target_goal.find_target(level, mob);

@@ -3410,6 +3410,21 @@ impl ServerLevel {
     }
 
     pub fn read_level_dependent_save_data_detached(&mut self, mut entity: LevelEntity, input: &Nbt) -> LevelEntity {
+        if let LevelEntity::Mob(mob) = &entity
+            && mob.raider().is_some()
+            && let Some(raid_id) = input.get("RaidId").and_then(Nbt::as_i64).map(|value| value as i32)
+            && self.raids.get(raid_id).is_some()
+        {
+            let id = entity.entity().id;
+            self.entities.insert(id, entity);
+            self.raider_mut(id).set_current_raid(Some(raid_id));
+            let wave = self.raider(id).get_wave();
+            self.raid_add_wave_mob(raid_id, wave, id, false);
+            if self.raider(id).patrolling_monster.is_patrol_leader() {
+                self.raid_set_leader(raid_id, wave, id);
+            }
+            entity = self.entities.shift_remove(&id).expect("the loaded raider");
+        }
         if crate::world::entity::projectile::throwableitemprojectile::thrown_enderpearl::is_thrown_enderpearl(&entity) {
             self.thrown_enderpearl_register_detached(&entity);
         }

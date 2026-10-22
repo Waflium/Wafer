@@ -97,6 +97,7 @@ pub struct ServerPlayer {
     pub seen_credits: bool,
     pub won_game: bool,
     pub spawn_extra_particles_on_fall: bool,
+    pub raid_omen_position: Option<BlockPos>,
     pub warden_spawn_tracker: WardenSpawnTracker,
     pub entered_nether_position: Option<Vec3>,
     pub current_explosion_impact_pos: Option<Vec3>,
@@ -245,6 +246,7 @@ impl ServerPlayer {
             seen_credits: false,
             won_game: false,
             spawn_extra_particles_on_fall: false,
+            raid_omen_position: None,
             warden_spawn_tracker: WardenSpawnTracker::default(),
             entered_nether_position: None,
             current_explosion_impact_pos: None,
@@ -460,6 +462,9 @@ impl ServerPlayer {
             nbt.push(("respawn".into(), Nbt::Compound(fields)));
         }
         nbt.push(("spawn_extra_particles_on_fall".into(), Nbt::Byte(self.spawn_extra_particles_on_fall as i8)));
+        if let Some(pos) = self.raid_omen_position {
+            nbt.push(("raid_omen_position".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z])));
+        }
         nbt.push(("post_effects".into(), Nbt::List(self.post_effects.iter().map(|p| s(p)).collect())));
         if !is_empty_compound(&self.shoulder_entity_left) {
             nbt.push(("ShoulderEntityLeft".into(), self.shoulder_entity_left.clone()));
@@ -496,6 +501,10 @@ impl ServerPlayer {
         });
         self.seen_credits = number("seenCredits").is_some_and(|v| v != 0.0);
         self.spawn_extra_particles_on_fall = nbt.get("spawn_extra_particles_on_fall").and_then(int_value).is_some_and(|v| v as i8 != 0);
+        self.raid_omen_position = match nbt.get("raid_omen_position") {
+            Some(Nbt::IntArray(p)) if p.len() == 3 => Some(BlockPos::new(p[0], p[1], p[2])),
+            _ => None,
+        };
         if let Some(post_effects) = nbt.get("post_effects").and_then(|list| {
             list.as_list().iter().map(|p| p.as_str().and_then(crate::commands::arguments::parse_identifier)).collect::<Option<Vec<String>>>()
         }) {

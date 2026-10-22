@@ -200,6 +200,6 @@ impl ServerLevel {
     }
 
     fn pillager_wants_item(&self, id: EntityId, item_stack: &ItemStack) -> bool {
-        self.raider(id).has_active_raid() && item_stack.is(items::WHITE_BANNER)
+        self.raider_has_active_raid(id) && item_stack.is(items::WHITE_BANNER)
     }
 }

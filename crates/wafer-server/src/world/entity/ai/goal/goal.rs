@@ -552,7 +552,7 @@ impl Goal {
             Goal::ObtainRaidLeaderBanner(goal) => goal.can_continue_to_use(level, mob),
             Goal::RaiderCelebration(goal) => goal.can_use(level, mob),
             Goal::PathfindToRaid(goal) => goal.can_continue_to_use(level, mob),
-            Goal::RaiderMoveThroughVillage(_) => false,
+            Goal::RaiderMoveThroughVillage(goal) => goal.can_continue_to_use(level, mob),
             Goal::HoldGroundAttack(goal) => goal.can_use(level, mob),
             Goal::RaiderOpenDoor(goal) => goal.open_door_goal.can_continue_to_use(),
             Goal::VindicatorBreakDoor(goal) => goal.can_continue_to_use(level, mob),
@@ -737,7 +737,8 @@ impl Goal {
             Goal::RangedAttack(_) | Goal::LongDistancePatrol(_) => {}
             Goal::ObtainRaidLeaderBanner(goal) => goal.start(level, mob),
             Goal::RaiderCelebration(goal) => goal.start(level, mob),
-            Goal::PathfindToRaid(_) | Goal::RaiderMoveThroughVillage(_) => {}
+            Goal::PathfindToRaid(_) => {}
+            Goal::RaiderMoveThroughVillage(goal) => goal.start(level, mob),
             Goal::HoldGroundAttack(goal) => goal.start(level, mob),
             Goal::RaiderOpenDoor(goal) => goal.open_door_goal.start(level, mob),
             Goal::VindicatorBreakDoor(goal) => goal.start(level, mob),
@@ -938,7 +939,8 @@ impl Goal {
             Goal::LongDistancePatrol(_) => {}
             Goal::ObtainRaidLeaderBanner(goal) => goal.stop(),
             Goal::RaiderCelebration(goal) => goal.stop(level, mob),
-            Goal::PathfindToRaid(_) | Goal::RaiderMoveThroughVillage(_) => {}
+            Goal::PathfindToRaid(_) => {}
+            Goal::RaiderMoveThroughVillage(goal) => goal.stop(level, mob),
             Goal::HoldGroundAttack(goal) => goal.stop(level, mob),
             Goal::RaiderOpenDoor(goal) => goal.open_door_goal.stop(level, mob),
             Goal::VindicatorBreakDoor(goal) => goal.break_door_goal.stop(level, mob),
@@ -1157,7 +1159,9 @@ impl Goal {
             Goal::LongDistancePatrol(goal) => goal.tick(level, mob),
             Goal::ObtainRaidLeaderBanner(goal) => goal.tick(level, mob),
             Goal::RaiderCelebration(goal) => goal.tick(level, mob),
-            Goal::PathfindToRaid(_) | Goal::RaiderMoveThroughVillage(_) | Goal::VindicatorJohnnyAttack(_) => {}
+            Goal::PathfindToRaid(goal) => goal.tick(level, mob),
+            Goal::RaiderMoveThroughVillage(goal) => goal.tick(level, mob),
+            Goal::VindicatorJohnnyAttack(_) => {}
             Goal::HoldGroundAttack(goal) => goal.tick(level, mob),
             Goal::RaiderOpenDoor(goal) => goal.open_door_goal.tick(level, mob),
             Goal::VindicatorBreakDoor(goal) => goal.break_door_goal.tick(level, mob),
