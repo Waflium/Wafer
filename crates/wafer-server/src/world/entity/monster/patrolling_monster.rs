@@ -9,10 +9,13 @@ use crate::world::entity::EntityId;
 use crate::world::entity::ai::MobAi;
 use crate::world::entity::ai::goal::goal::Goal;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::entity_type::EntityType;
+use crate::world::entity::monster::monster;
 use crate::world::entity::mob::{self, Mob};
 use crate::world::entity::raid::raid;
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::level::chunk::HeightmapType;
+use crate::world::level::light_layer::LightLayer;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 
 const DEFAULT_PATROL_LEADER: bool = false;
@@ -87,6 +90,10 @@ impl PatrollingMonster {
     pub fn set_patrolling(&mut self, value: bool) {
         self.patrolling = value;
     }
+}
+
+pub fn check_patrolling_monster_spawn_rules(entity_type: &EntityType, level: &mut (impl ServerLevelAccessor + ?Sized), spawn_reason: EntitySpawnReason, pos: BlockPos) -> bool {
+    if level.get_brightness(LightLayer::Block, pos) > 8 { false } else { monster::check_any_light_monster_spawn_rules(entity_type, level, spawn_reason, pos) }
 }
 
 pub fn finalize_spawn(

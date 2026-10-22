@@ -128,7 +128,9 @@ fn create_level(config: &ServerConfig, world_dir: Option<&WorldDir>, dimension: 
     level.seed = seed;
     if dimension == OVERWORLD {
         level.custom_spawners = vec![
+            crate::world::level::custom_spawner::CustomSpawner::Patrol(crate::world::level::levelgen::patrol_spawner::PatrolSpawner::default()),
             crate::world::level::custom_spawner::CustomSpawner::Cat(crate::world::entity::npc::cat_spawner::CatSpawner::default()),
+            crate::world::level::custom_spawner::CustomSpawner::VillageSiege(crate::world::entity::ai::village::village_siege::VillageSiege::default()),
             crate::world::level::custom_spawner::CustomSpawner::WanderingTrader(crate::world::entity::npc::wanderingtrader::wandering_trader_spawner::WanderingTraderSpawner::default()),
         ];
     }

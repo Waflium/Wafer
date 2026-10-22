@@ -12,6 +12,7 @@ pub mod geode_crack_settings;
 pub mod geode_layer_settings;
 pub mod heightproviders;
 pub mod material;
+pub mod patrol_spawner;
 pub mod placement;
 pub mod random_state;
 pub mod structure;
@@ -19,6 +20,8 @@ pub mod synth;
 pub mod worldgen_random;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod patrol_spawner_tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};

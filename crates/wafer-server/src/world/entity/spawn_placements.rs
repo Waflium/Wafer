@@ -15,7 +15,6 @@ use crate::world::attribute::environment_attributes;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::worldgen_random::WorldgenRandom;
-use crate::world::level::light_layer::LightLayer;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::world_gen_level::WorldGenLevel;
 
@@ -248,7 +247,7 @@ fn test(predicate: SpawnPredicate, entity_type: &EntityType, level: &mut (impl W
         P::ParrotCheckParrotSpawnRules => spawnable_on_and_bright(level, pos, &block_tags::PARROTS_SPAWNABLE_ON),
         P::HoglinCheckHoglinSpawnRules | P::PiglinCheckPiglinSpawnRules => !level.block_state(pos.below()).is_block(blocks::NETHER_WART_BLOCK),
         P::PatrollingMonsterCheckPatrollingMonsterSpawnRules => {
-            if level.get_brightness(LightLayer::Block, pos) > 8 { false } else { monster::check_any_light_monster_spawn_rules(entity_type, level, spawn_reason, pos) }
+            super::monster::patrolling_monster::check_patrolling_monster_spawn_rules(entity_type, level, spawn_reason, pos)
         }
         P::PolarBearCheckPolarBearSpawnRules => {
             let biome = level.get_biome(pos);
