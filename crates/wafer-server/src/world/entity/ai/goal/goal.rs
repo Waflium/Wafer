@@ -251,6 +251,10 @@ pub enum Goal {
     BeeWander(crate::world::entity::animal::bee::bee::BeeWanderGoal),
     BeeHurtByOther(crate::world::entity::animal::bee::bee::BeeHurtByOtherGoal),
     BeeBecomeAngryTarget(crate::world::entity::animal::bee::bee::BeeBecomeAngryTargetGoal),
+    ShulkerAttack(crate::world::entity::monster::shulker::ShulkerAttackGoal),
+    ShulkerPeek(crate::world::entity::monster::shulker::ShulkerPeekGoal),
+    ShulkerNearestAttack(crate::world::entity::monster::shulker::ShulkerNearestAttackGoal),
+    ShulkerDefenseAttack(crate::world::entity::monster::shulker::ShulkerDefenseAttackGoal),
     OcelotAttack(OcelotAttackGoal),
     OcelotAvoidEntity(OcelotAvoidEntityGoal),
     OcelotTempt(OcelotTemptGoal),
@@ -414,6 +418,10 @@ impl Goal {
             Goal::BeeWander(goal) => goal.can_use(level, mob),
             Goal::BeeHurtByOther(goal) => goal.hurt_by_target_goal.can_use(level, mob),
             Goal::BeeBecomeAngryTarget(goal) => goal.can_use(level, mob),
+            Goal::ShulkerAttack(goal) => goal.can_use(level, mob),
+            Goal::ShulkerPeek(goal) => goal.can_use(level, mob),
+            Goal::ShulkerNearestAttack(goal) => goal.can_use(level, mob),
+            Goal::ShulkerDefenseAttack(goal) => goal.can_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.can_use(level, mob),
@@ -593,6 +601,10 @@ impl Goal {
             Goal::BeeWander(goal) => goal.can_continue_to_use(level, mob),
             Goal::BeeHurtByOther(goal) => goal.can_continue_to_use(level, mob),
             Goal::BeeBecomeAngryTarget(goal) => goal.can_continue_to_use(level, mob),
+            Goal::ShulkerAttack(goal) => goal.can_use(level, mob),
+            Goal::ShulkerPeek(goal) => goal.can_continue_to_use(level, mob),
+            Goal::ShulkerNearestAttack(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
+            Goal::ShulkerDefenseAttack(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotTempt(goal) => goal.can_continue_to_use(level, mob),
@@ -773,6 +785,10 @@ impl Goal {
             Goal::BeeWander(goal) => goal.start(level, mob),
             Goal::BeeHurtByOther(goal) => goal.start(level, mob),
             Goal::BeeBecomeAngryTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
+            Goal::ShulkerAttack(goal) => goal.start(level, mob),
+            Goal::ShulkerPeek(goal) => goal.start(level, mob),
+            Goal::ShulkerNearestAttack(goal) => goal.nearest_attackable_target_goal.start(level, mob),
+            Goal::ShulkerDefenseAttack(goal) => goal.nearest_attackable_target_goal.start(level, mob),
             Goal::OcelotAttack(_) => {}
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.start(level),
@@ -858,6 +874,10 @@ impl Goal {
             Goal::BeeGoToKnownFlower(goal) => goal.stop(level, mob),
             Goal::BeeHurtByOther(goal) => goal.hurt_by_target_goal.target_goal.stop(level, mob),
             Goal::BeeBecomeAngryTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
+            Goal::ShulkerAttack(goal) => goal.stop(level, mob),
+            Goal::ShulkerPeek(goal) => goal.stop(level, mob),
+            Goal::ShulkerNearestAttack(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
+            Goal::ShulkerDefenseAttack(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::Panic(goal) => goal.stop(),
             Goal::Breed(goal) => goal.stop(),
             Goal::Tempt(goal) => goal.stop(level, mob),
@@ -1024,6 +1044,7 @@ impl Goal {
                 | Goal::PolarBearMeleeAttack(_)
                 | Goal::BeeAttack(_)
                 | Goal::BeePollinate(_)
+                | Goal::ShulkerAttack(_)
                 | Goal::PandaAttack(_)
                 | Goal::RaidGarden(_)
                 | Goal::TurtleLayEgg(_)
@@ -1092,6 +1113,9 @@ impl Goal {
             Goal::BeeGoToHive(goal) => goal.tick(level, mob),
             Goal::BeeGoToKnownFlower(goal) => goal.tick(level, mob),
             Goal::BeeGrowCrop(goal) => goal.tick(level, mob),
+            Goal::ShulkerAttack(goal) => goal.tick(level, mob),
+            Goal::ShulkerPeek(goal) => goal.tick(),
+            Goal::ShulkerNearestAttack(_) | Goal::ShulkerDefenseAttack(_) => {}
             Goal::BeeEnterHive(_) | Goal::ValidateHive(_) | Goal::ValidateFlower(_) | Goal::BeeLocateHive(_) | Goal::BeeWander(_) | Goal::BeeHurtByOther(_) | Goal::BeeBecomeAngryTarget(_) => {}
             Goal::OcelotAttack(goal) => goal.tick(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
@@ -1261,6 +1285,9 @@ impl Goal {
             Goal::BeePollinate(_) | Goal::BeeGoToHive(_) | Goal::BeeGoToKnownFlower(_) | Goal::BeeWander(_) => Flag::Move.bit(),
             Goal::BeeEnterHive(_) | Goal::ValidateHive(_) | Goal::ValidateFlower(_) | Goal::BeeLocateHive(_) | Goal::BeeGrowCrop(_) => 0,
             Goal::BeeHurtByOther(_) | Goal::BeeBecomeAngryTarget(_) => Flag::Target.bit(),
+            Goal::ShulkerAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::ShulkerPeek(_) => 0,
+            Goal::ShulkerNearestAttack(_) | Goal::ShulkerDefenseAttack(_) => Flag::Target.bit(),
             Goal::RunAroundLikeCrazy(_) | Goal::MountPanic(_) => Flag::Move.bit(),
             Goal::RandomStand(_) => 0,
             Goal::FoxFloat(_) => Flag::Jump.bit(),

@@ -1406,6 +1406,8 @@ impl ServerLevel {
                 } else if !self.tick_rate_manager.is_entity_frozen() {
                     if self.is_mob(id) {
                         self.check_mob_despawn(id);
+                    } else if self.is_shulker_bullet(id) {
+                        self.shulker_bullet_check_despawn(id);
                     }
                     let in_range = self.entities.get(&id).is_some_and(|e| self.in_entity_ticking_range(e.entity().chunk_position()));
                     if in_range {
@@ -1827,6 +1829,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Dolphin(_)) => self.dolphin_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Parrot(_)) => self.parrot_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Bee(_)) => self.bee_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Shulker(_)) => self.shulker_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_schooling_fish().is_some() => self.abstract_schooling_fish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Pufferfish(_)) => self.pufferfish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Cat(_)) => self.cat_tick(id),

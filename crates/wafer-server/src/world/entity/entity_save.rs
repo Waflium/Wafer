@@ -95,7 +95,7 @@ impl Entity {
             _ => (0.0, 0.0),
         };
         let clamp_motion = |v: f64| if v.abs() > 10.0 { 0.0 } else { v };
-        self.delta_movement = Vec3::new(clamp_motion(motion.x), clamp_motion(motion.y), clamp_motion(motion.z));
+        self.set_delta_movement(Vec3::new(clamp_motion(motion.x), clamp_motion(motion.y), clamp_motion(motion.z)));
         self.needs_sync = true;
         let pos = Vec3::new(pos.x.clamp(-3.0000512e7, 3.0000512e7), pos.y.clamp(-2.0e7, 2.0e7), pos.z.clamp(-3.0000512e7, 3.0000512e7));
         if !pos.x.is_finite() || !pos.y.is_finite() || !pos.z.is_finite() {
@@ -242,6 +242,7 @@ impl LevelEntity {
                     ProjectileKind::LargeFireball(_) => projectile.large_fireball_add_additional_save_data(out),
                     ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => projectile.abstract_hurting_projectile_add_additional_save_data(out),
                     ProjectileKind::FishingHook(_) => {}
+                    ProjectileKind::ShulkerBullet(_) => super::projectile::shulker_bullet::ShulkerBullet::add_additional_save_data(projectile, out),
                     _ => projectile.throwable_item_projectile_add_additional_save_data(out),
                 }
             }
@@ -323,6 +324,7 @@ impl LevelEntity {
                     ProjectileKind::LargeFireball(_) => projectile.large_fireball_read_additional_save_data(nbt),
                     ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => projectile.abstract_hurting_projectile_read_additional_save_data(nbt),
                     ProjectileKind::FishingHook(_) => {}
+                    ProjectileKind::ShulkerBullet(_) => super::projectile::shulker_bullet::ShulkerBullet::read_additional_save_data(projectile, nbt),
                     _ => projectile.throwable_item_projectile_read_additional_save_data(nbt),
                 }
             }
@@ -454,6 +456,8 @@ impl ServerLevel {
             "minecraft:llama" => LevelEntity::Mob(Box::new(super::animal::equine::llama::Llama::create())),
             "minecraft:trader_llama" => LevelEntity::Mob(Box::new(super::animal::equine::trader_llama::TraderLlama::create())),
             "minecraft:wandering_trader" => LevelEntity::Mob(Box::new(super::npc::wanderingtrader::wandering_trader::WanderingTrader::create())),
+            "minecraft:shulker_bullet" => LevelEntity::Projectile(Box::new(super::projectile::shulker_bullet::ShulkerBullet::of_type())),
+            "minecraft:shulker" => LevelEntity::Mob(Box::new(super::monster::shulker::Shulker::create())),
             "minecraft:llama_spit" => LevelEntity::Projectile(Box::new(super::projectile::llama_spit::LlamaSpit::of_type())),
             "minecraft:skeleton_horse" => LevelEntity::Mob(Box::new(super::animal::equine::skeleton_horse::SkeletonHorse::create())),
             "minecraft:zombie_horse" => LevelEntity::Mob(Box::new(super::animal::equine::zombie_horse::ZombieHorse::create())),

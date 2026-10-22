@@ -4,6 +4,7 @@ pub mod eye_of_ender;
 pub mod llama_spit;
 pub mod firework_rocket_entity;
 pub mod fishing_hook;
+pub mod shulker_bullet;
 pub mod hurtingprojectile;
 #[allow(clippy::module_inception)]
 pub mod projectile;

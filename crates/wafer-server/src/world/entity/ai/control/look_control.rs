@@ -13,6 +13,7 @@ pub enum LookControlKind {
     Fox,
     Phantom,
     Bee,
+    Shulker,
 }
 
 #[derive(Default)]
@@ -80,6 +81,7 @@ impl ServerLevel {
             LookControlKind::Axolotl(max_y_rot_from_center) => self.axolotl_look_control_tick(id, max_y_rot_from_center),
             LookControlKind::Fox => self.fox_look_control_tick(id),
             LookControlKind::Phantom => {}
+            LookControlKind::Shulker => self.shulker_look_control_tick(id),
             LookControlKind::Bee => {
                 if !self.is_angry(id) {
                     self.look_control_look_control_tick(id);

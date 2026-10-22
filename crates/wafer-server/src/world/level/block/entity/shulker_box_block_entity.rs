@@ -82,6 +82,7 @@ impl ServerLevel {
     pub fn shulker_box_tick(&mut self, pos: BlockPos, state: BlockState) {
         let Some(shulker) = self.shulker_box(pos) else { return };
         shulker.progress_old = shulker.progress;
+        let opening = shulker.animation_status == AnimationStatus::Opening;
         let mut updates = 0;
         match shulker.animation_status {
             AnimationStatus::Closed => shulker.progress = 0.0,
@@ -109,9 +110,32 @@ impl ServerLevel {
                 }
             }
         }
+        let (progress_old, progress) = (shulker.progress_old, shulker.progress);
         for _ in 0..updates {
             self.update_neighbour_shapes(state, pos, UPDATE_ALL, crate::world::level::update_flags::UPDATE_LIMIT);
             self.update_neighbors_at(pos, state.block());
+        }
+        if opening {
+            self.shulker_box_move_collided_entities(pos, state, progress_old, progress);
+        }
+    }
+
+    fn shulker_box_move_collided_entities(&mut self, pos: BlockPos, state: BlockState, progress_old: f32, progress: f32) {
+        if !state.block().is_instance_of("ShulkerBoxBlock") {
+            return;
+        }
+        let direction = state.get(wafer_data::properties::FACING);
+        let aabb = crate::world::entity::monster::shulker::get_progress_delta_aabb(1.0, direction, progress_old, progress, wafer_core::Vec3::at_bottom_center_of(pos));
+        let entities = self.get_entities(None, &aabb);
+        for entity in entities {
+            if self.get_piston_push_reaction(entity) != wafer_data::PushReaction::IgnoreEntity {
+                let delta = wafer_core::Vec3::new(
+                    (aabb.x_size() + 0.01) * direction.step_x() as f64,
+                    (aabb.y_size() + 0.01) * direction.step_y() as f64,
+                    (aabb.z_size() + 0.01) * direction.step_z() as f64,
+                );
+                self.move_entity(entity, crate::world::entity::MoverType::ShulkerBox, delta);
+            }
         }
     }
 

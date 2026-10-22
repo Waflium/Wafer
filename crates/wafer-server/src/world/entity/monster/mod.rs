@@ -30,6 +30,9 @@ mod silverfish_tests;
 pub mod ravager;
 pub mod skeleton;
 pub mod spider;
+pub mod shulker;
+#[cfg(test)]
+mod shulker_tests;
 pub mod strider;
 pub mod warden;
 pub mod vex;

@@ -51,6 +51,7 @@ pub enum ProjectileKind {
     WindCharge(super::hurtingprojectile::windcharge::wind_charge::WindCharge),
     BreezeWindCharge(super::hurtingprojectile::windcharge::breeze_wind_charge::BreezeWindCharge),
     FishingHook(super::fishing_hook::FishingHook),
+    ShulkerBullet(super::shulker_bullet::ShulkerBullet),
 }
 
 pub struct Projectile {
@@ -259,6 +260,7 @@ impl ServerLevel {
             ProjectileKind::WindCharge(_) => self.wind_charge_tick(id),
             ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_tick(id),
             ProjectileKind::FishingHook(_) => self.fishing_hook_tick(id),
+            ProjectileKind::ShulkerBullet(_) => self.shulker_bullet_tick(id),
             _ => self.throwable_projectile_tick(id),
         }
     }
@@ -407,6 +409,7 @@ impl ServerLevel {
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit(id, hit_result),
             ProjectileKind::LargeFireball(_) => self.large_fireball_on_hit(id, hit_result),
             ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit(id, hit_result),
+            ProjectileKind::ShulkerBullet(_) => self.shulker_bullet_on_hit(id, hit_result),
         }
     }
 
@@ -429,6 +432,9 @@ impl ServerLevel {
     }
 
     fn on_redirect_projectile(&mut self, id: EntityId, hit_projectile: EntityId) {
+        if self.is_shulker_bullet(id) {
+            return self.shulker_bullet_on_redirect_projectile(id, hit_projectile);
+        }
         let (owner, owner_reference) = (self.projectile_get_owner(id), self.projectile(id).owner);
         self.deflect(hit_projectile, ProjectileDeflection::AimDeflect, owner, owner_reference, true, Vec3::new(1.0, 1.0, 1.0));
     }
@@ -449,6 +455,7 @@ impl ServerLevel {
             ProjectileKind::LlamaSpit(_) => self.llama_spit_on_hit_entity(id, hit_result),
             ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit_entity(id, hit_result),
             ProjectileKind::FishingHook(_) => self.fishing_hook_on_hit_entity(id, hit_result),
+            ProjectileKind::ShulkerBullet(_) => self.shulker_bullet_on_hit_entity(id, hit_result),
         }
     }
 
@@ -461,6 +468,7 @@ impl ServerLevel {
             ProjectileKind::LlamaSpit(_) => self.llama_spit_on_hit_block(id, hit_result),
             ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit_block(id, hit_result),
             ProjectileKind::FishingHook(_) => self.fishing_hook_on_hit_block(id, hit_result),
+            ProjectileKind::ShulkerBullet(_) => self.shulker_bullet_on_hit_block(id, hit_result),
             _ => self.projectile_base_on_hit_block(id, hit_result),
         }
     }
@@ -482,6 +490,9 @@ impl ServerLevel {
         }
         if self.is_fishing_hook(id) {
             return self.fishing_hook_can_hit_entity(id, entity);
+        }
+        if self.is_shulker_bullet(id) {
+            return self.shulker_bullet_can_hit_entity(id, entity);
         }
         self.projectile_base_can_hit_entity(id, entity)
     }
@@ -531,6 +542,9 @@ impl ServerLevel {
     }
 
     pub fn projectile_hurt_server(&mut self, id: EntityId, source: &DamageSource) -> bool {
+        if self.is_shulker_bullet(id) {
+            return self.shulker_bullet_hurt_server(id);
+        }
         if self.projectile(id).abstract_hurting_projectile().is_some() {
             return false;
         }

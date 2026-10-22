@@ -166,6 +166,7 @@ pub struct Entity {
     pub vehicle: Option<EntityId>,
     pub boarding_cooldown: i32,
     pub block_attached: Option<super::decoration::block_attached_entity::BlockAttachedEntity>,
+    pub shulker_peek: Option<super::monster::shulker::ShulkerPeek>,
 }
 
 impl Entity {
@@ -238,6 +239,7 @@ impl Entity {
             vehicle: None,
             boarding_cooldown: 0,
             block_attached: None,
+            shulker_peek: None,
         }
     }
 
@@ -266,12 +268,22 @@ impl Entity {
             super::decoration::block_attached_entity::set_pos(self, pos.x, pos.y, pos.z);
             return;
         }
+        if self.shulker_peek.is_some() {
+            super::monster::shulker::set_pos(self, pos.x, pos.y, pos.z);
+            return;
+        }
+        self.entity_set_pos(pos);
+    }
+
+    pub fn entity_set_pos(&mut self, pos: Vec3) {
         self.set_pos_raw(pos);
         self.bb = self.make_bounding_box(pos);
     }
 
     pub fn make_bounding_box(&self, position: Vec3) -> AABB {
-        if self.entity_type == super::entity_types::WIND_CHARGE.id || self.entity_type == super::entity_types::BREEZE_WIND_CHARGE.id {
+        if self.shulker_peek.is_some() {
+            super::monster::shulker::make_bounding_box(self, position)
+        } else if self.entity_type == super::entity_types::WIND_CHARGE.id || self.entity_type == super::entity_types::BREEZE_WIND_CHARGE.id {
             super::projectile::hurtingprojectile::windcharge::abstract_wind_charge::make_bounding_box(self.dimensions, position)
         } else {
             self.dimensions.make_bounding_box(position)
@@ -420,6 +432,9 @@ impl Entity {
     }
 
     pub fn set_delta_movement(&mut self, movement: Vec3) {
+        if self.shulker_peek.is_some() {
+            return;
+        }
         if movement.is_finite() {
             self.delta_movement = movement;
         }
@@ -958,6 +973,9 @@ impl ServerLevel {
     }
 
     pub fn is_on_fire(&self, id: EntityId) -> bool {
+        if self.is_shulker_bullet(id) {
+            return false;
+        }
         match self.mob(id) {
             Some(mob) if matches!(mob.kind, super::mob::MobKind::Blaze(_)) => super::monster::blaze::Blaze::is_on_fire(&mob.entity),
             Some(mob) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => false,
@@ -1024,6 +1042,7 @@ impl ServerLevel {
                 ProjectileKind::FireworkRocket(_) => 0.0,
                 ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) | ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => 0.0,
                 ProjectileKind::FishingHook(_) => super::projectile::fishing_hook::GRAVITY as f64,
+                ProjectileKind::ShulkerBullet(_) => super::projectile::shulker_bullet::GRAVITY,
                 ProjectileKind::LlamaSpit(_) => 0.06,
                 _ => 0.03,
             },
@@ -1071,6 +1090,7 @@ impl ServerLevel {
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Silverfish(_) | super::mob::MobKind::Endermite(_) | super::mob::MobKind::Breeze(_)) => MovementEmission::Events,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Bat(_)) || mob.is_squid() => MovementEmission::Events,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Guardian(_) | super::mob::MobKind::ElderGuardian(_)) => MovementEmission::Events,
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Shulker(_)) => MovementEmission::None,
             _ if self.is_living(id) => MovementEmission::All,
             _ if self.is_vehicle_entity(id) => MovementEmission::Events,
             _ => MovementEmission::None,
@@ -1119,7 +1139,8 @@ impl ServerLevel {
             None => SoundSource::Players,
             Some(super::LevelEntity::ExperienceOrb(_)) => SoundSource::Ambient,
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
-            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Hoglin(_)) => SoundSource::Hostile,
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Hoglin(_) | super::mob::MobKind::Shulker(_)) => SoundSource::Hostile,
+            Some(super::LevelEntity::Projectile(projectile)) if matches!(projectile.kind, super::projectile::projectile::ProjectileKind::ShulkerBullet(_)) => SoundSource::Hostile,
             Some(super::LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Ghast(_)) => super::monster::ghast::Ghast::get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Phantom(_)) => super::monster::phantom::Phantom::get_sound_source(),
@@ -1288,6 +1309,8 @@ impl ServerLevel {
     pub fn move_entity(&mut self, id: EntityId, mover: MoverType, delta: Vec3) {
         if self.is_minecart(id) {
             self.minecart_move(id, mover, delta);
+        } else if self.is_shulker(id) {
+            self.shulker_move(id, mover, delta);
         } else {
             self.entity_move(id, mover, delta);
         }
@@ -2582,6 +2605,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Panda(_)) => return self.panda_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Parrot(_)) => return self.parrot_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Bee(_)) => return self.bee_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Shulker(_)) => return self.shulker_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Zoglin(_)) => return self.zoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Piglin(_)) => return self.piglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::PiglinBrute(_)) => return self.piglin_brute_hurt_server(id, source, damage),
@@ -2938,6 +2962,7 @@ impl ServerLevel {
                     super::mob::MobKind::Cat(_) => "Cat",
                     super::mob::MobKind::Parrot(_) => "Parrot",
                     super::mob::MobKind::Bee(_) => "Bee",
+                    super::mob::MobKind::Shulker(_) => "Shulker",
                     super::mob::MobKind::Ocelot(_) => "Ocelot",
                     super::mob::MobKind::Horse(_) => "Horse",
                     super::mob::MobKind::Donkey(_) => "Donkey",
@@ -2971,6 +2996,7 @@ impl ServerLevel {
                     ProjectileKind::LargeFireball(_) => "LargeFireball",
                     ProjectileKind::WindCharge(_) => "WindCharge",
                     ProjectileKind::FishingHook(_) => "FishingHook",
+                    ProjectileKind::ShulkerBullet(_) => "ShulkerBullet",
                     ProjectileKind::BreezeWindCharge(_) => "BreezeWindCharge",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",
@@ -3541,6 +3567,9 @@ impl ServerLevel {
     }
 
     pub fn start_riding(&mut self, id: EntityId, entity_to_ride: EntityId, force: bool, send_event_and_triggers: bool) -> bool {
+        if self.is_shulker(id) {
+            self.shulker_start_riding(id);
+        }
         let entity_to_ride = if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Piglin(_))) { self.piglin_get_entity_to_ride(id, entity_to_ride) } else { entity_to_ride };
         if self.vehicle(id) == Some(entity_to_ride) {
             return false;
@@ -3683,6 +3712,9 @@ impl ServerLevel {
             && self.vehicle(id) != Some(old)
         {
             self.dismount_vehicle(id, old);
+        }
+        if self.is_shulker(id) {
+            self.shulker_stop_riding(id);
         }
     }
 
@@ -3894,7 +3926,7 @@ impl ServerLevel {
     }
 
     pub fn can_be_collided_with(&self, id: EntityId, _other: Option<EntityId>) -> bool {
-        self.is_boat(id)
+        self.is_boat(id) || self.is_shulker(id) && self.is_alive(id)
     }
 
     pub fn can_collide_with(&self, id: EntityId, entity: EntityId) -> bool {
@@ -3917,6 +3949,7 @@ impl ServerLevel {
 
     pub fn push_entity(&mut self, id: EntityId, other: EntityId) {
         match self.entities.get(&id) {
+            Some(LevelEntity::Mob(mob)) if super::monster::shulker::is_shulker(mob) => {}
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_push(id, other),
             Some(LevelEntity::Boat(_)) => self.abstract_boat_push(id, other),
             Some(LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_push(id, other),
@@ -4028,7 +4061,8 @@ impl ServerLevel {
             }
             Some(LevelEntity::EndCrystal(_) | LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => true,
             Some(LevelEntity::Projectile(projectile)) => {
-                entity_type_tags::REDIRECTABLE_PROJECTILE.contains(projectile.entity.entity_type as usize) && !(projectile.abstract_arrow().is_some() && projectile.is_in_ground())
+                matches!(projectile.kind, super::projectile::projectile::ProjectileKind::ShulkerBullet(_))
+                    || entity_type_tags::REDIRECTABLE_PROJECTILE.contains(projectile.entity.entity_type as usize) && !(projectile.abstract_arrow().is_some() && projectile.is_in_ground())
             }
             Some(_) => false,
         }

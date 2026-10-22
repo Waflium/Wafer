@@ -1,4 +1,4 @@
-use super::AxisAngle4f;
+use super::{AxisAngle4f, Vector3f};
 use super::math::{cos_from_sin, float_to_int_bits, fma, fma_f64, invsqrt, sin};
 
 #[derive(Clone, Copy, Debug)]
@@ -40,6 +40,36 @@ impl Quaternionf {
             z: fma(self.w, q.z, fma(self.x, q.y, fma(-self.y, q.x, self.z * q.w))),
             w: fma(self.w, q.w, fma(-self.x, q.x, fma(-self.y, q.y, -self.z * q.z))),
         }
+    }
+
+    pub fn rotation_x(angle: f32) -> Quaternionf {
+        let sin = sin(angle * 0.5);
+        let cos = cos_from_sin(sin, angle * 0.5);
+        Quaternionf { x: sin, y: 0.0, z: 0.0, w: cos }
+    }
+
+    pub fn rotation_xyz(angle_x: f32, angle_y: f32, angle_z: f32) -> Quaternionf {
+        let sx = sin(angle_x * 0.5);
+        let cx = cos_from_sin(sx, angle_x * 0.5);
+        let sy = sin(angle_y * 0.5);
+        let cy = cos_from_sin(sy, angle_y * 0.5);
+        let sz = sin(angle_z * 0.5);
+        let cz = cos_from_sin(sz, angle_z * 0.5);
+        let (cycz, sysz, sycz, cysz) = (cy * cz, sy * sz, sy * cz, cy * sz);
+        Quaternionf { x: sx * cycz + cx * sysz, y: cx * sycz - sx * cysz, z: cx * cysz + sx * sycz, w: cx * cycz - sx * sysz }
+    }
+
+    pub fn transform(self, v: Vector3f) -> Vector3f {
+        let (x, y, z) = (v.x, v.y, v.z);
+        let (xx, yy, zz, ww) = (self.x * self.x, self.y * self.y, self.z * self.z, self.w * self.w);
+        let (xy, xz, yz, xw) = (self.x * self.y, self.x * self.z, self.y * self.z, self.x * self.w);
+        let (zw, yw) = (self.z * self.w, self.y * self.w);
+        let k = 1.0 / (xx + yy + zz + ww);
+        Vector3f::new(
+            fma((xx - yy - zz + ww) * k, x, fma(2.0 * (xy - zw) * k, y, (2.0 * (xz + yw) * k) * z)),
+            fma(2.0 * (xy + zw) * k, x, fma((yy - xx - zz + ww) * k, y, (2.0 * (yz - xw) * k) * z)),
+            fma(2.0 * (xz - yw) * k, x, fma(2.0 * (yz + xw) * k, y, ((zz - xx - yy + ww) * k) * z)),
+        )
     }
 
     pub fn rotation_y(angle: f32) -> Quaternionf {

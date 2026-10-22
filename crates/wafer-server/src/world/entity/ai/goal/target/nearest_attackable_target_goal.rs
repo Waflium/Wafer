@@ -75,6 +75,7 @@ pub struct NearestAttackableTargetGoal {
     pub random_interval: i32,
     pub target: Option<EntityId>,
     pub selector: Option<Selector>,
+    pub target_search_area: Option<fn(&ServerLevel, EntityId, f64) -> AABB>,
 }
 
 impl NearestAttackableTargetGoal {
@@ -83,7 +84,7 @@ impl NearestAttackableTargetGoal {
     }
 
     pub fn with(target_type: TargetType, random_interval: i32, must_see: bool, must_reach: bool, selector: Option<Selector>) -> NearestAttackableTargetGoal {
-        NearestAttackableTargetGoal { target_goal: TargetGoal::new(must_see, must_reach), target_type, random_interval: reduced_tick_delay(random_interval), target: None, selector }
+        NearestAttackableTargetGoal { target_goal: TargetGoal::new(must_see, must_reach), target_type, random_interval: reduced_tick_delay(random_interval), target: None, selector, target_search_area: None }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
@@ -95,6 +96,9 @@ impl NearestAttackableTargetGoal {
     }
 
     fn get_target_search_area(&self, level: &ServerLevel, mob: EntityId, follow_distance: f64) -> AABB {
+        if let Some(target_search_area) = self.target_search_area {
+            return target_search_area(level, mob, follow_distance);
+        }
         level.entity(mob).bounding_box().inflate(follow_distance, follow_distance, follow_distance)
     }
 

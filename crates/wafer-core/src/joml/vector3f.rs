@@ -1,3 +1,4 @@
+use super::math::fma;
 use super::math::float_to_int_bits;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -10,6 +11,17 @@ pub struct Vector3f {
 impl Vector3f {
     pub const fn new(x: f32, y: f32, z: f32) -> Vector3f {
         Vector3f { x, y, z }
+    }
+
+    pub fn cross(self, v: Vector3f) -> Vector3f {
+        let rx = fma(self.y, v.z, -self.z * v.y);
+        let ry = fma(self.z, v.x, -self.x * v.z);
+        let rz = fma(self.x, v.y, -self.y * v.x);
+        Vector3f::new(rx, ry, rz)
+    }
+
+    pub fn dot(self, v: Vector3f) -> f32 {
+        fma(self.x, v.x, fma(self.y, v.y, self.z * v.z))
     }
 
     pub fn mul(self, scalar: f32) -> Vector3f {

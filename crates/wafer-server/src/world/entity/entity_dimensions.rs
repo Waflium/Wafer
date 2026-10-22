@@ -39,6 +39,18 @@ impl EntityDimensions {
         }
     }
 
+    pub fn scale_xy(self, width_factor: f32, height_factor: f32) -> EntityDimensions {
+        if width_factor == 1.0 && height_factor == 1.0 {
+            return self;
+        }
+        EntityDimensions {
+            width: self.width * width_factor,
+            height: self.height * height_factor,
+            eye_height: self.eye_height * height_factor,
+            attachments: self.attachments.scale(width_factor, height_factor, width_factor),
+        }
+    }
+
     pub fn make_bounding_box(self, pos: Vec3) -> AABB {
         let w = (self.width / 2.0) as f64;
         let h = self.height as f64;

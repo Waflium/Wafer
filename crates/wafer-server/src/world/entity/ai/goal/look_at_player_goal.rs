@@ -29,6 +29,11 @@ impl LookAtPlayerGoal {
         self
     }
 
+    pub fn only_horizontal(mut self) -> LookAtPlayerGoal {
+        self.only_horizontal = true;
+        self
+    }
+
     pub fn look_at_context(&self) -> TargetingConditions<'static> {
         TargetingConditions::for_non_combat().range(self.look_distance as f64)
     }

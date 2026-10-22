@@ -97,6 +97,18 @@ impl Direction {
         }
     }
 
+    pub fn get_rotation(self) -> crate::joml::Quaternionf {
+        use crate::joml::Quaternionf;
+        match self {
+            Down => Quaternionf::rotation_x(std::f32::consts::PI),
+            Up => Quaternionf::IDENTITY,
+            North => Quaternionf::rotation_xyz(std::f32::consts::FRAC_PI_2, 0.0, std::f32::consts::PI),
+            South => Quaternionf::rotation_x(std::f32::consts::FRAC_PI_2),
+            West => Quaternionf::rotation_xyz(std::f32::consts::FRAC_PI_2, 0.0, std::f32::consts::FRAC_PI_2),
+            East => Quaternionf::rotation_xyz(std::f32::consts::FRAC_PI_2, 0.0, -std::f32::consts::FRAC_PI_2),
+        }
+    }
+
     pub const fn step_x(self) -> i32 {
         match self {
             West => -1,
