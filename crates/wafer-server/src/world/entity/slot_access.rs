@@ -88,6 +88,11 @@ impl ServerLevel {
         {
             return Some(inventory_slot);
         }
+        if self.is_abstract_nautilus(id)
+            && let Some(inventory_slot) = self.abstract_nautilus_get_slot(id, slot)
+        {
+            return Some(inventory_slot);
+        }
         if self.is_abstract_villager(id) {
             let inventory_slot = slot - super::npc::villager::abstract_villager::VILLAGER_SLOT_OFFSET;
             if inventory_slot >= 0 && (inventory_slot as usize) < self.abstract_villager(id).inventory.get_container_size() {

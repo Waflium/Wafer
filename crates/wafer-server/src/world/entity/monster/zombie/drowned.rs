@@ -21,13 +21,14 @@ use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::projectile::arrow::thrown_trident::ThrownTrident;
 use crate::world::entity::spawn_group_data::SpawnGroupData;
-use crate::world::entity::{EntityDimensions, EntityId, MoverType, sound_event};
+use crate::world::entity::{EntityDimensions, EntityId, LevelEntity, MoverType, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path_type::PathType;
 
 pub const NAUTILUS_SHELL_CHANCE: f32 = 0.03;
+const ZOMBIE_NAUTILUS_JOCKEY_CHANCE: f32 = 0.5;
 pub const BABY_DIMENSIONS: EntityDimensions =
     EntityDimensions::scalable(0.49, 0.98).with_eye_height(0.775).with_vehicle_attachment(&[Vec3::new(0.0, 0.1875f32 as f64, 0.0)]);
 
@@ -145,6 +146,29 @@ impl ServerLevel {
         if self.item_by_slot_ref(id, EquipmentSlot::Offhand).is_none() && self.random.next_float() < NAUTILUS_SHELL_CHANCE {
             self.living_set_item_slot(id, EquipmentSlot::Offhand, ItemStack::new(items::NAUTILUS_SHELL, 1));
             self.set_guaranteed_drop(id, EquipmentSlot::Offhand);
+        }
+        if (spawn_reason == EntitySpawnReason::Natural || spawn_reason == EntitySpawnReason::Structure)
+            && self.item_by_slot_ref(id, EquipmentSlot::Mainhand).is_some_and(|item| item.is(items::TRIDENT))
+            && self.random.next_float() < ZOMBIE_NAUTILUS_JOCKEY_CHANCE
+            && !self.is_baby(id)
+            && !{
+                let pos = self.entity(id).block_position();
+                crate::world::level::server_level_accessor::ServerLevelAccessor::get_biome(self, pos).is("minecraft:more_frequent_drowned_spawns")
+            }
+            && let Some(LevelEntity::Mob(mut zombie_nautilus)) = ServerLevel::create_entity("minecraft:zombie_nautilus")
+        {
+            if spawn_reason == EntitySpawnReason::Structure {
+                zombie_nautilus.persistence_required = true;
+            }
+            let e = self.entity(id);
+            let (x, y, z, y_rot) = (e.x(), e.y(), e.z(), e.y_rot);
+            zombie_nautilus.entity.snap_to(x, y, z, y_rot, 0.0);
+            let zombie_nautilus_id = zombie_nautilus.entity.id;
+            self.entities.insert(zombie_nautilus_id, LevelEntity::Mob(zombie_nautilus));
+            self.finalize_spawn(zombie_nautilus_id, difficulty, spawn_reason, None);
+            self.start_riding(id, zombie_nautilus_id, false, false);
+            let zombie_nautilus = self.entities.shift_remove(&zombie_nautilus_id).expect("the zombie nautilus");
+            self.add_fresh_entity(zombie_nautilus);
         }
         group_data
     }

@@ -171,7 +171,7 @@ impl ServerLevel {
 
     pub fn tamable_animal_feed(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, item_stack: &mut ItemStack, healing_factor: f32, default_heal: f32) {
         let food_properties = item_stack.get(dc::FOOD).map(FoodProperties::from_nbt);
-        self.use_player_item(player, hand, item_stack);
+        self.animal_use_player_item(id, player, hand, item_stack);
         self.heal(id, food_properties.map_or(default_heal, |food_properties| healing_factor * food_properties.nutrition as f32));
         self.play_eating_sound(id);
     }

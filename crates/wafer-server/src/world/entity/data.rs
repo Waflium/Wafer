@@ -88,6 +88,7 @@ pub enum DataValue {
     PaintingVariant(i32),
     ResolvableProfile(wafer_protocol::nbt::Nbt),
     SnifferState(i32),
+    ZombieNautilusVariant(i32),
 }
 
 impl DataValue {
@@ -133,6 +134,7 @@ impl DataValue {
             DataValue::PaintingVariant(_) => 34,
             DataValue::ResolvableProfile(_) => 41,
             DataValue::SnifferState(_) => 35,
+            DataValue::ZombieNautilusVariant(_) => 32,
         }
     }
 
@@ -195,6 +197,7 @@ impl DataValue {
             DataValue::PaintingVariant(id) => w.varint(*id + 1),
             DataValue::DyeColor(id) => w.varint(*id),
             DataValue::SnifferState(id) => w.varint(*id),
+            DataValue::ZombieNautilusVariant(id) => w.varint(*id),
             DataValue::ResolvableProfile(profile) => {
                 let _ = crate::world::item::component::PROFILE.write(profile, w);
             }

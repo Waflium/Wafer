@@ -1108,6 +1108,7 @@ impl ServerLevel {
                 _ if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) => super::animal::axolotl::axolotl::is_pushed_by_fluid(),
                 _ if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Frog(_))) => super::animal::frog::frog::is_pushed_by_fluid(),
                 _ if self.is_turtle(id) => super::animal::turtle::turtle::Turtle::is_pushed_by_fluid(),
+                _ if self.is_abstract_nautilus(id) => super::animal::nautilus::abstract_nautilus::is_pushed_by_fluid(),
                 _ => true,
             },
         }
@@ -1932,6 +1933,9 @@ impl ServerLevel {
             self.camel_play_step_sound(id, state);
             return;
         }
+        if self.is_abstract_nautilus(id) {
+            return;
+        }
         if self.is_abstract_horse(id) {
             self.abstract_horse_play_step_sound(id, pos, state);
             return;
@@ -1995,6 +1999,8 @@ impl ServerLevel {
         let pitch = 1.0 + (e.random.next_float() - e.random.next_float()) * 0.4;
         let sound = if self.is_player(id) {
             "minecraft:entity.player.swim"
+        } else if let Some(mob) = self.mob(id).filter(|mob| mob.abstract_nautilus().is_some()) {
+            super::animal::nautilus::abstract_nautilus::get_swim_sound(mob)
         } else if self.is_monster(id) || self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Hoglin(_))) {
             if self.is_drowned(id) { super::monster::zombie::drowned::Drowned::get_swim_sound() } else { self.monster_get_swim_sound() }
         } else if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
@@ -2558,6 +2564,8 @@ impl ServerLevel {
             self.ageable_water_creature_base_tick(id);
         } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) {
             self.axolotl_base_tick(id);
+        } else if self.is_nautilus(id) {
+            self.nautilus_base_tick(id);
         } else if self.mob(id).is_some_and(super::mob::Mob::is_water_animal) {
             self.water_animal_base_tick(id);
         } else if self.is_mob(id) {
@@ -2626,6 +2634,7 @@ impl ServerLevel {
                 ) => {
                     return self.abstract_horse_hurt_server(id, source, damage);
                 }
+                Some(super::mob::MobKind::Nautilus(_) | super::mob::MobKind::ZombieNautilus(_)) => return self.abstract_nautilus_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Axolotl(_)) => return self.axolotl_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Hoglin(_)) => return self.hoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Panda(_)) => return self.panda_hurt_server(id, source, damage),
@@ -2710,7 +2719,7 @@ impl ServerLevel {
         if !self.is_mob(id) {
             return self.entity_interact(id, player, hand, location);
         }
-        if self.is_zombie_horse(id) || self.is_camel_husk(id) {
+        if self.is_zombie_horse(id) || self.is_camel_husk(id) || self.is_abstract_nautilus(id) {
             self.mob_mut(id).expect("a mob").persistence_required = true;
         }
         if !self.is_alive(id) {
@@ -3009,6 +3018,8 @@ impl ServerLevel {
                     super::mob::MobKind::TraderLlama(_) => "TraderLlama",
                     super::mob::MobKind::Camel(_) => "Camel",
                     super::mob::MobKind::CamelHusk(_) => "CamelHusk",
+                    super::mob::MobKind::Nautilus(_) => "Nautilus",
+                    super::mob::MobKind::ZombieNautilus(_) => "ZombieNautilus",
                     super::mob::MobKind::WanderingTrader(_) => "WanderingTrader",
                     super::mob::MobKind::Axolotl(_) => "Axolotl",
                     super::mob::MobKind::Frog(_) => "Frog",
@@ -3577,6 +3588,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_get_controlling_passenger(id),
+            Some(LevelEntity::Mob(mob)) if mob.abstract_nautilus().is_some() => self.abstract_nautilus_get_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Pig(_)) => self.pig_get_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_get_controlling_passenger(id),
             Some(LevelEntity::Mob(_)) => self.mob_get_controlling_passenger(id),
@@ -3678,6 +3690,7 @@ impl ServerLevel {
             Some(LevelEntity::OminousItemSpawner(_)) => super::ominous_item_spawner::OminousItemSpawner::can_add_passenger(),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_can_add_passenger(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Camel(_) | super::mob::MobKind::CamelHusk(_)) => self.camel_can_add_passenger(id),
+            Some(LevelEntity::Mob(mob)) if mob.abstract_nautilus().is_some() => self.abstract_nautilus_can_add_passenger(id),
             _ => self.passengers(id).is_empty(),
         }
     }

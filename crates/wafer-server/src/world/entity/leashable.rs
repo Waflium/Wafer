@@ -181,6 +181,8 @@ impl ServerLevel {
             MobKind::Villager(_) | MobKind::WanderingTrader(_) => false,
             MobKind::ZombieHorse(_) => self.is_tamed(id) || !self.is_mob_controlled(id),
             MobKind::CamelHusk(_) => self.camel_husk_can_be_leashed(id),
+            MobKind::Nautilus(_) => self.nautilus_can_be_leashed(id),
+            MobKind::ZombieNautilus(_) => self.zombie_nautilus_can_be_leashed(id),
             _ => !self.is_enemy(id),
         }
     }

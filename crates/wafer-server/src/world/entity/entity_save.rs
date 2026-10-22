@@ -480,6 +480,8 @@ impl ServerLevel {
             "minecraft:trader_llama" => LevelEntity::Mob(Box::new(super::animal::equine::trader_llama::TraderLlama::create())),
             "minecraft:camel" => LevelEntity::Mob(Box::new(super::animal::camel::camel::Camel::create())),
             "minecraft:camel_husk" => LevelEntity::Mob(Box::new(super::animal::camel::camel_husk::CamelHusk::create())),
+            "minecraft:nautilus" => LevelEntity::Mob(Box::new(super::animal::nautilus::nautilus::Nautilus::create())),
+            "minecraft:zombie_nautilus" => LevelEntity::Mob(Box::new(super::animal::nautilus::zombie_nautilus::ZombieNautilus::create())),
             "minecraft:wandering_trader" => LevelEntity::Mob(Box::new(super::npc::wanderingtrader::wandering_trader::WanderingTrader::create())),
             "minecraft:dragon_fireball" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::dragon_fireball::DragonFireball::of_type())),
             "minecraft:wither_skull" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::wither_skull::WitherSkull::of_type())),

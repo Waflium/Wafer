@@ -46,6 +46,10 @@ impl ServerLevel {
             self.abstract_horse_open_custom_inventory_screen(id, player);
             return;
         }
+        if self.is_abstract_nautilus(id) {
+            self.abstract_nautilus_open_custom_inventory_screen(id, player);
+            return;
+        }
         self.open_menu(player, MenuProvider::ChestVehicle(id));
         crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(self, player, true);
     }

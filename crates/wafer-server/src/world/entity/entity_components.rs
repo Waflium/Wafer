@@ -97,6 +97,10 @@ impl DataComponentGetter for EntityComponents<'_> {
                 MobKind::Fox(_) if ty == dc::FOX_VARIANT => {
                     return Some(Cow::Owned(Nbt::String(super::animal::fox::fox::get_variant(&mob.entity).get_serialized_name().to_string())));
                 }
+                MobKind::ZombieNautilus(_) if ty == dc::ZOMBIE_NAUTILUS_VARIANT => {
+                    let variant = super::animal::nautilus::zombie_nautilus::get_variant(&mob.entity);
+                    return Some(Cow::Owned(Nbt::String(variant_utils::variant_name(super::animal::nautilus::zombie_nautilus::VARIANT_REGISTRY, variant).to_string())));
+                }
                 MobKind::Llama(_) | MobKind::TraderLlama(_) if ty == dc::LLAMA_VARIANT => {
                     return Some(Cow::Owned(Nbt::String(super::animal::equine::llama::get_variant(&mob.entity).serialized_name().to_string())));
                 }

@@ -15,7 +15,7 @@ pub fn get_inventory_size(inventory_columns: usize) -> usize {
 
 impl ServerLevel {
     pub fn abstract_mount_inventory_menu_still_valid(&mut self, menu: &AbstractContainerMenu, player: EntityId, mount: EntityId, inventory_version: u32) -> bool {
-        let mount_container = menu.container.unwrap_or(ContainerRef::HorseInventory(mount));
+        let mount_container = menu.container.unwrap_or(ContainerRef::MountInventory(mount));
         !self.has_inventory_changed(mount, inventory_version)
             && self.container_still_valid(mount_container, player)
             && self.entity_ref(mount).is_some()

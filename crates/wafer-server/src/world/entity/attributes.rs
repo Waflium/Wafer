@@ -612,6 +612,32 @@ pub static ZOMBIE_HORSE_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static NAUTILUS_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange, AttackDamage,
+        ],
+        &[(FollowRange, 16.0), (TemptRange, 10.0), (MaxHealth, 15.0), (MovementSpeed, 1.0), (AttackDamage, 3.0), (KnockbackResistance, 0.3f32 as f64)],
+    )
+};
+
+pub static ZOMBIE_NAUTILUS_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange, AttackDamage,
+        ],
+        &[(FollowRange, 16.0), (TemptRange, 10.0), (MaxHealth, 15.0), (MovementSpeed, 1.1f32 as f64), (AttackDamage, 3.0), (KnockbackResistance, 0.3f32 as f64)],
+    )
+};
+
 pub static CAMEL_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

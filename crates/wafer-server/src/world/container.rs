@@ -24,7 +24,7 @@ pub enum ContainerRef {
     DecoratedPot(BlockPos),
     PlayerEnderChest(EntityId),
     ChestVehicle(EntityId),
-    HorseInventory(EntityId),
+    MountInventory(EntityId),
     MobEquipmentSlot(EntityId, wafer_data::EquipmentSlot),
 }
 
@@ -100,7 +100,10 @@ impl ServerLevel {
                 self.unpack_chest_vehicle_loot_table(entity, None);
                 self.container_entity(entity).map(|container| container.get_item_stacks())
             }
-            ContainerRef::HorseInventory(entity) => self.mob_mut(entity).and_then(|mob| mob.abstract_horse_mut()).map(|horse| &mut horse.inventory.items),
+            ContainerRef::MountInventory(entity) => match self.mob_mut(entity) {
+                Some(mob) if mob.abstract_nautilus().is_some() => mob.abstract_nautilus_mut().map(|nautilus| &mut nautilus.inventory.items),
+                mob => mob.and_then(|mob| mob.abstract_horse_mut()).map(|horse| &mut horse.inventory.items),
+            },
             _ => None,
         }
     }
@@ -155,7 +158,7 @@ impl ServerLevel {
         if let ContainerRef::ChestVehicle(entity) = container {
             return self.container_entity(entity).map_or(0, |container| container.get_item_stacks().len());
         }
-        if let ContainerRef::ChiseledBookShelf(_) | ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::HorseInventory(_) = container {
+        if let ContainerRef::ChiseledBookShelf(_) | ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::MountInventory(_) = container {
             return self.list_backed_items(container).map_or(0, |items| items.len());
         }
         container.parts().into_iter().map(|(pos, _)| self.get_block_entity(pos).map_or(0, |e| size_of(e))).sum()
@@ -180,7 +183,7 @@ impl ServerLevel {
         if let ContainerRef::MobEquipmentSlot(entity, slot) = container {
             return self.mob_equipment_slot_get_the_item(entity, slot).is_empty();
         }
-        if let ContainerRef::ChiseledBookShelf(_) | ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::HorseInventory(_) = container {
+        if let ContainerRef::ChiseledBookShelf(_) | ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::MountInventory(_) = container {
             return self.list_backed_items(container).is_none_or(|items| items.iter().all(ItemStack::is_empty));
         }
         if let Some(crafter) = container.single_block().and_then(|pos| self.crafter(pos)) {
@@ -209,7 +212,7 @@ impl ServerLevel {
         if let ContainerRef::MobEquipmentSlot(entity, equipment_slot) = container {
             return if slot == 0 { self.mob_equipment_slot_get_the_item(entity, equipment_slot) } else { ItemStack::empty() };
         }
-        if let ContainerRef::ChiseledBookShelf(_) | ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::HorseInventory(_) = container {
+        if let ContainerRef::ChiseledBookShelf(_) | ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::MountInventory(_) = container {
             return self.list_backed_items(container).and_then(|items| items.get(slot).cloned()).unwrap_or_else(ItemStack::empty);
         }
         let Some((pos, slot)) = self.container_part(container, slot) else { return ItemStack::empty() };
@@ -232,7 +235,7 @@ impl ServerLevel {
             }
             return;
         }
-        if let ContainerRef::ChiseledBookShelf(_) | ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::HorseInventory(_) = container {
+        if let ContainerRef::ChiseledBookShelf(_) | ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::MountInventory(_) = container {
             if let Some(items) = self.list_backed_items(container)
                 && slot < items.len()
             {
@@ -277,7 +280,7 @@ impl ServerLevel {
             }
             return self.shelf_set_changed(pos);
         }
-        if let ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::HorseInventory(_) = container {
+        if let ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::MountInventory(_) = container {
             if let Some(items) = self.list_backed_items(container) {
                 stack.limit_size(stack.max_stack_size().min(99));
                 items[slot] = stack;
@@ -335,7 +338,7 @@ impl ServerLevel {
         if let ContainerRef::MobEquipmentSlot(entity, equipment_slot) = container {
             return if slot != 0 { ItemStack::empty() } else { self.mob_equipment_slot_split_the_item(entity, equipment_slot, count) };
         }
-        if let ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::HorseInventory(_) = container {
+        if let ContainerRef::Shelf(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::MountInventory(_) = container {
             let result = match self.list_backed_items(container).and_then(|items| items.get_mut(slot)) {
                 Some(stack) if !stack.is_empty() && count > 0 => stack.split(count),
                 _ => ItemStack::empty(),
@@ -373,7 +376,7 @@ impl ServerLevel {
         if let ContainerRef::Lectern { pos, .. } = container {
             return self.lectern_book_access_remove_item_no_update(pos, slot);
         }
-        if let ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::HorseInventory(_) = container {
+        if let ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::MountInventory(_) = container {
             return self.list_backed_items(container).and_then(|items| items.get_mut(slot)).map(|s| std::mem::replace(s, ItemStack::empty())).unwrap_or_else(ItemStack::empty);
         }
         if let ContainerRef::MobEquipmentSlot(..) = container {
@@ -426,7 +429,7 @@ impl ServerLevel {
         if let ContainerRef::Lectern { .. } = container {
             return false;
         }
-        if let ContainerRef::DecoratedPot(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::HorseInventory(_) | ContainerRef::MobEquipmentSlot(..) = container {
+        if let ContainerRef::DecoratedPot(_) | ContainerRef::PlayerEnderChest(_) | ContainerRef::ChestVehicle(_) | ContainerRef::MountInventory(_) | ContainerRef::MobEquipmentSlot(..) = container {
             return true;
         }
         if let ContainerRef::ChiseledBookShelf(pos) = container {
@@ -508,7 +511,7 @@ impl ServerLevel {
         if let ContainerRef::ChestVehicle(entity) = container {
             return self.is_chest_vehicle_still_valid(entity, player);
         }
-        if let ContainerRef::HorseInventory(_) = container {
+        if let ContainerRef::MountInventory(_) = container {
             return true;
         }
         if let ContainerRef::MobEquipmentSlot(entity, _) = container {

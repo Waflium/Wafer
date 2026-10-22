@@ -587,6 +587,7 @@ impl ServerLevel {
             Some(MobKind::Strider(_)) => self.strider_can_use_slot(id, slot),
             Some(MobKind::Horse(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_)) => true,
             Some(MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::Camel(_) | MobKind::CamelHusk(_)) => self.abstract_horse_can_use_slot(id, slot),
+            Some(MobKind::Nautilus(_) | MobKind::ZombieNautilus(_)) => self.abstract_nautilus_can_use_slot(id, slot),
             _ => true,
         }
     }
@@ -597,6 +598,9 @@ impl ServerLevel {
         }
         if slot == EquipmentSlot::Saddle && self.is_strider(id) {
             return Some(sound_event("minecraft:entity.strider.saddle").into());
+        }
+        if slot == EquipmentSlot::Saddle && self.is_abstract_nautilus(id) {
+            return Some(sound_event(self.abstract_nautilus_get_equip_sound_for_saddle(id)).into());
         }
         if slot == EquipmentSlot::Saddle && self.is_abstract_horse(id) {
             return self.get_equip_sound_for_saddle(id).map(Into::into);
@@ -1681,7 +1685,7 @@ impl ServerLevel {
             self.raider_die(id, source);
         } else if self.is_wolf(id) {
             self.wolf_die(id, source);
-        } else if self.is_cat(id) {
+        } else if self.is_cat(id) || self.is_abstract_nautilus(id) {
             self.tamable_animal_die(id, source);
         } else if self.is_villager(id) {
             self.villager_die(id, source);
@@ -2505,6 +2509,8 @@ impl ServerLevel {
     pub fn tick_ridden_by(&mut self, id: EntityId, controller: EntityId, ridden_input: Vec3) {
         if self.is_camel(id) {
             self.camel_tick_ridden(id, controller, ridden_input);
+        } else if self.is_abstract_nautilus(id) {
+            self.abstract_nautilus_tick_ridden(id, controller, ridden_input);
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_tick_ridden(id, controller, ridden_input);
         } else if self.is_pig(id) {
@@ -2521,6 +2527,8 @@ impl ServerLevel {
     pub fn get_ridden_input(&self, id: EntityId, controller: EntityId, self_input: Vec3) -> Vec3 {
         if self.is_camel(id) {
             self.camel_get_ridden_input(id, controller, self_input)
+        } else if self.is_abstract_nautilus(id) {
+            self.abstract_nautilus_get_ridden_input(controller)
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_get_ridden_input(id, controller, self_input)
         } else if self.is_pig(id) {
@@ -2535,6 +2543,8 @@ impl ServerLevel {
     pub fn get_ridden_speed(&self, id: EntityId, controller: EntityId) -> f32 {
         if self.is_camel(id) {
             self.camel_get_ridden_speed(id, controller)
+        } else if self.is_abstract_nautilus(id) {
+            self.abstract_nautilus_get_ridden_speed(id)
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_get_ridden_speed(id, controller)
         } else if self.is_pig(id) {
@@ -3064,6 +3074,8 @@ impl ServerLevel {
             self.guardian_travel_in_water(id, input);
         } else if self.is_dolphin(id) {
             self.dolphin_travel_in_water(id, input);
+        } else if self.is_abstract_nautilus(id) {
+            self.abstract_nautilus_travel_in_water(id, input);
         } else {
             self.living_entity_travel_in_water(id, input, base_gravity, is_falling, old_y);
         }
@@ -3292,6 +3304,7 @@ impl ServerLevel {
             Some(MobKind::WitherSkeleton(_)) => self.wither_skeleton_can_be_affected(id, effect),
             Some(MobKind::Parched(_)) => self.parched_can_be_affected(id, effect),
             Some(MobKind::Wither(_)) => self.wither_can_be_affected(id, effect),
+            Some(MobKind::Nautilus(_) | MobKind::ZombieNautilus(_)) => self.abstract_nautilus_can_be_affected(id, effect),
             _ => self.living_entity_can_be_affected(id, effect),
         }
     }

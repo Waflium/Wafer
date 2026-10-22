@@ -1156,6 +1156,8 @@ impl ServerLevel {
             self.award_stat(id, stats::HORSE_ONE_CM, distance);
         } else if self.is_strider(vehicle) {
             self.award_stat(id, stats::STRIDER_ONE_CM, distance);
+        } else if self.is_abstract_nautilus(vehicle) {
+            self.award_stat(id, stats::NAUTILUS_ONE_CM, distance);
         }
     }
 

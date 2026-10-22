@@ -32,7 +32,7 @@ impl FollowPlayerRiddenEntityGoal {
         let area = level.entity(mob).bounding_box().inflate_all(5.0);
         level.get_entities_matching(None, &area, |level, entity| match self.entity_type_to_follow {
             EntityTypeToFollow::AbstractBoat => level.is_boat(entity),
-            EntityTypeToFollow::AbstractNautilus => false,
+            EntityTypeToFollow::AbstractNautilus => level.is_abstract_nautilus(entity),
         })
     }
 

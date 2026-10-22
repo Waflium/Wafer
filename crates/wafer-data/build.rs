@@ -93,6 +93,7 @@ fn main() -> anyhow::Result<()> {
     embed_json(&mut out, &data, "cat_variant", "CAT_VARIANTS")?;
     embed_json(&mut out, &data, "cat_sound_variant", "CAT_SOUND_VARIANTS")?;
     embed_json(&mut out, &data, "frog_variant", "FROG_VARIANTS")?;
+    embed_json(&mut out, &data, "zombie_nautilus_variant", "ZOMBIE_NAUTILUS_VARIANTS")?;
     embed_json(&mut out, &data, "painting_variant", "PAINTING_VARIANTS")?;
     embed_json(&mut out, &data, "worldgen/biome", "BIOMES")?;
     embed_json(&mut out, &data, "worldgen/density_function", "DENSITY_FUNCTIONS")?;

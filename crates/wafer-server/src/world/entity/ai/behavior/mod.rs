@@ -10,6 +10,7 @@ pub mod behavior_control;
 pub mod behavior_utils;
 pub mod block_pos_tracker;
 pub mod celebrate_villagers_survived_raid;
+pub mod charge_attack;
 pub mod count_down_cooldown_ticks;
 pub mod croak;
 pub mod declarative;

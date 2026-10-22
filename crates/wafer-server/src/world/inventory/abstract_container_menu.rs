@@ -61,13 +61,14 @@ pub enum MenuKind {
     Loom,
     CartographyTable,
     HorseInventory { mount: EntityId, inventory_columns: usize, inventory_version: u32 },
+    NautilusInventory { mount: EntityId, inventory_version: u32 },
     Merchant,
 }
 
 impl MenuKind {
     pub fn menu_type(self) -> &'static str {
         match self {
-            MenuKind::Inventory | MenuKind::HorseInventory { .. } => "",
+            MenuKind::Inventory | MenuKind::HorseInventory { .. } | MenuKind::NautilusInventory { .. } => "",
             MenuKind::Crafting => "minecraft:crafting",
             MenuKind::Chest { rows: 3 } => "minecraft:generic_9x3",
             MenuKind::Chest { rows: 6 } => "minecraft:generic_9x6",
@@ -362,6 +363,7 @@ impl AbstractContainerMenu {
                 menu.add_slot(Slot::new(SlotContainer::Menu(cartography_table_menu::RESULT_CONTAINER), 2, SlotKind::CartographyResult));
             }
             MenuKind::HorseInventory { mount, inventory_columns, .. } => horse_inventory_menu::add_mount_slots(&mut menu, mount, inventory_columns),
+            MenuKind::NautilusInventory { mount, .. } => super::nautilus_inventory_menu::add_mount_slots(&mut menu, mount),
             MenuKind::Merchant => {
                 menu.containers.push(MenuContainer::Simple(SimpleContainer::new(SimpleContainerKind::Plain, 3)));
                 menu.add_slot(Slot::new(SlotContainer::Menu(super::merchant_container::CONTAINER), 0, SlotKind::Normal));
@@ -930,6 +932,10 @@ impl ServerLevel {
                 let mount_container_size = super::abstract_mount_inventory_menu::get_inventory_size(inventory_columns);
                 return self.abstract_mount_inventory_menu_quick_move_stack(menu, player, index, stack, clicked, mount_container_size);
             }
+            MenuKind::NautilusInventory { mount, .. } => {
+                let mount_container_size = self.mob(mount).and_then(|mob| mob.abstract_nautilus()).map_or(0, |nautilus| nautilus.inventory.items.len());
+                return self.abstract_mount_inventory_menu_quick_move_stack(menu, player, index, stack, clicked, mount_container_size);
+            }
             MenuKind::Inventory => {
                 let equipment_slot = self.get_equipment_slot_for_item(player, &clicked);
                 let armor_slot = humanoid_armor_index(equipment_slot).map(|armor_index| 8 - armor_index);
@@ -1283,7 +1289,7 @@ impl ServerLevel {
             MenuKind::Grindstone => self.still_valid_access(menu.access, player, wafer_data::blocks::GRINDSTONE),
             MenuKind::Loom => self.still_valid_access(menu.access, player, wafer_data::blocks::LOOM),
             MenuKind::CartographyTable => self.still_valid_access(menu.access, player, wafer_data::blocks::CARTOGRAPHY_TABLE),
-            MenuKind::HorseInventory { mount, inventory_version, .. } => self.abstract_mount_inventory_menu_still_valid(menu, player, mount, inventory_version),
+            MenuKind::HorseInventory { mount, inventory_version, .. } | MenuKind::NautilusInventory { mount, inventory_version } => self.abstract_mount_inventory_menu_still_valid(menu, player, mount, inventory_version),
             MenuKind::Merchant => self.merchant_menu_still_valid(menu, player),
             MenuKind::Anvil => menu.access.is_none_or(|pos| {
                 crate::world::level::BlockGetter::block_state(self, pos).block().is(&wafer_data::block_tags::ANVIL) && self.is_within_block_interaction_range(player, pos, 4.0)

@@ -10,6 +10,7 @@ pub mod crafting_menu;
 pub mod enchantment_menu;
 pub mod grindstone_menu;
 pub mod horse_inventory_menu;
+pub mod nautilus_inventory_menu;
 pub mod inventory_menu;
 pub mod item_combiner_menu;
 pub mod lectern_menu;

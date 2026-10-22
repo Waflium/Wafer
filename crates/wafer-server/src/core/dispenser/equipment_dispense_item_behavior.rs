@@ -23,6 +23,7 @@ fn can_dispenser_equip_into_slot(level: &ServerLevel, id: EntityId, slot: Equipm
         Some(mob) if matches!(mob.kind, MobKind::Pig(_) | MobKind::Strider(_)) => slot == EquipmentSlot::Saddle || mob.can_pick_up_loot,
         Some(mob) if matches!(mob.kind, MobKind::Fox(_) | MobKind::Dolphin(_)) => slot == EquipmentSlot::Mainhand && mob.can_pick_up_loot,
         Some(mob) if matches!(mob.kind, MobKind::Panda(_)) => crate::world::entity::animal::panda::panda::Panda::can_dispenser_equip_into_slot(mob, slot),
+        Some(mob) if mob.abstract_nautilus().is_some() => slot == EquipmentSlot::Body || slot == EquipmentSlot::Saddle || mob.can_pick_up_loot,
         Some(mob) if level.is_abstract_horse(id) => (slot == EquipmentSlot::Body || slot == EquipmentSlot::Saddle) && level.is_tamed(id) || mob.can_pick_up_loot,
         Some(mob) => mob.can_pick_up_loot,
         None => true,

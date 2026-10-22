@@ -1027,7 +1027,7 @@ impl ServerLevel {
         let inventory_slot = slot - INVENTORY_SLOT_OFFSET;
         let size = abstract_horse(self.mob(id).expect("an abstract horse")).inventory.items.len() as i32;
         if inventory_slot >= 0 && inventory_slot < size {
-            return Some(crate::world::entity::slot_access::LevelSlot::Container(crate::world::container::ContainerRef::HorseInventory(id), inventory_slot as usize));
+            return Some(crate::world::entity::slot_access::LevelSlot::Container(crate::world::container::ContainerRef::MountInventory(id), inventory_slot as usize));
         }
         None
     }
@@ -1093,6 +1093,9 @@ impl ServerLevel {
     }
 
     pub fn has_inventory_changed(&self, id: EntityId, inventory_version: u32) -> bool {
+        if let Some(nautilus) = self.mob(id).and_then(Mob::abstract_nautilus) {
+            return nautilus.inventory_version != inventory_version;
+        }
         self.mob(id).and_then(Mob::abstract_horse).is_none_or(|horse| horse.inventory_version != inventory_version)
     }
 

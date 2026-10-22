@@ -26,6 +26,7 @@ pub mod chicken;
 pub mod cow;
 pub mod frog;
 pub mod goat;
+pub mod nautilus;
 pub mod equine;
 #[cfg(test)]
 mod farm_tests;
@@ -160,6 +161,7 @@ impl ServerLevel {
             MobKind::ZombieHorse(_) => equine::zombie_horse::is_food(item_stack),
             MobKind::Llama(_) | MobKind::TraderLlama(_) => equine::llama::is_food(item_stack),
             MobKind::Camel(_) | MobKind::CamelHusk(_) => camel::camel::is_food(self.mob(id).expect("a camel"), item_stack),
+            MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => self.abstract_nautilus_is_food(id, item_stack),
             MobKind::WanderingTrader(_) => false,
             MobKind::Axolotl(_) => axolotl::axolotl::is_food(item_stack),
             MobKind::Frog(_) => frog::frog::is_food(item_stack),
@@ -188,6 +190,10 @@ impl ServerLevel {
             self.frog_play_eating_sound(id);
         } else if let MobKind::Fox(_) = mob.kind {
             self.fox_play_eating_sound(id);
+        } else if let MobKind::Nautilus(_) = mob.kind {
+            self.nautilus_play_eating_sound(id);
+        } else if let MobKind::ZombieNautilus(_) = mob.kind {
+            self.zombie_nautilus_play_eating_sound(id);
         }
     }
 
@@ -211,9 +217,10 @@ impl ServerLevel {
         self.ageable_mob_mob_interact(id, player, hand)
     }
 
-    fn animal_use_player_item(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, item_stack: &mut ItemStack) {
+    pub fn animal_use_player_item(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, item_stack: &mut ItemStack) {
         match self.mob(id).expect("an animal").kind {
             MobKind::Axolotl(_) => self.axolotl_use_player_item(player, hand, item_stack),
+            MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => self.abstract_nautilus_use_player_item(player, hand, item_stack),
             _ => self.use_player_item(player, hand, item_stack),
         }
     }

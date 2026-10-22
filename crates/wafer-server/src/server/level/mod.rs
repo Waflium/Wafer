@@ -1842,6 +1842,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Cat(_)) => self.cat_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Camel(_) | crate::world::entity::mob::MobKind::CamelHusk(_)) => self.camel_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_tick(id),
+            Some(LevelEntity::Mob(mob)) if mob.abstract_nautilus().is_some() => self.abstract_nautilus_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Villager(_)) => self.villager_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Fox(_)) => self.fox_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Breeze(_)) => self.breeze_tick(id),
