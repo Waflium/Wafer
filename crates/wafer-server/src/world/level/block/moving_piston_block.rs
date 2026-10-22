@@ -1,13 +1,48 @@
+use wafer_core::BlockPos;
+use wafer_data::properties::{EXTENDED, FACING};
 use wafer_data::BlockState;
-use wafer_data::properties::FACING;
 
-use super::BlockBehaviour;
+use super::{BlockBehaviour, BlockHitResult};
 use super::mirror::Mirror;
 use super::rotation::Rotation;
+use crate::server::level::ServerLevel;
+use crate::world::InteractionResult;
+use crate::world::entity::EntityId;
+use crate::world::item::ItemStack;
+use crate::world::level::BlockGetter;
+use crate::world::level::storage::loot::loot_params::LootParams;
 
 pub struct MovingPistonBlock;
 
 impl BlockBehaviour for MovingPistonBlock {
+    fn destroy(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState) {
+        let relative = pos.relative(state.get(FACING).opposite());
+        let block_state = level.block_state(relative);
+        if block_state.block().is_instance_of("PistonBaseBlock") && block_state.get(EXTENDED) {
+            level.remove_block(relative, false);
+        }
+    }
+
+    fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
+        if level.get_block_entity(pos).is_none() {
+            level.remove_block(pos, false);
+            InteractionResult::CONSUME
+        } else {
+            InteractionResult::Pass
+        }
+    }
+
+    fn get_drops(&self, _state: BlockState, params: LootParams) -> Vec<ItemStack> {
+        let Some(origin) = params.origin else { return Vec::new() };
+        let pos = BlockPos::containing(origin.x, origin.y, origin.z);
+        let Some(moved_state) = params.level.piston_moving_block_entity(pos).map(|entity| entity.get_moved_state()) else { return Vec::new() };
+        super::of(moved_state).get_drops(moved_state, params)
+    }
+
+    fn get_clone_item_stack(&self, _level: &ServerLevel, _pos: BlockPos, _state: BlockState, _include_data: bool) -> ItemStack {
+        ItemStack::empty()
+    }
+
     fn rotate(&self, state: BlockState, rotation: Rotation) -> BlockState {
         state.set(FACING, rotation.rotate(state.get(FACING)))
     }

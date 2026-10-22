@@ -23,6 +23,7 @@ pub mod hopper_block_entity;
 pub mod jigsaw_block_entity;
 pub mod jukebox_block_entity;
 pub mod lectern_block_entity;
+pub mod piston_moving_block_entity;
 #[cfg(test)]
 mod oracle_data;
 #[cfg(test)]
@@ -77,6 +78,7 @@ pub enum BlockEntityTicker {
     Crafter,
     EndGateway,
     Spawner,
+    Piston,
 }
 
 enum UpdateTag {
@@ -117,6 +119,7 @@ pub enum BlockEntityKind {
     BrewingStand(brewing_stand_block_entity::BrewingStandBlockEntity),
     EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity),
     Jigsaw(jigsaw_block_entity::JigsawBlockEntity),
+    PistonMoving(piston_moving_block_entity::PistonMovingBlockEntity),
     Other(Vec<(String, Nbt)>),
 }
 
@@ -171,12 +174,16 @@ impl BlockEntity {
             types::BREWING_STAND => BlockEntityKind::BrewingStand(brewing_stand_block_entity::BrewingStandBlockEntity::default()),
             types::END_GATEWAY => BlockEntityKind::EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity::default()),
             types::JIGSAW => BlockEntityKind::Jigsaw(jigsaw_block_entity::JigsawBlockEntity::default()),
+            types::PISTON => BlockEntityKind::PistonMoving(piston_moving_block_entity::PistonMovingBlockEntity::default()),
             _ => BlockEntityKind::Other(Vec::new()),
         };
         Some(BlockEntity { ty, pos, block_state: state, remove: false, components: DataComponentMap::EMPTY, id: NEXT_ID.fetch_add(1, Ordering::Relaxed), kind })
     }
 
     pub fn new_for(pos: BlockPos, state: BlockState) -> Option<BlockEntity> {
+        if state.is_block(wafer_data::blocks::MOVING_PISTON) {
+            return None;
+        }
         BlockEntity::new(state.block().block_entity_type()?, pos, state)
     }
 
@@ -281,6 +288,7 @@ impl BlockEntity {
             BlockEntityKind::BrewingStand(brewing_stand) => brewing_stand.load_additional(input),
             BlockEntityKind::EndGateway(gateway) => gateway.load_additional(input),
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.load_additional(input, state),
+            BlockEntityKind::PistonMoving(piston) => piston.load_additional(input),
             BlockEntityKind::Other(data) => {
                 let _ = state;
                 *data = match input {
@@ -323,6 +331,7 @@ impl BlockEntity {
             BlockEntityKind::BrewingStand(brewing_stand) => brewing_stand.save_additional(output),
             BlockEntityKind::EndGateway(gateway) => gateway.save_additional(output),
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.save_additional(output),
+            BlockEntityKind::PistonMoving(piston) => piston.save_additional(output),
             BlockEntityKind::Other(data) => output.extend(data.iter().cloned()),
         }
     }
@@ -400,7 +409,9 @@ impl BlockEntity {
     }
 
     pub fn has_update_packet(&self) -> bool {
-        matches!(self.kind, BlockEntityKind::Spawner(_) | BlockEntityKind::Brushable(_) | BlockEntityKind::Campfire(_) | BlockEntityKind::Shelf(_) | BlockEntityKind::Vault(_)) || !matches!(self.update_tag_kind(), UpdateTag::None)
+        !matches!(self.kind, BlockEntityKind::PistonMoving(_))
+            && (matches!(self.kind, BlockEntityKind::Spawner(_) | BlockEntityKind::Brushable(_) | BlockEntityKind::Campfire(_) | BlockEntityKind::Shelf(_) | BlockEntityKind::Vault(_))
+                || !matches!(self.update_tag_kind(), UpdateTag::None))
     }
 
     fn update_tag_kind(&self) -> UpdateTag {
@@ -416,7 +427,8 @@ impl BlockEntity {
             | types::STRUCTURE_BLOCK
             | types::TEST_BLOCK
             | types::TEST_INSTANCE_BLOCK
-            | types::END_GATEWAY => UpdateTag::CustomOnly,
+            | types::END_GATEWAY
+            | types::PISTON => UpdateTag::CustomOnly,
             types::BANNER => UpdateTag::WithoutMetadata,
             _ => UpdateTag::None,
         }
@@ -614,6 +626,7 @@ impl BlockEntity {
             types::CRAFTER if block.is_instance_of("CrafterBlock") => Some(BlockEntityTicker::Crafter),
             types::END_GATEWAY if block.is_instance_of("EndGatewayBlock") => Some(BlockEntityTicker::EndGateway),
             types::MOB_SPAWNER if block.is_instance_of("SpawnerBlock") => Some(BlockEntityTicker::Spawner),
+            types::PISTON if block.is_instance_of("MovingPistonBlock") => Some(BlockEntityTicker::Piston),
             types::CAMPFIRE if block.is_instance_of("CampfireBlock") => {
                 Some(if state.get(wafer_data::properties::LIT) { BlockEntityTicker::CampfireCook } else { BlockEntityTicker::CampfireCooldown })
             }

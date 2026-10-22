@@ -249,7 +249,11 @@ mod jigsaw_block;
 mod lectern_block;
 mod moving_piston_block;
 pub mod nether_portal_block;
-mod piston_base_block;
+pub mod piston_base_block;
+pub mod piston_math;
+pub mod piston_structure_resolver;
+#[cfg(test)]
+mod piston_tests;
 pub mod portal;
 pub mod state;
 mod pointed_dripstone_block;
@@ -862,7 +866,7 @@ fn for_class(class: &str, block: Block) -> Option<Box<dyn BlockBehaviour>> {
         "LecternBlock" => Box::new(lectern_block::LecternBlock),
         "MovingPistonBlock" => Box::new(moving_piston_block::MovingPistonBlock),
         "NetherPortalBlock" => Box::new(nether_portal_block::NetherPortalBlock),
-        "PistonBaseBlock" => Box::new(piston_base_block::PistonBaseBlock),
+        "PistonBaseBlock" => Box::new(piston_base_block::PistonBaseBlock { is_sticky: block == wafer_data::blocks::STICKY_PISTON }),
         "ShelfBlock" => Box::new(shelf_block::ShelfBlock),
         "PointedDripstoneBlock" => Box::new(pointed_dripstone_block::PointedDripstoneBlock::new(block)),
         "SulfurSpikeBlock" => Box::new(sulfur_spike_block::SulfurSpikeBlock::new(block)),

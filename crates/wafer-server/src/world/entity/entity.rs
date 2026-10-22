@@ -158,6 +158,8 @@ pub struct Entity {
     pub last_known_position: Option<Vec3>,
     pub in_block_state: Option<BlockState>,
     pub movement_this_tick: VecDeque<Movement>,
+    piston_deltas: [f64; 3],
+    piston_deltas_game_time: i64,
     pub final_movements_this_tick: Vec<Movement>,
     pub inside_effects: InsideBlockEffects,
     pub passengers: Vec<EntityId>,
@@ -227,6 +229,8 @@ impl Entity {
             last_known_position: None,
             in_block_state: None,
             movement_this_tick: VecDeque::new(),
+            piston_deltas: [0.0; 3],
+            piston_deltas_game_time: 0,
             final_movements_this_tick: Vec::new(),
             inside_effects: InsideBlockEffects::default(),
             passengers: Vec::new(),
@@ -677,6 +681,36 @@ impl Entity {
             self.movement_this_tick.push_front(Movement { from: first.from, to: second.to, axis_dependent_original_movement: None });
         }
         self.movement_this_tick.push_back(movement);
+    }
+
+    pub fn limit_piston_movement(&mut self, vec: Vec3, current_game_time: i64) -> Vec3 {
+        if vec.length_sqr() <= 1.0e-7 {
+            return vec;
+        }
+        if current_game_time != self.piston_deltas_game_time {
+            self.piston_deltas = [0.0; 3];
+            self.piston_deltas_game_time = current_game_time;
+        }
+        if vec.x != 0.0 {
+            let xa = self.apply_piston_movement_restriction(Axis::X, vec.x);
+            if xa.abs() <= 1.0e-5f32 as f64 { Vec3::ZERO } else { Vec3::new(xa, 0.0, 0.0) }
+        } else if vec.y != 0.0 {
+            let ya = self.apply_piston_movement_restriction(Axis::Y, vec.y);
+            if ya.abs() <= 1.0e-5f32 as f64 { Vec3::ZERO } else { Vec3::new(0.0, ya, 0.0) }
+        } else if vec.z != 0.0 {
+            let za = self.apply_piston_movement_restriction(Axis::Z, vec.z);
+            if za.abs() <= 1.0e-5f32 as f64 { Vec3::ZERO } else { Vec3::new(0.0, 0.0, za) }
+        } else {
+            Vec3::ZERO
+        }
+    }
+
+    fn apply_piston_movement_restriction(&mut self, axis: Axis, amount: f64) -> f64 {
+        let ordinal = axis as usize;
+        let min = mth::clamp(amount + self.piston_deltas[ordinal], -0.51, 0.51);
+        let amount = min - self.piston_deltas[ordinal];
+        self.piston_deltas[ordinal] = min;
+        amount
     }
 
     pub fn remove_latest_movement_recording(&mut self) {
@@ -1212,6 +1246,14 @@ impl ServerLevel {
             return;
         }
         let mut delta = delta;
+        if mover == MoverType::Piston {
+            let game_time = self.game_time;
+            delta = self.entity_mut(id).limit_piston_movement(delta, game_time);
+            if delta == Vec3::ZERO {
+                return;
+            }
+        }
+        let e = self.entity_mut(id);
         if e.stuck_speed_multiplier.length_sqr() > 1.0e-7 {
             if mover != MoverType::Piston {
                 let m = e.stuck_speed_multiplier;
@@ -3766,6 +3808,13 @@ impl ServerLevel {
             return;
         }
         self.entity_mut(id).push(xa, ya, za);
+    }
+
+    pub fn get_piston_push_reaction(&self, id: EntityId) -> wafer_data::PushReaction {
+        match self.entities.get(&id) {
+            Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_)) => wafer_data::PushReaction::IgnoreEntity,
+            _ => wafer_data::PushReaction::PushPull,
+        }
     }
 
     pub fn is_ignoring_block_triggers(&self, id: EntityId) -> bool {

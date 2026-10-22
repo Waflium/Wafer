@@ -72,6 +72,7 @@ impl ServerLevel {
             BlockEntityKind::Furnace(_) => (true, true),
             BlockEntityKind::Jukebox(_) => return self.jukebox_pop_out_the_item(pos),
             BlockEntityKind::Campfire(_) => return self.campfire_pre_remove_side_effects(pos),
+            BlockEntityKind::PistonMoving(_) => return self.piston_moving_final_tick(pos),
             BlockEntityKind::ChiseledBookShelf(_) => {
                 return crate::world::containers::drop_contents(self, pos, ContainerRef::ChiseledBookShelf(pos));
             }
@@ -187,6 +188,7 @@ impl ServerLevel {
             BlockEntityTicker::Sign => self.sign_tick(pos),
             BlockEntityTicker::EndGateway => self.end_gateway_portal_tick(pos, state),
             BlockEntityTicker::Spawner => crate::world::level::block::entity::spawner_block_entity::SpawnerBlockEntity::server_tick(self, pos),
+            BlockEntityTicker::Piston => self.piston_moving_tick(pos),
         }
     }
 

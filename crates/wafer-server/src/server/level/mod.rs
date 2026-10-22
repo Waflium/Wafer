@@ -201,6 +201,7 @@ pub struct ServerLevel {
     pub overworld_clock_time: i64,
     pub simulation_distance: i32,
     empty_time: i32,
+    pub handling_tick: bool,
     pub tick_rate_manager: Rc<TickRateManager>,
     block_events: Vec<(BlockPos, Block, i32, i32)>,
     pub game_time: i64,
@@ -287,6 +288,7 @@ impl ServerLevel {
             overworld_clock_time: 0,
             simulation_distance,
             empty_time: 0,
+            handling_tick: false,
             tick_rate_manager: Rc::default(),
             block_events: Vec::new(),
             game_time: 0,
@@ -1259,6 +1261,7 @@ impl ServerLevel {
     }
 
     pub fn tick_until_sleep(&mut self) -> bool {
+        self.handling_tick = true;
         self.environment_attributes.invalidate_tick_cache();
         let runs = self.tick_rate_manager.runs_normally();
         if runs {
@@ -1367,6 +1370,7 @@ impl ServerLevel {
         if runs {
             self.run_block_events();
         }
+        self.handling_tick = false;
         if self.chunks.has_active_tickets() {
             self.empty_time = 0;
         }

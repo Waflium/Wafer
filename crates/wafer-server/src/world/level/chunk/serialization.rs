@@ -97,7 +97,8 @@ pub fn state_to_nbt(state: BlockState) -> Nbt {
     if block.default_state() == state {
         return Nbt::String(block.name().into());
     }
-    let properties = state.properties().map(|(name, value)| (name.to_string(), Nbt::String(value.into()))).collect();
+    let mut properties: Vec<(String, Nbt)> = state.properties().map(|(name, value)| (name.to_string(), Nbt::String(value.into()))).collect();
+    properties.reverse();
     Nbt::Compound(vec![("id".into(), Nbt::String(block.name().into())), ("properties".into(), Nbt::Compound(properties))])
 }
 

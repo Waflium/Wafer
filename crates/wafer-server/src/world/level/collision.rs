@@ -145,6 +145,24 @@ pub fn for_each_block_collision<'c>(
         if face_type == 1 && !state.has_large_collision_shape() || face_type == 2 && !state.is_block(blocks::MOVING_PISTON) {
             continue;
         }
+        if state.is_block(blocks::MOVING_PISTON) {
+            let shapes = match chunk.block_entities.map.get(&pos).map(|entity| &entity.kind) {
+                Some(crate::world::level::block::entity::BlockEntityKind::PistonMoving(piston)) => piston.collision_shapes(pos),
+                _ => [None, None],
+            };
+            for (shape, shape_offset) in shapes.into_iter().flatten() {
+                if shape.is_empty() {
+                    continue;
+                }
+                let collider = Collider { shape, shape_offset, offset: [x as f64, y as f64, z as f64] };
+                let moved = collider.moved();
+                let entity_shape = entity_shape.get_or_insert_with(|| VoxelShape::from_boxes(&[*box_]));
+                if join_is_not_empty(&moved, entity_shape, BooleanOp::And) && !visit(pos, collider) {
+                    return false;
+                }
+            }
+            continue;
+        }
         let liquid_block = always_collide_with_fluid && (state.is_block(blocks::WATER) || state.is_block(blocks::LAVA));
         let (shape, shape_offset) = if liquid_block { (&*FULL_BLOCK, [0.0; 3]) } else { context.get_collision_shape(state, pos) };
         let collider = Collider { shape, shape_offset, offset: [x as f64, y as f64, z as f64] };
