@@ -428,6 +428,7 @@ impl ServerLevel {
             "minecraft:cave_spider" => LevelEntity::Mob(Box::new(super::monster::spider::cave_spider::CaveSpider::create())),
             "minecraft:skeleton" => LevelEntity::Mob(Box::new(super::monster::skeleton::skeleton::Skeleton::create())),
             "minecraft:stray" => LevelEntity::Mob(Box::new(super::monster::skeleton::stray::Stray::create())),
+            "minecraft:parched" => LevelEntity::Mob(Box::new(super::monster::skeleton::parched::Parched::create())),
             "minecraft:bogged" => LevelEntity::Mob(Box::new(super::monster::skeleton::bogged::Bogged::create())),
             "minecraft:drowned" => LevelEntity::Mob(Box::new(super::monster::zombie::drowned::Drowned::create())),
             "minecraft:silverfish" => LevelEntity::Mob(Box::new(super::monster::silverfish::Silverfish::create())),

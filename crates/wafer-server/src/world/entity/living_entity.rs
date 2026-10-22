@@ -1547,7 +1547,7 @@ impl ServerLevel {
                 | MobKind::Spider(_)
                 | MobKind::CaveSpider(_)
                 | MobKind::Skeleton(_)
-                | MobKind::Stray(_)
+                | MobKind::Stray(_) | MobKind::Parched(_)
                 | MobKind::WitherSkeleton(_)
                 | MobKind::Bogged(_)
                 | MobKind::Silverfish(_)
@@ -2090,7 +2090,7 @@ impl ServerLevel {
                 | MobKind::Spider(_)
                 | MobKind::CaveSpider(_)
                 | MobKind::Skeleton(_)
-                | MobKind::Stray(_)
+                | MobKind::Stray(_) | MobKind::Parched(_)
                 | MobKind::WitherSkeleton(_)
                 | MobKind::Bogged(_)
                 | MobKind::Silverfish(_)
@@ -2920,6 +2920,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Spider(_) | MobKind::CaveSpider(_)) => self.spider_can_be_affected(id, effect),
             Some(MobKind::WitherSkeleton(_)) => self.wither_skeleton_can_be_affected(id, effect),
+            Some(MobKind::Parched(_)) => self.parched_can_be_affected(id, effect),
             _ => self.living_entity_can_be_affected(id, effect),
         }
     }

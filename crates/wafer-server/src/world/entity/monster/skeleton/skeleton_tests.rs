@@ -4,6 +4,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::bogged::{self, Bogged};
 use super::skeleton::Skeleton;
+use super::parched::Parched;
 use super::stray::Stray;
 use crate::server::level::{ServerLevel, testing};
 use crate::world::InteractionHand;
@@ -168,7 +169,7 @@ fn skeleton_arrows_hurt_players() {
 
 #[test]
 fn strays_and_bogged_tip_their_arrows() {
-    for (mob, effect, duration) in [(Stray::create(), mob_effects::SLOWNESS, 600), (Bogged::create(), mob_effects::POISON, 100)] {
+    for (mob, effect, duration) in [(Stray::create(), mob_effects::SLOWNESS, 600), (Bogged::create(), mob_effects::POISON, 100), (Parched::create(), mob_effects::WEAKNESS, 600)] {
         let mut level = testing::level();
         let (_, _, arrows, _) = shoot(&mut level, mob);
         let contents = level.projectile(arrows[0]).abstract_arrow().unwrap().pickup_item_stack.get(dc::POTION_CONTENTS).cloned().unwrap();
