@@ -4,7 +4,6 @@ use super::goal::reduced_tick_delay;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::util::default_random_pos;
-use crate::world::entity::animal::equine::abstract_horse;
 use crate::world::entity::entity_event;
 
 pub struct RunAroundLikeCrazyGoal {

@@ -56,10 +56,6 @@ pub fn is_empty(contents: &Nbt) -> bool {
     values::templates(contents).is_empty()
 }
 
-pub fn weight_safe(contents: &Nbt) -> Fraction {
-    weight(contents).unwrap_or(Fraction::ONE)
-}
-
 fn get_stacked_weight(weight: Fraction, count: i32) -> Fraction {
     Fraction::get_fraction(count, 1).and_then(|count| weight.multiply_by(count)).expect("Fraction overflow")
 }

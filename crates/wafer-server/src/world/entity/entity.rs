@@ -2820,7 +2820,7 @@ impl ServerLevel {
                 }
             }
         }
-        let mut held_item = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
+        let held_item = self.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
         if held_item.is(wafer_data::items::SHEARS) && self.shear_off_all_leash_connections(id, Some(player)) {
             self.hurt_and_break(player, hand.as_equipment_slot(), 1);
             return InteractionResult::SUCCESS;

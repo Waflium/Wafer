@@ -5,7 +5,6 @@ use wafer_data::{Fluid, Item, fluid_tags, items, registry, registry_id};
 use super::ItemStack;
 use super::item_utils::{self, has_infinite_materials};
 use super::mob_bucket_item::MobBucketItem;
-use crate::server::level::game_mode::GameType;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::attribute::environment_attributes;
 use crate::world::entity::EntityId;
