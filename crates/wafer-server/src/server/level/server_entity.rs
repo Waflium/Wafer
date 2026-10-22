@@ -256,7 +256,7 @@ impl ServerEntity {
         out
     }
 
-    pub fn send_changes(&mut self, entity: &mut Entity, attributes: Option<&mut AttributeMap>, current: Vec3) -> Vec<(Audience, Vec<u8>)> {
+    pub fn send_changes(&mut self, entity: &mut Entity, attributes: Option<&mut AttributeMap>, current: Vec3, projectile_power: Option<f64>) -> Vec<(Audience, Vec<u8>)> {
         let mut out = Vec::new();
         if entity.passengers != self.last_passengers {
             out.push((Audience::Tracking, set_passengers_packet(entity.id, &entity.passengers)));
@@ -304,7 +304,21 @@ impl ServerEntity {
                     let diff = movement.distance_to_sqr(self.last_sent_movement);
                     if diff > 1.0e-7 || diff > 0.0 && movement.length_sqr() == 0.0 {
                         self.last_sent_movement = movement;
-                        out.push((Audience::Tracking, set_entity_motion(entity.id, movement)));
+                        match projectile_power {
+                            Some(acceleration_power) => {
+                                out.push((Audience::Tracking, encode(clientbound::BUNDLE_DELIMITER, |_| {})));
+                                out.push((Audience::Tracking, set_entity_motion(entity.id, movement)));
+                                out.push((
+                                    Audience::Tracking,
+                                    encode(clientbound::PROJECTILE_POWER, |p| {
+                                        p.varint(entity.id);
+                                        p.f64(acceleration_power);
+                                    }),
+                                ));
+                                out.push((Audience::Tracking, encode(clientbound::BUNDLE_DELIMITER, |_| {})));
+                            }
+                            None => out.push((Audience::Tracking, set_entity_motion(entity.id, movement))),
+                        }
                     }
                 }
                 match packet {

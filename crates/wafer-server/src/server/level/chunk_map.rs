@@ -604,6 +604,7 @@ impl ServerLevel {
             }
         }
         let current = self.tracking_position(id);
+        let projectile_power = self.as_projectile(id).and_then(|projectile| projectile.abstract_hurting_projectile()).map(|projectile| projectile.acceleration_power);
         let Some(tracked) = self.chunk_map.tracked.get_mut(id) else { return };
         let (entity, attributes) = match self.players.get_mut(&id) {
             Some(p) => (&mut p.entity, Some(&mut p.living.attributes)),
@@ -615,7 +616,7 @@ impl ServerLevel {
                 None => return,
             },
         };
-        let packets = tracked.server_entity.send_changes(entity, attributes, current);
+        let packets = tracked.server_entity.send_changes(entity, attributes, current, projectile_power);
         for (audience, packet) in packets {
             for viewer in &tracked.seen_by {
                 if let Some(p) = self.players.get(viewer) {
