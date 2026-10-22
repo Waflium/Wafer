@@ -228,10 +228,14 @@ impl WorldBorder {
     }
 
     pub fn is_inside_close_to_border(&self, source: &Entity, bounding_box: &AABB) -> bool {
+        self.is_inside_close_to_border_at(source.x(), source.z(), bounding_box)
+    }
+
+    pub fn is_inside_close_to_border_at(&self, x: f64, z: f64, bounding_box: &AABB) -> bool {
         let x_size = bounding_box.max_x - bounding_box.min_x;
         let z_size = bounding_box.max_z - bounding_box.min_z;
         let bb_max = mth::jmax(mth::jmax(x_size.abs(), z_size.abs()), 1.0);
-        self.get_distance_to_border(source.x(), source.z()) < bb_max * 2.0 && self.is_within_bounds_margin(source.x(), source.z(), bb_max)
+        self.get_distance_to_border(x, z) < bb_max * 2.0 && self.is_within_bounds_margin(x, z, bb_max)
     }
 
     pub fn get_min_x(&self) -> f64 {

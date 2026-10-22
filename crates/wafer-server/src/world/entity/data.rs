@@ -82,6 +82,8 @@ pub enum DataValue {
     VillagerData(super::npc::villager::villager_data::VillagerData),
     Vector3(wafer_core::joml::Vector3f),
     Quaternion(wafer_core::joml::Quaternionf),
+    Direction(wafer_core::Direction),
+    PaintingVariant(i32),
 }
 
 impl DataValue {
@@ -121,6 +123,8 @@ impl DataValue {
             DataValue::VillagerData(_) => 18,
             DataValue::Vector3(_) => 39,
             DataValue::Quaternion(_) => 40,
+            DataValue::Direction(_) => 12,
+            DataValue::PaintingVariant(_) => 34,
         }
     }
 
@@ -179,6 +183,8 @@ impl DataValue {
                 w.f32(v.y);
                 w.f32(v.z);
             }
+            DataValue::Direction(direction) => w.varint(direction.ordinal() as i32),
+            DataValue::PaintingVariant(id) => w.varint(*id + 1),
             DataValue::Quaternion(q) => {
                 w.f32(q.x);
                 w.f32(q.y);

@@ -159,6 +159,7 @@ impl ServerLevel {
         let status = section.status();
         self.entity_manager.callbacks.insert(id, key);
         self.entities.insert(id, entity);
+        self.item_frame_flush_pending_sounds(id);
         if status.is_accessible() {
             self.start_tracking(id);
         }

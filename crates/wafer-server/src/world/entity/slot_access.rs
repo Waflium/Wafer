@@ -25,6 +25,7 @@ pub enum LevelSlot {
     PillagerInventory(EntityId, usize),
     Item(EntityId),
     ItemDisplay(EntityId),
+    ItemFrame(EntityId),
     Container(ContainerRef, usize),
     ChestedHorseChest(EntityId),
     Detached(ItemStack),
@@ -106,6 +107,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Item(_)) if slot == 0 => Some(LevelSlot::Item(id)),
             Some(LevelEntity::Display(display)) if display.is_item_display() && slot == 0 => Some(LevelSlot::ItemDisplay(id)),
+            Some(LevelEntity::ItemFrame(_)) if slot == 0 => Some(LevelSlot::ItemFrame(id)),
             Some(LevelEntity::Boat(boat)) if boat.container.is_some() && (0..abstract_chest_boat::CONTAINER_SIZE as i32).contains(&slot) => {
                 Some(LevelSlot::Container(ContainerRef::ChestVehicle(id), slot as usize))
             }
@@ -141,6 +143,10 @@ impl ServerLevel {
             },
             LevelSlot::ItemDisplay(id) => match self.entities.get(&id) {
                 Some(LevelEntity::Display(display)) => display.get_item_stack().cloned().unwrap_or_else(ItemStack::empty),
+                _ => ItemStack::empty(),
+            },
+            LevelSlot::ItemFrame(id) => match self.entities.get(&id) {
+                Some(LevelEntity::ItemFrame(frame)) => super::decoration::item_frame::get_item(&frame.entity).cloned().unwrap_or_else(ItemStack::empty),
                 _ => ItemStack::empty(),
             },
             LevelSlot::Container(..) => ItemStack::empty(),
@@ -186,6 +192,11 @@ impl ServerLevel {
                     display.set_item_stack(item_stack);
                 }
             }
+            LevelSlot::ItemFrame(id) => {
+                if self.entities.contains_key(&id) {
+                    self.item_frame_set_item(id, item_stack, true);
+                }
+            }
             LevelSlot::Container(container, index) => self.set_item(container, index, item_stack),
             LevelSlot::ChestedHorseChest(id) => return self.chested_horse_chest_slot_set(id, &item_stack),
             LevelSlot::Detached(_) => {}
@@ -220,6 +231,11 @@ impl ServerLevel {
             LevelSlot::ItemDisplay(id) => {
                 if let Some(LevelEntity::Display(display)) = self.entities.get_mut(&id) {
                     *display.item_stack_mut() = super::data::DataValue::ItemStack(Some(item_stack));
+                }
+            }
+            LevelSlot::ItemFrame(id) => {
+                if let Some(LevelEntity::ItemFrame(frame)) = self.entities.get_mut(&id) {
+                    *frame.item_mut() = super::data::DataValue::ItemStack(Some(item_stack));
                 }
             }
             LevelSlot::Container(container, index) => self.put_item(container, index, item_stack),

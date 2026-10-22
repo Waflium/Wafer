@@ -88,7 +88,7 @@ impl ServerLevel {
         out
     }
 
-    fn for_each_block_collision(&self, box_: &AABB, context: &CollisionContext, only_suffocating_blocks: bool, always_collide_with_fluid: bool, visit: impl FnMut(BlockPos, Collider<'static>) -> bool) -> bool {
+    pub fn for_each_block_collision(&self, box_: &AABB, context: &CollisionContext, only_suffocating_blocks: bool, always_collide_with_fluid: bool, visit: impl FnMut(BlockPos, Collider<'static>) -> bool) -> bool {
         for_each_block_collision(|pos| self.chunks.chunk_without_loading(pos), box_, context, only_suffocating_blocks, always_collide_with_fluid, visit)
     }
 }
@@ -209,6 +209,11 @@ impl ServerLevel {
 
     pub fn no_border_collision(&self, entity: EntityId, box_: &AABB) -> bool {
         self.border_collision(entity, box_).is_none_or(|shape| !join_is_not_empty(shape, &VoxelShape::from_boxes(&[*box_]), BooleanOp::And))
+    }
+
+    pub fn no_border_collision_at(&self, x: f64, z: f64, box_: &AABB) -> bool {
+        let border = &self.world_border;
+        !border.is_inside_close_to_border_at(x, z, box_) || !join_is_not_empty(border.get_collision_shape(), &VoxelShape::from_boxes(&[*box_]), BooleanOp::And)
     }
 
     pub fn border_collision(&self, entity: EntityId, box_: &AABB) -> Option<&VoxelShape> {

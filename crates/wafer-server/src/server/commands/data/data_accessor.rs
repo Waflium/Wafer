@@ -59,6 +59,7 @@ impl DataAccessor {
                 if level.is_leashable(*id) && level.get_leash_data(*id).is_some() && crate::world::entity::leashable::LeashData::read(&tag).is_none() {
                     level.remove_leash(*id);
                 }
+                let previous_framed_item = level.item_frame_item(*id);
                 let Some(entity) = level.entities.get_mut(id) else { return Err(ERROR_NO_PLAYERS.create()) };
                 let uuid = entity.entity().uuid;
                 let previous_dimensions = entity.entity().dimensions;
@@ -66,6 +67,7 @@ impl DataAccessor {
                     error!("{e}");
                 }
                 entity.entity_mut().uuid = uuid;
+                level.item_frame_loaded(*id, previous_framed_item);
                 if level.mob(*id).is_some_and(crate::world::entity::mob::Mob::is_abstract_skeleton) {
                     level.reassess_weapon_goal(*id);
                 }

@@ -150,6 +150,8 @@ impl LevelEntity {
             LevelEntity::EyeOfEnder(_) => Some("minecraft:eye_of_ender"),
             LevelEntity::EvokerFangs(_) => Some("minecraft:evoker_fangs"),
             LevelEntity::LeashKnot(_) => None,
+            LevelEntity::Painting(_) => Some("minecraft:painting"),
+            LevelEntity::ItemFrame(frame) => Some(if frame.glow { "minecraft:glow_item_frame" } else { "minecraft:item_frame" }),
             LevelEntity::Marker(_) => Some("minecraft:marker"),
             LevelEntity::Interaction(_) => Some("minecraft:interaction"),
             LevelEntity::Display(display) => Some(match display.kind {
@@ -214,6 +216,8 @@ impl LevelEntity {
             LevelEntity::LeashKnot(_) | LevelEntity::Marker(_) => {}
             LevelEntity::Interaction(interaction) => interaction.add_additional_save_data(out),
             LevelEntity::Display(display) => display.add_additional_save_data(out),
+            LevelEntity::Painting(painting) => painting.add_additional_save_data(out),
+            LevelEntity::ItemFrame(frame) => frame.add_additional_save_data(out),
             LevelEntity::EndCrystal(crystal) => {
                 if let Some(target) = crystal.get_beam_target() {
                     out.push(("beam_target".into(), Nbt::IntArray(vec![target.x, target.y, target.z])));
@@ -285,6 +289,8 @@ impl LevelEntity {
             LevelEntity::LeashKnot(_) | LevelEntity::Marker(_) => {}
             LevelEntity::Interaction(interaction) => interaction.read_additional_save_data(nbt),
             LevelEntity::Display(display) => display.read_additional_save_data(nbt),
+            LevelEntity::Painting(painting) => painting.read_additional_save_data(nbt),
+            LevelEntity::ItemFrame(frame) => frame.read_additional_save_data(nbt),
             LevelEntity::EyeOfEnder(eye) => {
                 let item = nbt.get("Item").and_then(|i| ItemStack::from_nbt(i).ok()).unwrap_or_else(ItemStack::empty);
                 eye.set_item(&item);
@@ -333,6 +339,7 @@ impl LevelEntity {
 pub fn apply_default_stack_config(entity: &mut LevelEntity, item_stack: &ItemStack) -> Option<Nbt> {
     match &mut *entity {
         LevelEntity::Mob(mob) => mob.apply_components_from_item_stack(item_stack),
+        LevelEntity::Painting(painting) => painting.apply_components_from_item_stack(item_stack),
         other => other.entity_mut().apply_components_from_item_stack(item_stack),
     }
     update_custom_entity_tag(entity, item_stack.get(crate::world::item::component::ENTITY_DATA)?)
@@ -382,6 +389,9 @@ impl ServerLevel {
             "minecraft:experience_orb" => LevelEntity::ExperienceOrb(super::experience_orb::ExperienceOrb::of_type()),
             "minecraft:lightning_bolt" => LevelEntity::LightningBolt(super::lightning_bolt::LightningBolt::new(Vec3::ZERO)),
             "minecraft:eye_of_ender" => LevelEntity::EyeOfEnder(super::projectile::eye_of_ender::EyeOfEnder::of_type()),
+            "minecraft:painting" => LevelEntity::Painting(super::decoration::painting::Painting::create_empty()),
+            "minecraft:item_frame" => LevelEntity::ItemFrame(super::decoration::item_frame::ItemFrame::create_empty(false)),
+            "minecraft:glow_item_frame" => LevelEntity::ItemFrame(super::decoration::item_frame::ItemFrame::create_empty(true)),
             "minecraft:block_display" => LevelEntity::Display(super::display::Display::create_block_display()),
             "minecraft:item_display" => LevelEntity::Display(super::display::Display::create_item_display()),
             "minecraft:text_display" => LevelEntity::Display(super::display::Display::create_text_display()),

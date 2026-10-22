@@ -262,7 +262,7 @@ pub fn inventory_tick(item_stack: &ItemStack, level: &mut ServerLevel, owner: En
     let Some(data) = get_saved_data(item_stack, level) else { return };
     let mut data = data.borrow_mut();
     if level.is_player(owner) {
-        data.tick_carried_by(level, owner, item_stack);
+        data.tick_carried_by(level, owner, item_stack, None);
     }
     if !data.locked && matches!(slot, Some(EquipmentSlot::Mainhand | EquipmentSlot::Offhand)) {
         update(level, owner, &mut data);

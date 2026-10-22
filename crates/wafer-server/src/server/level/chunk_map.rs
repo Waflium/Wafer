@@ -6,7 +6,7 @@ use wafer_core::fastutil::{Int2ObjectOpenHashMap, ShortOpenHashSet};
 use wafer_core::hash_map::FastSet;
 use crate::util::FastIndexSet;
 
-use wafer_core::{BlockPos, ChunkPos, mth};
+use wafer_core::{BlockPos, ChunkPos, mth, Vec3};
 use wafer_data::packets::play::clientbound;
 use wafer_protocol::Writer;
 
@@ -365,9 +365,10 @@ impl ServerLevel {
         if config.range == 0 {
             return;
         }
-        let entity = self.entity_ref(id).expect("tracked entity exists");
         let is_arrow = self.as_projectile(id).is_some_and(|projectile| projectile.abstract_arrow().is_some());
-        let server_entity = ServerEntity::new(entity, config.update_interval, config.track_deltas, config.stepped, config.is_item, is_arrow);
+        let tracking_position = self.tracking_position(id);
+        let entity = self.entity_ref(id).expect("tracked entity exists");
+        let server_entity = ServerEntity::new(entity, tracking_position, config.update_interval, config.track_deltas, config.stepped, config.is_item, is_arrow);
         let tracked = TrackedEntity { server_entity, range: config.range, last_section_pos: section_pos(entity), seen_by: FastIndexSet::default() };
         self.chunk_map.tracked.insert(id, tracked);
         let players = self.level_players();
@@ -431,7 +432,7 @@ impl ServerLevel {
                 let entity = self.entity_ref(tracked).unwrap();
                 let mut packets = vec![encode(clientbound::BUNDLE_DELIMITER, |_| {})];
                 let block_pos = match self.entities.get(&tracked) {
-                    Some(LevelEntity::LeashKnot(knot)) => Some(knot.block_attached.pos),
+                    Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => Some(self.entity(tracked).block_attached_pos()),
                     _ => None,
                 };
                 packets.extend(self.chunk_map.tracked.get(tracked).unwrap().server_entity.pairing_packets(entity, self.add_entity_data(tracked), block_pos));
@@ -563,10 +564,31 @@ impl ServerLevel {
         }
     }
 
+    pub fn tracking_position(&self, id: EntityId) -> Vec3 {
+        match self.entities.get(&id) {
+            Some(LevelEntity::Painting(painting)) => Vec3::at_lower_corner_of(painting.entity.block_attached_pos()),
+            _ => self.entity(id).position(),
+        }
+    }
+
     fn send_entity_changes(&mut self, id: EntityId) {
         if self.is_living(id) {
             self.update_dirty_effects(id);
         }
+        if matches!(self.entities.get(&id), Some(LevelEntity::ItemFrame(_))) && self.chunk_map.tracked.get(id).is_some_and(|tracked| tracked.server_entity.tick_count() % 10 == 0) {
+            self.item_frame_tick_map(id);
+            let Some(tracked) = self.chunk_map.tracked.get_mut(id) else { return };
+            let Some(LevelEntity::ItemFrame(frame)) = self.entities.get_mut(&id) else { return };
+            let packets = tracked.server_entity.send_dirty_entity_data_now(&mut frame.entity);
+            for (_, packet) in packets {
+                for viewer in &tracked.seen_by {
+                    if let Some(p) = self.players.get(viewer) {
+                        p.connection.send_raw(packet.clone());
+                    }
+                }
+            }
+        }
+        let current = self.tracking_position(id);
         let Some(tracked) = self.chunk_map.tracked.get_mut(id) else { return };
         let (entity, attributes) = match self.players.get_mut(&id) {
             Some(p) => (&mut p.entity, Some(&mut p.living.attributes)),
@@ -576,7 +598,7 @@ impl ServerLevel {
                 None => return,
             },
         };
-        let packets = tracked.server_entity.send_changes(entity, attributes);
+        let packets = tracked.server_entity.send_changes(entity, attributes, current);
         for (audience, packet) in packets {
             for viewer in &tracked.seen_by {
                 if let Some(p) = self.players.get(viewer) {

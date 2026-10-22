@@ -120,6 +120,9 @@ impl ServerLevel {
     fn ignore_explosion(&self, id: EntityId, explosion: &ServerExplosion) -> bool {
         match self.entities.get(&id) {
             Some(LevelEntity::Item(_)) => !self.should_affect_blocklike_entities(explosion),
+            Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => {
+                explosion.source.is_some_and(|direct_entity| self.entity(direct_entity).is_in_water()) || !self.should_affect_blocklike_entities(explosion)
+            }
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => explosion.indirect_source.is_some_and(|indirect| self.is_mob(indirect)) && !self.game_rules.get_bool(game_rule::MOB_GRIEFING),
             _ => false,
         }

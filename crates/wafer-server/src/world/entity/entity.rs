@@ -165,6 +165,7 @@ pub struct Entity {
     pub passengers: Vec<EntityId>,
     pub vehicle: Option<EntityId>,
     pub boarding_cooldown: i32,
+    pub block_attached: Option<super::decoration::block_attached_entity::BlockAttachedEntity>,
 }
 
 impl Entity {
@@ -236,6 +237,7 @@ impl Entity {
             passengers: Vec::new(),
             vehicle: None,
             boarding_cooldown: 0,
+            block_attached: None,
         }
     }
 
@@ -255,7 +257,15 @@ impl Entity {
         self.pos.z
     }
 
+    pub fn block_attached_pos(&self) -> BlockPos {
+        self.block_attached.map_or(BlockPos::ZERO, |block_attached| block_attached.pos)
+    }
+
     pub fn set_pos(&mut self, pos: Vec3) {
+        if self.block_attached.is_some() {
+            super::decoration::block_attached_entity::set_pos(self, pos.x, pos.y, pos.z);
+            return;
+        }
         self.set_pos_raw(pos);
         self.bb = self.dimensions.make_bounding_box(pos);
     }
@@ -2466,7 +2476,8 @@ impl ServerLevel {
             Some(LevelEntity::FallingBlock(_)) => self.falling_block_hurt_server(id, source),
             Some(LevelEntity::EndCrystal(_)) => self.end_crystal_hurt_server(id, source),
             Some(LevelEntity::Projectile(_)) => self.projectile_hurt_server(id, &source),
-            Some(LevelEntity::LeashKnot(_)) => self.block_attached_entity_hurt_server(id, source),
+            Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_)) => self.block_attached_entity_hurt_server(id, source),
+            Some(LevelEntity::ItemFrame(_)) => self.item_frame_hurt_server(id, source),
             Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) => super::marker::Marker::hurt_server(),
             Some(LevelEntity::Display(_)) => super::display::Display::hurt_server(),
             Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_hurt_server(id, source, damage),
@@ -2513,6 +2524,7 @@ impl ServerLevel {
     pub fn interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {
         match self.entities.get(&id) {
             Some(LevelEntity::LeashKnot(_)) => return self.leash_fence_knot_interact(id, player, hand, location),
+            Some(LevelEntity::ItemFrame(_)) => return self.item_frame_interact(id, player, hand),
             Some(LevelEntity::Interaction(_)) => return self.interaction_interact(id, player),
             Some(LevelEntity::Minecart(_)) => return self.abstract_minecart_interact(id, player, hand, location),
             Some(LevelEntity::Boat(boat)) if boat.container.is_some() => return self.abstract_chest_boat_interact(id, player, hand, location),
@@ -2960,7 +2972,7 @@ impl ServerLevel {
                 player.connection.send_raw(packet);
             }
         }
-        let has_update_interval = !matches!(self.entities.get(&id), Some(LevelEntity::LightningBolt(_) | LevelEntity::EndCrystal(_)));
+        let has_update_interval = self.entities.get(&id).is_none_or(|entity| entity.tracking_config().update_interval != crate::server::level::server_entity::UpdateInterval::Never);
         let server_and_client = matches!(self.entities.get(&id), Some(LevelEntity::ExperienceOrb(_) | LevelEntity::FallingBlock(_)));
         if !has_update_interval || server_and_client {
             let packet = teleport(own, 0);
@@ -3816,15 +3828,7 @@ impl ServerLevel {
     pub fn skip_attack_interaction(&mut self, id: EntityId, source: EntityId) -> bool {
         match self.entities.get(&id) {
             Some(LevelEntity::Interaction(_)) => self.interaction_skip_attack_interaction(id, source),
-            Some(LevelEntity::LeashKnot(_)) if self.is_player(source) => {
-                let pos = self.entity(id).block_position();
-                if !self.may_interact(source, pos) {
-                    true
-                } else {
-                    let damage_source = crate::world::damagesource::DamageSource { causing_entity: Some(source), direct_entity: Some(source), ..crate::world::damagesource::DamageSource::new(wafer_data::damage_types::PLAYER_ATTACK) };
-                    self.block_attached_entity_hurt_server(id, damage_source)
-                }
-            }
+            Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => self.block_attached_entity_skip_attack_interaction(id, source),
             _ => false,
         }
     }
@@ -3869,7 +3873,7 @@ impl ServerLevel {
             None | Some(LevelEntity::Mob(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) | LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_)) => {
                 !self.entity(id).is_removed()
             }
-            Some(LevelEntity::EndCrystal(_)) => true,
+            Some(LevelEntity::EndCrystal(_) | LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_)) => true,
             Some(LevelEntity::Projectile(projectile)) => {
                 entity_type_tags::REDIRECTABLE_PROJECTILE.contains(projectile.entity.entity_type as usize) && !(projectile.abstract_arrow().is_some() && projectile.is_in_ground())
             }

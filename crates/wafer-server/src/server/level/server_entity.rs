@@ -185,14 +185,14 @@ pub struct ServerEntity {
 }
 
 impl ServerEntity {
-    pub fn new(entity: &Entity, update_interval: UpdateInterval, track_delta: bool, stepped: bool, is_item: bool, is_arrow: bool) -> ServerEntity {
+    pub fn new(entity: &Entity, tracking_position: Vec3, update_interval: UpdateInterval, track_delta: bool, stepped: bool, is_item: bool, is_arrow: bool) -> ServerEntity {
         ServerEntity {
             update_interval,
             track_delta,
             is_item,
             is_arrow,
             interpolation: stepped.then(SteppedInterpolationTracker::new),
-            position_base: entity.position(),
+            position_base: tracking_position,
             last_sent_y_rot: mth::pack_degrees(entity.y_rot),
             last_sent_x_rot: mth::pack_degrees(entity.x_rot),
             last_sent_y_head_rot: mth::pack_degrees(entity.y_head_rot),
@@ -246,13 +246,22 @@ impl ServerEntity {
         }
     }
 
-    pub fn send_changes(&mut self, entity: &mut Entity, attributes: Option<&mut AttributeMap>) -> Vec<(Audience, Vec<u8>)> {
+    pub fn tick_count(&self) -> i32 {
+        self.tick_count
+    }
+
+    pub fn send_dirty_entity_data_now(&mut self, entity: &mut Entity) -> Vec<(Audience, Vec<u8>)> {
+        let mut out = Vec::new();
+        self.send_dirty_entity_data(entity, None, &mut out);
+        out
+    }
+
+    pub fn send_changes(&mut self, entity: &mut Entity, attributes: Option<&mut AttributeMap>, current: Vec3) -> Vec<(Audience, Vec<u8>)> {
         let mut out = Vec::new();
         if entity.passengers != self.last_passengers {
             out.push((Audience::Tracking, set_passengers_packet(entity.id, &entity.passengers)));
             self.last_passengers.clone_from(&entity.passengers);
         }
-        let current = entity.position();
         if let Some(tracker) = &mut self.interpolation {
             tracker.update_tracking(entity, current);
         }

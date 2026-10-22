@@ -98,6 +98,8 @@ pub enum LevelEntity {
     Marker(marker::Marker),
     Interaction(interaction::Interaction),
     Display(display::Display),
+    Painting(decoration::painting::Painting),
+    ItemFrame(decoration::item_frame::ItemFrame),
 }
 
 impl LevelEntity {
@@ -143,6 +145,7 @@ impl LevelEntity {
             LevelEntity::Interaction(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Display(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Periodic(1), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Marker(_) => TrackingConfig { range: 0, update_interval: UpdateInterval::Periodic(1), track_deltas: true, stepped: false, is_item: false },
+            LevelEntity::Painting(_) | LevelEntity::ItemFrame(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Never, track_deltas: false, stepped: false, is_item: false },
             LevelEntity::LeashKnot(_) => TrackingConfig { range: 10 * 16, update_interval: UpdateInterval::Never, track_deltas: true, stepped: false, is_item: false },
             LevelEntity::EvokerFangs(_) => TrackingConfig { range: 6 * 16, update_interval: UpdateInterval::Periodic(2), track_deltas: false, stepped: false, is_item: false },
             LevelEntity::EndCrystal(_) => TrackingConfig { range: 16 * 16, update_interval: UpdateInterval::Never, track_deltas: false, stepped: false, is_item: false },
@@ -162,6 +165,8 @@ impl LevelEntity {
     pub fn add_entity_data(&self) -> i32 {
         match self {
             LevelEntity::FallingBlock(falling) => falling.get_block_state().id() as i32,
+            LevelEntity::Painting(painting) => decoration::hanging_entity::get_direction(&painting.entity).ordinal() as i32,
+            LevelEntity::ItemFrame(frame) => decoration::hanging_entity::get_direction(&frame.entity).ordinal() as i32,
             _ => 0,
         }
     }
@@ -173,6 +178,8 @@ impl LevelEntity {
             LevelEntity::EyeOfEnder(eye) => &eye.entity,
             LevelEntity::EvokerFangs(fangs) => &fangs.entity,
             LevelEntity::LeashKnot(knot) => &knot.entity,
+            LevelEntity::Painting(painting) => &painting.entity,
+            LevelEntity::ItemFrame(frame) => &frame.entity,
             LevelEntity::Marker(marker) => &marker.entity,
             LevelEntity::Interaction(interaction) => &interaction.entity,
             LevelEntity::Display(display) => &display.entity,
@@ -195,6 +202,8 @@ impl LevelEntity {
             LevelEntity::EyeOfEnder(eye) => &mut eye.entity,
             LevelEntity::EvokerFangs(fangs) => &mut fangs.entity,
             LevelEntity::LeashKnot(knot) => &mut knot.entity,
+            LevelEntity::Painting(painting) => &mut painting.entity,
+            LevelEntity::ItemFrame(frame) => &mut frame.entity,
             LevelEntity::Marker(marker) => &mut marker.entity,
             LevelEntity::Interaction(interaction) => &mut interaction.entity,
             LevelEntity::Display(display) => &mut display.entity,

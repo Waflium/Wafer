@@ -280,7 +280,7 @@ impl MapItemSavedData {
         self.carried_by.iter().position(|holding_player| holding_player.player == player && !holding_player.removed)
     }
 
-    pub fn tick_carried_by(&mut self, level: &ServerLevel, ticking_player: EntityId, item_stack: &ItemStack) {
+    pub fn tick_carried_by(&mut self, level: &ServerLevel, ticking_player: EntityId, item_stack: &ItemStack, placed_in_frame: Option<(BlockPos, wafer_core::Direction, EntityId)>) {
         if self.holding_player_index(ticking_player).is_none() {
             self.carried_by.push(HoldingPlayer::new(ticking_player, level.player(ticking_player).profile.name.as_str().into()));
         }
@@ -296,8 +296,8 @@ impl MapItemSavedData {
                 self.carried_by.remove(i);
                 self.remove_decoration(&other_player_name);
             } else if let Some(other) = level.players.get(&other_player) {
-                if !other.entity.is_removed() && inventory_contains(level, other_player, item_stack) {
-                    if level.dimension == self.dimension && self.tracking_position {
+                if !other.entity.is_removed() && (placed_in_frame.is_some() || inventory_contains(level, other_player, item_stack)) {
+                    if placed_in_frame.is_none() && level.dimension == self.dimension && self.tracking_position {
                         let (x, z, y_rot) = (other.entity.x(), other.entity.z(), other.entity.y_rot);
                         self.add_decoration(PLAYER, Some(level), &other_player_name, x, z, y_rot as f64, None);
                     }
@@ -310,6 +310,24 @@ impl MapItemSavedData {
                 }
             }
             i += 1;
+        }
+        if let Some((pos, direction, frame_id)) = placed_in_frame
+            && self.tracking_position
+        {
+            let existing_frame = self.frame_markers.get(&super::map_frame::frame_id(pos)).cloned();
+            if let Some(existing_frame) = existing_frame
+                && frame_id != existing_frame.entity_id
+                && self.frame_markers.contains_key(&existing_frame.get_id())
+            {
+                self.remove_decoration(&get_frame_key(existing_frame.entity_id));
+            }
+            let rotation = direction.get_2d_data_value() * 90;
+            let map_frame = MapFrame { pos, rotation, entity_id: frame_id };
+            self.add_decoration(FRAME, Some(level), &get_frame_key(frame_id), pos.x as f64, pos.z as f64, rotation as f64, None);
+            let old_frame = self.frame_markers.insert(map_frame.get_id(), map_frame.clone());
+            if old_frame.as_ref() != Some(&map_frame) {
+                self.set_dirty();
+            }
         }
         if let Some(Nbt::Compound(static_decorations)) = item_stack.get(dc::MAP_DECORATIONS)
             && !static_decorations.iter().all(|(id, _)| self.decorations.contains_key(id))
@@ -553,6 +571,12 @@ impl MapItemSavedData {
     pub fn set_color(&mut self, x: i32, y: i32, new_color: u8) {
         self.colors[(x + y * MAP_SIZE as i32) as usize] = new_color;
         self.set_colors_dirty(x, y);
+    }
+
+    pub fn removed_from_frame(&mut self, pos: BlockPos, entity_id: EntityId) {
+        self.remove_decoration(&get_frame_key(entity_id));
+        self.frame_markers.remove(&super::map_frame::frame_id(pos));
+        self.set_dirty();
     }
 
     pub fn is_tracked_count_over_limit(&self, limit: i32) -> bool {

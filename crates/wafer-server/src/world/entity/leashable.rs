@@ -401,7 +401,7 @@ impl ServerLevel {
 
     fn leash_holder_info(&self, holder: EntityId) -> LeashInfo {
         match self.entities.get(&holder) {
-            Some(LevelEntity::LeashKnot(knot)) => LeashInfo::Pos(knot.block_attached.pos),
+            Some(LevelEntity::LeashKnot(knot)) => LeashInfo::Pos(knot.entity.block_attached_pos()),
             _ => LeashInfo::Uuid(self.entity(holder).uuid),
         }
     }
