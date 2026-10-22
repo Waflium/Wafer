@@ -134,6 +134,7 @@ pub fn update_custom_block_entity_tag(level: &mut ServerLevel, player: Option<En
         return false;
     }
     entity.load_custom_only(&tag);
+    level.block_entity_loaded(pos);
     level.block_entity_set_changed(pos);
     true
 }

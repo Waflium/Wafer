@@ -199,6 +199,7 @@ fn clone_blocks(
         {
             new_block_entity.load_custom_only(&block_entity_info.tag);
             new_block_entity.set_components(block_entity_info.components);
+            level.block_entity_loaded(info.pos);
             level.block_entity_set_changed(info.pos);
         }
         level.set_block(info.pos, info.state, default_flags);

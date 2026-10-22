@@ -202,6 +202,8 @@ pub struct ServerLevel {
     pub simulation_distance: i32,
     empty_time: i32,
     pub handling_tick: bool,
+    block_ticks_to_run: std::collections::VecDeque<crate::world::ticks::ScheduledTick<Block>>,
+    pub pending_minecart_commands: Vec<EntityId>,
     pub tick_rate_manager: Rc<TickRateManager>,
     block_events: Vec<(BlockPos, Block, i32, i32)>,
     pub game_time: i64,
@@ -289,6 +291,8 @@ impl ServerLevel {
             simulation_distance,
             empty_time: 0,
             handling_tick: false,
+            block_ticks_to_run: std::collections::VecDeque::new(),
+            pending_minecart_commands: Vec::new(),
             tick_rate_manager: Rc::default(),
             block_events: Vec::new(),
             game_time: 0,
@@ -1247,6 +1251,7 @@ impl ServerLevel {
         while self.tick_entities() {
             self.pending_portal_teleport = None;
             self.pending_ender_pearl_teleport = None;
+            self.pending_minecart_commands.clear();
         }
         self.tick_after_entities();
     }
@@ -1350,8 +1355,13 @@ impl ServerLevel {
     }
 
     pub fn tick_after_time(&mut self, runs: bool) {
+        self.begin_block_ticks(runs);
+        while self.run_block_ticks().is_some() {}
+        self.tick_after_block_ticks(runs);
+    }
+
+    pub fn tick_after_block_ticks(&mut self, runs: bool) {
         if runs {
-            self.tick_block_ticks();
             self.tick_fluid_ticks();
             self.raids.tick();
         }
@@ -1407,7 +1417,7 @@ impl ServerLevel {
                     }
                 }
             }
-            if self.pending_portal_teleport.is_some() || self.pending_ender_pearl_teleport.is_some() {
+            if self.pending_portal_teleport.is_some() || self.pending_ender_pearl_teleport.is_some() || !self.pending_minecart_commands.is_empty() {
                 self.entity_tick_range = Some((i + 1, end));
                 return true;
             }
@@ -1453,16 +1463,26 @@ impl ServerLevel {
         self.chunks.block_ticks.will_tick_this_tick(pos, block)
     }
 
-    fn tick_block_ticks(&mut self) {
-        let entity_manager = &self.entity_manager;
-        let due = self.chunks.collect_block_ticks(self.game_time, 65536, |c| entity_manager.are_entities_loaded(c.pack()));
-        for tick in due {
+    pub fn begin_block_ticks(&mut self, runs: bool) {
+        if runs {
+            let entity_manager = &self.entity_manager;
+            let due = self.chunks.collect_block_ticks(self.game_time, 65536, |c| entity_manager.are_entities_loaded(c.pack()));
+            self.block_ticks_to_run.extend(due);
+        }
+    }
+
+    pub fn run_block_ticks(&mut self) -> Option<BlockPos> {
+        while let Some(tick) = self.block_ticks_to_run.pop_front() {
             self.chunks.block_ticks.ran(tick.pos, tick.ty);
             let state = self.block_state(tick.pos);
             if state.is_block(tick.ty) {
+                if tick.ty.is_instance_of("CommandBlock") {
+                    return Some(tick.pos);
+                }
                 block::of(state).tick(state, self, tick.pos);
             }
         }
+        None
     }
 
     fn tick_fluid_ticks(&mut self) {

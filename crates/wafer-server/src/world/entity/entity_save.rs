@@ -459,6 +459,7 @@ impl ServerLevel {
             "minecraft:furnace_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_furnace::MinecartFurnace::create())),
             "minecraft:hopper_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_hopper::MinecartHopper::create())),
             "minecraft:tnt_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_tnt::MinecartTnt::create())),
+            "minecraft:command_block_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_command_block::MinecartCommandBlock::create())),
             "minecraft:spawner_minecart" => LevelEntity::Minecart(Box::new(super::vehicle::minecart::minecart_spawner::MinecartSpawner::create())),
             _ => {
                 let boat = super::vehicle::boat::boat::create(entity_type)

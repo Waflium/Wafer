@@ -253,6 +253,8 @@ pub mod piston_base_block;
 pub mod piston_math;
 pub mod piston_structure_resolver;
 #[cfg(test)]
+mod command_block_tests;
+#[cfg(test)]
 mod piston_tests;
 pub mod portal;
 pub mod state;
@@ -848,7 +850,7 @@ fn for_class(class: &str, block: Block) -> Option<Box<dyn BlockBehaviour>> {
         "CampfireBlock" => Box::new(campfire_block::CampfireBlock::new(block)),
         "CeilingHangingSignBlock" => Box::new(ceiling_hanging_sign_block::CeilingHangingSignBlock),
         "ChiseledBookShelfBlock" => Box::new(chiseled_book_shelf_block::ChiseledBookShelfBlock),
-        "CommandBlock" => Box::new(command_block::CommandBlock),
+        "CommandBlock" => Box::new(command_block::CommandBlock { automatic: block == wafer_data::blocks::CHAIN_COMMAND_BLOCK }),
         "CopperGolemStatueBlock" => Box::new(copper_golem_statue_block::CopperGolemStatueBlock),
         "WeatheringCopperGolemStatueBlock" => Box::new(copper_golem_statue_block::WeatheringCopperGolemStatueBlock),
         "CrafterBlock" => Box::new(crafter_block::CrafterBlock),

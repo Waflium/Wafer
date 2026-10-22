@@ -19,6 +19,7 @@ pub enum CommandSource {
     Server,
     Rcon,
     Player(EntityId),
+    CommandBlock(u64),
     Null,
 }
 
@@ -27,6 +28,7 @@ impl CommandSource {
         match self {
             CommandSource::Server | CommandSource::Rcon => true,
             CommandSource::Player(_) => server.game_rules.get_bool(game_rule::SEND_COMMAND_FEEDBACK),
+            CommandSource::CommandBlock(_) => server.game_rules.get_bool(game_rule::SEND_COMMAND_FEEDBACK),
             CommandSource::Null => false,
         }
     }
@@ -40,6 +42,7 @@ impl CommandSource {
             CommandSource::Server => server.config.broadcast_console_to_ops,
             CommandSource::Rcon => server.config.broadcast_rcon_to_ops,
             CommandSource::Player(_) => true,
+            CommandSource::CommandBlock(_) => server.game_rules.get_bool(game_rule::COMMAND_BLOCK_OUTPUT),
             CommandSource::Null => false,
         }
     }
@@ -49,6 +52,7 @@ impl CommandSource {
             CommandSource::Server => server.send_system_message(message),
             CommandSource::Rcon => server.rcon_buffer.borrow_mut().push_str(&message.get_string()),
             CommandSource::Player(id) => server.send_player_system_message(id, message, false),
+            CommandSource::CommandBlock(session) => server.command_block_messages.borrow_mut().push((session, message.clone())),
             CommandSource::Null => {}
         }
     }

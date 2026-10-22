@@ -10,6 +10,7 @@ pub mod brushable_block_entity;
 pub mod campfire_block_entity;
 pub mod chest_block_entity;
 pub mod chiseled_book_shelf_block_entity;
+pub mod command_block_entity;
 pub mod comparator_block_entity;
 pub mod conduit_block_entity;
 pub mod container_openers_counter;
@@ -120,6 +121,7 @@ pub enum BlockEntityKind {
     EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity),
     Jigsaw(jigsaw_block_entity::JigsawBlockEntity),
     PistonMoving(piston_moving_block_entity::PistonMovingBlockEntity),
+    CommandBlock(command_block_entity::CommandBlockEntity),
     Other(Vec<(String, Nbt)>),
 }
 
@@ -174,6 +176,7 @@ impl BlockEntity {
             types::BREWING_STAND => BlockEntityKind::BrewingStand(brewing_stand_block_entity::BrewingStandBlockEntity::default()),
             types::END_GATEWAY => BlockEntityKind::EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity::default()),
             types::JIGSAW => BlockEntityKind::Jigsaw(jigsaw_block_entity::JigsawBlockEntity::default()),
+            types::COMMAND_BLOCK => BlockEntityKind::CommandBlock(command_block_entity::CommandBlockEntity::new(state.is_block(wafer_data::blocks::CHAIN_COMMAND_BLOCK))),
             types::PISTON => BlockEntityKind::PistonMoving(piston_moving_block_entity::PistonMovingBlockEntity::default()),
             _ => BlockEntityKind::Other(Vec::new()),
         };
@@ -289,6 +292,7 @@ impl BlockEntity {
             BlockEntityKind::EndGateway(gateway) => gateway.load_additional(input),
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.load_additional(input, state),
             BlockEntityKind::PistonMoving(piston) => piston.load_additional(input),
+            BlockEntityKind::CommandBlock(command_block) => command_block.load_additional(input),
             BlockEntityKind::Other(data) => {
                 let _ = state;
                 *data = match input {
@@ -332,6 +336,7 @@ impl BlockEntity {
             BlockEntityKind::EndGateway(gateway) => gateway.save_additional(output),
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.save_additional(output),
             BlockEntityKind::PistonMoving(piston) => piston.save_additional(output),
+            BlockEntityKind::CommandBlock(command_block) => command_block.save_additional(output),
             BlockEntityKind::Other(data) => output.extend(data.iter().cloned()),
         }
     }
@@ -464,6 +469,8 @@ impl BlockEntity {
             skull.apply_implicit_components(&mut get);
         } else if let BlockEntityKind::Sign(sign) = &mut self.kind {
             sign.apply_implicit_components(&mut get);
+        } else if let BlockEntityKind::CommandBlock(command_block) = &mut self.kind {
+            command_block.apply_implicit_components(&mut get);
         }
         let added: Vec<(DataComponentType, Nbt)> =
             patch.iter().filter(|(ty, _)| !implicit.contains(ty)).filter_map(|(ty, value)| value.map(|v| (ty, v.clone()))).collect();
@@ -492,6 +499,8 @@ impl BlockEntity {
             skull.collect_implicit_components(&mut result);
         } else if let BlockEntityKind::Sign(sign) = &self.kind {
             sign.collect_implicit_components(&mut result);
+        } else if let BlockEntityKind::CommandBlock(command_block) = &self.kind {
+            command_block.collect_implicit_components(&mut result);
         }
         result
     }
@@ -520,6 +529,8 @@ impl BlockEntity {
             output.retain(|(k, _)| !matches!(k.as_str(), "sherds" | "item"));
         } else if let BlockEntityKind::Banner(_) = self.kind {
             output.retain(|(k, _)| !matches!(k.as_str(), "patterns" | "CustomName"));
+        } else if let BlockEntityKind::CommandBlock(_) = self.kind {
+            output.retain(|(k, _)| !matches!(k.as_str(), "CustomName" | "conditionMet" | "powered"));
         } else if let BlockEntityKind::Skull(_) = self.kind {
             output.retain(|(k, _)| !matches!(k.as_str(), "profile" | "note_block_sound" | "custom_name"));
         } else if let BlockEntityKind::Sign(_) = self.kind {

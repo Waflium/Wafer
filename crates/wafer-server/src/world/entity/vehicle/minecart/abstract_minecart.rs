@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::minecart::Minecart;
 use super::minecart_chest::{self, MinecartChest};
+use super::minecart_command_block::MinecartCommandBlock;
 use super::minecart_furnace::MinecartFurnace;
 use super::minecart_hopper::{self, MinecartHopper};
 use super::minecart_spawner::MinecartSpawner;
@@ -37,6 +38,7 @@ pub enum MinecartKind {
     Hopper(MinecartHopper),
     Tnt(MinecartTnt),
     Spawner(MinecartSpawner),
+    CommandBlock(MinecartCommandBlock),
 }
 
 impl MinecartKind {
@@ -90,6 +92,10 @@ impl AbstractMinecart {
         if let MinecartKind::Furnace(_) = kind {
             data.push(DataValue::Boolean(false));
         }
+        if let MinecartKind::CommandBlock(_) = kind {
+            data.push(DataValue::String(String::new()));
+            data.push(DataValue::Component(crate::network::chat::Component::empty().to_nbt()));
+        }
         let entity = Entity::new(registry_id(registry::ENTITY_TYPE, entity_type), DIMENSIONS, data);
         let container = match kind {
             MinecartKind::Chest(_) => Some(ContainerEntity::new(minecart_chest::CONTAINER_SIZE)),
@@ -122,7 +128,7 @@ impl AbstractMinecart {
 
     pub fn get_drop_item(&self) -> Item {
         match &self.kind {
-            MinecartKind::Minecart(_) | MinecartKind::Spawner(_) => items::MINECART,
+            MinecartKind::Minecart(_) | MinecartKind::Spawner(_) | MinecartKind::CommandBlock(_) => items::MINECART,
             MinecartKind::Chest(_) => items::CHEST_MINECART,
             MinecartKind::Furnace(_) => items::FURNACE_MINECART,
             MinecartKind::Hopper(_) => items::HOPPER_MINECART,
@@ -131,7 +137,10 @@ impl AbstractMinecart {
     }
 
     pub fn get_pick_result(&self) -> Item {
-        self.get_drop_item()
+        match &self.kind {
+            MinecartKind::CommandBlock(_) => items::COMMAND_BLOCK_MINECART,
+            _ => self.get_drop_item(),
+        }
     }
 
     pub fn is_rideable(&self) -> bool {
@@ -177,6 +186,7 @@ impl AbstractMinecart {
             MinecartKind::Furnace(_) => MinecartFurnace::read_additional_save_data(self, nbt),
             MinecartKind::Tnt(_) => MinecartTnt::read_additional_save_data(self, nbt),
             MinecartKind::Spawner(_) => MinecartSpawner::read_additional_save_data(self, nbt),
+            MinecartKind::CommandBlock(_) => MinecartCommandBlock::read_additional_save_data(self, nbt),
             MinecartKind::Minecart(_) | MinecartKind::Chest(_) => {}
         }
     }
@@ -199,6 +209,7 @@ impl AbstractMinecart {
             MinecartKind::Furnace(_) => MinecartFurnace::add_additional_save_data(self, out),
             MinecartKind::Tnt(_) => MinecartTnt::add_additional_save_data(self, out),
             MinecartKind::Spawner(_) => MinecartSpawner::add_additional_save_data(self, out),
+            MinecartKind::CommandBlock(_) => MinecartCommandBlock::add_additional_save_data(self, out),
             MinecartKind::Minecart(_) | MinecartKind::Chest(_) => {}
         }
     }
@@ -289,7 +300,7 @@ impl ServerLevel {
     pub fn tick_minecart(&mut self, id: EntityId) {
         match &self.minecart(id).kind {
             MinecartKind::Minecart(_) => self.minecart_tick(id),
-            MinecartKind::Chest(_) => self.abstract_minecart_tick(id),
+            MinecartKind::Chest(_) | MinecartKind::CommandBlock(_) => self.abstract_minecart_tick(id),
             MinecartKind::Furnace(_) => self.minecart_furnace_tick(id),
             MinecartKind::Hopper(_) => self.minecart_hopper_tick(id),
             MinecartKind::Tnt(_) => self.minecart_tnt_tick(id),
@@ -304,6 +315,7 @@ impl ServerLevel {
             MinecartKind::Hopper(_) => self.abstract_minecart_container_interact(id, player),
             MinecartKind::Furnace(_) => self.minecart_furnace_interact(id, player, hand),
             MinecartKind::Tnt(_) | MinecartKind::Spawner(_) => self.entity_interact(id, player, hand, location),
+            MinecartKind::CommandBlock(_) => self.minecart_command_block_interact(player),
         }
     }
 
@@ -311,7 +323,7 @@ impl ServerLevel {
         match &self.minecart(id).kind {
             MinecartKind::Chest(_) | MinecartKind::Hopper(_) => self.abstract_minecart_container_destroy(id, source),
             MinecartKind::Tnt(_) => self.minecart_tnt_destroy(id, source),
-            MinecartKind::Minecart(_) | MinecartKind::Furnace(_) | MinecartKind::Spawner(_) => {
+            MinecartKind::Minecart(_) | MinecartKind::Furnace(_) | MinecartKind::Spawner(_) | MinecartKind::CommandBlock(_) => {
                 let drop_item = self.vehicle_drop_item(id);
                 self.destroy(id, drop_item);
             }
@@ -382,6 +394,7 @@ impl ServerLevel {
             MinecartKind::Minecart(_) => self.minecart_activate_minecart(id, xt, yt, zt, state),
             MinecartKind::Hopper(_) => self.minecart_hopper_activate_minecart(id, state),
             MinecartKind::Tnt(_) => self.minecart_tnt_activate_minecart(id, state),
+            MinecartKind::CommandBlock(_) => self.minecart_command_block_activate_minecart(id, state),
             MinecartKind::Chest(_) | MinecartKind::Furnace(_) | MinecartKind::Spawner(_) => {}
         }
     }

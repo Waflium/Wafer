@@ -72,6 +72,7 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:hopper_minecart",
     "minecraft:tnt_minecart",
     "minecraft:spawner_minecart",
+    "minecraft:command_block_minecart",
     "minecraft:guardian",
     "minecraft:elder_guardian",
     "minecraft:slime",

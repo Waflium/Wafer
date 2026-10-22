@@ -35,7 +35,9 @@ impl BlockInput {
         {
             let before = entity.save_without_metadata();
             entity.load_with_components(tag);
-            if entity.save_without_metadata() != before {
+            let changed = entity.save_without_metadata() != before;
+            level.block_entity_loaded(pos);
+            if changed {
                 affected = true;
                 level.block_entity_set_changed(pos);
                 let state = level.block_state(pos);

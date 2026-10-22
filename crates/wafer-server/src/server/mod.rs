@@ -211,6 +211,7 @@ pub struct Server {
     tasks: VecDeque<Task>,
     console_inputs: Vec<(String, CommandSourceStack, bool)>,
     pub rcon_buffer: std::cell::RefCell<String>,
+    pub command_block_messages: std::cell::RefCell<Vec<(u64, crate::network::chat::Component)>>,
     random: LegacyRandomSource,
     status: Arc<RwLock<Option<Arc<str>>>>,
     last_status: Option<Instant>,
@@ -401,6 +402,7 @@ impl Server {
             tasks: VecDeque::new(),
             console_inputs: Vec::new(),
             rcon_buffer: std::cell::RefCell::new(String::new()),
+            command_block_messages: std::cell::RefCell::new(Vec::new()),
             random: LegacyRandomSource::create(),
             status: Arc::default(),
             last_status: None,
@@ -1515,9 +1517,14 @@ impl Server {
             let time = level.tick_time();
             TimerQueue::tick(self, time);
         }
-        self.levels[index].tick_after_time(runs);
+        self.levels[index].begin_block_ticks(runs);
+        while let Some(pos) = self.levels[index].run_block_ticks() {
+            self.command_block_tick(index, pos);
+        }
+        self.levels[index].tick_after_block_ticks(runs);
         self.update_other_level_players(index);
         while self.levels[index].tick_entities() {
+            self.run_pending_minecart_commands(index);
             self.handle_pending_portal_teleport(index);
             self.handle_pending_ender_pearl_teleport(index);
             self.update_other_level_players(index);

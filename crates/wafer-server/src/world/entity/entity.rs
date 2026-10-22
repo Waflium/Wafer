@@ -2832,6 +2832,7 @@ impl ServerLevel {
                     super::vehicle::minecart::abstract_minecart::MinecartKind::Hopper(_) => "MinecartHopper",
                     super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_) => "MinecartTNT",
                     super::vehicle::minecart::abstract_minecart::MinecartKind::Spawner(_) => "MinecartSpawner",
+                    super::vehicle::minecart::abstract_minecart::MinecartKind::CommandBlock(_) => "MinecartCommandBlock",
                 },
                 Some(LevelEntity::Boat(boat)) => match boat.kind {
                     super::vehicle::boat::abstract_boat::BoatKind::Boat => "Boat",

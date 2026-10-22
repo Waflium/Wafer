@@ -73,6 +73,7 @@ impl ServerLevel {
         if let Some(entity) = self.get_block_entity(pos) {
             entity.load_with_components(input);
         }
+        self.block_entity_loaded(pos);
     }
 
     pub fn jukebox(&mut self, pos: BlockPos) -> Option<&mut JukeboxBlockEntity> {

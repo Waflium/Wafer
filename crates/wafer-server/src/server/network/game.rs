@@ -251,20 +251,20 @@ impl ServerLevel {
                 self.player(id).connection.send(clientbound::PONG_RESPONSE, |w| w.i64(time));
             }
             serverbound::SET_COMMAND_BLOCK => {
-                r.position()?;
-                r.string(32767)?;
+                let (x, y, z) = r.position()?;
+                let command = r.string(32767)?.to_owned();
                 let mode = r.varint()?;
                 if !(0..3).contains(&mode) {
                     anyhow::bail!("Unknown command block mode {mode}");
                 }
-                r.u8()?;
-                self.handle_set_command_block(id);
+                let flags = r.u8()?;
+                self.handle_set_command_block(id, BlockPos::new(x, y, z), &command, mode, flags & 1 != 0, flags & 2 != 0, flags & 4 != 0);
             }
             serverbound::SET_COMMAND_MINECART => {
-                r.varint()?;
-                r.string(32767)?;
-                r.bool()?;
-                self.handle_set_command_minecart(id);
+                let entity = r.varint()?;
+                let command = r.string(32767)?.to_owned();
+                let track_output = r.bool()?;
+                self.handle_set_command_minecart(id, entity, &command, track_output);
             }
             serverbound::SET_JIGSAW_BLOCK => {
                 let pos = r.position()?;
@@ -792,15 +792,76 @@ impl ServerLevel {
         }
     }
 
-    fn handle_set_command_block(&mut self, id: EntityId) {
+    #[allow(clippy::too_many_arguments)]
+    fn handle_set_command_block(&mut self, id: EntityId, block_pos: BlockPos, command: &str, mode: i32, track_output: bool, conditional: bool, automatic: bool) {
+        use crate::world::level::block::entity::command_block_entity::Mode;
         if !self.can_use_game_master_blocks(id) {
             self.send_system_message(id, &Component::translatable("advMode.notAllowed"));
+            return;
+        }
+        if self.command_block_entity(block_pos).is_none() {
+            return;
+        }
+        let old_mode = self.command_block_entity_get_mode(block_pos);
+        let current_block_state = self.block_state(block_pos);
+        let direction = current_block_state.get(wafer_data::properties::FACING);
+        let packet_mode = match mode {
+            0 => Mode::Sequence,
+            1 => Mode::Auto,
+            _ => Mode::Redstone,
+        };
+        let base_block_state = match packet_mode {
+            Mode::Sequence => wafer_data::blocks::CHAIN_COMMAND_BLOCK.default_state(),
+            Mode::Auto => wafer_data::blocks::REPEATING_COMMAND_BLOCK.default_state(),
+            Mode::Redstone => wafer_data::blocks::COMMAND_BLOCK.default_state(),
+        };
+        let block_state = base_block_state.set(wafer_data::properties::FACING, direction).set(wafer_data::properties::CONDITIONAL, conditional);
+        if block_state != current_block_state {
+            let Some(mut block_entity) = self.get_block_entity(block_pos).cloned() else { return };
+            self.set_block(block_pos, block_state, 2);
+            block_entity.set_block_state(block_state);
+            block_entity.clear_removed();
+            self.set_block_entity(block_entity);
+        }
+        let Some(command_block) = self.command_block_entity(block_pos) else { return };
+        command_block.command_block.set_command(command);
+        command_block.command_block.set_track_output(track_output);
+        if !track_output {
+            command_block.command_block.set_last_output(None);
+        }
+        self.block_entity_set_changed(block_pos);
+        self.command_block_entity_set_automatic(block_pos, automatic);
+        if old_mode != packet_mode {
+            self.command_block_entity_on_mode_switch(block_pos);
+        }
+        let command_blocks_work = self.game_rules.get_bool(wafer_data::game_rule::COMMAND_BLOCKS_WORK);
+        if command_blocks_work {
+            self.command_block_entity_on_updated(block_pos);
+        }
+        if !command.is_empty() {
+            let key = if command_blocks_work { "advMode.setCommand.success" } else { "advMode.setCommand.disabled" };
+            self.send_system_message(id, &Component::translatable_with(key, vec![crate::network::chat::Arg::String(command.to_string())]));
         }
     }
 
-    fn handle_set_command_minecart(&mut self, id: EntityId) {
+    fn handle_set_command_minecart(&mut self, id: EntityId, entity: i32, command: &str, track_output: bool) {
         if !self.can_use_game_master_blocks(id) {
             self.send_system_message(id, &Component::translatable("advMode.notAllowed"));
+            return;
+        }
+        let Some(command_block) = self.minecart_command_block(entity) else { return };
+        command_block.set_command(command);
+        command_block.set_track_output(track_output);
+        if !track_output {
+            command_block.set_last_output(None);
+        }
+        let command_blocks_work = self.game_rules.get_bool(wafer_data::game_rule::COMMAND_BLOCKS_WORK);
+        if command_blocks_work {
+            self.minecart_command_block_on_updated(entity);
+        }
+        if !command.is_empty() {
+            let key = if command_blocks_work { "advMode.setCommand.success" } else { "advMode.setCommand.disabled" };
+            self.send_system_message(id, &Component::translatable_with(key, vec![crate::network::chat::Arg::String(command.to_string())]));
         }
     }
 

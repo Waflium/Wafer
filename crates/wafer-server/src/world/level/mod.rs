@@ -1,3 +1,4 @@
+pub mod base_command_block;
 pub mod base_spawner;
 #[cfg(test)]
 mod base_spawner_tests;

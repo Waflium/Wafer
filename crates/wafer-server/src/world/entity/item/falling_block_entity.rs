@@ -221,6 +221,7 @@ impl ServerLevel {
                                         }
                                     }
                                     block_entity.load_with_components(&Nbt::Compound(merged));
+                                    self.block_entity_loaded(pos);
                                     self.block_entity_set_changed(pos);
                                 }
                             } else if self.falling_block(id).drop_item && self.game_rules.get_bool(game_rule::ENTITY_DROPS) {

@@ -120,6 +120,10 @@ impl BlockBehaviour for DetectorRailBlock {
 
     fn get_analog_output_signal(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _direction: Direction) -> i32 {
         if state.get(POWERED) {
+            let command_blocks: Vec<EntityId> = self.get_interacting_minecarts(level, pos).into_iter().filter(|&entity| level.minecart_command_block(entity).is_some()).collect();
+            if let Some(&first) = command_blocks.first() {
+                return level.minecart_command_block(first).map_or(0, |command_block| command_block.get_success_count());
+            }
             let entities: Vec<EntityId> = self.get_interacting_minecarts(level, pos).into_iter().filter(|&entity| level.is_container_entity(entity) && level.is_alive(entity)).collect();
             if let Some(&first) = entities.first() {
                 return level.get_redstone_signal_from_container(Some(ContainerRef::ChestVehicle(first)));

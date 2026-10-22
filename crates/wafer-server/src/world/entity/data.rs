@@ -52,6 +52,8 @@ pub enum DataValue {
     Int(i32),
     Float(f32),
     OptionalComponent(Option<wafer_protocol::nbt::Nbt>),
+    String(String),
+    Component(wafer_protocol::nbt::Nbt),
     ItemStack(Option<ItemStack>),
     Boolean(bool),
     BlockPos(BlockPos),
@@ -87,6 +89,8 @@ impl DataValue {
             DataValue::Int(_) => 1,
             DataValue::Float(_) => 3,
             DataValue::OptionalComponent(_) => 6,
+            DataValue::String(_) => 4,
+            DataValue::Component(_) => 5,
             DataValue::ItemStack(_) => 7,
             DataValue::Boolean(_) => 8,
             DataValue::BlockPos(_) => 10,
@@ -121,6 +125,8 @@ impl DataValue {
             DataValue::Byte(v) => w.u8(*v as u8),
             DataValue::Int(v) => w.varint(*v),
             DataValue::Float(v) => w.f32(*v),
+            DataValue::String(v) => w.string(v),
+            DataValue::Component(v) => v.write(w),
             DataValue::OptionalComponent(v) => {
                 w.bool(v.is_some());
                 if let Some(c) = v {
