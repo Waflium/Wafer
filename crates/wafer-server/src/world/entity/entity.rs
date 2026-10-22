@@ -778,6 +778,10 @@ pub fn sound_event(name: &str) -> i32 {
     registry_id(registry::SOUND_EVENT, name)
 }
 
+pub fn calculate_view_quaternion(x_rot: f32, y_rot: f32) -> wafer_core::joml::Quaternionf {
+    wafer_core::joml::Quaternionf::rotation_y(-y_rot * mth::DEG_TO_RAD).rotate_x(x_rot * mth::DEG_TO_RAD)
+}
+
 pub fn calculate_view_vector(x_rot: f32, y_rot: f32) -> Vec3 {
     let real_x_rot = x_rot * mth::DEG_TO_RAD;
     let real_y_rot = -y_rot * mth::DEG_TO_RAD;
@@ -864,6 +868,23 @@ impl ServerLevel {
             self.play_entity_on_fire_extinguished_sound(id);
         }
         self.clear_fire(id);
+    }
+
+    pub fn known_speed(&self, id: EntityId) -> Vec3 {
+        if let Some(player) = self.players.get(&id) {
+            return match self.vehicle(id) {
+                Some(vehicle) if self.controlling_passenger(vehicle) != Some(id) => self.known_speed(vehicle),
+                _ => player.known_movement,
+            };
+        }
+        match self.controlling_passenger(id).filter(|&c| self.is_player(c)) {
+            Some(controller) if self.is_alive(id) => self.known_speed(controller),
+            _ => self.entity(id).last_known_speed,
+        }
+    }
+
+    pub fn is_invulnerable_to_piercing_weapon(&self, id: EntityId) -> bool {
+        self.entity(id).is_invulnerable()
     }
 
     pub fn known_movement(&self, id: EntityId) -> Vec3 {

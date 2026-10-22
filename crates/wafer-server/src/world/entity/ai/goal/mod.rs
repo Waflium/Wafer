@@ -35,6 +35,7 @@ pub mod random_swimming_goal;
 pub mod ranged_attack_goal;
 pub mod ranged_bow_attack_goal;
 pub mod ranged_crossbow_attack_goal;
+pub mod spear_use_goal;
 pub mod remove_block_goal;
 pub mod restrict_sun_goal;
 pub mod run_around_like_crazy_goal;

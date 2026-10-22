@@ -19,6 +19,7 @@ use crate::world::entity::monster::phantom::{PhantomAttackPlayerTargetGoal, Phan
 use crate::world::entity::animal::equine::trader_llama::TraderLlamaDefendWanderingTraderGoal;
 use crate::world::entity::npc::wanderingtrader::wandering_trader::WanderToPositionGoal;
 use super::ranged_crossbow_attack_goal::RangedCrossbowAttackGoal;
+use super::spear_use_goal::SpearUseGoal;
 use crate::world::entity::monster::illager::illusioner::{IllusionerBlindnessSpellGoal, IllusionerMirrorSpellGoal};
 use crate::world::entity::monster::illager::spellcaster_illager::SpellcasterCastingSpellGoal;
 use crate::world::entity::monster::illager::evoker::{EvokerAttackSpellGoal, EvokerCastingSpellGoal, EvokerSummonSpellGoal, EvokerWololoSpellGoal};
@@ -133,6 +134,7 @@ pub enum Goal {
     SpiderTarget(SpiderTargetGoal),
     RangedBowAttack(RangedBowAttackGoal),
     RangedCrossbowAttack(RangedCrossbowAttackGoal),
+    SpearUse(SpearUseGoal),
     SpellcasterCastingSpell(SpellcasterCastingSpellGoal),
     EvokerCastingSpell(EvokerCastingSpellGoal),
     IllusionerMirrorSpell(IllusionerMirrorSpellGoal),
@@ -302,6 +304,7 @@ impl Goal {
             Goal::SpiderTarget(goal) => goal.can_use(level, mob),
             Goal::RangedBowAttack(goal) => goal.can_use(level, mob),
             Goal::RangedCrossbowAttack(goal) => goal.can_use(level, mob),
+            Goal::SpearUse(goal) => goal.can_use(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_use(level, mob),
             Goal::RandomStroll(goal) => {
                 if level.guardian_take_random_stroll_trigger(mob) {
@@ -463,6 +466,7 @@ impl Goal {
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
             Goal::RangedBowAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::RangedCrossbowAttack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::SpearUse(goal) => goal.can_continue_to_use(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
             Goal::RandomStroll(goal) => goal.can_continue_to_use(level, mob),
             Goal::DrownedGoToWater(goal) => goal.can_continue_to_use(level, mob),
@@ -620,6 +624,7 @@ impl Goal {
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.start(level, mob),
             Goal::RangedBowAttack(goal) => goal.start(level, mob),
             Goal::RangedCrossbowAttack(_) => {}
+            Goal::SpearUse(goal) => goal.start(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.start(level, mob),
             Goal::RandomStroll(goal) => goal.start(level, mob),
             Goal::DrownedGoToWater(goal) => goal.start(level, mob),
@@ -767,6 +772,7 @@ impl Goal {
             Goal::SpiderTarget(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::RangedBowAttack(goal) => goal.stop(level, mob),
             Goal::RangedCrossbowAttack(goal) => goal.stop(level, mob),
+            Goal::SpearUse(goal) => goal.stop(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.stop(level, mob),
             Goal::RandomStroll(goal) => goal.stop(level, mob),
             Goal::DrownedGoToWater(_) | Goal::DrownedGoToBeach(_) => {}
@@ -954,6 +960,7 @@ impl Goal {
             Goal::SpiderAttack(goal) => goal.melee_attack_goal.tick(level, mob),
             Goal::RangedBowAttack(goal) => goal.tick(level, mob),
             Goal::RangedCrossbowAttack(goal) => goal.tick(level, mob),
+            Goal::SpearUse(goal) => goal.tick(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.tick(level, mob),
             Goal::RandomStroll(_) | Goal::DrownedGoToWater(_) => {}
             Goal::DrownedTridentAttack(goal) => goal.ranged_attack_goal.tick(level, mob),
@@ -1054,6 +1061,7 @@ impl Goal {
             | Goal::ZombieAttack(_)
             | Goal::RangedBowAttack(_)
             | Goal::RangedCrossbowAttack(_)
+            | Goal::SpearUse(_)
             | Goal::AbstractSkeletonMelee(_)
             | Goal::DrownedTridentAttack(_)
             | Goal::DrownedAttack(_) => Flag::Move.bit() | Flag::Look.bit(),

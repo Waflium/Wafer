@@ -11,6 +11,7 @@ use crate::util::time_util;
 use crate::util::valueproviders::IntProvider;
 use crate::world::entity::ai::MobAi;
 use crate::world::entity::ai::goal::goal::Goal;
+use crate::world::entity::ai::goal::spear_use_goal::SpearUseGoal;
 use crate::world::entity::ai::goal::target::hurt_by_target_goal::HurtByTargetGoal;
 use crate::world::entity::ai::goal::target::nearest_attackable_target_goal::{NearestAttackableTargetGoal, TargetType};
 use crate::world::entity::ai::goal::target::reset_universal_anger_target_goal::ResetUniversalAngerTargetGoal;
@@ -90,6 +91,7 @@ impl ZombifiedPiglin {
     }
 
     pub fn add_behaviour_goals(ai: &mut MobAi) {
+        ai.goal_selector.add_goal(1, Goal::SpearUse(SpearUseGoal::new(1.0, 1.0, 10.0, 2.0)));
         ai.goal_selector.add_goal(2, Goal::ZombieAttack(ZombieAttackGoal::new(1.0, false)));
         ai.goal_selector.add_goal(7, Goal::WaterAvoidingRandomStroll(WaterAvoidingRandomStrollGoal::new(1.0)));
         let target_selector = &mut ai.target_selector;

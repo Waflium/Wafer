@@ -20,6 +20,16 @@ use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::enchantment::enchanted_item_in_use::EnchantedItemInUse;
 use crate::world::item::enchantment::level_based_value::LevelBasedValue;
 
+const POST_IMPULSE_CONTEXT_RESET_GRACE_TIME_TICKS: i32 = 10;
+
+fn vec3(tag: &Nbt) -> DataResult<Vec3> {
+    let list = codec::list_of(tag, codec::double)?;
+    if list.len() != 3 {
+        return Err("Input is not a list of 3 elements".to_string());
+    }
+    Ok(Vec3::new(list[0], list[1], list[2]))
+}
+
 #[allow(dead_code)]
 pub enum EnchantmentEntityEffect {
     AllOf(Vec<EnchantmentEntityEffect>),
@@ -28,7 +38,7 @@ pub enum EnchantmentEntityEffect {
     DamageEntity { min_damage: LevelBasedValue, max_damage: LevelBasedValue, damage_type: DamageType },
     Explode(Nbt),
     Ignite { duration: LevelBasedValue },
-    ApplyImpulse(Nbt),
+    ApplyImpulse { direction: Vec3, coordinate_scale: Vec3, magnitude: LevelBasedValue },
     ApplyExhaustion { amount: LevelBasedValue },
     PlaySound { sound_events: Vec<SoundEvent>, volume: FloatProvider, pitch: FloatProvider },
     ReplaceBlock(Nbt),
@@ -165,7 +175,11 @@ impl EnchantmentEntityEffect {
             },
             "minecraft:explode" => EnchantmentEntityEffect::Explode(tag.clone()),
             "minecraft:ignite" => EnchantmentEntityEffect::Ignite { duration: value("duration")? },
-            "minecraft:apply_impulse" => EnchantmentEntityEffect::ApplyImpulse(tag.clone()),
+            "minecraft:apply_impulse" => EnchantmentEntityEffect::ApplyImpulse {
+                direction: codec::decode_field(tag, "direction", vec3)?,
+                coordinate_scale: codec::decode_field(tag, "coordinate_scale", vec3)?,
+                magnitude: value("magnitude")?,
+            },
             "minecraft:apply_exhaustion" => EnchantmentEntityEffect::ApplyExhaustion { amount: value("amount")? },
             "minecraft:play_sound" => EnchantmentEntityEffect::PlaySound {
                 sound_events: codec::decode_field(tag, "sound", |t| codec::compact_list_of(t, sound_event))?,
@@ -296,8 +310,25 @@ impl EnchantmentEntityEffect {
                 let speed = speed.sample(random) as f64;
                 level.send_particles(particle.particle_type, |w| particle.write_options(w), x, y, z, 0, dist, speed);
             }
+            EnchantmentEntityEffect::ApplyImpulse { direction, coordinate_scale, magnitude } => {
+                let e = level.entity(entity);
+                let look = crate::world::entity::calculate_view_quaternion(e.x_rot, e.y_rot);
+                let (x, y, z) = look.transform_f64(direction.x, direction.y, direction.z);
+                let magnitude = magnitude.calculate(enchantment_level) as f64;
+                let impulse = Vec3::new(x * coordinate_scale.x * magnitude, y * coordinate_scale.y * magnitude, z * coordinate_scale.z * magnitude);
+                level.entity_mut(entity).add_delta_movement(impulse);
+                if let Some(player) = level.players.get_mut(&entity) {
+                    let packet = crate::server::level::server_entity::set_entity_motion(entity, player.entity.delta_movement);
+                    player.connection.send_raw(packet);
+                    player.entity.sync_velocity = false;
+                } else {
+                    level.entity_mut(entity).sync_velocity = true;
+                }
+                if level.is_living(entity) {
+                    level.living_mut(entity).apply_post_impulse_grace_time(POST_IMPULSE_CONTEXT_RESET_GRACE_TIME_TICKS);
+                }
+            }
             EnchantmentEntityEffect::Explode(_)
-            | EnchantmentEntityEffect::ApplyImpulse(_)
             | EnchantmentEntityEffect::ReplaceBlock(_)
             | EnchantmentEntityEffect::RunFunction(_)
             | EnchantmentEntityEffect::SetBlockProperties(_) => {}

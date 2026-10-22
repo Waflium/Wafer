@@ -23,6 +23,9 @@ use crate::world::entity::ai::behavior::look_at_target_sink::LookAtTargetSink;
 use crate::world::entity::ai::behavior::move_to_target_sink::MoveToTargetSink;
 use crate::world::entity::ai::behavior::one_shot::OneShot;
 use crate::world::entity::ai::behavior::set_entity_look_target_sometimes::Ticker;
+use crate::world::entity::ai::behavior::spear_approach::SpearApproach;
+use crate::world::entity::ai::behavior::spear_attack::SpearAttack;
+use crate::world::entity::ai::behavior::spear_retreat::SpearRetreat;
 use crate::world::entity::ai::behavior::{
     back_up_if_too_close, behavior_utils, copy_memory_with_expiry, dismount_or_skip_mounting, erase_memory_if, go_to_target_location, go_to_wanted_item, interact_with, interact_with_door,
     melee_attack, mount, random_stroll, run_one, set_entity_look_target, set_look_and_interact, set_walk_target_away_from, set_walk_target_from_attack_target_if_target_out_of_reach,
@@ -126,6 +129,9 @@ fn init_fight_activity() -> ActivityData {
             Box::new(stop_attacking_if_target_invalid::create_when(|level, body, target| !is_nearest_valid_attack_target(level, body, target))),
             Box::new(behavior_builder::sequence(behavior_builder::trigger_if(has_crossbow), back_up_if_too_close::create(MIN_DESIRED_DIST_FROM_TARGET_WHEN_HOLDING_CROSSBOW, SPEED_WHEN_STRAFING_BACK_FROM_TARGET))),
             Box::new(set_walk_target_from_attack_target_if_target_out_of_reach::create_with(|_, _| 1.0)),
+            Box::new(SpearApproach::new(1.0, 10.0)),
+            Box::new(SpearAttack::new(1.0, 1.0, 2.0)),
+            Box::new(SpearRetreat::new(1.0)),
             Box::new(melee_attack::create(MELEE_ATTACK_COOLDOWN)),
             Box::new(CrossbowAttack::default()),
             Box::new(remember_if_hoglin_was_killed::create()),

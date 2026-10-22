@@ -260,20 +260,12 @@ pub(super) fn default_use(level: &mut ServerLevel, player: EntityId, hand: Inter
         level.start_using_item(player, hand);
         return (InteractionResult::CONSUME, None);
     }
-    if let Some(kinetic_weapon) = stack.get(component::KINETIC_WEAPON) {
+    if let Some(kinetic_weapon) = component::kinetic_weapon::KineticWeapon::of(&stack) {
         level.start_using_item(player, hand);
-        make_sound(level, kinetic_weapon, player);
+        kinetic_weapon.make_sound(level, player);
         return (InteractionResult::CONSUME, None);
     }
     (InteractionResult::Pass, None)
-}
-
-fn make_sound(level: &mut ServerLevel, kinetic_weapon: &wafer_protocol::nbt::Nbt, causer: EntityId) {
-    let Some(sound) = kinetic_weapon.get("sound").and_then(crate::sounds::sound_event::SoundEvent::from_nbt) else { return };
-    let source = level.sound_source(causer);
-    let e = level.entity(causer);
-    let (x, y, z) = (e.x(), e.y(), e.z());
-    level.play_sound_at(Some(causer), x, y, z, sound, source, 1.0, 1.0);
 }
 
 fn swap_with_equipment_slot(

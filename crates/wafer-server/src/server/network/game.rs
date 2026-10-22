@@ -324,7 +324,18 @@ impl ServerLevel {
         }
         self.player_mut(id).reset_last_action_time();
         match action {
-            STAB => {}
+            STAB => {
+                if self.is_spectator(id) {
+                    return;
+                }
+                let item_in_hand = self.get_item_in_hand(id, InteractionHand::MainHand).unwrap_or_else(ItemStack::empty);
+                if self.cannot_attack_with_item(id, &item_in_hand, 5) {
+                    return;
+                }
+                if let Some(piercing_weapon) = crate::world::item::component::piercing_weapon::PiercingWeapon::of(&item_in_hand) {
+                    piercing_weapon.attack(self, id, wafer_data::EquipmentSlot::Mainhand);
+                }
+            }
             SWAP_ITEM_WITH_OFFHAND => {
                 if !self.is_spectator(id) {
                     let p = self.player_mut(id);

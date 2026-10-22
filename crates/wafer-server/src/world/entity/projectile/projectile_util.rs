@@ -6,7 +6,10 @@ use crate::server::level::ServerLevel;
 use crate::world::InteractionHand;
 use crate::world::entity::EntityId;
 use crate::world::item::{ItemStack, arrow_item};
-use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::util::either::Either;
+use crate::world::entity::calculate_view_vector;
+use crate::world::item::component::attack_range::AttackRange;
+use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid, ClipResult};
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::{HitResult, Type};
 
@@ -50,6 +53,47 @@ impl ServerLevel {
             let y_rot = mth::lerp_f(rotation_speed, e.y_rot_o, e.y_rot);
             e.set_y_rot(y_rot);
         }
+    }
+
+    pub fn get_hit_entities_along(
+        &mut self,
+        attacker: EntityId,
+        attack_range: &AttackRange,
+        matching: impl Fn(&ServerLevel, EntityId) -> bool,
+        block_clip_type: ClipBlock,
+    ) -> Either<ClipResult, Vec<EntityHitResult>> {
+        let e = self.entity(attacker);
+        let look = calculate_view_vector(e.x_rot, e.y_head_rot);
+        let eye_position = e.eye_position();
+        let from = eye_position.add_vec(look.scale(attack_range.effective_min_range(self, attacker) as f64));
+        let movement_component = self.known_movement(attacker).dot(look);
+        let to = eye_position.add_vec(look.scale(attack_range.effective_max_range(self, attacker) as f64 + 0.0f64.max(movement_component)));
+        self.get_hit_entities_along_between(attacker, eye_position, from, matching, to, attack_range.hitbox_margin, block_clip_type)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn get_hit_entities_along_between(
+        &mut self,
+        source: EntityId,
+        origin: Vec3,
+        from: Vec3,
+        matching: impl Fn(&ServerLevel, EntityId) -> bool,
+        mut to: Vec3,
+        entity_margin: f32,
+        clip_type: ClipBlock,
+    ) -> Either<ClipResult, Vec<EntityHitResult>> {
+        let ctx = ClipContext { from: origin, to, block: clip_type, fluid: ClipFluid::None, is_player: self.is_player(source) };
+        let hit_result = self.clip_including_border(&ctx);
+        if !hit_result.miss {
+            to = hit_result.hit.location;
+            if origin.distance_to_sqr(to) < origin.distance_to_sqr(from) {
+                return Either::Left(hit_result);
+            }
+        }
+        let margin = entity_margin as f64;
+        let search_area = AABB::of_size(from, margin, margin, margin).expand_towards_vec(to.subtract(from)).inflate_all(1.0);
+        let entity_hit = self.get_many_entity_hit_result(source, from, to, &search_area, matching, entity_margin, clip_type, true, true);
+        if !entity_hit.is_empty() { Either::Right(entity_hit) } else { Either::Left(hit_result) }
     }
 
     pub fn get_hit_result_on_move_vector(&mut self, source: EntityId, matching: impl Fn(&ServerLevel, EntityId) -> bool) -> HitResult {

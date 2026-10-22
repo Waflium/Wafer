@@ -12,6 +12,7 @@ use crate::world::effect::MobEffectInstance;
 use crate::world::entity::ai::MobAi;
 use crate::world::entity::ai::goal::break_door_goal::BreakDoorGoal;
 use crate::world::entity::ai::goal::goal::Goal;
+use crate::world::entity::ai::goal::spear_use_goal::SpearUseGoal;
 use crate::world::entity::ai::goal::look_at_player_goal::LookAtPlayerGoal;
 use crate::world::entity::ai::goal::random_look_around_goal::RandomLookAroundGoal;
 use crate::world::entity::ai::goal::remove_block_goal::{RemoveBlockGoal, RemoveBlockSounds};
@@ -192,6 +193,7 @@ impl Zombie {
     }
 
     fn add_behaviour_goals(ai: &mut MobAi) {
+        ai.goal_selector.add_goal(2, Goal::SpearUse(SpearUseGoal::new(1.0, 1.0, 10.0, 2.0)));
         ai.goal_selector.add_goal(3, Goal::ZombieAttack(ZombieAttackGoal::new(1.0, false)));
         ai.goal_selector.add_goal(7, Goal::WaterAvoidingRandomStroll(WaterAvoidingRandomStrollGoal::new(1.0)));
         let target_selector = &mut ai.target_selector;

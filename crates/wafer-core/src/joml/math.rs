@@ -18,6 +18,10 @@ pub fn fma(a: f32, b: f32, c: f32) -> f32 {
     a * b + c
 }
 
+pub fn fma_f64(a: f64, b: f64, c: f64) -> f64 {
+    a * b + c
+}
+
 pub fn cos_from_sin(sin: f32, angle: f32) -> f32 {
     let cos = sqrt(1.0 - sin * sin);
     let a = angle + PI_HALF_F;

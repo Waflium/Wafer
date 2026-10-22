@@ -65,6 +65,7 @@ pub struct LivingEntity {
     pub last_climbable_pos: Option<BlockPos>,
     pub current_impulse_impact_pos: Option<Vec3>,
     pub current_impulse_context_reset_grace_time: i32,
+    pub recent_kinetic_enemies: Option<Vec<(EntityId, i64)>>,
     pub last_pos: Option<BlockPos>,
     active_location_dependent_enchantments: [Vec<(&'static enchantment::Enchantment, Vec<usize>)>; 8],
     pub hurt_time: i32,
@@ -121,6 +122,7 @@ impl LivingEntity {
             last_climbable_pos: None,
             current_impulse_impact_pos: None,
             current_impulse_context_reset_grace_time: 0,
+            recent_kinetic_enemies: None,
             last_pos: None,
             active_location_dependent_enchantments: Default::default(),
             hurt_time: 0,
@@ -617,6 +619,71 @@ impl ServerLevel {
 
     pub fn post_piercing_attack(&mut self, id: EntityId) {
         self.do_post_piercing_attack_effects(id);
+    }
+
+    pub fn was_recently_stabbed(&self, id: EntityId, target: EntityId, allowed_time: i32) -> bool {
+        match &self.living(id).recent_kinetic_enemies {
+            None => false,
+            Some(recent_kinetic_enemies) => recent_kinetic_enemies.iter().find(|(entity, _)| *entity == target).is_some_and(|&(_, time)| self.game_time - time < allowed_time as i64),
+        }
+    }
+
+    pub fn remember_stabbed_entity(&mut self, id: EntityId, target: EntityId) {
+        let game_time = self.game_time;
+        if let Some(recent_kinetic_enemies) = &mut self.living_mut(id).recent_kinetic_enemies {
+            match recent_kinetic_enemies.iter_mut().find(|(entity, _)| *entity == target) {
+                Some(entry) => entry.1 = game_time,
+                None => recent_kinetic_enemies.push((target, game_time)),
+            }
+        }
+    }
+
+    pub fn stabbed_entities(&self, id: EntityId, filter: impl Fn(&ServerLevel, EntityId) -> bool) -> i32 {
+        self.living(id).recent_kinetic_enemies.as_ref().map_or(0, |recent_kinetic_enemies| recent_kinetic_enemies.iter().filter(|(entity, _)| filter(self, *entity)).count() as i32)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn stab_attack(&mut self, id: EntityId, weapon_slot: EquipmentSlot, target: EntityId, base_damage: f32, deals_damage: bool, deals_knockback: bool, dismounts: bool) -> bool {
+        if self.is_player(id) {
+            self.player_stab_attack(id, weapon_slot, target, base_damage, deals_damage, deals_knockback, dismounts)
+        } else {
+            self.living_entity_stab_attack(id, weapon_slot, target, base_damage, deals_damage, deals_knockback, dismounts)
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn living_entity_stab_attack(&mut self, id: EntityId, weapon_slot: EquipmentSlot, target: EntityId, base_damage: f32, deals_damage: bool, deals_knockback: bool, dismounts: bool) -> bool {
+        let weapon_item = self.item_by_slot(id, weapon_slot).unwrap_or_else(ItemStack::empty);
+        let damage_source = self.get_damage_source(&weapon_item, id);
+        let post_enchantment_damage = self.modify_damage(&weapon_item, target, &damage_source, base_damage);
+        let old_movement = self.entity(target).delta_movement;
+        let mut affected = deals_knockback;
+        let dealt_damage = deals_damage && self.hurt_server(target, damage_source, post_enchantment_damage);
+        affected |= dealt_damage;
+        if deals_knockback {
+            self.living_entity_cause_extra_knockback(id, target, 0.4, old_movement);
+            let knockback = self.get_knockback(id, target, &damage_source);
+            self.living_entity_cause_extra_knockback(id, target, knockback, old_movement);
+        }
+        if dismounts && self.is_passenger(target) && !entity_type_tags::CANNOT_BE_DISMOUNTED_BY_ITEM_USAGE.contains(self.entity(target).entity_type as usize) {
+            affected = true;
+            self.stop_riding(target);
+        }
+        if dealt_damage {
+            self.do_post_attack_effects(target, &damage_source);
+        }
+        if !affected {
+            return false;
+        }
+        self.set_last_hurt_mob(id, target);
+        self.play_attack_sound(id);
+        true
+    }
+
+    pub fn on_attack(&mut self, id: EntityId) {
+        if self.is_player(id) {
+            self.player_on_attack(id);
+        }
     }
 
     pub fn get_attack_range_with(&self, id: EntityId, weapon_item: &ItemStack) -> AttackRange {

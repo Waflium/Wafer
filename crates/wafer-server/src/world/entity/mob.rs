@@ -2799,7 +2799,11 @@ impl ServerLevel {
         was_hurt
     }
 
-    fn get_damage_source(&self, item_stack: &ItemStack, attacker: EntityId) -> DamageSource {
+    pub fn charge_speed_modifier(&self, _id: EntityId) -> f32 {
+        1.0
+    }
+
+    pub fn get_damage_source(&self, item_stack: &ItemStack, attacker: EntityId) -> DamageSource {
         let ty = item_stack
             .get(dc::DAMAGE_TYPE)
             .and_then(Nbt::as_str)

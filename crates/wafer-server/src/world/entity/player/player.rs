@@ -108,6 +108,10 @@ impl ServerLevel {
         p.item_swap_ticker = 0;
     }
 
+    pub fn player_on_attack(&mut self, id: EntityId) {
+        self.reset_only_attack_strength_ticker(id);
+    }
+
     fn reset_only_attack_strength_ticker(&mut self, id: EntityId) {
         self.player_mut(id).attack_strength_ticker = 0;
     }
@@ -234,7 +238,7 @@ impl ServerLevel {
         let attack_strength_scale = self.get_attack_strength_scale(id, 0.5);
         let magic_boost = attack_strength_scale * (self.get_enchanted_damage(id, entity, base_damage, &damage_source) - base_damage);
         base_damage *= self.base_damage_scale_factor(id);
-        self.reset_only_attack_strength_ticker(id);
+        self.player_on_attack(id);
         if self.deflect_projectile(id, entity) {
             return;
         }
@@ -271,6 +275,46 @@ impl ServerLevel {
             }
         }
         self.post_piercing_attack(id);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn player_stab_attack(&mut self, id: EntityId, slot: EquipmentSlot, target: EntityId, mut base_damage: f32, deals_damage: bool, deals_knockback: bool, dismounts: bool) -> bool {
+        if self.cannot_attack(id, target) {
+            return false;
+        }
+        let weapon_item = self.item_by_slot(id, slot).unwrap_or_else(ItemStack::empty);
+        let damage_source = self.create_attack_source(id, &weapon_item);
+        let mut magic_boost = self.get_enchanted_damage(id, target, base_damage, &damage_source) - base_damage;
+        if !self.is_using_item(id) || self.used_item_hand(id).as_equipment_slot() != slot {
+            magic_boost *= self.get_attack_strength_scale(id, 0.5);
+            base_damage *= self.base_damage_scale_factor(id);
+        }
+        if deals_knockback && self.deflect_projectile(id, target) {
+            return true;
+        }
+        let total_damage = if deals_damage { base_damage + magic_boost } else { 0.0 };
+        let old_living_entity_health = if self.is_living(target) { self.health(target) } else { 0.0 };
+        let old_movement = self.entity(target).delta_movement;
+        let was_hurt = deals_damage && self.hurt_server(target, damage_source, total_damage);
+        if deals_knockback {
+            self.cause_extra_knockback(id, target, 0.4, old_movement);
+            let knockback = self.get_knockback(id, target, &damage_source);
+            self.cause_extra_knockback(id, target, knockback, old_movement);
+        }
+        let mut dismounted = false;
+        if dismounts && self.is_passenger(target) && !wafer_data::entity_type_tags::CANNOT_BE_DISMOUNTED_BY_ITEM_USAGE.contains(self.entity(target).entity_type as usize) {
+            dismounted = true;
+            self.stop_riding(target);
+        }
+        if !was_hurt && !deals_knockback && !dismounted {
+            return false;
+        }
+        self.attack_visual_effects(id, target, false, false, deals_damage, true, magic_boost);
+        self.set_last_hurt_mob(id, target);
+        self.item_attack_interaction(id, target, &weapon_item, &damage_source, was_hurt);
+        self.damage_stats_and_hearts(id, target, old_living_entity_health);
+        self.cause_food_exhaustion(id, 0.1);
+        true
     }
 
     fn deflect_projectile(&mut self, id: EntityId, entity: EntityId) -> bool {
@@ -913,5 +957,20 @@ mod tests {
         let dropped: Vec<_> = level.entities.values().filter_map(|e| if let LevelEntity::Item(item) = e { Some(item.item.item) } else { None }).collect();
         assert_eq!(dropped, vec![items::LEATHER_HELMET]);
         assert!(level.item_by_slot(player, EquipmentSlot::Mainhand).is_none());
+    }
+
+    #[test]
+    fn spears_stab_entities_between_their_reaches() {
+        let (mut level, player, near) = setup(Some(ItemStack::new(items::IRON_SPEAR, 1)));
+        let mut mob = crate::world::entity::monster::zombie::zombie::Zombie::create();
+        mob.entity.set_pos(Vec3::new(0.5, -60.0, 3.5));
+        let far = mob.entity.id;
+        level.add_fresh_entity(LevelEntity::Mob(Box::new(mob)));
+        let piercing_weapon = crate::world::item::component::piercing_weapon::PiercingWeapon::of(&ItemStack::new(items::IRON_SPEAR, 1)).unwrap();
+        piercing_weapon.attack(&mut level, player, EquipmentSlot::Mainhand);
+        assert_eq!(level.health(near), 4.0);
+        assert!((level.health(far) - 17.06).abs() < 1.0e-4);
+        assert_eq!(level.player(player).attack_strength_ticker, 0);
+        assert_eq!(level.item_by_slot(player, EquipmentSlot::Mainhand).unwrap().damage_value(), 1);
     }
 }

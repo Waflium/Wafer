@@ -88,6 +88,9 @@ impl ServerLevel {
         self.send_to_tracking_players(id, &packet);
         self.set_living_entity_flag(id, FLAG_IS_USING, true);
         self.set_living_entity_flag(id, FLAG_OFF_HAND, hand == InteractionHand::OffHand);
+        if self.living(id).use_item.as_ref().is_some_and(|use_item| use_item.has(dc::KINETIC_WEAPON)) {
+            self.living_mut(id).recent_kinetic_enemies = Some(Vec::new());
+        }
     }
 
     pub fn updating_using_item(&mut self, id: EntityId) {
@@ -116,7 +119,13 @@ impl ServerLevel {
             self.emit_particles_and_sounds(id, &stack, &consumable, 5);
         }
         let before = stack.clone();
-        crate::world::item::on_use_tick(self, id, &mut stack, remaining);
+        match crate::world::item::component::kinetic_weapon::KineticWeapon::of(&stack) {
+            Some(kinetic_weapon) => {
+                let slot = self.used_item_hand(id).as_equipment_slot();
+                kinetic_weapon.damage_entities(self, &stack, remaining, id, slot);
+            }
+            None => crate::world::item::on_use_tick(self, id, &mut stack, remaining),
+        }
         if stack != before {
             let hand = self.used_item_hand(id);
             if self.is_player(id) {
@@ -217,6 +226,7 @@ impl ServerLevel {
     }
 
     pub fn stop_using_item(&mut self, id: EntityId) {
+        self.living_mut(id).recent_kinetic_enemies = None;
         self.set_living_entity_flag(id, FLAG_IS_USING, false);
         let living = self.living_mut(id);
         living.use_item = None;

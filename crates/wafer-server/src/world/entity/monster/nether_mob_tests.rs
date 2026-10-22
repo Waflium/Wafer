@@ -277,7 +277,7 @@ fn nether_mobs_have_vanillas_attributes() {
     assert_eq!(attributes.value(Attribute::AttackDamage), 5.0);
     assert_eq!(attributes.value(Attribute::SpawnReinforcements), 0.0);
     assert_eq!(zombified_piglin.entity.dimensions.eye_height, 1.79);
-    assert_eq!(zombified_piglin.ai.goal_selector.get_available_goals().len(), 5);
+    assert_eq!(zombified_piglin.ai.goal_selector.get_available_goals().len(), 6);
     assert_eq!(zombified_piglin.ai.target_selector.get_available_goals().len(), 3);
 }
 
