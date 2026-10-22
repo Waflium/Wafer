@@ -193,6 +193,10 @@ impl ServerLevel {
         self.for_each_block_collision(box_, &CollisionContext::EMPTY, false, false, |_, c| c.shape.is_empty())
     }
 
+    pub fn no_block_collision(&self, entity: EntityId, box_: &AABB) -> bool {
+        self.for_each_block_collision(box_, &CollisionContext::of(self, entity), false, false, |_, c| c.shape.is_empty())
+    }
+
     pub fn no_block_and_liquid_collision(&self, box_: &AABB) -> bool {
         self.for_each_block_collision(box_, &CollisionContext::EMPTY, false, true, |_, c| c.shape.is_empty())
     }

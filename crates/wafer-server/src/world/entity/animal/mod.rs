@@ -20,6 +20,7 @@ pub mod dolphin;
 pub mod parrot;
 pub mod armadillo;
 pub mod bee;
+pub mod camel;
 pub mod axolotl;
 pub mod chicken;
 pub mod cow;
@@ -158,6 +159,7 @@ impl ServerLevel {
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) => equine::abstract_horse::is_food(item_stack),
             MobKind::ZombieHorse(_) => equine::zombie_horse::is_food(item_stack),
             MobKind::Llama(_) | MobKind::TraderLlama(_) => equine::llama::is_food(item_stack),
+            MobKind::Camel(_) | MobKind::CamelHusk(_) => camel::camel::is_food(self.mob(id).expect("a camel"), item_stack),
             MobKind::WanderingTrader(_) => false,
             MobKind::Axolotl(_) => axolotl::axolotl::is_food(item_stack),
             MobKind::Frog(_) => frog::frog::is_food(item_stack),
@@ -222,6 +224,7 @@ impl ServerLevel {
             MobKind::Turtle(_) => self.turtle_can_fall_in_love(id),
             MobKind::Hoglin(_) => self.hoglin_can_fall_in_love(id),
             MobKind::ZombieHorse(_) => false,
+            MobKind::CamelHusk(_) => camel::camel_husk::can_fall_in_love(),
             _ => self.animal_can_fall_in_love(id),
         }
     }
@@ -262,6 +265,8 @@ impl ServerLevel {
             MobKind::Mule(_) => false,
             MobKind::Sniffer(_) => self.sniffer_can_mate(id, partner),
             MobKind::Llama(_) | MobKind::TraderLlama(_) => self.llama_can_mate(id, partner),
+            MobKind::Camel(_) => self.camel_can_mate(id, partner),
+            MobKind::CamelHusk(_) => camel::camel_husk::can_mate(),
             _ => self.animal_can_mate(id, partner),
         }
     }

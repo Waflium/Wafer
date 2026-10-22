@@ -28,6 +28,8 @@ pub trait ServerLevelAccessor: LevelAccessor {
 
     fn get_sky_darken(&self) -> i32;
 
+    fn get_game_time(&self) -> i64;
+
     fn is_thundering(&self) -> bool;
 
     fn is_within_world_border(&self, pos: BlockPos) -> bool;

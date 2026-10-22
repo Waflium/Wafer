@@ -1928,6 +1928,10 @@ impl ServerLevel {
         if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
             return;
         }
+        if self.is_camel(id) {
+            self.camel_play_step_sound(id, state);
+            return;
+        }
         if self.is_abstract_horse(id) {
             self.abstract_horse_play_step_sound(id, pos, state);
             return;
@@ -2616,7 +2620,9 @@ impl ServerLevel {
                     | super::mob::MobKind::SkeletonHorse(_)
                     | super::mob::MobKind::ZombieHorse(_)
                     | super::mob::MobKind::Llama(_)
-                    | super::mob::MobKind::TraderLlama(_),
+                    | super::mob::MobKind::TraderLlama(_)
+                    | super::mob::MobKind::Camel(_)
+                    | super::mob::MobKind::CamelHusk(_),
                 ) => {
                     return self.abstract_horse_hurt_server(id, source, damage);
                 }
@@ -2704,8 +2710,8 @@ impl ServerLevel {
         if !self.is_mob(id) {
             return self.entity_interact(id, player, hand, location);
         }
-        if self.is_zombie_horse(id) {
-            self.mob_mut(id).expect("a zombie horse").persistence_required = true;
+        if self.is_zombie_horse(id) || self.is_camel_husk(id) {
+            self.mob_mut(id).expect("a mob").persistence_required = true;
         }
         if !self.is_alive(id) {
             return InteractionResult::Pass;
@@ -3001,6 +3007,8 @@ impl ServerLevel {
                     super::mob::MobKind::ZombieHorse(_) => "ZombieHorse",
                     super::mob::MobKind::Llama(_) => "Llama",
                     super::mob::MobKind::TraderLlama(_) => "TraderLlama",
+                    super::mob::MobKind::Camel(_) => "Camel",
+                    super::mob::MobKind::CamelHusk(_) => "CamelHusk",
                     super::mob::MobKind::WanderingTrader(_) => "WanderingTrader",
                     super::mob::MobKind::Axolotl(_) => "Axolotl",
                     super::mob::MobKind::Frog(_) => "Frog",
@@ -3669,6 +3677,7 @@ impl ServerLevel {
             Some(LevelEntity::Marker(_)) => super::marker::Marker::can_add_passenger(),
             Some(LevelEntity::OminousItemSpawner(_)) => super::ominous_item_spawner::OminousItemSpawner::can_add_passenger(),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_can_add_passenger(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Camel(_) | super::mob::MobKind::CamelHusk(_)) => self.camel_can_add_passenger(id),
             _ => self.passengers(id).is_empty(),
         }
     }
@@ -3949,6 +3958,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_passenger_attachment_point(id, passenger),
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_passenger_attachment_point(id, passenger),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Camel(_) | super::mob::MobKind::CamelHusk(_)) => self.camel_passenger_attachment_point(id, passenger),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_passenger_attachment_point(id, passenger),
             _ => self.default_passenger_attachment_point(id, passenger),
         }

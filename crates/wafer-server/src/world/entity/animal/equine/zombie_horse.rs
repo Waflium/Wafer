@@ -76,6 +76,10 @@ pub fn is_food(item_stack: &ItemStack) -> bool {
     item_stack.get_item().is(&item_tags::ZOMBIE_HORSE_FOOD)
 }
 
+pub fn charge_speed_modifier() -> f32 {
+    1.4
+}
+
 pub fn sun_protection_slot() -> EquipmentSlot {
     EquipmentSlot::Body
 }

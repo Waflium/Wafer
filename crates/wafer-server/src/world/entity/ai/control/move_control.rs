@@ -31,6 +31,7 @@ pub enum MoveControlKind {
     Axolotl(SmoothSwimmingMoveControl),
     Fox,
     Panda,
+    Camel,
     Ghast,
     Rabbit,
     Turtle,

@@ -14,6 +14,7 @@ pub enum LookControlKind {
     Phantom,
     Bee,
     Shulker,
+    Camel,
 }
 
 #[derive(Default)]
@@ -82,6 +83,7 @@ impl ServerLevel {
             LookControlKind::Fox => self.fox_look_control_tick(id),
             LookControlKind::Phantom => {}
             LookControlKind::Shulker => self.shulker_look_control_tick(id),
+            LookControlKind::Camel => self.camel_look_control_tick(id),
             LookControlKind::Bee => {
                 if !self.is_angry(id) {
                     self.look_control_look_control_tick(id);

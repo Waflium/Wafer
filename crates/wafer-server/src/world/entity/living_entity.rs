@@ -586,7 +586,7 @@ impl ServerLevel {
             Some(MobKind::Pig(_)) => self.pig_can_use_slot(id, slot),
             Some(MobKind::Strider(_)) => self.strider_can_use_slot(id, slot),
             Some(MobKind::Horse(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_)) => true,
-            Some(MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_can_use_slot(id, slot),
+            Some(MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::Camel(_) | MobKind::CamelHusk(_)) => self.abstract_horse_can_use_slot(id, slot),
             _ => true,
         }
     }
@@ -1315,6 +1315,8 @@ impl ServerLevel {
             self.wolf_actually_hurt(id, source, damage);
         } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, MobKind::Armadillo(_))) {
             self.armadillo_actually_hurt(id, source, damage);
+        } else if self.is_camel(id) {
+            self.camel_actually_hurt(id, source, damage);
         } else if self.mob(id).is_some_and(|mob| mob.animal().is_some()) {
             self.animal_actually_hurt(id, source, damage);
         } else {
@@ -2431,6 +2433,7 @@ impl ServerLevel {
             Some(MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::ZombieHorse(_)) => self.abstract_horse_ai_step(id),
             Some(MobKind::SkeletonHorse(_)) => self.skeleton_horse_ai_step(id),
             Some(MobKind::Llama(_)) => self.abstract_horse_ai_step(id),
+            Some(MobKind::Camel(_) | MobKind::CamelHusk(_)) => self.abstract_horse_ai_step(id),
             Some(MobKind::TraderLlama(_)) => self.trader_llama_ai_step(id),
             Some(MobKind::WanderingTrader(_)) => self.wandering_trader_ai_step(id),
             Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
@@ -2500,7 +2503,9 @@ impl ServerLevel {
     }
 
     pub fn tick_ridden_by(&mut self, id: EntityId, controller: EntityId, ridden_input: Vec3) {
-        if self.is_abstract_horse(id) {
+        if self.is_camel(id) {
+            self.camel_tick_ridden(id, controller, ridden_input);
+        } else if self.is_abstract_horse(id) {
             self.abstract_horse_tick_ridden(id, controller, ridden_input);
         } else if self.is_pig(id) {
             self.pig_tick_ridden(id, controller, ridden_input);
@@ -2514,7 +2519,9 @@ impl ServerLevel {
     pub fn living_entity_tick_ridden(&mut self, _id: EntityId, _controller: EntityId, _ridden_input: Vec3) {}
 
     pub fn get_ridden_input(&self, id: EntityId, controller: EntityId, self_input: Vec3) -> Vec3 {
-        if self.is_abstract_horse(id) {
+        if self.is_camel(id) {
+            self.camel_get_ridden_input(id, controller, self_input)
+        } else if self.is_abstract_horse(id) {
             self.abstract_horse_get_ridden_input(id, controller, self_input)
         } else if self.is_pig(id) {
             self.pig_get_ridden_input(id, controller, self_input)
@@ -2526,7 +2533,9 @@ impl ServerLevel {
     }
 
     pub fn get_ridden_speed(&self, id: EntityId, controller: EntityId) -> f32 {
-        if self.is_abstract_horse(id) {
+        if self.is_camel(id) {
+            self.camel_get_ridden_speed(id, controller)
+        } else if self.is_abstract_horse(id) {
             self.abstract_horse_get_ridden_speed(id, controller)
         } else if self.is_pig(id) {
             self.pig_get_ridden_speed(id, controller)
@@ -2898,6 +2907,8 @@ impl ServerLevel {
             self.ghast_travel(id, input);
         } else if self.is_phantom(id) {
             self.phantom_travel(id, input);
+        } else if self.is_camel(id) {
+            self.camel_travel(id, input);
         } else {
             self.living_entity_travel(id, input);
         }
@@ -3562,6 +3573,11 @@ impl ServerLevel {
             entity_type: super::entity_type::EntityType::by_id(self.entity(id).entity_type),
             is_player: self.is_player(id),
         }
+    }
+
+    pub fn would_not_suffocate_at_target_pose(&self, id: EntityId, pose: Pose) -> bool {
+        let target_bb = self.mob(id).expect("a mob").get_dimensions(pose).make_bounding_box(self.entity(id).position());
+        self.no_block_collision(id, &target_bb)
     }
 
     pub fn set_entity_pose(&mut self, id: EntityId, pose: Pose) {

@@ -1280,6 +1280,7 @@ impl ServerLevel {
     fn update_region_level_data(&mut self) {
         let moon_phase = self.environment_attributes().get_dimension_value(crate::world::attribute::environment_attributes::MOON_PHASE);
         self.chunks.region_level_data = world_gen_region::RegionLevelData {
+            game_time: self.game_time,
             overworld_clock_time: self.overworld_clock_time,
             moon_brightness: crate::world::level::moon_phase::MOON_BRIGHTNESS_PER_PHASE[moon_phase.index() as usize],
             thundering: self.is_thundering(),
@@ -1839,6 +1840,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if mob.abstract_schooling_fish().is_some() => self.abstract_schooling_fish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Pufferfish(_)) => self.pufferfish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Cat(_)) => self.cat_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Camel(_) | crate::world::entity::mob::MobKind::CamelHusk(_)) => self.camel_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Villager(_)) => self.villager_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Fox(_)) => self.fox_tick(id),
@@ -2160,6 +2162,10 @@ impl crate::world::level::server_level_accessor::ServerLevelAccessor for ServerL
 
     fn get_sky_darken(&self) -> i32 {
         self.sky_darken
+    }
+
+    fn get_game_time(&self) -> i64 {
+        self.game_time
     }
 
     fn is_thundering(&self) -> bool {

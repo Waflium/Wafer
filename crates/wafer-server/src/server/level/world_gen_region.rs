@@ -53,6 +53,7 @@ pub struct WorldGenRegion<'a> {
 
 #[derive(Clone, Copy, Debug)]
 pub struct RegionLevelData {
+    pub game_time: i64,
     pub overworld_clock_time: i64,
     pub moon_brightness: f32,
     pub thundering: bool,
@@ -61,7 +62,7 @@ pub struct RegionLevelData {
 
 impl Default for RegionLevelData {
     fn default() -> RegionLevelData {
-        RegionLevelData { overworld_clock_time: 0, moon_brightness: 0.0, thundering: false, world_border: [f64::MIN, f64::MIN, f64::MAX, f64::MAX] }
+        RegionLevelData { game_time: 0, overworld_clock_time: 0, moon_brightness: 0.0, thundering: false, world_border: [f64::MIN, f64::MIN, f64::MAX, f64::MAX] }
     }
 }
 
@@ -396,6 +397,10 @@ impl ServerLevelAccessor for WorldGenRegion<'_> {
 
     fn get_sky_darken(&self) -> i32 {
         0
+    }
+
+    fn get_game_time(&self) -> i64 {
+        self.level_data.game_time
     }
 
     fn is_thundering(&self) -> bool {

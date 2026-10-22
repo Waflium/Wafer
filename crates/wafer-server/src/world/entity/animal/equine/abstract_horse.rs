@@ -293,7 +293,8 @@ impl AbstractHorse {
         output.push(("EatingHaystack".into(), Nbt::Byte(is_eating(&mob.entity) as i8)));
         output.push(("Bred".into(), Nbt::Byte(is_bred(&mob.entity) as i8)));
         output.push(("Temper".into(), Nbt::Int(abstract_horse(mob).temper)));
-        output.push(("Tame".into(), Nbt::Byte(is_tamed(&mob.entity) as i8)));
+        let tamed = if matches!(mob.kind, MobKind::Camel(_) | MobKind::CamelHusk(_)) { crate::world::entity::animal::camel::camel::is_tamed() } else { is_tamed(&mob.entity) };
+        output.push(("Tame".into(), Nbt::Byte(tamed as i8)));
         EntityReference::store(abstract_horse(mob).owner, output, "Owner");
     }
 
@@ -346,7 +347,7 @@ impl ServerLevel {
     }
 
     pub fn can_perform_rearing(&self, id: EntityId) -> bool {
-        !self.is_llama(id) && can_perform_rearing()
+        !self.is_llama(id) && !self.is_camel(id) && can_perform_rearing()
     }
 
     pub fn can_eat_grass(&self, id: EntityId) -> bool {
@@ -354,7 +355,13 @@ impl ServerLevel {
     }
 
     pub fn is_mob_controlled(&self, id: EntityId) -> bool {
-        if self.is_zombie_horse(id) { self.zombie_horse_is_mob_controlled(id) } else { is_mob_controlled() }
+        if self.is_zombie_horse(id) {
+            self.zombie_horse_is_mob_controlled(id)
+        } else if self.is_camel_husk(id) {
+            self.camel_husk_is_mob_controlled(id)
+        } else {
+            is_mob_controlled()
+        }
     }
 }
 
@@ -395,7 +402,7 @@ impl ServerLevel {
     }
 
     pub fn is_tamed(&self, id: EntityId) -> bool {
-        is_tamed(self.entity(id))
+        if self.is_camel(id) { crate::world::entity::animal::camel::camel::is_tamed() } else { is_tamed(self.entity(id)) }
     }
 
     pub fn is_eating(&self, id: EntityId) -> bool {
@@ -479,7 +486,11 @@ impl ServerLevel {
     }
 
     pub fn get_equip_sound_for_saddle(&self, id: EntityId) -> Option<i32> {
-        self.is_abstract_horse(id).then(|| sound_event("minecraft:entity.horse.saddle"))
+        let mob = self.mob(id)?;
+        match mob.kind {
+            MobKind::Camel(_) | MobKind::CamelHusk(_) => Some(sound_event(crate::world::entity::animal::camel::camel::get_saddle_sound(mob))),
+            _ => self.is_abstract_horse(id).then(|| sound_event("minecraft:entity.horse.saddle")),
+        }
     }
 
     pub fn abstract_horse_hurt_server(&mut self, id: EntityId, source: DamageSource, damage: f32) -> bool {
@@ -498,6 +509,7 @@ impl ServerLevel {
             MobKind::Mule(_) => Some(super::mule::get_eating_sound()),
             MobKind::ZombieHorse(_) => Some(super::zombie_horse::get_eating_sound()),
             MobKind::Llama(_) | MobKind::TraderLlama(_) => Some(super::llama::get_eating_sound()),
+            MobKind::Camel(_) | MobKind::CamelHusk(_) => Some(crate::world::entity::animal::camel::camel::get_eating_sound(mob)),
             _ => None,
         }
     }
@@ -549,13 +561,23 @@ impl ServerLevel {
     }
 
     pub fn abstract_horse_open_custom_inventory_screen(&mut self, id: EntityId, player: EntityId) {
+        if self.is_camel(id) {
+            self.camel_open_custom_inventory_screen(id, player);
+            return;
+        }
         if (!self.is_vehicle(id) || self.has_passenger(id, player)) && self.is_tamed(id) {
             self.open_horse_inventory(player, id);
         }
     }
 
     pub fn fed_food(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, item_stack: &mut ItemStack) -> InteractionResult {
-        let ate_food = if self.is_llama(id) { self.llama_handle_eating(id, player, item_stack) } else { self.handle_eating(id, player, item_stack) };
+        let ate_food = if self.is_llama(id) {
+            self.llama_handle_eating(id, player, item_stack)
+        } else if self.is_camel(id) {
+            self.camel_handle_eating(id, player, item_stack)
+        } else {
+            self.handle_eating(id, player, item_stack)
+        };
         if ate_food {
             item_stack.consume(1, self, Some(player));
             self.player_mut(player).update_item_in_hand(hand, item_stack);
@@ -631,7 +653,7 @@ impl ServerLevel {
         item_used
     }
 
-    fn ageable_age(&self, id: EntityId) -> i32 {
+    pub fn ageable_age(&self, id: EntityId) -> i32 {
         self.mob(id).and_then(Mob::ageable).map_or(0, |ageable| ageable.age)
     }
 
@@ -867,7 +889,7 @@ impl ServerLevel {
 
     pub fn abstract_horse_tick_ridden(&mut self, id: EntityId, controller: EntityId, ridden_input: Vec3) {
         self.living_entity_tick_ridden(id, controller, ridden_input);
-        let (rotation_x, rotation_y) = self.get_ridden_rotation(controller);
+        let (rotation_x, rotation_y) = self.get_ridden_rotation(id, controller);
         let e = self.entity_mut(id);
         e.set_rot(rotation_y, rotation_x);
         let y_rot = e.y_rot;
@@ -888,7 +910,10 @@ impl ServerLevel {
         }
     }
 
-    fn get_ridden_rotation(&self, controller: EntityId) -> (f32, f32) {
+    fn get_ridden_rotation(&self, id: EntityId, controller: EntityId) -> (f32, f32) {
+        if self.is_camel(id) {
+            return self.camel_get_ridden_rotation(id, controller);
+        }
         let c = self.entity(controller);
         (c.x_rot * 0.5, c.y_rot)
     }
@@ -919,6 +944,10 @@ impl ServerLevel {
     }
 
     fn execute_riders_jump(&mut self, id: EntityId, amount: f32, input: Vec3) {
+        if self.is_camel(id) {
+            self.camel_execute_riders_jump(id, amount);
+            return;
+        }
         let impulse = self.get_jump_power_with_multiplier(id, amount) as f64;
         let e = self.entity_mut(id);
         let movement = e.delta_movement;

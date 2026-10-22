@@ -180,6 +180,7 @@ impl ServerLevel {
             MobKind::Panda(_) => false,
             MobKind::Villager(_) | MobKind::WanderingTrader(_) => false,
             MobKind::ZombieHorse(_) => self.is_tamed(id) || !self.is_mob_controlled(id),
+            MobKind::CamelHusk(_) => self.camel_husk_can_be_leashed(id),
             _ => !self.is_enemy(id),
         }
     }
@@ -287,6 +288,9 @@ impl ServerLevel {
         self.entity_mut(id).check_fall_distance_accumulation();
         if self.is_abstract_horse(id) && self.is_eating(id) {
             self.set_eating(id, false);
+        }
+        if self.is_camel(id) {
+            self.camel_on_elastic_leash_pull(id);
         }
     }
 

@@ -9,7 +9,7 @@ use crate::world::entity::attributes::ZOMBIE_ATTRIBUTES;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::spawn_group_data::SpawnGroupData;
-use crate::world::entity::{EntityDimensions, EntityId};
+use crate::world::entity::{EntityDimensions, EntityId, LevelEntity};
 use crate::world::item::ItemStack;
 
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.6, 1.95)
@@ -70,9 +70,31 @@ impl ServerLevel {
                 husk_group_data.tried_to_spawn_camel_husk = true;
                 if self.random.next_float() < 0.1 {
                     self.living_set_item_slot(id, EquipmentSlot::Mainhand, ItemStack::new(items::IRON_SPEAR, 1));
+                    self.husk_spawn_camel_husk(id, difficulty, spawn_reason);
                 }
             }
         }
         group_data
+    }
+
+    fn husk_spawn_camel_husk(&mut self, id: EntityId, difficulty: &DifficultyInstance, spawn_reason: EntitySpawnReason) {
+        let Some(LevelEntity::Mob(mut camel_husk)) = ServerLevel::create_entity("minecraft:camel_husk") else { return };
+        let e = self.entity(id);
+        let (x, y, z, y_rot) = (e.x(), e.y(), e.z(), e.y_rot);
+        camel_husk.entity.set_pos(Vec3::new(x, y, z));
+        let camel_husk_id = camel_husk.entity.id;
+        self.entities.insert(camel_husk_id, LevelEntity::Mob(camel_husk));
+        self.finalize_spawn(camel_husk_id, difficulty, spawn_reason, None);
+        self.start_riding(id, camel_husk_id, true, true);
+        let camel_husk = self.entities.shift_remove(&camel_husk_id).expect("the camel husk");
+        self.add_fresh_entity(camel_husk);
+        let Some(LevelEntity::Mob(mut parched)) = ServerLevel::create_entity("minecraft:parched") else { return };
+        parched.entity.snap_to(x, y, z, y_rot, 0.0);
+        let parched_id = parched.entity.id;
+        self.entities.insert(parched_id, LevelEntity::Mob(parched));
+        self.finalize_spawn(parched_id, difficulty, spawn_reason, None);
+        self.start_riding(parched_id, camel_husk_id, false, false);
+        let parched = self.entities.shift_remove(&parched_id).expect("the parched");
+        crate::world::level::server_level_accessor::ServerLevelAccessor::add_fresh_entity_with_passengers(self, parched);
     }
 }

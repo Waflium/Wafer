@@ -7,11 +7,15 @@ impl ServerLevel {
     }
 
     pub fn can_jump(&self, id: EntityId) -> bool {
-        self.abstract_horse_can_jump(id)
+        if self.is_camel(id) { self.camel_can_jump(id) } else { self.abstract_horse_can_jump(id) }
     }
 
     pub fn handle_start_jump(&mut self, id: EntityId, jump_scale: i32) {
-        self.abstract_horse_handle_start_jump(id, jump_scale);
+        if self.is_camel(id) {
+            self.camel_handle_start_jump(id);
+        } else {
+            self.abstract_horse_handle_start_jump(id, jump_scale);
+        }
     }
 
     pub fn handle_stop_jump(&mut self, id: EntityId) {
