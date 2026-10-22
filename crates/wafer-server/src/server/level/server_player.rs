@@ -149,6 +149,7 @@ pub struct ServerPlayer {
     pub post_effects_dirty: bool,
     pub camera: Option<EntityId>,
     pub ender_pearls: Vec<EntityId>,
+    pub fishing: Option<EntityId>,
     pub cooldowns: crate::world::item::item_cooldowns::ItemCooldowns,
 }
 
@@ -268,6 +269,7 @@ impl ServerPlayer {
             post_effects_dirty: true,
             camera: None,
             ender_pearls: Vec::new(),
+            fishing: None,
             cooldowns: Default::default(),
         };
         player.update_options(client);

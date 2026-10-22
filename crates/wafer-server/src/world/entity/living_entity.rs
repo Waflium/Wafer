@@ -1973,6 +1973,8 @@ impl ServerLevel {
             self.abstract_minecart_remove(id, reason);
         } else if self.is_container_entity(id) {
             self.abstract_chest_boat_remove(id, reason);
+        } else if self.is_fishing_hook(id) {
+            self.fishing_hook_remove(id, reason);
         } else {
             self.set_removed(id, reason);
         }

@@ -315,6 +315,14 @@ impl Enchantment {
         modify_item_filtered_count(&self.effects.projectile_piercing, level, enchantment_level, item_stack, count);
     }
 
+    pub fn modify_fishing_time_reduction(&self, level: &mut ServerLevel, enchantment_level: i32, fisher: EntityId, time_reduction: &mut f32) {
+        modify_entity_filtered_value(&self.effects.fishing_time_reduction, level, enchantment_level, fisher, time_reduction);
+    }
+
+    pub fn modify_fishing_luck_bonus(&self, level: &mut ServerLevel, enchantment_level: i32, fisher: EntityId, luck: &mut f32) {
+        modify_entity_filtered_value(&self.effects.fishing_luck_bonus, level, enchantment_level, fisher, luck);
+    }
+
     pub fn modify_projectile_count(&self, level: &mut ServerLevel, enchantment_level: i32, shooter: EntityId, count: &mut f32) {
         modify_entity_filtered_value(&self.effects.projectile_count, level, enchantment_level, shooter, count);
     }

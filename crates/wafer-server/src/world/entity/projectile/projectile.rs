@@ -50,6 +50,7 @@ pub enum ProjectileKind {
     LlamaSpit(super::llama_spit::LlamaSpit),
     WindCharge(super::hurtingprojectile::windcharge::wind_charge::WindCharge),
     BreezeWindCharge(super::hurtingprojectile::windcharge::breeze_wind_charge::BreezeWindCharge),
+    FishingHook(super::fishing_hook::FishingHook),
 }
 
 pub struct Projectile {
@@ -240,6 +241,9 @@ impl ServerLevel {
     }
 
     pub fn projectile_add_data(&self, id: EntityId) -> i32 {
+        if self.is_fishing_hook(id) {
+            return self.fishing_hook_add_data(id);
+        }
         self.projectile_get_owner(id).unwrap_or(0)
     }
 
@@ -254,6 +258,7 @@ impl ServerLevel {
             ProjectileKind::LlamaSpit(_) => self.llama_spit_tick(id),
             ProjectileKind::WindCharge(_) => self.wind_charge_tick(id),
             ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_tick(id),
+            ProjectileKind::FishingHook(_) => self.fishing_hook_tick(id),
             _ => self.throwable_projectile_tick(id),
         }
     }
@@ -363,7 +368,7 @@ impl ServerLevel {
     }
 
     fn should_bounce_on_world_border(&self, id: EntityId) -> bool {
-        self.projectile(id).abstract_arrow().is_some()
+        self.projectile(id).abstract_arrow().is_some() || self.is_fishing_hook(id)
     }
 
     pub fn deflect(&mut self, id: EntityId, deflection: ProjectileDeflection, deflecting_entity: Option<EntityId>, new_owner: Option<EntityReference>, by_attack: bool, power: Vec3) -> bool {
@@ -396,7 +401,7 @@ impl ServerLevel {
             ProjectileKind::ThrownEnderpearl(_) => self.thrown_enderpearl_on_hit(id, hit_result),
             ProjectileKind::ThrownExperienceBottle(_) => self.thrown_experience_bottle_on_hit(id, hit_result),
             ProjectileKind::ThrownSplashPotion(_) | ProjectileKind::ThrownLingeringPotion(_) => self.abstract_thrown_potion_on_hit(id, hit_result),
-            ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::ThrownTrident(_) | ProjectileKind::FireworkRocket(_) | ProjectileKind::LlamaSpit(_) => {
+            ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) | ProjectileKind::ThrownTrident(_) | ProjectileKind::FireworkRocket(_) | ProjectileKind::LlamaSpit(_) | ProjectileKind::FishingHook(_) => {
                 self.projectile_base_on_hit(id, hit_result)
             }
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit(id, hit_result),
@@ -443,6 +448,7 @@ impl ServerLevel {
             ProjectileKind::LargeFireball(_) => self.large_fireball_on_hit_entity(id, hit_result),
             ProjectileKind::LlamaSpit(_) => self.llama_spit_on_hit_entity(id, hit_result),
             ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit_entity(id, hit_result),
+            ProjectileKind::FishingHook(_) => self.fishing_hook_on_hit_entity(id, hit_result),
         }
     }
 
@@ -454,6 +460,7 @@ impl ServerLevel {
             ProjectileKind::SmallFireball(_) => self.small_fireball_on_hit_block(id, hit_result),
             ProjectileKind::LlamaSpit(_) => self.llama_spit_on_hit_block(id, hit_result),
             ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => self.abstract_wind_charge_on_hit_block(id, hit_result),
+            ProjectileKind::FishingHook(_) => self.fishing_hook_on_hit_block(id, hit_result),
             _ => self.projectile_base_on_hit_block(id, hit_result),
         }
     }
@@ -472,6 +479,9 @@ impl ServerLevel {
         }
         if self.projectile(id).abstract_hurting_projectile().is_some() {
             return self.abstract_hurting_projectile_can_hit_entity(id, entity);
+        }
+        if self.is_fishing_hook(id) {
+            return self.fishing_hook_can_hit_entity(id, entity);
         }
         self.projectile_base_can_hit_entity(id, entity)
     }

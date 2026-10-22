@@ -152,7 +152,13 @@ impl LevelEntity {
             LevelEntity::ExperienceOrb(_) => TrackingConfig { range: 6 * 16, update_interval: UpdateInterval::Periodic(20), track_deltas: true, stepped: false, is_item: false },
             LevelEntity::Mob(mob) => TrackingConfig { range: mob.client_tracking_range() * 16, update_interval: UpdateInterval::Periodic(3), track_deltas: mob.track_deltas(), stepped: true, is_item: false },
             LevelEntity::Projectile(projectile) => {
-                let update_interval = if projectile.abstract_arrow().is_some() { 20 } else { 10 };
+                let update_interval = if projectile.abstract_arrow().is_some() {
+                    20
+                } else if matches!(projectile.kind, projectile::projectile::ProjectileKind::FishingHook(_)) {
+                    5
+                } else {
+                    10
+                };
                 let track_deltas = !matches!(projectile.kind, projectile::projectile::ProjectileKind::LlamaSpit(_));
                 TrackingConfig { range: 4 * 16, update_interval: UpdateInterval::Periodic(update_interval), track_deltas, stepped: false, is_item: false }
             }

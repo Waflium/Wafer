@@ -24,6 +24,7 @@ pub mod enderpearl_item;
 pub mod experience_bottle_item;
 pub mod fire_charge_item;
 pub mod firework_rocket_item;
+pub mod fishing_rod_item;
 pub mod glow_ink_sac_item;
 pub mod ink_sac_item;
 pub mod projectile_item;
@@ -208,6 +209,9 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     }
     if stack.item.is_instance_of("SnowballItem") {
         return snowball_item::use_item(level, player, hand);
+    }
+    if stack.item.is_instance_of("FishingRodItem") {
+        return fishing_rod_item::use_item(level, player, hand);
     }
     if stack.item.is_instance_of("WindChargeItem") {
         return wind_charge_item::use_item(level, player, hand);

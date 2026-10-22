@@ -241,6 +241,7 @@ impl LevelEntity {
                     ProjectileKind::SmallFireball(_) => projectile.fireball_add_additional_save_data(out),
                     ProjectileKind::LargeFireball(_) => projectile.large_fireball_add_additional_save_data(out),
                     ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => projectile.abstract_hurting_projectile_add_additional_save_data(out),
+                    ProjectileKind::FishingHook(_) => {}
                     _ => projectile.throwable_item_projectile_add_additional_save_data(out),
                 }
             }
@@ -321,6 +322,7 @@ impl LevelEntity {
                     ProjectileKind::SmallFireball(_) => projectile.fireball_read_additional_save_data(nbt),
                     ProjectileKind::LargeFireball(_) => projectile.large_fireball_read_additional_save_data(nbt),
                     ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => projectile.abstract_hurting_projectile_read_additional_save_data(nbt),
+                    ProjectileKind::FishingHook(_) => {}
                     _ => projectile.throwable_item_projectile_read_additional_save_data(nbt),
                 }
             }

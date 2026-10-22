@@ -934,10 +934,6 @@ impl ServerLevel {
         if self.is_minecart(id) { ServerLevel::old_minecart_behavior_known_movement(known_movement) } else { known_movement }
     }
 
-    pub fn fishing_hook_open_water(&self, _id: EntityId) -> Option<bool> {
-        None
-    }
-
     pub fn is_alive(&self, id: EntityId) -> bool {
         match self.players.get(&id) {
             Some(p) => !p.entity.is_removed() && p.health > 0.0,
@@ -1020,6 +1016,7 @@ impl ServerLevel {
                 | ProjectileKind::ThrownTrident(_) => 0.05,
                 ProjectileKind::FireworkRocket(_) => 0.0,
                 ProjectileKind::SmallFireball(_) | ProjectileKind::LargeFireball(_) | ProjectileKind::WindCharge(_) | ProjectileKind::BreezeWindCharge(_) => 0.0,
+                ProjectileKind::FishingHook(_) => super::projectile::fishing_hook::GRAVITY as f64,
                 ProjectileKind::LlamaSpit(_) => 0.06,
                 _ => 0.03,
             },
@@ -2909,6 +2906,7 @@ impl ServerLevel {
                     ProjectileKind::LlamaSpit(_) => "LlamaSpit",
                     ProjectileKind::LargeFireball(_) => "LargeFireball",
                     ProjectileKind::WindCharge(_) => "WindCharge",
+                    ProjectileKind::FishingHook(_) => "FishingHook",
                     ProjectileKind::BreezeWindCharge(_) => "BreezeWindCharge",
                 },
                 Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",
@@ -3090,6 +3088,9 @@ impl ServerLevel {
     pub fn can_use_portal(&self, id: EntityId, ignore_passenger: bool) -> bool {
         if self.as_projectile(id).is_some_and(super::projectile::projectile::Projectile::is_throwable_item_projectile) {
             return true;
+        }
+        if self.is_fishing_hook(id) {
+            return false;
         }
         (ignore_passenger || self.vehicle(id).is_none()) && self.is_alive(id) && !(self.is_living(id) && self.is_sleeping(id))
     }

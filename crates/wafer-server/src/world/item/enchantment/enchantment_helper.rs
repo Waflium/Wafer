@@ -29,6 +29,18 @@ pub fn process_ammo_use(level: &mut ServerLevel, weapon: &ItemStack, ammo: &Item
     modified_amount as i32
 }
 
+pub fn get_fishing_luck_bonus(level: &mut ServerLevel, rod: &ItemStack, fisher: EntityId) -> i32 {
+    let mut modified_speed = 0.0;
+    run_iteration_on_item(rod, |enchantment, enchantment_level| enchantment.modify_fishing_luck_bonus(level, enchantment_level, fisher, &mut modified_speed));
+    0.max(modified_speed as i32)
+}
+
+pub fn get_fishing_time_reduction(level: &mut ServerLevel, rod: &ItemStack, fisher: EntityId) -> f32 {
+    let mut modified_speed = 0.0;
+    run_iteration_on_item(rod, |enchantment, enchantment_level| enchantment.modify_fishing_time_reduction(level, enchantment_level, fisher, &mut modified_speed));
+    0.0f32.max(modified_speed)
+}
+
 pub fn process_projectile_count(level: &mut ServerLevel, weapon: &ItemStack, shooter: EntityId, count: i32) -> i32 {
     let mut modified_count = count as f32;
     run_iteration_on_item(weapon, |enchantment, enchantment_level| enchantment.modify_projectile_count(level, enchantment_level, shooter, &mut modified_count));
