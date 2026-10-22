@@ -23,6 +23,9 @@ use crate::world::entity::monster::illager::illusioner::{IllusionerBlindnessSpel
 use crate::world::entity::monster::illager::spellcaster_illager::SpellcasterCastingSpellGoal;
 use crate::world::entity::monster::illager::evoker::{EvokerAttackSpellGoal, EvokerCastingSpellGoal, EvokerSummonSpellGoal, EvokerWololoSpellGoal};
 use crate::world::entity::animal::equine::skeleton_horse::SkeletonTrapGoal;
+use crate::world::entity::animal::panda::panda::{
+    PandaAttackGoal, PandaAvoidGoal, PandaBreedGoal, PandaHurtByTargetGoal, PandaLieOnBackGoal, PandaLookAtPlayerGoal, PandaPanicGoal, PandaRollGoal, PandaSitGoal, PandaSneezeGoal,
+};
 use crate::world::entity::animal::polarbear::polar_bear::{PolarBearAttackPlayersGoal, PolarBearHurtByTargetGoal, PolarBearMeleeAttackGoal};
 use crate::world::entity::monster::vex::{VexChargeAttackGoal, VexCopyOwnerTargetGoal, VexRandomMoveGoal};
 use super::random_stroll_goal::RandomStrollGoal;
@@ -143,6 +146,16 @@ pub enum Goal {
     SkeletonTrap(SkeletonTrapGoal),
     PolarBearMeleeAttack(PolarBearMeleeAttackGoal),
     PolarBearHurtByTarget(PolarBearHurtByTargetGoal),
+    PandaPanic(PandaPanicGoal),
+    PandaBreed(PandaBreedGoal),
+    PandaAttack(PandaAttackGoal),
+    PandaAvoid(PandaAvoidGoal),
+    PandaSit(PandaSitGoal),
+    PandaLieOnBack(PandaLieOnBackGoal),
+    PandaSneeze(PandaSneezeGoal),
+    PandaLookAtPlayer(PandaLookAtPlayerGoal),
+    PandaRoll(PandaRollGoal),
+    PandaHurtByTarget(PandaHurtByTargetGoal),
     PolarBearAttackPlayers(PolarBearAttackPlayersGoal),
     LlamaFollowCaravan(LlamaFollowCaravanGoal),
     LlamaHurtByTarget(HurtByTargetGoal),
@@ -388,6 +401,16 @@ impl Goal {
             Goal::SkeletonTrap(goal) => goal.can_use(level, mob),
             Goal::PolarBearMeleeAttack(goal) => goal.melee_attack_goal.can_use(level, mob),
             Goal::PolarBearHurtByTarget(goal) => goal.hurt_by_target_goal.can_use(level, mob),
+            Goal::PandaPanic(goal) => goal.panic_goal.can_use(level, mob),
+            Goal::PandaBreed(goal) => goal.can_use(level, mob),
+            Goal::PandaAttack(goal) => goal.can_use(level, mob),
+            Goal::PandaAvoid(goal) => goal.can_use(level, mob),
+            Goal::PandaSit(goal) => goal.can_use(level, mob),
+            Goal::PandaLieOnBack(goal) => goal.can_use(level, mob),
+            Goal::PandaSneeze(goal) => goal.can_use(level, mob),
+            Goal::PandaLookAtPlayer(goal) => goal.can_use(level, mob),
+            Goal::PandaRoll(goal) => goal.can_use(level, mob),
+            Goal::PandaHurtByTarget(goal) => goal.hurt_by_target_goal.can_use(level, mob),
             Goal::PolarBearAttackPlayers(goal) => goal.can_use(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.can_use(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.can_use(level, mob),
@@ -534,6 +557,15 @@ impl Goal {
             Goal::SkeletonTrap(goal) => goal.can_use(level, mob),
             Goal::PolarBearMeleeAttack(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
             Goal::PolarBearHurtByTarget(goal) => goal.hurt_by_target_goal.target_goal.can_continue_to_use(level, mob),
+            Goal::PandaPanic(goal) => goal.can_continue_to_use(level, mob),
+            Goal::PandaBreed(goal) => goal.breed_goal.can_continue_to_use(level, mob),
+            Goal::PandaAttack(goal) => goal.melee_attack_goal.can_continue_to_use(level, mob),
+            Goal::PandaAvoid(goal) => goal.avoid_entity_goal.can_continue_to_use(level, mob),
+            Goal::PandaSit(goal) => goal.can_continue_to_use(level, mob),
+            Goal::PandaLieOnBack(goal) => goal.can_continue_to_use(level, mob),
+            Goal::PandaSneeze(_) | Goal::PandaRoll(_) => false,
+            Goal::PandaLookAtPlayer(goal) => goal.can_continue_to_use(level, mob),
+            Goal::PandaHurtByTarget(goal) => goal.can_continue_to_use(level, mob),
             Goal::PolarBearAttackPlayers(goal) => goal.nearest_attackable_target_goal.target_goal.can_continue_to_use(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.can_continue_to_use(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.can_continue_to_use(level, mob),
@@ -549,7 +581,7 @@ impl Goal {
     }
 
     pub fn is_interruptable(&self) -> bool {
-        !matches!(self, Goal::FoxPounce(_))
+        !matches!(self, Goal::FoxPounce(_) | Goal::PandaRoll(_))
     }
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
@@ -676,6 +708,16 @@ impl Goal {
             Goal::SkeletonTrap(_) => {}
             Goal::PolarBearMeleeAttack(goal) => goal.melee_attack_goal.start(level, mob),
             Goal::PolarBearHurtByTarget(goal) => goal.start(level, mob),
+            Goal::PandaPanic(goal) => goal.panic_goal.start(level, mob),
+            Goal::PandaBreed(_) => {}
+            Goal::PandaAttack(goal) => goal.melee_attack_goal.start(level, mob),
+            Goal::PandaAvoid(goal) => goal.avoid_entity_goal.start(level, mob),
+            Goal::PandaSit(goal) => goal.start(level, mob),
+            Goal::PandaLieOnBack(goal) => goal.start(level, mob),
+            Goal::PandaSneeze(goal) => goal.start(level, mob),
+            Goal::PandaLookAtPlayer(goal) => goal.look_at_player_goal.start(level, mob),
+            Goal::PandaRoll(goal) => goal.start(level, mob),
+            Goal::PandaHurtByTarget(goal) => goal.start(level, mob),
             Goal::PolarBearAttackPlayers(goal) => goal.nearest_attackable_target_goal.start(level, mob),
             Goal::RabbitPanic(goal) => goal.panic_goal.start(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
@@ -797,6 +839,15 @@ impl Goal {
             Goal::SkeletonTrap(_) => {}
             Goal::PolarBearMeleeAttack(goal) => goal.stop(level, mob),
             Goal::PolarBearHurtByTarget(goal) => goal.hurt_by_target_goal.target_goal.stop(level, mob),
+            Goal::PandaPanic(goal) => goal.panic_goal.stop(),
+            Goal::PandaBreed(goal) => goal.breed_goal.stop(),
+            Goal::PandaAttack(goal) => goal.melee_attack_goal.stop(level, mob),
+            Goal::PandaAvoid(goal) => goal.avoid_entity_goal.stop(),
+            Goal::PandaSit(goal) => goal.stop(level, mob),
+            Goal::PandaLieOnBack(goal) => goal.stop(level, mob),
+            Goal::PandaSneeze(_) | Goal::PandaRoll(_) => {}
+            Goal::PandaLookAtPlayer(goal) => goal.look_at_player_goal.stop(),
+            Goal::PandaHurtByTarget(goal) => goal.hurt_by_target_goal.target_goal.stop(level, mob),
             Goal::PolarBearAttackPlayers(goal) => goal.nearest_attackable_target_goal.target_goal.stop(level, mob),
             Goal::BlazeAttack(goal) => goal.stop(level, mob),
             Goal::GhastShootFireball(goal) => goal.stop(level, mob),
@@ -846,6 +897,7 @@ impl Goal {
                 | Goal::GhastShootFireball(_)
                 | Goal::VexChargeAttack(_)
                 | Goal::PolarBearMeleeAttack(_)
+                | Goal::PandaAttack(_)
                 | Goal::RaidGarden(_)
                 | Goal::TurtleLayEgg(_)
                 | Goal::TurtleGoToWater(_)
@@ -963,6 +1015,13 @@ impl Goal {
             Goal::SkeletonTrap(goal) => goal.tick(level, mob),
             Goal::PolarBearMeleeAttack(goal) => goal.tick(level, mob),
             Goal::PolarBearHurtByTarget(_) | Goal::PolarBearAttackPlayers(_) => {}
+            Goal::PandaPanic(_) => {}
+            Goal::PandaBreed(goal) => goal.breed_goal.tick(level, mob),
+            Goal::PandaAttack(goal) => goal.melee_attack_goal.tick(level, mob),
+            Goal::PandaAvoid(goal) => goal.avoid_entity_goal.tick(level, mob),
+            Goal::PandaSit(goal) => goal.tick(level, mob),
+            Goal::PandaLieOnBack(_) | Goal::PandaSneeze(_) | Goal::PandaRoll(_) | Goal::PandaHurtByTarget(_) => {}
+            Goal::PandaLookAtPlayer(goal) => goal.tick(level, mob),
             Goal::GhastShootFireball(goal) => goal.tick(level, mob),
             Goal::RabbitPanic(goal) => goal.tick(level, mob),
             Goal::RabbitAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
@@ -1061,6 +1120,12 @@ impl Goal {
             Goal::EvokerSummonSpell(_) | Goal::EvokerAttackSpell(_) | Goal::EvokerWololoSpell(_) | Goal::VexCopyOwnerTarget(_) | Goal::SkeletonTrap(_) => 0,
             Goal::PolarBearMeleeAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::PolarBearHurtByTarget(_) | Goal::PolarBearAttackPlayers(_) => Flag::Target.bit(),
+            Goal::PandaPanic(_) | Goal::PandaAvoid(_) | Goal::PandaSit(_) => Flag::Move.bit(),
+            Goal::PandaBreed(_) | Goal::PandaAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::PandaLieOnBack(_) | Goal::PandaSneeze(_) => 0,
+            Goal::PandaLookAtPlayer(_) => Flag::Look.bit(),
+            Goal::PandaRoll(_) => Flag::Move.bit() | Flag::Look.bit() | Flag::Jump.bit(),
+            Goal::PandaHurtByTarget(_) => Flag::Target.bit(),
             Goal::VexChargeAttack(_) | Goal::VexRandomMove(_) => Flag::Move.bit(),
             Goal::GhastShootFireball(_) => 0,
             Goal::RabbitPanic(_) | Goal::RabbitAvoidEntity(_) | Goal::TurtlePanic(_) | Goal::TurtleRandomStroll(_) => Flag::Move.bit(),

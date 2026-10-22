@@ -10,7 +10,7 @@ pub struct LookAtPlayerGoal {
     pub look_at: Option<EntityId>,
     look_distance: f32,
     look_time: i32,
-    probability: f32,
+    pub probability: f32,
     only_horizontal: bool,
     look_at_type: Option<TargetType>,
 }
@@ -29,7 +29,7 @@ impl LookAtPlayerGoal {
         self
     }
 
-    fn look_at_context(&self) -> TargetingConditions<'static> {
+    pub fn look_at_context(&self) -> TargetingConditions<'static> {
         TargetingConditions::for_non_combat().range(self.look_distance as f64)
     }
 

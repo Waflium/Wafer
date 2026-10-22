@@ -49,6 +49,7 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:bogged",
     "minecraft:parched",
     "minecraft:hoglin",
+    "minecraft:panda",
     "minecraft:zoglin",
     "minecraft:drowned",
     "minecraft:silverfish",

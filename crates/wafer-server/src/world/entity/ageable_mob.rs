@@ -90,6 +90,7 @@ impl ServerLevel {
             MobKind::Wolf(_) => self.wolf_get_breed_offspring(id, partner),
             MobKind::Goat(_) => self.goat_get_breed_offspring(id, partner),
             MobKind::Hoglin(_) => self.hoglin_get_breed_offspring(id, partner),
+            MobKind::Panda(_) => self.panda_get_breed_offspring(id, partner),
             MobKind::Zoglin(_) => None,
             MobKind::PolarBear(_) => self.polar_bear_get_breed_offspring(id, partner),
             MobKind::Cat(_) => self.cat_get_breed_offspring(id, partner),

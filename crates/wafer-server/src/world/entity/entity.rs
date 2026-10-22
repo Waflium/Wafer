@@ -2468,6 +2468,7 @@ impl ServerLevel {
                 }
                 Some(super::mob::MobKind::Axolotl(_)) => return self.axolotl_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Hoglin(_)) => return self.hoglin_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Panda(_)) => return self.panda_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Zoglin(_)) => return self.zoglin_hurt_server(id, source, damage),
                 _ => {}
             }
@@ -2778,6 +2779,7 @@ impl ServerLevel {
                     super::mob::MobKind::Stray(_) => "Stray",
                     super::mob::MobKind::Parched(_) => "Parched",
                     super::mob::MobKind::Hoglin(_) => "Hoglin",
+                    super::mob::MobKind::Panda(_) => "Panda",
                     super::mob::MobKind::Zoglin(_) => "Zoglin",
                     super::mob::MobKind::WitherSkeleton(_) => "WitherSkeleton",
                     super::mob::MobKind::Bogged(_) => "Bogged",

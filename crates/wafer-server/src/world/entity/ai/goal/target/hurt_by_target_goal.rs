@@ -43,13 +43,17 @@ impl HurtByTargetGoal {
     }
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        self.start_with(level, mob, HurtByTargetGoal::alert_other);
+    }
+
+    pub fn start_with(&mut self, level: &mut ServerLevel, mob: EntityId, alert_other: fn(&HurtByTargetGoal, &mut ServerLevel, EntityId, EntityId)) {
         let last_hurt_by_mob = level.get_last_hurt_by_mob(mob);
         level.set_target(mob, last_hurt_by_mob);
         self.target_goal.target_mob = level.get_target(mob);
         self.timestamp = level.living(mob).last_hurt_by_mob_timestamp;
         self.target_goal.unseen_memory_ticks = 300;
         if self.alert_same_type {
-            self.alert_others(level, mob);
+            self.alert_others_with(level, mob, alert_other);
         }
         self.target_goal.start();
     }

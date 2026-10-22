@@ -47,6 +47,10 @@ impl AvoidEntityGoal {
         AvoidEntityGoal { walk_speed_modifier, sprint_speed_modifier, to_avoid: None, max_dist, path: None, avoid_class, predicate_on_avoid_entity }
     }
 
+    pub fn of_class_with_predicate(avoid_class: AvoidClass, max_dist: f32, walk_speed_modifier: f64, sprint_speed_modifier: f64, predicate_on_avoid_entity: PredicateOnAvoidEntity) -> AvoidEntityGoal {
+        AvoidEntityGoal { predicate_on_avoid_entity, ..AvoidEntityGoal::of_class(avoid_class, max_dist, walk_speed_modifier, sprint_speed_modifier) }
+    }
+
     pub fn with_predicate_on_avoid_entity(
         avoid_class: &'static str,
         max_dist: f32,

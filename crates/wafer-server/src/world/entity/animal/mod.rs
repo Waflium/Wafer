@@ -30,6 +30,7 @@ pub mod fish;
 pub mod feline;
 pub mod fox;
 pub mod pig;
+pub mod panda;
 pub mod polarbear;
 pub mod rabbit;
 #[cfg(test)]
@@ -93,6 +94,7 @@ impl ServerLevel {
             MobKind::Wolf(_) => wolf::wolf::is_food(item_stack),
             MobKind::Goat(_) => goat::goat::is_food(item_stack),
             MobKind::Hoglin(_) => crate::world::entity::monster::hoglin::hoglin::is_food(item_stack),
+            MobKind::Panda(_) => panda::panda::is_food(item_stack),
             MobKind::Zoglin(_) => false,
             MobKind::PolarBear(_) => false,
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),

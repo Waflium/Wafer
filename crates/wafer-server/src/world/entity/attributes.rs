@@ -455,6 +455,19 @@ pub static POLAR_BEAR_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static PANDA_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange, AttackDamage,
+        ],
+        &[(FollowRange, 16.0), (TemptRange, 10.0), (MovementSpeed, 0.15f32 as f64), (AttackDamage, 6.0)],
+    )
+};
+
 pub static GOAT_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(
