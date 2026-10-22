@@ -1528,7 +1528,7 @@ impl ServerLevel {
         if self.is_strider(id) && self.strider_check_fall_damage(id) {
             return;
         }
-        if self.is_parrot(id) {
+        if self.is_parrot(id) || self.is_bee(id) {
             return;
         }
         if self.is_boat(id) {
@@ -1827,7 +1827,13 @@ impl ServerLevel {
     }
 
     fn is_flapping(&self, id: EntityId) -> bool {
-        if self.is_parrot(id) { self.parrot_is_flapping(id) } else { false }
+        if self.is_parrot(id) {
+            self.parrot_is_flapping(id)
+        } else if self.is_bee(id) {
+            self.bee_is_flapping(id)
+        } else {
+            false
+        }
     }
 
     fn on_flap(&mut self, id: EntityId) {
@@ -1837,7 +1843,7 @@ impl ServerLevel {
     }
 
     pub fn omnidirectional_air_mover(&self, id: EntityId) -> bool {
-        self.is_parrot(id)
+        self.is_parrot(id) || self.is_bee(id)
     }
 
     fn next_step(&self, id: EntityId) -> f32 {
@@ -1885,6 +1891,9 @@ impl ServerLevel {
     }
 
     fn play_step_sound(&mut self, id: EntityId, pos: BlockPos, state: BlockState) {
+        if self.is_bee(id) {
+            return;
+        }
         if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::IronGolem(_))) {
             self.iron_golem_play_step_sound(id, pos);
             return;
@@ -2572,6 +2581,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Hoglin(_)) => return self.hoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Panda(_)) => return self.panda_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Parrot(_)) => return self.parrot_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Bee(_)) => return self.bee_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Zoglin(_)) => return self.zoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Piglin(_)) => return self.piglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::PiglinBrute(_)) => return self.piglin_brute_hurt_server(id, source, damage),
@@ -2927,6 +2937,7 @@ impl ServerLevel {
                     super::mob::MobKind::TropicalFish(_) => "TropicalFish",
                     super::mob::MobKind::Cat(_) => "Cat",
                     super::mob::MobKind::Parrot(_) => "Parrot",
+                    super::mob::MobKind::Bee(_) => "Bee",
                     super::mob::MobKind::Ocelot(_) => "Ocelot",
                     super::mob::MobKind::Horse(_) => "Horse",
                     super::mob::MobKind::Donkey(_) => "Donkey",

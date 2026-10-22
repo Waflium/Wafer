@@ -46,6 +46,10 @@ impl ServerLevel {
     }
 
     pub fn block_entity_set_changed(&mut self, pos: BlockPos) {
+        let Some(block_entity) = self.chunks.block_entity_ref(pos) else { return };
+        if matches!(block_entity.kind, BlockEntityKind::Beehive(_)) {
+            self.beehive_set_changed(pos);
+        }
         let Some(state) = self.chunks.block_entity_ref(pos).map(BlockEntity::block_state) else { return };
         self.block_entity_set_changed_static(pos, state);
     }
@@ -189,6 +193,7 @@ impl ServerLevel {
             BlockEntityTicker::EndGateway => self.end_gateway_portal_tick(pos, state),
             BlockEntityTicker::Spawner => crate::world::level::block::entity::spawner_block_entity::SpawnerBlockEntity::server_tick(self, pos),
             BlockEntityTicker::Piston => self.piston_moving_tick(pos),
+            BlockEntityTicker::Beehive => self.beehive_server_tick(pos, state),
         }
     }
 

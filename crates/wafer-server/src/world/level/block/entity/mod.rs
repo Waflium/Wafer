@@ -80,6 +80,7 @@ pub enum BlockEntityTicker {
     EndGateway,
     Spawner,
     Piston,
+    Beehive,
 }
 
 enum UpdateTag {
@@ -471,6 +472,8 @@ impl BlockEntity {
             sign.apply_implicit_components(&mut get);
         } else if let BlockEntityKind::CommandBlock(command_block) = &mut self.kind {
             command_block.apply_implicit_components(&mut get);
+        } else if let BlockEntityKind::Beehive(beehive) = &mut self.kind {
+            beehive.apply_implicit_components(&mut get);
         }
         let added: Vec<(DataComponentType, Nbt)> =
             patch.iter().filter(|(ty, _)| !implicit.contains(ty)).filter_map(|(ty, value)| value.map(|v| (ty, v.clone()))).collect();
@@ -501,6 +504,8 @@ impl BlockEntity {
             sign.collect_implicit_components(&mut result);
         } else if let BlockEntityKind::CommandBlock(command_block) = &self.kind {
             command_block.collect_implicit_components(&mut result);
+        } else if let BlockEntityKind::Beehive(beehive) = &self.kind {
+            beehive.collect_implicit_components(&mut result);
         }
         result
     }
@@ -535,6 +540,8 @@ impl BlockEntity {
             output.retain(|(k, _)| !matches!(k.as_str(), "profile" | "note_block_sound" | "custom_name"));
         } else if let BlockEntityKind::Sign(_) = self.kind {
             output.retain(|(k, _)| !matches!(k.as_str(), "front_text" | "back_text" | "is_waxed"));
+        } else if let BlockEntityKind::Beehive(_) = self.kind {
+            output.retain(|(k, _)| k != "bees");
         }
     }
 
@@ -638,6 +645,7 @@ impl BlockEntity {
             types::END_GATEWAY if block.is_instance_of("EndGatewayBlock") => Some(BlockEntityTicker::EndGateway),
             types::MOB_SPAWNER if block.is_instance_of("SpawnerBlock") => Some(BlockEntityTicker::Spawner),
             types::PISTON if block.is_instance_of("MovingPistonBlock") => Some(BlockEntityTicker::Piston),
+            types::BEEHIVE if block.is_instance_of("BeehiveBlock") => Some(BlockEntityTicker::Beehive),
             types::CAMPFIRE if block.is_instance_of("CampfireBlock") => {
                 Some(if state.get(wafer_data::properties::LIT) { BlockEntityTicker::CampfireCook } else { BlockEntityTicker::CampfireCooldown })
             }

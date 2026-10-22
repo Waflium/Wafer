@@ -84,6 +84,7 @@ pub struct LivingEntity {
     pub auto_spin_attack_dmg: f32,
     pub auto_spin_attack_item_stack: Option<ItemStack>,
     pub remove_arrow_time: i32,
+    pub remove_stinger_time: i32,
     pub fall_fly_ticks: i32,
     pub last_equipment_items: [Option<ItemStack>; 8],
     pub swing_state: SwingState,
@@ -141,6 +142,7 @@ impl LivingEntity {
             auto_spin_attack_dmg: 0.0,
             auto_spin_attack_item_stack: None,
             remove_arrow_time: 0,
+            remove_stinger_time: 0,
             fall_fly_ticks: 0,
             last_equipment_items: Default::default(),
             swing_state: SwingState::default(),
@@ -518,6 +520,17 @@ impl ServerLevel {
 
     pub fn set_arrow_count(&mut self, id: EntityId, count: i32) {
         self.entity_mut(id).data.set(ids::ARROW_COUNT, DataValue::Int(count));
+    }
+
+    pub fn get_stinger_count(&self, id: EntityId) -> i32 {
+        match self.entity(id).data.get(ids::STINGER_COUNT) {
+            DataValue::Int(count) => *count,
+            _ => 0,
+        }
+    }
+
+    pub fn set_stinger_count(&mut self, id: EntityId, count: i32) {
+        self.entity_mut(id).data.set(ids::STINGER_COUNT, DataValue::Int(count));
     }
 
     pub fn is_affected_by_potions(&self, id: EntityId) -> bool {
@@ -1780,6 +1793,17 @@ impl ServerLevel {
                 self.set_arrow_count(id, arrow_count - 1);
             }
         }
+        let stinger_count = self.get_stinger_count(id);
+        if stinger_count > 0 {
+            let living = self.living_mut(id);
+            if living.remove_stinger_time <= 0 {
+                living.remove_stinger_time = 20 * (30 - stinger_count);
+            }
+            living.remove_stinger_time -= 1;
+            if living.remove_stinger_time <= 0 {
+                self.set_stinger_count(id, stinger_count - 1);
+            }
+        }
         self.detect_equipment_updates(id);
         if self.entity(id).tick_count % 20 == 0 {
             self.recheck_combat_status(id);
@@ -2226,6 +2250,7 @@ impl ServerLevel {
             Some(MobKind::Villager(_) | MobKind::Dolphin(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Fox(_)) => self.fox_ai_step(id),
             Some(MobKind::Parrot(_)) => self.parrot_ai_step(id),
+            Some(MobKind::Bee(_)) => self.bee_ai_step(id),
             Some(MobKind::Rabbit(_)) => self.rabbit_ai_step(id),
             Some(MobKind::Turtle(_)) => self.turtle_ai_step(id),
             Some(_) => self.animal_ai_step(id),
@@ -2588,6 +2613,7 @@ impl ServerLevel {
     fn jump_in_liquid(&mut self, id: EntityId, ty: &wafer_data::Tag) {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::MagmaCube(_)) => self.magma_cube_jump_in_liquid(id, ty),
+            Some(MobKind::Bee(_)) => self.bee_jump_in_liquid(id),
             Some(_) => self.mob_jump_in_liquid(id, ty),
             None => self.living_entity_jump_in_liquid(id, ty),
         }

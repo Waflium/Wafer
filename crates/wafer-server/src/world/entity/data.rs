@@ -348,6 +348,7 @@ pub mod ids {
     pub const EFFECT_PARTICLES: usize = 10;
     pub const EFFECT_AMBIENCE: usize = 11;
     pub const ARROW_COUNT: usize = 12;
+    pub const STINGER_COUNT: usize = 13;
     pub const SLEEPING_POS: usize = 14;
     pub const MOB_FLAGS: usize = 15;
     pub const AGEABLE_BABY: usize = 16;

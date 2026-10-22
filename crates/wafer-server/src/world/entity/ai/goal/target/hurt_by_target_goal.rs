@@ -46,7 +46,7 @@ impl HurtByTargetGoal {
         self.start_with(level, mob, HurtByTargetGoal::alert_other);
     }
 
-    pub fn start_with(&mut self, level: &mut ServerLevel, mob: EntityId, alert_other: fn(&HurtByTargetGoal, &mut ServerLevel, EntityId, EntityId)) {
+    pub fn start_with(&mut self, level: &mut ServerLevel, mob: EntityId, alert_other: fn(&HurtByTargetGoal, &mut ServerLevel, EntityId, EntityId, EntityId)) {
         let last_hurt_by_mob = level.get_last_hurt_by_mob(mob);
         level.set_target(mob, last_hurt_by_mob);
         self.target_goal.target_mob = level.get_target(mob);
@@ -62,7 +62,7 @@ impl HurtByTargetGoal {
         self.alert_others_with(level, mob, HurtByTargetGoal::alert_other);
     }
 
-    pub fn alert_others_with(&mut self, level: &mut ServerLevel, mob: EntityId, alert_other: fn(&HurtByTargetGoal, &mut ServerLevel, EntityId, EntityId)) {
+    pub fn alert_others_with(&mut self, level: &mut ServerLevel, mob: EntityId, alert_other: fn(&HurtByTargetGoal, &mut ServerLevel, EntityId, EntityId, EntityId)) {
         let within = self.target_goal.get_follow_distance(level, mob);
         let search_aabb = AABB::unit_cube_from_lower_corner(level.entity(mob).position()).inflate(within, ALERT_RANGE_Y, within);
         let nearby = level.get_entities_of_mob_class(mob, &search_aabb);
@@ -83,14 +83,14 @@ impl HurtByTargetGoal {
                 continue;
             }
             if let Some(hurt_by_mob) = hurt_by_mob {
-                alert_other(self, level, other, hurt_by_mob);
+                alert_other(self, level, mob, other, hurt_by_mob);
             } else {
                 level.set_target(other, None);
             }
         }
     }
 
-    pub fn alert_other(&self, level: &mut ServerLevel, other: EntityId, hurt_by_mob: EntityId) {
+    pub fn alert_other(&self, level: &mut ServerLevel, _mob: EntityId, other: EntityId, hurt_by_mob: EntityId) {
         level.set_target(other, Some(hurt_by_mob));
     }
 }

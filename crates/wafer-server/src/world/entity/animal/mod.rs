@@ -19,6 +19,7 @@ pub mod ageable_water_creature;
 pub mod dolphin;
 pub mod parrot;
 pub mod armadillo;
+pub mod bee;
 pub mod axolotl;
 pub mod chicken;
 pub mod cow;
@@ -149,6 +150,7 @@ impl ServerLevel {
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => false,
             MobKind::Cat(_) => feline::cat::is_food(item_stack),
             MobKind::Parrot(_) => false,
+            MobKind::Bee(_) => bee::bee::is_food(item_stack),
             MobKind::Ocelot(_) => feline::ocelot::is_food(item_stack),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) => equine::abstract_horse::is_food(item_stack),
             MobKind::ZombieHorse(_) => equine::zombie_horse::is_food(item_stack),

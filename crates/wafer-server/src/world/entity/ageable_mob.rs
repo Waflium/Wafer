@@ -97,6 +97,7 @@ impl ServerLevel {
             MobKind::PolarBear(_) => self.polar_bear_get_breed_offspring(id, partner),
             MobKind::Cat(_) => self.cat_get_breed_offspring(id, partner),
             MobKind::Parrot(_) => None,
+            MobKind::Bee(_) => self.bee_get_breed_offspring(id, partner),
             MobKind::Ocelot(_) => Some(Box::new(super::animal::feline::ocelot::Ocelot::create())),
             MobKind::Armadillo(_) => self.armadillo_get_breed_offspring(id, partner),
             MobKind::Zombie(_)

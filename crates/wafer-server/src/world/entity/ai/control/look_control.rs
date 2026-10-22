@@ -12,6 +12,7 @@ pub enum LookControlKind {
     Frog,
     Fox,
     Phantom,
+    Bee,
 }
 
 #[derive(Default)]
@@ -79,6 +80,11 @@ impl ServerLevel {
             LookControlKind::Axolotl(max_y_rot_from_center) => self.axolotl_look_control_tick(id, max_y_rot_from_center),
             LookControlKind::Fox => self.fox_look_control_tick(id),
             LookControlKind::Phantom => {}
+            LookControlKind::Bee => {
+                if !self.is_angry(id) {
+                    self.look_control_look_control_tick(id);
+                }
+            }
         }
     }
 
@@ -86,6 +92,7 @@ impl ServerLevel {
         match self.mob(id).expect("a mob").ai.look_control.kind {
             LookControlKind::Frog => self.frog_look_control_reset_x_rot_on_tick(id),
             LookControlKind::Fox => self.fox_look_control_reset_x_rot_on_tick(id),
+            LookControlKind::Bee => !crate::world::entity::animal::bee::bee::is_pollinating(self.mob(id).expect("a bee")),
             _ => true,
         }
     }

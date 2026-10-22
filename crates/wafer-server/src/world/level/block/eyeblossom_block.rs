@@ -1,11 +1,16 @@
 use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction, Vec3};
-use wafer_data::{Block, BlockState, blocks, registry, registry_id};
+use wafer_data::{Block, BlockState, blocks, mob_effects, registry, registry_id};
 
 use super::BlockBehaviour;
 use super::flower_block::FlowerBlock;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::attribute::environment_attributes::EYEBLOSSOM_OPEN;
+use crate::world::difficulty::Difficulty;
+use crate::world::effect::mob_effect_instance::MobEffectInstance;
+use crate::world::entity::EntityId;
+use crate::world::entity::animal::bee::bee;
+use crate::world::entity::inside_block::InsideBlockEffects;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::level::{LevelAccessor, LevelReader};
 
@@ -133,4 +138,14 @@ impl BlockBehaviour for EyeblossomBlock {
     fn can_survive(&self, state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
         FlowerBlock.can_survive(state, level, pos)
     }
+
+    fn entity_inside(&self, state: BlockState, level: &mut ServerLevel, _pos: BlockPos, entity: EntityId, _effects: &mut InsideBlockEffects, _is_precise: bool) {
+        if level.difficulty != Difficulty::Peaceful && level.is_bee(entity) && bee::attracts_bees(state) && !level.has_effect(entity, mob_effects::POISON) {
+            level.add_effect(entity, get_bee_interaction_effect(), None);
+        }
+    }
+}
+
+pub fn get_bee_interaction_effect() -> MobEffectInstance {
+    MobEffectInstance::new(mob_effects::POISON, 25, 0)
 }

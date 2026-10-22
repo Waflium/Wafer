@@ -101,6 +101,10 @@ pub trait LevelAccessor: LevelReader + ScheduledTickAccess + LevelWriter {
     fn mark_pos_for_post_processing(&mut self, pos: BlockPos);
 
     fn play_sound(&mut self, _pos: BlockPos, _sound: i32, _source: crate::server::level::SoundSource, _volume: f32, _pitch: f32) {}
+
+    fn as_server_level(&mut self) -> Option<&mut crate::server::level::ServerLevel> {
+        None
+    }
 }
 
 pub mod update_flags {

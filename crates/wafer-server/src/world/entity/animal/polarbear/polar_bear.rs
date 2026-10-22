@@ -224,9 +224,9 @@ impl PolarBearHurtByTargetGoal {
         }
     }
 
-    fn alert_other(goal: &HurtByTargetGoal, level: &mut ServerLevel, other: EntityId, hurt_by_mob: EntityId) {
+    fn alert_other(goal: &HurtByTargetGoal, level: &mut ServerLevel, mob: EntityId, other: EntityId, hurt_by_mob: EntityId) {
         if level.is_polar_bear(other) && !level.is_baby(other) {
-            goal.alert_other(level, other, hurt_by_mob);
+            goal.alert_other(level, mob, other, hurt_by_mob);
         }
     }
 }

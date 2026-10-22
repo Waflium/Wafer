@@ -1826,6 +1826,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Strider(_)) => self.strider_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Dolphin(_)) => self.dolphin_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Parrot(_)) => self.parrot_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Bee(_)) => self.bee_tick(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_schooling_fish().is_some() => self.abstract_schooling_fish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Pufferfish(_)) => self.pufferfish_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Cat(_)) => self.cat_tick(id),
@@ -2051,6 +2052,10 @@ impl crate::world::level::LevelWriter for ServerLevel {
 impl crate::world::level::LevelAccessor for ServerLevel {
     fn get_random(&mut self) -> &mut dyn wafer_core::random::RandomSource {
         &mut self.random
+    }
+
+    fn as_server_level(&mut self) -> Option<&mut ServerLevel> {
+        Some(self)
     }
 
     fn mark_pos_for_post_processing(&mut self, pos: BlockPos) {

@@ -761,7 +761,7 @@ impl PandaHurtByTargetGoal {
         self.hurt_by_target_goal.start_with(level, mob, PandaHurtByTargetGoal::alert_other);
     }
 
-    fn alert_other(_goal: &HurtByTargetGoal, level: &mut ServerLevel, other: EntityId, hurt_by_mob: EntityId) {
+    fn alert_other(_goal: &HurtByTargetGoal, level: &mut ServerLevel, _mob: EntityId, other: EntityId, hurt_by_mob: EntityId) {
         if matches!(level.mob(other).map(|mob| &mob.kind), Some(MobKind::Panda(_))) && is_aggressive(level.entity(other)) {
             level.set_target(other, Some(hurt_by_mob));
         }
