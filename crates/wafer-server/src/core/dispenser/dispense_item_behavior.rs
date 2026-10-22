@@ -6,7 +6,7 @@ use wafer_data::{Item, block_tags, blocks, fluid_tags, game_rule, items, registr
 use super::block_source::BlockSource;
 use super::default_dispense_item_behavior::{self, consume_with_remainder, play_default_animation};
 use super::{
-    equipment_dispense_item_behavior, flint_and_steel_dispense_item_behavior, projectile_dispense_behavior, shears_dispense_item_behavior, shulker_box_dispense_behavior,
+    boat_dispense_item_behavior, equipment_dispense_item_behavior, minecart_dispense_item_behavior, flint_and_steel_dispense_item_behavior, projectile_dispense_behavior, shears_dispense_item_behavior, shulker_box_dispense_behavior,
     spawn_egg_item_behavior,
 };
 use crate::core::cauldron::cauldron_interactions::{is_water_potion, water_potion};
@@ -43,6 +43,8 @@ pub enum DispenseItemBehavior {
     Equipment,
     SpawnEgg,
     Projectile,
+    Minecart,
+    Boat,
 }
 
 fn registered(item: Item) -> Option<DispenseItemBehavior> {
@@ -79,6 +81,8 @@ fn registered(item: Item) -> Option<DispenseItemBehavior> {
         items::BRUSH => Brush,
         items::HONEYCOMB => Honeycomb,
         items::POTION => Potion,
+        items::MINECART | items::CHEST_MINECART | items::FURNACE_MINECART | items::TNT_MINECART | items::HOPPER_MINECART | items::COMMAND_BLOCK_MINECART => Minecart,
+        _ if item.is_instance_of("BoatItem") => Boat,
         _ if item.info().block.is_some_and(|block| block.is_instance_of("ShulkerBoxBlock")) => ShulkerBox,
         _ => return None,
     })
@@ -146,6 +150,8 @@ impl DispenseItemBehavior {
             Equipment => equipment_dispense_item_behavior::execute(level, source, dispensed),
             SpawnEgg => spawn_egg_item_behavior::execute(level, source, dispensed),
             Projectile => projectile_dispense_behavior::execute(level, source, dispensed),
+            Minecart => minecart_dispense_item_behavior::execute(level, source, dispensed),
+            Boat => boat_dispense_item_behavior::execute(level, source, dispensed),
         }
     }
 }
