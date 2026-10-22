@@ -16,6 +16,12 @@ impl PathNavigation {
         PathFinder::new(NodeEvaluatorKind::Walk(WalkNodeEvaluator::default()), max_visited_nodes)
     }
 
+    pub fn creaking_path_navigation_create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {
+        let mut node_evaluator = WalkNodeEvaluator::home();
+        node_evaluator.node_evaluator.can_pass_doors = true;
+        PathFinder::new(NodeEvaluatorKind::Walk(node_evaluator), max_visited_nodes)
+    }
+
     pub fn ground_path_navigation_can_update_path(&self, level: &ServerLevel, mob: EntityId) -> bool {
         let e = level.entity(mob);
         e.on_ground || e.is_in_liquid() || level.is_passenger(mob)

@@ -76,6 +76,7 @@ impl ServerLevel {
             BlockEntityKind::Furnace(_) => (true, true),
             BlockEntityKind::Jukebox(_) => return self.jukebox_pop_out_the_item(pos),
             BlockEntityKind::Campfire(_) => return self.campfire_pre_remove_side_effects(pos),
+            BlockEntityKind::CreakingHeart(_) => return self.creaking_heart_pre_remove_side_effects(pos),
             BlockEntityKind::PistonMoving(_) => return self.piston_moving_final_tick(pos),
             BlockEntityKind::ChiseledBookShelf(_) => {
                 return crate::world::containers::drop_contents(self, pos, ContainerRef::ChiseledBookShelf(pos));
@@ -182,6 +183,7 @@ impl ServerLevel {
             BlockEntityTicker::DaylightDetector => self.daylight_detector_tick_entity(pos, state),
             BlockEntityTicker::Jukebox => self.jukebox_tick(pos),
             BlockEntityTicker::Conduit => self.conduit_server_tick(pos, state),
+            BlockEntityTicker::CreakingHeart => self.creaking_heart_server_tick(pos, state),
             BlockEntityTicker::Beacon => self.beacon_tick(pos),
             BlockEntityTicker::BrewingStand => self.brewing_stand_server_tick(pos, state),
             BlockEntityTicker::CampfireCook => self.campfire_cook_tick(pos, state),

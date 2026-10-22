@@ -37,6 +37,7 @@ pub enum MoveControlKind {
     Turtle,
     Vex,
     Phantom,
+    Creaking,
     Guardian,
     Flying(super::flying_move_control::FlyingMoveControl),
 }

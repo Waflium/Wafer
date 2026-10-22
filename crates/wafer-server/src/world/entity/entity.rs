@@ -968,6 +968,7 @@ impl ServerLevel {
     pub fn fire_immune(&self, id: EntityId) -> bool {
         match self.entities.get(&id) {
             Some(super::LevelEntity::Item(item)) => !item.item.can_be_hurt_by(&crate::world::damagesource::DamageSource::new(wafer_data::damage_types::IN_FIRE)),
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Creaking(_)) && super::monster::creaking::creaking::is_heart_bound(&mob.entity) => true,
             _ => self.entity_ref(id).is_some_and(|e| super::entity_type::fire_immune(e.entity_type)),
         }
     }
@@ -1936,6 +1937,10 @@ impl ServerLevel {
         if self.is_abstract_nautilus(id) || self.is_happy_ghast(id) {
             return;
         }
+        if self.is_creaking(id) {
+            self.creaking_play_step_sound(id);
+            return;
+        }
         if self.is_abstract_horse(id) {
             self.abstract_horse_play_step_sound(id, pos, state);
             return;
@@ -2617,6 +2622,7 @@ impl ServerLevel {
             match self.mob(id).map(|mob| &mob.kind) {
                 Some(super::mob::MobKind::Bat(_)) => return self.bat_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Ghast(_)) => return self.ghast_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Creaking(_)) => return self.creaking_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Guardian(_) | super::mob::MobKind::ElderGuardian(_)) => return self.guardian_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::GlowSquid(_)) => return self.glow_squid_hurt_server(id, source, damage),
@@ -2971,6 +2977,7 @@ impl ServerLevel {
                     super::mob::MobKind::Piglin(_) => "Piglin",
                     super::mob::MobKind::PiglinBrute(_) => "PiglinBrute",
                     super::mob::MobKind::Breeze(_) => "Breeze",
+                    super::mob::MobKind::Creaking(_) => "Creaking",
                     super::mob::MobKind::WitherSkeleton(_) => "WitherSkeleton",
                     super::mob::MobKind::Bogged(_) => "Bogged",
                     super::mob::MobKind::Drowned(_) => "Drowned",
@@ -3229,6 +3236,9 @@ impl ServerLevel {
 
     pub fn can_use_portal(&self, id: EntityId, ignore_passenger: bool) -> bool {
         if self.is_wither(id) {
+            return false;
+        }
+        if self.is_creaking(id) && !self.creaking_can_use_portal(id) {
             return false;
         }
         if self.as_projectile(id).is_some_and(super::projectile::projectile::Projectile::is_throwable_item_projectile) {
@@ -4096,6 +4106,9 @@ impl ServerLevel {
         if self.is_wind_charge(id) || self.as_projectile(id).is_some_and(|projectile| projectile.abstract_arrow().is_some() && projectile.is_in_ground()) {
             return;
         }
+        if self.is_creaking(id) && !self.creaking_can_move(id) {
+            return;
+        }
         self.entity_mut(id).push(xa, ya, za);
     }
 
@@ -4145,6 +4158,8 @@ impl ServerLevel {
             self.abstract_horse_is_pushable(id)
         } else if self.is_parrot(id) {
             true
+        } else if self.is_creaking(id) {
+            self.creaking_is_pushable(id)
         } else if self.is_living(id) {
             self.living_entity_is_pushable(id)
         } else {

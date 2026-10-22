@@ -1355,7 +1355,7 @@ impl ServerLevel {
         }
     }
 
-    fn resolve_mob_responsible_for_damage(&mut self, id: EntityId, source: &DamageSource) {
+    pub fn resolve_mob_responsible_for_damage(&mut self, id: EntityId, source: &DamageSource) {
         let Some(living_source) = source.causing_entity.filter(|&e| self.is_living(e)) else { return };
         if source.is(&damage_type_tags::NO_ANGER) || source.is_type(damage_types::WIND_CHARGE) && entity_type_tags::NO_ANGER_FROM_WIND_CHARGE.contains(self.entity(id).entity_type as usize) {
             return;
@@ -1367,13 +1367,29 @@ impl ServerLevel {
         living.last_hurt_by_mob_timestamp = tick_count;
     }
 
-    fn resolve_player_responsible_for_damage(&mut self, id: EntityId, source: &DamageSource) {
-        if let Some(player) = source.causing_entity.filter(|&e| self.is_player(e)) {
-            let uuid = self.entity(player).uuid;
-            let living = self.living_mut(id);
-            living.last_hurt_by_player = Some(uuid);
-            living.last_hurt_by_player_memory_time = 100;
+    pub fn resolve_player_responsible_for_damage(&mut self, id: EntityId, source: &DamageSource) -> Option<EntityId> {
+        match source.causing_entity {
+            Some(player) if self.is_player(player) => {
+                let uuid = self.entity(player).uuid;
+                let living = self.living_mut(id);
+                living.last_hurt_by_player = Some(uuid);
+                living.last_hurt_by_player_memory_time = 100;
+            }
+            Some(wolf) if self.is_wolf(wolf) && self.is_tame(wolf) => match super::tamable_animal::get_owner_reference(self.entity(wolf)) {
+                Some(owner) => {
+                    let living = self.living_mut(id);
+                    living.last_hurt_by_player = Some(owner.get_uuid());
+                    living.last_hurt_by_player_memory_time = 100;
+                }
+                None => {
+                    let living = self.living_mut(id);
+                    living.last_hurt_by_player = None;
+                    living.last_hurt_by_player_memory_time = 0;
+                }
+            },
+            _ => {}
         }
+        self.living(id).last_hurt_by_player.and_then(|uuid| self.get_player_by_uuid(uuid))
     }
 
     fn block_using_item(&mut self, id: EntityId, attacker: EntityId, fully_blocked: bool) {
@@ -1420,7 +1436,7 @@ impl ServerLevel {
         }
     }
 
-    fn play_hurt_sound(&mut self, id: EntityId, source: &DamageSource) {
+    pub fn play_hurt_sound(&mut self, id: EntityId, source: &DamageSource) {
         if let Some(mob) = self.mob_mut(id) {
             mob.ambient_sound_time = -mob.ambient_sound_interval();
         }
@@ -1596,6 +1612,9 @@ impl ServerLevel {
     }
 
     pub fn knockback(&mut self, id: EntityId, power: f64, mut xd: f64, mut zd: f64) {
+        if self.is_creaking(id) && !self.creaking_can_move(id) {
+            return;
+        }
         let power = power * (1.0 - self.attribute_value(id, Attribute::KnockbackResistance));
         if power <= 0.0 {
             return;
@@ -1833,7 +1852,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Hoglin(_)) => self.mob(id).expect("a hoglin").xp_reward,
-            Some(MobKind::Zoglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Zoglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) | MobKind::Creaking(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Piglin(_)) => self.mob(id).expect("a piglin").xp_reward,
             Some(MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
             Some(MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::Phantom(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.mob_get_base_experience_reward(id),
@@ -2183,6 +2202,9 @@ impl ServerLevel {
     }
 
     fn tick_death(&mut self, id: EntityId) {
+        if self.is_creaking(id) && self.creaking_tick_death(id) {
+            return;
+        }
         let living = self.living_mut(id);
         living.death_time += 1;
         if living.death_time >= 20 && !self.entity(id).is_removed() {
@@ -2424,6 +2446,7 @@ impl ServerLevel {
             Some(MobKind::HappyGhast(_)) => self.happy_ghast_ai_step(id),
             Some(MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.guardian_ai_step(id),
             Some(MobKind::ZombifiedPiglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_)) => self.monster_ai_step(id),
+            Some(MobKind::Creaking(_)) => self.creaking_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(MobKind::Ravager(_)) => self.ravager_ai_step(id),
             Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.raider_ai_step(id),

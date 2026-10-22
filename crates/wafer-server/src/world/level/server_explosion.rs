@@ -157,7 +157,7 @@ impl ServerExplosion {
 }
 
 impl BlockInteraction {
-    fn should_affect_blocklike_entities(self) -> bool {
+    pub fn should_affect_blocklike_entities(self) -> bool {
         matches!(self, BlockInteraction::Destroy | BlockInteraction::DestroyWithDecay)
     }
 }

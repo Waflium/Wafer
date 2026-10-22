@@ -561,7 +561,7 @@ impl ServerLevel {
             let knockback_resistance = (1.0 - self.attribute_value(mob, Attribute::KnockbackResistance)).max(0.0);
             let movement = self.entity(id).delta_movement.multiply(1.0, 0.0, 1.0).normalize().scale(knockback * 0.6 * knockback_resistance);
             if movement.length_sqr() > 0.0 {
-                self.entity_mut(mob).push(movement.x, 0.1, movement.z);
+                self.entity_push(mob, movement.x, 0.1, movement.z);
             }
         }
     }

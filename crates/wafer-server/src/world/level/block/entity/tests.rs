@@ -344,11 +344,11 @@ fn chunk_packets_list_block_entities() {
 fn unported_block_entities_keep_their_data() {
     let (mut level, _) = level_with_player();
     let pos = BlockPos::new(0, -60, 0);
-    level.set_block(pos, blocks::CREAKING_HEART.default_state(), UPDATE_ALL);
-    let tag = crate::nbt::parse_fully("{id:\"minecraft:creaking_heart\",x:0,y:-60,z:0,creaking:[I;1,2,3,4],extra:1b}").unwrap();
+    level.set_block(pos, blocks::STRUCTURE_BLOCK.default_state(), UPDATE_ALL);
+    let tag = crate::nbt::parse_fully("{id:\"minecraft:structure_block\",x:0,y:-60,z:0,name:\"minecraft:a\",extra:1b}").unwrap();
     level.get_block_entity(pos).unwrap().load_with_components(&tag);
     let saved = level.block_entity_data(pos).unwrap();
-    assert_eq!(saved.get("creaking"), tag.get("creaking"));
+    assert_eq!(saved.get("name"), tag.get("name"));
     assert_eq!(saved.get("extra"), Some(&Nbt::Byte(1)));
     assert!(level.get_block_entity(pos).unwrap().has_update_packet());
 }
@@ -359,4 +359,17 @@ fn block_entity_types_match_their_blocks() {
     assert!(BlockEntity::new_for(pos, blocks::COPPER_CHEST.default_state()).is_some_and(|e| e.ty() == wafer_data::block_entity_types::CHEST));
     assert!(BlockEntity::new_for(pos, blocks::STONE.default_state()).is_none());
     assert!(BlockEntity::new(wafer_data::block_entity_types::CHEST, pos, blocks::FURNACE.default_state()).is_none());
+}
+
+#[test]
+fn creaking_hearts_keep_their_creaking() {
+    let (mut level, _) = level_with_player();
+    let pos = BlockPos::new(0, -60, 0);
+    level.set_block(pos, blocks::CREAKING_HEART.default_state(), UPDATE_ALL);
+    let tag = crate::nbt::parse_fully("{id:\"minecraft:creaking_heart\",x:0,y:-60,z:0,creaking:[I;1,2,3,4],extra:1b}").unwrap();
+    level.get_block_entity(pos).unwrap().load_with_components(&tag);
+    let saved = level.block_entity_data(pos).unwrap();
+    assert_eq!(saved.get("creaking"), tag.get("creaking"));
+    assert_eq!(saved.get("extra"), None);
+    assert!(level.get_block_entity(pos).unwrap().has_update_packet());
 }

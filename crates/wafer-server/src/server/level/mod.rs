@@ -1034,6 +1034,36 @@ impl ServerLevel {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn send_particles_forced(&self, particle: &str, options: impl Fn(&mut wafer_protocol::Writer), x: f64, y: f64, z: f64, count: i32, dist: (f64, f64, f64), speed: f64) {
+        let packet = encode(clientbound::LEVEL_PARTICLES, |p| {
+            p.varint(wafer_data::registry_id(wafer_data::registry::PARTICLE_TYPE, particle));
+            options(p);
+            p.bool(true);
+            p.bool(true);
+            p.f64(x);
+            p.f64(y);
+            p.f64(z);
+            p.f32(dist.0 as f32);
+            p.f32(dist.1 as f32);
+            p.f32(dist.2 as f32);
+            p.f32(speed as f32);
+            p.f32(speed as f32);
+            p.f32(speed as f32);
+            p.varint(count);
+            p.varint(0);
+        });
+        for player in self.players.values() {
+            if player.entity.is_removed() {
+                continue;
+            }
+            let center = Vec3::at_center_of(player.entity.block_position());
+            if center.distance_to_sqr(Vec3::new(x, y, z)) < 512.0 * 512.0 {
+                player.connection.send_raw(packet.clone());
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn send_particles_with_speeds(
         &self,
         particle: &str,
@@ -1847,6 +1877,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Villager(_)) => self.villager_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Fox(_)) => self.fox_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Breeze(_)) => self.breeze_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Creaking(_)) => self.creaking_tick(id),
             Some(LevelEntity::Mob(_)) => self.mob_tick(id),
             Some(LevelEntity::Minecart(_)) => self.tick_minecart(id),
             Some(LevelEntity::Boat(_)) => self.tick_boat(id),

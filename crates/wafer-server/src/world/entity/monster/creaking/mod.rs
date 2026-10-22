@@ -1,0 +1,5 @@
+#[allow(clippy::module_inception)]
+pub mod creaking;
+pub mod creaking_ai;
+#[cfg(test)]
+mod creaking_tests;

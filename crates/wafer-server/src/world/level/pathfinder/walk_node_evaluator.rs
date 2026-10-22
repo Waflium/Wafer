@@ -23,11 +23,16 @@ pub struct WalkNodeEvaluator {
     pub amphibious: Option<AmphibiousNodeEvaluator>,
     pub frog: Option<FrogNodeEvaluator>,
     pub fly: Option<super::fly_node_evaluator::FlyNodeEvaluator>,
+    pub home: bool,
 }
 
 impl WalkNodeEvaluator {
     pub fn amphibious(prefers_shallow_swimming: bool) -> WalkNodeEvaluator {
         WalkNodeEvaluator { amphibious: Some(AmphibiousNodeEvaluator::new(prefers_shallow_swimming)), ..WalkNodeEvaluator::default() }
+    }
+
+    pub fn home() -> WalkNodeEvaluator {
+        WalkNodeEvaluator { home: true, ..WalkNodeEvaluator::default() }
     }
 
     pub fn frog(prefers_shallow_swimming: bool) -> WalkNodeEvaluator {
@@ -517,6 +522,9 @@ impl WalkNodeEvaluator {
     }
 
     pub fn walk_node_evaluator_get_path_type(&self, context: &PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+        if self.home && context.level().level.creaking_home_node_evaluator_blocks(self.node_evaluator.mob, context.mob_position(), x, y, z) {
+            return PathType::Blocked;
+        }
         get_path_type_static(context, x, y, z)
     }
 }

@@ -1306,6 +1306,19 @@ pub static BAT_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static CREAKING_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage,
+        ],
+        &[(FollowRange, 32.0), (MaxHealth, 1.0), (MovementSpeed, 0.4f32 as f64), (AttackDamage, 3.0), (StepHeight, 1.0625)],
+    )
+};
+
 pub static BREEZE_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

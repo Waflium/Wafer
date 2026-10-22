@@ -13,6 +13,7 @@ pub mod chiseled_book_shelf_block_entity;
 pub mod command_block_entity;
 pub mod comparator_block_entity;
 pub mod conduit_block_entity;
+pub mod creaking_heart_block_entity;
 pub mod container_openers_counter;
 pub mod crafter_block_entity;
 pub mod decorated_pot_block_entity;
@@ -69,6 +70,7 @@ pub enum BlockEntityTicker {
     DaylightDetector,
     Jukebox,
     Conduit,
+    CreakingHeart,
     Beacon,
     BrewingStand,
     CampfireCook,
@@ -104,6 +106,7 @@ pub enum BlockEntityKind {
     Comparator(comparator_block_entity::ComparatorBlockEntity),
     Jukebox(jukebox_block_entity::JukeboxBlockEntity),
     Conduit(conduit_block_entity::ConduitBlockEntity),
+    CreakingHeart(creaking_heart_block_entity::CreakingHeartBlockEntity),
     Beacon(beacon_block_entity::BeaconBlockEntity),
     EnchantingTable(enchanting_table_block_entity::EnchantingTableBlockEntity),
     Campfire(campfire_block_entity::CampfireBlockEntity),
@@ -160,6 +163,7 @@ impl BlockEntity {
             types::COMPARATOR => BlockEntityKind::Comparator(comparator_block_entity::ComparatorBlockEntity::default()),
             types::JUKEBOX => BlockEntityKind::Jukebox(jukebox_block_entity::JukeboxBlockEntity::default()),
             types::CONDUIT => BlockEntityKind::Conduit(conduit_block_entity::ConduitBlockEntity::default()),
+            types::CREAKING_HEART => BlockEntityKind::CreakingHeart(creaking_heart_block_entity::CreakingHeartBlockEntity::default()),
             types::BEACON => BlockEntityKind::Beacon(beacon_block_entity::BeaconBlockEntity::default()),
             types::ENCHANTING_TABLE => BlockEntityKind::EnchantingTable(enchanting_table_block_entity::EnchantingTableBlockEntity::default()),
             types::CAMPFIRE => BlockEntityKind::Campfire(campfire_block_entity::CampfireBlockEntity::default()),
@@ -277,6 +281,7 @@ impl BlockEntity {
             BlockEntityKind::Comparator(comparator) => comparator.load_additional(input),
             BlockEntityKind::Jukebox(jukebox) => jukebox.load_additional(input),
             BlockEntityKind::Conduit(conduit) => conduit.load_additional(input),
+            BlockEntityKind::CreakingHeart(heart) => heart.load_additional(input),
             BlockEntityKind::Beacon(beacon) => beacon.load_additional(input),
             BlockEntityKind::EnchantingTable(enchanting_table) => enchanting_table.load_additional(input),
             BlockEntityKind::Campfire(campfire) => campfire.load_additional(input),
@@ -321,6 +326,7 @@ impl BlockEntity {
             BlockEntityKind::Comparator(comparator) => comparator.save_additional(output),
             BlockEntityKind::Jukebox(jukebox) => jukebox.save_additional(output),
             BlockEntityKind::Conduit(conduit) => conduit.save_additional(output),
+            BlockEntityKind::CreakingHeart(heart) => heart.save_additional(output),
             BlockEntityKind::Beacon(beacon) => beacon.save_additional(output),
             BlockEntityKind::EnchantingTable(enchanting_table) => enchanting_table.save_additional(output),
             BlockEntityKind::Campfire(campfire) => campfire.save_additional(output),
@@ -636,6 +642,7 @@ impl BlockEntity {
             types::DAYLIGHT_DETECTOR if block.is_instance_of("DaylightDetectorBlock") => Some(BlockEntityTicker::DaylightDetector),
             types::JUKEBOX if block.is_instance_of("JukeboxBlock") && state.get(wafer_data::properties::HAS_RECORD) => Some(BlockEntityTicker::Jukebox),
             types::CONDUIT if block.is_instance_of("ConduitBlock") => Some(BlockEntityTicker::Conduit),
+            types::CREAKING_HEART if block.is_instance_of("CreakingHeartBlock") && state.get(wafer_data::properties::CREAKING_HEART_STATE) != wafer_data::properties::CreakingHeartState::Uprooted => Some(BlockEntityTicker::CreakingHeart),
             types::BEACON if block.is_instance_of("BeaconBlock") => Some(BlockEntityTicker::Beacon),
             types::BREWING_STAND if block.is_instance_of("BrewingStandBlock") => Some(BlockEntityTicker::BrewingStand),
             types::BELL if block.is_instance_of("BellBlock") => Some(BlockEntityTicker::Bell),

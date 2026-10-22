@@ -1,5 +1,6 @@
 pub mod blaze;
 pub mod breeze;
+pub mod creaking;
 pub mod creeper;
 #[cfg(test)]
 mod creeper_tests;

@@ -1,5 +1,6 @@
-use wafer_core::{BlockPos, mth};
-use wafer_data::{BlockState, blocks};
+use wafer_core::shapes::is_face_full;
+use wafer_core::{BlockPos, Direction, mth};
+use wafer_data::{BlockState, block_tags, blocks};
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
@@ -11,11 +12,17 @@ use crate::world::level::server_level_accessor::ServerLevelAccessor;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Strategy {
     LegacyIronGolem,
+    OnTopOfCollider,
+    OnTopOfColliderNoLeaves,
 }
 
 impl Strategy {
-    fn can_spawn_on(self, block_state: BlockState, above_state: BlockState) -> bool {
+    fn can_spawn_on(self, pos: BlockPos, block_state: BlockState, above_pos: BlockPos, above_state: BlockState) -> bool {
         match self {
+            Strategy::OnTopOfCollider => above_state.get_collision_shape(above_pos).is_empty() && is_face_full(&block_state.get_collision_shape(pos), Direction::Up),
+            Strategy::OnTopOfColliderNoLeaves => {
+                above_state.get_collision_shape(above_pos).is_empty() && !block_state.is(&block_tags::LEAVES) && is_face_full(&block_state.get_collision_shape(pos), Direction::Up)
+            }
             Strategy::LegacyIronGolem => {
                 let block = block_state.block();
                 if block == blocks::COBWEB
@@ -82,7 +89,7 @@ fn move_to_possible_spawn_position(level: &mut ServerLevel, spawn_range_y: i32, 
     while y >= -spawn_range_y {
         *search_pos = search_pos.below();
         let current_state = level.block_state(*search_pos);
-        if strategy.can_spawn_on(current_state, above_state) {
+        if strategy.can_spawn_on(*search_pos, current_state, search_pos.above(), above_state) {
             *search_pos = search_pos.above();
             return true;
         }
