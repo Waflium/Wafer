@@ -108,7 +108,9 @@ fn carrots_put_rabbits_in_love() {
 fn rabbits_hop_instead_of_walking() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
-    let rabbit = add(&mut level, Rabbit::create(), Vec3::new(0.5, -60.0, 30.5));
+    let mut mob = Rabbit::create();
+    mob.entity.random = wafer_core::random::LegacyRandomSource::new(1);
+    let rabbit = add(&mut level, mob, Vec3::new(0.5, -60.0, 30.5));
     let mut jumps = 0;
     let mut was_on_ground = true;
     for _ in 0..600 {
