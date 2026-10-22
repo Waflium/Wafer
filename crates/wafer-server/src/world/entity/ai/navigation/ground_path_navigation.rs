@@ -8,12 +8,18 @@ use crate::world::level::chunk::LevelChunk;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path::Path;
 use crate::world::level::pathfinder::node_evaluator::NodeEvaluatorKind;
-use crate::world::level::pathfinder::path_finder::PathFinder;
+use crate::world::level::pathfinder::path_finder::{PathFinder, PathFinderKind};
 use crate::world::level::pathfinder::walk_node_evaluator::WalkNodeEvaluator;
 
 impl PathNavigation {
     pub fn ground_path_navigation_create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {
         PathFinder::new(NodeEvaluatorKind::Walk(WalkNodeEvaluator::default()), max_visited_nodes)
+    }
+
+    pub fn warden_path_navigation_create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {
+        let mut path_finder = PathFinder::new(NodeEvaluatorKind::Walk(WalkNodeEvaluator::default()), max_visited_nodes);
+        path_finder.kind = PathFinderKind::DistanceXz;
+        path_finder
     }
 
     pub fn creaking_path_navigation_create_path_finder(&mut self, max_visited_nodes: i32) -> PathFinder {

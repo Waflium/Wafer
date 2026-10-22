@@ -91,6 +91,9 @@ impl ServerLevel {
         if self.is_allay(entity) {
             return Some(self.allay_listener_source(entity, kind));
         }
+        if self.is_warden(entity) {
+            return Some(self.warden_listener_source(entity));
+        }
         None
     }
 
@@ -98,12 +101,18 @@ impl ServerLevel {
         if self.is_allay(entity) {
             return self.allay_listener_radius(kind);
         }
+        if self.is_warden(entity) {
+            return crate::world::entity::monster::warden::warden::GAME_EVENT_LISTENER_RANGE;
+        }
         0
     }
 
     fn entity_handle_game_event(&mut self, entity: EntityId, kind: EntityListenerKind, event: GameEvent, context: Context, source_position: Vec3) -> bool {
         if self.is_allay(entity) {
             return self.allay_handle_game_event(entity, kind, event, context, source_position);
+        }
+        if self.is_warden(entity) {
+            return self.warden_handle_game_event(entity, event, context, source_position);
         }
         false
     }

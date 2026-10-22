@@ -1033,6 +1033,19 @@ pub static RAVAGER_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static WARDEN_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, AttackDamage,
+        ],
+        &[(MaxHealth, 500.0), (MovementSpeed, 0.3f32 as f64), (KnockbackResistance, 1.0), (AttackKnockback, 1.5), (AttackDamage, 30.0), (FollowRange, 24.0)],
+    )
+};
+
 pub static ILLUSIONER_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

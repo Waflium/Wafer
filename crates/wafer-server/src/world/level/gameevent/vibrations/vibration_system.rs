@@ -87,6 +87,7 @@ pub enum VibrationUser {
     CalibratedSculkSensor { pos: BlockPos, id: u64 },
     SculkShrieker { pos: BlockPos, id: u64 },
     Allay(EntityId),
+    Warden(EntityId),
 }
 
 pub fn distance_between_in_blocks(origin: BlockPos, dest: BlockPos) -> f32 {
@@ -111,6 +112,7 @@ impl ServerLevel {
             VibrationUser::SculkSensor { pos, id } | VibrationUser::CalibratedSculkSensor { pos, id } => self.sculk_sensor_vibration_data(pos, id),
             VibrationUser::SculkShrieker { pos, id } => self.sculk_shrieker_vibration_data(pos, id),
             VibrationUser::Allay(id) => self.allay_vibration_data(id),
+            VibrationUser::Warden(id) => self.warden_vibration_data(id),
         }
     }
 
@@ -119,6 +121,7 @@ impl ServerLevel {
             VibrationUser::SculkSensor { pos, id } | VibrationUser::CalibratedSculkSensor { pos, id } => self.sculk_sensor_vibration_data_mut(pos, id),
             VibrationUser::SculkShrieker { pos, id } => self.sculk_shrieker_vibration_data_mut(pos, id),
             VibrationUser::Allay(id) => self.allay_vibration_data_mut(id),
+            VibrationUser::Warden(id) => self.warden_vibration_data_mut(id),
         }
     }
 
@@ -128,6 +131,7 @@ impl ServerLevel {
             VibrationUser::CalibratedSculkSensor { .. } => crate::world::level::block::entity::sculk_sensor_block_entity::CALIBRATED_LISTENER_RANGE,
             VibrationUser::SculkShrieker { .. } => crate::world::level::block::entity::sculk_shrieker_block_entity::LISTENER_RADIUS,
             VibrationUser::Allay(_) => crate::world::entity::animal::allay::allay::VIBRATION_EVENT_LISTENER_RANGE,
+            VibrationUser::Warden(_) => crate::world::entity::monster::warden::warden::GAME_EVENT_LISTENER_RANGE,
         }
     }
 
@@ -135,6 +139,7 @@ impl ServerLevel {
         match user {
             VibrationUser::SculkSensor { pos, .. } | VibrationUser::CalibratedSculkSensor { pos, .. } | VibrationUser::SculkShrieker { pos, .. } => PositionSource::Block(pos),
             VibrationUser::Allay(id) => self.allay_position_source(id),
+            VibrationUser::Warden(id) => self.warden_position_source(id),
         }
     }
 
@@ -144,6 +149,7 @@ impl ServerLevel {
             VibrationUser::CalibratedSculkSensor { pos: block_pos, id } => self.calibrated_sculk_sensor_can_receive_vibration(block_pos, id, pos, event, context),
             VibrationUser::SculkShrieker { pos: block_pos, .. } => self.sculk_shrieker_can_receive_vibration(block_pos, context),
             VibrationUser::Allay(id) => self.allay_can_receive_vibration(id, pos),
+            VibrationUser::Warden(id) => self.warden_can_receive_vibration(id, pos, context),
         }
     }
 
@@ -154,6 +160,7 @@ impl ServerLevel {
             }
             VibrationUser::SculkShrieker { pos: block_pos, .. } => self.sculk_shrieker_on_receive_vibration(block_pos, source_entity, projectile_owner),
             VibrationUser::Allay(id) => self.allay_on_receive_vibration(id, pos, event),
+            VibrationUser::Warden(id) => self.warden_on_receive_vibration(id, pos, source_entity, projectile_owner),
         }
     }
 
@@ -162,11 +169,12 @@ impl ServerLevel {
             VibrationUser::SculkSensor { .. } | VibrationUser::CalibratedSculkSensor { .. } => &game_event_tags::VIBRATIONS,
             VibrationUser::SculkShrieker { .. } => &game_event_tags::SHRIEKER_CAN_LISTEN,
             VibrationUser::Allay(_) => &game_event_tags::ALLAY_CAN_LISTEN,
+            VibrationUser::Warden(_) => &game_event_tags::WARDEN_CAN_LISTEN,
         }
     }
 
     fn vibration_user_can_trigger_avoid_vibration(&self, user: VibrationUser) -> bool {
-        matches!(user, VibrationUser::SculkSensor { .. } | VibrationUser::CalibratedSculkSensor { .. })
+        matches!(user, VibrationUser::SculkSensor { .. } | VibrationUser::CalibratedSculkSensor { .. } | VibrationUser::Warden(_))
     }
 
     fn vibration_user_requires_adjacent_chunks_to_be_ticking(&self, user: VibrationUser) -> bool {
@@ -180,7 +188,7 @@ impl ServerLevel {
     fn vibration_user_on_data_changed(&mut self, user: VibrationUser) {
         match user {
             VibrationUser::SculkSensor { pos, .. } | VibrationUser::CalibratedSculkSensor { pos, .. } | VibrationUser::SculkShrieker { pos, .. } => self.block_entity_set_changed(pos),
-            VibrationUser::Allay(_) => {}
+            VibrationUser::Allay(_) | VibrationUser::Warden(_) => {}
         }
     }
 

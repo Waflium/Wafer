@@ -58,17 +58,22 @@ impl ServerLevel {
     fn dynamic_game_event_listeners(&self, id: crate::world::entity::EntityId) -> Vec<DynamicGameEventListener> {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(crate::world::entity::mob::MobKind::Allay(allay)) => vec![allay.dynamic_vibration_listener, allay.dynamic_jukebox_listener],
+            Some(crate::world::entity::mob::MobKind::Warden(warden)) => vec![warden.dynamic_game_event_listener],
             _ => Vec::new(),
         }
     }
 
     fn set_dynamic_game_event_listener(&mut self, id: crate::world::entity::EntityId, index: usize, dynamic: DynamicGameEventListener) {
-        if let Some(crate::world::entity::mob::MobKind::Allay(allay)) = self.mob_mut(id).map(|mob| &mut mob.kind) {
-            if index == 0 {
-                allay.dynamic_vibration_listener = dynamic;
-            } else {
-                allay.dynamic_jukebox_listener = dynamic;
+        match self.mob_mut(id).map(|mob| &mut mob.kind) {
+            Some(crate::world::entity::mob::MobKind::Allay(allay)) => {
+                if index == 0 {
+                    allay.dynamic_vibration_listener = dynamic;
+                } else {
+                    allay.dynamic_jukebox_listener = dynamic;
+                }
             }
+            Some(crate::world::entity::mob::MobKind::Warden(warden)) => warden.dynamic_game_event_listener = dynamic,
+            _ => {}
         }
     }
 

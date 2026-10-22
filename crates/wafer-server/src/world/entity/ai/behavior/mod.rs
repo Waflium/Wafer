@@ -87,6 +87,7 @@ pub mod update_activity_from_schedule;
 pub mod use_bonemeal;
 pub mod validate_nearby_poi;
 pub mod village_bound_random_stroll;
+pub mod warden;
 pub mod villager_calm_down;
 pub mod villager_goal_packages;
 pub mod villager_make_love;

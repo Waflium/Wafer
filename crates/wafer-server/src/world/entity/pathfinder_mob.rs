@@ -43,6 +43,7 @@ impl ServerLevel {
             MobKind::Pillager(_) => super::monster::illager::pillager::Pillager::get_walk_target_value(),
             MobKind::Blaze(_) | MobKind::ZombifiedPiglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => self.monster_get_walk_target_value(pos),
             MobKind::Creaking(_) => super::monster::creaking::creaking::get_walk_target_value(),
+            MobKind::Warden(_) => super::monster::warden::warden::get_walk_target_value(),
             MobKind::Ghast(_) | MobKind::Phantom(_) => get_walk_target_value(),
             MobKind::Guardian(_) | MobKind::ElderGuardian(_) => self.guardian_get_walk_target_value(pos),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => get_walk_target_value(),

@@ -190,6 +190,8 @@ pub struct ServerLevel {
     pub entity_manager: PersistentEntitySectionManager,
     pub(crate) tick_list: EntityTickList,
     pub(crate) removed_entities: Vec<EntityId>,
+    pub anger_suspects: wafer_core::hash_map::FastSet<EntityId>,
+    pub dropped_suspect_reasons: wafer_core::hash_map::FastMap<EntityId, (crate::world::entity::RemovalReason, i64)>,
     waypoint_manager: RefCell<ServerWaypointManager>,
     pub random: LegacyRandomSource,
     pub sleep_status: crate::server::players::sleep_status::SleepStatus,
@@ -279,6 +281,8 @@ impl ServerLevel {
             entity_manager: PersistentEntitySectionManager::new(entity_storage),
             tick_list: EntityTickList::default(),
             removed_entities: Vec::new(),
+            anger_suspects: Default::default(),
+            dropped_suspect_reasons: Default::default(),
             waypoint_manager: RefCell::default(),
             random: LegacyRandomSource::create(),
             sleep_status: Default::default(),
@@ -1191,6 +1195,7 @@ impl ServerLevel {
 
     pub fn remove_player_immediately(&mut self, id: EntityId, reason: crate::world::entity::RemovalReason) -> ServerPlayer {
         self.player_remove(id, reason);
+        self.record_dropped_suspect(id, Some(reason));
         self.world_border.listener.remove_connection(id);
         let player = self.players.shift_remove(&id).expect("removed player");
         self.update_sleeping_player_list();
@@ -1198,6 +1203,7 @@ impl ServerLevel {
     }
 
     pub fn remove_player(&mut self, id: EntityId) -> Option<ServerPlayer> {
+        self.record_dropped_suspect(id, Some(crate::world::entity::RemovalReason::UnloadedWithPlayer));
         self.world_border.listener.remove_connection(id);
         self.player_left_level(id);
         let player = self.players.shift_remove(&id);
@@ -1221,14 +1227,28 @@ impl ServerLevel {
             self.set_removed(id, reason);
         }
         self.entity_removed(id, reason);
+        self.record_dropped_suspect(id, reason);
         self.entities.swap_remove(&id);
+    }
+
+    fn record_dropped_suspect(&mut self, id: EntityId, reason: Option<crate::world::entity::RemovalReason>) {
+        if self.anger_suspects.remove(&id)
+            && let Some(reason) = reason
+        {
+            self.dropped_suspect_reasons.insert(id, (reason, self.game_time));
+        }
     }
 
     fn remove_untracked_entities(&mut self) {
         for id in std::mem::take(&mut self.removed_entities) {
-            if self.entities.get(&id).is_some_and(|e| e.entity().is_removed()) {
+            if let Some(reason) = self.entities.get(&id).and_then(|e| e.entity().removal) {
+                self.record_dropped_suspect(id, Some(reason));
                 self.entities.swap_remove(&id);
             }
+        }
+        if !self.dropped_suspect_reasons.is_empty() {
+            let game_time = self.game_time;
+            self.dropped_suspect_reasons.retain(|_, &mut (_, time)| game_time - time <= 40);
         }
     }
 
@@ -1885,6 +1905,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Fox(_)) => self.fox_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Breeze(_)) => self.breeze_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Creaking(_)) => self.creaking_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Warden(_)) => self.warden_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::CopperGolem(_)) => self.copper_golem_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Allay(_)) => self.allay_tick(id),
             Some(LevelEntity::Mob(_)) => self.mob_tick(id),

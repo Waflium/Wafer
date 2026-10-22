@@ -128,7 +128,7 @@ impl ServerLevel {
             MobKind::Hoglin(_) => crate::world::entity::monster::hoglin::hoglin::is_food(item_stack),
             MobKind::Panda(_) => panda::panda::is_food(item_stack),
             MobKind::Strider(_) => crate::world::entity::monster::strider::is_food(item_stack),
-            MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) | MobKind::Creaking(_) | MobKind::Dolphin(_) => false,
+            MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) | MobKind::Creaking(_) | MobKind::Warden(_) | MobKind::Dolphin(_) => false,
             MobKind::PolarBear(_) => false,
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),
             MobKind::Sniffer(_) => sniffer::sniffer::is_food(item_stack),

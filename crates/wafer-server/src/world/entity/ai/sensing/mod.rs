@@ -22,3 +22,4 @@ pub mod sensor_type;
 pub mod tempting_sensor;
 pub mod villager_babies_sensor;
 pub mod villager_hostiles_sensor;
+pub mod warden_entity_sensor;

@@ -895,6 +895,7 @@ impl ServerLevel {
     pub fn add_entity_data(&self, id: EntityId) -> i32 {
         match self.entities.get(&id) {
             Some(LevelEntity::Projectile(_)) => self.projectile_add_data(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Warden(_)) => (mob.entity.pose() == super::data::Pose::Emerging) as i32,
             Some(entity) => entity.add_entity_data(),
             None => 0,
         }
@@ -1905,6 +1906,8 @@ impl ServerLevel {
             super::animal::turtle::turtle::Turtle::next_step(self.entity(id))
         } else if self.is_strider(id) {
             super::monster::strider::next_step(self.entity(id))
+        } else if self.is_warden(id) {
+            super::monster::warden::warden::next_step(self.entity(id))
         } else {
             self.entity_next_step(id)
         }
@@ -1976,6 +1979,10 @@ impl ServerLevel {
         }
         if self.is_creaking(id) {
             self.creaking_play_step_sound(id);
+            return;
+        }
+        if self.is_warden(id) {
+            self.warden_play_step_sound(id);
             return;
         }
         if self.is_abstract_horse(id) {
@@ -2661,6 +2668,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Bat(_)) => return self.bat_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Ghast(_)) => return self.ghast_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Creaking(_)) => return self.creaking_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Warden(_)) => return self.warden_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Guardian(_) | super::mob::MobKind::ElderGuardian(_)) => return self.guardian_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Squid(_)) => return self.squid_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::GlowSquid(_)) => return self.glow_squid_hurt_server(id, source, damage),
@@ -2726,6 +2734,8 @@ impl ServerLevel {
             self.ghast_is_invulnerable_to(id, source)
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Breeze(_))) {
             self.breeze_is_invulnerable_to(id, source)
+        } else if self.is_warden(id) {
+            self.warden_is_invulnerable_to(id, source) || self.living_entity_is_invulnerable_to(id, source)
         } else if self.is_living(id) {
             self.living_entity_is_invulnerable_to(id, source)
         } else {
@@ -2893,6 +2903,7 @@ impl ServerLevel {
     pub fn dampens_vibrations(&self, id: EntityId) -> bool {
         match self.entities.get(&id) {
             Some(LevelEntity::Item(item)) => item.item.get_item().is(&wafer_data::item_tags::DAMPENS_VIBRATIONS),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Warden(_)) => true,
             _ => false,
         }
     }
@@ -3044,6 +3055,7 @@ impl ServerLevel {
                     super::mob::MobKind::PiglinBrute(_) => "PiglinBrute",
                     super::mob::MobKind::Breeze(_) => "Breeze",
                     super::mob::MobKind::Creaking(_) => "Creaking",
+                    super::mob::MobKind::Warden(_) => "Warden",
                     super::mob::MobKind::WitherSkeleton(_) => "WitherSkeleton",
                     super::mob::MobKind::Bogged(_) => "Bogged",
                     super::mob::MobKind::Drowned(_) => "Drowned",
@@ -3758,7 +3770,7 @@ impl ServerLevel {
     }
 
     fn can_ride(&self, id: EntityId, _vehicle: EntityId) -> bool {
-        if self.is_wither(id) {
+        if self.is_wither(id) || self.is_warden(id) {
             return false;
         }
         let e = self.entity(id);
@@ -4236,6 +4248,8 @@ impl ServerLevel {
             true
         } else if self.is_creaking(id) {
             self.creaking_is_pushable(id)
+        } else if self.is_warden(id) {
+            self.warden_is_pushable(id)
         } else if self.is_living(id) {
             self.living_entity_is_pushable(id)
         } else {

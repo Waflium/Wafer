@@ -901,6 +901,9 @@ impl ServerLevel {
     }
 
     pub fn get_seconds_to_disable_blocking(&self, id: EntityId) -> f32 {
+        if self.is_warden(id) {
+            return super::monster::warden::warden::get_seconds_to_disable_blocking();
+        }
         let weapon_item = self.get_weapon_item(id);
         match weapon_item.get(dc::WEAPON) {
             Some(weapon) if weapon_item == self.get_active_item(id) => weapon.get("disable_blocking_for_seconds").map_or(0.0, component_codec::as_f32),
@@ -1125,6 +1128,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::IronGolem(_)) => self.iron_golem_can_attack(id, target),
             Some(MobKind::Breeze(_)) => self.breeze_can_attack(id, target),
+            Some(MobKind::Warden(_)) => self.warden_can_target_entity(id, Some(target)),
             Some(MobKind::Dolphin(_)) => self.dolphin_can_attack(id, target),
             Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.abstract_illager_can_attack(id, target),
             Some(_) => self.mob_can_attack(id, target),
@@ -1881,7 +1885,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Hoglin(_)) => self.mob(id).expect("a hoglin").xp_reward,
-            Some(MobKind::Zoglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) | MobKind::Creaking(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Zoglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) | MobKind::Creaking(_) | MobKind::Warden(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Piglin(_)) => self.mob(id).expect("a piglin").xp_reward,
             Some(MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
             Some(MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::Phantom(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.mob_get_base_experience_reward(id),
@@ -2483,7 +2487,7 @@ impl ServerLevel {
             Some(MobKind::Ghast(_) | MobKind::Phantom(_)) => self.mob_ai_step(id),
             Some(MobKind::HappyGhast(_)) => self.happy_ghast_ai_step(id),
             Some(MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.guardian_ai_step(id),
-            Some(MobKind::ZombifiedPiglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_)) => self.monster_ai_step(id),
+            Some(MobKind::ZombifiedPiglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) | MobKind::Warden(_)) => self.monster_ai_step(id),
             Some(MobKind::Creaking(_)) => self.creaking_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(MobKind::Ravager(_)) => self.ravager_ai_step(id),
@@ -2866,6 +2870,7 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::IronGolem(_)) => self.iron_golem_do_push(id, entity),
+            Some(MobKind::Warden(_)) => self.warden_do_push(id, entity),
             Some(MobKind::Parrot(_)) if self.is_player(entity) => {}
             _ => self.living_entity_do_push(id, entity),
         }

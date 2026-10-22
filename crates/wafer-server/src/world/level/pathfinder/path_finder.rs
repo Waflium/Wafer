@@ -10,7 +10,15 @@ use super::walk_node_evaluator::WalkNodeEvaluator;
 use crate::world::entity::EntityId;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum PathFinderKind {
+    #[default]
+    Default,
+    DistanceXz,
+}
+
 pub struct PathFinder {
+    pub kind: PathFinderKind,
     neighbors: [u32; 32],
     max_visited_nodes: i32,
     pub node_evaluator: NodeEvaluatorKind,
@@ -25,7 +33,14 @@ impl Default for PathFinder {
 
 impl PathFinder {
     pub fn new(node_evaluator: NodeEvaluatorKind, max_visited_nodes: i32) -> PathFinder {
-        PathFinder { neighbors: [0; 32], max_visited_nodes, node_evaluator, open_set: BinaryHeap::default() }
+        PathFinder { kind: PathFinderKind::Default, neighbors: [0; 32], max_visited_nodes, node_evaluator, open_set: BinaryHeap::default() }
+    }
+
+    fn distance(&self, from: &Node, to: &Node) -> f32 {
+        match self.kind {
+            PathFinderKind::Default => from.distance_to(to),
+            PathFinderKind::DistanceXz => from.distance_to_xz(to),
+        }
     }
 
     pub fn set_max_visited_nodes(&mut self, max_visited_nodes: i32) {
@@ -86,7 +101,7 @@ impl PathFinder {
                 self.neighbors = neighbors;
                 for &neighbor in &neighbors[..neighbor_count] {
                     let neighbor_node = self.node_evaluator.node_evaluator_mut().nodes[neighbor as usize];
-                    let distance = current_node.distance_to(&neighbor_node);
+                    let distance = self.distance(&current_node, &neighbor_node);
                     let walked_distance = current_node.walked_distance + distance;
                     self.node_evaluator.node_evaluator_mut().nodes[neighbor as usize].walked_distance = walked_distance;
                     let tentative_g_score = current_node.g + distance + neighbor_node.cost_malus;

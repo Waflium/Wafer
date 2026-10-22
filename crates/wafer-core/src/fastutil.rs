@@ -57,6 +57,15 @@ impl OpenHashKey for crate::BlockPos {
     }
 }
 
+impl OpenHashKey for u128 {
+    const NULL: u128 = 0;
+
+    fn mix(self) -> usize {
+        let hilo = ((self >> 64) as i64) ^ (self as i64);
+        mix_int(((hilo >> 32) as i32) ^ (hilo as i32)) as u32 as usize
+    }
+}
+
 pub type Long2ObjectOpenHashMap<V> = OpenHashMap<i64, V>;
 pub type Int2ObjectOpenHashMap<V> = OpenHashMap<i32, V>;
 
