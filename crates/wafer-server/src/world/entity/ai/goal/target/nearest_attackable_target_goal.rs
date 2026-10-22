@@ -31,6 +31,7 @@ pub enum TargetType {
     Fox,
     Zombie,
     AbstractIllager,
+    Guardian,
 }
 
 impl TargetType {
@@ -55,6 +56,7 @@ impl TargetType {
             TargetType::Fox => is_type(level, entity, &["minecraft:fox"]),
             TargetType::Zombie => level.mob(entity).is_some_and(|mob| mob.is_zombie()),
             TargetType::AbstractIllager => level.mob(entity).is_some_and(|mob| mob.is_abstract_illager()),
+            TargetType::Guardian => level.is_guardian(entity),
         }
     }
 }

@@ -14,6 +14,7 @@ use super::llama_follow_caravan_goal::LlamaFollowCaravanGoal;
 use super::look_at_trading_player_goal::LookAtTradingPlayerGoal;
 use super::trade_with_player_goal::TradeWithPlayerGoal;
 use super::use_item_goal::UseItemGoal;
+use crate::world::entity::monster::guardian::GuardianAttackGoal;
 use crate::world::entity::monster::phantom::{PhantomAttackPlayerTargetGoal, PhantomAttackStrategyGoal, PhantomCircleAroundAnchorGoal, PhantomSweepAttackGoal};
 use crate::world::entity::animal::equine::trader_llama::TraderLlamaDefendWanderingTraderGoal;
 use crate::world::entity::npc::wanderingtrader::wandering_trader::WanderToPositionGoal;
@@ -154,6 +155,7 @@ pub enum Goal {
     PhantomSweepAttack(PhantomSweepAttackGoal),
     PhantomCircleAroundAnchor(PhantomCircleAroundAnchorGoal),
     PhantomAttackPlayerTarget(PhantomAttackPlayerTargetGoal),
+    GuardianAttack(GuardianAttackGoal),
     Interact(LookAtPlayerGoal),
     AbstractSkeletonMelee(AbstractSkeletonMeleeGoal),
     RandomStroll(RandomStrollGoal),
@@ -263,6 +265,7 @@ impl Goal {
             Goal::PhantomSweepAttack(goal) => goal.can_use(level, mob),
             Goal::PhantomCircleAroundAnchor(goal) => goal.can_use(level, mob),
             Goal::PhantomAttackPlayerTarget(goal) => goal.can_use(level, mob),
+            Goal::GuardianAttack(goal) => goal.can_use(level, mob),
             Goal::LlamaFollowCaravan(goal) => goal.can_use(level, mob),
             Goal::LlamaHurtByTarget(goal) => goal.can_use(level, mob),
             Goal::TraderLlamaDefendWanderingTarget(goal) => goal.can_use(level, mob),
@@ -287,7 +290,12 @@ impl Goal {
             Goal::RangedBowAttack(goal) => goal.can_use(level, mob),
             Goal::RangedCrossbowAttack(goal) => goal.can_use(level, mob),
             Goal::AbstractSkeletonMelee(goal) => goal.melee_attack_goal.can_use(level, mob),
-            Goal::RandomStroll(goal) => goal.can_use(level, mob, RandomStrollGoal::get_position),
+            Goal::RandomStroll(goal) => {
+                if level.guardian_take_random_stroll_trigger(mob) {
+                    goal.trigger();
+                }
+                goal.can_use(level, mob, RandomStrollGoal::get_position)
+            }
             Goal::DrownedGoToWater(goal) => goal.can_use(level, mob),
             Goal::DrownedTridentAttack(goal) => goal.can_use(level, mob),
             Goal::DrownedAttack(goal) => goal.can_use(level, mob),
@@ -408,6 +416,7 @@ impl Goal {
             Goal::PhantomSweepAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::PhantomCircleAroundAnchor(goal) => goal.can_use(level, mob),
             Goal::PhantomAttackPlayerTarget(goal) => goal.can_continue_to_use(level, mob),
+            Goal::GuardianAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::LlamaFollowCaravan(goal) => goal.can_continue_to_use(level, mob),
             Goal::LlamaHurtByTarget(goal) => level.llama_hurt_by_target_can_continue_to_use(goal, mob),
             Goal::TraderLlamaDefendWanderingTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
@@ -555,6 +564,7 @@ impl Goal {
             Goal::PhantomAttackStrategy(goal) => goal.start(level, mob),
             Goal::PhantomCircleAroundAnchor(goal) => goal.start(level, mob),
             Goal::PhantomSweepAttack(_) | Goal::PhantomAttackPlayerTarget(_) => {}
+            Goal::GuardianAttack(goal) => goal.start(level, mob),
             Goal::LlamaFollowCaravan(_) => {}
             Goal::LlamaHurtByTarget(goal) => goal.start(level, mob),
             Goal::TraderLlamaDefendWanderingTarget(goal) => goal.start(level, mob),
@@ -693,6 +703,7 @@ impl Goal {
             Goal::PhantomAttackStrategy(goal) => goal.stop(level, mob),
             Goal::PhantomSweepAttack(goal) => goal.stop(level, mob),
             Goal::PhantomCircleAroundAnchor(_) | Goal::PhantomAttackPlayerTarget(_) => {}
+            Goal::GuardianAttack(goal) => goal.stop(level, mob),
             Goal::LlamaFollowCaravan(goal) => goal.stop(level, mob),
             Goal::LlamaHurtByTarget(goal) => goal.target_goal.stop(level, mob),
             Goal::TraderLlamaDefendWanderingTarget(goal) => goal.target_goal.stop(level, mob),
@@ -813,6 +824,7 @@ impl Goal {
                 | Goal::SpiderAttack(_)
                 | Goal::RangedBowAttack(_)
                 | Goal::RangedCrossbowAttack(_)
+                | Goal::GuardianAttack(_)
                 | Goal::AbstractSkeletonMelee(_)
                 | Goal::DrownedTridentAttack(_)
                 | Goal::DrownedAttack(_)
@@ -858,6 +870,7 @@ impl Goal {
             Goal::PhantomSweepAttack(goal) => goal.tick(level, mob),
             Goal::PhantomCircleAroundAnchor(goal) => goal.tick(level, mob),
             Goal::PhantomAttackPlayerTarget(_) => {}
+            Goal::GuardianAttack(goal) => goal.tick(level, mob),
             Goal::LlamaFollowCaravan(goal) => goal.tick(level, mob),
             Goal::LlamaHurtByTarget(_) | Goal::TraderLlamaDefendWanderingTarget(_) | Goal::UseItem(_) | Goal::TradeWithPlayer(_) => {}
             Goal::LookAtTradingPlayer(goal) => goal.look_at_player_goal.tick(level, mob),
@@ -971,8 +984,10 @@ impl Goal {
             | Goal::FleeSun(_)
             | Goal::Swell(_)
             | Goal::AvoidEntity(_)
-            | Goal::RandomStroll(_)
             | Goal::DrownedGoToWater(_) => Flag::Move.bit(),
+            Goal::RandomStroll(goal) => goal.flags,
+            Goal::MoveTowardsRestriction(goal) => goal.flags,
+            Goal::GuardianAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::Breed(_)
             | Goal::Tempt(_)
             | Goal::RandomLookAround(_)
@@ -1038,7 +1053,7 @@ impl Goal {
             Goal::FoxFollowParent(_) => 0,
             Goal::FoxLookAtPlayer(_) => Flag::Look.bit(),
             Goal::DefendTrustedTarget(_) => Flag::Target.bit(),
-            Goal::MoveTowardsRestriction(_) | Goal::RandomFloatAround(_) => Flag::Move.bit(),
+            Goal::RandomFloatAround(_) => Flag::Move.bit(),
             Goal::BlazeAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::GhastLook => Flag::Look.bit(),
             Goal::EvokerCastingSpell(_) | Goal::SpellcasterCastingSpell(_) => Flag::Move.bit() | Flag::Look.bit(),

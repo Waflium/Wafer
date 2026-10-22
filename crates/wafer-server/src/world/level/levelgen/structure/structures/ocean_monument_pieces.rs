@@ -3,6 +3,10 @@ use wafer_core::random::RandomSource;
 use wafer_data::{Block, BlockState, blocks};
 use wafer_protocol::nbt::Nbt;
 
+use crate::server::level::ServerLevel;
+use crate::world::entity::attributes::Attribute;
+use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
+use crate::world::entity::{LevelEntity, mob};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::shuffle;
 use crate::world::level::levelgen::structure::BoundingBox;
@@ -1320,7 +1324,7 @@ impl OceanMonumentPenthouse {
         piece.generate_box(level, chunk_bb, 8, 0, 10, 8, 2, 10, base_light, base_light, false);
         piece.generate_box(level, chunk_bb, 6, -1, 7, 7, -1, 8, base_black, base_black, false);
         monument.generate_water_box(level, chunk_bb, 6, -1, 3, 7, -1, 4);
-        monument.spawn_elder(chunk_bb, 6, 1, 6);
+        monument.spawn_elder(level, chunk_bb, 6, 1, 6);
     }
 }
 
@@ -1435,8 +1439,20 @@ impl OceanMonumentPiece {
         chunk_bb.intersects_xz(wx0.min(wx1), wz0.min(wz1), wx0.max(wx1), wz0.max(wz1))
     }
 
-    fn spawn_elder(&self, chunk_bb: &BoundingBox, x: i32, y: i32, z: i32) -> bool {
-        chunk_bb.is_inside(self.piece.get_world_pos(x, y, z))
+    fn spawn_elder(&self, level: &mut impl WorldGenLevel, chunk_bb: &BoundingBox, x: i32, y: i32, z: i32) {
+        let pos = self.piece.get_world_pos(x, y, z);
+        if chunk_bb.is_inside(pos)
+            && let Some(LevelEntity::Mob(mut elder)) = ServerLevel::create_entity("minecraft:elder_guardian")
+        {
+            let max_health = elder.living.attributes.value(Attribute::MaxHealth) as f32;
+            if elder.health > 0.0 {
+                elder.set_health(elder.health + max_health);
+            }
+            elder.entity.snap_to(pos.x as f64 + 0.5, pos.y as f64, pos.z as f64 + 0.5, 0.0, 0.0);
+            let difficulty = level.get_current_difficulty_at(elder.entity.block_position());
+            mob::finalize_spawn(level, &mut elder, &difficulty, EntitySpawnReason::Structure, None);
+            level.add_fresh_entity_with_passengers(LevelEntity::Mob(elder));
+        }
     }
 }
 
@@ -1707,7 +1723,7 @@ impl OceanMonumentWingRoom {
             piece.place_block(level, base_light, 13, 7, 20, chunk_bb);
             piece.generate_box(level, chunk_bb, 6, 0, 21, 7, 4, 21, base_light, base_light, false);
             piece.generate_box(level, chunk_bb, 15, 0, 21, 16, 4, 21, base_light, base_light, false);
-            monument.spawn_elder(chunk_bb, 11, 2, 16);
+            monument.spawn_elder(level, chunk_bb, 11, 2, 16);
         } else if self.main_design == 1 {
             piece.generate_box(level, chunk_bb, 9, 3, 18, 13, 3, 20, base_light, base_light, false);
             piece.generate_box(level, chunk_bb, 9, 0, 18, 9, 2, 18, base_light, base_light, false);
@@ -1738,7 +1754,7 @@ impl OceanMonumentWingRoom {
             }
             piece.generate_box(level, chunk_bb, 8, 3, 8, 8, 3, 13, base_black, base_black, false);
             piece.generate_box(level, chunk_bb, 14, 3, 8, 14, 3, 13, base_black, base_black, false);
-            monument.spawn_elder(chunk_bb, 11, 5, 13);
+            monument.spawn_elder(level, chunk_bb, 11, 5, 13);
         }
     }
 }

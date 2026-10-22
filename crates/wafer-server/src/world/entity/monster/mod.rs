@@ -16,6 +16,8 @@ pub mod ghast;
 pub mod monster;
 #[cfg(test)]
 mod nether_mob_tests;
+pub mod elder_guardian;
+pub mod guardian;
 pub mod patrolling_monster;
 pub mod phantom;
 pub mod ranged_attack_mob;
@@ -35,3 +37,5 @@ mod ravager_tests;
 pub mod zombie;
 #[cfg(test)]
 mod phantom_tests;
+#[cfg(test)]
+mod guardian_tests;

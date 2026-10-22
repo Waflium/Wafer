@@ -1,5 +1,6 @@
 use wafer_core::Vec3;
 
+use super::goal::Flag;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::util::default_random_pos;
@@ -9,11 +10,16 @@ pub struct MoveTowardsRestrictionGoal {
     wanted_y: f64,
     wanted_z: f64,
     speed_modifier: f64,
+    pub flags: u8,
 }
 
 impl MoveTowardsRestrictionGoal {
     pub fn new(speed_modifier: f64) -> MoveTowardsRestrictionGoal {
-        MoveTowardsRestrictionGoal { wanted_x: 0.0, wanted_y: 0.0, wanted_z: 0.0, speed_modifier }
+        MoveTowardsRestrictionGoal { wanted_x: 0.0, wanted_y: 0.0, wanted_z: 0.0, speed_modifier, flags: Flag::Move.bit() }
+    }
+
+    pub fn set_flags(&mut self, flags: u8) {
+        self.flags = flags;
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {

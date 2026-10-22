@@ -391,6 +391,8 @@ impl ServerLevel {
             "minecraft:evoker" => LevelEntity::Mob(Box::new(super::monster::illager::evoker::Evoker::create())),
             "minecraft:illusioner" => LevelEntity::Mob(Box::new(super::monster::illager::illusioner::Illusioner::create())),
             "minecraft:vex" => LevelEntity::Mob(Box::new(super::monster::vex::Vex::create())),
+            "minecraft:guardian" => LevelEntity::Mob(Box::new(super::monster::guardian::Guardian::create())),
+            "minecraft:elder_guardian" => LevelEntity::Mob(Box::new(super::monster::elder_guardian::ElderGuardian::create())),
             "minecraft:phantom" => LevelEntity::Mob(Box::new(super::monster::phantom::Phantom::create())),
             "minecraft:giant" => LevelEntity::Mob(Box::new(super::monster::giant::Giant::create())),
             "minecraft:wither_skeleton" => LevelEntity::Mob(Box::new(super::monster::skeleton::wither_skeleton::WitherSkeleton::create())),

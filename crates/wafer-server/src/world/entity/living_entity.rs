@@ -1541,7 +1541,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
             Some(MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
-            Some(MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::Phantom(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::Phantom(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.mob_get_base_experience_reward(id),
             Some(
                 MobKind::Creeper(_)
                 | MobKind::Spider(_)
@@ -2098,6 +2098,7 @@ impl ServerLevel {
             Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),
             Some(MobKind::Blaze(_)) => self.blaze_ai_step(id),
             Some(MobKind::Ghast(_) | MobKind::Phantom(_)) => self.mob_ai_step(id),
+            Some(MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.guardian_ai_step(id),
             Some(MobKind::ZombifiedPiglin(_)) => self.monster_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
             Some(MobKind::Ravager(_)) => self.ravager_ai_step(id),
@@ -2692,6 +2693,8 @@ impl ServerLevel {
             self.abstract_fish_travel_in_water(id, input, base_gravity, is_falling, old_y);
         } else if self.is_turtle(id) {
             self.turtle_travel_in_water(id, input);
+        } else if self.is_guardian(id) {
+            self.guardian_travel_in_water(id, input);
         } else {
             self.living_entity_travel_in_water(id, input, base_gravity, is_falling, old_y);
         }

@@ -1,7 +1,7 @@
 use wafer_core::Vec3;
 use wafer_core::random::RandomSource;
 
-use super::goal::reduced_tick_delay;
+use super::goal::{Flag, reduced_tick_delay};
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::util::default_random_pos;
@@ -16,6 +16,7 @@ pub struct RandomStrollGoal {
     interval: i32,
     force_trigger: bool,
     check_no_action_time: bool,
+    pub flags: u8,
 }
 
 impl RandomStrollGoal {
@@ -28,7 +29,7 @@ impl RandomStrollGoal {
     }
 
     pub fn with(speed_modifier: f64, interval: i32, check_no_action_time: bool) -> RandomStrollGoal {
-        RandomStrollGoal { wanted_x: 0.0, wanted_y: 0.0, wanted_z: 0.0, speed_modifier, interval, force_trigger: false, check_no_action_time }
+        RandomStrollGoal { wanted_x: 0.0, wanted_y: 0.0, wanted_z: 0.0, speed_modifier, interval, force_trigger: false, check_no_action_time, flags: Flag::Move.bit() }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId, get_position: impl FnOnce(&mut ServerLevel, EntityId) -> Option<Vec3>) -> bool {
@@ -70,6 +71,10 @@ impl RandomStrollGoal {
 
     pub fn trigger(&mut self) {
         self.force_trigger = true;
+    }
+
+    pub fn set_flags(&mut self, flags: u8) {
+        self.flags = flags;
     }
 
     pub fn set_interval(&mut self, interval: i32) {
