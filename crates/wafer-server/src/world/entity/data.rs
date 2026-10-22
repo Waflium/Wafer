@@ -87,6 +87,7 @@ pub enum DataValue {
     Direction(wafer_core::Direction),
     PaintingVariant(i32),
     ResolvableProfile(wafer_protocol::nbt::Nbt),
+    SnifferState(i32),
 }
 
 impl DataValue {
@@ -131,6 +132,7 @@ impl DataValue {
             DataValue::Direction(_) => 12,
             DataValue::PaintingVariant(_) => 34,
             DataValue::ResolvableProfile(_) => 41,
+            DataValue::SnifferState(_) => 35,
         }
     }
 
@@ -192,6 +194,7 @@ impl DataValue {
             DataValue::Direction(direction) => w.varint(direction.ordinal() as i32),
             DataValue::PaintingVariant(id) => w.varint(*id + 1),
             DataValue::DyeColor(id) => w.varint(*id),
+            DataValue::SnifferState(id) => w.varint(*id),
             DataValue::ResolvableProfile(profile) => {
                 let _ = crate::world::item::component::PROFILE.write(profile, w);
             }

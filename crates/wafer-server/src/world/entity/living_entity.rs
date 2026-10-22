@@ -1683,6 +1683,8 @@ impl ServerLevel {
             self.tamable_animal_die(id, source);
         } else if self.is_villager(id) {
             self.villager_die(id, source);
+        } else if self.is_sniffer(id) {
+            self.sniffer_die(id, source);
         } else {
             self.living_entity_die(id, source);
         }
@@ -2838,6 +2840,7 @@ impl ServerLevel {
             Some(MobKind::Slime(_)) => self.abstract_cube_mob_jump_from_ground(id),
             Some(MobKind::MagmaCube(_)) => self.magma_cube_jump_from_ground(id),
             Some(MobKind::Rabbit(_)) => self.rabbit_jump_from_ground(id),
+            Some(MobKind::Sniffer(_)) => self.sniffer_jump_from_ground(id),
             _ if self.is_player(id) => self.server_player_jump_from_ground(id),
             _ => self.living_entity_jump_from_ground(id),
         }

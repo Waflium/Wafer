@@ -36,6 +36,7 @@ pub mod pig;
 pub mod panda;
 pub mod polarbear;
 pub mod rabbit;
+pub mod sniffer;
 #[cfg(test)]
 mod rabbit_turtle_oracle_tests;
 pub mod sheep;
@@ -126,6 +127,7 @@ impl ServerLevel {
             MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) | MobKind::Dolphin(_) => false,
             MobKind::PolarBear(_) => false,
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),
+            MobKind::Sniffer(_) => sniffer::sniffer::is_food(item_stack),
             MobKind::Zombie(_)
             | MobKind::ZombieVillager(_)
             | MobKind::Husk(_)
@@ -178,6 +180,8 @@ impl ServerLevel {
             self.cat_play_eating_sound(id);
         } else if let MobKind::Armadillo(_) = mob.kind {
             self.armadillo_play_eating_sound(id);
+        } else if let MobKind::Sniffer(_) = mob.kind {
+            self.sniffer_play_eating_sound(id);
         } else if let MobKind::Frog(_) = mob.kind {
             self.frog_play_eating_sound(id);
         } else if let MobKind::Fox(_) = mob.kind {
@@ -256,6 +260,7 @@ impl ServerLevel {
             MobKind::Horse(_) => self.horse_can_mate(id, partner),
             MobKind::Donkey(_) => self.donkey_can_mate(id, partner),
             MobKind::Mule(_) => false,
+            MobKind::Sniffer(_) => self.sniffer_can_mate(id, partner),
             MobKind::Llama(_) | MobKind::TraderLlama(_) => self.llama_can_mate(id, partner),
             _ => self.animal_can_mate(id, partner),
         }
@@ -272,6 +277,7 @@ impl ServerLevel {
     pub fn spawn_child_from_breeding(&mut self, id: EntityId, partner: EntityId) {
         match self.mob(id).expect("an animal").kind {
             MobKind::Frog(_) => self.frog_spawn_child_from_breeding(id, partner),
+            MobKind::Sniffer(_) => self.sniffer_spawn_child_from_breeding(id, partner),
             _ => self.animal_spawn_child_from_breeding(id, partner),
         }
     }

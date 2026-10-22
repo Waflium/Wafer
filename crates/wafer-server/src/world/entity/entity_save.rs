@@ -434,6 +434,7 @@ impl ServerLevel {
             "minecraft:sheep" => LevelEntity::Mob(Box::new(super::animal::sheep::sheep::Sheep::create())),
             "minecraft:goat" => LevelEntity::Mob(Box::new(super::animal::goat::goat::Goat::create())),
             "minecraft:armadillo" => LevelEntity::Mob(Box::new(super::animal::armadillo::armadillo::Armadillo::create())),
+            "minecraft:sniffer" => LevelEntity::Mob(Box::new(super::animal::sniffer::sniffer::Sniffer::create())),
             "minecraft:axolotl" => LevelEntity::Mob(Box::new(super::animal::axolotl::axolotl::Axolotl::create())),
             "minecraft:frog" => LevelEntity::Mob(Box::new(super::animal::frog::frog::Frog::create())),
             "minecraft:tadpole" => LevelEntity::Mob(Box::new(super::animal::frog::tadpole::Tadpole::create())),

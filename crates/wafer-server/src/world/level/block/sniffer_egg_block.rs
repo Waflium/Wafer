@@ -49,6 +49,9 @@ impl BlockBehaviour for SnifferEggBlock {
             level.destroy_block(position, false, None, UPDATE_LIMIT);
             if let Some(mut sniffer) = ServerLevel::create_entity("minecraft:sniffer") {
                 let spawn_at = Vec3::at_center_of(position);
+                if let crate::world::entity::LevelEntity::Mob(mob) = &mut sniffer {
+                    mob.set_baby(true);
+                }
                 let y_rot = mth::wrap_degrees(level.random.next_float() * 360.0);
                 sniffer.entity_mut().snap_to(spawn_at.x, spawn_at.y, spawn_at.z, y_rot, 0.0);
                 level.add_fresh_entity(sniffer);

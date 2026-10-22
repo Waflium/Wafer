@@ -634,6 +634,19 @@ pub static CHESTED_HORSE_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static SNIFFER_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange,
+        ],
+        &[(FollowRange, 16.0), (TemptRange, 10.0), (MovementSpeed, 0.1f32 as f64), (MaxHealth, 14.0)],
+    )
+};
+
 pub static ARMADILLO_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

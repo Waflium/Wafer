@@ -38,7 +38,7 @@ pub fn finalize_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), mob: &mut
     if ageable_mob_group_data.is_should_spawn_baby()
         && ageable_mob_group_data.get_group_size() > 0
         && level.get_random().next_float() <= ageable_mob_group_data.get_baby_spawn_chance()
-        && mob.set_age(BABY_START_AGE)
+        && mob.set_age(mob.get_baby_start_age())
     {
         mob.refresh_dimensions();
     }
@@ -101,6 +101,7 @@ impl ServerLevel {
             MobKind::Shulker(_) | MobKind::Wither(_) => None,
             MobKind::Ocelot(_) => Some(Box::new(super::animal::feline::ocelot::Ocelot::create())),
             MobKind::Armadillo(_) => self.armadillo_get_breed_offspring(id, partner),
+            MobKind::Sniffer(_) => self.sniffer_get_breed_offspring(id, partner),
             MobKind::Zombie(_)
             | MobKind::ZombieVillager(_)
             | MobKind::Husk(_)
@@ -155,7 +156,8 @@ impl ServerLevel {
     fn set_age_locked_data(&mut self, id: EntityId) {
         let locked = !self.mob(id).expect("an ageable mob").is_age_locked();
         self.mob_mut(id).expect("an ageable mob").entity.data.set(ids::AGE_LOCKED, DataValue::Boolean(locked));
-        self.set_age(id, BABY_START_AGE);
+        let baby_start_age = self.mob(id).expect("an ageable mob").get_baby_start_age();
+        self.set_age(id, baby_start_age);
         self.mob_mut(id).expect("an ageable mob").ageable_mut().expect("an ageable mob").age_lock_particle_timer = 40;
     }
 

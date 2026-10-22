@@ -1826,6 +1826,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Wolf(_)) => self.wolf_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Armadillo(_)) => self.armadillo_tick(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Sniffer(_)) => self.sniffer_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Bat(_)) => self.bat_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Vex(_)) => self.vex_tick(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::PolarBear(_)) => self.polar_bear_tick(id),

@@ -149,6 +149,7 @@ pub enum MobKind {
     Goat(Goat),
     PolarBear(PolarBear),
     Armadillo(Armadillo),
+    Sniffer(super::animal::sniffer::sniffer::Sniffer),
     Zombie(Zombie),
     Husk(Husk),
     Vindicator(Vindicator),
@@ -290,7 +291,7 @@ impl Mob {
             MobKind::Panda(_) => super::animal::panda::panda::Panda::register_goals(&mut self.ai),
             MobKind::Strider(_) => super::monster::strider::Strider::register_goals(&mut self.ai),
             MobKind::PolarBear(_) => PolarBear::register_goals(&mut self.ai),
-            MobKind::Armadillo(_) => {}
+            MobKind::Armadillo(_) | MobKind::Sniffer(_) => {}
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_) => Zombie::register_goals(&mut self.ai, &self.kind),
             MobKind::Blaze(_) => Blaze::register_goals(&mut self.ai),
             MobKind::Ghast(_) => Ghast::register_goals(&mut self.ai),
@@ -355,6 +356,7 @@ impl Mob {
             MobKind::PiglinBrute(_) => super::monster::piglin::piglin_brute::PiglinBrute::make_brain(self, packed_brain),
             MobKind::Breeze(_) => super::monster::breeze::breeze::Breeze::make_brain(self, packed_brain),
             MobKind::Armadillo(_) => Armadillo::make_brain(self, packed_brain),
+            MobKind::Sniffer(_) => super::animal::sniffer::sniffer::Sniffer::make_brain(self, packed_brain),
             MobKind::Axolotl(_) => Axolotl::make_brain(self, packed_brain),
             MobKind::Frog(_) => Frog::make_brain(self, packed_brain),
             MobKind::Tadpole(_) => Tadpole::make_brain(self, packed_brain),
@@ -550,6 +552,18 @@ impl Mob {
 
     pub fn can_stand_on_fluid(&self, fluid: wafer_data::Fluid) -> bool {
         matches!(self.kind, MobKind::Strider(_)) && super::monster::strider::can_stand_on_fluid(fluid)
+    }
+
+    pub fn on_pathfinding_start(&self, level: &ServerLevel) {
+        if let MobKind::Sniffer(_) = self.kind {
+            super::animal::sniffer::sniffer::on_pathfinding_start(level, self);
+        }
+    }
+
+    pub fn on_pathfinding_done(&self) {
+        if let MobKind::Sniffer(_) = self.kind {
+            super::animal::sniffer::sniffer::on_pathfinding_done(self);
+        }
     }
 
     pub fn get_pathfinding_malus(&self, path_type: PathType) -> f32 {
@@ -842,6 +856,7 @@ impl Mob {
             MobKind::PolarBear(polar_bear) => Some(&polar_bear.animal),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) => self.abstract_horse().map(|horse| &horse.animal),
             MobKind::Armadillo(armadillo) => Some(&armadillo.animal),
+            MobKind::Sniffer(sniffer) => Some(&sniffer.animal),
             MobKind::Axolotl(axolotl) => Some(&axolotl.animal),
             MobKind::Frog(frog) => Some(&frog.animal),
             MobKind::Tadpole(_) => None,
@@ -886,6 +901,7 @@ impl Mob {
             MobKind::ZombieHorse(horse) => Some(&mut horse.abstract_horse.animal),
             MobKind::Llama(llama) | MobKind::TraderLlama(llama) => Some(&mut llama.abstract_chested_horse.abstract_horse.animal),
             MobKind::Armadillo(armadillo) => Some(&mut armadillo.animal),
+            MobKind::Sniffer(sniffer) => Some(&mut sniffer.animal),
             MobKind::Axolotl(axolotl) => Some(&mut axolotl.animal),
             MobKind::Frog(frog) => Some(&mut frog.animal),
             MobKind::Tadpole(_) => None,
@@ -925,6 +941,13 @@ impl Mob {
         false
     }
 
+    pub fn get_baby_start_age(&self) -> i32 {
+        match self.kind {
+            MobKind::Sniffer(_) => super::animal::sniffer::sniffer::SNIFFER_BABY_START_AGE,
+            _ => BABY_START_AGE,
+        }
+    }
+
     pub fn set_baby(&mut self, baby: bool) {
         if self.is_zombie() {
             Zombie::set_baby(self, baby);
@@ -932,7 +955,7 @@ impl Mob {
             super::monster::zoglin::set_baby(self, baby);
         } else if let MobKind::Piglin(_) = self.kind {
             super::monster::piglin::piglin::set_baby(self, baby);
-        } else if self.ageable().is_some() && self.can_be_a_baby() && self.set_age(if baby { BABY_START_AGE } else { 0 }) {
+        } else if self.ageable().is_some() && self.can_be_a_baby() && self.set_age(if baby { self.get_baby_start_age() } else { 0 }) {
             self.refresh_dimensions();
         }
     }
@@ -969,7 +992,7 @@ impl Mob {
             MobKind::Goat(_) | MobKind::PolarBear(_) => {}
             MobKind::Hoglin(_) | MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => {}
             MobKind::Panda(_) | MobKind::Strider(_) => {}
-            MobKind::Armadillo(_) => {}
+            MobKind::Armadillo(_) | MobKind::Sniffer(_) => {}
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Creeper(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Parched(_) | MobKind::WitherSkeleton(_) | MobKind::Bogged(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => {}
             MobKind::Enderman(_) => {}
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => {}
@@ -1239,6 +1262,7 @@ impl Mob {
             MobKind::PolarBear(_) if self.is_baby() => polar_bear::BABY_DIMENSIONS,
             MobKind::PolarBear(_) => polar_bear::DIMENSIONS,
             MobKind::Armadillo(_) => armadillo::get_default_dimensions(self.is_baby()),
+            MobKind::Sniffer(_) => super::animal::sniffer::sniffer::get_default_dimensions(&self.entity, self.is_baby()),
             MobKind::Zombie(_) if self.is_baby() => zombie::BABY_DIMENSIONS,
             MobKind::Zombie(_) => zombie::DIMENSIONS,
             MobKind::ZombieVillager(_) => zombie_villager::get_default_dimensions(self),
@@ -1342,6 +1366,8 @@ impl Mob {
             MobKind::Piglin(_) | MobKind::PiglinBrute(_) => (0.0, 2.0125f32 as f64, 0.0),
             MobKind::Breeze(_) => (0.0, 1.77f32 as f64, 0.0),
             MobKind::Armadillo(_) => (0.0, self.default_dimensions().height as f64, 0.0),
+            MobKind::Sniffer(_) if super::animal::sniffer::sniffer::get_state(&self.entity) == super::animal::sniffer::sniffer::State::Digging => (0.0, self.default_dimensions().height as f64, 0.0),
+            MobKind::Sniffer(_) => (0.0, (2.09375f32 * if baby { 0.5 } else { 1.0 }) as f64, 0.0),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) if baby => (0.0, 0.98f32 as f64, 0.0),
             MobKind::Zombie(_) | MobKind::Drowned(_) => (0.0, 2.0125f32 as f64, 0.0),
             MobKind::Husk(_) => (0.0, 2.075f32 as f64, 0.0),
@@ -1520,6 +1546,7 @@ impl Mob {
             MobKind::Breeze(_) => {}
             MobKind::PolarBear(_) => PolarBear::add_additional_save_data(self, out),
             MobKind::Armadillo(_) => Armadillo::add_additional_save_data(self, out),
+            MobKind::Sniffer(_) => {}
             MobKind::ZombieVillager(_) => ZombieVillager::add_additional_save_data(self, out),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) => {
                 let is_afflicted = self.entity.is_eye_in_fluid(&wafer_data::fluid_tags::WATER);
@@ -1707,7 +1734,7 @@ impl Mob {
             MobKind::Goat(_) | MobKind::PolarBear(_) => {}
             MobKind::Hoglin(_) | MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => {}
             MobKind::Panda(_) | MobKind::Strider(_) => {}
-            MobKind::Armadillo(_) => {}
+            MobKind::Armadillo(_) | MobKind::Sniffer(_) => {}
             MobKind::Chicken(chicken) => {
                 let variant = nbt.get("variant").and_then(Nbt::as_str).and_then(chicken::variant_id);
                 let sound_variant = nbt.get("sound_variant").and_then(Nbt::as_str).and_then(chicken::sound_variant_id);
@@ -1853,6 +1880,7 @@ impl Mob {
             MobKind::Strider(_) => "minecraft:entity.strider.ambient",
             MobKind::PolarBear(_) => polar_bear::get_ambient_sound(self),
             MobKind::Armadillo(_) => return armadillo::get_ambient_sound(&self.entity),
+            MobKind::Sniffer(_) => return super::animal::sniffer::sniffer::get_ambient_sound(&self.entity),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) => Zombie::get_ambient_sound(self),
             MobKind::Drowned(_) => Drowned::get_ambient_sound(self),
             MobKind::Creeper(_) => return None,
@@ -1935,6 +1963,7 @@ impl Mob {
             MobKind::Breeze(_) => super::monster::breeze::breeze::get_hurt_sound(),
             MobKind::PolarBear(_) => polar_bear::get_hurt_sound(),
             MobKind::Armadillo(_) => armadillo::get_hurt_sound(&self.entity),
+            MobKind::Sniffer(_) => super::animal::sniffer::sniffer::get_hurt_sound(),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) => Zombie::get_hurt_sound(self),
             MobKind::Drowned(_) => Drowned::get_hurt_sound(self),
             MobKind::Creeper(_) => Creeper::get_hurt_sound(),
@@ -2012,6 +2041,7 @@ impl Mob {
             MobKind::Breeze(_) => super::monster::breeze::breeze::get_death_sound(),
             MobKind::PolarBear(_) => polar_bear::get_death_sound(),
             MobKind::Armadillo(_) => armadillo::get_death_sound(),
+            MobKind::Sniffer(_) => super::animal::sniffer::sniffer::get_death_sound(),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) => Zombie::get_death_sound(self),
             MobKind::Drowned(_) => Drowned::get_death_sound(self),
             MobKind::Creeper(_) => Creeper::get_death_sound(),
@@ -2089,6 +2119,7 @@ impl Mob {
             MobKind::Breeze(_) => return None,
             MobKind::PolarBear(_) => polar_bear::get_step_sound(),
             MobKind::Armadillo(_) => armadillo::get_step_sound(),
+            MobKind::Sniffer(_) => super::animal::sniffer::sniffer::get_step_sound(),
             MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) => Zombie::get_step_sound(self),
             MobKind::Drowned(_) => Drowned::get_step_sound(self),
             MobKind::Creeper(_) => return None,
@@ -2144,6 +2175,7 @@ impl Mob {
             MobKind::Ravager(_) => Ravager::get_max_head_y_rot(),
             MobKind::Goat(_) => goat::get_max_head_y_rot(),
             MobKind::Armadillo(_) => armadillo::get_max_head_y_rot(&self.entity),
+            MobKind::Sniffer(_) => super::animal::sniffer::sniffer::get_max_head_y_rot(),
             MobKind::Axolotl(_) => axolotl::get_max_head_y_rot(),
             MobKind::Frog(_) => frog::get_max_head_y_rot(),
             MobKind::Dolphin(_) => super::animal::dolphin::dolphin::get_max_head_y_rot(),
@@ -2281,6 +2313,7 @@ impl ServerLevel {
             MobKind::Piglin(_) => self.piglin_mob_interact(id, player, hand),
             MobKind::PolarBear(_) => self.animal_mob_interact(id, player, hand),
             MobKind::Armadillo(_) => self.armadillo_mob_interact(id, player, hand),
+            MobKind::Sniffer(_) => self.sniffer_mob_interact(id, player, hand),
             MobKind::ZombieVillager(_) => self.zombie_villager_mob_interact(id, player, hand),
             MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::Spider(_) | MobKind::CaveSpider(_) | MobKind::Skeleton(_) | MobKind::Stray(_) | MobKind::Parched(_) | MobKind::WitherSkeleton(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Giant(_) => {
                 self.mob_mob_interact(id, player, hand)
@@ -3088,6 +3121,7 @@ impl ServerLevel {
             Some(MobKind::PiglinBrute(_)) => self.piglin_brute_custom_server_ai_step(id),
             Some(MobKind::Breeze(_)) => self.breeze_custom_server_ai_step(id),
             Some(MobKind::Armadillo(_)) => self.armadillo_custom_server_ai_step(id),
+            Some(MobKind::Sniffer(_)) => self.sniffer_custom_server_ai_step(id),
             Some(
                 MobKind::Zombie(_)
                 | MobKind::ZombieVillager(_)
@@ -3453,7 +3487,7 @@ pub fn finalize_spawn(
         MobKind::Zoglin(_) => super::monster::zoglin::finalize_spawn(level, mob),
         MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => {}
         MobKind::PolarBear(_) => group_data = polar_bear::finalize_spawn(level, group_data),
-        MobKind::Armadillo(_) => {}
+        MobKind::Armadillo(_) | MobKind::Sniffer(_) => {}
         MobKind::Zombie(_)
         | MobKind::ZombieVillager(_)
         | MobKind::Husk(_)

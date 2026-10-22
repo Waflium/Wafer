@@ -345,7 +345,7 @@ impl ServerLevel {
     }
 
     pub fn support_quad_leash(&self, id: EntityId) -> bool {
-        !self.is_llama(id) && self.is_abstract_horse(id) || self.is_boat(id)
+        !self.is_llama(id) && self.is_abstract_horse(id) || self.is_boat(id) || self.is_sniffer(id)
     }
 
     pub fn support_quad_leash_as_holder(&self, _id: EntityId) -> bool {

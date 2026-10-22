@@ -52,17 +52,24 @@ impl WalkNodeEvaluator {
 
     pub fn walk_node_evaluator_prepare(&mut self, context: &PathfindingContext, mob: crate::world::entity::EntityId) {
         self.node_evaluator.prepare(context, mob);
+        let level = context.level().level;
+        if let Some(entity) = level.mob(mob) {
+            entity.on_pathfinding_start(level);
+        }
     }
 
     pub fn done(&mut self, context: &PathfindingContext) {
         if self.is_amphibious() {
             self.amphibious_node_evaluator_done(context);
         } else {
-            self.walk_node_evaluator_done();
+            self.walk_node_evaluator_done(context);
         }
     }
 
-    pub fn walk_node_evaluator_done(&mut self) {
+    pub fn walk_node_evaluator_done(&mut self, context: &PathfindingContext) {
+        if let Some(entity) = context.level().level.mob(self.node_evaluator.mob) {
+            entity.on_pathfinding_done();
+        }
         self.path_types_by_pos_cache_by_mob.clear();
         self.collision_cache.clear();
     }

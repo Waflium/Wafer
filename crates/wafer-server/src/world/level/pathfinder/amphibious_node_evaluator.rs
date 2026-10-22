@@ -45,7 +45,7 @@ impl WalkNodeEvaluator {
         let mob = self.mob(context);
         mob.set_pathfinding_malus(PathType::Walkable, old_walkable_cost);
         mob.set_pathfinding_malus(PathType::WaterBorder, old_water_border_cost);
-        self.walk_node_evaluator_done();
+        self.walk_node_evaluator_done(context);
     }
 
     pub fn amphibious_node_evaluator_get_start(&mut self, context: &PathfindingContext) -> Option<u32> {
