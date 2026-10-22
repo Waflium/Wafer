@@ -167,6 +167,7 @@ pub enum MobKind {
     PiglinBrute(super::monster::piglin::piglin_brute::PiglinBrute),
     Breeze(super::monster::breeze::breeze::Breeze),
     Strider(super::monster::strider::Strider),
+    Dolphin(super::animal::dolphin::dolphin::Dolphin),
     SkeletonHorse(SkeletonHorse),
     ZombieHorse(ZombieHorse),
     Llama(Llama),
@@ -312,6 +313,7 @@ impl Mob {
             MobKind::Wolf(_) => Wolf::register_goals(&mut self.ai, self.living.attributes.value(Attribute::FollowRange)),
             MobKind::Bat(_) => {}
             MobKind::Squid(_) | MobKind::GlowSquid(_) => Squid::register_goals(&mut self.ai),
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::Dolphin::register_goals(&mut self.ai),
             MobKind::IronGolem(_) => IronGolem::register_goals(&mut self.ai),
             MobKind::SnowGolem(_) => SnowGolem::register_goals(&mut self.ai),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::TropicalFish(_) => AbstractSchoolingFish::register_goals(&mut self.ai, &mut self.entity.random),
@@ -491,7 +493,7 @@ impl Mob {
             10
         } else if self.is_abstract_fish() {
             4
-        } else if matches!(self.kind, MobKind::Bat(_)) {
+        } else if matches!(self.kind, MobKind::Bat(_) | MobKind::Dolphin(_)) {
             5
         } else if self.is_zombie()
             || matches!(self.kind, MobKind::Creeper(_) | MobKind::Silverfish(_) | MobKind::Endermite(_) | MobKind::Enderman(_) | MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::MagmaCube(_) | MobKind::Phantom(_) | MobKind::Guardian(_) | MobKind::Hoglin(_) | MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_))
@@ -522,7 +524,7 @@ impl Mob {
             MobKind::Drowned(_) | MobKind::Axolotl(_) => PathNavigation::of_kind(PathNavigationKind::Amphibious, follow_range_base),
             MobKind::Frog(_) => PathNavigation::of_kind(PathNavigationKind::Frog, follow_range_base),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => PathNavigation::of_kind(PathNavigationKind::WaterBound, follow_range_base),
-            MobKind::Guardian(_) | MobKind::ElderGuardian(_) => PathNavigation::of_kind(PathNavigationKind::WaterBound, follow_range_base),
+            MobKind::Guardian(_) | MobKind::ElderGuardian(_) | MobKind::Dolphin(_) => PathNavigation::of_kind(PathNavigationKind::WaterBound, follow_range_base),
             MobKind::Turtle(_) => Turtle::create_navigation(follow_range_base),
             MobKind::Strider(_) => PathNavigation::of_kind(PathNavigationKind::Strider, follow_range_base),
             _ => PathNavigation::new(follow_range_base),
@@ -550,6 +552,7 @@ impl Mob {
         match self.kind {
             MobKind::Wolf(_) => wolf::get_max_head_x_rot(self),
             MobKind::Axolotl(_) => axolotl::get_max_head_x_rot(),
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::get_max_head_x_rot(),
             MobKind::Guardian(_) | MobKind::ElderGuardian(_) => crate::world::entity::monster::guardian::Guardian::get_max_head_x_rot(),
             _ if self.is_cube_mob() => 0,
             _ => 40,
@@ -598,7 +601,7 @@ impl Mob {
             MobKind::Evoker(evoker) => evoker.spellcaster_illager.raider.remove_when_far_away(dist_sqr),
             MobKind::Illusioner(illusioner) => illusioner.spellcaster_illager.raider.remove_when_far_away(dist_sqr),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => true,
-            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => true,
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => true,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => abstract_golem::remove_when_far_away(dist_sqr),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => self.abstract_fish_remove_when_far_away(),
             MobKind::Cat(_) => cat::remove_when_far_away(self),
@@ -775,6 +778,9 @@ impl Mob {
         if self.is_squid() {
             return Some(&squid::squid(self).ageable_water_creature.ageable);
         }
+        if let MobKind::Dolphin(dolphin) = &self.kind {
+            return Some(&dolphin.ageable_water_creature.ageable);
+        }
         if let Some(abstract_villager) = self.abstract_villager() {
             return Some(&abstract_villager.ageable);
         }
@@ -787,6 +793,10 @@ impl Mob {
     pub fn ageable_mut(&mut self) -> Option<&mut AgeableMob> {
         if self.is_squid() {
             return Some(&mut squid::squid_mut(self).ageable_water_creature.ageable);
+        }
+        if matches!(self.kind, MobKind::Dolphin(_)) {
+            let MobKind::Dolphin(dolphin) = &mut self.kind else { unreachable!() };
+            return Some(&mut dolphin.ageable_water_creature.ageable);
         }
         if self.is_cube_mob() {
             return self.abstract_cube_mob_mut().map(|cube_mob| &mut cube_mob.ageable);
@@ -821,7 +831,7 @@ impl Mob {
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => None,
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
-            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => None,
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => None,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => None,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => None,
             MobKind::Cat(cat) => Some(&cat.tamable_animal.animal),
@@ -862,7 +872,7 @@ impl Mob {
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => None,
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_) => None,
             MobKind::Slime(_) | MobKind::MagmaCube(_) => None,
-            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => None,
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => None,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => None,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => None,
             MobKind::Cat(cat) => Some(&mut cat.tamable_animal.animal),
@@ -940,7 +950,7 @@ impl Mob {
             MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::ZombifiedPiglin(_) | MobKind::Phantom(_) => {}
             MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_) => {}
             MobKind::Slime(_) | MobKind::MagmaCube(_) => {}
-            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => {}
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => {}
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => {}
             MobKind::Salmon(_) => {
                 self.apply_implicit_component_if_present(components, dc::SALMON_SIZE);
@@ -1220,6 +1230,8 @@ impl Mob {
             MobKind::Bat(_) => bat::DIMENSIONS,
             MobKind::Squid(_) | MobKind::GlowSquid(_) if self.is_baby() => squid::BABY_DIMENSIONS,
             MobKind::Squid(_) | MobKind::GlowSquid(_) => squid::DIMENSIONS,
+            MobKind::Dolphin(_) if self.is_baby() => super::animal::dolphin::dolphin::BABY_DIMENSIONS,
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::DIMENSIONS,
             MobKind::IronGolem(_) => iron_golem::DIMENSIONS,
             MobKind::SnowGolem(_) => snow_golem::DIMENSIONS,
             MobKind::Cod(_) => cod::DIMENSIONS,
@@ -1313,6 +1325,8 @@ impl Mob {
             MobKind::Bat(_) => (0.0, 0.9f32 as f64, 0.0),
             MobKind::Squid(_) | MobKind::GlowSquid(_) if baby => (0.0, 0.5f32 as f64, 0.0),
             MobKind::Squid(_) | MobKind::GlowSquid(_) => (0.0, 0.8f32 as f64, 0.0),
+            MobKind::Dolphin(_) if baby => (0.0, 0.3125f32 as f64, 0.0),
+            MobKind::Dolphin(_) => (0.0, 0.6f32 as f64, 0.0),
             MobKind::IronGolem(_) => (0.0, 2.7f32 as f64, 0.0),
             MobKind::SnowGolem(_) => (0.0, 1.9f32 as f64, 0.0),
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => (0.0, self.default_dimensions().height as f64, 0.0),
@@ -1490,6 +1504,7 @@ impl Mob {
             MobKind::Bat(_) => Bat::add_additional_save_data(self, out),
             MobKind::Squid(_) => {}
             MobKind::GlowSquid(_) => GlowSquid::add_additional_save_data(self, out),
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::Dolphin::add_additional_save_data(self, out),
             MobKind::IronGolem(_) => IronGolem::add_additional_save_data(self, out),
             MobKind::SnowGolem(_) => SnowGolem::add_additional_save_data(self, out),
             MobKind::Cod(_) => AbstractFish::add_additional_save_data(self, out),
@@ -1665,7 +1680,7 @@ impl Mob {
             MobKind::Guardian(_) | MobKind::ElderGuardian(_) => {}
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_read_was_on_ground(nbt),
             MobKind::Wolf(_) => {}
-            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => {}
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => {}
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => {}
             MobKind::Cod(_) => AbstractFish::read_additional_save_data(self, nbt),
             MobKind::Salmon(_) => {
@@ -1715,6 +1730,7 @@ impl Mob {
             MobKind::Giant(_) => {}
             MobKind::Bat(_) => Bat::read_additional_save_data(self, nbt),
             MobKind::GlowSquid(_) => GlowSquid::read_additional_save_data(self, nbt),
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::Dolphin::read_additional_save_data(self, nbt),
             MobKind::Goat(_) => Goat::read_additional_save_data(self, nbt),
             MobKind::Hoglin(_) => super::monster::hoglin::hoglin::Hoglin::read_additional_save_data(self, nbt),
             MobKind::Panda(_) => super::animal::panda::panda::Panda::read_additional_save_data(self, nbt),
@@ -1808,6 +1824,7 @@ impl Mob {
             MobKind::Bat(_) => unreachable!("bats pick their ambient sound with their random"),
             MobKind::Squid(_) => Squid::get_ambient_sound(),
             MobKind::GlowSquid(_) => GlowSquid::get_ambient_sound(),
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::get_ambient_sound(&self.entity),
             MobKind::IronGolem(_) => return None,
             MobKind::SnowGolem(_) => SnowGolem::get_ambient_sound(),
             MobKind::Cod(_) => Cod::get_ambient_sound(),
@@ -1886,6 +1903,7 @@ impl Mob {
             MobKind::Bat(_) => Bat::get_hurt_sound(),
             MobKind::Squid(_) => Squid::get_hurt_sound(),
             MobKind::GlowSquid(_) => GlowSquid::get_hurt_sound(),
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::get_hurt_sound(),
             MobKind::IronGolem(_) => IronGolem::get_hurt_sound(),
             MobKind::SnowGolem(_) => SnowGolem::get_hurt_sound(),
             MobKind::Cod(_) => Cod::get_hurt_sound(),
@@ -1958,6 +1976,7 @@ impl Mob {
             MobKind::Bat(_) => Bat::get_death_sound(),
             MobKind::Squid(_) => Squid::get_death_sound(),
             MobKind::GlowSquid(_) => GlowSquid::get_death_sound(),
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::get_death_sound(),
             MobKind::IronGolem(_) => IronGolem::get_death_sound(),
             MobKind::SnowGolem(_) => SnowGolem::get_death_sound(),
             MobKind::Cod(_) => Cod::get_death_sound(),
@@ -2018,7 +2037,7 @@ impl Mob {
             MobKind::Ravager(_) => Ravager::get_step_sound(),
             MobKind::Slime(_) | MobKind::MagmaCube(_) => return None,
             MobKind::Wolf(_) => Wolf::get_step_sound(self),
-            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) => return None,
+            MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => return None,
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) => return None,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => return None,
             MobKind::Cat(_) | MobKind::Ocelot(_) => return None,
@@ -2053,6 +2072,7 @@ impl Mob {
             MobKind::Armadillo(_) => armadillo::get_max_head_y_rot(&self.entity),
             MobKind::Axolotl(_) => axolotl::get_max_head_y_rot(),
             MobKind::Frog(_) => frog::get_max_head_y_rot(),
+            MobKind::Dolphin(_) => super::animal::dolphin::dolphin::get_max_head_y_rot(),
             MobKind::Breeze(_) => super::monster::breeze::breeze::get_max_head_y_rot(),
             _ => 75,
         }
@@ -2074,7 +2094,7 @@ impl Mob {
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) => abstract_horse::get_ambient_sound_interval(),
             MobKind::Turtle(_) => Turtle::get_ambient_sound_interval(),
             MobKind::Guardian(_) | MobKind::ElderGuardian(_) => crate::world::entity::monster::guardian::Guardian::get_ambient_sound_interval(),
-            _ if self.is_squid() => ageable_water_creature::get_ambient_sound_interval(),
+            _ if self.is_squid() || matches!(self.kind, MobKind::Dolphin(_)) => ageable_water_creature::get_ambient_sound_interval(),
             _ if self.is_water_animal() => water_animal::get_ambient_sound_interval(),
             _ if self.animal().is_some() => 120,
             _ => 80,
@@ -2180,6 +2200,7 @@ impl ServerLevel {
             MobKind::Hoglin(_) => self.hoglin_mob_interact(id, player, hand),
             MobKind::Panda(_) => self.panda_mob_interact(id, player, hand),
             MobKind::Strider(_) => self.strider_mob_interact(id, player, hand),
+            MobKind::Dolphin(_) => self.dolphin_mob_interact(id, player, hand),
             MobKind::Zoglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Piglin(_) => self.piglin_mob_interact(id, player, hand),
             MobKind::PolarBear(_) => self.animal_mob_interact(id, player, hand),
@@ -2423,6 +2444,7 @@ impl ServerLevel {
             Some(MobKind::Axolotl(_)) => self.axolotl_play_attack_sound(id),
             Some(MobKind::Rabbit(_)) => self.rabbit_play_attack_sound(id),
             Some(MobKind::Panda(_)) => self.panda_play_attack_sound(id),
+            Some(MobKind::Dolphin(_)) => self.dolphin_play_attack_sound(id),
             _ => {}
         }
     }
@@ -2506,6 +2528,8 @@ impl ServerLevel {
             self.fox_pick_up_item(id, entity);
         } else if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Panda(_))) {
             self.panda_pick_up_item(id, entity);
+        } else if self.is_dolphin(id) {
+            self.dolphin_pick_up_item(id, entity);
         } else {
             self.mob_pick_up_item(id, entity);
         }
@@ -3006,7 +3030,7 @@ impl ServerLevel {
             Some(MobKind::Vex(_)) => {}
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => {}
             Some(MobKind::Bat(_)) => self.bat_custom_server_ai_step(id),
-            Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => {}
+            Some(MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_)) => {}
             Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_)) => {}
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_)) => {}
             Some(MobKind::Cat(_)) => self.cat_custom_server_ai_step(id),
@@ -3329,6 +3353,10 @@ pub fn finalize_spawn(
         MobKind::Hoglin(_) => super::monster::hoglin::hoglin::finalize_spawn(level, mob),
         MobKind::Panda(_) => group_data = super::animal::panda::panda::finalize_spawn(level, mob, group_data),
         MobKind::Strider(_) => {}
+        MobKind::Dolphin(_) => {
+            super::animal::dolphin::dolphin::finalize_spawn(mob);
+            group_data = group_data.or(Some(SpawnGroupData::AgeableMob(super::ageable_mob::AgeableMobGroupData::with_chance(true, 0.1))));
+        }
         MobKind::Zoglin(_) => super::monster::zoglin::finalize_spawn(level, mob),
         MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => {}
         MobKind::PolarBear(_) => group_data = polar_bear::finalize_spawn(level, group_data),
@@ -3438,7 +3466,7 @@ pub fn get_walk_target_value(mob: &Mob, pos: BlockPos, level: &mut (impl ServerL
         MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_) => super::monster::monster::get_walk_target_value(pos, level),
         MobKind::Pillager(_) => Pillager::get_walk_target_value(),
         MobKind::Slime(_) | MobKind::MagmaCube(_) => super::pathfinder_mob::get_walk_target_value(),
-        MobKind::Squid(_) | MobKind::GlowSquid(_) => super::pathfinder_mob::get_walk_target_value(),
+        MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => super::pathfinder_mob::get_walk_target_value(),
         MobKind::IronGolem(_) | MobKind::SnowGolem(_) => super::pathfinder_mob::get_walk_target_value(),
         MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => super::pathfinder_mob::get_walk_target_value(),
         MobKind::Axolotl(_) => axolotl::get_walk_target_value(),
@@ -3459,7 +3487,7 @@ pub fn check_spawn_obstruction(mob: &Mob, level: &mut (impl ServerLevelAccessor 
     let bounding_box = mob.entity.bounding_box();
     match mob.kind {
         MobKind::Drowned(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_) => level.is_unobstructed(&bounding_box),
-        MobKind::Squid(_) | MobKind::GlowSquid(_) => ageable_water_creature::check_spawn_obstruction(mob, level),
+        MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => ageable_water_creature::check_spawn_obstruction(mob, level),
         MobKind::IronGolem(_) => IronGolem::check_spawn_obstruction(mob, level),
         MobKind::Ravager(_) => Ravager::check_spawn_obstruction(mob, level),
         MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => water_animal::check_spawn_obstruction(mob, level),

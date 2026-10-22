@@ -16,6 +16,7 @@ use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::{InteractionHand, InteractionResult};
 
 pub mod ageable_water_creature;
+pub mod dolphin;
 pub mod armadillo;
 pub mod axolotl;
 pub mod chicken;
@@ -120,7 +121,7 @@ impl ServerLevel {
             MobKind::Hoglin(_) => crate::world::entity::monster::hoglin::hoglin::is_food(item_stack),
             MobKind::Panda(_) => panda::panda::is_food(item_stack),
             MobKind::Strider(_) => crate::world::entity::monster::strider::is_food(item_stack),
-            MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => false,
+            MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) | MobKind::Dolphin(_) => false,
             MobKind::PolarBear(_) => false,
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),
             MobKind::Zombie(_)

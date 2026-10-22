@@ -934,6 +934,7 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::IronGolem(_)) => self.iron_golem_can_attack(id, target),
             Some(MobKind::Breeze(_)) => self.breeze_can_attack(id, target),
+            Some(MobKind::Dolphin(_)) => self.dolphin_can_attack(id, target),
             Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.abstract_illager_can_attack(id, target),
             Some(_) => self.mob_can_attack(id, target),
             None => self.living_entity_can_attack(id, target),
@@ -1646,7 +1647,7 @@ impl ServerLevel {
             Some(MobKind::Witch(_) | MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_) | MobKind::Vex(_) | MobKind::Ravager(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Slime(_) | MobKind::MagmaCube(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Bat(_)) => self.mob_get_base_experience_reward(id),
-            Some(MobKind::Squid(_) | MobKind::GlowSquid(_)) => self.ageable_water_creature_get_base_experience_reward(id),
+            Some(MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_)) => self.ageable_water_creature_get_base_experience_reward(id),
             Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_)) => self.water_animal_get_base_experience_reward(id),
             Some(MobKind::Villager(_)) => self.mob_get_base_experience_reward(id),
@@ -1884,14 +1885,14 @@ impl ServerLevel {
                         self.hurt_server(id, DamageSource::new(damage_types::DROWN), 2.0);
                     }
                 } else if self.entity(id).air_supply() < self.entity(id).get_max_air_supply() && self.should_effects_refill_air_supply(id) {
-                    let supply = (self.entity(id).air_supply() + 4).min(self.entity(id).get_max_air_supply());
+                    let supply = self.increase_air_supply(id, self.entity(id).air_supply());
                     self.entity_mut(id).set_air_supply(supply);
                 }
                 if self.vehicle(id).is_some_and(|vehicle| self.dismounts_underwater(vehicle)) {
                     self.stop_riding(id);
                 }
             } else if self.entity(id).air_supply() < self.entity(id).get_max_air_supply() {
-                let supply = (self.entity(id).air_supply() + 4).min(self.entity(id).get_max_air_supply());
+                let supply = self.increase_air_supply(id, self.entity(id).air_supply());
                 self.entity_mut(id).set_air_supply(supply);
             }
             let pos = self.entity(id).block_position();
@@ -1940,6 +1941,13 @@ impl ServerLevel {
 
     pub fn should_take_drowning_damage(&self, id: EntityId) -> bool {
         self.entity(id).air_supply() <= -20
+    }
+
+    fn increase_air_supply(&self, id: EntityId, current_supply: i32) -> i32 {
+        if self.is_dolphin(id) {
+            return self.entity(id).get_max_air_supply();
+        }
+        (current_supply + 4).min(self.entity(id).get_max_air_supply())
     }
 
     fn decrease_air_supply(&mut self, id: EntityId, supply: i32) -> i32 {
@@ -2214,7 +2222,7 @@ impl ServerLevel {
             Some(MobKind::TraderLlama(_)) => self.trader_llama_ai_step(id),
             Some(MobKind::WanderingTrader(_)) => self.wandering_trader_ai_step(id),
             Some(MobKind::Tadpole(_)) => self.tadpole_ai_step(id),
-            Some(MobKind::Villager(_)) => self.ageable_mob_ai_step(id),
+            Some(MobKind::Villager(_) | MobKind::Dolphin(_)) => self.ageable_mob_ai_step(id),
             Some(MobKind::Fox(_)) => self.fox_ai_step(id),
             Some(MobKind::Rabbit(_)) => self.rabbit_ai_step(id),
             Some(MobKind::Turtle(_)) => self.turtle_ai_step(id),
@@ -2805,6 +2813,8 @@ impl ServerLevel {
             self.turtle_travel_in_water(id, input);
         } else if self.is_guardian(id) {
             self.guardian_travel_in_water(id, input);
+        } else if self.is_dolphin(id) {
+            self.dolphin_travel_in_water(id, input);
         } else {
             self.living_entity_travel_in_water(id, input, base_gravity, is_falling, old_y);
         }

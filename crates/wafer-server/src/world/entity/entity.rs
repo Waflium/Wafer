@@ -637,7 +637,13 @@ impl Entity {
     }
 
     pub fn get_max_air_supply(&self) -> i32 {
-        if self.entity_type == super::entity_types::AXOLOTL.id { super::animal::axolotl::axolotl::AXOLOTL_TOTAL_AIR_SUPPLY } else { TOTAL_AIR_SUPPLY }
+        if self.entity_type == super::entity_types::AXOLOTL.id {
+            super::animal::axolotl::axolotl::AXOLOTL_TOTAL_AIR_SUPPLY
+        } else if self.entity_type == super::entity_types::DOLPHIN.id {
+            super::animal::dolphin::dolphin::TOTAL_AIR_SUPPLY
+        } else {
+            TOTAL_AIR_SUPPLY
+        }
     }
 
     pub fn is_freezing(&self) -> bool {
@@ -1077,7 +1083,7 @@ impl ServerLevel {
             None => match self.as_projectile(id) {
                 Some(projectile) if projectile.abstract_arrow().is_some() => self.abstract_arrow_is_pushed_by_fluid(id),
                 _ if self.is_drowned(id) => super::monster::zombie::drowned::Drowned::is_pushed_by_fluid(self.mob(id).expect("a drowned")),
-                _ if self.mob(id).is_some_and(super::mob::Mob::is_squid) => super::animal::ageable_water_creature::is_pushed_by_fluid(),
+                _ if self.mob(id).is_some_and(|mob| mob.is_squid() || matches!(mob.kind, super::mob::MobKind::Dolphin(_))) => super::animal::ageable_water_creature::is_pushed_by_fluid(),
                 _ if self.mob(id).is_some_and(super::mob::Mob::is_water_animal) => super::animal::fish::water_animal::is_pushed_by_fluid(),
                 _ if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) => super::animal::axolotl::axolotl::is_pushed_by_fluid(),
                 _ if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Frog(_))) => super::animal::frog::frog::is_pushed_by_fluid(),
@@ -1930,6 +1936,8 @@ impl ServerLevel {
             super::animal::fish::abstract_fish::AbstractFish::get_swim_sound()
         } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_))) {
             super::animal::axolotl::axolotl::get_swim_sound()
+        } else if self.is_dolphin(id) {
+            super::animal::dolphin::dolphin::get_swim_sound()
         } else if self.is_turtle(id) {
             super::animal::turtle::turtle::Turtle::get_swim_sound()
         } else if self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::SkeletonHorse(_))) {
@@ -2204,6 +2212,7 @@ impl ServerLevel {
         let player = self.is_player(id);
         let monster = self.is_monster(id);
         let axolotl = self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Axolotl(_)));
+        let dolphin = self.is_dolphin(id);
         let e = self.entity_mut(id);
         let m = e.delta_movement;
         let speed = (((m.x * m.x * 0.2f32 as f64 + m.y * m.y + m.z * m.z * 0.2f32 as f64).sqrt() as f32) * 0.2).min(1.0);
@@ -2213,6 +2222,7 @@ impl ServerLevel {
             (true, false) => "minecraft:entity.player.splash.high_speed",
             (false, true) if monster => self.monster_get_swim_splash_sound(),
             (false, true) if axolotl => super::animal::axolotl::axolotl::get_swim_splash_sound(),
+            (false, true) if dolphin => super::animal::dolphin::dolphin::get_swim_splash_sound(),
             (false, _) => "minecraft:entity.generic.splash",
         };
         self.entity_play_sound(id, sound_event(sound), speed, pitch);
@@ -2852,6 +2862,7 @@ impl ServerLevel {
                     super::mob::MobKind::Hoglin(_) => "Hoglin",
                     super::mob::MobKind::Panda(_) => "Panda",
                     super::mob::MobKind::Strider(_) => "Strider",
+                    super::mob::MobKind::Dolphin(_) => "Dolphin",
                     super::mob::MobKind::Zoglin(_) => "Zoglin",
                     super::mob::MobKind::Piglin(_) => "Piglin",
                     super::mob::MobKind::PiglinBrute(_) => "PiglinBrute",

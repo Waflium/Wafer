@@ -171,7 +171,7 @@ impl ServerLevel {
         let Some(mob) = self.mob(id) else { return true };
         match mob.kind {
             MobKind::Bat(_) => false,
-            MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Axolotl(_) => true,
+            MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Axolotl(_) | MobKind::Dolphin(_) => true,
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => false,
             MobKind::Turtle(_) => false,
             MobKind::Wolf(_) => !self.is_angry(id),

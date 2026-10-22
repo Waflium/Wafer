@@ -437,6 +437,7 @@ impl ServerLevel {
             "minecraft:zoglin" => LevelEntity::Mob(Box::new(super::monster::zoglin::Zoglin::create())),
             "minecraft:breeze" => LevelEntity::Mob(Box::new(super::monster::breeze::breeze::Breeze::create())),
             "minecraft:strider" => LevelEntity::Mob(Box::new(super::monster::strider::Strider::create())),
+            "minecraft:dolphin" => LevelEntity::Mob(Box::new(super::animal::dolphin::dolphin::Dolphin::create())),
             "minecraft:piglin" => LevelEntity::Mob(Box::new(super::monster::piglin::piglin::Piglin::create())),
             "minecraft:piglin_brute" => LevelEntity::Mob(Box::new(super::monster::piglin::piglin_brute::PiglinBrute::create())),
             "minecraft:parched" => LevelEntity::Mob(Box::new(super::monster::skeleton::parched::Parched::create())),

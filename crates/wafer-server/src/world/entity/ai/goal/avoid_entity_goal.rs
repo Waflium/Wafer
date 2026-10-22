@@ -16,6 +16,7 @@ pub enum AvoidClass {
     EntityType(&'static str),
     Monster,
     Zombie,
+    Guardian,
 }
 
 impl AvoidClass {
@@ -24,6 +25,7 @@ impl AvoidClass {
             AvoidClass::EntityType(entity_type) => wafer_data::registry::ENTITY_TYPE[level.entity(entity).entity_type as usize] == entity_type,
             AvoidClass::Monster => level.is_monster(entity),
             AvoidClass::Zombie => level.mob(entity).is_some_and(|mob| mob.is_zombie()),
+            AvoidClass::Guardian => level.is_guardian(entity),
         }
     }
 }

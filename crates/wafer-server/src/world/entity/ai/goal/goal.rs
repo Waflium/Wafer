@@ -227,6 +227,15 @@ pub enum Goal {
     CatLieOnBlock(CatLieOnBlockGoal),
     CatSitOnBlock(CatSitOnBlockGoal),
     StriderGoToLava(crate::world::entity::monster::strider::StriderGoToLavaGoal),
+    BreathAir(super::breath_air_goal::BreathAirGoal),
+    TryFindLiquid(super::try_find_liquid_goal::TryFindLiquidGoal),
+    RandomSwimming(super::random_swimming_goal::RandomSwimmingGoal),
+    DolphinJump(super::dolphin_jump_goal::DolphinJumpGoal),
+    FollowPlayerRiddenEntity(super::follow_player_ridden_entity_goal::FollowPlayerRiddenEntityGoal),
+    DolphinSwimToTreasure(crate::world::entity::animal::dolphin::dolphin::DolphinSwimToTreasureGoal),
+    DolphinSwimWithPlayer(crate::world::entity::animal::dolphin::dolphin::DolphinSwimWithPlayerGoal),
+    DolphinMoveToItem(crate::world::entity::animal::dolphin::dolphin::MoveToItemGoal),
+    DolphinPlayWithItems(crate::world::entity::animal::dolphin::dolphin::PlayWithItemsGoal),
     OcelotAttack(OcelotAttackGoal),
     OcelotAvoidEntity(OcelotAvoidEntityGoal),
     OcelotTempt(OcelotTemptGoal),
@@ -366,6 +375,15 @@ impl Goal {
             Goal::CatLieOnBlock(goal) => goal.can_use(level, mob),
             Goal::CatSitOnBlock(goal) => goal.can_use(level, mob),
             Goal::StriderGoToLava(goal) => goal.can_use(level, mob),
+            Goal::BreathAir(goal) => goal.can_use(level, mob),
+            Goal::TryFindLiquid(goal) => goal.can_use(level, mob),
+            Goal::RandomSwimming(goal) => goal.can_use(level, mob),
+            Goal::DolphinJump(goal) => goal.can_use(level, mob),
+            Goal::FollowPlayerRiddenEntity(goal) => goal.can_use(level, mob),
+            Goal::DolphinSwimToTreasure(goal) => goal.can_use(level, mob),
+            Goal::DolphinSwimWithPlayer(goal) => goal.can_use(level, mob),
+            Goal::DolphinMoveToItem(goal) => goal.can_use(level, mob),
+            Goal::DolphinPlayWithItems(goal) => goal.can_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.can_use(level, mob),
@@ -524,6 +542,15 @@ impl Goal {
             Goal::CatLieOnBlock(goal) => goal.can_continue_to_use(level),
             Goal::CatSitOnBlock(goal) => goal.can_continue_to_use(level),
             Goal::StriderGoToLava(goal) => goal.can_continue_to_use(level, mob),
+            Goal::BreathAir(goal) => goal.can_continue_to_use(level, mob),
+            Goal::TryFindLiquid(goal) => goal.can_use(level, mob),
+            Goal::RandomSwimming(goal) => goal.random_stroll_goal.can_continue_to_use(level, mob),
+            Goal::DolphinJump(goal) => goal.can_continue_to_use(level, mob),
+            Goal::FollowPlayerRiddenEntity(goal) => goal.can_continue_to_use(level),
+            Goal::DolphinSwimToTreasure(goal) => goal.can_continue_to_use(level, mob),
+            Goal::DolphinSwimWithPlayer(goal) => goal.can_continue_to_use(level, mob),
+            Goal::DolphinMoveToItem(goal) => goal.can_use(level, mob),
+            Goal::DolphinPlayWithItems(goal) => goal.can_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotTempt(goal) => goal.can_continue_to_use(level, mob),
@@ -588,7 +615,7 @@ impl Goal {
     }
 
     pub fn is_interruptable(&self) -> bool {
-        !matches!(self, Goal::FoxPounce(_) | Goal::PandaRoll(_))
+        !matches!(self, Goal::FoxPounce(_) | Goal::PandaRoll(_) | Goal::BreathAir(_) | Goal::DolphinJump(_) | Goal::DolphinSwimToTreasure(_))
     }
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
@@ -677,6 +704,15 @@ impl Goal {
             Goal::CatLieOnBlock(goal) => goal.start(level, mob),
             Goal::CatSitOnBlock(goal) => goal.start(level, mob),
             Goal::StriderGoToLava(goal) => goal.start(level, mob),
+            Goal::BreathAir(goal) => goal.start(level, mob),
+            Goal::TryFindLiquid(goal) => goal.start(level, mob),
+            Goal::RandomSwimming(goal) => goal.random_stroll_goal.start(level, mob),
+            Goal::DolphinJump(goal) => goal.start(level, mob),
+            Goal::FollowPlayerRiddenEntity(goal) => goal.start(level, mob),
+            Goal::DolphinSwimToTreasure(goal) => goal.start(level, mob),
+            Goal::DolphinSwimWithPlayer(goal) => goal.start(level, mob),
+            Goal::DolphinMoveToItem(goal) => goal.start(level, mob),
+            Goal::DolphinPlayWithItems(_) => {}
             Goal::OcelotAttack(_) => {}
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.start(level),
@@ -744,6 +780,14 @@ impl Goal {
     pub fn stop(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self {
             Goal::Float(_) | Goal::RandomLookAround(_) | Goal::FleeSun(_) | Goal::StriderGoToLava(_) => {}
+            Goal::BreathAir(_) | Goal::TryFindLiquid(_) => {}
+            Goal::RandomSwimming(goal) => goal.random_stroll_goal.stop(level, mob),
+            Goal::DolphinJump(goal) => goal.stop(level, mob),
+            Goal::FollowPlayerRiddenEntity(goal) => goal.stop(),
+            Goal::DolphinSwimToTreasure(goal) => goal.stop(level, mob),
+            Goal::DolphinSwimWithPlayer(goal) => goal.stop(level, mob),
+            Goal::DolphinMoveToItem(goal) => goal.stop(level, mob),
+            Goal::DolphinPlayWithItems(goal) => goal.stop(level, mob),
             Goal::Panic(goal) => goal.stop(),
             Goal::Breed(goal) => goal.stop(),
             Goal::Tempt(goal) => goal.stop(level, mob),
@@ -960,6 +1004,14 @@ impl Goal {
             Goal::CatLieOnBlock(goal) => goal.tick(level, mob),
             Goal::CatSitOnBlock(goal) => goal.tick(level, mob),
             Goal::StriderGoToLava(goal) => goal.tick(level, mob),
+            Goal::BreathAir(goal) => goal.tick(level, mob),
+            Goal::TryFindLiquid(_) | Goal::RandomSwimming(_) => {}
+            Goal::DolphinJump(goal) => goal.tick(level, mob),
+            Goal::FollowPlayerRiddenEntity(goal) => goal.tick(level, mob),
+            Goal::DolphinSwimToTreasure(goal) => goal.tick(level, mob),
+            Goal::DolphinSwimWithPlayer(goal) => goal.tick(level, mob),
+            Goal::DolphinMoveToItem(goal) => goal.tick(level, mob),
+            Goal::DolphinPlayWithItems(goal) => goal.tick(level, mob),
             Goal::OcelotAttack(goal) => goal.tick(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.tick(level, mob),
@@ -1116,6 +1168,11 @@ impl Goal {
             Goal::CatRelaxOnOwner(_) => 0,
             Goal::CatTempt(_) | Goal::OcelotTempt(_) | Goal::OcelotAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::CatLieOnBlock(_) | Goal::CatSitOnBlock(_) | Goal::StriderGoToLava(_) => Flag::Move.bit() | Flag::Jump.bit(),
+            Goal::BreathAir(_) | Goal::DolphinSwimToTreasure(_) | Goal::DolphinSwimWithPlayer(_) => Flag::Move.bit() | Flag::Look.bit(),
+            Goal::TryFindLiquid(_) | Goal::FollowPlayerRiddenEntity(_) | Goal::DolphinPlayWithItems(_) => 0,
+            Goal::RandomSwimming(goal) => goal.random_stroll_goal.flags,
+            Goal::DolphinJump(_) => Flag::Move.bit() | Flag::Jump.bit(),
+            Goal::DolphinMoveToItem(_) => Flag::Move.bit(),
             Goal::RunAroundLikeCrazy(_) | Goal::MountPanic(_) => Flag::Move.bit(),
             Goal::RandomStand(_) => 0,
             Goal::FoxFloat(_) => Flag::Jump.bit(),
