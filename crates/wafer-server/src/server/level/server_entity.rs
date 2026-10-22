@@ -439,6 +439,10 @@ impl ServerEntity {
     }
 }
 
+pub fn position_sync_of(entity: &Entity, tracking_position: Vec3) -> Vec<u8> {
+    position_sync(entity, &PositionPath::Linear(tracking_position))
+}
+
 fn position_sync(entity: &Entity, path: &PositionPath) -> Vec<u8> {
     encode(clientbound::ENTITY_POSITION_SYNC, |p| {
         p.varint(entity.id);

@@ -136,6 +136,7 @@ impl ServerLevel {
             MobKind::CamelHusk(_) => None,
             MobKind::Nautilus(_) => self.nautilus_get_breed_offspring(id, partner),
             MobKind::ZombieNautilus(_) => None,
+            MobKind::HappyGhast(_) => self.happy_ghast_get_breed_offspring(id, partner),
             MobKind::WanderingTrader(_) => None,
             MobKind::Axolotl(_) => self.axolotl_get_breed_offspring(id, partner),
             MobKind::Frog(_) => self.frog_get_breed_offspring(id, partner),
@@ -213,6 +214,8 @@ impl ServerLevel {
                 self.villager_age_boundary_reached(id);
             } else if self.is_turtle(id) {
                 self.turtle_age_boundary_reached(id);
+            } else if self.is_happy_ghast(id) {
+                self.happy_ghast_age_boundary_reached(id);
             }
         }
     }

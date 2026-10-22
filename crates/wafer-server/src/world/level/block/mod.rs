@@ -68,6 +68,7 @@ mod cross_collision_block;
 mod detector_rail_block;
 mod diode_block;
 pub mod door_block;
+pub mod dried_ghast_block;
 mod drop_experience_block;
 mod end_rod_block;
 mod face_attached_horizontal_directional_block;
@@ -850,6 +851,7 @@ fn for_class(class: &str, block: Block) -> Option<Box<dyn BlockBehaviour>> {
         "CoralBlock" => Box::new(coral_block::CoralBlock::new(block)),
         "TurtleEggBlock" => Box::new(turtle_egg_block::TurtleEggBlock::new(block)),
         "SnifferEggBlock" => Box::new(sniffer_egg_block::SnifferEggBlock::new(block)),
+        "DriedGhastBlock" => Box::new(dried_ghast_block::DriedGhastBlock::new(block)),
         "FrogspawnBlock" => Box::new(frogspawn_block::FrogspawnBlock::new(block)),
         "ChorusPlantBlock" => Box::new(chorus_plant_block::ChorusPlantBlock::new(block)),
         "ChorusFlowerBlock" => Box::new(chorus_flower_block::ChorusFlowerBlock::new(block)),

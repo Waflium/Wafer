@@ -181,6 +181,7 @@ pub enum MobKind {
     CamelHusk(super::animal::camel::camel::Camel),
     Nautilus(super::animal::nautilus::abstract_nautilus::AbstractNautilus),
     ZombieNautilus(super::animal::nautilus::abstract_nautilus::AbstractNautilus),
+    HappyGhast(super::animal::happyghast::happy_ghast::HappyGhast),
     WanderingTrader(WanderingTrader),
     Giant(Giant),
     WitherSkeleton(WitherSkeleton),
@@ -340,6 +341,7 @@ impl Mob {
             MobKind::TraderLlama(_) => TraderLlama::register_goals(&mut self.ai),
             MobKind::Camel(_) | MobKind::CamelHusk(_) => {}
             MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => {}
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::HappyGhast::register_goals(&mut self.ai),
             MobKind::WanderingTrader(_) => WanderingTrader::register_goals(&mut self.ai),
             MobKind::Axolotl(_) | MobKind::Frog(_) => {}
             MobKind::Tadpole(_) => AbstractFish::register_goals(&mut self.ai),
@@ -366,6 +368,7 @@ impl Mob {
             MobKind::Camel(_) | MobKind::CamelHusk(_) => super::animal::camel::camel::Camel::make_brain(self, packed_brain),
             MobKind::Nautilus(_) => super::animal::nautilus::nautilus::Nautilus::make_brain(self, packed_brain),
             MobKind::ZombieNautilus(_) => super::animal::nautilus::zombie_nautilus::ZombieNautilus::make_brain(self, packed_brain),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::HappyGhast::make_brain(self, packed_brain),
             MobKind::Axolotl(_) => Axolotl::make_brain(self, packed_brain),
             MobKind::Frog(_) => Frog::make_brain(self, packed_brain),
             MobKind::Tadpole(_) => Tadpole::make_brain(self, packed_brain),
@@ -380,6 +383,9 @@ impl Mob {
         }
         if let MobKind::Hoglin(_) = self.kind {
             super::monster::hoglin::hoglin::Hoglin::age_boundary_reached(self);
+        }
+        if let MobKind::HappyGhast(_) = self.kind {
+            super::animal::happyghast::happy_ghast::HappyGhast::age_boundary_reached(self);
         }
     }
 
@@ -398,7 +404,12 @@ impl Mob {
             _ => self.default_dimensions(),
         };
         let scale = self.living.attributes.value(Attribute::Scale) as f32;
-        default_dimensions.scale(if matches!(self.kind, MobKind::Shulker(_)) { super::monster::shulker::sanitize_scale(scale) } else { scale })
+        let scale = match self.kind {
+            MobKind::Shulker(_) => super::monster::shulker::sanitize_scale(scale),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::sanitize_scale(scale),
+            _ => scale,
+        };
+        default_dimensions.scale(scale)
     }
 
     pub fn is_monster(&self) -> bool {
@@ -533,7 +544,7 @@ impl Mob {
     }
 
     pub fn client_tracking_range(&self) -> i32 {
-        if matches!(self.kind, MobKind::Tadpole(_) | MobKind::Ravager(_) | MobKind::PolarBear(_) | MobKind::Panda(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) | MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) | MobKind::WanderingTrader(_) | MobKind::Breeze(_) | MobKind::Strider(_)) {
+        if matches!(self.kind, MobKind::Tadpole(_) | MobKind::Ravager(_) | MobKind::PolarBear(_) | MobKind::Panda(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) | MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) | MobKind::HappyGhast(_) | MobKind::WanderingTrader(_) | MobKind::Breeze(_) | MobKind::Strider(_)) {
             10
         } else if self.is_abstract_fish() {
             4
@@ -683,6 +694,7 @@ impl Mob {
             MobKind::Pufferfish(_) | MobKind::Tadpole(_) => self.abstract_fish_get_max_spawn_cluster_size(),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) => abstract_horse::get_max_spawn_cluster_size(),
             MobKind::Ghast(_) => Ghast::get_max_spawn_cluster_size(),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::get_max_spawn_cluster_size(),
             MobKind::Pillager(_) => Pillager::get_max_spawn_cluster_size(),
             _ => self.mob_get_max_spawn_cluster_size(),
         }
@@ -889,6 +901,7 @@ impl Mob {
             MobKind::PolarBear(polar_bear) => Some(&polar_bear.animal),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) => self.abstract_horse().map(|horse| &horse.animal),
             MobKind::Nautilus(nautilus) | MobKind::ZombieNautilus(nautilus) => Some(&nautilus.tamable_animal.animal),
+            MobKind::HappyGhast(happy_ghast) => Some(&happy_ghast.animal),
             MobKind::Armadillo(armadillo) => Some(&armadillo.animal),
             MobKind::Sniffer(sniffer) => Some(&sniffer.animal),
             MobKind::Axolotl(axolotl) => Some(&axolotl.animal),
@@ -936,6 +949,7 @@ impl Mob {
             MobKind::Llama(llama) | MobKind::TraderLlama(llama) => Some(&mut llama.abstract_chested_horse.abstract_horse.animal),
             MobKind::Camel(camel) | MobKind::CamelHusk(camel) => Some(&mut camel.abstract_horse.animal),
             MobKind::Nautilus(nautilus) | MobKind::ZombieNautilus(nautilus) => Some(&mut nautilus.tamable_animal.animal),
+            MobKind::HappyGhast(happy_ghast) => Some(&mut happy_ghast.animal),
             MobKind::Armadillo(armadillo) => Some(&mut armadillo.animal),
             MobKind::Sniffer(sniffer) => Some(&mut sniffer.animal),
             MobKind::Axolotl(axolotl) => Some(&mut axolotl.animal),
@@ -1067,7 +1081,7 @@ impl Mob {
                 self.apply_implicit_component_if_present(components, dc::LLAMA_VARIANT);
             }
             MobKind::Camel(_) | MobKind::CamelHusk(_) => {}
-            MobKind::Nautilus(_) => {}
+            MobKind::Nautilus(_) | MobKind::HappyGhast(_) => {}
             MobKind::ZombieNautilus(_) => {
                 self.apply_implicit_component_if_present(components, dc::ZOMBIE_NAUTILUS_VARIANT);
             }
@@ -1369,6 +1383,8 @@ impl Mob {
             MobKind::Camel(_) | MobKind::CamelHusk(_) => super::animal::camel::camel::get_default_dimensions(self.is_baby(), self.entity.pose()),
             MobKind::Nautilus(_) if self.is_baby() => super::animal::nautilus::nautilus::baby_dimensions(),
             MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => super::animal::nautilus::nautilus::DIMENSIONS,
+            MobKind::HappyGhast(_) if self.is_baby() => super::animal::happyghast::happy_ghast::baby_dimensions(),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::DIMENSIONS,
             MobKind::WanderingTrader(_) => super::npc::wanderingtrader::wandering_trader::DIMENSIONS,
             MobKind::SkeletonHorse(_) if self.is_baby() => skeleton_horse::baby_dimensions(),
             MobKind::SkeletonHorse(_) => skeleton_horse::DIMENSIONS,
@@ -1462,7 +1478,7 @@ impl Mob {
             MobKind::Ocelot(_) => (0.0, 0.6375f32 as f64, 0.0),
             MobKind::Fox(_) if baby => (0.0, 0.375f32 as f64, 0.0),
             MobKind::Fox(_) => (0.0, 0.6375, -0.25),
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) | MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) | MobKind::Rabbit(_) | MobKind::Turtle(_) => {
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) | MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) | MobKind::HappyGhast(_) | MobKind::Rabbit(_) | MobKind::Turtle(_) => {
                 let point = self.default_dimensions().attachments.get(super::entity_attachments::EntityAttachment::Passenger, 0, 0.0);
                 (point.x, point.y, point.z)
             }
@@ -1661,6 +1677,7 @@ impl Mob {
             MobKind::Camel(_) | MobKind::CamelHusk(_) => super::animal::camel::camel::Camel::add_additional_save_data(self, out),
             MobKind::Nautilus(_) => super::animal::nautilus::nautilus::Nautilus::add_additional_save_data(self, out),
             MobKind::ZombieNautilus(_) => super::animal::nautilus::zombie_nautilus::ZombieNautilus::add_additional_save_data(self, out),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::HappyGhast::add_additional_save_data(self, out),
             MobKind::WanderingTrader(_) => WanderingTrader::add_additional_save_data(self, out),
             MobKind::ZombieHorse(_) => AbstractHorse::add_additional_save_data(self, out),
             MobKind::Donkey(_) | MobKind::Mule(_) => AbstractChestedHorse::add_additional_save_data(self, out),
@@ -1831,7 +1848,7 @@ impl Mob {
                 TropicalFish::read_additional_save_data(self, nbt);
             }
             MobKind::Cat(_) | MobKind::Ocelot(_) | MobKind::Parrot(_) | MobKind::Bee(_) | MobKind::Shulker(_) | MobKind::Wither(_) => {}
-            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) | MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) | MobKind::WanderingTrader(_) => {}
+            MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) | MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) | MobKind::HappyGhast(_) | MobKind::WanderingTrader(_) => {}
             MobKind::Axolotl(_) => Axolotl::read_additional_save_data(self, nbt),
             MobKind::Frog(_) => Frog::read_additional_save_data(self, nbt),
             MobKind::Tadpole(_) => {
@@ -1857,6 +1874,7 @@ impl Mob {
             MobKind::Camel(_) | MobKind::CamelHusk(_) => super::animal::camel::camel::Camel::read_additional_save_data(self, nbt),
             MobKind::Nautilus(_) => super::animal::nautilus::nautilus::Nautilus::read_additional_save_data(self, nbt),
             MobKind::ZombieNautilus(_) => super::animal::nautilus::zombie_nautilus::ZombieNautilus::read_additional_save_data(self, nbt),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::HappyGhast::read_additional_save_data(self, nbt),
             MobKind::WanderingTrader(_) => WanderingTrader::read_additional_save_data(self, nbt),
             MobKind::ZombieHorse(_) => AbstractHorse::read_additional_save_data(self, nbt),
             MobKind::Donkey(_) | MobKind::Mule(_) => AbstractChestedHorse::read_additional_save_data(self, nbt),
@@ -1989,6 +2007,7 @@ impl Mob {
             MobKind::Camel(_) | MobKind::CamelHusk(_) => super::animal::camel::camel::get_ambient_sound(self),
             MobKind::Nautilus(_) => super::animal::nautilus::nautilus::get_ambient_sound(&self.entity, self.is_baby()),
             MobKind::ZombieNautilus(_) => super::animal::nautilus::zombie_nautilus::get_ambient_sound(&self.entity),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::get_ambient_sound(self.is_baby()),
             MobKind::WanderingTrader(_) => {
                 if self.abstract_villager().is_some_and(|villager| villager.trading_player.is_some()) {
                     "minecraft:entity.wandering_trader.trade"
@@ -2076,6 +2095,7 @@ impl Mob {
             MobKind::Camel(_) | MobKind::CamelHusk(_) => super::animal::camel::camel::get_hurt_sound(self),
             MobKind::Nautilus(_) => super::animal::nautilus::nautilus::get_hurt_sound(&self.entity, self.is_baby()),
             MobKind::ZombieNautilus(_) => super::animal::nautilus::zombie_nautilus::get_hurt_sound(&self.entity),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::get_hurt_sound(self.is_baby()),
             MobKind::WanderingTrader(_) => WanderingTrader::get_hurt_sound(),
             MobKind::Axolotl(_) => axolotl::get_hurt_sound(),
             MobKind::Frog(_) => frog::get_hurt_sound(),
@@ -2157,6 +2177,7 @@ impl Mob {
             MobKind::Camel(_) | MobKind::CamelHusk(_) => super::animal::camel::camel::get_death_sound(self),
             MobKind::Nautilus(_) => super::animal::nautilus::nautilus::get_death_sound(&self.entity, self.is_baby()),
             MobKind::ZombieNautilus(_) => super::animal::nautilus::zombie_nautilus::get_death_sound(&self.entity),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::get_death_sound(self.is_baby()),
             MobKind::WanderingTrader(_) => WanderingTrader::get_death_sound(),
             MobKind::Axolotl(_) => axolotl::get_death_sound(),
             MobKind::Frog(_) => frog::get_death_sound(),
@@ -2214,6 +2235,7 @@ impl Mob {
             MobKind::Llama(_) | MobKind::TraderLlama(_) => llama::get_step_sound(),
             MobKind::Camel(_) | MobKind::CamelHusk(_) => return None,
             MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => return None,
+            MobKind::HappyGhast(_) => return None,
             MobKind::WanderingTrader(_) => return None,
             MobKind::Axolotl(_) | MobKind::Tadpole(_) => return None,
             MobKind::Frog(_) => frog::get_step_sound(),
@@ -2233,6 +2255,7 @@ impl Mob {
             MobKind::Squid(_) | MobKind::GlowSquid(_) => Squid::get_sound_volume(),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) => abstract_horse::get_sound_volume(),
             MobKind::Ghast(_) => Ghast::get_sound_volume(),
+            MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::get_sound_volume(self.is_baby()),
             _ => 1.0,
         }
     }
@@ -2272,6 +2295,7 @@ impl Mob {
             MobKind::Guardian(_) | MobKind::ElderGuardian(_) => crate::world::entity::monster::guardian::Guardian::get_ambient_sound_interval(),
             _ if self.is_squid() || matches!(self.kind, MobKind::Dolphin(_)) => ageable_water_creature::get_ambient_sound_interval(),
             _ if self.is_water_animal() => water_animal::get_ambient_sound_interval(),
+            MobKind::HappyGhast(_) if !self.entity.passengers.is_empty() => 120 * 6,
             _ if self.animal().is_some() => 120,
             _ => 80,
         }
@@ -2409,6 +2433,7 @@ impl ServerLevel {
             MobKind::Llama(_) | MobKind::TraderLlama(_) => self.abstract_chested_horse_mob_interact(id, player, hand),
             MobKind::Camel(_) | MobKind::CamelHusk(_) => self.camel_mob_interact(id, player, hand),
             MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => self.abstract_nautilus_mob_interact(id, player, hand),
+            MobKind::HappyGhast(_) => self.happy_ghast_mob_interact(id, player, hand),
             MobKind::WanderingTrader(_) => self.wandering_trader_mob_interact(id, player, hand),
             MobKind::Donkey(_) | MobKind::Mule(_) => self.abstract_chested_horse_mob_interact(id, player, hand),
             MobKind::Axolotl(_) => self.axolotl_mob_interact(id, player, hand),
@@ -2549,6 +2574,7 @@ impl ServerLevel {
             MobKind::Shulker(_) => {}
             MobKind::Phantom(_) => self.phantom_body_rotation_control_client_tick(id),
             MobKind::Camel(_) | MobKind::CamelHusk(_) => self.camel_body_rotation_control_client_tick(id),
+            MobKind::HappyGhast(_) => self.happy_ghast_body_rotation_control_client_tick(id),
             _ => self.body_rotation_control_tick(id),
         }
     }
@@ -3127,7 +3153,7 @@ impl ServerLevel {
             MoveControlKind::Fox => self.fox_move_control_tick(id),
             MoveControlKind::Panda => self.panda_move_control_tick(id),
             MoveControlKind::Camel => self.camel_move_control_tick(id),
-            MoveControlKind::Ghast => self.ghast_move_control_tick(id),
+            MoveControlKind::Ghast(_) => self.ghast_move_control_tick(id),
             MoveControlKind::Vex => self.vex_move_control_tick(id),
             MoveControlKind::Phantom => self.phantom_move_control_tick(id),
             MoveControlKind::Guardian => self.guardian_move_control_tick(id),
@@ -3207,6 +3233,7 @@ impl ServerLevel {
             Some(MobKind::Camel(_) | MobKind::CamelHusk(_)) => self.camel_custom_server_ai_step(id),
             Some(MobKind::Nautilus(_)) => self.nautilus_custom_server_ai_step(id),
             Some(MobKind::ZombieNautilus(_)) => self.zombie_nautilus_custom_server_ai_step(id),
+            Some(MobKind::HappyGhast(_)) => self.happy_ghast_custom_server_ai_step(id),
             Some(
                 MobKind::Zombie(_)
                 | MobKind::ZombieVillager(_)
@@ -3612,6 +3639,7 @@ pub fn finalize_spawn(
             group_data = abstract_horse::finalize_spawn(level, mob, group_data);
         }
         MobKind::Nautilus(_) => super::animal::nautilus::abstract_nautilus::finalize_spawn(level, mob),
+        MobKind::HappyGhast(_) => {}
         MobKind::ZombieNautilus(_) => {
             super::animal::nautilus::zombie_nautilus::finalize_spawn(level, mob);
             super::animal::nautilus::abstract_nautilus::finalize_spawn(level, mob);
@@ -3678,6 +3706,15 @@ pub fn get_walk_target_value(mob: &Mob, pos: BlockPos, level: &mut (impl ServerL
         MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => super::monster::monster::get_walk_target_value(pos, level),
         MobKind::Giant(_) => giant::get_walk_target_value(pos, level),
         MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => super::animal::nautilus::abstract_nautilus::get_walk_target_value(),
+        MobKind::HappyGhast(_) => {
+            if !level.block_state(pos).is_air() {
+                0.0
+            } else if level.block_state(pos.below()).is_air() && !level.block_state(pos.below().below()).is_air() {
+                10.0
+            } else {
+                5.0
+            }
+        }
         MobKind::Bee(_) => super::animal::bee::bee::get_walk_target_value(pos, level),
         MobKind::Zombie(_)
         | MobKind::ZombieVillager(_)

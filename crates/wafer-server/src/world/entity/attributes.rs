@@ -612,6 +612,19 @@ pub static ZOMBIE_HORSE_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static HAPPY_GHAST_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange, TemptRange, FlyingSpeed,
+        ],
+        &[(FollowRange, 16.0), (TemptRange, 16.0), (MaxHealth, 20.0), (FlyingSpeed, 0.05), (MovementSpeed, 0.05), (CameraDistance, 8.0)],
+    )
+};
+
 pub static NAUTILUS_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

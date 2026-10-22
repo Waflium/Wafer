@@ -504,7 +504,7 @@ impl ServerLevel {
             if self.entity_ref(vehicle).is_none() {
                 return;
             }
-            let floating = oy_dist >= -0.03125 && !vehicle_rests_on_something && !self.allow_flight && !self.entity(vehicle).is_no_gravity() && {
+            let floating = oy_dist >= -0.03125 && !vehicle_rests_on_something && !self.allow_flight && !self.is_flying_vehicle(vehicle) && !self.entity(vehicle).is_no_gravity() && {
                 let box_ = self.entity(vehicle).bounding_box().inflate_all(0.0625).expand_towards(0.0, -0.55, 0.0);
                 self.all_air_in(&box_)
             };

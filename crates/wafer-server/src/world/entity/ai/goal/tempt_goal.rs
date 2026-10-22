@@ -1,3 +1,4 @@
+use wafer_core::random::RandomSource;
 use wafer_data::EquipmentSlot;
 
 use super::goal::reduced_tick_delay;
@@ -9,6 +10,12 @@ use crate::world::item::ItemStack;
 
 pub const DEFAULT_STOP_DISTANCE: f64 = 2.5;
 
+#[derive(Clone, Copy)]
+pub enum TemptItems {
+    Items(fn(&ItemStack) -> bool),
+    ForMob(fn(&ServerLevel, EntityId, &ItemStack) -> bool),
+}
+
 pub struct TemptGoal {
     speed_modifier: f64,
     px: f64,
@@ -19,9 +26,10 @@ pub struct TemptGoal {
     pub player: Option<EntityId>,
     calm_down: i32,
     is_running: bool,
-    items: fn(&ItemStack) -> bool,
+    items: TemptItems,
     can_scare: bool,
     stop_distance: f64,
+    for_non_pathfinders: bool,
 }
 
 impl TemptGoal {
@@ -36,10 +44,15 @@ impl TemptGoal {
             player: None,
             calm_down: 0,
             is_running: false,
-            items,
+            items: TemptItems::Items(items),
             can_scare,
             stop_distance: DEFAULT_STOP_DISTANCE,
+            for_non_pathfinders: false,
         }
+    }
+
+    pub fn for_non_pathfinders(speed_modifier: f64, items: fn(&ServerLevel, EntityId, &ItemStack) -> bool, can_scare: bool, stop_distance: f64) -> TemptGoal {
+        TemptGoal { items: TemptItems::ForMob(items), stop_distance, for_non_pathfinders: true, ..TemptGoal::new(speed_modifier, |_| false, can_scare) }
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
@@ -48,7 +61,7 @@ impl TemptGoal {
             return false;
         }
         let items = self.items;
-        let should_follow = |target: EntityId, level: &ServerLevel| should_follow(level, items, target);
+        let should_follow = |target: EntityId, level: &ServerLevel| should_follow(level, items, mob, target);
         let targeting_conditions = TargetingConditions::for_non_combat().ignore_line_of_sight().selector(&should_follow).range(level.attribute_value(mob, Attribute::TemptRange));
         let e = level.entity(mob);
         let (x, y, z) = (e.x(), e.y(), e.z());
@@ -115,11 +128,24 @@ impl TemptGoal {
     }
 
     fn stop_navigation(&self, level: &mut ServerLevel, mob: EntityId) {
+        if self.for_non_pathfinders {
+            level.mob_mut(mob).expect("a mob").ai.move_control.set_wait();
+            return;
+        }
         level.mob_mut(mob).expect("a mob").ai.navigation.stop();
     }
 
     fn navigate_towards(&self, level: &mut ServerLevel, mob: EntityId, player: EntityId) {
         let speed_modifier = self.speed_modifier;
+        if self.for_non_pathfinders {
+            let eye_position = level.entity(player).eye_position();
+            let m = level.mob_mut(mob).expect("a mob");
+            let position = m.entity.position();
+            let scale = m.entity.random.next_double();
+            let target = eye_position.subtract(position).scale(scale).add_vec(position);
+            m.ai.move_control.set_wanted_position(target.x, target.y, target.z, speed_modifier);
+            return;
+        }
         level.get_navigation(mob, |navigation, level| navigation.move_to_entity(level, mob, player, speed_modifier));
     }
 
@@ -128,7 +154,12 @@ impl TemptGoal {
     }
 }
 
-fn should_follow(level: &ServerLevel, items: fn(&ItemStack) -> bool, player: EntityId) -> bool {
-    let test = |slot| level.item_by_slot_ref(player, slot).is_some_and(items);
+fn should_follow(level: &ServerLevel, items: TemptItems, mob: EntityId, player: EntityId) -> bool {
+    let test = |slot| {
+        level.item_by_slot_ref(player, slot).is_some_and(|item_stack| match items {
+            TemptItems::Items(items) => items(item_stack),
+            TemptItems::ForMob(items) => items(level, mob, item_stack),
+        })
+    };
     test(EquipmentSlot::Mainhand) || test(EquipmentSlot::Offhand)
 }

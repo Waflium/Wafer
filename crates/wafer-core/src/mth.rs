@@ -187,6 +187,17 @@ pub fn wrap_degrees(angle: f32) -> f32 {
     a
 }
 
+pub fn wrap_degrees90(angle: f32) -> f32 {
+    let mut normalized_angle = angle % 90.0;
+    if normalized_angle >= 45.0 {
+        normalized_angle -= 90.0;
+    }
+    if normalized_angle < -45.0 {
+        normalized_angle += 90.0;
+    }
+    normalized_angle
+}
+
 pub fn rot_lerp(a: f32, from: f32, to: f32) -> f32 {
     from + a * wrap_degrees(to - from)
 }

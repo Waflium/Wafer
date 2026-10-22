@@ -588,6 +588,7 @@ impl ServerLevel {
             Some(MobKind::Horse(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_)) => true,
             Some(MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::Camel(_) | MobKind::CamelHusk(_)) => self.abstract_horse_can_use_slot(id, slot),
             Some(MobKind::Nautilus(_) | MobKind::ZombieNautilus(_)) => self.abstract_nautilus_can_use_slot(id, slot),
+            Some(MobKind::HappyGhast(_)) => self.happy_ghast_can_use_slot(id, slot),
             _ => true,
         }
     }
@@ -1632,6 +1633,7 @@ impl ServerLevel {
             Some(MobKind::Bat(_)) => self.bat_voice_pitch(id),
             Some(MobKind::ZombieVillager(_)) => self.zombie_villager_voice_pitch(id),
             Some(MobKind::Parrot(_)) => self.parrot_voice_pitch(id),
+            Some(MobKind::HappyGhast(_)) => super::animal::happyghast::happy_ghast::get_voice_pitch(),
             _ => self.living_entity_voice_pitch(id),
         }
     }
@@ -2091,7 +2093,7 @@ impl ServerLevel {
             let e = self.entity(id);
             let eye_pos = BlockPos::containing(e.x(), e.eye_y(), e.z());
             if e.is_eye_in_fluid(&fluid_tags::WATER) && !self.block_state(eye_pos).is_block(blocks::BUBBLE_COLUMN) {
-                let can_drown = !entity_type_tags::CAN_BREATHE_UNDER_WATER.contains(self.entity(id).entity_type as usize)
+                let can_drown = !self.can_breathe_underwater(id)
                     && !self.has_water_breathing(id)
                     && !self.players.get(&id).is_some_and(|p| p.abilities.invulnerable);
                 if can_drown {
@@ -2419,6 +2421,7 @@ impl ServerLevel {
             Some(MobKind::Enderman(_)) => self.enderman_ai_step(id),
             Some(MobKind::Blaze(_)) => self.blaze_ai_step(id),
             Some(MobKind::Ghast(_) | MobKind::Phantom(_)) => self.mob_ai_step(id),
+            Some(MobKind::HappyGhast(_)) => self.happy_ghast_ai_step(id),
             Some(MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.guardian_ai_step(id),
             Some(MobKind::ZombifiedPiglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_)) => self.monster_ai_step(id),
             Some(MobKind::Witch(_)) => self.witch_ai_step(id),
@@ -2511,6 +2514,8 @@ impl ServerLevel {
             self.camel_tick_ridden(id, controller, ridden_input);
         } else if self.is_abstract_nautilus(id) {
             self.abstract_nautilus_tick_ridden(id, controller, ridden_input);
+        } else if self.is_happy_ghast(id) {
+            self.happy_ghast_tick_ridden(id, controller, ridden_input);
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_tick_ridden(id, controller, ridden_input);
         } else if self.is_pig(id) {
@@ -2529,6 +2534,8 @@ impl ServerLevel {
             self.camel_get_ridden_input(id, controller, self_input)
         } else if self.is_abstract_nautilus(id) {
             self.abstract_nautilus_get_ridden_input(controller)
+        } else if self.is_happy_ghast(id) {
+            self.happy_ghast_get_ridden_input(id, controller)
         } else if self.is_abstract_horse(id) {
             self.abstract_horse_get_ridden_input(id, controller, self_input)
         } else if self.is_pig(id) {
@@ -2919,6 +2926,8 @@ impl ServerLevel {
             self.phantom_travel(id, input);
         } else if self.is_camel(id) {
             self.camel_travel(id, input);
+        } else if self.is_happy_ghast(id) {
+            self.happy_ghast_travel(id, input);
         } else {
             self.living_entity_travel(id, input);
         }
@@ -3240,6 +3249,7 @@ impl ServerLevel {
             Some(mob) if mob.is_spider() => super::monster::spider::spider::Spider::on_climbable(mob),
             Some(mob) if mob.abstract_horse().is_some() => super::animal::equine::abstract_horse::on_climbable(),
             Some(mob) if matches!(mob.kind, MobKind::Ghast(_)) => super::monster::ghast::Ghast::on_climbable(),
+            Some(mob) if matches!(mob.kind, MobKind::HappyGhast(_)) => super::animal::happyghast::happy_ghast::on_climbable(),
             Some(mob) if matches!(mob.kind, MobKind::Phantom(_)) => super::monster::phantom::Phantom::on_climbable(),
             _ => self.living_entity_on_climbable(id),
         }
@@ -3586,6 +3596,13 @@ impl ServerLevel {
             entity_type: super::entity_type::EntityType::by_id(self.entity(id).entity_type),
             is_player: self.is_player(id),
         }
+    }
+
+    pub fn can_breathe_underwater(&self, id: EntityId) -> bool {
+        if self.is_happy_ghast(id) && self.happy_ghast_can_breathe_underwater(id) {
+            return true;
+        }
+        entity_type_tags::CAN_BREATHE_UNDER_WATER.contains(self.entity(id).entity_type as usize)
     }
 
     pub fn would_not_suffocate_at_target_pose(&self, id: EntityId, pose: Pose) -> bool {

@@ -1563,7 +1563,7 @@ impl ServerLevel {
             self.bat_check_fall_damage(id);
             return;
         }
-        if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Ghast(_))) {
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(super::mob::MobKind::Ghast(_) | super::mob::MobKind::HappyGhast(_))) {
             self.ghast_check_fall_damage(id);
             return;
         }
@@ -1933,7 +1933,7 @@ impl ServerLevel {
             self.camel_play_step_sound(id, state);
             return;
         }
-        if self.is_abstract_nautilus(id) {
+        if self.is_abstract_nautilus(id) || self.is_happy_ghast(id) {
             return;
         }
         if self.is_abstract_horse(id) {
@@ -3020,6 +3020,7 @@ impl ServerLevel {
                     super::mob::MobKind::CamelHusk(_) => "CamelHusk",
                     super::mob::MobKind::Nautilus(_) => "Nautilus",
                     super::mob::MobKind::ZombieNautilus(_) => "ZombieNautilus",
+                    super::mob::MobKind::HappyGhast(_) => "HappyGhast",
                     super::mob::MobKind::WanderingTrader(_) => "WanderingTrader",
                     super::mob::MobKind::Axolotl(_) => "Axolotl",
                     super::mob::MobKind::Frog(_) => "Frog",
@@ -3589,6 +3590,7 @@ impl ServerLevel {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_get_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_nautilus().is_some() => self.abstract_nautilus_get_controlling_passenger(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::HappyGhast(_)) => self.happy_ghast_get_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Pig(_)) => self.pig_get_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_get_controlling_passenger(id),
             Some(LevelEntity::Mob(_)) => self.mob_get_controlling_passenger(id),
@@ -3691,6 +3693,7 @@ impl ServerLevel {
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_can_add_passenger(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Camel(_) | super::mob::MobKind::CamelHusk(_)) => self.camel_can_add_passenger(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_nautilus().is_some() => self.abstract_nautilus_can_add_passenger(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::HappyGhast(_)) => self.happy_ghast_can_add_passenger(id),
             _ => self.passengers(id).is_empty(),
         }
     }
@@ -3706,6 +3709,8 @@ impl ServerLevel {
     fn add_passenger(&mut self, id: EntityId, passenger: EntityId) {
         if self.is_abstract_horse(id) {
             self.abstract_horse_add_passenger(id, passenger);
+        } else if self.is_happy_ghast(id) {
+            self.happy_ghast_add_passenger(id, passenger);
         } else {
             self.entity_add_passenger(id, passenger);
         }
@@ -3726,6 +3731,9 @@ impl ServerLevel {
         self.entity_mut(passenger).boarding_cooldown = 60;
         if self.is_cushion(id) {
             self.cushion_remove_passenger(id);
+        }
+        if self.is_happy_ghast(id) {
+            self.happy_ghast_remove_passenger(id);
         }
     }
 
@@ -3861,6 +3869,7 @@ impl ServerLevel {
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_dismount_location_for_passenger(id, passenger),
             Some(LevelEntity::Boat(_)) => self.abstract_boat_dismount_location_for_passenger(id, passenger),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_dismount_location_for_passenger(id, passenger),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::HappyGhast(_)) => self.happy_ghast_dismount_location_for_passenger(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_dismount_location_for_passenger(id, passenger),
             Some(LevelEntity::Mob(mob)) if mob.animal().is_some() => self.animal_dismount_location_for_passenger(id, passenger),
             _ => self.entity_dismount_location_for_passenger(id, passenger),
@@ -3991,8 +4000,23 @@ impl ServerLevel {
         }
     }
 
+    pub fn is_in_clouds(&self, id: EntityId) -> bool {
+        let position = self.entity(id).position();
+        let attributes = self.environment_attributes();
+        if attributes.get_value(crate::world::attribute::environment_attributes::CLOUD_COLOR, position)[3] == 0.0 {
+            return false;
+        }
+        let cloud_bottom = attributes.get_value(crate::world::attribute::environment_attributes::CLOUD_HEIGHT, position);
+        let e = self.entity(id);
+        if e.y() + (e.dimensions.height as f64) < cloud_bottom as f64 {
+            return false;
+        }
+        let cloud_top = cloud_bottom + 4.0;
+        e.y() <= cloud_top as f64
+    }
+
     pub fn can_be_collided_with(&self, id: EntityId, _other: Option<EntityId>) -> bool {
-        self.is_boat(id) || self.is_shulker(id) && self.is_alive(id)
+        self.is_boat(id) || self.is_shulker(id) && self.is_alive(id) || self.is_happy_ghast(id) && self.happy_ghast_can_be_collided_with(id, _other)
     }
 
     pub fn can_collide_with(&self, id: EntityId, entity: EntityId) -> bool {

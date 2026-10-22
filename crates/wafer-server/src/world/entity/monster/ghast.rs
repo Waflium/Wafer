@@ -28,19 +28,25 @@ pub const DIMENSIONS: EntityDimensions =
 const DEFAULT_EXPLOSION_POWER: i8 = 1;
 const XP_REWARD: i32 = 5;
 
+#[derive(Clone, Copy, PartialEq)]
 pub struct GhastMoveControl {
     float_duration: i32,
     careful: bool,
 }
 
+impl GhastMoveControl {
+    pub const fn new(careful: bool) -> GhastMoveControl {
+        GhastMoveControl { float_duration: 0, careful }
+    }
+}
+
 pub struct Ghast {
     explosion_power: i32,
-    pub move_control: GhastMoveControl,
 }
 
 impl Default for Ghast {
     fn default() -> Ghast {
-        Ghast { explosion_power: DEFAULT_EXPLOSION_POWER as i32, move_control: GhastMoveControl { float_duration: 0, careful: false } }
+        Ghast { explosion_power: DEFAULT_EXPLOSION_POWER as i32 }
     }
 }
 
@@ -81,7 +87,7 @@ impl Ghast {
         let entity = Entity::new(registry_id(registry::ENTITY_TYPE, "minecraft:ghast"), DIMENSIONS, ghast_defaults());
         let mut mob = Mob::new(entity, LivingEntity::new(&GHAST_ATTRIBUTES), MobKind::Ghast(Ghast::default()));
         mob.xp_reward = XP_REWARD;
-        mob.ai.move_control.kind = MoveControlKind::Ghast;
+        mob.ai.move_control.kind = MoveControlKind::Ghast(GhastMoveControl::new(false));
         mob
     }
 
@@ -188,19 +194,35 @@ impl ServerLevel {
         self.travel_flying(id, input, 0.02);
     }
 
+    fn ghast_move_control_should_be_stopped(&self, id: EntityId) -> bool {
+        self.is_happy_ghast(id) && self.happy_ghast_is_on_still_timeout(id)
+    }
+
+    fn ghast_move_control_mut(mob: &mut Mob) -> &mut GhastMoveControl {
+        match &mut mob.ai.move_control.kind {
+            MoveControlKind::Ghast(control) => control,
+            _ => unreachable!("a ghast move control"),
+        }
+    }
+
     pub fn ghast_move_control_tick(&mut self, id: EntityId) {
+        if self.ghast_move_control_should_be_stopped(id) {
+            self.mob_mut(id).expect("a mob").ai.move_control.operation = Operation::Wait;
+            self.stop_in_place(id);
+        }
         let flying_speed = self.attribute_value(id, Attribute::FlyingSpeed);
         let mob = self.mob_mut(id).expect("a ghast");
         if mob.ai.move_control.operation != Operation::MoveTo {
             return;
         }
-        let float_duration = ghast(mob).move_control.float_duration;
-        ghast_mut(mob).move_control.float_duration -= 1;
+        let control = ServerLevel::ghast_move_control_mut(mob);
+        let float_duration = control.float_duration;
+        control.float_duration -= 1;
         if float_duration > 0 {
             return;
         }
         let increase = mob.entity.random.next_int_bounded(5) + 2;
-        ghast_mut(mob).move_control.float_duration += increase;
+        ServerLevel::ghast_move_control_mut(mob).float_duration += increase;
         let control = &mob.ai.move_control;
         let travel = Vec3::new(control.wanted_x - mob.entity.x(), control.wanted_y - mob.entity.y(), control.wanted_z - mob.entity.z());
         if self.ghast_move_control_can_reach(id, travel) {
@@ -212,7 +234,7 @@ impl ServerLevel {
     }
 
     fn ghast_move_control_can_reach(&mut self, id: EntityId, travel: Vec3) -> bool {
-        let careful = ghast(self.mob(id).expect("a ghast")).move_control.careful;
+        let careful = ServerLevel::ghast_move_control_mut(self.mob_mut(id).expect("a ghast")).careful;
         let aabb = self.entity(id).bounding_box();
         let aabb_at_destination = aabb.move_vec(travel);
         if careful {
@@ -239,7 +261,7 @@ impl ServerLevel {
         if state.is_air() {
             return true;
         }
-        let careful = ghast(self.mob(id).expect("a ghast")).move_control.careful;
+        let careful = ServerLevel::ghast_move_control_mut(self.mob_mut(id).expect("a ghast")).careful;
         let path_no_collisions = match start_end {
             Some((start, end)) => {
                 let boxes: Vec<AABB> = state.get_collision_shape(pos).to_aabbs().iter().map(|b| b.move_to_block(pos)).collect();

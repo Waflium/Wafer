@@ -294,14 +294,17 @@ impl ServerLevel {
         if self.is_camel(id) {
             self.camel_on_elastic_leash_pull(id);
         }
+        if self.is_happy_ghast(id) {
+            self.happy_ghast_on_elastic_leash_pull(id);
+        }
     }
 
-    pub fn leash_snap_distance(&self, _id: EntityId) -> f64 {
-        LEASH_TOO_FAR_DIST
+    pub fn leash_snap_distance(&self, id: EntityId) -> f64 {
+        if self.is_happy_ghast(id) { crate::world::entity::animal::happyghast::happy_ghast::leash_snap_distance() } else { LEASH_TOO_FAR_DIST }
     }
 
-    pub fn leash_elastic_distance(&self, _id: EntityId) -> f64 {
-        LEASH_ELASTIC_DIST
+    pub fn leash_elastic_distance(&self, id: EntityId) -> f64 {
+        if self.is_happy_ghast(id) { crate::world::entity::animal::happyghast::happy_ghast::leash_elastic_distance() } else { LEASH_ELASTIC_DIST }
     }
 
     fn angular_friction(&mut self, id: EntityId) -> f32 {
@@ -320,6 +323,9 @@ impl ServerLevel {
             let home = self.entity(leash_holder).block_position();
             let radius = self.leash_elastic_distance(id) as i32 - 1;
             self.mob_mut(id).expect("a pathfinder mob").set_home_to(home, radius);
+        }
+        if self.is_happy_ghast(leash_holder) {
+            self.happy_ghast_notify_leash_holder(leash_holder, id);
         }
     }
 
@@ -342,8 +348,8 @@ impl ServerLevel {
         }
     }
 
-    fn should_stay_close_to_leash_holder(&self, _id: EntityId) -> bool {
-        true
+    fn should_stay_close_to_leash_holder(&self, id: EntityId) -> bool {
+        !self.is_happy_ghast(id)
     }
 
     fn follow_leash_speed(&self, id: EntityId) -> f64 {
@@ -354,8 +360,8 @@ impl ServerLevel {
         !self.is_llama(id) && self.is_abstract_horse(id) || self.is_boat(id) || self.is_sniffer(id)
     }
 
-    pub fn support_quad_leash_as_holder(&self, _id: EntityId) -> bool {
-        false
+    pub fn support_quad_leash_as_holder(&self, id: EntityId) -> bool {
+        self.is_happy_ghast(id)
     }
 
     fn get_holder_movement(&self, leash_holder: EntityId) -> Vec3 {

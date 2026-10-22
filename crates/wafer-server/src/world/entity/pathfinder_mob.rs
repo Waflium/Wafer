@@ -13,6 +13,16 @@ impl ServerLevel {
     pub fn get_walk_target_value(&self, id: EntityId, pos: BlockPos) -> f32 {
         match self.mob(id).expect("a pathfinder mob").kind {
             MobKind::MushroomCow(_) => self.mushroom_cow_get_walk_target_value(pos),
+            MobKind::HappyGhast(_) => {
+                let region = crate::world::level::path_navigation_region::PathNavigationRegion::new(self);
+                if !region.get_block_state(pos).is_air() {
+                    0.0
+                } else if region.get_block_state(pos.below()).is_air() && !region.get_block_state(pos.below().below()).is_air() {
+                    10.0
+                } else {
+                    5.0
+                }
+            }
             MobKind::Zombie(_)
             | MobKind::ZombieVillager(_)
             | MobKind::Husk(_)

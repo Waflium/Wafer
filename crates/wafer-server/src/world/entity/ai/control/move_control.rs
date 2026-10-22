@@ -32,7 +32,7 @@ pub enum MoveControlKind {
     Fox,
     Panda,
     Camel,
-    Ghast,
+    Ghast(crate::world::entity::monster::ghast::GhastMoveControl),
     Rabbit,
     Turtle,
     Vex,

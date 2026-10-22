@@ -26,6 +26,7 @@ pub mod chicken;
 pub mod cow;
 pub mod frog;
 pub mod goat;
+pub mod happyghast;
 pub mod nautilus;
 pub mod equine;
 #[cfg(test)]
@@ -162,6 +163,7 @@ impl ServerLevel {
             MobKind::Llama(_) | MobKind::TraderLlama(_) => equine::llama::is_food(item_stack),
             MobKind::Camel(_) | MobKind::CamelHusk(_) => camel::camel::is_food(self.mob(id).expect("a camel"), item_stack),
             MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => self.abstract_nautilus_is_food(id, item_stack),
+            MobKind::HappyGhast(_) => happyghast::happy_ghast::is_food(item_stack),
             MobKind::WanderingTrader(_) => false,
             MobKind::Axolotl(_) => axolotl::axolotl::is_food(item_stack),
             MobKind::Frog(_) => frog::frog::is_food(item_stack),
@@ -232,6 +234,7 @@ impl ServerLevel {
             MobKind::Hoglin(_) => self.hoglin_can_fall_in_love(id),
             MobKind::ZombieHorse(_) => false,
             MobKind::CamelHusk(_) => camel::camel_husk::can_fall_in_love(),
+            MobKind::HappyGhast(_) => happyghast::happy_ghast::can_fall_in_love(),
             _ => self.animal_can_fall_in_love(id),
         }
     }

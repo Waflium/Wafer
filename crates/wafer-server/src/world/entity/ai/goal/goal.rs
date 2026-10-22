@@ -111,6 +111,7 @@ impl Flag {
 
 pub enum Goal {
     Float(FloatGoal),
+    HappyGhastFloat(FloatGoal),
     Panic(PanicGoal),
     Breed(BreedGoal),
     Tempt(TemptGoal),
@@ -300,6 +301,7 @@ impl Goal {
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
         match self {
             Goal::Float(goal) => goal.can_use(level, mob),
+            Goal::HappyGhastFloat(goal) => level.happy_ghast_float_goal_can_use(mob, goal),
             Goal::Panic(goal) => goal.can_use(level, mob),
             Goal::Breed(goal) => goal.can_use(level, mob),
             Goal::Tempt(goal) => goal.can_use(level, mob),
@@ -493,6 +495,7 @@ impl Goal {
     pub fn can_continue_to_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
         match self {
             Goal::Float(goal) => goal.can_use(level, mob),
+            Goal::HappyGhastFloat(goal) => level.happy_ghast_float_goal_can_use(mob, goal),
             Goal::Panic(goal) => goal.can_continue_to_use(level, mob),
             Goal::Breed(goal) => goal.can_continue_to_use(level, mob),
             Goal::Tempt(goal) => goal.can_continue_to_use(level, mob),
@@ -683,7 +686,7 @@ impl Goal {
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self {
-            Goal::Float(_) | Goal::Breed(_) => {}
+            Goal::Float(_) | Goal::HappyGhastFloat(_) | Goal::Breed(_) => {}
             Goal::Panic(goal) => goal.start(level, mob),
             Goal::Tempt(goal) => goal.start(level),
             Goal::FollowParent(goal) => goal.start(),
@@ -863,7 +866,7 @@ impl Goal {
 
     pub fn stop(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self {
-            Goal::Float(_) | Goal::RandomLookAround(_) | Goal::FleeSun(_) | Goal::StriderGoToLava(_) => {}
+            Goal::Float(_) | Goal::HappyGhastFloat(_) | Goal::RandomLookAround(_) | Goal::FleeSun(_) | Goal::StriderGoToLava(_) => {}
             Goal::BreathAir(_) | Goal::TryFindLiquid(_) => {}
             Goal::RandomSwimming(goal) => goal.random_stroll_goal.stop(level, mob),
             Goal::DolphinJump(goal) => goal.stop(level, mob),
@@ -1020,6 +1023,7 @@ impl Goal {
         matches!(
             self,
             Goal::Float(_)
+                | Goal::HappyGhastFloat(_)
                 | Goal::RandomLookAround(_)
                 | Goal::MeleeAttack(_)
                 | Goal::ZombieAttack(_)
@@ -1069,7 +1073,7 @@ impl Goal {
         let requires_update_every_tick = self.requires_update_every_tick();
         let adjusted_tick_delay = |ticks: i32| if requires_update_every_tick { ticks } else { reduced_tick_delay(ticks) };
         match self {
-            Goal::Float(goal) => goal.tick(level, mob),
+            Goal::Float(goal) | Goal::HappyGhastFloat(goal) => goal.tick(level, mob),
             Goal::Panic(_) | Goal::WaterAvoidingRandomStroll(_) | Goal::RestrictSun(_) | Goal::FleeSun(_) | Goal::NearestAttackableTarget(_) | Goal::HurtByTarget(_) => {}
             Goal::Breed(goal) => goal.tick(level, mob),
             Goal::Tempt(goal) => goal.tick(level, mob),
@@ -1218,7 +1222,7 @@ impl Goal {
 
     pub fn get_flags(&self) -> u8 {
         match self {
-            Goal::Float(_) => Flag::Jump.bit(),
+            Goal::Float(_) | Goal::HappyGhastFloat(_) => Flag::Jump.bit(),
             Goal::Panic(_)
             | Goal::WaterAvoidingRandomStroll(_)
             | Goal::FleeSun(_)

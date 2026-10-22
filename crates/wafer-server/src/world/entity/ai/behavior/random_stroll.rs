@@ -7,7 +7,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::memory::walk_target::WalkTarget;
-use crate::world::entity::ai::util::{goal_utils, land_random_pos};
+use crate::world::entity::ai::util::{air_and_water_random_pos, goal_utils, land_random_pos};
 use crate::world::level::BlockGetter;
 
 const MAX_XZ_DIST: i32 = 10;
@@ -30,8 +30,18 @@ pub fn stroll_within(speed_modifier: f32, max_horizontal_distance: i32, max_vert
     stroll_fly_or_swim(speed_modifier, move |level, body| land_random_pos::get_pos(level, body, max_horizontal_distance, max_vertical_distance), |_, _| true)
 }
 
+pub fn fly(speed_modifier: f32) -> OneShot {
+    stroll_fly_or_swim(speed_modifier, |level, body| get_target_fly_pos(level, body, MAX_XZ_DIST, MAX_Y_DIST), |_, _| true)
+}
+
 pub fn swim(speed_modifier: f32) -> OneShot {
     stroll_fly_or_swim(speed_modifier, get_target_swim_pos, |level, body| level.entity(body).is_in_water())
+}
+
+fn get_target_fly_pos(level: &mut ServerLevel, body: EntityId, max_horizontal_distance: i32, max_vertical_distance: i32) -> Option<Vec3> {
+    let e = level.entity(body);
+    let wander_direction = crate::world::entity::calculate_view_vector(e.x_rot_o, level.living(body).y_head_rot_o);
+    air_and_water_random_pos::get_pos(level, body, max_horizontal_distance, max_vertical_distance, -2, wander_direction.x, wander_direction.z, std::f32::consts::FRAC_PI_2 as f64)
 }
 
 fn get_target_swim_pos(level: &mut ServerLevel, body: EntityId) -> Option<Vec3> {
