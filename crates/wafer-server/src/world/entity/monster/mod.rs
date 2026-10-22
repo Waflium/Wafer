@@ -8,6 +8,7 @@ pub mod enderman;
 mod enderman_tests;
 pub mod endermite;
 pub mod giant;
+pub mod hoglin;
 pub mod illager;
 #[cfg(test)]
 mod endermite_tests;
@@ -30,6 +31,7 @@ pub mod spider;
 pub mod warden;
 pub mod vex;
 pub mod witch;
+pub mod zoglin;
 #[cfg(test)]
 mod witch_tests;
 #[cfg(test)]

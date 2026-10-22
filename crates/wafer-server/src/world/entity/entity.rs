@@ -1061,6 +1061,7 @@ impl ServerLevel {
             None => SoundSource::Players,
             Some(super::LevelEntity::ExperienceOrb(_)) => SoundSource::Ambient,
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Hoglin(_)) => SoundSource::Hostile,
             Some(super::LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Ghast(_)) => super::monster::ghast::Ghast::get_sound_source(),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Phantom(_)) => super::monster::phantom::Phantom::get_sound_source(),
@@ -1855,7 +1856,7 @@ impl ServerLevel {
         let pitch = 1.0 + (e.random.next_float() - e.random.next_float()) * 0.4;
         let sound = if self.is_player(id) {
             "minecraft:entity.player.swim"
-        } else if self.is_monster(id) {
+        } else if self.is_monster(id) || self.mob(id).is_some_and(|mob| matches!(mob.kind, super::mob::MobKind::Hoglin(_))) {
             if self.is_drowned(id) { super::monster::zombie::drowned::Drowned::get_swim_sound() } else { self.monster_get_swim_sound() }
         } else if self.mob(id).is_some_and(super::mob::Mob::is_abstract_fish) {
             super::animal::fish::abstract_fish::AbstractFish::get_swim_sound()
@@ -2466,6 +2467,8 @@ impl ServerLevel {
                     return self.abstract_horse_hurt_server(id, source, damage);
                 }
                 Some(super::mob::MobKind::Axolotl(_)) => return self.axolotl_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Hoglin(_)) => return self.hoglin_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::Zoglin(_)) => return self.zoglin_hurt_server(id, source, damage),
                 _ => {}
             }
             return self.living_entity_hurt_server(id, source, damage);
@@ -2774,6 +2777,8 @@ impl ServerLevel {
                     super::mob::MobKind::Skeleton(_) => "Skeleton",
                     super::mob::MobKind::Stray(_) => "Stray",
                     super::mob::MobKind::Parched(_) => "Parched",
+                    super::mob::MobKind::Hoglin(_) => "Hoglin",
+                    super::mob::MobKind::Zoglin(_) => "Zoglin",
                     super::mob::MobKind::WitherSkeleton(_) => "WitherSkeleton",
                     super::mob::MobKind::Bogged(_) => "Bogged",
                     super::mob::MobKind::Drowned(_) => "Drowned",

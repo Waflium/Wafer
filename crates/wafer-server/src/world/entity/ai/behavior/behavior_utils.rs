@@ -123,3 +123,24 @@ pub fn get_random_swimmable_pos(level: &mut ServerLevel, body: EntityId, max_hor
     }
     target_pos
 }
+
+pub fn is_other_target_much_further_away_than_current_attack_target(level: &ServerLevel, body: EntityId, other_target: EntityId, how_much_further_away: f64) -> bool {
+    let Some(current_target) = level.get_brain(body).get_memory(crate::world::entity::ai::memory::memory_module_type::ATTACK_TARGET).copied() else { return false };
+    let body_position = level.entity(body).position();
+    let dist_sqr_to_current_target = body_position.distance_to_sqr(level.entity(current_target).position());
+    let dist_sqr_to_other_target = body_position.distance_to_sqr(level.entity(other_target).position());
+    dist_sqr_to_other_target > dist_sqr_to_current_target + how_much_further_away * how_much_further_away
+}
+
+pub fn get_nearest_target(level: &ServerLevel, body: EntityId, target1: Option<EntityId>, target2: EntityId) -> EntityId {
+    match target1 {
+        None => target2,
+        Some(target1) => get_target_nearest_me(level, body, target1, target2),
+    }
+}
+
+pub fn get_target_nearest_me(level: &ServerLevel, body: EntityId, target1: EntityId, target2: EntityId) -> EntityId {
+    let body_position = level.entity(body).position();
+    let (pos1, pos2) = (level.entity(target1).position(), level.entity(target2).position());
+    if body_position.distance_to_sqr(pos1) < body_position.distance_to_sqr(pos2) { target1 } else { target2 }
+}

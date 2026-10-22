@@ -3,6 +3,7 @@ pub mod animal_make_love;
 pub mod animal_panic;
 pub mod assign_profession_from_job_site;
 pub mod baby_follow_adult;
+pub mod become_passive_if_memory_present;
 #[allow(clippy::module_inception)]
 pub mod behavior;
 pub mod behavior_control;

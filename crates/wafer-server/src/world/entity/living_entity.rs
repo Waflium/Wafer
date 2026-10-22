@@ -1129,6 +1129,11 @@ impl ServerLevel {
             self.ravager_blocked_by_item(id, defender);
             return;
         }
+        match self.mob(id).map(|mob| &mob.kind) {
+            Some(MobKind::Hoglin(_)) => return self.hoglin_blocked_by_item(id, defender),
+            Some(MobKind::Zoglin(_)) => return self.zoglin_blocked_by_item(id, defender),
+            _ => {}
+        }
         if !fully_blocked {
             let (d, e) = (self.entity(defender), self.entity(id));
             let (xd, zd) = (d.x() - e.x(), d.z() - e.z());
@@ -1503,6 +1508,9 @@ impl ServerLevel {
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Tadpole(_))) {
             return super::animal::frog::tadpole::should_drop_experience();
         }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Hoglin(_))) {
+            return true;
+        }
         !self.is_baby(id)
     }
 
@@ -1540,6 +1548,8 @@ impl ServerLevel {
         }
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_get_base_experience_reward(id),
+            Some(MobKind::Hoglin(_)) => self.mob(id).expect("a hoglin").xp_reward,
+            Some(MobKind::Zoglin(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Zombie(_) | MobKind::ZombieVillager(_) | MobKind::Husk(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)) => self.zombie_get_base_experience_reward(id),
             Some(MobKind::Blaze(_) | MobKind::Ghast(_) | MobKind::Phantom(_) | MobKind::Guardian(_) | MobKind::ElderGuardian(_)) => self.mob_get_base_experience_reward(id),
             Some(
@@ -2082,6 +2092,8 @@ impl ServerLevel {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Chicken(_)) => self.chicken_ai_step(id),
             Some(MobKind::Goat(_)) => self.goat_ai_step(id),
+            Some(MobKind::Hoglin(_)) => self.hoglin_ai_step(id),
+            Some(MobKind::Zoglin(_)) => self.zoglin_ai_step(id),
             Some(
                 MobKind::Zombie(_)
                 | MobKind::ZombieVillager(_)

@@ -2,6 +2,7 @@ pub mod adult_sensor;
 pub mod axolotl_attackables_sensor;
 pub mod frog_attackables_sensor;
 pub mod golem_sensor;
+pub mod hoglin_specific_sensor;
 pub mod hurt_by_sensor;
 pub mod is_in_water_sensor;
 pub mod mob_sensor;

@@ -92,6 +92,8 @@ impl ServerLevel {
             MobKind::Sheep(_) => sheep::sheep::is_food(item_stack),
             MobKind::Wolf(_) => wolf::wolf::is_food(item_stack),
             MobKind::Goat(_) => goat::goat::is_food(item_stack),
+            MobKind::Hoglin(_) => crate::world::entity::monster::hoglin::hoglin::is_food(item_stack),
+            MobKind::Zoglin(_) => false,
             MobKind::PolarBear(_) => false,
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),
             MobKind::Zombie(_)
@@ -181,6 +183,7 @@ impl ServerLevel {
         match self.mob(id).expect("an animal").kind {
             MobKind::Armadillo(_) => self.armadillo_can_fall_in_love(id),
             MobKind::Turtle(_) => self.turtle_can_fall_in_love(id),
+            MobKind::Hoglin(_) => self.hoglin_can_fall_in_love(id),
             MobKind::ZombieHorse(_) => false,
             _ => self.animal_can_fall_in_love(id),
         }

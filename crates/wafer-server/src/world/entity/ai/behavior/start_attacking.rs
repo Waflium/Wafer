@@ -6,7 +6,7 @@ use crate::world::entity::ai::memory::memory_module_type;
 
 pub type StartAttackingCondition = fn(&ServerLevel, EntityId) -> bool;
 
-pub type TargetFinder = fn(&ServerLevel, EntityId) -> Option<EntityId>;
+pub type TargetFinder = fn(&mut ServerLevel, EntityId) -> Option<EntityId>;
 
 pub fn create(target_finder_function: TargetFinder) -> OneShot {
     create_with(|_, _| true, target_finder_function)

@@ -29,6 +29,7 @@ pub enum SensorType {
     FrogTemptations,
     FrogAttackables,
     IsInWater,
+    HoglinSpecificSensor,
 }
 
 impl SensorType {
@@ -50,6 +51,7 @@ impl SensorType {
             SensorType::FrogTemptations => "minecraft:frog_temptations",
             SensorType::FrogAttackables => "minecraft:frog_attackables",
             SensorType::IsInWater => "minecraft:is_in_water",
+            SensorType::HoglinSpecificSensor => "minecraft:hoglin_specific_sensor",
         }
     }
 

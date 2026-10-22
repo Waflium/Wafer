@@ -176,6 +176,7 @@ impl ServerLevel {
             MobKind::Turtle(_) => false,
             MobKind::Wolf(_) => !self.is_angry(id),
             MobKind::Cat(_) => true,
+            MobKind::Hoglin(_) | MobKind::Zoglin(_) => true,
             MobKind::Villager(_) | MobKind::WanderingTrader(_) => false,
             MobKind::ZombieHorse(_) => self.is_tamed(id) || !self.is_mob_controlled(id),
             _ => !self.is_enemy(id),

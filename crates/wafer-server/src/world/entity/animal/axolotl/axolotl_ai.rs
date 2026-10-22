@@ -137,6 +137,6 @@ fn get_speed_modifier(level: &ServerLevel, mob: EntityId) -> f32 {
     if level.entity(mob).is_in_water() { SPEED_MULTIPLIER_WHEN_IDLING_IN_WATER } else { SPEED_MULTIPLIER_ON_LAND }
 }
 
-fn find_nearest_valid_attack_target(level: &ServerLevel, body: EntityId) -> Option<EntityId> {
+fn find_nearest_valid_attack_target(level: &mut ServerLevel, body: EntityId) -> Option<EntityId> {
     if behavior_utils::is_breeding(level, body) { None } else { level.get_brain(body).get_memory(memory_module_type::NEAREST_ATTACKABLE).copied() }
 }

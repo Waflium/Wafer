@@ -10,6 +10,10 @@ use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::entity_type::EntityType;
 
+pub fn create(max_dist: f32, interval: IntProvider) -> OneShot {
+    create_with(max_dist, interval, |_, _| true)
+}
+
 pub fn create_for_type(entity_type: &'static EntityType, max_dist: f32, interval: IntProvider) -> OneShot {
     create_with(max_dist, interval, move |level, mob| level.entity(mob).entity_type == entity_type.id)
 }
