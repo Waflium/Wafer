@@ -3,6 +3,7 @@ use wafer_protocol::Writer;
 
 use super::ServerLevel;
 use crate::network::chat::{ChatFormatting, Component};
+use crate::network::connection::Outbound;
 use crate::world::entity::EntityId;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -97,6 +98,7 @@ pub struct ServerBossEvent {
     pub play_boss_music: bool,
     pub create_world_fog: bool,
     pub players: Vec<EntityId>,
+    connections: Vec<Outbound>,
     pub visible: bool,
 }
 
@@ -112,6 +114,7 @@ impl ServerBossEvent {
             play_boss_music: false,
             create_world_fog: false,
             players: Vec::new(),
+            connections: Vec::new(),
             visible: true,
         }
     }
@@ -139,108 +142,109 @@ impl ServerBossEvent {
         }
     }
 
-    fn send(&self, levels: &[ServerLevel], player: EntityId, operation: Operation) {
-        if let Some(player) = levels.iter().find_map(|level| level.players.get(&player)) {
-            player.connection.send(clientbound::BOSS_EVENT, |w| self.write(w, operation));
-        }
+    fn send(&self, connection: &Outbound, operation: Operation) {
+        connection.send(clientbound::BOSS_EVENT, |w| self.write(w, operation));
     }
 
-    fn broadcast(&self, levels: &[ServerLevel], operation: Operation) {
+    fn broadcast(&self, operation: Operation) {
         if self.visible {
-            for &player in &self.players {
-                self.send(levels, player, operation);
+            for connection in &self.connections {
+                self.send(connection, operation);
             }
         }
     }
 
-    pub fn set_progress(&mut self, levels: &[ServerLevel], progress: f32) -> bool {
+    pub fn set_progress(&mut self, progress: f32) -> bool {
         if progress == self.progress {
             return false;
         }
         self.progress = progress;
-        self.broadcast(levels, Operation::UpdateProgress);
+        self.broadcast(Operation::UpdateProgress);
         true
     }
 
-    pub fn set_color(&mut self, levels: &[ServerLevel], color: BossBarColor) -> bool {
+    pub fn set_color(&mut self, color: BossBarColor) -> bool {
         if color == self.color {
             return false;
         }
         self.color = color;
-        self.broadcast(levels, Operation::UpdateStyle);
+        self.broadcast(Operation::UpdateStyle);
         true
     }
 
-    pub fn set_overlay(&mut self, levels: &[ServerLevel], overlay: BossBarOverlay) -> bool {
+    pub fn set_overlay(&mut self, overlay: BossBarOverlay) -> bool {
         if overlay == self.overlay {
             return false;
         }
         self.overlay = overlay;
-        self.broadcast(levels, Operation::UpdateStyle);
+        self.broadcast(Operation::UpdateStyle);
         true
     }
 
-    pub fn set_darken_screen(&mut self, levels: &[ServerLevel], darken_screen: bool) -> bool {
+    pub fn set_darken_screen(&mut self, darken_screen: bool) -> bool {
         if darken_screen == self.darken_screen {
             return false;
         }
         self.darken_screen = darken_screen;
-        self.broadcast(levels, Operation::UpdateProperties);
+        self.broadcast(Operation::UpdateProperties);
         true
     }
 
-    pub fn set_play_boss_music(&mut self, levels: &[ServerLevel], play_boss_music: bool) -> bool {
+    pub fn set_play_boss_music(&mut self, play_boss_music: bool) -> bool {
         if play_boss_music == self.play_boss_music {
             return false;
         }
         self.play_boss_music = play_boss_music;
-        self.broadcast(levels, Operation::UpdateProperties);
+        self.broadcast(Operation::UpdateProperties);
         true
     }
 
-    pub fn set_create_world_fog(&mut self, levels: &[ServerLevel], create_world_fog: bool) -> bool {
+    pub fn set_create_world_fog(&mut self, create_world_fog: bool) -> bool {
         if create_world_fog == self.create_world_fog {
             return false;
         }
         self.create_world_fog = create_world_fog;
-        self.broadcast(levels, Operation::UpdateProperties);
+        self.broadcast(Operation::UpdateProperties);
         true
     }
 
-    pub fn set_name(&mut self, levels: &[ServerLevel], name: Component) -> bool {
+    pub fn set_name(&mut self, name: Component) -> bool {
         if name == self.name {
             return false;
         }
         self.name = name;
-        self.broadcast(levels, Operation::UpdateName);
+        self.broadcast(Operation::UpdateName);
         true
     }
 
     pub fn add_player(&mut self, levels: &[ServerLevel], player: EntityId) {
         if !self.players.contains(&player) {
-            self.players.push(player);
+            let Some(connection) = levels.iter().find_map(|level| level.players.get(&player)).map(|p| p.connection.clone()) else { return };
             if self.visible {
-                self.send(levels, player, Operation::Add);
+                self.send(&connection, Operation::Add);
             }
+            self.players.push(player);
+            self.connections.push(connection);
         }
     }
 
-    pub fn remove_player(&mut self, levels: &[ServerLevel], player: EntityId) {
+    pub fn remove_player(&mut self, player: EntityId) {
         if let Some(i) = self.players.iter().position(|&p| p == player) {
             self.players.remove(i);
+            let connection = self.connections.remove(i);
             if self.visible {
-                self.send(levels, player, Operation::Remove);
+                self.send(&connection, Operation::Remove);
             }
         }
     }
 
-    pub fn set_visible(&mut self, levels: &[ServerLevel], visible: bool) -> bool {
+    pub fn set_visible(&mut self, visible: bool) -> bool {
         if visible == self.visible {
             return false;
         }
         self.visible = visible;
-        for &player in &self.players {
-            self.send(levels, player, if visible { Operation::Add } else { Operation::Remove });
+        for connection in &self.connections {
+            self.send(connection, if visible { Operation::Add } else { Operation::Remove });
         }
         true
     }

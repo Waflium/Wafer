@@ -379,7 +379,7 @@ impl ServerLevel {
     }
 
     fn item_attack_interaction(&mut self, id: EntityId, entity: EntityId, attacking_item_stack: &ItemStack, damage_source: &DamageSource, apply_to_target: bool) {
-        let hurt_target = entity;
+        let hurt_target = self.dragon_part_parent(entity).unwrap_or(entity);
         let mut item_hurt_enemy = false;
         if self.is_living(hurt_target) {
             crate::world::item::hurt_enemy(self, attacking_item_stack, hurt_target, id);

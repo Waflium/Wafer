@@ -2,7 +2,6 @@ use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Vec3};
 use wafer_data::{damage_type_tags, damage_types, registry, registry_id};
 
-use crate::server::THE_END;
 use crate::server::level::ServerLevel;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::data::{DataValue, entity_defaults};
@@ -68,7 +67,7 @@ impl ServerLevel {
         }
         self.handle_portal(id);
         let pos = self.entity(id).block_position();
-        if self.dimension == THE_END && self.block_state(pos).is_air() {
+        if self.dragon_fight.is_some() && self.block_state(pos).is_air() {
             let fire = base_fire_block::get_state(self, pos);
             self.set_block(pos, fire, crate::world::level::update_flags::UPDATE_ALL);
         }
@@ -94,7 +93,19 @@ impl ServerLevel {
                 let center = Vec3::new(e.x(), e.y(), e.z());
                 self.explode(Some(id), None, damage_source, center, 6.0, false, ExplosionInteraction::Block);
             }
+            self.end_crystal_on_destroyed_by(id, &source);
         }
         true
+    }
+
+    pub fn end_crystal_kill(&mut self, id: EntityId) {
+        self.end_crystal_on_destroyed_by(id, &DamageSource::new(damage_types::GENERIC));
+        self.entity_kill(id);
+    }
+
+    fn end_crystal_on_destroyed_by(&mut self, id: EntityId, source: &DamageSource) {
+        if self.dragon_fight.is_some() {
+            self.dragon_fight_on_crystal_destroyed(id, source);
+        }
     }
 }

@@ -223,21 +223,27 @@ impl ServerLevel {
         self.with_wither_boss_event(id, |boss_event, level| boss_event.add_player(std::slice::from_ref(level), player));
     }
 
+    fn wither_boss_event_mut(&mut self, id: EntityId) -> Option<&mut ServerBossEvent> {
+        self.mob_mut(id).and_then(|mob| wither_mut(mob).boss_event.as_mut())
+    }
+
     pub fn wither_stop_seen_by_player(&mut self, id: EntityId, player: EntityId) {
-        self.with_wither_boss_event(id, |boss_event, level| boss_event.remove_player(std::slice::from_ref(level), player));
+        if let Some(boss_event) = self.wither_boss_event_mut(id) {
+            boss_event.remove_player(player);
+        }
     }
 
     fn wither_set_boss_event_progress(&mut self, id: EntityId, progress: f32) {
-        self.with_wither_boss_event(id, |boss_event, level| {
-            boss_event.set_progress(std::slice::from_ref(level), progress);
-        });
+        if let Some(boss_event) = self.wither_boss_event_mut(id) {
+            boss_event.set_progress(progress);
+        }
     }
 
     fn wither_update_boss_event_name(&mut self, id: EntityId) {
         let name = display_name(self.entity(id));
-        self.with_wither_boss_event(id, |boss_event, level| {
-            boss_event.set_name(std::slice::from_ref(level), name);
-        });
+        if let Some(boss_event) = self.wither_boss_event_mut(id) {
+            boss_event.set_name(name);
+        }
     }
 
     fn wither_get_head_x(&self, id: EntityId, index: usize) -> f64 {

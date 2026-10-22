@@ -1,5 +1,5 @@
 use wafer_core::random::{LegacyRandomSource, RandomSource};
-use wafer_core::{BlockPos, mth};
+use wafer_core::{AABB, BlockPos, mth};
 use wafer_data::blocks;
 use wafer_data::properties::{EAST, NORTH, SOUTH, WEST};
 use serde_json::Value;
@@ -7,6 +7,7 @@ use serde_json::Value;
 use crate::world::entity::LevelEntity;
 use crate::world::entity::boss::enderdragon::end_crystal::EndCrystal;
 use crate::world::level::block::base_fire_block;
+use crate::world::level::dimension::dimension_type;
 use crate::world::level::world_gen_level::WorldGenLevel;
 
 const NUMBER_OF_SPIKES: i32 = 10;
@@ -51,6 +52,17 @@ impl EndSpike {
         self.height
     }
 
+    pub fn get_top_bounding_box(&self) -> AABB {
+        AABB::new(
+            (self.center_x - self.radius) as f64,
+            dimension_type::MIN_Y as f64,
+            (self.center_z - self.radius) as f64,
+            (self.center_x + self.radius) as f64,
+            dimension_type::MAX_Y as f64,
+            (self.center_z + self.radius) as f64,
+        )
+    }
+
     pub fn is_guarded(&self) -> bool {
         self.guarded
     }
@@ -82,6 +94,10 @@ pub fn get_spikes_for_level(seed: i64) -> Vec<EndSpike> {
 }
 
 impl EndSpikeFeature {
+    pub fn new(spikes: Vec<EndSpike>, crystal_invulnerable: bool, crystal_beam_target: Option<BlockPos>) -> EndSpikeFeature {
+        EndSpikeFeature { spikes, crystal_invulnerable, crystal_beam_target }
+    }
+
     pub fn parse(json: &Value) -> Result<EndSpikeFeature, String> {
         let crystal_beam_target = match json.get("crystal_beam_target").and_then(Value::as_array) {
             Some(v) if v.len() == 3 => {

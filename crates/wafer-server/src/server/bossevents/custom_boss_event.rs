@@ -40,7 +40,7 @@ impl CustomBossEvent {
     }
 
     pub fn remove_player(&mut self, levels: &[ServerLevel], player: EntityId) {
-        self.event.remove_player(levels, player);
+        self.event.remove_player(player);
         let uuid = player_in(levels, player).profile.uuid;
         if let Some(i) = self.players.iter().position(|&p| p == uuid) {
             self.players.remove(i);
@@ -48,9 +48,9 @@ impl CustomBossEvent {
         }
     }
 
-    pub fn remove_all_players(&mut self, levels: &[ServerLevel]) {
+    pub fn remove_all_players(&mut self) {
         for player in self.event.players.clone() {
-            self.event.remove_player(levels, player);
+            self.event.remove_player(player);
         }
         if !self.players.is_empty() {
             self.players.clear();
@@ -58,15 +58,15 @@ impl CustomBossEvent {
         }
     }
 
-    pub fn set_value(&mut self, levels: &[ServerLevel], value: i32) {
+    pub fn set_value(&mut self, value: i32) {
         self.value = value;
-        self.event.set_progress(levels, mth::clamp_f(value as f32 / self.max as f32, 0.0, 1.0));
+        self.event.set_progress(mth::clamp_f(value as f32 / self.max as f32, 0.0, 1.0));
         self.dirty = true;
     }
 
-    pub fn set_max(&mut self, levels: &[ServerLevel], max: i32) {
+    pub fn set_max(&mut self, max: i32) {
         self.max = max;
-        self.event.set_progress(levels, mth::clamp_f(self.value as f32 / max as f32, 0.0, 1.0));
+        self.event.set_progress(mth::clamp_f(self.value as f32 / max as f32, 0.0, 1.0));
         self.dirty = true;
     }
 
@@ -103,8 +103,8 @@ impl CustomBossEvent {
         }
     }
 
-    pub fn on_player_disconnect(&mut self, levels: &[ServerLevel], player: EntityId) {
-        self.event.remove_player(levels, player);
+    pub fn on_player_disconnect(&mut self, player: EntityId) {
+        self.event.remove_player(player);
     }
 
     pub fn load(id: u128, custom_id: String, packed: &Nbt) -> Option<CustomBossEvent> {

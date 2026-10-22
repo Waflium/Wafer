@@ -157,7 +157,7 @@ impl ServerLevel {
             MobKind::Cat(_) => feline::cat::is_food(item_stack),
             MobKind::Parrot(_) => false,
             MobKind::Bee(_) => bee::bee::is_food(item_stack),
-            MobKind::Shulker(_) | MobKind::Wither(_) => false,
+            MobKind::Shulker(_) | MobKind::Wither(_) | MobKind::EnderDragon(_) => false,
             MobKind::Ocelot(_) => feline::ocelot::is_food(item_stack),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) => equine::abstract_horse::is_food(item_stack),
             MobKind::ZombieHorse(_) => equine::zombie_horse::is_food(item_stack),

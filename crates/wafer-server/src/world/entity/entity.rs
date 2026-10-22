@@ -842,10 +842,13 @@ impl ServerLevel {
     }
 
     pub fn entity_mut(&mut self, id: EntityId) -> &mut Entity {
-        match self.players.get_mut(&id) {
-            Some(p) => &mut p.entity,
-            None => self.entities.get_mut(&id).expect("entity in this level").entity_mut(),
+        if self.players.contains_key(&id) {
+            return &mut self.players.get_mut(&id).expect("a player").entity;
         }
+        if self.entities.contains_key(&id) {
+            return self.entities.get_mut(&id).expect("entity in this level").entity_mut();
+        }
+        self.dragon_part_entity_mut(id).expect("entity in this level")
     }
 
     pub fn is_player(&self, id: EntityId) -> bool {
@@ -1158,7 +1161,7 @@ impl ServerLevel {
             None => SoundSource::Players,
             Some(super::LevelEntity::ExperienceOrb(_)) => SoundSource::Ambient,
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
-            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Hoglin(_) | super::mob::MobKind::Shulker(_)) => SoundSource::Hostile,
+            Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Hoglin(_) | super::mob::MobKind::Shulker(_) | super::mob::MobKind::EnderDragon(_)) => SoundSource::Hostile,
             Some(super::LevelEntity::Projectile(projectile)) if matches!(projectile.kind, super::projectile::projectile::ProjectileKind::ShulkerBullet(_)) => SoundSource::Hostile,
             Some(super::LevelEntity::Mob(mob)) if mob.sulfur_cube().is_some() => SoundSource::Neutral,
             Some(super::LevelEntity::Mob(mob)) if mob.is_cube_mob() => self.abstract_cube_mob_get_sound_source(),
@@ -1876,7 +1879,7 @@ impl ServerLevel {
         }
     }
 
-    fn process_flapping_movement(&mut self, id: EntityId) {
+    pub(crate) fn process_flapping_movement(&mut self, id: EntityId) {
         if self.is_flapping(id) {
             self.on_flap(id);
             if self.movement_emission(id).emits_events() {
@@ -1895,6 +1898,7 @@ impl ServerLevel {
             super::mob::MobKind::Allay(_) => !mob.entity.on_ground,
             super::mob::MobKind::Phantom(_) => (super::monster::phantom::get_unique_flap_tick_offset(id).wrapping_add(mob.entity.tick_count)) % super::monster::phantom::TICKS_PER_FLAP == 0,
             super::mob::MobKind::Vex(_) => mob.entity.tick_count % super::monster::vex::TICKS_PER_FLAP == 0,
+            super::mob::MobKind::EnderDragon(ref dragon) => dragon.is_flapping(),
             _ => false,
         }
     }
@@ -2709,6 +2713,7 @@ impl ServerLevel {
                 Some(super::mob::MobKind::Bee(_)) => return self.bee_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Shulker(_)) => return self.shulker_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Wither(_)) => return self.wither_hurt_server(id, source, damage),
+                Some(super::mob::MobKind::EnderDragon(_)) => return self.ender_dragon_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Zoglin(_)) => return self.zoglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::Piglin(_)) => return self.piglin_hurt_server(id, source, damage),
                 Some(super::mob::MobKind::PiglinBrute(_)) => return self.piglin_brute_hurt_server(id, source, damage),
@@ -2730,6 +2735,7 @@ impl ServerLevel {
             Some(LevelEntity::Display(_)) => super::display::Display::hurt_server(),
             Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_hurt_server(id, source, damage),
             Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)) => self.vehicle_entity_hurt_server(id, source, damage),
+            None if self.dragon_parts.contains_key(id) => self.ender_dragon_part_hurt_server(id, source, damage),
             _ => false,
         }
     }
@@ -2947,8 +2953,16 @@ impl ServerLevel {
             self.block_attached_entity_kill(id, Some(id));
             return;
         }
+        if self.is_ender_dragon(id) {
+            self.ender_dragon_kill(id);
+            return;
+        }
         if self.is_living(id) {
             self.hurt_server(id, DamageSource::new(damage_types::GENERIC_KILL), f32::MAX);
+            return;
+        }
+        if matches!(self.entities.get(&id), Some(LevelEntity::EndCrystal(_))) {
+            self.end_crystal_kill(id);
             return;
         }
         self.entity_kill(id);
@@ -3110,6 +3124,7 @@ impl ServerLevel {
                     super::mob::MobKind::Bee(_) => "Bee",
                     super::mob::MobKind::Shulker(_) => "Shulker",
                     super::mob::MobKind::Wither(_) => "WitherBoss",
+                    super::mob::MobKind::EnderDragon(_) => "EnderDragon",
                     super::mob::MobKind::Ocelot(_) => "Ocelot",
                     super::mob::MobKind::Horse(_) => "Horse",
                     super::mob::MobKind::Donkey(_) => "Donkey",
@@ -3330,7 +3345,7 @@ impl ServerLevel {
     }
 
     pub fn can_use_portal(&self, id: EntityId, ignore_passenger: bool) -> bool {
-        if self.is_wither(id) {
+        if self.is_wither(id) || self.is_ender_dragon(id) {
             return false;
         }
         if self.is_creaking(id) && !self.creaking_can_use_portal(id) {
@@ -3785,7 +3800,7 @@ impl ServerLevel {
     }
 
     fn can_ride(&self, id: EntityId, _vehicle: EntityId) -> bool {
-        if self.is_wither(id) || self.is_warden(id) {
+        if self.is_wither(id) || self.is_warden(id) || self.is_ender_dragon(id) {
             return false;
         }
         let e = self.entity(id);
@@ -4278,6 +4293,7 @@ impl ServerLevel {
         }
         match self.entities.get(&id) {
             Some(LevelEntity::ArmorStand(stand)) => !stand.entity.is_removed() && !stand.is_marker(),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::EnderDragon(_)) => false,
             None | Some(LevelEntity::Mob(_) | LevelEntity::Mannequin(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) | LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_)) => {
                 !self.entity(id).is_removed()
             }

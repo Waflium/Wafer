@@ -144,6 +144,7 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:shulker",
     "minecraft:shulker_bullet",
     "minecraft:wither",
+    "minecraft:ender_dragon",
     "minecraft:wither_skull",
     "minecraft:dragon_fireball",
     "minecraft:ominous_item_spawner",

@@ -1137,6 +1137,7 @@ impl ServerLevel {
             Some(MobKind::Breeze(_)) => self.breeze_can_attack(id, target),
             Some(MobKind::Warden(_)) => self.warden_can_target_entity(id, Some(target)),
             Some(MobKind::Dolphin(_)) => self.dolphin_can_attack(id, target),
+            Some(MobKind::EnderDragon(_)) => self.ender_dragon_can_attack(target),
             Some(MobKind::Vindicator(_) | MobKind::Pillager(_) | MobKind::Evoker(_) | MobKind::Illusioner(_)) => self.abstract_illager_can_attack(id, target),
             Some(_) => self.mob_can_attack(id, target),
             None => self.living_entity_can_attack(id, target),
@@ -1643,6 +1644,9 @@ impl ServerLevel {
         if self.is_creaking(id) && !self.creaking_can_move(id) {
             return;
         }
+        if self.is_ender_dragon(id) && self.dragon_current_phase(id).is_sitting() {
+            return;
+        }
         if self.mob(id).is_some_and(|mob| mob.sulfur_cube().is_some()) && self.sulfur_cube_knockback(id, power, xd, zd, source, damage, comes_from_effect) {
             return;
         }
@@ -1763,7 +1767,7 @@ impl ServerLevel {
             let message = self.death_message(id);
             info!("Named entity {} died: {}", self.entity_to_string(id), message.get_string());
         }
-        self.living_mut(id).dead = true;
+        self.handle_killing_blow(id);
         if source.causing_entity.is_none_or(|source_entity| self.killed_entity(source_entity, id, &source)) {
             self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_DIE);
             self.drop_all_death_loot(id, &source);
@@ -1923,6 +1927,7 @@ impl ServerLevel {
             Some(MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Shulker(_) | MobKind::Allay(_)) => self.mob_get_base_experience_reward(id),
             Some(MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_)) => self.water_animal_get_base_experience_reward(id),
             Some(MobKind::Villager(_)) => self.mob_get_base_experience_reward(id),
+            Some(MobKind::Wither(_) | MobKind::EnderDragon(_)) => self.mob_get_base_experience_reward(id),
             Some(_) => self.animal_get_base_experience_reward(id),
             None => 0,
         }
@@ -2247,8 +2252,20 @@ impl ServerLevel {
         if oxygen_bonus > 0.0 && self.entity_mut(id).random.next_double() >= 1.0 / (oxygen_bonus + 1.0) { supply } else { supply - 1 }
     }
 
+    fn handle_killing_blow(&mut self, id: EntityId) {
+        if self.is_ender_dragon(id) {
+            self.ender_dragon_handle_killing_blow(id);
+        } else {
+            self.living_mut(id).dead = true;
+        }
+    }
+
     fn tick_death(&mut self, id: EntityId) {
         if self.is_creaking(id) && self.creaking_tick_death(id) {
+            return;
+        }
+        if self.is_ender_dragon(id) {
+            self.ender_dragon_tick_death(id);
             return;
         }
         let living = self.living_mut(id);
@@ -2538,6 +2555,7 @@ impl ServerLevel {
             Some(MobKind::Parrot(_)) => self.parrot_ai_step(id),
             Some(MobKind::Bee(_)) => self.bee_ai_step(id),
             Some(MobKind::Wither(_)) => self.wither_ai_step(id),
+            Some(MobKind::EnderDragon(_)) => self.ender_dragon_ai_step(id),
             Some(MobKind::Rabbit(_)) => self.rabbit_ai_step(id),
             Some(MobKind::Turtle(_)) => self.turtle_ai_step(id),
             Some(_) => self.animal_ai_step(id),
@@ -3380,7 +3398,7 @@ impl ServerLevel {
     }
 
     pub fn add_effect(&mut self, id: EntityId, new_effect: MobEffectInstance, source: Option<EntityId>) -> bool {
-        if self.is_wither(id) {
+        if self.is_wither(id) || self.is_ender_dragon(id) {
             return false;
         }
         if !self.can_be_affected(id, &new_effect) {

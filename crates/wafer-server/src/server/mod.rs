@@ -121,6 +121,10 @@ fn create_level(config: &ServerConfig, world_dir: Option<&WorldDir>, dimension: 
     level.world_border = WorldBorder::load(world_dir.map(|d| d.dimension_data_folder(dimension)));
     level.world_border.set_absolute_max_size(config.max_world_size);
     level.raids = crate::world::entity::raid::raids::Raids::load(world_dir.map(|d| d.dimension_data_folder(dimension)));
+    if dimension_type.has_ender_dragon_fight {
+        level.dragon_fight = Some(crate::world::level::dimension::end::ender_dragon_fight::EnderDragonFight::load(world_dir.map(|d| d.dimension_data_folder(dimension))));
+        level.dragon_fight_init(seed, wafer_core::BlockPos::ZERO);
+    }
     level.level_name = config.level_name.clone();
     level.allow_flight = config.allow_flight;
     level.set_max_chained_neighbor_updates(config.max_chained_neighbor_updates);
@@ -1390,7 +1394,7 @@ impl Server {
         self.player_list.retain(|&p| p != id);
         self.scoreboard.borrow_mut().server.remove_connection(id);
         self.update_player_names_array();
-        self.custom_boss_events.on_player_disconnect(&self.levels, id);
+        self.custom_boss_events.on_player_disconnect(id);
         self.save_player_data(&saved, &player);
         self.notification_manager.player_left(&NameAndId { id: player.profile.uuid, name: player.profile.name.clone() });
         for other in self.players() {

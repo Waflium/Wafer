@@ -91,7 +91,7 @@ impl KineticWeapon {
             .right()
             .unwrap_or_default();
         for hit_result in hits {
-            let other_entity = hit_result.entity;
+            let other_entity = level.dragon_part_parent(hit_result.entity).unwrap_or(hit_result.entity);
             let was_stabbed = level.was_recently_stabbed(living_entity, other_entity, self.contact_cooldown_ticks);
             if was_stabbed {
                 continue;

@@ -187,6 +187,8 @@ pub struct ServerLevel {
     pub chunk_map: ChunkMap,
     pub players: FastIndexMap<EntityId, ServerPlayer>,
     pub entities: FastIndexMap<EntityId, LevelEntity>,
+    pub dragon_parts: wafer_core::fastutil::OpenHashMap<i32, (EntityId, usize)>,
+    pub dragon_fight: Option<crate::world::level::dimension::end::ender_dragon_fight::EnderDragonFight>,
     pub entity_manager: PersistentEntitySectionManager,
     pub(crate) tick_list: EntityTickList,
     pub(crate) removed_entities: Vec<EntityId>,
@@ -278,6 +280,8 @@ impl ServerLevel {
             chunk_map: ChunkMap::new(view_distance),
             players: FastIndexMap::default(),
             entities: FastIndexMap::default(),
+            dragon_parts: wafer_core::fastutil::OpenHashMap::new(),
+            dragon_fight: None,
             entity_manager: PersistentEntitySectionManager::new(entity_storage),
             tick_list: EntityTickList::default(),
             removed_entities: Vec::new(),
@@ -366,6 +370,9 @@ impl ServerLevel {
     fn save_level_data(&mut self, dir: &WorldDir) {
         crate::server::log_save_failure("world_border.dat", self.world_border.save());
         crate::server::log_save_failure("raids.dat", self.raids.save());
+        if let Some(fight) = &mut self.dragon_fight {
+            crate::server::log_save_failure("ender_dragon_fight.dat", fight.save());
+        }
         let tickets = &mut self.chunks.distance_manager.ticket_storage;
         if tickets.dirty {
             let file = Nbt::Compound(vec![("data".into(), tickets.to_nbt()), ("DataVersion".into(), Nbt::Int(wafer_data::WORLD_VERSION))]);
@@ -580,7 +587,10 @@ impl ServerLevel {
     pub fn entity_ref(&self, id: EntityId) -> Option<&Entity> {
         match self.players.get(&id) {
             Some(p) => Some(&p.entity),
-            None => self.entities.get(&id).map(LevelEntity::entity),
+            None => match self.entities.get(&id) {
+                Some(entity) => Some(entity.entity()),
+                None => self.dragon_part_entity(id),
+            },
         }
     }
 
@@ -1280,6 +1290,11 @@ impl ServerLevel {
                 }
             }
         });
+        for (part, &(parent, _)) in self.dragon_parts.iter() {
+            if Some(part) != except && Some(parent) != except && selector(self, part) && self.dragon_part_entity(part).is_some_and(|e| area.intersects(&e.bounding_box())) {
+                found.push(part);
+            }
+        }
         found
     }
 
@@ -1446,6 +1461,9 @@ impl ServerLevel {
             self.empty_time += 1;
         }
         if self.empty_time < 300 {
+            if self.dragon_fight.is_some() && runs {
+                self.dragon_fight_tick();
+            }
             self.entity_tick_range = Some((0, self.tick_list.begin_iteration()));
         }
     }
@@ -1464,6 +1482,7 @@ impl ServerLevel {
                 } else if !self.tick_rate_manager.is_entity_frozen() {
                     if self.is_wither(id) {
                         self.wither_check_despawn(id);
+                    } else if self.is_ender_dragon(id) {
                     } else if self.is_mob(id) {
                         self.check_mob_despawn(id);
                     } else if self.is_shulker_bullet(id) {

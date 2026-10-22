@@ -36,6 +36,7 @@ pub mod snowball_item;
 pub mod wind_charge_item;
 pub mod spyglass_item;
 pub mod enchantment;
+pub mod end_crystal_item;
 pub mod ender_eye_item;
 pub mod flint_and_steel_item;
 pub mod food_on_a_stick_item;
@@ -151,6 +152,7 @@ fn item_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand,
         Some(&"CushionItem") => return cushion_item::use_on(level, player, hand, hit, stack),
         Some(&"HangingEntityItem" | &"ItemFrameItem") => return hanging_entity_item::use_on(level, player, hand, hit, stack),
         Some(&"HoneycombItem") => return honeycomb_item::use_on(level, player, hand, hit, stack),
+        Some(&"EndCrystalItem") => return end_crystal_item::use_on(level, player, hand, hit, stack),
         Some(&"EnderEyeItem") => return ender_eye_item::use_on(level, player, hand, hit, stack),
         Some(&"FireworkRocketItem") => return firework_rocket_item::use_on(level, player, hand, hit, stack),
         Some(&"PotionItem") => return potion_item::use_on(level, player, hand, hit, stack),

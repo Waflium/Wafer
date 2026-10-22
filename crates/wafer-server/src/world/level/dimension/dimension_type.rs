@@ -22,3 +22,6 @@ pub fn monster_spawn_light_test(dimension: &'static DimensionType) -> &'static I
 pub fn monster_spawn_block_light_limit(dimension: &'static DimensionType) -> i32 {
     dimension.monster_spawn_block_light_limit
 }
+
+pub const MIN_Y: i32 = -2032;
+pub const MAX_Y: i32 = 2031;

@@ -489,6 +489,7 @@ impl ServerLevel {
             "minecraft:dragon_fireball" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::dragon_fireball::DragonFireball::of_type())),
             "minecraft:wither_skull" => LevelEntity::Projectile(Box::new(super::projectile::hurtingprojectile::wither_skull::WitherSkull::of_type())),
             "minecraft:wither" => LevelEntity::Mob(Box::new(super::boss::wither::wither_boss::WitherBoss::create())),
+            "minecraft:ender_dragon" => LevelEntity::Mob(Box::new(super::boss::enderdragon::ender_dragon::EnderDragon::create())),
             "minecraft:shulker_bullet" => LevelEntity::Projectile(Box::new(super::projectile::shulker_bullet::ShulkerBullet::of_type())),
             "minecraft:shulker" => LevelEntity::Mob(Box::new(super::monster::shulker::Shulker::create())),
             "minecraft:llama_spit" => LevelEntity::Projectile(Box::new(super::projectile::llama_spit::LlamaSpit::of_type())),

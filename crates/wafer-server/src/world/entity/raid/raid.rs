@@ -430,7 +430,7 @@ impl ServerLevel {
             }
             for &player in &current_players_in_raid {
                 if !new_players_in_raid.contains(&player) {
-                    raid_event.remove_player(std::slice::from_ref(level), player);
+                    raid_event.remove_player(player);
                 }
             }
         });
@@ -452,29 +452,27 @@ impl ServerLevel {
         let Some(raid) = self.raid_mut(raid_id) else { return };
         raid.active = false;
         raid.status = RaidStatus::Stopped;
-        self.with_raid_event(raid_id, |raid_event, level| {
-            for player in raid_event.players.clone() {
-                raid_event.remove_player(std::slice::from_ref(level), player);
-            }
-        });
+        for player in raid.raid_event.players.clone() {
+            raid.raid_event.remove_player(player);
+        }
     }
 
     fn raid_set_name(&mut self, raid_id: i32, name: Component) {
-        self.with_raid_event(raid_id, |raid_event, level| {
-            raid_event.set_name(std::slice::from_ref(level), name);
-        });
+        if let Some(raid) = self.raid_mut(raid_id) {
+            raid.raid_event.set_name(name);
+        }
     }
 
     fn raid_set_progress(&mut self, raid_id: i32, progress: f32) {
-        self.with_raid_event(raid_id, |raid_event, level| {
-            raid_event.set_progress(std::slice::from_ref(level), progress);
-        });
+        if let Some(raid) = self.raid_mut(raid_id) {
+            raid.raid_event.set_progress(progress);
+        }
     }
 
     fn raid_set_visible(&mut self, raid_id: i32, visible: bool) {
-        self.with_raid_event(raid_id, |raid_event, level| {
-            raid_event.set_visible(std::slice::from_ref(level), visible);
-        });
+        if let Some(raid) = self.raid_mut(raid_id) {
+            raid.raid_event.set_visible(visible);
+        }
     }
 
     pub fn raid_tick(&mut self, raid_id: i32) {

@@ -838,6 +838,19 @@ pub static ZOMBIFIED_PIGLIN_ATTRIBUTES: AttributeSupplier = {
     )
 };
 
+pub static ENDER_DRAGON_ATTRIBUTES: AttributeSupplier = {
+    use Attribute::*;
+    AttributeSupplier::of(
+        &[
+            MaxHealth, KnockbackResistance, MovementSpeed, Armor, ArmorToughness, MaxAbsorption, StepHeight, Scale, Gravity, SafeFallDistance,
+            FallDamageMultiplier, JumpStrength, EntityInteractionRange, OxygenBonus, BurningTime, ExplosionKnockbackResistance, WaterMovementEfficiency,
+            MovementEfficiency, AttackKnockback, CameraDistance, WaypointTransmitRange, Bounciness, AirDragModifier, FrictionModifier, NameTagDistance,
+            BelowNameDistance, FollowRange,
+        ],
+        &[(FollowRange, 16.0), (MaxHealth, 200.0), (CameraDistance, 16.0)],
+    )
+};
+
 pub static WITHER_ATTRIBUTES: AttributeSupplier = {
     use Attribute::*;
     AttributeSupplier::of(

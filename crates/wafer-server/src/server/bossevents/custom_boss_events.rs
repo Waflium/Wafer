@@ -79,9 +79,9 @@ impl CustomBossEvents {
         }
     }
 
-    pub fn on_player_disconnect(&mut self, levels: &[ServerLevel], player: EntityId) {
+    pub fn on_player_disconnect(&mut self, player: EntityId) {
         for event in self.events.values_mut() {
-            event.on_player_disconnect(levels, player);
+            event.on_player_disconnect(player);
         }
     }
 

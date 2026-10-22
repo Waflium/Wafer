@@ -133,11 +133,21 @@ impl ServerLevel {
         if self.is_living(id) && self.is_transmitting_waypoint(id) {
             self.get_waypoint_manager().track_waypoint(self, id);
         }
+        if self.is_ender_dragon(id) {
+            for (index, part) in self.ender_dragon(id).sub_entities.iter().map(|part| part.entity.id).enumerate().collect::<Vec<_>>() {
+                self.dragon_parts.insert(part, (id, index));
+            }
+        }
         self.update_dynamic_game_event_listener(id, DynamicListenerAction::Add);
     }
 
     fn stop_tracking(&mut self, id: EntityId) {
         self.untrack_entity(id);
+        if self.is_ender_dragon(id) {
+            for part in self.ender_dragon(id).sub_entities.iter().map(|part| part.entity.id).collect::<Vec<_>>() {
+                self.dragon_parts.remove(part);
+            }
+        }
         self.update_dynamic_game_event_listener(id, DynamicListenerAction::Remove);
         let uuid = self.entities[&id].entity().uuid;
         self.entity_manager.visible_entity_storage.remove(id, uuid);

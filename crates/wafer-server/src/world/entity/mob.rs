@@ -173,6 +173,7 @@ pub enum MobKind {
     Bee(super::animal::bee::bee::Bee),
     Shulker(super::monster::shulker::Shulker),
     Wither(Box<super::boss::wither::wither_boss::WitherBoss>),
+    EnderDragon(Box<super::boss::enderdragon::ender_dragon::EnderDragon>),
     SkeletonHorse(SkeletonHorse),
     ZombieHorse(ZombieHorse),
     Llama(Llama),
@@ -340,6 +341,7 @@ impl Mob {
             MobKind::Bee(_) => super::animal::bee::bee::Bee::register_goals(&mut self.ai, &mut self.entity.random),
             MobKind::Shulker(_) => super::monster::shulker::Shulker::register_goals(&mut self.ai),
             MobKind::Wither(_) => super::boss::wither::wither_boss::WitherBoss::register_goals(&mut self.ai),
+            MobKind::EnderDragon(_) => {}
             MobKind::Ocelot(_) => Ocelot::register_goals(&mut self.ai),
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) => AbstractHorse::register_goals(&mut self.ai, AbstractHorse::add_behaviour_goals),
             MobKind::SkeletonHorse(_) => AbstractHorse::register_goals(&mut self.ai, |_| {}),
@@ -423,6 +425,7 @@ impl Mob {
         let scale = match self.kind {
             MobKind::Shulker(_) => super::monster::shulker::sanitize_scale(scale),
             MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::sanitize_scale(scale),
+            MobKind::EnderDragon(_) => 1.0,
             _ => scale,
         };
         default_dimensions.scale(scale)
@@ -952,7 +955,7 @@ impl Mob {
             MobKind::Cat(cat) => Some(&cat.tamable_animal.animal),
             MobKind::Parrot(parrot) => Some(&parrot.shoulder_riding_entity.tamable_animal.animal),
             MobKind::Bee(bee) => Some(&bee.animal),
-            MobKind::Shulker(_) | MobKind::Wither(_) => None,
+            MobKind::Shulker(_) | MobKind::Wither(_) | MobKind::EnderDragon(_) => None,
             MobKind::Ocelot(ocelot) => Some(&ocelot.animal),
             MobKind::Villager(_) | MobKind::WanderingTrader(_) => None,
             MobKind::Fox(fox) => Some(&fox.animal),
@@ -1000,7 +1003,7 @@ impl Mob {
             MobKind::Cat(cat) => Some(&mut cat.tamable_animal.animal),
             MobKind::Parrot(parrot) => Some(&mut parrot.shoulder_riding_entity.tamable_animal.animal),
             MobKind::Bee(bee) => Some(&mut bee.animal),
-            MobKind::Shulker(_) | MobKind::Wither(_) => None,
+            MobKind::Shulker(_) | MobKind::Wither(_) | MobKind::EnderDragon(_) => None,
             MobKind::Ocelot(ocelot) => Some(&mut ocelot.animal),
             MobKind::Villager(_) | MobKind::WanderingTrader(_) => None,
             MobKind::Fox(fox) => Some(&mut fox.animal),
@@ -1103,7 +1106,7 @@ impl Mob {
             MobKind::Shulker(_) => {
                 self.apply_implicit_component_if_present(components, dc::SHULKER_COLOR);
             }
-            MobKind::Wither(_) => {}
+            MobKind::Wither(_) | MobKind::EnderDragon(_) => {}
             MobKind::Cat(_) => {
                 self.apply_implicit_component_if_present(components, dc::CAT_VARIANT);
                 self.apply_implicit_component_if_present(components, dc::CAT_SOUND_VARIANT);
@@ -1420,6 +1423,7 @@ impl Mob {
             MobKind::Bee(_) => super::animal::bee::bee::DIMENSIONS,
             MobKind::Shulker(_) => super::monster::shulker::DIMENSIONS,
             MobKind::Wither(_) => super::boss::wither::wither_boss::DIMENSIONS,
+            MobKind::EnderDragon(_) => super::boss::enderdragon::ender_dragon::DIMENSIONS,
             MobKind::Ocelot(_) if self.is_baby() => ocelot::BABY_DIMENSIONS,
             MobKind::Ocelot(_) => ocelot::DIMENSIONS,
             MobKind::Horse(_) if self.is_baby() => horse::baby_dimensions(),
@@ -1524,6 +1528,7 @@ impl Mob {
             MobKind::Cat(_) => (0.0, 0.5125f32 as f64, 0.0),
             MobKind::Parrot(_) => (0.0, 0.4625f32 as f64, 0.0),
             MobKind::Bee(_) | MobKind::Shulker(_) | MobKind::Wither(_) => (0.0, self.default_dimensions().height as f64, 0.0),
+            MobKind::EnderDragon(_) => (0.0, 3.0, 0.0),
             MobKind::Ocelot(_) => (0.0, 0.6375f32 as f64, 0.0),
             MobKind::Fox(_) if baby => (0.0, 0.375f32 as f64, 0.0),
             MobKind::Fox(_) => (0.0, 0.6375, -0.25),
@@ -1726,6 +1731,7 @@ impl Mob {
             MobKind::Bee(_) => super::animal::bee::bee::Bee::add_additional_save_data(self, out),
             MobKind::Shulker(_) => super::monster::shulker::Shulker::add_additional_save_data(self, out),
             MobKind::Wither(_) => super::boss::wither::wither_boss::WitherBoss::add_additional_save_data(self, out),
+            MobKind::EnderDragon(_) => super::boss::enderdragon::ender_dragon::EnderDragon::add_additional_save_data(self, out),
             MobKind::Ocelot(_) => Ocelot::add_additional_save_data(self, out),
             MobKind::Horse(_) => Horse::add_additional_save_data(self, out),
             MobKind::SkeletonHorse(_) => SkeletonHorse::add_additional_save_data(self, out),
@@ -1908,7 +1914,7 @@ impl Mob {
                 AbstractFish::read_additional_save_data(self, nbt);
                 TropicalFish::read_additional_save_data(self, nbt);
             }
-            MobKind::Cat(_) | MobKind::Ocelot(_) | MobKind::Parrot(_) | MobKind::Bee(_) | MobKind::Shulker(_) | MobKind::Wither(_) => {}
+            MobKind::Cat(_) | MobKind::Ocelot(_) | MobKind::Parrot(_) | MobKind::Bee(_) | MobKind::Shulker(_) | MobKind::Wither(_) | MobKind::EnderDragon(_) => {}
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) | MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) | MobKind::HappyGhast(_) | MobKind::WanderingTrader(_) => {}
             MobKind::Axolotl(_) => Axolotl::read_additional_save_data(self, nbt),
             MobKind::Frog(_) => Frog::read_additional_save_data(self, nbt),
@@ -1927,6 +1933,7 @@ impl Mob {
             MobKind::Bee(_) => super::animal::bee::bee::Bee::read_additional_save_data(self, nbt),
             MobKind::Shulker(_) => super::monster::shulker::Shulker::read_additional_save_data(self, nbt),
             MobKind::Wither(_) => super::boss::wither::wither_boss::WitherBoss::read_additional_save_data(self, nbt),
+            MobKind::EnderDragon(_) => super::boss::enderdragon::ender_dragon::EnderDragon::read_additional_save_data(self, nbt),
             MobKind::Ocelot(_) => Ocelot::read_additional_save_data(self, nbt),
             MobKind::Horse(_) => Horse::read_additional_save_data(self, nbt),
             MobKind::SkeletonHorse(_) => SkeletonHorse::read_additional_save_data(self, nbt),
@@ -2066,6 +2073,7 @@ impl Mob {
             MobKind::Bee(_) => return None,
             MobKind::Shulker(_) => super::monster::shulker::get_ambient_sound(),
             MobKind::Wither(_) => super::boss::wither::wither_boss::get_ambient_sound(),
+            MobKind::EnderDragon(_) => super::boss::enderdragon::ender_dragon::get_ambient_sound(),
             MobKind::Ocelot(_) => Ocelot::get_ambient_sound(),
             MobKind::Horse(_) => horse::get_ambient_sound(self),
             MobKind::Donkey(_) => donkey::get_ambient_sound(),
@@ -2159,6 +2167,7 @@ impl Mob {
             MobKind::Bee(_) => super::animal::bee::bee::get_hurt_sound(),
             MobKind::Shulker(_) => super::monster::shulker::get_hurt_sound(&self.entity),
             MobKind::Wither(_) => super::boss::wither::wither_boss::get_hurt_sound(),
+            MobKind::EnderDragon(_) => super::boss::enderdragon::ender_dragon::get_hurt_sound(),
             MobKind::Ocelot(_) => Ocelot::get_hurt_sound(),
             MobKind::Horse(_) => horse::get_hurt_sound(self),
             MobKind::Donkey(_) => donkey::get_hurt_sound(),
@@ -2246,6 +2255,7 @@ impl Mob {
             MobKind::Bee(_) => super::animal::bee::bee::get_death_sound(),
             MobKind::Shulker(_) => super::monster::shulker::get_death_sound(),
             MobKind::Wither(_) => super::boss::wither::wither_boss::get_death_sound(),
+            MobKind::EnderDragon(_) => "minecraft:entity.generic.death",
             MobKind::Ocelot(_) => Ocelot::get_death_sound(),
             MobKind::Horse(_) => horse::get_death_sound(self),
             MobKind::Donkey(_) => donkey::get_death_sound(),
@@ -2309,7 +2319,7 @@ impl Mob {
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => return None,
             MobKind::Cat(_) | MobKind::Ocelot(_) => return None,
             MobKind::Parrot(_) => super::animal::parrot::parrot::get_step_sound(),
-            MobKind::Bee(_) | MobKind::Shulker(_) | MobKind::Wither(_) => return None,
+            MobKind::Bee(_) | MobKind::Shulker(_) | MobKind::Wither(_) | MobKind::EnderDragon(_) => return None,
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => return None,
             MobKind::Llama(_) | MobKind::TraderLlama(_) => llama::get_step_sound(),
             MobKind::Camel(_) | MobKind::CamelHusk(_) => return None,
@@ -2337,6 +2347,7 @@ impl Mob {
             MobKind::Horse(_) | MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_) | MobKind::Camel(_) | MobKind::CamelHusk(_) => abstract_horse::get_sound_volume(),
             MobKind::Ghast(_) => Ghast::get_sound_volume(),
             MobKind::HappyGhast(_) => super::animal::happyghast::happy_ghast::get_sound_volume(self.is_baby()),
+            MobKind::EnderDragon(_) => 5.0,
             _ => 1.0,
         }
     }
@@ -2509,7 +2520,7 @@ impl ServerLevel {
             MobKind::Cat(_) => self.cat_mob_interact(id, player, hand),
             MobKind::Parrot(_) => self.parrot_mob_interact(id, player, hand),
             MobKind::Bee(_) => self.bee_mob_interact(id, player, hand),
-            MobKind::Shulker(_) | MobKind::Wither(_) => self.mob_mob_interact(id, player, hand),
+            MobKind::Shulker(_) | MobKind::Wither(_) | MobKind::EnderDragon(_) => self.mob_mob_interact(id, player, hand),
             MobKind::Ocelot(_) => self.ocelot_mob_interact(id, player, hand),
             MobKind::Horse(_) => self.horse_mob_interact(id, player, hand),
             MobKind::SkeletonHorse(_) => self.skeleton_horse_mob_interact(id, player, hand),
@@ -3782,7 +3793,7 @@ pub fn finalize_spawn(
         MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) | MobKind::Tadpole(_) => {}
         MobKind::Cat(_) => return cat::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Parrot(_) => group_data = super::animal::parrot::parrot::finalize_spawn(level, mob, group_data),
-        MobKind::Bee(_) | MobKind::Shulker(_) | MobKind::Wither(_) => {}
+        MobKind::Bee(_) | MobKind::Shulker(_) | MobKind::Wither(_) | MobKind::EnderDragon(_) => {}
         MobKind::Ocelot(_) => return ocelot::finalize_spawn(level, mob, difficulty, spawn_reason, group_data),
         MobKind::Horse(_) => group_data = horse::finalize_spawn(level, mob, group_data),
         MobKind::Donkey(_) | MobKind::Mule(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) => group_data = abstract_horse::finalize_spawn(level, mob, group_data),
