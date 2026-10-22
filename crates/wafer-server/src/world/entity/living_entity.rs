@@ -457,6 +457,7 @@ impl ServerLevel {
     pub fn can_use_slot(&self, id: EntityId, slot: EquipmentSlot) -> bool {
         match self.mob(id).map(|mob| &mob.kind) {
             Some(MobKind::Pig(_)) => self.pig_can_use_slot(id, slot),
+            Some(MobKind::Strider(_)) => self.strider_can_use_slot(id, slot),
             Some(MobKind::Horse(_) | MobKind::SkeletonHorse(_) | MobKind::ZombieHorse(_) | MobKind::Llama(_) | MobKind::TraderLlama(_)) => true,
             Some(MobKind::Donkey(_) | MobKind::Mule(_)) => self.abstract_horse_can_use_slot(id, slot),
             _ => true,
@@ -466,6 +467,9 @@ impl ServerLevel {
     fn get_equip_sound(&self, id: EntityId, slot: EquipmentSlot, equippable: &crate::world::item::component::values::Equippable) -> Option<crate::sounds::sound_event::SoundEvent> {
         if slot == EquipmentSlot::Saddle && matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Pig(_))) {
             return Some(sound_event("minecraft:entity.pig.saddle").into());
+        }
+        if slot == EquipmentSlot::Saddle && self.is_strider(id) {
+            return Some(sound_event("minecraft:entity.strider.saddle").into());
         }
         if slot == EquipmentSlot::Saddle && self.is_abstract_horse(id) {
             return self.get_equip_sound_for_saddle(id).map(Into::into);
@@ -2269,6 +2273,8 @@ impl ServerLevel {
             self.abstract_horse_tick_ridden(id, controller, ridden_input);
         } else if self.is_pig(id) {
             self.pig_tick_ridden(id, controller, ridden_input);
+        } else if self.is_strider(id) {
+            self.strider_tick_ridden(id, controller, ridden_input);
         } else {
             self.living_entity_tick_ridden(id, controller, ridden_input);
         }
@@ -2281,6 +2287,8 @@ impl ServerLevel {
             self.abstract_horse_get_ridden_input(id, controller, self_input)
         } else if self.is_pig(id) {
             self.pig_get_ridden_input(id, controller, self_input)
+        } else if self.is_strider(id) {
+            self.strider_get_ridden_input(id, controller, self_input)
         } else {
             self_input
         }
@@ -2291,6 +2299,8 @@ impl ServerLevel {
             self.abstract_horse_get_ridden_speed(id, controller)
         } else if self.is_pig(id) {
             self.pig_get_ridden_speed(id, controller)
+        } else if self.is_strider(id) {
+            self.strider_get_ridden_speed(id, controller)
         } else {
             self.living(id).speed
         }
@@ -2667,13 +2677,22 @@ impl ServerLevel {
     }
 
     pub fn living_entity_travel(&mut self, id: EntityId, input: Vec3) {
-        if self.entity(id).is_in_liquid() && self.is_affected_by_fluids(id) {
+        let fluid_state = self.fluid_state(self.entity(id).block_position());
+        if self.should_travel_in_fluid(id, fluid_state) {
             self.travel_in_fluid(id, input);
         } else if self.entity(id).is_fall_flying() {
             self.travel_fall_flying(id, input);
         } else {
             self.travel_in_air(id, input);
         }
+    }
+
+    fn should_travel_in_fluid(&self, id: EntityId, fluid_state: wafer_data::FluidState) -> bool {
+        self.entity(id).is_in_liquid() && self.is_affected_by_fluids(id) && !self.mob(id).is_some_and(|mob| mob.can_stand_on_fluid(fluid_state.fluid))
+    }
+
+    pub fn get_liquid_collision_shape(&self, id: EntityId) -> Option<&'static wafer_core::shapes::VoxelShape> {
+        if self.is_strider(id) { Some(super::monster::strider::get_liquid_collision_shape()) } else { None }
     }
 
     fn travel_fall_flying(&mut self, id: EntityId, input: Vec3) {

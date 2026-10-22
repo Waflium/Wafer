@@ -32,6 +32,7 @@ pub enum TargetType {
     Zombie,
     AbstractIllager,
     Guardian,
+    Strider,
 }
 
 impl TargetType {
@@ -57,6 +58,7 @@ impl TargetType {
             TargetType::Zombie => level.mob(entity).is_some_and(|mob| mob.is_zombie()),
             TargetType::AbstractIllager => level.mob(entity).is_some_and(|mob| mob.is_abstract_illager()),
             TargetType::Guardian => level.is_guardian(entity),
+            TargetType::Strider => level.is_strider(entity),
         }
     }
 }

@@ -40,6 +40,7 @@ impl ServerLevel {
             MobKind::Cod(_) | MobKind::Salmon(_) | MobKind::Pufferfish(_) | MobKind::TropicalFish(_) => get_walk_target_value(),
             MobKind::Turtle(_) => self.turtle_get_walk_target_value(id, pos),
             MobKind::Hoglin(_) => self.hoglin_get_walk_target_value(id, pos),
+            MobKind::Strider(_) => self.strider_get_walk_target_value(id, pos),
             MobKind::Zoglin(_) => self.monster_get_walk_target_value(pos),
             MobKind::Tadpole(_) | MobKind::Axolotl(_) | MobKind::Villager(_) | MobKind::WanderingTrader(_) => get_walk_target_value(),
             _ => self.animal_get_walk_target_value(pos),

@@ -954,6 +954,7 @@ impl ServerLevel {
     pub fn is_on_fire(&self, id: EntityId) -> bool {
         match self.mob(id) {
             Some(mob) if matches!(mob.kind, super::mob::MobKind::Blaze(_)) => super::monster::blaze::Blaze::is_on_fire(&mob.entity),
+            Some(mob) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => false,
             _ => self.entity_is_on_fire(id),
         }
     }
@@ -1518,6 +1519,9 @@ impl ServerLevel {
     }
 
     pub fn check_fall_damage(&mut self, id: EntityId, ya: f64, on_ground: bool, on_state: BlockState, pos: BlockPos) {
+        if self.is_strider(id) && self.strider_check_fall_damage(id) {
+            return;
+        }
         if self.is_boat(id) {
             self.abstract_boat_check_fall_damage(id, ya, on_ground);
             return;
@@ -1806,7 +1810,13 @@ impl ServerLevel {
     }
 
     fn next_step(&self, id: EntityId) -> f32 {
-        if self.is_turtle(id) { super::animal::turtle::turtle::Turtle::next_step(self.entity(id)) } else { self.entity_next_step(id) }
+        if self.is_turtle(id) {
+            super::animal::turtle::turtle::Turtle::next_step(self.entity(id))
+        } else if self.is_strider(id) {
+            super::monster::strider::next_step(self.entity(id))
+        } else {
+            self.entity_next_step(id)
+        }
     }
 
     fn entity_next_step(&self, id: EntityId) -> f32 {
@@ -1853,6 +1863,10 @@ impl ServerLevel {
         }
         if self.is_abstract_horse(id) {
             self.abstract_horse_play_step_sound(id, pos, state);
+            return;
+        }
+        if self.is_strider(id) {
+            self.strider_play_step_sound(id);
             return;
         }
         if let Some(sound) = self.mob(id).and_then(|mob| mob.get_step_sound()) {
@@ -2837,6 +2851,7 @@ impl ServerLevel {
                     super::mob::MobKind::Parched(_) => "Parched",
                     super::mob::MobKind::Hoglin(_) => "Hoglin",
                     super::mob::MobKind::Panda(_) => "Panda",
+                    super::mob::MobKind::Strider(_) => "Strider",
                     super::mob::MobKind::Zoglin(_) => "Zoglin",
                     super::mob::MobKind::Piglin(_) => "Piglin",
                     super::mob::MobKind::PiglinBrute(_) => "PiglinBrute",
@@ -3445,6 +3460,7 @@ impl ServerLevel {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_get_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Pig(_)) => self.pig_get_controlling_passenger(id),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_get_controlling_passenger(id),
             Some(LevelEntity::Mob(_)) => self.mob_get_controlling_passenger(id),
             _ => None,
         }
@@ -3535,6 +3551,7 @@ impl ServerLevel {
         match self.entities.get(&id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_can_add_passenger(id),
             Some(LevelEntity::Marker(_)) => super::marker::Marker::can_add_passenger(),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_can_add_passenger(id),
             _ => self.passengers(id).is_empty(),
         }
     }
@@ -3698,6 +3715,8 @@ impl ServerLevel {
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_dismount_location_for_passenger(id, passenger),
             Some(LevelEntity::Boat(_)) => self.abstract_boat_dismount_location_for_passenger(id, passenger),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_dismount_location_for_passenger(id, passenger),
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Strider(_)) => self.strider_dismount_location_for_passenger(id, passenger),
+            Some(LevelEntity::Mob(mob)) if mob.animal().is_some() => self.animal_dismount_location_for_passenger(id, passenger),
             _ => self.entity_dismount_location_for_passenger(id, passenger),
         }
     }

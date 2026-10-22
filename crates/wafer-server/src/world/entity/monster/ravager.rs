@@ -34,7 +34,7 @@ const XP_REWARD: i32 = 20;
 const EVENT_ATTACK: u8 = 4;
 const EVENT_STUNNED: u8 = 39;
 const EVENT_ROAR: u8 = 69;
-pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(1.95, 2.2).with_passenger_attachments(&[Vec3::new(0.0, 2.2625f32 as f64, -0.0625f32 as f64)]);
+pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(1.95, 2.2).with_passenger_attachments(&[Vec3::new(0.0, 2.2625, -0.0625)]);
 
 #[derive(Default)]
 pub struct Ravager {

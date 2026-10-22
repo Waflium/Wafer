@@ -226,6 +226,7 @@ pub enum Goal {
     CatTempt(CatTemptGoal),
     CatLieOnBlock(CatLieOnBlockGoal),
     CatSitOnBlock(CatSitOnBlockGoal),
+    StriderGoToLava(crate::world::entity::monster::strider::StriderGoToLavaGoal),
     OcelotAttack(OcelotAttackGoal),
     OcelotAvoidEntity(OcelotAvoidEntityGoal),
     OcelotTempt(OcelotTemptGoal),
@@ -364,6 +365,7 @@ impl Goal {
             Goal::CatTempt(goal) => goal.can_use(level, mob),
             Goal::CatLieOnBlock(goal) => goal.can_use(level, mob),
             Goal::CatSitOnBlock(goal) => goal.can_use(level, mob),
+            Goal::StriderGoToLava(goal) => goal.can_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_use(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.can_use(level, mob),
@@ -521,6 +523,7 @@ impl Goal {
             Goal::CatTempt(goal) => goal.can_continue_to_use(level, mob),
             Goal::CatLieOnBlock(goal) => goal.can_continue_to_use(level),
             Goal::CatSitOnBlock(goal) => goal.can_continue_to_use(level),
+            Goal::StriderGoToLava(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotAttack(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.can_continue_to_use(level, mob),
             Goal::OcelotTempt(goal) => goal.can_continue_to_use(level, mob),
@@ -673,6 +676,7 @@ impl Goal {
             Goal::CatTempt(goal) => goal.tempt_goal.start(level),
             Goal::CatLieOnBlock(goal) => goal.start(level, mob),
             Goal::CatSitOnBlock(goal) => goal.start(level, mob),
+            Goal::StriderGoToLava(goal) => goal.start(level, mob),
             Goal::OcelotAttack(_) => {}
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.start(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.start(level),
@@ -739,7 +743,7 @@ impl Goal {
 
     pub fn stop(&mut self, level: &mut ServerLevel, mob: EntityId) {
         match self {
-            Goal::Float(_) | Goal::RandomLookAround(_) | Goal::FleeSun(_) => {}
+            Goal::Float(_) | Goal::RandomLookAround(_) | Goal::FleeSun(_) | Goal::StriderGoToLava(_) => {}
             Goal::Panic(goal) => goal.stop(),
             Goal::Breed(goal) => goal.stop(),
             Goal::Tempt(goal) => goal.stop(level, mob),
@@ -893,6 +897,7 @@ impl Goal {
                 | Goal::SquidFlee(_)
                 | Goal::CatLieOnBlock(_)
                 | Goal::CatSitOnBlock(_)
+                | Goal::StriderGoToLava(_)
                 | Goal::OcelotAttack(_)
                 | Goal::RandomStand(_)
                 | Goal::FoxFloat(_)
@@ -954,6 +959,7 @@ impl Goal {
             Goal::CatTempt(goal) => goal.tick(level, mob, adjusted_tick_delay(600), adjusted_tick_delay(500)),
             Goal::CatLieOnBlock(goal) => goal.tick(level, mob),
             Goal::CatSitOnBlock(goal) => goal.tick(level, mob),
+            Goal::StriderGoToLava(goal) => goal.tick(level, mob),
             Goal::OcelotAttack(goal) => goal.tick(level, mob),
             Goal::OcelotAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
             Goal::OcelotTempt(goal) => goal.tempt_goal.tick(level, mob),
@@ -1109,7 +1115,7 @@ impl Goal {
             Goal::CatAvoidEntity(_) | Goal::OcelotAvoidEntity(_) => Flag::Move.bit(),
             Goal::CatRelaxOnOwner(_) => 0,
             Goal::CatTempt(_) | Goal::OcelotTempt(_) | Goal::OcelotAttack(_) => Flag::Move.bit() | Flag::Look.bit(),
-            Goal::CatLieOnBlock(_) | Goal::CatSitOnBlock(_) => Flag::Move.bit() | Flag::Jump.bit(),
+            Goal::CatLieOnBlock(_) | Goal::CatSitOnBlock(_) | Goal::StriderGoToLava(_) => Flag::Move.bit() | Flag::Jump.bit(),
             Goal::RunAroundLikeCrazy(_) | Goal::MountPanic(_) => Flag::Move.bit(),
             Goal::RandomStand(_) => 0,
             Goal::FoxFloat(_) => Flag::Jump.bit(),

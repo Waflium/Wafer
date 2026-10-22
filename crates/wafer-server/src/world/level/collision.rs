@@ -164,7 +164,13 @@ pub fn for_each_block_collision<'c>(
             continue;
         }
         let liquid_block = always_collide_with_fluid && (state.is_block(blocks::WATER) || state.is_block(blocks::LAVA));
-        let (shape, shape_offset) = if liquid_block { (&*FULL_BLOCK, [0.0; 3]) } else { context.get_collision_shape(state, pos) };
+        let (shape, shape_offset) = if liquid_block {
+            (&*FULL_BLOCK, [0.0; 3])
+        } else if let Some(shape) = context.get_liquid_block_collision_shape(state, pos, || chunk.block_state(pos.above()).fluid_state()) {
+            (shape, [0.0; 3])
+        } else {
+            context.get_collision_shape(state, pos)
+        };
         let collider = Collider { shape, shape_offset, offset: [x as f64, y as f64, z as f64] };
         let collides = if liquid_block || state.is_collision_shape_full_block() {
             box_.intersects_bounds(x as f64, y as f64, z as f64, x as f64 + 1.0, y as f64 + 1.0, z as f64 + 1.0)

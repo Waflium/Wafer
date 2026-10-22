@@ -1035,6 +1035,10 @@ impl ServerLevel {
             self.award_stat(id, stats::BOAT_ONE_CM, distance);
         } else if self.is_pig(vehicle) {
             self.award_stat(id, stats::PIG_ONE_CM, distance);
+        } else if self.is_abstract_horse(vehicle) {
+            self.award_stat(id, stats::HORSE_ONE_CM, distance);
+        } else if self.is_strider(vehicle) {
+            self.award_stat(id, stats::STRIDER_ONE_CM, distance);
         }
     }
 

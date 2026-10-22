@@ -16,7 +16,7 @@ use crate::world::entity::{EntityDimensions, EntityId, sound_event};
 use crate::world::item::{ItemStack, item_utils};
 use crate::world::{InteractionHand, InteractionResult};
 
-pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 1.4).with_eye_height(1.3).with_passenger_attachments(&[wafer_core::Vec3::new(0.0, 1.36875, 0.0)]);
+pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 1.4).with_eye_height(1.3).with_passenger_attachments(&[wafer_core::Vec3::new(0.0, 1.36875f32 as f64, 0.0)]);
 
 #[derive(Default)]
 pub struct AbstractCow {

@@ -20,7 +20,7 @@ use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
 
 pub const LONG_JUMPING_DIMENSION_SCALE_FACTOR: f32 = 0.7;
-pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 1.3).with_passenger_attachments(&[Vec3::new(0.0, 1.1125, 0.0)]);
+pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 1.3).with_passenger_attachments(&[Vec3::new(0.0, 1.1125f32 as f64, 0.0)]);
 pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.45, 0.65).with_eye_height(0.59375).with_passenger_attachments(&[Vec3::new(0.0, 0.53125, 0.0)]);
 const ADULT_ATTACK_DAMAGE: i32 = 2;
 const BABY_ATTACK_DAMAGE: i32 = 1;

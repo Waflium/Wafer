@@ -77,7 +77,13 @@ impl WalkNodeEvaluator {
         let e = &mob.entity;
         let mut start_y = e.block_position().y;
         let mut block_state = context.get_block_state(BlockPos::containing(e.x(), start_y as f64, e.z()));
-        if self.node_evaluator.can_float && e.fluid_interaction.is_in_fluid(&fluid_tags::ENTITY_FLOATABLE) {
+        if mob.can_stand_on_fluid(block_state.fluid_state().fluid) {
+            while mob.can_stand_on_fluid(block_state.fluid_state().fluid) {
+                start_y += 1;
+                block_state = context.get_block_state(BlockPos::containing(e.x(), start_y as f64, e.z()));
+            }
+            start_y -= 1;
+        } else if self.node_evaluator.can_float && e.fluid_interaction.is_in_fluid(&fluid_tags::ENTITY_FLOATABLE) {
             while block_state.fluid_state().is(&fluid_tags::ENTITY_FLOATABLE) {
                 start_y += 1;
                 block_state = context.get_block_state(BlockPos::containing(e.x(), start_y as f64, e.z()));

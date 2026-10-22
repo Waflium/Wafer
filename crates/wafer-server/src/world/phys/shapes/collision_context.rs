@@ -2,8 +2,8 @@ use std::sync::LazyLock;
 
 use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, Axis, BlockPos};
-use wafer_data::properties::{BOTTOM, STABILITY_DISTANCE};
-use wafer_data::{BlockState, blocks};
+use wafer_data::properties::{BOTTOM, LEVEL, STABILITY_DISTANCE};
+use wafer_data::{BlockState, FluidState, blocks};
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::{Entity, EntityId, LevelEntity};
@@ -19,6 +19,8 @@ struct EntityProperties {
     fall_distance: f64,
     is_falling_block: bool,
     can_walk_on_powder_snow: bool,
+    liquid_collision_shape: Option<&'static VoxelShape>,
+    can_stand_on_lava: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -37,7 +39,7 @@ impl CollisionContext {
     }
 
     pub fn of_detached(entity: &Entity) -> CollisionContext {
-        let properties = EntityProperties { fall_distance: entity.fall_distance, is_falling_block: false, can_walk_on_powder_snow: false };
+        let properties = EntityProperties { fall_distance: entity.fall_distance, is_falling_block: false, can_walk_on_powder_snow: false, liquid_collision_shape: None, can_stand_on_lava: false };
         CollisionContext { descending: entity.is_shift_key_down(), placement: false, entity_bottom: entity.y(), entity: Some(properties) }
     }
 
@@ -58,6 +60,8 @@ impl CollisionContext {
             fall_distance: e.fall_distance,
             is_falling_block: matches!(level.entities.get(&entity), Some(LevelEntity::FallingBlock(_))),
             can_walk_on_powder_snow: level.can_entity_walk_on_powder_snow(entity),
+            liquid_collision_shape: level.get_liquid_collision_shape(entity),
+            can_stand_on_lava: level.mob(entity).is_some_and(|mob| mob.can_stand_on_fluid(wafer_data::Fluid::Lava)),
         };
         CollisionContext { descending: e.is_shift_key_down(), placement, entity_bottom, entity: Some(properties) }
     }
@@ -79,6 +83,17 @@ impl CollisionContext {
             return default_value;
         }
         self.entity_bottom > pos.y as f64 + max_y - 1.0e-5f32 as f64
+    }
+
+    pub fn get_liquid_block_collision_shape(&self, state: BlockState, pos: BlockPos, fluid_above: impl FnOnce() -> FluidState) -> Option<&'static VoxelShape> {
+        let entity = self.entity?;
+        let liquid_stable_shape = entity.liquid_collision_shape?;
+        if !(state.is_block(blocks::WATER) || state.is_block(blocks::LAVA)) || state.get(LEVEL) != 0 {
+            return None;
+        }
+        let fluid = state.fluid_state().fluid;
+        let can_stand_on_fluid = entity.can_stand_on_lava && fluid.is(&wafer_data::fluid_tags::LAVA) && !fluid_above().fluid.is_same(fluid);
+        (self.is_above(liquid_stable_shape, pos, true) && can_stand_on_fluid).then_some(liquid_stable_shape)
     }
 
     pub fn get_collision_shape(&self, state: BlockState, pos: BlockPos) -> (&'static VoxelShape, [f64; 3]) {

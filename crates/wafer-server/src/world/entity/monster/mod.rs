@@ -30,6 +30,7 @@ mod silverfish_tests;
 pub mod ravager;
 pub mod skeleton;
 pub mod spider;
+pub mod strider;
 pub mod warden;
 pub mod vex;
 pub mod witch;
@@ -43,3 +44,5 @@ pub mod zombie;
 mod phantom_tests;
 #[cfg(test)]
 mod guardian_tests;
+#[cfg(test)]
+mod strider_tests;

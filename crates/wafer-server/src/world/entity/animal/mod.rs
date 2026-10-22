@@ -72,6 +72,30 @@ pub fn remove_when_far_away(_dist_sqr: f64) -> bool {
 }
 
 impl ServerLevel {
+    pub fn animal_dismount_location_for_passenger(&mut self, id: EntityId, passenger: EntityId) -> Vec3 {
+        let forward = self.entity(id).get_motion_direction();
+        if forward.axis() == wafer_core::Axis::Y {
+            return self.entity_dismount_location_for_passenger(id, passenger);
+        }
+        let offsets = super::vehicle::dismount_helper::offsets_for_direction(forward);
+        let vehicle_block_pos = self.entity(id).block_position();
+        for &dismount_pose in self.dismount_poses(passenger) {
+            let pose_collision_box = self.local_bounds_for_pose(passenger, dismount_pose);
+            for offset_xz in offsets {
+                let target_block_pos = BlockPos::new(vehicle_block_pos.x + offset_xz[0], vehicle_block_pos.y, vehicle_block_pos.z + offset_xz[1]);
+                let block_floor_height = super::vehicle::dismount_helper::get_block_floor_height(self, target_block_pos);
+                if super::vehicle::dismount_helper::is_block_floor_valid(block_floor_height) {
+                    let location = Vec3::up_from_bottom_center_of(target_block_pos, block_floor_height);
+                    if super::vehicle::dismount_helper::can_dismount_to(self, passenger, &pose_collision_box.move_by(location.x, location.y, location.z)) {
+                        self.set_entity_pose(passenger, dismount_pose);
+                        return location;
+                    }
+                }
+            }
+        }
+        self.entity_dismount_location_for_passenger(id, passenger)
+    }
+
     pub fn animal_custom_server_ai_step(&mut self, id: EntityId) {
         let mob = self.mob_mut(id).expect("an animal");
         let age = mob.ageable().expect("an animal").age;
@@ -95,6 +119,7 @@ impl ServerLevel {
             MobKind::Goat(_) => goat::goat::is_food(item_stack),
             MobKind::Hoglin(_) => crate::world::entity::monster::hoglin::hoglin::is_food(item_stack),
             MobKind::Panda(_) => panda::panda::is_food(item_stack),
+            MobKind::Strider(_) => crate::world::entity::monster::strider::is_food(item_stack),
             MobKind::Zoglin(_) | MobKind::Piglin(_) | MobKind::PiglinBrute(_) | MobKind::Breeze(_) => false,
             MobKind::PolarBear(_) => false,
             MobKind::Armadillo(_) => armadillo::armadillo::is_food(item_stack),

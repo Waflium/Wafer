@@ -29,7 +29,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, entity_types, sou
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 
 const DATA_BABY_ID: usize = 16;
-pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(1.3964844, 1.4).with_passenger_attachments(&[Vec3::new(0.0, 1.49375, 0.0)]);
+pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(1.3964844, 1.4).with_passenger_attachments(&[Vec3::new(0.0, 1.49375f32 as f64, 0.0)]);
 pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.75, 0.85).with_eye_height(0.625).with_passenger_attachments(&[Vec3::new(0.0, 0.875, 0.0)]);
 const BABY_ATTACK_DAMAGE: f64 = 0.5;
 const ATTACK_INTERVAL: i32 = 40;

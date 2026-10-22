@@ -27,7 +27,7 @@ use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
 
 pub const DATA_WOOL_ID: usize = 18;
-pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 1.3).with_eye_height(1.235).with_passenger_attachments(&[wafer_core::Vec3::new(0.0, 1.2375, 0.0)]);
+pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 1.3).with_eye_height(1.235).with_passenger_attachments(&[wafer_core::Vec3::new(0.0, 1.2375f32 as f64, 0.0)]);
 pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.45, 0.65).with_eye_height(0.65625).with_passenger_attachments(&[wafer_core::Vec3::new(0.0, 0.5625, 0.0)]);
 const SHEAR_SHEEP: &str = "minecraft:shearing/sheep";
 
