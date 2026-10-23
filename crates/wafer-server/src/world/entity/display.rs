@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use wafer_core::joml::{Quaternionf, Vector3f};
 use wafer_core::math::Transformation;
 use wafer_data::{BlockState, blocks, registry, registry_id};
@@ -7,9 +5,13 @@ use wafer_protocol::nbt::Nbt;
 
 use super::data::{DataValue, entity_defaults};
 use super::{Entity, EntityDimensions, EntityId, LevelEntity};
+use crate::commands::arguments::selector::entity_world::LevelWorld;
+use crate::commands::brigadier::CommandSyntaxException;
 use crate::commands::source::{Anchor, CommandResultCallback, CommandSource, CommandSourceStack, Names};
 use crate::network::chat::{Component, component_utils};
 use crate::server::Server;
+use crate::server::level::ServerLevel;
+use crate::util::FastIndexMap;
 use crate::util::brightness::Brightness;
 use crate::util::codec::{self, DataResult};
 use crate::util::extra_codecs;
@@ -105,10 +107,6 @@ pub enum DisplayKind {
 pub struct Display {
     pub entity: Entity,
     pub kind: DisplayKind,
-}
-
-thread_local! {
-    static PENDING_TEXT_RESOLUTIONS: RefCell<Vec<EntityId>> = const { RefCell::new(Vec::new()) };
 }
 
 fn display_defaults() -> Vec<DataValue> {
@@ -297,8 +295,6 @@ impl Display {
                 if let DisplayKind::TextDisplay { pending_text } = &mut self.kind {
                     *pending_text = Some(text);
                 }
-                let id = self.entity.id;
-                PENDING_TEXT_RESOLUTIONS.with(|pending| pending.borrow_mut().push(id));
             } else {
                 self.entity.data.set(DATA_TEXT_ID, DataValue::Component(text.to_nbt()));
             }
@@ -328,8 +324,9 @@ impl Display {
                 output.push(("item_display".into(), Nbt::String(ItemDisplayContext::by_id(self.byte(DATA_ITEM_DISPLAY_ID)).get_serialized_name().into())));
             }
             DisplayKind::TextDisplay { .. } => {
-                let text = match self.entity.data.get(DATA_TEXT_ID) {
-                    DataValue::Component(text) => text.clone(),
+                let text = match (&self.kind, self.entity.data.get(DATA_TEXT_ID)) {
+                    (DisplayKind::TextDisplay { pending_text: Some(pending) }, _) => pending.to_nbt(),
+                    (_, DataValue::Component(text)) => text.clone(),
                     _ => Component::empty().to_nbt(),
                 };
                 output.push(("text".into(), text));
@@ -390,7 +387,7 @@ pub fn get_align(flags: i8) -> Align {
     }
 }
 
-impl crate::server::level::ServerLevel {
+impl ServerLevel {
     pub fn tick_display(&mut self, id: EntityId) {
         if let Some(vehicle) = self.entity(id).vehicle
             && self.entity_ref(vehicle).is_none_or(|vehicle| vehicle.is_removed())
@@ -400,51 +397,63 @@ impl crate::server::level::ServerLevel {
     }
 }
 
-impl Server {
-    pub fn resolve_pending_display_texts(&mut self) {
-        let pending = PENDING_TEXT_RESOLUTIONS.with(|pending| std::mem::take(&mut *pending.borrow_mut()));
-        for id in pending {
-            if let Some(level) = self.level_of(id) {
-                self.resolve_display_text(level, id);
+fn is_text_pending(entity: &LevelEntity) -> bool {
+    matches!(entity, LevelEntity::Display(Display { kind: DisplayKind::TextDisplay { pending_text: Some(_) }, .. }))
+}
+
+fn take_pending_text(entities: &mut FastIndexMap<EntityId, LevelEntity>, id: EntityId, level: usize) -> Option<(Component, CommandSourceStack)> {
+    let Some(LevelEntity::Display(display)) = entities.get_mut(&id) else { return None };
+    let DisplayKind::TextDisplay { pending_text } = &mut display.kind else { return None };
+    let text = pending_text.take()?;
+    let entity = &display.entity;
+    let source = CommandSourceStack {
+        source: CommandSource::Null,
+        position: entity.position(),
+        rotation: (entity.x_rot, entity.y_rot),
+        level,
+        permission: 2,
+        names: Names::ForEntity,
+        entity: Some(id),
+        silent: false,
+        anchor: Anchor::Feet,
+        callback: CommandResultCallback::default(),
+        signing_context: None,
+    };
+    Some((text, source))
+}
+
+fn store_resolved_text(entities: &mut FastIndexMap<EntityId, LevelEntity>, id: EntityId, text: &Component, resolved: Result<Component, CommandSyntaxException>) {
+    match resolved {
+        Ok(resolved) => {
+            if let Some(LevelEntity::Display(display)) = entities.get_mut(&id) {
+                display.entity.data.set(DATA_TEXT_ID, DataValue::Component(resolved.to_nbt()));
             }
         }
+        Err(e) => warn!("Failed to parse display entity text Optional[{}]\ncom.mojang.brigadier.exceptions.CommandSyntaxException: {}", text.java_to_string(), e.get_message()),
     }
+}
 
-    pub fn resolve_detached_display_text(&mut self, level: usize, entity: LevelEntity) -> LevelEntity {
-        if !matches!(&entity, LevelEntity::Display(Display { kind: DisplayKind::TextDisplay { pending_text: Some(_) }, .. })) {
+impl ServerLevel {
+    pub fn resolve_display_text_detached(&mut self, entity: LevelEntity) -> LevelEntity {
+        if !is_text_pending(&entity) {
             return entity;
         }
         let id = entity.entity().id;
-        self.levels[level].entities.insert(id, entity);
-        self.resolve_display_text(level, id);
-        self.levels[level].entities.swap_remove(&id).expect("the display just inserted")
+        self.entities.insert(id, entity);
+        if let Some((text, source)) = take_pending_text(&mut self.entities, id, self.index) {
+            let resolved = component_utils::resolve(&LevelWorld(self), &source, &text);
+            store_resolved_text(&mut self.entities, id, &text, resolved);
+        }
+        self.entities.swap_remove(&id).expect("the display just inserted")
     }
+}
 
-    fn resolve_display_text(&mut self, level: usize, id: EntityId) {
-        let Some(LevelEntity::Display(display)) = self.levels[level].entities.get_mut(&id) else { return };
-        let DisplayKind::TextDisplay { pending_text } = &mut display.kind else { return };
-        let Some(text) = pending_text.take() else { return };
-        let entity = &display.entity;
-        let source = CommandSourceStack {
-            source: CommandSource::Null,
-            position: entity.position(),
-            rotation: (entity.x_rot, entity.y_rot),
-            level,
-            permission: 2,
-            names: Names::ForEntity,
-            entity: Some(id),
-            silent: false,
-            anchor: Anchor::Feet,
-            callback: CommandResultCallback::default(),
-            signing_context: None,
-        };
-        match component_utils::resolve(self, &source, &text) {
-            Ok(resolved) => {
-                if let Some(LevelEntity::Display(display)) = self.levels[level].entities.get_mut(&id) {
-                    display.entity.data.set(DATA_TEXT_ID, DataValue::Component(resolved.to_nbt()));
-                }
-            }
-            Err(_) => warn!("Failed to parse display entity text Optional[{}]", text.to_json()),
+impl Server {
+    pub fn resolve_display_text(&mut self, level: usize, id: EntityId) {
+        if let Some((text, source)) = take_pending_text(&mut self.levels[level].entities, id, level) {
+            let resolved = component_utils::resolve(self, &source, &text);
+            store_resolved_text(&mut self.levels[level].entities, id, &text, resolved);
         }
     }
 }
+

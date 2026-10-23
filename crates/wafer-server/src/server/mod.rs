@@ -1600,7 +1600,6 @@ impl Server {
         self.levels[index].tick_after_block_ticks(runs);
         self.update_other_level_players(index);
         while self.levels[index].tick_entities() {
-            self.resolve_pending_display_texts();
             self.run_pending_minecart_commands(index);
             self.handle_pending_portal_teleport(index);
             self.handle_pending_ender_pearl_teleport(index);
@@ -1608,13 +1607,11 @@ impl Server {
             self.send_global_level_events();
         }
         self.levels[index].tick_after_entities();
-        self.resolve_pending_display_texts();
         self.flush_other_level_ender_pearls();
         self.send_global_level_events();
     }
 
     pub fn run_level_tasks(&mut self) {
-        self.resolve_pending_display_texts();
         self.deliver_level_broadcasts();
         for index in 0..self.levels.len() {
             for (function, player) in std::mem::take(&mut self.levels[index].pending_function_executions) {

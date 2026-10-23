@@ -36,3 +36,22 @@ fn display_transformations_decompose_like_vanilla() {
     assert_eq!(transformation.get("right_rotation"), Some(&floats(&[0.0, 0.0, 0.70710677, 0.70710677])));
     assert_eq!(saved(&display, "teleport_duration"), Nbt::Int(59));
 }
+
+#[test]
+fn text_displays_resolve_their_text_while_loading() {
+    use crate::network::chat::Component;
+    use crate::server::level::testing;
+    use crate::world::entity::LevelEntity;
+    use crate::world::item::component::custom::parse_snbt;
+    use crate::world::scores::criteria::{ObjectiveCriteria, RenderType};
+    use crate::world::scores::score_holder::ScoreHolder;
+
+    let mut level = testing::level();
+    let objective = level.scoreboard.borrow_mut().add_objective("o", ObjectiveCriteria::DUMMY, Component::literal("O"), RenderType::Integer, false, None);
+    let mut score = level.scoreboard.borrow_mut().get_or_create_player_score(&ScoreHolder::for_name_only("Fred"), objective, false);
+    score.set(&mut level, 7).unwrap();
+
+    let nbt = parse_snbt(r#"{id:"minecraft:text_display",text:{score:{name:"Fred",objective:"o"}}}"#).unwrap();
+    let LevelEntity::Display(display) = level.load_entity(&nbt).unwrap() else { unreachable!() };
+    assert_eq!(saved(&display, "text"), Nbt::String("7".into()));
+}

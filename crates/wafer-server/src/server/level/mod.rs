@@ -1218,6 +1218,7 @@ impl ServerLevel {
             warn!("Tried to add entity {ty} but it was marked as removed already");
             return false;
         }
+        let entity = self.resolve_display_text_detached(entity);
         self.add_entity(entity)
     }
 

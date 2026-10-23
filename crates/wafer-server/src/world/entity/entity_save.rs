@@ -764,7 +764,8 @@ impl ServerLevel {
             return None;
         }
         let entity = self.reassess_weapon_goal_detached(entity);
-        Some(self.read_level_dependent_save_data_detached(entity, nbt))
+        let entity = self.read_level_dependent_save_data_detached(entity, nbt);
+        Some(self.resolve_display_text_detached(entity))
     }
 
     pub fn entity_tag_to_compare(&self, id: EntityId) -> Nbt {

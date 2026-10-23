@@ -227,7 +227,6 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
     let (entity, name) = level.display_name_detached(loaded.remove(0));
     loaded.insert(0, entity);
     for entity in loaded {
-        let entity = server.resolve_detached_display_text(source.level, entity);
         server.levels[source.level].add_fresh_entity_with_passengers(entity);
     }
     Ok((id, name))

@@ -178,3 +178,18 @@ fn nbt_contents_decoding_matches_vanilla() {
     ];
     check_cases(cases);
 }
+
+#[test]
+fn component_strings_match_vanilla_to_string() {
+    let cases: &[(&str, &str)] = &[
+        ("{score:{name:\"@e[type=pig]\",objective:\"o\"}}", "score{name='Left[@e[type=pig]]', objective='o'}"),
+        ("{score:{name:\"Fred\",objective:\"o\"},hover_event:{action:\"show_text\",value:{selector:\"@p\"}}}", "score{name='Left[Fred]', objective='o'}[style={hoverEvent=ShowText[value=pattern{@p}]}]"),
+        ("{text:\"hi\",extra:[{keybind:\"key.jump\"}],click_event:{action:\"run_command\",command:\"/say hi\"},insertion:\"ins\",font:\"minecraft:uniform\",color:\"#123456\"}", "literal{hi}[style={color=#123456,clickEvent=RunCommand[command=/say hi],insertion=ins,font=Resource[id=minecraft:uniform]}, siblings=[keybind{key.jump}]]"),
+        ("{translate:\"x\",fallback:\"fb\",with:[{selector:\"@p\"},\"s\",3,2L,1.5f,0.25d]}", "translation{key='x', fallback='fb', args=[pattern{@p}, s, 3, 2, 1.5, 0.25]}"),
+        ("{text:\"\",bold:0b,italic:1b,shadow_color:5}", "empty[style={shadowColor=5,!bold,italic}]"),
+    ];
+    for (snbt, expected) in cases {
+        let tag = crate::nbt::parse_fully(snbt).unwrap();
+        assert_eq!(&decode(&tag).unwrap().java_to_string(), expected, "{snbt}");
+    }
+}

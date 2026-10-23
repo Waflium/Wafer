@@ -232,6 +232,109 @@ impl Style {
         self.write_fields(&mut fields);
         Nbt::Compound(fields)
     }
+
+    pub fn java_to_string(&self) -> String {
+        let mut result = String::from("{");
+        let mut first = true;
+        let mut separate = |result: &mut String| {
+            if !first {
+                result.push(',');
+            }
+            first = false;
+        };
+        if let Some(color) = &self.color {
+            separate(&mut result);
+            result.push_str(&format!("color={}", color.serialize()));
+        }
+        if let Some(shadow_color) = self.shadow_color {
+            separate(&mut result);
+            result.push_str(&format!("shadowColor={shadow_color}"));
+        }
+        for (name, value) in [("bold", self.bold), ("italic", self.italic), ("underlined", self.underlined), ("strikethrough", self.strikethrough), ("obfuscated", self.obfuscated)] {
+            if let Some(value) = value {
+                separate(&mut result);
+                if !value {
+                    result.push('!');
+                }
+                result.push_str(name);
+            }
+        }
+        if let Some(click_event) = &self.click_event {
+            separate(&mut result);
+            result.push_str("clickEvent=");
+            result.push_str(&match click_event {
+                ClickEvent::SuggestCommand(command) => format!("SuggestCommand[command={command}]"),
+                ClickEvent::RunCommand(command) => format!("RunCommand[command={command}]"),
+                ClickEvent::CopyToClipboard(value) => format!("CopyToClipboard[value={value}]"),
+                ClickEvent::OpenUrl(uri) => format!("OpenUrl[uri={uri}]"),
+                ClickEvent::ChangePage(page) => format!("ChangePage[page={page}]"),
+                ClickEvent::Other { action, .. } => format!("{action}[]"),
+            });
+        }
+        if let Some(hover_event) = &self.hover_event {
+            separate(&mut result);
+            result.push_str("hoverEvent=");
+            result.push_str(&match hover_event {
+                HoverEvent::ShowText(text) => format!("ShowText[value={}]", text.java_to_string()),
+                HoverEvent::ShowEntity { .. } => "ShowEntity[]".to_string(),
+                HoverEvent::ShowItem { .. } => "ShowItem[]".to_string(),
+            });
+        }
+        if let Some(insertion) = &self.insertion {
+            separate(&mut result);
+            result.push_str(&format!("insertion={insertion}"));
+        }
+        if let Some(font) = &self.font {
+            separate(&mut result);
+            result.push_str(&format!("font=Resource[id={font}]"));
+        }
+        result.push('}');
+        result
+    }
+}
+
+impl Arg {
+    fn java_to_string(&self) -> String {
+        match self {
+            Arg::Component(component) => component.java_to_string(),
+            other => other.plain(),
+        }
+    }
+}
+
+impl Contents {
+    fn java_to_string(&self) -> String {
+        match self {
+            Contents::Literal(text) if text.is_empty() => "empty".to_string(),
+            Contents::Literal(text) => format!("literal{{{text}}}"),
+            Contents::Translatable { key, fallback, args } => {
+                let fallback = fallback.as_ref().map_or_else(String::new, |fallback| format!(", fallback='{fallback}'"));
+                let args: Vec<String> = args.iter().map(Arg::java_to_string).collect();
+                format!("translation{{key='{key}'{fallback}, args=[{}]}}", args.join(", "))
+            }
+            Contents::Keybind(name) => format!("keybind{{{name}}}"),
+            Contents::Score { name, selector, objective } => {
+                let side = if selector.is_some() { "Left" } else { "Right" };
+                format!("score{{name='{side}[{name}]', objective='{objective}'}}")
+            }
+            Contents::Selector { pattern, .. } => format!("pattern{{{pattern}}}"),
+            Contents::Other(fields) => {
+                let field = |name: &str| fields.iter().find(|(key, _)| key == name).map(|(_, value)| value);
+                let Some(path) = field("nbt").and_then(Nbt::as_str) else { return String::new() };
+                let flag = |name: &str| field(name).and_then(Nbt::as_i64).is_some_and(|value| value != 0);
+                let separator = field("separator").map_or_else(|| "Optional.empty".to_string(), |separator| format!("Optional[{}]", Component::from_nbt(separator).java_to_string()));
+                let data_source = if let Some(selector) = field("entity").and_then(Nbt::as_str) {
+                    format!("EntityDataSource[selector={selector}]")
+                } else if let Some(coordinates) = field("block").and_then(Nbt::as_str) {
+                    format!("BlockDataSource[coordinates={coordinates}]")
+                } else {
+                    format!("storage={}", field("storage").and_then(Nbt::as_str).unwrap_or_default())
+                };
+                format!("NbtContents[nbtPath={path}, interpreting={}, plain={}, separator={separator}, dataSource={data_source}]", flag("interpret"), flag("plain"))
+            }
+            Contents::Nbt(_) => String::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -488,6 +591,28 @@ impl Component {
             string.truncate(end);
         }
         string
+    }
+
+    pub fn java_to_string(&self) -> String {
+        let mut result = self.contents.java_to_string();
+        let has_style = !self.style.is_empty();
+        let has_siblings = !self.siblings.is_empty();
+        if has_style || has_siblings {
+            result.push('[');
+            if has_style {
+                result.push_str("style=");
+                result.push_str(&self.style.java_to_string());
+            }
+            if has_style && has_siblings {
+                result.push_str(", ");
+            }
+            if has_siblings {
+                let siblings: Vec<String> = self.siblings.iter().map(Component::java_to_string).collect();
+                result.push_str(&format!("siblings=[{}]", siblings.join(", ")));
+            }
+            result.push(']');
+        }
+        result
     }
 
     pub fn get_string(&self) -> String {

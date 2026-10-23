@@ -76,6 +76,8 @@ impl DataAccessor {
                 level.on_dimensions_loaded(*id, previous_dimensions, previous_cube_size);
                 level.read_level_dependent_save_data(*id, &tag);
                 level.entity_moved(*id);
+                let level = level.index;
+                server.resolve_display_text(level, *id);
             }
             DataAccessor::Storage(id) => server.command_storage.borrow_mut().set(id, into_fields(tag)),
             DataAccessor::Block(level, pos) => {
