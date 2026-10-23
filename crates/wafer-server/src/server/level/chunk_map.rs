@@ -604,10 +604,18 @@ impl ServerLevel {
             }
         }
         let current = self.tracking_position(id);
+        let experimental_minecart = crate::world::entity::vehicle::minecart::abstract_minecart::use_experimental_movement(self);
         let projectile_power = self.as_projectile(id).and_then(|projectile| projectile.abstract_hurting_projectile()).map(|projectile| projectile.acceleration_power);
         let Some(tracked) = self.chunk_map.tracked.get_mut(id) else { return };
+        let mut minecart_lerp_steps = None;
         let (entity, attributes) = match self.players.get_mut(&id) {
             Some(p) => (&mut p.entity, Some(&mut p.living.attributes)),
+            None if experimental_minecart && matches!(self.entities.get(&id), Some(LevelEntity::Minecart(_))) => {
+                let Some(LevelEntity::Minecart(minecart)) = self.entities.get_mut(&id) else { return };
+                let minecart = &mut **minecart;
+                minecart_lerp_steps = Some(&mut minecart.new_behavior.lerp_steps);
+                (&mut minecart.entity, None)
+            }
             None => match self.entities.get_mut(&id) {
                 Some(LevelEntity::Mob(mob)) => (&mut mob.entity, Some(&mut mob.living.attributes)),
                 Some(LevelEntity::ArmorStand(stand)) => (&mut stand.entity, Some(&mut stand.living.attributes)),
@@ -616,7 +624,7 @@ impl ServerLevel {
                 None => return,
             },
         };
-        let packets = tracked.server_entity.send_changes(entity, attributes, current, projectile_power);
+        let packets = tracked.server_entity.send_changes(entity, attributes, current, projectile_power, minecart_lerp_steps);
         for (audience, packet) in packets {
             for viewer in &tracked.seen_by {
                 if let Some(p) = self.players.get(viewer) {

@@ -12,9 +12,18 @@ impl FeatureFlagSet {
     pub const DEFAULT_FLAGS: FeatureFlagSet = FeatureFlagSet::VANILLA_SET;
     pub const ALL_FLAGS: FeatureFlagSet = FeatureFlagSet((1 << NAMES.len()) - 1);
     pub const REDSTONE_EXPERIMENTS: FeatureFlagSet = FeatureFlagSet(1 << 2);
+    pub const MINECART_IMPROVEMENTS: FeatureFlagSet = FeatureFlagSet(1 << 3);
 
     pub fn of(name: &str) -> Option<FeatureFlagSet> {
         NAMES.iter().position(|&n| n == name).map(|i| FeatureFlagSet(1 << i))
+    }
+
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+
+    pub const fn from_bits(bits: u8) -> FeatureFlagSet {
+        FeatureFlagSet(bits)
     }
 
     pub fn contains(self, flag: FeatureFlagSet) -> bool {

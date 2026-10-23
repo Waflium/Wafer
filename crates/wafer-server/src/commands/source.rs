@@ -3,6 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use wafer_core::Vec3;
+use wafer_data::commands::CommandNode;
 use wafer_data::game_rule;
 
 use super::brigadier::{CommandSyntaxException, SimpleCommandExceptionType};
@@ -145,6 +146,10 @@ pub struct CommandSourceStack {
 }
 
 impl CommandSourceStack {
+    pub fn can_use(&self, node: &CommandNode) -> bool {
+        self.has_permission(node.permission as i32) && super::is_enabled(node)
+    }
+
     pub fn server(server: &Server) -> CommandSourceStack {
         CommandSourceStack {
             source: CommandSource::Server,

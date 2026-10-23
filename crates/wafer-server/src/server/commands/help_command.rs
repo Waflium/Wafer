@@ -15,7 +15,7 @@ fn usage_text(node: &CommandNode) -> String {
 }
 
 fn can_use(node: &CommandNode, source: &CommandSourceStack) -> bool {
-    source.has_permission(node.permission as i32)
+    source.can_use(node)
 }
 
 pub fn smart_usage(node: &'static CommandNode, source: &CommandSourceStack) -> Vec<String> {

@@ -13,7 +13,7 @@ static ERROR_GAME_RULE_NOT_SET: Dynamic2CommandExceptionType = Dynamic2CommandEx
 
 pub fn executors() -> Vec<(String, CommandFn)> {
     let mut out: Vec<(String, CommandFn)> = Vec::new();
-    for rule in GameRules::default().available() {
+    for rule in wafer_data::GameRule::all() {
         let name = rule.info().name;
         for literal in [name.to_string(), format!("minecraft:{name}")] {
             out.push((format!("gamerule {literal}"), query_rule));

@@ -6,6 +6,7 @@ use crate::network::connection::encode;
 use crate::world::entity::{Entity, EntityId, set_passengers_packet};
 use crate::world::entity::attributes::AttributeMap;
 use crate::world::entity::data::{DataValue, write_values};
+use crate::world::entity::vehicle::minecart::new_minecart_behavior::MinecartStep;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum UpdateInterval {
@@ -256,7 +257,45 @@ impl ServerEntity {
         out
     }
 
-    pub fn send_changes(&mut self, entity: &mut Entity, attributes: Option<&mut AttributeMap>, current: Vec3, projectile_power: Option<f64>) -> Vec<(Audience, Vec<u8>)> {
+    #[allow(clippy::too_many_arguments)]
+    fn handle_minecart_pos_rot(
+        &mut self,
+        entity: &mut Entity,
+        attributes: Option<&mut AttributeMap>,
+        current: Vec3,
+        lerp_steps: &mut Vec<MinecartStep>,
+        y_rot: i8,
+        x_rot: i8,
+        should_send_rotation: bool,
+        out: &mut Vec<(Audience, Vec<u8>)>,
+    ) {
+        self.send_dirty_entity_data(entity, attributes, out);
+        if lerp_steps.is_empty() {
+            let movement = entity.delta_movement;
+            let diff = movement.distance_to_sqr(self.last_sent_movement);
+            let position_changed = current.subtract(self.position_base).length_sqr() >= 7.6293945e-6f32 as f64;
+            let should_send_position = position_changed || self.tick_count % 60 == 0;
+            if should_send_position || should_send_rotation || diff > 1.0e-7 {
+                let step = MinecartStep { position: entity.position(), movement: entity.delta_movement, y_rot: entity.y_rot, x_rot: entity.x_rot, weight: 1.0 };
+                out.push((Audience::Tracking, move_minecart_along_track(entity.id, &[step])));
+            }
+        } else {
+            out.push((Audience::Tracking, move_minecart_along_track(entity.id, lerp_steps)));
+            lerp_steps.clear();
+        }
+        self.last_sent_y_rot = y_rot;
+        self.last_sent_x_rot = x_rot;
+        self.position_base = entity.position();
+    }
+
+    pub fn send_changes(
+        &mut self,
+        entity: &mut Entity,
+        attributes: Option<&mut AttributeMap>,
+        current: Vec3,
+        projectile_power: Option<f64>,
+        minecart_lerp_steps: Option<&mut Vec<MinecartStep>>,
+    ) -> Vec<(Audience, Vec<u8>)> {
         let mut out = Vec::new();
         if entity.passengers != self.last_passengers {
             out.push((Audience::Tracking, set_passengers_packet(entity.id, &entity.passengers)));
@@ -286,6 +325,8 @@ impl ServerEntity {
                 self.position_base = current;
                 self.send_dirty_entity_data(entity, attributes, &mut out);
                 self.was_riding = true;
+            } else if let Some(lerp_steps) = minecart_lerp_steps {
+                self.handle_minecart_pos_rot(entity, attributes, current, lerp_steps, y_rot, x_rot, should_send_rotation, &mut out);
             } else {
                 self.teleport_delay += 1;
                 let path = self.position_path(current);
@@ -500,4 +541,21 @@ mod tests {
         }
         assert_eq!(deltas, [0x667, 0x666, 0x666, 0x667, 0x666, 0x667]);
     }
+}
+
+fn move_minecart_along_track(entity_id: i32, lerp_steps: &[MinecartStep]) -> Vec<u8> {
+    encode(clientbound::MOVE_MINECART_ALONG_TRACK, |p| {
+        p.varint(entity_id);
+        p.varint(lerp_steps.len() as i32);
+        for step in lerp_steps {
+            for v in [step.position, step.movement] {
+                p.f64(v.x);
+                p.f64(v.y);
+                p.f64(v.z);
+            }
+            p.u8(mth::pack_degrees(step.y_rot) as u8);
+            p.u8(mth::pack_degrees(step.x_rot) as u8);
+            p.f32(step.weight);
+        }
+    })
 }

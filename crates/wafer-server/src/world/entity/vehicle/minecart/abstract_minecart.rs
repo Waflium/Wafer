@@ -10,6 +10,7 @@ use super::minecart_furnace::MinecartFurnace;
 use super::minecart_hopper::{self, MinecartHopper};
 use super::minecart_spawner::MinecartSpawner;
 use super::minecart_tnt::MinecartTnt;
+use super::new_minecart_behavior::NewMinecartBehavior;
 use super::old_minecart_behavior::OldMinecartBehavior;
 use crate::server::level::ServerLevel;
 use crate::world::entity::data::{DataValue, Pose};
@@ -56,6 +57,7 @@ pub struct AbstractMinecart {
     on_rails: bool,
     flipped: bool,
     pub behavior: OldMinecartBehavior,
+    pub new_behavior: NewMinecartBehavior,
     pub kind: MinecartKind,
     pub container: Option<ContainerEntity>,
 }
@@ -80,6 +82,10 @@ pub fn exits(shape: RailShape) -> ([i32; 3], [i32; 3]) {
     }
 }
 
+pub fn use_experimental_movement(level: &ServerLevel) -> bool {
+    level.enabled_features.contains(crate::world::flag::FeatureFlagSet::MINECART_IMPROVEMENTS)
+}
+
 pub fn rail_shape(state: BlockState) -> RailShape {
     state.get(base_rail_block::shape_property(state.block()))
 }
@@ -102,7 +108,7 @@ impl AbstractMinecart {
             MinecartKind::Hopper(_) => Some(ContainerEntity::new(minecart_hopper::CONTAINER_SIZE)),
             _ => None,
         };
-        AbstractMinecart { entity, on_rails: false, flipped: DEFAULT_FLIPPED_ROTATION, behavior: OldMinecartBehavior::default(), kind, container }
+        AbstractMinecart { entity, on_rails: false, flipped: DEFAULT_FLIPPED_ROTATION, behavior: OldMinecartBehavior::default(), new_behavior: NewMinecartBehavior::default(), kind, container }
     }
 
     pub fn set_initial_pos(&mut self, x: f64, y: f64, z: f64) {
@@ -357,7 +363,11 @@ impl ServerLevel {
         if self.entity(id).is_removed() {
             return;
         }
-        self.old_minecart_behavior_tick(id);
+        if use_experimental_movement(self) {
+            self.new_minecart_behavior_tick(id);
+        } else {
+            self.old_minecart_behavior_tick(id);
+        }
         if self.entity_ref(id).is_none_or(Entity::is_removed) {
             return;
         }
@@ -376,7 +386,12 @@ impl ServerLevel {
     pub fn get_current_block_pos_or_rail_below(&mut self, id: EntityId) -> BlockPos {
         let e = self.entity(id);
         let (xt, mut yt, zt) = (mth::floor(e.x()), mth::floor(e.y()), mth::floor(e.z()));
-        if self.block_state(BlockPos::new(xt, yt - 1, zt)).is(&block_tags::RAILS) {
+        if use_experimental_movement(self) {
+            let y = e.y() - 0.1 - 1.0e-5f32 as f64;
+            if self.block_state(BlockPos::containing(xt as f64, y, zt as f64)).is(&block_tags::RAILS) {
+                yt = mth::floor(y);
+            }
+        } else if self.block_state(BlockPos::new(xt, yt - 1, zt)).is(&block_tags::RAILS) {
             yt -= 1;
         }
         BlockPos::new(xt, yt, zt)
@@ -385,8 +400,12 @@ impl ServerLevel {
     pub fn minecart_max_speed(&self, id: EntityId) -> f64 {
         match &self.minecart(id).kind {
             MinecartKind::Furnace(_) => self.minecart_furnace_max_speed(id),
-            _ => self.old_minecart_behavior_max_speed(id),
+            _ => self.minecart_behavior_max_speed(id),
         }
+    }
+
+    pub fn minecart_behavior_max_speed(&self, id: EntityId) -> f64 {
+        if use_experimental_movement(self) { self.new_minecart_behavior_max_speed(id) } else { self.old_minecart_behavior_max_speed(id) }
     }
 
     pub fn activate_minecart(&mut self, id: EntityId, xt: i32, yt: i32, zt: i32, state: bool) {
@@ -420,13 +439,33 @@ impl ServerLevel {
     }
 
     pub fn minecart_move(&mut self, id: EntityId, mover: MoverType, delta: Vec3) {
-        self.entity_move(id, mover, delta);
-        if self.entity_ref(id).is_some() {
-            self.minecart_apply_effects_from_blocks(id);
+        if use_experimental_movement(self) {
+            let to_position = self.entity(id).position().add_vec(delta);
+            self.entity_move(id, mover, delta);
+            if self.entity_ref(id).is_none() {
+                return;
+            }
+            let should_continue = self.new_minecart_behavior_push_and_pickup_entities(id);
+            if should_continue {
+                let delta = to_position.subtract(self.entity(id).position());
+                self.entity_move(id, mover, delta);
+            }
+            if mover == MoverType::Piston && let Some(LevelEntity::Minecart(minecart)) = self.entities.get_mut(&id) {
+                minecart.set_on_rails(false);
+            }
+        } else {
+            self.entity_move(id, mover, delta);
+            if self.entity_ref(id).is_some() {
+                self.minecart_apply_effects_from_blocks(id);
+            }
         }
     }
 
     pub fn minecart_apply_effects_from_blocks(&mut self, id: EntityId) {
+        if use_experimental_movement(self) {
+            self.apply_effects_from_blocks(id);
+            return;
+        }
         let position = self.entity(id).position();
         self.apply_effects_from_blocks_between(id, position, position);
         if self.entity_ref(id).is_some() {
@@ -470,7 +509,7 @@ impl ServerLevel {
     }
 
     pub fn abstract_minecart_apply_natural_slowdown(&self, id: EntityId, movement: Vec3) -> Vec3 {
-        let slowdown_factor = self.old_minecart_behavior_slowdown_factor(id);
+        let slowdown_factor = if use_experimental_movement(self) { self.new_minecart_behavior_slowdown_factor(id) } else { self.old_minecart_behavior_slowdown_factor(id) };
         let new_movement = movement.multiply(slowdown_factor, 0.0, slowdown_factor);
         if self.entity(id).is_in_water() { new_movement.scale(WATER_SLOWDOWN_FACTOR as f64) } else { new_movement }
     }
@@ -504,14 +543,14 @@ impl ServerLevel {
     }
 
     fn push_other_minecart(&mut self, id: EntityId, other: EntityId, xa: f64, za: f64) {
+        let experimental = use_experimental_movement(self);
         let (e, o) = (self.entity(id), self.entity(other));
-        let xo = o.x() - e.x();
-        let zo = o.z() - e.z();
+        let (xo, zo) = if experimental { (e.delta_movement.x, e.delta_movement.z) } else { (o.x() - e.x(), o.z() - e.z()) };
         let dir = Vec3::new(xo, 0.0, zo).normalize();
         let y_rot = e.y_rot * mth::DEG_TO_RAD;
         let facing = Vec3::new(mth::cos(y_rot as f64) as f64, 0.0, mth::sin(y_rot as f64) as f64).normalize();
         let dot = dir.dot(facing).abs();
-        if dot < 0.8f32 as f64 {
+        if dot < 0.8f32 as f64 && !experimental {
             return;
         }
         let movement = e.delta_movement;

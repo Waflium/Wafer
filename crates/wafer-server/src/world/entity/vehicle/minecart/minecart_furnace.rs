@@ -97,7 +97,7 @@ impl ServerLevel {
     }
 
     pub fn minecart_furnace_max_speed(&self, id: EntityId) -> f64 {
-        if self.entity(id).is_in_water() { self.old_minecart_behavior_max_speed(id) * 0.75 } else { self.old_minecart_behavior_max_speed(id) * 0.5 }
+        if self.entity(id).is_in_water() { self.minecart_behavior_max_speed(id) * 0.75 } else { self.minecart_behavior_max_speed(id) * 0.5 }
     }
 
     pub fn minecart_furnace_apply_natural_slowdown(&mut self, id: EntityId, delta_movement: Vec3) -> Vec3 {

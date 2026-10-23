@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::LazyLock;
 
 use wafer_data::commands::{CommandNode, CommandNodeKind};
+
+use crate::world::flag::FeatureFlagSet;
 use wafer_data::{registry, registry_id};
 use wafer_protocol::Writer;
 use serde_json::Value;
@@ -271,6 +273,16 @@ impl Keys {
     }
 }
 
+static ENABLED_FEATURES: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(FeatureFlagSet::DEFAULT_FLAGS.bits());
+
+pub fn set_enabled_features(enabled_features: FeatureFlagSet) {
+    ENABLED_FEATURES.store(enabled_features.bits(), std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn is_enabled(node: &CommandNode) -> bool {
+    !node.features || FeatureFlagSet::from_bits(ENABLED_FEATURES.load(std::sync::atomic::Ordering::Relaxed)).contains(FeatureFlagSet::MINECART_IMPROVEMENTS)
+}
+
 static ORIGINAL_KEYS: LazyLock<(Keys, Vec<u32>)> = LazyLock::new(|| {
     let mut keys = Keys::default();
     let mut ids = vec![0; CommandNode::all().len()];
@@ -293,7 +305,7 @@ impl UsableTree {
 
     fn fill(&mut self, from: &'static CommandNode, target: usize, source: &CommandSourceStack, converted: &mut HashMap<u32, usize>, keys: &[u32]) {
         for child in from.children() {
-            if !source.has_permission(child.permission as i32) {
+            if !source.can_use(child) {
                 continue;
             }
             let redirect = child.redirect.and_then(|r| converted.get(&keys[r as usize]).copied());

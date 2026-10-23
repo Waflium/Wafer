@@ -7,6 +7,7 @@ pub mod minecart_furnace;
 pub mod minecart_hopper;
 pub mod minecart_spawner;
 pub mod minecart_tnt;
+pub mod new_minecart_behavior;
 pub mod old_minecart_behavior;
 #[cfg(test)]
 mod minecart_tests;

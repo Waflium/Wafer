@@ -4,18 +4,31 @@ use std::sync::atomic::{AtomicI32, Ordering};
 use wafer_data::{GameRule, GameRuleType};
 use wafer_protocol::nbt::Nbt;
 
+use crate::world::flag::FeatureFlagSet;
+
 #[derive(Clone)]
-pub struct GameRules(Arc<[AtomicI32]>);
+pub struct GameRules {
+    values: Arc<[AtomicI32]>,
+    enabled_features: FeatureFlagSet,
+}
 
 impl Default for GameRules {
     fn default() -> GameRules {
-        GameRules(GameRule::all().map(|r| AtomicI32::new(r.info().default)).collect())
+        GameRules::new(FeatureFlagSet::DEFAULT_FLAGS)
     }
 }
 
+pub fn required_features(rule: GameRule) -> FeatureFlagSet {
+    if rule.info().experimental { FeatureFlagSet::MINECART_IMPROVEMENTS } else { FeatureFlagSet::default() }
+}
+
 impl GameRules {
+    pub fn new(enabled_features: FeatureFlagSet) -> GameRules {
+        GameRules { values: GameRule::all().map(|r| AtomicI32::new(r.info().default)).collect(), enabled_features }
+    }
+
     pub fn has(&self, rule: GameRule) -> bool {
-        !rule.info().experimental
+        required_features(rule).is_subset_of(self.enabled_features)
     }
 
     pub fn available(&self) -> impl Iterator<Item = GameRule> + '_ {
@@ -33,11 +46,11 @@ impl GameRules {
     }
 
     pub fn get(&self, rule: GameRule) -> i32 {
-        self.0[rule.0 as usize].load(Ordering::Relaxed)
+        self.values[rule.0 as usize].load(Ordering::Relaxed)
     }
 
     pub fn set(&self, rule: GameRule, value: i32) {
-        self.0[rule.0 as usize].store(value, Ordering::Relaxed);
+        self.values[rule.0 as usize].store(value, Ordering::Relaxed);
     }
 
     pub fn serialize(rule: GameRule, value: i32) -> String {

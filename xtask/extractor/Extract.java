@@ -76,7 +76,10 @@ public final class Extract {
         var commands = new net.minecraft.commands.Commands(
                 net.minecraft.commands.Commands.CommandSelection.DEDICATED,
                 net.minecraft.commands.CommandBuildContext.simple(net.minecraft.data.registries.VanillaRegistries.createWorldLookup(), net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS));
-        write(out.resolve("commands.json"), commands(commands.getDispatcher()));
+        var allFeatureCommands = new net.minecraft.commands.Commands(
+                net.minecraft.commands.Commands.CommandSelection.DEDICATED,
+                net.minecraft.commands.CommandBuildContext.simple(net.minecraft.data.registries.VanillaRegistries.createWorldLookup(), net.minecraft.world.flag.FeatureFlags.REGISTRY.allFlags()));
+        write(out.resolve("commands.json"), commands(allFeatureCommands.getDispatcher(), commands.getDispatcher()));
         commandPackets(commands.getDispatcher(), out);
         write(out.resolve("game_rules.json"), gameRules());
         write(out.resolve("items.json"), items());
@@ -614,7 +617,9 @@ public final class Extract {
         return v instanceof StringRepresentable s ? s.getSerializedName() : v.toString();
     }
 
-    private static JsonArray commands(com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> dispatcher) {
+    private static JsonArray commands(com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> dispatcher, com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> defaultDispatcher) {
+        var withoutFeatures = new java.util.HashSet<com.mojang.brigadier.tree.CommandNode<?>>();
+        markFeatureNodes(dispatcher.getRoot(), defaultDispatcher.getRoot(), withoutFeatures);
         var commandIds = new IdentityHashMap<Object, Integer>();
         var argumentTypes = new ArrayList<com.mojang.brigadier.arguments.ArgumentType<?>>();
         var ids = new java.util.IdentityHashMap<com.mojang.brigadier.tree.CommandNode<?>, Integer>();
@@ -637,6 +642,9 @@ public final class Extract {
             if (node.isFork()) {
                 o.addProperty("fork", true);
             }
+            if (!withoutFeatures.contains(node)) {
+                o.addProperty("features", true);
+            }
             if (node.getRedirectModifier() != null) {
                 o.addProperty("modifier", true);
             }
@@ -657,6 +665,18 @@ public final class Extract {
             out.add(o);
         }
         return out;
+    }
+
+    private static void markFeatureNodes(com.mojang.brigadier.tree.CommandNode<?> node, com.mojang.brigadier.tree.CommandNode<?> defaultNode, java.util.Set<com.mojang.brigadier.tree.CommandNode<?>> withoutFeatures) {
+        if (!withoutFeatures.add(node)) {
+            return;
+        }
+        for (var child : node.getChildren()) {
+            var defaultChild = defaultNode.getChild(child.getName());
+            if (defaultChild != null) {
+                markFeatureNodes(child, defaultChild, withoutFeatures);
+            }
+        }
     }
 
     private static void commandPackets(com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> dispatcher, Path out) throws Exception {

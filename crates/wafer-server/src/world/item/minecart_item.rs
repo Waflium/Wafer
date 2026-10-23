@@ -4,6 +4,7 @@ use wafer_data::properties::RailShape;
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::entity_save::apply_default_stack_config;
+use crate::world::entity::vehicle::minecart::abstract_minecart::use_experimental_movement;
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
@@ -19,7 +20,10 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
     let shape = if block_state.block().is_instance_of("BaseRailBlock") { block_state.get(base_rail_block::shape_property(block_state.block())) } else { RailShape::NorthSouth };
     let offset = if base_rail_block::is_slope(shape) { 0.5 } else { 0.0 };
     let spawn_pos = Vec3::new(pos.x as f64 + 0.5, pos.y as f64 + 0.0625 + offset, pos.z as f64 + 0.5);
-    let Some(cart) = create_minecart(spawn_pos, item_stack.item.name(), &item_stack) else { return InteractionResult::Fail };
+    let Some(cart) = create_minecart(level, spawn_pos, item_stack.item.name(), &item_stack) else { return InteractionResult::Fail };
+    if use_experimental_movement(level) && level.get_entities(None, &cart.entity().bounding_box()).into_iter().any(|entity| level.is_minecart(entity)) {
+        return InteractionResult::Fail;
+    }
     level.add_fresh_entity(cart);
     let below_state = level.block_state(pos.below());
     level.game_event_at_with(crate::world::level::gameevent::game_event::ENTITY_PLACE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(player), Some(below_state)));
@@ -28,10 +32,18 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
     InteractionResult::SUCCESS
 }
 
-pub fn create_minecart(spawn_pos: Vec3, entity_type: &str, item_stack: &ItemStack) -> Option<LevelEntity> {
+pub fn create_minecart(level: &mut ServerLevel, spawn_pos: Vec3, entity_type: &str, item_stack: &ItemStack) -> Option<LevelEntity> {
     let mut entity = ServerLevel::create_entity(entity_type)?;
     let LevelEntity::Minecart(minecart) = &mut entity else { return None };
     minecart.set_initial_pos(spawn_pos.x, spawn_pos.y, spawn_pos.z);
     apply_default_stack_config(&mut entity, item_stack);
-    Some(entity)
+    if !use_experimental_movement(level) {
+        return Some(entity);
+    }
+    let id = entity.entity().id;
+    level.entities.insert(id, entity);
+    let current_pos = level.get_current_block_pos_or_rail_below(id);
+    let current_state = level.block_state(current_pos);
+    level.new_minecart_behavior_adjust_to_rails(id, current_pos, current_state, true);
+    level.entities.shift_remove(&id)
 }

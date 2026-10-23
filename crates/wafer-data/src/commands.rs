@@ -22,6 +22,7 @@ pub struct CommandNode {
     pub properties: &'static str,
     pub permission: u8,
     pub suggestions: Option<&'static str>,
+    pub features: bool,
 }
 
 impl CommandNode {

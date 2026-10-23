@@ -548,7 +548,7 @@ fn parse_nodes<'a>(
     let mut potentials: Vec<ParseResults<'a>> = Vec::new();
     let cursor = original_reader.cursor;
     for child in relevant_nodes(node, &original_reader) {
-        if !source.has_permission(child.permission as i32) {
+        if !source.can_use(child) {
             continue;
         }
         let mut context = context_so_far.copy();

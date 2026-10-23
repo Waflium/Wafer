@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, Axis, BlockPos};
-use wafer_data::properties::{BOTTOM, LEVEL, STABILITY_DISTANCE};
+use wafer_data::properties::{BOTTOM, LEVEL, RailShape, STABILITY_DISTANCE};
 use wafer_data::{BlockState, FluidState, blocks};
 
 use crate::server::level::ServerLevel;
@@ -30,22 +30,53 @@ pub struct CollisionContext {
     position: bool,
     entity_bottom: f64,
     entity: Option<EntityProperties>,
+    ignore_below: Option<BlockPos>,
+    slope_ignore: Option<BlockPos>,
 }
 
 impl CollisionContext {
-    pub const EMPTY: CollisionContext = CollisionContext { descending: false, placement: false, position: false, entity_bottom: -f64::MAX, entity: None };
+    pub const EMPTY: CollisionContext =
+        CollisionContext { descending: false, placement: false, position: false, entity_bottom: -f64::MAX, entity: None, ignore_below: None, slope_ignore: None };
 
     pub fn position_context(y: f64) -> CollisionContext {
         CollisionContext { position: true, entity_bottom: y, ..CollisionContext::EMPTY }
     }
 
     pub fn of(level: &ServerLevel, entity: EntityId) -> CollisionContext {
-        CollisionContext::new(level, entity, false, level.entity(entity).y())
+        let mut context = CollisionContext::new(level, entity, false, level.entity(entity).y());
+        if level.is_minecart(entity) && crate::world::entity::vehicle::minecart::abstract_minecart::use_experimental_movement(level) {
+            context.setup_minecart_context(level, entity);
+        }
+        context
+    }
+
+    fn setup_minecart_context(&mut self, level: &ServerLevel, minecart: EntityId) {
+        let e = level.entity(minecart);
+        let block_state = |pos: BlockPos| {
+            level.chunks.chunk_without_loading(pos.chunk()).filter(|_| !level.chunks.is_outside_build_height(pos.y)).map_or(blocks::AIR.default_state(), |chunk| chunk.block_state(pos))
+        };
+        let (xt, mut yt, zt) = (wafer_core::mth::floor(e.x()), wafer_core::mth::floor(e.y()), wafer_core::mth::floor(e.z()));
+        let y = e.y() - 0.1 - 1.0e-5f32 as f64;
+        if block_state(BlockPos::containing(xt as f64, y, zt as f64)).is(&wafer_data::block_tags::RAILS) {
+            yt = wafer_core::mth::floor(y);
+        }
+        let current_rail_pos = BlockPos::new(xt, yt, zt);
+        let current_state = block_state(current_rail_pos);
+        if crate::world::level::block::base_rail_block::is_rail(current_state) {
+            self.ignore_below = Some(current_rail_pos.below());
+            self.slope_ignore = match crate::world::entity::vehicle::minecart::abstract_minecart::rail_shape(current_state) {
+                RailShape::AscendingEast => Some(current_rail_pos.east()),
+                RailShape::AscendingWest => Some(current_rail_pos.west()),
+                RailShape::AscendingNorth => Some(current_rail_pos.north()),
+                RailShape::AscendingSouth => Some(current_rail_pos.south()),
+                _ => None,
+            };
+        }
     }
 
     pub fn of_detached(entity: &Entity) -> CollisionContext {
         let properties = EntityProperties { fall_distance: entity.fall_distance, is_falling_block: false, can_walk_on_powder_snow: false, liquid_collision_shape: None, can_stand_on_lava: false };
-        CollisionContext { descending: entity.is_shift_key_down(), placement: false, position: false, entity_bottom: entity.y(), entity: Some(properties) }
+        CollisionContext { descending: entity.is_shift_key_down(), entity_bottom: entity.y(), entity: Some(properties), ..CollisionContext::EMPTY }
     }
 
     pub fn placement_context(level: &ServerLevel, player: Option<EntityId>) -> CollisionContext {
@@ -68,7 +99,7 @@ impl CollisionContext {
             liquid_collision_shape: level.get_liquid_collision_shape(entity),
             can_stand_on_lava: level.mob(entity).is_some_and(|mob| mob.can_stand_on_fluid(wafer_data::Fluid::Lava)),
         };
-        CollisionContext { descending: e.is_shift_key_down(), placement, position: false, entity_bottom, entity: Some(properties) }
+        CollisionContext { descending: e.is_shift_key_down(), placement, entity_bottom, entity: Some(properties), ..CollisionContext::EMPTY }
     }
 
     pub fn is_descending(&self) -> bool {
@@ -102,7 +133,9 @@ impl CollisionContext {
     }
 
     pub fn get_collision_shape(&self, state: BlockState, pos: BlockPos) -> (&'static VoxelShape, [f64; 3]) {
-        if state.is_block(blocks::SCAFFOLDING) {
+        if Some(pos) == self.ignore_below || Some(pos) == self.slope_ignore {
+            (&EMPTY, [0.0; 3])
+        } else if state.is_block(blocks::SCAFFOLDING) {
             (self.scaffolding_collision_shape(state, pos), [0.0; 3])
         } else if state.is_block(blocks::POWDER_SNOW) {
             (self.powder_snow_collision_shape(pos), [0.0; 3])

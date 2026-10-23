@@ -967,7 +967,11 @@ impl ServerLevel {
             Some(controller) if self.is_alive(id) => self.known_movement(controller),
             _ => self.entity(id).delta_movement,
         };
-        if self.is_minecart(id) { ServerLevel::old_minecart_behavior_known_movement(known_movement) } else { known_movement }
+        if self.is_minecart(id) && !crate::world::entity::vehicle::minecart::abstract_minecart::use_experimental_movement(self) {
+            ServerLevel::old_minecart_behavior_known_movement(known_movement)
+        } else {
+            known_movement
+        }
     }
 
     pub fn is_alive(&self, id: EntityId) -> bool {

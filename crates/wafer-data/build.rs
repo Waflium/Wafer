@@ -882,7 +882,7 @@ fn command_tree(out: &mut String, nodes: &Value) -> anyhow::Result<()> {
         let children: Vec<u64> = node["children"].as_array().unwrap().iter().map(|c| c.as_u64().unwrap()).collect();
         writeln!(
             out,
-            "commands::CommandNode {{ id: {i}, kind: commands::CommandNodeKind::{kind}, name: {:?}, executable: {}, children: &{children:?}, redirect: {:?}, fork: {}, modifier: {}, command: {:?}, type_class: {}, parser: {:?}, properties: {:?}, permission: {permission}, suggestions: {:?} }},",
+            "commands::CommandNode {{ id: {i}, kind: commands::CommandNodeKind::{kind}, name: {:?}, executable: {}, children: &{children:?}, redirect: {:?}, fork: {}, modifier: {}, command: {:?}, type_class: {}, parser: {:?}, properties: {:?}, permission: {permission}, suggestions: {:?}, features: {} }},",
             node["name"].as_str().unwrap(),
             node["executable"] == true,
             node["redirect"].as_u64(),
@@ -893,6 +893,7 @@ fn command_tree(out: &mut String, nodes: &Value) -> anyhow::Result<()> {
             node["parser"].as_str(),
             node.get("properties").map_or("{}".to_string(), |p| p.to_string()),
             node["suggestions"].as_str(),
+            node["features"] == true,
         )?;
     }
     writeln!(out, "];")?;

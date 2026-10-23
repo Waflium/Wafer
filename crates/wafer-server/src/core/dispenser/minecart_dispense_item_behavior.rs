@@ -30,7 +30,7 @@ pub fn execute(level: &mut ServerLevel, source: &BlockSource, mut dispensed: Ite
         if direction != Direction::Down && base_rail_block::is_slope(get_rail_shape(block_below)) { -0.4 } else { -0.9 }
     };
     let spawn_pos = Vec3::new(spawn_x, spawn_y + y_offset, spawn_z);
-    if let Some(minecart) = minecart_item::create_minecart(spawn_pos, dispensed.item.name(), &dispensed) {
+    if let Some(minecart) = minecart_item::create_minecart(level, spawn_pos, dispensed.item.name(), &dispensed) {
         level.add_fresh_entity(minecart);
         dispensed.shrink(1);
     }
