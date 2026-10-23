@@ -10,6 +10,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::attributes::Attribute;
 use super::entity_attachments::EntityAttachment;
+use super::move_simulation_type::MoveSimulationType;
 use super::{EntityDimensions, ItemEntity, LevelEntity, data, relative};
 use crate::world::damagesource::DamageSource;
 use crate::world::item::ItemStack;
@@ -1150,13 +1151,23 @@ impl ServerLevel {
         self.controlling_passenger(id).is_some_and(|passenger| self.is_client_authoritative(passenger))
     }
 
-    pub fn can_simulate_movement(&self, id: EntityId) -> bool {
+    pub fn get_move_simulation_type(&self, id: EntityId) -> MoveSimulationType {
         if self.is_player(id) {
-            return true;
+            return MoveSimulationType::AuthoritativeSideAndServer;
         }
         match self.entities.get(&id) {
-            Some(LevelEntity::ExperienceOrb(_) | LevelEntity::FallingBlock(_)) => true,
-            _ => self.is_local_instance_authoritative(id),
+            Some(LevelEntity::ExperienceOrb(_) | LevelEntity::FallingBlock(_) | LevelEntity::Item(_) | LevelEntity::PrimedTnt(_) | LevelEntity::Projectile(_)) => {
+                MoveSimulationType::ServerAndClient
+            }
+            Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::EnderDragon(_)) && self.is_dead_or_dying(id) => MoveSimulationType::ServerAndClient,
+            _ => MoveSimulationType::AuthoritativeSide,
+        }
+    }
+
+    pub fn can_simulate_movement(&self, id: EntityId) -> bool {
+        match self.get_move_simulation_type(id) {
+            MoveSimulationType::ServerAndClient | MoveSimulationType::AuthoritativeSideAndServer => true,
+            MoveSimulationType::AuthoritativeSide => self.is_local_instance_authoritative(id),
         }
     }
 
@@ -3327,7 +3338,7 @@ impl ServerLevel {
             }
         }
         let has_update_interval = self.entities.get(&id).is_none_or(|entity| entity.tracking_config().update_interval != crate::server::level::server_entity::UpdateInterval::Never);
-        let server_and_client = matches!(self.entities.get(&id), Some(LevelEntity::ExperienceOrb(_) | LevelEntity::FallingBlock(_)));
+        let server_and_client = self.get_move_simulation_type(id) == MoveSimulationType::ServerAndClient;
         if !has_update_interval || server_and_client {
             let packet = teleport(own, 0);
             if let Some(tracked) = self.chunk_map.tracked.get(id) {

@@ -57,6 +57,7 @@ pub mod ominous_item_spawner;
 mod ominous_item_spawner_tests;
 pub mod mob;
 pub mod mob_category;
+pub mod move_simulation_type;
 pub mod monster;
 pub mod neutral_mob;
 pub mod npc;
