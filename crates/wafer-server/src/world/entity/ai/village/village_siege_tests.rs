@@ -89,3 +89,21 @@ fn sieges_stop_in_daylight_and_outside_villages() {
     assert!(zombies(&level).is_empty());
 }
 
+
+#[test]
+fn village_distance_spreads_from_occupied_village_pois() {
+    let mut level = testing::level();
+    let pos = BlockPos::new(8, -60, 8);
+    let center = BlockPos::new(0, -4, 0);
+    assert_eq!(level.sections_to_village(center), 7);
+    level.chunks.poi_manager.add(pos, PoiType::Home);
+    assert_eq!(level.sections_to_village(center), 7);
+    level.chunks.poi_manager.take(&|poi_type| poi_type == PoiType::Home, |_, found| found == pos, pos, 1);
+    assert_eq!(level.sections_to_village(center), 0);
+    assert_eq!(level.sections_to_village(BlockPos::new(2, -3, -2)), 2);
+    assert_eq!(level.sections_to_village(BlockPos::new(-5, -4, 5)), 5);
+    assert_eq!(level.sections_to_village(BlockPos::new(-6, -4, 6)), 7);
+    assert_eq!(level.sections_to_village(BlockPos::new(7, -4, 0)), 7);
+    level.chunks.poi_manager.remove(pos);
+    assert_eq!(level.sections_to_village(BlockPos::new(2, -3, -2)), 6);
+}

@@ -1,4 +1,5 @@
 mod block_light_engine;
+pub mod dynamic_graph_min_fixed_point;
 pub mod level_light_engine;
 mod light_engine;
 mod section_storage;

@@ -56,6 +56,7 @@ pub struct SectionStorage<R> {
     max_section_y: i32,
     loaded_chunks: LongOpenHashSet,
     pending_loads: HashMap<i64, Receiver<Option<PackedChunk<R>>>>,
+    pub loaded_sections: std::cell::RefCell<Vec<i64>>,
 }
 
 impl<R: SectionData> SectionStorage<R> {
@@ -68,6 +69,7 @@ impl<R: SectionData> SectionStorage<R> {
             max_section_y,
             loaded_chunks: LongOpenHashSet::new(),
             pending_loads: HashMap::new(),
+            loaded_sections: std::cell::RefCell::new(Vec::new()),
         }
     }
 
@@ -190,8 +192,11 @@ impl<R: SectionData> SectionStorage<R> {
                     let section = sections_by_y.iter().position(|(y, _)| *y == section_y).map(|i| sections_by_y.swap_remove(i).1);
                     let present = section.is_some();
                     self.storage.insert(key, section);
-                    if present && version_changed {
-                        self.set_dirty(key);
+                    if present {
+                        self.loaded_sections.get_mut().push(key);
+                        if version_changed {
+                            self.set_dirty(key);
+                        }
                     }
                 }
             }

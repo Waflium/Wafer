@@ -6,6 +6,8 @@ use super::poi_types::{self, PoiType};
 use crate::server::level::chunk_cache::ChunkCache;
 use crate::server::level::chunk_workers::IoWorker;
 use crate::server::level::chunk_level::ChunkStatus;
+use crate::server::level::chunk_tracker::TrackerLevels;
+use crate::server::level::section_tracker::SectionTracker;
 use crate::world::level::chunk::LevelChunkSection;
 use crate::world::level::chunk::storage::section_storage::{SectionData, SectionStorage, section_key};
 
@@ -45,18 +47,86 @@ fn block_section_key(pos: BlockPos) -> i64 {
 pub struct PoiManager {
     pub storage: SectionStorage<PoiSection>,
     pub loaded_chunks: wafer_core::fastutil::LongOpenHashSet,
+    distance_tracker: std::cell::RefCell<DistanceTracker>,
+}
+
+struct DistanceTracker {
+    tracker: SectionTracker,
+    levels: wafer_core::hash_map::FastMap<i64, u8>,
+}
+
+struct DistanceLevels<'a> {
+    levels: &'a mut wafer_core::hash_map::FastMap<i64, u8>,
+    storage: &'a SectionStorage<PoiSection>,
+}
+
+impl TrackerLevels for DistanceLevels<'_> {
+    fn level(&self, node: i64) -> i32 {
+        self.levels.get(&node).map_or(7, |&level| level as i32)
+    }
+
+    fn set_level(&mut self, node: i64, level: i32) {
+        if level > 6 {
+            self.levels.remove(&node);
+        } else {
+            self.levels.insert(node, level as u8);
+        }
+    }
+
+    fn level_from_source(&self, to: i64) -> i32 {
+        if is_village_center(self.storage, to) { 0 } else { 7 }
+    }
+}
+
+fn is_village_center(storage: &SectionStorage<PoiSection>, section_pos: i64) -> bool {
+    match storage.get(section_pos) {
+        Some(Some(section)) => section.get_records(PoiType::is_village, Occupancy::IsOccupied).next().is_some(),
+        _ => false,
+    }
+}
+
+impl DistanceTracker {
+    fn update(&mut self, storage: &SectionStorage<PoiSection>, section_pos: i64) {
+        let level_from_source = if is_village_center(storage, section_pos) { 0 } else { 7 };
+        let mut levels = DistanceLevels { levels: &mut self.levels, storage };
+        self.tracker.update(&mut levels, section_pos, level_from_source, false);
+    }
+
+    fn on_section_loads(&mut self, storage: &SectionStorage<PoiSection>) {
+        let loaded = std::mem::take(&mut *storage.loaded_sections.borrow_mut());
+        for section_pos in loaded {
+            self.update(storage, section_pos);
+        }
+    }
+
+    fn run_all_updates(&mut self, storage: &SectionStorage<PoiSection>) {
+        self.on_section_loads(storage);
+        let mut levels = DistanceLevels { levels: &mut self.levels, storage };
+        self.tracker.run_updates(&mut levels, i32::MAX);
+    }
 }
 
 impl PoiManager {
     pub fn new(io: Option<IoWorker>, min_section_y: i32, max_section_y: i32) -> PoiManager {
-        PoiManager { storage: SectionStorage::new(io, min_section_y, max_section_y), loaded_chunks: wafer_core::fastutil::LongOpenHashSet::new() }
+        PoiManager {
+            storage: SectionStorage::new(io, min_section_y, max_section_y),
+            loaded_chunks: wafer_core::fastutil::LongOpenHashSet::new(),
+            distance_tracker: std::cell::RefCell::new(DistanceTracker { tracker: SectionTracker::new(7), levels: wafer_core::hash_map::FastMap::default() }),
+        }
+    }
+
+    fn set_dirty(&mut self, section_pos: i64) {
+        self.storage.set_dirty(section_pos);
+        let tracker = self.distance_tracker.get_mut();
+        tracker.on_section_loads(&self.storage);
+        tracker.update(&self.storage, section_pos);
     }
 
     pub fn add(&mut self, pos: BlockPos, poi_type: PoiType) -> Option<PoiRecord> {
         let key = block_section_key(pos);
         let record = self.storage.get_or_create(key).add(pos, poi_type);
         if record.is_some() {
-            self.storage.set_dirty(key);
+            self.set_dirty(key);
         }
         record
     }
@@ -66,7 +136,7 @@ impl PoiManager {
         if let Some(section) = self.storage.get_or_load(key)
             && section.remove(pos)
         {
-            self.storage.set_dirty(key);
+            self.set_dirty(key);
         }
     }
 
@@ -142,7 +212,7 @@ impl PoiManager {
             && let Some(record) = section.record_mut(record.pos)
             && record.acquire_ticket()
         {
-            self.storage.set_dirty(key);
+            self.set_dirty(key);
         }
         Some(record.pos)
     }
@@ -206,12 +276,13 @@ impl PoiManager {
         let section = self.storage.get_or_load(key).unwrap_or_else(|| panic!("POI never registered at {pos:?}"));
         let record = section.record_mut(pos).unwrap_or_else(|| panic!("POI never registered at {pos:?}"));
         let success = record.release_ticket();
-        self.storage.set_dirty(key);
+        self.set_dirty(key);
         success
     }
 
     pub fn tick(&mut self, have_time: &mut dyn FnMut() -> bool) {
         self.storage.tick(have_time);
+        self.distance_tracker.get_mut().run_all_updates(&self.storage);
     }
 
     pub fn check_consistency_with_blocks(&mut self, chunk_pos: ChunkPos, section_y: i32, block_section: &LevelChunkSection) {
@@ -224,7 +295,7 @@ impl PoiManager {
                         update_from_section(block_section, chunk_pos, section_y, output);
                     }
                 }) {
-                    self.storage.set_dirty(key);
+                    self.set_dirty(key);
                 }
             }
             None => {
@@ -233,7 +304,7 @@ impl PoiManager {
                     let section = self.storage.get_or_create(key);
                     update_from_section(block_section, chunk_pos, section_y, &mut |pos, poi_type| added |= section.add(pos, poi_type).is_some());
                     if added {
-                        self.storage.set_dirty(key);
+                        self.set_dirty(key);
                     }
                 }
             }
@@ -258,28 +329,10 @@ impl PoiManager {
     }
 
     pub fn sections_to_village(&self, section_pos: BlockPos) -> i32 {
-        let mut level = MAX_VILLAGE_DISTANCE + 1;
-        for z in -MAX_VILLAGE_DISTANCE..=MAX_VILLAGE_DISTANCE {
-            for y in -MAX_VILLAGE_DISTANCE..=MAX_VILLAGE_DISTANCE {
-                for x in -MAX_VILLAGE_DISTANCE..=MAX_VILLAGE_DISTANCE {
-                    let distance = x.abs().max(y.abs()).max(z.abs());
-                    if distance < level && self.is_village_center(section_key(section_pos.x + x, section_pos.y + y, section_pos.z + z)) {
-                        level = distance;
-                        if level == 0 {
-                            return level;
-                        }
-                    }
-                }
-            }
-        }
-        level
-    }
-
-    fn is_village_center(&self, section_pos: i64) -> bool {
-        match self.storage.get(section_pos) {
-            Some(Some(section)) => section.get_records(PoiType::is_village, Occupancy::IsOccupied).next().is_some(),
-            _ => false,
-        }
+        let mut tracker = self.distance_tracker.borrow_mut();
+        tracker.run_all_updates(&self.storage);
+        let key = section_key(section_pos.x, section_pos.y, section_pos.z);
+        tracker.levels.get(&key).map_or(7, |&level| level as i32)
     }
 
     pub fn needs_loading(&mut self, chunk_pos: ChunkPos, section_y: i32) -> bool {

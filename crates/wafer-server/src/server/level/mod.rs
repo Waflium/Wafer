@@ -11,6 +11,7 @@ pub mod events;
 pub mod game_mode;
 #[cfg(test)]
 mod natural_spawner_tests;
+pub mod section_tracker;
 pub mod server_player;
 #[cfg(test)]
 mod server_player_tests;
