@@ -64,6 +64,9 @@ pub fn number(tag: &Nbt) -> DataResult<&Nbt> {
 }
 
 pub fn bool_value(tag: &Nbt) -> DataResult<bool> {
+    if crate::nbt::is_json_source() && !is_nbt_ops() {
+        return number(tag).map(|n| component_codec::as_i64(n) != 0).map_err(|_| format!("Not a boolean: {}", crate::nbt::to_string(tag)));
+    }
     Ok(component_codec::as_i64(number(tag)?) != 0)
 }
 

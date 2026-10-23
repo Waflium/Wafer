@@ -175,6 +175,7 @@ pub fn as_f32(tag: &Nbt) -> f32 {
 pub fn string(tag: &Nbt) -> Result<&str, String> {
     match tag {
         Nbt::String(s) => Ok(s),
+        other if nbt::is_json_source() => Err(format!("Not a string: {}", nbt::to_string(other))),
         _ => Err("Not a string".into()),
     }
 }
@@ -182,6 +183,7 @@ pub fn string(tag: &Nbt) -> Result<&str, String> {
 pub fn map(tag: &Nbt) -> Result<&[(String, Nbt)], String> {
     match tag {
         Nbt::Compound(fields) => Ok(fields),
+        other if nbt::is_json_source() => Err(format!("Not a JSON object: {}", nbt::to_string(other))),
         other => Err(format!("Not a map: {}", nbt::to_string(other))),
     }
 }
@@ -192,6 +194,7 @@ pub fn list(tag: &Nbt) -> Result<Vec<Nbt>, String> {
         Nbt::ByteArray(v) => Ok(v.iter().map(|&b| Nbt::Byte(b)).collect()),
         Nbt::IntArray(v) => Ok(v.iter().map(|&b| Nbt::Int(b)).collect()),
         Nbt::LongArray(v) => Ok(v.iter().map(|&b| Nbt::Long(b)).collect()),
+        other if nbt::is_json_source() => Err(format!("Not a json array: {}", nbt::to_string(other))),
         other => Err(format!("Not a list: {}", nbt::to_string(other))),
     }
 }
@@ -256,6 +259,7 @@ impl Codec {
     pub fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         match self {
             Codec::Unit => map(tag).map(|_| Nbt::Compound(Vec::new())),
+            Codec::Bool if nbt::is_json_source() => number(tag).map(|n| Nbt::Byte((as_f64(n) != 0.0) as i8)).map_err(|_| format!("Not a boolean: {}", nbt::to_string(tag))),
             Codec::Bool => number(tag).map(|n| Nbt::Byte((as_f64(n) != 0.0) as i8)),
             Codec::Byte => number(tag).map(|n| Nbt::Byte(as_i64(n) as i8)),
             Codec::UnsignedByte => number(tag).map(|n| Nbt::Byte(as_i64(n) as i8)),

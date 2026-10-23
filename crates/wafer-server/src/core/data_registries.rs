@@ -362,6 +362,7 @@ fn decode(registry: &str, json: &Value) -> Result<(), String> {
         "minecraft:cat_variant" => decode_with(crate::world::entity::animal::feline::cat_variant::direct_codec(), json),
         "minecraft:cat_sound_variant" => decode_with(crate::world::entity::animal::feline::cat_sound_variant::direct_codec(), json),
         "minecraft:zombie_nautilus_variant" => decode_with(crate::world::entity::animal::nautilus::zombie_nautilus_variant::direct_codec(), json),
+        "minecraft:world_clock" => decode_with(crate::world::item::component::types::record(Vec::new()), json),
         "minecraft:dimension_type" => {
             use crate::world::level::dimension::dimension_type;
             let tag = dimension_type::direct_codec().0.decode(&crate::world::item::component::json_to_nbt(json))?;
