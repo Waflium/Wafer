@@ -362,6 +362,7 @@ impl Server {
         for level in &mut levels {
             level.chunks.set_main_thread_wakeup(main_thread_wakeup.clone());
             level.game_rules = game_rules.clone();
+            level.enabled_features = data_configuration.enabled_features;
             level.chunks.game_rules = game_rules.clone();
             level.weather = weather.clone();
             level.default_game_type = default_game_type.clone();

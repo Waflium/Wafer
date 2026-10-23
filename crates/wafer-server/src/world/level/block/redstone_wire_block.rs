@@ -11,8 +11,12 @@ use crate::server::level::ServerLevel;
 use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::context::BlockPlaceContext;
-use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
+use crate::world::flag::FeatureFlagSet;
 use crate::world::level::redstone::default_redstone_wire_evaluator::DefaultRedstoneWireEvaluator;
+use crate::world::level::redstone::experimental_redstone_utils;
+use crate::world::level::redstone::experimental_redstone_wire_evaluator::ExperimentalRedstoneWireEvaluator;
+use crate::world::level::redstone::orientation::Orientation;
+use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 
 const PLANE_VERTICAL: [Direction; 2] = [Direction::Up, Direction::Down];
 
@@ -61,6 +65,10 @@ fn should_connect_to(state: BlockState, level: &mut dyn LevelReader, pos: BlockP
 
 fn can_survive_on(level: &mut dyn LevelReader, pos: BlockPos, state: BlockState) -> bool {
     level.is_face_sturdy_at(pos, state, Direction::Up, wafer_data::SupportType::Full) || state.is_block(blocks::HOPPER)
+}
+
+fn use_experimental_evaluator(level: &ServerLevel) -> bool {
+    level.enabled_features.contains(FeatureFlagSet::REDSTONE_EXPERIMENTS)
 }
 
 pub fn get_block_signal(level: &mut ServerLevel, pos: BlockPos) -> i32 {
@@ -151,6 +159,14 @@ impl RedstoneWireBlock {
         }
     }
 
+    fn update_power_strength(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState, orientation: Option<Orientation>, shape_update_wires_around_initial_position: bool) {
+        if use_experimental_evaluator(level) {
+            ExperimentalRedstoneWireEvaluator::new(self.block).update_power_strength(level, pos, orientation, shape_update_wires_around_initial_position);
+        } else {
+            self.evaluator.update_power_strength(level, pos, state);
+        }
+    }
+
     fn check_corner_change_at(&self, level: &mut ServerLevel, pos: BlockPos) {
         if level.block_state(pos).is_block(self.block) {
             level.update_neighbors_at(pos, self.block);
@@ -175,10 +191,11 @@ impl RedstoneWireBlock {
     }
 
     fn updates_on_shape_change(&self, level: &mut ServerLevel, pos: BlockPos, old_state: BlockState, new_state: BlockState) {
+        let orientation = experimental_redstone_utils::initial_orientation(level, None, Some(Direction::Up));
         for direction in Direction::PLANE_HORIZONTAL {
             let relative_pos = pos.relative(direction);
             if connected(old_state, direction) != connected(new_state, direction) && level.block_state(relative_pos).is_redstone_conductor() {
-                level.update_neighbors_at_except_from_facing(relative_pos, new_state.block(), Some(direction.opposite()));
+                level.update_neighbors_at_except_from_facing(relative_pos, new_state.block(), Some(direction.opposite()), experimental_redstone_utils::with_front(orientation, direction));
             }
         }
     }
@@ -269,7 +286,7 @@ impl BlockBehaviour for RedstoneWireBlock {
 
     fn on_place(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, old_state: BlockState, _moved_by_piston: bool) {
         if !old_state.is_block(state.block()) {
-            self.evaluator.update_power_strength(level, pos, state);
+            self.update_power_strength(level, pos, state, None, true);
             for direction in PLANE_VERTICAL {
                 level.update_neighbors_at(pos.relative(direction), self.block);
             }
@@ -282,17 +299,19 @@ impl BlockBehaviour for RedstoneWireBlock {
             for direction in Direction::VALUES {
                 level.update_neighbors_at(pos.relative(direction), self.block);
             }
-            self.evaluator.update_power_strength(level, pos, state);
+            self.update_power_strength(level, pos, state, None, false);
             self.update_neighbors_of_neighboring_wires(level, pos);
         }
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
-        if self.can_survive(state, level, pos) {
-            self.evaluator.update_power_strength(level, pos, state);
-        } else {
-            level.drop_resources(state, pos, None, None);
-            level.remove_block(pos, false);
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, orientation: Option<Orientation>, _moved_by_piston: bool) {
+        if block != self.block || !use_experimental_evaluator(level) {
+            if self.can_survive(state, level, pos) {
+                self.update_power_strength(level, pos, state, orientation, false);
+            } else {
+                level.drop_resources(state, pos, None, None);
+                level.remove_block(pos, false);
+            }
         }
     }
 

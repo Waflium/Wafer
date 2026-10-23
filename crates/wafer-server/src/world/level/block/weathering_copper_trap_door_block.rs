@@ -11,6 +11,7 @@ use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::LevelAccessor;
+use crate::world::level::redstone::orientation::Orientation;
 
 pub struct WeatheringCopperTrapDoorBlock {
     trap_door: TrapDoorBlock,
@@ -43,8 +44,8 @@ impl BlockBehaviour for WeatheringCopperTrapDoorBlock {
         self.trap_door.use_without_item(state, level, pos, player, hit)
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, moved_by_piston: bool) {
-        self.trap_door.neighbor_changed(state, level, pos, block, moved_by_piston);
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {
+        self.trap_door.neighbor_changed(state, level, pos, block, orientation, moved_by_piston);
     }
 
     fn update_shape(

@@ -17,6 +17,7 @@ use crate::world::entity::boss::wither::wither_boss::WitherBoss;
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 
 static WITHER_PATTERN_FULL: LazyLock<BlockPattern> = LazyLock::new(|| {
     BlockPatternBuilder::start()
@@ -78,8 +79,8 @@ impl BlockBehaviour for WitherSkullBlock {
         SkullBlock.get_state_for_placement(block, ctx, level)
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, moved_by_piston: bool) {
-        SkullBlock.neighbor_changed(state, level, pos, block, moved_by_piston);
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {
+        SkullBlock.neighbor_changed(state, level, pos, block, orientation, moved_by_piston);
     }
 
     fn rotate(&self, state: BlockState, rotation: Rotation) -> BlockState {
@@ -102,8 +103,8 @@ impl BlockBehaviour for WitherWallSkullBlock {
         WallSkullBlock.get_state_for_placement(block, ctx, level)
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, moved_by_piston: bool) {
-        WallSkullBlock.neighbor_changed(state, level, pos, block, moved_by_piston);
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {
+        WallSkullBlock.neighbor_changed(state, level, pos, block, orientation, moved_by_piston);
     }
 
     fn rotate(&self, state: BlockState, rotation: Rotation) -> BlockState {

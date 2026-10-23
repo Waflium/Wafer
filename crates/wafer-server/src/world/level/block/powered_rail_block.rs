@@ -8,6 +8,7 @@ use super::mirror::Mirror;
 use super::rotation::Rotation;
 use crate::server::level::ServerLevel;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 
 pub struct PoweredRailBlock {
@@ -147,7 +148,7 @@ impl BlockBehaviour for PoweredRailBlock {
         base::on_place(self, state, level, pos, old_state, moved_by_piston);
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, _orientation: Option<Orientation>, moved_by_piston: bool) {
         base::neighbor_changed(self, state, level, pos, block, moved_by_piston);
     }
 

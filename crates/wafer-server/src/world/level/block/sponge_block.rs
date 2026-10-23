@@ -7,6 +7,7 @@ use super::BlockBehaviour;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::level::BlockGetter;
 use crate::world::level::block;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::update_flags::UPDATE_ALL;
 
 const MAX_DEPTH: i32 = 6;
@@ -86,7 +87,7 @@ impl BlockBehaviour for SpongeBlock {
         }
     }
 
-    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         Self::try_absorb_water(level, pos);
     }
 }

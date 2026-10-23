@@ -118,7 +118,7 @@ pub fn on_place(rail: &(impl BaseRailBlock + ?Sized), state: BlockState, level: 
 pub fn update_state(rail: &(impl BaseRailBlock + ?Sized), state: BlockState, level: &mut ServerLevel, pos: BlockPos, moved_by_piston: bool) -> BlockState {
     let state = update_dir(level, pos, state, true);
     if is_straight(rail.block()) {
-        level.neighbor_changed_with_state(state, pos, rail.block(), moved_by_piston);
+        level.neighbor_changed_with_state(state, pos, rail.block(), None, moved_by_piston);
     }
     state
 }

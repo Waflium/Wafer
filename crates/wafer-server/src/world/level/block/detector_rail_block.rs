@@ -12,6 +12,7 @@ use crate::world::container::ContainerRef;
 use crate::world::entity::EntityId;
 use crate::world::entity::inside_block::InsideBlockEffects;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 
 const PRESSED_CHECK_PERIOD: i32 = 20;
@@ -55,7 +56,7 @@ impl DetectorRailBlock {
         let rail = RailState::new(pos, state);
         for &connection_pos in rail.connections() {
             let connection_state = level.block_state(connection_pos);
-            level.neighbor_changed_with_state(connection_state, connection_pos, connection_state.block(), false);
+            level.neighbor_changed_with_state(connection_state, connection_pos, connection_state.block(), None, false);
         }
     }
 }
@@ -94,7 +95,7 @@ impl BlockBehaviour for DetectorRailBlock {
         }
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, _orientation: Option<Orientation>, moved_by_piston: bool) {
         base::neighbor_changed(self, state, level, pos, block, moved_by_piston);
     }
 

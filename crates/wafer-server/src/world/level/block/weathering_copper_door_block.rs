@@ -12,6 +12,7 @@ use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{LevelAccessor, LevelReader};
 
 pub struct WeatheringCopperDoorBlock {
@@ -65,8 +66,8 @@ impl BlockBehaviour for WeatheringCopperDoorBlock {
         self.door.use_without_item(state, level, pos, player, hit)
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, moved_by_piston: bool) {
-        self.door.neighbor_changed(state, level, pos, block, moved_by_piston);
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {
+        self.door.neighbor_changed(state, level, pos, block, orientation, moved_by_piston);
     }
 
     fn can_survive(&self, state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {

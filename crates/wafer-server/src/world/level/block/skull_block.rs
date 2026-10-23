@@ -9,6 +9,7 @@ use super::rotation::Rotation;
 use super::rotation_segment;
 use crate::server::level::ServerLevel;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 
 const MAX: i32 = 15;
 const ROTATIONS: i32 = MAX + 1;
@@ -20,7 +21,7 @@ impl BlockBehaviour for SkullBlock {
         Some(abstract_skull_block::get_state_for_placement(block, ctx, level).set(ROTATION_16, rotation_segment::convert_to_segment(ctx.rotation())))
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         abstract_skull_block::neighbor_changed(state, level, pos);
     }
 

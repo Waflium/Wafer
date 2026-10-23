@@ -24,8 +24,9 @@ impl ObserverBlock {
     fn update_neighbors_in_front(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState) {
         let direction = state.get(FACING);
         let opposite_pos = pos.relative(direction.opposite());
-        level.neighbor_changed(opposite_pos, self.block);
-        level.update_neighbors_at_except_from_facing(opposite_pos, self.block, Some(direction));
+        let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(level, Some(direction.opposite()), None);
+        level.neighbor_changed(opposite_pos, self.block, orientation);
+        level.update_neighbors_at_except_from_facing(opposite_pos, self.block, Some(direction), orientation);
     }
 }
 

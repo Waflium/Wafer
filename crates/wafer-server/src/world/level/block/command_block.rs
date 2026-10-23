@@ -16,6 +16,7 @@ use crate::world::item::component as dc;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::BlockGetter;
 use crate::world::level::base_command_block::CommandBlockOwner;
+use crate::world::level::redstone::orientation::Orientation;
 
 pub struct CommandBlock {
     pub automatic: bool,
@@ -41,7 +42,7 @@ impl CommandBlock {
 }
 
 impl BlockBehaviour for CommandBlock {
-    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         if level.command_block_entity(pos).is_some() {
             let has_neighbor_signal = level.has_neighbor_signal(pos);
             self.set_powered_and_update(level, pos, has_neighbor_signal);

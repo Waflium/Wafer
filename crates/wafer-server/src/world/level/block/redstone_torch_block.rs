@@ -5,6 +5,7 @@ use wafer_data::{Block, BlockState};
 use super::{BlockBehaviour, base_torch_block};
 use crate::server::level::ServerLevel;
 use crate::server::level::events::REDSTONE_TORCH_BURNOUT;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 
 const RECENT_TOGGLE_TIMER: i64 = 60;
@@ -17,9 +18,10 @@ pub struct RedstoneTorchBlock {
 }
 
 impl RedstoneTorchBlock {
-    fn notify_neighbors(&self, level: &mut ServerLevel, pos: BlockPos) {
+    fn notify_neighbors(&self, level: &mut ServerLevel, pos: BlockPos, front: Option<Direction>) {
+        let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(level, front, Some(Direction::Up));
         for direction in Direction::VALUES {
-            level.update_neighbors_at(pos.relative(direction), self.block);
+            level.update_neighbors_at_oriented(pos.relative(direction), self.block, crate::world::level::redstone::experimental_redstone_utils::with_front(orientation, direction));
         }
     }
 
@@ -48,13 +50,13 @@ impl RedstoneTorchBlock {
         }
     }
 
-    pub fn on_place(&self, level: &mut ServerLevel, pos: BlockPos) {
-        self.notify_neighbors(level, pos);
+    pub fn on_place(&self, level: &mut ServerLevel, pos: BlockPos, front: Option<Direction>) {
+        self.notify_neighbors(level, pos, front);
     }
 
-    pub fn affect_neighbors_after_removal(&self, level: &mut ServerLevel, pos: BlockPos, moved_by_piston: bool) {
+    pub fn affect_neighbors_after_removal(&self, level: &mut ServerLevel, pos: BlockPos, moved_by_piston: bool, front: Option<Direction>) {
         if !moved_by_piston {
-            self.notify_neighbors(level, pos);
+            self.notify_neighbors(level, pos, front);
         }
     }
 }
@@ -102,11 +104,11 @@ impl BlockBehaviour for RedstoneTorchBlock {
     }
 
     fn on_place(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _old_state: BlockState, _moved_by_piston: bool) {
-        RedstoneTorchBlock::on_place(self, level, pos);
+        RedstoneTorchBlock::on_place(self, level, pos, None);
     }
 
     fn affect_neighbors_after_removal(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, moved_by_piston: bool) {
-        RedstoneTorchBlock::affect_neighbors_after_removal(self, level, pos, moved_by_piston);
+        RedstoneTorchBlock::affect_neighbors_after_removal(self, level, pos, moved_by_piston, None);
     }
 
     fn tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
@@ -114,7 +116,7 @@ impl BlockBehaviour for RedstoneTorchBlock {
         self.tick_with_signal(state, level, pos, neighbor_signal);
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let neighbor_signal = level.has_signal(pos.below(), Direction::Down);
         self.neighbor_changed_with_signal(state, level, pos, neighbor_signal);
     }

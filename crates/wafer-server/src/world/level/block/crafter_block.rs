@@ -19,6 +19,7 @@ use crate::world::item::context::BlockPlaceContext;
 use crate::world::item::crafting::crafting_input::CraftingInput;
 use crate::world::item::crafting::recipe_cache::RecipeCache;
 use crate::world::item::crafting::recipe_holder::RecipeHolder;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
 
 const MAX_CRAFTING_TICKS: i32 = 6;
@@ -111,7 +112,7 @@ impl BlockBehaviour for CrafterBlock {
         level.crafter(pos).map_or(0, |crafter_block_entity| crafter_block_entity.get_redstone_signal())
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let should_trigger = level.has_neighbor_signal(pos);
         let is_triggered = state.get(TRIGGERED);
         if should_trigger && !is_triggered {

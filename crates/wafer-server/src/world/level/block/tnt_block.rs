@@ -11,6 +11,7 @@ use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::level::block::BlockHitResult;
 use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::server_explosion::ServerExplosion;
 use crate::world::level::update_flags::UPDATE_ALL_IMMEDIATE;
 use crate::world::{InteractionHand, InteractionResult};
@@ -52,7 +53,7 @@ impl BlockBehaviour for TntBlock {
         }
     }
 
-    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: wafer_data::Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: wafer_data::Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         if level.has_neighbor_signal(pos) && prime(level, pos, None, None) {
             level.remove_block(pos, false);
         }

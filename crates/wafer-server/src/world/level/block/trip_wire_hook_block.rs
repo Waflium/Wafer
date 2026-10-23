@@ -118,8 +118,9 @@ fn emit_state(level: &mut ServerLevel, pos: BlockPos, attached: bool, powered: b
 
 fn notify_neighbors(block: Block, level: &mut ServerLevel, pos: BlockPos, direction: Direction) {
     let front = direction.opposite();
-    level.update_neighbors_at(pos, block);
-    level.update_neighbors_at(pos.relative(front), block);
+    let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(level, Some(front), Some(Direction::Up));
+    level.update_neighbors_at_oriented(pos, block, orientation);
+    level.update_neighbors_at_oriented(pos.relative(front), block, orientation);
 }
 
 fn on_removed(state: BlockState, level: &mut ServerLevel, pos: BlockPos) {

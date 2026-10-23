@@ -18,7 +18,8 @@ pub struct LightningRodBlock;
 
 fn update_neighbours(state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
     let front = state.get(FACING).opposite();
-    level.update_neighbors_at(pos.relative(front), state.block());
+    let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(level, Some(front), None);
+    level.update_neighbors_at_oriented(pos.relative(front), state.block(), orientation);
 }
 
 impl BlockBehaviour for LightningRodBlock {

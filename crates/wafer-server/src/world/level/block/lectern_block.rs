@@ -56,7 +56,8 @@ fn change_powered(level: &mut ServerLevel, pos: BlockPos, state: BlockState, is_
 }
 
 fn update_below(level: &mut ServerLevel, pos: BlockPos, state: BlockState) {
-    level.update_neighbors_at(pos.below(), state.block());
+    let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(level, Some(state.get(HORIZONTAL_FACING).opposite()), Some(Direction::Up));
+    level.update_neighbors_at_oriented(pos.below(), state.block(), orientation);
 }
 
 pub struct LecternBlock;

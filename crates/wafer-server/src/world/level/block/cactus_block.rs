@@ -52,7 +52,7 @@ impl BlockBehaviour for CactusBlock {
             level.set_block(above, block.default_state(), UPDATE_ALL);
             let above_block = state.set(AGE_15, 0);
             level.set_block(pos, above_block, UPDATE_NONE);
-            level.neighbor_changed_with_state(above_block, above, block, false);
+            level.neighbor_changed_with_state(above_block, above, block, None, false);
         }
         if age < 15 {
             level.set_block(pos, state.set(AGE_15, age + 1), UPDATE_NONE);

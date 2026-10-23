@@ -12,6 +12,7 @@ use crate::world::entity::inside_block::InsideBlockEffects;
 use crate::world::inventory::menu_provider::MenuProvider;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::block::entity::BlockEntityKind;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
 
 pub struct HopperBlock;
@@ -52,7 +53,7 @@ impl BlockBehaviour for HopperBlock {
         InteractionResult::SUCCESS
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         check_powered_state(level, pos, state);
     }
 

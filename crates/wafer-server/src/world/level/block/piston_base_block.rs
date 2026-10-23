@@ -15,6 +15,7 @@ use crate::world::entity::{EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::BlockGetter;
+use crate::world::level::redstone::orientation::Orientation;
 
 pub const TRIGGER_EXTEND: i32 = 0;
 pub const TRIGGER_CONTRACT: i32 = 1;
@@ -177,21 +178,22 @@ impl PistonBaseBlock {
             level.update_neighbour_shapes(air, pos, 2, crate::world::level::update_flags::UPDATE_LIMIT);
             super::of(air).update_indirect_neighbour_shapes(air, level, pos, 2, crate::world::level::update_flags::UPDATE_LIMIT);
         }
+        let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(level, Some(push_direction), None);
         let mut update_index = 0;
         for &pos in to_destroy.iter().rev() {
             let state = to_update[update_index];
             update_index += 1;
             super::of(state).affect_neighbors_after_removal(state, level, pos, false);
             super::of(state).update_indirect_neighbour_shapes(state, level, pos, 2, crate::world::level::update_flags::UPDATE_LIMIT);
-            level.update_neighbors_at(pos, state.block());
+            level.update_neighbors_at_oriented(pos, state.block(), orientation);
         }
         for &pos in to_push.iter().rev() {
             let block = to_update[update_index].block();
             update_index += 1;
-            level.update_neighbors_at(pos, block);
+            level.update_neighbors_at_oriented(pos, block, orientation);
         }
         if extending {
-            level.update_neighbors_at(arm_pos, blocks::PISTON_HEAD);
+            level.update_neighbors_at_oriented(arm_pos, blocks::PISTON_HEAD, orientation);
         }
         true
     }
@@ -206,7 +208,7 @@ impl BlockBehaviour for PistonBaseBlock {
         self.check_if_extend(level, pos, state);
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         self.check_if_extend(level, pos, state);
     }
 

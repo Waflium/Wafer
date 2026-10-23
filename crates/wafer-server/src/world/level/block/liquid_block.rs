@@ -6,6 +6,7 @@ use super::{BlockBehaviour, bubble_column_block};
 use crate::server::level::ServerLevel;
 use crate::server::level::events::LAVA_FIZZ;
 use crate::world::item::ItemStack;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{BlockGetter, LevelAccessor};
 use crate::world::level::material::{self, FlowingFluid};
 use crate::world::level::update_flags::UPDATE_ALL;
@@ -109,7 +110,7 @@ impl BlockBehaviour for LiquidBlock {
         state
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         self.schedule_fluid_tick(level, pos, state);
     }
 

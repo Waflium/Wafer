@@ -22,7 +22,7 @@ pub fn melt(level: &mut ServerLevel, pos: BlockPos) {
         level.remove_block(pos, false);
     } else {
         level.set_block(pos, melts_into(), UPDATE_ALL);
-        level.neighbor_changed(pos, melts_into().block());
+        level.neighbor_changed(pos, melts_into().block(), None);
         level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_DESTROY, pos, crate::world::level::gameevent::game_event::Context::of_state(Some(state)));
     }
 }

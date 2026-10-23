@@ -5,6 +5,7 @@ use wafer_data::{Block, BlockState};
 use super::BlockBehaviour;
 use crate::server::level::ServerLevel;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
 
 pub struct RedstoneLampBlock {
@@ -16,7 +17,7 @@ impl BlockBehaviour for RedstoneLampBlock {
         Some(block.default_state().set(LIT, level.has_neighbor_signal(ctx.clicked_pos())))
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let is_lit = state.get(LIT);
         if is_lit != level.has_neighbor_signal(pos) {
             if is_lit {

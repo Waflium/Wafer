@@ -157,8 +157,9 @@ impl ServerLevel {
         self.block_event(pos, block, chest_block_entity::EVENT_SET_OPEN_COUNT, current);
         let trapped = self.get_block_entity(pos).is_some_and(|e| e.ty() == wafer_data::block_entity_types::TRAPPED_CHEST);
         if trapped && previous != current {
-            self.update_neighbors_at(pos, block);
-            self.update_neighbors_at(pos.below(), block);
+            let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(self, Some(state.get(wafer_data::properties::HORIZONTAL_FACING).opposite()), Some(wafer_core::Direction::Up));
+            self.update_neighbors_at_oriented(pos, block, orientation);
+            self.update_neighbors_at_oriented(pos.below(), block, orientation);
         }
     }
 

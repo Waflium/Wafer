@@ -6,6 +6,7 @@ use super::BlockBehaviour;
 use super::weathering_copper::change_over_time;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::level::BlockGetter;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::update_flags::UPDATE_ALL;
 
 pub struct CopperBulbBlock;
@@ -32,7 +33,7 @@ impl BlockBehaviour for CopperBulbBlock {
         }
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         self.check_and_flip(state, level, pos);
     }
 
@@ -48,8 +49,8 @@ impl BlockBehaviour for WeatheringCopperBulbBlock {
         CopperBulbBlock.on_place(state, level, pos, old_state, moved_by_piston);
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, moved_by_piston: bool) {
-        CopperBulbBlock.neighbor_changed(state, level, pos, block, moved_by_piston);
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {
+        CopperBulbBlock.neighbor_changed(state, level, pos, block, orientation, moved_by_piston);
     }
 
     fn get_analog_output_signal(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, direction: Direction) -> i32 {

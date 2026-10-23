@@ -15,6 +15,7 @@ use crate::world::entity::EntityId;
 use crate::world::inventory::menu_provider::MenuProvider;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::block::entity::BlockEntityKind;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
 
 const TRIGGER_DURATION: i32 = 4;
@@ -94,7 +95,7 @@ impl BlockBehaviour for DispenserBlock {
         InteractionResult::SUCCESS
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let should_trigger = level.has_neighbor_signal(pos) || level.has_neighbor_signal(pos.above());
         let is_triggered = state.get(TRIGGERED);
         if should_trigger && !is_triggered {

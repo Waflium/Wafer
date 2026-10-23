@@ -2,7 +2,7 @@ use wafer_core::{BlockPos, Direction};
 use wafer_data::properties::POWER;
 use wafer_data::{Block, BlockState};
 
-use super::redstone_wire_evaluator::{get_block_signal, get_incoming_wire_signal};
+use super::redstone_wire_evaluator::{get_block_signal, get_incoming_wire_signal, get_wire_signal};
 use crate::server::level::ServerLevel;
 use crate::world::level::BlockGetter;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
@@ -31,7 +31,7 @@ impl DefaultRedstoneWireEvaluator {
 
     fn calculate_target_strength(&self, level: &mut ServerLevel, pos: BlockPos) -> i32 {
         let block_signal = get_block_signal(level, pos);
-        if block_signal == 15 { block_signal } else { block_signal.max(get_incoming_wire_signal(self.wire_block, level, pos)) }
+        if block_signal == 15 { block_signal } else { block_signal.max(get_incoming_wire_signal(level, pos, &|_, state| get_wire_signal(self.wire_block, state))) }
     }
 }
 

@@ -8,6 +8,7 @@ use super::rotation::Rotation;
 use super::{BlockBehaviour, wall_torch_block};
 use crate::server::level::ServerLevel;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{LevelAccessor, LevelReader};
 
 pub struct RedstoneWallTorchBlock {
@@ -49,12 +50,12 @@ impl BlockBehaviour for RedstoneWallTorchBlock {
         wall_torch_block::update_shape(state, level, pos, direction)
     }
 
-    fn on_place(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _old_state: BlockState, _moved_by_piston: bool) {
-        self.torch.on_place(level, pos);
+    fn on_place(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _old_state: BlockState, _moved_by_piston: bool) {
+        self.torch.on_place(level, pos, Some(state.get(HORIZONTAL_FACING).opposite()));
     }
 
-    fn affect_neighbors_after_removal(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, moved_by_piston: bool) {
-        self.torch.affect_neighbors_after_removal(level, pos, moved_by_piston);
+    fn affect_neighbors_after_removal(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, moved_by_piston: bool) {
+        self.torch.affect_neighbors_after_removal(level, pos, moved_by_piston, Some(state.get(HORIZONTAL_FACING).opposite()));
     }
 
     fn tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
@@ -62,7 +63,7 @@ impl BlockBehaviour for RedstoneWallTorchBlock {
         self.torch.tick_with_signal(state, level, pos, neighbor_signal);
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let neighbor_signal = has_neighbor_signal(state, level, pos);
         self.torch.neighbor_changed_with_signal(state, level, pos, neighbor_signal);
     }

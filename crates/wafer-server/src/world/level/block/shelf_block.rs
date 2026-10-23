@@ -12,6 +12,7 @@ use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::entity::EntityId;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::item::{ItemStack, inventory_slot};
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::level::{BlockGetter, LevelAccessor};
 use crate::world::{InteractionHand, InteractionResult};
@@ -104,7 +105,7 @@ impl BlockBehaviour for ShelfBlock {
         self.update_neighbors_after_powering_down(level, pos, state);
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let signal = level.has_neighbor_signal(pos);
         if state.get(POWERED) != signal {
             let mut new_state = state.set(POWERED, signal);

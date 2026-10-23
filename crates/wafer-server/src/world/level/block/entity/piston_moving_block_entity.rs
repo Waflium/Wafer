@@ -183,14 +183,15 @@ impl ServerLevel {
         if piston.progress_o < 1.0 {
             piston.progress = 1.0;
             piston.progress_o = piston.progress;
-            let (is_source_piston, moved_state) = (piston.is_source_piston, piston.moved_state);
+            let (is_source_piston, moved_state, push_direction) = (piston.is_source_piston, piston.moved_state, piston.get_push_direction());
             if let Some(mut removed) = self.remove_block_entity(pos) {
                 removed.set_removed();
             }
             if self.block_state(pos).is_block(blocks::MOVING_PISTON) {
                 let new_state = if is_source_piston { blocks::AIR.default_state() } else { self.update_from_neighbour_shapes(moved_state, pos) };
                 self.set_block(pos, new_state, UPDATE_ALL);
-                self.neighbor_changed(pos, new_state.block());
+                let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(self, Some(push_direction), None);
+                self.neighbor_changed(pos, new_state.block(), orientation);
             }
         }
     }
@@ -201,7 +202,7 @@ impl ServerLevel {
         entity.last_ticked = game_time;
         entity.progress_o = entity.progress;
         if entity.progress_o >= 1.0 {
-            let moved_state = entity.moved_state;
+            let (moved_state, push_direction) = (entity.moved_state, entity.get_push_direction());
             if let Some(mut removed) = self.remove_block_entity(pos) {
                 removed.set_removed();
             }
@@ -215,7 +216,8 @@ impl ServerLevel {
                         new_state = new_state.set(WATERLOGGED, false);
                     }
                     self.set_block(pos, new_state, 67);
-                    self.neighbor_changed(pos, new_state.block());
+                    let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(self, Some(push_direction), None);
+                    self.neighbor_changed(pos, new_state.block(), orientation);
                 }
             }
         } else {

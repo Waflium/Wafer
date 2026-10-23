@@ -40,6 +40,7 @@ use crate::network::connection::encode;
 use crate::world::attribute::environment_attribute_system::{EnvironmentAccess, EnvironmentAttributeReader};
 use crate::world::attribute::EnvironmentAttributeSystem;
 use crate::world::clock::ServerClockManager;
+use crate::world::flag::FeatureFlagSet;
 use crate::world::entity::{Entity, EntityId, ItemEntity, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
@@ -55,6 +56,8 @@ use crate::world::level::gamerules::GameRules;
 use crate::world::level::local_mob_cap_calculator::LocalMobCapCalculator;
 use crate::world::level::natural_spawner;
 use crate::world::level::pathfinder::path_type_cache::PathTypeCache;
+use crate::world::level::redstone::experimental_redstone_utils;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::saveddata::weather_data::WeatherData;
 use game_mode::GameType;
 use crate::world::level::saveddata::maps::map_id::MapId;
@@ -129,14 +132,14 @@ pub const UPDATE_SHAPE_ORDER: [Direction; 6] = [Direction::West, Direction::East
 
 enum NeighborUpdates {
     Shape { direction: Direction, neighbor_state: BlockState, pos: BlockPos, neighbor_pos: BlockPos, flags: i32, update_limit: i32 },
-    Simple { pos: BlockPos, block: Block },
-    Full { state: BlockState, pos: BlockPos, block: Block, moved_by_piston: bool },
-    Multi { source_pos: BlockPos, source_block: Block, skip: Option<Direction>, idx: usize },
+    Simple { pos: BlockPos, block: Block, orientation: Option<Orientation> },
+    Full { state: BlockState, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool },
+    Multi { source_pos: BlockPos, source_block: Block, orientation: Option<Orientation>, skip: Option<Direction>, idx: usize },
 }
 
 enum NeighborStep {
     Shape { direction: Direction, neighbor_state: BlockState, pos: BlockPos, neighbor_pos: BlockPos, flags: i32, update_limit: i32 },
-    Changed { state: Option<BlockState>, pos: BlockPos, block: Block, moved_by_piston: bool },
+    Changed { state: Option<BlockState>, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool },
 }
 
 struct NeighborUpdater {
@@ -153,6 +156,7 @@ pub struct ServerLevel {
     pub random_sequences: Rc<RefCell<crate::world::random_sequences::RandomSequences>>,
     pub server_data_storage: Rc<RefCell<SavedDataStorage>>,
     pub game_rules: GameRules,
+    pub enabled_features: FeatureFlagSet,
     pub spawn_protection: SpawnProtection,
     pub respawn_data: crate::world::level::storage::RespawnData,
     pub custom_spawners: Vec<crate::world::level::custom_spawner::CustomSpawner>,
@@ -261,6 +265,7 @@ impl ServerLevel {
             random_sequences: Rc::new(RefCell::new(crate::world::random_sequences::RandomSequences::load(None))),
             server_data_storage: Rc::new(RefCell::new(SavedDataStorage::new(None))),
             game_rules: GameRules::default(),
+            enabled_features: FeatureFlagSet::DEFAULT_FLAGS,
             difficulty: crate::world::difficulty::Difficulty::Easy,
             no_save: false,
             allow_flight: false,
@@ -785,20 +790,25 @@ impl ServerLevel {
     }
 
     pub fn update_neighbors_at(&mut self, pos: BlockPos, block: Block) {
-        self.update_neighbors_at_except_from_facing(pos, block, None);
+        let orientation = experimental_redstone_utils::initial_orientation(self, None, None);
+        self.update_neighbors_at_oriented(pos, block, orientation);
     }
 
-    pub fn update_neighbors_at_except_from_facing(&mut self, pos: BlockPos, block: Block, skip: Option<Direction>) {
+    pub fn update_neighbors_at_oriented(&mut self, pos: BlockPos, block: Block, orientation: Option<Orientation>) {
+        self.update_neighbors_at_except_from_facing(pos, block, None, orientation);
+    }
+
+    pub fn update_neighbors_at_except_from_facing(&mut self, pos: BlockPos, block: Block, skip: Option<Direction>, orientation: Option<Orientation>) {
         let idx = usize::from(skip == Some(UPDATE_ORDER[0]));
-        self.add_and_run(pos, NeighborUpdates::Multi { source_pos: pos, source_block: block, skip, idx });
+        self.add_and_run(pos, NeighborUpdates::Multi { source_pos: pos, source_block: block, orientation, skip, idx });
     }
 
-    pub fn neighbor_changed(&mut self, pos: BlockPos, block: Block) {
-        self.add_and_run(pos, NeighborUpdates::Simple { pos, block });
+    pub fn neighbor_changed(&mut self, pos: BlockPos, block: Block, orientation: Option<Orientation>) {
+        self.add_and_run(pos, NeighborUpdates::Simple { pos, block, orientation });
     }
 
-    pub fn neighbor_changed_with_state(&mut self, state: BlockState, pos: BlockPos, block: Block, moved_by_piston: bool) {
-        self.add_and_run(pos, NeighborUpdates::Full { state, pos, block, moved_by_piston });
+    pub fn neighbor_changed_with_state(&mut self, state: BlockState, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {
+        self.add_and_run(pos, NeighborUpdates::Full { state, pos, block, orientation, moved_by_piston });
     }
 
     pub fn neighbor_shape_changed(&mut self, direction: Direction, pos: BlockPos, neighbor_pos: BlockPos, neighbor_state: BlockState, flags: i32, update_limit: i32) {
@@ -863,15 +873,27 @@ impl ServerLevel {
             &mut NeighborUpdates::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit } => {
                 (NeighborStep::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit }, false)
             }
-            &mut NeighborUpdates::Simple { pos, block } => (NeighborStep::Changed { state: None, pos, block, moved_by_piston: false }, false),
-            &mut NeighborUpdates::Full { state, pos, block, moved_by_piston } => (NeighborStep::Changed { state: Some(state), pos, block, moved_by_piston }, false),
-            NeighborUpdates::Multi { source_pos, source_block, skip, idx } => {
-                let direction = UPDATE_ORDER[*idx];
+            &mut NeighborUpdates::Simple { pos, block, orientation } => (NeighborStep::Changed { state: None, pos, block, orientation, moved_by_piston: false }, false),
+            &mut NeighborUpdates::Full { state, pos, block, orientation, moved_by_piston } => {
+                (NeighborStep::Changed { state: Some(state), pos, block, orientation, moved_by_piston }, false)
+            }
+            &mut NeighborUpdates::Multi { source_pos, source_block, orientation, skip, idx } => {
+                let direction = UPDATE_ORDER[idx];
+                let mut step_orientation = None;
+                let mut multi_orientation = orientation;
+                if self.enabled_features.contains(FeatureFlagSet::REDSTONE_EXPERIMENTS) {
+                    if multi_orientation.is_none() {
+                        multi_orientation = experimental_redstone_utils::initial_orientation(self, skip.map(Direction::opposite), None);
+                    }
+                    step_orientation = experimental_redstone_utils::with_front(multi_orientation, direction);
+                }
+                let Some(NeighborUpdates::Multi { orientation, idx, .. }) = self.neighbor_updater.stack.last_mut() else { unreachable!() };
+                *orientation = multi_orientation;
                 *idx += 1;
-                if *idx < UPDATE_ORDER.len() && Some(UPDATE_ORDER[*idx]) == *skip {
+                if *idx < UPDATE_ORDER.len() && Some(UPDATE_ORDER[*idx]) == skip {
                     *idx += 1;
                 }
-                let step = NeighborStep::Changed { state: None, pos: source_pos.relative(direction), block: *source_block, moved_by_piston: false };
+                let step = NeighborStep::Changed { state: None, pos: source_pos.relative(direction), block: source_block, orientation: step_orientation, moved_by_piston: false };
                 (step, *idx < UPDATE_ORDER.len())
             }
         }
@@ -887,9 +909,9 @@ impl ServerLevel {
                 let new = block::of(current).update_shape(current, self, pos, direction, neighbor_pos, neighbor_state);
                 self.update_or_destroy(current, new, pos, flags, update_limit);
             }
-            NeighborStep::Changed { state, pos, block, moved_by_piston } => {
+            NeighborStep::Changed { state, pos, block, orientation, moved_by_piston } => {
                 let state = state.unwrap_or_else(|| self.block_state(pos));
-                block::of(state).neighbor_changed(state, self, pos, block, moved_by_piston);
+                block::of(state).neighbor_changed(state, self, pos, block, orientation, moved_by_piston);
             }
         }
     }

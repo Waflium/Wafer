@@ -112,12 +112,12 @@ impl ServerLevel {
             }
             let mut state = self.block_state(relative);
             if state.is_block(blocks::COMPARATOR) {
-                self.neighbor_changed_with_state(state, relative, changed, false);
+                self.neighbor_changed_with_state(state, relative, changed, None, false);
             } else if state.is_redstone_conductor() {
                 relative = relative.relative(direction);
                 state = self.block_state(relative);
                 if state.is_block(blocks::COMPARATOR) {
-                    self.neighbor_changed_with_state(state, relative, changed, false);
+                    self.neighbor_changed_with_state(state, relative, changed, None, false);
                 }
             }
         }

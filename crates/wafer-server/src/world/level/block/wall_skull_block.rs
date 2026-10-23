@@ -9,6 +9,7 @@ use super::rotation::Rotation;
 use crate::server::level::ServerLevel;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::BlockGetter;
+use crate::world::level::redstone::orientation::Orientation;
 
 pub struct WallSkullBlock;
 
@@ -28,7 +29,7 @@ impl BlockBehaviour for WallSkullBlock {
         None
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         abstract_skull_block::neighbor_changed(state, level, pos);
     }
 

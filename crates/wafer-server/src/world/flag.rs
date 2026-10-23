@@ -11,9 +11,14 @@ impl FeatureFlagSet {
     pub const VANILLA_SET: FeatureFlagSet = FeatureFlagSet(1);
     pub const DEFAULT_FLAGS: FeatureFlagSet = FeatureFlagSet::VANILLA_SET;
     pub const ALL_FLAGS: FeatureFlagSet = FeatureFlagSet((1 << NAMES.len()) - 1);
+    pub const REDSTONE_EXPERIMENTS: FeatureFlagSet = FeatureFlagSet(1 << 2);
 
     pub fn of(name: &str) -> Option<FeatureFlagSet> {
         NAMES.iter().position(|&n| n == name).map(|i| FeatureFlagSet(1 << i))
+    }
+
+    pub fn contains(self, flag: FeatureFlagSet) -> bool {
+        flag.is_subset_of(self)
     }
 
     pub fn is_empty(self) -> bool {

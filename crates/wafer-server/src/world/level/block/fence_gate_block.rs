@@ -12,6 +12,7 @@ use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{BlockGetter, LevelAccessor};
 use crate::world::level::update_flags::{UPDATE_CLIENTS, UPDATE_IMMEDIATE};
 
@@ -102,7 +103,7 @@ impl BlockBehaviour for FenceGateBlock {
         InteractionResult::SUCCESS
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let has_power = level.has_neighbor_signal(pos);
         if state.get(POWERED) != has_power {
             level.set_block(pos, state.set(POWERED, has_power).set(OPEN, has_power), UPDATE_CLIENTS);

@@ -14,6 +14,7 @@ use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 use crate::world::level::block;
 use crate::world::level::update_flags::{UPDATE_ALL, UPDATE_CLIENTS, UPDATE_IMMEDIATE, UPDATE_SUPPRESS_DROPS};
@@ -202,7 +203,7 @@ impl BlockBehaviour for DoorBlock {
         InteractionResult::SUCCESS
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let other_half = if state.get(DOUBLE_BLOCK_HALF) == DoubleBlockHalf::Lower { Direction::Up } else { Direction::Down };
         let signal = level.has_neighbor_signal(pos) || level.has_neighbor_signal(pos.relative(other_half));
         if block != state.block() && signal != state.get(POWERED) {

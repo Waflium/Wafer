@@ -337,3 +337,24 @@ fn tripwire_hooks_attach_and_power_when_the_wire_is_pressed() {
     assert!(!level.block_state(at(0, 0)).get(POWERED));
     assert!(level.block_state(at(0, 0)).get(ATTACHED));
 }
+
+#[test]
+fn experimental_wires_power_down_a_line_and_back() {
+    let (mut level, _) = setup();
+    level.enabled_features = crate::world::flag::FeatureFlagSet::DEFAULT_FLAGS.join(crate::world::flag::FeatureFlagSet::REDSTONE_EXPERIMENTS);
+    let setblock = |level: &mut ServerLevel, pos: BlockPos, state: BlockState| {
+        level.set_block(pos, state, crate::world::level::update_flags::UPDATE_CLIENTS);
+        level.update_neighbors_at(pos, state.block());
+    };
+    for x in 1..=17 {
+        setblock(&mut level, at(x, 0), blocks::REDSTONE_WIRE.default_state());
+    }
+    setblock(&mut level, at(0, 0), blocks::REDSTONE_BLOCK.default_state());
+    let powers: Vec<i32> = (1..=17).map(|x| level.block_state(at(x, 0)).get(POWER)).collect();
+    assert_eq!(powers, [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0]);
+    setblock(&mut level, at(0, 0), blocks::AIR.default_state());
+    assert!((1..=17).all(|x| level.block_state(at(x, 0)).get(POWER) == 0));
+    setblock(&mut level, at(9, 0), blocks::REDSTONE_BLOCK.default_state());
+    let powers: Vec<i32> = (1..=17).filter(|&x| x != 9).map(|x| level.block_state(at(x, 0)).get(POWER)).collect();
+    assert_eq!(powers, [8, 9, 10, 11, 12, 13, 14, 15, 15, 14, 13, 12, 11, 10, 9, 8]);
+}

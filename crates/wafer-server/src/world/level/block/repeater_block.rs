@@ -12,6 +12,7 @@ use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{LevelAccessor, LevelReader};
 
 pub struct RepeaterBlock {
@@ -89,7 +90,7 @@ impl BlockBehaviour for RepeaterBlock {
         diode_block::tick(self, state, level, pos);
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         diode_block::neighbor_changed(self, state, level, pos);
     }
 

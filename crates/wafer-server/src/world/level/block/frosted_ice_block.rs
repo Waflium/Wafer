@@ -10,6 +10,7 @@ use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::light_layer::LightLayer;
+use crate::world::level::redstone::orientation::Orientation;
 
 const MAX_AGE: i32 = 3;
 const NEIGHBORS_TO_AGE: i32 = 4;
@@ -72,7 +73,7 @@ impl BlockBehaviour for FrostedIceBlock {
         level.schedule_tick(pos, blocks::FROSTED_ICE, delay);
     }
 
-    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         if block == blocks::FROSTED_ICE && Self::fewer_neighbours_than(level, pos, NEIGHBORS_TO_MELT) {
             melt(level, pos);
         }

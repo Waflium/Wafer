@@ -1,5 +1,5 @@
 use wafer_core::{AABB, Axis, BlockPos, Direction};
-use wafer_data::properties::POWERED;
+use wafer_data::properties::{HORIZONTAL_FACING, POWERED};
 use wafer_data::{Block, BlockState, registry, registry_id};
 
 use super::face_attached_horizontal_directional_block as face_attached;
@@ -71,8 +71,10 @@ impl ButtonBlock {
 
     fn update_neighbours(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
         let front = face_attached::get_connected_direction(state).opposite();
-        level.update_neighbors_at(pos, self.block);
-        level.update_neighbors_at(pos.relative(front), self.block);
+        let up = if front.axis().is_horizontal() { Direction::Up } else { state.get(HORIZONTAL_FACING) };
+        let orientation = crate::world::level::redstone::experimental_redstone_utils::initial_orientation(level, Some(front), Some(up));
+        level.update_neighbors_at_oriented(pos, self.block, orientation);
+        level.update_neighbors_at_oriented(pos.relative(front), self.block, orientation);
     }
 }
 

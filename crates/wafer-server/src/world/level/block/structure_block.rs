@@ -7,6 +7,7 @@ use crate::server::level::ServerLevel;
 use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
+use crate::world::level::redstone::orientation::Orientation;
 
 pub struct StructureBlock;
 
@@ -37,7 +38,7 @@ impl BlockBehaviour for StructureBlock {
         }
     }
 
-    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         if level.structure_block_entity(pos).is_none() {
             return;
         }

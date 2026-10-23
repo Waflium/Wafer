@@ -299,6 +299,7 @@ use wafer_core::{AABB, BlockPos, Direction, Vec3};
 use wafer_data::properties::WATERLOGGED;
 use wafer_data::{Block, BlockState, Fluid, FluidState};
 
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{LevelAccessor, LevelReader};
 use crate::world::level::biome::Precipitation;
 use crate::server::level::ServerLevel;
@@ -357,7 +358,7 @@ pub trait BlockBehaviour: Send + Sync {
 
     fn update_indirect_neighbour_shapes(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, flags: i32, update_limit: i32) {}
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, moved_by_piston: bool) {}
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {}
 
     fn on_place(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, old_state: BlockState, moved_by_piston: bool) {}
 

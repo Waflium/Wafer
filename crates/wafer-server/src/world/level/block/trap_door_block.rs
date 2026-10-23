@@ -14,6 +14,7 @@ use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::LevelAccessor;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
 
 pub struct TrapDoorBlock {
@@ -81,7 +82,7 @@ impl BlockBehaviour for TrapDoorBlock {
         InteractionResult::SUCCESS
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let signal = level.has_neighbor_signal(pos);
         if signal == state.get(POWERED) {
             return;

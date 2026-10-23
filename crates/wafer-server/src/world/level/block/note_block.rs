@@ -12,6 +12,7 @@ use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::block::entity::BlockEntityKind;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 use crate::world::{InteractionHand, InteractionResult};
 
@@ -107,7 +108,7 @@ impl BlockBehaviour for NoteBlock {
         if direction.axis() == Axis::Y { self.set_instrument(level, pos, state) } else { state }
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, _block: Block, _orientation: Option<Orientation>, _moved_by_piston: bool) {
         let signal = level.has_neighbor_signal(pos);
         if signal != state.get(POWERED) {
             if signal {

@@ -8,6 +8,7 @@ use super::rotation::Rotation;
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
+use crate::world::level::redstone::orientation::Orientation;
 use crate::world::level::{LevelAccessor, LevelReader};
 
 pub struct PistonHeadBlock;
@@ -52,9 +53,9 @@ impl BlockBehaviour for PistonHeadBlock {
         is_fitting_base(state, base) || base.is_block(blocks::MOVING_PISTON) && base.get(FACING) == state.get(FACING)
     }
 
-    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, _moved_by_piston: bool) {
+    fn neighbor_changed(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, block: Block, orientation: Option<Orientation>, _moved_by_piston: bool) {
         if self.can_survive(state, level, pos) {
-            level.neighbor_changed(pos.relative(state.get(FACING).opposite()), block);
+            level.neighbor_changed(pos.relative(state.get(FACING).opposite()), block, crate::world::level::redstone::experimental_redstone_utils::with_front(orientation, state.get(FACING).opposite()));
         }
     }
 
