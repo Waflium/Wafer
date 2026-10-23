@@ -8,7 +8,7 @@ use wafer_protocol::nbt::Nbt;
 use super::data::{DataValue, entity_defaults};
 use super::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::commands::source::{Anchor, CommandResultCallback, CommandSource, CommandSourceStack, Names};
-use crate::network::chat::{Component, Contents, HoverEvent, component_utils};
+use crate::network::chat::{Component, component_utils};
 use crate::server::Server;
 use crate::util::brightness::Brightness;
 use crate::util::codec::{self, DataResult};
@@ -157,17 +157,6 @@ fn encode_transformation(transformation: &Transformation) -> Nbt {
     ])
 }
 
-fn needs_resolution(component: &Component) -> bool {
-    let contents = match &component.contents {
-        Contents::Score { .. } | Contents::Selector { .. } => true,
-        Contents::Translatable { args, .. } => args.iter().any(|arg| matches!(arg, crate::network::chat::Arg::Component(c) if needs_resolution(c))),
-        _ => false,
-    };
-    contents
-        || matches!(&component.style.hover_event, Some(HoverEvent::ShowText(text)) if needs_resolution(text))
-        || component.siblings.iter().any(needs_resolution)
-}
-
 impl Display {
     fn create(entity_type: &str, kind: DisplayKind, extra: Vec<DataValue>) -> Display {
         let mut data = display_defaults();
@@ -304,7 +293,7 @@ impl Display {
         self.entity.data.set(DATA_STYLE_FLAGS_ID, DataValue::Byte(flags));
         if let Some(text) = input.get("text") {
             let text = Component::from_nbt(text);
-            if needs_resolution(&text) {
+            if component_utils::needs_resolution(&text) {
                 if let DisplayKind::TextDisplay { pending_text } = &mut self.kind {
                     *pending_text = Some(text);
                 }

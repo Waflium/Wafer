@@ -1,5 +1,8 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::commands::arguments::selector::entity_world::LevelWorld;
+use crate::commands::source::{Anchor, CommandResultCallback, CommandSource, CommandSourceStack, Names};
+use crate::network::chat::{Component, component_utils};
 use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, DataComponentType};
@@ -40,10 +43,41 @@ impl SetNameFunction {
         })
     }
 
+    pub fn create_resolver<'a>(context: &'a LootContext, entity_target: Option<EntityTarget>) -> impl Fn(&Nbt) -> Nbt + 'a {
+        let level = &*context.params.level;
+        let source = entity_target.and_then(|target| target.get(&context.params)).and_then(|id| level.entity_ref(id)).map(|entity| CommandSourceStack {
+            source: CommandSource::Null,
+            position: entity.position(),
+            rotation: (entity.x_rot, entity.y_rot),
+            level: level.index,
+            permission: 2,
+            names: Names::ForEntity,
+            entity: Some(entity.id),
+            silent: false,
+            anchor: Anchor::Feet,
+            callback: CommandResultCallback::default(),
+            signing_context: None,
+        });
+        move |line| {
+            let Some(source) = &source else { return line.clone() };
+            let component = Component::from_nbt(line);
+            if !component_utils::needs_resolution(&component) {
+                return line.clone();
+            }
+            match component_utils::resolve(&LevelWorld(level), source, &component) {
+                Ok(resolved) => resolved.to_nbt(),
+                Err(_) => {
+                    warn!("Failed to resolve text component");
+                    line.clone()
+                }
+            }
+        }
+    }
+
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {
         if let Some(name) = &self.name {
-            let _ = self.resolution_context.and_then(|target| target.get(&context.params));
-            item_stack.set(self.target.component(), Some(name.clone()));
+            let resolved = SetNameFunction::create_resolver(context, self.resolution_context)(name);
+            item_stack.set(self.target.component(), Some(resolved));
         }
         item_stack
     }

@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use super::list_operation::ListOperation;
-use super::set_name_function::decode_component;
+use super::set_name_function::{SetNameFunction, decode_component};
 use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
@@ -25,8 +25,8 @@ impl SetLoreFunction {
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {
         let old_lore = item_stack.get(dc::LORE).map_or(Vec::new(), |l| l.as_list().to_vec());
-        let _ = self.resolution_context.and_then(|target| target.get(&context.params));
-        let lines = self.mode.apply(&old_lore, &self.lore, 256);
+        let resolved_lines: Vec<Nbt> = self.lore.iter().map(SetNameFunction::create_resolver(context, self.resolution_context)).collect();
+        let lines = self.mode.apply(&old_lore, &resolved_lines, 256);
         item_stack.set(dc::LORE, Some(Nbt::List(lines)));
         item_stack
     }

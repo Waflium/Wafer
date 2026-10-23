@@ -141,6 +141,33 @@ fn loot_arguments_suggest_registry_elements() {
 }
 
 #[test]
+fn loot_functions_resolve_entity_text_like_vanilla() {
+    let mut server = flat_server();
+    run(&mut server, "setblock 0 -60 0 minecraft:chest");
+    run(&mut server, "scoreboard objectives add o dummy");
+    run(&mut server, "summon pig 2 -60 2 {NoAI:1b,Tags:[\"u\"]}");
+    run(&mut server, "summon pig 4 -60 2 {NoAI:1b,Tags:[\"u\"]}");
+    run(&mut server, "scoreboard players set @e[tag=u] o 9");
+    let table = |slot: u32, function: &str| {
+        format!("execute as @e[tag=u,limit=1] run loot replace block 0 -60 0 container.{slot} loot {{pools:[{{rolls:1,entries:[{{type:\"minecraft:item\",name:\"minecraft:stone\",modifier:{function}}}]}}]}}")
+    };
+    run(&mut server, &table(0, "{type:\"minecraft:set_name\",name:{score:{name:\"@s\",objective:\"o\"}},entity:\"this\"}"));
+    run(&mut server, &table(1, "{type:\"minecraft:set_name\",name:{score:{name:\"@s\",objective:\"o\"}}}"));
+    run(&mut server, &table(2, "{type:\"minecraft:set_name\",name:{score:{name:\"@e[tag=u]\",objective:\"o\"}},entity:\"this\"}"));
+    run(&mut server, &table(3, "{type:\"minecraft:set_lore\",lore:[{score:{name:\"@s\",objective:\"o\"}},\"plain\"],mode:\"append\",entity:\"this\"}"));
+    assert_eq!(run(&mut server, "data get block 0 -60 0 Items[{Slot:0b}].components"), ["0, -60, 0 has the following block data: {\"minecraft:custom_name\": \"9\"}"]);
+    assert_eq!(
+        run(&mut server, "data get block 0 -60 0 Items[{Slot:1b}].components"),
+        ["0, -60, 0 has the following block data: {\"minecraft:custom_name\": {score: {name: \"@s\", objective: \"o\"}}}"]
+    );
+    assert_eq!(
+        run(&mut server, "data get block 0 -60 0 Items[{Slot:2b}].components"),
+        ["0, -60, 0 has the following block data: {\"minecraft:custom_name\": {score: {name: \"@e[tag=u]\", objective: \"o\"}}}"]
+    );
+    assert_eq!(run(&mut server, "data get block 0 -60 0 Items[{Slot:3b}].components"), ["0, -60, 0 has the following block data: {\"minecraft:lore\": [\"9\", \"plain\"]}"]);
+}
+
+#[test]
 fn malformed_entity_predicates_print_vanilla_errors() {
     let mut server = flat_server();
     let predicate = |inner: &str| format!("execute if predicate {{type:\"minecraft:entity_properties\",entity:\"this\",predicate:{inner}}}");

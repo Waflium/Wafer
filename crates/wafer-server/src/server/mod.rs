@@ -49,6 +49,7 @@ use crate::network::chat::message_signature::MessageSignature;
 use crate::network::chat::signed_message_body::SignedMessageBody;
 use crate::server::network::chat::{ArgumentSignature, ChatState};
 use crate::{LevelType, ServerConfig};
+use crate::commands::arguments::selector::entity_world::EntityWorld;
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{ChatFormatting, Component, player_joined_or_left};
 use crate::network::configuration::{ChatVisibility, CommonListenerCookie};
@@ -1366,19 +1367,11 @@ impl Server {
     }
 
     pub fn entity_name(&self, id: EntityId) -> String {
-        let Some(level) = self.level_of(id) else { return String::new() };
-        let level = &self.levels[level];
-        match level.players.get(&id) {
-            Some(p) => p.profile.name.clone(),
-            None => level.entities.get(&id).map_or_else(String::new, |e| e.name().get_string()),
-        }
+        EntityWorld::entity_name(self, id)
     }
 
     pub fn entity_display_name(&self, id: EntityId) -> Component {
-        match self.level_of(id) {
-            Some(level) => self.levels[level].display_name(id),
-            None => Component::empty(),
-        }
+        EntityWorld::entity_display_name(self, id)
     }
 
     pub fn profile_permission_level(&self, uuid: u128) -> i32 {

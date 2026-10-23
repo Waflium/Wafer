@@ -10,7 +10,7 @@ use crate::advancements::predicates::min_max_bounds::{Doubles, Ints};
 use crate::commands::brigadier::CommandSyntaxException;
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Component, HoverEvent};
-use crate::server::Server;
+use super::entity_world::EntityWorld;
 use crate::server::level::ServerLevel;
 use crate::server::level::game_mode::GameType;
 use crate::world::entity::{Entity, EntityId};
@@ -26,8 +26,8 @@ pub enum Order {
 static SHUFFLE_RANDOM: LazyLock<Mutex<LegacyRandomSource>> = LazyLock::new(|| Mutex::new(LegacyRandomSource::create()));
 
 impl Order {
-    fn apply(self, server: &Server, pos: Vec3, entities: &mut [EntityId]) {
-        let distance = |id: &EntityId| entity(server, *id).position().distance_to_sqr(pos);
+    fn apply(self, world: &dyn EntityWorld, pos: Vec3, entities: &mut [EntityId]) {
+        let distance = |id: &EntityId| entity(world, *id).position().distance_to_sqr(pos);
         match self {
             Order::Arbitrary => {}
             Order::Nearest => entities.sort_by(|a, b| distance(a).total_cmp(&distance(b))),
@@ -77,11 +77,11 @@ impl AdvancementSelectorPredicate {
 }
 
 impl EntityPredicate {
-    fn test(&self, server: &Server, level: &ServerLevel, id: EntityId) -> bool {
+    fn test(&self, world: &dyn EntityWorld, level: &ServerLevel, id: EntityId) -> bool {
         let e = level.entity(id);
         match self {
             EntityPredicate::Alive => level.is_alive(id),
-            EntityPredicate::Name { name, inverted } => (server.entity_name(id) == *name) != *inverted,
+            EntityPredicate::Name { name, inverted } => (world.entity_name(id) == *name) != *inverted,
             EntityPredicate::GameMode { mode, inverted } => match level.players.get(&id) {
                 Some(player) => (player.game_mode.game_type == *mode) ^ *inverted,
                 None => false,
@@ -94,7 +94,7 @@ impl EntityPredicate {
             }
             EntityPredicate::Nbt { tag, inverted } => compare_nbt(tag, Some(&level.entity_tag_to_compare(id))) != *inverted,
             EntityPredicate::Scores(expected) => {
-                let scoreboard = server.scoreboard.borrow();
+                let scoreboard = world.scoreboard().borrow();
                 let holder = level.scoreboard_name(id);
                 expected.iter().all(|(objective, range)| {
                     scoreboard
@@ -119,8 +119,8 @@ impl EntityPredicate {
     }
 }
 
-fn entity(server: &Server, id: EntityId) -> &Entity {
-    server.entity_level(id).entity(id)
+fn entity(world: &dyn EntityWorld, id: EntityId) -> &Entity {
+    world.level_of_entity(id).expect("entity in a loaded level").entity(id)
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -158,9 +158,9 @@ impl EntitySelector {
         Ok(())
     }
 
-    pub fn find_single_entity(&self, server: &Server, source: &CommandSourceStack) -> Result<EntityId, CommandSyntaxException> {
+    pub fn find_single_entity(&self, world: &dyn EntityWorld, source: &CommandSourceStack) -> Result<EntityId, CommandSyntaxException> {
         self.check_permissions(source)?;
-        let entities = self.find_entities(server, source)?;
+        let entities = self.find_entities(world, source)?;
         match entities[..] {
             [] => Err(NO_ENTITIES_FOUND.create()),
             [entity] => Ok(entity),
@@ -168,16 +168,16 @@ impl EntitySelector {
         }
     }
 
-    pub fn find_entities(&self, server: &Server, source: &CommandSourceStack) -> Result<Vec<EntityId>, CommandSyntaxException> {
+    pub fn find_entities(&self, world: &dyn EntityWorld, source: &CommandSourceStack) -> Result<Vec<EntityId>, CommandSyntaxException> {
         self.check_permissions(source)?;
         if !self.includes_entities {
-            return self.find_players(server, source);
+            return self.find_players(world, source);
         }
         if let Some(name) = &self.player_name {
-            return Ok(player_by_name(server, name).into_iter().collect());
+            return Ok(player_by_name(world, name).into_iter().collect());
         }
         if let Some(uuid) = self.entity_uuid {
-            for level in &server.levels {
+            for level in world.levels() {
                 if let Some(found) = level.all_entities().find(|&id| level.entity(id).uuid == uuid) {
                     return Ok(vec![found]);
                 }
@@ -189,22 +189,22 @@ impl EntitySelector {
         if self.current_entity {
             return Ok(source
                 .entity
-                .filter(|&e| server.level_of(e).is_some_and(|level| self.test(server, &server.levels[level], e, pos, absolute_aabb)))
+                .filter(|&e| world.level_of_entity(e).is_some_and(|level| self.test(world, level, e, pos, absolute_aabb)))
                 .into_iter()
                 .collect());
         }
         let mut result = Vec::new();
         if self.world_limited {
-            self.add_entities(server, &server.levels[source.level], &mut result, absolute_aabb, pos);
+            self.add_entities(world, world.level(source.level), &mut result, absolute_aabb, pos);
         } else {
-            for level in &server.levels {
-                self.add_entities(server, level, &mut result, absolute_aabb, pos);
+            for level in world.levels() {
+                self.add_entities(world, level, &mut result, absolute_aabb, pos);
             }
         }
-        Ok(self.sort_and_limit(server, pos, result))
+        Ok(self.sort_and_limit(world, pos, result))
     }
 
-    fn add_entities(&self, server: &Server, level: &ServerLevel, result: &mut Vec<EntityId>, aabb: Option<AABB>, pos: Vec3) {
+    fn add_entities(&self, world: &dyn EntityWorld, level: &ServerLevel, result: &mut Vec<EntityId>, aabb: Option<AABB>, pos: Vec3) {
         let limit = self.result_limit();
         if result.len() >= limit {
             return;
@@ -221,7 +221,7 @@ impl EntitySelector {
             }
         };
         for id in candidates {
-            if self.test(server, level, id, pos, aabb) {
+            if self.test(world, level, id, pos, aabb) {
                 result.push(id);
                 if result.len() >= limit {
                     return;
@@ -234,34 +234,39 @@ impl EntitySelector {
         if self.order == Order::Arbitrary { self.max_results as usize } else { i32::MAX as usize }
     }
 
-    pub fn find_single_player(&self, server: &Server, source: &CommandSourceStack) -> Result<EntityId, CommandSyntaxException> {
+    pub fn find_single_player(&self, world: &dyn EntityWorld, source: &CommandSourceStack) -> Result<EntityId, CommandSyntaxException> {
         self.check_permissions(source)?;
-        let players = self.find_players(server, source)?;
+        let players = self.find_players(world, source)?;
         match players[..] {
             [player] => Ok(player),
             _ => Err(NO_PLAYERS_FOUND.create()),
         }
     }
 
-    pub fn find_players(&self, server: &Server, source: &CommandSourceStack) -> Result<Vec<EntityId>, CommandSyntaxException> {
+    pub fn find_players(&self, world: &dyn EntityWorld, source: &CommandSourceStack) -> Result<Vec<EntityId>, CommandSyntaxException> {
         self.check_permissions(source)?;
         if let Some(name) = &self.player_name {
-            return Ok(player_by_name(server, name).into_iter().collect());
+            return Ok(player_by_name(world, name).into_iter().collect());
         }
         if let Some(uuid) = self.entity_uuid {
-            return Ok(server.players().find(|p| p.profile.uuid == uuid).map(|p| p.entity.id).into_iter().collect());
+            return Ok(world.players().find(|p| p.profile.uuid == uuid).map(|p| p.entity.id).into_iter().collect());
         }
         let pos = self.apply_position(source.position);
         let absolute_aabb = self.absolute_aabb(pos);
         if self.current_entity {
-            return Ok(source.player_id(server).filter(|&p| self.test(server, server.entity_level(p), p, pos, absolute_aabb)).into_iter().collect());
+            return Ok(source
+                .entity
+                .filter(|&e| world.has_player(e))
+                .filter(|&p| world.level_of_entity(p).is_some_and(|level| self.test(world, level, p, pos, absolute_aabb)))
+                .into_iter()
+                .collect());
         }
         let limit = self.result_limit();
         let mut result = Vec::new();
         if self.world_limited {
-            let level = &server.levels[source.level];
+            let level = world.level(source.level);
             for &id in level.players.keys() {
-                if self.test(server, level, id, pos, absolute_aabb) {
+                if self.test(world, level, id, pos, absolute_aabb) {
                     result.push(id);
                     if result.len() >= limit {
                         break;
@@ -269,8 +274,8 @@ impl EntitySelector {
                 }
             }
         } else {
-            for &id in &server.player_list {
-                if self.test(server, server.entity_level(id), id, pos, absolute_aabb) {
+            for id in world.players().map(|p| p.entity.id) {
+                if world.level_of_entity(id).is_some_and(|level| self.test(world, level, id, pos, absolute_aabb)) {
                     result.push(id);
                     if result.len() >= limit {
                         return Ok(result);
@@ -278,7 +283,7 @@ impl EntitySelector {
                 }
             }
         }
-        Ok(self.sort_and_limit(server, pos, result))
+        Ok(self.sort_and_limit(world, pos, result))
     }
 
     fn apply_position(&self, origin: Vec3) -> Vec3 {
@@ -290,23 +295,23 @@ impl EntitySelector {
         self.aabb.map(|bb| bb.move_vec(pos))
     }
 
-    fn test(&self, server: &Server, level: &ServerLevel, id: EntityId, pos: Vec3, aabb: Option<AABB>) -> bool {
-        self.predicates.iter().all(|p| p.test(server, level, id))
+    fn test(&self, world: &dyn EntityWorld, level: &ServerLevel, id: EntityId, pos: Vec3, aabb: Option<AABB>) -> bool {
+        self.predicates.iter().all(|p| p.test(world, level, id))
             && aabb.is_none_or(|bb| bb.intersects(&level.entity(id).bounding_box()))
             && self.range.is_none_or(|range| range.matches_sqr(level.entity(id).position().distance_to_sqr(pos)))
     }
 
-    fn sort_and_limit(&self, server: &Server, pos: Vec3, mut result: Vec<EntityId>) -> Vec<EntityId> {
+    fn sort_and_limit(&self, world: &dyn EntityWorld, pos: Vec3, mut result: Vec<EntityId>) -> Vec<EntityId> {
         if result.len() > 1 {
-            self.order.apply(server, pos, &mut result);
+            self.order.apply(world, pos, &mut result);
         }
         result.truncate(self.max_results as usize);
         result
     }
 }
 
-pub fn player_by_name(server: &Server, name: &str) -> Option<EntityId> {
-    server.players().find(|p| java_equals_ignore_case(&p.profile.name, name)).map(|p| p.entity.id)
+pub fn player_by_name(world: &dyn EntityWorld, name: &str) -> Option<EntityId> {
+    world.players().find(|p| java_equals_ignore_case(&p.profile.name, name)).map(|p| p.entity.id)
 }
 
 pub fn java_equals_ignore_case(a: &str, b: &str) -> bool {
@@ -325,8 +330,8 @@ pub fn java_equals_ignore_case(a: &str, b: &str) -> bool {
         })
 }
 
-pub fn join_names(server: &Server, entities: &[EntityId]) -> Component {
-    crate::server::commands::list_players_command::format_list(entities.iter().map(|&e| server.entity_display_name(e)).collect())
+pub fn join_names(world: &dyn EntityWorld, entities: &[EntityId]) -> Component {
+    crate::server::commands::list_players_command::format_list(entities.iter().map(|&e| world.entity_display_name(e)).collect())
 }
 
 pub fn player_type() -> i32 {
