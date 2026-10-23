@@ -78,7 +78,7 @@ impl DataFixerUpper {
                 fix.get_rule().everywheres(&mut rules);
                 for rule in rules {
                     if types::contains(&current, &rule.ty) {
-                        let next = types::rewrite_everywhere(&current, &rule.ty, &rule.new_type);
+                        let next = if Arc::ptr_eq(&rule.ty, &rule.new_type) { current.clone() } else { types::rewrite_everywhere(&current, &rule.ty, &rule.new_type) };
                         steps.push(Step { rule, ty: current });
                         current = next;
                     }
