@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use wafer_core::random::RandomSource;
 use wafer_core::{Axis, BlockPos, Direction};
 use wafer_data::properties::{EAST, HORIZONTAL_FACING, RAIL_SHAPE, RailShape, WEST};
-use wafer_data::{BlockState, SupportType, blocks};
+use wafer_data::{BlockState, blocks};
 use wafer_protocol::nbt::Nbt;
 
 use super::Piece;
@@ -352,7 +352,7 @@ impl MineShaftCorridor {
                 pos.y = world_y - distance_from_world_y;
                 let below_state = level.get_block_state(pos);
                 let empty_below = is_replaceable_by_structures(below_state) && !below_state.is_block(blocks::LAVA);
-                if !empty_below && can_place_column_on_top_of(below_state) {
+                if !empty_below && can_place_column_on_top_of(level, pos, below_state) {
                     fill_column_between(level, pillar_state, pos, world_y - distance_from_world_y + 1, world_y);
                     return;
                 }
@@ -407,7 +407,10 @@ impl MineShaftCorridor {
         let mut sturdy_neighbours = 0;
         for direction in Direction::VALUES {
             let pos = world_pos.relative(direction);
-            if chunk_bb.is_inside(pos) && level.get_block_state(pos).is_face_sturdy(direction.opposite(), SupportType::Full) {
+            if chunk_bb.is_inside(pos) && {
+                let state = level.get_block_state(pos);
+                level.is_face_sturdy_full_at(pos, state, direction.opposite())
+            } {
                 sturdy_neighbours += 1;
                 if sturdy_neighbours >= count {
                     return true;
@@ -425,8 +428,8 @@ fn fill_column_between(level: &mut impl WorldGenLevel, pillar_state: BlockState,
     }
 }
 
-fn can_place_column_on_top_of(state_below: BlockState) -> bool {
-    state_below.is_face_sturdy(Direction::Up, SupportType::Full)
+fn can_place_column_on_top_of(level: &mut impl WorldGenLevel, pos_below: BlockPos, state_below: BlockState) -> bool {
+    level.is_face_sturdy_full_at(pos_below, state_below, Direction::Up)
 }
 
 fn can_hang_chain_below(level: &mut impl WorldGenLevel, pos_above: BlockPos, state_above: BlockState) -> bool {
@@ -640,7 +643,7 @@ impl MineShaftPiece {
         if self.piece.is_interior(level, x, y, z, chunk_bb) {
             let pos = self.piece.get_world_pos(x, y, z);
             let existing_state = level.get_block_state(pos);
-            if !existing_state.is_face_sturdy(Direction::Up, SupportType::Full) {
+            if !level.is_face_sturdy_full_at(pos, existing_state, Direction::Up) {
                 level.set_block(pos, planks_block, 2);
             }
         }

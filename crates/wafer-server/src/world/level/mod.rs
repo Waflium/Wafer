@@ -40,9 +40,12 @@ pub mod validation;
 pub mod world_data_configuration;
 pub mod world_gen_level;
 
+use std::borrow::Cow;
+
 use wafer_core::random::RandomSource;
+use wafer_core::shapes::VoxelShape;
 use wafer_core::{BlockPos, Direction};
-use wafer_data::{Block, BlockState, Fluid, FluidState};
+use wafer_data::{Block, BlockState, Fluid, FluidState, SupportType};
 
 use crate::world::ticks::TickPriority;
 
@@ -59,8 +62,25 @@ pub trait BlockGetter {
         self.block_state(pos).fluid_state()
     }
 
-    fn is_face_sturdy_at(&mut self, _pos: BlockPos, state: BlockState, direction: Direction, support: wafer_data::SupportType) -> bool {
-        state.is_face_sturdy(direction, support)
+    fn get_block_support_shape(&mut self, state: BlockState, pos: BlockPos) -> Cow<'static, VoxelShape> {
+        state.get_block_support_shape(pos)
+    }
+
+    fn get_state_collision_shape(&mut self, state: BlockState, pos: BlockPos) -> Cow<'static, VoxelShape> {
+        state.get_collision_shape(pos)
+    }
+
+    fn is_face_sturdy_at(&mut self, pos: BlockPos, state: BlockState, direction: Direction, support: SupportType) -> bool {
+        if state.has_dynamic_shape() {
+            let support_shape = self.get_block_support_shape(state, pos);
+            block::support_type::is_supporting(&support_shape, direction, support)
+        } else {
+            state.is_face_sturdy_cached(direction, support)
+        }
+    }
+
+    fn is_face_sturdy_full_at(&mut self, pos: BlockPos, state: BlockState, direction: Direction) -> bool {
+        self.is_face_sturdy_at(pos, state, direction, SupportType::Full)
     }
 }
 

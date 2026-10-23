@@ -37,7 +37,8 @@ impl BlockBehaviour for NetherPortalBlock {
             while level.block_state(pos).is_block(blocks::NETHER_PORTAL) {
                 pos = pos.below();
             }
-            if is_valid_spawn(level.block_state(pos), &entity_types::ZOMBIFIED_PIGLIN)
+            let state = level.block_state(pos);
+            if is_valid_spawn(level, state, pos, &entity_types::ZOMBIFIED_PIGLIN)
                 && let Some(entity) = level.spawn_entity_type(entity_types::ZOMBIFIED_PIGLIN.get_key(), pos.above(), EntitySpawnReason::Structure)
             {
                 level.set_portal_cooldown(entity);

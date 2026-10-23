@@ -1,8 +1,8 @@
 use wafer_core::random::RandomSource;
-use wafer_core::shapes::{self, VoxelShape};
+use wafer_core::shapes;
 use wafer_core::{BlockPos, Direction};
 use wafer_data::properties::{BooleanProperty, EAST, NORTH, SOUTH, UP, WEST};
-use wafer_data::{Block, BlockState, SupportType, blocks};
+use wafer_data::{Block, BlockState, blocks};
 
 use super::BlockBehaviour;
 use super::mirror::Mirror;
@@ -26,14 +26,14 @@ pub fn property_for_face(direction: Direction) -> BooleanProperty {
     }
 }
 
-pub fn can_attach_to(direction_towards_neighbour: Direction, neighbour_state: BlockState) -> bool {
+pub fn can_attach_to(level: &mut (impl BlockGetter + ?Sized), direction_towards_neighbour: Direction, neighbour_pos: BlockPos, neighbour_state: BlockState) -> bool {
     let face = direction_towards_neighbour.opposite();
-    neighbour_state.is_face_sturdy(face, SupportType::Full) || shapes::is_face_full(&VoxelShape::from_boxes(neighbour_state.collision_shape()), face)
+    level.is_face_sturdy_full_at(neighbour_pos, neighbour_state, face) || shapes::is_face_full(&level.get_state_collision_shape(neighbour_state, neighbour_pos), face)
 }
 
 pub fn is_acceptable_neighbour(level: &mut dyn LevelReader, neighbour_pos: BlockPos, direction_to_neighbour: Direction) -> bool {
     let state = level.block_state(neighbour_pos);
-    can_attach_to(direction_to_neighbour, state)
+    can_attach_to(level, direction_to_neighbour, neighbour_pos, state)
 }
 
 fn count_faces(state: BlockState) -> usize {

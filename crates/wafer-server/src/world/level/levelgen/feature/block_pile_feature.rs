@@ -39,8 +39,9 @@ impl BlockPileFeature {
     }
 
     fn may_place_on(&self, level: &mut impl WorldGenLevel, block_pos: BlockPos, random: &mut impl RandomSource) -> bool {
-        let below_state = level.get_block_state(block_pos.below());
-        if below_state.is_block(blocks::DIRT_PATH) { random.next_boolean() } else { below_state.is_face_sturdy_full(Direction::Up) }
+        let below = block_pos.below();
+        let below_state = level.get_block_state(below);
+        if below_state.is_block(blocks::DIRT_PATH) { random.next_boolean() } else { level.is_face_sturdy_full_at(below, below_state, Direction::Up) }
     }
 
     fn try_place_block<R: RandomSource>(&self, level: &mut impl WorldGenLevel, block_pos: BlockPos, random: &mut R) {

@@ -503,6 +503,9 @@ fn blocks(
                     flags |= 1 << (23 + bit);
                 }
             }
+            if block["dynamic_shape"] == true {
+                flags |= 1 << 26;
+            }
             if state["interaction_offset"] == true {
                 bail!("{name} has an interaction shape moved by its offset");
             }

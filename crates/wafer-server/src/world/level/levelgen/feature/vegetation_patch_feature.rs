@@ -85,7 +85,7 @@ impl VegetationPatchFeature {
                     }
                     let below_pos = pos.relative(self.surface);
                     let below_state = level.get_block_state(below_pos);
-                    if level.get_block_state(pos).is_air() && below_state.is_face_sturdy_full(self.surface.opposite()) {
+                    if level.get_block_state(pos).is_air() && level.is_face_sturdy_full_at(below_pos, below_state, self.surface.opposite()) {
                         let depth = self.depth.sample(random) + if self.extra_bottom_block_chance > 0.0 && random.next_float() < self.extra_bottom_block_chance { 1 } else { 0 };
                         let ground_pos = below_pos;
                         if self.place_ground(level, random, below_pos, depth) {
@@ -161,5 +161,7 @@ fn is_exposed(level: &mut impl WorldGenLevel, pos: BlockPos) -> bool {
 }
 
 fn is_exposed_direction(level: &mut impl WorldGenLevel, pos: BlockPos, direction: Direction) -> bool {
-    !level.get_block_state(pos.relative(direction)).is_face_sturdy_full(direction.opposite())
+    let test_pos = pos.relative(direction);
+    let test_state = level.get_block_state(test_pos);
+    !level.is_face_sturdy_full_at(test_pos, test_state, direction.opposite())
 }

@@ -218,7 +218,7 @@ impl EvokerAttackSpellGoal {
         loop {
             let below = pos.below();
             let below_state = level.block_state(below);
-            if below_state.is_face_sturdy_full(Direction::Up) {
+            if level.is_face_sturdy_full_at(below, below_state, Direction::Up) {
                 if !level.block_state(pos).is_air() {
                     let block_state = level.block_state(pos);
                     let shape = block_state.get_collision_shape(pos);

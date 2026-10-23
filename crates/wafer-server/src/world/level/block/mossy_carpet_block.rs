@@ -33,8 +33,9 @@ fn can_support_at_face(level: &mut dyn LevelReader, pos: BlockPos, direction: Di
     if direction == Direction::Up {
         return false;
     }
-    let neighbour = level.block_state(pos.relative(direction));
-    can_attach_to(direction, neighbour)
+    let neighbour_pos = pos.relative(direction);
+    let neighbour = level.block_state(neighbour_pos);
+    can_attach_to(level, direction, neighbour_pos, neighbour)
 }
 
 fn updated_state(mut state: BlockState, level: &mut dyn LevelReader, pos: BlockPos, mut create_sides: bool) -> BlockState {

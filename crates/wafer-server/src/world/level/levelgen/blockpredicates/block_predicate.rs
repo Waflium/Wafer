@@ -1,5 +1,5 @@
 use wafer_core::{AABB, BlockPos, Direction};
-use wafer_data::{Block, BlockState, Fluid, SupportType, Tag, block_tags, fluid_tags};
+use wafer_data::{Block, BlockState, Fluid, Tag, block_tags, fluid_tags};
 use serde_json::Value;
 
 use crate::world::level::world_gen_level::WorldGenLevel;
@@ -151,7 +151,11 @@ impl BlockPredicate {
             BlockPredicate::Solid { offset } => level.get_block_state(at(*offset)).is_solid(),
             BlockPredicate::Replaceable { offset } => level.get_block_state(at(*offset)).can_be_replaced(),
             BlockPredicate::WouldSurvive { offset, state } => block::of(*state).can_survive(*state, level, at(*offset)),
-            BlockPredicate::HasSturdyFace { offset, direction } => level.get_block_state(at(*offset)).is_face_sturdy(*direction, SupportType::Full),
+            BlockPredicate::HasSturdyFace { offset, direction } => {
+                let test_position = at(*offset);
+                let state = level.get_block_state(test_position);
+                level.is_face_sturdy_full_at(test_position, state, *direction)
+            }
             BlockPredicate::InsideWorldBounds { offset } => !level.is_outside_build_height(at(*offset).y),
             BlockPredicate::HeightRange { min_inclusive, max_inclusive } => {
                 let context = WorldGenerationContext { min_gen_y: level.get_min_y(), gen_depth: level.get_height_of_level(), sea_level: level.get_sea_level() };

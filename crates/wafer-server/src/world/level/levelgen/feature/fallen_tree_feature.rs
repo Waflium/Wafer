@@ -107,7 +107,8 @@ impl FallenTreeFeature {
 }
 
 fn is_over_solid_ground(level: &mut impl WorldGenLevel, block_pos: BlockPos) -> bool {
-    level.get_block_state(block_pos.below()).is_face_sturdy_full(Direction::Up)
+    let below_state = level.get_block_state(block_pos.below());
+    level.is_face_sturdy_full_at(block_pos, below_state, Direction::Up)
 }
 
 fn decorate_logs<R: RandomSource>(level: &mut impl WorldGenLevel, random: &mut R, logs: &JavaObjectHashSet<BlockPos>, decorators: &[TreeDecorator]) {

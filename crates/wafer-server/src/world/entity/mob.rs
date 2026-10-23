@@ -2421,7 +2421,10 @@ impl Mob {
 
 pub fn check_mob_spawn_rules(entity_type: &EntityType, level: &mut (impl ServerLevelAccessor + ?Sized), spawn_reason: EntitySpawnReason, pos: BlockPos) -> bool {
     let below = pos.below();
-    EntitySpawnReason::is_spawner(spawn_reason) || block_behaviour::is_valid_spawn(level.block_state(below), entity_type)
+    EntitySpawnReason::is_spawner(spawn_reason) || {
+        let below_state = level.block_state(below);
+        block_behaviour::is_valid_spawn(level, below_state, below, entity_type)
+    }
 }
 
 pub fn slot_name(slot: EquipmentSlot) -> &'static str {

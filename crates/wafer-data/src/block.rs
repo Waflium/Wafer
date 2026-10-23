@@ -124,6 +124,7 @@ pub(crate) mod flags {
     pub const SHAPE_OFFSET: u32 = 1 << 23;
     pub const COLLISION_OFFSET: u32 = 1 << 24;
     pub const SUPPORT_OFFSET: u32 = 1 << 25;
+    pub const DYNAMIC_SHAPE: u32 = 1 << 26;
 }
 
 impl Block {
@@ -334,6 +335,10 @@ impl BlockState {
     pub fn get_collision_shape(self, pos: BlockPos) -> Cow<'static, wafer_core::shapes::VoxelShape> {
         self.moved_by_offset(self.collision_voxel_shape(), flags::COLLISION_OFFSET, pos)
     }
+
+    pub fn get_block_support_shape(self, pos: BlockPos) -> Cow<'static, wafer_core::shapes::VoxelShape> {
+        self.moved_by_offset(self.support_voxel_shape(), flags::SUPPORT_OFFSET, pos)
+    }
     pub fn is_pathfindable_land(self) -> bool {
         self.flag(flags::PATHFINDABLE_LAND)
     }
@@ -349,12 +354,12 @@ impl BlockState {
         self.data().light_dampening
     }
 
-    pub fn is_face_sturdy(self, direction: Direction, support: SupportType) -> bool {
+    pub fn is_face_sturdy_cached(self, direction: Direction, support: SupportType) -> bool {
         self.data().face_sturdy & (1 << (direction as u32 * 3 + support as u32)) != 0
     }
 
-    pub fn is_face_sturdy_full(self, direction: Direction) -> bool {
-        self.is_face_sturdy(direction, SupportType::Full)
+    pub fn has_dynamic_shape(self) -> bool {
+        self.flag(flags::DYNAMIC_SHAPE)
     }
 
     pub fn push_reaction(self) -> PushReaction {
@@ -550,12 +555,12 @@ mod tests {
     #[test]
     fn cached_state_values() {
         let stone = blocks::STONE.default_state();
-        assert!(stone.is_face_sturdy(Direction::Up, SupportType::Full));
+        assert!(stone.is_face_sturdy_cached(Direction::Up, SupportType::Full));
         assert!(stone.is_redstone_conductor());
         let slab = blocks::OAK_SLAB.default_state();
         assert_eq!(slab.get(SLAB_TYPE), SlabType::Bottom);
-        assert!(!slab.is_face_sturdy(Direction::Up, SupportType::Full));
-        assert!(slab.is_face_sturdy(Direction::Down, SupportType::Full));
+        assert!(!slab.is_face_sturdy_cached(Direction::Up, SupportType::Full));
+        assert!(slab.is_face_sturdy_cached(Direction::Down, SupportType::Full));
         assert!(blocks::WATER.default_state().fluid_state().is_source());
         assert!(blocks::AIR.default_state().is_air());
     }

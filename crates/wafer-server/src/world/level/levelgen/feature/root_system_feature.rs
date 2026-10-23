@@ -130,7 +130,10 @@ impl RootSystemFeature {
             let working_pos = pos.offset(dx, dy, dz);
             if level.get_block_state(working_pos).is_air() {
                 let target_state = self.hanging_root_state_provider.value().get_state(level, random, working_pos);
-                if block::of(target_state).can_survive(target_state, level, working_pos) && level.get_block_state(working_pos.above()).is_face_sturdy_full(Direction::Down) {
+                if block::of(target_state).can_survive(target_state, level, working_pos) && {
+                    let above_state = level.get_block_state(working_pos.above());
+                    level.is_face_sturdy_full_at(working_pos, above_state, Direction::Down)
+                } {
                     level.set_block(working_pos, target_state, 2);
                 }
             }

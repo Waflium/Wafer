@@ -34,7 +34,7 @@ impl SpawnPlacementType {
                     let above = block_pos.above();
                     let below = block_pos.below();
                     let below_state = level.block_state(below);
-                    if !block_behaviour::is_valid_spawn(below_state, entity_type) {
+                    if !block_behaviour::is_valid_spawn(level, below_state, below, entity_type) {
                         return false;
                     }
                     is_valid_empty_spawn_block(level, block_pos, entity_type) && is_valid_empty_spawn_block(level, above, entity_type)

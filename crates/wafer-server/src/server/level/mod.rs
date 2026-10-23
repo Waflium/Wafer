@@ -2147,12 +2147,22 @@ impl BlockGetter for ServerLevel {
         self.chunks.block_state(pos)
     }
 
-    fn is_face_sturdy_at(&mut self, pos: BlockPos, state: BlockState, direction: Direction, support: wafer_data::SupportType) -> bool {
-        if !state.is_block(blocks::MOVING_PISTON) {
-            return state.is_face_sturdy(direction, support);
+    fn get_block_support_shape(&mut self, state: BlockState, pos: BlockPos) -> std::borrow::Cow<'static, wafer_core::shapes::VoxelShape> {
+        if state.is_block(blocks::MOVING_PISTON) {
+            std::borrow::Cow::Owned(crate::world::level::block::moving_piston_block::get_collision_shape(self, pos))
+        } else if state.block().is_instance_of("ShulkerBoxBlock") {
+            crate::world::level::block::shulker_box_block::get_block_support_shape(self, state, pos)
+        } else {
+            state.get_block_support_shape(pos)
         }
-        let shape = crate::world::level::block::moving_piston_block::get_collision_shape(self, pos);
-        crate::world::level::block::support_type::is_supporting(&shape, direction, support)
+    }
+
+    fn get_state_collision_shape(&mut self, state: BlockState, pos: BlockPos) -> std::borrow::Cow<'static, wafer_core::shapes::VoxelShape> {
+        if state.is_block(blocks::MOVING_PISTON) {
+            std::borrow::Cow::Owned(crate::world::level::block::moving_piston_block::get_collision_shape(self, pos))
+        } else {
+            state.get_collision_shape(pos)
+        }
     }
 
     fn get_min_y(&self) -> i32 {

@@ -319,5 +319,6 @@ fn is_movement_unobstructed(level: &mut impl WorldGenLevel, from: BlockPos, to: 
 
 fn is_unobstructed(level: &mut impl WorldGenLevel, from: BlockPos, direction: Direction) -> bool {
     let test_pos = from.relative(direction);
-    !level.get_block_state(test_pos).is_face_sturdy_full(direction.opposite())
+    let test_state = level.get_block_state(test_pos);
+    !level.is_face_sturdy_full_at(test_pos, test_state, direction.opposite())
 }

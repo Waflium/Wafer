@@ -28,13 +28,14 @@ pub fn has_face(state: BlockState, face_direction: Direction) -> bool {
     state.try_get(get_face_property(face_direction)).unwrap_or(false)
 }
 
-pub fn can_attach_to(direction_towards_neighbour: Direction, neighbour_state: BlockState) -> bool {
-    vine_block::can_attach_to(direction_towards_neighbour, neighbour_state)
+pub fn can_attach_to(level: &mut (impl BlockGetter + ?Sized), direction_towards_neighbour: Direction, neighbour_pos: BlockPos, neighbour_state: BlockState) -> bool {
+    vine_block::can_attach_to(level, direction_towards_neighbour, neighbour_pos, neighbour_state)
 }
 
 pub fn can_attach_to_at(level: &mut dyn LevelReader, pos: BlockPos, direction_towards_neighbour: Direction) -> bool {
-    let block_state = level.block_state(pos.relative(direction_towards_neighbour));
-    can_attach_to(direction_towards_neighbour, block_state)
+    let neighbour_pos = pos.relative(direction_towards_neighbour);
+    let block_state = level.block_state(neighbour_pos);
+    can_attach_to(level, direction_towards_neighbour, neighbour_pos, block_state)
 }
 
 fn remove_face(state: BlockState, property: BooleanProperty) -> BlockState {
@@ -54,7 +55,7 @@ pub fn is_valid_state_for_placement(block: Block, level: &mut dyn LevelReader, o
     if !old_state.is_block(block) || !has_face(old_state, placement_direction) {
         let neighbour_pos = placement_pos.relative(placement_direction);
         let neighbour_state = level.block_state(neighbour_pos);
-        can_attach_to(placement_direction, neighbour_state)
+        can_attach_to(level, placement_direction, neighbour_pos, neighbour_state)
     } else {
         false
     }
@@ -101,11 +102,11 @@ impl BlockBehaviour for MultifaceBlock {
         ctx.item.is_empty() || ctx.item.item != state.block().item() || has_any_vacant_face(state)
     }
 
-    fn update_shape(&self, state: BlockState, level: &mut dyn LevelAccessor, pos: BlockPos, direction: Direction, _: BlockPos, neighbour_state: BlockState) -> BlockState {
+    fn update_shape(&self, state: BlockState, level: &mut dyn LevelAccessor, pos: BlockPos, direction: Direction, neighbour_pos: BlockPos, neighbour_state: BlockState) -> BlockState {
         schedule_water_tick(state, level, pos);
         if !has_any_face(state) {
             blocks::AIR.default_state()
-        } else if has_face(state, direction) && !can_attach_to(direction, neighbour_state) {
+        } else if has_face(state, direction) && !can_attach_to(level, direction, neighbour_pos, neighbour_state) {
             remove_face(state, get_face_property(direction))
         } else {
             state

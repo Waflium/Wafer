@@ -217,7 +217,11 @@ impl ServerLevel {
     }
 
     pub fn fluid_height_for_camera(&mut self, fluid: FluidState, pos: BlockPos) -> f32 {
-        if fluid.is_source() && self.block_state(pos.above()).is_face_sturdy_full(Direction::Down) {
+        if fluid.is_source() && {
+            let above = pos.above();
+            let above_state = self.block_state(above);
+            self.is_face_sturdy_full_at(above, above_state, Direction::Down)
+        } {
             return 1.0;
         }
         self.fluid_height(fluid, pos)
@@ -285,7 +289,7 @@ impl ServerLevel {
         } else if state.block().is_instance_of("IceBlock") {
             false
         } else {
-            state.is_face_sturdy_full(direction)
+            self.is_face_sturdy_full_at(pos, state, direction)
         }
     }
 }

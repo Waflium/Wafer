@@ -1,8 +1,9 @@
-use wafer_core::Direction;
-use wafer_data::{Block, BlockState, SupportType, blocks};
+use wafer_core::{BlockPos, Direction};
+use wafer_data::{Block, BlockState, blocks};
 
 use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::entity_types;
+use crate::world::level::BlockGetter;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RenderShape {
@@ -128,9 +129,9 @@ fn is_valid_spawn_predicate(block: Block) -> IsValidSpawn {
     }
 }
 
-pub fn is_valid_spawn(state: BlockState, entity_type: &EntityType) -> bool {
+pub fn is_valid_spawn(level: &mut (impl BlockGetter + ?Sized), state: BlockState, pos: BlockPos, entity_type: &EntityType) -> bool {
     match is_valid_spawn_predicate(state.block()) {
-        IsValidSpawn::Default => state.is_face_sturdy(Direction::Up, SupportType::Full) && state.light_emission() < 14,
+        IsValidSpawn::Default => level.is_face_sturdy_full_at(pos, state, Direction::Up) && state.light_emission() < 14,
         IsValidSpawn::Never => false,
         IsValidSpawn::Always => true,
         IsValidSpawn::OcelotOrParrot => *entity_type == entity_types::OCELOT || *entity_type == entity_types::PARROT,
@@ -141,10 +142,24 @@ pub fn is_valid_spawn(state: BlockState, entity_type: &EntityType) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use wafer_data::Block;
+    use wafer_core::BlockPos;
+    use wafer_data::{Block, BlockState, blocks};
 
     use super::is_valid_spawn;
     use crate::world::entity::entity_types;
+    use crate::world::level::BlockGetter;
+
+    struct Empty;
+
+    impl BlockGetter for Empty {
+        fn block_state(&mut self, _pos: BlockPos) -> BlockState {
+            blocks::AIR.default_state()
+        }
+
+        fn get_min_y(&self) -> i32 {
+            0
+        }
+    }
 
     #[test]
     fn is_valid_spawn_matches_vanilla() {
@@ -153,7 +168,7 @@ mod tests {
         let mut wrong = Vec::new();
         for (id, &expected) in oracle.iter().enumerate() {
             let state = wafer_data::BlockState(id as u16);
-            let actual = probes.iter().enumerate().fold(0, |bits, (i, probe)| bits | (is_valid_spawn(state, probe) as u32) << i);
+            let actual = probes.iter().enumerate().fold(0, |bits, (i, probe)| bits | (is_valid_spawn(&mut Empty, state, BlockPos::new(0, 0, 0), probe) as u32) << i);
             if actual != expected {
                 let block: Block = state.block();
                 let entry = format!("{} {expected} {actual}", block.info().name);

@@ -1,3 +1,7 @@
+use std::borrow::Cow;
+use std::sync::LazyLock;
+
+use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, BlockPos, Direction, Vec3};
 use wafer_data::properties::FACING;
 use wafer_data::{Block, BlockState};
@@ -14,6 +18,24 @@ use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::block::entity::{AnimationStatus, BlockEntityKind};
 
 pub struct ShulkerBoxBlock;
+
+static SHAPES_OPEN_SUPPORT: LazyLock<[VoxelShape; 6]> = LazyLock::new(|| {
+    [Direction::Down, Direction::Up, Direction::North, Direction::South, Direction::West, Direction::East].map(|direction| {
+        let min = |step: i32| if step > 0 { 15.0 / 16.0 } else { 0.0 };
+        let max = |step: i32| if step < 0 { 1.0 / 16.0 } else { 1.0 };
+        let (x, y, z) = (direction.step_x(), direction.step_y(), direction.step_z());
+        VoxelShape::from_boxes(&[AABB::new(min(x), min(y), min(z), max(x), max(y), max(z))])
+    })
+});
+
+static BLOCK_SHAPE: LazyLock<VoxelShape> = LazyLock::new(VoxelShape::block);
+
+pub fn get_block_support_shape(level: &mut ServerLevel, state: BlockState, pos: BlockPos) -> Cow<'static, VoxelShape> {
+    match level.get_block_entity(pos).map(|entity| &entity.kind) {
+        Some(BlockEntityKind::ShulkerBox(shulker)) if !shulker.is_closed() => Cow::Borrowed(&SHAPES_OPEN_SUPPORT[state.get(FACING).opposite() as usize]),
+        _ => Cow::Borrowed(&BLOCK_SHAPE),
+    }
+}
 
 pub fn progress_delta_aabb(direction: Direction, progress_from: f32, progress_to: f32, position: Vec3) -> AABB {
     let bounds = AABB::new(-0.5, 0.0, -0.5, 0.5, 1.0, 0.5);

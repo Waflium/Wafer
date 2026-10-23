@@ -11,8 +11,9 @@ use crate::world::level::update_flags::{UPDATE_ALL, UPDATE_LIMIT};
 pub struct HangingMossBlock;
 
 fn can_stay_at_position(level: &mut dyn LevelReader, pos: BlockPos) -> bool {
-    let block_state = level.block_state(pos.above());
-    can_attach_to(Direction::Up, block_state) || block_state.is_block(blocks::PALE_HANGING_MOSS)
+    let neighbour_pos = pos.above();
+    let block_state = level.block_state(neighbour_pos);
+    can_attach_to(level, Direction::Up, neighbour_pos, block_state) || block_state.is_block(blocks::PALE_HANGING_MOSS)
 }
 
 fn tip(level: &mut ServerLevel, pos: BlockPos) -> BlockPos {

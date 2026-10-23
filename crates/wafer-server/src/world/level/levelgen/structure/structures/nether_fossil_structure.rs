@@ -1,6 +1,6 @@
 use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction};
-use wafer_data::blocks;
+use wafer_data::{SupportType, blocks};
 use serde_json::Value;
 
 use super::nether_fossil_pieces;
@@ -33,7 +33,7 @@ impl NetherFossilStructure {
             let current = column.get_block(y);
             y -= 1;
             let below = column.get_block(y);
-            if current.is_air() && (below.is_block(blocks::SOUL_SAND) || below.is_face_sturdy_full(Direction::Up)) {
+            if current.is_air() && (below.is_block(blocks::SOUL_SAND) || below.is_face_sturdy_cached(Direction::Up, SupportType::Full)) {
                 break;
             }
         }

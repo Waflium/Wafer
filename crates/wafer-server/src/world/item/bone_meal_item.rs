@@ -1,7 +1,7 @@
 use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction};
 use wafer_data::properties::HORIZONTAL_FACING;
-use wafer_data::{Block, SupportType, blocks};
+use wafer_data::{Block, blocks};
 
 use super::ItemStack;
 use crate::server::level::ServerLevel;
@@ -24,7 +24,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
         InteractionResult::SUCCESS_SERVER
     } else {
         let clicked_state = level.block_state(pos);
-        let solid_block_face = clicked_state.is_face_sturdy(hit.direction, SupportType::Full);
+        let solid_block_face = level.is_face_sturdy_full_at(pos, clicked_state, hit.direction);
         if solid_block_face && grow_water_plant(&mut bone_meal_stack, level, relative, Some(hit.direction)) {
             level.cause_use_vibration(&bone_meal_stack, player, crate::world::level::gameevent::game_event::ITEM_INTERACT_FINISH);
             level.level_event(None, PARTICLES_AND_SOUND_PLANT_GROWTH, relative, 15);

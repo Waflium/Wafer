@@ -220,8 +220,10 @@ impl ServerLevel {
             let z = pos.z - 1 + random.next_int_bounded(3);
             let candidate = BlockPos::new(x, y, z);
             let below = candidate.below();
-            if !positions.contains(&candidate) && self.block_state(candidate).can_be_replaced() && self.block_state(below).is_face_sturdy_full(Direction::Up)
-            {
+            if !positions.contains(&candidate) && self.block_state(candidate).can_be_replaced() && {
+                let below_state = self.block_state(below);
+                self.is_face_sturdy_full_at(below, below_state, Direction::Up)
+            } {
                 positions.push(candidate);
                 if positions.len() >= cobweb_count {
                     break;

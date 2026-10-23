@@ -11,7 +11,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::map_post_processing::MapPostProcessing;
 use crate::world::level::block::BlockHitResult;
-use crate::world::level::LevelReader;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::material::create_legacy_block;
 use crate::world::level::material::map_color::{Brightness, MapColor, get_map_color};
@@ -152,7 +152,7 @@ pub fn update(level: &mut ServerLevel, player: EntityId, data: &mut MapItemSaved
                                         break;
                                     }
                                 }
-                                state = get_correct_state_for_fluid_block(state);
+                                state = get_correct_state_for_fluid_block(level, state, block_pos);
                             }
                         }
                         data.check_banners(level, x, z);
@@ -190,9 +190,9 @@ pub fn update(level: &mut ServerLevel, player: EntityId, data: &mut MapItemSaved
     }
 }
 
-fn get_correct_state_for_fluid_block(state: BlockState) -> BlockState {
+fn get_correct_state_for_fluid_block(level: &mut ServerLevel, state: BlockState, pos: BlockPos) -> BlockState {
     let fluid_state = state.fluid_state();
-    if !fluid_state.is_empty() && !state.is_face_sturdy_full(Direction::Up) { create_legacy_block(fluid_state) } else { state }
+    if !fluid_state.is_empty() && !level.is_face_sturdy_full_at(pos, state, Direction::Up) { create_legacy_block(fluid_state) } else { state }
 }
 
 fn is_biome_watery(is_biome_watery: &[bool], x: i32, z: i32) -> bool {
