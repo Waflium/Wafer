@@ -1985,7 +1985,8 @@ fn backtrace_frames() -> Vec<String> {
 
 pub(crate) fn capture_panic_frames() {
     let frames = backtrace_frames();
-    let start = frames.iter().rposition(|frame| frame.starts_with("std::panicking::") || frame.starts_with("core::panicking::") || frame.starts_with("core::option::")).map_or(0, |i| i + 1);
+    let end = frames.iter().position(|frame| frame.contains("catch_unwind")).unwrap_or(frames.len());
+    let start = frames[..end].iter().rposition(|frame| frame.starts_with("std::panicking::") || frame.starts_with("core::panicking::") || frame.starts_with("core::option::")).map_or(0, |i| i + 1);
     PANIC_FRAMES.set(Some(frames[start..].to_vec()));
 }
 

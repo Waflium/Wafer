@@ -80,7 +80,9 @@ impl ServerLevel {
                 true
             }
             mob_effects::HUNGER => {
-                self.cause_food_exhaustion(id, 0.005 * (amplifier + 1) as f32);
+                if self.is_player(id) {
+                    self.cause_food_exhaustion(id, 0.005 * (amplifier + 1) as f32);
+                }
                 true
             }
             mob_effects::ABSORPTION => self.absorption_amount(id) > 0.0,

@@ -272,3 +272,14 @@ fn foxes_sleep_under_a_roof_by_day_and_wake_at_night() {
     }
     assert!(!level.is_sleeping(id));
 }
+
+#[test]
+fn foxes_with_hunger_keep_ticking() {
+    let (mut level, _, fox) = setup(Vec3::new(0.5, -60.0, 0.5));
+    let effect = crate::world::effect::MobEffectInstance::new(wafer_data::mob_effects::HUNGER, 40, 0);
+    assert!(level.add_effect(fox, effect, None));
+    for _ in 0..20 {
+        level.tick();
+    }
+    assert!(level.has_effect(fox, wafer_data::mob_effects::HUNGER));
+}
