@@ -11,6 +11,7 @@ use crate::network::chat::player_chat_message::PlayerChatMessage;
 use crate::network::chat::{Arg, ChatFormatting, Component};
 use crate::server::Server;
 use crate::world::entity::EntityId;
+use crate::commands::execution::ExecutionContext;
 
 pub static ERROR_NOT_PLAYER: SimpleCommandExceptionType = SimpleCommandExceptionType("permissions.requires.player");
 pub static ERROR_NOT_ENTITY: SimpleCommandExceptionType = SimpleCommandExceptionType("permissions.requires.entity");
@@ -21,6 +22,7 @@ pub enum CommandSource {
     Rcon,
     Player(EntityId),
     CommandBlock(u64),
+    Tracer,
     Null,
 }
 
@@ -30,8 +32,13 @@ impl CommandSource {
             CommandSource::Server | CommandSource::Rcon => true,
             CommandSource::Player(_) => server.game_rules.get_bool(game_rule::SEND_COMMAND_FEEDBACK),
             CommandSource::CommandBlock(_) => server.game_rules.get_bool(game_rule::SEND_COMMAND_FEEDBACK),
+            CommandSource::Tracer => true,
             CommandSource::Null => false,
         }
+    }
+
+    fn always_accepts(self) -> bool {
+        matches!(self, CommandSource::Tracer)
     }
 
     fn accepts_failure(self) -> bool {
@@ -44,7 +51,7 @@ impl CommandSource {
             CommandSource::Rcon => server.config.broadcast_rcon_to_ops,
             CommandSource::Player(_) => true,
             CommandSource::CommandBlock(_) => server.game_rules.get_bool(game_rule::COMMAND_BLOCK_OUTPUT),
-            CommandSource::Null => false,
+            CommandSource::Tracer | CommandSource::Null => false,
         }
     }
 
@@ -54,6 +61,7 @@ impl CommandSource {
             CommandSource::Rcon => server.rcon_buffer.borrow_mut().push_str(&message.get_string()),
             CommandSource::Player(id) => server.send_player_system_message(id, message, false),
             CommandSource::CommandBlock(session) => server.command_block_messages.borrow_mut().push((session, message.clone())),
+            CommandSource::Tracer => ExecutionContext::with_tracer(|tracer| tracer.send_system_message(&message.get_string())),
             CommandSource::Null => {}
         }
     }
@@ -270,6 +278,9 @@ impl CommandSourceStack {
     }
 
     pub fn with_suppressed_output(&self) -> CommandSourceStack {
+        if self.source.always_accepts() {
+            return self.clone();
+        }
         CommandSourceStack { silent: true, ..self.clone() }
     }
 
@@ -348,6 +359,7 @@ impl CommandSourceStack {
     }
 
     pub fn handle_error(&self, server: &Server, e: CommandSyntaxException, forked: bool) {
+        ExecutionContext::with_tracer(|tracer| tracer.on_error(&e.message.get_string()));
         if !forked {
             self.send_failure(server, e.message);
         }

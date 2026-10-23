@@ -474,6 +474,7 @@ mod tests {
         LazyLock::force(&MODIFIERS);
         LazyLock::force(&CUSTOM_EXECUTORS);
         LazyLock::force(&CUSTOM_MODIFIERS);
+        LazyLock::force(&SUGGESTERS);
     }
 }
 

@@ -14,6 +14,7 @@ mod data_pack_command;
 mod command_response_tracker;
 mod data;
 mod de_op_commands;
+pub mod debug_command;
 mod dialog_command;
 mod default_game_mode_commands;
 mod difficulty_command;
@@ -100,6 +101,7 @@ use crate::commands::{CommandFn, ModifierFn};
 pub fn executors() -> Vec<(String, CommandFn)> {
     let mut all: Vec<(String, CommandFn)> = EXECUTORS.iter().map(|&(path, f)| (path.to_string(), f)).collect();
     all.extend(game_rule_command::executors());
+    all.extend(debug_command::executors());
     all.extend(fill_command::executors());
     all.extend(clone_commands::executors());
     all.extend(data::executors());
@@ -711,6 +713,7 @@ pub fn suggestion_providers() -> Vec<(String, crate::commands::SuggestFn)> {
     all.push(("scoreboard players enable targets objective".into(), scoreboard_command::suggest_triggers));
     let functions: SuggestFn = function_command::suggest_function;
     all.push(("function name".into(), functions));
+    all.push(("debug function name".into(), functions));
     all.push(("execute if function name".into(), functions));
     all.push(("execute unless function name".into(), functions));
     all.push(("schedule function function".into(), functions));
@@ -747,6 +750,7 @@ pub fn suggestion_providers() -> Vec<(String, crate::commands::SuggestFn)> {
 pub fn custom_executors() -> Vec<(String, crate::commands::CustomCommandFn)> {
     let mut all = function_command::custom_executors();
     all.extend(return_command::custom_executors());
+    all.extend(debug_command::custom_executors());
     all
 }
 

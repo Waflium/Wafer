@@ -14,6 +14,10 @@ pub static ERROR_FORK_LIMIT_REACHED: DynamicCommandExceptionType = DynamicComman
 pub struct BuildContexts(pub ChainStage);
 
 impl BuildContexts {
+    pub fn trace_command_start(&self, frame: &Frame) {
+        ExecutionContext::with_tracer(|tracer| tracer.on_command(frame.depth, &self.0.top_context().input));
+    }
+
     pub fn execute(&self, server: &mut Server, original_source: &CommandSourceStack, initial_sources: Vec<CommandSourceStack>, frame: &Frame, initial_modifiers: ChainModifiers) {
         let mut current_stage = self.0.clone();
         let mut modifiers = initial_modifiers;
@@ -86,11 +90,12 @@ pub struct ExecuteCommand {
 }
 
 impl ExecuteCommand {
-    pub fn execute(&self, server: &mut Server, sender: &CommandSourceStack) {
+    pub fn execute(&self, server: &mut Server, sender: &CommandSourceStack, frame: &Frame) {
         ExecutionContext::with(ExecutionContext::increment_cost);
         let forked = self.modifiers.is_forked();
-        if let Err(e) = run_executable(server, &self.stage, sender, forked) {
-            sender.handle_error(server, e, forked);
+        match run_executable(server, &self.stage, sender, forked) {
+            Ok(result) => ExecutionContext::with_tracer(|tracer| tracer.on_return(frame.depth, &self.stage.top_context().input, result)),
+            Err(e) => sender.handle_error(server, e, forked),
         }
     }
 }
@@ -124,6 +129,9 @@ impl CallFunction {
         let new_depth = frame.depth + 1;
         let frame_control = ExecutionContext::with(|context| {
             context.increment_cost();
+            if let Some(tracer) = context.tracer() {
+                tracer.on_call(frame.depth, &self.function.id, self.function.entries.len());
+            }
             if self.return_parent_frame { frame.frame_control } else { FrameControl::DiscardAtDepthOrHigher(new_depth) }
         });
         let new_frame = Frame { depth: new_depth, return_value_consumer: self.result_callback, frame_control };

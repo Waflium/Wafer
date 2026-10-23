@@ -216,6 +216,8 @@ pub struct Server {
     send_all_player_info_in: i32,
     pub seed: i64,
     pub tick_count: i32,
+    debug_command_profiler: Option<commands::debug_command::TimeProfiler>,
+    debug_command_profiler_delay_start: bool,
     ticks_until_autosave: i32,
     pub tick_rate_manager: ServerTickRateManager,
     tick_times_nanos: [i64; 100],
@@ -441,6 +443,8 @@ impl Server {
             send_all_player_info_in: 0,
             seed,
             tick_count: 0,
+            debug_command_profiler: None,
+            debug_command_profiler_delay_start: false,
             ticks_until_autosave: AUTOSAVE_INTERVAL,
             tick_rate_manager,
             tick_times_nanos: [0; 100],
@@ -1454,6 +1458,18 @@ impl Server {
         }
     }
 
+    pub fn is_time_profiler_running(&self) -> bool {
+        self.debug_command_profiler_delay_start || self.debug_command_profiler.is_some()
+    }
+
+    pub fn start_time_profiler(&mut self) {
+        self.debug_command_profiler_delay_start = true;
+    }
+
+    pub fn stop_time_profiler(&mut self) -> Option<commands::debug_command::TimeProfiler> {
+        self.debug_command_profiler.take()
+    }
+
     pub(crate) fn tick(&mut self) {
         let start = Instant::now();
         let empty_tick_threshold = self.config.pause_when_empty_seconds * 20;
@@ -1983,6 +1999,10 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             this_tick
         };
         let sprinting = this_tick.is_zero();
+        if server.debug_command_profiler_delay_start {
+            server.debug_command_profiler_delay_start = false;
+            server.debug_command_profiler = Some(commands::debug_command::TimeProfiler::new(server.tick_count));
+        }
         next_tick += this_tick;
         timing.set_next_tick_time(next_tick, server.tick_rate_manager.milliseconds_per_tick());
         if ticks.is_multiple_of(SNAPSHOT_INTERVAL)

@@ -10,6 +10,7 @@ use super::brigadier::{CommandContext, ContextChain};
 use super::functions::InstantiatedFunction;
 use super::source::{CommandResultCallback, CommandSourceStack};
 use crate::server::Server;
+use crate::server::commands::debug_command::Tracer;
 
 const MAX_QUEUE_DEPTH: usize = 10_000_000;
 
@@ -121,7 +122,10 @@ impl CommandQueueEntry {
     fn execute(self, server: &mut Server) {
         let frame = &self.frame;
         match self.action {
-            EntryAction::BuildContexts(build, sender) => build.execute(server, &sender, vec![sender.clone()], frame, ChainModifiers::DEFAULT),
+            EntryAction::BuildContexts(build, sender) => {
+                build.trace_command_start(frame);
+                build.execute(server, &sender, vec![sender.clone()], frame, ChainModifiers::DEFAULT)
+            }
             EntryAction::Continuation { build, modifiers, original, sources } => {
                 let sources = match sources {
                     ContinuationSources::Owned(sources) => sources,
@@ -129,7 +133,7 @@ impl CommandQueueEntry {
                 };
                 build.execute(server, &original, sources, frame, modifiers);
             }
-            EntryAction::ExecuteCommand(command, sender) => command.execute(server, &sender),
+            EntryAction::ExecuteCommand(command, sender) => command.execute(server, &sender, frame),
             EntryAction::CallFunction(call, sender) => call.execute(sender, frame),
             EntryAction::ContinuationTask(task) => task.execute(frame),
             EntryAction::Fallthrough => {
@@ -168,6 +172,7 @@ pub struct ExecutionContext {
     command_queue: VecDeque<CommandQueueEntry>,
     new_top_commands: Vec<CommandQueueEntry>,
     current_frame_depth: i32,
+    tracer: Option<Tracer>,
 }
 
 thread_local! {
@@ -192,6 +197,7 @@ impl ExecutionContext {
             command_queue: VecDeque::new(),
             new_top_commands: Vec::new(),
             current_frame_depth: 0,
+            tracer: None,
         }
     }
 
@@ -288,6 +294,24 @@ impl ExecutionContext {
         for entry in self.new_top_commands.drain(..).rev() {
             self.command_queue.push_front(entry);
         }
+    }
+
+    pub fn set_tracer(&mut self, tracer: Tracer) {
+        self.tracer = Some(tracer);
+    }
+
+    pub fn tracer(&mut self) -> Option<&mut Tracer> {
+        self.tracer.as_mut()
+    }
+
+    pub fn with_tracer(f: impl FnOnce(&mut Tracer)) {
+        CURRENT_EXECUTION_CONTEXT.with(|c| {
+            if let Ok(mut context) = c.try_borrow_mut()
+                && let Some(tracer) = context.as_mut().and_then(ExecutionContext::tracer)
+            {
+                f(tracer);
+            }
+        });
     }
 
     pub fn fork_limit(&self) -> i32 {
