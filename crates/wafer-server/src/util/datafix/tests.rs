@@ -371,3 +371,99 @@ fn criteria_rename_rejects_duplicate_keys_like_vanilla() {
 fn frog_variant_without_a_name_fails_like_vanilla() {
     update("entity_chunk", 3086, 3087, r#"{Entities:[{id:"minecraft:frog",Variant:5}]}"#);
 }
+const CASES_FROM_100: &[(&str, i32, i32, &str, &str)] = &[
+    ("entity", 100, 101, r#"{id:"Villager",Profession:1}"#, r#"{CanPickUpLoot:1b,Profession:1,id:"Villager"}"#),
+    ("entity", 100, 101, r#"{id:"Villager",Profession:1,CanPickUpLoot:0b}"#, r#"{CanPickUpLoot:1b,Profession:1,id:"Villager"}"#),
+    ("item_stack", 101, 102, r#"{id:1s,Count:1b}"#, r#"{Count:1b,id:"minecraft:stone"}"#),
+    ("item_stack", 101, 102, r#"{id:373s,Damage:8193s,Count:1b}"#, r#"{Count:1b,Damage:8193s,id:"minecraft:potion"}"#),
+    ("item_stack", 101, 102, r#"{id:373s,Damage:16385s,Count:1b}"#, r#"{Count:1b,Damage:16385s,id:"minecraft:potion"}"#),
+    ("item_stack", 101, 102, r#"{id:"minecraft:stone",Count:1b}"#, r#"{Count:1b,id:"minecraft:stone"}"#),
+    ("item_stack", 104, 105, r#"{id:"minecraft:spawn_egg",Damage:50s,Count:1b}"#, r#"{Count:1b,Damage:0s,id:"minecraft:spawn_egg",tag:{EntityTag:{id:"Creeper"}}}"#),
+    ("item_stack", 104, 105, r#"{id:"minecraft:spawn_egg",Damage:90s,Count:1b,tag:{display:{Name:"x"}}}"#, r#"{Count:1b,Damage:0s,id:"minecraft:spawn_egg",tag:{EntityTag:{id:"Pig"},display:{Name:"x"}}}"#),
+    ("block_entity", 105, 106, r#"{id:"MobSpawner",EntityId:"Pig",SpawnData:{},x:0,y:0,z:0}"#, r#"{EntityId:"Pig",SpawnData:{id:"Pig"},id:"MobSpawner",x:0,y:0,z:0}"#),
+    ("block_entity", 105, 106, r#"{id:"MobSpawner",EntityId:"Pig",SpawnPotentials:[{Type:"Cow",Weight:1,Properties:{}}],x:0,y:0,z:0}"#, r#"{EntityId:"Pig",SpawnData:{id:"Pig"},SpawnPotentials:[{Entity:{id:"Cow"},Weight:1}],id:"MobSpawner",x:0,y:0,z:0}"#),
+    ("entity", 106, 107, r#"{id:"Minecart",Type:1,Items:[]}"#, r#"{Items:[],Type:1,id:"MinecartChest"}"#),
+    ("entity", 106, 107, r#"{id:"Minecart",Type:2}"#, r#"{Type:2,id:"MinecartFurnace"}"#),
+    ("entity", 106, 107, r#"{id:"Minecart"}"#, r#"{id:"MinecartRideable"}"#),
+    ("entity", 107, 108, r#"{id:"Pig",UUID:"12345678-1234-1234-1234-123456789abc"}"#, r#"{UUID:"12345678-1234-1234-1234-123456789abc",UUIDLeast:1311693407470000828L,UUIDMost:1311768465173123636L,id:"Pig"}"#),
+    ("entity", 108, 109, r#"{id:"Pig",HealF:5.0f,Health:10s}"#, r#"{HealF:5.0f,Health:5.0f,id:"Pig"}"#),
+    ("entity", 108, 109, r#"{id:"Pig",Health:10s}"#, r#"{Health:10.0f,id:"Pig"}"#),
+    ("entity", 109, 110, r#"{id:"EntityHorse",Saddle:1b}"#, r#"{Saddle:1b,SaddleItem:{Count:1b,Damage:0s,id:"minecraft:saddle"},id:"EntityHorse"}"#),
+    ("entity", 109, 110, r#"{id:"EntityHorse",Saddle:0b}"#, r#"{Saddle:0b,id:"EntityHorse"}"#),
+    ("entity", 110, 111, r#"{id:"Painting",Direction:1b,TileX:0,TileY:0,TileZ:0}"#, r#"{Direction:1b,Facing:1b,TileX:-1,TileY:0,TileZ:0,id:"Painting"}"#),
+    ("entity", 110, 111, r#"{id:"ItemFrame",Direction:2b,TileX:5,TileY:6,TileZ:7}"#, r#"{Direction:2b,Facing:2b,TileX:5,TileY:6,TileZ:6,id:"ItemFrame"}"#),
+    ("entity", 111, 113, r#"{id:"Pig",HandDropChances:[0.0f,0.0f],ArmorDropChances:[0.0f,0.0f,0.0f,0.0f]}"#, r#"{ArmorDropChances:[0.0f,0.0f,0.0f,0.0f],HandDropChances:[0.0f,0.0f],id:"Pig"}"#),
+    ("entity", 111, 113, r#"{id:"Pig",HandDropChances:[0.0f,0.5f],ArmorDropChances:[0.0f,0.0f,0.0f]}"#, r#"{ArmorDropChances:[0.0f,0.0f,0.0f],HandDropChances:[0.0f,0.5f],id:"Pig"}"#),
+    ("entity", 134, 135, r#"{id:"Pig",Riding:{id:"Cow",Riding:{id:"Sheep"}}}"#, r#"{Riding:{Riding:{id:"Sheep"},id:"Cow"},id:"Pig"}"#),
+    ("entity", 134, 135, r#"{id:"Pig"}"#, r#"{id:"Pig"}"#),
+    ("entity", 142, 143, r#"{id:"TippedArrow"}"#, r#"{id:"Arrow"}"#),
+    ("entity", 146, 147, r#"{id:"ArmorStand",Silent:1b}"#, r#"{Silent:1b,id:"ArmorStand"}"#),
+    ("entity", 146, 147, r#"{id:"ArmorStand",Silent:1b,Marker:1b}"#, r#"{Marker:1b,Silent:1b,id:"ArmorStand"}"#),
+    ("block_entity", 164, 165, r#"{id:"Sign",Text1:"hello",Text2:"\"quoted\"",Text3:"{\"text\":\"a\",\"b\":1}",Text4:"null",x:0,y:0,z:0}"#, r#"{Text1:'{"text":"hello"}',Text2:'{"text":"quoted"}',Text3:'{"b":1,"text":"a"}',Text4:'{"text":""}',id:"Sign",x:0,y:0,z:0}"#),
+    ("block_entity", 164, 165, r#"{id:"Sign",Text1:"",Text2:"[1, 2",Text3:"{text:a}",Text4:"[\"a\",{\"text\":\"b\"}]",x:0,y:0,z:0}"#, r#"{Text1:'{"text":""}',Text2:'{"text":"[1, 2"}',Text3:'{"text":"a"}',Text4:'["a",{"text":"b"}]',id:"Sign",x:0,y:0,z:0}"#),
+    ("item_stack", 164, 165, r#"{id:"minecraft:written_book",Count:1b,tag:{pages:["plain","{text:\"x\"}","[\"a\",\"b\"]",""]}}"#, r#"{Count:1b,id:"minecraft:written_book",tag:{pages:['{"text":"plain"}','{"text":"x"}','["a","b"]','{"text":""}']}}"#),
+    ("item_stack", 164, 165, r#"{id:"minecraft:writable_book",Count:1b,tag:{pages:["plain"]}}"#, r#"{Count:1b,id:"minecraft:writable_book",tag:{pages:["plain"]}}"#),
+    ("entity", 500, 501, r#"{id:"PolarBear"}"#, r#"{id:"PolarBear"}"#),
+    ("item_stack", 501, 502, r#"{id:"minecraft:cooked_fished",Count:1b}"#, r#"{Count:1b,id:"minecraft:cooked_fish"}"#),
+    ("item_stack", 501, 502, r#"{id:"cooked_fished",Count:1b}"#, r#"{Count:1b,id:"minecraft:cooked_fish"}"#),
+    ("entity", 501, 502, r#"{id:"Zombie",IsVillager:1b,VillagerProfession:2}"#, r#"{IsVillager:1b,VillagerProfession:2,ZombieType:2,id:"Zombie"}"#),
+    ("entity", 501, 502, r#"{id:"Zombie",IsVillager:1b,ZombieType:3}"#, r#"{IsVillager:1b,ZombieType:3,id:"Zombie"}"#),
+    ("entity", 501, 502, r#"{id:"Zombie",IsVillager:0b}"#, r#"{IsVillager:0b,id:"Zombie"}"#),
+    ("options", 504, 505, r#"{useVbo:"false"}"#, r#"{useVbo:"true"}"#),
+    ("entity", 699, 700, r#"{id:"Guardian",Elder:1b}"#, r#"{Elder:1b,id:"ElderGuardian"}"#),
+    ("entity", 699, 700, r#"{id:"Guardian"}"#, r#"{id:"Guardian"}"#),
+    ("entity", 700, 701, r#"{id:"Skeleton",SkeletonType:1}"#, r#"{SkeletonType:1,id:"WitherSkeleton"}"#),
+    ("entity", 700, 701, r#"{id:"Skeleton",SkeletonType:2}"#, r#"{SkeletonType:2,id:"Stray"}"#),
+    ("entity", 700, 701, r#"{id:"Skeleton"}"#, r#"{id:"Skeleton"}"#),
+    ("entity", 701, 702, r#"{id:"Zombie",ZombieType:2}"#, r#"{Profession:1,ZombieType:2,id:"ZombieVillager"}"#),
+    ("entity", 701, 702, r#"{id:"Zombie",ZombieType:6}"#, r#"{ZombieType:6,id:"Husk"}"#),
+    ("entity", 701, 702, r#"{id:"Zombie",ZombieType:0}"#, r#"{ZombieType:0,id:"Zombie"}"#),
+    ("entity", 702, 703, r#"{id:"EntityHorse",Type:3}"#, r#"{Type:3,id:"ZombieHorse"}"#),
+    ("entity", 702, 703, r#"{id:"EntityHorse",Type:1,ChestedHorse:1b,Items:[]}"#, r#"{ChestedHorse:1b,Items:[],Type:1,id:"Donkey"}"#),
+    ("entity", 702, 703, r#"{id:"EntityHorse"}"#, r#"{id:"Horse"}"#),
+    ("block_entity", 703, 704, r#"{id:"Chest",Items:[],x:0,y:0,z:0}"#, r#"{Items:[],id:"minecraft:chest",x:0,y:0,z:0}"#),
+    ("block_entity", 703, 704, r#"{id:"Unknown",x:0,y:0,z:0}"#, r#"{id:"Unknown",x:0,y:0,z:0}"#),
+    ("item_stack", 703, 704, r#"{id:"minecraft:chest",Count:1b,tag:{BlockEntityTag:{Items:[]}}}"#, r#"{Count:1b,id:"minecraft:chest",tag:{BlockEntityTag:{Items:[],id:"minecraft:chest"}}}"#),
+    ("entity", 704, 705, r#"{id:"Pig"}"#, r#"{id:"minecraft:pig"}"#),
+    ("entity", 704, 705, r#"{id:"Villager",Profession:1}"#, r#"{Profession:1,id:"minecraft:villager"}"#),
+    ("item_stack", 704, 705, r#"{id:"minecraft:spawn_egg",Count:1b,tag:{EntityTag:{id:"Cow"}}}"#, r#"{Count:1b,id:"minecraft:spawn_egg",tag:{EntityTag:{id:"minecraft:cow"}}}"#),
+    ("item_stack", 803, 804, r#"{id:"minecraft:banner",Count:1b,Damage:0s,tag:{BlockEntityTag:{Base:4,Patterns:[]}}}"#, r#"{Count:1b,Damage:4s,id:"minecraft:banner",tag:{BlockEntityTag:{Base:4,Patterns:[],id:"minecraft:banner"}}}"#),
+    ("item_stack", 803, 804, r#"{id:"minecraft:banner",Count:1b,Damage:0s,tag:{BlockEntityTag:{Base:20},display:{Lore:["(+NBT"]}}}"#, r#"{Count:1b,Damage:4s,id:"minecraft:banner",tag:{BlockEntityTag:{Base:20,id:"minecraft:banner"},display:{Lore:["(+NBT"]}}}"#),
+    ("item_stack", 803, 804, r#"{id:"minecraft:banner",Count:1b,Damage:7s,tag:{BlockEntityTag:{Patterns:[]}}}"#, r#"{Count:1b,Damage:7s,id:"minecraft:banner",tag:{BlockEntityTag:{Patterns:[],id:"minecraft:banner"}}}"#),
+    ("item_stack", 803, 804, r#"{id:"minecraft:banner",Count:1b,Damage:7s}"#, r#"{Count:1b,Damage:7s,id:"minecraft:banner"}"#),
+    ("item_stack", 805, 806, r#"{id:"minecraft:potion",Count:1b}"#, r#"{Count:1b,id:"minecraft:potion",tag:{Potion:"minecraft:water"}}"#),
+    ("item_stack", 805, 806, r#"{id:"minecraft:tipped_arrow",Count:1b,tag:{Potion:"minecraft:healing"}}"#, r#"{Count:1b,id:"minecraft:tipped_arrow",tag:{Potion:"minecraft:healing"}}"#),
+    ("item_stack", 805, 806, r#"{id:"minecraft:stone",Count:1b}"#, r#"{Count:1b,id:"minecraft:stone"}"#),
+    ("block_entity", 807, 808, r#"{id:"minecraft:shulker_box",Items:[],x:0,y:0,z:0}"#, r#"{Items:[],id:"minecraft:shulker_box",x:0,y:0,z:0}"#),
+    ("entity", 807, 813, r#"{id:"minecraft:shulker"}"#, r#"{Color:10b,id:"minecraft:shulker"}"#),
+    ("entity", 807, 813, r#"{id:"minecraft:shulker",Color:3b}"#, r#"{Color:3b,id:"minecraft:shulker"}"#),
+    ("item_stack", 812, 813, r#"{id:"minecraft:shulker_box",Count:1b}"#, r#"{Count:1b,id:"minecraft:shulker_box"}"#),
+    ("block_entity", 812, 813, r#"{id:"minecraft:shulker_box",Color:3b,x:0,y:0,z:0}"#, r#"{Color:3b,id:"minecraft:shulker_box",x:0,y:0,z:0}"#),
+    ("options", 815, 816, r#"{lang:"EN_us"}"#, r#"{lang:"en_us"}"#),
+    ("options", 815, 816, r#"{}"#, r#"{}"#),
+    ("item_stack", 819, 820, r#"{id:"minecraft:totem",Count:1b}"#, r#"{Count:1b,id:"minecraft:totem_of_undying"}"#),
+    ("entity", 99, 820, r#"{id:"Zombie",ZombieType:6,HealF:3.0f,UUID:"12345678-1234-1234-1234-123456789abc",Riding:{id:"EntityHorse",Type:4,Saddle:1b}}"#, r#"{HealF:3.0f,Health:3.0f,Riding:{Saddle:1b,Type:4,id:"EntityHorse"},UUID:"12345678-1234-1234-1234-123456789abc",UUIDLeast:1311693407470000828L,UUIDMost:1311768465173123636L,ZombieType:6,id:"minecraft:husk"}"#),
+    ("entity", 99, 820, r#"{id:"Skeleton",SkeletonType:1,Equipment:[{id:276s,Count:1b},{},{},{},{}]}"#, r#"{ArmorItems:[{},{},{},{}],Equipment:[{Count:1b,id:276s},{},{},{},{}],HandItems:[{Count:1b,id:"minecraft:diamond_sword"},{}],SkeletonType:1,id:"minecraft:wither_skeleton"}"#),
+    ("item_stack", 99, 820, r#"{id:373s,Damage:0s,Count:1b}"#, r#"{Count:1b,Damage:0s,id:"minecraft:potion",tag:{Potion:"minecraft:water"}}"#),
+    ("item_stack", 99, 820, r#"{id:425s,Damage:0s,Count:1b,tag:{BlockEntityTag:{Base:1}}}"#, r#"{Count:1b,Damage:0s,id:"minecraft:air",tag:{BlockEntityTag:{Base:1}}}"#),
+    ("block_entity", 99, 820, r#"{id:"Sign",Text1:"a",Text2:"",Text3:"\"b\"",Text4:"{}",x:0,y:0,z:0}"#, r#"{Text1:'{"text":"a"}',Text2:'{"text":""}',Text3:'{"text":"b"}',Text4:"{}",id:"minecraft:sign",x:0,y:0,z:0}"#),
+];
+
+#[test]
+fn fixes_from_100_match_vanilla() {
+    let mut failures = 0;
+    for &(ty, from, to, input, expected) in CASES_FROM_100 {
+        let actual = update(ty, from, to, input);
+        if actual != expected {
+            failures += 1;
+            eprintln!("{ty} {from} -> {to}: {input}\n  expected {expected}\n  actual   {actual}");
+        }
+    }
+    assert_eq!(failures, 0);
+}
+
+#[test]
+#[should_panic(expected = "Invalid UUID string: nope")]
+fn invalid_string_uuid_fails_like_vanilla() {
+    update("entity", 107, 108, r#"{id:"Pig",UUID:"nope"}"#);
+}

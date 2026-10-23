@@ -192,6 +192,55 @@ pub fn with_focus_type(ty: &Arc<Type>, finder: &OpticFinder, new_focus: &Arc<Typ
     }
 }
 
+fn directly_matches(ty: &Arc<Type>, finder: &OpticFinder) -> bool {
+    match finder.matches(ty) {
+        Match::Found(_) => true,
+        Match::Stop => false,
+        Match::Continue => match &**ty {
+            Type::Named(_, element) | Type::Hook(element, _, _) => directly_matches(element, finder),
+            _ => false,
+        },
+    }
+}
+
+fn build_absent(ty: &Arc<Type>, value: &mut Value, finder: &OpticFinder, new_value: &Value) {
+    if let Match::Found(_) = finder.matches(ty) {
+        return;
+    }
+    let built = match (&**ty, &mut *value) {
+        (Type::Named(_, element) | Type::Hook(element, _, _), value) => {
+            build_absent(element, value, finder, new_value);
+            None
+        }
+        (Type::RecursivePoint(..), value) => {
+            build_absent(&ty.unfold(), value, finder, new_value);
+            None
+        }
+        (Type::Product(first, second), Value::Pair(first_value, second_value)) => {
+            if resolves(first, finder) {
+                build_absent(first, first_value, finder, new_value);
+            } else {
+                build_absent(second, second_value, finder, new_value);
+            }
+            None
+        }
+        (Type::Sum(first, _), Value::Left(inner)) if resolves(first, finder) => {
+            build_absent(first, inner, finder, new_value);
+            None
+        }
+        (Type::Sum(_, second), Value::Right(inner)) if resolves(second, finder) => {
+            build_absent(second, inner, finder, new_value);
+            None
+        }
+        (Type::Sum(first, _), Value::Right(_)) if directly_matches(first, finder) => Some(Value::Left(Box::new(new_value.clone()))),
+        (Type::Sum(_, second), Value::Left(_)) if directly_matches(second, finder) => Some(Value::Right(Box::new(new_value.clone()))),
+        _ => None,
+    };
+    if let Some(built) = built {
+        *value = built;
+    }
+}
+
 pub fn point(ty: &Arc<Type>) -> Option<Value> {
     match &**ty {
         Type::Const(_) => None,
@@ -309,7 +358,8 @@ impl Typed {
         self
     }
 
-    pub fn set(self, finder: &OpticFinder, new_value: Typed) -> Typed {
+    pub fn set(mut self, finder: &OpticFinder, new_value: Typed) -> Typed {
+        build_absent(&self.ty, &mut self.value, finder, &new_value.value);
         self.update(finder, |_| new_value.value.clone())
     }
 

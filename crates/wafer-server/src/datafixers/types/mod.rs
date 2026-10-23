@@ -285,9 +285,30 @@ fn patch_family(family: &Arc<RecursiveTypeFamily>, find: &Arc<Type>, replace: &A
     let patched = RecursiveTypeFamily::new(family.name.clone(), family.size());
     families.push((key, patched.clone()));
     for index in 0..family.size() {
-        patched.set_member(index, patch(family.unfold(index), find, replace, families));
+        patched.set_member(index, rebind(&patch(family.unfold(index), find, replace, families), &patched));
     }
     patched
+}
+
+fn rebind(ty: &Arc<Type>, family: &Arc<RecursiveTypeFamily>) -> Arc<Type> {
+    let sub = |element: &Arc<Type>| rebind(element, family);
+    Arc::new(match &**ty {
+        Type::Const(_) | Type::Remainder | Type::EmptyPart => return ty.clone(),
+        Type::RecursivePoint(point_family, _) if Arc::ptr_eq(point_family, family) => return ty.clone(),
+        Type::RecursivePoint(_, index) => Type::RecursivePoint(family.clone(), *index),
+        Type::Named(name, element) => Type::Named(name.clone(), sub(element)),
+        Type::Field(name, element) => Type::Field(name.clone(), sub(element)),
+        Type::Product(first, second) => Type::Product(sub(first), sub(second)),
+        Type::Sum(first, second) => Type::Sum(sub(first), sub(second)),
+        Type::List(element) => Type::List(sub(element)),
+        Type::CompoundList(key, element) => Type::CompoundList(sub(key), sub(element)),
+        Type::TaggedChoice(choice) => Type::TaggedChoice(Arc::new(TaggedChoiceType {
+            name: choice.name.clone(),
+            key_type: choice.key_type,
+            types: choice.types.iter().map(|(key, element)| (key.clone(), sub(element))).collect(),
+        })),
+        Type::Hook(element, pre_read, post_write) => Type::Hook(sub(element), *pre_read, *post_write),
+    })
 }
 
 pub fn contains(ty: &Arc<Type>, target: &Arc<Type>) -> bool {
