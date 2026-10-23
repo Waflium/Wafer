@@ -1,0 +1,282 @@
+use std::sync::Arc;
+
+use super::dynamic::{DataResult, Dynamic};
+use super::types::{Type, equals};
+use super::value::{self, Value};
+
+#[derive(Clone)]
+pub enum OpticFinder {
+    Remainder,
+    Type(Arc<Type>),
+    Field(String, Arc<Type>),
+    NamedChoice(String, Arc<Type>),
+}
+
+pub fn remainder_finder() -> OpticFinder {
+    OpticFinder::Remainder
+}
+
+pub fn type_finder(ty: Arc<Type>) -> OpticFinder {
+    OpticFinder::Type(ty)
+}
+
+pub fn field_finder(name: &str, ty: Arc<Type>) -> OpticFinder {
+    OpticFinder::Field(name.to_string(), ty)
+}
+
+pub fn named_choice(name: &str, ty: Arc<Type>) -> OpticFinder {
+    OpticFinder::NamedChoice(name.to_string(), ty)
+}
+
+impl OpticFinder {
+    pub fn ty(&self) -> Arc<Type> {
+        match self {
+            OpticFinder::Remainder => Arc::new(Type::Remainder),
+            OpticFinder::Type(ty) | OpticFinder::Field(_, ty) | OpticFinder::NamedChoice(_, ty) => ty.clone(),
+        }
+    }
+
+    fn matches(&self, target: &Arc<Type>) -> Match {
+        match self {
+            OpticFinder::Remainder => match &**target {
+                Type::Remainder => Match::Found(target.clone()),
+                Type::Field(..) => Match::Stop,
+                _ => Match::Continue,
+            },
+            OpticFinder::Type(ty) => {
+                if equals(ty, target, true) {
+                    Match::Found(target.clone())
+                } else if matches!(&**target, Type::Field(..)) {
+                    Match::Stop
+                } else {
+                    Match::Continue
+                }
+            }
+            OpticFinder::Field(name, ty) => match &**target {
+                Type::Field(field_name, element) if **field_name == **name => {
+                    if equals(ty, element, false) { Match::Found(element.clone()) } else { Match::Stop }
+                }
+                Type::Field(..) => Match::Stop,
+                _ => Match::Continue,
+            },
+            OpticFinder::NamedChoice(name, ty) => match &**target {
+                Type::TaggedChoice(choice) => match choice.get(name) {
+                    Some(element) if equals(ty, element, false) => Match::Found(element.clone()),
+                    Some(_) => Match::Stop,
+                    None => Match::Continue,
+                },
+                Type::Field(..) => Match::Stop,
+                _ => Match::Continue,
+            },
+        }
+    }
+}
+
+enum Match {
+    Found(Arc<Type>),
+    Continue,
+    Stop,
+}
+
+fn resolves(ty: &Arc<Type>, finder: &OpticFinder) -> bool {
+    match finder.matches(ty) {
+        Match::Found(_) => return true,
+        Match::Stop => return false,
+        Match::Continue => {}
+    }
+    match &**ty {
+        Type::Named(_, element) | Type::Hook(element, _, _) | Type::List(element) => resolves(element, finder),
+        Type::RecursivePoint(..) => resolves(&ty.unfold(), finder),
+        Type::Product(first, second) | Type::Sum(first, second) => resolves(first, finder) || resolves(second, finder),
+        Type::TaggedChoice(choice) => choice.types.iter().any(|(_, element)| resolves(element, finder)),
+        _ => false,
+    }
+}
+
+fn visit(ty: &Arc<Type>, value: &mut Value, finder: &OpticFinder, f: &mut dyn FnMut(&Arc<Type>, &mut Value)) {
+    if let Match::Found(focus) = finder.matches(ty) {
+        match (finder, &**ty, value) {
+            (OpticFinder::NamedChoice(name, _), Type::TaggedChoice(_), Value::Choice(key, inner)) => {
+                if key == name {
+                    f(&focus, inner);
+                }
+            }
+            (OpticFinder::NamedChoice(..), _, _) => {}
+            (_, _, value) => f(&focus, value),
+        }
+        return;
+    }
+    match (&**ty, value) {
+        (Type::Named(_, element) | Type::Hook(element, _, _), value) => visit(element, value, finder, f),
+        (Type::RecursivePoint(..), value) => visit(&ty.unfold(), value, finder, f),
+        (Type::Product(first, second), Value::Pair(first_value, second_value)) => {
+            if resolves(first, finder) {
+                visit(first, first_value, finder, f);
+            } else {
+                visit(second, second_value, finder, f);
+            }
+        }
+        (Type::Sum(first, _), Value::Left(inner)) => {
+            if resolves(first, finder) {
+                visit(first, inner, finder, f);
+            }
+        }
+        (Type::Sum(_, second), Value::Right(inner)) => {
+            if resolves(second, finder) {
+                visit(second, inner, finder, f);
+            }
+        }
+        (Type::List(element), Value::List(values)) => {
+            for value in values {
+                visit(element, value, finder, f);
+            }
+        }
+        (Type::TaggedChoice(choice), Value::Choice(key, inner)) => {
+            if let Some(element) = choice.get(key)
+                && resolves(element, finder)
+            {
+                visit(element, inner, finder, f);
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn point(ty: &Arc<Type>) -> Option<Value> {
+    match &**ty {
+        Type::Const(_) => None,
+        Type::Remainder => Some(Value::Dynamic(Dynamic::empty())),
+        Type::EmptyPart => Some(Value::Unit),
+        Type::Named(_, element) | Type::Field(_, element) | Type::Hook(element, _, _) => point(element),
+        Type::RecursivePoint(..) => point(&ty.unfold()),
+        Type::Product(first, second) => Some(Value::Pair(Box::new(point(first)?), Box::new(point(second)?))),
+        Type::Sum(first, second) => point(second).map(|value| Value::Right(Box::new(value))).or_else(|| point(first).map(|value| Value::Left(Box::new(value)))),
+        Type::List(_) => Some(Value::List(Vec::new())),
+        Type::CompoundList(..) => Some(Value::CompoundList(Vec::new())),
+        Type::TaggedChoice(choice) => choice.types.iter().find_map(|(key, element)| point(element).map(|value| Value::Choice(key.clone(), Box::new(value)))),
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Typed {
+    pub ty: Arc<Type>,
+    pub value: Value,
+}
+
+impl Typed {
+    pub fn new(ty: Arc<Type>, value: Value) -> Typed {
+        Typed { ty, value }
+    }
+
+    pub fn read_typed(ty: &Arc<Type>, input: Dynamic) -> DataResult<(Typed, Dynamic)> {
+        value::decode(ty, input.value).map(|(value, rest)| (Typed::new(ty.clone(), value), Dynamic::of(rest)))
+    }
+
+    pub fn get_type(&self) -> &Arc<Type> {
+        &self.ty
+    }
+
+    pub fn write(&self) -> DataResult<Dynamic> {
+        value::encode_start(&self.ty, &self.value).map(Dynamic::of)
+    }
+
+    fn check(&self, finder: &OpticFinder) {
+        if !resolves(&self.ty, finder) {
+            panic!("Not found: {:?} (in type: {:?})", finder.ty(), self.ty);
+        }
+    }
+
+    pub fn get_optional_typed(&self, finder: &OpticFinder) -> Option<Typed> {
+        self.check(finder);
+        let mut found = None;
+        let mut value = self.value.clone();
+        visit(&self.ty, &mut value, finder, &mut |ty, value| {
+            if found.is_none() {
+                found = Some(Typed::new(ty.clone(), value.clone()));
+            }
+        });
+        found
+    }
+
+    pub fn get_optional(&self, finder: &OpticFinder) -> Option<Value> {
+        self.get_optional_typed(finder).map(|typed| typed.value)
+    }
+
+    pub fn get_typed(&self, finder: &OpticFinder) -> Typed {
+        self.get_optional_typed(finder).expect("a value at the optic")
+    }
+
+    pub fn get_or_create_typed(&self, finder: &OpticFinder) -> Typed {
+        self.get_optional_typed(finder).unwrap_or_else(|| {
+            let ty = finder.ty();
+            match point(&ty) {
+                Some(value) => Typed::new(ty, value),
+                None => panic!("Could not create default value for type: {ty:?}"),
+            }
+        })
+    }
+
+    pub fn get_all_typed(&self, finder: &OpticFinder) -> Vec<Typed> {
+        self.check(finder);
+        let mut found = Vec::new();
+        let mut value = self.value.clone();
+        let ty = finder.ty();
+        visit(&self.ty, &mut value, finder, &mut |_, value| found.push(Typed::new(ty.clone(), value.clone())));
+        found
+    }
+
+    pub fn update_typed(mut self, finder: &OpticFinder, new_type: Option<&Arc<Type>>, mut updater: impl FnMut(Typed) -> Typed) -> Typed {
+        self.check(finder);
+        let finder_type = finder.ty();
+        let expected = new_type.cloned().unwrap_or_else(|| finder_type.clone());
+        visit(&self.ty.clone(), &mut self.value, finder, &mut |_, value| {
+            let result = updater(Typed::new(finder_type.clone(), std::mem::replace(value, Value::Unit)));
+            if !equals(&expected, &result.ty, true) {
+                panic!("Function didn't update to the expected type");
+            }
+            *value = result.value;
+        });
+        self
+    }
+
+    pub fn update(mut self, finder: &OpticFinder, mut updater: impl FnMut(Value) -> Value) -> Typed {
+        self.check(finder);
+        visit(&self.ty.clone(), &mut self.value, finder, &mut |_, value| {
+            *value = updater(std::mem::replace(value, Value::Unit));
+        });
+        self
+    }
+
+    pub fn set(self, finder: &OpticFinder, new_value: Typed) -> Typed {
+        self.update(finder, |_| new_value.value.clone())
+    }
+
+    pub fn with_type(self, ty: Arc<Type>) -> Typed {
+        Typed { ty, value: self.value }
+    }
+
+    pub fn get_remainder(&self) -> Dynamic {
+        match self.get_optional(&OpticFinder::Remainder) {
+            Some(Value::Dynamic(dynamic)) => dynamic,
+            _ => panic!("No remainder in {:?}", self.ty),
+        }
+    }
+
+    pub fn get_optional_remainder(&self) -> Option<Dynamic> {
+        match self.get_optional(&OpticFinder::Remainder) {
+            Some(Value::Dynamic(dynamic)) => Some(dynamic),
+            _ => None,
+        }
+    }
+
+    pub fn update_remainder(self, mut updater: impl FnMut(Dynamic) -> Dynamic) -> Typed {
+        self.update(&OpticFinder::Remainder, |value| match value {
+            Value::Dynamic(dynamic) => Value::Dynamic(updater(dynamic)),
+            other => other,
+        })
+    }
+
+    pub fn set_remainder(self, dynamic: Dynamic) -> Typed {
+        self.update(&OpticFinder::Remainder, |_| Value::Dynamic(dynamic.clone()))
+    }
+}
