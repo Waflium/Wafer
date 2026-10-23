@@ -6,6 +6,8 @@ pub mod banner_item;
 pub mod block_item;
 pub mod boat_item;
 pub mod bottle_item;
+pub mod compass_item;
+pub mod written_book_item;
 pub mod bow_item;
 pub mod bucket_item;
 pub mod mob_bucket_item;
@@ -153,6 +155,7 @@ fn item_use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand,
         Some(&"HangingEntityItem" | &"ItemFrameItem") => return hanging_entity_item::use_on(level, player, hand, hit, stack),
         Some(&"HoneycombItem") => return honeycomb_item::use_on(level, player, hand, hit, stack),
         Some(&"EndCrystalItem") => return end_crystal_item::use_on(level, player, hand, hit, stack),
+        Some(&"CompassItem") => return compass_item::use_on(level, player, hand, hit, stack),
         Some(&"EnderEyeItem") => return ender_eye_item::use_on(level, player, hand, hit, stack),
         Some(&"FireworkRocketItem") => return firework_rocket_item::use_on(level, player, hand, hit, stack),
         Some(&"PotionItem") => return potion_item::use_on(level, player, hand, hit, stack),
@@ -249,6 +252,9 @@ fn item_use(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, st
     }
     if stack.item.is_instance_of("InstrumentItem") {
         return instrument_item::use_item(level, player, hand);
+    }
+    if stack.item.is_instance_of("WrittenBookItem") || stack.item.is_instance_of("WritableBookItem") {
+        return written_book_item::use_item(level, player, hand);
     }
     if stack.item.is_instance_of("KnowledgeBookItem") {
         return knowledge_book_item::use_item(level, player, hand);
@@ -444,6 +450,13 @@ pub fn inventory_tick(level: &mut ServerLevel, owner: EntityId, slot_index: usiz
     if item_stack.item.is_instance_of("MapItem") {
         let item_stack = item_stack.clone();
         map_item::inventory_tick(&item_stack, level, owner, slot);
+    } else if item_stack.item.is_instance_of("CompassItem") {
+        let old_tracker = item_stack.get(component::LODESTONE_TRACKER).cloned();
+        let mut new_stack = item_stack.clone();
+        compass_item::inventory_tick(&mut new_stack, level);
+        if new_stack.get(component::LODESTONE_TRACKER) != old_tracker.as_ref() {
+            level.player_mut(owner).inventory.slots[slot_index] = Some(new_stack);
+        }
     }
 }
 

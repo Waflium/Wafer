@@ -891,6 +891,9 @@ impl Server {
                 if result.is_err() {
                     self.player_mut(id).disconnect("multiplayer.disconnect.invalid_packet");
                 }
+                if let Some(level) = self.level_of(id) {
+                    self.open_pending_books(level);
+                }
                 self.entity_level_mut(id).entity_moved(id);
                 self.send_global_level_events();
                 if self.player(id).disconnected {
