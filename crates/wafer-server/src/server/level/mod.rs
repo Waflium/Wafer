@@ -2027,6 +2027,21 @@ impl ServerLevel {
     }
 
     pub fn take(&mut self, player: EntityId, entity: EntityId, count: i32) {
+        if self.is_player(player) {
+            self.server_player_take(player, entity, count);
+        } else {
+            self.living_entity_take(player, entity, count);
+        }
+    }
+
+    pub fn server_player_take(&mut self, player: EntityId, entity: EntityId, count: i32) {
+        self.living_entity_take(player, entity, count);
+        let Some(mut menu) = self.take_container_menu(player) else { return };
+        self.menu_broadcast_changes(&mut menu, player);
+        self.restore_container_menu(player, menu);
+    }
+
+    pub fn living_entity_take(&mut self, player: EntityId, entity: EntityId, count: i32) {
         if self.entity(entity).is_removed() {
             return;
         }
@@ -2051,12 +2066,7 @@ impl ServerLevel {
             return;
         }
         let left = item_stack.count;
-        let packet = encode(clientbound::TAKE_ITEM_ENTITY, |p| {
-            p.varint(id);
-            p.varint(player);
-            p.varint(original);
-        });
-        self.send_to_tracking_players(id, &packet);
+        self.take(player, id, original);
         let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) else { return };
         item.item.count = left;
         if left == 0 {

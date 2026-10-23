@@ -1,11 +1,9 @@
 use wafer_core::random::RandomSource;
 use wafer_core::{AABB, Vec3};
-use wafer_data::packets::play::clientbound;
 use wafer_data::{fluid_tags, registry, registry_id};
 
 use super::data::{DataValue, entity_defaults};
 use super::{Entity, EntityDimensions, EntityId, LevelEntity, MoverType};
-use crate::network::connection::encode;
 use crate::server::level::ServerLevel;
 use crate::world::damagesource::DamageSource;
 use crate::world::item::enchantment::enchantment_effect_components::REPAIR_WITH_XP;
@@ -251,12 +249,7 @@ impl ServerLevel {
             return;
         }
         self.player_mut(player).experience.take_xp_delay = 2;
-        let packet = encode(clientbound::TAKE_ITEM_ENTITY, |p| {
-            p.varint(id);
-            p.varint(player);
-            p.varint(1);
-        });
-        self.send_to_tracking_players(id, &packet);
+        self.take(player, id, 1);
         let value = self.experience_orb(id).expect("touched orb").value();
         let remaining = self.repair_player_items(player, value);
         if remaining > 0 {
