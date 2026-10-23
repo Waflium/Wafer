@@ -27,7 +27,10 @@ impl Server {
     pub(crate) fn load_player_data(&self, name: &str, uuid: u128) -> Option<Nbt> {
         let dir = self.world_dir.as_ref()?;
         match crate::world::level::storage::read_dat(&dir.player(uuid)) {
-            Ok(nbt) => nbt,
+            Ok(nbt) => nbt.map(|tag| {
+                let version = crate::nbt::get_data_version(&tag, -1);
+                crate::util::datafix::data_fix_types::DataFixTypes::Player.update_tag_to_current_version(tag, version)
+            }),
             Err(_) => {
                 warn!("Failed to load player data for {name}");
                 None

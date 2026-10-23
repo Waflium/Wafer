@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
-use super::{read_dat, write_dat};
+use super::{read_saved_data_dat, write_dat};
 
 pub struct CommandStorage {
     dir: Option<PathBuf>,
@@ -29,7 +29,7 @@ impl CommandStorage {
 
     fn container(&mut self, namespace: &str) -> Option<&mut Container> {
         if !self.namespaces.contains_key(namespace) {
-            let loaded = self.file(namespace).and_then(|file| match read_dat(&file) {
+            let loaded = self.file(namespace).and_then(|file| match read_saved_data_dat(&file, DataFixTypes::SavedDataCommandStorage) {
                 Ok(tag) => tag.and_then(|t| Container::from_nbt(t.get("data")?)),
                 Err(_) => {
                     error!("Error loading saved data: SavedDataType[{namespace}:command_storage]");
@@ -120,3 +120,4 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
+use crate::util::datafix::data_fix_types::DataFixTypes;

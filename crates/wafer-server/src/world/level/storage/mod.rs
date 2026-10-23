@@ -3,6 +3,7 @@ pub mod loot;
 pub mod saved_data_storage;
 pub mod tag_value_input;
 
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -35,6 +36,13 @@ pub fn read_dat(path: &Path) -> io::Result<Option<Nbt>> {
     let mut bytes = Vec::new();
     GzDecoder::new(file).read_to_end(&mut bytes)?;
     decode_nbt(&bytes).map(Some)
+}
+
+pub fn read_saved_data_dat(path: &Path, data_fix_type: crate::util::datafix::data_fix_types::DataFixTypes) -> io::Result<Option<Nbt>> {
+    Ok(read_dat(path)?.map(|tag| {
+        let version = crate::nbt::get_data_version(&tag, 1343);
+        data_fix_type.update_tag_to_current_version(tag, version)
+    }))
 }
 
 pub fn write_dat(path: &Path, nbt: &Nbt) -> io::Result<()> {
@@ -301,13 +309,13 @@ impl WorldData {
         let difficulty_settings = level.get("difficulty_settings");
         let setting = |key: &str| difficulty_settings.and_then(|d| d.get(key));
         let flag = |key: &str| setting(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
-        let settings_file = read_dat(&dir.data("world_gen_settings"))?.ok_or_else(|| invalid("world_gen_settings.dat is missing"))?;
+        let settings_file = read_saved_data_dat(&dir.data("world_gen_settings"), DataFixTypes::SavedDataWorldGenSettings)?.ok_or_else(|| invalid("world_gen_settings.dat is missing"))?;
         let worldgen = settings_file.get("data").ok_or_else(|| invalid("world_gen_settings.dat has no data"))?;
         let seed = worldgen.get("seed").and_then(Nbt::as_i64).unwrap_or(0);
         let dimensions = worldgen.get("dimensions").ok_or_else(|| invalid("world_gen_settings.dat has no dimensions"))?;
         let dimensions = WorldDimensions::from_nbt(dimensions, seed).map_err(|e| invalid(&e))?;
-        let clocks = read_dat(&dir.data("world_clocks"))?.and_then(|c| c.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new()));
-        let weather = read_dat(&dir.data("weather"))?.and_then(|w| w.get("data").and_then(WeatherData::from_nbt)).unwrap_or_default();
+        let clocks = read_saved_data_dat(&dir.data("world_clocks"), DataFixTypes::SavedDataWorldClocks)?.and_then(|c| c.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new()));
+        let weather = read_saved_data_dat(&dir.data("weather"), DataFixTypes::SavedDataWeather)?.and_then(|w| w.get("data").and_then(WeatherData::from_nbt)).unwrap_or_default();
         Ok(Some(WorldData {
             seed,
             game_time: level.get("Time").and_then(Nbt::as_i64).unwrap_or(0),
@@ -329,7 +337,7 @@ impl WorldData {
                 brands
             }),
             was_modded: level.get("WasModded").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
-            game_rules: read_dat(&dir.data("game_rules"))?.and_then(|r| r.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new())),
+            game_rules: read_saved_data_dat(&dir.data("game_rules"), DataFixTypes::SavedDataGameRules)?.and_then(|r| r.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new())),
             data_configuration: WorldDataConfiguration::parse(level),
         }))
     }

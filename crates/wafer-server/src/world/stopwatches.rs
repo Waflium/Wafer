@@ -7,8 +7,9 @@ use wafer_core::fastutil::Object2ObjectOpenHashMap;
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::util::java_collections::identifier_hash;
-use crate::world::level::storage::{read_dat, write_dat};
+use crate::world::level::storage::{read_saved_data_dat, write_dat};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Stopwatch {
@@ -47,7 +48,7 @@ impl Stopwatches {
     }
 
     pub fn load(dir: Option<PathBuf>) -> Stopwatches {
-        let data = dir.as_deref().and_then(|dir| match read_dat(&Stopwatches::file(dir)) {
+        let data = dir.as_deref().and_then(|dir| match read_saved_data_dat(&Stopwatches::file(dir), DataFixTypes::SavedDataStopwatches) {
             Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
             Err(_) => {
                 error!("Error loading saved data: SavedDataType[minecraft:stopwatches]");

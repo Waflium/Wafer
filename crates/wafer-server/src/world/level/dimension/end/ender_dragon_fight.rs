@@ -8,6 +8,7 @@ use wafer_data::{WORLD_VERSION, block_entity_types, blocks};
 use wafer_protocol::nbt::Nbt;
 
 use super::dragon_respawn_stage::DragonRespawnStage;
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::advancements::triggers::criteria_triggers;
 use crate::network::chat::Component;
 use crate::server::level::chunk_level;
@@ -30,7 +31,7 @@ use crate::world::level::levelgen::feature::end_gateway_feature::EndGatewayFeatu
 use crate::world::level::levelgen::feature::end_podium_feature::EndPodiumFeature;
 use crate::world::level::levelgen::feature::end_spike_feature;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
-use crate::world::level::storage::{read_dat, write_dat};
+use crate::world::level::storage::{read_saved_data_dat, write_dat};
 use crate::world::level::world_gen_level::WorldGenLevel;
 
 const MAX_TICKS_BEFORE_DRAGON_RESPAWN: i32 = 1200;
@@ -163,7 +164,7 @@ impl EnderDragonFight {
 
     pub fn load(dir: Option<PathBuf>) -> EnderDragonFight {
         let Some(file) = dir.as_deref().map(EnderDragonFight::file) else { return EnderDragonFight::create_default(dir) };
-        match read_dat(&file) {
+        match read_saved_data_dat(&file, DataFixTypes::SavedDataEnderDragonFight) {
             Ok(Some(tag)) => match tag.get("data").ok_or_else(|| "No key data in MapLike".to_string()).and_then(|data| EnderDragonFight::decode(dir.clone(), data)) {
                 Ok(fight) => fight,
                 Err(error) => {

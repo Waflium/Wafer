@@ -310,3 +310,24 @@ pub fn from_json(value: &serde_json::Value) -> Option<Nbt> {
         serde_json::Value::Object(fields) => Nbt::Compound(fields.iter().filter_map(|(k, v)| Some((k.clone(), from_json(v)?))).collect()),
     })
 }
+
+pub fn add_data_version(tag: &mut Nbt, version: i32) {
+    if let Nbt::Compound(entries) = tag {
+        match entries.iter_mut().find(|(key, _)| key == "DataVersion") {
+            Some((_, value)) => *value = Nbt::Int(version),
+            None => entries.push(("DataVersion".to_string(), Nbt::Int(version))),
+        }
+    }
+}
+
+pub fn get_data_version(tag: &Nbt, default: i32) -> i32 {
+    match tag.get("DataVersion") {
+        Some(Nbt::Byte(v)) => *v as i32,
+        Some(Nbt::Short(v)) => *v as i32,
+        Some(Nbt::Int(v)) => *v,
+        Some(Nbt::Long(v)) => *v as i32,
+        Some(Nbt::Float(v)) => *v as i32,
+        Some(Nbt::Double(v)) => *v as i32,
+        _ => default,
+    }
+}

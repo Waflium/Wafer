@@ -7,8 +7,9 @@ use wafer_protocol::nbt::Nbt;
 use indexmap::IndexMap;
 
 use super::TimerCallback;
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::server::Server;
-use crate::world::level::storage::{read_dat, write_dat};
+use crate::world::level::storage::{read_saved_data_dat, write_dat};
 
 struct Event {
     trigger_time: i64,
@@ -32,7 +33,7 @@ impl TimerQueue {
     pub fn load(dir: Option<PathBuf>) -> TimerQueue {
         let mut queue = TimerQueue { dir, queue: BTreeMap::new(), sequential_id: 0, events: IndexMap::new(), dirty: false };
         let Some(dir) = queue.dir.clone() else { return queue };
-        let data = match read_dat(&TimerQueue::file(&dir)) {
+        let data = match read_saved_data_dat(&TimerQueue::file(&dir), DataFixTypes::SavedDataScheduledEvents) {
             Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
             Err(_) => {
                 error!("Error loading saved data: SavedDataType[minecraft:scheduled_events]");

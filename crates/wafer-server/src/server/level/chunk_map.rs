@@ -876,3 +876,11 @@ mod tests {
         assert!(sent.iter().all(|(u, _)| matches!(u, Update::Light(..))));
     }
 }
+
+pub fn get_chunk_data_fix_context_tag(dimension: &str, generator_identifier: Option<&str>) -> wafer_protocol::nbt::Nbt {
+    let mut context = vec![("dimension".to_string(), wafer_protocol::nbt::Nbt::String(dimension.to_string()))];
+    if let Some(identifier) = generator_identifier {
+        context.push(("generator".to_string(), wafer_protocol::nbt::Nbt::String(identifier.to_string())));
+    }
+    wafer_protocol::nbt::Nbt::Compound(context)
+}

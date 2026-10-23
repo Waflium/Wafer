@@ -6,7 +6,8 @@ use std::rc::Rc;
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
-use super::{read_dat, write_dat};
+use super::{read_saved_data_dat, write_dat};
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::world::entity::EntityId;
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::level::saveddata::maps::map_index::{self, MapIndex};
@@ -29,9 +30,9 @@ impl SavedDataStorage {
         Some(self.data_folder.as_ref()?.join("minecraft").join(format!("{id}.dat")))
     }
 
-    fn read_saved_data<T>(&self, id: &str, decode: impl FnOnce(&Nbt) -> Result<T, String>) -> Option<T> {
+    fn read_saved_data<T>(&self, id: &str, data_fix_type: DataFixTypes, decode: impl FnOnce(&Nbt) -> Result<T, String>) -> Option<T> {
         let file = self.get_data_file(id)?;
-        match read_dat(&file) {
+        match read_saved_data_dat(&file, data_fix_type) {
             Ok(Some(tag)) => match tag.get("data").ok_or_else(|| "No key data in MapLike".to_string()).and_then(decode) {
                 Ok(data) => Some(data),
                 Err(error) => {
@@ -49,7 +50,7 @@ impl SavedDataStorage {
 
     pub fn get_map_data(&mut self, id: MapId) -> Option<Rc<RefCell<MapItemSavedData>>> {
         if !self.maps.contains_key(&id) {
-            let data = self.read_saved_data(&id.key(), MapItemSavedData::decode).map(|data| Rc::new(RefCell::new(data)));
+            let data = self.read_saved_data(&id.key(), DataFixTypes::SavedDataMapData, MapItemSavedData::decode).map(|data| Rc::new(RefCell::new(data)));
             self.maps.insert(id, data);
         }
         self.maps[&id].clone()
@@ -62,7 +63,7 @@ impl SavedDataStorage {
 
     pub fn map_index(&mut self) -> &mut MapIndex {
         if self.map_index.is_none() {
-            self.map_index = Some(self.read_saved_data(map_index::TYPE, |tag| MapIndex::decode(tag).ok_or_else(|| "Not a number".to_string())));
+            self.map_index = Some(self.read_saved_data(map_index::TYPE, DataFixTypes::SavedDataMapIndex, |tag| MapIndex::decode(tag).ok_or_else(|| "Not a number".to_string())));
         }
         let index = self.map_index.as_mut().unwrap();
         if index.is_none() {
@@ -75,7 +76,7 @@ impl SavedDataStorage {
 
     pub fn wandering_trader_data(&mut self) -> &mut WanderingTraderData {
         if self.wandering_trader.is_none() {
-            let data = self.read_saved_data(wandering_trader_data::TYPE, |tag| Ok(WanderingTraderData::decode(tag))).unwrap_or_else(WanderingTraderData::new_dirty);
+            let data = self.read_saved_data(wandering_trader_data::TYPE, DataFixTypes::SavedDataWanderingTrader, |tag| Ok(WanderingTraderData::decode(tag))).unwrap_or_else(WanderingTraderData::new_dirty);
             self.wandering_trader = Some(data);
         }
         self.wandering_trader.as_mut().unwrap()

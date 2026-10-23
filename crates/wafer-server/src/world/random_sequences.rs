@@ -6,8 +6,9 @@ use wafer_core::random::{XoroshiroRandomSource, mix_stafford13, seed_from_hash_o
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::util::java_collections::identifier_hash;
-use crate::world::level::storage::{read_dat, write_dat};
+use crate::world::level::storage::{read_saved_data_dat, write_dat};
 
 fn create_sequence(seed: i64, key: Option<&str>) -> XoroshiroRandomSource {
     let mut lo = seed ^ 7640891576956012809;
@@ -46,7 +47,7 @@ impl RandomSequences {
     }
 
     pub fn load(dir: Option<PathBuf>) -> RandomSequences {
-        let data = dir.as_deref().and_then(|dir| match read_dat(&RandomSequences::file(dir)) {
+        let data = dir.as_deref().and_then(|dir| match read_saved_data_dat(&RandomSequences::file(dir), DataFixTypes::SavedDataRandomSequences) {
             Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
             Err(_) => {
                 error!("Error loading saved data: SavedDataType[minecraft:random_sequences]");

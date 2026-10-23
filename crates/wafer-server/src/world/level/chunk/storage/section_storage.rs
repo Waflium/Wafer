@@ -20,8 +20,9 @@ pub struct PackedChunk<R> {
 
 impl<R: SectionData> PackedChunk<R> {
     fn parse(tag: &Nbt, min_section_y: i32, max_section_y: i32) -> PackedChunk<R> {
-        let version_changed = tag.get("DataVersion").and_then(Nbt::as_i64).is_none_or(|v| (v as i32) < WORLD_VERSION);
-        let sections = tag.get("Sections");
+        let version_changed = crate::nbt::get_data_version(tag, 1945) < WORLD_VERSION;
+        let fixed_tag = super::simple_region_storage::upgrade_chunk_tag_to_current_version(tag, 1945, crate::util::datafix::data_fix_types::DataFixTypes::PoiChunk);
+        let sections = fixed_tag.get("Sections");
         let mut sections_by_y = Vec::new();
         for section_y in min_section_y..=max_section_y {
             if let Some(section) = sections.and_then(|s| s.get(&section_y.to_string())).and_then(R::unpack) {

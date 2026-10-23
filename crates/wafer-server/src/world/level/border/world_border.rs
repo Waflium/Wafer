@@ -7,10 +7,11 @@ use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
 use super::border_change_listener::BorderChangeListener;
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::server::level::ServerLevel;
 use crate::world::entity::Entity;
 use crate::world::level::chunk::HeightmapType;
-use crate::world::level::storage::{RespawnData, read_dat, write_dat};
+use crate::world::level::storage::{RespawnData, read_saved_data_dat, write_dat};
 
 pub const MAX_SIZE: f64 = 5.999997E7f32 as f64;
 pub const MAX_CENTER_COORDINATE: f64 = 2.9999984E7;
@@ -169,7 +170,7 @@ impl WorldBorder {
     }
 
     pub fn load(dir: Option<PathBuf>) -> WorldBorder {
-        let settings = dir.as_deref().and_then(|dir| match read_dat(&WorldBorder::file(dir)) {
+        let settings = dir.as_deref().and_then(|dir| match read_saved_data_dat(&WorldBorder::file(dir), DataFixTypes::SavedDataWorldBorder) {
             Ok(tag) => tag.and_then(|t| t.get("data").and_then(Settings::from_nbt)),
             Err(_) => {
                 error!("Error loading saved data: SavedDataType[minecraft:world_border]");

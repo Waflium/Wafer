@@ -28,6 +28,8 @@ use crate::world::level::block::entity::BlockEntity;
 use crate::world::level::chunk::block_entities::{BlockEntityTickers, EntityCreationType};
 use super::world_gen_region::{RegionLevelData, RegionLightTask, WorldGenRegion};
 use crate::world::attribute::EnvironmentAttributeSystem;
+use crate::util::datafix::data_fix_types::{DataFixTypes, current_version};
+use crate::world::level::chunk::storage::simple_region_storage;
 use crate::world::level::gamerules::GameRules;
 use crate::world::level::natural_spawner::SpawnState;
 use crate::world::level::chunk::chunk_generator_structure_state::ChunkGeneratorStructureState;
@@ -53,6 +55,7 @@ struct Job {
 pub struct ChunkCache {
     pub dimension: &'static DimensionType,
     pub generator: ChunkGenerator,
+    pub data_fix_context: Option<wafer_protocol::nbt::Nbt>,
     chunks: FastMap<ChunkPos, LevelChunk>,
     terrain_chunks: FastMap<ChunkPos, LevelChunk>,
     structure_chunks: FastMap<ChunkPos, ChunkStructures>,
@@ -115,6 +118,7 @@ impl ChunkCache {
         let mut cache = ChunkCache {
             dimension,
             generator,
+            data_fix_context: None,
             chunks: FastMap::default(),
             terrain_chunks: FastMap::default(),
             structure_chunks: FastMap::default(),
@@ -1273,11 +1277,17 @@ impl ChunkCache {
         }
         self.poi_manager.storage.prefetch(pos);
         let token = self.new_token(job);
-        let (dimension, seed, results) = (self.dimension, self.seed, self.results.0.clone());
+        let (dimension, seed, results, context) = (self.dimension, self.seed, self.results.0.clone(), self.data_fix_context.clone());
         self.in_flight += 1;
         self.io.as_ref().unwrap().read(pos, move |read| {
             chunk_workers::execute(move || {
-                let result = read.and_then(|nbt| nbt.map(|nbt| serialization::read(&nbt, dimension, seed)).transpose());
+                let result = read.and_then(|nbt| {
+                    nbt.map(|nbt| {
+                        let nbt = simple_region_storage::upgrade_chunk_tag(nbt, -1, context.as_ref(), current_version(), DataFixTypes::Chunk);
+                        serialization::read(&nbt, dimension, seed)
+                    })
+                    .transpose()
+                });
                 let _ = results.send(WorkResult::Loaded { pos, token, result });
             });
         });

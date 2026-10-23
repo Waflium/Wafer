@@ -6,11 +6,12 @@ use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
 use super::custom_boss_event::CustomBossEvent;
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::network::chat::Component;
 use crate::server::level::ServerLevel;
 use crate::util::java_collections::{JavaHashMap, identifier_hash};
 use crate::world::entity::{EntityId, create_insecure_uuid};
-use crate::world::level::storage::{read_dat, write_dat};
+use crate::world::level::storage::{read_saved_data_dat, write_dat};
 
 pub struct CustomBossEvents {
     dir: Option<PathBuf>,
@@ -24,7 +25,7 @@ impl CustomBossEvents {
     }
 
     pub fn load(dir: Option<PathBuf>) -> CustomBossEvents {
-        let data = dir.as_deref().and_then(|dir| match read_dat(&CustomBossEvents::file(dir)) {
+        let data = dir.as_deref().and_then(|dir| match read_saved_data_dat(&CustomBossEvents::file(dir), DataFixTypes::SavedDataCustomBossEvents) {
             Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
             Err(_) => {
                 error!("Error loading saved data: SavedDataType[minecraft:custom_boss_events]");

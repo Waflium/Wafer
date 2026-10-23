@@ -183,5 +183,7 @@ fn read_template(bytes: &[u8]) -> Result<StructureTemplate, String> {
     let mut decompressed = Vec::new();
     GzDecoder::new(bytes).read_to_end(&mut decompressed).map_err(|e| e.to_string())?;
     let tag = decode_nbt(&decompressed).map_err(|e| e.to_string())?;
+    let version = crate::nbt::get_data_version(&tag, 500);
+    let tag = crate::util::datafix::data_fix_types::DataFixTypes::Structure.update_tag_to_current_version(tag, version);
     Ok(StructureTemplate::load(&tag))
 }

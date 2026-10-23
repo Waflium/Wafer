@@ -105,6 +105,8 @@ impl ServerLevel {
             }
             _ => warn!("Failed to parse chunk [{}, {}] position info", pos.x, pos.z),
         }
+        let upgraded_chunk_tag = super::simple_region_storage::upgrade_chunk_tag_to_current_version(tag, -1, crate::util::datafix::data_fix_types::DataFixTypes::EntityChunk);
+        let tag = &*upgraded_chunk_tag;
         let _collector = tag_value_input::ScopedCollector::new(PathElement::Text(format!("chunk@[{}, {}]", pos.x, pos.z)), ENTITY_STORAGE_LOGGER);
         let mut loaded = Vec::new();
         tag_value_input::for_each_child(tag, "Entities", |entity| loaded.extend(self.load_entity_recursive_in_scope(entity, &mut |_| {})));

@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
-use crate::world::level::storage::{read_dat, write_dat};
+use crate::util::datafix::data_fix_types::DataFixTypes;
+use crate::world::level::storage::{read_saved_data_dat, write_dat};
 
 pub struct ScoreboardSaveData {
     dir: Option<PathBuf>,
@@ -18,7 +19,7 @@ impl ScoreboardSaveData {
     }
 
     pub fn load(dir: Option<PathBuf>) -> ScoreboardSaveData {
-        let data = dir.as_deref().and_then(|dir| match read_dat(&ScoreboardSaveData::file(dir)) {
+        let data = dir.as_deref().and_then(|dir| match read_saved_data_dat(&ScoreboardSaveData::file(dir), DataFixTypes::SavedDataScoreboard) {
             Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
             Err(_) => {
                 error!("Error loading saved data: SavedDataType[minecraft:scoreboard]");

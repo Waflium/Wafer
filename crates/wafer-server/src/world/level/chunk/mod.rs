@@ -437,6 +437,14 @@ impl From<FlatLevelSource> for ChunkGenerator {
 }
 
 impl ChunkGenerator {
+    pub fn get_type_name_for_data_fixer(&self) -> Option<&'static str> {
+        Some(match self {
+            ChunkGenerator::Flat(_) => "minecraft:flat",
+            ChunkGenerator::Noise(_) => "minecraft:noise",
+            ChunkGenerator::Debug(_) => "minecraft:debug",
+        })
+    }
+
     pub fn is_flat(&self) -> bool {
         matches!(self, ChunkGenerator::Flat(_))
     }

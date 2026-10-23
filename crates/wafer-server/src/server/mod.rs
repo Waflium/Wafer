@@ -117,7 +117,9 @@ fn create_level(
     let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension_type).expect("a dimension type");
     let dimension_type = &wafer_data::dimension_types()[dimension_type_id as usize];
     let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes));
+    let generator_identifier = generator.get_type_name_for_data_fixer();
     let mut chunks = ChunkCache::new(dimension_type, generator, storage);
+    chunks.data_fix_context = Some(level::chunk_map::get_chunk_data_fix_context_tag(dimension, generator_identifier));
     chunks.is_debug = is_debug;
     chunks.generate_structures = generate_structures;
     chunks.set_seed(seed);

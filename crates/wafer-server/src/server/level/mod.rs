@@ -29,6 +29,7 @@ pub mod world_gen_region;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::util::FastIndexMap;
 
 use wafer_core::random::{LegacyRandomSource, RandomSource};
@@ -65,7 +66,7 @@ use game_mode::GameType;
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::level::saveddata::maps::map_item_saved_data::MapItemSavedData;
 use crate::world::level::storage::saved_data_storage::SavedDataStorage;
-use crate::world::level::storage::{WorldDir, read_dat, write_dat};
+use crate::world::level::storage::{WorldDir, read_saved_data_dat, write_dat};
 use wafer_protocol::nbt::Nbt;
 use crate::world::tick_rate_manager::TickRateManager;
 use crate::world::level::update_flags::*;
@@ -399,7 +400,7 @@ impl ServerLevel {
     }
 
     pub fn load_chunk_tickets(&mut self, dir: &WorldDir) {
-        match read_dat(&chunk_tickets_file(dir, self.dimension)) {
+        match read_saved_data_dat(&chunk_tickets_file(dir, self.dimension), DataFixTypes::SavedDataForcedChunks) {
             Ok(tag) => {
                 if let Some(data) = tag.as_ref().and_then(|t| t.get("data")) {
                     self.chunks.distance_manager.ticket_storage = ticket::TicketStorage::from_nbt(data);

@@ -7,11 +7,12 @@ use wafer_data::{WORLD_VERSION, game_rule};
 use wafer_protocol::nbt::Nbt;
 
 use super::raid::{self, Raid};
+use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::server::level::ServerLevel;
 use crate::world::attribute::environment_attributes;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::village::poi::poi_manager::Occupancy;
-use crate::world::level::storage::{read_dat, write_dat};
+use crate::world::level::storage::{read_saved_data_dat, write_dat};
 
 pub struct Raids {
     dir: Option<PathBuf>,
@@ -32,7 +33,7 @@ impl Raids {
     }
 
     pub fn load(dir: Option<PathBuf>) -> Raids {
-        let data = dir.as_deref().and_then(|dir| match read_dat(&Raids::file(dir)) {
+        let data = dir.as_deref().and_then(|dir| match read_saved_data_dat(&Raids::file(dir), DataFixTypes::SavedDataRaids) {
             Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
             Err(_) => {
                 error!("Error loading saved data: SavedDataType[minecraft:raids]");

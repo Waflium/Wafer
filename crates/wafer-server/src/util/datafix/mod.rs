@@ -5,3 +5,4 @@ pub mod schemas;
 
 #[cfg(test)]
 mod tests;
+pub mod data_fix_types;
