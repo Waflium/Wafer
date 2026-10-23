@@ -14,7 +14,7 @@ pub struct EnvironmentAttributeCheck {
 impl EnvironmentAttributeCheck {
     pub fn decode(tag: &Nbt) -> DataResult<EnvironmentAttributeCheck> {
         let name = codec::decode_field(tag, "attribute", codec::identifier)?;
-        let attribute = EnvironmentAttributeInfo::by_name(&name).ok_or_else(|| format!("Unknown registry key: {name}"))?;
+        let attribute = EnvironmentAttributeInfo::by_name(&name).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:environment_attribute]: {name}"))?;
         let value = codec::decode_field(tag, "value", |t| attribute.parse_value(&codec::to_json(t)))?;
         Ok(EnvironmentAttributeCheck { attribute, value })
     }

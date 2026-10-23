@@ -1,3 +1,7 @@
+use wafer_protocol::nbt::Nbt;
+
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum LevelBasedValue {
     Constant(f32),
@@ -10,23 +14,60 @@ pub enum LevelBasedValue {
 }
 
 impl LevelBasedValue {
-    pub fn decode(tag: &wafer_protocol::nbt::Nbt) -> crate::util::codec::DataResult<LevelBasedValue> {
-        use crate::util::codec;
-        if let Ok(constant) = codec::float(tag) {
-            return Ok(LevelBasedValue::Constant(constant));
-        }
-        let boxed = |key| codec::decode_field(tag, key, LevelBasedValue::decode).map(Box::new);
-        let float = |key| codec::decode_field(tag, key, codec::float);
-        let ty = codec::decode_field(tag, "type", codec::identifier)?;
-        Ok(match ty.as_str() {
-            "minecraft:clamped" => LevelBasedValue::Clamped { value: boxed("value")?, min: float("min")?, max: float("max")? },
-            "minecraft:exponent" => LevelBasedValue::Exponent { base: boxed("base")?, power: boxed("power")? },
-            "minecraft:fraction" => LevelBasedValue::Fraction { numerator: boxed("numerator")?, denominator: boxed("denominator")? },
-            "minecraft:levels_squared" => LevelBasedValue::LevelsSquared { added: float("added")? },
-            "minecraft:linear" => LevelBasedValue::Linear { base: float("base")?, per_level_above_first: float("per_level_above_first")? },
-            "minecraft:lookup" => LevelBasedValue::Lookup { values: codec::decode_field(tag, "values", |t| codec::list_of(t, codec::float))?, fallback: boxed("fallback")? },
-            other => return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:enchantment_level_based_value_type]: {other}")),
+    pub fn decode(tag: &Nbt) -> DataResult<LevelBasedValue> {
+        LevelBasedValue::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<LevelBasedValue> {
+        codec::either_result(DecodeResult::from(codec::float(tag)), || LevelBasedValue::decode_typed(tag)).map(|value| match value {
+            Ok(constant) => LevelBasedValue::Constant(constant),
+            Err(value) => value,
         })
+    }
+
+    fn decode_typed(tag: &Nbt) -> DecodeResult<LevelBasedValue> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let ty = match codec::decode_field(tag, "type", codec::identifier) {
+            Ok(ty) => ty,
+            Err(error) => return DecodeResult::error(error),
+        };
+        let mut record = Record::default();
+        let boxed = |record: &mut Record, key: &str| record.required(tag, key, |t| LevelBasedValue::decode_partial(t).map(Box::new));
+        match ty.as_str() {
+            "minecraft:clamped" => {
+                let value = boxed(&mut record, "value");
+                let min = record.required(tag, "min", codec::float);
+                let max = record.required(tag, "max", codec::float);
+                record.build(|| Some(LevelBasedValue::Clamped { value: value?, min: min?, max: max? }))
+            }
+            "minecraft:exponent" => {
+                let base = boxed(&mut record, "base");
+                let power = boxed(&mut record, "power");
+                record.build(|| Some(LevelBasedValue::Exponent { base: base?, power: power? }))
+            }
+            "minecraft:fraction" => {
+                let numerator = boxed(&mut record, "numerator");
+                let denominator = boxed(&mut record, "denominator");
+                record.build(|| Some(LevelBasedValue::Fraction { numerator: numerator?, denominator: denominator? }))
+            }
+            "minecraft:levels_squared" => {
+                let added = record.required(tag, "added", codec::float);
+                record.build(|| Some(LevelBasedValue::LevelsSquared { added: added? }))
+            }
+            "minecraft:linear" => {
+                let base = record.required(tag, "base", codec::float);
+                let per_level_above_first = record.required(tag, "per_level_above_first", codec::float);
+                record.build(|| Some(LevelBasedValue::Linear { base: base?, per_level_above_first: per_level_above_first? }))
+            }
+            "minecraft:lookup" => {
+                let values = record.required(tag, "values", |t| codec::list_partial(t, |element| DecodeResult::from(codec::float(element))));
+                let fallback = boxed(&mut record, "fallback");
+                record.build(|| Some(LevelBasedValue::Lookup { values: values?, fallback: fallback? }))
+            }
+            other => DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:enchantment_level_based_value_type]: {other}")),
+        }
     }
 
     pub fn calculate(&self, level: i32) -> f32 {

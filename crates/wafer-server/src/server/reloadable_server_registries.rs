@@ -77,6 +77,19 @@ pub enum LoadResult {
 thread_local! {
     static VALIDATING: Cell<Option<*const ReloadableRegistries>> = const { Cell::new(None) };
     static PENDING_KEYS: RefCell<Option<HashMap<&'static str, HashSet<String>>>> = const { RefCell::new(None) };
+    static UNBOUND: RefCell<Vec<(String, String)>> = const { RefCell::new(Vec::new()) };
+}
+
+pub fn is_loading() -> bool {
+    PENDING_KEYS.with(|pending| pending.borrow().is_some())
+}
+
+pub fn is_reloadable(registry: &str) -> bool {
+    RELOADABLE_REGISTRIES.contains(&registry)
+}
+
+pub fn record_unbound(registry: &str, key: &str) {
+    UNBOUND.with(|unbound| unbound.borrow_mut().push((registry.to_string(), key.to_string())));
 }
 
 static BOUND: RwLock<Option<&'static ReloadableRegistries>> = RwLock::new(None);
@@ -264,6 +277,9 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
         )
     });
     PENDING_KEYS.with(|pending| pending.replace(previous));
+    for (registry, keys) in crate::core::data_registries::group_unbound(UNBOUND.with(|unbound| std::mem::take(&mut *unbound.borrow_mut()))) {
+        errors.0.insert(("minecraft:root".to_string(), registry.clone()), format!("java.lang.IllegalStateException: Unbound values in registry ResourceKey[minecraft:root / {registry}]: [{}]", keys.join(", ")));
+    }
     if !errors.0.is_empty() {
         error!("{}", errors.report());
         return Err(exception_chain(&["net.minecraft.ReportedException: Registry Loading", "java.lang.IllegalStateException: Failed to load registries due to errors"]));

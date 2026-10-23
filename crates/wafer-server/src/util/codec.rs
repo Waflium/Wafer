@@ -168,8 +168,13 @@ pub fn is_nbt_ops() -> bool {
     NBT_OPS.with(Cell::get)
 }
 
+pub fn is_json_value() -> bool {
+    crate::nbt::is_json_source() && !is_nbt_ops()
+}
+
 pub fn number(tag: &Nbt) -> DataResult<&Nbt> {
     match tag {
+        Nbt::Byte(_) if is_json_value() => Err(format!("Not a number: {}", crate::nbt::to_string(tag))),
         Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) => Ok(tag),
         _ if is_nbt_ops() => Err("Not a number".to_string()),
         _ => Err(format!("Not a number: {}", crate::nbt::to_string(tag))),
@@ -177,8 +182,11 @@ pub fn number(tag: &Nbt) -> DataResult<&Nbt> {
 }
 
 pub fn bool_value(tag: &Nbt) -> DataResult<bool> {
-    if crate::nbt::is_json_source() && !is_nbt_ops() {
-        return number(tag).map(|n| component_codec::as_i64(n) != 0).map_err(|_| format!("Not a boolean: {}", crate::nbt::to_string(tag)));
+    if is_json_value() {
+        return match tag {
+            Nbt::Byte(value) => Ok(*value != 0),
+            _ => Err(format!("Not a boolean: {}", crate::nbt::to_string(tag))),
+        };
     }
     Ok(component_codec::as_i64(number(tag)?) != 0)
 }
@@ -331,12 +339,16 @@ pub fn holder_set_partial<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -
         Nbt::String(name) => match name.strip_prefix('#') {
             Some(location) => {
                 return match crate::resources::identifier::read(location) {
+                    Ok(_) if crate::core::data_registries::is_loading() && crate::server::reloadable_server_registries::is_reloadable(registry) => {
+                        DecodeResult::error(format!("Registry {registry} is not available in this context"))
+                    }
                     Ok(location) => DecodeResult::error(format!("Missing tag: '{location}' in '{registry}'")),
                     Err(message) => DecodeResult::error(message),
                 };
             }
             None => "Not a tag id".to_string(),
         },
+        _ if is_json_value() => format!("Not a string: {}", crate::nbt::to_string(tag)),
         _ => "Not a string".to_string(),
     };
     let compact = compact_list_partial(tag, element);
@@ -354,7 +366,8 @@ pub fn compact_list_partial<T>(tag: &Nbt, element: impl Fn(&Nbt) -> DecodeResult
             if result.value.is_some() {
                 return result.map(|value| vec![value]);
             }
-            DecodeResult::error(format!("Failed to parse either. First: Not a list: {}; Second: {}", crate::nbt::to_string(single), result.error.expect("an error")))
+            let list_kind = if is_json_value() { "Not a json array" } else { "Not a list" };
+            DecodeResult::error(format!("Failed to parse either. First: {list_kind}: {}; Second: {}", crate::nbt::to_string(single), result.error.expect("an error")))
         }
     }
 }

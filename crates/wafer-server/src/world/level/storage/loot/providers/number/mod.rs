@@ -5,7 +5,7 @@ pub mod stored_number_access;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::{Holder, RegistryElement};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::validatable::{self, Validatable};
@@ -35,8 +35,14 @@ pub struct Case<V: RegistryElement> {
 }
 
 impl<V: RegistryElement> Case<V> {
-    pub fn decode(tag: &Nbt, value: fn(&Nbt) -> DataResult<Holder<V>>) -> DataResult<Case<V>> {
-        Ok(Case { condition: codec::decode_field(tag, "condition", LootItemCondition::decode_holder)?, value: codec::decode_field(tag, "value", value)? })
+    pub fn decode_partial(tag: &Nbt, value: fn(&Nbt) -> DecodeResult<Holder<V>>) -> DecodeResult<Case<V>> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let condition = record.required(tag, "condition", LootItemCondition::decode_holder_partial);
+        let value = record.required(tag, "value", value);
+        record.build(|| Some(Case { condition: condition?, value: value? }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {
@@ -44,27 +50,24 @@ impl<V: RegistryElement> Case<V> {
     }
 }
 
-pub fn decode_holder_list<V: RegistryElement>(tag: &Nbt, holder: fn(&Nbt) -> DataResult<Holder<V>>) -> DataResult<Vec<Holder<V>>> {
-    if let Nbt::String(s) = tag
-        && s.starts_with('#')
-    {
-        return Err(format!("Missing tag: '{}' in '{}'", &s[1..], V::REGISTRY));
-    }
-    codec::compact_list_of(tag, holder)
+pub fn decode_holder_list_partial<V: RegistryElement>(tag: &Nbt, holder: fn(&Nbt) -> DecodeResult<Holder<V>>) -> DecodeResult<Vec<Holder<V>>> {
+    codec::holder_set_partial(tag, V::REGISTRY, holder)
 }
 
-pub fn decode_weighted_list<V: RegistryElement>(tag: &Nbt, holder: fn(&Nbt) -> DataResult<Holder<V>>) -> DataResult<Vec<(Holder<V>, i32)>> {
-    let entries = codec::list_of(tag, |entry| {
-        let weight = codec::decode_field(entry, "weight", codec::int)?;
-        if weight < 0 {
-            return Err(format!("Value must be non-negative: {weight}"));
+pub fn decode_weighted_list<V: RegistryElement>(tag: &Nbt, holder: fn(&Nbt) -> DecodeResult<Holder<V>>) -> DecodeResult<Vec<(Holder<V>, i32)>> {
+    codec::list_partial(tag, |entry| {
+        if let Err(error) = codec::map(entry) {
+            return DecodeResult::error(error);
         }
-        Ok((codec::decode_field(entry, "data", holder)?, weight))
-    })?;
-    if entries.is_empty() {
-        return Err("List must have contents".into());
-    }
-    Ok(entries)
+        let mut record = Record::default();
+        let data = record.required(entry, "data", holder);
+        let weight = record.required(entry, "weight", |t| {
+            let weight = codec::int(t)?;
+            if weight < 0 { Err(format!("Value must be non-negative: {weight}")) } else { Ok(weight) }
+        });
+        record.build(|| Some((data?, weight?)))
+    })
+    .validate(|entries| if entries.is_empty() { Err("Weighted list must contain at least one entry with non-zero weight".to_string()) } else { Ok(()) })
 }
 
 pub fn get_random<'v, V>(distribution: &'v [(V, i32)], context: &mut LootContext) -> &'v V {

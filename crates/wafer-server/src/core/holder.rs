@@ -43,10 +43,18 @@ impl<T: RegistryElement> Holder<T> {
 
     pub fn decode_partial(tag: &Nbt, direct: impl FnOnce(&Nbt) -> DecodeResult<T>) -> DecodeResult<Holder<T>> {
         let Ok(key) = codec::identifier(tag) else { return direct(tag).map(Holder::direct) };
-        if T::contains_key(&key) {
+        let loading_dynamic = crate::core::data_registries::is_loading();
+        if loading_dynamic && crate::server::reloadable_server_registries::is_reloadable(T::REGISTRY) {
+            DecodeResult::error(format!("Registry does not exist: {}", T::REGISTRY))
+        } else if T::contains_key(&key) {
             DecodeResult::success(Holder::Reference(key, OnceLock::new()))
         } else if codec::is_nbt_ops() {
             DecodeResult::error(format!("Failed to get element {key} from registry {}", T::REGISTRY))
+        } else if loading_dynamic {
+            DecodeResult::error(crate::core::data_registries::unknown_reference(T::REGISTRY, &key))
+        } else if crate::server::reloadable_server_registries::is_loading() {
+            crate::server::reloadable_server_registries::record_unbound(T::REGISTRY, &key);
+            DecodeResult::success(Holder::Reference(key, OnceLock::new()))
         } else {
             DecodeResult::error(format!("Missing element ResourceKey[{} / {key}]", T::REGISTRY))
         }

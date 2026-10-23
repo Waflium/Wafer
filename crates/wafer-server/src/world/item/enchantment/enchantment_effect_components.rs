@@ -93,7 +93,7 @@ fn decode_component_type(key: &str) -> DataResult<String> {
 }
 
 fn value_effects(tag: &Nbt) -> DecodeResult<Vec<ConditionalEffect<EnchantmentValueEffect>>> {
-    codec::list_partial(tag, |t| ConditionalEffect::decode(t, EnchantmentValueEffect::decode))
+    codec::list_partial(tag, |t| ConditionalEffect::decode(t, EnchantmentValueEffect::decode_partial))
 }
 
 fn entity_effects(tag: &Nbt) -> DecodeResult<Vec<ConditionalEffect<EnchantmentEntityEffect>>> {
@@ -128,7 +128,7 @@ impl EnchantmentEffectComponents {
             "minecraft:hit_block" => self.hit_block = validated(entity_effects(value), &loot_context_param_sets::HIT_BLOCK)?,
             "minecraft:item_damage" => self.item_damage = validated(value_effects(value), &loot_context_param_sets::ENCHANTED_ITEM)?,
             "minecraft:equipment_drops" => {
-                self.equipment_drops = validated(codec::list_partial(value, |t| TargetedConditionalEffect::decode_equipment_drops(t, EnchantmentValueEffect::decode)), &loot_context_param_sets::ENCHANTED_DAMAGE)?;
+                self.equipment_drops = validated(codec::list_partial(value, |t| TargetedConditionalEffect::decode_equipment_drops(t, EnchantmentValueEffect::decode_partial)), &loot_context_param_sets::ENCHANTED_DAMAGE)?;
             }
             "minecraft:location_changed" => {
                 self.location_changed = validated(codec::list_partial(value, |t| ConditionalEffect::decode(t, EnchantmentLocationBasedEffect::decode)), &loot_context_param_sets::ENCHANTED_LOCATION)?;

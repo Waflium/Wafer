@@ -274,7 +274,19 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     *PACK_ELEMENTS.lock().unwrap() = pack_elements;
 }
 
-fn group_unbound(unbound: Vec<(String, String)>) -> BTreeMap<String, Vec<String>> {
+#[cfg(test)]
+pub fn with_loading<R>(f: impl FnOnce() -> R) -> R {
+    let previous = UNBOUND.with(|unbound| unbound.replace(Some(Vec::new())));
+    let result = f();
+    UNBOUND.with(|unbound| unbound.replace(previous));
+    result
+}
+
+pub fn is_loading() -> bool {
+    UNBOUND.with(|unbound| unbound.borrow().is_some())
+}
+
+pub fn group_unbound(unbound: Vec<(String, String)>) -> BTreeMap<String, Vec<String>> {
     let mut by_registry: BTreeMap<String, Vec<(String, ())>> = BTreeMap::new();
     for (registry, key) in unbound {
         let keys = by_registry.entry(registry).or_default();
@@ -289,6 +301,31 @@ fn group_unbound(unbound: Vec<(String, String)>) -> BTreeMap<String, Vec<String>
             (registry, keys.into_iter().map(|(key, _)| key).collect())
         })
         .collect()
+}
+
+fn validate_timelines(errors: &mut LoadingErrors) {
+    const REGISTRY: &str = "minecraft:timeline";
+    let Some(registry) = get(REGISTRY) else { return };
+    let mut timelines: Vec<&(&str, &str)> = registry.json_entries().iter().collect();
+    timelines.sort_by_key(|(id, _)| file_key(id));
+    let mut defined: Vec<(String, String)> = Vec::new();
+    for (id, json) in timelines {
+        let Ok(value) = serde_json::from_str::<Value>(json) else { continue };
+        let Some(clock) = value["clock"].as_str().and_then(|clock| crate::resources::identifier::read(clock).ok()) else { continue };
+        let Some(markers) = value["time_markers"].as_object() else { continue };
+        for marker in markers.keys() {
+            let Ok(marker) = crate::resources::identifier::read(marker) else { continue };
+            let key = (clock.clone(), marker);
+            if defined.contains(&key) {
+                errors.0.insert(
+                    (REGISTRY.to_string(), id.to_string()),
+                    format!("java.lang.IllegalStateException: ResourceKey[minecraft:clock_time_marker / {}] was defined multiple times in {}", key.1, key.0),
+                );
+            } else {
+                defined.push(key);
+            }
+        }
+    }
 }
 
 pub fn validate() -> Result<(), String> {
@@ -315,6 +352,9 @@ pub fn validate() -> Result<(), String> {
     }
     for (registry, keys) in unbound_values {
         errors.0.insert(("minecraft:root".to_string(), registry.clone()), format!("java.lang.IllegalStateException: Unbound values in registry ResourceKey[minecraft:root / {registry}]: [{}]", keys.join(", ")));
+    }
+    if errors.0.is_empty() {
+        validate_timelines(&mut errors);
     }
     if errors.0.is_empty() {
         return Ok(());

@@ -1,4 +1,6 @@
 #[cfg(test)]
+mod json_decode_tests;
+#[cfg(test)]
 mod loot_decode_tests;
 pub mod container_component_manipulator;
 pub mod container_component_manipulators;

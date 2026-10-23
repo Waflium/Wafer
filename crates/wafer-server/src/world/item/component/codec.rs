@@ -131,6 +131,7 @@ fn range_error<T: std::fmt::Display>(kind: RangeError, value: String, min: T, ma
 
 fn number(tag: &Nbt) -> Result<&Nbt, String> {
     match tag {
+        Nbt::Byte(_) if nbt::is_json_source() => Err(format!("Not a number: {}", nbt::to_string(tag))),
         Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) => Ok(tag),
         _ if nbt::is_json_source() => Err(format!("Not a number: {}", nbt::to_string(tag))),
         _ => Err("Not a number".into()),
@@ -259,7 +260,10 @@ impl Codec {
     pub fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         match self {
             Codec::Unit => map(tag).map(|_| Nbt::Compound(Vec::new())),
-            Codec::Bool if nbt::is_json_source() => number(tag).map(|n| Nbt::Byte((as_f64(n) != 0.0) as i8)).map_err(|_| format!("Not a boolean: {}", nbt::to_string(tag))),
+            Codec::Bool if nbt::is_json_source() => match tag {
+                Nbt::Byte(value) => Ok(Nbt::Byte((*value != 0) as i8)),
+                _ => Err(format!("Not a boolean: {}", nbt::to_string(tag))),
+            },
             Codec::Bool => number(tag).map(|n| Nbt::Byte((as_f64(n) != 0.0) as i8)),
             Codec::Byte => number(tag).map(|n| Nbt::Byte(as_i64(n) as i8)),
             Codec::UnsignedByte => number(tag).map(|n| Nbt::Byte(as_i64(n) as i8)),

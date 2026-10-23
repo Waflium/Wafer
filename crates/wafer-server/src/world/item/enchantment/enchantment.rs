@@ -204,7 +204,9 @@ impl Enchantment {
 
     pub fn decode_holder(tag: &Nbt) -> DataResult<String> {
         let id = codec::identifier(tag)?;
-        crate::world::item::component::codec::registry_id("minecraft:enchantment", &id)?;
+        if !crate::world::item::component::codec::registry("minecraft:enchantment").contains(&id.as_str()) {
+            return Err(format!("Failed to get element {id} from registry minecraft:enchantment"));
+        }
         Ok(id)
     }
 

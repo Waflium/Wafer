@@ -34,24 +34,21 @@ impl HolderSet {
             }
             return DecodeResult::success(HolderSet::named(registry, key));
         }
-        if codec::is_nbt_ops() {
-            return codec::holder_set_partial(tag, registry, |element| {
-                DecodeResult::from(codec::identifier(element).and_then(|key| {
-                    if !component_codec::registry(registry).contains(&key.as_str()) {
-                        return Err(format!("Failed to get element {key} from registry {registry}"));
-                    }
-                    component_codec::registry_id(registry, &key)
-                }))
-            })
-            .map(HolderSet::Direct);
-        }
-        DecodeResult::from(
-            codec::compact_list_of(tag, |element| {
-                let key = codec::identifier(element)?;
-                component_codec::registry_id(registry, &key)
-            })
-            .map(HolderSet::Direct),
-        )
+        codec::holder_set_partial(tag, registry, |element| {
+            let key = match codec::identifier(element) {
+                Ok(key) => key,
+                Err(error) => return DecodeResult::error(error),
+            };
+            if component_codec::registry(registry).contains(&key.as_str()) {
+                return DecodeResult::from(component_codec::registry_id(registry, &key));
+            }
+            if !codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(registry).is_some() {
+                crate::core::data_registries::unknown_reference(registry, &key);
+                return DecodeResult::success(-1);
+            }
+            DecodeResult::error(format!("Failed to get element {key} from registry {registry}"))
+        })
+        .map(HolderSet::Direct)
     }
 
     pub fn contents(&self) -> &[i32] {

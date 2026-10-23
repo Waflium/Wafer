@@ -1,7 +1,7 @@
 use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::enchantment::level_based_value::LevelBasedValue;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -16,18 +16,47 @@ pub enum EnchantmentValueEffect {
 
 impl EnchantmentValueEffect {
     pub fn decode(tag: &Nbt) -> DataResult<EnchantmentValueEffect> {
-        codec::map(tag)?;
-        let ty = codec::decode_field(tag, "type", codec::identifier)?;
-        let value = |key: &str| codec::decode_field(tag, key, LevelBasedValue::decode);
-        Ok(match ty.as_str() {
-            "minecraft:add" => EnchantmentValueEffect::AddValue(value("value")?),
-            "minecraft:all_of" => EnchantmentValueEffect::AllOf(codec::decode_field(tag, "effects", |t| codec::list_of(t, EnchantmentValueEffect::decode))?),
-            "minecraft:multiply" => EnchantmentValueEffect::MultiplyValue(value("factor")?),
-            "minecraft:remove_binomial" => EnchantmentValueEffect::RemoveBinomial(value("chance")?),
-            "minecraft:exponential" => EnchantmentValueEffect::ScaleExponentially { base: value("base")?, exponent: value("exponent")? },
-            "minecraft:set" => EnchantmentValueEffect::SetValue(value("value")?),
-            other => return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:enchantment_value_effect_type]: {other}")),
-        })
+        EnchantmentValueEffect::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<EnchantmentValueEffect> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let ty = match codec::decode_field(tag, "type", codec::identifier) {
+            Ok(ty) => ty,
+            Err(error) => return DecodeResult::error(error),
+        };
+        let mut record = Record::default();
+        let value = |record: &mut Record, key: &str| record.required(tag, key, LevelBasedValue::decode_partial);
+        match ty.as_str() {
+            "minecraft:add" => {
+                let value = value(&mut record, "value");
+                record.build(|| Some(EnchantmentValueEffect::AddValue(value?)))
+            }
+            "minecraft:all_of" => {
+                let effects = record.required(tag, "effects", |t| codec::list_partial(t, EnchantmentValueEffect::decode_partial));
+                record.build(|| Some(EnchantmentValueEffect::AllOf(effects?)))
+            }
+            "minecraft:multiply" => {
+                let factor = value(&mut record, "factor");
+                record.build(|| Some(EnchantmentValueEffect::MultiplyValue(factor?)))
+            }
+            "minecraft:remove_binomial" => {
+                let chance = value(&mut record, "chance");
+                record.build(|| Some(EnchantmentValueEffect::RemoveBinomial(chance?)))
+            }
+            "minecraft:exponential" => {
+                let base = value(&mut record, "base");
+                let exponent = value(&mut record, "exponent");
+                record.build(|| Some(EnchantmentValueEffect::ScaleExponentially { base: base?, exponent: exponent? }))
+            }
+            "minecraft:set" => {
+                let value = value(&mut record, "value");
+                record.build(|| Some(EnchantmentValueEffect::SetValue(value?)))
+            }
+            other => DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:enchantment_value_effect_type]: {other}")),
+        }
     }
 
     pub fn process(&self, enchantment_level: i32, random: &mut impl RandomSource, input_value: f32) -> f32 {

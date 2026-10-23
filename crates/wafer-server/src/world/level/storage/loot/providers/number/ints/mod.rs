@@ -6,10 +6,10 @@ use wafer_protocol::nbt::Nbt;
 
 use super::floats::ContextFloatProvider;
 use super::stored_number_access::StoredNumberAccess;
-use super::{ArithmeticException, ArithmeticResult, Case, DIVISION_BY_ZERO, INTEGER_OVERFLOW, decode_holder_list, decode_weighted_list, get_random};
+use super::{ArithmeticException, ArithmeticResult, Case, DIVISION_BY_ZERO, INTEGER_OVERFLOW, decode_holder_list_partial, decode_weighted_list, get_random};
 use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -81,76 +81,155 @@ fn division_by_zero() -> ArithmeticException {
 
 impl ContextIntProvider {
     pub fn decode_holder(tag: &Nbt) -> DataResult<Holder<ContextIntProvider>> {
-        Holder::decode(tag, ContextIntProvider::decode)
+        ContextIntProvider::decode_holder_partial(tag).into_result()
     }
 
-    fn decode_holders(tag: &Nbt) -> DataResult<Vec<Holder<ContextIntProvider>>> {
-        decode_holder_list(tag, ContextIntProvider::decode_holder)
+    pub fn decode_holder_partial(tag: &Nbt) -> DecodeResult<Holder<ContextIntProvider>> {
+        Holder::decode_partial(tag, ContextIntProvider::decode_partial)
+    }
+
+    fn decode_holders(tag: &Nbt) -> DecodeResult<Vec<Holder<ContextIntProvider>>> {
+        decode_holder_list_partial(tag, ContextIntProvider::decode_holder_partial)
     }
 
     pub fn decode(tag: &Nbt) -> DataResult<ContextIntProvider> {
-        match codec::either(tag, codec::int, ContextIntProvider::decode_typed)? {
-            Ok(value) => Ok(ContextIntProvider::ConstantValue(value)),
-            Err(provider) => Ok(provider),
-        }
+        ContextIntProvider::decode_partial(tag).into_result()
     }
 
-    fn decode_typed(tag: &Nbt) -> DataResult<ContextIntProvider> {
-        let ty = codec::decode_field(tag, "type", codec::identifier)?;
-        let holder = |key| codec::decode_field(tag, key, ContextIntProvider::decode_holder);
-        let inputs = || codec::decode_field(tag, "inputs", ContextIntProvider::decode_holders);
-        Ok(match ty.as_str() {
-            "minecraft:abs" => ContextIntProvider::Absolute(holder("input")?),
-            "minecraft:avg" => ContextIntProvider::Average(inputs()?),
-            "minecraft:binomial" => ContextIntProvider::BinomialDistributionGenerator {
-                n: holder("n")?,
-                p: codec::decode_field(tag, "p", ContextFloatProvider::decode_holder)?,
-            },
-            "minecraft:conditional" => ContextIntProvider::ConditionalValue {
-                condition: codec::decode_field(tag, "condition", LootItemCondition::decode_holder)?,
-                on_true: holder("on_true")?,
-                on_false: codec::decode_or(tag, "on_false", exactly(0), ContextIntProvider::decode_holder)?,
-            },
-            "minecraft:constant" => ContextIntProvider::ConstantValue(codec::decode_field(tag, "value", codec::int)?),
-            "minecraft:sub" => ContextIntProvider::Difference { left: holder("left")?, right: holder("right")? },
-            "minecraft:environment_attribute" => {
-                let name = codec::decode_field(tag, "attribute", codec::identifier)?;
-                let attribute = EnvironmentAttributeInfo::by_name(&name).ok_or_else(|| format!("Unknown registry key: {name}"))?;
-                if attribute.ty.to_int(attribute.default_value()).is_none() {
-                    return Err(format!("{name} cannot be converted to an integer"));
-                }
-                ContextIntProvider::EnvironmentAttributeValue(attribute)
-            }
-            "minecraft:from_float" => ContextIntProvider::FromFloat(codec::decode_field(tag, "input", ContextFloatProvider::decode_holder)?),
-            "minecraft:max" => ContextIntProvider::Maximum(inputs()?),
-            "minecraft:min" => ContextIntProvider::Minimum(inputs()?),
-            "minecraft:floor_mod" => ContextIntProvider::FloorModulus { left: holder("left")?, right: holder("right")? },
-            "minecraft:floor_div" => ContextIntProvider::FloorQuotient { left: holder("left")?, right: holder("right")? },
-            "minecraft:mod" => ContextIntProvider::Modulus { left: holder("left")?, right: holder("right")? },
-            "minecraft:div" => ContextIntProvider::Quotient { left: holder("left")?, right: holder("right")? },
-            "minecraft:negate" => ContextIntProvider::Negate(holder("input")?),
-            "minecraft:number_dispatcher" => ContextIntProvider::NumberDispatcher {
-                cases: codec::decode_field(tag, "cases", |t| codec::list_of(t, |c| Case::decode(c, ContextIntProvider::decode_holder)))?,
-                default_value: codec::decode_or(tag, "default", exactly(0), ContextIntProvider::decode_holder)?,
-            },
-            "minecraft:pow" => ContextIntProvider::Power { base: holder("base")?, exponent: holder("exponent")? },
-            "minecraft:mul" => ContextIntProvider::Product(inputs()?),
-            "minecraft:score" => ContextIntProvider::ScoreboardValue {
-                target: codec::decode_field(tag, "target", ScoreboardNameProvider::decode)?,
-                score: codec::decode_field(tag, "score", |t| Ok(codec::string(t)?.to_string()))?,
-                fallback: codec::decode_or(tag, "fallback", exactly(0), ContextIntProvider::decode_holder)?,
-            },
-            "minecraft:storage" => ContextIntProvider::StorageValue {
-                access: StoredNumberAccess::decode(tag)?,
-                fallback: codec::decode_or(tag, "fallback", exactly(0), ContextIntProvider::decode_holder)?,
-            },
-            "minecraft:add" => ContextIntProvider::Sum(inputs()?),
-            "minecraft:uniform" => ContextIntProvider::UniformGenerator { min: holder("min")?, max: holder("max")? },
-            "minecraft:weighted_list" => ContextIntProvider::WeightedListValue(codec::decode_field(tag, "distribution", |t| {
-                decode_weighted_list(t, ContextIntProvider::decode_holder)
-            })?),
-            other => return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:context_int_provider_type]: {other}")),
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<ContextIntProvider> {
+        codec::either_result(DecodeResult::from(codec::int(tag)), || ContextIntProvider::decode_typed(tag)).map(|value| match value {
+            Ok(value) => ContextIntProvider::ConstantValue(value),
+            Err(provider) => provider,
         })
+    }
+
+    fn decode_typed(tag: &Nbt) -> DecodeResult<ContextIntProvider> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let ty = match codec::decode_field(tag, "type", codec::identifier) {
+            Ok(ty) => ty,
+            Err(error) => return DecodeResult::error(error),
+        };
+        let mut record = Record::default();
+        let holder = |record: &mut Record, key: &str| record.required(tag, key, ContextIntProvider::decode_holder_partial);
+        let fallback = |record: &mut Record| record.with_default(tag, "fallback", exactly(0), ContextIntProvider::decode_holder_partial);
+        match ty.as_str() {
+            "minecraft:abs" => {
+                let input = holder(&mut record, "input");
+                record.build(|| Some(ContextIntProvider::Absolute(input?)))
+            }
+            "minecraft:avg" => {
+                let inputs = record.required(tag, "inputs", ContextIntProvider::decode_holders);
+                record.build(|| Some(ContextIntProvider::Average(inputs?)))
+            }
+            "minecraft:binomial" => {
+                let n = holder(&mut record, "n");
+                let p = record.required(tag, "p", ContextFloatProvider::decode_holder_partial);
+                record.build(|| Some(ContextIntProvider::BinomialDistributionGenerator { n: n?, p: p? }))
+            }
+            "minecraft:conditional" => {
+                let condition = record.required(tag, "condition", LootItemCondition::decode_holder_partial);
+                let on_true = holder(&mut record, "on_true");
+                let on_false = record.with_default(tag, "on_false", exactly(0), ContextIntProvider::decode_holder_partial);
+                record.build(|| Some(ContextIntProvider::ConditionalValue { condition: condition?, on_true: on_true?, on_false }))
+            }
+            "minecraft:constant" => {
+                let value = record.required(tag, "value", codec::int);
+                record.build(|| Some(ContextIntProvider::ConstantValue(value?)))
+            }
+            "minecraft:sub" => {
+                let left = holder(&mut record, "left");
+                let right = holder(&mut record, "right");
+                record.build(|| Some(ContextIntProvider::Difference { left: left?, right: right? }))
+            }
+            "minecraft:environment_attribute" => {
+                let attribute = record.required(tag, "attribute", |t| -> DataResult<&'static EnvironmentAttributeInfo> {
+                    let name = codec::identifier(t)?;
+                    let attribute = EnvironmentAttributeInfo::by_name(&name).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:environment_attribute]: {name}"))?;
+                    if attribute.ty.to_int(attribute.default_value()).is_none() {
+                        return Err(format!("{name} cannot be converted to an integer"));
+                    }
+                    Ok(attribute)
+                });
+                record.build(|| Some(ContextIntProvider::EnvironmentAttributeValue(attribute?)))
+            }
+            "minecraft:from_float" => {
+                let input = record.required(tag, "input", ContextFloatProvider::decode_holder_partial);
+                record.build(|| Some(ContextIntProvider::FromFloat(input?)))
+            }
+            "minecraft:max" => {
+                let inputs = record.required(tag, "inputs", ContextIntProvider::decode_holders);
+                record.build(|| Some(ContextIntProvider::Maximum(inputs?)))
+            }
+            "minecraft:min" => {
+                let inputs = record.required(tag, "inputs", ContextIntProvider::decode_holders);
+                record.build(|| Some(ContextIntProvider::Minimum(inputs?)))
+            }
+            "minecraft:floor_mod" => {
+                let left = holder(&mut record, "left");
+                let right = holder(&mut record, "right");
+                record.build(|| Some(ContextIntProvider::FloorModulus { left: left?, right: right? }))
+            }
+            "minecraft:floor_div" => {
+                let left = holder(&mut record, "left");
+                let right = holder(&mut record, "right");
+                record.build(|| Some(ContextIntProvider::FloorQuotient { left: left?, right: right? }))
+            }
+            "minecraft:mod" => {
+                let left = holder(&mut record, "left");
+                let right = holder(&mut record, "right");
+                record.build(|| Some(ContextIntProvider::Modulus { left: left?, right: right? }))
+            }
+            "minecraft:div" => {
+                let left = holder(&mut record, "left");
+                let right = holder(&mut record, "right");
+                record.build(|| Some(ContextIntProvider::Quotient { left: left?, right: right? }))
+            }
+            "minecraft:negate" => {
+                let input = holder(&mut record, "input");
+                record.build(|| Some(ContextIntProvider::Negate(input?)))
+            }
+            "minecraft:number_dispatcher" => {
+                let cases = record.required(tag, "cases", |t| codec::list_partial(t, |c| Case::decode_partial(c, ContextIntProvider::decode_holder_partial)));
+                let default_value = record.with_default(tag, "default", exactly(0), ContextIntProvider::decode_holder_partial);
+                record.build(|| Some(ContextIntProvider::NumberDispatcher { cases: cases?, default_value }))
+            }
+            "minecraft:pow" => {
+                let base = holder(&mut record, "base");
+                let exponent = holder(&mut record, "exponent");
+                record.build(|| Some(ContextIntProvider::Power { base: base?, exponent: exponent? }))
+            }
+            "minecraft:mul" => {
+                let inputs = record.required(tag, "inputs", ContextIntProvider::decode_holders);
+                record.build(|| Some(ContextIntProvider::Product(inputs?)))
+            }
+            "minecraft:score" => {
+                let target = record.required(tag, "target", ScoreboardNameProvider::decode);
+                let score = record.required(tag, "score", |t| codec::string(t).map(str::to_string));
+                let fallback = fallback(&mut record);
+                record.build(|| Some(ContextIntProvider::ScoreboardValue { target: target?, score: score?, fallback }))
+            }
+            "minecraft:storage" => {
+                let access = record.absorb(StoredNumberAccess::decode_partial(tag));
+                let fallback = fallback(&mut record);
+                record.build(|| Some(ContextIntProvider::StorageValue { access: access?, fallback }))
+            }
+            "minecraft:add" => {
+                let inputs = record.required(tag, "inputs", ContextIntProvider::decode_holders);
+                record.build(|| Some(ContextIntProvider::Sum(inputs?)))
+            }
+            "minecraft:uniform" => {
+                let min = holder(&mut record, "min");
+                let max = holder(&mut record, "max");
+                record.build(|| Some(ContextIntProvider::UniformGenerator { min: min?, max: max? }))
+            }
+            "minecraft:weighted_list" => {
+                let distribution = record.required(tag, "distribution", |t| decode_weighted_list(t, ContextIntProvider::decode_holder_partial));
+                record.build(|| Some(ContextIntProvider::WeightedListValue(distribution?)))
+            }
+            other => DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:context_int_provider_type]: {other}")),
+        }
     }
 
     pub fn get_int(&self, context: &mut LootContext) -> i32 {

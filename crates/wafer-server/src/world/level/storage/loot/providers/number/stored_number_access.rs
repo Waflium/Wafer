@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::arguments::nbt_path_argument::NbtPath;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::level::storage::loot::loot_context::LootContext;
 
 pub struct StoredNumberAccess {
@@ -10,9 +10,11 @@ pub struct StoredNumberAccess {
 }
 
 impl StoredNumberAccess {
-    pub fn decode(tag: &Nbt) -> DataResult<StoredNumberAccess> {
-        let path = codec::decode_field(tag, "path", NbtPath::decode)?;
-        Ok(StoredNumberAccess { storage: codec::decode_field(tag, "storage", codec::identifier)?, path })
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<StoredNumberAccess> {
+        let mut record = Record::default();
+        let storage = record.required(tag, "storage", codec::identifier);
+        let path = record.required(tag, "path", NbtPath::decode);
+        record.build(|| Some(StoredNumberAccess { storage: storage?, path: path? }))
     }
 
     pub fn get_numeric_tag(&self, context: &mut LootContext) -> Option<Nbt> {

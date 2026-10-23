@@ -93,8 +93,16 @@ fn lenient_optional<T>(tag: Option<&Nbt>, decode: impl FnOnce(&Nbt) -> DataResul
     tag.map(decode).filter(DataResult::is_success).and_then(|result| result.value)
 }
 
+fn json() -> bool {
+    crate::util::codec::is_json_value()
+}
+
+fn not_a_map(tag: &Nbt) -> String {
+    format!("{}: {}", if json() { "Not a JSON object" } else { "Not a map" }, snbt(tag))
+}
+
 fn list<T>(tag: &Nbt,decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T>> {
-    let Nbt::List(items) = tag else { return DataResult::error(format!("Not a list: {}", snbt(tag))) };
+    let Nbt::List(items) = tag else { return DataResult::error(format!("{}: {}", if json() { "Not a json array" } else { "Not a list" }, snbt(tag))) };
     let mut elements = Vec::new();
     let mut errors = Vec::new();
     for item in items {
@@ -138,19 +146,31 @@ fn required<T>(fields: &[(String, Nbt)], key: &str, decode: impl FnOnce(&Nbt) ->
 fn string(tag: &Nbt) -> DataResult<String> {
     match tag {
         Nbt::String(s) => DataResult::success(s.clone()),
+        _ if json() => DataResult::error(format!("Not a string: {}", snbt(tag))),
         _ => DataResult::error("Not a string"),
     }
 }
 
 fn boolean(tag: &Nbt) -> DataResult<bool> {
+    if json() {
+        return match tag {
+            Nbt::Byte(value) => DataResult::success(*value != 0),
+            _ => DataResult::error(format!("Not a boolean: {}", snbt(tag))),
+        };
+    }
     match tag.as_f64() {
         Some(value) => DataResult::success(value != 0.0),
         None => DataResult::error("Not a number"),
     }
 }
 
+fn not_a_number(tag: &Nbt) -> String {
+    if json() { format!("Not a number: {}", snbt(tag)) } else { "Not a number".to_string() }
+}
+
 fn number(tag: &Nbt) -> Option<f64> {
     match tag {
+        Nbt::Byte(_) if json() => None,
         Nbt::Byte(v) => Some(*v as f64),
         Nbt::Short(v) => Some(*v as f64),
         Nbt::Int(v) => Some(*v as f64),
@@ -163,20 +183,21 @@ fn number(tag: &Nbt) -> Option<f64> {
 
 fn int(tag: &Nbt) -> DataResult<i32> {
     match tag {
+        Nbt::Byte(_) if json() => DataResult::error(not_a_number(tag)),
         Nbt::Byte(v) => DataResult::success(*v as i32),
         Nbt::Short(v) => DataResult::success(*v as i32),
         Nbt::Int(v) => DataResult::success(*v),
         Nbt::Long(v) => DataResult::success(*v as i32),
         Nbt::Float(v) => DataResult::success(*v as i32),
         Nbt::Double(v) => DataResult::success(*v as i32),
-        _ => DataResult::error("Not a number"),
+        _ => DataResult::error(not_a_number(tag)),
     }
 }
 
 fn float(tag: &Nbt) -> DataResult<f32> {
     match number(tag) {
         Some(value) => DataResult::success(value as f32),
-        None => DataResult::error("Not a number"),
+        None => DataResult::error(not_a_number(tag)),
     }
 }
 
@@ -197,14 +218,11 @@ pub fn decode_style_fields(fields: &[(String, Nbt)]) -> std::result::Result<Styl
 }
 
 fn decode_component(tag: &Nbt) -> DataResult<Component> {
-    let literal = match tag {
-        Nbt::String(s) => DataResult::success(Component::literal(s.clone())),
-        _ => DataResult::error("Not a string"),
-    };
+    let literal = string(tag).map(Component::literal);
     let special = either(literal, || non_empty_list(tag, decode_component).map(create_from_list));
     either(special, || match tag {
         Nbt::Compound(fields) => decode_full(fields),
-        _ => DataResult::error(format!("Not a map: {}", snbt(tag))),
+        _ => DataResult::error(not_a_map(tag)),
     })
 }
 
@@ -235,7 +253,10 @@ fn decode_contents(fields: &[(String, Nbt)]) -> DataResult<Contents> {
 
 fn create_legacy_component_matcher<T>(type_field_name: &str, types: &[&str], fields: &[(String, Nbt)], decode_type: impl Fn(&str, &[(String, Nbt)]) -> DataResult<T>) -> DataResult<T> {
     if let Some(kind) = get(fields, type_field_name) {
-        let Some(kind) = string(kind).value else { return DataResult::error("Not a string") };
+        let kind = match string(kind).into_result() {
+            Ok(kind) => kind,
+            Err(message) => return DataResult::error(message),
+        };
         if !types.contains(&kind.as_str()) {
             return DataResult::error(format!("Unknown element id: {kind}"));
         }
@@ -266,8 +287,8 @@ fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> DataResult<Conte
         }
         "keybind" => required(fields, "keybind", string).map(Contents::Keybind),
         "score" => required(fields, "score", |score| {
-            let Nbt::Compound(score) = score else { return DataResult::error(format!("Not a map: {}", snbt(score))) };
-            let name = required(score, "name", |name| either(string(name), || DataResult::error("Not a string")));
+            let Nbt::Compound(score) = score else { return DataResult::error(not_a_map(score)) };
+            let name = required(score, "name", |name| either(string(name), || string(name)));
             let objective = required(score, "objective", string);
             let error = record_error(&[&name.error, &objective.error]);
             let value = match (name.value, objective.value) {
@@ -420,7 +441,7 @@ fn argb_color(tag: &Nbt) -> DataResult<i32> {
 }
 
 fn click_event(tag: &Nbt) -> std::result::Result<ClickEvent, String> {
-    let Nbt::Compound(fields) = tag else { return Err(format!("Not a map: {}", snbt(tag))) };
+    let Nbt::Compound(fields) = tag else { return Err(not_a_map(tag)) };
     let field = |key: &str| required(fields, key, string).into_result();
     let action = field("action")?;
     Ok(match action.as_str() {
@@ -444,8 +465,49 @@ fn click_event(tag: &Nbt) -> std::result::Result<ClickEvent, String> {
     })
 }
 
+fn unknown_registry_key(registry: &str, raw: &str) -> String {
+    match crate::resources::identifier::read(raw) {
+        Ok(id) => format!("Unknown registry key in ResourceKey[minecraft:root / {registry}]: {id}"),
+        Err(message) => message,
+    }
+}
+
+fn nbt_uuid(tag: &Nbt) -> DataResult<u128> {
+    match tag {
+        Nbt::IntArray(ints) if ints.len() == 4 => DataResult::success(ints.iter().fold(0u128, |acc, &i| acc << 32 | i as u32 as u128)),
+        Nbt::String(s) => match crate::commands::arguments::java_uuid_from_string(s) {
+            Some(uuid) => DataResult::success(uuid),
+            None => DataResult::error(format!("Invalid UUID {s}")),
+        },
+        other => DataResult::error(format!("Not an int array: {}", snbt(other))),
+    }
+}
+
+fn json_uuid(tag: &Nbt) -> DataResult<u128> {
+    let either = |first: String, second: String| DataResult::error(format!("Failed to parse either. First: {first}; Second: {second}"));
+    match tag {
+        Nbt::List(items) => {
+            if items.len() > 4 && items.iter().all(|item| matches!(item, Nbt::Long(_) | Nbt::Double(_))) {
+                return DataResult::error("Input is not a list of 4 ints");
+            }
+            if !items.iter().all(|item| matches!(item, Nbt::Long(_) | Nbt::Double(_))) {
+                return either(format!("Some elements are not ints: {}", snbt(tag)), format!("Not a string: {}", snbt(tag)));
+            }
+            if items.len() != 4 {
+                return either("Input is not a list of 4 ints".to_string(), format!("Not a string: {}", snbt(tag)));
+            }
+            DataResult::success(items.iter().fold(0u128, |acc, item| acc << 32 | int(item).value.unwrap_or(0) as u32 as u128))
+        }
+        Nbt::String(s) => match crate::commands::arguments::java_uuid_from_string(s) {
+            Some(uuid) => DataResult::success(uuid),
+            None => either(format!("Not a json array: {}", snbt(tag)), format!("Invalid UUID {s}: Invalid UUID string: {s}")),
+        },
+        other => either(format!("Not a json array: {}", snbt(other)), format!("Not a string: {}", snbt(other))),
+    }
+}
+
 fn hover_event(tag: &Nbt) -> DataResult<HoverEvent> {
-    let Nbt::Compound(fields) = tag else { return DataResult::error(format!("Not a map: {}", snbt(tag))) };
+    let Nbt::Compound(fields) = tag else { return DataResult::error(not_a_map(tag)) };
     let action = match required(fields, "action", string).into_result() {
         Ok(action) => action,
         Err(message) => return DataResult::error(message),
@@ -456,7 +518,7 @@ fn hover_event(tag: &Nbt) -> DataResult<HoverEvent> {
             let id = required(fields, "id", |raw| {
                 string(raw).flat_map(|raw| match parse_identifier(&raw).and_then(|id| registry::ITEM.iter().find(|&&i| i == id)) {
                     Some(id) => DataResult::success(*id),
-                    None => DataResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: {raw}")),
+                    None => DataResult::error(unknown_registry_key("minecraft:item", &raw)),
                 })
             });
             let count = optional(get(fields, "count"), |count| {
@@ -466,7 +528,7 @@ fn hover_event(tag: &Nbt) -> DataResult<HoverEvent> {
             });
             let components = optional(get(fields, "components"), |components| match components {
                 Nbt::Compound(c) => DataResult::success(c.clone()),
-                other => DataResult::error(format!("Not a map: {}", snbt(other))),
+                other => DataResult::error(not_a_map(other)),
             });
             let error = record_error(&[&id.error, &count.error, &components.error]);
             let value = match (id.value, count.value, components.value) {
@@ -479,17 +541,10 @@ fn hover_event(tag: &Nbt) -> DataResult<HoverEvent> {
             let id = required(fields, "id", |raw| {
                 string(raw).flat_map(|raw| match parse_identifier(&raw).and_then(|id| registry::ENTITY_TYPE.iter().find(|&&t| t == id)) {
                     Some(id) => DataResult::success(*id),
-                    None => DataResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_type]: {raw}")),
+                    None => DataResult::error(unknown_registry_key("minecraft:entity_type", &raw)),
                 })
             });
-            let uuid = required(fields, "uuid", |uuid| match uuid {
-                Nbt::IntArray(ints) if ints.len() == 4 => DataResult::success(ints.iter().fold(0u128, |acc, &i| acc << 32 | i as u32 as u128)),
-                Nbt::String(s) => match crate::commands::arguments::java_uuid_from_string(s) {
-                    Some(uuid) => DataResult::success(uuid),
-                    None => DataResult::error(format!("Invalid UUID {s}")),
-                },
-                other => DataResult::error(format!("Not an int array: {}", snbt(other))),
-            });
+            let uuid = required(fields, "uuid", |uuid| if json() { json_uuid(uuid) } else { nbt_uuid(uuid) });
             let name = optional(get(fields, "name"), decode_component);
             let error = record_error(&[&id.error, &uuid.error, &name.error]);
             let value = match (id.value, uuid.value, name.value) {
