@@ -54,6 +54,7 @@ pub struct EnderDragon {
     pub dragon_fight: bool,
     pub fight_origin: BlockPos,
     pub phase_manager: EnderDragonPhaseManager,
+    ended_phase: Option<EnderDragonPhase>,
     sitting_damage_received: f32,
     nodes: Vec<Node>,
     open_set: BinaryHeap,
@@ -88,6 +89,7 @@ impl EnderDragon {
             dragon_fight: false,
             fight_origin: BlockPos::ZERO,
             phase_manager: EnderDragonPhaseManager::new(),
+            ended_phase: None,
             sitting_damage_received: 0.0,
             nodes: Vec::new(),
             open_set: BinaryHeap::default(),
@@ -115,7 +117,9 @@ impl EnderDragon {
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         if let Some(phase_id) = input.get("DragonPhase").and_then(crate::world::level::block::entity::int_value) {
             let target = EnderDragonPhase::get_by_id(phase_id);
-            if ender_dragon(mob).phase_manager.current_phase != Some(target) {
+            let current_phase = ender_dragon(mob).phase_manager.current_phase;
+            if current_phase != Some(target) {
+                ender_dragon_mut(mob).ended_phase = current_phase;
                 switch_phase(mob, target);
             }
         }
@@ -123,6 +127,10 @@ impl EnderDragon {
         dragon.dragon_death_time = input.get("DragonDeathTime").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_DEATH_TIME);
         dragon.sitting_damage_received = input.get("sitting_damage_received").and_then(crate::world::level::block::entity::float_value).unwrap_or(0.0);
     }
+}
+
+pub fn take_ended_phase(mob: &mut Mob) -> Option<EnderDragonPhase> {
+    ender_dragon_mut(mob).ended_phase.take()
 }
 
 pub fn ender_dragon(mob: &Mob) -> &EnderDragon {

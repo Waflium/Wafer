@@ -3450,6 +3450,11 @@ impl ServerLevel {
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::ZombieVillager(_))) {
             self.zombie_villager_read_level_dependent_save_data(id, input);
         }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::EnderDragon(_)))
+            && let Some(phase) = super::boss::enderdragon::ender_dragon::take_ended_phase(self.mob_mut(id).expect("an ender dragon"))
+        {
+            self.dragon_phase_end(id, phase);
+        }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::ZombieVillager(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)))
             && let Some(door_pos) = crate::world::entity::monster::zombie::zombie::Zombie::take_stopped_break_door_pos(self.mob_mut(id).expect("a zombie"))
         {
