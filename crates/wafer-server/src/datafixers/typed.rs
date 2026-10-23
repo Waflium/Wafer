@@ -160,6 +160,38 @@ fn visit(ty: &Arc<Type>, value: &mut Value, finder: &OpticFinder, f: &mut dyn Fn
     }
 }
 
+pub fn with_focus_type(ty: &Arc<Type>, finder: &OpticFinder, new_focus: &Arc<Type>) -> Arc<Type> {
+    if let Match::Found(_) = finder.matches(ty) {
+        return match (finder, &**ty) {
+            (OpticFinder::Field(..), Type::Field(name, _)) => Arc::new(Type::Field(name.clone(), new_focus.clone())),
+            (OpticFinder::NamedChoice(name, _), Type::TaggedChoice(choice)) => Arc::new(Type::TaggedChoice(Arc::new(crate::datafixers::types::TaggedChoiceType {
+                name: choice.name.clone(),
+                key_type: choice.key_type,
+                types: choice.types.iter().map(|(key, element)| (key.clone(), if key == name { new_focus.clone() } else { element.clone() })).collect(),
+            }))),
+            (OpticFinder::Field(..), Type::TaggedChoice(_)) => ty.clone(),
+            _ => new_focus.clone(),
+        };
+    }
+    let sub = |element: &Arc<Type>| if resolves(element, finder) { with_focus_type(element, finder, new_focus) } else { element.clone() };
+    match &**ty {
+        Type::Named(name, element) => Arc::new(Type::Named(name.clone(), sub(element))),
+        Type::Hook(element, pre_read, post_write) => Arc::new(Type::Hook(sub(element), *pre_read, *post_write)),
+        Type::List(element) => Arc::new(Type::List(sub(element))),
+        Type::RecursivePoint(..) => with_focus_type(&ty.unfold(), finder, new_focus),
+        Type::Product(first, second) => {
+            if resolves(first, finder) { Arc::new(Type::Product(sub(first), second.clone())) } else { Arc::new(Type::Product(first.clone(), sub(second))) }
+        }
+        Type::Sum(first, second) => Arc::new(Type::Sum(sub(first), sub(second))),
+        Type::TaggedChoice(choice) => Arc::new(Type::TaggedChoice(Arc::new(crate::datafixers::types::TaggedChoiceType {
+            name: choice.name.clone(),
+            key_type: choice.key_type,
+            types: choice.types.iter().map(|(key, element)| (key.clone(), sub(element))).collect(),
+        }))),
+        _ => ty.clone(),
+    }
+}
+
 pub fn point(ty: &Arc<Type>) -> Option<Value> {
     match &**ty {
         Type::Const(_) => None,
@@ -254,6 +286,18 @@ impl Typed {
             }
             *value = result.value;
         });
+        if let Some(new_type) = new_type {
+            self.ty = with_focus_type(&self.ty, finder, new_type);
+        }
+        self
+    }
+
+    pub fn update_to(mut self, finder: &OpticFinder, new_type: &Arc<Type>, mut updater: impl FnMut(Value) -> Value) -> Typed {
+        self.check(finder);
+        visit(&self.ty.clone(), &mut self.value, finder, &mut |_, value| {
+            *value = updater(std::mem::replace(value, Value::Unit));
+        });
+        self.ty = with_focus_type(&self.ty, finder, new_type);
         self
     }
 
