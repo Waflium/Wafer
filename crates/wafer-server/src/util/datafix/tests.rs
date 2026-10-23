@@ -1,6 +1,7 @@
 use crate::datafixers::dsl::TypeReference;
 use crate::datafixers::dynamic::Dynamic;
 use crate::util::datafix::data_fixers::get_data_fixer;
+use crate::util::datafix::schemas::{v1451_6, v3818_5, v704, v705};
 
 fn update(ty: &'static str, from: i32, to: i32, input: &str) -> String {
     let input = crate::nbt::parse_fully(input).expect("valid snbt");
@@ -67,4 +68,67 @@ fn updates_match_the_vanilla_oracle() {
         }
     }
     assert_eq!(mismatches, 0);
+}
+
+#[test]
+fn schema_hooks_match_vanilla() {
+    let cases: [(&str, &str, &str); 44] = [
+        ("unpack", r#"{CriteriaName:"minecraft.mined:minecraft.stone",DisplayName:"x"}"#, r#"{CriteriaName:"minecraft.mined:minecraft.stone",CriteriaType:{id:"minecraft:stone",type:"minecraft:mined"},DisplayName:"x"}"#),
+        ("unpack", r#"{CriteriaName:"dummy"}"#, r#"{CriteriaName:"dummy",CriteriaType:{id:"dummy",type:"_special"}}"#),
+        ("unpack", r#"{CriteriaName:"a:b:c"}"#, r#"{CriteriaName:"a:b:c",CriteriaType:{id:"a:b:c",type:"_special"}}"#),
+        ("unpack", r#"{CriteriaName:"minecraft.custom:minecraft.jump"}"#, r#"{CriteriaName:"minecraft.custom:minecraft.jump",CriteriaType:{id:"minecraft:jump",type:"minecraft:custom"}}"#),
+        ("unpack", r#"{CriteriaName:"Bad Space:x"}"#, r#"{CriteriaName:"Bad Space:x",CriteriaType:{id:"Bad Space:x",type:"_special"}}"#),
+        ("unpack", r#"{CriteriaName:"stat.mineBlock.minecraft.stone"}"#, r#"{CriteriaName:"stat.mineBlock.minecraft.stone",CriteriaType:{id:"stat.mineBlock.minecraft.stone",type:"_special"}}"#),
+        ("unpack", r#"{CriteriaName:"x:"}"#, r#"{CriteriaName:"x:",CriteriaType:{id:"minecraft:",type:"minecraft:x"}}"#),
+        ("unpack", r#"{CriteriaName:":y"}"#, r#"{CriteriaName:":y",CriteriaType:{id:"minecraft:y",type:"minecraft:"}}"#),
+        ("unpack", r#"{DisplayName:"x"}"#, r#"{DisplayName:"x"}"#),
+        ("unpack", r#"{CriteriaName:5}"#, r#"{CriteriaName:5}"#),
+        ("repack", r#"{CriteriaType:{type:"minecraft:mined",id:"minecraft:stone"},DisplayName:"x"}"#, r#"{CriteriaName:"minecraft.mined:minecraft.stone",DisplayName:"x"}"#),
+        ("repack", r#"{CriteriaType:{type:"_special",id:"dummy"}}"#, r#"{CriteriaName:"dummy"}"#),
+        ("repack", r#"{CriteriaType:{type:"a"}}"#, r#"{CriteriaType:{type:"a"}}"#),
+        ("repack", r#"{CriteriaType:{type:"minecraft:custom",id:"minecraft:jump"}}"#, r#"{CriteriaName:"minecraft.custom:minecraft.jump"}"#),
+        ("repack", r#"{CriteriaType:{type:"Bad Space",id:"x"}}"#, r#"{CriteriaName:"Bad Space:minecraft.x"}"#),
+        ("repack", r#"{CriteriaType:5}"#, r#"{CriteriaType:5}"#),
+        ("repack", r#"{DisplayName:"x"}"#, r#"{DisplayName:"x"}"#),
+        ("plain", r#""minecraft:stone""#, r#"{count:1,id:"minecraft:stone"}"#),
+        ("plain", r#"{id:"x"}"#, r#"{id:"x"}"#),
+        ("plain", r#"5"#, r#"5"#),
+        ("v704", r#"{id:"minecraft:chest",tag:{BlockEntityTag:{Items:[]}}}"#, r#"{id:"minecraft:chest",tag:{BlockEntityTag:{Items:[],id:"minecraft:chest"}}}"#),
+        ("v704", r#"{id:"minecraft:oak_sign",tag:{BlockEntityTag:{}}}"#, r#"{id:"minecraft:oak_sign",tag:{BlockEntityTag:{id:"minecraft:sign"}}}"#),
+        ("v704", r#"{id:"minecraft:white_shulker_box",tag:{BlockEntityTag:{x:1}}}"#, r#"{id:"minecraft:white_shulker_box",tag:{BlockEntityTag:{id:"minecraft:shulker_box",x:1}}}"#),
+        ("v704", r#"{id:"minecraft:pig_spawn_egg",tag:{EntityTag:{}}}"#, r#"{id:"minecraft:pig_spawn_egg",tag:{EntityTag:{}}}"#),
+        ("v704", r#"{id:"minecraft:armor_stand",tag:{EntityTag:{}}}"#, r#"{id:"minecraft:armor_stand",tag:{EntityTag:{id:"ArmorStand"}}}"#),
+        ("v704", r#"{id:"minecraft:boat",tag:{EntityTag:{}}}"#, r#"{id:"minecraft:boat",tag:{EntityTag:{}}}"#),
+        ("v704", r#"{id:"minecraft:painting",tag:{EntityTag:{id:"keep"}}}"#, r#"{id:"minecraft:painting",tag:{EntityTag:{id:"keep"}}}"#),
+        ("v704", r#"{id:"minecraft:stone",tag:{BlockEntityTag:{}}}"#, r#"{id:"minecraft:stone",tag:{BlockEntityTag:{}}}"#),
+        ("v704", r#"{tag:{BlockEntityTag:{}}}"#, r#"{tag:{BlockEntityTag:{}}}"#),
+        ("v704", r#"{id:"minecraft:enhanting_table",tag:{BlockEntityTag:{}}}"#, r#"{id:"minecraft:enhanting_table",tag:{BlockEntityTag:{id:"minecraft:enchanting_table"}}}"#),
+        ("v704", r#"{id:"minecraft:spawner",tag:{BlockEntityTag:{}}}"#, r#"{id:"minecraft:spawner",tag:{BlockEntityTag:{id:"minecraft:mob_spawner"}}}"#),
+        ("v704", r#"{id:"minecraft:stone"}"#, r#"{id:"minecraft:stone"}"#),
+        ("v705", r#"{id:"minecraft:chest",tag:{BlockEntityTag:{Items:[]}}}"#, r#"{id:"minecraft:chest",tag:{BlockEntityTag:{Items:[],id:"minecraft:chest"}}}"#),
+        ("v705", r#"{id:"minecraft:oak_sign",tag:{BlockEntityTag:{}}}"#, r#"{id:"minecraft:oak_sign",tag:{BlockEntityTag:{id:"minecraft:sign"}}}"#),
+        ("v705", r#"{id:"minecraft:white_shulker_box",tag:{BlockEntityTag:{x:1}}}"#, r#"{id:"minecraft:white_shulker_box",tag:{BlockEntityTag:{id:"minecraft:shulker_box",x:1}}}"#),
+        ("v705", r#"{id:"minecraft:pig_spawn_egg",tag:{EntityTag:{}}}"#, r#"{id:"minecraft:pig_spawn_egg",tag:{EntityTag:{id:"minecraft:pig"}}}"#),
+        ("v705", r#"{id:"minecraft:armor_stand",tag:{EntityTag:{}}}"#, r#"{id:"minecraft:armor_stand",tag:{EntityTag:{id:"minecraft:armor_stand"}}}"#),
+        ("v705", r#"{id:"minecraft:boat",tag:{EntityTag:{}}}"#, r#"{id:"minecraft:boat",tag:{EntityTag:{id:"minecraft:oak_boat"}}}"#),
+        ("v705", r#"{id:"minecraft:painting",tag:{EntityTag:{id:"keep"}}}"#, r#"{id:"minecraft:painting",tag:{EntityTag:{id:"keep"}}}"#),
+        ("v705", r#"{id:"minecraft:stone",tag:{BlockEntityTag:{}}}"#, r#"{id:"minecraft:stone",tag:{BlockEntityTag:{}}}"#),
+        ("v705", r#"{tag:{BlockEntityTag:{}}}"#, r#"{tag:{BlockEntityTag:{}}}"#),
+        ("v705", r#"{id:"minecraft:enhanting_table",tag:{BlockEntityTag:{}}}"#, r#"{id:"minecraft:enhanting_table",tag:{BlockEntityTag:{id:"minecraft:enchanting_table"}}}"#),
+        ("v705", r#"{id:"minecraft:spawner",tag:{BlockEntityTag:{}}}"#, r#"{id:"minecraft:spawner",tag:{BlockEntityTag:{id:"minecraft:mob_spawner"}}}"#),
+        ("v705", r#"{id:"minecraft:stone"}"#, r#"{id:"minecraft:stone"}"#),
+    ];
+    for (label, input, expected) in cases {
+        let hook: fn(Dynamic) -> Dynamic = match label {
+            "unpack" => v1451_6::unpack_objective_id,
+            "repack" => v1451_6::repack_objective_id,
+            "plain" => v3818_5::unpack_plain_id,
+            "v704" => v704::add_names_hook,
+            "v705" => v705::add_names_hook,
+            _ => unreachable!(),
+        };
+        let value = crate::nbt::parse_fully(input).expect("valid snbt");
+        let output = hook(Dynamic::new(value));
+        assert_eq!(crate::nbt::to_string(output.get_value().expect("a value")), expected, "{label} {input}");
+    }
 }

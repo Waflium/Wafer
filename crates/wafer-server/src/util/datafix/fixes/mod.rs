@@ -4,6 +4,7 @@ pub mod advancements_rename_fix;
 pub mod attributes_rename_fix;
 pub mod blending_data_fix;
 pub mod blending_data_no_value_height_fix;
+pub mod block_entity_id_fix;
 pub mod block_state_field_names_fix;
 pub mod chunk_delete_light_fix;
 pub mod copper_golem_weather_state_fix;

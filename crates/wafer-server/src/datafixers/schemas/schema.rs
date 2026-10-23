@@ -10,13 +10,20 @@ pub type RegisterChoices = fn(parent: Option<&Arc<Schema>>) -> TypeTemplates;
 
 pub struct SchemaClass {
     pub namespaced: bool,
+    pub namespaced_block_entity_choices: bool,
     pub register_types: Option<RegisterTypes>,
     pub register_entities: Option<RegisterChoices>,
     pub register_block_entities: Option<RegisterChoices>,
 }
 
 impl SchemaClass {
-    pub const NAMESPACED: SchemaClass = SchemaClass { namespaced: true, register_types: None, register_entities: None, register_block_entities: None };
+    pub const NAMESPACED: SchemaClass = SchemaClass {
+        namespaced: true,
+        namespaced_block_entity_choices: false,
+        register_types: None,
+        register_entities: None,
+        register_block_entities: None,
+    };
 }
 
 #[derive(Default)]
@@ -36,6 +43,18 @@ impl Registry {
 
 pub fn register(map: &mut TypeTemplates, name: &str, template: impl Fn(&Schema) -> TypeTemplate + Send + Sync + 'static) {
     let supplier: TemplateSupplier = Arc::new(template);
+    match map.iter_mut().find(|(key, _)| key == name) {
+        Some((_, slot)) => *slot = supplier,
+        None => map.push((name.to_string(), supplier)),
+    }
+}
+
+pub fn remove(map: &mut TypeTemplates, name: &str) -> Option<TemplateSupplier> {
+    let index = map.iter().position(|(key, _)| key == name)?;
+    Some(map.remove(index).1)
+}
+
+pub fn put(map: &mut TypeTemplates, name: &str, supplier: TemplateSupplier) {
     match map.iter_mut().find(|(key, _)| key == name) {
         Some((_, slot)) => *slot = supplier,
         None => map.push((name.to_string(), supplier)),
@@ -131,7 +150,8 @@ impl Schema {
     }
 
     pub fn get_choice_type(&self, ty: TypeReference, choice_name: &str) -> Arc<Type> {
-        let choice_name = if self.class.namespaced { crate::util::datafix::schemas::namespaced_schema::ensure_namespaced(choice_name) } else { choice_name.to_string() };
+        let namespaced = self.class.namespaced || (self.class.namespaced_block_entity_choices && ty.type_name() == crate::util::datafix::fixes::references::BLOCK_ENTITY.type_name());
+        let choice_name = if namespaced { crate::util::datafix::schemas::namespaced_schema::ensure_namespaced(choice_name) } else { choice_name.to_string() };
         let choice_type = self.find_choice_type(ty);
         match choice_type.choices().get(&choice_name) {
             Some(ty) => ty.clone(),

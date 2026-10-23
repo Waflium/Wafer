@@ -8,6 +8,7 @@ use crate::util::datafix::schemas::namespaced_schema::ensure_namespaced;
 
 pub static V99: SchemaClass = SchemaClass {
     namespaced: false,
+    namespaced_block_entity_choices: false,
     register_types: Some(register_types),
     register_entities: Some(register_entities),
     register_block_entities: Some(register_block_entities),

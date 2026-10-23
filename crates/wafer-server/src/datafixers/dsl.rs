@@ -147,6 +147,28 @@ pub fn tagged_choice_lazy(name: &str, key_type: ConstType, templates: Arc<TypeTe
     TypeTemplate::TaggedChoice(name.into(), key_type, templates)
 }
 
+pub fn tagged_choice(name: &str, key_type: ConstType, templates: Vec<(&str, TypeTemplate)>) -> TypeTemplate {
+    let templates: TypeTemplates = templates
+        .into_iter()
+        .map(|(key, template)| (key.to_string(), Arc::new(move |_: &Schema| template.clone()) as TemplateSupplier))
+        .collect();
+    tagged_choice_lazy(name, key_type, Arc::new(templates))
+}
+
+pub fn template_map(templates: Vec<(&str, TemplateSupplier)>) -> Arc<TypeTemplates> {
+    Arc::new(templates.into_iter().map(|(key, supplier)| (key.to_string(), supplier)).collect())
+}
+
+pub fn supplier(template: impl Fn(&Schema) -> TypeTemplate + Send + Sync + 'static) -> TemplateSupplier {
+    Arc::new(template)
+}
+
+pub fn optional_fields_lazy(fields: &TypeTemplates, schema: &Schema) -> TypeTemplate {
+    let mut types: Vec<TypeTemplate> = fields.iter().map(|(name, supplier)| optional(field(name, supplier(schema)))).collect();
+    types.push(remainder());
+    and_all(types)
+}
+
 pub fn hook(template: TypeTemplate, pre_read: HookFunction, post_write: HookFunction) -> TypeTemplate {
     TypeTemplate::Hook(Box::new(template), pre_read, post_write)
 }
