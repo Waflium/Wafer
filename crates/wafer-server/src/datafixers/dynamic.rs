@@ -348,7 +348,18 @@ impl Dynamic {
     pub fn update_map_values(self, mut updater: impl FnMut((Dynamic, Dynamic)) -> (Dynamic, Dynamic)) -> Dynamic {
         match self.get_map_values().value {
             Some(entries) if self.get_map_values().is_success() => {
-                let updated: Vec<(Dynamic, Dynamic)> = entries.into_iter().map(&mut updater).collect();
+                let mut updated: Vec<(Dynamic, Dynamic)> = Vec::with_capacity(entries.len());
+                let mut positions: std::collections::HashMap<String, usize> = std::collections::HashMap::with_capacity(entries.len());
+                for entry in entries {
+                    let (key, value) = updater(entry);
+                    if let Some(Nbt::String(name)) = &key.value {
+                        if let Some(&position) = positions.get(name) {
+                            panic!("Duplicate key NBT[{}] (attempted merging values NBT[{}] and NBT[{}])", snbt(&key.value), snbt(&updated[position].1.value), snbt(&value.value));
+                        }
+                        positions.insert(name.clone(), updated.len());
+                    }
+                    updated.push((key, value));
+                }
                 self.create_map(updated)
             }
             _ => self,
