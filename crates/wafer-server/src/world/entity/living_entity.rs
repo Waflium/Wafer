@@ -1388,11 +1388,7 @@ impl ServerLevel {
         if source.is(&damage_type_tags::NO_ANGER) || source.is_type(damage_types::WIND_CHARGE) && entity_type_tags::NO_ANGER_FROM_WIND_CHARGE.contains(self.entity(id).entity_type as usize) {
             return;
         }
-        let uuid = self.entity(living_source).uuid;
-        let tick_count = self.entity(id).tick_count;
-        let living = self.living_mut(id);
-        living.last_hurt_by_mob = Some(uuid);
-        living.last_hurt_by_mob_timestamp = tick_count;
+        self.set_last_hurt_by_mob(id, Some(living_source));
     }
 
     pub fn resolve_player_responsible_for_damage(&mut self, id: EntityId, source: &DamageSource) -> Option<EntityId> {
