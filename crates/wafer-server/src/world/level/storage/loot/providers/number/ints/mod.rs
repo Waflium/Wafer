@@ -1,10 +1,14 @@
 pub mod resolvable_int;
 
+use std::sync::LazyLock;
+
 use wafer_core::mth;
 use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
-use super::floats::ContextFloatProvider;
+use super::floats::{self, ContextFloatProvider};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, def, req};
 use super::stored_number_access::StoredNumberAccess;
 use super::{ArithmeticException, ArithmeticResult, Case, DIVISION_BY_ZERO, INTEGER_OVERFLOW, decode_holder_list_partial, decode_weighted_list, get_random};
 use crate::core::holder::{Holder, RegistryElement};
@@ -17,6 +21,68 @@ use crate::world::level::storage::loot::providers::score::ScoreboardNameProvider
 use crate::world::level::storage::loot::validatable::{self, Validatable};
 use crate::world::level::storage::loot::validation_context::ValidationContext;
 use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
+
+fn direct_codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(direct_codec);
+    &CODEC
+}
+
+pub fn holder_codec() -> Pair {
+    (Codec::Either(Box::new(Codec::Identifier), Box::new(Codec::Lazy(direct_codec_lazy))), Stream::Nbt)
+}
+
+pub fn direct_codec() -> Pair {
+    let input = |name: &'static str| req(name, holder_codec());
+    let inputs = || req("inputs", types::compact_list(holder_codec()));
+    let binary = || vec![input("left"), input("right")];
+    let fallback = || def("fallback", holder_codec(), Nbt::Int(0));
+    let cases = vec![
+        ("minecraft:abs", vec![input("input")]),
+        ("minecraft:avg", vec![inputs()]),
+        ("minecraft:binomial", vec![input("n"), req("p", floats::holder_codec())]),
+        (
+            "minecraft:conditional",
+            vec![req("condition", LootItemCondition::holder_codec()), input("on_true"), def("on_false", holder_codec(), Nbt::Int(0))],
+        ),
+        ("minecraft:constant", vec![req("value", (Codec::int(), Stream::Int))]),
+        ("minecraft:sub", binary()),
+        ("minecraft:environment_attribute", vec![req("attribute", types::by_name("minecraft:environment_attribute"))]),
+        ("minecraft:from_float", vec![req("input", floats::holder_codec())]),
+        ("minecraft:max", vec![inputs()]),
+        ("minecraft:min", vec![inputs()]),
+        ("minecraft:floor_mod", binary()),
+        ("minecraft:floor_div", binary()),
+        ("minecraft:mod", binary()),
+        ("minecraft:div", binary()),
+        ("minecraft:negate", vec![input("input")]),
+        (
+            "minecraft:number_dispatcher",
+            vec![
+                req("cases", types::list(types::record(vec![req("condition", LootItemCondition::holder_codec()), input("value")]))),
+                def("default", holder_codec(), Nbt::Int(0)),
+            ],
+        ),
+        ("minecraft:pow", vec![input("base"), input("exponent")]),
+        ("minecraft:mul", vec![inputs()]),
+        ("minecraft:score", vec![req("target", ScoreboardNameProvider::codec()), req("score", types::string()), fallback()]),
+        ("minecraft:storage", vec![req("storage", types::identifier()), req("path", types::string()), fallback()]),
+        ("minecraft:add", vec![inputs()]),
+        ("minecraft:uniform", vec![input("min"), input("max")]),
+        (
+            "minecraft:weighted_list",
+            vec![req("distribution", types::list(types::record(vec![req("data", holder_codec()), req("weight", types::var_int(types::non_negative_int()))])))],
+        ),
+    ];
+    let typed = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:context_int_provider_type"), cases }));
+    (Codec::Normalize(Box::new(Codec::Either(Box::new(Codec::int()), Box::new(typed))), constant_int), Stream::Nbt)
+}
+
+fn constant_int(provider: Nbt) -> Result<Nbt, String> {
+    match provider.get("type").and_then(Nbt::as_str) {
+        Some("minecraft:constant") => Ok(provider.get("value").cloned().expect("a constant value")),
+        _ => Ok(provider),
+    }
+}
 
 pub enum ContextIntProvider {
     Absolute(Holder<ContextIntProvider>),

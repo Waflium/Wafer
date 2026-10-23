@@ -1,7 +1,18 @@
+use std::sync::LazyLock;
+
 use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::{DamageType, MobEffect, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
+
+use crate::core::particles::particle_types;
+use crate::util::valueproviders::float_provider_codec;
+use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
+use crate::world::item::component::custom;
+use crate::world::item::component::types::{self, Pair, def, opt, record, req};
+use crate::world::item::enchantment::level_based_value;
+use crate::world::level::levelgen::blockpredicates::block_predicate;
+use crate::world::level::levelgen::feature::stateproviders::block_state_provider;
 
 use crate::world::level::BlockGetter;
 use crate::core::holder_set::HolderSet;
@@ -21,6 +32,144 @@ use crate::world::effect::MobEffectInstance;
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::enchantment::enchanted_item_in_use::EnchantedItemInUse;
 use crate::world::item::enchantment::level_based_value::LevelBasedValue;
+
+fn decode_vec3(tag: Nbt) -> Result<Nbt, String> {
+    let values = Codec::list(Codec::Double).decode(&tag)?;
+    if values.as_list().len() != 3 {
+        return Err("Input is not a list of 3 elements".into());
+    }
+    Ok(values)
+}
+
+fn vec3_codec() -> Pair {
+    types::transform(decode_vec3)
+}
+
+fn zero_vec3() -> Nbt {
+    Nbt::List(vec![Nbt::Double(0.0); 3])
+}
+
+fn zero_vec3i() -> Nbt {
+    Nbt::IntArray(vec![0; 3])
+}
+
+fn position_source_codec() -> Pair {
+    record(vec![
+        req("type", types::enumeration(&["entity_position", "in_bounding_box"])),
+        def("offset", types::float(Codec::float()), types::f(0.0)),
+        def("scale", types::float(types::positive_float()), types::f(1.0)),
+    ])
+}
+
+fn velocity_source_codec() -> Pair {
+    record(vec![
+        def("movement_scale", types::float(Codec::float()), types::f(0.0)),
+        def("base", float_provider_codec(), types::f(0.0)),
+    ])
+}
+
+fn replace_fields(radius: bool) -> Vec<Field> {
+    let level_based = |name: &'static str| req(name, level_based_value::codec());
+    let mut fields = Vec::new();
+    if radius {
+        fields.push(level_based("radius"));
+        fields.push(level_based("height"));
+    }
+    fields.push(def("offset", custom::block_pos(), zero_vec3i()));
+    fields.push(opt("predicate", block_predicate::codec()));
+    fields.push(req("block_state", block_state_provider::holder_codec()));
+    fields.push(opt("trigger_game_event", types::fixed("minecraft:game_event")));
+    fields
+}
+
+pub fn shared_cases() -> Vec<(&'static str, Vec<Field>)> {
+    let level_based = |name: &'static str| req(name, level_based_value::codec());
+    let particle = |name: &'static str| req(name, particle_types::dispatch_codec());
+    vec![
+        (
+            "minecraft:apply_mob_effect",
+            vec![
+                req("to_apply", types::holder_set("minecraft:mob_effect")),
+                level_based("min_duration"),
+                level_based("max_duration"),
+                level_based("min_amplifier"),
+                level_based("max_amplifier"),
+            ],
+        ),
+        ("minecraft:change_item_damage", vec![level_based("amount")]),
+        (
+            "minecraft:damage_entity",
+            vec![level_based("min_damage"), level_based("max_damage"), req("damage_type", types::fixed("minecraft:damage_type"))],
+        ),
+        (
+            "minecraft:explode",
+            vec![
+                def("attribute_to_user", types::bool(), types::b(false)),
+                opt("damage_type", types::fixed("minecraft:damage_type")),
+                opt("knockback_multiplier", level_based_value::codec()),
+                opt("immune_blocks", types::holder_set("minecraft:block")),
+                def("offset", vec3_codec(), zero_vec3()),
+                level_based("radius"),
+                def("create_fire", types::bool(), types::b(false)),
+                req("block_interaction", types::enumeration(&["none", "block", "mob", "tnt", "trigger"])),
+                particle("small_particle"),
+                particle("large_particle"),
+                def(
+                    "block_particles",
+                    types::list(record(vec![
+                        req("particle", particle_types::dispatch_codec()),
+                        def("scaling", types::float(Codec::float()), types::f(1.0)),
+                        def("speed", types::float(Codec::float()), types::f(1.0)),
+                        req("weight", types::var_int(types::non_negative_int())),
+                    ])),
+                    types::empty_list(),
+                ),
+                req("sound", types::sound_event()),
+            ],
+        ),
+        ("minecraft:ignite", vec![level_based("duration")]),
+        ("minecraft:apply_impulse", vec![req("direction", vec3_codec()), req("coordinate_scale", vec3_codec()), level_based("magnitude")]),
+        ("minecraft:apply_exhaustion", vec![level_based("amount")]),
+        (
+            "minecraft:play_sound",
+            vec![req("sound", types::compact_list(types::sound_event())), req("volume", float_provider_codec()), req("pitch", float_provider_codec())],
+        ),
+        ("minecraft:replace_block", replace_fields(false)),
+        ("minecraft:replace_disk", replace_fields(true)),
+        ("minecraft:run_function", vec![req("function", types::identifier())]),
+        (
+            "minecraft:set_block_properties",
+            vec![
+                req("properties", (Codec::Map(Box::new(Codec::string()), Box::new(Codec::string())), Stream::Nbt)),
+                def("offset", custom::block_pos(), zero_vec3i()),
+                opt("trigger_game_event", types::fixed("minecraft:game_event")),
+            ],
+        ),
+        (
+            "minecraft:spawn_particles",
+            vec![
+                particle("particle"),
+                req("horizontal_position", position_source_codec()),
+                req("vertical_position", position_source_codec()),
+                req("horizontal_velocity", velocity_source_codec()),
+                req("vertical_velocity", velocity_source_codec()),
+                def("speed", float_provider_codec(), types::f(0.0)),
+            ],
+        ),
+        ("minecraft:summon_entity", vec![req("entity", types::holder_set("minecraft:entity_type")), def("join_team", types::bool(), types::b(false))]),
+    ]
+}
+
+fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(codec);
+    &CODEC
+}
+
+pub fn codec() -> Pair {
+    let mut cases = shared_cases();
+    cases.push(("minecraft:all_of", vec![req("effects", types::list((Codec::Lazy(codec_lazy), Stream::Lazy)))]));
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:enchantment_entity_effect_type"), cases })), Stream::Dispatch)
+}
 
 const POST_IMPULSE_CONTEXT_RESET_GRACE_TIME_TICKS: i32 = 10;
 

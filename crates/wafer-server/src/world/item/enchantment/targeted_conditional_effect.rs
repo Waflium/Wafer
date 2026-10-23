@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
 use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::types::{self, Pair, opt, record, req};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::validatable::{self, Validatable};
@@ -22,6 +23,19 @@ impl EnchantmentTarget {
     fn decode_non_damage(tag: &Nbt) -> DataResult<EnchantmentTarget> {
         codec::string_enum(tag, &[("attacker", EnchantmentTarget::Attacker), ("victim", EnchantmentTarget::Victim)])
     }
+}
+
+pub fn codec(effect: Pair) -> Pair {
+    record(vec![
+        req("enchanted", types::enumeration(&["attacker", "damaging_entity", "victim"])),
+        req("affected", types::enumeration(&["attacker", "damaging_entity", "victim"])),
+        req("effect", effect),
+        opt("requirements", LootItemCondition::holder_codec()),
+    ])
+}
+
+pub fn equipment_drops_codec(effect: Pair) -> Pair {
+    record(vec![req("enchanted", types::enumeration(&["attacker", "victim"])), req("effect", effect), opt("requirements", LootItemCondition::holder_codec())])
 }
 
 pub struct TargetedConditionalEffect<T> {

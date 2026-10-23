@@ -1,5 +1,12 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::advancements::predicates::enchantment_predicate;
+use crate::world::item::component::types::{self, Pair};
+
+pub fn codec() -> Pair {
+    types::list(enchantment_predicate::codec())
+}
+
 use crate::advancements::predicates::enchantment_predicate::EnchantmentPredicate;
 use crate::util::codec::{self, DataResult};
 use crate::world::item::component::DataComponentType;

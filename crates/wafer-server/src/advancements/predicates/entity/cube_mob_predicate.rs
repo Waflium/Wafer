@@ -1,9 +1,14 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::advancements::predicates::min_max_bounds::Ints;
+use crate::advancements::predicates::min_max_bounds::{Ints, ints_codec};
+use crate::world::item::component::types::{self, Pair, def, record};
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
+
+pub fn codec() -> Pair {
+    record(vec![def("size", ints_codec(), types::empty_map())])
+}
 
 #[derive(Debug)]
 pub struct CubeMobPredicate {

@@ -4,6 +4,20 @@ use wafer_data::{BlockState, FluidState};
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::types::{self, Pair, opt, record};
+
+pub fn codec() -> Pair {
+    let ranged = record(vec![opt("min", types::string()), opt("max", types::string())]);
+    (
+        Codec::Map(Box::new(Codec::string()), Box::new(Codec::Either(Box::new(Codec::string()), Box::new(ranged.0)))),
+        Stream::Map(
+            Box::new(Stream::Utf8(32767)),
+            Box::new(Stream::Either(Box::new(Stream::Utf8(32767)), Box::new(ranged.1))),
+            i32::MAX as usize,
+        ),
+    )
+}
 
 #[derive(Debug)]
 enum ValueMatcher {

@@ -1,5 +1,11 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::types::{self, Pair};
+
+pub fn codec() -> Pair {
+    types::holder_set("minecraft:villager_type")
+}
+
 use crate::core::holder_set::HolderSet;
 use crate::util::codec::DataResult;
 use crate::world::item::component::codec::registry_id;

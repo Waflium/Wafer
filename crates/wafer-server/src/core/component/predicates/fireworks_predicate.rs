@@ -1,5 +1,14 @@
 use wafer_protocol::nbt::Nbt;
 
+use super::firework_explosion_predicate::firework_predicate_codec;
+use crate::advancements::predicates::collection_predicate;
+use crate::advancements::predicates::min_max_bounds::ints_codec;
+use crate::world::item::component::types::{self, Pair, def, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![opt("explosions", collection_predicate::codec(firework_predicate_codec)), def("flight_duration", ints_codec(), types::empty_map())])
+}
+
 use super::firework_explosion_predicate::FireworkPredicate;
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::min_max_bounds::Ints;

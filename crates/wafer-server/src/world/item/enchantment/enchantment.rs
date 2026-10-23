@@ -16,12 +16,35 @@ use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::damagesource::DamageSource;
+use crate::world::item::component::codec::{Codec, RangeError, Stream};
+use crate::world::item::component::text;
+use crate::world::item::component::types::{self, Pair, def, opt, record, req};
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::{LootContext, LootContextBuilder};
 use crate::world::level::storage::loot::loot_params::LootParams;
 
 pub const MAX_LEVEL: i32 = 255;
+
+fn cost_codec() -> Pair {
+    record(vec![req("base", (Codec::int(), Stream::Int)), req("per_level_above_first", (Codec::int(), Stream::Int))])
+}
+
+pub fn direct_codec() -> Pair {
+    record(vec![
+        req("description", text::text()),
+        req("supported_items", types::holder_set("minecraft:item")),
+        opt("primary_items", types::holder_set("minecraft:item")),
+        req("weight", types::var_int(Codec::Int(1, 1024, RangeError::Outside))),
+        req("max_level", types::var_int(Codec::Int(1, MAX_LEVEL, RangeError::Outside))),
+        req("min_cost", cost_codec()),
+        req("max_cost", cost_codec()),
+        req("anvil_cost", types::var_int(types::non_negative_int())),
+        req("slots", types::list(types::enumeration(types::EQUIPMENT_SLOT_GROUPS))),
+        def("exclusive_set", types::holder_set("minecraft:enchantment"), types::empty_list()),
+        def("effects", super::enchantment_effect_components::components_codec(), types::empty_map()),
+    ])
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Cost {

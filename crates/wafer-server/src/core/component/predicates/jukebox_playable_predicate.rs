@@ -1,5 +1,11 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::types::{self, Pair, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![opt("song", types::holder_set("minecraft:jukebox_song"))])
+}
+
 use crate::core::holder_set::HolderSet;
 use crate::util::codec::{self, DataResult};
 use crate::world::item::component::codec::registry;

@@ -5,6 +5,16 @@ use crate::commands::brigadier::{
     StringReader,
 };
 use crate::util::codec::{self, DataResult, DecodeError};
+use crate::world::item::component::custom;
+use crate::world::item::component::types::Pair;
+
+pub fn ints_codec() -> Pair {
+    custom::ints_bounds()
+}
+
+pub fn doubles_codec() -> Pair {
+    custom::doubles_bounds()
+}
 
 pub static ERROR_EMPTY: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.range.empty");
 pub static ERROR_SWAPPED: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.range.swapped");

@@ -1,5 +1,12 @@
 use wafer_protocol::nbt::Nbt;
 
+use super::min_max_bounds::ints_codec;
+use crate::world::item::component::types::{self, Pair, def, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![opt("enchantments", types::holder_set("minecraft:enchantment")), def("levels", ints_codec(), types::empty_map())])
+}
+
 use super::min_max_bounds::Ints;
 use crate::core::holder_set::HolderSet;
 use crate::util::codec::{self, DataResult};

@@ -1,6 +1,13 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::advancements::predicates::min_max_bounds::Doubles;
+use crate::advancements::predicates::min_max_bounds::{Doubles, doubles_codec};
+use crate::world::item::component::types::{self, Pair, def, record};
+
+pub fn codec() -> Pair {
+    record(
+        ["x", "y", "z", "speed", "horizontal_speed", "vertical_speed", "fall_distance"].into_iter().map(|key| def(key, doubles_codec(), types::empty_map())).collect(),
+    )
+}
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;

@@ -1,5 +1,6 @@
 use wafer_core::mth::{self, lerp3_f, smoothstep};
 use wafer_core::{Interval, RandomSource};
+use wafer_protocol::nbt::Nbt;
 
 use super::density_function::DensityVolume;
 use super::AlgorithmRandom;
@@ -316,6 +317,18 @@ impl NoiseStack {
             layer.noise.add_to_volume(buffer, volume, xz_scale * f, y_scale * f, amplitude * layer.amplitude);
         }
     }
+}
+
+pub fn parameters_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, RangeError, Stream};
+    use crate::world::item::component::types::{self, def, record, req};
+    record(vec![
+        def("base_amplitude", (Codec::Double, Stream::Double), Nbt::Double(1.0)),
+        req("base_octave", (Codec::Int(-32, 32, RangeError::Outside), Stream::Int)),
+        def("octave_count", (Codec::Int(1, 32, RangeError::Outside), Stream::Int), Nbt::Int(1)),
+        def("normalize", (Codec::Either(Box::new(Codec::Bool), Box::new(Codec::Enum(&["legacy"]))), Stream::Nbt), types::b(true)),
+        def("amplitude_modifiers", types::list((Codec::Double, Stream::Double)), types::empty_list()),
+    ])
 }
 
 #[derive(Clone, Debug, PartialEq)]

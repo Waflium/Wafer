@@ -1,6 +1,11 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::advancements::predicates::slots_predicate::SlotsPredicate;
+use crate::advancements::predicates::slots_predicate::{self, SlotsPredicate};
+use crate::world::item::component::types::Pair;
+
+pub fn codec() -> Pair {
+    slots_predicate::codec()
+}
 use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;

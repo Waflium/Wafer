@@ -1,11 +1,16 @@
 use wafer_core::BlockPos;
 use wafer_protocol::nbt::Nbt;
 
-use super::state_properties_predicate::StatePropertiesPredicate;
+use super::state_properties_predicate::{self, StatePropertiesPredicate};
 use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::types::{self, Pair, opt, record};
 use crate::world::level::BlockGetter;
+
+pub fn codec() -> Pair {
+    record(vec![opt("fluids", types::holder_set("minecraft:fluid")), opt("state", state_properties_predicate::codec())])
+}
 
 #[derive(Debug)]
 pub struct FluidPredicate {

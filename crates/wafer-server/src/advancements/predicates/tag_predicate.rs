@@ -2,6 +2,11 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder_set::HolderSet;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::types::{self, Pair, record, req};
+
+pub fn codec(registry: &'static str) -> Pair {
+    record(vec![req("id", types::holder_set(registry)), req("expected", types::bool())])
+}
 
 #[derive(Debug)]
 pub struct TagPredicate {

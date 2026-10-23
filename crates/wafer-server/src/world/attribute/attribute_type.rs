@@ -1,11 +1,17 @@
 use std::sync::Arc;
 
 use serde_json::Value as Json;
+use wafer_protocol::nbt::Nbt;
 
 use super::modifier::color_modifier::{parse_argb, parse_rgb};
 use super::modifier::{AttributeModifier, BooleanModifier, ColorModifier, FloatModifier, IntegerModifier, OperationId};
-use super::{AmbientParticle, BedRule, LerpFunction, Value};
+use super::{AmbientParticle, BedRule, LerpFunction, Value, ambient_sounds, background_music};
+use crate::core::particles::particle_types;
+use crate::util::argb;
+use crate::util::extra_codecs::hex_color;
 use crate::util::tri_state::TriState;
+use crate::world::item::component::json_to_nbt;
+use crate::world::item::component::types::Pair;
 use crate::world::entity::schedule::Activity;
 use crate::world::level::biome::mob_spawn_settings::MobSpawnSettings;
 use crate::world::level::levelgen::density_function::{float, resource_name};
@@ -171,6 +177,32 @@ impl AttributeType {
                 Value::AmbientParticles(Arc::new(list.iter().map(AmbientParticle::parse).collect::<Result<_, _>>()?))
             }
             AttributeType::MobSpawnSettings => Value::MobSpawnSettings(Arc::new(MobSpawnSettings::parse(json)?)),
+        })
+    }
+
+    pub fn encode_value(self, value: &Value) -> Result<Nbt, String> {
+        let data = |codec: Pair, json: &Json| codec.0.decode(&json_to_nbt(json));
+        Ok(match (self, value) {
+            (AttributeType::Boolean, Value::Boolean(value)) => Nbt::Byte(*value as i8),
+            (AttributeType::Float | AttributeType::AngleDegrees, Value::Float(value)) => Nbt::Float(*value),
+            (AttributeType::RgbColor, Value::Rgb(value)) => Nbt::String(hex_color(argb::transparent(argb::color_from_vector3f(*value)), 6)),
+            (AttributeType::ArgbColor, Value::Argb(value)) => Nbt::String(hex_color(argb::color_from_vector4f(*value), 8)),
+            (AttributeType::MoonPhase, Value::MoonPhase(value)) => Nbt::String(value.name().into()),
+            (AttributeType::Particle, Value::Data(json)) => data(particle_types::dispatch_codec(), json)?,
+            (AttributeType::BackgroundMusic, Value::Data(json)) => data(background_music::codec(), json)?,
+            (AttributeType::AmbientSounds, Value::Data(json)) => data(ambient_sounds::codec(), json)?,
+            (AttributeType::AmbientParticles, Value::AmbientParticles(particles)) => Nbt::List(
+                particles
+                    .iter()
+                    .map(|particle| {
+                        Ok(Nbt::Compound(vec![
+                            ("particle".into(), data(particle_types::dispatch_codec(), &particle.particle)?),
+                            ("probability".into(), Nbt::Float(particle.probability)),
+                        ]))
+                    })
+                    .collect::<Result<_, String>>()?,
+            ),
+            (ty, value) => return Err(format!("{ty:?} is not synchronized with {value:?}")),
         })
     }
 

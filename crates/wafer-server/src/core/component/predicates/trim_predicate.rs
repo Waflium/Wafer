@@ -1,5 +1,11 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::types::{self, Pair, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![opt("material", types::holder_set("minecraft:trim_material")), opt("pattern", types::holder_set("minecraft:trim_pattern"))])
+}
+
 use crate::core::holder_set::HolderSet;
 use crate::util::codec::{self, DataResult};
 use crate::world::item::component::codec::registry_id;

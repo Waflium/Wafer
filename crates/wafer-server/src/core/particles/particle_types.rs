@@ -8,7 +8,7 @@ use super::particle_options::ParticleOptions;
 use crate::util::hash_ops::{self, HashCode};
 use crate::world::item::component::codec::{self, Codec, Custom, Dispatch, RangeError, Selector, Stream};
 use crate::world::item::component::custom;
-use crate::world::item::component::types::{Pair, always, def, f, float, i, positive_int, record, req, rgb_color, argb_color, var_int};
+use crate::world::item::component::types::{Pair, always, def, f, float, i, positive_int, record, req, rgb_color, argb_color, transform, var_int};
 
 fn block_particle_option() -> Pair {
     record(vec![req("block_state", (Codec::Custom(Box::new(BlockStateCodec)), Stream::Custom))])
@@ -205,4 +205,29 @@ impl Custom for Vec3Codec {
         }
         Ok(Nbt::List(values))
     }
+}
+
+fn block_state_options() -> Pair {
+    record(vec![req("block_state", crate::world::level::block::state::block_state::codec())])
+}
+
+fn network_options(tag: Nbt) -> Result<Nbt, String> {
+    let ty = tag.get("type").ok_or_else(|| format!("No key type in MapLike[{}]", crate::nbt::to_string(&tag)))?;
+    let id = codec::identifier(ty)?;
+    let name = wafer_data::registry::PARTICLE_TYPE
+        .iter()
+        .copied()
+        .find(|name| *name == id)
+        .ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:particle_type]: {id}"))?;
+    let options = match name {
+        "minecraft:block" | "minecraft:block_marker" | "minecraft:falling_dust" | "minecraft:dust_pillar" | "minecraft:block_crumble" => block_state_options().0.decode(&tag)?,
+        _ => codec(name).0.decode(&tag)?,
+    };
+    let Nbt::Compound(mut fields) = options else { return Ok(options) };
+    fields.push(("type".into(), Nbt::String(name.into())));
+    Ok(Nbt::Compound(fields))
+}
+
+pub fn dispatch_codec() -> Pair {
+    transform(network_options)
 }

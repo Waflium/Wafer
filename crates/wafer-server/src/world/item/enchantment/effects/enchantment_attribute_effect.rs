@@ -4,7 +4,22 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::attributes::{Attribute, AttributeModifier, Operation};
-use crate::world::item::enchantment::level_based_value::LevelBasedValue;
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{self, Pair, record, req};
+use crate::world::item::enchantment::level_based_value::{self, LevelBasedValue};
+
+pub fn fields() -> Vec<Field> {
+    vec![
+        req("id", types::identifier()),
+        req("attribute", types::by_name("minecraft:attribute")),
+        req("amount", level_based_value::codec()),
+        req("operation", types::enumeration(&["add_value", "add_multiplied_base", "add_multiplied_total"])),
+    ]
+}
+
+pub fn map_codec() -> Pair {
+    record(fields())
+}
 
 #[derive(Debug)]
 pub struct EnchantmentAttributeEffect {

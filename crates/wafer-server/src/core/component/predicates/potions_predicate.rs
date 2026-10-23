@@ -1,5 +1,13 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::advancements::predicates::collection_predicate;
+use crate::advancements::predicates::mob_effects_predicate;
+use crate::world::item::component::types::{self, Pair, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![opt("potions", types::holder_set("minecraft:potion")), opt("effects", collection_predicate::codec(mob_effects_predicate::codec))])
+}
+
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::mob_effects_predicate::MobEffectsPredicate;
 use crate::core::holder_set::HolderSet;

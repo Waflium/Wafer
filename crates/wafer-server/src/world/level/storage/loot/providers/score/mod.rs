@@ -1,6 +1,8 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, req};
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
 use crate::world::scores::score_holder::ScoreHolder;
 use crate::world::level::storage::loot::validatable::Validatable;
@@ -11,7 +13,21 @@ pub enum ScoreboardNameProvider {
     Context(EntityTarget),
 }
 
+fn context_target(provider: Nbt) -> Result<Nbt, String> {
+    match provider.get("type").and_then(Nbt::as_str) {
+        Some("minecraft:context") => Ok(provider.get("target").cloned().expect("a context target")),
+        _ => Ok(provider),
+    }
+}
+
 impl ScoreboardNameProvider {
+    pub fn codec() -> Pair {
+        let target = || types::enumeration(&["this", "attacker", "direct_attacker", "attacking_player", "target_entity", "interacting_entity"]);
+        let cases = vec![("minecraft:fixed", vec![req("name", types::string())]), ("minecraft:context", vec![req("target", target())])];
+        let typed = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:loot_score_provider_type"), cases }));
+        (Codec::Normalize(Box::new(Codec::Either(Box::new(target().0), Box::new(typed))), context_target), Stream::Nbt)
+    }
+
     pub fn decode(tag: &Nbt) -> DataResult<ScoreboardNameProvider> {
         match codec::either(tag, EntityTarget::decode, |t| {
             let ty = codec::decode_field(t, "type", codec::identifier)?;

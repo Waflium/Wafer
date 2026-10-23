@@ -1,7 +1,12 @@
 use wafer_core::Vec3;
 use wafer_protocol::nbt::Nbt;
 
-use super::entity_predicate::EntityPredicate;
+use super::entity_predicate::{self, EntityPredicate};
+use crate::world::item::component::types::Pair;
+
+pub fn codec() -> Pair {
+    entity_predicate::codec()
+}
 use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;

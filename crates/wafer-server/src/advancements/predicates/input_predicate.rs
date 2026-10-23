@@ -2,6 +2,13 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::server::network::movement::Input;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::types::{self, Pair, opt, record};
+
+pub fn codec() -> Pair {
+    record(
+        ["forward", "backward", "left", "right", "jump", "sneak", "sprint"].into_iter().map(|key| opt(key, types::bool())).collect(),
+    )
+}
 
 #[derive(Debug)]
 pub struct InputPredicate {

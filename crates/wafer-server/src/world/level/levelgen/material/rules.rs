@@ -12,6 +12,19 @@ use crate::world::level::levelgen::density_function::{DensityVolume, Df, Parser,
 use crate::world::level::levelgen::synth::NoiseStack;
 use crate::world::level::levelgen::{PositionalRandomFactory, RandomState, parse_block_state};
 
+fn decode_vertical_anchor(tag: wafer_protocol::nbt::Nbt) -> Result<wafer_protocol::nbt::Nbt, String> {
+    use crate::world::item::component::codec::{Codec, RangeError};
+    use crate::world::level::dimension::dimension_type::{MAX_Y, MIN_Y};
+    const KEYS: [&str; 4] = ["absolute", "above_bottom", "below_top", "relative_to_sea_level"];
+    let mut found = KEYS.iter().filter_map(|key| tag.get(key).map(|value| (*key, value)));
+    let (Some((key, value)), None) = (found.next(), found.next()) else { return Err(format!("Not a valid vertical anchor: {}", crate::nbt::to_string(&tag))) };
+    Ok(wafer_protocol::nbt::Nbt::Compound(vec![(key.into(), Codec::Int(MIN_Y, MAX_Y, RangeError::Outside).decode(value)?)]))
+}
+
+pub fn vertical_anchor_codec() -> crate::world::item::component::types::Pair {
+    crate::world::item::component::types::transform(decode_vertical_anchor)
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum VerticalAnchor {
     Absolute(i32),

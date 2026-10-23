@@ -5,6 +5,10 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;
 
+pub fn codec() -> crate::world::item::component::types::Pair {
+    crate::world::item::component::types::holder_set("minecraft:entity_type")
+}
+
 #[derive(Debug)]
 pub struct EntityTypePredicate {
     types: HolderSet,

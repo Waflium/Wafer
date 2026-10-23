@@ -2,8 +2,10 @@ use std::sync::OnceLock;
 
 use serde_json::Value;
 
-use super::test_environment_definition::EnvironmentHolder;
+use super::test_environment_definition::{self, EnvironmentHolder};
 use crate::network::chat::{ChatFormatting, Component};
+use crate::world::item::component::codec::{Codec, Dispatch, Field, RangeError, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, def, req};
 use crate::world::level::block::rotation::Rotation;
 
 pub const REGISTRY: &str = "minecraft:test_instance";
@@ -43,6 +45,30 @@ impl TestData {
             padding: int("padding", 0),
         })
     }
+}
+
+fn test_data_fields() -> Vec<Field> {
+    vec![
+        req("environment", test_environment_definition::holder_codec()),
+        def("dimension", types::identifier(), types::s("minecraft:overworld")),
+        req("structure", types::identifier()),
+        req("max_ticks", types::var_int(types::positive_int())),
+        def("setup_ticks", types::var_int(types::non_negative_int()), types::i(0)),
+        def("required", types::bool(), types::b(true)),
+        def("rotation", types::enumeration(&["none", "clockwise_90", "180", "counterclockwise_90"]), types::s("none")),
+        def("manual_only", types::bool(), types::b(false)),
+        def("max_attempts", types::var_int(types::positive_int()), types::i(1)),
+        def("required_successes", types::var_int(types::positive_int()), types::i(1)),
+        def("sky_access", types::bool(), types::b(false)),
+        def("padding", types::var_int(Codec::Int(0, 128, RangeError::Outside)), types::i(0)),
+    ]
+}
+
+pub fn direct_codec() -> Pair {
+    let mut function = vec![req("function", types::identifier())];
+    function.extend(test_data_fields());
+    let cases = vec![("minecraft:block_based", test_data_fields()), ("minecraft:function", function)];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:test_instance_type"), cases })), Stream::Dispatch)
 }
 
 pub enum GameTestInstanceType {

@@ -2,13 +2,33 @@ use wafer_core::BlockPos;
 use wafer_protocol::nbt::Nbt;
 
 use super::block_predicate::BlockPredicate;
-use super::fluid_predicate::FluidPredicate;
-use super::light_predicate::LightPredicate;
-use super::min_max_bounds::Doubles;
+use super::fluid_predicate::{self, FluidPredicate};
+use super::light_predicate::{self, LightPredicate};
+use super::min_max_bounds::{Doubles, doubles_codec};
 use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::custom;
+use crate::world::item::component::types::{self, Pair, def, opt, record};
 use crate::world::level::block::campfire_block;
+
+fn position_codec() -> Pair {
+    record(vec![def("x", doubles_codec(), types::empty_map()), def("y", doubles_codec(), types::empty_map()), def("z", doubles_codec(), types::empty_map())])
+}
+
+pub fn codec() -> Pair {
+    record(vec![
+        opt("position", position_codec()),
+        opt("biomes", types::holder_set("minecraft:worldgen/biome")),
+        opt("structures", types::holder_set("minecraft:worldgen/structure")),
+        opt("dimension", types::identifier()),
+        opt("smokey", types::bool()),
+        opt("light", light_predicate::codec()),
+        opt("block", custom::block_predicate()),
+        opt("fluid", fluid_predicate::codec()),
+        opt("can_see_sky", types::bool()),
+    ])
+}
 
 #[derive(Debug)]
 struct PositionPredicate {

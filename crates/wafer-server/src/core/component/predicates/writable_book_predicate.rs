@@ -1,5 +1,12 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::advancements::predicates::collection_predicate;
+use crate::world::item::component::types::{self, Pair, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![opt("pages", collection_predicate::codec(types::string))])
+}
+
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::util::codec::{self, DataResult};
 

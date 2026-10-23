@@ -1,8 +1,13 @@
 use wafer_protocol::nbt::Nbt;
 
-use super::min_max_bounds::{Doubles, Ints};
+use super::min_max_bounds::{Doubles, Ints, doubles_codec, ints_codec};
 use crate::util::codec::{self, DataResult};
 use crate::world::food::FoodData;
+use crate::world::item::component::types::{self, Pair, def, record};
+
+pub fn codec() -> Pair {
+    record(vec![def("level", ints_codec(), types::empty_map()), def("saturation", doubles_codec(), types::empty_map())])
+}
 
 #[derive(Debug)]
 pub struct FoodPredicate {

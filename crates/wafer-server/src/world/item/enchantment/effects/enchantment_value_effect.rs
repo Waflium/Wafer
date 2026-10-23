@@ -1,8 +1,30 @@
+use std::sync::LazyLock;
+
 use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult, DecodeResult, Record};
-use crate::world::item::enchantment::level_based_value::LevelBasedValue;
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, req};
+use crate::world::item::enchantment::level_based_value::{self, LevelBasedValue};
+
+fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(codec);
+    &CODEC
+}
+
+pub fn codec() -> Pair {
+    let value = |name: &'static str| req(name, level_based_value::codec());
+    let cases = vec![
+        ("minecraft:add", vec![value("value")]),
+        ("minecraft:all_of", vec![req("effects", types::list((Codec::Lazy(codec_lazy), Stream::Lazy)))]),
+        ("minecraft:multiply", vec![value("factor")]),
+        ("minecraft:remove_binomial", vec![value("chance")]),
+        ("minecraft:exponential", vec![value("base"), value("exponent")]),
+        ("minecraft:set", vec![value("value")]),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:enchantment_value_effect_type"), cases })), Stream::Dispatch)
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EnchantmentValueEffect {

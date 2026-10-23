@@ -1,5 +1,18 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::advancements::predicates::collection_predicate;
+use crate::world::item::component::codec::Stream;
+use crate::world::item::component::custom;
+use crate::world::item::component::types::{Pair, opt, record};
+
+fn item_codec() -> Pair {
+    (custom::item_predicate(), Stream::Nbt)
+}
+
+pub fn codec() -> Pair {
+    record(vec![opt("items", collection_predicate::codec(item_codec))])
+}
+
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::item_predicate::ItemPredicate;
 use crate::util::codec::{self, DataResult};

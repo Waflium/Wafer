@@ -408,11 +408,18 @@ fn decode(registry: &str, json: &Value) -> Result<(), String> {
         "minecraft:cat_sound_variant" => decode_with(crate::world::entity::animal::feline::cat_sound_variant::direct_codec(), json),
         "minecraft:zombie_nautilus_variant" => decode_with(crate::world::entity::animal::nautilus::zombie_nautilus_variant::direct_codec(), json),
         "minecraft:world_clock" => decode_with(crate::world::item::component::types::record(Vec::new()), json),
+        "minecraft:sulfur_cube_archetype" => decode_with(crate::world::entity::sulfur_cube_archetype::direct_codec(), json),
+        "minecraft:timeline" => crate::world::clock::Timeline::parse("", json).and_then(|_| crate::world::clock::encode_network_timeline(json)).map(drop),
+        "minecraft:test_environment" => decode_with(crate::gametest::framework::test_environment_definition::direct_codec(), json),
+        "minecraft:test_instance" => decode_with(crate::gametest::framework::game_test_instance::direct_codec(), json),
+        "minecraft:block_transformer" => decode_with(crate::core::component::block_transformer::direct_codec(), json),
+        "minecraft:worldgen/block_state_provider" => decode_with(crate::world::level::levelgen::feature::stateproviders::block_state_provider::direct_codec(), json),
         "minecraft:dialog" => crate::server::dialog::validate(&json_to_nbt(json)),
         "minecraft:dimension_type" => {
             use crate::world::level::dimension::dimension_type;
             let tag = dimension_type::direct_codec().0.decode(&crate::world::item::component::json_to_nbt(json))?;
-            dimension_type::check(&tag).map_err(|e| format!("Caught exception decoding {json}: {e}"))
+            dimension_type::check(&tag).map_err(|e| format!("Caught exception decoding {json}: {e}"))?;
+            dimension_type::encode_network(json).map(drop)
         }
         _ => Ok(()),
     }
@@ -442,19 +449,32 @@ fn network_codec(registry: &str) -> Option<crate::world::item::component::types:
         "minecraft:cat_sound_variant" => crate::world::entity::animal::feline::cat_sound_variant::direct_codec(),
         "minecraft:zombie_nautilus_variant" => crate::world::entity::animal::nautilus::zombie_nautilus_variant::network_codec(),
         "minecraft:world_clock" => crate::world::item::component::types::record(Vec::new()),
+        "minecraft:sulfur_cube_archetype" => crate::world::entity::sulfur_cube_archetype::direct_codec(),
+        "minecraft:enchantment" => crate::world::item::enchantment::enchantment::direct_codec(),
+        "minecraft:test_environment" => crate::gametest::framework::test_environment_definition::direct_codec(),
+        "minecraft:test_instance" => crate::gametest::framework::game_test_instance::direct_codec(),
+        "minecraft:block_transformer" => crate::core::component::block_transformer::direct_codec(),
+        "minecraft:worldgen/block_state_provider" => crate::world::level::levelgen::feature::stateproviders::block_state_provider::direct_codec(),
         _ => return None,
     })
 }
 
-fn encode_network(registry: &str, json: &Value) -> Nbt {
+fn try_encode_network(registry: &str, json: &Value) -> Result<Nbt, String> {
     let tag = crate::world::item::component::json_to_nbt(json);
-    if registry == "minecraft:dialog" {
-        return crate::nbt::with_json_source(|| crate::server::dialog::dialog::decode_direct(&tag)).expect("a decoded registry element");
-    }
-    match network_codec(registry) {
-        Some(codec) => crate::nbt::with_json_source(|| codec.0.decode(&tag)).expect("a decoded registry element"),
-        None => tag,
-    }
+    crate::nbt::with_json_source(|| match registry {
+        "minecraft:dialog" => crate::server::dialog::dialog::decode_direct(&tag),
+        "minecraft:worldgen/biome" => crate::world::level::biome::encode_network(json),
+        "minecraft:dimension_type" => crate::world::level::dimension::dimension_type::encode_network(json),
+        "minecraft:timeline" => crate::world::clock::encode_network_timeline(json),
+        _ => match network_codec(registry) {
+            Some(codec) => codec.0.decode(&tag),
+            None => Ok(tag.clone()),
+        },
+    })
+}
+
+fn encode_network(registry: &str, json: &Value) -> Nbt {
+    try_encode_network(registry, json).unwrap_or_else(|_| crate::world::item::component::json_to_nbt(json))
 }
 
 fn decode_with(codec: crate::world::item::component::types::Pair, json: &Value) -> Result<(), String> {
@@ -496,6 +516,205 @@ mod tests {
         let damage = serde_json::json!({"exhaustion": 1, "message_id": "m", "scaling": "always"});
         let damage = super::encode_network("minecraft:damage_type", &damage);
         assert_eq!(damage.get("exhaustion"), Some(&wafer_protocol::nbt::Nbt::Float(1.0)));
+    }
+
+    #[test]
+    fn every_vanilla_entry_encodes_for_the_network() {
+        for builtin in wafer_data::builtin_synced_registries() {
+            for &(id, json) in super::json_entries(builtin.name) {
+                let json: serde_json::Value = serde_json::from_str(json).unwrap();
+                if let Err(error) = super::try_encode_network(builtin.name, &json) {
+                    panic!("{} {id}: {error}", builtin.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn biomes_are_encoded_with_their_network_codec() {
+        use wafer_protocol::nbt::Nbt;
+        let json = serde_json::json!({
+            "has_precipitation": true,
+            "temperature": 1,
+            "downfall": 0,
+            "effects": {"water_color": 4159204, "grass_color": [0.5, 0.25, 0.125], "foliage_color": "#ABCDEF"},
+            "features": [],
+            "carvers": [],
+            "attributes": {
+                "minecraft:visual/fog_color": [0.1, 0.2, 0.3],
+                "minecraft:visual/fog_end_distance": 100,
+                "minecraft:gameplay/bed_rule": {"can_sleep": "always", "can_set_spawn": "never"},
+                "minecraft:visual/sun_angle": {"modifier": "add", "argument": 3}
+            }
+        });
+        let tag = super::encode_network("minecraft:worldgen/biome", &json);
+        assert_eq!(tag.get("temperature"), Some(&Nbt::Float(1.0)));
+        assert!(tag.get("features").is_none());
+        let effects = tag.get("effects").unwrap();
+        assert_eq!(effects.get("water_color").and_then(Nbt::as_str), Some("#3f76e4"));
+        assert_eq!(effects.get("grass_color").and_then(Nbt::as_str), Some("#7f3f1f"));
+        assert_eq!(effects.get("foliage_color").and_then(Nbt::as_str), Some("#abcdef"));
+        let attributes = tag.get("attributes").unwrap();
+        assert_eq!(attributes.get("minecraft:visual/fog_color").and_then(Nbt::as_str), Some("#19334c"));
+        assert_eq!(attributes.get("minecraft:visual/fog_end_distance"), Some(&Nbt::Float(100.0)));
+        assert!(attributes.get("minecraft:gameplay/bed_rule").is_none());
+        let sun_angle = attributes.get("minecraft:visual/sun_angle").unwrap();
+        assert_eq!(sun_angle.get("modifier").and_then(Nbt::as_str), Some("add"));
+        assert_eq!(sun_angle.get("argument"), Some(&Nbt::Float(3.0)));
+    }
+
+    #[test]
+    fn dimension_types_are_encoded_with_their_network_codec() {
+        use wafer_protocol::nbt::Nbt;
+        let json = serde_json::json!({
+            "ambient_light": 0,
+            "coordinate_scale": 1,
+            "has_ceiling": false,
+            "has_ender_dragon_fight": false,
+            "has_skylight": true,
+            "height": 384,
+            "infiniburn": "#minecraft:infiniburn_overworld",
+            "logical_height": 384,
+            "min_y": -64,
+            "monster_spawn_block_light_limit": 0,
+            "monster_spawn_light_level": {"type": "minecraft:constant", "value": 7},
+            "timelines": [],
+            "attributes": {"minecraft:visual/cloud_height": 192, "minecraft:gameplay/respawn_anchor_works": true}
+        });
+        let tag = super::encode_network("minecraft:dimension_type", &json);
+        assert_eq!(tag.get("coordinate_scale"), Some(&Nbt::Double(1.0)));
+        assert_eq!(tag.get("ambient_light"), Some(&Nbt::Float(0.0)));
+        assert_eq!(tag.get("monster_spawn_light_level"), Some(&Nbt::Int(7)));
+        assert!(tag.get("timelines").is_none());
+        let attributes = tag.get("attributes").unwrap();
+        assert_eq!(attributes.get("minecraft:visual/cloud_height"), Some(&Nbt::Float(192.0)));
+        assert!(attributes.get("minecraft:gameplay/respawn_anchor_works").is_none());
+    }
+
+    #[test]
+    fn timelines_are_encoded_with_their_network_codec() {
+        use wafer_protocol::nbt::Nbt;
+        let json = serde_json::json!({
+            "clock": "overworld",
+            "period_ticks": 24000,
+            "time_markers": {"ta:a": 5, "b": {"ticks": 6}, "ta:c": {"ticks": 7, "show_in_commands": true}},
+            "tracks": {
+                "minecraft:visual/fog_start_distance": {"ease": "linear", "keyframes": [{"ticks": 0, "value": 1}]},
+                "minecraft:gameplay/villager_activity": {"keyframes": [{"ticks": 0, "value": "minecraft:work"}]},
+                "minecraft:visual/sky_color": {"modifier": "override", "ease": {"cubic_bezier": [0, 0.5, 1, 2]}, "keyframes": [{"ticks": 0, "value": [0.5, 0.5, 0.5]}]}
+            }
+        });
+        let tag = super::encode_network("minecraft:timeline", &json);
+        assert_eq!(tag.get("clock").and_then(Nbt::as_str), Some("minecraft:overworld"));
+        assert_eq!(tag.get("period_ticks"), Some(&Nbt::Int(24000)));
+        let markers = tag.get("time_markers").unwrap();
+        assert_eq!(markers.get("minecraft:b"), Some(&Nbt::Int(6)));
+        assert_eq!(markers.get("ta:c").and_then(|marker| marker.get("show_in_commands")), Some(&Nbt::Byte(1)));
+        let tracks = tag.get("tracks").unwrap();
+        let fog = tracks.get("minecraft:visual/fog_start_distance").unwrap();
+        assert!(fog.get("ease").is_none());
+        assert_eq!(fog.get("keyframes").unwrap().as_list()[0].get("value"), Some(&Nbt::Float(1.0)));
+        assert!(tracks.get("minecraft:gameplay/villager_activity").is_none());
+        let sky = tracks.get("minecraft:visual/sky_color").unwrap();
+        assert!(sky.get("modifier").is_none());
+        assert_eq!(sky.get("keyframes").unwrap().as_list()[0].get("value").and_then(Nbt::as_str), Some("#7f7f7f"));
+        assert!(sky.get("ease").unwrap().get("cubic_bezier").is_some());
+    }
+
+    #[test]
+    fn block_state_providers_and_transformers_are_encoded_with_their_network_codecs() {
+        use wafer_protocol::nbt::Nbt;
+        let simple = super::encode_network("minecraft:worldgen/block_state_provider", &serde_json::json!({"type": "simple", "state": "minecraft:oak_stairs"}));
+        assert_eq!(simple.get("id").and_then(Nbt::as_str), Some("minecraft:oak_stairs"));
+        assert!(simple.get("properties").is_some());
+        assert!(simple.get("type").is_none());
+        let weighted = super::encode_network(
+            "minecraft:worldgen/block_state_provider",
+            &serde_json::json!({"type": "weighted", "entries": [{"data": {"id": "minecraft:stone"}, "weight": 1}]}),
+        );
+        assert_eq!(weighted.get("entries").unwrap().as_list()[0].get("data").and_then(Nbt::as_str), Some("minecraft:stone"));
+        let transformer = super::encode_network("minecraft:block_transformer", &serde_json::json!([{"block_state_provider": {"id": "minecraft:dirt"}, "particle": "none", "consume_on_use": true}]));
+        let data = &transformer.as_list()[0];
+        assert!(data.get("particle").is_none());
+        assert!(data.get("consume_on_use").is_none());
+        assert!(data.get("block_state_provider").is_some());
+    }
+
+    #[test]
+    fn test_registries_are_encoded_with_their_network_codecs() {
+        use wafer_protocol::nbt::Nbt;
+        let environment = super::encode_network(
+            "minecraft:test_environment",
+            &serde_json::json!({"type": "all_of", "definitions": [{"type": "game_rules", "rules": {"keep_inventory": true, "random_tick_speed": 5.0}}, "minecraft:default"]}),
+        );
+        let definitions = environment.get("definitions").unwrap().as_list();
+        assert_eq!(definitions[0].get("rules").unwrap().get("minecraft:random_tick_speed"), Some(&Nbt::Int(5)));
+        assert_eq!(definitions[1].as_str(), Some("minecraft:default"));
+        let instance = super::encode_network(
+            "minecraft:test_instance",
+            &serde_json::json!({"type": "function", "function": "ta:f", "environment": {"type": "weather", "weather": "clear"}, "structure": "s", "max_ticks": 5, "padding": 0, "rotation": "none"}),
+        );
+        assert_eq!(instance.get("structure").and_then(Nbt::as_str), Some("minecraft:s"));
+        assert!(instance.get("padding").is_none());
+        assert!(instance.get("rotation").is_none());
+    }
+
+    #[test]
+    fn enchantments_are_encoded_with_their_network_codec() {
+        use wafer_protocol::nbt::Nbt;
+        let json = serde_json::json!({
+            "anvil_cost": 1,
+            "description": "Plain",
+            "effects": {
+                "minecraft:damage": [{
+                    "effect": {"type": "minecraft:add", "value": {"type": "minecraft:linear", "base": 1, "per_level_above_first": 2}},
+                    "requirements": {
+                        "type": "minecraft:entity_properties",
+                        "entity": "attacker",
+                        "predicate": {"minecraft:distance": {"x": {"min": 1, "max": 2}, "horizontal": 3}, "minecraft:entity_type": ["zombie"]}
+                    }
+                }],
+                "minecraft:prevent_equipment_drop": {}
+            },
+            "max_cost": {"base": 3, "per_level_above_first": 4},
+            "max_level": 3,
+            "min_cost": {"base": 1, "per_level_above_first": 2},
+            "slots": ["mainhand"],
+            "supported_items": ["stick"],
+            "weight": 2
+        });
+        let tag = super::try_encode_network("minecraft:enchantment", &json).unwrap();
+        assert_eq!(tag.get("description").and_then(Nbt::as_str), Some("Plain"));
+        assert_eq!(tag.get("supported_items").and_then(Nbt::as_str), Some("minecraft:stick"));
+        assert!(tag.get("exclusive_set").is_none());
+        let damage = &tag.get("effects").unwrap().get("minecraft:damage").unwrap().as_list()[0];
+        let value = damage.get("effect").unwrap().get("value").unwrap();
+        assert_eq!(value.get("base"), Some(&Nbt::Float(1.0)));
+        let predicate = damage.get("requirements").unwrap().get("predicate").unwrap();
+        assert_eq!(predicate.get("minecraft:entity_type").and_then(Nbt::as_str), Some("minecraft:zombie"));
+        let distance = predicate.get("minecraft:distance").unwrap();
+        assert_eq!(distance.get("horizontal"), Some(&Nbt::Double(3.0)));
+        assert_eq!(distance.get("x").unwrap().get("min"), Some(&Nbt::Double(1.0)));
+        assert_eq!(tag.get("effects").unwrap().get("minecraft:prevent_equipment_drop"), Some(&Nbt::Compound(Vec::new())));
+    }
+
+    #[test]
+    fn sulfur_cube_archetypes_are_encoded_with_their_network_codec() {
+        use wafer_protocol::nbt::Nbt;
+        let tag = super::encode_network(
+            "minecraft:sulfur_cube_archetype",
+            &serde_json::json!({
+                "items": ["stone"],
+                "attribute_modifiers": [{"attribute": "knockback_resistance", "id": "ta:x", "amount": 1, "operation": "add_value"}],
+                "contact_damage": {"damage_type": "cactus", "amount": 4, "attribute_to_source": true},
+                "knockback_modifiers": {"horizontal_power": 1, "vertical_power": 2},
+                "sound_settings": {"hit_sound": "entity.sulfur_cube.regular.hit", "push_sound": "entity.sulfur_cube.regular.push", "push_sound_impulse_threshold": 1, "push_sound_cooldown": 2}
+            }),
+        );
+        assert_eq!(tag.get("items").and_then(Nbt::as_str), Some("minecraft:stone"));
+        assert!(tag.get("buoyant").is_none());
+        assert_eq!(tag.get("contact_damage").unwrap().get("amount"), Some(&Nbt::Float(4.0)));
+        assert_eq!(tag.get("knockback_modifiers").unwrap().get("vertical_power"), Some(&Nbt::Float(2.0)));
     }
 
     #[test]

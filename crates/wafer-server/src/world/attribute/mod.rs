@@ -1,6 +1,10 @@
+pub mod ambient_additions_settings;
+pub mod ambient_mood_settings;
 pub mod ambient_particle;
+pub mod ambient_sounds;
 pub mod attribute_range;
 pub mod attribute_type;
+pub mod background_music;
 pub mod bed_rule;
 pub mod environment_attribute;
 pub mod environment_attribute_map;

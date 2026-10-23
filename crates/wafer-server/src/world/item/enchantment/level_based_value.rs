@@ -1,6 +1,30 @@
+use std::sync::LazyLock;
+
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult, DecodeResult, Record};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, req};
+
+fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(codec);
+    &CODEC
+}
+
+pub fn codec() -> Pair {
+    let value = |name: &'static str| req(name, (Codec::Lazy(codec_lazy), Stream::Lazy));
+    let float = |name: &'static str| req(name, types::float(Codec::float()));
+    let cases = vec![
+        ("minecraft:clamped", vec![value("value"), float("min"), float("max")]),
+        ("minecraft:fraction", vec![value("numerator"), value("denominator")]),
+        ("minecraft:levels_squared", vec![float("added")]),
+        ("minecraft:linear", vec![float("base"), float("per_level_above_first")]),
+        ("minecraft:exponent", vec![value("base"), value("power")]),
+        ("minecraft:lookup", vec![req("values", types::list(types::float(Codec::float()))), value("fallback")]),
+    ];
+    let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:enchantment_level_based_value_type"), cases }));
+    (Codec::Either(Box::new(Codec::float()), Box::new(dispatch)), Stream::Nbt)
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum LevelBasedValue {

@@ -1,7 +1,18 @@
 use wafer_protocol::nbt::Nbt;
 
-use super::min_max_bounds::Doubles;
+use super::min_max_bounds::{Doubles, doubles_codec};
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::types::{self, Pair, def, record};
+
+pub fn codec() -> Pair {
+    record(vec![
+        def("x", doubles_codec(), types::empty_map()),
+        def("y", doubles_codec(), types::empty_map()),
+        def("z", doubles_codec(), types::empty_map()),
+        def("horizontal", doubles_codec(), types::empty_map()),
+        def("absolute", doubles_codec(), types::empty_map()),
+    ])
+}
 
 #[derive(Debug)]
 pub struct DistancePredicate {

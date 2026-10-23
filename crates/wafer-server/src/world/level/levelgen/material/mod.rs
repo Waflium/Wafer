@@ -6,7 +6,7 @@ use wafer_core::mth::{self, jmin};
 use wafer_core::{BlockPos, RandomSource};
 use wafer_data::{BlockState, blocks};
 
-pub use rules::{MaterialParser, MaterialRule, Rule, RuleContext, VerticalAnchor, WorldGenerationContext};
+pub use rules::{MaterialParser, MaterialRule, Rule, RuleContext, VerticalAnchor, WorldGenerationContext, vertical_anchor_codec};
 
 use super::aquifer::WAY_BELOW_MIN_Y;
 use super::density_function::{Df, DensityVolume, SamplerContext};

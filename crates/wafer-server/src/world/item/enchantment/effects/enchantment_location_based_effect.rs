@@ -1,13 +1,29 @@
+use std::sync::LazyLock;
+
 use wafer_core::Vec3;
 use wafer_protocol::nbt::Nbt;
 
-use super::enchantment_attribute_effect::EnchantmentAttributeEffect;
-use super::enchantment_entity_effect::EnchantmentEntityEffect;
+use super::enchantment_attribute_effect::{self, EnchantmentAttributeEffect};
+use super::enchantment_entity_effect::{self, EnchantmentEntityEffect};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, req};
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 use crate::world::item::enchantment::enchanted_item_in_use::EnchantedItemInUse;
 use crate::world::item::enchantment::enchantment_helper::equipment_slot_name;
+
+fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(codec);
+    &CODEC
+}
+
+pub fn codec() -> Pair {
+    let mut cases = enchantment_entity_effect::shared_cases();
+    cases.push(("minecraft:all_of", vec![req("effects", types::list((Codec::Lazy(codec_lazy), Stream::Lazy)))]));
+    cases.push(("minecraft:attribute", enchantment_attribute_effect::fields()));
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:enchantment_location_based_effect_type"), cases })), Stream::Dispatch)
+}
 
 pub enum EnchantmentLocationBasedEffect {
     AllOf(Vec<EnchantmentLocationBasedEffect>),

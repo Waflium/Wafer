@@ -1,5 +1,12 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::custom;
+use crate::world::item::component::types::Pair;
+
+pub fn codec() -> Pair {
+    custom::nbt_predicate()
+}
+
 use crate::advancements::predicates::nbt_predicate::NbtPredicate;
 use crate::core::component::data_component_getter::DataComponentGetter;
 use crate::util::codec::DataResult;

@@ -5,13 +5,82 @@ use wafer_core::{BlockPos, Direction, mth};
 use wafer_data::properties::{AXIS, FACING, HORIZONTAL_FACING};
 use wafer_data::{Block, BlockState};
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, opt, record, req};
+use crate::world::level::block::state::block_state;
+use crate::world::level::levelgen::blockpredicates::block_predicate;
+use crate::world::level::levelgen::synth::parameters_codec;
 use crate::world::level::world_gen_level::WorldGenLevel;
+use crate::util::inclusive_range::InclusiveRange;
 use crate::util::random::WeightedList;
-use crate::util::valueproviders::{IntProvider, float};
+use crate::util::valueproviders::{IntProvider, float, int_provider_codec};
 use crate::world::level::levelgen::blockpredicates::block_predicate::{BlockPredicate, resource};
 use crate::world::level::levelgen::synth::NoiseStack;
 use crate::world::level::levelgen::{AlgorithmRandom, parse_block_state, parse_noise};
+
+fn direct_codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(direct_codec);
+    &CODEC
+}
+
+pub fn holder_codec() -> Pair {
+    provider_holder()
+}
+
+fn provider_holder() -> Pair {
+    (Codec::Holder("minecraft:worldgen/block_state_provider", Some(Box::new(Codec::Lazy(direct_codec_lazy)))), Stream::Nbt)
+}
+
+fn simple_provider_to_full(provider: Nbt) -> Result<Nbt, String> {
+    match provider.get("type").and_then(Nbt::as_str) {
+        Some("minecraft:simple") => block_state::to_full(provider.get("state").expect("a simple provider state")),
+        _ => Ok(provider),
+    }
+}
+
+pub fn direct_codec() -> Pair {
+    let noise = || vec![req("seed", (Codec::long(), Stream::Long)), req("noise", parameters_codec()), req("scale", types::float(types::positive_float()))];
+    let noise_provider = || {
+        let mut fields = noise();
+        fields.push(req("states", types::list(block_state::codec())));
+        fields
+    };
+    let mut dual_noise = vec![req("variety", InclusiveRange::int_codec()), req("slow_noise", parameters_codec()), req("slow_scale", types::float(types::positive_float()))];
+    dual_noise.extend(noise_provider());
+    let mut noise_threshold = noise();
+    noise_threshold.extend([
+        req("threshold", types::float(types::codec_float_range(-1.0, 1.0))),
+        req("high_chance", types::float(types::codec_float_range(0.0, 1.0))),
+        req("default_state", block_state::codec()),
+        req("low_states", types::list(block_state::codec())),
+        req("high_states", types::list(block_state::codec())),
+    ]);
+    let cases = vec![
+        ("minecraft:copy_properties", vec![req("source", provider_holder())]),
+        ("minecraft:dual_noise", dual_noise),
+        ("minecraft:noise", noise_provider()),
+        ("minecraft:noise_threshold", noise_threshold),
+        ("minecraft:random_block", vec![req("blocks", types::holder_set("minecraft:block"))]),
+        ("minecraft:randomized_int", vec![req("source", provider_holder()), req("property", types::string()), req("values", int_provider_codec())]),
+        ("minecraft:rotated", vec![req("state", provider_holder()), opt("direction", types::enumeration(&["down", "up", "north", "south", "west", "east"]))]),
+        (
+            "minecraft:rule_based",
+            vec![
+                opt("fallback", provider_holder()),
+                req("rules", types::list(record(vec![req("if_true", block_predicate::codec()), req("then", provider_holder())]))),
+            ],
+        ),
+        ("minecraft:simple", vec![req("state", block_state::codec())]),
+        ("minecraft:weighted", vec![req("entries", types::list(record(vec![req("data", block_state::codec()), req("weight", types::var_int(types::non_negative_int()))])))]),
+    ];
+    let typed = Codec::Normalize(
+        Box::new(Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:block_state_provider_type"), cases }))),
+        simple_provider_to_full,
+    );
+    (Codec::Either(Box::new(block_state::full_codec().0), Box::new(typed)), Stream::Nbt)
+}
 
 pub enum BlockStateProvider {
     Simple(BlockState),

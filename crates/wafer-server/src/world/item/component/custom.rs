@@ -4,7 +4,7 @@ use wafer_protocol::{Reader, Writer};
 
 use super::codec::{self, Codec, Custom, Field, Kind, RangeError, Stream, as_i32, as_i64};
 use super::types::{
-    DYE_COLORS, Pair, always, b, bool, def, dye_color, empty_map, holder_set, i, lenient_opt, opt, record, req, string,
+    DYE_COLORS, Pair, always, b, bool, def, dye_color, empty_map, holder_set, i, lenient_opt, opt, record, req,
 };
 use super::{DataComponentPatch, DataComponentType, text};
 use crate::commands::brigadier::StringReader;
@@ -608,17 +608,7 @@ impl Custom for Profile {
 }
 
 pub fn block_predicate() -> Pair {
-    let state = (
-        Codec::Map(
-            Box::new(Codec::string()),
-            Box::new(Codec::Either(Box::new(Codec::string()), Box::new(Codec::Record(vec![opt("min", string()), opt("max", string())])))),
-        ),
-        Stream::Map(
-            Box::new(Stream::Utf8(32767)),
-            Box::new(Stream::Either(Box::new(Stream::Utf8(32767)), Box::new(Stream::Record))),
-            i32::MAX as usize,
-        ),
-    );
+    let state = crate::advancements::predicates::state_properties_predicate::codec();
     record(vec![
         opt("blocks", holder_set("minecraft:block")),
         opt("state", state),
@@ -628,19 +618,43 @@ pub fn block_predicate() -> Pair {
     ])
 }
 
-fn int_bounds() -> Codec {
-    let range = Codec::Record(vec![opt("min", (Codec::int(), Stream::VarInt)), opt("max", (Codec::int(), Stream::VarInt))]);
-    Codec::Normalize(Box::new(Codec::Either(Box::new(range), Box::new(Codec::int()))), |value| {
+fn number_bounds(number: fn() -> Codec) -> Codec {
+    let range = Codec::Record(vec![opt("min", (number(), Stream::Nbt)), opt("max", (number(), Stream::Nbt))]);
+    Codec::Normalize(Box::new(Codec::Either(Box::new(range), Box::new(number()))), |value| {
         let (Some(min), Some(max)) = (value.get("min"), value.get("max")) else { return Ok(value) };
-        let (min, max) = (as_i32(min), as_i32(max));
-        if min > max {
-            Err(format!("Swapped bounds in range: Optional[{min}] is higher than Optional[{max}]"))
-        } else if min == max {
-            Ok(Nbt::Int(min))
+        let (low, high) = (codec::as_f64(min), codec::as_f64(max));
+        if low > high {
+            Err(format!("Swapped bounds in range: Optional[{}] is higher than Optional[{}]", nbt::to_string(min), nbt::to_string(max)))
+        } else if low == high {
+            Ok(min.clone())
         } else {
             Ok(value)
         }
     })
+}
+
+fn int_bounds() -> Codec {
+    number_bounds(Codec::int)
+}
+
+pub fn ints_bounds() -> Pair {
+    (int_bounds(), Stream::Nbt)
+}
+
+pub fn doubles_bounds() -> Pair {
+    (number_bounds(|| Codec::Double), Stream::Nbt)
+}
+
+pub fn nbt_predicate() -> Pair {
+    (Codec::Custom(Box::new(NbtPredicate)), Stream::Custom)
+}
+
+pub fn exact_components() -> Pair {
+    (Codec::Custom(Box::new(ExactPredicate)), Stream::Custom)
+}
+
+pub fn partial_components() -> Pair {
+    (Codec::Custom(Box::new(PartialPredicates)), Stream::Custom)
 }
 
 pub fn item_predicate() -> Codec {
@@ -657,8 +671,8 @@ struct NbtPredicate;
 impl Custom for NbtPredicate {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         match tag {
-            Nbt::String(_) => parse_compound(tag).map(|c| Nbt::String(nbt::to_string(&c))),
-            Nbt::Compound(_) => Ok(Nbt::String(nbt::to_string(tag))),
+            Nbt::String(_) => parse_compound(tag).map(|c| Nbt::String(nbt::to_snbt(&c))),
+            Nbt::Compound(_) => Ok(Nbt::String(nbt::to_snbt(tag))),
             other => Err(format!("Failed to parse either. First: Not a string; Second: Not a map: {}", nbt::to_string(other))),
         }
     }
@@ -732,7 +746,11 @@ impl Custom for PartialPredicates {
         for (key, value) in fields {
             let id = codec::identifier(&Nbt::String(key.clone()))?;
             if codec::registry(PREDICATE_TYPES).contains(&id.as_str()) {
-                out.push((id, value.clone()));
+                let decoded = match crate::core::component::predicates::data_component_predicate::type_codec(&id) {
+                    Some(predicate_codec) => predicate_codec.0.decode(value)?,
+                    None => value.clone(),
+                };
+                out.push((id, decoded));
             } else if DataComponentType::by_name(&id).is_some() {
                 out.push((id, Codec::Unit.decode(value)?));
             } else {

@@ -1,6 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::types::{self, Pair};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct InclusiveRange {
@@ -42,6 +43,10 @@ impl InclusiveRange {
             let max = codec::decode_field(tag, "max_inclusive", codec::int).map_err(|_| array_error)?;
             InclusiveRange::create(min, max)
         })
+    }
+
+    pub fn int_codec() -> Pair {
+        types::transform(|tag| InclusiveRange::decode_int(&tag).map(|range| range.encode_int()))
     }
 
     pub fn encode_int(&self) -> Nbt {

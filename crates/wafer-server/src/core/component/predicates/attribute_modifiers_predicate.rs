@@ -1,5 +1,23 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::advancements::predicates::collection_predicate;
+use crate::advancements::predicates::min_max_bounds::doubles_codec;
+use crate::world::item::component::types::{self, Pair, def, opt, record};
+
+fn entry_codec() -> Pair {
+    record(vec![
+        opt("attribute", types::holder_set("minecraft:attribute")),
+        opt("id", types::identifier()),
+        def("amount", doubles_codec(), types::empty_map()),
+        opt("operation", types::enumeration(&["add_value", "add_multiplied_base", "add_multiplied_total"])),
+        opt("slot", types::enumeration(types::EQUIPMENT_SLOT_GROUPS)),
+    ])
+}
+
+pub fn codec() -> Pair {
+    record(vec![opt("modifiers", collection_predicate::codec(entry_codec))])
+}
+
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::min_max_bounds::Doubles;
 use crate::core::holder_set::HolderSet;

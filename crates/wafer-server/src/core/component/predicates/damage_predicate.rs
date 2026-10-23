@@ -1,5 +1,12 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::advancements::predicates::min_max_bounds::ints_codec;
+use crate::world::item::component::types::{self, Pair, def, record};
+
+pub fn codec() -> Pair {
+    record(vec![def("durability", ints_codec(), types::empty_map()), def("damage", ints_codec(), types::empty_map())])
+}
+
 use crate::advancements::predicates::min_max_bounds::Ints;
 use crate::core::component::data_component_getter::DataComponentGetter;
 use crate::util::codec::{self, DataResult};

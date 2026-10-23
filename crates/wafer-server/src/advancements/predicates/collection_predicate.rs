@@ -1,5 +1,16 @@
 use wafer_protocol::nbt::Nbt;
 
+use super::min_max_bounds::ints_codec;
+use crate::world::item::component::types::{self, Pair, opt, record, req};
+
+pub fn codec(element: fn() -> Pair) -> Pair {
+    record(vec![
+        opt("contains", types::list(element())),
+        opt("count", types::list(record(vec![req("test", element()), req("count", ints_codec())]))),
+        opt("size", ints_codec()),
+    ])
+}
+
 use super::collection_contents_predicate::CollectionContentsPredicate;
 use super::collection_counts_predicate::CollectionCountsPredicate;
 use super::min_max_bounds::Ints;

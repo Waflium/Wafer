@@ -3,9 +3,11 @@ use std::sync::OnceLock;
 
 use serde_json::Value;
 
-use crate::util::valueproviders::FloatProvider;
+use crate::util::valueproviders::{FloatProvider, float_provider_codec};
 use crate::world::entity::attributes::{Attribute, AttributeModifier, Operation};
 use crate::world::item::ItemStack;
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::types::{self, Pair, def, opt, record, req};
 use crate::world::item::component::values::HolderSet;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -53,6 +55,56 @@ pub struct SulfurCubeArchetype {
     pub contact_damage: Option<ContactDamage>,
     pub knockback_modifiers: KnockbackModifiers,
     pub sound_settings: SoundSettings,
+}
+
+fn attribute_entry_codec() -> Pair {
+    record(vec![
+        req("attribute", types::by_name("minecraft:attribute")),
+        req("id", types::identifier()),
+        req("amount", (Codec::Double, Stream::Double)),
+        req("operation", types::enumeration(&["add_value", "add_multiplied_base", "add_multiplied_total"])),
+    ])
+}
+
+fn explosion_data_codec() -> Pair {
+    record(vec![
+        req("power", types::var_int(types::non_negative_int())),
+        req("causes_fire", types::bool()),
+        req("fuse", types::var_int(types::positive_int())),
+    ])
+}
+
+fn contact_damage_codec() -> Pair {
+    record(vec![
+        req("damage_type", types::fixed("minecraft:damage_type")),
+        req("amount", float_provider_codec()),
+        req("attribute_to_source", types::bool()),
+    ])
+}
+
+fn knockback_modifiers_codec() -> Pair {
+    record(vec![req("horizontal_power", types::float(Codec::float())), req("vertical_power", types::float(Codec::float()))])
+}
+
+fn sound_settings_codec() -> Pair {
+    record(vec![
+        req("hit_sound", types::sound_event()),
+        req("push_sound", types::sound_event()),
+        req("push_sound_impulse_threshold", types::float(Codec::float())),
+        req("push_sound_cooldown", types::float(Codec::float())),
+    ])
+}
+
+pub fn direct_codec() -> Pair {
+    record(vec![
+        req("items", types::holder_set("minecraft:item")),
+        req("attribute_modifiers", types::list(attribute_entry_codec())),
+        def("buoyant", types::bool(), types::b(false)),
+        opt("explosion", explosion_data_codec()),
+        opt("contact_damage", contact_damage_codec()),
+        req("knockback_modifiers", knockback_modifiers_codec()),
+        req("sound_settings", sound_settings_codec()),
+    ])
 }
 
 fn leak(value: &str) -> &'static str {

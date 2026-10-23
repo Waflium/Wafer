@@ -4,6 +4,11 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 
+pub fn codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{self, def, record};
+    record(vec![def("has_raid", types::bool(), types::b(false)), def("is_captain", types::bool(), types::b(false))])
+}
+
 #[derive(Debug)]
 pub struct RaiderPredicate {
     has_raid: bool,

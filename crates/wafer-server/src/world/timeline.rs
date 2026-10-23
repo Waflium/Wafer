@@ -1,7 +1,9 @@
 use std::cell::RefCell;
 
 use serde_json::Value as Json;
+use wafer_protocol::nbt::Nbt;
 
+use crate::util::easing_type::EasingType;
 use crate::util::keyframe_track::{KeyframeTrack, KeyframeTrackSampler};
 use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
 use crate::world::attribute::modifier::{AttributeModifier, OperationId};
@@ -32,6 +34,24 @@ impl AttributeTrack {
         };
         let argument_track = KeyframeTrack::parse(json, |v| modifier.parse_argument(attribute, v))?;
         Ok(AttributeTrack { modifier, argument_track })
+    }
+
+    pub fn encode(&self, attribute: &EnvironmentAttributeInfo) -> Result<Nbt, String> {
+        let mut fields = Vec::new();
+        if self.modifier != AttributeModifier::Override {
+            fields.push(("modifier".to_string(), Nbt::String(self.modifier.operation_id().name().into())));
+        }
+        let keyframes = self
+            .argument_track
+            .keyframes
+            .iter()
+            .map(|(ticks, value)| Ok(Nbt::Compound(vec![("ticks".into(), Nbt::Int(*ticks)), ("value".into(), self.modifier.encode_argument(attribute, value)?)])))
+            .collect::<Result<_, String>>()?;
+        fields.push(("keyframes".into(), Nbt::List(keyframes)));
+        if self.argument_track.easing_type != EasingType::LINEAR {
+            fields.push(("ease".into(), self.argument_track.easing_type.encode()));
+        }
+        Ok(Nbt::Compound(fields))
     }
 
     pub fn bake_sampler(&self, attribute: &EnvironmentAttributeInfo, clock: usize, period_ticks: Option<i32>) -> AttributeTrackSampler {

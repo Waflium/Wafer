@@ -2,10 +2,12 @@ use std::sync::LazyLock;
 
 use wafer_data::DimensionType;
 
-use crate::util::valueproviders::IntProvider;
+use crate::util::valueproviders::{IntProvider, int_provider_codec};
+use serde_json::Value;
 use wafer_protocol::nbt::Nbt;
 use crate::world::attribute::EnvironmentAttributeMap;
 use crate::world::item::component::codec::{Codec, RangeError, Stream};
+use crate::world::item::component::json_to_nbt;
 use crate::world::item::component::custom::DecodeOnly;
 use crate::world::item::component::types::{self, Pair, def, opt, record, req};
 
@@ -87,6 +89,38 @@ pub fn direct_codec() -> Pair {
         def("timelines", types::holder_set("minecraft:timeline"), types::empty_list()),
         opt("default_clock", (Codec::Holder("minecraft:world_clock", None), Stream::Holder("minecraft:world_clock", None))),
     ])
+}
+
+fn network_codec() -> Pair {
+    record(vec![
+        def("has_fixed_time", types::bool(), types::b(false)),
+        req("has_skylight", types::bool()),
+        req("has_ceiling", types::bool()),
+        req("has_ender_dragon_fight", types::bool()),
+        req("coordinate_scale", (Codec::Double, Stream::Double)),
+        req("min_y", (Codec::Int(MIN_Y, MAX_Y, RangeError::Outside), Stream::Int)),
+        req("height", (Codec::Int(16, Y_SIZE, RangeError::Outside), Stream::Int)),
+        req("logical_height", (Codec::Int(0, Y_SIZE, RangeError::Outside), Stream::Int)),
+        req("infiniburn", types::holder_set("minecraft:block")),
+        req("ambient_light", types::float(Codec::float())),
+        req("monster_spawn_light_level", int_provider_codec()),
+        req("monster_spawn_block_light_limit", (Codec::Int(0, 15, RangeError::Outside), Stream::Int)),
+        def("skybox", types::enumeration(&["none", "overworld", "end"]), types::s("overworld")),
+        def("cardinal_light", types::enumeration(&["default", "nether"]), types::s("default")),
+        def("timelines", types::holder_set("minecraft:timeline"), types::empty_list()),
+        opt("default_clock", (Codec::Holder("minecraft:world_clock", None), Stream::Holder("minecraft:world_clock", None))),
+    ])
+}
+
+pub fn encode_network(json: &Value) -> Result<Nbt, String> {
+    let Nbt::Compound(mut fields) = network_codec().0.decode(&json_to_nbt(json))? else { return Err("A dimension type is not a compound".into()) };
+    if let Some(attributes) = json.get("attributes") {
+        let attributes = EnvironmentAttributeMap::parse(attributes, false)?.encode_network()?;
+        if !matches!(&attributes, Nbt::Compound(entries) if entries.is_empty()) {
+            fields.push(("attributes".into(), attributes));
+        }
+    }
+    Ok(Nbt::Compound(fields))
 }
 
 pub fn check(tag: &Nbt) -> Result<(), String> {

@@ -4,6 +4,13 @@ use super::item_predicate::ItemPredicate;
 use crate::util::codec::{self, DataResult};
 use crate::world::inventory::slot_ranges::{self, SlotRange};
 use crate::world::item::ItemStack;
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::custom;
+use crate::world::item::component::types::Pair;
+
+pub fn codec() -> Pair {
+    (Codec::Map(Box::new(Codec::string()), Box::new(custom::item_predicate())), Stream::Nbt)
+}
 
 #[derive(Debug)]
 pub struct SlotsPredicate {

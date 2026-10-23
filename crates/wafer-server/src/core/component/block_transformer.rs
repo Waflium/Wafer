@@ -9,6 +9,8 @@ use serde_json::Value;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::entity::EntityId;
 use crate::world::item::component as dc;
+use crate::world::item::component::types::{self, Pair, def, opt, record, req};
+use crate::world::level::levelgen::feature::stateproviders::block_state_provider;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::item::item_utils::has_infinite_materials;
 use crate::world::level::BlockGetter;
@@ -16,6 +18,25 @@ use crate::world::level::block::chest_block::get_connected_direction;
 use crate::world::level::levelgen::feature::stateproviders::block_state_provider::BlockStateProviderHolder;
 use crate::world::level::update_flags::UPDATE_ALL_IMMEDIATE;
 use crate::world::{InteractionHand, InteractionResult};
+
+fn block_transform_data_codec() -> Pair {
+    record(vec![
+        req("block_state_provider", block_state_provider::holder_codec()),
+        opt("sound", types::sound_event()),
+        def("particle", types::enumeration(&["none", "scrape", "wax_on", "wax_off"]), types::s("none")),
+        def("disallowed_faces", types::list(types::enumeration(&["down", "up", "north", "south", "west", "east"])), types::empty_list()),
+        opt("loot", types::identifier()),
+        def("drop_strategy", types::enumeration(&["clicked_face", "from_middle"]), types::s("from_middle")),
+        def("update_from_neighbors", types::bool(), types::b(true)),
+        def("transform_type", types::enumeration(&["single_block", "copper_chest"]), types::s("single_block")),
+        def("consume_on_use", types::bool(), types::b(true)),
+        def("item_damage_per_use", types::var_int(types::non_negative_int()), types::i(0)),
+    ])
+}
+
+pub fn direct_codec() -> Pair {
+    types::list_max(block_transform_data_codec(), 200)
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DropStrategy {

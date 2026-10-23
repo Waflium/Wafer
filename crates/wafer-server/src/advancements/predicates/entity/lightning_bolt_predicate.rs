@@ -1,8 +1,13 @@
 use wafer_core::Vec3;
 use wafer_protocol::nbt::Nbt;
 
-use super::entity_predicate::EntityPredicate;
-use crate::advancements::predicates::min_max_bounds::Ints;
+use super::entity_predicate::{self, EntityPredicate};
+use crate::advancements::predicates::min_max_bounds::{Ints, ints_codec};
+use crate::world::item::component::types::{self, Pair, def, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![def("blocks_set_on_fire", ints_codec(), types::empty_map()), opt("entity_struck", entity_predicate::codec())])
+}
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::{EntityId, LevelEntity};

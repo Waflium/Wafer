@@ -1,4 +1,5 @@
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use super::ease;
 use crate::world::level::levelgen::density_function::float;
@@ -67,6 +68,15 @@ impl EasingType {
         Ok(EasingType::CubicBezier(CubicBezier::new(x1, y1, x2, y2)))
     }
 
+    pub fn encode(&self) -> Nbt {
+        match self {
+            EasingType::Simple(i) => Nbt::String(SIMPLE[*i].0.into()),
+            EasingType::CubicBezier(bezier) => {
+                Nbt::Compound(vec![("cubic_bezier".into(), Nbt::List(bezier.controls.iter().map(|&control| Nbt::Float(control)).collect()))])
+            }
+        }
+    }
+
     pub fn apply(&self, x: f32) -> f32 {
         match self {
             EasingType::Simple(i) => SIMPLE[*i].1(x),
@@ -77,6 +87,7 @@ impl EasingType {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct CubicBezier {
+    controls: [f32; 4],
     x_curve: CubicCurve,
     y_curve: CubicCurve,
 }
@@ -104,7 +115,7 @@ impl CubicCurve {
 
 impl CubicBezier {
     pub fn new(x1: f32, y1: f32, x2: f32, y2: f32) -> CubicBezier {
-        CubicBezier { x_curve: CubicCurve::from_controls(x1, x2), y_curve: CubicCurve::from_controls(y1, y2) }
+        CubicBezier { controls: [x1, y1, x2, y2], x_curve: CubicCurve::from_controls(x1, x2), y_curve: CubicCurve::from_controls(y1, y2) }
     }
 
     pub fn apply(&self, x: f32) -> f32 {

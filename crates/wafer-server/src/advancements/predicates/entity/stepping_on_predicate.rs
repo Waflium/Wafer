@@ -1,7 +1,12 @@
 use wafer_core::Vec3;
 use wafer_protocol::nbt::Nbt;
 
-use crate::advancements::predicates::location_predicate::LocationPredicate;
+use crate::advancements::predicates::location_predicate::{self, LocationPredicate};
+use crate::world::item::component::types::Pair;
+
+pub fn codec() -> Pair {
+    location_predicate::codec()
+}
 use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;

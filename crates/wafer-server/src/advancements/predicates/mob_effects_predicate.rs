@@ -1,9 +1,24 @@
 use wafer_data::MobEffect;
 use wafer_protocol::nbt::Nbt;
 
-use super::min_max_bounds::Ints;
+use super::min_max_bounds::{Ints, ints_codec};
 use crate::util::codec::{self, DataResult};
 use crate::world::effect::MobEffectInstance;
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::types::{self, Pair, def, opt, record};
+
+fn instance_codec() -> Pair {
+    record(vec![
+        def("amplifier", ints_codec(), types::empty_map()),
+        def("duration", ints_codec(), types::empty_map()),
+        opt("ambient", types::bool()),
+        opt("visible", types::bool()),
+    ])
+}
+
+pub fn codec() -> Pair {
+    (Codec::Map(Box::new(Codec::Element("minecraft:mob_effect")), Box::new(instance_codec().0)), Stream::Nbt)
+}
 
 #[derive(Debug)]
 pub struct MobEffectInstancePredicate {

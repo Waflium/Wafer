@@ -1,12 +1,13 @@
 use wafer_protocol::nbt::Nbt;
 
-use super::conditional_effect::ConditionalEffect;
-use super::effects::enchantment_attribute_effect::EnchantmentAttributeEffect;
-use super::effects::enchantment_entity_effect::EnchantmentEntityEffect;
-use super::effects::enchantment_location_based_effect::EnchantmentLocationBasedEffect;
-use super::effects::enchantment_value_effect::EnchantmentValueEffect;
-use super::targeted_conditional_effect::TargetedConditionalEffect;
+use super::conditional_effect::{self, ConditionalEffect};
+use super::effects::enchantment_attribute_effect::{self as attribute_effect, EnchantmentAttributeEffect};
+use super::effects::enchantment_entity_effect::{self as entity_effect, EnchantmentEntityEffect};
+use super::effects::enchantment_location_based_effect::{self as location_based_effect, EnchantmentLocationBasedEffect};
+use super::effects::enchantment_value_effect::{self as value_effect, EnchantmentValueEffect};
+use super::targeted_conditional_effect::{self, TargetedConditionalEffect};
 use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::types::{self, Pair, opt};
 use crate::world::level::storage::loot::parameters::loot_context_param_sets::{self, ContextKeySet};
 use crate::world::level::storage::loot::validatable::{self, Validatable};
 
@@ -82,6 +83,58 @@ const COMPONENT_TYPES: [&str; 31] = [
     "minecraft:prevent_armor_change",
     "minecraft:trident_spin_attack_strength",
 ];
+
+fn component_codec(component: &str) -> Pair {
+    let value = || value_effect::codec();
+    let conditional = |effect: Pair| types::list(conditional_effect::codec(effect));
+    let targeted = |effect: Pair| types::list(targeted_conditional_effect::codec(effect));
+    match component {
+        "minecraft:damage_protection"
+        | "minecraft:damage"
+        | "minecraft:smash_damage_per_fallen_block"
+        | "minecraft:knockback"
+        | "minecraft:armor_effectiveness"
+        | "minecraft:item_damage"
+        | "minecraft:ammo_use"
+        | "minecraft:projectile_piercing"
+        | "minecraft:projectile_spread"
+        | "minecraft:projectile_count"
+        | "minecraft:trident_return_acceleration"
+        | "minecraft:fishing_time_reduction"
+        | "minecraft:fishing_luck_bonus"
+        | "minecraft:block_experience"
+        | "minecraft:mob_experience"
+        | "minecraft:repair_with_xp" => conditional(value()),
+        "minecraft:damage_immunity" => conditional(types::record(Vec::new())),
+        "minecraft:post_attack" => targeted(entity_effect::codec()),
+        "minecraft:post_piercing_attack" | "minecraft:hit_block" | "minecraft:tick" | "minecraft:projectile_spawned" => conditional(entity_effect::codec()),
+        "minecraft:equipment_drops" => types::list(targeted_conditional_effect::equipment_drops_codec(value())),
+        "minecraft:location_changed" => conditional(location_based_effect::codec()),
+        "minecraft:attributes" => types::list(attribute_effect::map_codec()),
+        "minecraft:crossbow_charge_time" | "minecraft:trident_spin_attack_strength" => value(),
+        "minecraft:crossbow_charging_sounds" => {
+            types::list(types::record(vec![opt("start", types::sound_event()), opt("mid", types::sound_event()), opt("end", types::sound_event())]))
+        }
+        "minecraft:trident_sound" => types::list(types::sound_event()),
+        "minecraft:prevent_equipment_drop" | "minecraft:prevent_armor_change" => types::record(Vec::new()),
+        other => unreachable!("enchantment effect component type {other}"),
+    }
+}
+
+fn decode_components(tag: Nbt) -> Result<Nbt, String> {
+    let entries = codec::map(&tag).map_err(|e| e.to_string())?;
+    let mut components = Vec::with_capacity(entries.len());
+    for (key, value) in entries {
+        let id = decode_component_type(key)?;
+        let decoded = component_codec(&id).0.decode(value)?;
+        components.push((id, decoded));
+    }
+    Ok(Nbt::Compound(components))
+}
+
+pub fn components_codec() -> Pair {
+    types::transform(decode_components)
+}
 
 fn decode_component_type(key: &str) -> DataResult<String> {
     let id = codec::identifier(&Nbt::String(key.to_string()))?;

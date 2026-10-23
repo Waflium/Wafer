@@ -1,7 +1,8 @@
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
 use serde_json::Value;
 use wafer_data::{GameRule, GameRuleType};
+use wafer_protocol::nbt::Nbt;
 
 use super::game_test_instance::resource;
 use crate::commands::source::CommandSourceStack;
@@ -9,8 +10,48 @@ use crate::server::Server;
 use crate::server::server_function_manager::ServerFunctionManager;
 use crate::world::clock::ServerClockManager;
 use crate::world::difficulty::Difficulty;
+use crate::world::item::component::codec::{self, Codec, Dispatch, RangeError, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, opt, req};
 
 pub const REGISTRY: &str = "minecraft:test_environment";
+
+fn decode_game_rule_map(tag: Nbt) -> Result<Nbt, String> {
+    let entries = codec::map(&tag)?;
+    let mut rules = Vec::with_capacity(entries.len());
+    for (name, value) in entries {
+        let id = codec::identifier(&Nbt::String(name.clone()))?;
+        let rule = GameRule::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: {id}"))?;
+        let info = rule.info();
+        let value = match info.kind {
+            GameRuleType::Bool => Codec::Bool.decode(value)?,
+            GameRuleType::Int => Codec::Int(info.min, info.max, RangeError::Outside).decode(value)?,
+        };
+        rules.push((id, value));
+    }
+    Ok(Nbt::Compound(rules))
+}
+
+fn definition_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(direct_codec);
+    &CODEC
+}
+
+pub fn holder_codec() -> Pair {
+    (Codec::Holder(REGISTRY, Some(Box::new(Codec::Lazy(definition_lazy)))), Stream::Nbt)
+}
+
+pub fn direct_codec() -> Pair {
+    let cases = vec![
+        ("minecraft:all_of", vec![req("definitions", types::list(holder_codec()))]),
+        ("minecraft:clock_time", vec![req("clock", types::fixed("minecraft:world_clock")), req("time", types::var_int(types::non_negative_int()))]),
+        ("minecraft:difficulty", vec![req("difficulty", types::enumeration(&["peaceful", "easy", "normal", "hard"]))]),
+        ("minecraft:function", vec![opt("setup", types::identifier()), opt("teardown", types::identifier())]),
+        ("minecraft:game_rules", vec![req("rules", types::transform(decode_game_rule_map))]),
+        ("minecraft:timeline_attributes", vec![req("timelines", types::list(types::fixed("minecraft:timeline")))]),
+        ("minecraft:weather", vec![req("weather", types::enumeration(&["clear", "rain", "thunder"]))]),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:test_environment_definition_type"), cases })), Stream::Dispatch)
+}
 
 pub enum EnvironmentHolder {
     Reference(String),

@@ -1,5 +1,19 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::types::{self, Pair, opt, record};
+
+pub fn firework_predicate_codec() -> Pair {
+    record(vec![
+        opt("shape", types::enumeration(&["small_ball", "large_ball", "star", "creeper", "burst"])),
+        opt("has_twinkle", types::bool()),
+        opt("has_trail", types::bool()),
+    ])
+}
+
+pub fn codec() -> Pair {
+    firework_predicate_codec()
+}
+
 use crate::util::codec::{self, DataResult};
 use crate::world::item::component::codec as component_codec;
 

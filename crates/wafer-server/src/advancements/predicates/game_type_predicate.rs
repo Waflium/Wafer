@@ -2,6 +2,11 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::game_mode::GameType;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::types::{self, Pair};
+
+pub fn codec() -> Pair {
+    types::list(types::enumeration(&["survival", "creative", "adventure", "spectator"]))
+}
 
 #[derive(Debug)]
 pub struct GameTypePredicate {

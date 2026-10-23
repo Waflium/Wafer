@@ -4,6 +4,11 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 
+pub fn codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{self, opt, record};
+    record(["any_of", "all_of", "none_of"].into_iter().map(|key| opt(key, types::list(types::string()))).collect())
+}
+
 #[derive(Debug)]
 pub struct EntityTagPredicate {
     any_of: Option<Vec<String>>,

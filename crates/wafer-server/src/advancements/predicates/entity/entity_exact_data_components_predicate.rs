@@ -1,6 +1,12 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::component::data_component_exact_predicate::DataComponentExactPredicate;
+use crate::world::item::component::custom;
+use crate::world::item::component::types::Pair;
+
+pub fn codec() -> Pair {
+    custom::exact_components()
+}
 use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;

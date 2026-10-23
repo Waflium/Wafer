@@ -1,5 +1,6 @@
 pub mod biome_generation_settings;
 pub mod biome_source;
+pub mod biome_special_effects;
 pub mod climate;
 pub mod feature_sorter;
 pub mod mob_spawn_settings;
@@ -10,10 +11,14 @@ use std::sync::LazyLock;
 use wafer_core::random::LegacyRandomSource;
 use wafer_core::BlockPos;
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use wafer_data::{Fluid, blocks};
 
 use crate::world::attribute::EnvironmentAttributeMap;
+use crate::world::item::component::codec::Codec;
+use crate::world::item::component::json_to_nbt;
+use crate::world::item::component::types::{self, Pair, def, record, req};
 use crate::world::level::block;
 use crate::world::level::light_layer::LightLayer;
 use crate::world::level::LevelReader;
@@ -43,8 +48,9 @@ pub fn validate(json: &Value) -> Result<(), String> {
     codec::decode_field(&tag, "temperature", codec::float)?;
     codec::decode_field(&tag, "downfall", codec::float)?;
     codec::field(&tag, "effects")?;
+    network_codec().0.decode(&tag)?;
     if let Some(attributes) = json.get("attributes") {
-        EnvironmentAttributeMap::parse(attributes, true)?;
+        EnvironmentAttributeMap::parse(attributes, true)?.encode_network()?;
     }
     for step in json.get("features").and_then(Value::as_array).into_iter().flatten() {
         for feature in step.as_array().into_iter().flatten() {
@@ -54,6 +60,27 @@ pub fn validate(json: &Value) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn network_codec() -> Pair {
+    record(vec![
+        req("has_precipitation", types::bool()),
+        req("temperature", types::float(Codec::float())),
+        def("temperature_modifier", types::enumeration(&["none", "frozen"]), types::s("none")),
+        req("downfall", types::float(Codec::float())),
+        req("effects", biome_special_effects::codec()),
+    ])
+}
+
+pub fn encode_network(json: &Value) -> Result<Nbt, String> {
+    let Nbt::Compound(mut fields) = network_codec().0.decode(&json_to_nbt(json))? else { return Err("A biome is not a compound".into()) };
+    if let Some(attributes) = json.get("attributes") {
+        let attributes = EnvironmentAttributeMap::parse(attributes, true)?.encode_network()?;
+        if !matches!(&attributes, Nbt::Compound(entries) if entries.is_empty()) {
+            fields.push(("attributes".into(), attributes));
+        }
+    }
+    Ok(Nbt::Compound(fields))
 }
 
 static CLIMATE: LazyLock<Vec<ClimateSettings>> = LazyLock::new(|| {

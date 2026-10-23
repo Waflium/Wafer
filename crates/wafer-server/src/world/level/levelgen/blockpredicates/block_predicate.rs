@@ -1,9 +1,17 @@
+use std::sync::LazyLock;
+
 use wafer_core::{AABB, BlockPos, Direction};
 use wafer_data::{Block, BlockState, Fluid, Tag, block_tags, fluid_tags};
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
+use crate::world::item::component::custom;
+use crate::world::item::component::types::{self, Pair, def, req};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::block;
+use crate::world::level::block::state::block_state;
+use crate::world::level::levelgen::material::vertical_anchor_codec;
 use crate::world::level::levelgen::material::{VerticalAnchor, WorldGenerationContext};
 use crate::world::level::levelgen::parse_block_state;
 
@@ -79,6 +87,39 @@ pub fn parse_offset(json: &Value) -> Result<(i32, i32, i32), String> {
         Some(_) => Err("offset needs three values".into()),
         None => Ok((0, 0, 0)),
     }
+}
+
+fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(codec);
+    &CODEC
+}
+
+fn offset() -> Field {
+    def("offset", custom::block_pos(), Nbt::IntArray(vec![0, 0, 0]))
+}
+
+pub fn codec() -> Pair {
+    let predicate = |name: &'static str| req(name, (Codec::Lazy(codec_lazy), Stream::Lazy));
+    let combining = || vec![req("predicates", types::list((Codec::Lazy(codec_lazy), Stream::Lazy)))];
+    let cases = vec![
+        ("minecraft:matching_blocks", vec![offset(), req("blocks", types::holder_set("minecraft:block"))]),
+        ("minecraft:matching_block_tag", vec![offset(), req("tag", types::identifier())]),
+        ("minecraft:matching_fluids", vec![offset(), req("fluids", types::holder_set("minecraft:fluid"))]),
+        ("minecraft:matching_biomes", vec![req("biomes", types::holder_set("minecraft:worldgen/biome"))]),
+        ("minecraft:has_sturdy_face", vec![offset(), req("direction", types::enumeration(&["down", "up", "north", "south", "west", "east"]))]),
+        ("minecraft:solid", vec![offset()]),
+        ("minecraft:replaceable", vec![offset()]),
+        ("minecraft:would_survive", vec![offset(), req("state", block_state::codec())]),
+        ("minecraft:inside_world_bounds", vec![offset()]),
+        ("minecraft:any_of", combining()),
+        ("minecraft:all_of", combining()),
+        ("minecraft:not", vec![predicate("predicate")]),
+        ("minecraft:true", vec![]),
+        ("minecraft:unobstructed", vec![offset()]),
+        ("minecraft:height_range", vec![req("min_inclusive", vertical_anchor_codec()), req("max_inclusive", vertical_anchor_codec())]),
+        ("minecraft:volume_match", vec![req("min", custom::block_pos()), req("max", custom::block_pos()), predicate("match")]),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:block_predicate_type"), cases })), Stream::Dispatch)
 }
 
 pub enum BlockPredicate {

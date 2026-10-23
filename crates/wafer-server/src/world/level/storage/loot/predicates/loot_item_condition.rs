@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use wafer_protocol::nbt::Nbt;
 
 use super::all_of_condition::AllOfCondition;
@@ -22,7 +24,19 @@ use super::time_check::TimeCheck;
 use super::weather_check::WeatherCheck;
 use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
+use crate::advancements::predicates::damage_source_predicate;
+use crate::advancements::predicates::entity::entity_predicate;
+use crate::advancements::predicates::location_predicate;
+use crate::world::attribute::AttributeType;
+use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
 use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::custom;
+use crate::world::item::component::types::{self, Pair, def, opt, req};
+use crate::world::item::enchantment::level_based_value;
+use crate::world::level::storage::loot::float_range_predicate;
+use crate::world::level::storage::loot::int_range_predicate;
+use crate::world::level::storage::loot::providers::number::{floats, ints};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::validatable::Validatable;
 use crate::world::level::storage::loot::validation_context::ValidationContext;
@@ -63,7 +77,106 @@ impl RegistryElement for LootItemCondition {
     }
 }
 
+fn direct_codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(LootItemCondition::direct_codec);
+    &CODEC
+}
+
+fn raw() -> Pair {
+    (Codec::AnyTag, Stream::Nbt)
+}
+
+fn normalize_environment_attribute_check(condition: Nbt) -> Result<Nbt, String> {
+    if condition.get("type").and_then(Nbt::as_str) != Some("minecraft:environment_attribute_check") {
+        return Ok(condition);
+    }
+    let attribute = condition.get("attribute").and_then(Nbt::as_str).and_then(EnvironmentAttributeInfo::by_name).expect("a decoded attribute");
+    let value = condition.get("value").expect("a decoded value");
+    let encoded = match attribute.ty {
+        AttributeType::Boolean
+        | AttributeType::Float
+        | AttributeType::AngleDegrees
+        | AttributeType::RgbColor
+        | AttributeType::ArgbColor
+        | AttributeType::MoonPhase
+        | AttributeType::Particle
+        | AttributeType::AmbientParticles
+        | AttributeType::BackgroundMusic
+        | AttributeType::AmbientSounds => attribute.ty.encode_value(&attribute.parse_value(&codec::to_json(value))?)?,
+        _ => value.clone(),
+    };
+    let Nbt::Compound(fields) = condition else { unreachable!("a condition is a compound") };
+    Ok(Nbt::Compound(fields.into_iter().map(|(key, field)| if key == "value" { (key, encoded.clone()) } else { (key, field) }).collect()))
+}
+
+fn entity_target() -> Pair {
+    types::enumeration(&["this", "attacker", "direct_attacker", "attacking_player", "target_entity", "interacting_entity"])
+}
+
 impl LootItemCondition {
+    pub fn direct_codec() -> Pair {
+        let term = |name: &'static str| req(name, Self::holder_codec());
+        let terms = || req("terms", types::compact_list(Self::holder_codec()));
+        let cases = vec![
+            ("minecraft:inverted", vec![term("term")]),
+            ("minecraft:any_of", vec![terms()]),
+            ("minecraft:all_of", vec![terms()]),
+            ("minecraft:random_chance", vec![req("chance", floats::holder_codec())]),
+            (
+                "minecraft:random_chance_with_enchanted_bonus",
+                vec![
+                    req("unenchanted_chance", types::float(types::codec_float_range(0.0, 1.0))),
+                    req("enchanted_chance", level_based_value::codec()),
+                    req("enchantment", types::fixed("minecraft:enchantment")),
+                ],
+            ),
+            ("minecraft:entity_properties", vec![opt("predicate", entity_predicate::codec()), req("entity", entity_target())]),
+            ("minecraft:killed_by_player", vec![]),
+            (
+                "minecraft:entity_scores",
+                vec![req("scores", (Codec::Map(Box::new(Codec::string()), Box::new(int_range_predicate::codec().0)), Stream::Nbt)), req("entity", entity_target())],
+            ),
+            (
+                "minecraft:match_block",
+                match custom::block_predicate().0 {
+                    Codec::Record(fields) => fields,
+                    _ => unreachable!("a block predicate is a record"),
+                },
+            ),
+            ("minecraft:match_tool", vec![opt("predicate", (custom::item_predicate(), Stream::Nbt))]),
+            (
+                "minecraft:table_bonus",
+                vec![req("enchantment", types::fixed("minecraft:enchantment")), req("chances", types::list(types::float(Codec::float())))],
+            ),
+            ("minecraft:survives_explosion", vec![]),
+            ("minecraft:damage_source_properties", vec![opt("predicate", damage_source_predicate::codec())]),
+            (
+                "minecraft:location_check",
+                vec![
+                    opt("predicate", location_predicate::codec()),
+                    def("offsetX", (Codec::int(), Stream::Int), types::i(0)),
+                    def("offsetY", (Codec::int(), Stream::Int), types::i(0)),
+                    def("offsetZ", (Codec::int(), Stream::Int), types::i(0)),
+                ],
+            ),
+            ("minecraft:weather_check", vec![opt("raining", types::bool()), opt("thundering", types::bool())]),
+            (
+                "minecraft:time_check",
+                vec![req("clock", types::fixed("minecraft:world_clock")), opt("period", (Codec::long(), Stream::Long)), req("value", int_range_predicate::codec())],
+            ),
+            ("minecraft:int_value_check", vec![req("value", ints::holder_codec()), req("test", int_range_predicate::codec())]),
+            ("minecraft:float_value_check", vec![req("value", floats::holder_codec()), req("test", float_range_predicate::codec())]),
+            ("minecraft:enchantment_active_check", vec![req("active", types::bool())]),
+            ("minecraft:environment_attribute_check", vec![req("attribute", types::by_name("minecraft:environment_attribute")), req("value", raw())]),
+        ];
+        let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:loot_condition_type"), cases }));
+        (Codec::Normalize(Box::new(dispatch), normalize_environment_attribute_check), Stream::Nbt)
+    }
+
+    pub fn holder_codec() -> Pair {
+        (Codec::Either(Box::new(Codec::Identifier), Box::new(Codec::Lazy(direct_codec_lazy))), Stream::Nbt)
+    }
+
     pub fn decode_holder(tag: &Nbt) -> DataResult<Holder<LootItemCondition>> {
         LootItemCondition::decode_holder_partial(tag).into_result()
     }

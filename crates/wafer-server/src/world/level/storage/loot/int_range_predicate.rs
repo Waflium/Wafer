@@ -1,11 +1,18 @@
 use wafer_protocol::nbt::Nbt;
 
 use super::loot_context::LootContext;
-use super::providers::number::ints::ContextIntProvider;
+use super::providers::number::ints::{self, ContextIntProvider};
 use crate::core::holder::Holder;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::types::{self, Pair, opt};
 use crate::world::level::storage::loot::validatable::{self, Validatable};
 use crate::world::level::storage::loot::validation_context::ValidationContext;
+
+pub fn codec() -> Pair {
+    let line = types::record(vec![opt("min", ints::holder_codec()), opt("max", ints::holder_codec())]);
+    (Codec::Either(Box::new(ints::holder_codec().0), Box::new(line.0)), Stream::Nbt)
+}
 
 pub enum IntRangePredicate {
     Point(Holder<ContextIntProvider>),

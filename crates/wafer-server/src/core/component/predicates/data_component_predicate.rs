@@ -1,5 +1,32 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::types::Pair;
+
+pub fn type_codec(id: &str) -> Option<Pair> {
+    use super::{
+        attribute_modifiers_predicate, bundle_predicate, container_predicate, custom_data_predicate, damage_predicate, enchantments_predicate,
+        firework_explosion_predicate, fireworks_predicate, jukebox_playable_predicate, potions_predicate, trim_predicate, villager_type_predicate,
+        writable_book_predicate, written_book_predicate,
+    };
+    Some(match id {
+        "minecraft:damage" => damage_predicate::codec(),
+        "minecraft:enchantments" | "minecraft:stored_enchantments" => enchantments_predicate::codec(),
+        "minecraft:potion_contents" => potions_predicate::codec(),
+        "minecraft:custom_data" => custom_data_predicate::codec(),
+        "minecraft:container" => container_predicate::codec(),
+        "minecraft:bundle_contents" => bundle_predicate::codec(),
+        "minecraft:firework_explosion" => firework_explosion_predicate::codec(),
+        "minecraft:fireworks" => fireworks_predicate::codec(),
+        "minecraft:writable_book_content" => writable_book_predicate::codec(),
+        "minecraft:written_book_content" => written_book_predicate::codec(),
+        "minecraft:attribute_modifiers" => attribute_modifiers_predicate::codec(),
+        "minecraft:trim" => trim_predicate::codec(),
+        "minecraft:jukebox_playable" => jukebox_playable_predicate::codec(),
+        "minecraft:villager/variant" => villager_type_predicate::codec(),
+        _ => return None,
+    })
+}
+
 use super::any_value::AnyValue;
 use super::attribute_modifiers_predicate::AttributeModifiersPredicate;
 use super::bundle_predicate::BundlePredicate;

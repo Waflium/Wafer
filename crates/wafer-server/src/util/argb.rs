@@ -53,6 +53,18 @@ pub fn color_from_float(alpha: f32, red: f32, green: f32, blue: f32) -> i32 {
     color(as_8bit_channel(alpha), as_8bit_channel(red), as_8bit_channel(green), as_8bit_channel(blue))
 }
 
+pub fn color_from_vector3f(color: Vec3f) -> i32 {
+    self::color(255, as_8bit_channel(color[0]), as_8bit_channel(color[1]), as_8bit_channel(color[2]))
+}
+
+pub fn color_from_vector4f(color: Vec4f) -> i32 {
+    self::color(as_8bit_channel(color[3]), as_8bit_channel(color[0]), as_8bit_channel(color[1]), as_8bit_channel(color[2]))
+}
+
+pub fn transparent(color: i32) -> i32 {
+    color & 0xFFFFFF
+}
+
 pub fn vector3f_from_rgb24(color: i32) -> Vec3f {
     [from_8bit_channel(red(color)), from_8bit_channel(green(color)), from_8bit_channel(blue(color))]
 }

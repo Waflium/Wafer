@@ -1,7 +1,10 @@
 use wafer_core::joml::{AxisAngle4f, Matrix4f, Quaternionf, Vector3f};
 use wafer_protocol::nbt::Nbt;
 
+use super::argb;
 use super::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::{self as component_codec, Codec};
+use crate::world::item::component::types::{self, Pair};
 
 pub fn fixed_size_list_partial<T>(tag: &Nbt, size: usize, decode: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
     let result = codec::list_partial(tag, decode);
@@ -125,4 +128,45 @@ pub fn matrix4f(tag: &Nbt) -> DataResult<Matrix4f> {
         result.set_row_column(i >> 2, i & 3, value);
     }
     Ok(result)
+}
+
+fn parse_hex_color(tag: &Nbt, digits: usize) -> Result<i32, String> {
+    let string = component_codec::string(tag)?;
+    let hex = string.strip_prefix('#').ok_or("Hex color must begin with #")?;
+    if hex.len() != digits {
+        return Err(format!("Hex color is wrong size, expected {digits} digits but got {}", hex.len()));
+    }
+    u32::from_str_radix(hex, 16).map(|value| value as i32).map_err(|_| format!("Invalid color value: {string}"))
+}
+
+fn color_floats(tag: &Nbt, size: usize) -> Result<Vec<f32>, String> {
+    let items = component_codec::list(tag)?;
+    if items.len() != size {
+        return Err(format!("Input is not a list of {size} elements"));
+    }
+    items.iter().map(|item| Codec::float().decode(item).map(|value| component_codec::as_f32(&value))).collect()
+}
+
+fn color_int(tag: &Nbt) -> Result<i32, String> {
+    Codec::int().decode(tag).map(|value| component_codec::as_i32(&value))
+}
+
+pub fn hex_color(color: i32, digits: usize) -> String {
+    format!("#{:0width$x}", color as u32 as u64 & ((1u64 << (digits * 4)) - 1), width = digits)
+}
+
+fn decode_string_rgb_color(tag: Nbt) -> Result<Nbt, String> {
+    let color = match &tag {
+        Nbt::String(_) => argb::opaque(parse_hex_color(&tag, 6)?),
+        Nbt::List(_) => {
+            let channels = color_floats(&tag, 3)?;
+            argb::color_from_float(1.0, channels[0], channels[1], channels[2])
+        }
+        other => color_int(other)?,
+    };
+    Ok(Nbt::String(hex_color(argb::transparent(color), 6)))
+}
+
+pub fn string_rgb_color() -> Pair {
+    types::transform(decode_string_rgb_color)
 }

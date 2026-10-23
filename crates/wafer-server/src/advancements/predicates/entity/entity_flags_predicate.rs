@@ -4,6 +4,16 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 
+pub fn codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{self, opt, record};
+    record(
+        ["is_on_ground", "is_on_fire", "is_sneaking", "is_sprinting", "is_swimming", "is_flying", "is_baby", "is_in_water", "is_fall_flying"]
+            .into_iter()
+            .map(|flag| opt(flag, types::bool()))
+            .collect(),
+    )
+}
+
 #[derive(Debug)]
 pub struct EntityFlagsPredicate {
     is_on_ground: Option<bool>,

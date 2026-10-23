@@ -4,6 +4,11 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 
+pub fn codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{self, opt, record};
+    record(vec![opt("in_open_water", types::bool())])
+}
+
 #[derive(Debug)]
 pub struct FishingHookPredicate {
     in_open_water: Option<bool>,

@@ -1,6 +1,8 @@
 use serde_json::Value as Json;
+use wafer_protocol::nbt::Nbt;
 
 use super::environment_attribute::EnvironmentAttributeInfo;
+use super::environment_attributes::ATTRIBUTES;
 use super::modifier::{AttributeModifier, OperationId};
 use super::{EnvironmentAttribute, Value};
 use crate::world::level::levelgen::density_function::resource_name;
@@ -14,6 +16,16 @@ pub struct Entry {
 impl Entry {
     pub fn apply_modifier(&self, subject: &Value) -> Value {
         self.modifier.apply(subject, &self.argument)
+    }
+
+    pub fn encode(&self, attribute: &EnvironmentAttributeInfo) -> Result<Nbt, String> {
+        if self.modifier == AttributeModifier::Override {
+            return attribute.ty.encode_value(&self.argument);
+        }
+        Ok(Nbt::Compound(vec![
+            ("modifier".into(), Nbt::String(self.modifier.operation_id().name().into())),
+            ("argument".into(), self.modifier.encode_argument(attribute, &self.argument)?),
+        ]))
     }
 
     fn parse(attribute: &EnvironmentAttributeInfo, json: &Json) -> Result<Entry, String> {
@@ -55,6 +67,16 @@ impl EnvironmentAttributeMap {
             return Err(format!("The following attributes cannot be positional: {illegal:?}"));
         }
         Ok(map)
+    }
+
+    pub fn encode_network(&self) -> Result<Nbt, String> {
+        Ok(Nbt::Compound(
+            self.entries
+                .iter()
+                .filter(|(id, _)| ATTRIBUTES[*id].is_syncable)
+                .map(|(id, entry)| Ok((ATTRIBUTES[*id].name.to_string(), entry.encode(&ATTRIBUTES[*id])?)))
+                .collect::<Result<_, String>>()?,
+        ))
     }
 
     fn put(&mut self, id: usize, entry: Entry) {

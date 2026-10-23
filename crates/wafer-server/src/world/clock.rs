@@ -94,8 +94,8 @@ impl Timeline {
         track.bake_sampler(attribute, self.clock, self.period_ticks)
     }
 
-    fn parse(id: &'static str, v: &serde_json::Value) -> Result<Timeline, String> {
-        let clock = ServerClockManager::id_of(v["clock"].as_str().ok_or("missing clock")?).ok_or("unknown clock")?;
+    pub fn parse(id: &'static str, v: &serde_json::Value) -> Result<Timeline, String> {
+        let clock = ServerClockManager::id_of(&resource_name(v["clock"].as_str().ok_or("missing clock")?)).ok_or("unknown clock")?;
         let period_ticks = match v.get("period_ticks") {
             None => None,
             Some(p) => Some(p.as_i64().filter(|p| (1..=i32::MAX as i64).contains(p)).ok_or("Value must be positive")? as i32),
@@ -124,6 +124,43 @@ impl Timeline {
         }
         Ok(Timeline { id, clock, period_ticks, time_markers, tracks })
     }
+}
+
+pub fn encode_network_timeline(json: &serde_json::Value) -> Result<Nbt, String> {
+    let clock = json["clock"].as_str().ok_or("No key clock")?;
+    let mut fields = vec![("clock".to_string(), Nbt::String(resource_name(clock)))];
+    if let Some(period_ticks) = json.get("period_ticks").and_then(serde_json::Value::as_i64) {
+        fields.push(("period_ticks".into(), Nbt::Int(period_ticks as i32)));
+    }
+    let mut tracks: Vec<(String, Nbt)> = Vec::new();
+    for (name, track) in json["tracks"].as_object().into_iter().flatten() {
+        let attribute = EnvironmentAttributeInfo::by_name(&resource_name(name)).ok_or_else(|| format!("unknown environment attribute {name}"))?;
+        if attribute.is_syncable {
+            tracks.push((attribute.name.to_string(), AttributeTrack::parse(attribute, track)?.encode(attribute)?));
+        }
+    }
+    if !tracks.is_empty() {
+        fields.push(("tracks".into(), Nbt::Compound(tracks)));
+    }
+    let time_markers: Vec<(String, Nbt)> = json["time_markers"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(marker, info)| {
+            let encoded = match info.as_i64() {
+                Some(ticks) => Nbt::Int(ticks as i32),
+                None if info["show_in_commands"].as_bool().unwrap_or(false) => {
+                    Nbt::Compound(vec![("ticks".into(), Nbt::Int(info["ticks"].as_i64().unwrap_or(0) as i32)), ("show_in_commands".into(), Nbt::Byte(1))])
+                }
+                None => Nbt::Int(info["ticks"].as_i64().unwrap_or(0) as i32),
+            };
+            (resource_name(marker), encoded)
+        })
+        .collect();
+    if !time_markers.is_empty() {
+        fields.push(("time_markers".into(), Nbt::Compound(time_markers)));
+    }
+    Ok(Nbt::Compound(fields))
 }
 
 pub static TIMELINE_DATA: LazyLock<Vec<Timeline>> = LazyLock::new(|| {

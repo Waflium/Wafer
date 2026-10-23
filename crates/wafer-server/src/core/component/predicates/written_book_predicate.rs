@@ -1,5 +1,20 @@
 use wafer_protocol::nbt::Nbt;
 
+use crate::advancements::predicates::collection_predicate;
+use crate::advancements::predicates::min_max_bounds::ints_codec;
+use crate::world::item::component::text;
+use crate::world::item::component::types::{self, Pair, def, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![
+        opt("pages", collection_predicate::codec(text::text)),
+        opt("author", types::string()),
+        opt("title", types::string()),
+        def("generation", ints_codec(), types::empty_map()),
+        opt("resolved", types::bool()),
+    ])
+}
+
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::min_max_bounds::Ints;
 use crate::network::chat::Component;

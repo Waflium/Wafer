@@ -1,6 +1,11 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::advancements::predicates::mob_effects_predicate::MobEffectsPredicate;
+use crate::advancements::predicates::mob_effects_predicate::{self, MobEffectsPredicate};
+use crate::world::item::component::types::Pair;
+
+pub fn codec() -> Pair {
+    mob_effects_predicate::codec()
+}
 use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;

@@ -1,11 +1,21 @@
 use wafer_core::Vec3;
 use wafer_protocol::nbt::Nbt;
 
-use super::entity::entity_predicate::EntityPredicate;
-use super::tag_predicate::TagPredicate;
+use super::entity::entity_predicate::{self, EntityPredicate};
+use super::tag_predicate::{self, TagPredicate};
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::damagesource::DamageSource;
+use crate::world::item::component::types::{self, Pair, def, opt, record};
+
+pub fn codec() -> Pair {
+    record(vec![
+        def("tags", types::list(tag_predicate::codec("minecraft:damage_type")), types::empty_list()),
+        opt("direct_entity", entity_predicate::codec()),
+        opt("source_entity", entity_predicate::codec()),
+        opt("is_direct", types::bool()),
+    ])
+}
 
 #[derive(Debug)]
 pub struct DamageSourcePredicate {

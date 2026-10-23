@@ -2,6 +2,13 @@ use wafer_data::EquipmentSlot;
 use wafer_protocol::nbt::Nbt;
 
 use crate::advancements::predicates::item_predicate::ItemPredicate;
+use crate::world::item::component::codec::Stream;
+use crate::world::item::component::custom;
+use crate::world::item::component::types::{Pair, opt, record};
+
+pub fn codec() -> Pair {
+    record(["head", "chest", "legs", "feet", "body", "mainhand", "offhand"].into_iter().map(|slot| opt(slot, (custom::item_predicate(), Stream::Nbt))).collect())
+}
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;

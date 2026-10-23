@@ -39,6 +39,10 @@ pub fn list(p: Pair) -> Pair {
     (Codec::list(p.0), Stream::List(Box::new(p.1), MAX))
 }
 
+pub fn compact_list(p: Pair) -> Pair {
+    (Codec::Compact(Box::new(p.0)), Stream::List(Box::new(p.1), MAX))
+}
+
 pub fn list_max(p: Pair, max: usize) -> Pair {
     (Codec::list_max(p.0, max), Stream::List(Box::new(p.1), max))
 }
@@ -121,6 +125,10 @@ pub fn alt(primary: Pair, alternative: Codec, convert: fn(&Nbt) -> Result<Nbt, S
 
 pub fn nbt(codec: Codec) -> Pair {
     (codec, Stream::Nbt)
+}
+
+pub fn transform(f: fn(Nbt) -> Result<Nbt, String>) -> Pair {
+    (Codec::Normalize(Box::new(Codec::AnyTag), f), Stream::Nbt)
 }
 
 
