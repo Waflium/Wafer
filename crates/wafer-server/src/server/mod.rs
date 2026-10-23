@@ -1526,12 +1526,17 @@ impl Server {
                 self.remove_player(conn, Some(reason));
                 continue;
             }
-            self.entity_level_mut(id).tick_connection_start(id);
+            if let Some(index) = self.level_of(id) {
+                level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_start(id);
+            }
             if let Some(level) = self.level_of(id) {
                 self.handle_pending_spectator_portal_use(level);
                 self.handle_pending_portal_teleport(level);
             }
-            let connected = self.entity_level_mut(id).tick_connection_end(id);
+            let connected = match self.level_of(id) {
+                Some(index) => level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_end(id),
+                None => false,
+            };
             if connected {
                 self.tick_command_suggestions(id);
             }
@@ -1599,14 +1604,14 @@ impl Server {
         }
         self.levels[index].tick_after_block_ticks(runs);
         self.update_other_level_players(index);
-        while self.levels[index].tick_entities() {
+        while level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_entities() {
             self.run_pending_minecart_commands(index);
             self.handle_pending_portal_teleport(index);
             self.handle_pending_ender_pearl_teleport(index);
             self.update_other_level_players(index);
             self.send_global_level_events();
         }
-        self.levels[index].tick_after_entities();
+        level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_entities();
         self.flush_other_level_ender_pearls();
         self.send_global_level_events();
     }

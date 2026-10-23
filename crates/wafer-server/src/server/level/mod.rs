@@ -8,6 +8,7 @@ pub mod chunk_tracker;
 pub mod chunk_workers;
 pub mod distance_manager;
 pub mod events;
+pub mod lent_levels;
 pub mod game_mode;
 #[cfg(test)]
 mod natural_spawner_tests;
@@ -174,6 +175,7 @@ pub struct ServerLevel {
     pub pending_spectator_portal_use: Option<crate::world::level::block::portal::PendingSpectatorPortalUse>,
     pub pending_ender_pearl_teleport: Option<crate::world::entity::projectile::throwableitemprojectile::thrown_enderpearl::PendingEnderPearlTeleport>,
     pub other_level_players: Vec<OtherLevelPlayer>,
+    pub other_levels: Vec<ServerLevel>,
     pub other_level_ender_pearls: Vec<(u128, EntityId, bool)>,
     pub global_level_events: Vec<(i32, BlockPos, i32)>,
     pub pending_system_broadcasts: Vec<crate::network::chat::Component>,
@@ -321,6 +323,7 @@ impl ServerLevel {
             pending_spectator_portal_use: None,
             pending_ender_pearl_teleport: None,
             other_level_players: Vec::new(),
+            other_levels: Vec::new(),
             other_level_ender_pearls: Vec::new(),
             global_level_events: Vec::new(),
             pending_system_broadcasts: Vec::new(),

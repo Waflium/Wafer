@@ -276,6 +276,11 @@ impl MapItemSavedData {
         )
     }
 
+    #[cfg(test)]
+    pub fn is_carried_by(&self, player: EntityId) -> bool {
+        self.holding_player_index(player).is_some()
+    }
+
     fn holding_player_index(&self, player: EntityId) -> Option<usize> {
         self.carried_by.iter().position(|holding_player| holding_player.player == player && !holding_player.removed)
     }
@@ -295,17 +300,18 @@ impl MapItemSavedData {
             if other_holding_player.removed {
                 self.carried_by.remove(i);
                 self.remove_decoration(&other_player_name);
-            } else if let Some(other) = level.players.get(&other_player) {
-                if !other.entity.is_removed() && (placed_in_frame.is_some() || inventory_contains(level, other_player, item_stack)) {
-                    if placed_in_frame.is_none() && level.dimension == self.dimension && self.tracking_position {
+            } else if let Some(other_level) = level.level_with_player(other_player) {
+                let other = other_level.player(other_player);
+                if !other.entity.is_removed() && (placed_in_frame.is_some() || inventory_contains(other_level, other_player, item_stack)) {
+                    if placed_in_frame.is_none() && other_level.dimension == self.dimension && self.tracking_position {
                         let (x, z, y_rot) = (other.entity.x(), other.entity.z(), other.entity.y_rot);
-                        self.add_decoration(PLAYER, Some(level), &other_player_name, x, z, y_rot as f64, None);
+                        self.add_decoration(PLAYER, Some(other_level), &other_player_name, x, z, y_rot as f64, None);
                     }
                 } else {
                     self.carried_by.remove(i);
                     self.remove_decoration(&other_player_name);
                 }
-                if other_player != ticking_player && has_map_invisibility_item_equipped(level, other_player) {
+                if other_player != ticking_player && has_map_invisibility_item_equipped(other_level, other_player) {
                     self.remove_decoration(&other_player_name);
                 }
             }
