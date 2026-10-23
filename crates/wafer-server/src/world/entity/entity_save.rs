@@ -18,10 +18,29 @@ use crate::world::level::collision::{Collider, shapes_collide};
 use crate::world::level::storage::uuid_ints;
 
 pub fn uuid_from_nbt(nbt: &Nbt) -> Option<u128> {
-    match nbt {
-        Nbt::IntArray(v) if v.len() == 4 => Some(v.iter().fold(0u128, |uuid, &i| uuid << 32 | i as u32 as u128)),
-        _ => None,
-    }
+    let ints: [i32; 4] = match nbt {
+        Nbt::IntArray(v) => v.as_slice().try_into().ok()?,
+        Nbt::ByteArray(v) => <[i8; 4]>::try_from(v.as_slice()).ok()?.map(i32::from),
+        Nbt::LongArray(v) => <[i64; 4]>::try_from(v.as_slice()).ok()?.map(|l| l as i32),
+        Nbt::List(v) => {
+            let numbers: [&Nbt; 4] = v.iter().collect::<Vec<_>>().try_into().ok()?;
+            let mut ints = [0; 4];
+            for (int, number) in ints.iter_mut().zip(numbers) {
+                *int = match number {
+                    Nbt::Byte(n) => *n as i32,
+                    Nbt::Short(n) => *n as i32,
+                    Nbt::Int(n) => *n,
+                    Nbt::Long(n) => *n as i32,
+                    Nbt::Float(n) => *n as i32,
+                    Nbt::Double(n) => *n as i32,
+                    _ => return None,
+                };
+            }
+            ints
+        }
+        _ => return None,
+    };
+    Some(ints.iter().fold(0u128, |uuid, &i| uuid << 32 | i as u32 as u128))
 }
 
 fn number(nbt: &Nbt, key: &str) -> Option<f64> {
