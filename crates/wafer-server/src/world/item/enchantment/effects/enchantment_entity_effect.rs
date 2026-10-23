@@ -3,6 +3,7 @@ use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::{DamageType, MobEffect, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
+use crate::world::level::BlockGetter;
 use crate::core::holder_set::HolderSet;
 use crate::core::particles::particle_options::ParticleOptions;
 use crate::world::level::levelgen::blockpredicates::block_predicate::{BlockPredicate, parse_offset};
@@ -55,10 +56,10 @@ pub enum EnchantmentEntityEffect {
     ApplyImpulse { direction: Vec3, coordinate_scale: Vec3, magnitude: LevelBasedValue },
     ApplyExhaustion { amount: LevelBasedValue },
     PlaySound { sound_events: Vec<SoundEvent>, volume: FloatProvider, pitch: FloatProvider },
-    ReplaceBlock(Nbt),
+    ReplaceBlock { offset: (i32, i32, i32), predicate: Option<BlockPredicate>, block_state: BlockStateProviderHolder, trigger_game_event: Option<crate::world::level::gameevent::game_event::GameEvent> },
     ReplaceDisk { radius: LevelBasedValue, height: LevelBasedValue, offset: (i32, i32, i32), predicate: Option<BlockPredicate>, block_state: BlockStateProviderHolder, trigger_game_event: Option<crate::world::level::gameevent::game_event::GameEvent> },
     RunFunction(String),
-    SetBlockProperties(Nbt),
+    SetBlockProperties { properties: Vec<(String, String)>, offset: (i32, i32, i32), trigger_game_event: Option<crate::world::level::gameevent::game_event::GameEvent> },
     SpawnParticles {
         particle: ParticleOptions,
         horizontal_position: PositionSource,
@@ -239,17 +240,26 @@ impl EnchantmentEntityEffect {
                 volume: codec::decode_field(tag, "volume", |t| float_provider(t, 1.0e-5, 10.0))?,
                 pitch: codec::decode_field(tag, "pitch", |t| float_provider(t, 1.0e-5, 2.0))?,
             },
-            "minecraft:replace_block" => EnchantmentEntityEffect::ReplaceBlock(tag.clone()),
+            "minecraft:replace_block" => EnchantmentEntityEffect::ReplaceBlock {
+                offset: codec::decode_or(tag, "offset", (0, 0, 0), |t| parse_offset(&serde_json::json!({ "offset": codec::to_json(t) })))?,
+                predicate: codec::decode_optional(tag, "predicate", |t| BlockPredicate::parse(&codec::to_json(t)))?,
+                block_state: codec::decode_field(tag, "block_state", |t| BlockStateProviderHolder::parse(&codec::to_json(t)))?,
+                trigger_game_event: codec::decode_optional(tag, "trigger_game_event", game_event)?,
+            },
             "minecraft:replace_disk" => EnchantmentEntityEffect::ReplaceDisk {
                 radius: value("radius")?,
                 height: value("height")?,
                 offset: codec::decode_or(tag, "offset", (0, 0, 0), |t| parse_offset(&serde_json::json!({ "offset": codec::to_json(t) })))?,
                 predicate: codec::decode_optional(tag, "predicate", |t| BlockPredicate::parse(&codec::to_json(t)))?,
                 block_state: codec::decode_field(tag, "block_state", |t| BlockStateProviderHolder::parse(&codec::to_json(t)))?,
-                trigger_game_event: codec::decode_optional(tag, "trigger_game_event", |t| t.as_str().and_then(crate::commands::arguments::parse_identifier).and_then(|name| crate::world::level::gameevent::game_event::GameEvent::by_name(&name)).ok_or_else(|| "Unknown game event".to_string()))?,
+                trigger_game_event: codec::decode_optional(tag, "trigger_game_event", game_event)?,
             },
             "minecraft:run_function" => EnchantmentEntityEffect::RunFunction(codec::decode_field(tag, "function", codec::identifier)?),
-            "minecraft:set_block_properties" => EnchantmentEntityEffect::SetBlockProperties(tag.clone()),
+            "minecraft:set_block_properties" => EnchantmentEntityEffect::SetBlockProperties {
+                properties: codec::decode_field(tag, "properties", |t| Ok(crate::world::item::component::values::block_state_properties(t)))?,
+                offset: codec::decode_or(tag, "offset", (0, 0, 0), |t| parse_offset(&serde_json::json!({ "offset": codec::to_json(t) })))?,
+                trigger_game_event: codec::decode_optional(tag, "trigger_game_event", game_event)?,
+            },
             "minecraft:spawn_particles" => EnchantmentEntityEffect::SpawnParticles {
                 particle: codec::decode_field(tag, "particle", particle_options)?,
                 horizontal_position: codec::decode_field(tag, "horizontal_position", PositionSource::decode)?,
@@ -419,9 +429,39 @@ impl EnchantmentEntityEffect {
                 let radius = radius.calculate(enchantment_level).max(0.0);
                 level.explode_with_particles(source, indirect_source, damage_source, calculator, pos, radius, *create_fire, *block_interaction, small_particle, large_particle, block_particles, sound);
             }
-            EnchantmentEntityEffect::ReplaceBlock(_)
-            | EnchantmentEntityEffect::RunFunction(_)
-            | EnchantmentEntityEffect::SetBlockProperties(_) => {}
+            EnchantmentEntityEffect::ReplaceBlock { offset, predicate, block_state, trigger_game_event } => {
+                let pos = BlockPos::containing(position.x, position.y, position.z).offset(offset.0, offset.1, offset.2);
+                if predicate.as_ref().is_none_or(|p| p.test(level, pos)) {
+                    let mut random = std::mem::replace(&mut level.entity_mut(entity).random, wafer_core::random::LegacyRandomSource::new(0));
+                    let state = block_state.value().get_state(level, &mut random, pos);
+                    level.entity_mut(entity).random = random;
+                    if level.set_block(pos, state, UPDATE_ALL)
+                        && let Some(event) = *trigger_game_event
+                    {
+                        level.game_event_at(Some(entity), event, pos);
+                    }
+                }
+            }
+            EnchantmentEntityEffect::RunFunction(function) => {
+                let e = level.entity(entity);
+                let rotation = (e.x_rot, e.y_rot);
+                level.pending_enchantment_functions.push((function.clone(), entity, position, rotation));
+            }
+            EnchantmentEntityEffect::SetBlockProperties { properties, offset, trigger_game_event } => {
+                let block_pos = BlockPos::containing(position.x, position.y, position.z).offset(offset.0, offset.1, offset.2);
+                let state = level.block_state(block_pos);
+                let modified = properties.iter().fold(state, |state, (property, value)| state.with_property_by_name(property, value).unwrap_or(state));
+                if state != modified
+                    && level.set_block(block_pos, modified, UPDATE_ALL)
+                    && let Some(event) = *trigger_game_event
+                {
+                    level.game_event_at(Some(entity), event, block_pos);
+                }
+            }
         }
     }
+}
+
+fn game_event(t: &Nbt) -> Result<crate::world::level::gameevent::game_event::GameEvent, String> {
+    t.as_str().and_then(crate::commands::arguments::parse_identifier).and_then(|name| crate::world::level::gameevent::game_event::GameEvent::by_name(&name)).ok_or_else(|| "Unknown game event".to_string())
 }

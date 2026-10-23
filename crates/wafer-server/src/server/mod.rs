@@ -1557,6 +1557,15 @@ impl Server {
                     ServerFunctionManager::execute(self, &function, &source);
                 }
             }
+            for (name, entity, position, rotation) in std::mem::take(&mut self.levels[index].pending_enchantment_functions) {
+                match self.functions.get(&name) {
+                    Some(function) => {
+                        let source = CommandSourceStack::server(self).with_permission(2).with_suppressed_output().with_entity(entity).with_level(self, index).with_position(position).with_rotation(rotation);
+                        ServerFunctionManager::execute(self, &function, &source);
+                    }
+                    None => error!("Enchantment run_function effect failed for non-existent function {name}"),
+                }
+            }
         }
     }
 
