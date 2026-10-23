@@ -132,7 +132,8 @@ impl ServerLevel {
         let above = pos.above();
         if self.mob(id).expect("a bat").is_resting() {
             let is_silent = self.entity(id).is_silent();
-            if self.block_state(above).is_redstone_conductor() {
+            let above_state = self.block_state(above);
+            if self.is_redstone_conductor_at(above, above_state) {
                 let e = self.entity_mut(id);
                 if e.random.next_int_bounded(200) == 0 {
                     e.y_head_rot = e.random.next_int_bounded(360) as f32;
@@ -182,7 +183,10 @@ impl ServerLevel {
             mob.living.zza = 0.5;
             let y_rot = mob.entity.y_rot + rot_diff;
             mob.entity.set_y_rot(y_rot);
-            if mob.entity.random.next_int_bounded(100) == 0 && self.block_state(above).is_redstone_conductor() {
+            if mob.entity.random.next_int_bounded(100) == 0 && {
+                let above_state = self.block_state(above);
+                self.is_redstone_conductor_at(above, above_state)
+            } {
                 self.mob_mut(id).expect("a bat").set_resting(true);
             }
         }

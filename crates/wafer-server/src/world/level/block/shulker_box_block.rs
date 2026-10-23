@@ -1,8 +1,9 @@
 use std::borrow::Cow;
-use std::sync::LazyLock;
+use std::collections::HashMap;
+use std::sync::{LazyLock, RwLock};
 
 use wafer_core::shapes::VoxelShape;
-use wafer_core::{AABB, BlockPos, Direction, Vec3};
+use wafer_core::{AABB, BlockPos, Direction, Vec3, mth};
 use wafer_data::properties::FACING;
 use wafer_data::{Block, BlockState};
 
@@ -15,6 +16,8 @@ use crate::world::entity::{EntityId, ItemEntity, LevelEntity};
 use crate::world::inventory::menu_provider::MenuProvider;
 use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
+use crate::world::entity::monster::shulker::get_progress_aabb;
+use crate::world::level::block::entity::shulker_box_block_entity::ShulkerBoxBlockEntity;
 use crate::world::level::block::entity::{AnimationStatus, BlockEntityKind};
 
 pub struct ShulkerBoxBlock;
@@ -30,10 +33,40 @@ static SHAPES_OPEN_SUPPORT: LazyLock<[VoxelShape; 6]> = LazyLock::new(|| {
 
 static BLOCK_SHAPE: LazyLock<VoxelShape> = LazyLock::new(VoxelShape::block);
 
+static SHAPES: LazyLock<RwLock<HashMap<(u8, u32), &'static VoxelShape>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
+
 pub fn get_block_support_shape(level: &mut ServerLevel, state: BlockState, pos: BlockPos) -> Cow<'static, VoxelShape> {
     match level.get_block_entity(pos).map(|entity| &entity.kind) {
         Some(BlockEntityKind::ShulkerBox(shulker)) if !shulker.is_closed() => Cow::Borrowed(&SHAPES_OPEN_SUPPORT[state.get(FACING).opposite() as usize]),
         _ => Cow::Borrowed(&BLOCK_SHAPE),
+    }
+}
+
+fn open_progress(shulker: &ShulkerBoxBlockEntity) -> f32 {
+    0.5 * mth::lerp_f(1.0, shulker.progress_old, shulker.progress)
+}
+
+pub fn get_bounding_box(shulker: &ShulkerBoxBlockEntity, state: BlockState) -> AABB {
+    get_progress_aabb(1.0, state.get(FACING), open_progress(shulker), Vec3::new(0.5, 0.0, 0.5))
+}
+
+pub fn shape_of(shulker: Option<&ShulkerBoxBlockEntity>, state: BlockState) -> &'static VoxelShape {
+    let Some(shulker) = shulker else { return &BLOCK_SHAPE };
+    let progress = open_progress(shulker);
+    if progress == 0.0 {
+        return &BLOCK_SHAPE;
+    }
+    let key = (state.get(FACING) as u8, progress.to_bits());
+    if let Some(shape) = SHAPES.read().unwrap().get(&key) {
+        return shape;
+    }
+    *SHAPES.write().unwrap().entry(key).or_insert_with(|| Box::leak(Box::new(VoxelShape::from_boxes(&[get_bounding_box(shulker, state)]))))
+}
+
+pub fn get_shape(level: &mut ServerLevel, state: BlockState, pos: BlockPos) -> &'static VoxelShape {
+    match level.get_block_entity(pos).map(|entity| &entity.kind) {
+        Some(BlockEntityKind::ShulkerBox(shulker)) => shape_of(Some(shulker), state),
+        _ => &BLOCK_SHAPE,
     }
 }
 

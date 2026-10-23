@@ -178,12 +178,12 @@ impl IronGolem {
         for i in 1..3 {
             let above_pos = pos.offset(0, i, 0);
             let above = level.block_state(above_pos);
-            if !natural_spawner::is_valid_empty_spawn_block(above, above.fluid_state(), entity_type) {
+            if !natural_spawner::is_valid_empty_spawn_block(level, above_pos, above, above.fluid_state(), entity_type) {
                 return false;
             }
         }
         let state = level.block_state(pos);
-        natural_spawner::is_valid_empty_spawn_block(state, wafer_data::FluidState::EMPTY, entity_type) && level.is_unobstructed(&mob.entity.bounding_box())
+        natural_spawner::is_valid_empty_spawn_block(level, pos, state, wafer_data::FluidState::EMPTY, entity_type) && level.is_unobstructed(&mob.entity.bounding_box())
     }
 }
 

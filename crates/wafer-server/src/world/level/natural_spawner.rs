@@ -139,7 +139,7 @@ pub fn spawn_category_for_position(
 ) {
     let y_start = start.y;
     let state = level.block_state(start);
-    if state.is_redstone_conductor() {
+    if level.is_redstone_conductor_at(start, state) {
         return;
     }
     let mut cluster_size = 0;
@@ -310,8 +310,8 @@ fn get_random_pos_within(level: &mut ServerLevel, chunk: ChunkPos) -> BlockPos {
     BlockPos::new(x, y, z)
 }
 
-pub fn is_valid_empty_spawn_block(block_state: BlockState, fluid_state: FluidState, entity_type: &EntityType) -> bool {
-    if block_state.is_collision_shape_full_block() {
+pub fn is_valid_empty_spawn_block(level: &mut (impl BlockGetter + ?Sized), pos: BlockPos, block_state: BlockState, fluid_state: FluidState, entity_type: &EntityType) -> bool {
+    if level.is_collision_shape_full_block_at(pos, block_state) {
         false
     } else if block_state.is_signal_source() {
         false

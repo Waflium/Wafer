@@ -57,7 +57,7 @@ impl ExperimentalRedstoneWireEvaluator {
                     let neighbor_state = level.block_state(neighbor_pos);
                     let neighbor_orientation = orientation.with_front_preserve_up(neighbor_direction);
                     level.neighbor_changed_with_state(neighbor_state, neighbor_pos, self.wire_block, Some(neighbor_orientation), false);
-                    if neighbor_state.is_redstone_conductor() {
+                    if level.is_redstone_conductor_at(neighbor_pos, neighbor_state) {
                         for &direction in neighbor_orientation.get_directions() {
                             if direction != neighbor_direction.opposite() {
                                 level.neighbor_changed(neighbor_pos.relative(direction), self.wire_block, Some(neighbor_orientation.with_front_preserve_up(direction)));
@@ -125,15 +125,19 @@ impl ExperimentalRedstoneWireEvaluator {
         }
         for &direction_vertical in orientation.get_vertical_directions() {
             let offset_pos = pos.relative(direction_vertical);
-            let solid_block = level.block_state(offset_pos).is_redstone_conductor();
+            let offset_state = level.block_state(offset_pos);
+            let solid_block = level.is_redstone_conductor_at(offset_pos, offset_state);
             for &direction_horizontal in orientation.get_horizontal_directions() {
                 let neighbor = pos.relative(direction_horizontal);
                 if direction_vertical == Direction::Up && !solid_block {
                     let neighbor_wire = offset_pos.relative(direction_horizontal);
                     self.enqueue_neighbor_wire(level, neighbor_wire, new_power, orientation.with_front(direction_horizontal), allow_turning_off);
-                } else if direction_vertical == Direction::Down && !level.block_state(neighbor).is_redstone_conductor() {
-                    let neighbor_wire = offset_pos.relative(direction_horizontal);
-                    self.enqueue_neighbor_wire(level, neighbor_wire, new_power, orientation.with_front(direction_horizontal), allow_turning_off);
+                } else if direction_vertical == Direction::Down {
+                    let neighbor_state = level.block_state(neighbor);
+                    if !level.is_redstone_conductor_at(neighbor, neighbor_state) {
+                        let neighbor_wire = offset_pos.relative(direction_horizontal);
+                        self.enqueue_neighbor_wire(level, neighbor_wire, new_power, orientation.with_front(direction_horizontal), allow_turning_off);
+                    }
                 }
             }
         }

@@ -54,7 +54,7 @@ impl PhantomSpawner {
             let spawn_pos = player_pos.offset(0, up, 0).offset(east, 0, 0).offset(0, 0, south);
             let block_state = level.block_state(spawn_pos);
             let fluid_state = level.fluid_state(spawn_pos);
-            if !natural_spawner::is_valid_empty_spawn_block(block_state, fluid_state, &entity_types::PHANTOM) {
+            if !natural_spawner::is_valid_empty_spawn_block(level, spawn_pos, block_state, fluid_state,&entity_types::PHANTOM) {
                 continue;
             }
             let mut group_data = None;

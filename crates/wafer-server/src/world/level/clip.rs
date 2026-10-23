@@ -295,7 +295,16 @@ fn add_collisions_along_travel(
 }
 
 impl ServerLevel {
+    fn shulker_box_clip_shape(&mut self, state: BlockState, pos: BlockPos) -> Option<ClipShape> {
+        (state.has_dynamic_shape() && state.block().is_instance_of("ShulkerBoxBlock")).then(|| ClipShape::Voxel(crate::world::level::block::shulker_box_block::get_shape(self, state, pos), Vec3::ZERO))
+    }
+
     fn clip_collision_shape(&mut self, ctx: &ClipContext, state: BlockState, pos: BlockPos) -> ClipShape {
+        if !ctx.collision_context.is_ignored(pos)
+            && let Some(shape) = self.shulker_box_clip_shape(state, pos)
+        {
+            return shape;
+        }
         let (shape, offset) = ctx.collision_context.get_block_collision_shape(state, pos, || self.block_state(pos.above()).fluid_state());
         ClipShape::Voxel(shape, Vec3::new(offset[0], offset[1], offset[2]))
     }
@@ -316,7 +325,7 @@ impl ServerLevel {
     fn clip_block_shape(&mut self, ctx: &ClipContext, state: BlockState, pos: BlockPos) -> ClipShape {
         match ctx.block {
             ClipBlock::Collider => self.clip_collision_shape(ctx, state, pos),
-            ClipBlock::Outline => ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos)),
+            ClipBlock::Outline => self.shulker_box_clip_shape(state, pos).unwrap_or_else(|| ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos))),
             ClipBlock::Visual => self.get_visual_shape(ctx, state, pos),
             ClipBlock::FallDamageResetting => {
                 if state.is(&block_tags::FALL_DAMAGE_RESETTING) {

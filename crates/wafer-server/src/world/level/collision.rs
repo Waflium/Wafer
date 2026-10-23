@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use wafer_core::shapes::{BooleanOp, VoxelShape, join_is_not_empty};
+use wafer_core::shapes::{self, BooleanOp, VoxelShape, join_is_not_empty};
 use wafer_core::{AABB, Axis, BlockPos, ChunkPos, Vec3, mth};
 use wafer_data::blocks;
 
@@ -139,7 +139,16 @@ pub fn for_each_block_collision<'c>(
         let Some(chunk) = chunk else { continue };
         let pos = BlockPos::new(x, y, z);
         let state = chunk.block_state(pos);
-        if only_suffocating_blocks && !state.is_suffocating() {
+        let is_shulker_box = state.has_dynamic_shape() && state.block().is_instance_of("ShulkerBoxBlock");
+        let shulker_box = if is_shulker_box {
+            match chunk.block_entities.map.get(&pos).map(|entity| &entity.kind) {
+                Some(crate::world::level::block::entity::BlockEntityKind::ShulkerBox(shulker)) => Some(shulker),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if only_suffocating_blocks && !(if is_shulker_box { shulker_box.is_none_or(|shulker| shulker.is_closed()) } else { state.is_suffocating() }) {
             continue;
         }
         if face_type == 1 && !state.has_large_collision_shape() || face_type == 2 && !state.is_block(blocks::MOVING_PISTON) {
@@ -168,11 +177,14 @@ pub fn for_each_block_collision<'c>(
             (&*FULL_BLOCK, [0.0; 3])
         } else if let Some(shape) = context.get_liquid_block_collision_shape(state, pos, || chunk.block_state(pos.above()).fluid_state()) {
             (shape, [0.0; 3])
+        } else if is_shulker_box && !context.is_ignored(pos) {
+            (crate::world::level::block::shulker_box_block::shape_of(shulker_box, state), [0.0; 3])
         } else {
             context.get_collision_shape(state, pos)
         };
         let collider = Collider { shape, shape_offset, offset: [x as f64, y as f64, z as f64] };
-        let collides = if liquid_block || state.is_collision_shape_full_block() {
+        let full_block = if is_shulker_box { !shape.is_empty() && shapes::is_shape_full_block(shape) } else { state.is_collision_shape_full_block() };
+        let collides = if liquid_block || full_block {
             box_.intersects_bounds(x as f64, y as f64, z as f64, x as f64 + 1.0, y as f64 + 1.0, z as f64 + 1.0)
         } else if !shape.is_empty() {
             let moved = collider.moved();

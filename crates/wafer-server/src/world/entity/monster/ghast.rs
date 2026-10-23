@@ -264,10 +264,10 @@ impl ServerLevel {
         let careful = ServerLevel::ghast_move_control_mut(self.mob_mut(id).expect("a ghast")).careful;
         let path_no_collisions = match start_end {
             Some((start, end)) => {
-                let boxes: Vec<AABB> = state.get_collision_shape(pos).to_aabbs().iter().map(|b| b.move_to_block(pos)).collect();
+                let boxes: Vec<AABB> = self.get_state_collision_shape(state, pos).to_aabbs().iter().map(|b| b.move_to_block(pos)).collect();
                 !self.collided_with_shape_moving_from(id, start, end, &boxes)
             }
-            None => state.get_collision_shape(pos).is_empty(),
+            None => self.get_state_collision_shape(state, pos).is_empty(),
         };
         if !careful {
             return path_no_collisions;

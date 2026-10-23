@@ -123,7 +123,8 @@ impl RedstoneWireBlock {
     }
 
     fn get_missing_connections(&self, level: &mut dyn LevelReader, mut state: BlockState, pos: BlockPos) -> BlockState {
-        let can_connect_up = !level.block_state(pos.above()).is_redstone_conductor();
+        let above_state = level.block_state(pos.above());
+        let can_connect_up = !level.is_redstone_conductor_at(pos.above(), above_state);
         for direction in Direction::PLANE_HORIZONTAL {
             if !connected(state, direction) {
                 let side = self.get_connecting_side_up(level, pos, direction, can_connect_up);
@@ -134,7 +135,8 @@ impl RedstoneWireBlock {
     }
 
     fn get_connecting_side(&self, level: &mut dyn LevelReader, pos: BlockPos, direction: Direction) -> RedstoneSide {
-        let can_connect_up = !level.block_state(pos.above()).is_redstone_conductor();
+        let above_state = level.block_state(pos.above());
+        let can_connect_up = !level.is_redstone_conductor_at(pos.above(), above_state);
         self.get_connecting_side_up(level, pos, direction, can_connect_up)
     }
 
@@ -151,7 +153,7 @@ impl RedstoneWireBlock {
             }
         }
         if !should_connect_to(relative_state, level, relative_pos, Some(direction))
-            && (relative_state.is_redstone_conductor() || !should_connect_to_pos(level, relative_pos.below()))
+            && (level.is_redstone_conductor_at(relative_pos, relative_state) || !should_connect_to_pos(level, relative_pos.below()))
         {
             RedstoneSide::None
         } else {
@@ -182,7 +184,8 @@ impl RedstoneWireBlock {
         }
         for direction in Direction::PLANE_HORIZONTAL {
             let target = pos.relative(direction);
-            if level.block_state(target).is_redstone_conductor() {
+            let target_state = level.block_state(target);
+            if level.is_redstone_conductor_at(target, target_state) {
                 self.check_corner_change_at(level, target.above());
             } else {
                 self.check_corner_change_at(level, target.below());
@@ -194,7 +197,10 @@ impl RedstoneWireBlock {
         let orientation = experimental_redstone_utils::initial_orientation(level, None, Some(Direction::Up));
         for direction in Direction::PLANE_HORIZONTAL {
             let relative_pos = pos.relative(direction);
-            if connected(old_state, direction) != connected(new_state, direction) && level.block_state(relative_pos).is_redstone_conductor() {
+            if connected(old_state, direction) != connected(new_state, direction) && {
+                let relative_state = level.block_state(relative_pos);
+                level.is_redstone_conductor_at(relative_pos, relative_state)
+            } {
                 level.update_neighbors_at_except_from_facing(relative_pos, new_state.block(), Some(direction.opposite()), experimental_redstone_utils::with_front(orientation, direction));
             }
         }

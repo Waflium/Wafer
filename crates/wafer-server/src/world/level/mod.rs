@@ -43,7 +43,7 @@ pub mod world_gen_level;
 use std::borrow::Cow;
 
 use wafer_core::random::RandomSource;
-use wafer_core::shapes::VoxelShape;
+use wafer_core::shapes::{self, VoxelShape};
 use wafer_core::{BlockPos, Direction};
 use wafer_data::{Block, BlockState, Fluid, FluidState, SupportType};
 
@@ -68,6 +68,35 @@ pub trait BlockGetter {
 
     fn get_state_collision_shape(&mut self, state: BlockState, pos: BlockPos) -> Cow<'static, VoxelShape> {
         state.get_collision_shape(pos)
+    }
+
+    fn is_shulker_box_closed(&mut self, _pos: BlockPos) -> bool {
+        true
+    }
+
+    fn is_collision_shape_full_block_at(&mut self, pos: BlockPos, state: BlockState) -> bool {
+        if state.has_dynamic_shape() {
+            let shape = self.get_state_collision_shape(state, pos);
+            shapes::is_shape_full_block(&shape)
+        } else {
+            state.is_collision_shape_full_block()
+        }
+    }
+
+    fn is_redstone_conductor_at(&mut self, pos: BlockPos, state: BlockState) -> bool {
+        state.is_redstone_conductor() && (!state.has_dynamic_shape() || self.is_collision_shape_full_block_at(pos, state))
+    }
+
+    fn is_suffocating_at(&mut self, pos: BlockPos, state: BlockState) -> bool {
+        if !state.has_dynamic_shape() {
+            state.is_suffocating()
+        } else if state.block().is_instance_of("ShulkerBoxBlock") {
+            self.is_shulker_box_closed(pos)
+        } else if state.is_suffocating() {
+            self.is_collision_shape_full_block_at(pos, state)
+        } else {
+            false
+        }
     }
 
     fn is_face_sturdy_at(&mut self, pos: BlockPos, state: BlockState, direction: Direction, support: SupportType) -> bool {

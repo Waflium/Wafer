@@ -434,7 +434,7 @@ impl ServerLevel {
                         let block_pos = BlockPos::new(x, y, z);
                         let block_state = self.block_state(block_pos);
                         if !block_state.block().is_instance_of("LilyPadBlock")
-                            && join_is_not_empty(&block_state.get_collision_shape(block_pos).moved(x as f64, y as f64, z as f64), &boat_shape, BooleanOp::And)
+                            && join_is_not_empty(&self.get_state_collision_shape(block_state, block_pos).moved(x as f64, y as f64, z as f64), &boat_shape, BooleanOp::And)
                         {
                             friction += block_state.block().info().friction;
                             count += 1;

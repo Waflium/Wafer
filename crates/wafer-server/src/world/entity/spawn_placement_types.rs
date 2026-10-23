@@ -21,7 +21,10 @@ impl SpawnPlacementType {
             SpawnPlacementType::InWater => match entity_type {
                 Some(_) if level.is_within_world_border(block_pos) => {
                     let above = block_pos.above();
-                    level.fluid_state(block_pos).is(&fluid_tags::WATER) && !level.block_state(above).is_redstone_conductor()
+                    level.fluid_state(block_pos).is(&fluid_tags::WATER) && {
+                        let above_state = level.block_state(above);
+                        !level.is_redstone_conductor_at(above, above_state)
+                    }
                 }
                 _ => false,
             },
@@ -57,5 +60,5 @@ impl SpawnPlacementType {
 
 fn is_valid_empty_spawn_block(level: &mut (impl ServerLevelAccessor + ?Sized), block_pos: BlockPos, entity_type: &EntityType) -> bool {
     let block_state = level.block_state(block_pos);
-    natural_spawner::is_valid_empty_spawn_block(block_state, block_state.fluid_state(), entity_type)
+    natural_spawner::is_valid_empty_spawn_block(level, block_pos, block_state, block_state.fluid_state(), entity_type)
 }

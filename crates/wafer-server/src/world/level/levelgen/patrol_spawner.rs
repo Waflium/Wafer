@@ -72,7 +72,7 @@ impl PatrolSpawner {
 
     fn spawn_patrol_member(&mut self, level: &mut ServerLevel, pos: BlockPos, is_leader: bool) -> bool {
         let state = level.block_state(pos);
-        if !natural_spawner::is_valid_empty_spawn_block(state, state.fluid_state(), &entity_types::PILLAGER) {
+        if !natural_spawner::is_valid_empty_spawn_block(level, pos, state, state.fluid_state(),&entity_types::PILLAGER) {
             return false;
         }
         if !patrolling_monster::check_patrolling_monster_spawn_rules(&entity_types::PILLAGER, level, EntitySpawnReason::Patrol, pos) {

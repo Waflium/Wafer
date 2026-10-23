@@ -804,7 +804,8 @@ impl ServerLevel {
     }
 
     fn free_at(&mut self, pos: BlockPos) -> bool {
-        !self.block_state(pos).is_suffocating()
+        let state = self.block_state(pos);
+        !self.is_suffocating_at(pos, state)
     }
 
     pub fn stop_sleep_in_bed(&mut self, id: EntityId, forceful_wake_up: bool, update_level_list: bool) {

@@ -243,7 +243,7 @@ impl EndermanLeaveBlockGoal {
         target_state.is_air()
             && !below_state.is_air()
             && !below_state.is_block(blocks::BEDROCK)
-            && below_state.is_collision_shape_full_block()
+            && level.is_collision_shape_full_block_at(pos.below(), below_state)
             && block::of(carried).can_survive(carried, level, pos)
             && level.get_entities(Some(mob), &AABB::unit_cube_from_lower_corner(Vec3::at_lower_corner_of(pos))).is_empty()
     }

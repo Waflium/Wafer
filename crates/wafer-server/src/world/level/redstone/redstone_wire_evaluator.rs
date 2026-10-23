@@ -21,11 +21,13 @@ pub fn get_incoming_wire_signal(level: &mut ServerLevel, pos: BlockPos, get_wire
         let neighbor_state = level.block_state(neighbor_pos);
         wire_signal = wire_signal.max(get_wire_signal(neighbor_pos, neighbor_state));
         let above_pos = pos.above();
-        if neighbor_state.is_redstone_conductor() && !level.block_state(above_pos).is_redstone_conductor() {
+        let above_state = level.block_state(above_pos);
+        let neighbor_conductor = level.is_redstone_conductor_at(neighbor_pos, neighbor_state);
+        if neighbor_conductor && !level.is_redstone_conductor_at(above_pos, above_state) {
             let above_neighbor_pos = neighbor_pos.above();
             let above_neighbor_state = level.block_state(above_neighbor_pos);
             wire_signal = wire_signal.max(get_wire_signal(above_neighbor_pos, above_neighbor_state));
-        } else if !neighbor_state.is_redstone_conductor() {
+        } else if !neighbor_conductor {
             let below_neighbor_pos = neighbor_pos.below();
             let below_neighbor_state = level.block_state(below_neighbor_pos);
             wire_signal = wire_signal.max(get_wire_signal(below_neighbor_pos, below_neighbor_state));

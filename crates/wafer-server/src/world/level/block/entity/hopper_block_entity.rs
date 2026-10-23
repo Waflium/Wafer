@@ -173,7 +173,7 @@ impl ServerLevel {
             }
             return false;
         }
-        let is_blocked = hopper.is_grid_aligned() && above_state.is_collision_shape_full_block() && !above_state.is(&block_tags::DOES_NOT_BLOCK_HOPPERS);
+        let is_blocked = hopper.is_grid_aligned() && self.is_collision_shape_full_block_at(above, above_state) &&!above_state.is(&block_tags::DOES_NOT_BLOCK_HOPPERS);
         if !is_blocked {
             for item in self.get_items_at_and_above(hopper) {
                 if self.hopper_add_item_entity(this, item, true) {

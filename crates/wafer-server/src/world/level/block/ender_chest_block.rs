@@ -27,7 +27,8 @@ impl BlockBehaviour for EnderChestBlock {
         let BlockEntityKind::EnderChest(_) = entity.kind else { return InteractionResult::SUCCESS };
         let id = entity.id();
         let above = pos.above();
-        if level.block_state(above).is_redstone_conductor() {
+        let above_state = level.block_state(above);
+        if level.is_redstone_conductor_at(above, above_state) {
             return InteractionResult::SUCCESS;
         }
         level.player_mut(player).ender_chest_inventory.set_active_chest(Some((pos, id)));

@@ -98,7 +98,7 @@ impl DiodeBlock for ComparatorBlock {
         let mut target_state = level.block_state(target_pos);
         if target_state.has_analog_output_signal() {
             result_signal = super::of(target_state).get_analog_output_signal(target_state, level, target_pos, direction.opposite());
-        } else if result_signal < 15 && target_state.is_redstone_conductor() {
+        } else if result_signal < 15 && level.is_redstone_conductor_at(target_pos, target_state) {
             target_pos = target_pos.relative(direction);
             target_state = level.block_state(target_pos);
             let item_frame = level.get_item_frame_for_comparator(direction, target_pos);

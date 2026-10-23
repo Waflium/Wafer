@@ -2160,8 +2160,17 @@ impl BlockGetter for ServerLevel {
     fn get_state_collision_shape(&mut self, state: BlockState, pos: BlockPos) -> std::borrow::Cow<'static, wafer_core::shapes::VoxelShape> {
         if state.is_block(blocks::MOVING_PISTON) {
             std::borrow::Cow::Owned(crate::world::level::block::moving_piston_block::get_collision_shape(self, pos))
+        } else if state.has_dynamic_shape() && state.block().is_instance_of("ShulkerBoxBlock") {
+            std::borrow::Cow::Borrowed(crate::world::level::block::shulker_box_block::get_shape(self, state, pos))
         } else {
             state.get_collision_shape(pos)
+        }
+    }
+
+    fn is_shulker_box_closed(&mut self, pos: BlockPos) -> bool {
+        match self.get_block_entity(pos).map(|entity| &entity.kind) {
+            Some(crate::world::level::block::entity::BlockEntityKind::ShulkerBox(shulker)) => shulker.is_closed(),
+            _ => true,
         }
     }
 

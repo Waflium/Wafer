@@ -140,7 +140,7 @@ pub fn is_smokey_pos(level: &mut ServerLevel, pos: BlockPos) -> bool {
         if is_lit_campfire(block_state) {
             return true;
         }
-        let smoke_blocked = join_is_not_empty(&shape_virtual_post(), &block_state.get_collision_shape(pos_to_check), BooleanOp::And);
+        let smoke_blocked = join_is_not_empty(&shape_virtual_post(), &level.get_state_collision_shape(block_state, pos_to_check), BooleanOp::And);
         if smoke_blocked {
             let below_state = level.block_state(pos_to_check.below());
             return is_lit_campfire(below_state);

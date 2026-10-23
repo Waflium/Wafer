@@ -264,6 +264,8 @@ pub mod piston_structure_resolver;
 mod command_block_tests;
 #[cfg(test)]
 mod piston_tests;
+#[cfg(test)]
+mod shulker_box_tests;
 pub mod portal;
 pub mod state;
 mod pointed_dripstone_block;

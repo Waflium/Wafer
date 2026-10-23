@@ -68,7 +68,8 @@ pub fn is_chest_blocked_at(level: &mut ServerLevel, pos: BlockPos) -> bool {
 }
 
 fn is_blocked_chest_by_block(level: &mut ServerLevel, pos: BlockPos) -> bool {
-    level.block_state(pos.above()).is_redstone_conductor()
+    let above_state = level.block_state(pos.above());
+    level.is_redstone_conductor_at(pos.above(), above_state)
 }
 
 fn is_cat_sitting_on_chest(level: &ServerLevel, pos: BlockPos) -> bool {

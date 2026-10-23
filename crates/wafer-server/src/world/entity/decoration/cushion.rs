@@ -146,7 +146,10 @@ fn is_covered_by_suffocating_blocks(level: &mut ServerLevel, bounding_box: &AABB
     let deflated = bounding_box.next_deflated();
     let from = BlockPos::containing(deflated.min_x, deflated.min_y, deflated.min_z);
     let to = BlockPos::containing(deflated.max_x, deflated.max_y, deflated.max_z);
-    BlockPos::between_closed(from, to).all(|block_pos| level.block_state(block_pos).is_suffocating())
+    BlockPos::between_closed(from, to).all(|block_pos| {
+        let state = level.block_state(block_pos);
+        level.is_suffocating_at(block_pos, state)
+    })
 }
 
 fn cushion(level: &ServerLevel, id: EntityId) -> &Cushion {

@@ -2590,7 +2590,8 @@ impl ServerLevel {
         let mut closest = f64::MAX;
         for direction in [Direction::North, Direction::South, Direction::West, Direction::East, Direction::Up] {
             let neighbour = pos.relative(direction);
-            if !self.block_state(neighbour).is_collision_shape_full_block() {
+            let neighbour_state = self.block_state(neighbour);
+            if !self.is_collision_shape_full_block_at(neighbour, neighbour_state) {
                 let d = delta.get(direction.axis());
                 let oriented = if direction.axis_direction() == AxisDirection::Positive { 1.0 - d } else { d };
                 if oriented < closest {
@@ -3070,8 +3071,8 @@ impl ServerLevel {
                 for z in min.z..=max.z {
                     let pos = BlockPos::new(x, y, z);
                     let state = self.block_state(pos);
-                    if !state.is_air() && state.is_suffocating() {
-                        let shape = state.collision_voxel_shape();
+                    if !state.is_air() && self.is_suffocating_at(pos, state) {
+                        let shape = self.get_state_collision_shape(state, pos);
                         if join_is_not_empty(&shape.moved(pos.x as f64, pos.y as f64, pos.z as f64), &eye_shape, BooleanOp::And) {
                             return true;
                         }

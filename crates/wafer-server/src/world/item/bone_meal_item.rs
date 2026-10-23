@@ -69,7 +69,8 @@ pub fn grow_water_plant(item_stack: &mut ItemStack, level: &mut ServerLevel, pos
             let y = (level.random.next_int_bounded(3) - 1) * level.random.next_int_bounded(3) / 2;
             let z = level.random.next_int_bounded(3) - 1;
             test_pos = test_pos.offset(x, y, z);
-            if level.block_state(test_pos).is_collision_shape_full_block() {
+            let test_state = level.block_state(test_pos);
+            if level.is_collision_shape_full_block_at(test_pos, test_state) {
                 continue 'attempts;
             }
         }

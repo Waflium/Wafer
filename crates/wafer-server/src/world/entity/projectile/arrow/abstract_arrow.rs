@@ -295,7 +295,7 @@ impl ServerLevel {
         let block_pos = self.entity(id).block_position();
         let block_state = self.block_state(block_pos);
         if !block_state.is_air() && physics_enabled {
-            let shape = block_state.get_collision_shape(block_pos);
+            let shape = self.get_state_collision_shape(block_state, block_pos);
             if !shape.is_empty() {
                 let position = self.entity(id).position();
                 for aabb in shape.to_aabbs() {

@@ -38,11 +38,11 @@ impl DoorBlock {
         let right_direction = place_direction.clockwise();
         let right_state = level.block_state(pos.relative(right_direction));
         let right_above_state = level.block_state(above_pos.relative(right_direction));
-        let full = |state: BlockState| state.is_collision_shape_full_block();
-        let solid_block_balance = (if full(left_state) { -1 } else { 0 })
-            + (if full(left_above_state) { -1 } else { 0 })
-            + (if full(right_state) { 1 } else { 0 })
-            + (if full(right_above_state) { 1 } else { 0 });
+        let mut full = |pos: BlockPos, state: BlockState| level.is_collision_shape_full_block_at(pos, state);
+        let solid_block_balance = (if full(pos.relative(left_direction), left_state) { -1 } else { 0 })
+            + (if full(above_pos.relative(left_direction), left_above_state) { -1 } else { 0 })
+            + (if full(pos.relative(right_direction), right_state) { 1 } else { 0 })
+            + (if full(above_pos.relative(right_direction), right_above_state) { 1 } else { 0 });
         let door_left = is_door(left_state) && left_state.get(DOUBLE_BLOCK_HALF) == DoubleBlockHalf::Lower;
         let door_right = is_door(right_state) && right_state.get(DOUBLE_BLOCK_HALF) == DoubleBlockHalf::Lower;
         if (door_left && !door_right) || solid_block_balance > 0 {

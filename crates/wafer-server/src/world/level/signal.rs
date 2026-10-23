@@ -44,7 +44,7 @@ pub fn has_signal(level: &mut impl LevelReader, pos: BlockPos, direction: Direct
 pub fn get_signal(level: &mut impl LevelReader, pos: BlockPos, direction: Direction) -> i32 {
     let state = level.block_state(pos);
     let signal = block::of(state).get_signal(state, level, pos, direction);
-    if state.is_redstone_conductor() { signal.max(get_direct_signal_to(level, pos)) } else { signal }
+    if level.is_redstone_conductor_at(pos, state) { signal.max(get_direct_signal_to(level, pos)) } else { signal }
 }
 
 pub fn get_best_own_or_neighbour_signal(level: &mut impl LevelReader, pos: BlockPos) -> i32 {
@@ -113,7 +113,7 @@ impl ServerLevel {
             let mut state = self.block_state(relative);
             if state.is_block(blocks::COMPARATOR) {
                 self.neighbor_changed_with_state(state, relative, changed, None, false);
-            } else if state.is_redstone_conductor() {
+            } else if self.is_redstone_conductor_at(relative, state) {
                 relative = relative.relative(direction);
                 state = self.block_state(relative);
                 if state.is_block(blocks::COMPARATOR) {

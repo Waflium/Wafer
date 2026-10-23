@@ -25,7 +25,11 @@ impl GrassBlock {
     }
 
     fn stop_bonemeal_spread(&self, level: &mut ServerLevel, test_pos: BlockPos, block: Block) -> bool {
-        !level.block_state(test_pos.below()).is_block(block) || level.block_state(test_pos).is_collision_shape_full_block()
+        if !level.block_state(test_pos.below()).is_block(block) {
+            return true;
+        }
+        let test_state = level.block_state(test_pos);
+        level.is_collision_shape_full_block_at(test_pos, test_state)
     }
 }
 

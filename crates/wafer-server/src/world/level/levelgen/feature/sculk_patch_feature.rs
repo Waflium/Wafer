@@ -55,5 +55,9 @@ fn can_spread_from(level: &mut impl WorldGenLevel, origin: BlockPos) -> bool {
     if !start.is_air() && (!start.is_block(blocks::WATER) || !start.fluid_state().is_source()) {
         return false;
     }
-    Direction::VALUES.into_iter().any(|direction| level.get_block_state(origin.relative(direction)).is_collision_shape_full_block())
+    Direction::VALUES.into_iter().any(|direction| {
+        let pos = origin.relative(direction);
+        let state = level.get_block_state(pos);
+        level.is_collision_shape_full_block_at(pos, state)
+    })
 }

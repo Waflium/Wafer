@@ -497,7 +497,8 @@ impl ServerLevel {
     }
 
     pub fn is_redstone_conductor(&mut self, pos: BlockPos) -> bool {
-        self.block_state(pos).is_redstone_conductor()
+        let state = self.block_state(pos);
+        self.is_redstone_conductor_at(pos, state)
     }
 
     pub fn apply_natural_slowdown(&mut self, id: EntityId, movement: Vec3) -> Vec3 {

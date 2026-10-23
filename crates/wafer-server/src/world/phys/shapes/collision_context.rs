@@ -145,8 +145,12 @@ impl CollisionContext {
         (self.is_above(liquid_stable_shape, pos, true) && can_stand_on_fluid).then_some(liquid_stable_shape)
     }
 
+    pub fn is_ignored(&self, pos: BlockPos) -> bool {
+        Some(pos) == self.ignore_below || Some(pos) == self.slope_ignore
+    }
+
     pub fn get_collision_shape(&self, state: BlockState, pos: BlockPos) -> (&'static VoxelShape, [f64; 3]) {
-        if Some(pos) == self.ignore_below || Some(pos) == self.slope_ignore { (&EMPTY, [0.0; 3]) } else { self.get_state_collision_shape(state, pos) }
+        if self.is_ignored(pos) { (&EMPTY, [0.0; 3]) } else { self.get_state_collision_shape(state, pos) }
     }
 
     pub fn get_block_collision_shape(&self, state: BlockState, pos: BlockPos, fluid_above: impl FnOnce() -> FluidState) -> (&'static VoxelShape, [f64; 3]) {
