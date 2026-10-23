@@ -5,6 +5,7 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::level_based_value::LevelBasedValue;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub struct LootItemRandomChanceWithEnchantedBonusCondition {
     unenchanted_chance: f32,
@@ -32,5 +33,11 @@ impl LootItemRandomChanceWithEnchantedBonusCondition {
         };
         let chance = if enchantment_level > 0 { self.enchanted_chance.calculate(enchantment_level) } else { self.unenchanted_chance };
         context.random().next_float() < chance
+    }
+}
+
+impl LootItemRandomChanceWithEnchantedBonusCondition {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::AttackingEntity]
     }
 }

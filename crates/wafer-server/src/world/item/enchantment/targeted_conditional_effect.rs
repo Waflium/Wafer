@@ -4,6 +4,8 @@ use crate::core::holder::Holder;
 use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EnchantmentTarget {
@@ -50,5 +52,11 @@ impl<T> TargetedConditionalEffect<T> {
 
     pub fn matches(&self, context: &mut LootContext) -> bool {
         self.requirements.as_ref().is_none_or(|requirements| requirements.value().test(context))
+    }
+}
+
+impl<T> Validatable for TargetedConditionalEffect<T> {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate_optional_holder(context, "requirements", self.requirements.as_ref());
     }
 }

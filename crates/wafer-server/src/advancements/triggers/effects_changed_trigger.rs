@@ -9,6 +9,8 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct EffectsChangedTrigger(pub CriterionTrigger);
@@ -45,5 +47,12 @@ impl TriggerInstance {
             None => true,
             Some(predicate) => source.is_some_and(|source| simple_criterion_trigger::matches_entity(level, player, Some(predicate), source)),
         }
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "source", self.source.as_ref());
     }
 }

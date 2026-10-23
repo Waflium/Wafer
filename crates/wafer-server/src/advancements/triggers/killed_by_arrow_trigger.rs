@@ -11,6 +11,8 @@ use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct KilledByArrowTrigger(pub CriterionTrigger);
@@ -67,5 +69,12 @@ impl TriggerInstance {
             }
         }
         self.unique_entity_types.matches(unique_entity_types)
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_holder_list(validator.entity_context(), "victims", &self.victims);
     }
 }

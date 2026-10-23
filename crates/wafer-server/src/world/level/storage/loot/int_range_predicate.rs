@@ -4,6 +4,8 @@ use super::loot_context::LootContext;
 use super::providers::number::ints::ContextIntProvider;
 use crate::core::holder::Holder;
 use crate::util::codec::{self, DataResult};
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub enum IntRangePredicate {
     Point(Holder<ContextIntProvider>),
@@ -41,6 +43,18 @@ impl IntRangePredicate {
                 let input = input.get_int(context);
                 self.test(context, input)
             }
+        }
+    }
+}
+
+impl Validatable for IntRangePredicate {
+    fn validate(&self, context: &ValidationContext) {
+        match self {
+            IntRangePredicate::Line { min, max } => {
+                validatable::validate_optional_holder(context, "min", min.as_ref());
+                validatable::validate_optional_holder(context, "max", max.as_ref());
+            }
+            IntRangePredicate::Point(value) => validatable::validate_holder_in(context, value),
         }
     }
 }

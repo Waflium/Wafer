@@ -10,6 +10,8 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct TargetBlockTrigger(pub CriterionTrigger);
@@ -43,5 +45,12 @@ impl TriggerInstance {
             return false;
         }
         simple_criterion_trigger::matches_entity(level, player, self.projectile.as_ref(), projectile)
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "projectile", self.projectile.as_ref());
     }
 }

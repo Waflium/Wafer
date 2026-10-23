@@ -10,6 +10,8 @@ use crate::util::codec::{self, DataResult};
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct FishingRodHookedTrigger(pub CriterionTrigger);
@@ -62,5 +64,12 @@ impl TriggerInstance {
             }
         }
         true
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "entity", self.entity.as_ref());
     }
 }

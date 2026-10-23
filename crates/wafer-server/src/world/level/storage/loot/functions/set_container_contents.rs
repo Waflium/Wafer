@@ -8,6 +8,8 @@ use crate::world::level::storage::loot::entries::loot_pool_entries;
 use crate::world::level::storage::loot::entries::loot_pool_entry_container::LootPoolEntryContainer;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::loot_table;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct SetContainerContents {
     component: ContainerComponentManipulator,
@@ -36,5 +38,11 @@ impl SetContainerContents {
         }
         self.component.set_contents(&mut item_stack, contents);
         item_stack
+    }
+}
+
+impl SetContainerContents {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_list(context, "entries", &self.entries);
     }
 }

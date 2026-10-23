@@ -13,6 +13,8 @@ use super::providers::number::ints::ContextIntProvider;
 use crate::core::holder::Holder;
 use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
+use super::validatable::{self, Validatable};
+use super::validation_context::ValidationContext;
 
 pub struct LootPool {
     entries: Vec<LootPoolEntryContainer>,
@@ -71,5 +73,15 @@ impl LootPool {
                 self.add_random_item(&mut decorated_consumer, context);
             }
         }
+    }
+}
+
+impl Validatable for LootPool {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate_optional_holder(context, "condition", self.condition.as_ref());
+        validatable::validate_optional_holder(context, "modifier", self.modifier.as_ref());
+        validatable::validate_list(context, "entries", &self.entries);
+        validatable::validate_holder(context, "rolls", &self.rolls);
+        validatable::validate_holder(context, "bonus_rolls", &self.bonus_rolls);
     }
 }

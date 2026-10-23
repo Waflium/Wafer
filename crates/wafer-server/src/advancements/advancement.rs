@@ -9,6 +9,8 @@ use super::triggers::criterion::Criterion;
 use crate::network::chat::component_utils;
 use crate::network::chat::{Component, HoverEvent, Style};
 use crate::util::codec::{self, DataResult};
+use crate::util::problem_reporter::{PathElement, ProblemReporter};
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
 
 pub struct Advancement {
     pub parent: Option<String>,
@@ -21,6 +23,13 @@ pub struct Advancement {
 }
 
 impl Advancement {
+    pub fn validate(&self, reporter: &ProblemReporter) {
+        for (name, criterion) in &self.criteria {
+            let mut validator = ValidationContextSource::new(reporter.for_child(PathElement::RootField(name.clone())));
+            criterion.trigger_instance.validate(&mut validator);
+        }
+    }
+
     pub fn decode(tag: &Nbt) -> DataResult<Advancement> {
         codec::map(tag)?;
         let parent = codec::decode_optional(tag, "parent", codec::identifier)?;
@@ -37,11 +46,11 @@ impl Advancement {
         let sends_telemetry_event = codec::decode_or(tag, "sends_telemetry_event", false, codec::bool_value)?;
         let name = display.as_ref().map(Advancement::decorate_name);
         let advancement = Advancement { parent, display, rewards, criteria, requirements, sends_telemetry_event, name };
-        advancement.validate()?;
+        advancement.validate_codec()?;
         Ok(advancement)
     }
 
-    fn validate(&self) -> DataResult<()> {
+    fn validate_codec(&self) -> DataResult<()> {
         let is_root = self.parent.is_none();
         let is_visible = self.display.is_some();
         let has_background = self.display.as_ref().is_some_and(|display| display.background.is_some());

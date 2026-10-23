@@ -6,6 +6,9 @@ use crate::world::item::ItemStack;
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::floats::ContextFloatProvider;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub const NO_LIMIT: i32 = 0;
 
@@ -40,5 +43,15 @@ impl EnchantedCountIncreaseFunction {
             item_stack.limit_size(self.limit);
         }
         item_stack
+    }
+}
+
+impl EnchantedCountIncreaseFunction {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::AttackingEntity]
+    }
+
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "count", &self.count);
     }
 }

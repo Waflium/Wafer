@@ -8,6 +8,8 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct LightningStrikeTrigger(pub CriterionTrigger);
@@ -44,5 +46,13 @@ impl TriggerInstance {
             None => true,
             Some(bystander) => entities_around.iter().any(|&entity| simple_criterion_trigger::matches_entity(level, player, Some(bystander), entity)),
         }
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "lightning", self.lightning.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "bystander", self.bystander.as_ref());
     }
 }

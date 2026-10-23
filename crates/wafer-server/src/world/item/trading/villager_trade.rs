@@ -15,6 +15,9 @@ use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::providers::number::floats::{self, ContextFloatProvider};
 use crate::world::level::storage::loot::providers::number::ints::{self, ContextIntProvider};
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
+use crate::world::level::storage::loot::parameters::loot_context_param_sets;
 
 pub struct VillagerTrade {
     wants: TradeCost,
@@ -33,7 +36,7 @@ pub const REGISTRY: &str = "minecraft:villager_trade";
 impl VillagerTrade {
     pub fn decode(tag: &Nbt) -> DataResult<VillagerTrade> {
         codec::map(tag)?;
-        Ok(VillagerTrade {
+        let trade = VillagerTrade {
             wants: codec::decode_field(tag, "wants", TradeCost::decode)?,
             additional_wants: codec::decode_optional(tag, "additional_wants", TradeCost::decode)?,
             gives: codec::decode_field(tag, "gives", |t| Ok(ItemStackTemplate::from_nbt(t)))?,
@@ -43,7 +46,9 @@ impl VillagerTrade {
             merchant_predicate: codec::decode_optional(tag, "merchant_predicate", LootItemCondition::decode_holder)?,
             given_item_modifier: codec::decode_optional(tag, "given_item_modifier", LootItemFunction::decode_holder)?,
             double_trade_price_enchantments: codec::decode_optional(tag, "double_trade_price_enchantments", |t| HolderSet::decode("minecraft:enchantment", t))?,
-        })
+        };
+        validatable::validator_for_context(&loot_context_param_sets::VILLAGER_TRADE, &trade)?;
+        Ok(trade)
     }
 
     pub fn by_id(id: i32) -> &'static VillagerTrade {
@@ -99,5 +104,17 @@ impl VillagerTrade {
             self.xp.value().get_int(loot_context).max(0),
             self.reputation_discount.value().get_float(loot_context).max(0.0),
         ))
+    }
+}
+
+impl Validatable for VillagerTrade {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate(context, "wants", &self.wants);
+        validatable::validate_optional(context, "additional_wants", self.additional_wants.as_ref());
+        validatable::validate_holder(context, "max_uses", &self.max_uses);
+        validatable::validate_holder(context, "reputation_discount", &self.reputation_discount);
+        validatable::validate_holder(context, "xp", &self.xp);
+        validatable::validate_optional_holder(context, "merchant_predicate", self.merchant_predicate.as_ref());
+        validatable::validate_optional_holder(context, "given_item_modifier", self.given_item_modifier.as_ref());
     }
 }

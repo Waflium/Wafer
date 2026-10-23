@@ -24,6 +24,9 @@ use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
 use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::validatable::Validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub enum LootItemCondition {
     Inverted(InvertedLootItemCondition),
@@ -120,6 +123,42 @@ impl LootItemCondition {
             LootItemCondition::FloatValueCheck(c) => c.test(context),
             LootItemCondition::EnchantmentActiveCheck(c) => c.test(context),
             LootItemCondition::EnvironmentAttributeCheck(c) => c.test(context),
+        }
+    }
+}
+
+impl LootItemCondition {
+    fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        match self {
+            LootItemCondition::TableBonus(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::DamageSourceProperties(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::EnchantmentActiveCheck(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::EntityScores(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::EnvironmentAttributeCheck(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::SurvivesExplosion(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::LocationCheck(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::EntityProperties(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::KilledByPlayer(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::RandomChanceWithEnchantedBonus(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::MatchBlock(condition) => condition.get_referenced_context_params(),
+            LootItemCondition::MatchTool(condition) => condition.get_referenced_context_params(),
+            _ => Vec::new(),
+        }
+    }
+}
+
+impl Validatable for LootItemCondition {
+    fn validate(&self, context: &ValidationContext) {
+        context.validate_context_usage(&self.get_referenced_context_params());
+        match self {
+            LootItemCondition::AllOf(condition) => condition.validate(context),
+            LootItemCondition::AnyOf(condition) => condition.validate(context),
+            LootItemCondition::EntityScores(condition) => condition.validate(context),
+            LootItemCondition::FloatValueCheck(condition) => condition.validate(context),
+            LootItemCondition::IntValueCheck(condition) => condition.validate(context),
+            LootItemCondition::Inverted(condition) => condition.validate(context),
+            LootItemCondition::TimeCheck(condition) => condition.validate(context),
+            _ => {}
         }
     }
 }

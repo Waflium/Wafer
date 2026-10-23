@@ -8,6 +8,8 @@ use crate::world::item::component::{self as dc, codec as component_codec};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::floats::ContextFloatProvider;
 use crate::world::level::storage::loot::providers::number::ints::{self, ContextIntProvider};
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct SetCustomModelDataFunction {
     floats: Option<StandAlone<Holder<ContextFloatProvider>>>,
@@ -81,5 +83,16 @@ impl SetCustomModelDataFunction {
         let value = dc::CUSTOM_MODEL_DATA.decode(&value).unwrap_or(value);
         item_stack.set(dc::CUSTOM_MODEL_DATA, Some(value));
         item_stack
+    }
+}
+
+impl SetCustomModelDataFunction {
+    pub fn validate(&self, context: &ValidationContext) {
+        if let Some(floats) = &self.floats {
+            validatable::validate_holder_list(context, "floats", &floats.value);
+        }
+        if let Some(colors) = &self.colors {
+            validatable::validate_holder_list(context, "colors", &colors.value);
+        }
     }
 }

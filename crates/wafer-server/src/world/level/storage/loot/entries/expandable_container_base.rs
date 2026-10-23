@@ -18,7 +18,7 @@ pub enum ExpandableEntry {
 pub struct ExpandableContainerBase {
     base: UniformContainerBase,
     expand: bool,
-    entry: ExpandableEntry,
+    pub(super) entry: ExpandableEntry,
 }
 
 impl ExpandableContainerBase {

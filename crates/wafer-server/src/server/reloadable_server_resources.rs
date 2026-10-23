@@ -22,8 +22,8 @@ impl ReloadableServerResources {
                 .spawn_scoped(scope, || {
                     let loaded = reloadable_server_registries::load(resource_manager, postponed_tags, Some(reloadable_server_registries::get()));
                     let advancements = match &loaded {
-                        Ok(LoadResult::Loaded { registries, .. }) => Some(ServerAdvancementManager::new(&registries.advancements)),
-                        Ok(LoadResult::Unchanged) => Some(ServerAdvancementManager::new(&reloadable_server_registries::get().advancements)),
+                        Ok(LoadResult::Loaded { registries, .. }) => Some(wafer_data::with_pending_tags(postponed_tags, || reloadable_server_registries::with_validating(registries, || ServerAdvancementManager::new(&registries.advancements)))),
+                        Ok(LoadResult::Unchanged) => Some(wafer_data::with_pending_tags(postponed_tags, || ServerAdvancementManager::new(&reloadable_server_registries::get().advancements))),
                         Err(_) => None,
                     };
                     (loaded, advancements)
@@ -35,7 +35,7 @@ impl ReloadableServerResources {
         let (registries, recipe_manager) = match loaded {
             Ok(LoadResult::Unchanged) => (None, None),
             Ok(LoadResult::Loaded { registries, recipes }) => (Some(registries), Some(RecipeManager::new(recipes))),
-            Err(_) => return Err("net.minecraft.ReportedException: Registry Loading".to_string()),
+            Err(exception) => return Err(exception),
         };
         let function_library = ServerFunctionLibrary::reload(resource_manager, function_compilation_permission);
         Ok(ReloadableServerResources { postponed_tags, registries, recipe_manager, advancements, function_library })

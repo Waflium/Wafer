@@ -4,6 +4,7 @@ use crate::util::codec::{self, DataResult};
 use crate::world::attribute::Value;
 use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub struct EnvironmentAttributeCheck {
     attribute: &'static EnvironmentAttributeInfo,
@@ -20,5 +21,11 @@ impl EnvironmentAttributeCheck {
 
     pub fn test(&self, context: &mut LootContext) -> bool {
         self.value == context.environment_attribute_value(self.attribute)
+    }
+}
+
+impl EnvironmentAttributeCheck {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        if self.attribute.is_positional { vec![LootContextParam::Origin] } else { Vec::new() }
     }
 }

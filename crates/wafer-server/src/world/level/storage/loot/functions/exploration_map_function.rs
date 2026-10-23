@@ -11,6 +11,7 @@ use crate::world::level::saveddata::maps::map_decoration_type::MapDecorationType
 use crate::world::level::saveddata::maps::map_decoration_types::WOODLAND_MANSION;
 use crate::world::level::saveddata::maps::map_item_saved_data::MapItemSavedData;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub const DEFAULT_DECORATION: MapDecorationTypeHolder = WOODLAND_MANSION;
 pub const DEFAULT_ZOOM: i8 = 2;
@@ -70,5 +71,11 @@ fn claim_structure_at(level: &mut ServerLevel, destination: &[StructureHolder], 
     {
         start.add_reference();
         level.structure_check.increment_reference(start.chunk_pos, start.structure);
+    }
+}
+
+impl ExplorationMapFunction {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::Origin]
     }
 }

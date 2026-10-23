@@ -4,6 +4,8 @@ use crate::util::codec::{self, DataResult};
 use crate::world::clock::ServerClockManager;
 use crate::world::level::storage::loot::int_range_predicate::IntRangePredicate;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct TimeCheck {
     clock: usize,
@@ -26,5 +28,11 @@ impl TimeCheck {
             time = time.wrapping_rem(period);
         }
         self.value.test(context, time as i32)
+    }
+}
+
+impl TimeCheck {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate(context, "value", &self.value);
     }
 }

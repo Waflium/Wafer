@@ -6,6 +6,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::enchantment_helper::get_item_enchantment_level;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 enum Formula {
     BinomialWithBonusCount { extra_rounds: i32, probability: f32 },
@@ -70,5 +71,11 @@ impl ApplyBonusCount {
             item_stack.count = self.formula.calculate_new_count(&mut context.random(),item_stack.count, level);
         }
         item_stack
+    }
+}
+
+impl ApplyBonusCount {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::Tool]
     }
 }

@@ -8,3 +8,9 @@ impl LootItemKilledByPlayerCondition {
         context.has_parameter(LootContextParam::LastDamagePlayer)
     }
 }
+
+impl LootItemKilledByPlayerCondition {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::LastDamagePlayer]
+    }
+}

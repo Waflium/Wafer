@@ -6,6 +6,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::loot_context_arg::{ArgCodecBuilder, LootContextArg};
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub const ENTITY_OR_BLOCK: ArgCodecBuilder = ArgCodecBuilder { any_entity: true, any_block_entity: true, any_item_stack: false, container: false };
 
@@ -37,5 +38,11 @@ impl CopyNameFunction {
             LootContextArg::Tool | LootContextArg::Container => {}
         }
         item_stack
+    }
+}
+
+impl CopyNameFunction {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![self.source.context_param()]
     }
 }

@@ -6,6 +6,7 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub struct SetLoreFunction {
     lore: Vec<Nbt>,
@@ -28,5 +29,11 @@ impl SetLoreFunction {
         let lines = self.mode.apply(&old_lore, &self.lore, 256);
         item_stack.set(dc::LORE, Some(Nbt::List(lines)));
         item_stack
+    }
+}
+
+impl SetLoreFunction {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        self.resolution_context.map(|target| vec![target.context_param()]).unwrap_or_default()
     }
 }

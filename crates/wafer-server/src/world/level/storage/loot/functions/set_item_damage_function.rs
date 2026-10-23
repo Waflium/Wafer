@@ -6,6 +6,8 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::floats::ContextFloatProvider;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct SetItemDamageFunction {
     damage: Holder<ContextFloatProvider>,
@@ -30,5 +32,11 @@ impl SetItemDamageFunction {
             warn!("Couldn't set damage of loot item {} {}", item_stack.count, item_stack.item.name());
         }
         item_stack
+    }
+}
+
+impl SetItemDamageFunction {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "damage", &self.damage);
     }
 }

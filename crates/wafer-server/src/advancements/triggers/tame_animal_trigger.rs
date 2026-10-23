@@ -8,6 +8,8 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct TameAnimalTrigger(pub CriterionTrigger);
@@ -29,5 +31,12 @@ pub struct TriggerInstance {
 impl TriggerInstance {
     pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
         Ok(TriggerInstance { player: simple_criterion_trigger::decode_player(tag)?, entity: simple_criterion_trigger::decode_condition(tag, "entity")? })
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "entity", self.entity.as_ref());
     }
 }

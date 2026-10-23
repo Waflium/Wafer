@@ -8,6 +8,8 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct BredAnimalsTrigger(pub CriterionTrigger);
@@ -49,5 +51,14 @@ impl TriggerInstance {
             simple_criterion_trigger::matches_entity(level, player, predicate.as_ref(), entity)
         };
         matches(level, &self.parent, parent) && matches(level, &self.partner, partner) || matches(level, &self.parent, partner) && matches(level, &self.partner, parent)
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "parent", self.parent.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "partner", self.partner.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "child", self.child.as_ref());
     }
 }

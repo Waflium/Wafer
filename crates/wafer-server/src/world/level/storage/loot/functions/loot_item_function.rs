@@ -47,6 +47,9 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub enum LootItemFunctionType {
     SetCount(SetItemCountFunction),
@@ -250,5 +253,53 @@ pub fn decorate<'a>(
             output(context, item_stack);
         }
         None => output(context, item_stack),
+    }
+}
+
+impl LootItemFunctionType {
+    fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        match self {
+            LootItemFunctionType::ApplyBonus(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::CopyState(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::CopyComponents(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::CopyName(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::EnchantedCountIncrease(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::EnchantRandomly(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::EnchantWithLevels(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::ExplorationMap(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::FillPlayerHead(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::SetLore(function) => function.get_referenced_context_params(),
+            LootItemFunctionType::SetName(function) => function.get_referenced_context_params(),
+            _ => Vec::new(),
+        }
+    }
+
+    fn validate(&self, context: &ValidationContext) {
+        match self {
+            LootItemFunctionType::CopyCustomData(function) => function.validate(context),
+            LootItemFunctionType::EnchantedCountIncrease(function) => function.validate(context),
+            LootItemFunctionType::EnchantWithLevels(function) => function.validate(context),
+            LootItemFunctionType::Filtered(function) => function.validate(context),
+            LootItemFunctionType::LimitCount(function) => function.validate(context),
+            LootItemFunctionType::ModifyContents(function) => function.validate(context),
+            LootItemFunctionType::Sequence(function) => function.validate(context),
+            LootItemFunctionType::SetAttributes(function) => function.validate(context),
+            LootItemFunctionType::SetContents(function) => function.validate(context),
+            LootItemFunctionType::SetCustomModelData(function) => function.validate(context),
+            LootItemFunctionType::SetEnchantments(function) => function.validate(context),
+            LootItemFunctionType::SetCount(function) => function.validate(context),
+            LootItemFunctionType::SetDamage(function) => function.validate(context),
+            LootItemFunctionType::SetOminousBottleAmplifier(function) => function.validate(context),
+            LootItemFunctionType::SetStewEffect(function) => function.validate(context),
+            _ => {}
+        }
+    }
+}
+
+impl Validatable for LootItemFunction {
+    fn validate(&self, context: &ValidationContext) {
+        context.validate_context_usage(&self.function.get_referenced_context_params());
+        validatable::validate_optional_holder(context, "condition", self.condition.as_ref());
+        self.function.validate(context);
     }
 }

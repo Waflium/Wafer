@@ -5,6 +5,7 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub struct FillPlayerHead {
     entity_target: EntityTarget,
@@ -38,5 +39,11 @@ impl FillPlayerHead {
         let value = dc::PROFILE.decode(&value).unwrap_or(value);
         item_stack.set(dc::PROFILE, Some(value));
         item_stack
+    }
+}
+
+impl FillPlayerHead {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![self.entity_target.context_param()]
     }
 }

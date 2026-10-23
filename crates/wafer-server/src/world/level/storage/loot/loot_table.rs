@@ -12,14 +12,18 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
 use crate::world::container::ContainerRef;
 use crate::world::item::ItemStack;
+use super::parameters::loot_context_param_sets::{self, ContextKeySet};
+use super::validatable::{self, Validatable};
+use super::validation_context::ValidationContext;
 
 pub struct LootTable {
+    pub param_set: &'static ContextKeySet,
     random_sequence: Option<String>,
     pools: Vec<LootPool>,
     modifier: Option<Holder<LootItemFunction>>,
 }
 
-pub static EMPTY: LootTable = LootTable { random_sequence: None, pools: Vec::new(), modifier: None };
+pub static EMPTY: LootTable = LootTable { param_set: &loot_context_param_sets::EMPTY, random_sequence: None, pools: Vec::new(), modifier: None };
 
 impl RegistryElement for LootTable {
     const REGISTRY: &'static str = "minecraft:loot_table";
@@ -52,6 +56,7 @@ impl LootTable {
     pub fn decode(tag: &Nbt) -> DataResult<LootTable> {
         codec::map(tag)?;
         Ok(LootTable {
+            param_set: codec::optional_field(tag, "type").and_then(|t| codec::identifier(t).ok()).and_then(|name| loot_context_param_sets::by_name(&name)).unwrap_or(&loot_context_param_sets::ALL_PARAMS),
             random_sequence: codec::decode_optional(tag, "random_sequence", codec::identifier)?,
             pools: codec::decode_or(tag, "pools", Vec::new(), |t| codec::list_of(t, LootPool::decode))?,
             modifier: codec::decode_optional(tag, "modifier", LootItemFunction::decode_holder)?,
@@ -367,5 +372,12 @@ mod tests {
         let counts: Vec<i32> = (0..200).map(|_| entity_drops(&mut level, id, Some(killer)).last().unwrap().count).collect();
         assert!(counts.iter().all(|c| (1..=4).contains(c)));
         assert!(counts.iter().any(|&c| c > 1));
+    }
+}
+
+impl Validatable for LootTable {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate_list(context, "pools", &self.pools);
+        validatable::validate_optional_holder(context, "modifier", self.modifier.as_ref());
     }
 }

@@ -5,6 +5,7 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::enchantment_helper::get_item_enchantment_level;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub struct BonusLevelTableCondition {
     enchantment: String,
@@ -24,5 +25,11 @@ impl BonusLevelTableCondition {
         let level = context.params.tool.map_or(0, |tool| get_item_enchantment_level(&self.enchantment, tool));
         let chance = self.values[(level.max(0) as usize).min(self.values.len() - 1)];
         context.random().next_float() < chance
+    }
+}
+
+impl BonusLevelTableCondition {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::Tool]
     }
 }

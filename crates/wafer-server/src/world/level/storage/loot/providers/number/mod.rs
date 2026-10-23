@@ -8,6 +8,8 @@ use crate::core::holder::{Holder, RegistryElement};
 use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 #[derive(Clone, Debug)]
 pub struct ArithmeticException(pub String);
@@ -76,4 +78,11 @@ pub fn get_random<'v, V>(distribution: &'v [(V, i32)], context: &mut LootContext
         }
     }
     unreachable!("selection within the total weight")
+}
+
+impl<V: RegistryElement + Validatable> Validatable for Case<V> {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "condition", &self.condition);
+        validatable::validate_holder(context, "value", &self.value);
+    }
 }

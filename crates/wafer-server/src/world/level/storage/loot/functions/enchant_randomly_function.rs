@@ -62,3 +62,9 @@ impl EnchantRandomlyFunction {
         item_stack
     }
 }
+
+impl EnchantRandomlyFunction {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        if self.include_additional_cost_component { vec![LootContextParam::AdditionalCostComponentAllowed] } else { Vec::new() }
+    }
+}

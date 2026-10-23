@@ -9,6 +9,8 @@ use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::enchantment_helper::update_enchantments;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::ints::ContextIntProvider;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct SetEnchantmentsFunction {
     enchantments: Vec<(String, Holder<ContextIntProvider>)>,
@@ -41,5 +43,13 @@ impl SetEnchantmentsFunction {
             }
         });
         item_stack
+    }
+}
+
+impl SetEnchantmentsFunction {
+    pub fn validate(&self, context: &ValidationContext) {
+        for (enchantment, holder) in &self.enchantments {
+            validatable::validate_holder_in(&context.for_map_field("enchantments", enchantment), holder);
+        }
     }
 }

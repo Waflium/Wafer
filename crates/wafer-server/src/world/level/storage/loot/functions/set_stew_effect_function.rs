@@ -8,6 +8,8 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::ints::ContextIntProvider;
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 struct EffectEntry {
     effect: MobEffect,
@@ -57,5 +59,17 @@ impl SetStewEffectFunction {
         let value = dc::SUSPICIOUS_STEW_EFFECTS.decode(&value).unwrap_or(value);
         item_stack.set(dc::SUSPICIOUS_STEW_EFFECTS, Some(value));
         item_stack
+    }
+}
+
+impl SetStewEffectFunction {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_list(context, "effects", &self.effects);
+    }
+}
+
+impl Validatable for EffectEntry {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "duration", &self.duration);
     }
 }

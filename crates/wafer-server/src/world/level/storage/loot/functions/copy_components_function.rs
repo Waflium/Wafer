@@ -7,6 +7,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::component::DataComponentType;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::loot_context_arg::{ArgCodecBuilder, LootContextArg};
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 const GETTER: ArgCodecBuilder = ArgCodecBuilder { any_entity: true, any_block_entity: true, any_item_stack: true, container: false };
 
@@ -76,5 +77,11 @@ impl CopyComponentsFunction {
             LootContextArg::Container => {}
         }
         item_stack
+    }
+}
+
+impl CopyComponentsFunction {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![self.source.context_param()]
     }
 }

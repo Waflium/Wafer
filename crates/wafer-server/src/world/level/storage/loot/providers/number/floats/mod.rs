@@ -14,6 +14,9 @@ use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
 use crate::world::item::enchantment::level_based_value::LevelBasedValue;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub enum ContextFloatProvider {
     Absolute(Holder<ContextFloatProvider>),
@@ -245,5 +248,59 @@ impl ContextFloatProvider {
             }
             ContextFloatProvider::WeightedListValue(distribution) => get_random(distribution, context).value().get_float_unsafe(context)?,
         })
+    }
+}
+
+impl Validatable for ContextFloatProvider {
+    fn validate(&self, context: &ValidationContext) {
+        match self {
+            ContextFloatProvider::Absolute(input)
+            | ContextFloatProvider::Ceiling(input)
+            | ContextFloatProvider::Cosine(input)
+            | ContextFloatProvider::Floor(input)
+            | ContextFloatProvider::Negate(input)
+            | ContextFloatProvider::Round(input)
+            | ContextFloatProvider::Sine(input)
+            | ContextFloatProvider::SquareRoot(input)
+            | ContextFloatProvider::Truncate(input) => validatable::validate_holder(context, "input", input),
+            ContextFloatProvider::FromInt(input) => validatable::validate_holder(context, "input", input),
+            ContextFloatProvider::Average(inputs)
+            | ContextFloatProvider::Length(inputs)
+            | ContextFloatProvider::Maximum(inputs)
+            | ContextFloatProvider::Minimum(inputs)
+            | ContextFloatProvider::Product(inputs)
+            | ContextFloatProvider::Sum(inputs) => validatable::validate_holder_set_with_min_size(context, "inputs", inputs, 1),
+            ContextFloatProvider::ConditionalValue { condition, on_true, on_false } => {
+                validatable::validate_holder(context, "condition", condition);
+                validatable::validate_holder(context, "on_true", on_true);
+                validatable::validate_holder(context, "on_false", on_false);
+            }
+            ContextFloatProvider::ConstantValue(_) => {}
+            ContextFloatProvider::Difference { left, right } | ContextFloatProvider::Modulus { left, right } | ContextFloatProvider::Quotient { left, right } => {
+                validatable::validate_holder(context, "left", left);
+                validatable::validate_holder(context, "right", right);
+            }
+            ContextFloatProvider::EnchantmentLevelProvider(_) => context.validate_context_usage(&[LootContextParam::EnchantmentLevel]),
+            ContextFloatProvider::EnvironmentAttributeValue(attribute) => {
+                context.validate_context_usage(if attribute.is_positional { &[LootContextParam::Origin] } else { &[] })
+            }
+            ContextFloatProvider::NumberDispatcher { cases, default_value } => {
+                validatable::validate_list(context, "cases", cases);
+                validatable::validate_holder(context, "default", default_value);
+            }
+            ContextFloatProvider::Power { base, exponent } => {
+                validatable::validate_holder(context, "base", base);
+                validatable::validate_holder(context, "exponent", exponent);
+            }
+            ContextFloatProvider::StorageValue { fallback, .. } => validatable::validate_holder(context, "fallback", fallback),
+            ContextFloatProvider::UniformGenerator { min, max } => {
+                validatable::validate_holder(context, "min", min);
+                validatable::validate_holder(context, "max", max);
+            }
+            ContextFloatProvider::WeightedListValue(distribution) => {
+                let values: Vec<&Holder<ContextFloatProvider>> = distribution.iter().map(|(value, _)| value).collect();
+                validatable::validate_holder_refs(context, "distribution", &values);
+            }
+        }
     }
 }

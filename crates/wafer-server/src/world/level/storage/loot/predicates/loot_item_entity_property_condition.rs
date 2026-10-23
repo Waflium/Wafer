@@ -3,6 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::advancements::predicates::entity::entity_predicate::EntityPredicate;
 use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub struct LootItemEntityPropertyCondition {
     predicate: Option<EntityPredicate>,
@@ -22,5 +23,11 @@ impl LootItemEntityPropertyCondition {
         let entity = self.entity_target.get(&context.params);
         let pos = context.params.origin;
         predicate.matches(context.level(), pos, entity)
+    }
+}
+
+impl LootItemEntityPropertyCondition {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::Origin, self.entity_target.context_param()]
     }
 }

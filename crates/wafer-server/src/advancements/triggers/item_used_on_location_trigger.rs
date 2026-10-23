@@ -13,6 +13,9 @@ use crate::world::level::BlockGetter;
 use crate::world::level::storage::loot::loot_context::{LootContext, LootContextBuilder};
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::parameters::loot_context_param_sets;
 
 #[derive(Clone, Copy)]
 pub struct ItemUsedOnLocationTrigger(pub CriterionTrigger);
@@ -46,5 +49,12 @@ impl TriggerInstance {
 
     pub fn matches(&self, location_context: &mut LootContext) -> bool {
         simple_criterion_trigger::matches(self.location.as_ref(), location_context)
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_optional_holder(&validator.context(&loot_context_param_sets::ADVANCEMENT_LOCATION), "location", self.location.as_ref());
     }
 }

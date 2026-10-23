@@ -16,8 +16,8 @@ pub enum CompositeEntry {
 }
 
 pub struct CompositeEntryBase {
-    children: Vec<LootPoolEntryContainer>,
-    entry: CompositeEntry,
+    pub(super) children: Vec<LootPoolEntryContainer>,
+    pub(super) entry: CompositeEntry,
 }
 
 impl CompositeEntryBase {

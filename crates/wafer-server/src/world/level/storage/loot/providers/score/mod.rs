@@ -3,6 +3,8 @@ use wafer_protocol::nbt::Nbt;
 use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
 use crate::world::scores::score_holder::ScoreHolder;
+use crate::world::level::storage::loot::validatable::Validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub enum ScoreboardNameProvider {
     Fixed(String),
@@ -36,5 +38,13 @@ impl ScoreboardNameProvider {
         let scoreboard = context.params.level.scoreboard.borrow();
         let objective = scoreboard.get_objective(score)?;
         scoreboard.get_player_score_info(score_holder.scoreboard_name(), objective.id()).map(|info| info.value)
+    }
+}
+
+impl Validatable for ScoreboardNameProvider {
+    fn validate(&self, context: &ValidationContext) {
+        if let ScoreboardNameProvider::Context(target) = self {
+            context.validate_context_usage(&[target.context_param()]);
+        }
     }
 }

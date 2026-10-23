@@ -1,6 +1,8 @@
 use super::triggers::*;
 use crate::core::holder::Holder;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use super::triggers::simple_criterion_trigger;
 
 pub enum CriterionTriggerInstance {
     Impossible,
@@ -97,6 +99,35 @@ impl CriterionTriggerInstance {
             I::UsedEnderEye(t) => t.player.as_ref(),
             I::UsedTotem(t) => t.player.as_ref(),
             I::UsingItem(t) => t.player.as_ref(),
+        }
+    }
+}
+
+impl CriterionTriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        use CriterionTriggerInstance as I;
+        match self {
+            I::Impossible => {}
+            I::AnyBlockInteraction(t) => t.validate(validator),
+            I::DefaultBlockInteraction(t) => t.validate(validator),
+            I::ItemUsedOnLocation(t) => t.validate(validator),
+            I::BredAnimals(t) => t.validate(validator),
+            I::ChanneledLightning(t) => t.validate(validator),
+            I::CuredZombieVillager(t) => t.validate(validator),
+            I::EffectsChanged(t) => t.validate(validator),
+            I::FallAfterExplosion(t) => t.validate(validator),
+            I::FishingRodHooked(t) => t.validate(validator),
+            I::KilledByArrow(t) => t.validate(validator),
+            I::Killed(t) => t.validate(validator),
+            I::LightningStrike(t) => t.validate(validator),
+            I::PickedUpItem(t) => t.validate(validator),
+            I::PlayerHurtEntity(t) => t.validate(validator),
+            I::PlayerInteract(t) => t.validate(validator),
+            I::SummonedEntity(t) => t.validate(validator),
+            I::TameAnimal(t) => t.validate(validator),
+            I::TargetBlock(t) => t.validate(validator),
+            I::Trade(t) => t.validate(validator),
+            _ => simple_criterion_trigger::validate(validator, self.player()),
         }
     }
 }

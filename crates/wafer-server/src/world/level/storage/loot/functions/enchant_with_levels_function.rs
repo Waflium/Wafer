@@ -10,6 +10,8 @@ use crate::world::item::enchantment::enchantment_helper::enchant_item;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 use crate::world::level::storage::loot::providers::number::ints::ContextIntProvider;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct EnchantWithLevelsFunction {
     levels: Holder<ContextIntProvider>,
@@ -38,5 +40,15 @@ impl EnchantWithLevelsFunction {
             result.set(dc::ADDITIONAL_TRADE_COST, Some(Nbt::Int(enchantment_cost)));
         }
         result
+    }
+}
+
+impl EnchantWithLevelsFunction {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        if self.include_additional_cost_component { vec![LootContextParam::AdditionalCostComponentAllowed] } else { Vec::new() }
+    }
+
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "levels", &self.levels);
     }
 }

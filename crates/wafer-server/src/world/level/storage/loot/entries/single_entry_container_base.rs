@@ -18,7 +18,7 @@ pub enum SingleEntry {
 
 pub struct SingleEntryContainerBase {
     base: UniformContainerBase,
-    entry: SingleEntry,
+    pub(super) entry: SingleEntry,
 }
 
 impl SingleEntryContainerBase {

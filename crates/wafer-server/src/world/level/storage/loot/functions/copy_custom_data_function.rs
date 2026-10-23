@@ -6,6 +6,8 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::nbt::NbtProvider;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 #[derive(Clone, Copy)]
 enum MergeStrategy {
@@ -89,5 +91,11 @@ impl CopyCustomDataFunction {
             item_stack.set(dc::CUSTOM_DATA, if empty { None } else { Some(result_tag) });
         }
         item_stack
+    }
+}
+
+impl CopyCustomDataFunction {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate(context, "source", &self.source);
     }
 }

@@ -8,6 +8,8 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::ints::{self, ContextIntProvider};
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct TradeCost {
     pub item: Item,
@@ -29,5 +31,11 @@ impl TradeCost {
         let max = ItemStack::new(self.item, 1).max_stack_size();
         let count = (self.count.value().get_int(loot_context) + additional_cost).clamp(0, max);
         ItemCost::new(self.item, count, self.components.clone())
+    }
+}
+
+impl Validatable for TradeCost {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "count", &self.count);
     }
 }

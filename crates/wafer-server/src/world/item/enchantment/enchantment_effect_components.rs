@@ -7,6 +7,8 @@ use super::effects::enchantment_location_based_effect::EnchantmentLocationBasedE
 use super::effects::enchantment_value_effect::EnchantmentValueEffect;
 use super::targeted_conditional_effect::TargetedConditionalEffect;
 use crate::util::codec::{self, DataResult};
+use crate::world::level::storage::loot::parameters::loot_context_param_sets::{self, ContextKeySet};
+use crate::world::level::storage::loot::validatable::{self, Validatable};
 
 pub const REPAIR_WITH_XP: &str = "minecraft:repair_with_xp";
 
@@ -55,56 +57,73 @@ fn entity_effects(tag: &Nbt) -> DataResult<Vec<ConditionalEffect<EnchantmentEnti
     codec::list_of(tag, |t| ConditionalEffect::decode(t, EnchantmentEntityEffect::decode))
 }
 
+fn validated<T: Validatable>(list: Vec<T>, params: &'static ContextKeySet) -> DataResult<Vec<T>> {
+    validatable::list_validator_for_context(params, &list)?;
+    Ok(list)
+}
+
 impl EnchantmentEffectComponents {
     pub fn decode(tag: &Nbt) -> DataResult<EnchantmentEffectComponents> {
         let mut effects = EnchantmentEffectComponents::default();
+        let mut errors = Vec::new();
+        let mut failed = Vec::new();
         for (key, value) in codec::map(tag)? {
-            let id = codec::identifier(&Nbt::String(key.clone()))?;
-            match id.as_str() {
-                "minecraft:damage_protection" => effects.damage_protection = value_effects(value)?,
-                "minecraft:damage_immunity" => {
-                    effects.damage_immunity = codec::list_of(value, |t| ConditionalEffect::decode(t, |e| codec::map(e).map(|_| ())))?;
-                }
-                "minecraft:damage" => effects.damage = value_effects(value)?,
-                "minecraft:smash_damage_per_fallen_block" => effects.smash_damage_per_fallen_block = value_effects(value)?,
-                "minecraft:knockback" => effects.knockback = value_effects(value)?,
-                "minecraft:armor_effectiveness" => effects.armor_effectiveness = value_effects(value)?,
-                "minecraft:post_attack" => {
-                    effects.post_attack = codec::list_of(value, |t| TargetedConditionalEffect::decode(t, EnchantmentEntityEffect::decode))?;
-                }
-                "minecraft:post_piercing_attack" => effects.post_piercing_attack = entity_effects(value)?,
-                "minecraft:hit_block" => effects.hit_block = entity_effects(value)?,
-                "minecraft:item_damage" => effects.item_damage = value_effects(value)?,
-                "minecraft:equipment_drops" => {
-                    effects.equipment_drops = codec::list_of(value, |t| TargetedConditionalEffect::decode_equipment_drops(t, EnchantmentValueEffect::decode))?;
-                }
-                "minecraft:location_changed" => {
-                    effects.location_changed = codec::list_of(value, |t| ConditionalEffect::decode(t, EnchantmentLocationBasedEffect::decode))?;
-                }
-                "minecraft:tick" => effects.tick = entity_effects(value)?,
-                "minecraft:ammo_use" => effects.ammo_use = value_effects(value)?,
-                "minecraft:projectile_piercing" => effects.projectile_piercing = value_effects(value)?,
-                "minecraft:projectile_spawned" => effects.projectile_spawned = entity_effects(value)?,
-                "minecraft:projectile_spread" => effects.projectile_spread = value_effects(value)?,
-                "minecraft:projectile_count" => effects.projectile_count = value_effects(value)?,
-                "minecraft:trident_return_acceleration" => effects.trident_return_acceleration = value_effects(value)?,
-                "minecraft:fishing_time_reduction" => effects.fishing_time_reduction = value_effects(value)?,
-                "minecraft:fishing_luck_bonus" => effects.fishing_luck_bonus = value_effects(value)?,
-                "minecraft:block_experience" => effects.block_experience = value_effects(value)?,
-                "minecraft:mob_experience" => effects.mob_experience = value_effects(value)?,
-                "minecraft:repair_with_xp" => effects.repair_with_xp = value_effects(value)?,
-                "minecraft:attributes" => effects.attributes = codec::list_of(value, EnchantmentAttributeEffect::decode)?,
-                "minecraft:crossbow_charge_time" => effects.crossbow_charge_time = Some(EnchantmentValueEffect::decode(value)?),
-                "minecraft:crossbow_charging_sounds" => effects.crossbow_charging_sounds = codec::list(value)?,
-                "minecraft:trident_sound" => effects.trident_sound = codec::list(value)?,
-                "minecraft:prevent_equipment_drop" => effects.prevent_equipment_drop = true,
-                "minecraft:prevent_armor_change" => effects.prevent_armor_change = true,
-                "minecraft:trident_spin_attack_strength" => effects.trident_spin_attack_strength = Some(EnchantmentValueEffect::decode(value)?),
-                other => return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:enchantment_effect_component_type]: {other}")),
+            if let Err(error) = codec::identifier(&Nbt::String(key.clone())).and_then(|id| effects.decode_component(id, value)) {
+                errors.push(error);
+                failed.push((key.clone(), value.clone()));
             }
-            effects.components.push(id);
+        }
+        if !errors.is_empty() {
+            return Err(format!("{} missed input: {}", errors.join("; "), crate::nbt::to_string(&Nbt::Compound(failed))));
         }
         Ok(effects)
+    }
+
+    fn decode_component(&mut self, id: String, value: &Nbt) -> DataResult<()> {
+        match id.as_str() {
+            "minecraft:damage_protection" => self.damage_protection = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_DAMAGE)?,
+            "minecraft:damage_immunity" => {
+                self.damage_immunity = validated(codec::list_of(value, |t| ConditionalEffect::decode(t, |e| codec::map(e).map(|_| ())))?, &loot_context_param_sets::ENCHANTED_DAMAGE)?;
+            }
+            "minecraft:damage" => self.damage = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_DAMAGE)?,
+            "minecraft:smash_damage_per_fallen_block" => self.smash_damage_per_fallen_block = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_DAMAGE)?,
+            "minecraft:knockback" => self.knockback = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_DAMAGE)?,
+            "minecraft:armor_effectiveness" => self.armor_effectiveness = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_DAMAGE)?,
+            "minecraft:post_attack" => {
+                self.post_attack = validated(codec::list_of(value, |t| TargetedConditionalEffect::decode(t, EnchantmentEntityEffect::decode))?, &loot_context_param_sets::ENCHANTED_DAMAGE)?;
+            }
+            "minecraft:post_piercing_attack" => self.post_piercing_attack = validated(entity_effects(value)?, &loot_context_param_sets::ENCHANTED_DAMAGE)?,
+            "minecraft:hit_block" => self.hit_block = validated(entity_effects(value)?, &loot_context_param_sets::HIT_BLOCK)?,
+            "minecraft:item_damage" => self.item_damage = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ITEM)?,
+            "minecraft:equipment_drops" => {
+                self.equipment_drops = validated(codec::list_of(value, |t| TargetedConditionalEffect::decode_equipment_drops(t, EnchantmentValueEffect::decode))?, &loot_context_param_sets::ENCHANTED_DAMAGE)?;
+            }
+            "minecraft:location_changed" => {
+                self.location_changed = validated(codec::list_of(value, |t| ConditionalEffect::decode(t, EnchantmentLocationBasedEffect::decode))?, &loot_context_param_sets::ENCHANTED_LOCATION)?;
+            }
+            "minecraft:tick" => self.tick = validated(entity_effects(value)?, &loot_context_param_sets::ENCHANTED_ENTITY)?,
+            "minecraft:ammo_use" => self.ammo_use = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ITEM)?,
+            "minecraft:projectile_piercing" => self.projectile_piercing = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ITEM)?,
+            "minecraft:projectile_spawned" => self.projectile_spawned = validated(entity_effects(value)?, &loot_context_param_sets::ENCHANTED_ENTITY)?,
+            "minecraft:projectile_spread" => self.projectile_spread = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ENTITY)?,
+            "minecraft:projectile_count" => self.projectile_count = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ENTITY)?,
+            "minecraft:trident_return_acceleration" => self.trident_return_acceleration = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ENTITY)?,
+            "minecraft:fishing_time_reduction" => self.fishing_time_reduction = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ENTITY)?,
+            "minecraft:fishing_luck_bonus" => self.fishing_luck_bonus = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ENTITY)?,
+            "minecraft:block_experience" => self.block_experience = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ITEM)?,
+            "minecraft:mob_experience" => self.mob_experience = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ENTITY)?,
+            "minecraft:repair_with_xp" => self.repair_with_xp = validated(value_effects(value)?, &loot_context_param_sets::ENCHANTED_ITEM)?,
+            "minecraft:attributes" => self.attributes = codec::list_of(value, EnchantmentAttributeEffect::decode)?,
+            "minecraft:crossbow_charge_time" => self.crossbow_charge_time = Some(EnchantmentValueEffect::decode(value)?),
+            "minecraft:crossbow_charging_sounds" => self.crossbow_charging_sounds = codec::list(value)?,
+            "minecraft:trident_sound" => self.trident_sound = codec::list(value)?,
+            "minecraft:prevent_equipment_drop" => self.prevent_equipment_drop = true,
+            "minecraft:prevent_armor_change" => self.prevent_armor_change = true,
+            "minecraft:trident_spin_attack_strength" => self.trident_spin_attack_strength = Some(EnchantmentValueEffect::decode(value)?),
+            other => return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:enchantment_effect_component_type]: {other}")),
+        }
+        self.components.push(id);
+        Ok(())
     }
 
     pub fn has(&self, component: &str) -> bool {

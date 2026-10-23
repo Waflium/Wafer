@@ -4,6 +4,7 @@ use indexmap::IndexMap;
 
 use crate::advancements::advancement_holder::AdvancementHolder;
 use crate::advancements::advancement_tree::AdvancementTree;
+use crate::util::problem_reporter::ProblemReporter;
 
 pub struct ServerAdvancementManager {
     advancements: IndexMap<&'static str, &'static AdvancementHolder>,
@@ -13,8 +14,20 @@ pub struct ServerAdvancementManager {
 static EMPTY: LazyLock<ServerAdvancementManager> = LazyLock::new(|| ServerAdvancementManager { advancements: IndexMap::new(), tree: AdvancementTree::default() });
 static BOUND: RwLock<Option<&'static ServerAdvancementManager>> = RwLock::new(None);
 
+fn validate(advancement: &AdvancementHolder) {
+    let problem_collector = ProblemReporter::default();
+    advancement.value.validate(&problem_collector);
+    if !problem_collector.is_empty() {
+        warn!("Found validation problems in advancement {}: 
+{}", advancement.id, problem_collector.get_report());
+    }
+}
+
 impl ServerAdvancementManager {
     pub fn new(advancements: &[&'static AdvancementHolder]) -> ServerAdvancementManager {
+        for holder in advancements {
+            validate(holder);
+        }
         let advancements: IndexMap<&'static str, &'static AdvancementHolder> = advancements.iter().map(|&holder| (holder.id.as_str(), holder)).collect();
         let mut tree = AdvancementTree::default();
         let holders: Vec<&'static AdvancementHolder> = advancements.values().copied().collect();

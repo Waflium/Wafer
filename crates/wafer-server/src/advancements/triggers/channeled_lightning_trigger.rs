@@ -8,6 +8,8 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct ChanneledLightningTrigger(pub CriterionTrigger);
@@ -33,5 +35,12 @@ impl TriggerInstance {
 
     pub fn matches(&self, level: &mut ServerLevel, player: EntityId, victims: &[EntityId]) -> bool {
         self.victims.iter().all(|predicate| victims.iter().any(|&victim| simple_criterion_trigger::matches_entity(level, player, Some(predicate), victim)))
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_holder_list(validator.entity_context(), "victims", &self.victims);
     }
 }

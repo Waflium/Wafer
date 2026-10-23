@@ -5,6 +5,8 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::ints::ContextIntProvider;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct SetItemCountFunction {
     count: Holder<ContextIntProvider>,
@@ -23,5 +25,11 @@ impl SetItemCountFunction {
         let base = if self.add { item_stack.count } else { 0 };
         item_stack.count = base.wrapping_add(self.count.value().get_int(context));
         item_stack
+    }
+}
+
+impl SetItemCountFunction {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "count", &self.count);
     }
 }

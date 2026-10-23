@@ -3,6 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::advancements::predicates::location_predicate::LocationPredicate;
 use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub struct LocationCheck {
     predicate: Option<LocationPredicate>,
@@ -23,5 +24,11 @@ impl LocationCheck {
         let Some(predicate) = &self.predicate else { return true };
         let (x, y, z) = self.offset;
         predicate.matches(context.level(), pos.x + x as f64, pos.y + y as f64, pos.z + z as f64)
+    }
+}
+
+impl LocationCheck {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::Origin]
     }
 }

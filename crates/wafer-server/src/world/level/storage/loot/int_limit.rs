@@ -4,6 +4,8 @@ use super::loot_context::LootContext;
 use super::providers::number::ints::ContextIntProvider;
 use crate::core::holder::Holder;
 use crate::util::codec::{self, DataResult};
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct IntLimit {
     min: Option<Holder<ContextIntProvider>>,
@@ -30,5 +32,12 @@ impl IntLimit {
                 if input < min { min } else { input.min(max) }
             }
         }
+    }
+}
+
+impl Validatable for IntLimit {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate_optional_holder(context, "min", self.min.as_ref());
+        validatable::validate_optional_holder(context, "max", self.max.as_ref());
     }
 }

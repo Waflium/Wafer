@@ -14,6 +14,9 @@ use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::providers::score::ScoreboardNameProvider;
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub enum ContextIntProvider {
     Absolute(Holder<ContextIntProvider>),
@@ -287,6 +290,62 @@ impl ContextIntProvider {
                 Ok(mth::next_int(&mut context.random(),min, max))
             }
             ContextIntProvider::WeightedListValue(distribution) => get_random(distribution, context).value().get_int_unsafe(context),
+        }
+    }
+}
+
+impl Validatable for ContextIntProvider {
+    fn validate(&self, context: &ValidationContext) {
+        match self {
+            ContextIntProvider::Absolute(input) | ContextIntProvider::Negate(input) => validatable::validate_holder(context, "input", input),
+            ContextIntProvider::FromFloat(input) => validatable::validate_holder(context, "input", input),
+            ContextIntProvider::Average(inputs)
+            | ContextIntProvider::Maximum(inputs)
+            | ContextIntProvider::Minimum(inputs)
+            | ContextIntProvider::Product(inputs)
+            | ContextIntProvider::Sum(inputs) => validatable::validate_holder_set_with_min_size(context, "inputs", inputs, 1),
+            ContextIntProvider::BinomialDistributionGenerator { n, p } => {
+                validatable::validate_holder(context, "n", n);
+                validatable::validate_holder(context, "p", p);
+            }
+            ContextIntProvider::ConditionalValue { condition, on_true, on_false } => {
+                validatable::validate_holder(context, "condition", condition);
+                validatable::validate_holder(context, "on_true", on_true);
+                validatable::validate_holder(context, "on_false", on_false);
+            }
+            ContextIntProvider::ConstantValue(_) => {}
+            ContextIntProvider::Difference { left, right }
+            | ContextIntProvider::FloorModulus { left, right }
+            | ContextIntProvider::FloorQuotient { left, right }
+            | ContextIntProvider::Modulus { left, right }
+            | ContextIntProvider::Quotient { left, right } => {
+                validatable::validate_holder(context, "left", left);
+                validatable::validate_holder(context, "right", right);
+            }
+            ContextIntProvider::EnvironmentAttributeValue(attribute) => {
+                context.validate_context_usage(if attribute.is_positional { &[LootContextParam::Origin] } else { &[] })
+            }
+            ContextIntProvider::NumberDispatcher { cases, default_value } => {
+                validatable::validate_list(context, "cases", cases);
+                validatable::validate_holder(context, "default", default_value);
+            }
+            ContextIntProvider::Power { base, exponent } => {
+                validatable::validate_holder(context, "base", base);
+                validatable::validate_holder(context, "exponent", exponent);
+            }
+            ContextIntProvider::ScoreboardValue { target, fallback, .. } => {
+                validatable::validate(context, "target", target);
+                validatable::validate_holder(context, "fallback", fallback);
+            }
+            ContextIntProvider::StorageValue { fallback, .. } => validatable::validate_holder(context, "fallback", fallback),
+            ContextIntProvider::UniformGenerator { min, max } => {
+                validatable::validate_holder(context, "min", min);
+                validatable::validate_holder(context, "max", max);
+            }
+            ContextIntProvider::WeightedListValue(distribution) => {
+                let values: Vec<&Holder<ContextIntProvider>> = distribution.iter().map(|(value, _)| value).collect();
+                validatable::validate_holder_refs(context, "distribution", &values);
+            }
         }
     }
 }

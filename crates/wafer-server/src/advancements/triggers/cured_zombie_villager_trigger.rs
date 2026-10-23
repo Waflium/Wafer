@@ -8,6 +8,8 @@ use crate::server::level::ServerLevel;
 use crate::util::codec::DataResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 #[derive(Clone, Copy)]
 pub struct CuredZombieVillagerTrigger(pub CriterionTrigger);
@@ -38,5 +40,13 @@ impl TriggerInstance {
 
     pub fn matches(&self, level: &mut ServerLevel, player: EntityId, zombie: EntityId, villager: EntityId) -> bool {
         simple_criterion_trigger::matches_entity(level, player, self.zombie.as_ref(), zombie) && simple_criterion_trigger::matches_entity(level, player, self.villager.as_ref(), villager)
+    }
+}
+
+impl TriggerInstance {
+    pub fn validate(&self, validator: &mut ValidationContextSource) {
+        simple_criterion_trigger::validate(validator, self.player.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "zombie", self.zombie.as_ref());
+        validatable::validate_optional_holder(validator.entity_context(), "villager", self.villager.as_ref());
     }
 }

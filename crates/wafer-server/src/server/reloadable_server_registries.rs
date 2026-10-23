@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{LazyLock, RwLock};
 
@@ -17,6 +17,10 @@ use crate::world::item::crafting::recipe_manager::RecipeManager;
 use crate::world::item::slot::slot_source::SlotSource;
 use crate::world::level::storage::loot::functions::loot_item_function::LootItemFunction;
 use crate::world::level::storage::loot::loot_table::LootTable;
+use crate::util::problem_reporter::{PathElement, ProblemReporter};
+use crate::world::level::storage::loot::parameters::loot_context_param_sets::{self, ContextKeySet};
+use crate::world::level::storage::loot::validatable::Validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::providers::number::floats::ContextFloatProvider;
 use crate::world::level::storage::loot::providers::number::ints::ContextIntProvider;
@@ -71,6 +75,7 @@ pub enum LoadResult {
 }
 
 thread_local! {
+    static VALIDATING: Cell<Option<*const ReloadableRegistries>> = const { Cell::new(None) };
     static PENDING_KEYS: RefCell<Option<HashMap<&'static str, HashSet<String>>>> = const { RefCell::new(None) };
 }
 
@@ -88,6 +93,9 @@ static VANILLA: LazyLock<(&'static ReloadableRegistries, &'static RecipeManager)
 });
 
 pub fn get() -> &'static ReloadableRegistries {
+    if let Some(validating) = VALIDATING.with(Cell::get) {
+        return unsafe { &*validating };
+    }
     match *BOUND.read().expect("reloadable registries") {
         Some(registries) => registries,
         None => VANILLA.0,
@@ -102,6 +110,53 @@ pub fn contains_key(registry: &str, key: &str) -> bool {
     PENDING_KEYS
         .with(|pending| pending.borrow().as_ref().map(|keys| keys.get(registry).is_some_and(|keys| keys.contains(key))))
         .unwrap_or_else(|| get().contains_key(registry, key))
+}
+
+pub fn with_validating<R>(registries: &ReloadableRegistries, f: impl FnOnce() -> R) -> R {
+    let previous = VALIDATING.with(|validating| validating.replace(Some(registries as *const ReloadableRegistries)));
+    let result = f();
+    VALIDATING.with(|validating| validating.set(previous));
+    result
+}
+
+fn run_validation<T: Validatable>(problems: &ProblemReporter, registry: &str, sources: &[Source], elements: &HashMap<String, T>, context: impl Fn(&T) -> &'static ContextKeySet) {
+    for source in sources {
+        let Some(value) = elements.get(&source.id) else { continue };
+        let root = ValidationContext::new(problems.clone(), context(value))
+            .enter_element(PathElement::RootElement { id: source.id.clone(), registry: registry.to_string() }, registry, &source.id);
+        value.validate(&root);
+    }
+}
+
+fn exception_chain(causes: &[&str]) -> String {
+    let mut chain = causes[0].to_string();
+    for cause in causes {
+        chain.push_str("
+Caused by: ");
+        chain.push_str(cause);
+    }
+    chain
+}
+
+fn all_params<T>(_: &T) -> &'static ContextKeySet {
+    &loot_context_param_sets::ALL_PARAMS
+}
+
+fn validate_loot_registries(registries: &ReloadableRegistries, sources: &[Vec<Source>]) -> Result<(), String> {
+    let problems = ProblemReporter::default();
+    with_validating(registries, || {
+        run_validation(&problems, PREDICATE, &sources[1], &registries.predicates, all_params);
+        run_validation(&problems, ITEM_MODIFIER, &sources[4], &registries.item_modifiers, all_params);
+        run_validation(&problems, SLOT_SOURCE, &sources[5], &registries.slot_sources, all_params);
+        run_validation(&problems, LOOT_TABLE, &sources[0], &registries.loot_tables, |table: &LootTable| table.param_set);
+        run_validation(&problems, CONTEXT_FLOAT_PROVIDER, &sources[2], &registries.context_float_providers, all_params);
+        run_validation(&problems, CONTEXT_INT_PROVIDER, &sources[3], &registries.context_int_providers, all_params);
+    });
+    problems.for_each(|id, problem| warn!("Found loot table element validation problem in {id}: {}", problem.description));
+    if problems.has_fatal_problems() {
+        return Err(exception_chain(&["java.lang.IllegalStateException: Found loot table validation problems"]));
+    }
+    Ok(())
 }
 
 pub fn bind(registries: ReloadableRegistries) {
@@ -210,9 +265,9 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
     });
     PENDING_KEYS.with(|pending| pending.replace(previous));
     if !errors.0.is_empty() {
-        let report = errors.report();
-        error!("{report}");
-        return Err(report);
+        error!("{}", errors.report());
+        return Err(exception_chain(&["net.minecraft.ReportedException: Registry Loading", "java.lang.IllegalStateException: Failed to load registries due to errors"]));
     }
+    wafer_data::with_pending_tags(tags, || validate_loot_registries(&registries, &sources))?;
     Ok(LoadResult::Loaded { registries: ReloadableRegistries { sources, ..registries }, recipes })
 }

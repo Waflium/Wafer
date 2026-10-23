@@ -7,6 +7,8 @@ use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::container_component_manipulator::ContainerComponentManipulator;
 use crate::world::level::storage::loot::container_component_manipulators;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct ModifyContainerContents {
     component: ContainerComponentManipulator,
@@ -27,5 +29,11 @@ impl ModifyContainerContents {
         }
         self.component.modify_items(&mut item_stack, |c| self.modifier.value().apply(c, context));
         item_stack
+    }
+}
+
+impl ModifyContainerContents {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "modifier", &self.modifier);
     }
 }

@@ -4,6 +4,7 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, DataComponentType};
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 #[derive(Clone, Copy)]
 enum Target {
@@ -45,5 +46,11 @@ impl SetNameFunction {
             item_stack.set(self.target.component(), Some(name.clone()));
         }
         item_stack
+    }
+}
+
+impl SetNameFunction {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        self.resolution_context.map(|target| vec![target.context_param()]).unwrap_or_default()
     }
 }

@@ -5,6 +5,8 @@ use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::float_range_predicate::FloatRangePredicate;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::floats::ContextFloatProvider;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct FloatValueCheck {
     value: Holder<ContextFloatProvider>,
@@ -21,5 +23,12 @@ impl FloatValueCheck {
 
     pub fn test(&self, context: &mut LootContext) -> bool {
         self.range.test_provider(context, self.value.value())
+    }
+}
+
+impl FloatValueCheck {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "value", &self.value);
+        validatable::validate(context, "range", &self.range);
     }
 }

@@ -8,6 +8,8 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::floats::ContextFloatProvider;
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 const EQUIPMENT_SLOT_GROUPS: [&str; 11] = ["any", "mainhand", "offhand", "hand", "feet", "legs", "chest", "head", "armor", "body", "saddle"];
 
@@ -86,5 +88,17 @@ impl SetAttributesFunction {
             ]));
         }
         item_modifiers
+    }
+}
+
+impl SetAttributesFunction {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_list(context, "modifiers", &self.modifiers);
+    }
+}
+
+impl Validatable for Modifier {
+    fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder(context, "amount", &self.amount);
     }
 }

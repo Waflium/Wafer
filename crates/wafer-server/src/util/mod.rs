@@ -21,6 +21,7 @@ pub mod random;
 pub mod signature_validator;
 pub mod spawn_util;
 pub mod special_dates;
+pub mod problem_reporter;
 pub mod string_util;
 pub mod tick_throttler;
 pub mod top_k_selector;

@@ -5,6 +5,7 @@ use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
 pub struct CopyBlockState {
     properties: Vec<&'static str>,
@@ -45,5 +46,11 @@ impl CopyBlockState {
         }
         item_stack.set(dc::BLOCK_STATE, Some(Nbt::Compound(item_state)));
         item_stack
+    }
+}
+
+impl CopyBlockState {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![LootContextParam::BlockState]
     }
 }

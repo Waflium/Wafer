@@ -3,6 +3,8 @@ use wafer_protocol::nbt::Nbt;
 use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::loot_context_arg::{ArgCodecBuilder, LootContextArg};
+use crate::world::level::storage::loot::validatable::Validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 const GETTER: ArgCodecBuilder = ArgCodecBuilder { any_entity: true, any_block_entity: true, any_item_stack: false, container: false };
 
@@ -32,6 +34,14 @@ impl NbtProvider {
             NbtProvider::Context(LootContextArg::BlockEntity) => context.params.block_entity.map(|entity| entity.save_with_full_metadata()),
             NbtProvider::Context(_) => None,
             NbtProvider::Storage(id) => Some(Nbt::Compound(context.level().command_storage.borrow_mut().get(id))),
+        }
+    }
+}
+
+impl Validatable for NbtProvider {
+    fn validate(&self, context: &ValidationContext) {
+        if let NbtProvider::Context(source) = self {
+            context.validate_context_usage(&[source.context_param()]);
         }
     }
 }

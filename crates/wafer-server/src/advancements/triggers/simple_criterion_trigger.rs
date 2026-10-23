@@ -10,6 +10,8 @@ use crate::util::codec::{self, DataResult};
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
+use crate::world::level::storage::loot::validatable;
 
 pub fn trigger(level: &mut ServerLevel, player: EntityId, trigger: CriterionTrigger, mut matcher: impl FnMut(&mut ServerLevel, &'static CriterionTriggerInstance) -> bool) {
     let Some(listeners_for_type) = level.player(player).advancements.get_trigger_map_for_type(trigger) else { return };
@@ -53,4 +55,8 @@ pub fn matches(predicate: Option<&Holder<LootItemCondition>>, context: &mut Loot
 
 pub fn matches_entity(level: &mut ServerLevel, player: EntityId, predicate: Option<&Holder<LootItemCondition>>, entity: EntityId) -> bool {
     predicate.is_none_or(|predicate| level.entity_ref(entity).is_some() && predicate.value().test(&mut EntityPredicate::create_context(level, player, entity)))
+}
+
+pub fn validate(validator: &mut ValidationContextSource, player: Option<&Holder<LootItemCondition>>) {
+    validatable::validate_optional_holder(validator.entity_context(), "player", player);
 }

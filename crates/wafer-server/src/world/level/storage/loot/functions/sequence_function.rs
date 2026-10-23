@@ -5,6 +5,8 @@ use crate::core::holder::Holder;
 use crate::util::codec::{self, DataResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
+use crate::world::level::storage::loot::validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct SequenceFunction {
     functions: Vec<Holder<LootItemFunction>>,
@@ -24,5 +26,11 @@ impl SequenceFunction {
             item_stack = function.value().apply(item_stack, context);
         }
         item_stack
+    }
+}
+
+impl SequenceFunction {
+    pub fn validate(&self, context: &ValidationContext) {
+        validatable::validate_holder_set(context, "functions", &self.functions);
     }
 }

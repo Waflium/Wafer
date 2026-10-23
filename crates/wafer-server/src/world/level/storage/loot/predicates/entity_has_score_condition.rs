@@ -4,6 +4,9 @@ use crate::util::codec::{self, DataResult};
 use crate::world::level::storage::loot::int_range_predicate::IntRangePredicate;
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
 use crate::world::scores::score_holder::ScoreHolder;
+use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
+use crate::world::level::storage::loot::validatable::Validatable;
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub struct EntityHasScoreCondition {
     scores: Vec<(String, IntRangePredicate)>,
@@ -32,5 +35,17 @@ impl EntityHasScoreCondition {
             value
         };
         range.test(context, value)
+    }
+}
+
+impl EntityHasScoreCondition {
+    pub fn get_referenced_context_params(&self) -> Vec<LootContextParam> {
+        vec![self.entity_target.context_param()]
+    }
+
+    pub fn validate(&self, context: &ValidationContext) {
+        for (score, value) in &self.scores {
+            value.validate(&context.for_map_field("scores", score));
+        }
     }
 }

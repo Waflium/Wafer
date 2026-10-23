@@ -15,6 +15,8 @@ use crate::world::level::storage::loot::container_component_manipulators;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::loot_context_arg::{ArgCodecBuilder, LootContextArg};
 use crate::world::level::storage::loot::loot_params::SlotProvider;
+use crate::world::level::storage::loot::validatable::{self, Validatable};
+use crate::world::level::storage::loot::validation_context::ValidationContext;
 
 pub enum SlotSource {
     Group(Vec<Holder<SlotSource>>),
@@ -122,6 +124,19 @@ impl SlotSource {
             }
             SlotSource::Contents { slot_source, component } => slot_source.value().provide(context).flat_map(*component),
             SlotSource::Empty => SlotCollection::Empty,
+        }
+    }
+}
+
+impl Validatable for SlotSource {
+    fn validate(&self, context: &ValidationContext) {
+        match self {
+            SlotSource::Group(terms) => validatable::validate_holder_set(context, "terms", terms),
+            SlotSource::Filtered { slot_source, .. } | SlotSource::LimitSlots { slot_source, .. } | SlotSource::Contents { slot_source, .. } => {
+                validatable::validate_holder(context, "slot_source", slot_source)
+            }
+            SlotSource::SlotRange { source, .. } => context.validate_context_usage(&[source.context_param()]),
+            SlotSource::Empty => {}
         }
     }
 }
