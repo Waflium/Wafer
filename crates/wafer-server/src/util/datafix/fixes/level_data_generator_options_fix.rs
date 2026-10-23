@@ -7,7 +7,6 @@ use crate::datafixers::schemas::schema::Schema;
 use crate::util::datafix::fixes::references::LEVEL;
 use crate::util::datafix::fixes::world_gen_settings_fix::java_parse_int;
 use crate::util::gson;
-use crate::util::gson::json_reader::JsonReaderError;
 
 const MAP: &[(&str, &str)] = &[
     ("0", "minecraft:ocean"),
@@ -114,7 +113,7 @@ impl DataFix for LevelDataGeneratorOptionsFix {
                 } else if generator_name.eq_ignore_ascii_case("buffet")
                     && let Some(generator_options) = generator_options
                 {
-                    let legacy_options = gson::parse_lenient(&generator_options).unwrap_or_else(|error| panic!("{}", json_syntax_exception_message(&error)));
+                    let legacy_options = gson::parse_lenient(&generator_options).unwrap_or_else(|error| panic!("{error}"));
                     let converted = json_ops::convert_element_to_nbt(&legacy_options).unwrap_or_else(|message| {
                         if message.starts_with("Unsupported null") {
                             panic!("Cannot invoke \"com.google.gson.JsonElement.getAsJsonPrimitive()\" because \"input\" is null");
@@ -127,14 +126,6 @@ impl DataFix for LevelDataGeneratorOptionsFix {
                 }
             })
         })
-    }
-}
-
-fn json_syntax_exception_message(error: &JsonReaderError) -> String {
-    match error {
-        JsonReaderError::EndOfInput(message) => format!("java.io.EOFException: {message}"),
-        JsonReaderError::Malformed(message) => format!("com.google.gson.stream.MalformedJsonException: {message}"),
-        JsonReaderError::IllegalState(message) => message.clone(),
     }
 }
 
