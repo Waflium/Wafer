@@ -223,6 +223,7 @@ pub struct ServerLevel {
     pub clock_ticks: Vec<i64>,
     pub(crate) sky_darken: i32,
     pub path_types_by_pos_cache: std::cell::RefCell<PathTypeCache>,
+    pub user_lookup: Option<crate::server::players::old_users_converter::UserLookup>,
 }
 
 impl EnvironmentAccess for ServerLevel {
@@ -332,6 +333,7 @@ impl ServerLevel {
             clock_ticks: ServerClockManager::new().clocks.iter().map(|c| c.total_ticks).collect(),
             sky_darken: 0,
             path_types_by_pos_cache: std::cell::RefCell::default(),
+            user_lookup: None,
         };
         level.environment_attributes = EnvironmentAttributeSystem::builder().add_default_layers(level.dimension_type(), level.can_have_weather()).build();
         level.update_sky_brightness();

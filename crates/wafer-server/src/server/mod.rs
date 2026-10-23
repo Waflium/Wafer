@@ -495,10 +495,18 @@ impl Server {
             ready: false,
         };
         server.name_to_id_cache.set_resolve_offline_users(!server.config.online_mode);
+        server.attach_user_lookup();
         server.set_difficulty(server.config.difficulty, true);
         server.prepare_levels(&mut load_listener);
         server.update_effective_respawn_data();
         Ok(server)
+    }
+
+    fn attach_user_lookup(&mut self) {
+        let lookup = players::old_users_converter::UserLookup { name_to_id_cache: self.name_to_id_cache.clone(), services: self.services.clone(), uses_authentication: self.config.online_mode };
+        for level in &mut self.levels {
+            level.user_lookup = Some(lookup.clone());
+        }
     }
 
     pub fn watchdog_snapshot(&self) -> dedicated::server_watchdog::ServerSnapshot {
@@ -1905,6 +1913,7 @@ pub fn run(
     server.settings = settings;
     info!("Done ({:.3}s)! For help, type \"help\"", started.elapsed().as_secs_f64());
     server.services = services;
+    server.attach_user_lookup();
     server.task_sender = Some(task_sender);
     server.status = status;
     server.player_names_array = player_names_array;

@@ -1,6 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::ServerLevel;
+use crate::server::players::old_users_converter::convert_mob_owner_if_necessary;
 use crate::world::entity::EntityId;
 use crate::world::entity::entity_save::uuid_from_nbt;
 use crate::world::level::storage::uuid_ints;
@@ -35,6 +36,13 @@ impl EntityReference {
 
     pub fn read(input: &Nbt, key: &str) -> Option<EntityReference> {
         input.get(key).and_then(uuid_from_nbt).map(EntityReference::of)
+    }
+
+    pub fn read_with_old_owner_conversion(input: &Nbt, key: &str, level: &ServerLevel) -> Option<EntityReference> {
+        EntityReference::read(input, key).or_else(|| {
+            let old_name = input.get(key).and_then(Nbt::as_str)?;
+            convert_mob_owner_if_necessary(level.user_lookup.as_ref()?, old_name).map(EntityReference::of)
+        })
     }
 
     pub fn get_living_entity(reference: Option<EntityReference>, level: &ServerLevel) -> Option<EntityId> {

@@ -60,10 +60,12 @@ impl DataAccessor {
                     level.remove_leash(*id);
                 }
                 let previous_framed_item = level.item_frame_item(*id);
-                let Some(entity) = level.entities.get_mut(id) else { return Err(ERROR_NO_PLAYERS.create()) };
+                let Some(entity) = level.entities.get(id) else { return Err(ERROR_NO_PLAYERS.create()) };
+                let converted = level.with_old_owner_converted(entity, &tag);
+                let entity = level.entities.get_mut(id).expect("the entity");
                 let uuid = entity.entity().uuid;
                 let previous_dimensions = entity.entity().dimensions;
-                if let Err(e) = entity.load(&tag) {
+                if let Err(e) = entity.load(&converted) {
                     error!("{e}");
                 }
                 entity.entity_mut().uuid = uuid;

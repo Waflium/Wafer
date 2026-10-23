@@ -150,6 +150,29 @@ fn tamed_wolves_save_and_load_like_vanilla() {
 }
 
 #[test]
+fn old_owner_names_are_converted_when_loading() {
+    use crate::network::login::offline_uuid;
+    use crate::server::players::NameAndId;
+    use crate::server::players::cached_user_name_to_id_resolver::CachedUserNameToIdResolver;
+    use crate::server::players::old_users_converter::UserLookup;
+    use crate::server::services::Services;
+    let mut level = testing::level();
+    let cache = std::sync::Arc::new(CachedUserNameToIdResolver::load(None));
+    cache.add(NameAndId { id: 7, name: "Rozqn".into() });
+    level.user_lookup = Some(UserLookup { name_to_id_cache: cache, services: Services::offline(), uses_authentication: false });
+    let mut load = |owner: &str| {
+        let tag = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:wolf".into())), ("Owner".into(), Nbt::String(owner.into()))]);
+        let Some(LevelEntity::Mob(mob)) = level.load_entity(&tag) else { unreachable!() };
+        (tamable_animal::is_tame(&mob.entity), tamable_animal::get_owner_reference(&mob.entity).map(|owner| owner.get_uuid()))
+    };
+    assert_eq!(load("ROZQN"), (true, Some(7)));
+    assert_eq!(load("Nobody"), (true, Some(offline_uuid("nobody"))));
+    assert_eq!(load(""), (false, None));
+    assert_eq!(load("a name that is far too long"), (false, None));
+    assert_eq!(load("12345678-1234-1234-1234-123456789abc"), (true, Some(0x12345678_1234_1234_1234_123456789abc)));
+}
+
+#[test]
 fn bred_puppies_of_tamed_wolves_belong_to_the_owner() {
     let (mut level, player, wolf) = tamed();
     let mut other = Wolf::create();

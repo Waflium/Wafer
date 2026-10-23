@@ -359,6 +359,10 @@ impl LevelEntity {
 }
 
 pub fn apply_default_stack_config(entity: &mut LevelEntity, item_stack: &ItemStack) -> Option<Nbt> {
+    apply_default_stack_config_in_level(None, entity, item_stack)
+}
+
+pub fn apply_default_stack_config_in_level(level: Option<&ServerLevel>, entity: &mut LevelEntity, item_stack: &ItemStack) -> Option<Nbt> {
     match &mut *entity {
         LevelEntity::Mob(mob) => mob.apply_components_from_item_stack(item_stack),
         LevelEntity::Painting(painting) => painting.apply_components_from_item_stack(item_stack),
@@ -366,7 +370,7 @@ pub fn apply_default_stack_config(entity: &mut LevelEntity, item_stack: &ItemSta
         LevelEntity::Mannequin(mannequin) => mannequin.apply_components_from_item_stack(item_stack),
         other => other.entity_mut().apply_components_from_item_stack(item_stack),
     }
-    update_custom_entity_tag(entity, item_stack.get(crate::world::item::component::ENTITY_DATA)?)
+    update_custom_entity_tag(level, entity, item_stack.get(crate::world::item::component::ENTITY_DATA)?)
 }
 
 fn start_riding_while_loading(loaded: &mut [LevelEntity], passenger: usize, vehicle: usize) {
@@ -382,7 +386,7 @@ fn only_op_can_set_nbt(entity_type: &str) -> bool {
     matches!(entity_type, "minecraft:falling_block" | "minecraft:command_block_minecart" | "minecraft:spawner_minecart")
 }
 
-fn update_custom_entity_tag(entity: &mut LevelEntity, entity_data: &Nbt) -> Option<Nbt> {
+fn update_custom_entity_tag(level: Option<&ServerLevel>, entity: &mut LevelEntity, entity_data: &Nbt) -> Option<Nbt> {
     let Nbt::Compound(fields) = entity_data else { return None };
     let entity_type = wafer_data::registry::ENTITY_TYPE[entity.entity().entity_type as usize];
     if fields.iter().find(|(k, _)| k == "id").and_then(|(_, v)| v.as_str()) != Some(entity_type) {
@@ -397,7 +401,8 @@ fn update_custom_entity_tag(entity: &mut LevelEntity, entity_data: &Nbt) -> Opti
     let uuid = entity.entity().uuid;
     crate::nbt::merge(&mut tag, &unsafe_data);
     let tag = Nbt::Compound(tag);
-    if let Err(e) = entity.load(&tag) {
+    let converted = level.map_or(std::borrow::Cow::Borrowed(&tag), |level| level.with_old_owner_converted(entity, &tag));
+    if let Err(e) = entity.load(&converted) {
         error!("{e}");
     }
     entity.entity_mut().uuid = uuid;
@@ -618,7 +623,7 @@ impl ServerLevel {
             entity = self.finalize_spawn_detached(entity, &difficulty, spawn_reason, None).0;
         }
         if let Some(item_stack) = item_stack
-            && let Some(tag) = apply_default_stack_config(&mut entity, item_stack)
+            && let Some(tag) = apply_default_stack_config_in_level(Some(self), &mut entity, item_stack)
         {
             entity = self.reassess_weapon_goal_detached(entity);
             entity = self.read_level_dependent_save_data_detached(entity, &tag);
@@ -714,13 +719,28 @@ impl ServerLevel {
         true
     }
 
+    pub fn with_old_owner_converted<'a>(&self, entity: &LevelEntity, nbt: &'a Nbt) -> std::borrow::Cow<'a, Nbt> {
+        let reads_owner = matches!(entity, LevelEntity::Mob(mob) if mob.tamable_animal().is_some() || mob.abstract_horse().is_some());
+        let Nbt::Compound(fields) = nbt else { return std::borrow::Cow::Borrowed(nbt) };
+        if !reads_owner || !matches!(nbt.get("Owner"), Some(Nbt::String(_))) {
+            return std::borrow::Cow::Borrowed(nbt);
+        }
+        let owner = super::entity_reference::EntityReference::read_with_old_owner_conversion(nbt, "Owner", self);
+        let mut fields = fields.clone();
+        fields.retain(|(key, _)| key != "Owner");
+        if let Some(owner) = owner {
+            fields.push(("Owner".into(), uuid_ints(owner.get_uuid())));
+        }
+        std::borrow::Cow::Owned(Nbt::Compound(fields))
+    }
+
     pub fn load_entity(&mut self, nbt: &Nbt) -> Option<LevelEntity> {
         let entity_type = nbt.get("id").and_then(Nbt::as_str)?;
         let Some(mut entity) = ServerLevel::create_entity(entity_type) else {
             warn!("Skipping Entity with id {entity_type}");
             return None;
         };
-        if let Err(e) = entity.load(nbt) {
+        if let Err(e) = entity.load(&self.with_old_owner_converted(&entity, nbt)) {
             error!("{e}");
             return None;
         }

@@ -12,6 +12,7 @@ use crate::network::chat::{Arg, Component};
 use crate::world::level::storage::format_uuid;
 
 pub mod cached_user_name_to_id_resolver;
+pub mod old_users_converter;
 pub mod player_list;
 pub mod profile_resolver;
 pub mod respawn;
