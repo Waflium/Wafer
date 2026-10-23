@@ -35,6 +35,7 @@ use crate::world::level::BlockGetter;
 use crate::world::level::block::abstract_bed_block;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::storage::loot::loot_table::LootTable;
 use crate::world::scores::team::CollisionRule;
@@ -1051,7 +1052,7 @@ impl ServerLevel {
         if to.distance_to(from) > 128.0 {
             return false;
         }
-        let ctx = ClipContext { from, to, block: block_colliding_context, fluid: fluid_colliding_context, is_player: self.is_player(id) };
+        let ctx = ClipContext { from, to, block: block_colliding_context, fluid: fluid_colliding_context, collision_context: CollisionContext::of(self, id) };
         self.clip(&ctx).miss
     }
 

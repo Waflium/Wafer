@@ -25,6 +25,7 @@ use crate::world::level::chunk::serialization::{state_from_nbt, state_to_nbt};
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::HitResult;
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 const ARROW_BASE_DAMAGE: f64 = 2.0;
 const SHAKE_TIME: i32 = 7;
@@ -346,7 +347,7 @@ impl ServerLevel {
         e.set_y_rot(lerp_rotation(e.y_rot, y_rot));
         self.check_left_owner(id);
         if physics_enabled {
-            let ctx = ClipContext { from: original_position, to: original_position.add_vec(movement), block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false };
+            let ctx = ClipContext { from: original_position, to: original_position.add_vec(movement), block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context: CollisionContext::of(self, id) };
             let clip = self.clip_including_border(&ctx);
             self.step_move_and_hit(id, clip.hit, clip.miss);
         } else {

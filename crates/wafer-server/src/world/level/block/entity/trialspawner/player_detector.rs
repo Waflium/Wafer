@@ -3,6 +3,7 @@ use wafer_core::{BlockPos, Vec3};
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum PlayerDetector {
@@ -45,6 +46,6 @@ impl PlayerDetector {
 }
 
 fn in_line_of_sight(level: &mut ServerLevel, origin: Vec3, dest: Vec3) -> bool {
-    let hit_result = level.clip(&ClipContext { from: dest, to: origin, block: ClipBlock::Visual, fluid: ClipFluid::None, is_player: false });
+    let hit_result = level.clip(&ClipContext { from: dest, to: origin, block: ClipBlock::Visual, fluid: ClipFluid::None, collision_context: CollisionContext::EMPTY });
     hit_result.hit.block_pos == BlockPos::containing_vec(origin) || hit_result.miss
 }

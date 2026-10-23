@@ -13,6 +13,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::block::{self, anvil_block, falling_block};
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::BlockGetter;
 use wafer_data::packets::play::clientbound;
 
@@ -164,7 +165,7 @@ impl ServerLevel {
             let e = &self.falling_block(id).entity;
             let move_vec = e.delta_movement.length_sqr();
             if is_concrete && move_vec > 1.0 {
-                let ctx = ClipContext { from: e.xo, to: e.position(), block: ClipBlock::Collider, fluid: ClipFluid::SourceOnly, is_player: false };
+                let ctx = ClipContext { from: e.xo, to: e.position(), block: ClipBlock::Collider, fluid: ClipFluid::SourceOnly, collision_context: CollisionContext::of(self, id) };
                 let clip = self.clip(&ctx);
                 if !clip.miss && self.fluid_state(clip.hit.block_pos).is(&fluid_tags::WATER) {
                     pos = clip.hit.block_pos;

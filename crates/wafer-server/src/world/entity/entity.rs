@@ -1405,7 +1405,7 @@ impl ServerLevel {
                     to: check_to,
                     block: ClipBlock::FallDamageResetting,
                     fluid: ClipFluid::Water,
-                    is_player: self.is_player(id),
+                    collision_context: CollisionContext::of(self, id),
                 };
                 if !self.clip(&ctx).miss {
                     self.reset_fall_distance(id);

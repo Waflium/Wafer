@@ -5,6 +5,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::attributes::Attribute;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path::Path;
 use crate::world::level::pathfinder::path_finder::PathFinder;
@@ -598,6 +599,6 @@ impl PathNavigation {
 pub fn is_clear_for_movement_between(level: &mut ServerLevel, mob: EntityId, start_pos: Vec3, stop_pos: Vec3, blocked_by_fluids: bool) -> bool {
     let to = Vec3::new(stop_pos.x, stop_pos.y + level.entity(mob).dimensions.height as f64 * 0.5, stop_pos.z);
     let fluid = if blocked_by_fluids { ClipFluid::Any } else { ClipFluid::None };
-    let ctx = ClipContext { from: start_pos, to, block: ClipBlock::Collider, fluid, is_player: false };
+    let ctx = ClipContext { from: start_pos, to, block: ClipBlock::Collider, fluid, collision_context: CollisionContext::of(level, mob) };
     level.clip(&ctx).miss
 }

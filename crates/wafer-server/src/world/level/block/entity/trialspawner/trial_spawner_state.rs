@@ -10,6 +10,7 @@ use crate::world::entity::EntityId;
 use crate::world::entity::ominous_item_spawner::OminousItemSpawner;
 use crate::world::level::BlockGetter;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 const DELAY_BEFORE_EJECT_AFTER_KILLING_LAST_MOB: f32 = 40.0;
 const TIME_BETWEEN_EACH_EJECTION: i32 = 30;
@@ -169,7 +170,7 @@ fn calculate_position_above(entity_to_spawn_item_above: EntityId, level: &mut Se
     let entity_pos = level.entity(entity_to_spawn_item_above).position();
     let bb_height = level.entity(entity_to_spawn_item_above).dimensions.height;
     let try_spawn_pos = entity_pos.relative(Direction::Up, (bb_height + 2.0 + level.random.next_int_bounded(4) as f32) as f64);
-    let hit_result = level.clip(&ClipContext { from: entity_pos, to: try_spawn_pos, block: ClipBlock::Visual, fluid: ClipFluid::None, is_player: false });
+    let hit_result = level.clip(&ClipContext { from: entity_pos, to: try_spawn_pos, block: ClipBlock::Visual, fluid: ClipFluid::None, collision_context: CollisionContext::EMPTY });
     let down = Vec3::at_center_of(hit_result.hit.block_pos).relative(Direction::Down, 1.0);
     let block_pos_down = BlockPos::containing_vec(down);
     if !level.block_state(block_pos_down).get_collision_shape(block_pos_down).is_empty() { None } else { Some(down) }

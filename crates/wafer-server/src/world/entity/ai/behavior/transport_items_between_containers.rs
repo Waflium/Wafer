@@ -17,6 +17,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::block::chest_block;
 use crate::world::level::block::entity::BlockEntityKind;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 pub const TARGET_INTERACTION_TIME: i32 = 60;
 const VISITED_POSITIONS_MEMORY_TIME: i64 = 6000;
@@ -411,10 +412,11 @@ impl TransportItemsBetweenContainers {
         can_reach_target && self.can_see_any_target_side(target, level, body, pos)
     }
 
-    fn can_see_any_target_side(&self, target: TransportItemTarget, level: &mut ServerLevel, _body: EntityId, eye_position: Vec3) -> bool {
+    fn can_see_any_target_side(&self, target: TransportItemTarget, level: &mut ServerLevel, body: EntityId, eye_position: Vec3) -> bool {
         let center = Vec3::at_center_of(target.pos);
+        let collision_context = CollisionContext::of(level, body);
         Direction::VALUES.into_iter().map(|direction| center.add(0.5 * direction.step_x() as f64, 0.5 * direction.step_y() as f64, 0.5 * direction.step_z() as f64)).any(|hit_target| {
-            let result = level.clip(&ClipContext { from: eye_position, to: hit_target, block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false });
+            let result = level.clip(&ClipContext { from: eye_position, to: hit_target, block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context });
             !result.miss && result.hit.block_pos == target.pos
         })
     }

@@ -17,6 +17,7 @@ use crate::network::chat::{Arg, ChatFormatting, ClickEvent, Component, HoverEven
 use crate::server::Server;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::chunk::HeightmapType;
 
 pub const TEST_NEARBY_SEARCH_RADIUS: i32 = 15;
@@ -315,7 +316,8 @@ fn show_pos(server: &mut Server, source: &CommandSourceStack, var_name: &str) ->
     let entity = server.levels[level].entity(player);
     let from = entity.eye_position();
     let to = from.add_vec(entity.look_angle().scale(10.0));
-    let pick = server.levels[level].clip(&ClipContext { from, to, block: ClipBlock::Outline, fluid: ClipFluid::None, is_player: true });
+    let collision_context = CollisionContext::of(&server.levels[level], player);
+    let pick = server.levels[level].clip(&ClipContext { from, to, block: ClipBlock::Outline, fluid: ClipFluid::None, collision_context });
     let target_pos_absolute = pick.hit.block_pos;
     let mut test_block_pos = structure_utils::find_test_containing_pos(target_pos_absolute, TEST_NEARBY_SEARCH_RADIUS, &mut server.levels[level]);
     if test_block_pos.is_none() {

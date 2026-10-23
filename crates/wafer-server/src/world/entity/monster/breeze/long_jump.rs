@@ -13,6 +13,7 @@ use crate::world::entity::data::Pose;
 use crate::world::entity::{EntityId, entity_types, sound_event};
 use crate::world::level::BlockGetter;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 const REQUIRED_AIR_BLOCKS_ABOVE: i32 = 4;
 const JUMP_COOLDOWN_TICKS: i64 = 10;
@@ -63,7 +64,7 @@ pub fn can_run(level: &mut ServerLevel, breeze: EntityId) -> bool {
         return false;
     }
     let point = breeze_util::random_point_behind_target(level, attack_target, breeze);
-    let Some(target_pos) = snap_to_surface(level, point) else { return false };
+    let Some(target_pos) = snap_to_surface(level, breeze, point) else { return false };
     let bs = level.block_state(target_pos.below());
     if entity_types::BREEZE.is_block_dangerous(bs) {
         return false;
@@ -87,13 +88,14 @@ fn is_finished_jumping(level: &ServerLevel, breeze: EntityId) -> bool {
     is_jumping && (landed_on_ground || landed_in_water)
 }
 
-fn snap_to_surface(level: &mut ServerLevel, target: Vec3) -> Option<BlockPos> {
-    let collision_below = ClipContext { from: target, to: target.add(0.0, -10.0, 0.0), block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false };
+fn snap_to_surface(level: &mut ServerLevel, entity: EntityId, target: Vec3) -> Option<BlockPos> {
+    let collision_context = CollisionContext::of(level, entity);
+    let collision_below = ClipContext { from: target, to: target.add(0.0, -10.0, 0.0), block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context };
     let surface_below = level.clip(&collision_below);
     if !surface_below.miss {
         return Some(BlockPos::containing_vec(surface_below.hit.location).above());
     }
-    let collision_above = ClipContext { from: target, to: target.add(0.0, 10.0, 0.0), block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false };
+    let collision_above = ClipContext { from: target, to: target.add(0.0, 10.0, 0.0), block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context };
     let surface_above = level.clip(&collision_above);
     (!surface_above.miss).then(|| BlockPos::containing_vec(surface_above.hit.location).above())
 }

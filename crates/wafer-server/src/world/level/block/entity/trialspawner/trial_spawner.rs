@@ -19,6 +19,7 @@ use crate::world::entity::{LevelEntity, mob, spawn_placements};
 use crate::world::level::BlockGetter;
 use crate::world::level::base_spawner;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::gameevent::game_event;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::spawn_data::SpawnData;
@@ -253,7 +254,7 @@ fn should_mob_be_untracked(level: &ServerLevel, spawner_pos: BlockPos, id: u128)
 }
 
 pub fn in_line_of_sight(level: &mut ServerLevel, origin: Vec3, dest: Vec3) -> bool {
-    let hit_result = level.clip(&ClipContext { from: dest, to: origin, block: ClipBlock::Visual, fluid: ClipFluid::None, is_player: false });
+    let hit_result = level.clip(&ClipContext { from: dest, to: origin, block: ClipBlock::Visual, fluid: ClipFluid::None, collision_context: CollisionContext::EMPTY });
     hit_result.hit.block_pos == BlockPos::containing_vec(origin) || hit_result.miss
 }
 

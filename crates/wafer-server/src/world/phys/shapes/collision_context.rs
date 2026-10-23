@@ -21,6 +21,7 @@ struct EntityProperties {
     can_walk_on_powder_snow: bool,
     liquid_collision_shape: Option<&'static VoxelShape>,
     can_stand_on_lava: bool,
+    is_player: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -75,7 +76,14 @@ impl CollisionContext {
     }
 
     pub fn of_detached(entity: &Entity) -> CollisionContext {
-        let properties = EntityProperties { fall_distance: entity.fall_distance, is_falling_block: false, can_walk_on_powder_snow: false, liquid_collision_shape: None, can_stand_on_lava: false };
+        let properties = EntityProperties {
+            fall_distance: entity.fall_distance,
+            is_falling_block: false,
+            can_walk_on_powder_snow: false,
+            liquid_collision_shape: None,
+            can_stand_on_lava: false,
+            is_player: entity.entity_type == crate::world::entity::entity_types::PLAYER.id,
+        };
         CollisionContext { descending: entity.is_shift_key_down(), entity_bottom: entity.y(), entity: Some(properties), ..CollisionContext::EMPTY }
     }
 
@@ -98,6 +106,7 @@ impl CollisionContext {
             can_walk_on_powder_snow: level.can_entity_walk_on_powder_snow(entity),
             liquid_collision_shape: level.get_liquid_collision_shape(entity),
             can_stand_on_lava: level.mob(entity).is_some_and(|mob| mob.can_stand_on_fluid(wafer_data::Fluid::Lava)),
+            is_player: level.is_player(entity),
         };
         CollisionContext { descending: e.is_shift_key_down(), placement, entity_bottom, entity: Some(properties), ..CollisionContext::EMPTY }
     }
@@ -108,6 +117,10 @@ impl CollisionContext {
 
     pub fn is_placement(&self) -> bool {
         self.placement
+    }
+
+    pub fn is_player(&self) -> bool {
+        self.entity.is_some_and(|entity| entity.is_player)
     }
 
     pub fn is_above(&self, shape: &VoxelShape, pos: BlockPos, default_value: bool) -> bool {
@@ -133,9 +146,18 @@ impl CollisionContext {
     }
 
     pub fn get_collision_shape(&self, state: BlockState, pos: BlockPos) -> (&'static VoxelShape, [f64; 3]) {
-        if Some(pos) == self.ignore_below || Some(pos) == self.slope_ignore {
-            (&EMPTY, [0.0; 3])
-        } else if state.is_block(blocks::SCAFFOLDING) {
+        if Some(pos) == self.ignore_below || Some(pos) == self.slope_ignore { (&EMPTY, [0.0; 3]) } else { self.get_state_collision_shape(state, pos) }
+    }
+
+    pub fn get_block_collision_shape(&self, state: BlockState, pos: BlockPos, fluid_above: impl FnOnce() -> FluidState) -> (&'static VoxelShape, [f64; 3]) {
+        match self.get_liquid_block_collision_shape(state, pos, fluid_above) {
+            Some(shape) => (shape, [0.0; 3]),
+            None => self.get_state_collision_shape(state, pos),
+        }
+    }
+
+    fn get_state_collision_shape(&self, state: BlockState, pos: BlockPos) -> (&'static VoxelShape, [f64; 3]) {
+        if state.is_block(blocks::SCAFFOLDING) {
             (self.scaffolding_collision_shape(state, pos), [0.0; 3])
         } else if state.is_block(blocks::POWDER_SNOW) {
             (self.powder_snow_collision_shape(pos), [0.0; 3])

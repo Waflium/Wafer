@@ -5,6 +5,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::attributes::Attribute;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 const MAX_LINE_OF_SIGHT_TEST_RANGE: f64 = 50.0;
 
@@ -23,7 +24,7 @@ pub fn has_line_of_sight(level: &mut ServerLevel, breeze: EntityId, target: Vec3
     if target.distance_to(from) > get_max_line_of_sight_test_range(level, breeze) {
         return false;
     }
-    let ctx = ClipContext { from, to: target, block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false };
+    let ctx = ClipContext { from, to: target, block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context: CollisionContext::of(level, breeze) };
     level.clip(&ctx).miss
 }
 

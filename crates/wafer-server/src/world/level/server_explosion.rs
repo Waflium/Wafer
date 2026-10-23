@@ -17,6 +17,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::{self, base_fire_block};
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::update_flags::UPDATE_ALL;
 
@@ -364,7 +365,7 @@ impl ServerLevel {
         if xs < 0.0 || ys < 0.0 || zs < 0.0 {
             return 0.0;
         }
-        let is_player = self.is_player(id);
+        let collision_context = CollisionContext::of(self, id);
         let (mut hits, mut count) = (0, 0);
         let mut xx = 0.0;
         while xx <= 1.0 {
@@ -376,7 +377,7 @@ impl ServerLevel {
                     let y = mth::lerp(yy, bb.min_y, bb.max_y);
                     let z = mth::lerp(zz, bb.min_z, bb.max_z);
                     let from = Vec3::new(x + x_offset, y, z + z_offset);
-                    let ctx = ClipContext { from, to: center, block: ClipBlock::Collider, fluid: ClipFluid::None, is_player };
+                    let ctx = ClipContext { from, to: center, block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context };
                     if self.clip(&ctx).miss {
                         hits += 1;
                     }

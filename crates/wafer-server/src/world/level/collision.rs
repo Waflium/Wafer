@@ -369,7 +369,7 @@ mod tests {
         let moved = collide_with_shapes(Vec3::new(1.0, 0.0, 0.0), &from, &colliders);
         assert_eq!(moved.x, 6.5 / 16.0 + offset.x + 4.0 - from.max_x);
 
-        let ctx = ClipContext { from: Vec3::new(1.5, -59.5, 5.7), to: Vec3::new(6.5, -59.5, 5.7), block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false };
+        let ctx = ClipContext { from: Vec3::new(1.5, -59.5, 5.7), to: Vec3::new(6.5, -59.5, 5.7), block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context: CollisionContext::EMPTY };
         let hit = level.clip(&ctx);
         assert!(!hit.miss);
         assert_eq!(hit.hit.block_pos, second);
@@ -377,15 +377,35 @@ mod tests {
     }
 
     #[test]
+    fn collider_clip_uses_the_collision_context() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let pos = BlockPos::new(6, -60, 6);
+        level.set_block(pos, blocks::POWDER_SNOW.default_state(), UPDATE_ALL);
+        let ray = |collision_context| ClipContext {
+            from: Vec3::new(5.0, -59.8, 6.5),
+            to: Vec3::new(8.0, -59.8, 6.5),
+            block: ClipBlock::Collider,
+            fluid: ClipFluid::None,
+            collision_context,
+        };
+        assert!(level.clip(&ray(CollisionContext::EMPTY)).miss);
+        level.entity_mut(player).fall_distance = 3.0;
+        let hit = level.clip(&ray(CollisionContext::of(&level, player)));
+        assert!(!hit.miss);
+        assert_eq!(hit.hit.block_pos, pos);
+    }
+
+    #[test]
     fn flower_outline_clips_at_its_offset() {
         let mut level = testing::level();
-        testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
         let pos = BlockPos::new(6, -60, 6);
         let poppy = blocks::POPPY.default_state();
         level.set_block(pos, poppy, UPDATE_ALL);
         let offset = poppy.get_offset(pos);
         let z = 6.5 + offset.z;
-        let ctx = ClipContext { from: Vec3::new(5.0, -59.8, z), to: Vec3::new(8.0, -59.8, z), block: ClipBlock::Outline, fluid: ClipFluid::None, is_player: true };
+        let ctx = ClipContext { from: Vec3::new(5.0, -59.8, z), to: Vec3::new(8.0, -59.8, z), block: ClipBlock::Outline, fluid: ClipFluid::None, collision_context: CollisionContext::of(&level, player) };
         let hit = level.clip(&ctx);
         assert!(!hit.miss);
         assert_eq!(hit.hit.block_pos, pos);

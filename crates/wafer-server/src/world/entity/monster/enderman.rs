@@ -41,6 +41,7 @@ use crate::world::level::BlockGetter;
 use crate::world::level::block;
 use crate::world::level::chunk::serialization::{state_from_nbt, state_to_nbt};
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::update_flags::UPDATE_ALL;
@@ -370,7 +371,8 @@ impl EndermanTakeBlockGoal {
         let block_state = level.block_state(pos);
         let from = Vec3::new(block_position.x as f64 + 0.5, yt as f64 + 0.5, block_position.z as f64 + 0.5);
         let to = Vec3::new(xt as f64 + 0.5, yt as f64 + 0.5, zt as f64 + 0.5);
-        let result = level.clip(&ClipContext { from, to, block: ClipBlock::Outline, fluid: ClipFluid::None, is_player: false });
+        let collision_context = CollisionContext::of(level, mob);
+        let result = level.clip(&ClipContext { from, to, block: ClipBlock::Outline, fluid: ClipFluid::None, collision_context });
         let reachable = result.hit.block_pos == pos;
         if block_state.is(&block_tags::ENDERMAN_HOLDABLE) && reachable {
             level.remove_block(pos, false);

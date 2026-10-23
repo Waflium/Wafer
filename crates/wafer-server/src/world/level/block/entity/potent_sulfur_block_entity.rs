@@ -196,5 +196,5 @@ fn is_water(level: &mut ServerLevel, pos: Vec3) -> bool {
 }
 
 fn have_line_of_sight(level: &mut ServerLevel, a: Vec3, b: Vec3) -> bool {
-    level.clip(&ClipContext { from: a, to: b, block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false }).miss
+    level.clip(&ClipContext { from: a, to: b, block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context: CollisionContext::EMPTY }).miss
 }

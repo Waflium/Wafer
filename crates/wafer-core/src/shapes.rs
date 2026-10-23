@@ -303,19 +303,58 @@ impl VoxelShape {
         distance
     }
 
-    pub fn to_aabbs(&self) -> Vec<AABB> {
-        let (nx, ny, nz) = (self.size(0), self.size(1), self.size(2));
-        let mut out = Vec::new();
-        for x in 0..nx {
-            for y in 0..ny {
-                for z in 0..nz {
-                    if self.is_full(x, y, z) {
-                        let c = &self.coords;
-                        out.push(AABB::new(c[0][x], c[1][y], c[2][z], c[0][x + 1], c[1][y + 1], c[2][z + 1]));
+    fn index(&self, x: usize, y: usize, z: usize) -> usize {
+        (x * self.size(1) + y) * self.size(2) + z
+    }
+
+    fn is_z_strip_full(&self, storage: &[bool], start_z: usize, end_z: usize, x: usize, y: usize) -> bool {
+        x < self.size(0) && y < self.size(1) && storage[self.index(x, y, start_z)..self.index(x, y, end_z)].iter().all(|&full| full)
+    }
+
+    fn is_xz_rectangle_full(&self, storage: &[bool], start_x: usize, end_x: usize, start_z: usize, end_z: usize, y: usize) -> bool {
+        (start_x..end_x).all(|x| self.is_z_strip_full(storage, start_z, end_z, x, y))
+    }
+
+    fn clear_z_strip(&self, storage: &mut [bool], start_z: usize, end_z: usize, x: usize, y: usize) {
+        storage[self.index(x, y, start_z)..self.index(x, y, end_z)].fill(false);
+    }
+
+    pub fn for_all_boxes(&self, mut consumer: impl FnMut(usize, usize, usize, usize, usize, usize)) {
+        let (x_size, y_size, z_size) = (self.size(0), self.size(1), self.size(2));
+        let mut storage = self.filled.clone();
+        for y in 0..y_size {
+            for x in 0..x_size {
+                let mut last_start_z = None;
+                for z in 0..=z_size {
+                    if z < z_size && storage[self.index(x, y, z)] {
+                        if last_start_z.is_none() {
+                            last_start_z = Some(z);
+                        }
+                    } else if let Some(start_z) = last_start_z.take() {
+                        let mut end_x = x;
+                        let mut end_y = y;
+                        self.clear_z_strip(&mut storage, start_z, z, x, y);
+                        while self.is_z_strip_full(&storage, start_z, z, end_x + 1, y) {
+                            self.clear_z_strip(&mut storage, start_z, z, end_x + 1, y);
+                            end_x += 1;
+                        }
+                        while self.is_xz_rectangle_full(&storage, x, end_x + 1, start_z, z, end_y + 1) {
+                            for cx in x..=end_x {
+                                self.clear_z_strip(&mut storage, start_z, z, cx, end_y + 1);
+                            }
+                            end_y += 1;
+                        }
+                        consumer(x, y, start_z, end_x + 1, end_y + 1, z);
                     }
                 }
             }
         }
+    }
+
+    pub fn to_aabbs(&self) -> Vec<AABB> {
+        let mut out = Vec::new();
+        let c = &self.coords;
+        self.for_all_boxes(|x1, y1, z1, x2, y2, z2| out.push(AABB::new(c[0][x1], c[1][y1], c[2][z1], c[0][x2], c[1][y2], c[2][z2])));
         out
     }
 }
@@ -554,6 +593,16 @@ mod tests {
         assert!(!is_face_full(&bottom, Direction::North));
         assert!(!is_shape_full_block(&bottom));
         assert!(is_shape_full_block(&VoxelShape::from_boxes(&[bx(0.0, 0.0, 0.0, 1.0, 0.5, 1.0), bx(0.0, 0.5, 0.0, 1.0, 1.0, 1.0)])));
+    }
+
+    #[test]
+    fn to_aabbs_merges_neighbouring_cells() {
+        let halves = VoxelShape::from_boxes(&[bx(0.0, 0.0, 0.0, 0.5, 1.0, 1.0), bx(0.5, 0.0, 0.0, 1.0, 1.0, 1.0)]);
+        assert_eq!(halves.to_aabbs(), vec![bx(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)]);
+        let stairs = VoxelShape::from_boxes(&[bx(0.0, 0.0, 0.0, 1.0, 0.5, 1.0), bx(0.0, 0.5, 0.5, 1.0, 1.0, 1.0)]);
+        assert_eq!(stairs.to_aabbs(), vec![bx(0.0, 0.0, 0.0, 1.0, 0.5, 1.0), bx(0.0, 0.5, 0.5, 1.0, 1.0, 1.0)]);
+        let corner = VoxelShape::from_boxes(&[bx(0.0, 0.0, 0.0, 1.0, 0.5, 1.0), bx(0.0, 0.5, 0.0, 0.5, 1.0, 1.0), bx(0.5, 0.5, 0.5, 1.0, 1.0, 1.0)]);
+        assert_eq!(corner.to_aabbs(), vec![bx(0.0, 0.0, 0.0, 1.0, 0.5, 1.0), bx(0.0, 0.5, 0.0, 0.5, 1.0, 1.0), bx(0.5, 0.5, 0.5, 1.0, 1.0, 1.0)]);
     }
 
     #[test]

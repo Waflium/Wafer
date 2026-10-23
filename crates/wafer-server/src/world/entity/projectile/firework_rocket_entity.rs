@@ -17,6 +17,7 @@ use crate::world::level::block::{self, BlockHitResult};
 use crate::world::level::block::entity::int_value;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::hit_result::Type;
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 const ENTITY_TYPE: &str = "minecraft:firework_rocket";
 const DATA_ID_FIREWORKS_ITEM: usize = 8;
@@ -257,7 +258,8 @@ impl ServerLevel {
             for test_step in 0..2 {
                 let t = self.entity(target);
                 let to = Vec3::new(t.x(), t.y() + t.dimensions.height as f64 * (0.5 * test_step as f64), t.z());
-                let clip = self.clip(&ClipContext { from: rocket_pos, to, block: ClipBlock::Collider, fluid: ClipFluid::None, is_player: false });
+                let collision_context = CollisionContext::of(self, id);
+                let clip = self.clip(&ClipContext { from: rocket_pos, to, block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context });
                 if clip.miss {
                     can_see = true;
                     break;

@@ -12,6 +12,7 @@ use crate::world::entity::attributes::Attribute;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::{self, BlockHitResult};
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::material;
 use crate::world::level::update_flags::UPDATE_LIMIT;
 use crate::world::{InteractionHand, InteractionResult};
@@ -174,7 +175,8 @@ pub fn player_pov_hit_result(level: &mut ServerLevel, player: EntityId, fluid: C
     let from = p.entity.eye_position();
     let range = p.living.attributes.value(Attribute::BlockInteractionRange);
     let to = from.add_vec(calculate_view_vector(p.entity.x_rot, p.entity.y_rot).scale(range));
-    let result = level.clip(&ClipContext { from, to, block: ClipBlock::Outline, fluid, is_player: true });
+    let collision_context = CollisionContext::of(level, player);
+    let result = level.clip(&ClipContext { from, to, block: ClipBlock::Outline, fluid, collision_context });
     (!result.miss).then_some(result.hit)
 }
 

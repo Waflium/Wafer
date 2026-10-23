@@ -2,11 +2,12 @@ use wafer_core::hash_map::FastSet;
 
 use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, Axis, BlockPos, Direction, Vec3, mth};
-use wafer_data::{BlockState, FluidState, block_tags, blocks, fluid_tags};
+use wafer_data::{BlockState, FluidState, block_tags, blocks, fluid_tags, game_rule};
 
 use crate::server::level::ServerLevel;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::BlockHitResult;
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ClipBlock {
@@ -41,7 +42,7 @@ pub struct ClipContext {
     pub to: Vec3,
     pub block: ClipBlock,
     pub fluid: ClipFluid,
-    pub is_player: bool,
+    pub collision_context: CollisionContext,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -293,27 +294,38 @@ fn add_collisions_along_travel(
     Some(iterations)
 }
 
-fn get_visual_shape(state: BlockState, pos: BlockPos) -> ClipShape {
-    let block = state.block();
-    if block.is_instance_of("TransparentBlock") || block.is_instance_of("IronBarsBlock") || block.is_instance_of("PowderSnowBlock") {
-        ClipShape::Empty
-    } else if block.is_instance_of("MudBlock") || block.is_instance_of("SoulSandBlock") {
-        ClipShape::Block
-    } else if block.is_instance_of("FenceBlock") || block.is_instance_of("SnowLayerBlock") {
-        ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos))
-    } else {
-        ClipShape::Voxel(state.collision_voxel_shape(), state.collision_offset(pos))
-    }
-}
-
 impl ServerLevel {
-    fn clip_block_shape(&self, ctx: &ClipContext, state: BlockState, pos: BlockPos) -> ClipShape {
+    fn clip_collision_shape(&mut self, ctx: &ClipContext, state: BlockState, pos: BlockPos) -> ClipShape {
+        let (shape, offset) = ctx.collision_context.get_block_collision_shape(state, pos, || self.block_state(pos.above()).fluid_state());
+        ClipShape::Voxel(shape, Vec3::new(offset[0], offset[1], offset[2]))
+    }
+
+    fn get_visual_shape(&mut self, ctx: &ClipContext, state: BlockState, pos: BlockPos) -> ClipShape {
+        let block = state.block();
+        if block.is_instance_of("TransparentBlock") || block.is_instance_of("IronBarsBlock") || block.is_instance_of("PowderSnowBlock") {
+            ClipShape::Empty
+        } else if block.is_instance_of("MudBlock") || block.is_instance_of("SoulSandBlock") {
+            ClipShape::Block
+        } else if block.is_instance_of("FenceBlock") || block.is_instance_of("SnowLayerBlock") {
+            ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos))
+        } else {
+            self.clip_collision_shape(ctx, state, pos)
+        }
+    }
+
+    fn clip_block_shape(&mut self, ctx: &ClipContext, state: BlockState, pos: BlockPos) -> ClipShape {
         match ctx.block {
-            ClipBlock::Collider => ClipShape::Voxel(state.collision_voxel_shape(), state.collision_offset(pos)),
+            ClipBlock::Collider => self.clip_collision_shape(ctx, state, pos),
             ClipBlock::Outline => ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos)),
-            ClipBlock::Visual => get_visual_shape(state, pos),
+            ClipBlock::Visual => self.get_visual_shape(ctx, state, pos),
             ClipBlock::FallDamageResetting => {
-                if state.is(&block_tags::FALL_DAMAGE_RESETTING) || ctx.is_player && (state.is_block(blocks::END_GATEWAY) || state.is_block(blocks::END_PORTAL)) {
+                if state.is(&block_tags::FALL_DAMAGE_RESETTING) {
+                    ClipShape::Block
+                } else if ctx.collision_context.is_player()
+                    && (state.is_block(blocks::END_GATEWAY)
+                        || state.is_block(blocks::END_PORTAL)
+                        || state.is_block(blocks::NETHER_PORTAL) && self.game_rules.get_int(game_rule::PLAYERS_NETHER_PORTAL_DEFAULT_DELAY) == 0)
+                {
                     ClipShape::Block
                 } else {
                     ClipShape::Empty

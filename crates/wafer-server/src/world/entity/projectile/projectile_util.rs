@@ -12,6 +12,7 @@ use crate::world::item::component::attack_range::AttackRange;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid, ClipResult};
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::{HitResult, Type};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 pub fn compute_margin(tick_count: i32) -> f32 {
     0.0f32.max(0.3f32.min((tick_count - 2) as f32 / 20.0))
@@ -82,7 +83,7 @@ impl ServerLevel {
         entity_margin: f32,
         clip_type: ClipBlock,
     ) -> Either<ClipResult, Vec<EntityHitResult>> {
-        let ctx = ClipContext { from: origin, to, block: clip_type, fluid: ClipFluid::None, is_player: self.is_player(source) };
+        let ctx = ClipContext { from: origin, to, block: clip_type, fluid: ClipFluid::None, collision_context: CollisionContext::of(self, source) };
         let hit_result = self.clip_including_border(&ctx);
         if !hit_result.miss {
             to = hit_result.hit.location;
@@ -116,7 +117,7 @@ impl ServerLevel {
 
     fn get_hit_result(&mut self, from: Vec3, source: EntityId, matching: impl Fn(&ServerLevel, EntityId) -> bool, delta: Vec3, entity_margin: f32, clip_type: ClipBlock) -> HitResult {
         let mut to = from.add_vec(delta);
-        let ctx = ClipContext { from, to, block: clip_type, fluid: ClipFluid::None, is_player: self.is_player(source) };
+        let ctx = ClipContext { from, to, block: clip_type, fluid: ClipFluid::None, collision_context: CollisionContext::of(self, source) };
         let clip = self.clip_including_border(&ctx);
         let mut hit_result = HitResult::Block { hit: clip.hit, miss: clip.miss };
         if hit_result.get_type() != Type::Miss {
@@ -185,7 +186,7 @@ impl ServerLevel {
                 && let Some(outside_hit_position) = entity_bb.inflate_all(entity_margin as f64).clip(from, to)
             {
                 let mut towards_target = entity_bb.center();
-                let ctx = ClipContext { from: outside_hit_position, to: towards_target, block: clip_type, fluid: ClipFluid::None, is_player: self.is_player(source) };
+                let ctx = ClipContext { from: outside_hit_position, to: towards_target, block: clip_type, fluid: ClipFluid::None, collision_context: CollisionContext::of(self, source) };
                 let clip = self.clip_including_border(&ctx);
                 if !clip.miss {
                     towards_target = clip.hit.location;
