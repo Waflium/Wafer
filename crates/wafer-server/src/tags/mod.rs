@@ -120,7 +120,7 @@ impl TagLoader {
                     .supplier
                     .read()
                     .map_err(|e| format!("java.io.IOException: {e}"))
-                    .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).map_err(|e| format!("com.google.gson.JsonSyntaxException: {e}")))
+                    .and_then(|bytes| crate::util::gson::parse_strict_bytes(&bytes))
                     .and_then(|element| {
                         if builders.get(&id).is_none() {
                             builders.insert(id.clone(), Vec::new());

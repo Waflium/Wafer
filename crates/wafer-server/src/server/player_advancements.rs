@@ -107,7 +107,7 @@ impl PlayerAdvancements {
             match std::fs::read_to_string(&path) {
                 Ok(text) => match parse_data(&text) {
                     Ok(data) => self.apply_from(manager, data),
-                    Err(error) => error!("Couldn't parse player advancements in {}\ncom.google.gson.JsonParseException: {error}", path.display()),
+                    Err(error) => error!("Couldn't parse player advancements in {}\n{error}", path.display()),
                 },
                 Err(error) => error!("Couldn't access player advancements in {}\n{error}", path.display()),
             }
@@ -362,7 +362,11 @@ impl PlayerAdvancements {
 }
 
 fn parse_data(text: &str) -> Result<Vec<(String, AdvancementProgress)>, String> {
-    let json: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    let json = crate::util::gson::parse_strict_value(text)?;
+    decode_data(json).map_err(|error| format!("com.google.gson.JsonParseException: {error}"))
+}
+
+fn decode_data(json: Value) -> Result<Vec<(String, AdvancementProgress)>, String> {
     let from_version = json.get("DataVersion").and_then(Value::as_f64).map_or(1343, |version| version as i32);
     let json = match json {
         Value::Object(mut fields) => {

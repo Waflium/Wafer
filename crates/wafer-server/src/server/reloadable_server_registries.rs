@@ -225,8 +225,7 @@ impl LoadingErrors {
 fn decode_registry<T>(registry: &str, sources: &[Source], decode: fn(&Nbt) -> Result<T, String>, errors: &mut LoadingErrors) -> HashMap<String, T> {
     let mut elements = HashMap::with_capacity(sources.len());
     for source in sources {
-        let parsed = serde_json::from_slice::<serde_json::Value>(&source.bytes)
-            .map_err(|e| format!("com.google.gson.JsonSyntaxException: {e}"))
+        let parsed = crate::util::gson::parse_strict_bytes(&source.bytes)
             .and_then(|json| crate::nbt::with_json_source(|| decode(&json_to_nbt(&json))).map_err(|e| format!("java.lang.IllegalStateException: {e}")));
         match parsed {
             Ok(element) => {

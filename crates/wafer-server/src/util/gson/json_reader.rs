@@ -26,14 +26,6 @@ pub enum JsonReaderError {
     IllegalState(String),
 }
 
-impl JsonReaderError {
-    pub fn message(&self) -> &str {
-        match self {
-            JsonReaderError::EndOfInput(message) | JsonReaderError::Malformed(message) | JsonReaderError::IllegalState(message) => message,
-        }
-    }
-}
-
 type Result<T> = std::result::Result<T, JsonReaderError>;
 
 const PEEKED_NONE: u8 = 0;
@@ -512,7 +504,6 @@ impl JsonReader {
             let c = self.buffer[p];
             p += 1;
             if self.strictness == Strictness::Strict && c < 32 {
-                self.pos = p;
                 return Err(self.syntax_error("Unescaped control characters (\\u0000-\\u001F) are not allowed in strict mode"));
             }
             if c == quote {
@@ -661,12 +652,24 @@ impl JsonReader {
     }
 
     pub fn get_path(&self) -> String {
+        self.get_path_with(false)
+    }
+
+    pub fn get_previous_path(&self) -> String {
+        self.get_path_with(true)
+    }
+
+    fn get_path_with(&self, use_previous_path: bool) -> String {
         let mut result = String::from("$");
         for (i, scope) in self.stack.iter().enumerate() {
             match *scope {
                 EMPTY_ARRAY | NONEMPTY_ARRAY => {
+                    let mut path_index = self.path_indices[i];
+                    if use_previous_path && path_index > 0 && i == self.stack.len() - 1 {
+                        path_index -= 1;
+                    }
                     result.push('[');
-                    result.push_str(&self.path_indices[i].to_string());
+                    result.push_str(&path_index.to_string());
                     result.push(']');
                 }
                 EMPTY_OBJECT | DANGLING_NAME | NONEMPTY_OBJECT => {

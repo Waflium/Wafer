@@ -92,22 +92,92 @@ pub fn parse_reader(reader: &mut JsonReader) -> Result<JsonElement, JsonReaderEr
     result
 }
 
-fn parse_to_end(mut reader: JsonReader) -> Result<JsonElement, JsonReaderError> {
-    let element = parse_reader(&mut reader)?;
-    if !element.is_json_null() && reader.peek()? != JsonToken::EndDocument {
-        return Err(JsonReaderError::Malformed("Did not consume the entire document.".to_string()));
+fn exception(error: &JsonReaderError) -> String {
+    match error {
+        JsonReaderError::EndOfInput(message) => format!("java.io.EOFException: {message}"),
+        JsonReaderError::Malformed(message) => format!("com.google.gson.stream.MalformedJsonException: {message}"),
+        JsonReaderError::IllegalState(message) => format!("java.lang.IllegalStateException: {message}"),
+    }
+}
+
+fn wrapped(wrapper: &str, error: &JsonReaderError) -> String {
+    let cause = exception(error);
+    format!("{wrapper}: {cause}\nCaused by: {cause}")
+}
+
+fn parse_to_end(mut reader: JsonReader) -> Result<JsonElement, String> {
+    let element = parse_reader(&mut reader).map_err(|error| wrapped("com.google.gson.JsonSyntaxException", &error))?;
+    if !element.is_json_null() {
+        match reader.peek() {
+            Ok(JsonToken::EndDocument) => {}
+            Ok(_) => return Err("com.google.gson.JsonSyntaxException: Did not consume the entire document.".to_string()),
+            Err(error @ JsonReaderError::EndOfInput(_)) => return Err(wrapped("com.google.gson.JsonIOException", &error)),
+            Err(error) => return Err(wrapped("com.google.gson.JsonSyntaxException", &error)),
+        }
     }
     Ok(element)
 }
 
-pub fn parse_lenient(json: &str) -> Result<JsonElement, JsonReaderError> {
+pub fn parse_lenient(json: &str) -> Result<JsonElement, String> {
     parse_to_end(JsonReader::new(json))
 }
 
-pub fn parse_strict(json: &str) -> Result<JsonElement, JsonReaderError> {
+pub fn parse_strict(json: &str) -> Result<JsonElement, String> {
     let mut reader = JsonReader::new(json);
     reader.strictness = Strictness::Strict;
     parse_to_end(reader)
+}
+
+pub fn parse_object(json: &str) -> Result<JsonElement, String> {
+    let mut reader = JsonReader::new(json);
+    reader.strictness = Strictness::Strict;
+    let element = read_element(&mut reader).map_err(|error| wrapped("com.google.gson.JsonParseException", &error))?;
+    let class = match element {
+        JsonElement::Object(_) => return Ok(element),
+        JsonElement::Null => "JsonNull",
+        JsonElement::Array(_) => "JsonArray",
+        _ => "JsonPrimitive",
+    };
+    Err(format!("com.google.gson.JsonSyntaxException: Expected a com.google.gson.JsonObject but was com.google.gson.{class}; at path {}", reader.get_previous_path()))
+}
+
+pub fn to_json_string(element: &JsonElement) -> String {
+    let mut out = String::new();
+    json_writer::write_value(&mut out, element, false);
+    out
+}
+
+pub fn to_value(element: JsonElement) -> serde_json::Value {
+    match element {
+        JsonElement::Null => serde_json::Value::Null,
+        JsonElement::Boolean(value) => serde_json::Value::Bool(value),
+        JsonElement::Number(text) => number(&text),
+        JsonElement::String(value) => serde_json::Value::String(value),
+        JsonElement::Array(elements) => serde_json::Value::Array(elements.into_iter().map(to_value).collect()),
+        JsonElement::Object(members) => serde_json::Value::Object(members.into_iter().map(|(name, value)| (name, to_value(value))).collect()),
+    }
+}
+
+fn number(text: &str) -> serde_json::Value {
+    if let Ok(value) = text.parse::<i64>() {
+        return serde_json::Value::Number(value.into());
+    }
+    if let Ok(value) = text.parse::<u64>() {
+        return serde_json::Value::Number(value.into());
+    }
+    text.parse::<f64>().ok().and_then(serde_json::Number::from_f64).map_or(serde_json::Value::Null, serde_json::Value::Number)
+}
+
+pub fn parse_lenient_value(json: &str) -> Result<serde_json::Value, String> {
+    parse_lenient(json).map(to_value)
+}
+
+pub fn parse_strict_value(json: &str) -> Result<serde_json::Value, String> {
+    parse_strict(json).map(to_value)
+}
+
+pub fn parse_strict_bytes(bytes: &[u8]) -> Result<serde_json::Value, String> {
+    parse_strict_value(&String::from_utf8_lossy(bytes))
 }
 
 pub fn to_stable_string(element: &JsonElement) -> String {

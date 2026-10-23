@@ -48,3 +48,50 @@ fn gson_matches_the_vanilla_oracle() {
     let path = std::env::var("GSON_ORACLE").expect("GSON_ORACLE");
     assert_eq!(check(&std::fs::read_to_string(path).unwrap()), 0);
 }
+
+fn result(value: Result<String, String>) -> String {
+    match value {
+        Ok(text) => format!("1{}", hex(&text)),
+        Err(text) => format!("0{}", hex(text.split("\nCaused by: ").next().unwrap())),
+    }
+}
+
+fn check_errors(expected: &str) -> usize {
+    let mut failures = 0;
+    for line in expected.lines() {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields[1..].iter().any(|field| has_lone_surrogate(&field[1..])) {
+            continue;
+        }
+        let input = String::from_utf16(&unhex(fields[0])).unwrap();
+        let strict = result(parse_strict(&input).map(|element| to_stable_string(&element)));
+        let lenient = result(parse_lenient(&input).map(|element| to_stable_string(&element)));
+        let object = result(super::parse_object(&input).map(|element| super::to_json_string(&element)));
+        let actual = [fields[0].to_string(), strict, lenient, object].join("\t");
+        if actual != line {
+            failures += 1;
+            if failures <= 10 {
+                let decode = |field: &str| String::from_utf16_lossy(&unhex(&field[1..]));
+                let actual_fields: Vec<String> = actual.split('\t').map(str::to_string).collect();
+                for i in 1..4 {
+                    if actual_fields[i] != fields[i] {
+                        eprintln!("input {input:?} field {i}\n  expected {}\n  actual   {}", decode(fields[i]), decode(&actual_fields[i]));
+                    }
+                }
+            }
+        }
+    }
+    failures
+}
+
+#[test]
+#[ignore]
+fn gson_errors_match_the_vanilla_oracle() {
+    let path = std::env::var("GSON_ERROR_ORACLE").expect("GSON_ERROR_ORACLE");
+    assert_eq!(check_errors(&std::fs::read_to_string(path).unwrap()), 0);
+}
+
+#[test]
+fn gson_errors_match_the_vanilla_cases() {
+    assert_eq!(check_errors(include_str!("error_cases.tsv")), 0);
+}

@@ -46,8 +46,8 @@ impl ServerStatsCounter {
         if counter.file.is_file() {
             match std::fs::read(&counter.file) {
                 Err(e) => error!("Couldn't read statistics file {}\n{e}", counter.file.display()),
-                Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
-                    Err(e) => error!("Couldn't parse statistics file {}\ncom.google.gson.JsonSyntaxException: {e}", counter.file.display()),
+                Ok(bytes) => match crate::util::gson::parse_strict_bytes(&bytes) {
+                    Err(e) => error!("Couldn't parse statistics file {}\n{e}", counter.file.display()),
                     Ok(element) => {
                         let version = element.get("DataVersion").and_then(Value::as_f64).map_or(1343, |version| version as i32);
                         let element = crate::util::datafix::data_fix_types::DataFixTypes::Stats.update_json_to_current_version(element, version);

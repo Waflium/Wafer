@@ -281,28 +281,7 @@ fn java_string_hash(s: &str) -> i32 {
 }
 
 fn compact_json(raw: &str) -> Result<String, String> {
-    serde_json::from_str::<serde_json::Value>(raw).map_err(|e| format!("com.google.gson.JsonSyntaxException: {e}"))?;
-    let mut out = String::with_capacity(raw.len());
-    let mut in_string = false;
-    let mut escaped = false;
-    for c in raw.chars() {
-        if in_string {
-            out.push(c);
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                in_string = false;
-            }
-        } else if c == '"' {
-            in_string = true;
-            out.push(c);
-        } else if !c.is_whitespace() {
-            out.push(c);
-        }
-    }
-    Ok(out)
+    crate::util::gson::parse_object(raw).map(|object| crate::util::gson::to_json_string(&object))
 }
 
 fn server_pack_info(id: &str, url: &str, sha1: &str, legacy_hash: Option<&str>, required: bool, prompt: &str) -> Option<ServerResourcePackInfo> {
@@ -346,7 +325,7 @@ fn parse_resource_pack_prompt(prompt: &str) -> Option<crate::network::chat::Comp
     if prompt.is_empty() {
         return None;
     }
-    match serde_json::from_str::<serde_json::Value>(prompt) {
+    match crate::util::gson::parse_strict_value(prompt) {
         Ok(json) => match crate::nbt::from_json(&json).ok_or_else(|| "Empty".to_string()).and_then(|tag| crate::network::chat::component_serialization::decode(&tag)) {
             Ok(component) => Some(component),
             Err(e) => {
@@ -354,8 +333,8 @@ fn parse_resource_pack_prompt(prompt: &str) -> Option<crate::network::chat::Comp
                 None
             }
         },
-        Err(_) => {
-            warn!("Failed to parse resource pack prompt '{prompt}'");
+        Err(e) => {
+            warn!("Failed to parse resource pack prompt '{prompt}'\n{e}");
             None
         }
     }

@@ -189,7 +189,7 @@ fn unknown_reference_message(registry: &str, key: &str) -> String {
 }
 
 fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, pack_elements: &mut Vec<PackElement>) -> Option<Value> {
-    let json = resource.supplier.read().map_err(|e| e.to_string()).and_then(|bytes| serde_json::from_slice::<Value>(&bytes).map_err(|e| format!("com.google.gson.JsonSyntaxException: {e}")));
+    let json = resource.supplier.read().map_err(|e| e.to_string()).and_then(|bytes| crate::util::gson::parse_strict_bytes(&bytes));
     let parsed = json.as_ref().ok().cloned();
     if resource.source_pack_id != VANILLA_ID {
         pack_elements.push(PackElement { registry, id: id.to_string(), pack: resource.source_pack_id.clone(), json });

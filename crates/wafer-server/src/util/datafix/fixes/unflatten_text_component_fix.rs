@@ -46,7 +46,7 @@ fn unflatten_json(json_string: &str) -> Dynamic {
                 }
             }
         }
-        Err(error) => error!("Failed to unflatten text component json: {json_string}\n{}", error.message()),
+        Err(error) => error!("Failed to unflatten text component json: {json_string}\n{error}"),
     }
     Dynamic::new(Nbt::String(json_string.to_string()))
 }
