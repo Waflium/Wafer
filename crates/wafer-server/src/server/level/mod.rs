@@ -2484,6 +2484,12 @@ pub mod testing {
         let id = player.entity.id;
         level.add_player(player);
         level.finish_chunk_work();
+        let center = level.entity(id).chunk_position();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !(-2..=2).all(|x| (-2..=2).all(|z| level.chunks.is_ticking(wafer_core::ChunkPos::new(center.x + x, center.z + z)))) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            level.finish_chunk_work();
+        }
         id
     }
 
