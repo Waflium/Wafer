@@ -44,7 +44,7 @@ fn parse_node(reader: &mut StringReader, first_node: bool) -> Result<Node, Comma
     if reader.at('[') {
         reader.skip();
         if !reader.can_read() {
-            return Err(DISPATCHER_PARSE_EXCEPTION.create_with_context(reader, "String index out of range"));
+            return Err(DISPATCHER_PARSE_EXCEPTION.create_with_context(reader, format!("Index {} out of bounds for length {}", reader.cursor, reader.total_length())));
         }
         if reader.at('{') {
             let pattern = nbt::parse_compound_as_argument(reader)?;

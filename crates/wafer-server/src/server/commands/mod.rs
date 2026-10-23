@@ -591,6 +591,33 @@ mod tests {
     }
 
     #[test]
+    fn nbt_components_resolve_like_vanilla() {
+        let mut server = testing::server();
+        run(&mut server, "data merge storage t:s {name:\"Bob\",list:[1,2,3],tags:[\"a\",\"b\"],comp:{text:\"hi\",color:\"red\"},comps:['{\"text\":\"x\"}',{text:\"z\"}]}");
+        let cases: &[(&str, &str)] = &[
+            ("{nbt:\"name\",storage:\"t:s\"}", "<\"Bob\">"),
+            ("{nbt:\"name\",storage:\"t:s\",interpret:1b}", "<Bob>"),
+            ("{nbt:\"tags\",storage:\"t:s\"}", "<[\"a\", \"b\"]>"),
+            ("{nbt:\"tags[]\",storage:\"t:s\"}", "<\"a\", \"b\">"),
+            ("{nbt:\"tags[]\",storage:\"t:s\",separator:\" | \"}", "<\"a\" | \"b\">"),
+            ("{nbt:\"list[]\",storage:\"t:s\",separator:\"+\"}", "<1+2+3>"),
+            ("{nbt:\"comp\",storage:\"t:s\"}", "<{color: \"red\", text: \"hi\"}>"),
+            ("{nbt:\"comp\",storage:\"t:s\",interpret:1b}", "<hi>"),
+            ("{nbt:\"comps[]\",storage:\"t:s\",interpret:1b,separator:\"; \"}", "<{\"text\":\"x\"}; z>"),
+            ("{nbt:\"missing\",storage:\"t:s\"}", "<>"),
+            ("{nbt:\"name\",storage:\"t:other\"}", "<>"),
+            ("{nbt:\"CustomName\",entity:\"@e[type=pig]\"}", "<>"),
+            ("{nbt:\"Items\",block:\"0 -60 0\"}", "<>"),
+            ("{text:\"A\",extra:[{nbt:\"name\",storage:\"t:s\"}]}", "<A\"Bob\">"),
+        ];
+        for (n, (component, expected)) in cases.iter().enumerate() {
+            let expected = format!("Created new objective [<{n}:{}>]", &expected[1..expected.len() - 1]);
+            let command = format!("scoreboard objectives add o{n} dummy [\"<{n}:\",{component},\">\"]");
+            assert_eq!(run(&mut server, &command), [expected], "{component}");
+        }
+    }
+
+    #[test]
     fn execute_store_and_if_data() {
         let mut server = testing::server();
         run(&mut server, "data merge storage t:s {list:[1,2],big:40000}");

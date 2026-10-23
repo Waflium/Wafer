@@ -228,6 +228,13 @@ impl ServerLevel {
         }
     }
 
+    pub fn loaded_block_entity_data(&self, pos: BlockPos) -> Option<Nbt> {
+        if !self.is_loaded(pos) {
+            return None;
+        }
+        Some(self.chunks.block_entity_ref(pos)?.save_with_full_metadata())
+    }
+
     pub fn block_entity_data(&mut self, pos: BlockPos) -> Option<Nbt> {
         Some(self.get_block_entity(pos)?.save_with_full_metadata())
     }

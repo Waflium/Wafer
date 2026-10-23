@@ -6,9 +6,11 @@ pub mod last_seen_messages;
 pub mod last_seen_messages_validator;
 pub mod message_signature;
 pub mod message_signature_cache;
+pub mod nbt_contents;
 pub mod numbers;
 pub mod player_chat_message;
 pub mod remote_chat_session;
+pub mod resolution_context;
 pub mod signable_command;
 #[cfg(test)]
 mod signed_chat_tests;
@@ -321,6 +323,7 @@ pub enum Contents {
     Keybind(String),
     Score { name: String, selector: Option<Box<EntitySelector>>, objective: String },
     Selector { pattern: String, selector: Box<EntitySelector>, separator: Option<Box<Component>> },
+    NbtContents(Box<nbt_contents::NbtContents>),
     Other(Vec<(String, Nbt)>),
     Nbt(Nbt),
 }
@@ -440,6 +443,20 @@ impl Component {
                     fields.push(("separator".into(), separator.to_nbt()));
                 }
             }
+            Contents::NbtContents(contents) => {
+                fields.push(("nbt".into(), Nbt::String(contents.nbt_path.source().into())));
+                if contents.interpreting {
+                    fields.push(("interpret".into(), Nbt::Byte(1)));
+                }
+                if contents.plain {
+                    fields.push(("plain".into(), Nbt::Byte(1)));
+                }
+                if let Some(separator) = &contents.separator {
+                    fields.push(("separator".into(), separator.to_nbt()));
+                }
+                let (key, value) = contents.data_source.to_field();
+                fields.push((key.into(), value));
+            }
             Contents::Other(raw) => fields.extend(raw.iter().cloned()),
         }
         if !self.siblings.is_empty() && !matches!(self.contents, Contents::Nbt(_)) {
@@ -503,7 +520,7 @@ impl Component {
                     }
                 }
             }
-            Contents::Score { .. } => {}
+            Contents::Score { .. } | Contents::NbtContents(_) => {}
         }
         for sibling in &self.siblings {
             sibling.append_string(out);

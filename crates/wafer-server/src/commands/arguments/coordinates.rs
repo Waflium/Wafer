@@ -2,6 +2,7 @@ use wafer_core::{BlockPos, Vec3, mth};
 
 use crate::commands::brigadier::{CommandContext, CommandSyntaxException, SimpleCommandExceptionType, StringReader};
 use crate::commands::source::{Anchor, CommandSourceStack};
+use crate::commands::arguments::selector::entity_world::EntityWorld;
 use crate::server::Server;
 
 pub static ERROR_NOT_COMPLETE: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.pos3d.incomplete");
@@ -81,7 +82,7 @@ pub enum Coordinates {
 }
 
 impl Coordinates {
-    pub fn position(&self, server: &Server, source: &CommandSourceStack) -> Vec3 {
+    pub fn position(&self, server: &dyn EntityWorld, source: &CommandSourceStack) -> Vec3 {
         match *self {
             Coordinates::World { x, y, z } => {
                 let pos = source.position;
@@ -101,7 +102,7 @@ impl Coordinates {
         }
     }
 
-    pub fn block_pos(&self, server: &Server, source: &CommandSourceStack) -> BlockPos {
+    pub fn block_pos(&self, server: &dyn EntityWorld, source: &CommandSourceStack) -> BlockPos {
         BlockPos::containing_vec(self.position(server, source))
     }
 
@@ -127,9 +128,9 @@ impl Coordinates {
     }
 }
 
-pub fn anchor_position(server: &Server, anchor: Anchor, source: &CommandSourceStack) -> Vec3 {
+pub fn anchor_position(server: &dyn EntityWorld, anchor: Anchor, source: &CommandSourceStack) -> Vec3 {
     let pos = source.position;
-    match (anchor, source.entity.and_then(|e| server.level_of(e).and_then(|level| server.levels[level].entity_ref(e)))) {
+    match (anchor, source.entity.and_then(|e| server.level_of_entity(e).and_then(|level| level.entity_ref(e)))) {
         (Anchor::Eyes, Some(entity)) => Vec3::new(pos.x, pos.y + entity.dimensions.eye_height as f64, pos.z),
         _ => pos,
     }

@@ -1,11 +1,14 @@
 use wafer_data::registry;
 use wafer_protocol::nbt::Nbt;
 
+use super::nbt_contents::{DataSource, NbtContents};
 use super::{Arg, ClickEvent, Component, Contents, HoverEvent, Style, TextColor};
+use crate::commands::arguments::coordinates::{Coordinates, parse_block_pos};
+use crate::commands::arguments::nbt_path_argument::{self, NbtPath};
 use crate::commands::arguments::parse_identifier;
 use crate::commands::arguments::selector::entity_selector::EntitySelector;
 use crate::commands::arguments::selector::entity_selector_parser::EntitySelectorParser;
-use crate::commands::brigadier::{StringReader, tr};
+use crate::util::compilable_string::{CompilableString, command_parser_helper};
 
 struct DataResult<T> {
     value: Option<T>,
@@ -86,7 +89,11 @@ fn optional<T>(tag: Option<&Nbt>, decode: impl FnOnce(&Nbt) -> DataResult<T>) ->
     }
 }
 
-fn list<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T>> {
+fn lenient_optional<T>(tag: Option<&Nbt>, decode: impl FnOnce(&Nbt) -> DataResult<T>) -> Option<T> {
+    tag.map(decode).filter(DataResult::is_success).and_then(|result| result.value)
+}
+
+fn list<T>(tag: &Nbt,decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T>> {
     let Nbt::List(items) = tag else { return DataResult::error(format!("Not a list: {}", snbt(tag))) };
     let mut elements = Vec::new();
     let mut errors = Vec::new();
@@ -223,17 +230,21 @@ fn decode_full(fields: &[(String, Nbt)]) -> DataResult<Component> {
 const CONTENT_TYPES: [&str; 7] = ["text", "translatable", "keybind", "score", "selector", "nbt", "object"];
 
 fn decode_contents(fields: &[(String, Nbt)]) -> DataResult<Contents> {
-    if let Some(kind) = get(fields, "type") {
+    create_legacy_component_matcher("type", &CONTENT_TYPES, fields, decode_content_type)
+}
+
+fn create_legacy_component_matcher<T>(type_field_name: &str, types: &[&str], fields: &[(String, Nbt)], decode_type: impl Fn(&str, &[(String, Nbt)]) -> DataResult<T>) -> DataResult<T> {
+    if let Some(kind) = get(fields, type_field_name) {
         let Some(kind) = string(kind).value else { return DataResult::error("Not a string") };
-        if !CONTENT_TYPES.contains(&kind.as_str()) {
-            return DataResult::error(format!("Unknown ID: {kind}"));
+        if !types.contains(&kind.as_str()) {
+            return DataResult::error(format!("Unknown element id: {kind}"));
         }
-        return decode_content_type(&kind, fields);
+        return decode_type(&kind, fields);
     }
-    for kind in CONTENT_TYPES {
-        let contents = decode_content_type(kind, fields);
-        if contents.is_success() {
-            return contents;
+    for kind in types {
+        let result = decode_type(kind, fields);
+        if result.is_success() {
+            return result;
         }
     }
     DataResult::error("No matching codec found")
@@ -261,7 +272,7 @@ fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> DataResult<Conte
             let error = record_error(&[&name.error, &objective.error]);
             let value = match (name.value, objective.value) {
                 (Some(name), Some(objective)) => {
-                    let selector = compile_selector(&name).ok().map(Box::new);
+                    let selector = compile_selector(&name).ok().map(|selector| Box::new(selector.into_compiled()));
                     Some(Contents::Score { name, selector, objective })
                 }
                 _ => None,
@@ -270,7 +281,7 @@ fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> DataResult<Conte
         }),
         "selector" => {
             let selector = required(fields, "selector", |pattern| {
-                string(pattern).flat_map(|pattern| DataResult::from_result(compile_selector(&pattern)).map(|selector| (pattern, selector)))
+                string(pattern).flat_map(|pattern| DataResult::from_result(compile_selector(&pattern)).map(|selector| (pattern, selector.into_compiled())))
             });
             let separator = optional(get(fields, "separator"), decode_component);
             let error = record_error(&[&selector.error, &separator.error]);
@@ -280,7 +291,7 @@ fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> DataResult<Conte
             };
             DataResult { value, error }
         }
-        "nbt" => required(fields, "nbt", string).map(|_| Contents::Other(content_fields(fields))),
+        "nbt" => decode_nbt_contents(fields),
         _ => {
             if get(fields, "object").is_none() && get(fields, "sprite").is_none() && get(fields, "player").is_none() {
                 return DataResult::error(no_key("object", fields));
@@ -294,19 +305,44 @@ fn content_fields(fields: &[(String, Nbt)]) -> Vec<(String, Nbt)> {
     fields.iter().filter(|(k, _)| k != "extra" && k != "type" && !STYLE_KEYS.contains(&k.as_str())).cloned().collect()
 }
 
-fn compile_selector(pattern: &str) -> std::result::Result<EntitySelector, String> {
-    let units: Vec<u16> = pattern.encode_utf16().collect();
-    let mut reader = StringReader::new(&units);
-    let parsed = EntitySelectorParser::new(&mut reader, true).parse();
-    let result = parsed.and_then(|selector| {
-        if reader.can_read() {
-            let parsed = reader.substring(0, reader.cursor);
-            let leftovers = reader.substring(reader.cursor, reader.total_length());
-            return Err(crate::commands::brigadier::CommandSyntaxException::new(tr("command.trailing_data", vec![format!("{parsed}[{leftovers}]").into()])));
-        }
-        Ok(selector)
-    });
-    result.map_err(|e| format!("Invalid selector component: {pattern}: {}", e.get_message()))
+fn decode_nbt_contents(fields: &[(String, Nbt)]) -> DataResult<Contents> {
+    let nbt_path = required(fields, "nbt", |path| string(path).flat_map(|path| DataResult::from_result(compile_nbt_path(&path))));
+    let interpreting = lenient_optional(get(fields, "interpret"), boolean).unwrap_or(false);
+    let plain = lenient_optional(get(fields, "plain"), boolean).unwrap_or(false);
+    let separator = lenient_optional(get(fields, "separator"), decode_component).map(Box::new);
+    let data_source = decode_data_source(fields);
+    let error = record_error(&[&nbt_path.error, &data_source.error]);
+    let value = match (nbt_path.value, data_source.value) {
+        (Some(nbt_path), Some(data_source)) => Some(NbtContents { nbt_path, interpreting, plain, separator, data_source }),
+        _ => None,
+    };
+    DataResult { value, error }
+        .flat_map(|contents| if contents.interpreting && contents.plain { DataResult::error("'interpret' and 'plain' flags can't be both on") } else { DataResult::success(contents) })
+        .map(|contents| Contents::NbtContents(Box::new(contents)))
+}
+
+pub fn decode_data_source_or_none(fields: &[(String, Nbt)]) -> Option<DataSource> {
+    decode_data_source(fields).value
+}
+
+fn decode_data_source(fields: &[(String, Nbt)]) -> DataResult<DataSource> {
+    create_legacy_component_matcher("source", &["entity", "block", "storage"], fields, |kind, fields| match kind {
+        "entity" => required(fields, "entity", |selector| string(selector).flat_map(|selector| DataResult::from_result(compile_selector(&selector)).map(DataSource::Entity))),
+        "block" => required(fields, "block", |pos| string(pos).flat_map(|pos| DataResult::from_result(compile_block_pos(&pos)).map(DataSource::Block))),
+        _ => required(fields, "storage", |id| string(id).flat_map(|id| DataResult::from_result(crate::resources::identifier::read(&id)).map(DataSource::Storage))),
+    })
+}
+
+fn compile_selector(pattern: &str) -> std::result::Result<CompilableString<EntitySelector>, String> {
+    command_parser_helper(pattern, |reader| EntitySelectorParser::new(reader, true).parse(), |original, e| format!("Invalid selector component: {original}: {}", e.get_message()))
+}
+
+fn compile_block_pos(pos: &str) -> std::result::Result<CompilableString<Coordinates>, String> {
+    command_parser_helper(pos, parse_block_pos, |original, e| format!("Invalid coordinates path: {original}: {}", e.get_message()))
+}
+
+fn compile_nbt_path(path: &str) -> std::result::Result<CompilableString<NbtPath>, String> {
+    command_parser_helper(path, nbt_path_argument::parse, |original, e| format!("Invalid NBT path: {original}: {}", e.get_message()))
 }
 
 fn decode_arg(tag: &Nbt) -> DataResult<Arg> {

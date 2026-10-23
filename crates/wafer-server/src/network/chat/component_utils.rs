@@ -1,4 +1,5 @@
 use super::numbers::NumberFormat;
+use super::resolution_context::ResolutionContext;
 use super::{Arg, Component, Contents, HoverEvent, Style};
 use crate::commands::arguments::entity_argument::ERROR_NOT_SINGLE_ENTITY;
 use crate::commands::brigadier::CommandSyntaxException;
@@ -28,7 +29,7 @@ pub fn wrap_in_square_brackets(component: Component) -> Component {
 
 pub fn needs_resolution(component: &Component) -> bool {
     let contents = match &component.contents {
-        Contents::Score { .. } | Contents::Selector { .. } => true,
+        Contents::Score { .. } | Contents::Selector { .. } | Contents::NbtContents(_) => true,
         Contents::Translatable { args, .. } => args.iter().any(|arg| matches!(arg, Arg::Component(c) if needs_resolution(c))),
         _ => false,
     };
@@ -38,41 +39,43 @@ pub fn needs_resolution(component: &Component) -> bool {
 }
 
 pub fn resolve(world: &dyn EntityWorld, source: &CommandSourceStack, component: &Component) -> Result<Component, CommandSyntaxException> {
-    resolve_depth(world, source, source.entity, component, 0)
+    resolve_depth(&mut ResolutionContext::new(world, source, source.entity), component, 0)
 }
 
 pub fn update_for_entity(world: &dyn EntityWorld, source: &CommandSourceStack, component: &Component, entity: Option<EntityId>) -> Result<Component, CommandSyntaxException> {
-    resolve_depth(world, source, entity, component, 0)
+    resolve_depth(&mut ResolutionContext::new(world, source, entity), component, 0)
 }
 
-fn resolve_depth(world: &dyn EntityWorld, source: &CommandSourceStack, entity: Option<EntityId>, component: &Component, depth: i32) -> Result<Component, CommandSyntaxException> {
+pub fn resolve_depth(context: &mut ResolutionContext, component: &Component, depth: i32) -> Result<Component, CommandSyntaxException> {
     if depth > DEPTH_LIMIT {
         return Ok(component.clone());
     }
-    let mut result = resolve_contents(world, source, entity, &component.contents, depth + 1)?;
+    let mut result = resolve_contents(context, &component.contents, depth + 1)?;
     for sibling in &component.siblings {
-        result.siblings.push(resolve_depth(world, source, entity, sibling, depth + 1)?);
+        result.siblings.push(resolve_depth(context, sibling, depth + 1)?);
     }
-    let style = resolve_style(world, source, entity, &component.style, depth)?;
+    let style = resolve_style(context, &component.style, depth)?;
     Ok(result.with_style(&style))
 }
 
-fn resolve_style(world: &dyn EntityWorld, source: &CommandSourceStack, entity: Option<EntityId>, style: &Style, depth: i32) -> Result<Style, CommandSyntaxException> {
+fn resolve_style(context: &mut ResolutionContext, style: &Style, depth: i32) -> Result<Style, CommandSyntaxException> {
     if let Some(HoverEvent::ShowText(text)) = &style.hover_event {
-        let resolved = resolve_depth(world, source, entity, text, depth + 1)?;
+        let resolved = resolve_depth(context, text, depth + 1)?;
         return Ok(Style { hover_event: Some(HoverEvent::ShowText(Box::new(resolved))), ..style.clone() });
     }
     Ok(style.clone())
 }
 
-fn resolve_contents(world: &dyn EntityWorld, source: &CommandSourceStack, entity: Option<EntityId>, contents: &Contents, depth: i32) -> Result<Component, CommandSyntaxException> {
+fn resolve_contents(context: &mut ResolutionContext, contents: &Contents, depth: i32) -> Result<Component, CommandSyntaxException> {
     let bare = |contents: Contents| Component { contents, style: Style::default(), siblings: Vec::new() };
+    let world = context.world;
+    let source = context.source;
     Ok(match contents {
         Contents::Translatable { key, fallback, args } => {
             let mut resolved = Vec::with_capacity(args.len());
             for arg in args {
                 resolved.push(match arg {
-                    Arg::Component(c) => Arg::Component(resolve_depth(world, source, entity, c, depth)?),
+                    Arg::Component(c) => Arg::Component(resolve_depth(context, c, depth)?),
                     other => other.clone(),
                 });
             }
@@ -90,7 +93,7 @@ fn resolve_contents(world: &dyn EntityWorld, source: &CommandSourceStack, entity
                 }
                 None => ScoreHolder::for_name_only(name.clone()),
             };
-            let holder = match entity.and_then(|entity| world.level_of_entity(entity).map(|level| (level, entity))) {
+            let holder = match context.default_scoreboard_entity.and_then(|entity| world.level_of_entity(entity).map(|level| (level, entity))) {
                 Some((level, entity)) if holder.is_wildcard() => ScoreHolder::for_entity(level, entity),
                 _ => holder,
             };
@@ -102,7 +105,7 @@ fn resolve_contents(world: &dyn EntityWorld, source: &CommandSourceStack, entity
         }
         Contents::Selector { selector, separator, .. } => {
             let separator = match separator {
-                Some(separator) => Some(resolve_depth(world, source, entity, separator, depth)?),
+                Some(separator) => Some(resolve_depth(context, separator, depth)?),
                 None => None,
             };
             let names = selector.find_entities(world, source)?.into_iter().map(|e| world.entity_display_name(e)).collect();
@@ -111,6 +114,7 @@ fn resolve_contents(world: &dyn EntityWorld, source: &CommandSourceStack, entity
                 None => format_list(names),
             }
         }
+        Contents::NbtContents(nbt) => nbt.resolve(context, depth)?,
         other => bare(other.clone()),
     })
 }

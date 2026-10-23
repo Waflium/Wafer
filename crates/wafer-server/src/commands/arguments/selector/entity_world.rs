@@ -5,6 +5,7 @@ use crate::server::Server;
 use crate::server::level::ServerLevel;
 use crate::server::level::server_player::ServerPlayer;
 use crate::world::entity::EntityId;
+use crate::world::level::storage::command_storage::CommandStorage;
 use crate::world::scores::scoreboard::Scoreboard;
 
 pub trait EntityWorld {
@@ -17,6 +18,8 @@ pub trait EntityWorld {
     fn players(&self) -> Box<dyn Iterator<Item = &ServerPlayer> + '_>;
 
     fn scoreboard(&self) -> &RefCell<Scoreboard>;
+
+    fn command_storage(&self) -> &RefCell<CommandStorage>;
 
     fn has_player(&self, id: EntityId) -> bool {
         self.level_of_entity(id).is_some_and(|level| level.players.contains_key(&id))
@@ -58,6 +61,10 @@ impl EntityWorld for Server {
     fn scoreboard(&self) -> &RefCell<Scoreboard> {
         &self.scoreboard
     }
+
+    fn command_storage(&self) -> &RefCell<CommandStorage> {
+        &self.command_storage
+    }
 }
 
 pub struct LevelWorld<'a>(pub &'a ServerLevel);
@@ -81,5 +88,9 @@ impl EntityWorld for LevelWorld<'_> {
 
     fn scoreboard(&self) -> &RefCell<Scoreboard> {
         &self.0.scoreboard
+    }
+
+    fn command_storage(&self) -> &RefCell<CommandStorage> {
+        &self.0.command_storage
     }
 }

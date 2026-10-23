@@ -3,6 +3,7 @@ pub mod basic_file_attributes;
 pub mod block_util;
 pub mod brightness;
 pub mod codec;
+pub mod compilable_string;
 pub mod dependency_sorter;
 pub mod ease;
 pub mod easing_type;

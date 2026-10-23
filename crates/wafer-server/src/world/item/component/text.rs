@@ -7,6 +7,7 @@ use super::codec::{self, Codec, Custom, Dispatch, Selector, Stream};
 use super::custom;
 use super::types::{Pair, b, bool, def, identifier, lenient, lenient_opt, list, opt, record, req, string};
 use crate::nbt;
+use crate::network::chat::component_serialization::decode_data_source_or_none;
 use crate::util::hash_ops::{self, HashCode};
 
 pub fn text() -> Pair {
@@ -197,15 +198,13 @@ fn decode_contents(contents: &Contents, tag: &Nbt) -> Result<Nbt, String> {
     let Nbt::Compound(fields) = &mut value else { return Ok(value) };
     match contents.name {
         "nbt" => {
-            let source = ["entity", "block", "storage"]
-                .into_iter()
-                .find_map(|key| tag.get(key).and_then(|v| v.as_str()).map(|v| (key, v)))
-                .ok_or_else(|| "No matching codec found".to_string())?;
-            let value = if source.0 == "storage" { Nbt::String(codec::identifier(&Nbt::String(source.1.into()))?) } else { Nbt::String(source.1.into()) };
+            let Nbt::Compound(raw) = tag else { return Err("No matching codec found".into()) };
+            let source = decode_data_source_or_none(raw).ok_or_else(|| "No matching codec found".to_string())?;
             if fields.iter().any(|(k, v)| k == "interpret" && *v == Nbt::Byte(1)) && fields.iter().any(|(k, v)| k == "plain" && *v == Nbt::Byte(1)) {
                 return Err("'interpret' and 'plain' flags can't be both on".into());
             }
-            fields.push((source.0.into(), value));
+            let (key, value) = source.to_field();
+            fields.push((key.into(), value));
         }
         "object" => {
             let object: Vec<(String, Nbt)> = if tag.get("sprite").is_some() {

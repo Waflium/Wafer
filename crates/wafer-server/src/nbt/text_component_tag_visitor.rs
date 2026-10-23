@@ -13,7 +13,11 @@ const NUMBER: ChatFormatting = ChatFormatting::Gold;
 const NUMBER_TYPE: ChatFormatting = ChatFormatting::Red;
 
 pub fn to_pretty_component(tag: &Nbt) -> Component {
-    let mut visitor = Visitor { result: Vec::new(), depth: 0 };
+    to_component(tag, false)
+}
+
+pub fn to_component(tag: &Nbt, plain: bool) -> Component {
+    let mut visitor = Visitor { result: Vec::new(), depth: 0, plain };
     visitor.visit(tag);
     visitor.result.into_iter().fold(Component::empty(), Component::append)
 }
@@ -21,6 +25,7 @@ pub fn to_pretty_component(tag: &Nbt) -> Component {
 struct Visitor {
     result: Vec<Component>,
     depth: usize,
+    plain: bool,
 }
 
 impl Visitor {
@@ -29,7 +34,8 @@ impl Visitor {
     }
 
     fn styled(&mut self, text: &str, color: ChatFormatting) {
-        self.result.push(Component::literal(text).with_color(color));
+        let component = Component::literal(text);
+        self.result.push(if self.plain { component } else { component.with_color(color) });
     }
 
     fn number(&mut self, value: String, suffix: Option<&str>) {
@@ -159,13 +165,14 @@ impl Visitor {
 
     fn key(&mut self, key: &str) {
         if !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '+' | '-')) {
-            self.result.push(Component::literal(key).with_color(KEY));
+            self.styled(key, KEY);
             return;
         }
         let mut quoted = String::new();
         quote_and_escape(key, &mut quoted);
         let quote = &quoted[..1];
-        let inner = Component::literal(&quoted[1..quoted.len() - 1]).with_color(KEY);
+        let inner = Component::literal(&quoted[1..quoted.len() - 1]);
+        let inner = if self.plain { inner } else { inner.with_color(KEY) };
         self.result.push(Component::literal(quote).append(inner).append(Component::literal(quote)));
     }
 }
