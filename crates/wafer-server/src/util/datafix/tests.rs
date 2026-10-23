@@ -48,3 +48,23 @@ fn schemas_match_the_vanilla_dump() {
     }
     assert_eq!(mismatches, 0);
 }
+
+#[test]
+#[ignore]
+fn updates_match_the_vanilla_oracle() {
+    let cases = std::fs::read_to_string(std::env::var("WAFER_DFU_CASES").expect("WAFER_DFU_CASES points at the DfuOracle input")).unwrap();
+    let expected = std::fs::read_to_string(std::env::var("WAFER_DFU_EXPECTED").expect("WAFER_DFU_EXPECTED points at the DfuOracle output")).unwrap();
+    let mut expected = expected.lines();
+    let mut mismatches = 0;
+    for case in cases.lines().filter(|line| !line.is_empty()) {
+        let fields: Vec<&str> = case.splitn(4, '\t').collect();
+        let ty: &'static str = Box::leak(fields[0].to_string().into_boxed_str());
+        let actual = update(ty, fields[1].parse().unwrap(), fields[2].parse().unwrap(), fields[3]);
+        let vanilla = expected.next().expect("an expected line");
+        if actual != vanilla {
+            mismatches += 1;
+            eprintln!("{case}\n  vanilla: {vanilla}\n  wafer:   {actual}");
+        }
+    }
+    assert_eq!(mismatches, 0);
+}
