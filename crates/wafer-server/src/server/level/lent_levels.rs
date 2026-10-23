@@ -30,6 +30,14 @@ impl Drop for LentLevels<'_> {
 }
 
 impl ServerLevel {
+    pub fn entity_in_any_dimension(&self, (index, id): (usize, crate::world::entity::EntityId)) -> Option<&crate::world::entity::Entity> {
+        if index == self.index {
+            self.entity_ref(id)
+        } else {
+            self.other_levels.iter().find(|level| level.index == index).and_then(|level| level.entity_ref(id))
+        }
+    }
+
     pub fn level_with_player(&self, id: crate::world::entity::EntityId) -> Option<&ServerLevel> {
         if self.players.contains_key(&id) {
             Some(self)

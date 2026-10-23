@@ -26,17 +26,17 @@ impl PathNavigation {
         self.ground_path_navigation_create_path(level, mob, pos, reach_range)
     }
 
-    pub fn wall_climber_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
-        self.wall_climber_navigation_mut().path_to_position = Some(level.entity(target).block_position());
-        self.ground_path_navigation_create_path_to_entity(level, mob, target, reach_range)
+    pub fn wall_climber_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target_pos: BlockPos, reach_range: i32) -> Option<Path> {
+        self.wall_climber_navigation_mut().path_to_position = Some(target_pos);
+        self.ground_path_navigation_create_path_to_entity(level, mob, target_pos, reach_range)
     }
 
-    pub fn wall_climber_navigation_move_to_entity(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId, speed_modifier: f64) -> bool {
-        let new_path = self.create_path_to_entity(level, mob, target, 0);
+    pub fn wall_climber_navigation_move_to_entity(&mut self, level: &mut ServerLevel, mob: EntityId, target_pos: BlockPos, speed_modifier: f64) -> bool {
+        let new_path = self.create_path_to_entity_at(level, mob, target_pos, 0);
         if new_path.is_some() {
             return self.move_to_path(level, mob, new_path, speed_modifier);
         }
-        self.wall_climber_navigation_mut().path_to_position = Some(level.entity(target).block_position());
+        self.wall_climber_navigation_mut().path_to_position = Some(target_pos);
         self.speed_modifier = speed_modifier;
         true
     }

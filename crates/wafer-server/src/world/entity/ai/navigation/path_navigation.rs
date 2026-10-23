@@ -204,9 +204,8 @@ impl PathNavigation {
         self.create_path_with_max_length(level, mob, &[pos], 8, false, reach_range, max_path_length as f32)
     }
 
-    fn path_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
-        let pos = level.entity(target).block_position();
-        self.create_path_from_targets(level, mob, &[pos], 16, true, reach_range)
+    fn path_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target_pos: BlockPos, reach_range: i32) -> Option<Path> {
+        self.create_path_from_targets(level, mob, &[target_pos], 16, true, reach_range)
     }
 
     fn create_path_from_targets(&mut self, level: &ServerLevel, mob: EntityId, targets: &[BlockPos], radius_offset: i32, above: bool, reach_range: i32) -> Option<Path> {
@@ -256,28 +255,37 @@ impl PathNavigation {
     }
 
     pub fn create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
+        self.create_path_to_entity_at(level, mob, level.entity(target).block_position(), reach_range)
+    }
+
+    pub fn create_path_to_entity_at(&mut self, level: &ServerLevel, mob: EntityId, target_pos: BlockPos, reach_range: i32) -> Option<Path> {
         if self.wall_climber_navigation.is_some() {
-            self.wall_climber_navigation_create_path_to_entity(level, mob, target, reach_range)
+            self.wall_climber_navigation_create_path_to_entity(level, mob, target_pos, reach_range)
         } else if matches!(self.kind, PathNavigationKind::Flying | PathNavigationKind::Bee | PathNavigationKind::BabyFlying) {
-            let pos = level.entity(target).block_position();
-            self.create_path(level, mob, pos, reach_range)
+            self.create_path(level, mob, target_pos, reach_range)
         } else if matches!(self.kind, PathNavigationKind::Amphibious | PathNavigationKind::Frog | PathNavigationKind::Turtle | PathNavigationKind::WaterBound) {
-            self.path_navigation_create_path_to_entity(level, mob, target, reach_range)
+            self.path_navigation_create_path_to_entity(level, mob, target_pos, reach_range)
         } else {
-            self.ground_path_navigation_create_path_to_entity(level, mob, target, reach_range)
+            self.ground_path_navigation_create_path_to_entity(level, mob, target_pos, reach_range)
         }
     }
 
     pub fn move_to_entity(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId, speed_modifier: f64) -> bool {
+        let target_pos = level.entity(target).block_position();
+        self.move_to_entity_at(level, mob, target_pos, speed_modifier)
+    }
+
+    pub fn move_to_entity_at(&mut self, level: &mut ServerLevel, mob: EntityId, target_pos: BlockPos, speed_modifier: f64) -> bool {
         if self.wall_climber_navigation.is_some() {
-            self.wall_climber_navigation_move_to_entity(level, mob, target, speed_modifier)
+            self.wall_climber_navigation_move_to_entity(level, mob, target_pos, speed_modifier)
         } else {
-            self.path_navigation_move_to_entity(level, mob, target, speed_modifier)
+            self.path_navigation_move_to_entity(level, mob, target_pos, speed_modifier)
         }
     }
 
-    pub fn path_navigation_move_to_entity(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId, speed_modifier: f64) -> bool {
-        self.move_to_entity_with_reach_range(level, mob, target, 1, speed_modifier)
+    pub fn path_navigation_move_to_entity(&mut self, level: &mut ServerLevel, mob: EntityId, target_pos: BlockPos, speed_modifier: f64) -> bool {
+        let new_path = self.create_path_to_entity_at(level, mob, target_pos, 1);
+        new_path.is_some() && self.move_to_path(level, mob, new_path, speed_modifier)
     }
 
     pub fn move_to_entity_with_reach_range(&mut self, level: &mut ServerLevel, mob: EntityId, target: EntityId, reach_range: i32, speed_modifier: f64) -> bool {

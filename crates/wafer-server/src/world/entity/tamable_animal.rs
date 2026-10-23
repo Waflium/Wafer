@@ -207,21 +207,24 @@ impl ServerLevel {
             return Some(own_team);
         }
         if self.is_tame(id)
-            && let Some(owner) = self.get_root_owner(id)
+            && let Some((owner_level, owner)) = self.get_root_owner_in_any_dimension(id)
         {
-            return self.team_of(owner);
+            return owner_level.team_of(owner);
         }
         None
     }
 
     pub fn tamable_animal_considers_entity_as_ally(&self, id: EntityId, other: EntityId) -> bool {
         if self.is_tame(id) {
-            let owner = self.get_root_owner(id);
-            if Some(other) == owner {
+            let owner = self.get_root_owner_in_any_dimension(id);
+            if owner.is_some_and(|(owner_level, owner)| owner_level.index == self.index && owner == other) {
                 return true;
             }
-            if let Some(owner) = owner {
-                return self.considers_entity_as_ally(owner, other);
+            if let Some((owner_level, owner)) = owner {
+                if owner_level.index == self.index {
+                    return self.considers_entity_as_ally(owner, other);
+                }
+                return owner_level.is_allied_to_team(owner, self.team_of(other).as_deref());
             }
         }
         self.entity_considers_entity_as_ally(id, other)
@@ -229,23 +232,23 @@ impl ServerLevel {
 
     pub fn tamable_animal_die(&mut self, id: EntityId, source: DamageSource) {
         if self.game_rules.get_bool(game_rule::SHOW_DEATH_MESSAGES)
-            && let Some(owner) = self.get_owner(id).filter(|&owner| self.is_player(owner))
+            && let Some((owner_level, owner)) = self.get_owner_in_any_dimension(id).filter(|&(owner_level, owner)| owner_level.is_player(owner))
         {
             let message = self.death_message(id);
-            self.send_system_message(owner, &message);
+            owner_level.send_system_message(owner, &message);
         }
         self.living_entity_die(id, source);
     }
 
     pub fn try_to_teleport_to_owner(&mut self, id: EntityId) {
-        if let Some(owner) = self.get_owner(id) {
-            let target_pos = self.entity(owner).block_position();
+        if let Some((owner_level, owner)) = self.get_owner_in_any_dimension(id) {
+            let target_pos = owner_level.entity(owner).block_position();
             self.teleport_to_around_block_pos(id, target_pos);
         }
     }
 
     pub fn should_try_teleport_to_owner(&self, id: EntityId) -> bool {
-        self.get_owner(id).is_some_and(|owner| self.entity(id).distance_to_sqr(self.entity(owner)) >= TELEPORT_WHEN_DISTANCE_IS_SQ)
+        self.get_owner_in_any_dimension(id).is_some_and(|(owner_level, owner)| self.entity(id).distance_to_sqr(owner_level.entity(owner)) >= TELEPORT_WHEN_DISTANCE_IS_SQ)
     }
 
     fn teleport_to_around_block_pos(&mut self, id: EntityId, target_pos: BlockPos) {
@@ -290,7 +293,7 @@ impl ServerLevel {
     }
 
     pub fn unable_to_move_to_owner(&self, id: EntityId) -> bool {
-        self.is_ordered_to_sit(id) || self.is_passenger(id) || self.may_be_leashed(id) || self.get_owner(id).is_some_and(|owner| self.is_spectator(owner))
+        self.is_ordered_to_sit(id) || self.is_passenger(id) || self.may_be_leashed(id) || self.get_owner_in_any_dimension(id).is_some_and(|(owner_level, owner)| owner_level.is_spectator(owner))
     }
 
     fn can_fly_to_owner(&self, id: EntityId) -> bool {

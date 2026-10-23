@@ -72,9 +72,8 @@ impl PathNavigation {
         column_pos
     }
 
-    pub fn ground_path_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target: EntityId, reach_range: i32) -> Option<Path> {
-        let pos = level.entity(target).block_position();
-        self.create_path(level, mob, pos, reach_range)
+    pub fn ground_path_navigation_create_path_to_entity(&mut self, level: &ServerLevel, mob: EntityId, target_pos: BlockPos, reach_range: i32) -> Option<Path> {
+        self.create_path(level, mob, target_pos, reach_range)
     }
 
     fn get_surface_y(&self, level: &ServerLevel, mob: EntityId) -> i32 {

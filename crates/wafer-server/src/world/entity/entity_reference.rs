@@ -28,6 +28,13 @@ impl EntityReference {
         level.entity_manager.visible_entity_storage.get(self.uuid).filter(|&id| level.entity_ref(id).is_some_and(|e| !e.is_removed()))
     }
 
+    pub fn get_entity_in_any_dimension(self, level: &ServerLevel) -> Option<(&ServerLevel, EntityId)> {
+        if let Some(id) = self.get_entity(level) {
+            return Some((level, id));
+        }
+        level.other_levels.iter().find_map(|other_level| self.get_entity(other_level).map(|id| (other_level, id)))
+    }
+
     pub fn store(reference: Option<EntityReference>, output: &mut Vec<(String, Nbt)>, key: &str) {
         if let Some(reference) = reference {
             output.push((key.into(), uuid_ints(reference.get_uuid())));
@@ -47,5 +54,9 @@ impl EntityReference {
 
     pub fn get_living_entity(reference: Option<EntityReference>, level: &ServerLevel) -> Option<EntityId> {
         reference?.get_entity(level).filter(|&id| level.is_living(id))
+    }
+
+    pub fn get_living_entity_in_any_dimension(reference: Option<EntityReference>, level: &ServerLevel) -> Option<(&ServerLevel, EntityId)> {
+        reference?.get_entity_in_any_dimension(level).filter(|&(level, id)| level.is_living(id))
     }
 }

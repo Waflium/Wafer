@@ -279,3 +279,38 @@ fn wild_wolves_hunt_sheep_but_not_cows() {
     assert!(TargetType::Animal.is_instance(&level, sheep_id) && selector(wolf, sheep_id, &level));
     assert!(TargetType::Animal.is_instance(&level, cow_id) && !selector(wolf, cow_id, &level));
 }
+
+#[test]
+fn wolves_follow_and_report_to_owners_in_another_dimension() {
+    use crate::commands::perform_prefixed_command;
+    use crate::commands::source::CommandSourceStack;
+    use crate::network::connection::Outbound;
+    use crate::network::login::Profile;
+    use crate::server::level::lent_levels::LentLevels;
+    use wafer_data::packets::play::clientbound;
+    use wafer_protocol::Reader;
+    let mut server = testing::server();
+    let player = testing::server_player_with_profile(&mut server, Profile { uuid: 1, name: "Owner".into(), properties: Vec::new() }, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+    server.overworld_mut().handle_player_loaded(player);
+    let mut mob = Wolf::create();
+    mob.entity.set_pos(Vec3::new(0.5, -60.0, 2.0));
+    let wolf = mob.entity.id;
+    server.overworld_mut().add_fresh_entity(LevelEntity::Mob(Box::new(mob)));
+    server.overworld_mut().tame(wolf, player);
+    let console = CommandSourceStack::server(&server);
+    perform_prefixed_command(&mut server, &console, "forceload add -16 -16 47 15");
+    perform_prefixed_command(&mut server, &console, "fill 10 63 -6 30 63 6 stone");
+    perform_prefixed_command(&mut server, &console, "execute in minecraft:the_nether run tp Owner 20.5 64 0.5");
+    let nether = server.level_of(player).unwrap();
+    assert_ne!(nether, 0);
+    for _ in 0..40 {
+        server.tick();
+    }
+    let position = server.overworld().entity(wolf).position();
+    assert!(position.distance_to_sqr(Vec3::new(20.5, 64.0, 0.5)) < 25.0, "the wolf stayed at {position:?}");
+    let (out, mut packets) = Outbound::capture();
+    server.levels[nether].player_mut(player).connection = out;
+    LentLevels::lend(&mut server.levels, 0).level().kill(wolf);
+    let ids: Vec<i32> = std::iter::from_fn(|| packets.try_recv().ok()).map(|p| Reader::new(&p).varint().unwrap()).collect();
+    assert!(ids.contains(&clientbound::SYSTEM_CHAT), "{ids:?}");
+}

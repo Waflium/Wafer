@@ -4,7 +4,7 @@ use crate::world::entity::EntityId;
 use crate::world::level::pathfinder::path_type::PathType;
 
 pub struct FollowOwnerGoal {
-    owner: Option<EntityId>,
+    owner: Option<(usize, EntityId)>,
     speed_modifier: f64,
     time_to_recalc_path: i32,
     stop_distance: f32,
@@ -18,11 +18,12 @@ impl FollowOwnerGoal {
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        let Some(owner) = level.get_owner(mob) else { return false };
+        let Some((owner_level, owner)) = level.get_owner_in_any_dimension(mob) else { return false };
+        let owner = (owner_level.index, owner);
         if level.unable_to_move_to_owner(mob) {
             return false;
         }
-        if level.entity(mob).distance_to_sqr(level.entity(owner)) < (self.start_distance * self.start_distance) as f64 {
+        if level.entity(mob).distance_to_sqr(level.entity_in_any_dimension(owner).expect("an owner")) < (self.start_distance * self.start_distance) as f64 {
             return false;
         }
         self.owner = Some(owner);
@@ -36,7 +37,7 @@ impl FollowOwnerGoal {
         if level.unable_to_move_to_owner(mob) {
             return false;
         }
-        let Some(owner) = self.owner.and_then(|owner| level.entity_ref(owner)) else { return false };
+        let Some(owner) = self.owner.and_then(|owner| level.entity_in_any_dimension(owner)) else { return false };
         !(level.entity(mob).distance_to_sqr(owner) <= (self.stop_distance * self.stop_distance) as f64)
     }
 
@@ -54,11 +55,13 @@ impl FollowOwnerGoal {
     }
 
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
-        let Some(owner) = self.owner.filter(|&owner| level.entity_ref(owner).is_some()) else { return };
+        let Some(owner) = self.owner.and_then(|owner| level.entity_in_any_dimension(owner)) else { return };
+        let (x, eye_y, z, owner_pos) = (owner.x(), owner.eye_y(), owner.z(), owner.block_position());
         let is_owner_far_away = level.should_try_teleport_to_owner(mob);
         if !is_owner_far_away {
-            let max_head_x_rot = level.mob(mob).expect("a tamable animal").get_max_head_x_rot() as f32;
-            level.set_look_at_entity(mob, owner, 10.0, max_head_x_rot);
+            let tamable = level.mob_mut(mob).expect("a tamable animal");
+            let max_head_x_rot = tamable.get_max_head_x_rot() as f32;
+            tamable.ai.look_control.set_look_at(x, eye_y, z, 10.0, max_head_x_rot);
         }
         self.time_to_recalc_path -= 1;
         if self.time_to_recalc_path <= 0 {
@@ -67,7 +70,7 @@ impl FollowOwnerGoal {
                 level.try_to_teleport_to_owner(mob);
             } else {
                 let speed_modifier = self.speed_modifier;
-                level.get_navigation(mob, |navigation, level| navigation.move_to_entity(level, mob, owner, speed_modifier));
+                level.get_navigation(mob, |navigation, level| navigation.move_to_entity_at(level, mob, owner_pos, speed_modifier));
             }
         }
     }

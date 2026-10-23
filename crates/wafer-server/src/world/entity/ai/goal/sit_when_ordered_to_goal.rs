@@ -21,8 +21,8 @@ impl SitWhenOrderedToGoal {
         if !e.on_ground {
             return false;
         }
-        let Some(owner) = level.get_owner(mob) else { return true };
-        if level.entity(mob).distance_to_sqr(level.entity(owner)) < TELEPORT_WHEN_DISTANCE_IS_SQ && level.get_last_hurt_by_mob(owner).is_some() { false } else { ordered_to_sit }
+        let Some((owner_level, owner)) = level.get_owner_in_any_dimension(mob) else { return true };
+        if level.entity(mob).distance_to_sqr(owner_level.entity(owner)) < TELEPORT_WHEN_DISTANCE_IS_SQ && owner_level.get_last_hurt_by_mob(owner).is_some() { false } else { ordered_to_sit }
     }
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
