@@ -22,6 +22,7 @@ pub mod slot_argument;
 pub mod slot_source_argument;
 pub mod waypoint_argument;
 
+use crate::world::level::chunk::HeightmapType;
 use std::sync::LazyLock;
 
 use wafer_data::commands::{CommandNode, CommandNodeKind};
@@ -129,6 +130,7 @@ pub enum ArgumentType {
     Dialog,
     TemplateRotation,
     TemplateMirror,
+    Heightmap,
     ResourceSelector { registry: String },
     Unsupported(&'static str),
 }
@@ -179,6 +181,7 @@ pub enum ArgumentValue {
     ResourceOrId(resource_or_id_argument::RawResourceOrId),
     Rotation(crate::world::level::block::rotation::Rotation),
     Mirror(crate::world::level::block::mirror::Mirror),
+    Heightmap(HeightmapType),
     ResourceSelector(Vec<String>),
 }
 
@@ -250,6 +253,7 @@ impl ArgumentType {
             "minecraft:dialog" => ArgumentType::Dialog,
             "minecraft:template_rotation" => ArgumentType::TemplateRotation,
             "minecraft:template_mirror" => ArgumentType::TemplateMirror,
+            "minecraft:heightmap" => ArgumentType::Heightmap,
             "minecraft:resource_selector" => ArgumentType::ResourceSelector { registry: registry() },
             other => ArgumentType::Unsupported(other),
         }
@@ -416,6 +420,13 @@ impl ArgumentType {
                 let id = reader.read_unquoted_string();
                 match crate::world::level::block::mirror::Mirror::by_name(&id) {
                     Some(mirror) => ArgumentValue::Mirror(mirror),
+                    None => return Err(ERROR_INVALID_ENUM_VALUE.create_with_context(reader, id)),
+                }
+            }
+            ArgumentType::Heightmap => {
+                let id = reader.read_unquoted_string();
+                match HeightmapType::LIVE.into_iter().find(|kind| kind.serialization_key().to_ascii_lowercase() == id) {
+                    Some(kind) => ArgumentValue::Heightmap(kind),
                     None => return Err(ERROR_INVALID_ENUM_VALUE.create_with_context(reader, id)),
                 }
             }
@@ -785,6 +796,13 @@ impl CommandContext {
         }
     }
 
+    pub fn get_heightmap(&self, name: &str) -> HeightmapType {
+        match self.argument(name) {
+            ArgumentValue::Heightmap(v) => *v,
+            other => panic!("{name} is {other:?}"),
+        }
+    }
+
     pub fn get_mirror(&self, name: &str) -> crate::world::level::block::mirror::Mirror {
         match self.argument(name) {
             ArgumentValue::Mirror(v) => *v,
@@ -920,6 +938,7 @@ pub fn list_suggestions(
             shared_suggestion_provider::suggest(["none", "clockwise_90", "180", "counterclockwise_90"], &mut builder)
         }
         ArgumentType::TemplateMirror => shared_suggestion_provider::suggest(["none", "left_right", "front_back"], &mut builder),
+        ArgumentType::Heightmap => shared_suggestion_provider::suggest(HeightmapType::LIVE.map(|kind| kind.serialization_key().to_ascii_lowercase()), &mut builder),
         _ => {}
     }
     builder.build()

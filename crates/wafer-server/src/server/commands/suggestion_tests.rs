@@ -34,7 +34,7 @@ fn time_markers_and_units_come_from_the_server() {
 #[test]
 fn tick_rate_suggests_the_default() {
     let server = server();
-    assert_eq!(suggest(&server, "/tick rate "), (11, 11, vec!["20.0".to_string()]));
+    assert_eq!(suggest(&server, "/tick rate "), (11, 11, vec!["20".to_string()]));
 }
 
 #[test]
@@ -142,4 +142,17 @@ fn nbt_paths_have_no_suggestions() {
     let server = server();
     assert_eq!(suggest(&server, "/data get entity @s Inv").2, Vec::<String>::new());
     assert_eq!(suggest(&server, "/data get entity @s Inventory[0].").2, Vec::<String>::new());
+}
+
+#[test]
+fn heightmaps_suggest_the_kept_types() {
+    let server = server();
+    assert_eq!(suggest(&server, "/execute positioned over "), (25, 25, ["motion_blocking", "motion_blocking_no_leaves", "ocean_floor", "world_surface"].map(String::from).to_vec()));
+}
+
+#[test]
+fn whitelist_add_suggests_online_players_missing_from_the_list() {
+    let mut server = server();
+    testing::server_player_with_profile(&mut server, crate::network::login::Profile { uuid: 1, name: "Alice".into(), properties: Vec::new() }, wafer_core::Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+    assert_eq!(suggest(&server, "/whitelist add "), (15, 15, vec!["Alice".to_string()]));
 }

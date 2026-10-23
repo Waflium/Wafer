@@ -419,6 +419,7 @@ static MODIFIERS: &[(&str, ModifierFn)] = &[
     ("execute on origin", execute_command::on_origin),
     ("execute on passengers", execute_command::on_passengers),
     ("execute positioned as targets", execute_command::positioned_as),
+    ("execute positioned over heightmap", execute_command::positioned_over),
     ("execute positioned pos", execute_command::positioned),
     ("execute rotated as targets", execute_command::rotated_as),
     ("execute rotated rot", execute_command::rotated),

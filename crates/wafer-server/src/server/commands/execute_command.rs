@@ -18,6 +18,7 @@ use crate::commands::source::{Anchor, CommandResultCallback, CommandSourceStack}
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
 use crate::world::entity::EntityId;
+use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::storage::loot::loot_context::LootContextBuilder;
 use crate::world::level::storage::loot::loot_params::LootParams;
 
@@ -91,6 +92,17 @@ pub fn at_targets(server: &mut Server, context: &CommandContext, source: &Comman
 pub fn positioned(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Sources {
     let pos = context.get_coordinates("pos").position(server, source);
     Ok(vec![source.with_position(pos).with_anchor(Anchor::Feet)])
+}
+
+pub fn positioned_over(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Sources {
+    let position = source.position;
+    let level = &mut server.levels[source.level];
+    let (x, z) = (position.x, position.z);
+    if !level.chunks.has_chunk(wafer_core::ChunkPos::new(mth::floor(x) >> 4, mth::floor(z) >> 4)) {
+        return Err(crate::commands::arguments::coordinates::ERROR_NOT_LOADED.create());
+    }
+    let height = level.get_height(context.get_heightmap("heightmap"), mth::floor(x), mth::floor(z));
+    Ok(vec![source.with_position(Vec3::new(x, height as f64, z))])
 }
 
 pub fn positioned_as(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Sources {

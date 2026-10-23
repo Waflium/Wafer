@@ -123,7 +123,7 @@ pub fn suggest_rate(
     _source: &CommandSourceStack,
     builder: crate::commands::suggestion::SuggestionsBuilder,
 ) -> std::result::Result<crate::commands::suggestion::Suggestions, CommandSyntaxException> {
-    suggest_fixed(&["20.0"], builder)
+    suggest_fixed(&["20"], builder)
 }
 
 pub fn suggest_step(
