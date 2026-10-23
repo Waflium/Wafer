@@ -2486,6 +2486,16 @@ impl ServerLevel {
             self.abstract_boat_on_above_bubble_column(id, drag_down, pos);
             return;
         }
+        if let Some(projectile) = self.as_projectile(id).filter(|_| !self.is_thrown_enderpearl(id)) {
+            if projectile.abstract_arrow().is_some() && projectile.is_in_ground() {
+                return;
+            }
+            let yd = if drag_down { -0.03 } else { 0.1 };
+            let e = self.entity_mut(id);
+            e.set_delta_movement(e.delta_movement.add(0.0, yd, 0.0));
+            self.send_bubble_column_particles(pos);
+            return;
+        }
         if self.players.get(&id).is_some_and(|p| p.abilities_flying()) {
             return;
         }
@@ -2508,6 +2518,16 @@ impl ServerLevel {
     }
 
     pub fn on_inside_bubble_column(&mut self, id: EntityId, drag_down: bool) {
+        if let Some(projectile) = self.as_projectile(id).filter(|_| !self.is_thrown_enderpearl(id)) {
+            if projectile.abstract_arrow().is_some() && projectile.is_in_ground() {
+                return;
+            }
+            let yd = if drag_down { -0.03 } else { 0.06 };
+            let e = self.entity_mut(id);
+            e.set_delta_movement(e.delta_movement.add(0.0, yd, 0.0));
+            self.reset_fall_distance(id);
+            return;
+        }
         if self.players.get(&id).is_some_and(|p| p.abilities_flying()) {
             return;
         }
