@@ -142,10 +142,7 @@ pub struct Outbound {
 
 impl Outbound {
     pub fn send(&self, id: i32, body: impl FnOnce(&mut Writer)) {
-        let mut w = Writer::new();
-        w.varint(id);
-        body(&mut w);
-        self.send_raw(w.into_inner());
+        self.send_raw(encode(id, body));
     }
 
     pub fn send_raw(&self, packet: Vec<u8>) {
@@ -153,7 +150,19 @@ impl Outbound {
     }
 
     pub fn send_with_fallback(&self, id: i32, body: impl FnOnce(&mut Writer), fallback: impl FnOnce() -> Option<Vec<u8>>) {
+        if self.sender.is_closed() {
+            return;
+        }
         let packet = encode(id, body);
+        if let Some((id, chain)) = encoding_fault(&packet) {
+            let (packet_type, wrapper, causes) = encoder_exception(id, chain);
+            error!(thread: &self.io_thread, "Error sending packet {packet_type}\n{wrapper}{causes}");
+            if let Some(fallback) = fallback() {
+                warn!(thread: &self.io_thread, "Failed to deliver packet, sending fallback {packet_type}\nnet.minecraft.network.SkipPacketEncoderException: {wrapper}\nCaused by: {wrapper}{causes}");
+                self.send_raw(fallback);
+            }
+            return;
+        }
         if packet.len() > ALWAYS_ENCODABLE_LEN
             && let Err(cause) = self.codec.try_encode(&packet)
         {
@@ -168,11 +177,41 @@ impl Outbound {
     }
 }
 
+const FAULTED_PACKET: [u8; 5] = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
+
 pub fn encode(id: i32, body: impl FnOnce(&mut Writer)) -> Vec<u8> {
     let mut w = Writer::new();
     w.varint(id);
     body(&mut w);
-    w.into_inner()
+    let Some(fault) = w.faults().first() else {
+        return w.into_inner();
+    };
+    let packet = w.as_slice();
+    let id_len = packet.iter().position(|&b| b & 0x80 == 0).map_or(packet.len(), |i| i + 1);
+    let mut faulted = Vec::with_capacity(FAULTED_PACKET.len() + id_len + fault.len());
+    faulted.extend_from_slice(&FAULTED_PACKET);
+    faulted.extend_from_slice(&packet[..id_len]);
+    faulted.extend_from_slice(fault.as_bytes());
+    faulted
+}
+
+fn encoding_fault(packet: &[u8]) -> Option<(i32, &str)> {
+    let rest = packet.strip_prefix(&FAULTED_PACKET)?;
+    let mut r = Reader::new(rest);
+    let id = r.varint().ok()?;
+    Some((id, std::str::from_utf8(&rest[rest.len() - r.remaining()..]).unwrap_or_default()))
+}
+
+fn encoder_exception(id: i32, chain: &str) -> (String, String, String) {
+    let packet_type = format!("clientbound/{}", wafer_data::packet_name("play", "clientbound", id).unwrap_or_default());
+    let wrapper = format!("io.netty.handler.codec.EncoderException: Failed to encode packet '{packet_type}'");
+    let causes = chain.lines().map(|cause| format!("\nCaused by: {cause}")).collect();
+    (packet_type, wrapper, causes)
+}
+
+fn is_skippable(id: i32) -> bool {
+    use wafer_data::packets::play::clientbound::{DISGUISED_CHAT, PLAYER_CHAT, PLAYER_COMBAT_KILL, SYSTEM_CHAT, TAG_QUERY};
+    matches!(id, DISGUISED_CHAT | PLAYER_CHAT | PLAYER_COMBAT_KILL | SYSTEM_CHAT | TAG_QUERY)
 }
 
 pub fn disconnection_reason(error: &anyhow::Error) -> Component {
@@ -192,6 +231,7 @@ pub fn spawn_io(
     let codec = w.codec;
     let on_packet = Arc::new(on_packet);
     let on_read = on_packet.clone();
+    let write_thread = io_thread.clone();
     tokio::spawn(async move {
         loop {
             match r.recv().await {
@@ -206,6 +246,15 @@ pub fn spawn_io(
             let mut fault = None;
             let mut next = Some(first);
             while let Some(packet) = next.take().or_else(|| rx.try_recv().ok()) {
+                if let Some((id, chain)) = encoding_fault(&packet) {
+                    let (packet_type, wrapper, causes) = encoder_exception(id, chain);
+                    error!(thread: &write_thread, "Error sending packet {packet_type}\n{wrapper}{causes}");
+                    if is_skippable(id) {
+                        continue;
+                    }
+                    fault = Some(vec![wrapper]);
+                    break;
+                }
                 match w.codec.try_encode(&packet) {
                     Ok(frame) => frames.extend(frame),
                     Err(cause) => {
@@ -223,6 +272,7 @@ pub fn spawn_io(
             }
             let written = w.half.write_all(&frames).await.is_ok();
             if let Some(reason) = reason {
+                rx.close();
                 on_packet(Err(reason));
                 break;
             }
@@ -244,5 +294,27 @@ impl Outbound {
     pub fn capture() -> (Outbound, mpsc::UnboundedReceiver<Vec<u8>>) {
         let (sender, rx) = mpsc::unbounded_channel();
         (Outbound { sender, codec: Codec::default(), io_thread: Arc::from("Netty NIO IO #1") }, rx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wafer_data::packets::play::clientbound::{SET_ENTITY_DATA, SYSTEM_CHAT};
+
+    use super::*;
+
+    #[test]
+    fn failed_encodes_carry_their_cause() {
+        let ok = encode(SYSTEM_CHAT, |w| w.string("hi"));
+        assert!(encoding_fault(&ok).is_none());
+        let faulted = encode(SET_ENTITY_DATA, |w| w.string(&"a".repeat(40000)));
+        let (id, chain) = encoding_fault(&faulted).unwrap();
+        assert_eq!(id, SET_ENTITY_DATA);
+        let (packet_type, wrapper, causes) = encoder_exception(id, chain);
+        assert_eq!(packet_type, "clientbound/minecraft:set_entity_data");
+        assert_eq!(wrapper, "io.netty.handler.codec.EncoderException: Failed to encode packet 'clientbound/minecraft:set_entity_data'");
+        assert_eq!(causes, "\nCaused by: io.netty.handler.codec.EncoderException: String too big (was 40000 characters, max 32767)");
+        assert!(is_skippable(SYSTEM_CHAT));
+        assert!(!is_skippable(SET_ENTITY_DATA));
     }
 }

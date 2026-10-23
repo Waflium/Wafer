@@ -138,14 +138,25 @@ impl<'a> Reader<'a> {
     }
 }
 
+const DEFAULT_STRING_MAX_LEN: usize = 32767;
+
 #[derive(Default)]
 pub struct Writer {
     buf: Vec<u8>,
+    faults: Vec<String>,
 }
 
 impl Writer {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn fail(&mut self, chain: String) {
+        self.faults.push(chain);
+    }
+
+    pub fn faults(&self) -> &[String] {
+        &self.faults
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -241,6 +252,12 @@ impl Writer {
     }
 
     pub fn string(&mut self, s: &str) {
+        if s.len() > DEFAULT_STRING_MAX_LEN {
+            let length = s.encode_utf16().count();
+            if length > DEFAULT_STRING_MAX_LEN {
+                self.fail(format!("io.netty.handler.codec.EncoderException: String too big (was {length} characters, max {DEFAULT_STRING_MAX_LEN})"));
+            }
+        }
         self.varint(s.len() as i32);
         self.bytes(s.as_bytes());
     }
@@ -342,6 +359,16 @@ mod tests {
         w.position(18357644, 831, -20882616);
         let expected: u64 = 0b01000110000001110110001100_10110000010101101101001000_001100111111;
         assert_eq!(w.as_slice(), &expected.to_be_bytes());
+    }
+
+    #[test]
+    fn string_fails_over_the_default_max_len() {
+        let mut w = Writer::new();
+        w.string(&"a".repeat(32767));
+        w.string(&"\u{20AC}".repeat(11000));
+        assert!(w.faults().is_empty());
+        w.string(&"a".repeat(32768));
+        assert_eq!(w.faults(), ["io.netty.handler.codec.EncoderException: String too big (was 32768 characters, max 32767)"]);
     }
 
     #[test]

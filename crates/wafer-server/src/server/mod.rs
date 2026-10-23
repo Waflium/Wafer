@@ -955,7 +955,7 @@ impl Server {
             }
             Event::Left { conn, reason } => {
                 if self.connections.contains_key(&conn) {
-                    self.lost_connections.insert(conn, reason);
+                    self.lost_connections.entry(conn).or_insert(reason);
                 }
             }
             Event::Verify { profile, address, user_name, reply } => self.pending_logins.push(PendingLogin { profile, address, user_name, reply, waiting_for_dupe: false }),

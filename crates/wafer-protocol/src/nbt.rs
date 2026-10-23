@@ -188,6 +188,19 @@ fn write_string(w: &mut Writer, s: &str) {
             }
         }
     }
+    if bytes.len() > u16::MAX as usize {
+        let units: Vec<u16> = s.encode_utf16().collect();
+        let display = |units: &[u16]| char::decode_utf16(units.iter().copied()).map(|c| c.unwrap_or('?')).collect::<String>();
+        let message = format!(
+            "java.io.UTFDataFormatException: encoded string ({}...{}) too long: {} bytes",
+            display(&units[..8]),
+            display(&units[units.len() - 8..]),
+            bytes.len()
+        );
+        w.fail(format!("io.netty.handler.codec.EncoderException: {message}\n{message}"));
+        w.u16(0);
+        return;
+    }
     w.u16(bytes.len() as u16);
     w.bytes(&bytes);
 }
@@ -344,5 +357,21 @@ mod tests {
         let mut w = Writer::new();
         Nbt::String("\0😀".into()).write(&mut w);
         assert_eq!(w.as_slice(), &[8, 0, 8, 0xC0, 0x80, 0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80]);
+    }
+
+    #[test]
+    fn strings_over_65535_bytes_fail_like_write_utf() {
+        let mut w = Writer::new();
+        Nbt::String("a".repeat(65535)).write(&mut w);
+        assert!(w.faults().is_empty());
+        let mut w = Writer::new();
+        Nbt::String("a".repeat(70000)).write(&mut w);
+        let message = "java.io.UTFDataFormatException: encoded string (aaaaaaaa...aaaaaaaa) too long: 70000 bytes";
+        assert_eq!(w.faults(), [format!("io.netty.handler.codec.EncoderException: {message}\n{message}")]);
+        assert_eq!(w.as_slice(), &[8, 0, 0]);
+        let mut w = Writer::new();
+        Nbt::String("\u{20AC}".repeat(21846)).write(&mut w);
+        assert_eq!(w.faults().len(), 1);
+        assert!(w.faults()[0].ends_with("(\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}...\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}) too long: 65538 bytes"));
     }
 }
