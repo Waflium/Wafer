@@ -48,6 +48,28 @@ pub fn parse_and_validate_untrusted_uri(uri: &str) -> Result<uri::URI, uri::URIS
     }
 }
 
+pub fn write_and_read_typed_or_throw(
+    typed: &crate::datafixers::typed::Typed,
+    new_type: &std::sync::Arc<crate::datafixers::types::Type>,
+    function: impl FnOnce(crate::datafixers::dynamic::Dynamic) -> crate::datafixers::dynamic::Dynamic,
+) -> crate::datafixers::typed::Typed {
+    let dynamic = typed.write().into_result().unwrap_or_else(|message| panic!("{message}"));
+    read_typed_or_throw(new_type, function(dynamic), true)
+}
+
+pub fn read_typed_or_throw(
+    ty: &std::sync::Arc<crate::datafixers::types::Type>,
+    dynamic: crate::datafixers::dynamic::Dynamic,
+    accept_partial: bool,
+) -> crate::datafixers::typed::Typed {
+    let result = crate::datafixers::typed::Typed::read_typed(ty, dynamic);
+    match (result.value, result.error) {
+        (Some((typed, _)), None) => typed,
+        (Some((typed, _)), Some(_)) if accept_partial => typed,
+        (_, error) => panic!("Reading type: {}", error.unwrap_or_default()),
+    }
+}
+
 pub fn get_millis() -> i64 {
     static ORIGIN: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
     ORIGIN.get_or_init(std::time::Instant::now).elapsed().as_millis() as i64

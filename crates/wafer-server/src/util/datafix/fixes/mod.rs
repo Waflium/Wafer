@@ -1,2 +1,14 @@
+pub mod abstract_uuid_fix;
+pub mod add_new_choices;
+pub mod data_component_remainder_fix;
 pub mod entity_equipment_to_armor_and_hand_fix;
+pub mod entity_rename_fix;
+pub mod item_rename_fix;
+pub mod item_stack_tag_fix;
+pub mod legacy_block_rename_fix;
+pub mod named_entity_fix;
+pub mod named_entity_write_read_fix;
+pub mod namespaced_type_rename_fix;
 pub mod references;
+pub mod simple_entity_rename_fix;
+pub mod simplest_entity_rename_fix;

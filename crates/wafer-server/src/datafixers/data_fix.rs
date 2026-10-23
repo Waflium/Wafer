@@ -88,7 +88,15 @@ pub trait DataFix: Send + Sync {
         &self.base().output_schema
     }
 
-    fn fix_type_everywhere(&self, name: &str, ty: Arc<Type>, new_type: Arc<Type>, function: impl Fn(Value) -> Value + Send + Sync + 'static) -> TypeRewriteRule
+    fn fix_type_everywhere(&self, name: &str, ty: Arc<Type>, function: impl Fn(Value) -> Value + Send + Sync + 'static) -> TypeRewriteRule
+    where
+        Self: Sized,
+    {
+        let new_type = ty.clone();
+        everywhere(name, ty, new_type, RuleFunction::Value(Arc::new(function)))
+    }
+
+    fn fix_type_everywhere_to(&self, name: &str, ty: Arc<Type>, new_type: Arc<Type>, function: impl Fn(Value) -> Value + Send + Sync + 'static) -> TypeRewriteRule
     where
         Self: Sized,
     {

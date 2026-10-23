@@ -28,6 +28,13 @@ pub fn named_choice(name: &str, ty: Arc<Type>) -> OpticFinder {
     OpticFinder::NamedChoice(name.to_string(), ty)
 }
 
+pub fn find_field(ty: &Arc<Type>, name: &str) -> OpticFinder {
+    match ty.find_field_type(name) {
+        Some(field_type) => OpticFinder::Field(name.to_string(), field_type),
+        None => panic!("Field not found: {name}"),
+    }
+}
+
 impl OpticFinder {
     pub fn ty(&self) -> Arc<Type> {
         match self {

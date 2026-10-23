@@ -73,6 +73,13 @@ impl std::fmt::Debug for Type {
 }
 
 impl Type {
+    pub fn choices(&self) -> &TaggedChoiceType {
+        match self {
+            Type::TaggedChoice(choice) => choice,
+            other => panic!("Not a choice type: {other:?}"),
+        }
+    }
+
     pub fn unfold(self: &Arc<Type>) -> Arc<Type> {
         match &**self {
             Type::RecursivePoint(family, index) => family.unfold(*index).clone(),
@@ -80,9 +87,9 @@ impl Type {
         }
     }
 
-    pub fn find_choice_type(self: &Arc<Type>) -> Option<Arc<TaggedChoiceType>> {
+    pub fn find_choice_type(self: &Arc<Type>) -> Option<Arc<Type>> {
         match &**self {
-            Type::TaggedChoice(choice) if &*choice.name == "id" => Some(choice.clone()),
+            Type::TaggedChoice(choice) if &*choice.name == "id" => Some(self.clone()),
             Type::Named(_, element) | Type::Hook(element, _, _) => element.find_choice_type(),
             Type::Product(first, second) | Type::Sum(first, second) => first.find_choice_type().or_else(|| second.find_choice_type()),
             Type::RecursivePoint(..) => self.unfold().find_choice_type(),
@@ -93,7 +100,7 @@ impl Type {
     pub fn find_field_type(self: &Arc<Type>, name: &str) -> Option<Arc<Type>> {
         match &**self {
             Type::Field(field_name, element) => (**field_name == *name).then(|| element.clone()),
-            Type::Named(_, element) | Type::Hook(element, _, _) | Type::List(element) => element.find_field_type(name),
+            Type::Named(_, element) | Type::Hook(element, _, _) => element.find_field_type(name),
             Type::Product(first, second) | Type::Sum(first, second) => first.find_field_type(name).or_else(|| second.find_field_type(name)),
             Type::TaggedChoice(choice) => choice.types.iter().find_map(|(_, ty)| ty.find_field_type(name)),
             Type::RecursivePoint(..) => self.unfold().find_field_type(name),

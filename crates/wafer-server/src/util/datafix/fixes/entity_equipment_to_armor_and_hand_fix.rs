@@ -43,7 +43,7 @@ impl EntityEquipmentToArmorAndHandFix {
             self.fix_type_everywhere_typed("EntityEquipmentToArmorAndHandFix - drop chances", self.get_input_schema().get_type(ENTITY), |typed| {
                 typed.update_remainder(fix_drop_chances)
             }),
-            self.fix_type_everywhere("EntityEquipmentToArmorAndHandFix - equipment", old_equipment_type, new_equipment_type, move |equipment_field| {
+            self.fix_type_everywhere_to("EntityEquipmentToArmorAndHandFix - equipment", old_equipment_type, new_equipment_type, move |equipment_field| {
                 let no_item = || Value::Right(Box::new(Value::Unit));
                 let items = match equipment_field {
                     Value::Left(items) => match *items {

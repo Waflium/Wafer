@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::datafixers::data_fix_utils;
 use crate::datafixers::dsl::{self, TemplateSupplier, TypeReference, TypeTemplate, TypeTemplates};
-use crate::datafixers::types::{self, RecursiveTypeFamily, TaggedChoiceType, Type};
+use crate::datafixers::types::{self, RecursiveTypeFamily, Type};
 
 pub type RegisterTypes = fn(parent: Option<&Arc<Schema>>, registry: &mut Registry, entity_types: &Arc<TypeTemplates>, block_entity_types: &Arc<TypeTemplates>);
 pub type RegisterChoices = fn(parent: Option<&Arc<Schema>>) -> TypeTemplates;
@@ -126,14 +126,14 @@ impl Schema {
         self.get_type_raw(ty).unfold()
     }
 
-    pub fn find_choice_type(&self, ty: TypeReference) -> Arc<TaggedChoiceType> {
+    pub fn find_choice_type(&self, ty: TypeReference) -> Arc<Type> {
         self.get_type(ty).find_choice_type().expect("Not a choice type")
     }
 
     pub fn get_choice_type(&self, ty: TypeReference, choice_name: &str) -> Arc<Type> {
         let choice_name = if self.class.namespaced { crate::util::datafix::schemas::namespaced_schema::ensure_namespaced(choice_name) } else { choice_name.to_string() };
         let choice_type = self.find_choice_type(ty);
-        match choice_type.get(&choice_name) {
+        match choice_type.choices().get(&choice_name) {
             Some(ty) => ty.clone(),
             None => panic!("Data fixer not registered for: {choice_name} in {}", ty.type_name()),
         }

@@ -295,3 +295,19 @@ pub fn encode(ty: &Arc<Type>, value: &Value, prefix: Option<Nbt>) -> DataResult<
         (ty, value) => DataResult { value: Some(prefix), error: Some(format!("Value {value:?} doesn't match type {ty:?}")) },
     }
 }
+
+impl Value {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Value::Prim(Nbt::String(value)) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn map_string(self, f: impl FnOnce(&str) -> String) -> Value {
+        match self {
+            Value::Prim(Nbt::String(value)) => Value::Prim(Nbt::String(f(&value))),
+            other => other,
+        }
+    }
+}
