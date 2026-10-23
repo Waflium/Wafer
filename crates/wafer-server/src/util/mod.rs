@@ -8,6 +8,7 @@ pub mod compilable_string;
 pub mod dependency_sorter;
 pub mod ease;
 pub mod easing_type;
+pub mod gson;
 pub mod either;
 pub mod extra_codecs;
 pub mod directory_lock;
