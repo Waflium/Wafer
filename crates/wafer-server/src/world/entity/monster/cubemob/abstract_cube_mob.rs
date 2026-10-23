@@ -34,6 +34,7 @@ pub struct AbstractCubeMob {
     pub squish: f32,
     pub o_squish: f32,
     pub was_on_ground: bool,
+    water_splash_pending: bool,
     pub move_control: CubeMobMoveControl,
 }
 
@@ -160,6 +161,13 @@ impl Mob {
         let y_head_rot = self.entity.y_head_rot;
         self.entity.set_y_rot(y_head_rot);
         self.living.y_body_rot = y_head_rot;
+        if self.entity.is_in_water() && self.entity.random.next_int_bounded(20) == 0 {
+            self.abstract_cube_mob_mut().expect("a cube mob").water_splash_pending = true;
+        }
+    }
+
+    pub fn take_water_splash_pending(&mut self) -> bool {
+        self.abstract_cube_mob_mut().is_some_and(|cube_mob| std::mem::take(&mut cube_mob.water_splash_pending))
     }
 
     pub fn abstract_cube_mob_add_additional_save_data(&self, out: &mut Vec<(String, Nbt)>) {
@@ -267,8 +275,12 @@ fn set_spawn_size(level: &mut (impl ServerLevelAccessor + ?Sized), mob: &mut Mob
 
 impl ServerLevel {
     pub fn set_size(&mut self, id: EntityId, size: i32, update_health: bool) {
-        let changed = self.mob_mut(id).expect("a cube mob").set_size(size, update_health);
-        if changed && self.entity(id).is_in_water() && self.entity_mut(id).random.next_int_bounded(20) == 0 {
+        self.mob_mut(id).expect("a cube mob").set_size(size, update_health);
+        self.do_pending_water_splash(id);
+    }
+
+    pub fn do_pending_water_splash(&mut self, id: EntityId) {
+        if self.mob_mut(id).is_some_and(Mob::take_water_splash_pending) {
             self.do_water_splash_effect(id);
         }
     }

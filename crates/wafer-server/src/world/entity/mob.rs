@@ -3450,6 +3450,7 @@ impl ServerLevel {
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::ZombieVillager(_))) {
             self.zombie_villager_read_level_dependent_save_data(id, input);
         }
+        self.do_pending_water_splash(id);
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::EnderDragon(_)))
             && let Some(phase) = super::boss::enderdragon::ender_dragon::take_ended_phase(self.mob_mut(id).expect("an ender dragon"))
         {

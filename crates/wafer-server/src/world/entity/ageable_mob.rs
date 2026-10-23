@@ -214,6 +214,7 @@ impl ServerLevel {
     pub fn set_age(&mut self, id: EntityId, age: i32) {
         let Some(mob) = self.mob_mut(id) else { return };
         if mob.set_age(age) {
+            self.do_pending_water_splash(id);
             self.refresh_mob_dimensions(id);
             if self.is_villager(id) {
                 self.villager_age_boundary_reached(id);
