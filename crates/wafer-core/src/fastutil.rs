@@ -445,6 +445,41 @@ impl ShortOpenHashSet {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct IntOpenHashSet(Int2ObjectOpenHashMap<()>);
+
+impl IntOpenHashSet {
+    pub fn new() -> Self {
+        IntOpenHashSet(Int2ObjectOpenHashMap::new())
+    }
+
+    pub fn add(&mut self, k: i32) -> bool {
+        match self.0.find(k) {
+            Ok(_) => false,
+            Err(pos) => {
+                self.0.insert_at(pos, k, ());
+                true
+            }
+        }
+    }
+
+    pub fn contains(&self, k: i32) -> bool {
+        self.0.contains_key(k)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = i32> + '_ {
+        self.0.keys()
+    }
+}
+
 #[derive(Clone)]
 pub struct Long2ByteOpenHashMap {
     map: Long2ObjectOpenHashMap<i8>,

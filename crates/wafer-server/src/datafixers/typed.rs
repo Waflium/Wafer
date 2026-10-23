@@ -374,6 +374,9 @@ impl Typed {
     pub fn set(mut self, finder: &OpticFinder, new_value: Typed) -> Typed {
         self.check(finder);
         set_value(&self.ty.clone(), &mut self.value, finder, &new_value.value);
+        if !equals(&new_value.ty, &finder.ty(), false) {
+            self.ty = with_focus_type(&self.ty, finder, &new_value.ty);
+        }
         self
     }
 
