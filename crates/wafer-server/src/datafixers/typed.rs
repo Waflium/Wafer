@@ -64,6 +64,10 @@ impl OpticFinder {
                     if equals(ty, element, false) { Match::Found(element.clone()) } else { Match::Stop }
                 }
                 Type::Field(..) => Match::Stop,
+                Type::TaggedChoice(choice) if *choice.name == **name => match &**ty {
+                    Type::Const(key_type) if *key_type == choice.key_type => Match::Found(ty.clone()),
+                    _ => Match::Stop,
+                },
                 _ => Match::Continue,
             },
             OpticFinder::NamedChoice(name, ty) => match &**target {
@@ -109,6 +113,13 @@ fn visit(ty: &Arc<Type>, value: &mut Value, finder: &OpticFinder, f: &mut dyn Fn
                 }
             }
             (OpticFinder::NamedChoice(..), _, _) => {}
+            (OpticFinder::Field(..), Type::TaggedChoice(_), Value::Choice(key, _)) => {
+                let mut key_value = Value::Prim(wafer_protocol::nbt::Nbt::String(std::mem::take(key)));
+                f(&focus, &mut key_value);
+                if let Value::Prim(wafer_protocol::nbt::Nbt::String(new_key)) = key_value {
+                    *key = new_key;
+                }
+            }
             (_, _, value) => f(&focus, value),
         }
         return;
