@@ -20,3 +20,31 @@ fn equipment_splits_into_armor_and_hand_items() {
         r#"{Entities:[{Item:{id:"minecraft:chest",tag:{BlockEntityTag:{Items:[{id:"minecraft:dirt"}],id:"Chest"}}},id:"Item"}]}"#
     );
 }
+
+#[test]
+#[ignore]
+fn schemas_match_the_vanilla_dump() {
+    let path = std::env::var("WAFER_SCHEMA_DUMP").expect("WAFER_SCHEMA_DUMP points at the SchemaDumpOracle output");
+    let expected = std::fs::read_to_string(path).unwrap();
+    let max: i32 = std::env::var("WAFER_SCHEMA_MAX").ok().and_then(|v| v.parse().ok()).unwrap_or(i32::MAX);
+    let fixer = get_data_fixer();
+    let mut mismatches = 0;
+    for line in expected.lines() {
+        let (key, rest) = line.split_once(' ').unwrap();
+        let (name, canonical) = rest.split_once(" = ").unwrap();
+        let key: i32 = key.parse().unwrap();
+        if key > max {
+            break;
+        }
+        let schema = fixer.get_schema(key);
+        assert_eq!(schema.version_key, key, "schema {key} is missing");
+        let actual = crate::datafixers::types::canonical(&schema.get_type(TypeReference(Box::leak(name.to_string().into_boxed_str()))));
+        if actual != canonical {
+            mismatches += 1;
+            if mismatches <= 5 {
+                eprintln!("{key} {name}\n  vanilla: {canonical}\n  wafer:   {actual}");
+            }
+        }
+    }
+    assert_eq!(mismatches, 0);
+}

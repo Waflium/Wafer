@@ -92,11 +92,11 @@ pub fn list(element: TypeTemplate) -> TypeTemplate {
 }
 
 pub fn compound_list(element: TypeTemplate) -> TypeTemplate {
-    TypeTemplate::CompoundList(Box::new(TypeTemplate::Const(ConstType::String)), Box::new(element))
+    compound_list_with_key(TypeTemplate::Const(ConstType::String), element)
 }
 
 pub fn compound_list_with_key(key: TypeTemplate, element: TypeTemplate) -> TypeTemplate {
-    TypeTemplate::CompoundList(Box::new(key), Box::new(element))
+    and(TypeTemplate::CompoundList(Box::new(key), Box::new(element)), remainder())
 }
 
 pub fn or(left: TypeTemplate, right: TypeTemplate) -> TypeTemplate {

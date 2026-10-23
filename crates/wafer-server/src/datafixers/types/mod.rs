@@ -175,6 +175,32 @@ pub fn equals(a: &Arc<Type>, b: &Arc<Type>, ignore_recursion_points: bool) -> bo
     }
 }
 
+#[cfg(test)]
+pub fn canonical(ty: &Arc<Type>) -> String {
+    match &**ty {
+        Type::Const(kind) => format!("{kind:?}"),
+        Type::Remainder => "Rem".to_string(),
+        Type::EmptyPart => "E".to_string(),
+        Type::Named(name, element) => format!("N[{name}]({})", canonical(element)),
+        Type::Field(name, element) => format!("F[{name}]({})", canonical(element)),
+        Type::Product(first, second) => format!("({},{})", canonical(first), canonical(second)),
+        Type::Sum(first, second) => format!("({}|{})", canonical(first), canonical(second)),
+        Type::List(element) => format!("L[{}]", canonical(element)),
+        Type::CompoundList(key, element) => format!("CL[{}->{}]", canonical(key), canonical(element)),
+        Type::TaggedChoice(choice) => {
+            let mut entries: Vec<(&String, String)> = choice.types.iter().map(|(key, element)| (key, canonical(element))).collect();
+            entries.sort_by(|a, b| a.0.encode_utf16().cmp(b.0.encode_utf16()));
+            let body: Vec<String> = entries.into_iter().map(|(key, element)| format!("{key}:{element}")).collect();
+            format!("TC[{},{:?}]{{{}}}", choice.name, choice.key_type, body.join(";"))
+        }
+        Type::Hook(element, _, _) => format!("H({})", canonical(element)),
+        Type::RecursivePoint(family, index) => match &**family.unfold(*index) {
+            Type::Named(name, _) => format!("R[{name}]"),
+            _ => format!("R[{index}]"),
+        },
+    }
+}
+
 pub fn instantiate(template: &TypeTemplate, family: &Arc<RecursiveTypeFamily>, schema: &Schema) -> Arc<Type> {
     Arc::new(match template {
         TypeTemplate::Const(ty) => Type::Const(*ty),
