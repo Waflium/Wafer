@@ -48,7 +48,11 @@ impl ServerStatsCounter {
                 Err(e) => error!("Couldn't read statistics file {}\n{e}", counter.file.display()),
                 Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
                     Err(e) => error!("Couldn't parse statistics file {}\ncom.google.gson.JsonSyntaxException: {e}", counter.file.display()),
-                    Ok(element) => counter.parse(&element),
+                    Ok(element) => {
+                        let version = element.get("DataVersion").and_then(Value::as_f64).map_or(1343, |version| version as i32);
+                        let element = crate::util::datafix::data_fix_types::DataFixTypes::Stats.update_json_to_current_version(element, version);
+                        counter.parse(&element)
+                    }
                 },
             }
         }

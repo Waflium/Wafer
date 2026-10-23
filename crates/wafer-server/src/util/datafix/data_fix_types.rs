@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::datafixers::dsl::TypeReference;
 use crate::datafixers::dynamic::Dynamic;
+use crate::datafixers::json_ops;
 use crate::util::datafix::data_fixers::get_data_fixer;
 use crate::util::datafix::fixes::references;
 
@@ -94,6 +95,26 @@ impl DataFixTypes {
 
     pub fn update_tag_to_current_version(self, tag: Nbt, from_version: i32) -> Nbt {
         self.update_tag(tag, from_version, current_version())
+    }
+
+    pub fn update_json_to_current_version(self, input: serde_json::Value, data_version: i32) -> serde_json::Value {
+        if data_version >= current_version() {
+            return input;
+        }
+        let updated = self.update(Dynamic::of(json_ops::convert_to_nbt(&input)), data_version, current_version());
+        let mut output = json_ops::convert_from_nbt(updated.get_value());
+        if self == DataFixTypes::Advancements
+            && let serde_json::Value::Object(advancements) = &mut output
+        {
+            for progress in advancements.values_mut() {
+                if let Some(done) = progress.get_mut("done")
+                    && let Some(number) = done.as_f64()
+                {
+                    *done = serde_json::Value::Bool(number != 0.0);
+                }
+            }
+        }
+        output
     }
 }
 

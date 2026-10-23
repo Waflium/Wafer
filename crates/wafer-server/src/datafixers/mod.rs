@@ -3,6 +3,7 @@ pub mod data_fix_utils;
 pub mod data_fixer_upper;
 pub mod dsl;
 pub mod dynamic;
+pub mod json_ops;
 pub mod schemas;
 pub mod typed;
 pub mod types;

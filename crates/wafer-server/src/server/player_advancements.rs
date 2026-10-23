@@ -363,8 +363,15 @@ impl PlayerAdvancements {
 
 fn parse_data(text: &str) -> Result<Vec<(String, AdvancementProgress)>, String> {
     let json: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
-    let Value::Object(mut fields) = json else { return Err(format!("Not a JSON object: {json}")) };
-    fields.shift_remove("DataVersion");
+    let from_version = json.get("DataVersion").and_then(Value::as_f64).map_or(1343, |version| version as i32);
+    let json = match json {
+        Value::Object(mut fields) => {
+            fields.shift_remove("DataVersion");
+            crate::util::datafix::data_fix_types::DataFixTypes::Advancements.update_json_to_current_version(Value::Object(fields), from_version)
+        }
+        other => other,
+    };
+    let Value::Object(fields) = json else { return Err(format!("Not a JSON object: {json}")) };
     let mut data = Vec::with_capacity(fields.len());
     for (id, value) in fields {
         let id = crate::resources::identifier::read(&id)?;
