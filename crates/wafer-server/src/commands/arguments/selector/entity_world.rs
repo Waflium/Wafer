@@ -29,7 +29,10 @@ pub trait EntityWorld {
         let Some(level) = self.level_of_entity(id) else { return String::new() };
         match level.players.get(&id) {
             Some(p) => p.profile.name.clone(),
-            None => level.entities.get(&id).map_or_else(String::new, |e| e.name().get_string()),
+            None => match level.entities.get(&id) {
+                Some(entity) => entity.name().get_string(),
+                None => level.dragon_part_entity(id).map_or_else(String::new, |part| crate::world::entity::entity_name(part).get_string()),
+            },
         }
     }
 
@@ -79,7 +82,7 @@ impl EntityWorld for LevelWorld<'_> {
     }
 
     fn level_of_entity(&self, id: EntityId) -> Option<&ServerLevel> {
-        (self.0.players.contains_key(&id) || self.0.entities.contains_key(&id)).then_some(self.0)
+        (self.0.players.contains_key(&id) || self.0.entities.contains_key(&id) || self.0.dragon_parts.contains_key(id)).then_some(self.0)
     }
 
     fn players(&self) -> Box<dyn Iterator<Item = &ServerPlayer> + '_> {

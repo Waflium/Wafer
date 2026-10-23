@@ -612,7 +612,7 @@ impl Server {
     }
 
     pub fn level_of(&self, entity: EntityId) -> Option<usize> {
-        self.levels.iter().position(|level| level.players.contains_key(&entity) || level.entities.contains_key(&entity))
+        self.levels.iter().position(|level| level.players.contains_key(&entity) || level.entities.contains_key(&entity) || level.dragon_parts.contains_key(entity))
     }
 
     pub fn entity_level(&self, entity: EntityId) -> &ServerLevel {

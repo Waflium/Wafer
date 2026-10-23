@@ -114,7 +114,7 @@ impl ServerLevel {
         let geyser_force_height = get_unobstructed_block_count(self, pos.above(), water_blocks);
         let above = pos.above();
         let aabb = AABB::new(above.x as f64, above.y as f64, above.z as f64, (above.x + 1) as f64, (above.y + 1) as f64, (above.z + 1) as f64).expand_towards(0.0, (geyser_force_height - 1) as f64, 0.0);
-        for entity_to_be_launched in self.get_entities_matching(None, &aabb, effect_predicate) {
+        for entity_to_be_launched in self.get_entities_of_type(|_, _| true, &aabb, effect_predicate) {
             let entity_velocity = self.entity(entity_to_be_launched).delta_movement;
             self.entity_mut(entity_to_be_launched).check_fall_distance_accumulation();
             if self.can_simulate_movement(entity_to_be_launched)

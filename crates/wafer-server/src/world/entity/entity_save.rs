@@ -689,7 +689,10 @@ impl ServerLevel {
         let start = out.len();
         match self.players.get(&id) {
             Some(player) => player.entity.save_without_id(out),
-            None => self.entities[&id].save_without_id(out),
+            None => match self.entities.get(&id) {
+                Some(entity) => entity.save_without_id(out),
+                None => self.dragon_part_entity(id).expect("entity in this level").save_without_id(out),
+            },
         }
         self.save_vehicle_position(id, &mut out[start..]);
         if self.is_vehicle(id) {

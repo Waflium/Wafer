@@ -303,10 +303,8 @@ pub fn succeed(server: &mut Server, id: InfoId) {
     let (level, pos) = (info(server, id).level, test_block_pos(server, id));
     let bounds = server.levels[level].test_instance_block_entity_get_structure_bounds(pos).inflate_all(1.0);
     let level = &mut server.levels[level];
-    for entity in level.get_entities(None, &bounds) {
-        if !level.is_player(entity) {
-            level.discard(entity);
-        }
+    for entity in level.get_entities_of_type(|_, _| true, &bounds, |level, entity| !level.is_player(entity)) {
+        level.discard(entity);
     }
 }
 

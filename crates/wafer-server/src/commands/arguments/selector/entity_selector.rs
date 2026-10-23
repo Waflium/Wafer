@@ -209,24 +209,25 @@ impl EntitySelector {
         if result.len() >= limit {
             return;
         }
-        let of_type = |id: &EntityId| self.entity_type.is_none_or(|t| level.entity(*id).entity_type == t);
-        let candidates: Vec<EntityId> = match aabb {
-            None => level.all_entities().filter(of_type).collect(),
-            Some(bb) => {
-                let mut found = Vec::new();
-                level.entity_manager.section_storage.for_each_accessible_non_empty_section(&bb, |section| {
-                    found.extend(section.entities().iter().copied().filter(|id| of_type(id) && level.entity(*id).bounding_box().intersects(&bb)));
-                });
-                found
-            }
-        };
-        for id in candidates {
-            if self.test(world, level, id, pos, aabb) {
-                result.push(id);
-                if result.len() >= limit {
-                    return;
+        match aabb {
+            None => {
+                let candidates: Vec<EntityId> = level.all_entities().filter(|&id| self.entity_type.is_none_or(|t| level.entity(id).entity_type == t)).collect();
+                for id in candidates {
+                    if self.test(world, level, id, pos, aabb) {
+                        result.push(id);
+                        if result.len() >= limit {
+                            return;
+                        }
+                    }
                 }
             }
+            Some(bb) => level.get_entities_of_type_limited(
+                |level, id| self.entity_type.is_none_or(|t| level.entity(id).entity_type == t),
+                &bb,
+                |level, id| self.test(world, level, id, pos, aabb),
+                result,
+                limit,
+            ),
         }
     }
 

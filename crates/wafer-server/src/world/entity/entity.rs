@@ -860,6 +860,10 @@ impl ServerLevel {
         if let Some(mob) = self.mob(id) {
             return mob.loot_table_id();
         }
+        if let Some(part) = self.dragon_part_entity(id) {
+            let type_id = wafer_data::registry::ENTITY_TYPE[part.entity_type as usize];
+            return Some(format!("minecraft:entities/{}", type_id.trim_start_matches("minecraft:")));
+        }
         self.is_player(id).then(|| "minecraft:entities/player".to_string())
     }
 

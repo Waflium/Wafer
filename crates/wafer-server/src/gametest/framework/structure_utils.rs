@@ -38,10 +38,8 @@ pub fn clear_space_for_structure(structure_bounding_box: &BoundingBox, level: &m
     level.chunks.block_ticks.clear_area(structure_bounding_box);
     level.clear_block_events(structure_bounding_box);
     let bounds = aabb_of(structure_bounding_box);
-    for entity in level.get_entities(None, &bounds) {
-        if !level.is_player(entity) {
-            level.discard(entity);
-        }
+    for entity in level.get_entities_of_type(|_, _| true, &bounds, |level, entity| !level.is_player(entity)) {
+        level.discard(entity);
     }
 }
 

@@ -49,3 +49,29 @@ fn dragons_save_their_phase_and_vanish_when_killed() {
     level.tick();
     assert!(level.dragon_part_parent(head).is_none());
 }
+
+#[test]
+fn typed_lookups_add_the_parts_after_their_dragon() {
+    let mut level = testing::level();
+    let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+    let (id, head) = summon_dragon(&mut level);
+    level.tick();
+    let parts: Vec<EntityId> = ender_dragon(level.mob(id).expect("the dragon")).sub_entities.iter().map(|part| part.entity.id).collect();
+    let area = level.entity(id).bounding_box().inflate_all(40.0);
+    let any = level.get_entities_of_type(|_, _| true, &area, |_, _| true);
+    let at = any.iter().position(|&found| found == id).expect("the dragon");
+    assert_eq!(any[at + 1..at + 9], parts[..]);
+    let living = level.get_entities_of_type(|level, found| level.is_living(found), &area, |_, _| true);
+    assert!(living.contains(&id));
+    assert!(parts.iter().all(|part| !living.contains(part)));
+    let dragon_type = level.entity(id).entity_type;
+    let of_type = level.get_entities_of_type(|level, found| level.entity(found).entity_type == dragon_type, &area, |_, found| found != head);
+    assert_eq!(of_type.len(), 8);
+    assert!(!of_type.contains(&head));
+    let mut limited = Vec::new();
+    level.get_entities_of_type_limited(|_, _| true, &area, |_, _| true, &mut limited, at + 3);
+    assert_eq!(limited.len(), at + 3);
+    assert_eq!(limited[at..], any[at..at + 3]);
+    let far = level.entity(id).bounding_box().move_by(0.0, 100.0, 0.0);
+    assert!(level.get_entities_of_type(|_, _| true, &far, |_, _| true).is_empty());
+}

@@ -72,7 +72,7 @@ impl ServerLevel {
     pub fn scoreboard_name(&self, id: EntityId) -> String {
         match self.players.get(&id) {
             Some(p) => p.profile.name.clone(),
-            None => self.entities.get(&id).map_or_else(String::new, |e| format_uuid(e.entity().uuid)),
+            None => self.entity_ref(id).map_or_else(String::new, |e| format_uuid(e.uuid)),
         }
     }
 

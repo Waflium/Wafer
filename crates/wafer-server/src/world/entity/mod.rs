@@ -137,12 +137,7 @@ impl LevelEntity {
     }
 
     pub fn display_name(&self, team: Option<&crate::world::scores::player_team::PlayerTeam>) -> crate::network::chat::Component {
-        use crate::network::chat::HoverEvent;
-        let entity = self.entity();
-        let type_id = wafer_data::registry::ENTITY_TYPE[entity.entity_type as usize];
-        crate::world::scores::player_team::PlayerTeam::format_name_for_team(team, self.name())
-            .with_hover(HoverEvent::ShowEntity { id: type_id, uuid: entity.uuid, name: Some(Box::new(self.name())) })
-            .with_insertion(&crate::world::level::storage::format_uuid(entity.uuid))
+        entity_display_name(self.entity(), self.name(), team)
     }
 
     pub fn tracking_config(&self) -> crate::server::level::chunk_map::TrackingConfig {
@@ -282,6 +277,25 @@ fn remove_action(component: crate::network::chat::Component) -> crate::network::
         contents: component.contents,
         style: crate::network::chat::Style { click_event: None, ..component.style },
         siblings: component.siblings.into_iter().map(remove_action).collect(),
+    }
+}
+
+pub fn entity_display_name(
+    entity: &Entity,
+    name: crate::network::chat::Component,
+    team: Option<&crate::world::scores::player_team::PlayerTeam>,
+) -> crate::network::chat::Component {
+    use crate::network::chat::HoverEvent;
+    let type_id = wafer_data::registry::ENTITY_TYPE[entity.entity_type as usize];
+    crate::world::scores::player_team::PlayerTeam::format_name_for_team(team, name.clone())
+        .with_hover(HoverEvent::ShowEntity { id: type_id, uuid: entity.uuid, name: Some(Box::new(name)) })
+        .with_insertion(&crate::world::level::storage::format_uuid(entity.uuid))
+}
+
+pub fn entity_name(entity: &Entity) -> crate::network::chat::Component {
+    match entity.custom_name() {
+        Some(custom_name) => remove_action(custom_name),
+        None => description(wafer_data::registry::ENTITY_TYPE[entity.entity_type as usize]),
     }
 }
 

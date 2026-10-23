@@ -19,10 +19,11 @@ fn kill(server: &mut Server, source: &CommandSourceStack, victims: &[EntityId]) 
     let mut tracker = CommandResponseTracker::new();
     for &entity in victims {
         tracker.track(server.entity_display_name(entity));
-        let level = server.entity_level_mut(entity);
+        let Some(level) = server.level_of(entity) else { continue };
+        let level = &mut server.levels[level];
         let living = level.is_living(entity);
         level.kill(entity);
-        if !living {
+        if !living && !level.dragon_parts.contains_key(entity) {
             level.remove_entity(entity);
         }
     }

@@ -1346,6 +1346,57 @@ impl ServerLevel {
         found
     }
 
+    pub fn get_entities_of_type(
+        &self,
+        type_test: impl Fn(&ServerLevel, EntityId) -> bool,
+        area: &AABB,
+        selector: impl Fn(&ServerLevel, EntityId) -> bool,
+    ) -> Vec<EntityId> {
+        let mut output = Vec::new();
+        self.get_entities_of_type_limited(type_test, area, selector, &mut output, usize::MAX);
+        output
+    }
+
+    pub fn get_entities_of_type_limited(
+        &self,
+        type_test: impl Fn(&ServerLevel, EntityId) -> bool,
+        area: &AABB,
+        selector: impl Fn(&ServerLevel, EntityId) -> bool,
+        output: &mut Vec<EntityId>,
+        max_results: usize,
+    ) {
+        let mut aborted = false;
+        self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
+            if aborted {
+                return;
+            }
+            for &id in section.entities() {
+                let Some(entity) = self.entity_ref(id) else { continue };
+                if entity.is_removed() || !entity.bounding_box().intersects(area) || !type_test(self, id) {
+                    continue;
+                }
+                if selector(self, id) {
+                    output.push(id);
+                    if output.len() >= max_results {
+                        aborted = true;
+                        return;
+                    }
+                }
+                if self.is_ender_dragon(id) {
+                    for sub_entity in self.ender_dragon(id).sub_entities.iter().map(|part| part.entity.id) {
+                        if type_test(self, sub_entity) && selector(self, sub_entity) {
+                            output.push(sub_entity);
+                            if output.len() >= max_results {
+                                aborted = true;
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     pub fn items_in(&self, area: &AABB, except: Option<EntityId>) -> Vec<EntityId> {
         let mut found = Vec::new();
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {

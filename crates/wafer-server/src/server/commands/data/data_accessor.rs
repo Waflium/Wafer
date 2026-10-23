@@ -57,6 +57,14 @@ impl DataAccessor {
         match self {
             DataAccessor::Entity(id) => {
                 let level = server.entity_level_mut(*id);
+                if let Some(part) = level.dragon_part_entity_mut(*id) {
+                    let uuid = part.uuid;
+                    if let Err(e) = part.load(&tag) {
+                        error!("{e}");
+                    }
+                    part.uuid = uuid;
+                    return Ok(());
+                }
                 if level.is_thrown_enderpearl(*id) {
                     level.thrown_enderpearl_deregister_from_current_owner(*id);
                 }

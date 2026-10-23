@@ -4,6 +4,7 @@ use wafer_data::{block_tags, registry, registry_id};
 
 use super::block_source::BlockSource;
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::world::entity::entity_selector;
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::beehive_block;
@@ -31,7 +32,7 @@ fn try_shear_beehive(level: &mut ServerLevel, tool: &ItemStack, pos: BlockPos) -
 }
 
 fn try_shear_entity(level: &mut ServerLevel, pos: BlockPos, tool: &ItemStack) -> bool {
-    for entity in level.get_entities(None, &AABB::of_block(pos)) {
+    for entity in level.get_entities_of_type(|_, _| true, &AABB::of_block(pos), entity_selector::no_spectators) {
         if level.is_alive(entity) && level.is_shearable(entity) && level.ready_for_shearing(entity) {
             level.shear(entity, SoundSource::Blocks, tool);
             level.game_event_at(None, crate::world::level::gameevent::game_event::SHEAR, pos);
