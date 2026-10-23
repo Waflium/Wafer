@@ -70,9 +70,25 @@ impl ServerLevel {
             }
             self.player_mut(id).last_item_in_main_hand = main_hand_item_stack.copy();
         }
+        if !self.entity(id).is_eye_in_fluid(&wafer_data::fluid_tags::WATER) && self.is_equipped(id, wafer_data::items::TURTLE_HELMET) {
+            self.turtle_helmet_tick(id);
+        }
         let p = self.player_mut(id);
         p.cooldowns.tick(&p.connection);
         self.update_player_pose(id);
+    }
+
+    fn turtle_helmet_tick(&mut self, id: EntityId) {
+        self.add_effect(id, crate::world::effect::MobEffectInstance::with(mob_effects::WATER_BREATHING, 200, 0, false, false, true), None);
+    }
+
+    fn is_equipped(&self, id: EntityId, item: wafer_data::Item) -> bool {
+        EquipmentSlot::VALUES.into_iter().any(|slot| {
+            self.item_by_slot_ref(id, slot).is_some_and(|item_stack| {
+                item_stack.get_item() == item
+                    && item_stack.get(dc::EQUIPPABLE).and_then(|equippable| equippable.get("slot")).and_then(Nbt::as_str).and_then(EquipmentSlot::by_name) == Some(slot)
+            })
+        })
     }
 
     pub fn get_current_item_attack_strength_delay(&self, id: EntityId) -> f32 {

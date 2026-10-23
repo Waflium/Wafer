@@ -289,6 +289,7 @@ impl ServerLevel {
             let e = self.entity_mut(id);
             e.abs_snap_to(target_x, target_y, target_z);
             e.abs_snap_rotation_to(target_y_rot, target_x_rot);
+            let is_auto_spin_attack = self.is_auto_spin_attack(id);
             let floating = oy_dist >= -0.03125
                 && !player_stands_on_something
                 && !self.is_spectator(id)
@@ -296,6 +297,7 @@ impl ServerLevel {
                 && !self.player(id).abilities_may_fly()
                 && !self.has_effect(id, wafer_data::mob_effects::LEVITATION)
                 && !is_fall_flying
+                && !is_auto_spin_attack
                 && {
                     let box_ = self.entity(id).bounding_box().inflate_all(0.0625).expand_towards(0.0, -0.55, 0.0);
                     self.all_air_in(&box_)
@@ -314,7 +316,7 @@ impl ServerLevel {
                 let e = self.entity(id);
                 e.delta_movement.y < 1.0e-5f32 as f64 && e.is_in_liquid()
             };
-            if on_ground || in_liquid_landed || self.on_climbable(id) || self.is_spectator(id) || is_fall_flying {
+            if on_ground || in_liquid_landed || self.on_climbable(id) || self.is_spectator(id) || is_fall_flying || is_auto_spin_attack {
                 self.player_mut(id).living.try_reset_current_impulse_context();
             }
             let e = self.entity(id);
