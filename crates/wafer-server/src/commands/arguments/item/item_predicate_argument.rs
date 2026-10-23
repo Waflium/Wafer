@@ -7,7 +7,9 @@ use crate::commands::arguments::registry_tag;
 use crate::commands::brigadier::{
     CommandSyntaxException, DISPATCHER_PARSE_EXCEPTION, Dynamic2CommandExceptionType, DynamicCommandExceptionType, StringReader, tr,
 };
+use crate::commands::suggestion::{Suggestions, SuggestionsBuilder};
 use crate::nbt;
+use crate::util::parsing::packrat::ResourceKind;
 use crate::world::item::ItemStack;
 use crate::world::item::component::codec::{self as component_codec, Codec};
 use crate::world::item::component::{self as dc, DataComponentType};
@@ -106,6 +108,17 @@ impl Context for ItemContext {
     type ComponentType = ComponentWrapper;
     type PredicateType = PredicateWrapper;
 
+    fn list_resources(&self, kind: ResourceKind) -> Vec<&'static str> {
+        match kind {
+            ResourceKind::Element => wafer_data::registry::ITEM.to_vec(),
+            ResourceKind::Tag => wafer_data::tags().iter().find(|r| r.registry == "minecraft:item").map_or(&[][..], |r| r.tags).iter().map(|t| t.0).collect(),
+            ResourceKind::Component => std::iter::once(COUNT_ID)
+                .chain(wafer_data::registry::DATA_COMPONENT_TYPE.iter().copied().filter(|id| DataComponentType::by_name(id).is_some_and(|ty| !ty.is_transient())))
+                .collect(),
+            ResourceKind::Predicate => std::iter::once(COUNT_ID).chain(wafer_data::registry::DATA_COMPONENT_PREDICATE_TYPE.iter().copied()).collect(),
+        }
+    }
+
     fn for_element_type(&self, reader: &StringReader, id: &str) -> Result<ItemPredicate, CommandSyntaxException> {
         Item::by_name(id).map(ItemPredicate::Item).ok_or_else(|| ERROR_UNKNOWN_ITEM.create_with_context(reader, id))
     }
@@ -184,4 +197,8 @@ fn decode_damage_predicate(value: &Nbt) -> Result<ItemPredicate, String> {
 
 pub fn parse(reader: &mut StringReader) -> Result<ItemPredicate, CommandSyntaxException> {
     component_predicate_parser::parse(reader, &ItemContext).map(ItemPredicate::AllOf)
+}
+
+pub fn fill_suggestions(builder: &SuggestionsBuilder) -> Suggestions {
+    component_predicate_parser::parse_for_suggestions(builder, &ItemContext)
 }

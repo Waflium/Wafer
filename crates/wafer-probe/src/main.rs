@@ -265,6 +265,16 @@ async fn main() -> anyhow::Result<()> {
                     let words: Vec<&str> = line.split_whitespace().collect();
                     match words.as_slice() {
                         ["wait", ticks] => script_wait = ticks.parse()?,
+                        ["suggest", id, ..] => {
+                            let id: i32 = id.parse()?;
+                            let rest = line.splitn(3, ' ').nth(2).unwrap_or("");
+                            let text = rest.strip_suffix('$').unwrap_or(rest);
+                            send(&mut wr, codec, play::serverbound::COMMAND_SUGGESTION, |w| {
+                                w.varint(id);
+                                w.string(text);
+                            })
+                            .await?;
+                        }
                         ["respawn"] => send(&mut wr, codec, play::serverbound::CLIENT_COMMAND, |w| w.varint(0)).await?,
                         ["stats"] => send(&mut wr, codec, play::serverbound::CLIENT_COMMAND, |w| w.varint(1)).await?,
                         ["input", flags] => {

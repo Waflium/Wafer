@@ -8,6 +8,7 @@ pub struct Suggestion {
     pub range: StringRange,
     pub text: String,
     pub tooltip: Option<Component>,
+    pub integer: Option<i32>,
 }
 
 impl Suggestion {
@@ -23,7 +24,7 @@ impl Suggestion {
         if range.end > self.range.end {
             text.push_str(&String::from_utf16_lossy(&command[self.range.end..range.end]));
         }
-        Suggestion { range, text, tooltip: self.tooltip.clone() }
+        Suggestion { range, text, tooltip: self.tooltip.clone(), integer: None }
     }
 }
 
@@ -68,7 +69,11 @@ impl Suggestions {
                 texts.push(expanded);
             }
         }
-        texts.sort_by(|a, b| compare_to_ignore_case(&a.text, &b.text));
+        texts.sort_by(|a, b| match (a.integer, b.integer) {
+            (Some(a), Some(b)) => a.cmp(&b),
+            (Some(_), None) => a.text.encode_utf16().cmp(b.text.encode_utf16()),
+            _ => compare_to_ignore_case(&a.text, &b.text),
+        });
         Suggestions { range, list: texts }
     }
 }
@@ -114,11 +119,11 @@ impl SuggestionsBuilder {
         if text.encode_utf16().eq(self.input[self.start..].iter().copied()) {
             return;
         }
-        self.result.push(Suggestion { range: StringRange { start: self.start, end: self.input.len() }, text, tooltip });
+        self.result.push(Suggestion { range: StringRange { start: self.start, end: self.input.len() }, text, tooltip, integer: None });
     }
 
     pub fn suggest_int(&mut self, value: i32) {
-        self.result.push(Suggestion { range: StringRange { start: self.start, end: self.input.len() }, text: value.to_string(), tooltip: None });
+        self.result.push(Suggestion { range: StringRange { start: self.start, end: self.input.len() }, text: value.to_string(), tooltip: None, integer: Some(value) });
     }
 
     pub fn add(&mut self, other: SuggestionsBuilder) {

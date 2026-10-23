@@ -55,3 +55,91 @@ fn coordinates_suggest_relative_positions() {
     assert_eq!(suggest(&server, "/setblock "), (10, 10, ["~", "~ ~", "~ ~ ~"].map(String::from).to_vec()));
     assert_eq!(suggest(&server, "/setblock 1 "), (10, 12, ["1 ~", "1 ~ ~"].map(String::from).to_vec()));
 }
+
+fn texts(values: &[&str]) -> Vec<String> {
+    values.iter().map(|v| v.to_string()).collect()
+}
+
+#[test]
+fn block_states_suggest_ids_properties_and_values() {
+    let server = server();
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ minecraft:oak_st"), (16, 32, texts(&["minecraft:oak_stairs"])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ oak_stairs[facing=north,"), (40, 40, texts(&["half=", "shape=", "waterlogged="])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ oak_stairs["), (27, 27, texts(&["]", "facing=", "half=", "shape=", "waterlogged="])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ oak_stairs[facing="), (34, 34, texts(&["east", "north", "south", "west"])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ oak_stairs[facing=north,half=top,shape=straight,waterlogged=false"), (81, 81, texts(&["]"])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ oak_stairs[facing"), (33, 33, texts(&["="])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ stone["), (22, 22, texts(&["]"])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ wheat[age=3"), (27, 27, texts(&["]"])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ wheat[age="), (26, 26, texts(&["0", "1", "2", "3", "4", "5", "6", "7"])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ red_bed"), (23, 23, texts(&["["])));
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ chest[facing=north]{").2, Vec::<String>::new());
+    assert_eq!(suggest(&server, "/setblock ~ ~ ~ #").2, Vec::<String>::new());
+}
+
+#[test]
+fn integer_property_values_sort_numerically() {
+    let server = server();
+    let (_, _, values) = suggest(&server, "/setblock ~ ~ ~ snow[layers=");
+    assert_eq!(values, texts(&["1", "2", "3", "4", "5", "6", "7", "8"]));
+    let (_, _, values) = suggest(&server, "/setblock ~ ~ ~ composter[level=");
+    assert_eq!(values, texts(&["0", "1", "2", "3", "4", "5", "6", "7", "8"]));
+    let (_, _, values) = suggest(&server, "/setblock ~ ~ ~ redstone_wire[power=");
+    assert_eq!(values.len(), 16);
+    assert_eq!(values[10], "10");
+}
+
+#[test]
+fn block_predicates_suggest_tags_and_vague_properties() {
+    let server = server();
+    assert_eq!(suggest(&server, "/execute if block ~ ~ ~ #minecraft:stairs["), (42, 42, texts(&["]", "facing=", "half=", "shape=", "waterlogged="])));
+    assert_eq!(suggest(&server, "/execute if block ~ ~ ~ #minecraft:stairs[facing="), (49, 49, texts(&[",", "]", "east", "north", "south", "west"])));
+    assert_eq!(suggest(&server, "/execute if block ~ ~ ~ #minecraft:beds[occupied="), (49, 49, texts(&[",", "]", "false", "true"])));
+    assert_eq!(suggest(&server, "/execute if block ~ ~ ~ #minecraft:banners"), (42, 42, texts(&["[", "{"])));
+    assert_eq!(suggest(&server, "/execute if block ~ ~ ~ #minecraft:stairs[facing=north,"), (55, 55, texts(&["half=", "shape=", "waterlogged="])));
+    let (start, end, tags) = suggest(&server, "/execute if block ~ ~ ~ #minecraft:sta");
+    assert_eq!((start, end), (24, 38));
+    assert_eq!(tags, texts(&["#minecraft:stairs", "#minecraft:standing_signs"]));
+}
+
+#[test]
+fn items_suggest_components() {
+    let server = server();
+    assert_eq!(suggest(&server, "/give @s diamond_sw"), (9, 19, texts(&["minecraft:diamond_sword"])));
+    assert_eq!(suggest(&server, "/give @s diamond_sword"), (22, 22, texts(&["["])));
+    assert_eq!(suggest(&server, "/give @s diamond_sword[damage=5"), (31, 31, texts(&[",", "]"])));
+    assert_eq!(suggest(&server, "/give @s diamond_sword[damage=").2, Vec::<String>::new());
+    assert_eq!(
+        suggest(&server, "/give @s diamond_sword[!dam"),
+        (24, 27, texts(&["minecraft:damage", "minecraft:damage_resistant", "minecraft:damage_type", "minecraft:max_damage"]))
+    );
+    let (start, _, components) = suggest(&server, "/give @s diamond_sword[");
+    assert_eq!(start, 23);
+    assert!(components[0] == "!" && components.contains(&"minecraft:damage=".to_string()) && !components.contains(&"minecraft:count=".to_string()), "{components:?}");
+    assert_eq!(suggest(&server, "/give @s diamond_sword[damage=5]").2, Vec::<String>::new());
+}
+
+#[test]
+fn item_predicates_suggest_through_the_packrat_parser() {
+    let server = server();
+    assert_eq!(suggest(&server, "/clear @s #minecraft:logs"), (25, 25, texts(&["["])));
+    assert_eq!(suggest(&server, "/clear @s *[count"), (17, 17, texts(&[",", "=", "]", "|", "~"])));
+    assert_eq!(suggest(&server, "/clear @s *[count=").2, Vec::<String>::new());
+    assert_eq!(suggest(&server, "/clear @s *[damage~").2, Vec::<String>::new());
+    let (start, _, entries) = suggest(&server, "/clear @s *[");
+    assert_eq!(start, 12);
+    assert!(entries[0] == "!" && entries[1] == "]" && entries.contains(&"minecraft:count".to_string()) && entries.contains(&"minecraft:damage".to_string()), "{entries:?}");
+    let (start, _, entries) = suggest(&server, "/clear @s *[!");
+    assert_eq!(start, 13);
+    assert!(entries.contains(&"minecraft:count".to_string()) && !entries.contains(&"!".to_string()), "{entries:?}");
+    let (start, _, entries) = suggest(&server, "/clear @s *[damage=1|!");
+    assert_eq!(start, 22);
+    assert!(entries.contains(&"minecraft:damage".to_string()), "{entries:?}");
+}
+
+#[test]
+fn nbt_paths_have_no_suggestions() {
+    let server = server();
+    assert_eq!(suggest(&server, "/data get entity @s Inv").2, Vec::<String>::new());
+    assert_eq!(suggest(&server, "/data get entity @s Inventory[0].").2, Vec::<String>::new());
+}

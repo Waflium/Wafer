@@ -2,14 +2,17 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::commands::arguments::{ERROR_INVALID_ID, parse_identifier};
 use crate::commands::brigadier::{CommandSyntaxException, StringReader};
+use crate::commands::shared_suggestion_provider;
+use crate::commands::suggestion::{Suggestions, SuggestionsBuilder};
 use crate::nbt;
-use crate::util::parsing::packrat::{Delayed, ParseState, Reason};
+use crate::util::parsing::packrat::{Delayed, ParseState, Reason, ResourceKind, SuggestionSupplier};
 
 pub trait Context {
     type Predicate;
     type ComponentType;
     type PredicateType;
 
+    fn list_resources(&self, kind: ResourceKind) -> Vec<&'static str>;
     fn for_element_type(&self, reader: &StringReader, id: &str) -> Result<Self::Predicate, CommandSyntaxException>;
     fn for_tag_type(&self, reader: &StringReader, id: &str) -> Result<Self::Predicate, CommandSyntaxException>;
     fn lookup_component_type(&self, reader: &StringReader, id: &str) -> Result<Self::ComponentType, CommandSyntaxException>;
@@ -27,6 +30,27 @@ pub fn parse<C: Context>(reader: &mut StringReader, context: &C) -> Result<Vec<C
     let mut state = ParseState::new(reader);
     let result = top(&mut state, context);
     state.finish(result)
+}
+
+pub fn parse_for_suggestions<C: Context>(builder: &SuggestionsBuilder, context: &C) -> Suggestions {
+    let input = builder.input().to_vec();
+    let mut reader = StringReader::new(&input);
+    reader.cursor = builder.start();
+    let mut state = ParseState::for_suggestions(&mut reader);
+    let result = top(&mut state, context);
+    let (cursor, entries) = state.finish_suggestions(&result);
+    if entries.is_empty() {
+        return Suggestions::empty();
+    }
+    let mut offset = builder.create_offset(cursor);
+    for entry in entries {
+        match entry {
+            SuggestionSupplier::Resources(kind) => shared_suggestion_provider::suggest_resource(context.list_resources(kind), &mut offset),
+            SuggestionSupplier::Characters(characters) => shared_suggestion_provider::suggest(characters.iter().map(char::to_string), &mut offset),
+            SuggestionSupplier::Empty => {}
+        }
+    }
+    offset.build()
 }
 
 fn top<C: Context>(s: &mut State, c: &C) -> Option<Vec<C::Predicate>> {
@@ -52,12 +76,12 @@ fn top<C: Context>(s: &mut State, c: &C) -> Option<Vec<C::Predicate>> {
 
 fn type_<C: Context>(s: &mut State, c: &C) -> Option<Option<C::Predicate>> {
     let mark = s.mark();
-    if let Some(element) = resource_lookup(s, |reader, id| c.for_element_type(reader, id)) {
+    if let Some(element) = resource_lookup(s, ResourceKind::Element, |reader, id| c.for_element_type(reader, id)) {
         return Some(Some(element));
     }
     s.restore(mark);
     if s.character('#') {
-        if let Some(tag) = resource_lookup(s, |reader, id| c.for_tag_type(reader, id)) {
+        if let Some(tag) = resource_lookup(s, ResourceKind::Tag, |reader, id| c.for_tag_type(reader, id)) {
             return Some(Some(tag));
         }
         s.restore(mark);
@@ -129,7 +153,7 @@ enum Test<C: Context> {
 fn test<C: Context>(s: &mut State, c: &C) -> Option<C::Predicate> {
     let mark = s.mark();
     let parsed = 'alternative: {
-        if let Some(component) = resource_lookup(s, |reader, id| c.lookup_component_type(reader, id))
+        if let Some(component) = resource_lookup(s, ResourceKind::Component, |reader, id| c.lookup_component_type(reader, id))
             && s.character('=')
         {
             match tag(s) {
@@ -141,7 +165,7 @@ fn test<C: Context>(s: &mut State, c: &C) -> Option<C::Predicate> {
             }
         }
         s.restore(mark);
-        if let Some(predicate) = resource_lookup(s, |reader, id| c.lookup_predicate_type(reader, id))
+        if let Some(predicate) = resource_lookup(s, ResourceKind::Predicate, |reader, id| c.lookup_predicate_type(reader, id))
             && s.character('~')
         {
             match tag(s) {
@@ -153,7 +177,7 @@ fn test<C: Context>(s: &mut State, c: &C) -> Option<C::Predicate> {
             }
         }
         s.restore(mark);
-        if let Some(component) = resource_lookup(s, |reader, id| c.lookup_component_type(reader, id)) {
+        if let Some(component) = resource_lookup(s, ResourceKind::Component, |reader, id| c.lookup_component_type(reader, id)) {
             break 'alternative Some(Test::Component(component, None));
         }
         s.restore(mark);
@@ -191,19 +215,23 @@ fn identifier(s: &mut State) -> Option<String> {
     id
 }
 
-fn resource_lookup<V>(s: &mut State, validate: impl FnOnce(&StringReader, &str) -> Result<V, CommandSyntaxException>) -> Option<V> {
+fn resource_lookup<V>(
+    s: &mut State,
+    kind: ResourceKind,
+    validate: impl FnOnce(&StringReader, &str) -> Result<V, CommandSyntaxException>,
+) -> Option<V> {
     s.input.skip_whitespace();
     let mark = s.mark();
     match identifier(s) {
         Some(id) => match validate(s.input, &id) {
             Ok(value) => Some(value),
             Err(e) => {
-                s.store(mark, Reason::Exception(e));
+                s.store_suggesting(mark, SuggestionSupplier::Resources(kind), Reason::Exception(e));
                 None
             }
         },
         None => {
-            s.store_delayed(mark, Delayed::Simple(&ERROR_INVALID_ID));
+            s.store_suggesting(mark, SuggestionSupplier::Resources(kind), Reason::Delayed(Delayed::Simple(&ERROR_INVALID_ID)));
             None
         }
     }

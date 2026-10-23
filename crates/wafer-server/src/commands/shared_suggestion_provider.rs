@@ -50,14 +50,17 @@ fn common_prefix_len(a: &str, b: &str) -> usize {
     a.char_indices().zip(b.chars()).take_while(|((_, x), y)| x == y).map(|((i, x), _)| i + x.len_utf8()).last().unwrap_or(0)
 }
 
-pub fn suggest_resource<S: AsRef<str>>(values: impl IntoIterator<Item = S>, builder: &mut SuggestionsBuilder) {
-    let contents = builder.remaining().to_lowercase();
+pub fn filter_resources<S: AsRef<str>>(values: impl IntoIterator<Item = S>, contents: &str, mut consumer: impl FnMut(S)) {
     for id in values {
-        let id = id.as_ref();
-        if identifier_matches(&contents, id) {
-            builder.suggest(id);
+        if identifier_matches(contents, id.as_ref()) {
+            consumer(id);
         }
     }
+}
+
+pub fn suggest_resource<S: AsRef<str>>(values: impl IntoIterator<Item = S>, builder: &mut SuggestionsBuilder) {
+    let contents = builder.remaining().to_lowercase();
+    filter_resources(values, &contents, |id| builder.suggest(id.as_ref()));
 }
 
 pub fn suggest_resource_with_prefix<S: AsRef<str>>(values: impl IntoIterator<Item = S>, builder: &mut SuggestionsBuilder, prefix: &str) {

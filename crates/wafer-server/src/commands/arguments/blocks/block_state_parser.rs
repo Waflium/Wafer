@@ -1,4 +1,4 @@
-use wafer_data::{Block, BlockState};
+use wafer_data::{Block, BlockState, registry};
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::arguments::{read_identifier, registry_tag};
@@ -6,6 +6,8 @@ use crate::commands::brigadier::{
     CommandSyntaxException, Dynamic2CommandExceptionType, Dynamic3CommandExceptionType, DynamicCommandExceptionType, SimpleCommandExceptionType, StringReader,
     tr,
 };
+use crate::commands::shared_suggestion_provider;
+use crate::commands::suggestion::{Suggestions, SuggestionsBuilder};
 use crate::nbt;
 
 pub static ERROR_NO_TAGS_ALLOWED: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.block.tag.disallowed");
@@ -38,6 +40,24 @@ pub enum ParseResult {
     Tag(TagResult),
 }
 
+enum Suggest {
+    Nothing,
+    BlockIdOrTag,
+    Item,
+    Tag,
+    OpenVaguePropertiesOrNbt,
+    OpenPropertiesOrNbt,
+    OpenNbt,
+    PropertyNameOrEnd,
+    VaguePropertyNameOrEnd,
+    PropertyName,
+    VaguePropertyName,
+    Equals,
+    NextPropertyOrEnd,
+    PropertyValue(&'static [&'static str]),
+    VaguePropertyValue(String),
+}
+
 struct BlockStateParser<'r, 'a> {
     reader: &'r mut StringReader<'a>,
     for_testing: bool,
@@ -48,6 +68,17 @@ struct BlockStateParser<'r, 'a> {
     state: Option<BlockState>,
     tag: Option<&'static [i32]>,
     nbt: Option<Nbt>,
+    suggestions: Suggest,
+}
+
+pub fn fill_suggestions(builder: &SuggestionsBuilder, for_testing: bool, allow_nbt: bool) -> Suggestions {
+    let input = builder.input().to_vec();
+    let mut reader = StringReader::new(&input);
+    reader.cursor = builder.start();
+    let mut parser = BlockStateParser::new(&mut reader, for_testing, allow_nbt);
+    let _ = parser.parse();
+    let offset = parser.reader.cursor;
+    parser.apply_suggestions(builder.create_offset(offset))
 }
 
 pub fn parse_for_block(reader: &mut StringReader, allow_nbt: bool) -> Result<BlockResult, CommandSyntaxException> {
@@ -87,6 +118,20 @@ pub fn property_value(values: &'static [&'static str], raw: &str) -> Option<&'st
     }
 }
 
+fn add_suggestions(builder: &mut SuggestionsBuilder, values: &[&str]) {
+    if values.iter().all(|v| v.parse::<i32>().is_ok()) {
+        for value in values {
+            if let Ok(value) = value.parse() {
+                builder.suggest_int(value);
+            }
+        }
+    } else {
+        for value in values {
+            builder.suggest(*value);
+        }
+    }
+}
+
 fn java_parse_int(s: &str) -> Option<i32> {
     let digits = s.strip_prefix(['-', '+']).unwrap_or(s);
     if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
@@ -108,25 +153,175 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
             state: None,
             tag: None,
             nbt: None,
+            suggestions: Suggest::Nothing,
         }
     }
 
     fn parse(&mut self) -> Result<(), CommandSyntaxException> {
+        self.suggestions = if self.for_testing { Suggest::BlockIdOrTag } else { Suggest::Item };
         if self.reader.at('#') {
             self.read_tag()?;
+            self.suggestions = Suggest::OpenVaguePropertiesOrNbt;
             if self.reader.at('[') {
                 self.read_vague_properties()?;
+                self.suggestions = Suggest::OpenNbt;
             }
         } else {
             self.read_block()?;
+            self.suggestions = Suggest::OpenPropertiesOrNbt;
             if self.reader.at('[') {
                 self.read_properties()?;
+                self.suggestions = Suggest::OpenNbt;
             }
         }
         if self.allow_nbt && self.reader.at('{') {
+            self.suggestions = Suggest::Nothing;
             self.nbt = Some(nbt::parse_compound_as_argument(self.reader)?);
         }
         Ok(())
+    }
+
+    fn apply_suggestions(&self, mut builder: SuggestionsBuilder) -> Suggestions {
+        match &self.suggestions {
+            Suggest::Nothing => {}
+            Suggest::BlockIdOrTag => {
+                self.suggest_tag(&mut builder);
+                self.suggest_item(&mut builder);
+            }
+            Suggest::Item => self.suggest_item(&mut builder),
+            Suggest::Tag => self.suggest_tag(&mut builder),
+            Suggest::OpenVaguePropertiesOrNbt => self.suggest_open_vague_properties_or_nbt(&mut builder),
+            Suggest::OpenPropertiesOrNbt => self.suggest_open_properties_or_nbt(&mut builder),
+            Suggest::OpenNbt => self.suggest_open_nbt(&mut builder),
+            Suggest::PropertyNameOrEnd => {
+                if builder.remaining().is_empty() {
+                    builder.suggest("]");
+                }
+                self.suggest_property_name(&mut builder);
+            }
+            Suggest::VaguePropertyNameOrEnd => {
+                if builder.remaining().is_empty() {
+                    builder.suggest("]");
+                }
+                self.suggest_vague_property_name(&mut builder);
+            }
+            Suggest::PropertyName => self.suggest_property_name(&mut builder),
+            Suggest::VaguePropertyName => self.suggest_vague_property_name(&mut builder),
+            Suggest::Equals => {
+                if builder.remaining().is_empty() {
+                    builder.suggest("=");
+                }
+            }
+            Suggest::NextPropertyOrEnd => {
+                if builder.remaining().is_empty() {
+                    builder.suggest("]");
+                    if self.properties.len() < self.state.expect("a parsed block").block().info().properties.len() {
+                        builder.suggest(",");
+                    }
+                }
+            }
+            Suggest::PropertyValue(values) => add_suggestions(&mut builder, values),
+            Suggest::VaguePropertyValue(key) => self.suggest_vague_property_value(&mut builder, key),
+        }
+        builder.build()
+    }
+
+    fn suggest_property_name(&self, builder: &mut SuggestionsBuilder) {
+        let prefix = builder.remaining().to_lowercase();
+        for (name, _) in self.state.expect("a parsed block").properties() {
+            if !self.properties.contains(&name) && name.starts_with(&prefix) {
+                builder.suggest(format!("{name}="));
+            }
+        }
+    }
+
+    fn suggest_vague_property_name(&self, builder: &mut SuggestionsBuilder) {
+        let prefix = builder.remaining().to_lowercase();
+        if let Some(tag) = self.tag {
+            for &block in tag {
+                for (name, _) in Block(block as u16).default_state().properties() {
+                    if !self.vague_properties.iter().any(|(key, _)| key == name) && name.starts_with(&prefix) {
+                        builder.suggest(format!("{name}="));
+                    }
+                }
+            }
+        }
+    }
+
+    fn suggest_open_nbt(&self, builder: &mut SuggestionsBuilder) {
+        if builder.remaining().is_empty() && self.has_block_entity() {
+            builder.suggest("{");
+        }
+    }
+
+    fn has_block_entity(&self) -> bool {
+        if let Some(state) = self.state {
+            return state.has_block_entity();
+        }
+        self.tag.is_some_and(|tag| tag.iter().any(|&block| Block(block as u16).default_state().has_block_entity()))
+    }
+
+    fn suggest_vague_property_value(&self, builder: &mut SuggestionsBuilder, key: &str) {
+        let mut has_more_properties = false;
+        if let Some(tag) = self.tag {
+            for &block in tag {
+                let block = Block(block as u16);
+                if let Some((_, values)) = block.property_by_name(key) {
+                    add_suggestions(builder, values);
+                }
+                if !has_more_properties {
+                    has_more_properties = block.default_state().properties().any(|(name, _)| !self.vague_properties.iter().any(|(vague, _)| vague == name));
+                }
+            }
+        }
+        if has_more_properties {
+            builder.suggest(",");
+        }
+        builder.suggest("]");
+    }
+
+    fn suggest_open_vague_properties_or_nbt(&self, builder: &mut SuggestionsBuilder) {
+        if builder.remaining().is_empty()
+            && let Some(tag) = self.tag
+        {
+            let mut has_properties = false;
+            let mut has_entity = false;
+            for &block in tag {
+                let default_state = Block(block as u16).default_state();
+                has_properties |= default_state.properties().next().is_some();
+                has_entity |= default_state.has_block_entity();
+                if has_properties && has_entity {
+                    break;
+                }
+            }
+            if has_properties {
+                builder.suggest("[");
+            }
+            if has_entity {
+                builder.suggest("{");
+            }
+        }
+    }
+
+    fn suggest_open_properties_or_nbt(&self, builder: &mut SuggestionsBuilder) {
+        if builder.remaining().is_empty() {
+            let state = self.state.expect("a parsed block");
+            if !state.block().info().properties.is_empty() {
+                builder.suggest("[");
+            }
+            if state.has_block_entity() {
+                builder.suggest("{");
+            }
+        }
+    }
+
+    fn suggest_tag(&self, builder: &mut SuggestionsBuilder) {
+        let tags = wafer_data::tags().iter().find(|r| r.registry == "minecraft:block").map_or(&[][..], |r| r.tags);
+        shared_suggestion_provider::suggest_resource_with_prefix(tags.iter().map(|t| t.0), builder, "#");
+    }
+
+    fn suggest_item(&self, builder: &mut SuggestionsBuilder) {
+        shared_suggestion_provider::suggest_resource(registry::BLOCK.iter(), builder);
     }
 
     fn read_block(&mut self) -> Result<(), CommandSyntaxException> {
@@ -146,6 +341,7 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
         }
         let start = self.reader.cursor;
         self.reader.expect('#')?;
+        self.suggestions = Suggest::Tag;
         let id = read_identifier(self.reader)?;
         match registry_tag("minecraft:block", &id) {
             Some(tag) => self.tag = Some(tag),
@@ -159,6 +355,7 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
 
     fn read_properties(&mut self) -> Result<(), CommandSyntaxException> {
         self.reader.skip();
+        self.suggestions = Suggest::PropertyNameOrEnd;
         self.reader.skip_whitespace();
         let block = self.state.expect("a parsed block").block();
         while self.reader.can_read() && !self.reader.at(']') {
@@ -174,14 +371,17 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
                 return Err(ERROR_DUPLICATE_PROPERTY.create_with_context(self.reader, self.id.as_str(), key));
             }
             self.reader.skip_whitespace();
+            self.suggestions = Suggest::Equals;
             if !self.reader.at('=') {
                 return Err(ERROR_EXPECTED_VALUE.create_with_context(self.reader, self.id.as_str(), key));
             }
             self.reader.skip();
             self.reader.skip_whitespace();
+            self.suggestions = Suggest::PropertyValue(values);
             let start = self.reader.cursor;
             let raw = self.reader.read_string()?;
             self.set_value(property, values, &raw, start)?;
+            self.suggestions = Suggest::NextPropertyOrEnd;
             self.reader.skip_whitespace();
             if self.reader.can_read() {
                 if !self.reader.at(',') {
@@ -191,6 +391,7 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
                     break;
                 }
                 self.reader.skip();
+                self.suggestions = Suggest::PropertyName;
             }
         }
         if self.reader.can_read() {
@@ -203,6 +404,7 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
 
     fn read_vague_properties(&mut self) -> Result<(), CommandSyntaxException> {
         self.reader.skip();
+        self.suggestions = Suggest::VaguePropertyNameOrEnd;
         let mut value_start = None;
         self.reader.skip_whitespace();
         while self.reader.can_read() && !self.reader.at(']') {
@@ -220,6 +422,7 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
             }
             self.reader.skip();
             self.reader.skip_whitespace();
+            self.suggestions = Suggest::VaguePropertyValue(key.clone());
             value_start = Some(self.reader.cursor);
             let value = self.reader.read_string()?;
             self.vague_properties.push((key, value));
@@ -233,6 +436,7 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
                     break;
                 }
                 self.reader.skip();
+                self.suggestions = Suggest::VaguePropertyName;
             }
         }
         if self.reader.can_read() {
