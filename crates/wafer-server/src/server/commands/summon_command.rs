@@ -83,6 +83,7 @@ pub(crate) const MODELLED: &[&str] = &[
     "minecraft:marker",
     "minecraft:interaction",
     "minecraft:painting",
+    "minecraft:leash_knot",
     "minecraft:item_frame",
     "minecraft:glow_item_frame",
     "minecraft:block_display",

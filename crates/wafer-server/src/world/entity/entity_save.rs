@@ -414,6 +414,7 @@ impl ServerLevel {
             "minecraft:lightning_bolt" => LevelEntity::LightningBolt(super::lightning_bolt::LightningBolt::new(Vec3::ZERO)),
             "minecraft:eye_of_ender" => LevelEntity::EyeOfEnder(super::projectile::eye_of_ender::EyeOfEnder::of_type()),
             "minecraft:painting" => LevelEntity::Painting(super::decoration::painting::Painting::create_empty()),
+            "minecraft:leash_knot" => LevelEntity::LeashKnot(super::decoration::leash_fence_knot_entity::LeashFenceKnotEntity::new(wafer_core::BlockPos::ZERO)),
             "minecraft:cushion" => LevelEntity::Cushion(super::decoration::cushion::Cushion::of_type()),
             "minecraft:item_frame" => LevelEntity::ItemFrame(super::decoration::item_frame::ItemFrame::create_empty(false)),
             "minecraft:glow_item_frame" => LevelEntity::ItemFrame(super::decoration::item_frame::ItemFrame::create_empty(true)),
