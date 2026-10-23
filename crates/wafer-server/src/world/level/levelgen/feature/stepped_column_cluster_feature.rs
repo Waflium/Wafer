@@ -20,7 +20,7 @@ pub struct SteppedColumnClusterFeature {
 
 impl SteppedColumnClusterFeature {
     pub fn parse(json: &Value) -> Result<SteppedColumnClusterFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(SteppedColumnClusterFeature {
             block: BlockStateProviderHolder::parse(field("block")?)?,
             continue_through: BlockPredicate::parse(field("continue_through")?)?,

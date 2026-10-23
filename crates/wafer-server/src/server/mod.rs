@@ -281,7 +281,8 @@ impl Server {
         let data_configuration = configure_pack_repository(&mut pack_repository, &initial_data_config, saved.is_none(), false);
         let resource_manager = MultiPackResourceManager::new(pack_repository.open_all_selected());
         crate::core::data_registries::load(&resource_manager);
-        let postponed_tags = crate::tags::load_tags_for_existing_registries(&resource_manager);
+        let postponed_tags = wafer_data::prepare_tags(crate::tags::load_tags_for_existing_registries(&resource_manager));
+        wafer_data::with_pending_tags(postponed_tags, crate::core::data_registries::validate).map_err(std::io::Error::other)?;
         let mut data_packs = ReloadableServerResources::load_resources(&resource_manager, postponed_tags, config.function_permission_level).map_err(std::io::Error::other)?;
         data_packs.update_components_and_static_registry_tags();
         data_packs.finalize_recipe_loading();
@@ -788,7 +789,7 @@ impl Server {
     pub fn reload_resources<S: AsRef<str>>(&mut self, packs_to_enable: &[S]) -> Result<(), String> {
         let packs_to_load = packs_to_enable.iter().filter_map(|id| self.pack_repository.pack(id.as_ref())).map(|pack| pack.open()).collect();
         let resource_manager = MultiPackResourceManager::new(packs_to_load);
-        let postponed_tags = crate::tags::load_tags_for_existing_registries(&resource_manager);
+        let postponed_tags = wafer_data::prepare_tags(crate::tags::load_tags_for_existing_registries(&resource_manager));
         let mut resources = ReloadableServerResources::load_resources(&resource_manager, postponed_tags, self.config.function_permission_level)?;
         self.pack_repository.set_selected(packs_to_enable);
         self.data_configuration = WorldDataConfiguration::new(get_selected_packs(&self.pack_repository, true), self.data_configuration.enabled_features);

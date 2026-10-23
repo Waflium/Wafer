@@ -206,6 +206,27 @@ pub struct WorldgenRegistries {
 
 pub static WORLDGEN: LazyLock<WorldgenRegistries> = LazyLock::new(|| WorldgenRegistries::load().expect("vanilla worldgen data"));
 
+pub fn validate(registry: &str, json: &Value) -> Result<(), String> {
+    if registry == "minecraft:worldgen/noise" {
+        return parse_noise(json).map(drop);
+    }
+    let mut noises = HashMap::new();
+    for (name, source) in crate::core::data_registries::json_entries("minecraft:worldgen/noise") {
+        if let Ok(noise) = serde_json::from_str::<Value>(source).map_err(|e| e.to_string()).and_then(|json| parse_noise(&json)) {
+            noises.insert(name.to_string(), Arc::new(noise));
+        }
+    }
+    let sources: HashMap<&'static str, &'static str> = crate::core::data_registries::json_entries("minecraft:worldgen/density_function").iter().copied().collect();
+    let mut parser = Parser { noises: &noises, sources: &sources, parsed: HashMap::new() };
+    let mut materials = material::MaterialParser::new();
+    match registry {
+        "minecraft:worldgen/density_function" => parser.parse(json).map(drop),
+        "minecraft:worldgen/noise_settings" => WorldgenRegistries::parse_settings("", json, &mut parser, &mut materials).map(drop),
+        "minecraft:worldgen/material_rule" => materials.rule(json, &mut parser).map(drop),
+        _ => materials.condition(json).map(drop),
+    }
+}
+
 pub fn parse_noise(json: &Value) -> Result<NormalNoise, String> {
     let normalize = match json.get("normalize") {
         None | Some(Value::Bool(true)) => Normalization::Enabled,
@@ -219,7 +240,7 @@ pub fn parse_noise(json: &Value) -> Result<NormalNoise, String> {
     };
     Ok(NormalNoise::new(NormalNoiseParameters {
         base_amplitude: json.get("base_amplitude").and_then(Value::as_f64).unwrap_or(1.0),
-        base_octave: json.get("base_octave").and_then(Value::as_i64).ok_or("missing base_octave")? as i32,
+        base_octave: json.get("base_octave").and_then(Value::as_i64).ok_or_else(|| crate::util::codec::no_key("base_octave", json))? as i32,
         octave_count: json.get("octave_count").and_then(Value::as_i64).unwrap_or(1) as i32,
         normalize,
         amplitude_modifiers: modifiers,
@@ -258,7 +279,7 @@ impl WorldgenRegistries {
         parser: &mut Parser,
         materials: &mut material::MaterialParser,
     ) -> Result<NoiseGeneratorSettings, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let noise = field("noise")?;
         let router = field("noise_router")?;
         let mut f = |key: &str| parser.parse(router.get(key).ok_or_else(|| format!("missing noise_router.{key}"))?);

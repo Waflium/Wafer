@@ -15,7 +15,7 @@ pub struct ReplaceBlobsFeature {
 
 impl ReplaceBlobsFeature {
     pub fn parse(json: &Value) -> Result<ReplaceBlobsFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(ReplaceBlobsFeature {
             target_state: parse_block_state(field("target")?)?,
             replace_state: parse_block_state(field("state")?)?,

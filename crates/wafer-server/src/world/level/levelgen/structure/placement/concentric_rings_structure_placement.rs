@@ -17,7 +17,7 @@ pub struct ConcentricRingsStructurePlacement {
 
 impl ConcentricRingsStructurePlacement {
     pub fn parse(json: &Value) -> Result<ConcentricRingsStructurePlacement, String> {
-        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| format!("missing {key}"));
+        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(ConcentricRingsStructurePlacement {
             spreading: AbstractSpreadingStructurePlacement::parse(json)?,
             distance: int("distance")?,

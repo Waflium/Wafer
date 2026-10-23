@@ -27,7 +27,7 @@ pub struct BlendToGray {
 impl BlendToGray {
     pub fn parse(json: &Json) -> Result<BlendToGray, String> {
         let unit = |key: &str| {
-            let v = float(json.get(key).ok_or_else(|| format!("missing {key}"))?)?;
+            let v = float(json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json))?)?;
             if (0.0..=1.0).contains(&v) { Ok(v) } else { Err(format!("Value {v} outside of range [0.0:1.0]")) }
         };
         Ok(BlendToGray { brightness: unit("brightness")?, factor: unit("factor")? })

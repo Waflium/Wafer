@@ -18,7 +18,7 @@ pub struct RandomNeighborSpreadFeature {
 
 impl RandomNeighborSpreadFeature {
     pub fn parse(json: &Value) -> Result<RandomNeighborSpreadFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(RandomNeighborSpreadFeature {
             block: BlockStateProviderHolder::parse(field("block")?)?,
             accepted_neighbors: BlockSet::parse(field("accepted_neighbors")?)?,

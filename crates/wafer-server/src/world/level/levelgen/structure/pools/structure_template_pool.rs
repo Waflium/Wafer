@@ -79,7 +79,7 @@ pub struct StructureTemplatePool {
 }
 
 impl StructureTemplatePool {
-    fn parse(json: &Value) -> Result<StructureTemplatePool, String> {
+    pub fn parse(json: &Value) -> Result<StructureTemplatePool, String> {
         let fallback_name = json.get("fallback").and_then(Value::as_str).ok_or("missing fallback")?;
         let fallback = TemplatePoolHolder::by_name(fallback_name).ok_or_else(|| format!("unknown pool {fallback_name}"))?;
         let mut templates = Vec::new();

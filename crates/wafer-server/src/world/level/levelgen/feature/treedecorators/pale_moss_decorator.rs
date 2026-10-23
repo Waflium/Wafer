@@ -18,7 +18,7 @@ pub struct PaleMossDecorator {
 
 impl PaleMossDecorator {
     pub fn parse(json: &Value) -> Result<PaleMossDecorator, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(PaleMossDecorator {
             leaves_probability: float(field("leaves_probability")?)?,
             trunk_probability: float(field("trunk_probability")?)?,

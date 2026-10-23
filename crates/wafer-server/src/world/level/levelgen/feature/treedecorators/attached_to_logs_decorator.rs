@@ -24,7 +24,7 @@ pub fn parse_directions(json: &Value) -> Result<Vec<Direction>, String> {
 
 impl AttachedToLogsDecorator {
     pub fn parse(json: &Value) -> Result<AttachedToLogsDecorator, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(AttachedToLogsDecorator {
             probability: float(field("probability")?)?,
             block_provider: BlockStateProviderHolder::parse(field("block_provider")?)?,

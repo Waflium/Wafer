@@ -2,6 +2,9 @@ use std::sync::LazyLock;
 
 use serde_json::Value;
 use wafer_data::SyncedRegistry;
+use wafer_protocol::nbt::Nbt;
+
+use crate::util::codec::{self, DataResult};
 
 pub const REGISTRY: &str = "minecraft:painting_variant";
 pub const PLACEABLE: &str = "minecraft:placeable";
@@ -12,6 +15,14 @@ pub struct PaintingVariant {
 }
 
 impl PaintingVariant {
+    pub fn decode(tag: &Nbt) -> DataResult<PaintingVariant> {
+        let asset_id = codec::decode_field(tag, "asset_id", codec::identifier);
+        let width = codec::decode_field(tag, "width", |tag| codec::int_range(tag, 1, 16));
+        let height = codec::decode_field(tag, "height", |tag| codec::int_range(tag, 1, 16));
+        codec::record_errors(&[asset_id.as_ref().err(), width.as_ref().err(), height.as_ref().err()])?;
+        Ok(PaintingVariant { width: width?, height: height? })
+    }
+
     pub fn area(&self) -> i32 {
         self.width * self.height
     }

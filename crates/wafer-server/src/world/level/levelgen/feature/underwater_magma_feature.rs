@@ -16,7 +16,7 @@ pub struct UnderwaterMagmaFeature {
 
 impl UnderwaterMagmaFeature {
     pub fn parse(json: &Value) -> Result<UnderwaterMagmaFeature, String> {
-        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| format!("missing {key}"));
+        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(UnderwaterMagmaFeature {
             floor_search_range: int("floor_search_range")?,
             placement_radius_around_floor: int("placement_radius_around_floor")?,

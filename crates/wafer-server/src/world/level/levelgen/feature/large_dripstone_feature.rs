@@ -25,7 +25,7 @@ pub struct LargeDripstoneFeature {
 
 impl LargeDripstoneFeature {
     pub fn parse(json: &Value) -> Result<LargeDripstoneFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(LargeDripstoneFeature {
             replaceable_blocks: BlockSet::parse(field("replaceable_blocks")?)?,
             floor_to_ceiling_search_range: json.get("floor_to_ceiling_search_range").and_then(Value::as_i64).map_or(30, |v| v as i32),

@@ -24,12 +24,12 @@ impl RuleTest {
     pub fn parse(json: &Value) -> Result<RuleTest, String> {
         let ty = json.get("predicate_type").and_then(Value::as_str).ok_or("rule test without predicate_type")?;
         let block = |key: &str| -> Result<Block, String> {
-            let name = json.get(key).and_then(Value::as_str).ok_or_else(|| format!("missing {key}"))?;
+            let name = json.get(key).and_then(Value::as_str).ok_or_else(|| crate::util::codec::no_key(key, json))?;
             Block::by_name(&resource(name)).ok_or_else(|| format!("unknown block {name}"))
         };
         let state = || parse_block_state(json.get("block_state").ok_or("missing block_state")?);
         let probability = || float(json.get("probability").ok_or("missing probability")?);
-        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| format!("missing {key}"));
+        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| crate::util::codec::no_key(key, json));
         let rules = || -> Result<Vec<RuleTest>, String> { json.get("rules").and_then(Value::as_array).ok_or("missing rules")?.iter().map(RuleTest::parse).collect() };
         Ok(match ty.strip_prefix("minecraft:").unwrap_or(ty) {
             "always_true" => RuleTest::AlwaysTrue,

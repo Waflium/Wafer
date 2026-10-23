@@ -18,7 +18,7 @@ pub struct UpwardsBranchingTrunkPlacer {
 
 impl UpwardsBranchingTrunkPlacer {
     pub fn parse(json: &Value) -> Result<UpwardsBranchingTrunkPlacer, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(UpwardsBranchingTrunkPlacer {
             extra_branch_steps: IntProvider::parse(field("extra_branch_steps")?)?,
             place_branch_per_log_probability: float(field("place_branch_per_log_probability")?)?,

@@ -19,7 +19,7 @@ pub struct CherryTrunkPlacer {
 
 impl CherryTrunkPlacer {
     pub fn parse(json: &Value) -> Result<CherryTrunkPlacer, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let branch_start = field("branch_start_offset_from_top")?;
         let bound = |key: &str| branch_start.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| format!("branch_start_offset_from_top without {key}"));
         let (min_inclusive, max_inclusive) = (bound("min_inclusive")?, bound("max_inclusive")?);

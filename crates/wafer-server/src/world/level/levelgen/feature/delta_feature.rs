@@ -20,7 +20,7 @@ pub struct DeltaFeature {
 
 impl DeltaFeature {
     pub fn parse(json: &Value) -> Result<DeltaFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(DeltaFeature {
             contents: parse_block_state(field("contents")?)?,
             rim: parse_block_state(field("rim")?)?,

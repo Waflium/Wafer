@@ -231,21 +231,32 @@ pub fn main(args: Vec<String>) {
     let worker_properties = properties.clone();
     let worker_data_configuration = data_configuration.clone();
     let bonus_chest = options.has("bonusChest");
-    let (postponed_tags, mut world_data) = std::thread::scope(|scope| {
+    let loaded = std::thread::scope(|scope| {
         std::thread::Builder::new()
             .name("Worker-Main-1".into())
             .spawn_scoped(scope, || {
-                let postponed_tags = load_tags_for_existing_registries(&resource_manager);
+                let postponed_tags = wafer_data::prepare_tags(load_tags_for_existing_registries(&resource_manager));
+                wafer_data::with_pending_tags(postponed_tags, crate::core::data_registries::validate)?;
                 let world_data = level_data.unwrap_or_else(|| {
                     info!("No existing world data, creating new world");
                     create_new_world_data(&worker_properties, worker_data_configuration, bonus_chest)
                 });
-                (postponed_tags, world_data)
+                Ok::<_, String>((postponed_tags, world_data))
             })
             .expect("worker thread")
             .join()
             .expect("world data")
     });
+    let (postponed_tags, mut world_data) = match loaded {
+        Ok(loaded) => loaded,
+        Err(_) => {
+            warn!(
+                "Failed to load datapacks, can't proceed with server load. You can either fix your datapacks or reset to vanilla with --safeMode\njava.util.concurrent.ExecutionException: net.minecraft.ReportedException: Registry Loading\nCaused by: net.minecraft.ReportedException: Registry Loading\nCaused by: java.lang.IllegalStateException: Failed to load registries due to errors"
+            );
+            runtime.shutdown_background();
+            return;
+        }
+    };
     let mut data_packs = match ReloadableServerResources::load_resources(&resource_manager, postponed_tags, properties.function_permission_level) {
         Ok(data_packs) => data_packs,
         Err(exception) => {

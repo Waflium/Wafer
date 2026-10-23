@@ -24,7 +24,7 @@ impl HeightProvider {
         let Some(ty) = json.get("type").and_then(Value::as_str) else {
             return Ok(HeightProvider::Constant(VerticalAnchor::parse(json)?));
         };
-        let anchor = |key: &str| VerticalAnchor::parse(json.get(key).ok_or_else(|| format!("missing {key}"))?);
+        let anchor = |key: &str| VerticalAnchor::parse(json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json))?);
         let int_or = |key: &str, default: i32| json.get(key).and_then(Value::as_i64).map_or(default, |v| v as i32);
         Ok(match ty.strip_prefix("minecraft:").unwrap_or(ty) {
             "constant" => HeightProvider::Constant(anchor("value")?),

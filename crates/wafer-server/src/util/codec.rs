@@ -11,6 +11,15 @@ pub fn field<'a>(tag: &'a Nbt, name: &str) -> DataResult<&'a Nbt> {
     tag.get(name).ok_or_else(|| format!("No key {name} in MapLike[{}]", crate::nbt::to_string(tag)))
 }
 
+pub fn no_key(key: &str, map: &serde_json::Value) -> String {
+    format!("No key {key} in MapLike[{map}]")
+}
+
+pub fn record_errors(errors: &[Option<&String>]) -> DataResult<()> {
+    let errors: Vec<&str> = errors.iter().flatten().map(|e| e.as_str()).collect();
+    if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
+}
+
 pub fn optional_field<'a>(tag: &'a Nbt, name: &str) -> Option<&'a Nbt> {
     tag.get(name)
 }
@@ -60,6 +69,14 @@ pub fn bool_value(tag: &Nbt) -> DataResult<bool> {
 
 pub fn int(tag: &Nbt) -> DataResult<i32> {
     Ok(component_codec::as_i32(number(tag)?))
+}
+
+pub fn int_range(tag: &Nbt, min: i32, max: i32) -> DataResult<i32> {
+    let value = int(tag)?;
+    if value < min || value > max {
+        return Err(format!("Value must be within range [{min};{max}]: {value}"));
+    }
+    Ok(value)
 }
 
 pub fn long(tag: &Nbt) -> DataResult<i64> {

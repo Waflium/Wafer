@@ -16,7 +16,7 @@ pub enum PoolAliasBinding {
 impl PoolAliasBinding {
     pub fn parse(json: &Value) -> Result<PoolAliasBinding, String> {
         let ty = json.get("type").and_then(Value::as_str).ok_or("pool alias without type")?;
-        let string = |key: &str| json.get(key).and_then(Value::as_str).map(resource).ok_or_else(|| format!("missing {key}"));
+        let string = |key: &str| json.get(key).and_then(Value::as_str).map(resource).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(match ty.strip_prefix("minecraft:").unwrap_or(ty) {
             "direct" => PoolAliasBinding::Direct { alias: string("alias")?, target: string("target")? },
             "random" => PoolAliasBinding::Random {

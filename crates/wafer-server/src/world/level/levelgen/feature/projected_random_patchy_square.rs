@@ -16,7 +16,7 @@ pub struct ProjectedRandomPatchySquare {
 
 impl ProjectedRandomPatchySquare {
     pub fn parse(json: &Value) -> Result<ProjectedRandomPatchySquare, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(ProjectedRandomPatchySquare {
             block: BlockStateProviderHolder::parse(field("block")?)?,
             project_through: BlockPredicate::parse(field("project_through")?)?,

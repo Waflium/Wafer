@@ -27,7 +27,7 @@ pub struct VegetationPatchFeature {
 
 impl VegetationPatchFeature {
     pub fn parse(json: &Value, waterlogged: bool) -> Result<VegetationPatchFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let surface = match field("surface")?.as_str() {
             Some("floor") => Direction::Down,
             Some("ceiling") => Direction::Up,

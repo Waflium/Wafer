@@ -85,7 +85,7 @@ impl MobSpawnSettings {
         }
         let costs = json.get("spawn_costs").and_then(Value::as_object).ok_or("missing spawn_costs")?;
         for (name, cost) in costs {
-            let field = |key: &str| cost.get(key).and_then(Value::as_f64).ok_or_else(|| format!("missing {key}"));
+            let field = |key: &str| cost.get(key).and_then(Value::as_f64).ok_or_else(|| crate::util::codec::no_key(key, cost));
             settings.put_cost(entity_type(&Value::String(name.clone()))?, MobSpawnCost { energy_budget: field("energy_budget")?, charge: field("charge")? });
         }
         Ok(settings)

@@ -58,7 +58,7 @@ pub struct ParameterPoint {
 
 impl ParameterPoint {
     pub fn parse_report(v: &Value) -> Result<ParameterPoint, String> {
-        let p = |key: &str| Parameter::parse_report(v.get(key).ok_or_else(|| format!("missing {key}"))?);
+        let p = |key: &str| Parameter::parse_report(v.get(key).ok_or_else(|| crate::util::codec::no_key(key, v))?);
         let offset = Parameter::parse_report(v.get("offset").ok_or("missing offset")?)?.min;
         Ok(ParameterPoint {
             space: [

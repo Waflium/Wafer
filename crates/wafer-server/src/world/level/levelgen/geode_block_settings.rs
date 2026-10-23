@@ -18,7 +18,7 @@ pub struct GeodeBlockSettings {
 
 impl GeodeBlockSettings {
     pub fn parse(json: &Value) -> Result<GeodeBlockSettings, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let provider = |key: &str| BlockStateProviderHolder::parse(field(key)?);
         Ok(GeodeBlockSettings {
             filling_provider: provider("filling_provider")?,

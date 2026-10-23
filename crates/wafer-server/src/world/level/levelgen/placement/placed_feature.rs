@@ -74,7 +74,7 @@ pub fn parse_placed_feature_set(json: &Value) -> Result<Vec<PlacedFeatureHolder>
 impl PlacedFeatureHolder {
     pub fn parse(json: &Value) -> Result<PlacedFeatureHolder, String> {
         match json {
-            Value::String(name) => placed_feature_index(name).map(PlacedFeatureHolder::Reference).ok_or_else(|| format!("unknown placed feature {name}")),
+            Value::String(name) => placed_feature_index(name).map(PlacedFeatureHolder::Reference).ok_or_else(|| crate::core::data_registries::unknown_reference("minecraft:worldgen/placed_feature", &resource(name))),
             other => Ok(PlacedFeatureHolder::Direct(Box::new(PlacedFeature::parse(other)?))),
         }
     }

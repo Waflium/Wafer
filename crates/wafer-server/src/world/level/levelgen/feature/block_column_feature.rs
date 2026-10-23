@@ -21,7 +21,7 @@ pub struct BlockColumnFeature {
 
 impl BlockColumnFeature {
     pub fn parse(json: &Value) -> Result<BlockColumnFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(BlockColumnFeature {
             layers: field("layers")?
                 .as_array()

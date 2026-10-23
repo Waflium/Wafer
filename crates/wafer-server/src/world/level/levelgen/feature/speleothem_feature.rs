@@ -21,7 +21,7 @@ pub struct SpeleothemFeature {
 
 impl SpeleothemFeature {
     pub fn parse(json: &Value) -> Result<SpeleothemFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let chance = |key: &str, default: f32| json.get(key).map(float).transpose().map(|v| v.unwrap_or(default));
         Ok(SpeleothemFeature {
             base_block: parse_block_state(field("base_block")?)?,

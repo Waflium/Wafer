@@ -102,7 +102,7 @@ impl ProcessorRule {
     }
 
     fn parse(json: &Value) -> Result<ProcessorRule, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(ProcessorRule {
             input_predicate: RuleTest::parse(field("input_predicate")?)?,
             loc_predicate: RuleTest::parse(field("location_predicate")?)?,
@@ -289,7 +289,7 @@ pub struct StructureProcessorList {
 }
 
 impl StructureProcessorList {
-    fn parse(json: &Value) -> Result<StructureProcessorList, String> {
+    pub fn parse(json: &Value) -> Result<StructureProcessorList, String> {
         let processors = json.get("processors").and_then(Value::as_array).ok_or("processor list without processors")?;
         Ok(StructureProcessorList { list: processors.iter().map(StructureProcessor::parse).collect::<Result<_, _>>()? })
     }

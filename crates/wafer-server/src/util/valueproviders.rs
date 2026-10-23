@@ -28,11 +28,11 @@ pub fn normal<R: RandomSource + ?Sized>(random: &mut R, mean: f32, deviation: f3
 }
 
 fn int_field(json: &Value, key: &str) -> Result<i32, String> {
-    json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| format!("missing {key}"))
+    json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| crate::util::codec::no_key(key, json))
 }
 
 fn float_field(json: &Value, key: &str) -> Result<f32, String> {
-    json.get(key).ok_or_else(|| format!("missing {key}")).and_then(float)
+    json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json)).and_then(float)
 }
 
 pub fn float(v: &Value) -> Result<f32, String> {

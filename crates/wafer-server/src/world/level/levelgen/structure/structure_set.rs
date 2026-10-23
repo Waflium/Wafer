@@ -49,7 +49,7 @@ static STRUCTURE_SETS: LazyLock<Vec<StructureSet>> = LazyLock::new(|| {
 });
 
 impl StructureSet {
-    fn parse(json: &Value) -> Result<StructureSet, String> {
+    pub fn parse(json: &Value) -> Result<StructureSet, String> {
         let structures = json
             .get("structures")
             .and_then(Value::as_array)

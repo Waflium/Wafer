@@ -103,10 +103,10 @@ impl BlockPredicate {
     pub fn parse(json: &Value) -> Result<BlockPredicate, String> {
         let ty = json.get("type").and_then(Value::as_str).ok_or("block predicate without type")?;
         let list = |key: &str| -> Result<Vec<BlockPredicate>, String> {
-            json.get(key).and_then(Value::as_array).ok_or_else(|| format!("missing {key}"))?.iter().map(BlockPredicate::parse).collect()
+            json.get(key).and_then(Value::as_array).ok_or_else(|| crate::util::codec::no_key(key, json))?.iter().map(BlockPredicate::parse).collect()
         };
         let vec3 = |key: &str| -> Result<(i32, i32, i32), String> {
-            let v = json.get(key).and_then(Value::as_array).filter(|v| v.len() == 3).ok_or_else(|| format!("missing {key}"))?;
+            let v = json.get(key).and_then(Value::as_array).filter(|v| v.len() == 3).ok_or_else(|| crate::util::codec::no_key(key, json))?;
             Ok((v[0].as_i64().unwrap_or(0) as i32, v[1].as_i64().unwrap_or(0) as i32, v[2].as_i64().unwrap_or(0) as i32))
         };
         Ok(match ty.strip_prefix("minecraft:").unwrap_or(ty) {

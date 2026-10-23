@@ -56,7 +56,7 @@ pub enum FoliagePlacerType {
 impl FoliagePlacer {
     pub fn parse(json: &Value) -> Result<FoliagePlacer, String> {
         let ty = json.get("type").and_then(Value::as_str).ok_or("foliage placer without type")?;
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let int = |key: &str| field(key)?.as_i64().map(|v| v as i32).ok_or_else(|| format!("bad {key}"));
         let kind = match ty.strip_prefix("minecraft:").unwrap_or(ty) {
             "blob_foliage_placer" => FoliagePlacerType::Blob { height: int("height")? },

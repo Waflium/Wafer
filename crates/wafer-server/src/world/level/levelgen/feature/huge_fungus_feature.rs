@@ -21,7 +21,7 @@ pub struct HugeFungusFeature {
 
 impl HugeFungusFeature {
     pub fn parse(json: &Value) -> Result<HugeFungusFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(HugeFungusFeature {
             valid_base_state: parse_block_state(field("valid_base_block")?)?,
             stem_state: parse_block_state(field("stem_state")?)?,

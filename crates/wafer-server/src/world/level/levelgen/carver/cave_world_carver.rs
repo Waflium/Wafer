@@ -27,7 +27,7 @@ struct Tunnel {
 
 impl CaveWorldCarver {
     pub fn parse(json: &Value) -> Result<CaveWorldCarver, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let float_provider = |key: &str| FloatProvider::parse(field(key)?);
         Ok(CaveWorldCarver {
             probability: float(field("probability")?)?,

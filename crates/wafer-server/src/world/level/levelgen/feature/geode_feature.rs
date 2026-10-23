@@ -34,7 +34,7 @@ pub struct GeodeFeature {
 
 impl GeodeFeature {
     pub fn parse(json: &Value) -> Result<GeodeFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let double = |key: &str, default: f64| json.get(key).and_then(Value::as_f64).unwrap_or(default);
         let int = |key: &str, default: i32| json.get(key).and_then(Value::as_i64).map_or(default, |v| v as i32);
         let provider = |key: &str, min: i32, max: i32| -> Result<IntProvider, String> {

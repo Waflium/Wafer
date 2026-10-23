@@ -111,7 +111,7 @@ impl BlockStateProvider {
         let Some(ty) = json.get("type").and_then(Value::as_str) else {
             return Ok(BlockStateProvider::Simple(parse_block_state(json)?));
         };
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(match ty.strip_prefix("minecraft:").unwrap_or(ty) {
             "simple" => BlockStateProvider::Simple(parse_block_state(field("state")?)?),
             "weighted" => BlockStateProvider::Weighted(WeightedList::parse(field("entries")?, parse_block_state)?),

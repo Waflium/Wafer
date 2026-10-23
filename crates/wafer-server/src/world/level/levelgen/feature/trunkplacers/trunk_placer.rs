@@ -35,7 +35,7 @@ pub enum TrunkPlacerType {
 impl TrunkPlacer {
     pub fn parse(json: &Value) -> Result<TrunkPlacer, String> {
         let ty = json.get("type").and_then(Value::as_str).ok_or("trunk placer without type")?;
-        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| format!("missing {key}"));
+        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| crate::util::codec::no_key(key, json));
         let kind = match ty.strip_prefix("minecraft:").unwrap_or(ty) {
             "straight_trunk_placer" => TrunkPlacerType::Straight,
             "forking_trunk_placer" => TrunkPlacerType::Forking,

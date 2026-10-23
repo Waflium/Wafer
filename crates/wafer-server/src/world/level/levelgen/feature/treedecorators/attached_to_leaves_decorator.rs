@@ -21,7 +21,7 @@ pub struct AttachedToLeavesDecorator {
 
 impl AttachedToLeavesDecorator {
     pub fn parse(json: &Value) -> Result<AttachedToLeavesDecorator, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let int = |key: &str| field(key)?.as_i64().map(|v| v as i32).ok_or_else(|| format!("bad {key}"));
         Ok(AttachedToLeavesDecorator {
             probability: float(field("probability")?)?,

@@ -223,7 +223,7 @@ pub fn get_lowest_y_in_5_by_5_box(context: &GenerationContext, block_x: i32, blo
 }
 
 impl Structure {
-    fn parse(json: &Value) -> Result<Structure, String> {
+    pub fn parse(json: &Value) -> Result<Structure, String> {
         Ok(Structure { settings: StructureSettings::parse(json)?, structure_type: StructureType::parse(json)? })
     }
 

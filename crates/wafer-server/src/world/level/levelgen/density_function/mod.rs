@@ -477,7 +477,7 @@ impl Parser<'_> {
         if let Some(f) = self.parsed.get(&name) {
             return Ok(f.clone());
         }
-        let source = self.sources.get(name.as_str()).ok_or_else(|| format!("unknown density function {name}"))?;
+        let source = self.sources.get(name.as_str()).ok_or_else(|| crate::core::data_registries::unknown_reference("minecraft:worldgen/density_function", &name))?;
         let json: Value = serde_json::from_str(source).map_err(|e| format!("{name}: {e}"))?;
         let f = self.parse(&json).map_err(|e| format!("{name}: {e}"))?;
         self.parsed.insert(name, f.clone());
@@ -486,7 +486,7 @@ impl Parser<'_> {
 
     fn noise(&self, v: &Value) -> Result<NoiseHolder, String> {
         let name = resource_name(v.as_str().ok_or("inline noises are not supported")?);
-        let noise = self.noises.get(&name).ok_or_else(|| format!("unknown noise {name}"))?.clone();
+        let noise = self.noises.get(&name).ok_or_else(|| crate::core::data_registries::unknown_reference("minecraft:worldgen/noise", &name))?.clone();
         Ok(NoiseHolder { name: name.into(), noise })
     }
 
@@ -499,7 +499,7 @@ impl Parser<'_> {
         if v.is_number() {
             return Ok(constant(float(v)?));
         }
-        let field = |key: &str| v.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| v.get(key).ok_or_else(|| crate::util::codec::no_key(key, v));
         let kind = v.get("type").and_then(Value::as_str).ok_or("missing type")?;
         let kind = kind.strip_prefix("minecraft:").unwrap_or(kind);
         let function = match kind {

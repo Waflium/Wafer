@@ -15,7 +15,7 @@ pub struct SpikeFeature {
 
 impl SpikeFeature {
     pub fn parse(json: &Value) -> Result<SpikeFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(SpikeFeature {
             state: parse_block_state(field("state")?)?,
             can_place_on: BlockPredicate::parse(field("can_place_on")?)?,

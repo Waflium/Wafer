@@ -21,7 +21,7 @@ pub struct FallenTreeFeature {
 
 impl FallenTreeFeature {
     pub fn parse(json: &Value) -> Result<FallenTreeFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let decorators = |key: &str| -> Result<Vec<TreeDecorator>, String> { field(key)?.as_array().ok_or("decorators is a list")?.iter().map(TreeDecorator::parse).collect() };
         Ok(FallenTreeFeature {
             trunk_provider: BlockStateProviderHolder::parse(field("trunk_provider")?)?,

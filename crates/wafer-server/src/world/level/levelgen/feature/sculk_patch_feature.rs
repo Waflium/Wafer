@@ -17,7 +17,7 @@ pub struct SculkPatchFeature {
 
 impl SculkPatchFeature {
     pub fn parse(json: &Value) -> Result<SculkPatchFeature, String> {
-        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| format!("missing {key}"));
+        let int = |key: &str| json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(SculkPatchFeature {
             charge_count: int("charge_count")?,
             amount_per_charge: int("amount_per_charge")?,

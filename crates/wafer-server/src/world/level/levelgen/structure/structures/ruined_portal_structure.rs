@@ -45,7 +45,7 @@ pub struct Setup {
 
 impl Setup {
     fn parse(json: &Value) -> Result<Setup, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let flag = |key: &str| field(key)?.as_bool().ok_or_else(|| format!("{key} is not a boolean"));
         let placement = field("placement")?.as_str().ok_or("placement is not a string")?;
         Ok(Setup {

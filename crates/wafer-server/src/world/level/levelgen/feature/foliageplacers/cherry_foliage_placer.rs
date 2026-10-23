@@ -16,7 +16,7 @@ pub struct CherryFoliagePlacer {
 
 impl CherryFoliagePlacer {
     pub fn parse(json: &Value) -> Result<CherryFoliagePlacer, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(CherryFoliagePlacer {
             height: IntProvider::parse(field("height")?)?,
             wide_bottom_layer_hole_chance: float(field("wide_bottom_layer_hole_chance")?)?,

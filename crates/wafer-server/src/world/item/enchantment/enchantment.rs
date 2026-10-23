@@ -80,15 +80,33 @@ pub fn slot_group(tag: &Nbt) -> DataResult<EquipmentSlotGroup> {
 
 impl EnchantmentDefinition {
     fn decode(tag: &Nbt) -> DataResult<EnchantmentDefinition> {
+        let supported_items = codec::decode_field(tag, "supported_items", |t| HolderSet::decode("minecraft:item", t));
+        let primary_items = codec::decode_optional(tag, "primary_items", |t| HolderSet::decode("minecraft:item", t));
+        let weight = codec::decode_field(tag, "weight", |t| int_range(t, 1, 1024));
+        let max_level = codec::decode_field(tag, "max_level", |t| int_range(t, 1, MAX_LEVEL));
+        let min_cost = codec::decode_field(tag, "min_cost", Cost::decode);
+        let max_cost = codec::decode_field(tag, "max_cost", Cost::decode);
+        let anvil_cost = codec::decode_field(tag, "anvil_cost", |t| int_range(t, 0, i32::MAX));
+        let slots = codec::decode_field(tag, "slots", |t| codec::list_of(t, slot_group));
+        codec::record_errors(&[
+            supported_items.as_ref().err(),
+            primary_items.as_ref().err(),
+            weight.as_ref().err(),
+            max_level.as_ref().err(),
+            min_cost.as_ref().err(),
+            max_cost.as_ref().err(),
+            anvil_cost.as_ref().err(),
+            slots.as_ref().err(),
+        ])?;
         Ok(EnchantmentDefinition {
-            supported_items: codec::decode_field(tag, "supported_items", |t| HolderSet::decode("minecraft:item", t))?,
-            primary_items: codec::decode_optional(tag, "primary_items", |t| HolderSet::decode("minecraft:item", t))?,
-            weight: codec::decode_field(tag, "weight", |t| int_range(t, 1, 1024))?,
-            max_level: codec::decode_field(tag, "max_level", |t| int_range(t, 1, MAX_LEVEL))?,
-            min_cost: codec::decode_field(tag, "min_cost", Cost::decode)?,
-            max_cost: codec::decode_field(tag, "max_cost", Cost::decode)?,
-            anvil_cost: codec::decode_field(tag, "anvil_cost", |t| int_range(t, 0, i32::MAX))?,
-            slots: codec::decode_field(tag, "slots", |t| codec::list_of(t, slot_group))?,
+            supported_items: supported_items?,
+            primary_items: primary_items?,
+            weight: weight?,
+            max_level: max_level?,
+            min_cost: min_cost?,
+            max_cost: max_cost?,
+            anvil_cost: anvil_cost?,
+            slots: slots?,
         })
     }
 }
@@ -171,13 +189,13 @@ fn entity_context(level: &mut ServerLevel, enchantment_level: i32, entity: Entit
 }
 
 impl Enchantment {
-    fn decode(tag: &Nbt) -> DataResult<Enchantment> {
-        Ok(Enchantment {
-            description: codec::decode_field(tag, "description", |t| Ok(t.clone()))?,
-            definition: EnchantmentDefinition::decode(tag)?,
-            exclusive_set: codec::decode_or(tag, "exclusive_set", HolderSet::Direct(Vec::new()), |t| HolderSet::decode("minecraft:enchantment", t))?,
-            effects: codec::decode_or(tag, "effects", EnchantmentEffectComponents::default(), EnchantmentEffectComponents::decode)?,
-        })
+    pub fn decode(tag: &Nbt) -> DataResult<Enchantment> {
+        let description = codec::decode_field(tag, "description", |t| Ok(t.clone()));
+        let definition = EnchantmentDefinition::decode(tag);
+        let exclusive_set = codec::decode_or(tag, "exclusive_set", HolderSet::Direct(Vec::new()), |t| HolderSet::decode("minecraft:enchantment", t));
+        let effects = codec::decode_or(tag, "effects", EnchantmentEffectComponents::default(), EnchantmentEffectComponents::decode);
+        codec::record_errors(&[description.as_ref().err(), definition.as_ref().err(), exclusive_set.as_ref().err(), effects.as_ref().err()])?;
+        Ok(Enchantment { description: description?, definition: definition?, exclusive_set: exclusive_set?, effects: effects? })
     }
 
     pub fn by_id(id: &str) -> Option<&'static Enchantment> {

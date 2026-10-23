@@ -70,7 +70,7 @@ pub fn valid_tree_pos(level: &mut impl WorldGenLevel, pos: BlockPos) -> bool {
 
 impl TreeFeature {
     pub fn parse(json: &Value) -> Result<TreeFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(TreeFeature {
             trunk_provider: BlockStateProviderHolder::parse(field("trunk_provider")?)?,
             trunk_placer: TrunkPlacer::parse(field("trunk_placer")?)?,

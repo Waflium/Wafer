@@ -16,7 +16,7 @@ pub struct PoplarTrunkPlacer {
 
 impl PoplarTrunkPlacer {
     pub fn parse(json: &Value) -> Result<PoplarTrunkPlacer, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(PoplarTrunkPlacer {
             trunk_height_above_branches: IntProvider::parse(field("trunk_height_above_branches")?)?,
             branch_amount: IntProvider::parse(field("branch_amount")?)?,

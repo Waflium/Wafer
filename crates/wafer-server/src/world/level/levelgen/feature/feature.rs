@@ -318,7 +318,7 @@ pub enum FeatureHolder {
 impl FeatureHolder {
     pub fn parse(json: &Value) -> Result<FeatureHolder, String> {
         match json {
-            Value::String(name) => feature_index(name).map(FeatureHolder::Reference).ok_or_else(|| format!("unknown feature {name}")),
+            Value::String(name) => feature_index(name).map(FeatureHolder::Reference).ok_or_else(|| crate::core::data_registries::unknown_reference("minecraft:worldgen/feature", &resource(name))),
             other => Ok(FeatureHolder::Direct(Box::new(Feature::parse(other)?))),
         }
     }

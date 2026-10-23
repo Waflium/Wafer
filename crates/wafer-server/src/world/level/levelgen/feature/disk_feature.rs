@@ -17,7 +17,7 @@ pub struct DiskFeature {
 
 impl DiskFeature {
     pub fn parse(json: &Value) -> Result<DiskFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(DiskFeature {
             state_provider: BlockStateProviderHolder::parse(field("state_provider")?)?,
             target: BlockPredicate::parse(field("target")?)?,

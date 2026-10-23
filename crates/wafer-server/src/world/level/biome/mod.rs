@@ -36,6 +36,26 @@ pub enum Precipitation {
     Snow,
 }
 
+pub fn validate(json: &Value) -> Result<(), String> {
+    use crate::util::codec;
+    let tag = crate::world::item::component::json_to_nbt(json);
+    codec::decode_field(&tag, "has_precipitation", codec::bool_value)?;
+    codec::decode_field(&tag, "temperature", codec::float)?;
+    codec::decode_field(&tag, "downfall", codec::float)?;
+    codec::field(&tag, "effects")?;
+    if let Some(attributes) = json.get("attributes") {
+        EnvironmentAttributeMap::parse(attributes, true)?;
+    }
+    for step in json.get("features").and_then(Value::as_array).into_iter().flatten() {
+        for feature in step.as_array().into_iter().flatten() {
+            let name = feature.as_str().ok_or_else(|| format!("Not a string: {feature}"))?;
+            crate::world::level::levelgen::placement::placed_feature::placed_feature_index(name)
+                .ok_or_else(|| crate::core::data_registries::unknown_reference("minecraft:worldgen/placed_feature", &crate::world::level::levelgen::blockpredicates::block_predicate::resource(name)))?;
+        }
+    }
+    Ok(())
+}
+
 static CLIMATE: LazyLock<Vec<ClimateSettings>> = LazyLock::new(|| {
     let registry = wafer_data::SyncedRegistry::get("minecraft:worldgen/biome");
     registry

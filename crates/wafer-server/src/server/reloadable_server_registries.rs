@@ -127,10 +127,14 @@ fn list_sources(resource_manager: &MultiPackResourceManager, registry: &str) -> 
         .collect()
 }
 
-struct LoadingErrors(BTreeMap<(String, String), String>);
+pub struct LoadingErrors(pub BTreeMap<(String, String), String>);
 
 impl LoadingErrors {
-    fn report(&self) -> String {
+    pub fn parse_error(&mut self, registry: &str, id: &str, pack: &str, cause: String) {
+        self.0.insert((registry.to_string(), id.to_string()), format!("java.lang.IllegalStateException: Failed to parse {id} from pack {pack}\nCaused by: {cause}"));
+    }
+
+    pub fn report(&self) -> String {
         let mut by_registry: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
         for ((registry, id), error) in &self.0 {
             by_registry.entry(registry).or_default().push((id, error));
@@ -160,10 +164,7 @@ fn decode_registry<T>(registry: &str, sources: &[Source], decode: fn(&Nbt) -> Re
             Ok(element) => {
                 elements.insert(source.id.clone(), element);
             }
-            Err(cause) => {
-                let error = format!("java.lang.IllegalStateException: Failed to parse {} from pack {}\nCaused by: {cause}", source.id, source.pack);
-                errors.0.insert((registry.to_string(), source.id.clone()), error);
-            }
+            Err(cause) => errors.parse_error(registry, &source.id, &source.pack, cause),
         }
     }
     elements

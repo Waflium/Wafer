@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use serde_json::Value;
@@ -6,6 +8,7 @@ use wafer_data::SyncedRegistry;
 
 use crate::server::packs::repository::VANILLA_ID;
 use crate::server::packs::resources::MultiPackResourceManager;
+use crate::server::reloadable_server_registries::LoadingErrors;
 
 pub struct DataRegistry {
     to_network: Vec<i32>,
@@ -141,53 +144,86 @@ const UNSYNCHRONIZED: &[(&str, &[(&str, &str)])] = &[
     ("minecraft:enchantment_provider", &[]),
 ];
 
-fn load_registry(resource_manager: &MultiPackResourceManager, name: &'static str, builtin: &[&'static str]) -> (DataRegistry, &'static [&'static str]) {
-    {
-        let directory = name.strip_prefix("minecraft:").unwrap_or(name);
-        let resources = resource_manager.list_resources(directory, ".json");
-        let mut entries: Vec<&'static str> = builtin.to_vec();
-        let mut contents: Vec<Option<Value>> = vec![None; entries.len()];
-        let mut elements: Vec<Value> = vec![Value::Null; entries.len()];
-        for (location, resource) in &resources {
-            let (namespace, path) = location.split_once(':').unwrap();
-            let id = format!("{namespace}:{}", &path[directory.len() + 1..path.len() - ".json".len()]);
-            let json = match resource.supplier.read().map_err(|e| e.to_string()).and_then(|bytes| serde_json::from_slice::<Value>(&bytes).map_err(|e| e.to_string())) {
-                Ok(json) => json,
-                Err(e) => {
-                    error!("Failed to parse {location} from pack {}: {e}", resource.source_pack_id);
-                    continue;
-                }
-            };
-            let index = match entries.iter().position(|&entry| entry == id) {
-                Some(index) => index,
-                None => {
-                    entries.push(Box::leak(id.into_boxed_str()));
-                    contents.push(None);
-                    elements.push(Value::Null);
-                    entries.len() - 1
-                }
-            };
-            if resource.source_pack_id != VANILLA_ID {
-                contents[index] = Some(json.clone());
-            }
-            elements[index] = json;
+struct PackElement {
+    registry: &'static str,
+    id: String,
+    pack: String,
+    json: Result<Value, String>,
+}
+
+static PACK_ELEMENTS: Mutex<Vec<PackElement>> = Mutex::new(Vec::new());
+
+thread_local! {
+    static UNBOUND: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
+}
+
+pub fn unknown_reference(registry: &str, key: &str) -> String {
+    UNBOUND.with(|unbound| {
+        if let Some(unbound) = unbound.borrow_mut().as_mut() {
+            unbound.push((registry.to_string(), key.to_string()));
         }
-        let mut from_network: Vec<i32> = (0..entries.len() as i32).collect();
-        from_network.sort_by_key(|&id| file_key(entries[id as usize]));
-        let mut to_network = vec![0; entries.len()];
-        for (network_id, &id) in from_network.iter().enumerate() {
-            to_network[id as usize] = network_id as i32;
-        }
-        let json: Vec<(&'static str, &'static str)> = entries.iter().zip(&elements).map(|(&name, element)| (name, &*Box::leak(element.to_string().into_boxed_str()))).collect();
-        (DataRegistry { to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) }, Box::leak(entries.into_boxed_slice()))
+    });
+    unknown_reference_message(registry, key)
+}
+
+fn unknown_reference_message(registry: &str, key: &str) -> String {
+    format!("Unknown registry key in ResourceKey[minecraft:root / {registry}]: {key}")
+}
+
+fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, pack_elements: &mut Vec<PackElement>) -> Option<Value> {
+    let json = resource.supplier.read().map_err(|e| e.to_string()).and_then(|bytes| serde_json::from_slice::<Value>(&bytes).map_err(|e| format!("com.google.gson.JsonSyntaxException: {e}")));
+    let parsed = json.as_ref().ok().cloned();
+    if resource.source_pack_id != VANILLA_ID {
+        pack_elements.push(PackElement { registry, id: id.to_string(), pack: resource.source_pack_id.clone(), json });
     }
+    parsed
+}
+
+fn load_registry(
+    resource_manager: &MultiPackResourceManager,
+    name: &'static str,
+    builtin: &[&'static str],
+    pack_elements: &mut Vec<PackElement>,
+) -> (DataRegistry, &'static [&'static str]) {
+    let directory = name.strip_prefix("minecraft:").unwrap_or(name);
+    let resources = resource_manager.list_resources(directory, ".json");
+    let mut entries: Vec<&'static str> = builtin.to_vec();
+    let mut contents: Vec<Option<Value>> = vec![None; entries.len()];
+    let mut elements: Vec<Value> = vec![Value::Null; entries.len()];
+    for (location, resource) in &resources {
+        let (namespace, path) = location.split_once(':').unwrap();
+        let id = format!("{namespace}:{}", &path[directory.len() + 1..path.len() - ".json".len()]);
+        let Some(json) = read_element(name, &id, resource, pack_elements) else { continue };
+        let index = match entries.iter().position(|&entry| entry == id) {
+            Some(index) => index,
+            None => {
+                entries.push(Box::leak(id.into_boxed_str()));
+                contents.push(None);
+                elements.push(Value::Null);
+                entries.len() - 1
+            }
+        };
+        if resource.source_pack_id != VANILLA_ID {
+            contents[index] = Some(json.clone());
+        }
+        elements[index] = json;
+    }
+    let mut from_network: Vec<i32> = (0..entries.len() as i32).collect();
+    from_network.sort_by_key(|&id| file_key(entries[id as usize]));
+    let mut to_network = vec![0; entries.len()];
+    for (network_id, &id) in from_network.iter().enumerate() {
+        to_network[id as usize] = network_id as i32;
+    }
+    let json: Vec<(&'static str, &'static str)> = entries.iter().zip(&elements).map(|(&name, element)| (name, &*Box::leak(element.to_string().into_boxed_str()))).collect();
+    (DataRegistry { to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) }, Box::leak(entries.into_boxed_slice()))
 }
 
 pub fn load(resource_manager: &MultiPackResourceManager) {
+    let mut pack_elements = Vec::new();
     let mut synced = Vec::new();
     let mut registries = HashMap::new();
     for builtin in wafer_data::builtin_synced_registries() {
-        let (registry, entries) = load_registry(resource_manager, builtin.name, builtin.entries);
+        let (registry, entries) = load_registry(resource_manager, builtin.name, builtin.entries, &mut pack_elements);
         synced.push(SyncedRegistry { name: builtin.name, entries });
         registries.insert(builtin.name, registry);
     }
@@ -195,7 +231,7 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     let mut unsynchronized = Vec::new();
     for &(name, table) in UNSYNCHRONIZED {
         let builtin: Vec<&'static str> = table.iter().map(|&(entry, _)| entry).collect();
-        let (registry, entries) = load_registry(resource_manager, name, &builtin);
+        let (registry, entries) = load_registry(resource_manager, name, &builtin, &mut pack_elements);
         unsynchronized.push((name, entries));
         registries.insert(name, registry);
     }
@@ -204,9 +240,8 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     for (location, resource) in resource_manager.list_resources("dimension", ".json") {
         let (namespace, path) = location.split_once(':').unwrap();
         let id = format!("{namespace}:{}", &path["dimension".len() + 1..path.len() - ".json".len()]);
-        match resource.supplier.read().map_err(|e| e.to_string()).and_then(|bytes| serde_json::from_slice::<Value>(&bytes).map_err(|e| e.to_string())) {
-            Ok(json) => stems.push((leak(id), json)),
-            Err(e) => error!("Failed to parse {location} from pack {}: {e}", resource.source_pack_id),
+        if let Some(json) = read_element("minecraft:dimension", &id, &resource, &mut pack_elements) {
+            stems.push((leak(id), json));
         }
     }
     stems.sort_by_key(|(id, _)| file_key(id));
@@ -217,6 +252,68 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     let registries: &'static HashMap<&'static str, DataRegistry> = Box::leak(Box::new(registries));
     BIOMES.store((&registries["minecraft:worldgen/biome"] as *const DataRegistry).cast_mut(), Ordering::Release);
     ACTIVE.store((registries as *const HashMap<&'static str, DataRegistry>).cast_mut(), Ordering::Release);
+    *PACK_ELEMENTS.lock().unwrap() = pack_elements;
+}
+
+pub fn validate() -> Result<(), String> {
+    let pack_elements = std::mem::take(&mut *PACK_ELEMENTS.lock().unwrap());
+    let mut errors = LoadingErrors(Default::default());
+    UNBOUND.with(|unbound| unbound.replace(Some(Vec::new())));
+    for element in &pack_elements {
+        let decoded = element.json.as_ref().map_err(Clone::clone).and_then(|json| crate::nbt::with_json_source(|| decode(element.registry, json)));
+        let unbound = UNBOUND.with(|unbound| unbound.borrow().as_ref().and_then(|unbound| unbound.last().map(|(registry, key)| unknown_reference_message(registry, key))));
+        match decoded {
+            Err(cause) if unbound.as_ref() == Some(&cause) => {}
+            Err(cause) if element.json.is_err() => errors.parse_error(element.registry, &element.id, &element.pack, cause),
+            Err(cause) => errors.parse_error(element.registry, &element.id, &element.pack, format!("java.lang.IllegalStateException: {cause}")),
+            Ok(()) => {}
+        }
+    }
+    let mut unbound_by_registry: BTreeMap<String, Vec<(String, ())>> = BTreeMap::new();
+    for (registry, key) in UNBOUND.with(|unbound| unbound.take()).unwrap_or_default() {
+        let keys = unbound_by_registry.entry(registry).or_default();
+        if !keys.iter().any(|(k, _)| *k == key) {
+            keys.push((key, ()));
+        }
+    }
+    for (registry, mut keys) in unbound_by_registry {
+        crate::tags::identifier_order(&mut keys);
+        let keys: Vec<String> = keys.into_iter().map(|(key, _)| key).collect();
+        errors.0.insert(("minecraft:root".to_string(), registry.clone()), format!("java.lang.IllegalStateException: Unbound values in registry ResourceKey[minecraft:root / {registry}]: [{}]", keys.join(", ")));
+    }
+    if errors.0.is_empty() {
+        return Ok(());
+    }
+    let report = errors.report();
+    error!("{report}");
+    Err(report)
+}
+
+fn decode(registry: &str, json: &Value) -> Result<(), String> {
+    use crate::world::item::component::json_to_nbt;
+    use crate::world::level::levelgen;
+    match registry {
+        "minecraft:worldgen/noise" | "minecraft:worldgen/density_function" | "minecraft:worldgen/noise_settings" | "minecraft:worldgen/material_rule" | "minecraft:worldgen/material_condition" => {
+            levelgen::validate(registry, json)
+        }
+        "minecraft:worldgen/feature" => levelgen::feature::feature::Feature::parse(json).map(drop),
+        "minecraft:worldgen/placed_feature" => levelgen::placement::placed_feature::PlacedFeature::parse(json).map(drop),
+        "minecraft:worldgen/structure" => levelgen::structure::structure::Structure::parse(json).map(drop),
+        "minecraft:worldgen/structure_set" => levelgen::structure::structure_set::StructureSet::parse(json).map(drop),
+        "minecraft:worldgen/template_pool" => levelgen::structure::pools::structure_template_pool::StructureTemplatePool::parse(json).map(drop),
+        "minecraft:worldgen/processor_list" => levelgen::structure::templatesystem::structure_processor::StructureProcessorList::parse(json).map(drop),
+        "minecraft:worldgen/configured_carver" | "minecraft:worldgen/carver" => levelgen::carver::WorldCarver::parse(json).map(drop),
+        "minecraft:worldgen/world_preset" => levelgen::world_dimensions::WorldDimensions::from_json(&json["dimensions"], 0).map(drop),
+        "minecraft:worldgen/biome" => crate::world::level::biome::validate(json),
+        "minecraft:dimension" => levelgen::world_dimensions::WorldDimensions::stem_from_json(json, 0).map(drop),
+        "minecraft:enchantment" => crate::world::item::enchantment::enchantment::Enchantment::decode(&json_to_nbt(json)).map(drop),
+        "minecraft:enchantment_provider" => crate::world::item::enchantment::providers::enchantment_provider::EnchantmentProvider::parse(json).map(drop),
+        "minecraft:villager_trade" => crate::world::item::trading::villager_trade::VillagerTrade::decode(&json_to_nbt(json)).map(drop),
+        "minecraft:trade_set" => crate::world::item::trading::trade_set::TradeSet::decode(&json_to_nbt(json)).map(drop),
+        "minecraft:trial_spawner" => crate::world::level::block::entity::trialspawner::trial_spawner_config::TrialSpawnerConfig::decode_direct(&json_to_nbt(json)).map(drop),
+        "minecraft:painting_variant" => crate::world::entity::decoration::painting::painting_variant::PaintingVariant::decode(&json_to_nbt(json)).map(drop),
+        _ => Ok(()),
+    }
 }
 
 #[cfg(test)]

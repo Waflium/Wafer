@@ -25,7 +25,7 @@ struct Shape {
 
 impl CanyonWorldCarver {
     pub fn parse(json: &Value) -> Result<CanyonWorldCarver, String> {
-        let field = |v: &Value, key: &str| v.get(key).cloned().ok_or_else(|| format!("missing {key}"));
+        let field = |v: &Value, key: &str| v.get(key).cloned().ok_or_else(|| crate::util::codec::no_key(key, v));
         let shape = field(json, "shape")?;
         let provider = |key: &str| FloatProvider::parse(&field(&shape, key)?);
         Ok(CanyonWorldCarver {

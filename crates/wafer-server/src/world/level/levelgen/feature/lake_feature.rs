@@ -32,7 +32,7 @@ fn is_edge(grid: &[bool; 2048], xx: i32, zz: i32, yy: i32) -> bool {
 
 impl LakeFeature {
     pub fn parse(json: &Value) -> Result<LakeFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(LakeFeature {
             fluid: BlockStateProviderHolder::parse(field("fluid")?)?,
             barrier: BlockStateProviderHolder::parse(field("barrier")?)?,

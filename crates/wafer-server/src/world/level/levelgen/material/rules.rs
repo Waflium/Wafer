@@ -80,8 +80,8 @@ pub struct MaterialParser {
     conditions: HashMap<String, Arc<MaterialCondition>>,
 }
 
-fn source(table: &[(&str, &'static str)], name: &str) -> Result<Value, String> {
-    let source = table.iter().find(|(n, _)| *n == name).ok_or_else(|| format!("unknown entry {name}"))?.1;
+fn source(registry: &str, name: &str) -> Result<Value, String> {
+    let source = crate::core::data_registries::json_entries(registry).iter().find(|(n, _)| *n == name).ok_or_else(|| crate::core::data_registries::unknown_reference(registry, name))?.1;
     serde_json::from_str(source).map_err(|e| format!("{name}: {e}"))
 }
 
@@ -96,11 +96,11 @@ impl MaterialParser {
             if let Some(rule) = self.rules.get(&name) {
                 return Ok(rule.clone());
             }
-            let rule = self.rule(&source(crate::core::data_registries::json_entries("minecraft:worldgen/material_rule"), &name)?, parser).map_err(|e| format!("{name}: {e}"))?;
+            let rule = self.rule(&source("minecraft:worldgen/material_rule", &name)?, parser).map_err(|e| format!("{name}: {e}"))?;
             self.rules.insert(name, rule.clone());
             return Ok(rule);
         }
-        let field = |key: &str| v.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| v.get(key).ok_or_else(|| crate::util::codec::no_key(key, v));
         let kind = v.get("type").and_then(Value::as_str).ok_or("rule without type")?;
         let rule = match kind.strip_prefix("minecraft:").unwrap_or(kind) {
             "block" => MaterialRule::Block(parse_block_state(field("result_state")?)?),
@@ -127,17 +127,17 @@ impl MaterialParser {
         Ok(Arc::new(rule))
     }
 
-    fn condition(&mut self, v: &Value) -> Result<Arc<MaterialCondition>, String> {
+    pub fn condition(&mut self, v: &Value) -> Result<Arc<MaterialCondition>, String> {
         if let Some(name) = v.as_str() {
             let name = resource_name(name);
             if let Some(condition) = self.conditions.get(&name) {
                 return Ok(condition.clone());
             }
-            let condition = self.condition(&source(crate::core::data_registries::json_entries("minecraft:worldgen/material_condition"), &name)?).map_err(|e| format!("{name}: {e}"))?;
+            let condition = self.condition(&source("minecraft:worldgen/material_condition", &name)?).map_err(|e| format!("{name}: {e}"))?;
             self.conditions.insert(name, condition.clone());
             return Ok(condition);
         }
-        let field = |key: &str| v.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| v.get(key).ok_or_else(|| crate::util::codec::no_key(key, v));
         let int = |key: &str| field(key).and_then(|v| v.as_i64().map(|i| i as i32).ok_or_else(|| format!("{key} is not an int")));
         let boolean = |key: &str| field(key).and_then(|v| v.as_bool().ok_or_else(|| format!("{key} is not a boolean")));
         let kind = v.get("type").and_then(Value::as_str).ok_or("condition without type")?;

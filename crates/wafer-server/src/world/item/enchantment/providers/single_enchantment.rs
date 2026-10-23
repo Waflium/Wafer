@@ -13,9 +13,9 @@ pub struct SingleEnchantment {
 
 impl SingleEnchantment {
     pub fn parse(json: &Value) -> Result<SingleEnchantment, String> {
-        let name = json["enchantment"].as_str().ok_or("No key enchantment in MapLike")?;
+        let name = json.get("enchantment").ok_or_else(|| format!("No key enchantment in MapLike[{json}]"))?.as_str().ok_or_else(|| format!("Not a string: {}", json["enchantment"]))?;
         let key = crate::resources::identifier::read(name)?;
-        let id = codec::registry_id("minecraft:enchantment", &key).map_err(|_| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:enchantment]: {key}"))?;
+        let id = codec::registry_id("minecraft:enchantment", &key).map_err(|_| crate::core::data_registries::unknown_reference("minecraft:enchantment", &key))?;
         Ok(SingleEnchantment { enchantment: codec::registry("minecraft:enchantment")[id as usize], level: IntProvider::parse(&json["level"])? })
     }
 

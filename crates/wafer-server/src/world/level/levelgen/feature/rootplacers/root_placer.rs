@@ -25,7 +25,7 @@ pub enum RootPlacerType {
 impl RootPlacer {
     pub fn parse(json: &Value) -> Result<RootPlacer, String> {
         let ty = json.get("type").and_then(Value::as_str).ok_or("root placer without type")?;
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let kind = match ty.strip_prefix("minecraft:").unwrap_or(ty) {
             "mangrove_root_placer" => RootPlacerType::Mangrove(MangroveRootPlacement::parse(field("mangrove_root_placement")?)?),
             other => return Err(format!("unknown root placer type {other}")),

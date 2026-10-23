@@ -23,7 +23,7 @@ pub struct AbstractHugeMushroomFeature {
 
 impl AbstractHugeMushroomFeature {
     pub fn parse(json: &Value, kind: HugeMushroomType) -> Result<AbstractHugeMushroomFeature, String> {
-        let field = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         Ok(AbstractHugeMushroomFeature {
             cap_provider: BlockStateProviderHolder::parse(field("cap_provider")?)?,
             stem_provider: BlockStateProviderHolder::parse(field("stem_provider")?)?,

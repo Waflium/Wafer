@@ -47,7 +47,7 @@ pub fn parse_heightmap(name: &str) -> Result<HeightmapType, String> {
 impl PlacementModifier {
     pub fn parse(json: &Value) -> Result<PlacementModifier, String> {
         let ty = json.get("type").and_then(Value::as_str).ok_or("placement modifier without type")?;
-        let get = |key: &str| json.get(key).ok_or_else(|| format!("missing {key}"));
+        let get = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let int = |key: &str| get(key).and_then(|v| v.as_i64().map(|v| v as i32).ok_or_else(|| format!("{key} is not an int")));
         let double = |key: &str| get(key).and_then(|v| v.as_f64().ok_or_else(|| format!("{key} is not a number")));
         let int_provider = |key: &str| get(key).and_then(IntProvider::parse);
