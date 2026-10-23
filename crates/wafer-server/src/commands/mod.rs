@@ -98,6 +98,7 @@ pub fn completion_suggestions(server: &Server, source: &CommandSourceStack, comm
     let context = parse.context.build(&brigadier::utf16(&truncated));
     let all = CommandNode::get(parent)
         .children()
+        .filter(|child| is_enabled(child))
         .map(|child| {
             let builder = SuggestionsBuilder::new(truncated.clone(), truncated_lower_case.clone(), start);
             list_suggestions(server, child, &context, source, builder).unwrap_or_else(|_| Suggestions::empty())

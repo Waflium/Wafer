@@ -156,3 +156,11 @@ fn whitelist_add_suggests_online_players_missing_from_the_list() {
     testing::server_player_with_profile(&mut server, crate::network::login::Profile { uuid: 1, name: "Alice".into(), properties: Vec::new() }, wafer_core::Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
     assert_eq!(suggest(&server, "/whitelist add "), (15, 15, vec!["Alice".to_string()]));
 }
+
+#[test]
+fn game_rules_behind_disabled_features_are_not_suggested() {
+    let server = server();
+    let (_, _, rules) = suggest(&server, "/gamerule ");
+    assert!(!rules.iter().any(|rule| rule.ends_with("max_minecart_speed")));
+    assert_eq!(rules.len(), 116);
+}
