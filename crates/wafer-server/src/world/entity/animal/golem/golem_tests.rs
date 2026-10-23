@@ -305,6 +305,7 @@ fn slimes_and_iron_golems_fight() {
     let mut slime = crate::world::entity::monster::cubemob::slime::Slime::create();
     slime.set_size(3, true);
     let slime = add(&mut level, slime, Vec3::new(5.5, -60.0, 0.5));
+    level.mob_mut(slime).unwrap().entity.random = LegacyRandomSource::new(5);
     let mut targeted = (false, false);
     for _ in 0..200 {
         level.tick();
