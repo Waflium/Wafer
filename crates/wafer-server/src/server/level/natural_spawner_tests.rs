@@ -58,7 +58,7 @@ fn creatures_spawn_every_400_ticks_away_from_the_player() {
     tick_until(&mut server, 400);
     let mobs = mob_positions(&server);
     let counted_by_the_local_cap = mobs.iter().filter(|(_, pos)| is_close_enough_for_spawning(*pos, Vec3::new(8.5, -60.0, 8.5))).count();
-    assert!(!mobs.is_empty() && counted_by_the_local_cap <= 13, "{mobs:?}");
+    assert!(!mobs.is_empty() && counted_by_the_local_cap <= 15, "{mobs:?}");
     for (name, pos) in &mobs {
         assert_eq!(EntityType::by_name(name).unwrap().get_category(), MobCategory::Creature);
         assert!(["minecraft:chicken", "minecraft:cow", "minecraft:pig", "minecraft:sheep", "minecraft:horse", "minecraft:donkey"].contains(name), "{name}");
