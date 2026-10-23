@@ -102,8 +102,18 @@ pub const OVERWORLD: &str = "minecraft:overworld";
 pub const THE_NETHER: &str = "minecraft:the_nether";
 pub const THE_END: &str = "minecraft:the_end";
 
-fn create_level(config: &ServerConfig, world_dir: Option<&WorldDir>, dimension: &'static str, generator: ChunkGenerator, is_debug: bool, generate_structures: bool, seed: i64) -> ServerLevel {
-    let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension).expect("a dimension type");
+#[allow(clippy::too_many_arguments)]
+fn create_level(
+    config: &ServerConfig,
+    world_dir: Option<&WorldDir>,
+    dimension: &'static str,
+    dimension_type: &str,
+    generator: ChunkGenerator,
+    is_debug: bool,
+    generate_structures: bool,
+    seed: i64,
+) -> ServerLevel {
+    let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension_type).expect("a dimension type");
     let dimension_type = &wafer_data::dimension_types()[dimension_type_id as usize];
     let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes));
     let mut chunks = ChunkCache::new(dimension_type, generator, storage);
@@ -231,6 +241,7 @@ pub struct Server {
     pub difficulty_locked: bool,
     pub hardcore: bool,
     generate_structures: bool,
+    world_dimensions: WorldDimensions,
     bonus_chest: bool,
     server_brands: Vec<String>,
     was_modded: bool,
@@ -315,7 +326,22 @@ impl Server {
         let is_debug = data.dimensions.is_debug();
         let (seed, game_time, dimensions, mut game_type, mut difficulty, mut difficulty_locked, hardcore) =
             (data.seed, data.game_time, data.dimensions, data.game_type, data.difficulty, data.difficulty_locked, data.hardcore);
-        let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, dimensions.overworld, is_debug, generate_structures, seed);
+        let world_dimensions = dimensions.clone();
+        let level_stems = crate::core::data_registries::level_stems();
+        let stem = |name: &str, generator: ChunkGenerator| -> (String, ChunkGenerator) {
+            match level_stems.iter().find(|(id, _)| *id == name) {
+                Some((_, json)) => match WorldDimensions::stem_from_json(json, seed) {
+                    Ok(stem) => stem,
+                    Err(e) => {
+                        error!("Failed to load dimension {name}: {e}");
+                        (name.to_owned(), generator)
+                    }
+                },
+                None => (name.to_owned(), generator),
+            }
+        };
+        let (overworld_type, overworld_generator) = stem(OVERWORLD, dimensions.overworld);
+        let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, &overworld_type, overworld_generator, is_debug, generate_structures, seed);
         overworld.chunks.game_rules = game_rules.clone();
         dedicated::set_overworld_created();
         if new_world && !is_debug {
@@ -346,7 +372,14 @@ impl Server {
         }
         let mut levels = vec![overworld];
         for (dimension, generator) in [(THE_NETHER, dimensions.nether), (THE_END, dimensions.end)] {
-            levels.push(create_level(&config, world_dir.as_ref(), dimension, generator, is_debug, generate_structures, seed));
+            let (dimension_type, generator) = stem(dimension, generator);
+            levels.push(create_level(&config, world_dir.as_ref(), dimension, &dimension_type, generator, is_debug, generate_structures, seed));
+        }
+        for (dimension, json) in level_stems.iter().filter(|(id, _)| ![OVERWORLD, THE_NETHER, THE_END].contains(id)) {
+            match WorldDimensions::stem_from_json(json, seed) {
+                Ok((dimension_type, generator)) => levels.push(create_level(&config, world_dir.as_ref(), dimension, &dimension_type, generator, is_debug, generate_structures, seed)),
+                Err(e) => error!("Failed to load dimension {dimension}: {e}"),
+            }
         }
         for (index, level) in levels.iter_mut().enumerate() {
             level.index = index;
@@ -432,6 +465,7 @@ impl Server {
             difficulty_locked,
             hardcore,
             generate_structures,
+            world_dimensions,
             bonus_chest,
             server_brands,
             was_modded,
@@ -698,11 +732,7 @@ impl Server {
             hardcore: self.hardcore,
             clocks: self.clocks.to_nbt(),
             weather: self.weather.get(),
-            dimensions: WorldDimensions {
-                overworld: self.overworld().chunks.generator.clone(),
-                nether: self.levels.iter().find(|level| level.dimension == THE_NETHER).expect("the nether").chunks.generator.clone(),
-                end: self.levels.iter().find(|level| level.dimension == THE_END).expect("the end").chunks.generator.clone(),
-            },
+            dimensions: self.world_dimensions.clone(),
             generate_structures: self.generate_structures,
             bonus_chest: self.bonus_chest,
             initialized: true,

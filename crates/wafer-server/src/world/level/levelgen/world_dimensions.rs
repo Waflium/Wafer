@@ -12,6 +12,7 @@ use crate::world::level::biome::the_end_biome_source::TheEndBiomeSource;
 use crate::world::level::chunk::{Biome, ChunkGenerator, FlatLevelSource};
 use super::flat::StructureOverrides;
 
+#[derive(Clone)]
 pub struct WorldDimensions {
     pub overworld: ChunkGenerator,
     pub nether: ChunkGenerator,
@@ -31,6 +32,14 @@ impl WorldDimensions {
         let json = wafer_data::WORLD_PRESETS.iter().find(|(name, _)| *name == preset).ok_or_else(|| format!("Unknown world preset {preset}"))?.1;
         let json: Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
         WorldDimensions::from_json(&json["dimensions"], seed)
+    }
+
+    pub fn stem_from_json(stem: &Value, seed: i64) -> Result<(String, ChunkGenerator), String> {
+        let dimension_type = stem["type"].as_str().ok_or("No key type")?;
+        if wafer_data::SyncedRegistry::get("minecraft:dimension_type").id_of(dimension_type).is_none() {
+            return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:dimension_type]: {dimension_type}"));
+        }
+        Ok((dimension_type.to_owned(), generator_from_json(&stem["generator"], seed)?))
     }
 
     pub fn from_json(dimensions: &Value, seed: i64) -> Result<WorldDimensions, String> {

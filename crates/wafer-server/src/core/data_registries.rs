@@ -49,6 +49,13 @@ fn active() -> Option<&'static HashMap<&'static str, DataRegistry>> {
     if active.is_null() { None } else { Some(unsafe { &*active }) }
 }
 
+static LEVEL_STEMS: AtomicPtr<Vec<(&'static str, Value)>> = AtomicPtr::new(std::ptr::null_mut());
+
+pub fn level_stems() -> &'static [(&'static str, Value)] {
+    let stems = LEVEL_STEMS.load(Ordering::Acquire);
+    if stems.is_null() { &[] } else { unsafe { &*stems } }
+}
+
 static BIOMES: AtomicPtr<DataRegistry> = AtomicPtr::new(std::ptr::null_mut());
 
 pub fn biome_network_id(id: u32) -> u32 {
@@ -166,6 +173,17 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
         registries.insert(builtin.name, DataRegistry { name: builtin.name, to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) });
     }
     wafer_data::set_synced_registries(synced);
+    let mut stems: Vec<(&'static str, Value)> = Vec::new();
+    for (location, resource) in resource_manager.list_resources("dimension", ".json") {
+        let (namespace, path) = location.split_once(':').unwrap();
+        let id = format!("{namespace}:{}", &path["dimension".len() + 1..path.len() - ".json".len()]);
+        match resource.supplier.read().map_err(|e| e.to_string()).and_then(|bytes| serde_json::from_slice::<Value>(&bytes).map_err(|e| e.to_string())) {
+            Ok(json) => stems.push((leak(id), json)),
+            Err(e) => error!("Failed to parse {location} from pack {}: {e}", resource.source_pack_id),
+        }
+    }
+    stems.sort_by_key(|(id, _)| file_key(id));
+    LEVEL_STEMS.store(Box::into_raw(Box::new(stems)), Ordering::Release);
     let dimension_registry = &registries["minecraft:dimension_type"];
     let dimension_entries = wafer_data::SyncedRegistry::get("minecraft:dimension_type").entries;
     wafer_data::set_dimension_types(dimension_entries.iter().zip(&dimension_registry.elements).map(|(&name, json)| dimension_type(name, json)).collect());
