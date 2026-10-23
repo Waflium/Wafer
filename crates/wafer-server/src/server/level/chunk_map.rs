@@ -327,20 +327,22 @@ impl ServerLevel {
         for pos in self.chunks.take_ticking_ready() {
             self.post_process_generation(pos);
             self.chunks.start_ticking_chunk(pos);
+            self.on_chunk_ready_to_send(pos);
         }
         while let Some((pos, status)) = self.chunks.pop_full_status_change() {
             self.update_chunk_status(pos, status);
         }
-        for pos in self.chunks.take_ready_to_send() {
-            let players: Vec<EntityId> = self.players.keys().copied().collect();
-            for player in players {
-                if self.player(player).chunk_tracking_view.is_some_and(|v| v.contains(pos.x, pos.z)) {
-                    self.player_mut(player).chunk_sender.mark_chunk_pending_to_send(pos);
-                }
+    }
+
+    fn on_chunk_ready_to_send(&mut self, pos: ChunkPos) {
+        let players: Vec<EntityId> = self.players.keys().copied().collect();
+        for player in players {
+            if self.player(player).chunk_tracking_view.is_some_and(|v| v.contains(pos.x, pos.z)) {
+                self.player_mut(player).chunk_sender.mark_chunk_pending_to_send(pos);
             }
-            if let Some(changes) = self.chunk_map.held.shift_remove(&pos) {
-                self.chunk_map.changed.entry(pos).or_insert(changes);
-            }
+        }
+        if let Some(changes) = self.chunk_map.held.shift_remove(&pos) {
+            self.chunk_map.changed.entry(pos).or_insert(changes);
         }
     }
 

@@ -90,7 +90,6 @@ pub struct ChunkCache {
     next_chunk_save_time: FastMap<i64, Instant>,
     chunks_to_eagerly_save: IndexSet<i64>,
     unsaved_listener: (std::sync::mpsc::Sender<i64>, Receiver<i64>),
-    ready_to_send: Vec<ChunkPos>,
     ticking_ready: Vec<ChunkPos>,
     structure_starts_available: Vec<(ChunkPos, FastMap<StructureHolder, i32>)>,
     world_gen_chunk_entities: Vec<Vec<wafer_protocol::nbt::Nbt>>,
@@ -151,7 +150,6 @@ impl ChunkCache {
             next_chunk_save_time: FastMap::default(),
             chunks_to_eagerly_save: IndexSet::new(),
             unsaved_listener: std::sync::mpsc::channel(),
-            ready_to_send: Vec::new(),
             ticking_ready: Vec::new(),
             structure_starts_available: Vec::new(),
             world_gen_chunk_entities: Vec::new(),
@@ -442,11 +440,6 @@ impl ChunkCache {
     pub fn start_ticking_chunk(&mut self, pos: ChunkPos) {
         self.block_ticks.unpack_container(pos, self.game_time);
         self.fluid_ticks.unpack_container(pos, self.game_time);
-        self.ready_to_send.push(pos);
-    }
-
-    pub fn take_ready_to_send(&mut self) -> Vec<ChunkPos> {
-        std::mem::take(&mut self.ready_to_send)
     }
 
     pub fn pop_full_status_change(&mut self) -> Option<(ChunkPos, FullChunkStatus)> {
