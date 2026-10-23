@@ -61,6 +61,24 @@ impl NotificationManager {
         self.broadcast(&methods::SERVER_ACTIVITY_OCCURRED, || None);
     }
 
+    pub fn world_upgrade_started(&self) {
+        self.broadcast(&methods::WORLD_UPGRADE_STARTED, || None);
+    }
+
+    pub fn world_upgrade_progress(&self, progress_percentage: f32) {
+        self.broadcast(&methods::WORLD_UPGRADE_PROGRESS, || {
+            Some(progress_percentage.to_string().parse::<f64>().ok().and_then(serde_json::Number::from_f64).map_or(Value::Null, Value::Number))
+        });
+    }
+
+    pub fn world_upgrade_finished(&self) {
+        self.broadcast(&methods::WORLD_UPGRADE_FINISHED, || None);
+    }
+
+    pub fn world_upgrade_failed(&self, reason: &str) {
+        self.broadcast(&methods::WORLD_UPGRADE_FAILED, || Some(Value::String(reason.into())));
+    }
+
     pub fn player_oped(&self, operator: &OpEntry) {
         self.broadcast(&methods::PLAYER_OPED, || Some(operator_service::encode_entry(operator)));
     }

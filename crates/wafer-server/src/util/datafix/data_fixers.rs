@@ -6,6 +6,15 @@ use crate::datafixers::dsl::ConstType;
 use crate::datafixers::schemas::schema::Schema;
 use crate::datafixers::typed::{field_finder, find_field, type_finder};
 use crate::datafixers::types::const_type;
+use crate::util::filefix::file_fixer_upper::{Builder as FileFixerBuilder, FileFixerUpper};
+use crate::util::filefix::fixes::dimension_storage_file_fix::DimensionStorageFileFix;
+use crate::util::filefix::fixes::generated_structures_rename_file_fix::GeneratedStructuresRenameFileFix;
+use crate::util::filefix::fixes::legacy_structure_file_fix::LegacyStructureFileFix;
+use crate::util::filefix::fixes::level_dat_to_saved_data_file_fix::LevelDatToSavedDataFileFix;
+use crate::util::filefix::fixes::player_storage_file_fix::PlayerStorageFileFix;
+use crate::util::filefix::fixes::reenable_spectators_generate_chunks_in_hardcore_worlds_file_fix::ReenableSpectatorsGenerateChunksInHardcoreWorldsFileFix;
+use crate::util::filefix::fixes::remove_obsolete_files_file_fix::RemoveObsoleteFilesFileFix;
+use crate::util::filefix::fixes::resource_pack_location_file_fix::ResourcePackLocationFileFix;
 use crate::util::datafix::fixes::abstract_arrow_pickup_fix::AbstractArrowPickupFix;
 use crate::util::datafix::fixes::add_field_fix::AddFieldFix;
 use crate::util::datafix::fixes::add_flag_if_not_present_fix::AddFlagIfNotPresentFix;
@@ -407,16 +416,31 @@ use crate::util::datafix::schemas::v705::V705;
 use crate::util::datafix::schemas::v808::V808;
 use crate::util::datafix::schemas::v99::V99;
 
-pub fn get_data_fixer() -> &'static DataFixerUpper {
-    static DATA_FIXER: OnceLock<DataFixerUpper> = OnceLock::new();
-    DATA_FIXER.get_or_init(|| {
-        let mut builder = DataFixerBuilder::new(wafer_data::WORLD_VERSION);
-        add_fixers(&mut builder);
-        builder.build()
+struct Fixers {
+    data_fixer: DataFixerUpper,
+    file_fixer: FileFixerUpper,
+}
+
+fn fixers() -> &'static Fixers {
+    static FIXERS: OnceLock<Fixers> = OnceLock::new();
+    FIXERS.get_or_init(|| {
+        let data_version = wafer_data::WORLD_VERSION;
+        let mut builder = DataFixerBuilder::new(data_version);
+        let mut file_fixer_upper = FileFixerBuilder::new(data_version);
+        add_fixers(&mut builder, &mut file_fixer_upper);
+        Fixers { data_fixer: builder.build(), file_fixer: file_fixer_upper.build() }
     })
 }
 
-fn add_fixers(fixer_upper: &mut DataFixerBuilder) {
+pub fn get_data_fixer() -> &'static DataFixerUpper {
+    &fixers().data_fixer
+}
+
+pub fn get_file_fixer() -> &'static FileFixerUpper {
+    &fixers().file_fixer
+}
+
+fn add_fixers(fixer_upper: &mut DataFixerBuilder, file_fixer_upper: &mut FileFixerBuilder) {
     fixer_upper.add_schema(99, &V99);
     let v100 = fixer_upper.add_schema(100, &V100);
     fixer_upper.add_fixer(EntityEquipmentToArmorAndHandFix::new(&v100));
@@ -605,7 +629,8 @@ fn add_fixers(fixer_upper: &mut DataFixerBuilder) {
     ));
     let v1492 = fixer_upper.add_schema(1492, &NAMESPACED_SCHEMA);
     fixer_upper.add_fixer(ChunkStructuresTemplateRenameFix::new(&v1492, false));
-    fixer_upper.add_schema(1493, &NAMESPACED_SCHEMA);
+    let v1493 = file_fixer_upper.add_schema(fixer_upper, 1493, &NAMESPACED_SCHEMA);
+    file_fixer_upper.add_fixer(LegacyStructureFileFix::new(&v1493));
     let v1494 = fixer_upper.add_schema(1494, &NAMESPACED_SCHEMA);
     fixer_upper.add_fixer(ItemStackEnchantmentNamesFix::new(&v1494, false));
     let v1496 = fixer_upper.add_schema(1496, &NAMESPACED_SCHEMA);
@@ -1398,8 +1423,14 @@ fn add_fixers(fixer_upper: &mut DataFixerBuilder) {
     let v4771 = fixer_upper.add_schema(4771, &V4771);
     fixer_upper.add_fixer(LevelDatDifficultyFix::new(&v4771));
     fixer_upper.add_fixer(LevelDatToSavedDataPreparationFix::new(&v4771));
-    fixer_upper.add_schema(4772, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(4773, &NAMESPACED_SCHEMA);
+    let v4772 = file_fixer_upper.add_schema(fixer_upper, 4772, &NAMESPACED_SCHEMA);
+    file_fixer_upper.add_fixer(ResourcePackLocationFileFix::new(&v4772));
+    file_fixer_upper.add_fixer(DimensionStorageFileFix::new(&v4772));
+    file_fixer_upper.add_fixer(PlayerStorageFileFix::new(&v4772));
+    file_fixer_upper.add_fixer(LevelDatToSavedDataFileFix::new(&v4772));
+    file_fixer_upper.add_fixer(RemoveObsoleteFilesFileFix::new(&v4772));
+    let v4773 = file_fixer_upper.add_schema(fixer_upper, 4773, &NAMESPACED_SCHEMA);
+    file_fixer_upper.add_fixer(GeneratedStructuresRenameFileFix::new(&v4773));
     let v4881 = fixer_upper.add_schema(4881, &V4881);
     fixer_upper.add_fixer(AddNewChoices::new(&v4881, "Added Sulfur Cube", ENTITY));
     fixer_upper.add_fixer(AddNewChoices::new(&v4881, "Added Potent Sulfur", BLOCK_ENTITY));
@@ -1409,7 +1440,8 @@ fn add_fixers(fixer_upper: &mut DataFixerBuilder) {
     fixer_upper.add_fixer(RenameNameplateToNameTagFix::new(&v4888));
     let v4892 = fixer_upper.add_schema(4892, &NAMESPACED_SCHEMA);
     fixer_upper.add_fixer(OptionsForceDefaultGraphicsApiFix::new(&v4892));
-    fixer_upper.add_schema(4899, &NAMESPACED_SCHEMA);
+    let v4899 = file_fixer_upper.add_schema(fixer_upper, 4899, &NAMESPACED_SCHEMA);
+    file_fixer_upper.add_fixer(ReenableSpectatorsGenerateChunksInHardcoreWorldsFileFix::new(&v4899));
     let v4996 = fixer_upper.add_schema(4996, &V4996);
     fixer_upper.add_fixer(PotDecorationsComponentUnflatteningFix::new(&v4996));
     let v4996_1 = fixer_upper.add_schema_with_sub_version(4996, 1, &V4996_1);

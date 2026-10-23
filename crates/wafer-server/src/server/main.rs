@@ -17,8 +17,13 @@ use crate::world::level::world_data_configuration::WorldDataConfiguration;
 use crate::world::level::chunk::ChunkGenerator;
 use crate::world::level::levelgen::flat;
 use crate::world::level::levelgen::world_dimensions::WorldDimensions;
-use crate::world::level::storage::{self, WorldData, WorldDir};
-use crate::world::level::validation::content_validation_message;
+use wafer_protocol::nbt::Nbt;
+
+use crate::world::level::storage::level_storage_source::{LevelStorageAccess, LevelStorageSource};
+use crate::world::level::storage::{WorldData, WorldDir};
+use crate::util::datafix::data_fixers::get_file_fixer;
+use crate::util::worldupdate::upgrade_progress::UpgradeProgress;
+use super::notifications::NotificationManager;
 use crate::{Listen, ServerConfig, serve_world};
 
 const HELP: &[&str] = &[
@@ -188,31 +193,26 @@ pub fn main(args: Vec<String>) {
         runtime.shutdown_background();
         return;
     }
-    let world_dir_validator = Arc::new(storage::parse_validator(&universe.join(storage::ALLOWED_SYMLINKS_CONFIG_NAME)));
-    let level_path = universe.join(&level_name);
-    match world_dir_validator.validate_directory(&level_path, true) {
-        Ok(issues) if issues.is_empty() => {}
-        Ok(issues) => {
-            error!("Failed to start the minecraft server\nnet.minecraft.world.level.validation.ContentValidationException: {}", content_validation_message(&level_path, &issues));
-            runtime.shutdown_background();
-            return;
-        }
-        Err(e) => {
-            error!("Failed to start the minecraft server\n{e}");
-            runtime.shutdown_background();
-            return;
-        }
-    }
-    let _lock =match crate::util::directory_lock::DirectoryLock::create(&universe.join(&level_name)) {
-        Ok(lock) => lock,
+    let notification_manager = NotificationManager::new(management_server.clone());
+    let level_storage_source = LevelStorageSource::create_default(&universe);
+    let world_dir_validator = level_storage_source.world_dir_validator().clone();
+    let mut access = match level_storage_source.validate_and_create_access(&level_name) {
+        Ok(access) => access,
         Err(e) => {
             error!("Failed to start the minecraft server\n{e}");
             runtime.shutdown_background();
             return;
         }
     };
-    let world_dir = WorldDir { root: universe.join(&level_name) };
-    let level_data = match WorldData::load(&world_dir) {
+    let world_dir = WorldDir { root: access.get_level_directory().path().to_path_buf() };
+    let level_data_tag = match fix_world_data(&mut access, notification_manager) {
+        Ok(level_data_tag) => level_data_tag,
+        Err(Abort) => {
+            runtime.shutdown_background();
+            return;
+        }
+    };
+    let level_data = match level_data_tag.map(|level_data_tag| WorldData::from_tag(&world_dir, &level_data_tag)).transpose() {
         Ok(level_data) => level_data,
         Err(e) => {
             error!("Failed to load world data. World files may be corrupted. Shutting down.\n{e}");
@@ -296,6 +296,43 @@ pub fn main(args: Vec<String>) {
     runtime.shutdown_background();
     if let Some(management_runtime) = management_runtime {
         management_runtime.shutdown_background();
+    }
+}
+
+pub(crate) struct Abort;
+
+pub(crate) fn fix_world_data(access: &mut LevelStorageAccess, notification_manager: NotificationManager) -> Result<Option<Nbt>, Abort> {
+    if !access.has_world_data() {
+        return Ok(None);
+    }
+    let level_data_unfixed = match access.get_unfixed_data_tag_with_fallback() {
+        Ok(level_data_unfixed) => level_data_unfixed,
+        Err(e) => {
+            error!("Failed to load world data. World files may be corrupted. Shutting down.\n{e}");
+            return Err(Abort);
+        }
+    };
+    let summary = match access.fix_and_get_summary_from_tag(&level_data_unfixed) {
+        Ok(summary) => summary,
+        Err(e) => {
+            error!("Failed to start the minecraft server\n{e}");
+            return Err(Abort);
+        }
+    };
+    if summary.requires_manual_conversion() {
+        info!("This world must be opened in an older version (like 1.6.4) to be safely converted");
+        return Err(Abort);
+    }
+    if !summary.is_compatible() {
+        info!("This world was created by an incompatible version.");
+        return Err(Abort);
+    }
+    match get_file_fixer().fix(access, level_data_unfixed, &UpgradeProgress::new(notification_manager)) {
+        Ok(level_data_tag) => Ok(level_data_tag.into_value()),
+        Err(e) => {
+            error!("Failed to start the minecraft server\n{e}");
+            Err(Abort)
+        }
     }
 }
 

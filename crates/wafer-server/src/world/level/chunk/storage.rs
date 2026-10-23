@@ -1,5 +1,6 @@
 pub mod entity_storage;
 pub mod region_file_version;
+pub mod region_storage_info;
 pub mod section_storage;
 pub mod simple_region_storage;
 
@@ -38,6 +39,18 @@ fn invalid(msg: &str) -> io::Error {
 pub fn decode_nbt(bytes: &[u8]) -> io::Result<Nbt> {
     let (_, nbt) = Nbt::read_named(&mut Reader::new(bytes)).map_err(|e| invalid(&e.to_string()))?;
     Ok(nbt)
+}
+
+pub fn decode_compressed_nbt(bytes: &[u8]) -> Result<Nbt, String> {
+    if bytes.len() < 2 {
+        return Err("java.io.EOFException".into());
+    }
+    if !bytes.starts_with(&[0x1f, 0x8b]) {
+        return Err("java.util.zip.ZipException: Not in GZIP format".into());
+    }
+    let mut decompressed = Vec::new();
+    flate2::read::GzDecoder::new(bytes).read_to_end(&mut decompressed).map_err(|_| "java.io.EOFException: Unexpected end of ZLIB input stream".to_string())?;
+    decode_nbt(&decompressed).map_err(|e| format!("java.io.IOException: {e}"))
 }
 
 pub fn encode_nbt(nbt: &Nbt) -> Vec<u8> {
@@ -85,6 +98,12 @@ impl RegionBitmap {
     }
 }
 
+pub trait ExternalChunkFiles: Send {
+    fn read(&self, pos: ChunkPos) -> io::Result<Vec<u8>>;
+    fn write(&self, pos: ChunkPos, data: &[u8]) -> io::Result<()>;
+    fn remove(&self, pos: ChunkPos) -> io::Result<()>;
+}
+
 pub struct RegionFile {
     path: PathBuf,
     file: File,
@@ -92,6 +111,7 @@ pub struct RegionFile {
     timestamps: [u32; 1024],
     used: RegionBitmap,
     version: RegionFileVersion,
+    external: Option<Box<dyn ExternalChunkFiles>>,
 }
 
 impl RegionFile {
@@ -102,7 +122,10 @@ impl RegionFile {
         if sync {
             dsync(&mut options);
         }
-        let mut file = options.open(path)?;
+        RegionFile::from_file(path, options.open(path)?, None)
+    }
+
+    pub fn from_file(path: &Path, mut file: File, external: Option<Box<dyn ExternalChunkFiles>>) -> io::Result<RegionFile> {
         let size = file.metadata()?.len();
         let mut header = vec![0u8; 2 * SECTOR_BYTES as usize];
         let read = file.read(&mut header)?;
@@ -116,6 +139,7 @@ impl RegionFile {
             timestamps: [0; 1024],
             used: RegionBitmap::default(),
             version: RegionFileVersion::selected(),
+            external,
         };
         region.used.force(0, 2);
         for i in 0..1024 {
@@ -162,7 +186,10 @@ impl RegionFile {
             return Ok(None);
         }
         let data = if version & EXTERNAL_STREAM_FLAG != 0 {
-            fs::read(self.external_path(pos))?
+            match &self.external {
+                Some(external) => external.read(pos)?,
+                None => fs::read(self.external_path(pos))?,
+            }
         } else {
             sectors.get(5..4 + length).ok_or_else(|| invalid("chunk data is truncated"))?.to_vec()
         };
@@ -189,18 +216,27 @@ impl RegionFile {
             warn!("Saving oversized chunk {pos:?} ({} bytes) to external file", record.len());
             sectors_needed = 1;
             new_sector = self.used.allocate(sectors_needed);
-            let tmp = self.external_path(pos).with_extension("tmp");
-            fs::write(&tmp, &compressed)?;
             let mut stub = Vec::from(1u32.to_be_bytes());
             stub.push(self.version.id() | EXTERNAL_STREAM_FLAG);
-            self.file.seek(SeekFrom::Start(new_sector as u64 * SECTOR_BYTES))?;
-            self.file.write_all(&stub)?;
-            fs::rename(tmp, self.external_path(pos))?;
+            match &self.external {
+                Some(external) => {
+                    external.write(pos, &compressed)?;
+                    self.file.seek(SeekFrom::Start(new_sector as u64 * SECTOR_BYTES))?;
+                    self.file.write_all(&stub)?;
+                }
+                None => {
+                    let tmp = self.external_path(pos).with_extension("tmp");
+                    fs::write(&tmp, &compressed)?;
+                    self.file.seek(SeekFrom::Start(new_sector as u64 * SECTOR_BYTES))?;
+                    self.file.write_all(&stub)?;
+                    fs::rename(tmp, self.external_path(pos))?;
+                }
+            }
         } else {
             new_sector = self.used.allocate(sectors_needed);
             self.file.seek(SeekFrom::Start(new_sector as u64 * SECTOR_BYTES))?;
             self.file.write_all(&record)?;
-            let _ = fs::remove_file(self.external_path(pos));
+            self.remove_external_file(pos);
         }
         self.offsets[index] = (new_sector as u32) << 8 | sectors_needed as u32;
         self.timestamps[index] = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as u32);
@@ -218,10 +254,26 @@ impl RegionFile {
             self.offsets[index] = 0;
             self.timestamps[index] = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as u32);
             self.write_header()?;
-            let _ = fs::remove_file(self.external_path(pos));
+            self.remove_external_file(pos);
             self.used.free((offset >> 8) as usize, (offset & 0xFF) as usize);
         }
         Ok(())
+    }
+
+    fn remove_external_file(&self, pos: ChunkPos) {
+        match &self.external {
+            Some(external) => {
+                let _ = external.remove(pos);
+            }
+            None => {
+                let _ = fs::remove_file(self.external_path(pos));
+            }
+        }
+    }
+
+    pub fn close(&mut self) -> io::Result<()> {
+        self.pad_to_full_sector()?;
+        self.file.sync_all()
     }
 
     fn write_header(&mut self) -> io::Result<()> {

@@ -13,10 +13,12 @@ pub mod either;
 pub mod extra_codecs;
 pub mod directory_lock;
 pub mod file_util;
+pub mod filefix;
 pub mod fraction;
 pub mod hash_ops;
 pub mod inclusive_range;
 pub mod java_collections;
+pub mod java_nio;
 pub mod keyframe_track;
 pub mod parsing;
 pub mod png_info;
@@ -32,6 +34,7 @@ pub mod time_util;
 pub mod tri_state;
 pub mod uri;
 pub mod valueproviders;
+pub mod worldupdate;
 
 use wafer_core::random::RandomSource;
 
@@ -74,6 +77,57 @@ pub fn read_typed_or_throw(
 pub fn get_millis() -> i64 {
     static ORIGIN: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
     ORIGIN.get_or_init(std::time::Instant::now).elapsed().as_millis() as i64
+}
+
+struct Operation<'a> {
+    description: String,
+    run: Box<dyn Fn() -> bool + 'a>,
+}
+
+fn create_renamer<'a>(from: &'a std::path::Path, to: &'a std::path::Path, options: &'a [java_nio::CopyOption]) -> Operation<'a> {
+    Operation {
+        description: format!("rename {} to {}", from.display(), to.display()),
+        run: Box::new(move || match java_nio::move_file(from, to, options) {
+            Ok(()) => true,
+            Err(e) => {
+                error!("Failed to rename\n{e}");
+                false
+            }
+        }),
+    }
+}
+
+fn create_file_created_check(target: &std::path::Path) -> Operation<'_> {
+    Operation { description: format!("verify that {} is present", target.display()), run: Box::new(move || java_nio::is_regular_file(target)) }
+}
+
+fn execute_in_sequence(operations: &[Operation]) -> bool {
+    for operation in operations {
+        if !(operation.run)() {
+            warn!("Failed to execute {}", operation.description);
+            return false;
+        }
+    }
+    true
+}
+
+fn run_with_retries(number_of_retries: i32, description: &str, operations: &[Operation]) -> bool {
+    for retry in 0..number_of_retries {
+        if execute_in_sequence(operations) {
+            return true;
+        }
+        error!("Failed to {description}, retrying {retry}/{number_of_retries}");
+    }
+    error!("Failed to {description}, aborting, progress might be lost");
+    false
+}
+
+pub fn safe_move_file(from_path: &std::path::Path, to_path: &std::path::Path, options: &[java_nio::CopyOption]) -> bool {
+    run_with_retries(
+        10,
+        &format!("move from  {} to {}", from_path.display(), to_path.display()),
+        &[create_renamer(from_path, to_path, options), create_file_created_check(to_path)],
+    )
 }
 
 pub fn java_min_f(a: f32, b: f32) -> f32 {

@@ -1,0 +1,8 @@
+pub mod dimension_storage_file_fix;
+pub mod generated_structures_rename_file_fix;
+pub mod legacy_structure_file_fix;
+pub mod level_dat_to_saved_data_file_fix;
+pub mod player_storage_file_fix;
+pub mod reenable_spectators_generate_chunks_in_hardcore_worlds_file_fix;
+pub mod remove_obsolete_files_file_fix;
+pub mod resource_pack_location_file_fix;

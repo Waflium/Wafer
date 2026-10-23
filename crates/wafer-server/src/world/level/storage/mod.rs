@@ -1,9 +1,15 @@
 pub mod command_storage;
+pub mod data_version;
+pub mod level_storage_source;
+pub mod level_summary;
+pub mod level_version;
 pub mod loot;
 pub mod saved_data_storage;
 pub mod tag_value_input;
 
+use crate::datafixers::dynamic::Dynamic;
 use crate::util::datafix::data_fix_types::DataFixTypes;
+use crate::util::datafix::data_fixers::get_file_fixer;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -18,7 +24,7 @@ use flate2::write::GzEncoder;
 
 use crate::server::level::game_mode::GameType;
 use crate::world::difficulty::Difficulty;
-use crate::world::level::chunk::storage::{decode_nbt, encode_nbt};
+use crate::world::level::chunk::storage::{decode_compressed_nbt, decode_nbt, encode_nbt};
 use crate::world::level::levelgen::world_dimensions::WorldDimensions;
 use crate::world::level::saveddata::weather_data::WeatherData;
 use crate::world::level::validation::directory_validator::{DirectoryValidator, SymlinkTargetAllowList};
@@ -54,17 +60,9 @@ pub fn write_dat(path: &Path, nbt: &Nbt) -> io::Result<()> {
     fs::rename(tmp, path)
 }
 
-fn read_level_data_tag_raw(data_file: &Path) -> Result<Nbt, String> {
+pub(crate) fn read_level_data_tag_raw(data_file: &Path) -> Result<Nbt, String> {
     let bytes = fs::read(data_file).map_err(|e| crate::server::dedicated::settings::java_io_exception(&e, data_file))?;
-    if bytes.len() < 2 {
-        return Err("java.io.EOFException".into());
-    }
-    if !bytes.starts_with(&[0x1f, 0x8b]) {
-        return Err("java.util.zip.ZipException: Not in GZIP format".into());
-    }
-    let mut decompressed = Vec::new();
-    GzDecoder::new(&bytes[..]).read_to_end(&mut decompressed).map_err(|_| "java.io.EOFException: Unexpected end of ZLIB input stream".to_string())?;
-    decode_nbt(&decompressed).map_err(|e| format!("java.io.IOException: {e}"))
+    decode_compressed_nbt(&bytes)
 }
 
 fn save_level_dat(dir: &WorldDir, root: &Nbt) -> io::Result<()> {
@@ -293,18 +291,36 @@ impl WorldData {
         }
     }
 
+    pub fn write_last_played(tag: Dynamic) -> Dynamic {
+        let last_played = tag.create_long(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64);
+        tag.set("LastPlayed", last_played)
+    }
+
+    pub fn write_version_tag(tag: Dynamic) -> Dynamic {
+        let world_version = tag
+            .empty_map()
+            .set("Name", tag.create_string(VERSION_NAME))
+            .set("Id", tag.create_int(WORLD_VERSION))
+            .set("Snapshot", tag.create_boolean(false))
+            .set("Series", tag.create_string("main"));
+        tag.set("Version", world_version)
+    }
+
     pub fn load(dir: &WorldDir) -> io::Result<Option<WorldData>> {
         if !dir.has_world_data() {
             return Ok(None);
         }
         let level = dir.unfixed_data_tag_with_fallback().map_err(|e| invalid(&e))?;
         let level = level.get("Data").ok_or_else(|| invalid("level.dat has no Data"))?;
-        let data_version = level.get("DataVersion").and_then(Nbt::as_i64).unwrap_or(0);
-        if data_version != WORLD_VERSION as i64 {
-            return Err(invalid(&format!(
-                "the world was saved by data version {data_version}; Wafer only reads {WORLD_VERSION} ({VERSION_NAME}) worlds"
-            )));
+        let data_version = level.get("DataVersion").and_then(Nbt::as_i64).unwrap_or(-1) as i32;
+        if get_file_fixer().requires_file_fixing(data_version) {
+            return Err(invalid("Cannot get level data without file fixing first"));
         }
+        let level = DataFixTypes::Level.update_to_current_version(Dynamic::new(level.clone()), data_version).into_value().ok_or_else(|| invalid("level.dat has no Data"))?;
+        WorldData::from_tag(dir, &level).map(Some)
+    }
+
+    pub fn from_tag(dir: &WorldDir, level: &Nbt) -> io::Result<WorldData> {
         let spawn = level.get("spawn").and_then(RespawnData::from_nbt).unwrap_or_else(|| RespawnData::of("minecraft:overworld", BlockPos::ZERO, 0.0, 0.0));
         let difficulty_settings = level.get("difficulty_settings");
         let setting = |key: &str| difficulty_settings.and_then(|d| d.get(key));
@@ -316,7 +332,7 @@ impl WorldData {
         let dimensions = WorldDimensions::from_nbt(dimensions, seed).map_err(|e| invalid(&e))?;
         let clocks = read_saved_data_dat(&dir.data("world_clocks"), DataFixTypes::SavedDataWorldClocks)?.and_then(|c| c.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new()));
         let weather = read_saved_data_dat(&dir.data("weather"), DataFixTypes::SavedDataWeather)?.and_then(|w| w.get("data").and_then(WeatherData::from_nbt)).unwrap_or_default();
-        Ok(Some(WorldData {
+        Ok(WorldData {
             seed,
             game_time: level.get("Time").and_then(Nbt::as_i64).unwrap_or(0),
             spawn,
@@ -339,7 +355,7 @@ impl WorldData {
             was_modded: level.get("WasModded").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
             game_rules: read_saved_data_dat(&dir.data("game_rules"), DataFixTypes::SavedDataGameRules)?.and_then(|r| r.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new())),
             data_configuration: WorldDataConfiguration::parse(level),
-        }))
+        })
     }
 
     pub fn save(&self, dir: &WorldDir) -> io::Result<()> {
