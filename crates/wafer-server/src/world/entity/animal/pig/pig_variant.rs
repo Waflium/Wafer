@@ -7,3 +7,9 @@ pub fn direct_codec() -> Pair {
     fields.push(req("spawn_conditions", spawn_priority_selectors::codec()));
     record(fields)
 }
+
+pub fn network_codec() -> Pair {
+    let mut fields = model_and_texture::fields(&["normal", "cold"]);
+    fields.push(req("baby_asset_id", types::identifier()));
+    record(fields)
+}

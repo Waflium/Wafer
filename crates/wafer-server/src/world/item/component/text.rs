@@ -274,9 +274,30 @@ impl Custom for TextCodec {
 
 struct ArgCodec;
 
+fn java_ops_number(tag: &Nbt) -> Nbt {
+    let integral = |v: i64| {
+        if let Ok(v) = i8::try_from(v) {
+            Nbt::Byte(v)
+        } else if let Ok(v) = i16::try_from(v) {
+            Nbt::Short(v)
+        } else if let Ok(v) = i32::try_from(v) {
+            Nbt::Int(v)
+        } else {
+            Nbt::Long(v)
+        }
+    };
+    match *tag {
+        Nbt::Long(v) => integral(v),
+        Nbt::Double(v) if v.fract() == 0.0 && (-9.223372036854775808E18..9.223372036854775808E18).contains(&v) => integral(v as i64),
+        Nbt::Double(v) if v as f32 as f64 == v => Nbt::Float(v as f32),
+        _ => tag.clone(),
+    }
+}
+
 impl Custom for ArgCodec {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         match tag {
+            Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) if nbt::is_json_source() => Ok(java_ops_number(tag)),
             Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) | Nbt::String(_) => Ok(tag.clone()),
             other => decode(other).map_err(|e| format!("Failed to parse either. First: This value needs to be parsed as component; Second: {e}")),
         }

@@ -8,3 +8,7 @@ fn asset_info() -> Pair {
 pub fn direct_codec() -> Pair {
     record(vec![req("assets", asset_info()), req("baby_assets", asset_info()), req("spawn_conditions", spawn_priority_selectors::codec())])
 }
+
+pub fn network_codec() -> Pair {
+    record(vec![req("assets", asset_info()), req("baby_assets", asset_info())])
+}

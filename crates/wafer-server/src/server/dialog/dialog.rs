@@ -271,7 +271,11 @@ fn direct_codec() -> &'static Pair {
 }
 
 pub fn validate(tag: &Nbt) -> Result<(), String> {
-    DIRECT.0.decode(tag).map(drop)
+    decode_direct(tag).map(drop)
+}
+
+pub fn decode_direct(tag: &Nbt) -> Result<Nbt, String> {
+    DIRECT.0.decode(tag)
 }
 
 pub fn write_holder(dialog: &RawResourceOrId, w: &mut Writer) {

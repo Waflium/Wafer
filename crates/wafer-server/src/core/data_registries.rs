@@ -1,19 +1,22 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use serde_json::Value;
 use wafer_data::SyncedRegistry;
+use wafer_protocol::nbt::Nbt;
 
 use crate::server::packs::repository::VANILLA_ID;
 use crate::server::packs::resources::MultiPackResourceManager;
 use crate::server::reloadable_server_registries::LoadingErrors;
 
 pub struct DataRegistry {
+    name: &'static str,
     to_network: Vec<i32>,
     from_network: Vec<i32>,
     contents: Vec<Option<Value>>,
+    network: Vec<OnceLock<Nbt>>,
     elements: Vec<Value>,
     json: &'static [(&'static str, &'static str)],
 }
@@ -31,8 +34,9 @@ impl DataRegistry {
         self.from_network.iter().copied()
     }
 
-    pub fn network_contents(&self, id: i32) -> Option<&Value> {
-        self.contents.get(id as usize).and_then(Option::as_ref)
+    pub fn network_contents(&self, id: i32) -> Option<&Nbt> {
+        let json = self.contents.get(id as usize)?.as_ref()?;
+        Some(self.network[id as usize].get_or_init(|| encode_network(self.name, json)))
     }
 
     pub fn json_entries(&self) -> &'static [(&'static str, &'static str)] {
@@ -229,7 +233,8 @@ fn load_registry(
         to_network[id as usize] = network_id as i32;
     }
     let json: Vec<(&'static str, &'static str)> = entries.iter().zip(&elements).map(|(&name, element)| (name, &*Box::leak(element.to_string().into_boxed_str()))).collect();
-    (DataRegistry { to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) }, Box::leak(entries.into_boxed_slice()))
+    let network = (0..entries.len()).map(|_| OnceLock::new()).collect();
+    (DataRegistry { name, to_network, from_network, contents, network, elements, json: Box::leak(json.into_boxed_slice()) }, Box::leak(entries.into_boxed_slice()))
 }
 
 pub fn load(resource_manager: &MultiPackResourceManager) {
@@ -363,12 +368,52 @@ fn decode(registry: &str, json: &Value) -> Result<(), String> {
         "minecraft:cat_sound_variant" => decode_with(crate::world::entity::animal::feline::cat_sound_variant::direct_codec(), json),
         "minecraft:zombie_nautilus_variant" => decode_with(crate::world::entity::animal::nautilus::zombie_nautilus_variant::direct_codec(), json),
         "minecraft:world_clock" => decode_with(crate::world::item::component::types::record(Vec::new()), json),
+        "minecraft:dialog" => crate::server::dialog::validate(&json_to_nbt(json)),
         "minecraft:dimension_type" => {
             use crate::world::level::dimension::dimension_type;
             let tag = dimension_type::direct_codec().0.decode(&crate::world::item::component::json_to_nbt(json))?;
             dimension_type::check(&tag).map_err(|e| format!("Caught exception decoding {json}: {e}"))
         }
         _ => Ok(()),
+    }
+}
+
+fn network_codec(registry: &str) -> Option<crate::world::item::component::types::Pair> {
+    Some(match registry {
+        "minecraft:damage_type" => crate::world::damagesource::damage_type::direct_codec(),
+        "minecraft:banner_pattern" => crate::world::level::block::entity::banner_pattern::direct_codec(),
+        "minecraft:decorated_pot_pattern" => crate::world::level::block::entity::decorated_pot_pattern::codec(),
+        "minecraft:trim_pattern" => crate::world::item::equipment::trim::trim_pattern::direct_codec(),
+        "minecraft:trim_material" => crate::world::item::equipment::trim::trim_material::direct_codec(),
+        "minecraft:jukebox_song" => crate::world::item::jukebox_song::direct_codec(),
+        "minecraft:instrument" => crate::world::item::instrument::direct_codec(),
+        "minecraft:chat_type" => crate::network::chat_type::direct_codec(),
+        "minecraft:painting_variant" => crate::world::entity::decoration::painting::painting_variant::direct_codec(),
+        "minecraft:wolf_variant" => crate::world::entity::animal::wolf::wolf_variant::network_codec(),
+        "minecraft:wolf_sound_variant" => crate::world::entity::animal::wolf::wolf_sound_variant::direct_codec(),
+        "minecraft:pig_variant" => crate::world::entity::animal::pig::pig_variant::network_codec(),
+        "minecraft:pig_sound_variant" => crate::world::entity::animal::pig::pig_sound_variant::direct_codec(),
+        "minecraft:cow_variant" => crate::world::entity::animal::cow::cow_variant::network_codec(),
+        "minecraft:cow_sound_variant" => crate::world::entity::animal::cow::cow_sound_variant::direct_codec(),
+        "minecraft:chicken_variant" => crate::world::entity::animal::chicken_variant::network_codec(),
+        "minecraft:chicken_sound_variant" => crate::world::entity::animal::chicken_sound_variant::direct_codec(),
+        "minecraft:frog_variant" => crate::world::entity::animal::frog::frog_variant::network_codec(),
+        "minecraft:cat_variant" => crate::world::entity::animal::feline::cat_variant::network_codec(),
+        "minecraft:cat_sound_variant" => crate::world::entity::animal::feline::cat_sound_variant::direct_codec(),
+        "minecraft:zombie_nautilus_variant" => crate::world::entity::animal::nautilus::zombie_nautilus_variant::network_codec(),
+        "minecraft:world_clock" => crate::world::item::component::types::record(Vec::new()),
+        _ => return None,
+    })
+}
+
+fn encode_network(registry: &str, json: &Value) -> Nbt {
+    let tag = crate::world::item::component::json_to_nbt(json);
+    if registry == "minecraft:dialog" {
+        return crate::nbt::with_json_source(|| crate::server::dialog::dialog::decode_direct(&tag)).expect("a decoded registry element");
+    }
+    match network_codec(registry) {
+        Some(codec) => crate::nbt::with_json_source(|| codec.0.decode(&tag)).expect("a decoded registry element"),
+        None => tag,
     }
 }
 
@@ -396,6 +441,21 @@ mod tests {
                 assert!(registry.json_entries()[id as usize].1 != "null", "{} {}", builtin.name, builtin.entries[id as usize]);
             }
         }
+    }
+
+    #[test]
+    fn network_contents_use_the_network_codec() {
+        let json = serde_json::json!({
+            "assets": {"wild": "a", "tame": "b", "angry": "c"},
+            "baby_assets": {"wild": "a", "tame": "b", "angry": "c"},
+            "spawn_conditions": [{"priority": 0}]
+        });
+        let wolf = super::encode_network("minecraft:wolf_variant", &json);
+        assert!(wolf.get("spawn_conditions").is_none());
+        assert_eq!(wolf.get("assets").and_then(|assets| assets.get("wild")).and_then(|wild| wild.as_str()), Some("minecraft:a"));
+        let damage = serde_json::json!({"exhaustion": 1, "message_id": "m", "scaling": "always"});
+        let damage = super::encode_network("minecraft:damage_type", &damage);
+        assert_eq!(damage.get("exhaustion"), Some(&wafer_protocol::nbt::Nbt::Float(1.0)));
     }
 
     #[test]

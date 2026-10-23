@@ -12,6 +12,7 @@ use crate::network::connection::{PacketReader, PacketWriter, disconnection_reaso
 use crate::network::login::Profile;
 use crate::server::Event;
 use crate::server::dedicated::dedicated_server_properties::ServerResourcePackInfo;
+use crate::util::java_collections::{JavaHashMap, identifier_hash};
 use crate::world::level::storage::format_uuid;
 
 pub struct ClientInfo {
@@ -342,7 +343,7 @@ fn send_registries(w: &mut PacketWriter) {
                 match data.and_then(|data| data.network_contents(id)) {
                     Some(contents) => {
                         p.bool(true);
-                        crate::world::item::component::json_to_nbt(contents).write(p);
+                        contents.write(p);
                     }
                     None => p.bool(false),
                 }
@@ -393,7 +394,11 @@ pub fn write_tags(p: &mut wafer_protocol::Writer) {
     for registry in registries {
         p.string(registry.registry);
         p.varint(registry.tags.len() as i32);
+        let mut result = JavaHashMap::new(identifier_hash);
         for (name, ids) in registry.tags {
+            result.insert(name.to_string(), *ids);
+        }
+        for (name, ids) in result.iter() {
             p.string(name);
             p.varint(ids.len() as i32);
             ids.iter().for_each(|&id| p.varint(crate::core::data_registries::network_id(registry.registry, id)));

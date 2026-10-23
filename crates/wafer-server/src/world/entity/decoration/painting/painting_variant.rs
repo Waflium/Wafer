@@ -5,9 +5,17 @@ use wafer_data::SyncedRegistry;
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::{Codec, RangeError};
+use crate::world::item::component::text;
+use crate::world::item::component::types::{self, Pair, opt, record, req};
 
 pub const REGISTRY: &str = "minecraft:painting_variant";
 pub const PLACEABLE: &str = "minecraft:placeable";
+
+pub fn direct_codec() -> Pair {
+    let size = || types::var_int(Codec::Int(1, 16, RangeError::Within));
+    record(vec![req("width", size()), req("height", size()), req("asset_id", types::identifier()), opt("title", text::text()), opt("author", text::text())])
+}
 
 pub struct PaintingVariant {
     pub width: i32,

@@ -6,3 +6,7 @@ pub fn direct_codec() -> Pair {
     fields.push(req("spawn_conditions", spawn_priority_selectors::codec()));
     record(fields)
 }
+
+pub fn network_codec() -> Pair {
+    record(model_and_texture::fields(&["normal", "warm"]))
+}
