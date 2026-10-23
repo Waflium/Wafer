@@ -3,10 +3,11 @@ use std::sync::LazyLock;
 use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, Axis, BlockPos};
 use wafer_data::properties::{BOTTOM, LEVEL, RailShape, STABILITY_DISTANCE};
-use wafer_data::{BlockState, FluidState, blocks};
+use wafer_data::{BlockState, EquipmentSlot, FluidState, Item, blocks, items};
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::{Entity, EntityId, LevelEntity};
+use crate::world::item::ItemStack;
 
 static EMPTY: LazyLock<VoxelShape> = LazyLock::new(VoxelShape::empty);
 static BLOCK: LazyLock<VoxelShape> = LazyLock::new(VoxelShape::block);
@@ -30,14 +31,23 @@ pub struct CollisionContext {
     placement: bool,
     position: bool,
     entity_bottom: f64,
+    held_item: Item,
     entity: Option<EntityProperties>,
     ignore_below: Option<BlockPos>,
     slope_ignore: Option<BlockPos>,
 }
 
 impl CollisionContext {
-    pub const EMPTY: CollisionContext =
-        CollisionContext { descending: false, placement: false, position: false, entity_bottom: -f64::MAX, entity: None, ignore_below: None, slope_ignore: None };
+    pub const EMPTY: CollisionContext = CollisionContext {
+        descending: false,
+        placement: false,
+        position: false,
+        entity_bottom: -f64::MAX,
+        held_item: items::AIR,
+        entity: None,
+        ignore_below: None,
+        slope_ignore: None,
+    };
 
     pub fn position_context(y: f64) -> CollisionContext {
         CollisionContext { position: true, entity_bottom: y, ..CollisionContext::EMPTY }
@@ -108,7 +118,22 @@ impl CollisionContext {
             can_stand_on_lava: level.mob(entity).is_some_and(|mob| mob.can_stand_on_fluid(wafer_data::Fluid::Lava)),
             is_player: level.is_player(entity),
         };
-        CollisionContext { descending: e.is_shift_key_down(), placement, entity_bottom, entity: Some(properties), ..CollisionContext::EMPTY }
+        CollisionContext { descending: e.is_shift_key_down(), placement, entity_bottom, held_item: CollisionContext::main_hand_item(level, entity), entity: Some(properties), ..CollisionContext::EMPTY }
+    }
+
+    fn main_hand_item(level: &ServerLevel, entity: EntityId) -> Item {
+        let stack = match level.entities.get(&entity) {
+            Some(LevelEntity::Mob(mob)) => mob.item_by_slot(EquipmentSlot::Mainhand),
+            Some(LevelEntity::ArmorStand(stand)) => stand.item_by_slot(EquipmentSlot::Mainhand),
+            Some(LevelEntity::Mannequin(mannequin)) => mannequin.item_by_slot(EquipmentSlot::Mainhand),
+            Some(_) => None,
+            None => level.players.get(&entity).and_then(|player| player.inventory.slots[player.inventory.selected_slot()].as_ref()),
+        };
+        stack.map_or(items::AIR, ItemStack::get_item)
+    }
+
+    pub fn is_holding_item(&self, item: Item) -> bool {
+        self.held_item == item
     }
 
     pub fn is_descending(&self) -> bool {

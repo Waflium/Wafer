@@ -351,10 +351,11 @@ impl ServerLevel {
 #[cfg(test)]
 mod tests {
     use wafer_core::{AABB, BlockPos, Vec3};
-    use wafer_data::blocks;
+    use wafer_data::{EquipmentSlot, blocks, items};
 
     use super::collide_with_shapes;
     use crate::server::level::testing;
+    use crate::world::item::ItemStack;
     use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
     use crate::world::level::update_flags::UPDATE_ALL;
     use crate::world::phys::shapes::collision_context::CollisionContext;
@@ -422,5 +423,48 @@ mod tests {
         assert!(!hit.miss);
         assert_eq!(hit.hit.block_pos, pos);
         assert!((hit.hit.location.x - (5.0 / 16.0 + offset.x + 6.0)).abs() < 1.0e-9);
+    }
+
+    fn outline_ray(collision_context: CollisionContext, pos: BlockPos) -> ClipContext {
+        let y = pos.y as f64 + 0.5;
+        ClipContext {
+            from: Vec3::new(pos.x as f64 + 0.5, y, pos.z as f64 - 2.0),
+            to: Vec3::new(pos.x as f64 + 0.5, y, pos.z as f64 + 3.0),
+            block: ClipBlock::Outline,
+            fluid: ClipFluid::None,
+            collision_context,
+        }
+    }
+
+    #[test]
+    fn light_outline_needs_a_held_light() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let pos = BlockPos::new(6, -60, 6);
+        level.set_block(pos, blocks::LIGHT.default_state(), UPDATE_ALL);
+        assert!(level.clip(&outline_ray(CollisionContext::of(&level, player), pos)).miss);
+        assert!(level.clip(&outline_ray(CollisionContext::EMPTY, pos)).miss);
+        level.set_item_slot(player, EquipmentSlot::Mainhand, ItemStack::new(items::LIGHT, 1));
+        let hit = level.clip(&outline_ray(CollisionContext::of(&level, player), pos));
+        assert!(!hit.miss);
+        assert_eq!(hit.hit.block_pos, pos);
+        assert!((hit.hit.location.z - 6.0).abs() < 1.0e-9);
+        assert!(level.clip(&outline_ray(CollisionContext::EMPTY, pos)).miss);
+        level.set_item_slot(player, EquipmentSlot::Mainhand, ItemStack::new(items::STONE, 1));
+        assert!(level.clip(&outline_ray(CollisionContext::of(&level, player), pos)).miss);
+    }
+
+    #[test]
+    fn scaffolding_outline_is_a_full_block_when_held() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let pos = BlockPos::new(6, -60, 6);
+        level.set_block(pos, blocks::SCAFFOLDING.default_state(), UPDATE_ALL);
+        assert!(level.clip(&outline_ray(CollisionContext::of(&level, player), pos)).miss);
+        level.set_item_slot(player, EquipmentSlot::Mainhand, ItemStack::new(items::SCAFFOLDING, 1));
+        let hit = level.clip(&outline_ray(CollisionContext::of(&level, player), pos));
+        assert!(!hit.miss);
+        assert!((hit.hit.location.z - 6.0).abs() < 1.0e-9);
+        assert!(level.clip(&outline_ray(CollisionContext::EMPTY, pos)).miss);
     }
 }

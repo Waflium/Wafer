@@ -2,7 +2,7 @@ use wafer_core::hash_map::FastSet;
 
 use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, Axis, BlockPos, Direction, Vec3, mth};
-use wafer_data::{BlockState, FluidState, block_tags, blocks, fluid_tags, game_rule};
+use wafer_data::{BlockState, FluidState, block_tags, blocks, fluid_tags, game_rule, items};
 
 use crate::server::level::ServerLevel;
 use crate::world::level::BlockGetter;
@@ -322,10 +322,18 @@ impl ServerLevel {
         }
     }
 
+    fn outline_shape(context: &CollisionContext, state: BlockState, pos: BlockPos) -> ClipShape {
+        if state.is_block(blocks::LIGHT) && context.is_holding_item(items::LIGHT) || state.is_block(blocks::SCAFFOLDING) && context.is_holding_item(items::SCAFFOLDING) {
+            ClipShape::Block
+        } else {
+            ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos))
+        }
+    }
+
     fn clip_block_shape(&mut self, ctx: &ClipContext, state: BlockState, pos: BlockPos) -> ClipShape {
         match ctx.block {
             ClipBlock::Collider => self.clip_collision_shape(ctx, state, pos),
-            ClipBlock::Outline => self.shulker_box_clip_shape(state, pos).unwrap_or_else(|| ClipShape::Voxel(state.voxel_shape(), state.shape_offset(pos))),
+            ClipBlock::Outline => self.shulker_box_clip_shape(state, pos).unwrap_or_else(|| Self::outline_shape(&ctx.collision_context, state, pos)),
             ClipBlock::Visual => self.get_visual_shape(ctx, state, pos),
             ClipBlock::FallDamageResetting => {
                 if state.is(&block_tags::FALL_DAMAGE_RESETTING) {
