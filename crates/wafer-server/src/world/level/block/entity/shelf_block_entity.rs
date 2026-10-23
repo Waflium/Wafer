@@ -6,6 +6,7 @@ use super::base_container_block_entity::{copy_into, from_items, load_all_items, 
 use crate::server::level::ServerLevel;
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, DataComponentType};
+use crate::world::level::storage::tag_value_input;
 
 pub const MAX_ITEMS: usize = 3;
 const ALIGN_ITEMS_TO_BOTTOM_TAG: &str = "align_items_to_bottom";
@@ -26,7 +27,7 @@ impl ShelfBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
         self.items = vec![ItemStack::empty(); MAX_ITEMS];
         load_all_items(input, &mut self.items);
-        self.align_items_to_bottom = input.get(ALIGN_ITEMS_TO_BOTTOM_TAG).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        self.align_items_to_bottom = tag_value_input::get_i64(input, ALIGN_ITEMS_TO_BOTTOM_TAG).is_some_and(|v| v != 0);
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

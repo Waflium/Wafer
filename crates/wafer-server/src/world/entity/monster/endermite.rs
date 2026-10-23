@@ -19,6 +19,7 @@ use crate::world::entity::living_entity::LivingEntity;
 use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::{Entity, EntityDimensions, EntityId};
 use crate::world::level::block::entity::int_value;
+use crate::world::level::storage::tag_value_input;
 
 const MAX_LIFE: i32 = 2400;
 const DEFAULT_LIFE: i32 = 0;
@@ -83,7 +84,7 @@ impl Endermite {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        endermite_mut(mob).life = input.get("Lifetime").and_then(int_value).unwrap_or(DEFAULT_LIFE);
+        endermite_mut(mob).life = tag_value_input::get_numeric(input, "Lifetime").and_then(int_value).unwrap_or(DEFAULT_LIFE);
     }
 
     pub fn add_additional_save_data(mob: &Mob, out: &mut Vec<(String, Nbt)>) {

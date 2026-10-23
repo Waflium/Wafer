@@ -68,9 +68,13 @@ pub use dispenser_block_entity::DispenserBlockEntity;
 pub use hopper_block_entity::HopperBlockEntity;
 pub use shulker_box_block_entity::{AnimationStatus, ShulkerBoxBlockEntity};
 
+use crate::util::problem_reporter::PathElement;
 use crate::world::item::component::{self as dc, DataComponentMap, DataComponentPatch, DataComponentType, PatchedDataComponentMap};
 use crate::world::item::ItemStack;
 use crate::world::item::crafting::recipe_type::RecipeType;
+use crate::world::level::storage::tag_value_input;
+
+pub const BLOCK_ENTITY_LOGGER: &str = "net.minecraft.world.level.block.entity.BlockEntity";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BlockEntityTicker {
@@ -276,7 +280,7 @@ impl BlockEntity {
     }
 
     pub fn get_pos_from_tag(base: ChunkPos, tag: &Nbt) -> BlockPos {
-        let int = |key: &str| tag.get(key).and_then(int_value).unwrap_or(0);
+        let int = |key: &str| tag_value_input::get_numeric(tag, key).and_then(int_value).unwrap_or(0);
         let (mut x, y, mut z) = (int("x"), int("y"), int("z"));
         if x >> 4 != base.x || z >> 4 != base.z {
             warn!("Block entity {} found in a wrong chunk, expected position from chunk {base:?}", crate::nbt::to_string(tag));
@@ -284,6 +288,14 @@ impl BlockEntity {
             z = base.min_block_z() + (z & 15);
         }
         BlockPos::new(x, y, z)
+    }
+
+    pub fn get_name_for_reporting(&self) -> String {
+        format!("{} // {}", self.ty.name(), canonical_class_name(self.ty.name()))
+    }
+
+    pub fn problem_path(&self) -> PathElement {
+        PathElement::Text(format!("{}@BlockPos{{x={}, y={}, z={}}}", self.get_name_for_reporting(), self.pos.x, self.pos.y, self.pos.z))
     }
 
     pub fn load_static(pos: BlockPos, state: BlockState, tag: &Nbt) -> Option<BlockEntity> {
@@ -295,6 +307,7 @@ impl BlockEntity {
             error!("Failed to create block entity {} for block {state:?} at position {pos:?} ", ty.name());
             return None;
         };
+        let _collector = tag_value_input::ScopedCollector::new(entity.problem_path(), BLOCK_ENTITY_LOGGER).logging_as("Server thread");
         entity.load_with_components(tag);
         Some(entity)
     }
@@ -400,7 +413,7 @@ impl BlockEntity {
 
     pub fn load_with_components(&mut self, input: &Nbt) {
         self.load_additional(input);
-        self.components = input.get("components").and_then(|c| decode_component_map(c).ok()).unwrap_or(DataComponentMap::EMPTY);
+        self.components = tag_value_input::read_or_error(input, "components", decode_component_map).unwrap_or(DataComponentMap::EMPTY);
     }
 
     pub fn load_custom_only(&mut self, input: &Nbt) {
@@ -766,11 +779,11 @@ pub fn byte_value(tag: &Nbt) -> Option<i8> {
 }
 
 pub fn byte_or(input: &Nbt, key: &str, default: i8) -> i8 {
-    input.get(key).and_then(byte_value).unwrap_or(default)
+    tag_value_input::get_numeric(input, key).and_then(byte_value).unwrap_or(default)
 }
 
 pub fn float_or(input: &Nbt, key: &str, default: f32) -> f32 {
-    input.get(key).and_then(float_value).unwrap_or(default)
+    tag_value_input::get_numeric(input, key).and_then(float_value).unwrap_or(default)
 }
 
 pub fn float_value(tag: &Nbt) -> Option<f32> {
@@ -790,21 +803,75 @@ pub fn long_value(tag: &Nbt) -> Option<i64> {
 }
 
 pub fn int_or(input: &Nbt, key: &str, default: i32) -> i32 {
-    input.get(key).and_then(int_value).unwrap_or(default)
+    tag_value_input::get_numeric(input, key).and_then(int_value).unwrap_or(default)
+}
+
+fn canonical_class_name(type_name: &str) -> &'static str {
+    match type_name {
+        "minecraft:furnace" => "net.minecraft.world.level.block.entity.FurnaceBlockEntity",
+        "minecraft:chest" => "net.minecraft.world.level.block.entity.ChestBlockEntity",
+        "minecraft:trapped_chest" => "net.minecraft.world.level.block.entity.TrappedChestBlockEntity",
+        "minecraft:ender_chest" => "net.minecraft.world.level.block.entity.EnderChestBlockEntity",
+        "minecraft:jukebox" => "net.minecraft.world.level.block.entity.JukeboxBlockEntity",
+        "minecraft:dispenser" => "net.minecraft.world.level.block.entity.DispenserBlockEntity",
+        "minecraft:dropper" => "net.minecraft.world.level.block.entity.DropperBlockEntity",
+        "minecraft:sign" => "net.minecraft.world.level.block.entity.SignBlockEntity",
+        "minecraft:hanging_sign" => "net.minecraft.world.level.block.entity.HangingSignBlockEntity",
+        "minecraft:mob_spawner" => "net.minecraft.world.level.block.entity.SpawnerBlockEntity",
+        "minecraft:creaking_heart" => "net.minecraft.world.level.block.entity.CreakingHeartBlockEntity",
+        "minecraft:piston" => "net.minecraft.world.level.block.piston.PistonMovingBlockEntity",
+        "minecraft:brewing_stand" => "net.minecraft.world.level.block.entity.BrewingStandBlockEntity",
+        "minecraft:enchanting_table" => "net.minecraft.world.level.block.entity.EnchantingTableBlockEntity",
+        "minecraft:end_portal" => "net.minecraft.world.level.block.entity.TheEndPortalBlockEntity",
+        "minecraft:beacon" => "net.minecraft.world.level.block.entity.BeaconBlockEntity",
+        "minecraft:skull" => "net.minecraft.world.level.block.entity.SkullBlockEntity",
+        "minecraft:daylight_detector" => "net.minecraft.world.level.block.entity.DaylightDetectorBlockEntity",
+        "minecraft:hopper" => "net.minecraft.world.level.block.entity.HopperBlockEntity",
+        "minecraft:comparator" => "net.minecraft.world.level.block.entity.ComparatorBlockEntity",
+        "minecraft:banner" => "net.minecraft.world.level.block.entity.BannerBlockEntity",
+        "minecraft:structure_block" => "net.minecraft.world.level.block.entity.StructureBlockEntity",
+        "minecraft:end_gateway" => "net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity",
+        "minecraft:command_block" => "net.minecraft.world.level.block.entity.CommandBlockEntity",
+        "minecraft:shulker_box" => "net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity",
+        "minecraft:conduit" => "net.minecraft.world.level.block.entity.ConduitBlockEntity",
+        "minecraft:barrel" => "net.minecraft.world.level.block.entity.BarrelBlockEntity",
+        "minecraft:smoker" => "net.minecraft.world.level.block.entity.SmokerBlockEntity",
+        "minecraft:blast_furnace" => "net.minecraft.world.level.block.entity.BlastFurnaceBlockEntity",
+        "minecraft:lectern" => "net.minecraft.world.level.block.entity.LecternBlockEntity",
+        "minecraft:bell" => "net.minecraft.world.level.block.entity.BellBlockEntity",
+        "minecraft:jigsaw" => "net.minecraft.world.level.block.entity.JigsawBlockEntity",
+        "minecraft:campfire" => "net.minecraft.world.level.block.entity.CampfireBlockEntity",
+        "minecraft:beehive" => "net.minecraft.world.level.block.entity.BeehiveBlockEntity",
+        "minecraft:sculk_sensor" => "net.minecraft.world.level.block.entity.SculkSensorBlockEntity",
+        "minecraft:calibrated_sculk_sensor" => "net.minecraft.world.level.block.entity.CalibratedSculkSensorBlockEntity",
+        "minecraft:sculk_catalyst" => "net.minecraft.world.level.block.entity.SculkCatalystBlockEntity",
+        "minecraft:sculk_shrieker" => "net.minecraft.world.level.block.entity.SculkShriekerBlockEntity",
+        "minecraft:chiseled_bookshelf" => "net.minecraft.world.level.block.entity.ChiseledBookShelfBlockEntity",
+        "minecraft:shelf" => "net.minecraft.world.level.block.entity.ShelfBlockEntity",
+        "minecraft:brushable_block" => "net.minecraft.world.level.block.entity.BrushableBlockEntity",
+        "minecraft:decorated_pot" => "net.minecraft.world.level.block.entity.DecoratedPotBlockEntity",
+        "minecraft:crafter" => "net.minecraft.world.level.block.entity.CrafterBlockEntity",
+        "minecraft:trial_spawner" => "net.minecraft.world.level.block.entity.TrialSpawnerBlockEntity",
+        "minecraft:vault" => "net.minecraft.world.level.block.entity.vault.VaultBlockEntity",
+        "minecraft:test_block" => "net.minecraft.world.level.block.entity.TestBlockEntity",
+        "minecraft:test_instance_block" => "net.minecraft.world.level.block.entity.TestInstanceBlockEntity",
+        "minecraft:copper_golem_statue" => "net.minecraft.world.level.block.entity.CopperGolemStatueBlockEntity",
+        "minecraft:potent_sulfur" => "net.minecraft.world.level.block.entity.PotentSulfurBlockEntity",
+        _ => "net.minecraft.world.level.block.entity.BlockEntity",
+    }
 }
 
 pub fn decode_component_map(tag: &Nbt) -> Result<DataComponentMap, String> {
-    let Nbt::Compound(fields) = tag else { return Err("Not a map".into()) };
-    let mut entries = Vec::new();
-    for (key, value) in fields {
+    let key = |key: &str| {
         let id = crate::commands::arguments::parse_identifier(key).ok_or_else(|| format!("Not a valid resource location: {key}"))?;
-        let ty = DataComponentType::by_name(&id).ok_or_else(|| format!("No component with type: {id}"))?;
+        let ty = DataComponentType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {id}"))?;
         if ty.is_transient() {
             return Err(format!("Encountered transient component {id}"));
         }
-        entries.push((ty, ty.decode(value)?));
-    }
-    Ok(DataComponentMap::new(entries))
+        Ok(ty)
+    };
+    let entries = crate::util::codec::dispatched_map(tag, key, |ty, value| ty.decode(value).map(|decoded| (*ty, decoded)))?;
+    Ok(DataComponentMap::new(entries.into_iter().map(|(_, entry)| entry).collect()))
 }
 
 pub fn encode_component_map(map: &DataComponentMap) -> Nbt {

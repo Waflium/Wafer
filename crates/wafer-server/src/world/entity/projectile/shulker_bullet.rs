@@ -15,6 +15,7 @@ use crate::world::entity::{EntityDimensions, EntityId, sound_event};
 use crate::world::level::block::BlockHitResult;
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::{HitResult, Type};
+use crate::world::level::storage::tag_value_input;
 
 const ENTITY_TYPE: &str = "minecraft:shulker_bullet";
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.3125, 0.3125);
@@ -81,12 +82,12 @@ impl ShulkerBullet {
 
     pub fn read_additional_save_data(projectile: &mut Projectile, input: &Nbt) {
         let bullet = shulker_bullet_mut(projectile);
-        bullet.flight_steps = input.get("Steps").and_then(crate::world::level::block::entity::int_value).unwrap_or(0);
-        let double = |key: &str| input.get(key).and_then(Nbt::as_f64).unwrap_or(0.0);
+        bullet.flight_steps = tag_value_input::get_numeric(input, "Steps").and_then(crate::world::level::block::entity::int_value).unwrap_or(0);
+        let double = |key: &str| tag_value_input::get_f64(input, key).unwrap_or(0.0);
         bullet.target_delta_x = double("TXD");
         bullet.target_delta_y = double("TYD");
         bullet.target_delta_z = double("TZD");
-        bullet.current_move_direction = input.get("Dir").and_then(Nbt::as_i64).map(|id| Direction::from_3d_data_value(id as i32));
+        bullet.current_move_direction = tag_value_input::get_i64(input, "Dir").map(|id| Direction::from_3d_data_value(id as i32));
         bullet.final_target = EntityReference::read(input, "Target");
     }
 }

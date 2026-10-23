@@ -23,6 +23,7 @@ use crate::world::level::pathfinder::path::Path;
 use crate::world::item::enchantment::enchantment_helper;
 use crate::world::item::enchantment::providers::vanilla_enchantment_providers;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 pub const IS_CELEBRATING: usize = 16;
 const DEFAULT_WAVE: i32 = 0;
@@ -101,8 +102,8 @@ impl Raider {
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
         self.patrolling_monster.read_additional_save_data(input);
-        self.wave = input.get("Wave").and_then(Nbt::as_i64).map_or(DEFAULT_WAVE, |wave| wave as i32);
-        self.can_join_raid = input.get("CanJoinRaid").and_then(Nbt::as_i64).map_or(DEFAULT_CAN_JOIN_RAID, |v| v != 0);
+        self.wave = tag_value_input::get_i64(input, "Wave").map_or(DEFAULT_WAVE, |wave| wave as i32);
+        self.can_join_raid = tag_value_input::get_i64(input, "CanJoinRaid").map_or(DEFAULT_CAN_JOIN_RAID, |v| v != 0);
     }
 
     pub fn remove_when_far_away(&self, dist_sqr: f64) -> bool {

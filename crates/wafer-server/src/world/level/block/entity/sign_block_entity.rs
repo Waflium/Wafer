@@ -9,6 +9,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::item::component::{self as dc, DataComponentType};
 use crate::world::level::block::sign_block;
+use crate::world::level::storage::tag_value_input;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SignTextSlot {
@@ -87,9 +88,9 @@ impl SignBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        let flag = |key: &str| input.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let flag = |key: &str| tag_value_input::get_i64(input, key).is_some_and(|v| v != 0);
         self.allow_op_features = flag("allow_op_features");
-        let text = |key: &str| input.get(key).and_then(|text| dc::SIGN_TEXT_FRONT.decode(text).ok()).and_then(|text| SignText::from_nbt(&text)).unwrap_or_default();
+        let text = |key: &str| tag_value_input::read_or_error(input, key, |text| dc::SIGN_TEXT_FRONT.decode(text)).and_then(|text| SignText::from_nbt(&text)).unwrap_or_default();
         self.front_text = text("front_text");
         self.back_text = text("back_text");
         self.is_waxed = flag("is_waxed");

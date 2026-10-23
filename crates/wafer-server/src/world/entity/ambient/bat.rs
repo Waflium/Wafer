@@ -13,6 +13,7 @@ use crate::world::entity::living_entity::LivingEntity;
 use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::{Entity, EntityDimensions, EntityId};
 use crate::world::level::BlockGetter;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_ID_FLAGS: usize = 16;
 const FLAG_RESTING: i8 = 1;
@@ -63,7 +64,7 @@ impl Bat {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let flags = input.get("BatFlags").and_then(Nbt::as_i64).map_or(DEFAULT_FLAGS, |flags| flags as i8);
+        let flags = tag_value_input::get_i64(input, "BatFlags").map_or(DEFAULT_FLAGS, |flags| flags as i8);
         mob.entity.data.set(DATA_ID_FLAGS, DataValue::Byte(flags));
     }
 

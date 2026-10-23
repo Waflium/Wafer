@@ -1,6 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::world::item::component::{self as dc, DataComponentType};
+use crate::world::level::storage::tag_value_input;
 
 const TAG_PATTERNS: &str = "patterns";
 
@@ -36,7 +37,7 @@ impl BannerBlockEntity {
 
     pub fn load_additional(&mut self, input: &Nbt) {
         self.name = crate::network::chat::component_serialization::parse_custom_name_safe(input, "CustomName");
-        self.patterns = input.get(TAG_PATTERNS).and_then(|patterns| dc::BANNER_PATTERNS.decode(patterns).ok()).unwrap_or(Nbt::List(Vec::new()));
+        self.patterns = tag_value_input::read_or_error(input, TAG_PATTERNS, |patterns| dc::BANNER_PATTERNS.decode(patterns)).unwrap_or(Nbt::List(Vec::new()));
     }
 
     pub fn get_patterns(&self) -> &Nbt {

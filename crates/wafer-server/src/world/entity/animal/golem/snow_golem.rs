@@ -25,6 +25,7 @@ use crate::world::level::BlockGetter;
 use crate::world::level::block;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_PUMPKIN_ID: usize = 16;
 const PUMPKIN_FLAG: i8 = 16;
@@ -98,7 +99,7 @@ impl SnowGolem {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let pumpkin = input.get("Pumpkin").and_then(Nbt::as_i64).map_or(DEFAULT_PUMPKIN, |v| v as i8 != 0);
+        let pumpkin = tag_value_input::get_i64(input, "Pumpkin").map_or(DEFAULT_PUMPKIN, |v| v as i8 != 0);
         set_pumpkin(&mut mob.entity, pumpkin);
     }
 }

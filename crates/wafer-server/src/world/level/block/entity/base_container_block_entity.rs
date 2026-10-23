@@ -2,9 +2,12 @@ use wafer_core::{BlockPos, Vec3};
 use wafer_data::BlockState;
 use wafer_protocol::nbt::Nbt;
 
-use super::{BlockEntity, int_value, long_value};
+use super::{BlockEntity, long_value};
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
+use crate::world::item::component::codec as component_codec;
+use crate::world::level::storage::tag_value_input;
 use crate::world::level::storage::loot::loot_context::{LootContext, LootContextBuilder};
 use crate::world::level::storage::loot::loot_params::{LootParams, SlotProvider};
 use crate::world::item::component::values::ItemStackTemplate;
@@ -25,7 +28,7 @@ impl BaseContainerBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.lock_key = input.get("lock").and_then(|lock| dc::LOCK.decode(lock).ok());
+        self.lock_key = tag_value_input::read_or_error(input, "lock", |lock| dc::LOCK.decode(lock));
         self.name = crate::network::chat::component_serialization::parse_custom_name_safe(input, "CustomName");
     }
 
@@ -43,8 +46,8 @@ impl BaseContainerBlockEntity {
     }
 
     pub fn try_load_loot_table(&mut self, input: &Nbt) -> bool {
-        self.loot_table = input.get("LootTable").and_then(Nbt::as_str).and_then(crate::commands::arguments::parse_identifier);
-        self.loot_table_seed = input.get("LootTableSeed").and_then(long_value).unwrap_or(0);
+        self.loot_table = tag_value_input::read_or_error(input, "LootTable", codec::identifier);
+        self.loot_table_seed = tag_value_input::get_numeric(input, "LootTableSeed").and_then(long_value).unwrap_or(0);
         self.loot_table.is_some()
     }
 
@@ -121,18 +124,22 @@ pub fn save_all_items(output: &mut Vec<(String, Nbt)>, items: &[ItemStack], also
     }
 }
 
+fn decode_item_stack_with_slot(entry: &Nbt) -> DecodeResult<(usize, ItemStack)> {
+    let slot = match entry.get("Slot") {
+        Some(tag) => codec::number(tag).map(|number| component_codec::as_i64(number) as u8 as usize),
+        None => Ok(0),
+    };
+    let stack = ItemStack::from_nbt_partial(entry);
+    let error = codec::record_errors(&[slot.as_ref().err(), stack.error.as_ref()]).err();
+    match (slot, stack.value) {
+        (Ok(slot), Some(stack)) => DecodeResult { value: Some((slot, stack)), error },
+        _ => DecodeResult { value: None, error },
+    }
+}
+
 pub fn load_all_items(input: &Nbt, items: &mut [ItemStack]) {
-    for entry in input.get("Items").map(Nbt::as_list).unwrap_or(&[]) {
-        let slot = match entry.get("Slot") {
-            Some(slot) => match int_value(slot) {
-                Some(slot) => slot as u8 as usize,
-                None => continue,
-            },
-            None => 0,
-        };
-        if let Ok(stack) = ItemStack::from_nbt(entry)
-            && slot < items.len()
-        {
+    for (slot, stack) in tag_value_input::list_or_empty(input, "Items", decode_item_stack_with_slot) {
+        if slot < items.len() {
             items[slot] = stack;
         }
     }

@@ -14,6 +14,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId};
 use crate::world::level::server_explosion::ExplosionInteraction;
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::HitResult;
+use crate::world::level::storage::tag_value_input;
 
 const ENTITY_TYPE: &str = "minecraft:wither_skull";
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.3125, 0.3125);
@@ -65,7 +66,7 @@ impl Projectile {
 
     pub fn wither_skull_read_additional_save_data(&mut self, input: &Nbt) {
         self.abstract_hurting_projectile_read_additional_save_data(input);
-        let dangerous = input.get("dangerous").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let dangerous = tag_value_input::get_i64(input, "dangerous").is_some_and(|v| v != 0);
         set_dangerous(&mut self.entity, dangerous);
     }
 }

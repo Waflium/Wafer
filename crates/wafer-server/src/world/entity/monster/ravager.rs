@@ -22,6 +22,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
 use crate::world::level::BlockGetter;
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 const BASE_MOVEMENT_SPEED: f64 = 0.3;
 const ATTACK_MOVEMENT_SPEED: f64 = 0.35;
@@ -100,7 +101,7 @@ impl Ravager {
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         let ravager = ravager_mut(mob);
         ravager.raider.read_additional_save_data(input);
-        let int = |key: &str, default: i32| input.get(key).and_then(Nbt::as_i64).map_or(default, |v| v as i32);
+        let int = |key: &str, default: i32| tag_value_input::get_i64(input, key).map_or(default, |v| v as i32);
         ravager.attack_tick = int("AttackTick", DEFAULT_ATTACK_TICK);
         ravager.stunned_tick = int("StunTick", DEFAULT_STUN_TICK);
         ravager.roar_tick = int("RoarTick", DEFAULT_ROAR_TICK);

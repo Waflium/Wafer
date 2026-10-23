@@ -21,6 +21,7 @@ use crate::world::item::component::values::ItemEnchantments;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::item::enchantment::enchantment_helper;
 use crate::world::item::enchantment::providers::vanilla_enchantment_providers;
+use crate::world::level::storage::tag_value_input;
 
 const TRAP_MAX_LIFE: i32 = 18000;
 const DEFAULT_IS_TRAP: bool = false;
@@ -94,9 +95,9 @@ impl SkeletonHorse {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         AbstractHorse::read_additional_save_data(mob, input);
-        let trap = input.get("SkeletonTrap").and_then(Nbt::as_i64).map_or(DEFAULT_IS_TRAP, |v| v != 0);
+        let trap = tag_value_input::get_i64(input, "SkeletonTrap").map_or(DEFAULT_IS_TRAP, |v| v != 0);
         SkeletonHorse::set_trap(mob, trap);
-        skeleton_horse_mut(mob).trap_time = input.get("SkeletonTrapTime").and_then(Nbt::as_i64).map_or(DEFAULT_TRAP_TIME, |v| v as i32);
+        skeleton_horse_mut(mob).trap_time = tag_value_input::get_i64(input, "SkeletonTrapTime").map_or(DEFAULT_TRAP_TIME, |v| v as i32);
     }
 
     pub fn is_trap(mob: &Mob) -> bool {

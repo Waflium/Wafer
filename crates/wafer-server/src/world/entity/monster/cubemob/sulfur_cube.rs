@@ -23,6 +23,7 @@ use crate::world::level::gameevent::game_event;
 use crate::world::level::server_explosion::{ExplosionDamageCalculator, ExplosionInteraction};
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.49, 0.49).with_eye_height(0.175);
 pub const DATA_MAX_FUSE: usize = 19;
@@ -201,9 +202,9 @@ impl Mob {
     }
 
     pub fn sulfur_cube_read_additional_save_data(&mut self, input: &Nbt) {
-        let int = |key: &str, default: i32| input.get(key).and_then(crate::world::level::block::entity::int_value).unwrap_or(default);
+        let int = |key: &str, default: i32| tag_value_input::get_numeric(input, key).and_then(crate::world::level::block::entity::int_value).unwrap_or(default);
         self.sulfur_cube_mut().expect("a sulfur cube").pickup_timer = int("pickup_timer", 0);
-        let from_bucket = input.get("from_bucket").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let from_bucket = tag_value_input::get_i64(input, "from_bucket").is_some_and(|v| v != 0);
         self.sulfur_cube_set_from_bucket(from_bucket);
         self.sulfur_cube_set_fuse(int("fuse", -1));
         let fuse = self.sulfur_cube_get_fuse();
@@ -227,9 +228,9 @@ impl Mob {
 
     pub fn sulfur_cube_load_from_bucket_tag(&mut self, tag: &Nbt) {
         crate::world::entity::bucketable::load_default_data_from_bucket_tag(self, tag);
-        let age = tag.get("age").and_then(crate::world::level::block::entity::int_value).unwrap_or(0);
+        let age = tag_value_input::get_numeric(tag, "age").and_then(crate::world::level::block::entity::int_value).unwrap_or(0);
         self.set_age(age);
-        let age_locked = tag.get("age_locked").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let age_locked = tag_value_input::get_i64(tag, "age_locked").is_some_and(|v| v != 0);
         self.entity.data.set(crate::world::entity::data::ids::AGE_LOCKED, DataValue::Boolean(age_locked));
     }
 

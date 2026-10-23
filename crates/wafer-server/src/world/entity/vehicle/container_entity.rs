@@ -11,6 +11,7 @@ use crate::world::level::block::entity::base_container_block_entity::{load_all_i
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::storage::loot::loot_table::LootTable;
 use crate::world::{InteractionResult, containers};
+use crate::world::level::storage::tag_value_input;
 
 pub struct ContainerEntity {
     item_stacks: Vec<ItemStack>,
@@ -50,8 +51,8 @@ impl ContainerEntity {
 
     pub fn read_chest_vehicle_save_data(&mut self, input: &Nbt) {
         self.clear_item_stacks();
-        self.loot_table = input.get("LootTable").and_then(Nbt::as_str).map(str::to_string);
-        self.loot_table_seed = input.get("LootTableSeed").and_then(Nbt::as_i64).unwrap_or(0);
+        self.loot_table = tag_value_input::read_or_error(input, "LootTable", crate::util::codec::identifier);
+        self.loot_table_seed = tag_value_input::get_i64(input, "LootTableSeed").unwrap_or(0);
         if self.loot_table.is_none() {
             load_all_items(input, &mut self.item_stacks);
         }

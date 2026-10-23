@@ -11,7 +11,11 @@ use wafer_protocol::nbt::Nbt;
 use super::RegionStorage;
 use crate::server::level::ServerLevel;
 use crate::server::level::chunk_workers::IoWorker;
+use crate::util::problem_reporter::PathElement;
 use crate::world::entity::LevelEntity;
+use crate::world::level::storage::tag_value_input;
+
+const ENTITY_STORAGE_LOGGER: &str = "net.minecraft.world.level.chunk.storage.EntityStorage";
 
 pub type EntityChunkRead = (ChunkPos, io::Result<Option<Nbt>>);
 
@@ -101,7 +105,9 @@ impl ServerLevel {
             }
             _ => warn!("Failed to parse chunk [{}, {}] position info", pos.x, pos.z),
         }
-        let entities = tag.get("Entities").map_or(&[][..], Nbt::as_list);
-        entities.iter().flat_map(|e| self.load_entity_recursive(e, &mut |_| {})).collect()
+        let _collector = tag_value_input::ScopedCollector::new(PathElement::Text(format!("chunk@[{}, {}]", pos.x, pos.z)), ENTITY_STORAGE_LOGGER);
+        let mut loaded = Vec::new();
+        tag_value_input::for_each_child(tag, "Entities", |entity| loaded.extend(self.load_entity_recursive_in_scope(entity, &mut |_| {})));
+        loaded
     }
 }

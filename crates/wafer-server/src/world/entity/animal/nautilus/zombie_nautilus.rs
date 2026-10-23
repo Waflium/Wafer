@@ -109,7 +109,7 @@ impl ZombieNautilus {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         TamableAnimal::read_additional_save_data(mob, input);
-        if let Some(variant) = input.get("variant").and_then(Nbt::as_str).and_then(|name| variant_utils::read_variant(VARIANT_REGISTRY, name)) {
+        if let Some(variant) = variant_utils::read_variant_field(input, "variant", VARIANT_REGISTRY) {
             set_variant(&mut mob.entity, variant);
         }
     }

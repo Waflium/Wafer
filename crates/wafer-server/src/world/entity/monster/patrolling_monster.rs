@@ -17,6 +17,7 @@ use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::light_layer::LightLayer;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 const DEFAULT_PATROL_LEADER: bool = false;
 const DEFAULT_PATROLLING: bool = false;
@@ -48,11 +49,8 @@ impl PatrollingMonster {
     }
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
-        self.patrol_target = match input.get("patrol_target") {
-            Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])),
-            _ => None,
-        };
-        let boolean = |key: &str, default: bool| input.get(key).and_then(Nbt::as_i64).map_or(default, |v| v != 0);
+        self.patrol_target = tag_value_input::read(input, "patrol_target", crate::util::extra_codecs::block_pos);
+        let boolean = |key: &str, default: bool| tag_value_input::get_i64(input, key).map_or(default, |v| v != 0);
         self.patrol_leader = boolean("PatrolLeader", DEFAULT_PATROL_LEADER);
         self.patrolling = boolean("Patrolling", DEFAULT_PATROLLING);
     }

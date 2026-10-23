@@ -21,11 +21,12 @@ use crate::world::item::enchantment::enchantment_helper;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::BlockHitResult;
 use crate::world::level::block::entity::int_value;
-use crate::world::level::chunk::serialization::{state_from_nbt, state_to_nbt};
+use crate::world::level::chunk::serialization::state_to_nbt;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::HitResult;
 use crate::world::phys::shapes::collision_context::CollisionContext;
+use crate::world::level::storage::tag_value_input;
 
 const ARROW_BASE_DAMAGE: f64 = 2.0;
 const SHAKE_TIME: i32 = 7;
@@ -251,12 +252,12 @@ impl Projectile {
     }
 
     pub fn abstract_arrow_read_additional_save_data(&mut self, input: &Nbt) {
-        let number = |key: &str| input.get(key).and_then(int_value);
+        let number = |key: &str| tag_value_input::get_numeric(input, key).and_then(int_value);
         let life = number("life").map_or(0, |v| v as i16 as i32);
-        let last_state = input.get("inBlockState").and_then(state_from_nbt);
+        let last_state = tag_value_input::read_or_error(input, "inBlockState", crate::world::level::chunk::serialization::decode_block_state);
         let shake_time = number("shake").map_or(0, |v| v as i8 as i32 & 255);
         self.set_in_ground(number("inGround").is_some_and(|v| v as i8 != 0));
-        let base_damage = input.get("damage").and_then(Nbt::as_f64).unwrap_or(ARROW_BASE_DAMAGE);
+        let base_damage = tag_value_input::get_f64(input, "damage").unwrap_or(ARROW_BASE_DAMAGE);
         let pickup = number("pickup").map_or(Pickup::Disallowed, |v| Pickup::by_ordinal(v as i8 as i32));
         self.set_crit_arrow(number("crit").is_some_and(|v| v as i8 != 0));
         self.set_pierce_level(number("PierceLevel").map_or(0, |v| v as i8));
@@ -266,8 +267,8 @@ impl Projectile {
             .and_then(crate::commands::arguments::parse_identifier)
             .and_then(|name| registry::SOUND_EVENT.iter().position(|&s| s == name))
             .map_or_else(|| get_default_hit_ground_sound_event(&self.kind), |id| id as i32);
-        let item = input.get("item").and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(|| get_default_pickup_item(&self.kind));
-        let weapon = input.get("weapon").and_then(|weapon| ItemStack::from_nbt(weapon).ok());
+        let item = tag_value_input::read(input, "item", ItemStack::from_nbt_partial).unwrap_or_else(|| get_default_pickup_item(&self.kind));
+        let weapon = tag_value_input::read(input, "weapon", ItemStack::from_nbt_partial);
         let arrow = self.abstract_arrow_mut().expect("an arrow");
         arrow.life = life;
         arrow.last_state = last_state;

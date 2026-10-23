@@ -17,6 +17,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::int_value;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const BABY_SCALE: f32 = 0.6;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.7, 0.65).with_eye_height(0.26);
@@ -188,7 +189,7 @@ impl Armadillo {
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
         let state = nbt.get("state").and_then(Nbt::as_str).and_then(ArmadilloState::by_name).unwrap_or(ArmadilloState::Idle);
         Armadillo::switch_to_state(mob, state);
-        if let Some(time) = nbt.get("scute_time").and_then(int_value) {
+        if let Some(time) = tag_value_input::get_numeric(nbt, "scute_time").and_then(int_value) {
             armadillo_mut(mob).scute_time = time;
         }
     }

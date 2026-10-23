@@ -16,6 +16,7 @@ use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::storage::loot::loot_context::{LootContext, LootContextBuilder};
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::simple_container::{SimpleContainer, SimpleContainerKind};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_UNHAPPY_COUNTER: usize = 18;
 pub const VILLAGER_SLOT_OFFSET: i32 = 300;
@@ -55,7 +56,7 @@ impl AbstractVillager {
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
         let abstract_villager = mob.abstract_villager_mut().expect("an abstract villager");
-        abstract_villager.offers = nbt.get("Offers").and_then(|offers| MerchantOffers::decode(offers).ok());
+        abstract_villager.offers = tag_value_input::read_or_error(nbt, "Offers", MerchantOffers::decode);
         inventory_carrier::read_inventory_from_tag(&mut abstract_villager.inventory, nbt);
     }
 }

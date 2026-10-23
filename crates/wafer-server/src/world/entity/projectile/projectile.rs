@@ -33,6 +33,7 @@ use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 use crate::world::level::BlockGetter;
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::{HitResult, Type};
+use crate::world::level::storage::tag_value_input;
 
 pub enum ProjectileKind {
     Snowball(Snowball),
@@ -151,8 +152,8 @@ impl Projectile {
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
         self.owner = EntityReference::read(input, "Owner");
-        self.left_owner = input.get("LeftOwner").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
-        self.has_been_shot = input.get("HasBeenShot").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        self.left_owner = tag_value_input::get_i64(input, "LeftOwner").is_some_and(|v| v != 0);
+        self.has_been_shot = tag_value_input::get_i64(input, "HasBeenShot").is_some_and(|v| v != 0);
         self.can_break = input.get("can_break").filter(|v| dc::CAN_BREAK.decode(v).is_ok()).cloned();
     }
 

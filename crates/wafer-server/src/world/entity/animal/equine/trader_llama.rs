@@ -15,6 +15,7 @@ use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::EntityId;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 const DEFAULT_DESPAWN_DELAY: i32 = 47999;
 
@@ -45,7 +46,7 @@ impl TraderLlama {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         Llama::read_additional_save_data(mob, input);
-        llama_mut(mob).despawn_delay = input.get("DespawnDelay").and_then(Nbt::as_i64).map_or(DEFAULT_DESPAWN_DELAY, |v| v as i32);
+        llama_mut(mob).despawn_delay = tag_value_input::get_i64(input, "DespawnDelay").map_or(DEFAULT_DESPAWN_DELAY, |v| v as i32);
     }
 }
 

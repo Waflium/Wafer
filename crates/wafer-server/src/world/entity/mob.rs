@@ -103,11 +103,14 @@ use super::ai::control::move_control::MoveControlKind;
 use super::ai::navigation::path_navigation::{PathNavigation, PathNavigationKind};
 use crate::world::level::pathfinder::path_type::PathType;
 use super::animal::Animal;
-use super::attributes::Attribute;
+use super::attributes::{self, Attribute};
 use super::data::{DataValue, ids};
-use super::entity_save::uuid_from_nbt;
+use super::entity_save;
+use crate::util::codec::{self, DecodeResult};
+use crate::util::extra_codecs;
+use crate::world::level::storage::tag_value_input;
 use super::ai::goal::goal_selector::GoalSelector;
-use super::living_entity::{LivingEntity, get_comfortable_fall_distance};
+use super::living_entity::{self, LivingEntity, get_comfortable_fall_distance};
 use super::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::core::component::data_component_getter::DataComponentGetter;
 use crate::server::level::ServerLevel;
@@ -1763,10 +1766,10 @@ impl Mob {
     }
 
     pub fn load(&mut self, nbt: &Nbt) {
-        let float = |key: &str| nbt.get(key).and_then(Nbt::as_f64).map(|v| v as f32);
-        let int = |key: &str| nbt.get(key).and_then(int_value);
-        let boolean = |key: &str| nbt.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
-        let short = |key: &str| nbt.get(key).and_then(Nbt::as_i64).map_or(0, |v| v as i16 as i32);
+        let float = |key: &str| tag_value_input::get_f64(nbt, key).map(|v| v as f32);
+        let int = |key: &str| tag_value_input::get_numeric(nbt, key).and_then(int_value);
+        let boolean = |key: &str| tag_value_input::get_boolean(nbt, key).unwrap_or(false);
+        let short = |key: &str| tag_value_input::get_i64(nbt, key).map_or(0, |v| v as i16 as i32);
         let y_rot = self.entity.y_rot;
         self.set_y_head_rot(y_rot);
         self.living.y_body_rot = y_rot;
@@ -1774,11 +1777,11 @@ impl Mob {
             self.abstract_cube_mob_read_size(nbt);
         }
         self.absorption = float("AbsorptionAmount").unwrap_or(0.0);
-        if let Some(attributes) = nbt.get("attributes") {
-            self.living.attributes.load(attributes);
+        if let Some(attributes) = tag_value_input::read(nbt, "attributes", attributes::decode_packed_list) {
+            self.living.attributes.load(&attributes);
         }
         self.living.active_effects.clear();
-        for effect in nbt.get("active_effects").map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(MobEffectInstance::from_nbt) {
+        for effect in tag_value_input::read(nbt, "active_effects", MobEffectInstance::decode_list).unwrap_or_default() {
             match self.living.active_effects.binary_search_by_key(&effect.effect, |e| e.effect) {
                 Ok(index) => self.living.active_effects[index] = effect,
                 Err(index) => self.living.active_effects.insert(index, effect),
@@ -1793,11 +1796,11 @@ impl Mob {
         if let Some(packed_brain) = nbt.get("Brain").and_then(brain::Packed::from_nbt) {
             self.living.brain = self.make_brain(packed_brain);
         }
-        self.living.last_hurt_by_player =nbt.get("last_hurt_by_player").and_then(uuid_from_nbt);
+        self.living.last_hurt_by_player = tag_value_input::read(nbt, "last_hurt_by_player", entity_save::decode_uuid);
         self.living.last_hurt_by_player_memory_time = int("last_hurt_by_player_memory_time").unwrap_or(0);
-        self.living.last_hurt_by_mob = nbt.get("last_hurt_by_mob").and_then(uuid_from_nbt);
+        self.living.last_hurt_by_mob = tag_value_input::read(nbt, "last_hurt_by_mob", entity_save::decode_uuid);
         self.living.last_hurt_by_mob_timestamp = self.entity.tick_count - int("ticks_since_last_hurt_by_mob").unwrap_or(0);
-        self.load_equipment(nbt.get("equipment"));
+        self.load_equipment(nbt);
         self.living.locator_bar_icon = nbt.get("locator_bar_icon").and_then(crate::world::waypoints::waypoint::Icon::from_nbt).unwrap_or_default();
         self.living.current_impulse_context_reset_grace_time = int("current_impulse_context_reset_grace_time").unwrap_or(0);
         self.living.current_impulse_impact_pos = match nbt.get("current_explosion_impact_pos") {
@@ -1807,24 +1810,17 @@ impl Mob {
         self.can_pick_up_loot = boolean("CanPickUpLoot");
         self.persistence_required = boolean("PersistenceRequired");
         self.drop_chances = [DEFAULT_EQUIPMENT_DROP_CHANCE; 8];
-        if let Some(Nbt::Compound(chances)) = nbt.get("drop_chances") {
-            for (name, chance) in chances {
-                if let (Some(slot), Some(chance)) = (EquipmentSlot::by_name(name), chance.as_f64()) {
-                    self.drop_chances[slot as usize] = chance as f32;
-                }
-            }
+        for (slot, chance) in tag_value_input::read(nbt, "drop_chances", decode_drop_chances).unwrap_or_default() {
+            self.drop_chances[slot as usize] = chance;
         }
         self.leash_data = super::leashable::LeashData::read(nbt);
         self.home_radius = int("home_radius").unwrap_or(-1);
         if self.home_radius >= 0 {
-            self.home_position = match nbt.get("home_pos") {
-                Some(Nbt::IntArray(v)) if v.len() == 3 => BlockPos::new(v[0], v[1], v[2]),
-                _ => BlockPos::ZERO,
-            };
+            self.home_position = tag_value_input::read(nbt, "home_pos", extra_codecs::block_pos).unwrap_or(BlockPos::ZERO);
         }
         self.set_left_handed(boolean("LeftHanded"));
-        self.loot_table = nbt.get("DeathLootTable").and_then(Nbt::as_str).map(str::to_string);
-        self.loot_table_seed = nbt.get("DeathLootTableSeed").and_then(Nbt::as_i64).unwrap_or(0);
+        self.loot_table = tag_value_input::read_or_error(nbt, "DeathLootTable", crate::util::codec::identifier);
+        self.loot_table_seed = tag_value_input::get_i64(nbt, "DeathLootTableSeed").unwrap_or(0);
         self.set_no_ai(boolean("NoAI"));
         if self.ageable().is_some() && self.can_be_a_baby() {
             if self.set_age(int("Age").unwrap_or(0)) {
@@ -1839,9 +1835,9 @@ impl Mob {
         }
         if let Some(animal) = self.animal_mut() {
             animal.in_love = int("InLove").unwrap_or(0);
-            animal.love_cause = nbt.get("LoveCause").and_then(uuid_from_nbt);
+            animal.love_cause = tag_value_input::read(nbt, "LoveCause", entity_save::decode_uuid);
         }
-        let read = |key: &str, registry: &str| nbt.get(key).and_then(Nbt::as_str).and_then(|name| variant_utils::read_variant(registry, name));
+        let read = |key: &str, registry: &str| variant_utils::read_variant_field(nbt, key, registry);
         match &mut self.kind {
             MobKind::Cow(_) => {
                 if let Some(variant) = read("variant", cow::VARIANT_REGISTRY) {
@@ -1866,7 +1862,7 @@ impl Mob {
             }
             MobKind::Sheep(_) => {
                 sheep::set_sheared(&mut self.entity, boolean("Sheared"));
-                let color = nbt.get("Color").and_then(Nbt::as_i64).map_or(DyeColor::VALUES[0], |id| DyeColor::by_id(id as i8 as i32));
+                let color = tag_value_input::read_byte(nbt, "Color").map_or(DyeColor::VALUES[0], |id| DyeColor::by_id(id as i32));
                 sheep::set_color(&mut self.entity, color);
             }
             MobKind::Goat(_) | MobKind::PolarBear(_) => {}
@@ -2406,16 +2402,29 @@ impl Mob {
         (!slots.is_empty()).then_some(Nbt::Compound(slots))
     }
 
-    pub fn load_equipment(&mut self, nbt: Option<&Nbt>) {
+    pub fn load_equipment(&mut self, nbt: &Nbt) {
         self.equipment = Default::default();
-        let Some(Nbt::Compound(slots)) = nbt else { return };
-        for (name, stack) in slots {
-            if let Some(slot) = EquipmentSlot::by_name(name)
-                && let Ok(stack) = ItemStack::from_nbt(stack)
-            {
-                self.equipment[slot as usize] = Some(stack);
-            }
+        for (slot, stack) in tag_value_input::read(nbt, "equipment", living_entity::decode_equipment).unwrap_or_default() {
+            self.equipment[slot as usize] = Some(stack);
         }
+    }
+}
+
+fn decode_drop_chances(tag: &Nbt) -> DecodeResult<Vec<(EquipmentSlot, f32)>> {
+    let key = |name: &str| EquipmentSlot::by_name(name).ok_or_else(|| format!("Unknown element name:{name}"));
+    let value = |chance: &Nbt| match codec::float(chance)? {
+        chance if chance >= 0.0 => Ok(chance),
+        chance => Err(format!("Value must be non-negative: {}", crate::nbt::to_string(&Nbt::Float(chance)).trim_end_matches('f'))),
+    };
+    match codec::base_map(tag, key, value) {
+        Ok(entries) => DecodeResult::success(entries),
+        Err(error) => match tag {
+            Nbt::Compound(fields) => {
+                let valid = fields.iter().filter_map(|(name, chance)| Some((key(name).ok()?, value(chance).ok()?))).collect();
+                DecodeResult { value: Some(valid), error: Some(error) }
+            }
+            _ => DecodeResult::error(error),
+        },
     }
 }
 
@@ -3478,7 +3487,7 @@ impl ServerLevel {
     pub fn read_level_dependent_save_data_detached(&mut self, mut entity: LevelEntity, input: &Nbt) -> LevelEntity {
         if let LevelEntity::Mob(mob) = &entity
             && mob.raider().is_some()
-            && let Some(raid_id) = input.get("RaidId").and_then(Nbt::as_i64).map(|value| value as i32)
+            && let Some(raid_id) = tag_value_input::get_i64(input, "RaidId").map(|value| value as i32)
             && self.raids.get(raid_id).is_some()
         {
             let id = entity.entity().id;

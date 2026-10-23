@@ -17,6 +17,7 @@ use crate::world::level::block::brewing_stand_block::HAS_BOTTLE;
 use crate::world::level::storage::loot::providers::number::floats::resolvable_float::ResolvableFloat;
 use crate::world::level::storage::loot::providers::number::ints::resolvable_int::ResolvableInt;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
+use crate::world::level::storage::tag_value_input;
 
 const INGREDIENT_SLOT: usize = 3;
 const FUEL_SLOT: usize = 4;
@@ -107,7 +108,7 @@ impl BrewingStandBlockEntity {
         }
         self.fuel = int_or(input, "Fuel", 0);
         self.total_fuel = int_or(input, "total_fuel", 20);
-        self.speed_multiplier = input.get("speed_multiplier").and_then(float_value).unwrap_or(1.0);
+        self.speed_multiplier = tag_value_input::get_numeric(input, "speed_multiplier").and_then(float_value).unwrap_or(1.0);
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

@@ -7,6 +7,7 @@ use crate::world::entity::EntityId;
 use crate::world::entity::data::{DataValue, entity_defaults};
 use crate::world::entity::projectile::projectile::Projectile;
 use crate::world::item::ItemStack;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_ITEM_STACK: usize = 8;
 
@@ -40,7 +41,7 @@ impl Projectile {
 
     pub fn fireball_read_additional_save_data(&mut self, input: &Nbt) {
         self.abstract_hurting_projectile_read_additional_save_data(input);
-        let item = input.get("Item").and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(get_default_item);
+        let item = tag_value_input::read(input, "Item", ItemStack::from_nbt_partial).unwrap_or_else(get_default_item);
         self.fireball_set_item(&item);
     }
 }

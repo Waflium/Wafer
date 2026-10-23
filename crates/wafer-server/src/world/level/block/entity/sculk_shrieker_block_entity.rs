@@ -17,6 +17,7 @@ use crate::world::level::gameevent::vibrations::vibration_system::{Data, Vibrati
 use crate::world::level::update_flags::UPDATE_CLIENTS;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::BlockGetter;
+use crate::world::level::storage::tag_value_input;
 
 const WARDEN_SPAWN_ATTEMPTS: i32 = 20;
 const WARDEN_SPAWN_RANGE_XZ: i32 = 5;
@@ -44,7 +45,7 @@ pub struct SculkShriekerBlockEntity {
 
 impl SculkShriekerBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.warning_level = input.get("warning_level").and_then(int_value).unwrap_or(DEFAULT_WARNING_LEVEL);
+        self.warning_level = tag_value_input::get_numeric(input, "warning_level").and_then(int_value).unwrap_or(DEFAULT_WARNING_LEVEL);
         self.vibration_data = Data::load(input.get("listener"));
     }
 

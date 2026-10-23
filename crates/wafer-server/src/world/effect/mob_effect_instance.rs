@@ -2,7 +2,9 @@ use wafer_data::{EffectInstanceTemplate, MobEffect, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::arguments::parse_identifier;
+use crate::util::codec::{self, DecodeResult};
 use crate::world::entity::data::ParticleOptions;
+use crate::world::item::component::types;
 
 pub const INFINITE_DURATION: i32 = -1;
 
@@ -165,6 +167,14 @@ impl MobEffectInstance {
             hidden.write_details(&mut hidden_fields);
             fields.push(("hidden_effect".into(), Nbt::Compound(hidden_fields)));
         }
+    }
+
+    pub fn decode_list(tag: &Nbt) -> DecodeResult<Vec<MobEffectInstance>> {
+        static CODEC: std::sync::LazyLock<types::Pair> = std::sync::LazyLock::new(types::mob_effect_instance);
+        codec::list_partial(tag, |entry| match CODEC.0.decode(entry) {
+            Ok(_) => DecodeResult { value: MobEffectInstance::from_nbt(entry), error: None },
+            Err(error) => DecodeResult::error(error),
+        })
     }
 
     pub fn from_nbt(nbt: &Nbt) -> Option<MobEffectInstance> {

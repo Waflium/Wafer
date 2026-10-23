@@ -7,6 +7,7 @@ use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::{EntityId, LevelEntity, sound_event};
 use crate::world::level::server_explosion::{ExplosionDamageCalculator, ExplosionInteraction};
+use crate::world::level::storage::tag_value_input;
 
 const DEFAULT_EXPLOSION_POWER_BASE: f32 = 4.0;
 const DEFAULT_EXPLOSION_SPEED_FACTOR: f32 = 1.0;
@@ -59,9 +60,9 @@ impl MinecartTnt {
 
     pub fn read_additional_save_data(minecart: &mut AbstractMinecart, input: &Nbt) {
         let tnt = tnt_mut(minecart);
-        tnt.fuse = input.get("fuse").and_then(Nbt::as_i64).map_or(-1, |v| v as i32);
-        tnt.explosion_power_base = input.get("explosion_power").and_then(Nbt::as_f64).map_or(DEFAULT_EXPLOSION_POWER_BASE, |v| v as f32).clamp(0.0, 128.0);
-        tnt.explosion_speed_factor = input.get("explosion_speed_factor").and_then(Nbt::as_f64).map_or(DEFAULT_EXPLOSION_SPEED_FACTOR, |v| v as f32).clamp(0.0, 128.0);
+        tnt.fuse = tag_value_input::get_i64(input, "fuse").map_or(-1, |v| v as i32);
+        tnt.explosion_power_base = tag_value_input::get_f64(input, "explosion_power").map_or(DEFAULT_EXPLOSION_POWER_BASE, |v| v as f32).clamp(0.0, 128.0);
+        tnt.explosion_speed_factor = tag_value_input::get_f64(input, "explosion_speed_factor").map_or(DEFAULT_EXPLOSION_SPEED_FACTOR, |v| v as f32).clamp(0.0, 128.0);
     }
 
     pub fn add_additional_save_data(minecart: &AbstractMinecart, output: &mut Vec<(String, Nbt)>) {

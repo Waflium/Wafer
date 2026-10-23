@@ -8,6 +8,7 @@ use crate::world::entity::entity_reference::EntityReference;
 use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind};
 use crate::world::entity::{EntityDimensions, EntityId};
 use crate::world::item::ItemStack;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_ITEM_STACK: usize = 8;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.25, 0.25);
@@ -61,7 +62,7 @@ impl Projectile {
     }
 
     pub fn throwable_item_projectile_read_additional_save_data(&mut self, input: &Nbt) {
-        let item = input.get("Item").and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(|| ItemStack::new(get_default_item(&self.kind), 1));
+        let item = tag_value_input::read(input, "Item", ItemStack::from_nbt_partial).unwrap_or_else(|| ItemStack::new(get_default_item(&self.kind), 1));
         self.set_item(&item);
     }
 }

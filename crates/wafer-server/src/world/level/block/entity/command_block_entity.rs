@@ -8,6 +8,7 @@ use crate::server::level::ServerLevel;
 use crate::world::item::component::{self as dc, DataComponentType};
 use crate::world::level::BlockGetter;
 use crate::world::level::base_command_block::BaseCommandBlock;
+use crate::world::level::storage::tag_value_input;
 
 const DEFAULT_POWERED: bool = false;
 const DEFAULT_CONDITION_MET: bool = false;
@@ -42,7 +43,7 @@ impl CommandBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        let boolean = |key: &str, default: bool| input.get(key).and_then(Nbt::as_i64).map_or(default, |v| v != 0);
+        let boolean = |key: &str, default: bool| tag_value_input::get_i64(input, key).map_or(default, |v| v != 0);
         self.command_block.load(input);
         self.powered = boolean("powered", DEFAULT_POWERED);
         self.condition_met = boolean("conditionMet", DEFAULT_CONDITION_MET);

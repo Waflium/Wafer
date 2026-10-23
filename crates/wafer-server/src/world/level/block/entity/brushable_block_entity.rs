@@ -16,6 +16,7 @@ use crate::world::level::block::brushable_block;
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::storage::loot::loot_table::LootTable;
 use crate::world::level::update_flags::UPDATE_ALL;
+use crate::world::level::storage::tag_value_input;
 
 const BRUSH_COOLDOWN_TICKS: i64 = 10;
 const BRUSH_RESET_TICKS: i64 = 40;
@@ -42,8 +43,8 @@ impl Default for BrushableBlockEntity {
 
 impl BrushableBlockEntity {
     fn try_load_loot_table(&mut self, input: &Nbt) -> bool {
-        self.loot_table = input.get("LootTable").and_then(Nbt::as_str).and_then(crate::commands::arguments::parse_identifier);
-        self.loot_table_seed = input.get("LootTableSeed").and_then(long_value).unwrap_or(0);
+        self.loot_table = tag_value_input::read_or_error(input, "LootTable", crate::util::codec::identifier);
+        self.loot_table_seed = tag_value_input::get_numeric(input, "LootTableSeed").and_then(long_value).unwrap_or(0);
         self.loot_table.is_some()
     }
 
@@ -69,11 +70,11 @@ impl BrushableBlockEntity {
 
     pub fn load_additional(&mut self, input: &Nbt) {
         self.item = if !self.try_load_loot_table(input) {
-            input.get("item").and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(ItemStack::empty)
+            tag_value_input::read(input, "item", ItemStack::from_nbt_partial).unwrap_or_else(ItemStack::empty)
         } else {
             ItemStack::empty()
         };
-        self.hit_direction = input.get("hit_direction").and_then(int_value).map(|value| Direction::from_3d_data_value(value as i8 as i32));
+        self.hit_direction = tag_value_input::get_numeric(input, "hit_direction").and_then(int_value).map(|value| Direction::from_3d_data_value(value as i8 as i32));
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

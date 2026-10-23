@@ -36,6 +36,7 @@ use crate::world::level::natural_spawner;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_FLAGS_ID: usize = 16;
 const IRON_INGOT_HEAL_AMOUNT: f32 = 25.0;
@@ -161,7 +162,7 @@ impl IronGolem {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let player_created = input.get("PlayerCreated").and_then(Nbt::as_i64).map_or(DEFAULT_PLAYER_CREATED, |v| v as i8 != 0);
+        let player_created = tag_value_input::get_i64(input, "PlayerCreated").map_or(DEFAULT_PLAYER_CREATED, |v| v as i8 != 0);
         set_player_created(&mut mob.entity, player_created);
     }
 

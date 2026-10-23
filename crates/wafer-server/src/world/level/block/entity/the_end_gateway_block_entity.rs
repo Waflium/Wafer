@@ -9,6 +9,7 @@ use crate::server::level::ServerLevel;
 use crate::world::level::BlockGetter;
 use crate::world::level::levelgen::feature::end_gateway_feature::EndGatewayFeature;
 use crate::world::level::levelgen::feature::feature;
+use crate::world::level::storage::tag_value_input;
 
 pub const SPAWN_TIME: i64 = 200;
 pub const COOLDOWN_TIME: i32 = 40;
@@ -36,7 +37,7 @@ impl TheEndGatewayBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.age = input.get("Age").and_then(super::long_value).unwrap_or(DEFAULT_AGE);
+        self.age = tag_value_input::get_numeric(input, "Age").and_then(super::long_value).unwrap_or(DEFAULT_AGE);
         self.exit_portal = match input.get("exit_portal") {
             Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])).filter(|&pos| is_in_spawnable_bounds(pos)),
             _ => None,

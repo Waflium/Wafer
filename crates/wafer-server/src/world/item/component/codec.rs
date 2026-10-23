@@ -322,12 +322,18 @@ impl Codec {
             Codec::Lazy(pair) => pair().0.decode(tag),
             Codec::Normalize(inner, f) => f(inner.decode(tag)?),
             Codec::List(elem, min, max) => {
+                if *min > 1 {
+                    let decoded = list(tag)?.iter().filter(|item| elem.decode(item).is_ok()).count();
+                    if decoded < *min {
+                        return Err(format!("List is too short: {decoded}, expected range [{min}-{max}]"));
+                    }
+                }
                 let out = decode_list(elem, tag)?;
                 if out.len() > *max {
                     return Err(format!("List is too long: {} > {max}", out.len()));
                 }
                 if out.len() < *min {
-                    return Err(if *min == 1 { "List must have contents".into() } else { format!("List is too short: {} < {min}", out.len()) });
+                    return Err("List must have contents".into());
                 }
                 Ok(Nbt::List(out))
             }

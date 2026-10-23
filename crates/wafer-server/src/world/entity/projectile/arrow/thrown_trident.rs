@@ -13,6 +13,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::enchantment_helper;
 use crate::world::phys::entity_hit_result::EntityHitResult;
+use crate::world::level::storage::tag_value_input;
 
 const ENTITY_TYPE: &str = "minecraft:trident";
 const ID_LOYALTY: usize = 11;
@@ -101,7 +102,7 @@ impl Projectile {
     }
 
     pub fn thrown_trident_read_additional_save_data(&mut self, input: &Nbt) {
-        thrown_trident_mut(self).dealt_damage = input.get("DealtDamage").and_then(Nbt::as_i64).map_or(DEFAULT_DEALT_DAMAGE, |v| v != 0);
+        thrown_trident_mut(self).dealt_damage = tag_value_input::get_i64(input, "DealtDamage").map_or(DEFAULT_DEALT_DAMAGE, |v| v != 0);
         let loyalty = self.get_unconditional_loyalty_from_item();
         self.entity.data.set(ID_LOYALTY, DataValue::Byte(loyalty));
     }

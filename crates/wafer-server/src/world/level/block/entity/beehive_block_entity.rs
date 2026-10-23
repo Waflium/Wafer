@@ -15,6 +15,7 @@ use crate::world::level::block::campfire_block;
 use crate::world::level::block::entity::BlockEntityKind;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::phys::shapes::collision_context::CollisionContext;
+use crate::world::level::storage::tag_value_input;
 
 const IGNORED_BEE_TAGS: [&str; 25] = [
     "Air",
@@ -190,10 +191,7 @@ impl BeehiveBlockEntity {
             let occupants: Option<Vec<Occupant>> = bees.iter().map(Occupant::load).collect();
             occupants.unwrap_or_default().into_iter().for_each(|occupant| self.store_bee(occupant));
         }
-        self.saved_flower_pos = match input.get("flower_pos") {
-            Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])),
-            _ => None,
-        };
+        self.saved_flower_pos = tag_value_input::read(input, "flower_pos", crate::util::extra_codecs::block_pos);
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

@@ -10,6 +10,7 @@ use crate::world::entity::living_entity::{self, LivingEntity};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
+use crate::world::level::storage::tag_value_input;
 
 const DATA_PROFILE: usize = 17;
 const DATA_IMMOVABLE: usize = 18;
@@ -141,7 +142,7 @@ impl Mannequin {
         self.entity.y_head_rot = y_rot;
         self.living.y_body_rot = y_rot;
         living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut self.health, &mut self.absorption, &mut self.equipment, input);
-        if let Some(profile) = input.get("profile").and_then(|tag| dc::PROFILE.decode(tag).ok()) {
+        if let Some(profile) = tag_value_input::read_or_error(input, "profile", |tag| dc::PROFILE.decode(tag)) {
             self.set_profile(profile);
         }
         let layers = input.get("hidden_layers").and_then(read_hidden_layers).unwrap_or(ALL_LAYERS);
@@ -154,8 +155,8 @@ impl Mannequin {
         avatar::set_main_arm(&mut self.entity, main_hand);
         let pose = input.get("pose").and_then(Nbt::as_str).and_then(|name| VALID_POSES.iter().find(|(_, pose_name)| *pose_name == name)).map_or(Pose::Standing, |(pose, _)| *pose);
         self.set_pose(pose);
-        self.set_immovable(input.get("immovable").and_then(Nbt::as_i64).is_some_and(|v| v != 0));
-        self.set_hide_description(input.get("hide_description").and_then(Nbt::as_i64).is_some_and(|v| v != 0));
+        self.set_immovable(tag_value_input::get_i64(input, "immovable").is_some_and(|v| v != 0));
+        self.set_hide_description(tag_value_input::get_i64(input, "hide_description").is_some_and(|v| v != 0));
         let description = input.get("description").and_then(crate::network::chat::component_serialization::decode_or_partial).map_or_else(default_description, |c| c.to_nbt());
         self.set_description(description);
     }

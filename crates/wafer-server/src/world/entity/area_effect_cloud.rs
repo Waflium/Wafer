@@ -13,6 +13,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::alchemy::potion_contents::PotionContents;
 use crate::world::item::component as dc;
 use crate::world::level::block::entity::int_value;
+use crate::world::level::storage::tag_value_input;
 
 const TIME_BETWEEN_APPLICATIONS: i32 = 5;
 const DATA_RADIUS: usize = 8;
@@ -173,8 +174,8 @@ impl AreaEffectCloud {
     }
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
-        let int = |key: &str, default: i32| input.get(key).and_then(int_value).unwrap_or(default);
-        let float = |key: &str, default: f32| input.get(key).and_then(Nbt::as_f64).map_or(default, |v| v as f32);
+        let int = |key: &str, default: i32| tag_value_input::get_numeric(input, key).and_then(int_value).unwrap_or(default);
+        let float = |key: &str, default: f32| tag_value_input::get_f64(input, key).map_or(default, |v| v as f32);
         self.entity.tick_count = int("Age", 0);
         self.duration = int("Duration", INFINITE_DURATION);
         self.wait_time = int("WaitTime", DEFAULT_WAIT_TIME);

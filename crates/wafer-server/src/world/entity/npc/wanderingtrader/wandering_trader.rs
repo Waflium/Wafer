@@ -27,6 +27,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::alchemy::potion_contents::PotionContents;
 use crate::world::item::trading::merchant_offer::MerchantOffer;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 const DEFAULT_DESPAWN_DELAY: i32 = 0;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.6, 1.95).with_eye_height(1.62);
@@ -106,11 +107,8 @@ impl WanderingTrader {
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         AbstractVillager::read_additional_save_data(mob, input);
         let trader = wandering_trader_mut(mob);
-        trader.despawn_delay = input.get("DespawnDelay").and_then(Nbt::as_i64).map_or(DEFAULT_DESPAWN_DELAY, |v| v as i32);
-        trader.wander_target = match input.get("wander_target") {
-            Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])),
-            _ => None,
-        };
+        trader.despawn_delay = tag_value_input::get_i64(input, "DespawnDelay").map_or(DEFAULT_DESPAWN_DELAY, |v| v as i32);
+        trader.wander_target = tag_value_input::read(input, "wander_target", crate::util::extra_codecs::block_pos);
         let age = mob.ageable().map_or(0, |ageable| ageable.age);
         mob.set_age(age.max(0));
     }

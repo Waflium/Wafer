@@ -10,7 +10,12 @@ use crate::nbt::text_component_tag_visitor::to_pretty_component;
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
 use crate::util::java_format_fixed;
+use crate::util::problem_reporter::PathElement;
 use crate::world::entity::EntityId;
+use crate::world::level::storage::tag_value_input;
+
+const ENTITY_DATA_ACCESSOR_LOGGER: &str = "net.minecraft.server.commands.data.EntityDataAccessor";
+const BLOCK_DATA_ACCESSOR_LOGGER: &str = "net.minecraft.server.commands.data.BlockDataAccessor";
 
 static ERROR_NOT_A_BLOCK_ENTITY: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.data.block.invalid");
 
@@ -60,6 +65,7 @@ impl DataAccessor {
                     level.remove_leash(*id);
                 }
                 let previous_framed_item = level.item_frame_item(*id);
+                let mut collector = tag_value_input::ScopedCollector::new_empty(ENTITY_DATA_ACCESSOR_LOGGER);
                 let Some(entity) = level.entities.get(id) else { return Err(ERROR_NO_PLAYERS.create()) };
                 let converted = level.with_old_owner_converted(entity, &tag);
                 let entity = level.entities.get_mut(id).expect("the entity");
@@ -75,6 +81,7 @@ impl DataAccessor {
                 }
                 level.on_dimensions_loaded(*id, previous_dimensions, previous_cube_size);
                 level.read_level_dependent_save_data(*id, &tag);
+                collector.set_root(PathElement::Text(level.entity_to_string(*id)));
                 level.entity_moved(*id);
                 let level = level.index;
                 server.resolve_display_text(level, *id);
@@ -85,6 +92,8 @@ impl DataAccessor {
                 if level.get_block_entity(*pos).is_none() {
                     return Err(ERROR_NOT_A_BLOCK_ENTITY.create());
                 }
+                let path = level.get_block_entity(*pos).map(|entity| entity.problem_path()).unwrap_or(PathElement::Empty);
+                let _collector = tag_value_input::ScopedCollector::new(path, BLOCK_DATA_ACCESSOR_LOGGER);
                 level.block_entity_load_with_components(*pos, &tag);
                 level.block_entity_set_changed(*pos);
                 let state = crate::world::level::BlockGetter::block_state(level, *pos);

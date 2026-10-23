@@ -18,6 +18,7 @@ use crate::world::item::{ItemStack, item_utils};
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const LONG_JUMPING_DIMENSION_SCALE_FACTOR: f32 = 0.7;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.9, 1.3).with_passenger_attachments(&[Vec3::new(0.0, 1.1125f32 as f64, 0.0)]);
@@ -135,7 +136,7 @@ impl Goat {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let boolean = |key: &str, default: bool| nbt.get(key).and_then(Nbt::as_i64).map_or(default, |v| v != 0);
+        let boolean = |key: &str, default: bool| tag_value_input::get_i64(nbt, key).map_or(default, |v| v != 0);
         set_screaming_goat(&mut mob.entity, boolean("IsScreamingGoat", DEFAULT_IS_SCREAMING));
         mob.entity.data.set(DATA_HAS_LEFT_HORN, DataValue::Boolean(boolean("HasLeftHorn", DEFAULT_HAS_LEFT_HORN)));
         mob.entity.data.set(DATA_HAS_RIGHT_HORN, DataValue::Boolean(boolean("HasRightHorn", DEFAULT_HAS_RIGHT_HORN)));

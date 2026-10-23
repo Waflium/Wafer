@@ -51,7 +51,7 @@ pub fn lenient_item_stack(tag: Option<&Nbt>) -> ItemStack {
 
 impl VaultConfig {
     pub fn decode(tag: &Nbt) -> Result<VaultConfig, String> {
-        let Nbt::Compound(_) = tag else { return Err("Not a map".into()) };
+        crate::util::codec::map(tag)?;
         let config = VaultConfig {
             loot_table: loot_table_key(tag.get("loot_table")).map_or(Cow::Borrowed(DEFAULT_LOOT_TABLE), Cow::Owned),
             activation_range: double(tag.get("activation_range"), DEFAULT_ACTIVATION_RANGE),

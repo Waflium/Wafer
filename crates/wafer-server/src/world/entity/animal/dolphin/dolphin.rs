@@ -34,6 +34,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::levelgen::structure::structure::StructureHolder;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 const DATA_GOT_FISH: usize = 18;
 const DATA_MOISTNESS_LEVEL: usize = 19;
@@ -151,9 +152,9 @@ impl Dolphin {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let got_fish = input.get("GotFish").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let got_fish = tag_value_input::get_i64(input, "GotFish").is_some_and(|v| v != 0);
         set_got_fish(&mut mob.entity, got_fish);
-        let moistness = input.get("Moistness").and_then(Nbt::as_i64).map_or(TOTAL_MOISTNESS_LEVEL, |v| v as i32);
+        let moistness = tag_value_input::get_i64(input, "Moistness").map_or(TOTAL_MOISTNESS_LEVEL, |v| v as i32);
         set_moisntess_level(&mut mob.entity, moistness);
     }
 }

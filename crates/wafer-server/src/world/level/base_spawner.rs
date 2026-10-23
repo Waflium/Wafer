@@ -13,6 +13,7 @@ use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::{LevelEntity, mob, spawn_placements};
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 pub const SPAWN_DATA_TAG: &str = "SpawnData";
 const EVENT_SPAWN: i32 = 1;
@@ -223,15 +224,15 @@ impl BaseSpawner {
     }
 
     pub fn load(&mut self, input: &Nbt) {
-        let int = |key: &str, default: i32| input.get(key).and_then(super::block::entity::int_value).unwrap_or(default);
-        self.spawn_delay = input.get("Delay").and_then(short_value).unwrap_or(DEFAULT_SPAWN_DELAY);
-        if let Some(next_spawn_data) = input.get(SPAWN_DATA_TAG).and_then(|tag| SpawnData::decode(tag).ok()) {
+        let int = |key: &str, default: i32| tag_value_input::get_numeric(input, key).and_then(super::block::entity::int_value).unwrap_or(default);
+        self.spawn_delay = tag_value_input::get_numeric(input, "Delay").and_then(short_value).unwrap_or(DEFAULT_SPAWN_DELAY);
+        if let Some(next_spawn_data) = tag_value_input::read_or_error(input, SPAWN_DATA_TAG, SpawnData::decode) {
             self.set_next_spawn_data(None, BlockPos::ZERO, next_spawn_data);
         }
-        self.spawn_potentials = match input.get("SpawnPotentials") {
+        let potentials = tag_value_input::read_or_error(input, "SpawnPotentials", crate::util::codec::list);
+        self.spawn_potentials = match potentials {
             Some(potentials) => WeightedList::new(
-                crate::util::codec::list(potentials)
-                    .unwrap_or_default()
+                potentials
                     .iter()
                     .filter_map(|entry| {
                         let weight = entry.get("weight").and_then(|weight| crate::util::codec::int(weight).ok()).filter(|&weight| weight >= 0)?;

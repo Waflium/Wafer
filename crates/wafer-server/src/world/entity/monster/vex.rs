@@ -26,6 +26,7 @@ use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_FLAGS_ID: usize = 16;
 const FLAG_IS_CHARGING: i8 = 1;
@@ -114,11 +115,8 @@ impl Vex {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         let vex = vex_mut(mob);
-        vex.bound_origin = match input.get("bound_pos") {
-            Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])),
-            _ => None,
-        };
-        match input.get("life_ticks").and_then(Nbt::as_i64) {
+        vex.bound_origin = tag_value_input::read(input, "bound_pos", crate::util::extra_codecs::block_pos);
+        match tag_value_input::get_i64(input, "life_ticks") {
             Some(life_ticks) => vex.set_limited_life(life_ticks as i32),
             None => vex.has_limited_life = false,
         }

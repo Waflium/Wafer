@@ -8,7 +8,10 @@ use self::block_state_parser::{ParseResult, property_value};
 use crate::commands::brigadier::{CommandSyntaxException, StringReader};
 use crate::server::level::ServerLevel;
 use crate::world::level::BlockGetter;
+use crate::world::level::storage::tag_value_input;
 use crate::world::level::update_flags::UPDATE_KNOWN_SHAPE;
+
+const BLOCK_INPUT_LOGGER: &str = "net.minecraft.commands.arguments.blocks.BlockInput";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockInput {
@@ -33,9 +36,11 @@ impl BlockInput {
         if let Some(tag) = &self.tag
             && let Some(entity) = level.get_block_entity(pos)
         {
+            let collector = tag_value_input::ScopedCollector::new_empty(BLOCK_INPUT_LOGGER);
             let before = entity.save_without_metadata();
             entity.load_with_components(tag);
             let changed = entity.save_without_metadata() != before;
+            drop(collector);
             level.block_entity_loaded(pos);
             if changed {
                 affected = true;

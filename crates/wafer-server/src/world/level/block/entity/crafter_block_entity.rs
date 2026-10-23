@@ -9,6 +9,7 @@ use crate::server::level::ServerLevel;
 use crate::world::item::ItemStack;
 use crate::world::item::crafting::crafting_input::CraftingInput;
 use crate::world::level::update_flags::UPDATE_ALL;
+use crate::world::level::storage::tag_value_input;
 
 pub const CONTAINER_WIDTH: usize = 3;
 pub const CONTAINER_HEIGHT: usize = 3;
@@ -98,7 +99,7 @@ impl CrafterBlockEntity {
         for i in 0..CONTAINER_SIZE {
             self.container_data.set(i, SLOT_ENABLED);
         }
-        if let Some(Nbt::IntArray(disabled_slots)) = input.get("disabled_slots") {
+        if let Some(disabled_slots) = tag_value_input::get_int_array(input, "disabled_slots") {
             for &i in disabled_slots {
                 if self.slot_can_be_disabled(i) {
                     self.container_data.set(i as usize, SLOT_DISABLED);

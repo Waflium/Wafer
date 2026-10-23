@@ -7,6 +7,7 @@ use crate::world::entity::data::{DataValue, ageable_mob_defaults};
 use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::EntityId;
 use crate::world::level::block::entity::int_value;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_DARK_TICKS_REMAINING: usize = 18;
 const DEFAULT_DARK_TICKS_REMAINING: i32 = 0;
@@ -52,7 +53,7 @@ impl GlowSquid {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        mob.set_dark_ticks(input.get("DarkTicksRemaining").and_then(int_value).unwrap_or(DEFAULT_DARK_TICKS_REMAINING));
+        mob.set_dark_ticks(tag_value_input::get_numeric(input, "DarkTicksRemaining").and_then(int_value).unwrap_or(DEFAULT_DARK_TICKS_REMAINING));
     }
 }
 

@@ -9,6 +9,7 @@ use crate::commands::arguments::parse_identifier;
 use crate::commands::arguments::selector::entity_selector::EntitySelector;
 use crate::commands::arguments::selector::entity_selector_parser::EntitySelectorParser;
 use crate::util::compilable_string::{CompilableString, command_parser_helper};
+use crate::world::level::storage::tag_value_input;
 
 struct DataResult<T> {
     value: Option<T>,
@@ -209,8 +210,13 @@ pub fn decode_or_partial(tag: &Nbt) -> Option<Component> {
     decode_component(tag).value
 }
 
+pub fn decode_custom_name(tag: &Nbt) -> crate::util::codec::DecodeResult<Nbt> {
+    let result = decode_component(tag);
+    crate::util::codec::DecodeResult { value: result.value.map(|name| name.to_nbt()), error: result.error }
+}
+
 pub fn parse_custom_name_safe(input: &Nbt, key: &str) -> Option<Nbt> {
-    input.get(key).and_then(decode_or_partial).map(|name| name.to_nbt())
+    tag_value_input::read(input, key, decode_custom_name)
 }
 
 pub fn decode_style_fields(fields: &[(String, Nbt)]) -> std::result::Result<Style, String> {

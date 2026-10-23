@@ -47,6 +47,7 @@ use crate::world::level::pathfinder::path::Path;
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_FLAGS_ID: usize = 18;
 pub const DATA_ANGER_END_TIME: usize = 19;
@@ -203,12 +204,9 @@ impl Bee {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let boolean = |key: &str| input.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
-        let int = |key: &str| input.get(key).and_then(crate::world::level::block::entity::int_value).unwrap_or(0);
-        let pos = |key: &str| match input.get(key) {
-            Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])),
-            _ => None,
-        };
+        let boolean = |key: &str| tag_value_input::get_i64(input, key).is_some_and(|v| v != 0);
+        let int = |key: &str| tag_value_input::get_numeric(input, key).and_then(crate::world::level::block::entity::int_value).unwrap_or(0);
+        let pos = |key: &str| tag_value_input::read(input, key, crate::util::extra_codecs::block_pos);
         set_has_nectar(mob, boolean("HasNectar"));
         set_has_stung(&mut mob.entity, boolean("HasStung"));
         let bee = bee_mut(mob);

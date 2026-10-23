@@ -20,6 +20,7 @@ use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, MoverType, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_FROM_BUCKET: usize = 16;
 pub const DEFAULT_FROM_BUCKET: bool = false;
@@ -66,7 +67,7 @@ impl AbstractFish {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let from_bucket = nbt.get("FromBucket").and_then(Nbt::as_i64).map_or(DEFAULT_FROM_BUCKET, |v| v != 0);
+        let from_bucket = tag_value_input::get_i64(nbt, "FromBucket").map_or(DEFAULT_FROM_BUCKET, |v| v != 0);
         mob.set_from_bucket(from_bucket);
     }
 }

@@ -18,6 +18,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_ID_TYPE_VARIANT: usize = 19;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(1.3964844, 1.6).with_eye_height(1.52).with_passenger_attachments(&[Vec3::new(0.0, 1.44375f32 as f64, 0.0)]);
@@ -134,7 +135,7 @@ impl Horse {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         AbstractHorse::read_additional_save_data(mob, input);
-        let variant = input.get("Variant").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_VARIANT);
+        let variant = tag_value_input::get_numeric(input, "Variant").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_VARIANT);
         set_type_variant(&mut mob.entity, variant);
     }
 }

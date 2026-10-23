@@ -18,6 +18,7 @@ use crate::world::level::block::entity::int_value;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::hit_result::Type;
 use crate::world::phys::shapes::collision_context::CollisionContext;
+use crate::world::level::storage::tag_value_input;
 
 const ENTITY_TYPE: &str = "minecraft:firework_rocket";
 const DATA_ID_FIREWORKS_ITEM: usize = 8;
@@ -127,11 +128,11 @@ impl Projectile {
 
     pub fn firework_read_additional_save_data(&mut self, input: &Nbt) {
         let rocket = firework(self);
-        rocket.life = input.get("Life").and_then(int_value).unwrap_or(0);
-        rocket.lifetime = input.get("LifeTime").and_then(int_value).unwrap_or(0);
-        let item = input.get("FireworksItem").and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(get_default_item);
+        rocket.life = tag_value_input::get_numeric(input, "Life").and_then(int_value).unwrap_or(0);
+        rocket.lifetime = tag_value_input::get_numeric(input, "LifeTime").and_then(int_value).unwrap_or(0);
+        let item = tag_value_input::read(input, "FireworksItem", ItemStack::from_nbt_partial).unwrap_or_else(get_default_item);
         self.entity.data.set(DATA_ID_FIREWORKS_ITEM, DataValue::ItemStack(Some(item)));
-        let shot_at_angle = input.get("ShotAtAngle").and_then(int_value).is_some_and(|v| v != 0);
+        let shot_at_angle = tag_value_input::get_numeric(input, "ShotAtAngle").and_then(int_value).is_some_and(|v| v != 0);
         self.entity.data.set(DATA_SHOT_AT_ANGLE, DataValue::Boolean(shot_at_angle));
     }
 }

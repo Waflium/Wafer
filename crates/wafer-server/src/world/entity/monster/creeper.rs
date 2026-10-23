@@ -26,6 +26,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, Remo
 use crate::world::item::ItemStack;
 use crate::world::level::server_explosion::ExplosionInteraction;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_SWELL_DIR: usize = 16;
 pub const DATA_IS_POWERED: usize = 17;
@@ -140,10 +141,10 @@ impl Creeper {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let boolean = |key: &str| input.get(key).and_then(Nbt::as_i64).is_some_and(|v| v as i8 != 0);
+        let boolean = |key: &str| tag_value_input::get_i64(input, key).is_some_and(|v| v as i8 != 0);
         mob.entity.data.set(DATA_IS_POWERED, DataValue::Boolean(boolean("powered")));
-        let max_swell = input.get("Fuse").and_then(Nbt::as_i64).map_or(DEFAULT_MAX_SWELL, |v| v as i16);
-        let explosion_radius = input.get("ExplosionRadius").and_then(Nbt::as_i64).map_or(DEFAULT_EXPLOSION_RADIUS, |v| v as i8);
+        let max_swell = tag_value_input::get_i64(input, "Fuse").map_or(DEFAULT_MAX_SWELL, |v| v as i16);
+        let explosion_radius = tag_value_input::get_i64(input, "ExplosionRadius").map_or(DEFAULT_EXPLOSION_RADIUS, |v| v as i8);
         let creeper = creeper_mut(mob);
         creeper.max_swell = max_swell as i32;
         creeper.explosion_radius = explosion_radius as i32;

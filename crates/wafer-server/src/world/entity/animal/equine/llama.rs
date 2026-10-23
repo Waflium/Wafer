@@ -32,6 +32,7 @@ use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 const MAX_STRENGTH: i32 = 5;
 pub const DATA_STRENGTH_ID: usize = 20;
@@ -235,9 +236,9 @@ impl Llama {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        set_strength(&mut mob.entity, input.get("Strength").and_then(Nbt::as_i64).map_or(0, |v| v as i32));
+        set_strength(&mut mob.entity, tag_value_input::get_i64(input, "Strength").map_or(0, |v| v as i32));
         AbstractChestedHorse::read_additional_save_data(mob, input);
-        let variant = input.get("Variant").and_then(Nbt::as_i64).map_or(Variant::DEFAULT, |v| Variant::by_id(v as i32));
+        let variant = tag_value_input::get_i64(input, "Variant").map_or(Variant::DEFAULT, |v| Variant::by_id(v as i32));
         set_variant(&mut mob.entity, variant);
     }
 

@@ -8,6 +8,7 @@ use crate::world::entity::EntityId;
 use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind};
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::int_value;
+use crate::world::level::storage::tag_value_input;
 
 const ENTITY_TYPE: &str = "minecraft:spectral_arrow";
 const DEFAULT_DURATION: i32 = 200;
@@ -46,7 +47,7 @@ impl Projectile {
 
     pub fn spectral_arrow_read_additional_save_data(&mut self, input: &Nbt) {
         if let ProjectileKind::SpectralArrow(arrow) = &mut self.kind {
-            arrow.duration = input.get("Duration").and_then(int_value).unwrap_or(DEFAULT_DURATION);
+            arrow.duration = tag_value_input::get_numeric(input, "Duration").and_then(int_value).unwrap_or(DEFAULT_DURATION);
         }
     }
 }

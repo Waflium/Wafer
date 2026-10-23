@@ -27,6 +27,7 @@ use crate::world::entity::raid::raider::{self, HoldGroundAttackGoal, RAIDER_TYPE
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::world::item::ItemStack;
+use crate::world::level::storage::tag_value_input;
 
 const TAG_JOHNNY: &str = "Johnny";
 const DEFAULT_JOHNNY: bool = false;
@@ -105,7 +106,7 @@ impl Vindicator {
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         let vindicator = vindicator_mut(mob);
         vindicator.raider.read_additional_save_data(input);
-        vindicator.is_johnny = input.get(TAG_JOHNNY).and_then(Nbt::as_i64).map_or(DEFAULT_JOHNNY, |v| v != 0);
+        vindicator.is_johnny = tag_value_input::get_i64(input, TAG_JOHNNY).map_or(DEFAULT_JOHNNY, |v| v != 0);
     }
 
     pub fn on_custom_name_set(mob: &mut Mob, name: Option<&Nbt>) {

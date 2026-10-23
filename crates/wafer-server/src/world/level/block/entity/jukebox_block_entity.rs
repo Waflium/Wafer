@@ -11,6 +11,7 @@ use crate::world::item::jukebox_song::JukeboxSong;
 use crate::world::item::jukebox_song_player::JukeboxSongPlayer;
 use crate::world::level::BlockGetter;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
+use crate::world::level::storage::tag_value_input;
 
 pub const SONG_ITEM_TAG_ID: &str = "RecordItem";
 pub const TICKS_SINCE_SONG_STARTED_TAG_ID: &str = "ticks_since_song_started";
@@ -33,7 +34,7 @@ impl JukeboxBlockEntity {
     }
 
     fn read_song_item(input: &Nbt) -> ItemStack {
-        input.get(SONG_ITEM_TAG_ID).and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(ItemStack::empty)
+        tag_value_input::read(input, SONG_ITEM_TAG_ID, ItemStack::from_nbt_partial).unwrap_or_else(ItemStack::empty)
     }
 
     pub fn load_stops_song(&self, input: &Nbt) -> bool {
@@ -46,7 +47,7 @@ impl JukeboxBlockEntity {
             self.jukebox_song_player.clear_song();
         }
         self.item = new_item;
-        if let Some(ticks_since_song_started) = input.get(TICKS_SINCE_SONG_STARTED_TAG_ID).and_then(Nbt::as_i64)
+        if let Some(ticks_since_song_started) = tag_value_input::get_i64(input, TICKS_SINCE_SONG_STARTED_TAG_ID)
             && let Some(song) = JukeboxSong::from_stack(&self.item)
         {
             self.jukebox_song_player.set_song_without_playing(song, ticks_since_song_started);

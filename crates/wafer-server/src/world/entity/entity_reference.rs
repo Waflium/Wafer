@@ -3,8 +3,8 @@ use wafer_protocol::nbt::Nbt;
 use crate::server::level::ServerLevel;
 use crate::server::players::old_users_converter::convert_mob_owner_if_necessary;
 use crate::world::entity::EntityId;
-use crate::world::entity::entity_save::uuid_from_nbt;
 use crate::world::level::storage::uuid_ints;
+use crate::world::level::storage::tag_value_input;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct EntityReference {
@@ -42,7 +42,14 @@ impl EntityReference {
     }
 
     pub fn read(input: &Nbt, key: &str) -> Option<EntityReference> {
-        input.get(key).and_then(uuid_from_nbt).map(EntityReference::of)
+        tag_value_input::read(input, key, crate::world::entity::entity_save::decode_uuid).map(EntityReference::of)
+    }
+
+    pub fn read_reporting_old_owner(input: &Nbt, key: &str) -> Option<EntityReference> {
+        EntityReference::read(input, key).or_else(|| {
+            tag_value_input::get_string(input, key);
+            None
+        })
     }
 
     pub fn read_with_old_owner_conversion(input: &Nbt, key: &str, level: &ServerLevel) -> Option<EntityReference> {

@@ -25,7 +25,7 @@ impl Default for VaultSharedData {
 
 impl VaultSharedData {
     pub fn decode(tag: &Nbt) -> Result<VaultSharedData, String> {
-        let Nbt::Compound(_) = tag else { return Err("Not a map".into()) };
+        crate::util::codec::map(tag)?;
         Ok(VaultSharedData {
             display_item: lenient_item_stack(tag.get("display_item")),
             connected_players: decode_uuid_linked_set(tag.get("connected_players")),

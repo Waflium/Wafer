@@ -26,6 +26,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::biome::Precipitation;
 use crate::world::level::block::entity::int_value;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const BABY_SCALE: f32 = 0.2375;
 pub const WANDER_GROUND_DISTANCE: i32 = 16;
@@ -198,7 +199,7 @@ impl HappyGhast {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let still_timeout = input.get("still_timeout").and_then(int_value).unwrap_or(0);
+        let still_timeout = tag_value_input::get_numeric(input, "still_timeout").and_then(int_value).unwrap_or(0);
         happy_ghast_mut(mob).server_still_timeout = still_timeout;
         sync_stay_still_flag(mob);
     }

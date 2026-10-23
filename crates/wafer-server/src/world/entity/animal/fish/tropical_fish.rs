@@ -17,6 +17,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::dye_color::DyeColor;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.5, 0.4).with_eye_height(0.26);
 pub const DATA_ID_TYPE_VARIANT: usize = 17;
@@ -233,7 +234,7 @@ impl TropicalFish {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let variant = nbt.get("Variant").and_then(Nbt::as_i64).map_or(DEFAULT_VARIANT, |id| Variant::from_packed_id(id as i32));
+        let variant = tag_value_input::get_i64(nbt, "Variant").map_or(DEFAULT_VARIANT, |id| Variant::from_packed_id(id as i32));
         mob.set_packed_variant(variant.get_packed_id());
     }
 

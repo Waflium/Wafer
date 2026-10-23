@@ -14,6 +14,7 @@ use crate::world::item::crafting::recipe_manager::RecipeManager;
 use crate::world::item::crafting::recipe_type::RecipeType;
 use crate::world::item::crafting::single_recipe_input::SingleRecipeInput;
 use crate::world::item::item_utils::has_infinite_materials;
+use crate::world::level::storage::tag_value_input;
 
 const BURN_COOL_SPEED: i32 = 2;
 const NUM_SLOTS: usize = 4;
@@ -36,10 +37,7 @@ impl Default for CampfireBlockEntity {
 }
 
 fn int_array(input: &Nbt, key: &str) -> Option<Vec<i32>> {
-    match input.get(key)? {
-        Nbt::IntArray(values) => Some(values.clone()),
-        _ => None,
-    }
+    tag_value_input::get_int_array(input, key).map(<[i32]>::to_vec)
 }
 
 impl CampfireBlockEntity {

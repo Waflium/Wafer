@@ -5,6 +5,7 @@ use crate::server::level::ServerLevel;
 use crate::world::container::ContainerRef;
 use crate::world::entity::EntityId;
 use crate::world::level::block::entity::hopper::Hopper;
+use crate::world::level::storage::tag_value_input;
 
 pub const CONTAINER_SIZE: usize = 5;
 const DEFAULT_ENABLED: bool = true;
@@ -56,7 +57,7 @@ impl MinecartHopper {
     }
 
     pub fn read_additional_save_data(minecart: &mut AbstractMinecart, input: &Nbt) {
-        hopper_mut(minecart).enabled = input.get("Enabled").and_then(Nbt::as_i64).map_or(DEFAULT_ENABLED, |v| v != 0);
+        hopper_mut(minecart).enabled = tag_value_input::get_i64(input, "Enabled").map_or(DEFAULT_ENABLED, |v| v != 0);
     }
 }
 

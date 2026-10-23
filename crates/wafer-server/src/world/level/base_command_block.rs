@@ -9,6 +9,7 @@ use crate::network::chat::Component;
 use crate::server::Server;
 use crate::world::entity::EntityId;
 use crate::network::chat::component_serialization::parse_custom_name_safe;
+use crate::world::level::storage::tag_value_input;
 
 const NO_LAST_EXECUTION: i64 = -1;
 
@@ -85,14 +86,14 @@ impl BaseCommandBlock {
     }
 
     pub fn load(&mut self, input: &Nbt) {
-        let boolean = |key: &str, default: bool| input.get(key).and_then(Nbt::as_i64).map_or(default, |v| v != 0);
-        self.command = input.get("Command").and_then(Nbt::as_str).unwrap_or_default().to_string();
-        self.success_count = input.get("SuccessCount").and_then(Nbt::as_i64).map_or(0, |v| v as i32);
+        let boolean = |key: &str, default: bool| tag_value_input::get_i64(input, key).map_or(default, |v| v != 0);
+        self.command = tag_value_input::get_string(input, "Command").unwrap_or_default().to_string();
+        self.success_count = tag_value_input::get_i64(input, "SuccessCount").map_or(0, |v| v as i32);
         self.set_custom_name(parse_custom_name_safe(input, "CustomName"));
         self.track_output = boolean("TrackOutput", true);
         self.last_output = if self.track_output { parse_custom_name_safe(input, "LastOutput") } else { None };
         self.update_last_execution = boolean("UpdateLastExecution", true);
-        self.last_execution = if self.update_last_execution { input.get("LastExecution").and_then(Nbt::as_i64).unwrap_or(NO_LAST_EXECUTION) } else { NO_LAST_EXECUTION };
+        self.last_execution = if self.update_last_execution { tag_value_input::get_i64(input, "LastExecution").unwrap_or(NO_LAST_EXECUTION) } else { NO_LAST_EXECUTION };
     }
 
     pub fn set_command(&mut self, command: &str) {

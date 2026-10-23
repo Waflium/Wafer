@@ -12,6 +12,7 @@ use crate::world::entity::ai::targeting::targeting_conditions::TargetingConditio
 use crate::world::entity::data::DataValue;
 use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::{EntityDimensions, EntityId, sound_event};
+use crate::world::level::storage::tag_value_input;
 
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.7, 0.7).with_eye_height(0.455);
 pub const PUFF_STATE: usize = 17;
@@ -84,7 +85,7 @@ impl Pufferfish {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let puff_state = nbt.get("PuffState").and_then(Nbt::as_i64).map_or(DEFAULT_PUFF_STATE, |v| v as i32);
+        let puff_state = tag_value_input::get_i64(nbt, "PuffState").map_or(DEFAULT_PUFF_STATE, |v| v as i32);
         mob.set_puff_state(puff_state.min(2));
     }
 

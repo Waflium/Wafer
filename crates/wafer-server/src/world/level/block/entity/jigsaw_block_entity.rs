@@ -1,8 +1,8 @@
 use wafer_data::BlockState;
 use wafer_protocol::nbt::Nbt;
 
-use crate::commands::arguments::parse_identifier;
 use crate::world::level::levelgen::structure::templatesystem::structure_template::get_front_facing;
+use crate::world::level::storage::tag_value_input;
 
 pub const EMPTY_ID: &str = "minecraft:empty";
 pub const DEFAULT_FINAL_STATE: &str = "minecraft:air";
@@ -69,12 +69,16 @@ impl JigsawBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt, state: BlockState) {
-        let identifier = |key: &str| input.get(key).and_then(Nbt::as_str).and_then(parse_identifier);
+        let identifier = |key: &str| tag_value_input::read_or_error(input, key, crate::util::codec::identifier);
         self.name = identifier("name").unwrap_or_else(|| EMPTY_ID.to_owned());
         self.target = identifier("target").unwrap_or_else(|| EMPTY_ID.to_owned());
         self.pool = identifier("pool").unwrap_or_else(|| EMPTY_ID.to_owned());
-        self.final_state = input.get("final_state").and_then(Nbt::as_str).unwrap_or(DEFAULT_FINAL_STATE).to_owned();
-        self.joint = input.get("joint").and_then(Nbt::as_str).and_then(JointType::by_name).unwrap_or_else(|| get_default_joint_type(state));
+        self.final_state = tag_value_input::get_string(input, "final_state").unwrap_or(DEFAULT_FINAL_STATE).to_owned();
+        self.joint = tag_value_input::read_or_error(input, "joint", |tag| {
+            let name = crate::util::codec::string(tag)?;
+            JointType::by_name(name).ok_or_else(|| format!("Unknown element name:{name}"))
+        })
+        .unwrap_or_else(|| get_default_joint_type(state));
         self.placement_priority = super::int_or(input, "placement_priority", DEFAULT_PLACEMENT_PRIORITY);
         self.selection_priority = super::int_or(input, "selection_priority", DEFAULT_SELECTION_PRIORITY);
     }

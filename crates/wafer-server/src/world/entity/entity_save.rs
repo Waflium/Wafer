@@ -10,12 +10,18 @@ use super::item::ItemEntity;
 use super::primed_tnt::PrimedTnt;
 use super::projectile::throwableitemprojectile;
 use super::{Entity, EntityId, LevelEntity, MAX_ENTITY_TAG_COUNT, RemovalReason};
+use crate::network::chat::component_serialization;
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult};
+use crate::util::extra_codecs;
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::int_value;
-use crate::world::level::chunk::serialization::{state_from_nbt, state_to_nbt};
+use crate::world::level::chunk::serialization::state_to_nbt;
 use crate::world::level::collision::{Collider, shapes_collide};
+use crate::world::level::storage::tag_value_input;
 use crate::world::level::storage::uuid_ints;
+
+const ENTITY_TYPE_LOGGER: &str = "net.minecraft.world.entity.EntityType";
 
 pub fn uuid_from_nbt(nbt: &Nbt) -> Option<u128> {
     let ints: [i32; 4] = match nbt {
@@ -43,19 +49,34 @@ pub fn uuid_from_nbt(nbt: &Nbt) -> Option<u128> {
     Some(ints.iter().fold(0u128, |uuid, &i| uuid << 32 | i as u32 as u128))
 }
 
+pub fn decode_uuid(tag: &Nbt) -> DecodeResult<u128> {
+    if let Nbt::IntArray(ints) = tag
+        && let [a, b, c, d] = ints.as_slice()
+    {
+        return DecodeResult::success([a, b, c, d].iter().fold(0u128, |uuid, &&i| uuid << 32 | i as u32 as u128));
+    }
+    extra_codecs::fixed_size_ints(tag, 4).map(|ints| ints.iter().fold(0u128, |uuid, &i| uuid << 32 | i as u32 as u128))
+}
+
+pub fn decode_custom_data(tag: &Nbt) -> Result<Nbt, String> {
+    let flattened_error = match tag {
+        Nbt::Compound(_) => return Ok(tag.clone()),
+        Nbt::String(snbt) => match crate::nbt::parse_fully(snbt) {
+            Ok(parsed @ Nbt::Compound(_)) => return Ok(parsed),
+            Ok(other) => format!("Expected compound tag, got {}", crate::nbt::to_string(&other)),
+            Err(error) => error.get_message(),
+        },
+        _ => "Not a string".to_string(),
+    };
+    Err(format!("Failed to parse either. First: Not a compound tag: {}; Second: {flattened_error}", crate::nbt::to_string(tag)))
+}
+
 fn number(nbt: &Nbt, key: &str) -> Option<f64> {
-    nbt.get(key).and_then(Nbt::as_f64)
+    tag_value_input::get_f64(nbt, key)
 }
 
 fn flag(nbt: &Nbt, key: &str) -> bool {
-    nbt.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0)
-}
-
-fn vec3(nbt: &Nbt, key: &str) -> Option<Vec3> {
-    match nbt.get(key)?.as_list() {
-        [x, y, z] => Some(Vec3::new(x.as_f64()?, y.as_f64()?, z.as_f64()?)),
-        _ => None,
-    }
+    tag_value_input::get_boolean(nbt, key).unwrap_or(false)
 }
 
 impl Entity {
@@ -107,12 +128,9 @@ impl Entity {
     }
 
     pub fn load(&mut self, nbt: &Nbt) -> Result<(), String> {
-        let pos = vec3(nbt, "Pos").unwrap_or(Vec3::ZERO);
-        let motion = vec3(nbt, "Motion").unwrap_or(Vec3::ZERO);
-        let (y_rot, x_rot) = match nbt.get("Rotation").map(Nbt::as_list) {
-            Some([y, x]) => (y.as_f64().unwrap_or(0.0) as f32, x.as_f64().unwrap_or(0.0) as f32),
-            _ => (0.0, 0.0),
-        };
+        let pos = tag_value_input::read(nbt, "Pos", extra_codecs::vec3).unwrap_or(Vec3::ZERO);
+        let motion = tag_value_input::read(nbt, "Motion", extra_codecs::vec3).unwrap_or(Vec3::ZERO);
+        let (y_rot, x_rot) = tag_value_input::read(nbt, "Rotation", extra_codecs::vec2).unwrap_or((0.0, 0.0));
         let clamp_motion = |v: f64| if v.abs() > 10.0 { 0.0 } else { v };
         self.set_delta_movement(Vec3::new(clamp_motion(motion.x), clamp_motion(motion.y), clamp_motion(motion.z)));
         self.needs_sync = true;
@@ -136,10 +154,10 @@ impl Entity {
         self.invulnerable = flag(nbt, "Invulnerable");
         self.invulnerable_time = number(nbt, "invulnerable_time").map_or(0, |v| v as i32);
         self.portal_cooldown = number(nbt, "PortalCooldown").map_or(0, |v| v as i32);
-        if let Some(uuid) = nbt.get("UUID").and_then(uuid_from_nbt) {
+        if let Some(uuid) = tag_value_input::read(nbt, "UUID", decode_uuid) {
             self.uuid = uuid;
         }
-        self.set_custom_name(nbt.get("CustomName").cloned());
+        self.set_custom_name(tag_value_input::read(nbt, "CustomName", component_serialization::decode_custom_name));
         self.data.set(ids::CUSTOM_NAME_VISIBLE, DataValue::Boolean(flag(nbt, "CustomNameVisible")));
         self.data.set(ids::SILENT, DataValue::Boolean(flag(nbt, "Silent")));
         self.data.set(ids::NO_GRAVITY, DataValue::Boolean(flag(nbt, "NoGravity")));
@@ -147,11 +165,12 @@ impl Entity {
         self.set_shared_flag(super::flags::GLOWING, self.has_glowing_tag);
         self.set_ticks_frozen(number(nbt, "TicksFrozen").map_or(0, |v| v as i32));
         self.has_visual_fire = flag(nbt, "HasVisualFire");
-        self.custom_data = nbt.get("data").cloned();
+        self.custom_data = tag_value_input::read_or_error(nbt, "data", decode_custom_data);
         self.tags.clear();
-        for tag in nbt.get("Tags").map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(Nbt::as_str).take(MAX_ENTITY_TAG_COUNT) {
-            if !self.tags.iter().any(|t| t == tag) {
-                self.tags.push(tag.to_string());
+        let tags = tag_value_input::read(nbt, "Tags", |tag| codec::sized_list_partial(tag, MAX_ENTITY_TAG_COUNT, |element| codec::string(element).map(str::to_string).into()));
+        for tag in tags.unwrap_or_default() {
+            if !self.tags.contains(&tag) {
+                self.tags.push(tag);
             }
         }
         Ok(())
@@ -294,9 +313,9 @@ impl LevelEntity {
                 item.health = number(nbt, "Health").map_or(5, |v| v as i16 as i32);
                 item.age = number(nbt, "Age").map_or(0, |v| v as i16 as i32);
                 item.pickup_delay = number(nbt, "PickupDelay").map_or(0, |v| v as i16 as i32);
-                item.target = nbt.get("Owner").and_then(uuid_from_nbt);
-                item.thrower = nbt.get("Thrower").and_then(uuid_from_nbt);
-                let stack = nbt.get("Item").and_then(|i| ItemStack::from_nbt(i).ok()).unwrap_or(ItemStack::new(wafer_data::items::AIR, 0));
+                item.target = tag_value_input::read(nbt, "Owner", decode_uuid);
+                item.thrower = tag_value_input::read(nbt, "Thrower", decode_uuid);
+                let stack = tag_value_input::read(nbt, "Item", ItemStack::from_nbt_partial).unwrap_or(ItemStack::new(wafer_data::items::AIR, 0));
                 item.set_item(stack);
                 if item.item.is_empty() {
                     item.entity.discard();
@@ -304,16 +323,20 @@ impl LevelEntity {
             }
             LevelEntity::PrimedTnt(tnt) => {
                 tnt.set_fuse(number(nbt, "fuse").map_or(super::primed_tnt::DEFAULT_FUSE_TIME, |v| v as i16 as i32));
-                tnt.set_block_state(nbt.get("block_state").and_then(state_from_nbt).unwrap_or(wafer_data::blocks::TNT.default_state()));
+                tnt.set_block_state(tag_value_input::read_or_error(nbt, "block_state", crate::world::level::chunk::serialization::decode_block_state).unwrap_or(wafer_data::blocks::TNT.default_state()));
                 tnt.explosion_power = number(nbt, "explosion_power").map_or(4.0, |v| v as f32).clamp(0.0, 128.0);
-                tnt.owner = nbt.get("owner").and_then(uuid_from_nbt);
+                tnt.owner = tag_value_input::read(nbt, "owner", decode_uuid);
             }
             LevelEntity::ExperienceOrb(orb) => {
-                let short = |key: &str, default: i16| nbt.get(key).and_then(int_value).map_or(default, |v| v as i16) as i32;
+                let short = |key: &str, default: i16| tag_value_input::get_numeric(nbt, key).and_then(int_value).map_or(default, |v| v as i16) as i32;
                 orb.health = short("Health", 5);
                 orb.age = short("Age", 0);
                 orb.set_value(short("Value", 0));
-                orb.count = nbt.get("Count").and_then(int_value).filter(|&c| c > 0).unwrap_or(1);
+                orb.count = tag_value_input::read_or_error(nbt, "Count", |tag| match codec::int(tag)? {
+                    count if count > 0 => Ok(count),
+                    count => Err(format!("Value must be positive: {count}")),
+                })
+                .unwrap_or(1);
             }
             LevelEntity::FallingBlock(falling) => falling.read_additional_save_data(nbt),
             LevelEntity::LightningBolt(_) => {}
@@ -328,16 +351,13 @@ impl LevelEntity {
             LevelEntity::Cushion(cushion) => cushion.read_additional_save_data(nbt),
             LevelEntity::ItemFrame(frame) => frame.read_additional_save_data(nbt),
             LevelEntity::EyeOfEnder(eye) => {
-                let item = nbt.get("Item").and_then(|i| ItemStack::from_nbt(i).ok()).unwrap_or_else(ItemStack::empty);
+                let item = tag_value_input::read(nbt, "Item", ItemStack::from_nbt_partial).unwrap_or_else(ItemStack::empty);
                 eye.set_item(&item);
             }
             LevelEntity::EndCrystal(crystal) => {
-                let target = match nbt.get("beam_target") {
-                    Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])),
-                    _ => None,
-                };
+                let target = tag_value_input::read(nbt, "beam_target", crate::util::extra_codecs::block_pos);
                 crystal.set_beam_target(target);
-                crystal.set_show_bottom(nbt.get("ShowBottom").and_then(int_value).map_or(true, |v| v != 0));
+                crystal.set_show_bottom(tag_value_input::get_numeric(nbt, "ShowBottom").and_then(int_value).map_or(true, |v| v != 0));
             }
             LevelEntity::Projectile(projectile) => {
                 use super::projectile::projectile::ProjectileKind;
@@ -697,6 +717,11 @@ impl ServerLevel {
     }
 
     pub fn load_entity_recursive(&mut self, nbt: &Nbt, post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
+        let _collector = tag_value_input::ScopedCollector::new_empty(ENTITY_TYPE_LOGGER);
+        self.load_entity_recursive_in_scope(nbt, post_load)
+    }
+
+    pub fn load_entity_recursive_in_scope(&mut self, nbt: &Nbt, post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
         let mut loaded = Vec::new();
         self.load_entity_recursive_into(nbt, true, post_load, &mut loaded);
         loaded
@@ -720,11 +745,11 @@ impl ServerLevel {
         post_load(&mut entity);
         let index = loaded.len();
         loaded.push(entity);
-        for passenger_tag in nbt.get("Passengers").map_or(&[][..], Nbt::as_list) {
+        tag_value_input::for_each_child(nbt, "Passengers", |passenger_tag| {
             if let Some(passenger) = self.load_entity_recursive_into(passenger_tag, ignore_checks, post_load, loaded) {
                 start_riding_while_loading(loaded, passenger, index);
             }
-        }
+        });
         Some(index)
     }
 

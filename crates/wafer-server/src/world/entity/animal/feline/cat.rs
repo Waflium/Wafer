@@ -46,6 +46,7 @@ use crate::world::item::dye_color::DyeColor;
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const TEMPT_SPEED_MOD: f64 = 0.6;
 pub const SPRINT_SPEED_MOD: f64 = 1.33;
@@ -226,14 +227,14 @@ impl Cat {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         TamableAnimal::read_additional_save_data(mob, input);
-        let read = |key: &str, registry: &str| input.get(key).and_then(Nbt::as_str).and_then(|name| variant_utils::read_variant(registry, name));
+        let read = |key: &str, registry: &str| variant_utils::read_variant_field(input, key, registry);
         if let Some(variant) = read("variant", VARIANT_REGISTRY) {
             set_variant(&mut mob.entity, variant);
         }
         if let Some(sound_variant) = read("sound_variant", cat_sound_variant::REGISTRY) {
             set_sound_variant(&mut mob.entity, sound_variant);
         }
-        let collar_color = input.get("CollarColor").and_then(Nbt::as_i64).map_or(DEFAULT_COLLAR_COLOR, |id| DyeColor::by_id(id as i8 as i32));
+        let collar_color = tag_value_input::read_byte(input, "CollarColor").map_or(DEFAULT_COLLAR_COLOR, |id| DyeColor::by_id(id as i32));
         set_collar_color(&mut mob.entity, collar_color);
     }
 }

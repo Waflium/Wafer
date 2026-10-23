@@ -4,11 +4,13 @@ use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
 use wafer_data::SyncedRegistry;
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use super::priority_provider::{self, Selector};
 use super::spawn_condition::SpawnCondition;
 use super::spawn_context::SpawnContext;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 pub struct SpawnPrioritySelectors {
     selectors: Vec<(i32, Selector)>,
@@ -40,6 +42,11 @@ pub fn pick_random_sound_variant(registry: &str, random: &mut (impl RandomSource
 
 pub fn read_variant(registry: &str, name: &str) -> Option<i32> {
     let name = if name.contains(':') { name.to_string() } else { format!("minecraft:{name}") };
+    SyncedRegistry::get(registry).id_of(&name)
+}
+
+pub fn read_variant_field(input: &Nbt, key: &str, registry: &str) -> Option<i32> {
+    let name = tag_value_input::read_or_error(input, key, crate::util::codec::identifier)?;
     SyncedRegistry::get(registry).id_of(&name)
 }
 

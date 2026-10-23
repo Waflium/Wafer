@@ -8,6 +8,7 @@ use super::component::values::{self, ItemEnchantments, Tool};
 use super::component::{self as dc, DataComponentPatch, DataComponentType, PatchedDataComponentMap, codec, item_components};
 use crate::network::chat::{ChatFormatting, Component, HoverEvent};
 use crate::server::level::ServerLevel;
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
 
@@ -469,22 +470,40 @@ impl ItemStack {
     }
 
     pub fn from_nbt(tag: &Nbt) -> Result<ItemStack, String> {
-        codec::map(tag)?;
-        let Some(id) = tag.get("id") else { return Err(format!("No key id in MapLike[{}]", crate::nbt::to_string(tag))) };
-        let id = codec::Codec::Element("minecraft:item").decode(id)?;
-        if id == Nbt::String("minecraft:air".into()) {
-            return Err("Item must not be minecraft:air".into());
+        ItemStack::from_nbt_partial(tag).into_result()
+    }
+
+    pub fn from_nbt_partial(tag: &Nbt) -> DecodeResult<ItemStack> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
         }
-        let item = Item::by_name(id.as_str().unwrap_or("")).ok_or("unknown item")?;
-        let count = match tag.get("count") {
-            Some(count) => codec::as_i32(&codec::Codec::Int(1, 99, codec::RangeError::Within).decode(count)?),
-            None => 1,
+        let Some(id) = tag.get("id") else { return DecodeResult::error(format!("No key id in MapLike[{}]", crate::nbt::to_string(tag))) };
+        let id = match codec::Codec::Element("minecraft:item").decode(id) {
+            Ok(id) => id,
+            Err(error) => return DecodeResult::error(error),
+        };
+        if id == Nbt::String("minecraft:air".into()) {
+            return DecodeResult::error("Item must not be minecraft:air");
+        }
+        let Some(item) = Item::by_name(id.as_str().unwrap_or("")) else { return DecodeResult::error("unknown item") };
+        let (count, count_error) = match tag.get("count") {
+            Some(count) => match codec::Codec::Int(1, 99, codec::RangeError::Within).decode(count) {
+                Ok(count) => (codec::as_i32(&count), None),
+                Err(error) => (1, Some(error)),
+            },
+            None => (1, None),
         };
         let patch = match tag.get("components") {
-            Some(components) => DataComponentPatch::from_nbt(components)?,
+            Some(components) => match DataComponentPatch::from_nbt(components) {
+                Ok(patch) => patch,
+                Err(error) => return DecodeResult::error(match count_error {
+                    Some(count_error) => format!("{error}; {count_error}"),
+                    None => error,
+                }),
+            },
             None => DataComponentPatch::default(),
         };
-        Ok(ItemStack::with_patch(item, count, &patch))
+        DecodeResult { value: Some(ItemStack::with_patch(item, count, &patch)), error: count_error }
     }
 
     pub fn from_optional_nbt(tag: &Nbt) -> Result<Option<ItemStack>, String> {

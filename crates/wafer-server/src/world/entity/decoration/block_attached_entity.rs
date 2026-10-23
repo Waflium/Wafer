@@ -6,6 +6,7 @@ use super::{cushion, hanging_entity, item_frame, leash_fence_knot_entity, painti
 use crate::server::level::ServerLevel;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::{Entity, EntityId, LevelEntity, RemovalReason};
+use crate::world::level::storage::tag_value_input;
 
 const CHECK_INTERVAL: i32 = 100;
 
@@ -62,10 +63,7 @@ pub fn add_additional_save_data(entity: &Entity, output: &mut Vec<(String, Nbt)>
 }
 
 pub fn read_additional_save_data(entity: &mut Entity, input: &Nbt) {
-    let stored_pos = match input.get("block_pos") {
-        Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])),
-        _ => None,
-    };
+    let stored_pos = tag_value_input::read(input, "block_pos", crate::util::extra_codecs::block_pos);
     match stored_pos {
         Some(stored_pos) if stored_pos.closer_than(entity.block_position(), 16.0) => {
             if let Some(block_attached) = &mut entity.block_attached {

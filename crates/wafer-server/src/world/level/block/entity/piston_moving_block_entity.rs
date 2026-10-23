@@ -10,9 +10,10 @@ use super::BlockEntityKind;
 use crate::server::level::ServerLevel;
 use crate::world::entity::{EntityId, MoverType};
 use crate::world::level::block::piston_math;
-use crate::world::level::chunk::serialization::{state_from_nbt, state_to_nbt};
+use crate::world::level::chunk::serialization::state_to_nbt;
 use crate::world::level::BlockGetter;
 use crate::world::level::update_flags::UPDATE_ALL;
+use crate::world::level::storage::tag_value_input;
 
 const PUSH_OFFSET: f64 = 0.01;
 const DEFAULT_PROGRESS: f32 = 0.0;
@@ -153,12 +154,12 @@ impl PistonMovingBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.moved_state = input.get("blockState").and_then(state_from_nbt).unwrap_or_else(|| blocks::AIR.default_state());
-        self.direction = input.get("facing").and_then(super::int_value).filter(|v| (0..6).contains(v)).map_or(Direction::Down, Direction::from_3d_data_value);
-        self.progress = input.get("progress").and_then(super::float_value).unwrap_or(DEFAULT_PROGRESS);
+        self.moved_state = tag_value_input::read_or_error(input, "blockState", crate::world::level::chunk::serialization::decode_block_state).unwrap_or_else(|| blocks::AIR.default_state());
+        self.direction = tag_value_input::get_numeric(input, "facing").and_then(super::int_value).filter(|v| (0..6).contains(v)).map_or(Direction::Down, Direction::from_3d_data_value);
+        self.progress = tag_value_input::get_numeric(input, "progress").and_then(super::float_value).unwrap_or(DEFAULT_PROGRESS);
         self.progress_o = self.progress;
-        self.extending = input.get("extending").and_then(super::int_value).map_or(DEFAULT_EXTENDING, |v| v != 0);
-        self.is_source_piston = input.get("source").and_then(super::int_value).map_or(DEFAULT_SOURCE, |v| v != 0);
+        self.extending = tag_value_input::get_numeric(input, "extending").and_then(super::int_value).map_or(DEFAULT_EXTENDING, |v| v != 0);
+        self.is_source_piston = tag_value_input::get_numeric(input, "source").and_then(super::int_value).map_or(DEFAULT_SOURCE, |v| v != 0);
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

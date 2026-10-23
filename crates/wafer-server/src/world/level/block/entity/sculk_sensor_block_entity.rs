@@ -9,6 +9,7 @@ use crate::world::level::block::sculk_sensor_block;
 use crate::world::level::gameevent::game_event::{self, Context, GameEvent};
 use crate::world::level::gameevent::vibrations::vibration_system::{self, Data, VibrationUser};
 use crate::world::level::signal;
+use crate::world::level::storage::tag_value_input;
 
 pub const DEFAULT_LAST_VIBRATION_FREQUENCY: i32 = 0;
 pub const LISTENER_RANGE: i32 = 8;
@@ -22,7 +23,7 @@ pub struct SculkSensorBlockEntity {
 
 impl SculkSensorBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.last_vibration_frequency = input.get("last_vibration_frequency").and_then(Nbt::as_i64).map_or(DEFAULT_LAST_VIBRATION_FREQUENCY, |value| value as i32);
+        self.last_vibration_frequency = tag_value_input::get_i64(input, "last_vibration_frequency").map_or(DEFAULT_LAST_VIBRATION_FREQUENCY, |value| value as i32);
         self.vibration_data = Data::load(input.get("listener"));
     }
 

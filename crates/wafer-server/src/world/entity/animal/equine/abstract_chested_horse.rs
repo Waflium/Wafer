@@ -12,6 +12,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::base_container_block_entity::{load_all_items, save_all_items};
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_ID_CHEST: usize = 19;
 const DEFAULT_HAS_CHEST: bool = false;
@@ -83,7 +84,7 @@ impl AbstractChestedHorse {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         AbstractHorse::read_additional_save_data(mob, input);
-        let chested = input.get("ChestedHorse").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let chested = tag_value_input::get_i64(input, "ChestedHorse").is_some_and(|v| v != 0);
         set_chest(&mut mob.entity, chested);
         abstract_horse::create_inventory(mob);
         if has_chest(&mob.entity) {

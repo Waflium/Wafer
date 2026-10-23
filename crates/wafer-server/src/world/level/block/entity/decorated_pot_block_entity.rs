@@ -6,6 +6,7 @@ use crate::server::level::ServerLevel;
 use crate::world::item::ItemStack;
 use crate::world::item::component::values::ItemStackTemplate;
 use crate::world::item::component::{self as dc, DataComponentType};
+use crate::world::level::storage::tag_value_input;
 
 pub const TAG_SHERDS: &str = "sherds";
 pub const TAG_ITEM: &str = "item";
@@ -64,8 +65,8 @@ impl Default for DecoratedPotBlockEntity {
 
 impl DecoratedPotBlockEntity {
     fn try_load_loot_table(&mut self, input: &Nbt) -> bool {
-        self.loot_table = input.get("LootTable").and_then(Nbt::as_str).and_then(crate::commands::arguments::parse_identifier);
-        self.loot_table_seed = input.get("LootTableSeed").and_then(long_value).unwrap_or(0);
+        self.loot_table = tag_value_input::read_or_error(input, "LootTable", crate::util::codec::identifier);
+        self.loot_table_seed = tag_value_input::get_numeric(input, "LootTableSeed").and_then(long_value).unwrap_or(0);
         self.loot_table.is_some()
     }
 
@@ -88,9 +89,9 @@ impl DecoratedPotBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.decorations = input.get(TAG_SHERDS).and_then(|sherds| dc::POT_DECORATIONS.decode(sherds).ok()).unwrap_or(Nbt::Compound(Vec::new()));
+        self.decorations = tag_value_input::read_or_error(input, TAG_SHERDS, |sherds| dc::POT_DECORATIONS.decode(sherds)).unwrap_or(Nbt::Compound(Vec::new()));
         if !self.try_load_loot_table(input) {
-            self.item = input.get(TAG_ITEM).and_then(|item| ItemStack::from_nbt(item).ok()).unwrap_or_else(ItemStack::empty);
+            self.item = tag_value_input::read(input, TAG_ITEM, ItemStack::from_nbt_partial).unwrap_or_else(ItemStack::empty);
         } else {
             self.item = ItemStack::empty();
         }

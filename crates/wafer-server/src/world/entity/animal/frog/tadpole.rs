@@ -22,6 +22,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, soun
 use crate::world::item::ItemStack;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 const DEFAULT_AGE: i32 = 0;
 pub const TICKS_TO_BE_FROG: i32 = 24000;
@@ -109,8 +110,8 @@ impl Tadpole {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        tadpole_mut(mob).age = nbt.get("Age").and_then(Nbt::as_i64).map_or(DEFAULT_AGE, |v| v as i32);
-        set_age_locked(mob, nbt.get("AgeLocked").and_then(Nbt::as_i64).is_some_and(|v| v != 0));
+        tadpole_mut(mob).age = tag_value_input::get_i64(nbt, "Age").map_or(DEFAULT_AGE, |v| v as i32);
+        set_age_locked(mob, tag_value_input::get_i64(nbt, "AgeLocked").is_some_and(|v| v != 0));
     }
 
     pub fn save_to_bucket_tag(mob: &Mob, bucket: &mut ItemStack) {
@@ -136,7 +137,7 @@ impl Tadpole {
         }) {
             tadpole_mut(mob).age = age;
         }
-        set_age_locked(mob, tag.get("AgeLocked").and_then(Nbt::as_i64).is_some_and(|v| v != 0));
+        set_age_locked(mob, tag_value_input::get_i64(tag, "AgeLocked").is_some_and(|v| v != 0));
     }
 }
 

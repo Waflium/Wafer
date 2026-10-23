@@ -6,6 +6,7 @@ use wafer_protocol::nbt::Nbt;
 use super::BlockEntityKind;
 use crate::server::level::ServerLevel;
 use crate::world::level::BlockGetter;
+use crate::world::level::storage::tag_value_input;
 
 #[derive(Clone)]
 pub struct TestBlockEntity {
@@ -29,7 +30,7 @@ impl TestBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
         self.mode = input.get("mode").and_then(Nbt::as_str).and_then(TestBlockMode::by_name).unwrap_or(TestBlockMode::Fail);
         self.message = input.get("message").and_then(Nbt::as_str).map(str::to_string).unwrap_or_default();
-        self.powered = input.get("powered").and_then(Nbt::as_i64).is_some_and(|powered| powered != 0);
+        self.powered = tag_value_input::get_i64(input, "powered").is_some_and(|powered| powered != 0);
     }
 
     pub fn is_powered(&self) -> bool {

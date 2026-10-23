@@ -7,6 +7,7 @@ use crate::world::damagesource::DamageSource;
 use crate::world::entity::data::entity_defaults;
 use crate::world::entity::entity_reference::EntityReference;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity};
+use crate::world::level::storage::tag_value_input;
 
 pub const ATTACK_DURATION: i32 = 20;
 pub const LIFE_OFFSET: i32 = 2;
@@ -43,7 +44,7 @@ impl EvokerFangs {
     }
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
-        self.warmup_delay_ticks = input.get("Warmup").and_then(Nbt::as_i64).map_or(DEFAULT_WARMUP_DELAY, |v| v as i32);
+        self.warmup_delay_ticks = tag_value_input::get_i64(input, "Warmup").map_or(DEFAULT_WARMUP_DELAY, |v| v as i32);
         self.owner = EntityReference::read(input, "Owner");
     }
 

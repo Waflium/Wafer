@@ -16,12 +16,14 @@ pub enum PathElement {
     MapEntry(String, String),
     RootElement { id: String, registry: String },
     RootField(String),
+    Text(String),
 }
 
 impl PathElement {
     pub fn get(&self) -> String {
         match self {
             PathElement::Empty => String::new(),
+            PathElement::Text(text) => text.clone(),
             PathElement::CollectionReference { tag, registry } => format!("->{{#{tag}@{registry}}}"),
             PathElement::ElementReference { id, registry } => format!("->{{{id}@{registry}}}"),
             PathElement::Field(name) => format!(".{name}"),
@@ -168,7 +170,11 @@ impl ProblemReporter {
     }
 
     pub fn get_tree_report(&self) -> String {
-        let mut root = ProblemTreeNode { element: self.root.element.clone(), problems: Vec::new(), children: Vec::new() };
+        self.get_tree_report_rooted(self.root.element.clone())
+    }
+
+    pub fn get_tree_report_rooted(&self, root_element: PathElement) -> String {
+        let mut root = ProblemTreeNode { element: root_element, problems: Vec::new(), children: Vec::new() };
         for (node, problem) in self.problems.borrow().iter() {
             let mut tree_node = &mut root;
             for element in ProblemReporter::path(node, Some(&self.root)) {

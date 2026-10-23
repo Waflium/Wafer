@@ -35,6 +35,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
+use crate::world::level::storage::tag_value_input;
 
 pub const BABY_DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.24, 0.4).with_eye_height(0.39);
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.49, 0.6).with_eye_height(0.59);
@@ -223,9 +224,9 @@ impl Rabbit {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let variant = input.get("RabbitType").and_then(crate::world::level::block::entity::int_value).map_or(Variant::DEFAULT, Variant::by_id);
+        let variant = tag_value_input::get_numeric(input, "RabbitType").and_then(crate::world::level::block::entity::int_value).map_or(Variant::DEFAULT, Variant::by_id);
         set_variant(mob, variant);
-        rabbit_mut(mob).more_carrot_ticks = input.get("MoreCarrotTicks").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_MORE_CARROT_TICKS);
+        rabbit_mut(mob).more_carrot_ticks = tag_value_input::get_numeric(input, "MoreCarrotTicks").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_MORE_CARROT_TICKS);
     }
 }
 

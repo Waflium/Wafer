@@ -3,6 +3,9 @@ use wafer_data::{EquipmentSlot, damage_type_tags, game_rule, items, registry, re
 use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult};
+use crate::util::extra_codecs;
+use crate::world::level::storage::tag_value_input;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::attributes::{ARMOR_STAND_ATTRIBUTES, Attribute};
 use crate::world::entity::data::{DataValue, ids, living_entity_defaults};
@@ -57,6 +60,22 @@ pub struct ArmorStand {
     invisible: bool,
     pub last_hit: i64,
     disabled_slots: i32,
+}
+
+fn decode_armor_stand_pose(tag: &Nbt) -> DecodeResult<Vec<Option<[f32; 3]>>> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let results: Vec<DecodeResult<[f32; 3]>> = POSES
+        .iter()
+        .map(|(name, _, _)| match tag.get(name) {
+            Some(rotation) => extra_codecs::fixed_size_list_partial(rotation, 3, |element| codec::float(element).into()).map(|v| rotations(v[0], v[1], v[2])),
+            None => DecodeResult { value: None, error: None },
+        })
+        .collect();
+    let errors: Vec<Option<&String>> = results.iter().map(|result| result.error.as_ref()).collect();
+    let error = codec::record_errors(&errors).err();
+    DecodeResult { value: Some(results.into_iter().map(|result| result.value).collect()), error }
 }
 
 pub fn rotations(x: f32, y: f32, z: f32) -> [f32; 3] {
@@ -266,8 +285,8 @@ impl ArmorStand {
     }
 
     pub fn read_additional_save_data(&mut self, nbt: &Nbt) {
-        let int = |key: &str| nbt.get(key).and_then(crate::world::level::block::entity::int_value);
-        let boolean = |key: &str| nbt.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let int = |key: &str| tag_value_input::get_numeric(nbt, key).and_then(crate::world::level::block::entity::int_value);
+        let boolean = |key: &str| tag_value_input::get_boolean(nbt, key).unwrap_or(false);
         let y_rot = self.entity.y_rot;
         self.set_y_head_rot(y_rot);
         self.set_y_body_rot(y_rot);
@@ -279,16 +298,9 @@ impl ArmorStand {
         self.set_no_base_plate(boolean("NoBasePlate"));
         self.set_marker(boolean("Marker"));
         self.entity.no_physics = !self.has_physics();
-        if let Some(pose) = nbt.get("Pose").filter(|pose| matches!(pose, Nbt::Compound(_))) {
-            for (name, accessor, default) in POSES {
-                let rotations = match pose.get(name) {
-                    Some(Nbt::List(values)) if values.len() == 3 => {
-                        let v: Vec<f32> = values.iter().map(|v| v.as_f64().unwrap_or(0.0) as f32).collect();
-                        rotations(v[0], v[1], v[2])
-                    }
-                    _ => default,
-                };
-                self.set_pose(accessor, rotations);
+        if let Some(poses) = tag_value_input::read(nbt, "Pose", decode_armor_stand_pose) {
+            for ((_, accessor, default), pose) in POSES.into_iter().zip(poses) {
+                self.set_pose(accessor, pose.unwrap_or(default));
             }
         }
     }

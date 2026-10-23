@@ -134,7 +134,9 @@ pub fn update_custom_block_entity_tag(level: &mut ServerLevel, player: Option<En
     if tag == old {
         return false;
     }
+    let collector = crate::world::level::storage::tag_value_input::ScopedCollector::new(entity.problem_path(), "net.minecraft.world.item.component.TypedEntityData");
     entity.load_custom_only(&tag);
+    drop(collector);
     level.block_entity_loaded(pos);
     level.block_entity_set_changed(pos);
     true

@@ -27,6 +27,7 @@ use crate::world::item::{ItemStack, item_utils};
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const TOTAL_PLAYDEAD_TIME: i32 = 200;
 pub const PLAYER_REGEN_DETECTION_RANGE: f64 = 20.0;
@@ -232,9 +233,9 @@ impl Axolotl {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let variant = nbt.get(VARIANT_TAG).and_then(Nbt::as_i64).map_or(Variant::DEFAULT, |id| Variant::by_id(id as i32));
+        let variant = tag_value_input::get_i64(nbt, VARIANT_TAG).map_or(Variant::DEFAULT, |id| Variant::by_id(id as i32));
         set_variant(&mut mob.entity, variant);
-        set_from_bucket(&mut mob.entity, nbt.get("FromBucket").and_then(Nbt::as_i64).is_some_and(|v| v != 0));
+        set_from_bucket(&mut mob.entity, tag_value_input::get_i64(nbt, "FromBucket").is_some_and(|v| v != 0));
     }
 
     pub fn save_to_bucket_tag(mob: &Mob, bucket: &mut ItemStack) {
@@ -259,11 +260,11 @@ impl Axolotl {
 
     pub fn load_from_bucket_tag(mob: &mut Mob, tag: &Nbt) {
         bucketable::load_default_data_from_bucket_tag(mob, tag);
-        let age = tag.get("Age").and_then(Nbt::as_i64).map_or(0, |v| v as i32);
+        let age = tag_value_input::get_i64(tag, "Age").map_or(0, |v| v as i32);
         if mob.set_age(age) {
             mob.refresh_dimensions();
         }
-        let age_locked = tag.get("AgeLocked").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let age_locked = tag_value_input::get_i64(tag, "AgeLocked").is_some_and(|v| v != 0);
         mob.entity.data.set(ids::AGE_LOCKED, DataValue::Boolean(age_locked));
         match tag.get("HuntingCooldown").and_then(|nbt| match nbt {
             Nbt::Long(v) => Some(*v),

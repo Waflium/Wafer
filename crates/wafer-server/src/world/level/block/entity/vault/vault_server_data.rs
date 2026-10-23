@@ -35,7 +35,7 @@ pub struct VaultServerData {
 
 impl VaultServerData {
     pub fn decode(tag: &Nbt) -> Result<VaultServerData, String> {
-        let Nbt::Compound(_) = tag else { return Err("Not a map".into()) };
+        crate::util::codec::map(tag)?;
         let items_to_eject = match tag.get("items_to_eject") {
             Some(Nbt::List(list)) => list.iter().map(|item| ItemStack::from_nbt(item).ok()).collect::<Option<Vec<ItemStack>>>().unwrap_or_default(),
             _ => Vec::new(),

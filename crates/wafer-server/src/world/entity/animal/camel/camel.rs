@@ -19,6 +19,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::long_value;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const BABY_SCALE: f32 = 0.6;
 pub const DASH_COOLDOWN_TICKS: i32 = 55;
@@ -224,7 +225,7 @@ impl Camel {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         AbstractHorse::read_additional_save_data(mob, input);
-        let pose_tick = input.get("LastPoseTick").and_then(long_value).unwrap_or(DEFAULT_LAST_POSE_CHANGE_TICK);
+        let pose_tick = tag_value_input::get_numeric(input, "LastPoseTick").and_then(long_value).unwrap_or(DEFAULT_LAST_POSE_CHANGE_TICK);
         if pose_tick < 0 && mob.entity.pose() != Pose::Sitting {
             mob.entity.set_pose(Pose::Sitting);
             mob.refresh_dimensions();

@@ -25,6 +25,7 @@ use crate::world::level::pathfinder::binary_heap::BinaryHeap;
 use crate::world::level::pathfinder::node::Node;
 use crate::world::level::pathfinder::path::Path;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_PHASE: usize = 16;
 const CRYSTAL_DESTROY_TARGETING: TargetingConditions<'static> = TargetingConditions::for_combat().range(64.0);
@@ -115,7 +116,7 @@ impl EnderDragon {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        if let Some(phase_id) = input.get("DragonPhase").and_then(crate::world::level::block::entity::int_value) {
+        if let Some(phase_id) = tag_value_input::get_numeric(input, "DragonPhase").and_then(crate::world::level::block::entity::int_value) {
             let target = EnderDragonPhase::get_by_id(phase_id);
             let current_phase = ender_dragon(mob).phase_manager.current_phase;
             if current_phase != Some(target) {
@@ -124,8 +125,8 @@ impl EnderDragon {
             }
         }
         let dragon = ender_dragon_mut(mob);
-        dragon.dragon_death_time = input.get("DragonDeathTime").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_DEATH_TIME);
-        dragon.sitting_damage_received = input.get("sitting_damage_received").and_then(crate::world::level::block::entity::float_value).unwrap_or(0.0);
+        dragon.dragon_death_time = tag_value_input::get_numeric(input, "DragonDeathTime").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_DEATH_TIME);
+        dragon.sitting_damage_received = tag_value_input::get_numeric(input, "sitting_damage_received").and_then(crate::world::level::block::entity::float_value).unwrap_or(0.0);
     }
 }
 

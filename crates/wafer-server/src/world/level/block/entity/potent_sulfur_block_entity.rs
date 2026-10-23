@@ -13,6 +13,7 @@ use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::level::gameevent::game_event;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::phys::shapes::collision_context::CollisionContext;
+use crate::world::level::storage::tag_value_input;
 
 const EFFECT_APPLICATION_FREQUENCY_TICKS: i64 = 10;
 const EFFECT_DURATION_IN_TICKS: i32 = 80;
@@ -37,7 +38,7 @@ impl PotentSulfurBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        if let Some(value) = input.get("countdown").and_then(super::int_value) {
+        if let Some(value) = tag_value_input::get_numeric(input, "countdown").and_then(super::int_value) {
             self.waiting_countdown = value;
         }
     }

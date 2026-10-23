@@ -18,6 +18,7 @@ use crate::world::item::crafting::single_recipe_input::SingleRecipeInput;
 use crate::world::level::storage::loot::providers::number::floats::resolvable_float::ResolvableFloat;
 use crate::world::level::storage::loot::providers::number::ints::resolvable_int::ResolvableInt;
 use crate::world::level::update_flags::UPDATE_ALL;
+use crate::world::level::storage::tag_value_input;
 
 pub const SLOT_INPUT: usize = 0;
 pub const SLOT_FUEL: usize = 1;
@@ -66,7 +67,7 @@ impl AbstractFurnaceBlockEntity {
         self.cooking_total_time = int_or(input, "cooking_total_time", 0);
         self.lit_time_remaining = int_or(input, "lit_time_remaining", 0);
         self.lit_total_time = int_or(input, "lit_total_time", 0);
-        self.speed_multiplier = input.get("speed_multiplier").and_then(float_value).unwrap_or(1.0);
+        self.speed_multiplier = tag_value_input::get_numeric(input, "speed_multiplier").and_then(float_value).unwrap_or(1.0);
         self.recipes_used = match input.get("RecipesUsed") {
             Some(Nbt::Compound(fields)) => fields
                 .iter()

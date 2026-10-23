@@ -23,6 +23,7 @@ use crate::world::level::block::weathering_copper::WeatherState;
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 const IGNORE_WEATHERING_TICK: i64 = -2;
 const UNSET_WEATHERING_TICK: i64 = -1;
@@ -155,7 +156,7 @@ impl CopperGolem {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        copper_golem_mut(mob).next_weathering_tick = input.get("next_weather_age").and_then(Nbt::as_i64).unwrap_or(UNSET_WEATHERING_TICK);
+        copper_golem_mut(mob).next_weathering_tick = tag_value_input::get_i64(input, "next_weather_age").unwrap_or(UNSET_WEATHERING_TICK);
         let weather_state = input.get("weather_state").and_then(Nbt::as_str).and_then(WeatherState::by_name).unwrap_or(WeatherState::Unaffected);
         set_weather_state(&mut mob.entity, weather_state);
     }

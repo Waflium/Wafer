@@ -29,6 +29,7 @@ use crate::world::level::gameevent::game_event_listener::{EntityListenerKind, Ga
 use crate::world::level::gameevent::position_source::PositionSource;
 use crate::world::level::gameevent::vibrations::vibration_system::{Data, VibrationUser};
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const ITEM_PICKUP_REACH: (f64, f64, f64) = (1.0, 1.0, 1.0);
 const DEFAULT_DUPLICATION_COOLDOWN: i64 = 0;
@@ -175,7 +176,7 @@ impl Allay {
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         inventory_carrier::read_inventory_from_tag(&mut allay_mut(mob).inventory, input);
         allay_mut(mob).vibration_data = Data::load(input.get("listener"));
-        let duplication_cooldown = input.get("DuplicationCooldown").and_then(Nbt::as_i64).map_or(DEFAULT_DUPLICATION_COOLDOWN, |value| value as i32 as i64);
+        let duplication_cooldown = tag_value_input::get_i64(input, "DuplicationCooldown").map_or(DEFAULT_DUPLICATION_COOLDOWN, |value| value as i32 as i64);
         set_duplication_cooldown(mob, duplication_cooldown);
     }
 }

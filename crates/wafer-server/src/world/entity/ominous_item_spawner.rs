@@ -9,6 +9,7 @@ use super::item::ItemEntity;
 use super::{Entity, EntityDimensions, EntityId, LevelEntity, RemovalReason};
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::item::{ItemStack, projectile_item};
+use crate::world::level::storage::tag_value_input;
 
 const SPAWN_ITEM_DELAY_MIN: i32 = 60;
 const SPAWN_ITEM_DELAY_MAX: i32 = 120;
@@ -51,9 +52,9 @@ impl OminousItemSpawner {
     }
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
-        let item = input.get(TAG_ITEM).and_then(|tag| ItemStack::from_nbt(tag).ok()).unwrap_or_else(ItemStack::empty);
+        let item = tag_value_input::read(input, TAG_ITEM, ItemStack::from_nbt_partial).unwrap_or_else(ItemStack::empty);
         self.set_item(item);
-        self.spawn_item_after_ticks = input.get(TAG_SPAWN_ITEM_AFTER_TICKS).and_then(Nbt::as_i64).unwrap_or(0);
+        self.spawn_item_after_ticks = tag_value_input::get_i64(input, TAG_SPAWN_ITEM_AFTER_TICKS).unwrap_or(0);
     }
 
     pub fn add_additional_save_data(&self, output: &mut Vec<(String, Nbt)>) {

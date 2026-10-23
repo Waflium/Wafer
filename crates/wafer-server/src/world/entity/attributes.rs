@@ -7,6 +7,9 @@ use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::arguments::parse_identifier;
+use crate::util::codec::{self, DecodeResult};
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::types;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Attribute {
@@ -1453,6 +1456,26 @@ pub struct AttributeMap {
     supplier: &'static AttributeSupplier,
     instances: Vec<AttributeInstance>,
     index: [u8; Attribute::COUNT],
+}
+
+fn packed_attribute_instance() -> &'static types::Pair {
+    static PACKED: std::sync::LazyLock<types::Pair> = std::sync::LazyLock::new(|| {
+        let modifier = types::record(vec![
+            types::req("id", types::identifier()),
+            types::req("amount", (Codec::Double, Stream::Double)),
+            types::req("operation", types::enumeration(&["add_value", "add_multiplied_base", "add_multiplied_total"])),
+        ]);
+        types::record(vec![
+            types::req("id", types::by_name("minecraft:attribute")),
+            types::always("base", (Codec::Double, Stream::Double), Nbt::Double(0.0)),
+            types::def("modifiers", types::list(modifier), Nbt::List(Vec::new())),
+        ])
+    });
+    &PACKED
+}
+
+pub fn decode_packed_list(tag: &Nbt) -> DecodeResult<Nbt> {
+    codec::list_partial(tag, |entry| packed_attribute_instance().0.decode(entry).into()).map(Nbt::List)
 }
 
 impl AttributeMap {

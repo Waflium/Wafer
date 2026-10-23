@@ -24,6 +24,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, Move
 use crate::world::item::dye_color::DyeColor;
 use crate::world::level::BlockGetter;
 use crate::world::phys::shapes::collision_context::CollisionContext;
+use crate::world::level::storage::tag_value_input;
 
 const COVERED_ARMOR_MODIFIER_ID: &str = "minecraft:covered";
 pub const DATA_ATTACH_FACE_ID: usize = 16;
@@ -72,9 +73,9 @@ impl Shulker {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let attach_face = input.get("AttachFace").and_then(Nbt::as_i64).map_or(DEFAULT_ATTACH_FACE, |id| Direction::from_3d_data_value(id as i32));
+        let attach_face = tag_value_input::get_i64(input, "AttachFace").map_or(DEFAULT_ATTACH_FACE, |id| Direction::from_3d_data_value(id as i32));
         set_attach_face(&mut mob.entity, attach_face);
-        let byte = |key: &str, default: i8| input.get(key).and_then(crate::world::level::block::entity::byte_value).unwrap_or(default);
+        let byte = |key: &str, default: i8| tag_value_input::get_numeric(input, key).and_then(crate::world::level::block::entity::byte_value).unwrap_or(default);
         mob.entity.data.set(DATA_PEEK_ID, DataValue::Byte(byte("Peek", DEFAULT_PEEK)));
         mob.entity.data.set(DATA_COLOR_ID, DataValue::Byte(byte("Color", DEFAULT_COLOR)));
     }

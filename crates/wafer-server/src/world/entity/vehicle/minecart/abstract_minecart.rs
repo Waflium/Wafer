@@ -23,7 +23,8 @@ use crate::world::entity::vehicle::vehicle_entity::{self, vehicle_entity_default
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, MoverType};
 use crate::world::level::BlockGetter;
 use crate::world::level::block::base_rail_block;
-use crate::world::level::chunk::serialization::{state_from_nbt, state_to_nbt};
+use crate::world::level::chunk::serialization::state_to_nbt;
+use crate::world::level::storage::tag_value_input;
 
 const LOWERED_PASSENGER_ATTACHMENT: Vec3 = Vec3::new(0.0, 0.0, 0.0);
 const DATA_ID_CUSTOM_DISPLAY_BLOCK: usize = 11;
@@ -180,10 +181,10 @@ impl AbstractMinecart {
     }
 
     pub fn read_additional_save_data(&mut self, nbt: &Nbt) {
-        self.set_custom_display_block_state(nbt.get("DisplayState").and_then(state_from_nbt));
-        self.set_display_offset(nbt.get("DisplayOffset").and_then(Nbt::as_i64).map_or(self.kind.get_default_display_offset(), |v| v as i32));
-        self.flipped = nbt.get("FlippedRotation").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
-        self.entity.first_tick = nbt.get("HasTicked").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        self.set_custom_display_block_state(tag_value_input::read_or_error(nbt, "DisplayState", crate::world::level::chunk::serialization::decode_block_state));
+        self.set_display_offset(tag_value_input::get_i64(nbt, "DisplayOffset").map_or(self.kind.get_default_display_offset(), |v| v as i32));
+        self.flipped = tag_value_input::get_i64(nbt, "FlippedRotation").is_some_and(|v| v != 0);
+        self.entity.first_tick = tag_value_input::get_i64(nbt, "HasTicked").is_some_and(|v| v != 0);
         if let Some(container) = &mut self.container {
             container.read_chest_vehicle_save_data(nbt);
         }

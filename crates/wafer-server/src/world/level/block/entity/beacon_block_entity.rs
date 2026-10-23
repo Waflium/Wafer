@@ -13,6 +13,7 @@ use crate::world::level::BlockGetter;
 use crate::world::level::block::beacon_block::BeaconBlock;
 use crate::world::level::block::vegetation_block::fields;
 use crate::world::level::chunk::HeightmapType;
+use crate::world::level::storage::tag_value_input;
 
 const MAX_LEVELS: i32 = 4;
 pub const BEACON_EFFECTS: [&[MobEffect]; 4] =
@@ -113,8 +114,11 @@ fn store_effect(output: &mut Vec<(String, Nbt)>, field: &str, effect: Option<Mob
 }
 
 fn load_effect(input: &Nbt, field: &str) -> Option<MobEffect> {
-    let name = crate::commands::arguments::parse_identifier(input.get(field)?.as_str()?)?;
-    MobEffect::by_name(&name).filter(|&effect| is_valid_effect(effect))
+    let effect = tag_value_input::read_or_error(input, field, |tag| {
+        let name = crate::util::codec::identifier(tag)?;
+        MobEffect::by_name(&name).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:mob_effect]: {name}"))
+    })?;
+    Some(effect).filter(|&effect| is_valid_effect(effect))
 }
 
 impl BeaconBlockEntity {
@@ -122,7 +126,7 @@ impl BeaconBlockEntity {
         self.primary_power = load_effect(input, TAG_PRIMARY);
         self.secondary_power = load_effect(input, TAG_SECONDARY);
         self.name = crate::network::chat::component_serialization::parse_custom_name_safe(input, "CustomName");
-        self.lock_key = input.get("lock").and_then(|lock| dc::LOCK.decode(lock).ok());
+        self.lock_key = tag_value_input::read_or_error(input, "lock", |lock| dc::LOCK.decode(lock));
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

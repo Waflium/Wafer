@@ -15,6 +15,7 @@ use crate::world::level::block::{self, anvil_block, falling_block};
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::BlockGetter;
+use crate::world::level::storage::tag_value_input;
 use wafer_data::packets::play::clientbound;
 
 const DEFAULT_TIME: i32 = 0;
@@ -110,13 +111,13 @@ impl FallingBlockEntity {
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
         use crate::world::level::block::entity::{float_value, int_value};
-        let flag = |key: &str| input.get(key).and_then(Nbt::as_i64).map(|v| v != 0);
-        self.block_state = input.get("BlockState").and_then(crate::world::level::chunk::serialization::state_from_nbt).unwrap_or(blocks::SAND.default_state());
-        self.time = input.get("Time").and_then(int_value).unwrap_or(DEFAULT_TIME);
+        let flag = |key: &str| tag_value_input::get_i64(input, key).map(|v| v != 0);
+        self.block_state = tag_value_input::read_or_error(input, "BlockState", crate::world::level::chunk::serialization::decode_block_state).unwrap_or(blocks::SAND.default_state());
+        self.time = tag_value_input::get_numeric(input, "Time").and_then(int_value).unwrap_or(DEFAULT_TIME);
         let default_hurt_entities = self.block_state.is(&block_tags::ANVIL);
         self.hurt_entities = flag("HurtEntities").unwrap_or(default_hurt_entities);
-        self.fall_damage_per_distance = input.get("FallHurtAmount").and_then(float_value).unwrap_or(DEFAULT_FALL_DAMAGE_PER_DISTANCE);
-        self.fall_damage_max = input.get("FallHurtMax").and_then(int_value).unwrap_or(DEFAULT_MAX_FALL_DAMAGE);
+        self.fall_damage_per_distance = tag_value_input::get_numeric(input, "FallHurtAmount").and_then(float_value).unwrap_or(DEFAULT_FALL_DAMAGE_PER_DISTANCE);
+        self.fall_damage_max = tag_value_input::get_numeric(input, "FallHurtMax").and_then(int_value).unwrap_or(DEFAULT_MAX_FALL_DAMAGE);
         self.drop_item = flag("DropItem").unwrap_or(DEFAULT_DROP_ITEM);
         self.block_data = input.get("TileEntityData").filter(|tag| matches!(tag, Nbt::Compound(_))).cloned();
         self.cancel_drop = flag("CancelDrop").unwrap_or(DEFAULT_CANCEL_DROP);
@@ -221,7 +222,9 @@ impl ServerLevel {
                                             None => merged.push((name, tag)),
                                         }
                                     }
+                                    let collector = crate::world::level::storage::tag_value_input::ScopedCollector::new(block_entity.problem_path(), "net.minecraft.world.entity.item.FallingBlockEntity");
                                     block_entity.load_with_components(&Nbt::Compound(merged));
+                                    drop(collector);
                                     self.block_entity_loaded(pos);
                                     self.block_entity_set_changed(pos);
                                 }

@@ -47,6 +47,7 @@ use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::update_flags::UPDATE_CLIENTS;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_TYPE_ID: usize = 18;
 pub const DATA_FLAGS_ID: usize = 19;
@@ -452,7 +453,7 @@ impl Fox {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let boolean = |key: &str, default: bool| input.get(key).and_then(Nbt::as_i64).map_or(default, |v| v != 0);
+        let boolean = |key: &str, default: bool| tag_value_input::get_i64(input, key).map_or(default, |v| v != 0);
         clear_trusted(&mut mob.entity);
         let trusted: Vec<EntityReference> = match input.get("Trusted") {
             Some(Nbt::List(list)) => list.iter().map(crate::world::entity::entity_save::uuid_from_nbt).collect::<Option<Vec<u128>>>().unwrap_or_default().into_iter().map(EntityReference::of).collect(),

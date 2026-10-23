@@ -6,7 +6,7 @@ use wafer_protocol::nbt::Nbt;
 use wafer_data::{BlockState, EquipmentSlot, EquipmentSlotGroup, MobEffect, block_tags, blocks, damage_type_tags, damage_types, entity_type_tags, fluid_tags, game_rule, item_tags, items, mob_effects};
 
 use super::ai::brain::Brain;
-use super::attributes::{Attribute, AttributeMap, AttributeModifier, AttributeSupplier, Operation, PLAYER_ATTRIBUTES, SPEED_MODIFIER_SPRINTING};
+use super::attributes::{self, Attribute, AttributeMap, AttributeModifier, AttributeSupplier, Operation, PLAYER_ATTRIBUTES, SPEED_MODIFIER_SPRINTING};
 use super::data::{DataValue, Pose, ids};
 use super::monster::ravager::Ravager;
 use super::mob::{Mob, MobKind};
@@ -17,6 +17,9 @@ use crate::core::holder_set::HolderSet;
 use crate::network::connection::encode;
 use crate::server::level::ServerLevel;
 use crate::stats::stats;
+use crate::util::codec::{self, DecodeResult};
+use crate::util::extra_codecs;
+use crate::world::level::storage::tag_value_input;
 use crate::world::difficulty::Difficulty;
 use crate::world::item::component::codec as component_codec;
 use crate::world::InteractionHand;
@@ -323,16 +326,16 @@ pub fn add_additional_save_data(entity: &Entity, living: &LivingEntity, health: 
 }
 
 pub fn read_additional_save_data(entity: &mut Entity, living: &mut LivingEntity, health: &mut f32, absorption: &mut f32, equipment: &mut [Option<ItemStack>; 8], nbt: &Nbt) {
-    let float = |key: &str| nbt.get(key).and_then(Nbt::as_f64).map(|v| v as f32);
-    let int = |key: &str| nbt.get(key).and_then(crate::world::level::block::entity::int_value);
-    let boolean = |key: &str| nbt.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
-    let short = |key: &str| nbt.get(key).and_then(Nbt::as_i64).map_or(0, |v| v as i16 as i32);
+    let float = |key: &str| tag_value_input::get_f64(nbt, key).map(|v| v as f32);
+    let int = |key: &str| tag_value_input::get_numeric(nbt, key).and_then(crate::world::level::block::entity::int_value);
+    let boolean = |key: &str| tag_value_input::get_boolean(nbt, key).unwrap_or(false);
+    let short = |key: &str| tag_value_input::get_i64(nbt, key).map_or(0, |v| v as i16 as i32);
     *absorption = float("AbsorptionAmount").unwrap_or(0.0).max(0.0);
-    if let Some(attributes) = nbt.get("attributes") {
-        living.attributes.load(attributes);
+    if let Some(attributes) = tag_value_input::read(nbt, "attributes", attributes::decode_packed_list) {
+        living.attributes.load(&attributes);
     }
     living.active_effects.clear();
-    for effect in nbt.get("active_effects").map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(MobEffectInstance::from_nbt) {
+    for effect in tag_value_input::read(nbt, "active_effects", MobEffectInstance::decode_list).unwrap_or_default() {
         match living.active_effects.binary_search_by_key(&effect.effect, |e| e.effect) {
             Ok(index) => living.active_effects[index] = effect,
             Err(index) => living.active_effects.insert(index, effect),
@@ -345,26 +348,31 @@ pub fn read_additional_save_data(entity: &mut Entity, living: &mut LivingEntity,
     living.hurt_time = short("HurtTime");
     living.death_time = short("DeathTime");
     entity.set_shared_flag(flags::FALL_FLYING, boolean("FallFlying"));
-    living.last_hurt_by_player = nbt.get("last_hurt_by_player").and_then(super::entity_save::uuid_from_nbt);
+    living.last_hurt_by_player = tag_value_input::read(nbt, "last_hurt_by_player", super::entity_save::decode_uuid);
     living.last_hurt_by_player_memory_time = int("last_hurt_by_player_memory_time").unwrap_or(0);
-    living.last_hurt_by_mob = nbt.get("last_hurt_by_mob").and_then(super::entity_save::uuid_from_nbt);
+    living.last_hurt_by_mob = tag_value_input::read(nbt, "last_hurt_by_mob", super::entity_save::decode_uuid);
     living.last_hurt_by_mob_timestamp = entity.tick_count - int("ticks_since_last_hurt_by_mob").unwrap_or(0);
     *equipment = Default::default();
-    if let Some(Nbt::Compound(slots)) = nbt.get("equipment") {
-        for (name, stack) in slots {
-            if let Some(slot) = EquipmentSlot::by_name(name)
-                && let Ok(stack) = ItemStack::from_nbt(stack)
-            {
-                equipment[slot as usize] = Some(stack);
-            }
-        }
+    for (slot, stack) in tag_value_input::read(nbt, "equipment", decode_equipment).unwrap_or_default() {
+        equipment[slot as usize] = Some(stack);
     }
     living.locator_bar_icon = nbt.get("locator_bar_icon").and_then(Icon::from_nbt).unwrap_or_default();
     living.current_impulse_context_reset_grace_time = int("current_impulse_context_reset_grace_time").unwrap_or(0);
-    living.current_impulse_impact_pos = match nbt.get("current_explosion_impact_pos") {
-        Some(Nbt::List(v)) if v.len() == 3 => Some(Vec3::new(v[0].as_f64().unwrap_or(0.0), v[1].as_f64().unwrap_or(0.0), v[2].as_f64().unwrap_or(0.0))),
-        _ => None,
-    };
+    living.current_impulse_impact_pos = tag_value_input::read(nbt, "current_explosion_impact_pos", extra_codecs::vec3);
+}
+
+pub fn decode_equipment(tag: &Nbt) -> DecodeResult<Vec<(EquipmentSlot, ItemStack)>> {
+    let key = |name: &str| EquipmentSlot::by_name(name).ok_or_else(|| format!("Unknown element name:{name}"));
+    match codec::base_map(tag, key, ItemStack::from_nbt) {
+        Ok(entries) => DecodeResult::success(entries),
+        Err(error) => match tag {
+            Nbt::Compound(fields) => {
+                let valid = fields.iter().filter_map(|(name, stack)| Some((key(name).ok()?, ItemStack::from_nbt_partial(stack).value?))).collect();
+                DecodeResult { value: Some(valid), error: Some(error) }
+            }
+            _ => DecodeResult::error(error),
+        },
+    }
 }
 
 pub fn get_comfortable_fall_distance(allowed_damage: f32) -> i32 {

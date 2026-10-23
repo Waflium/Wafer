@@ -29,6 +29,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, entity_event};
 use crate::world::item::ItemStack;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const CROUCH_SPEED_MOD: f64 = 0.6;
 pub const SPRINT_SPEED_MOD: f64 = 1.33;
@@ -153,7 +154,7 @@ impl Ocelot {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let trusting = input.get("Trusting").and_then(Nbt::as_i64).map_or(DEFAULT_TRUSTING, |v| v != 0);
+        let trusting = tag_value_input::get_i64(input, "Trusting").map_or(DEFAULT_TRUSTING, |v| v != 0);
         set_trusting(mob, trusting);
     }
 }

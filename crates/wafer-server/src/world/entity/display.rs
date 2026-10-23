@@ -18,7 +18,8 @@ use crate::util::extra_codecs;
 use crate::world::item::ItemStack;
 use crate::world::item::item_display_context::{self, ItemDisplayContext};
 use crate::world::level::block::entity::{byte_or, float_or, int_or};
-use crate::world::level::chunk::serialization::{state_from_nbt, state_to_nbt};
+use crate::world::level::chunk::serialization::state_to_nbt;
+use crate::world::level::storage::tag_value_input;
 
 const DATA_TRANSFORMATION_INTERPOLATION_START_DELTA_TICKS_ID: usize = 8;
 const DATA_TRANSFORMATION_INTERPOLATION_DURATION_ID: usize = 9;
@@ -242,13 +243,13 @@ impl Display {
     }
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
-        let transformation = input.get("transformation").and_then(|tag| decode_transformation(tag).ok()).unwrap_or(Transformation::IDENTITY);
+        let transformation = tag_value_input::read_or_error(input, "transformation", |tag| decode_transformation(tag)).unwrap_or(Transformation::IDENTITY);
         self.set_transformation(transformation);
         self.entity.data.set(DATA_TRANSFORMATION_INTERPOLATION_DURATION_ID, DataValue::Int(int_or(input, "interpolation_duration", 0)));
         self.entity.data.set_forced(DATA_TRANSFORMATION_INTERPOLATION_START_DELTA_TICKS_ID, DataValue::Int(int_or(input, "start_interpolation", 0)));
         let teleport_duration = int_or(input, "teleport_duration", 0);
         self.entity.data.set(DATA_POS_ROT_INTERPOLATION_DURATION_ID, DataValue::Int(teleport_duration.clamp(0, 59)));
-        let billboard = input.get("billboard").and_then(|tag| codec::string_enum(tag, &BILLBOARD_CONSTRAINTS).ok()).unwrap_or(BillboardConstraints::Fixed);
+        let billboard = tag_value_input::read_or_error(input, "billboard", |tag| codec::string_enum(tag, &BILLBOARD_CONSTRAINTS)).unwrap_or(BillboardConstraints::Fixed);
         self.entity.data.set(DATA_BILLBOARD_RENDER_CONSTRAINTS_ID, DataValue::Byte(billboard.get_id()));
         self.entity.data.set(DATA_VIEW_RANGE_ID, DataValue::Float(float_or(input, "view_range", INITIAL_VIEW_RANGE)));
         self.entity.data.set(DATA_SHADOW_RADIUS_ID, DataValue::Float(float_or(input, "shadow_radius", INITIAL_SHADOW_RADIUS)));
@@ -256,17 +257,17 @@ impl Display {
         self.entity.data.set(DATA_WIDTH_ID, DataValue::Float(float_or(input, "width", INITIAL_WIDTH)));
         self.entity.data.set(DATA_HEIGHT_ID, DataValue::Float(float_or(input, "height", INITIAL_HEIGHT)));
         self.entity.data.set(DATA_GLOW_COLOR_OVERRIDE_ID, DataValue::Int(int_or(input, "glow_color_override", NO_GLOW_COLOR_OVERRIDE)));
-        let brightness = input.get("brightness").and_then(|tag| Brightness::decode(tag).ok());
+        let brightness = tag_value_input::read_or_error(input, "brightness", |tag| Brightness::decode(tag));
         self.entity.data.set(DATA_BRIGHTNESS_OVERRIDE_ID, DataValue::Int(brightness.map_or(-1, Brightness::pack)));
         match self.kind {
             DisplayKind::BlockDisplay => {
-                let block_state = input.get("block_state").and_then(state_from_nbt).unwrap_or_else(|| blocks::AIR.default_state());
+                let block_state = tag_value_input::read_or_error(input, "block_state", crate::world::level::chunk::serialization::decode_block_state).unwrap_or_else(|| blocks::AIR.default_state());
                 self.entity.data.set(DATA_BLOCK_STATE_ID, DataValue::BlockState(block_state));
             }
             DisplayKind::ItemDisplay => {
-                let item = input.get("item").and_then(|tag| ItemStack::from_nbt(tag).ok()).filter(|item| !item.is_empty());
+                let item = tag_value_input::read(input, "item", ItemStack::from_nbt_partial).filter(|item| !item.is_empty());
                 self.entity.data.set(DATA_ITEM_STACK_ID, DataValue::ItemStack(item));
-                let item_display = input.get("item_display").and_then(|tag| codec::string_enum(tag, &item_display_context::VALUES).ok()).unwrap_or(ItemDisplayContext::None);
+                let item_display = tag_value_input::read_or_error(input, "item_display", |tag| codec::string_enum(tag, &item_display_context::VALUES)).unwrap_or(ItemDisplayContext::None);
                 self.entity.data.set(DATA_ITEM_DISPLAY_ID, DataValue::Byte(item_display.get_id()));
             }
             DisplayKind::TextDisplay { .. } => self.text_display_read_additional_save_data(input),
@@ -281,7 +282,7 @@ impl Display {
         let mut flags = load_flag(0, "shadow", FLAG_SHADOW);
         flags = load_flag(flags, "see_through", FLAG_SEE_THROUGH);
         flags = load_flag(flags, "default_background", FLAG_USE_DEFAULT_BACKGROUND);
-        if let Some(alignment) = input.get("alignment").and_then(|tag| codec::string_enum(tag, &ALIGNS).ok()) {
+        if let Some(alignment) = tag_value_input::read_or_error(input, "alignment", |tag| codec::string_enum(tag, &ALIGNS)) {
             flags = match alignment {
                 Align::Center => flags,
                 Align::Left => flags | FLAG_ALIGN_LEFT,
@@ -289,8 +290,8 @@ impl Display {
             };
         }
         self.entity.data.set(DATA_STYLE_FLAGS_ID, DataValue::Byte(flags));
-        if let Some(text) = input.get("text") {
-            let text = Component::from_nbt(text);
+        if let Some(text) = tag_value_input::read(input, "text", crate::network::chat::component_serialization::decode_custom_name) {
+            let text = Component::from_nbt(&text);
             if component_utils::needs_resolution(&text) {
                 if let DisplayKind::TextDisplay { pending_text } = &mut self.kind {
                     *pending_text = Some(text);

@@ -12,6 +12,7 @@ use crate::world::entity::variant::variant_utils;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc};
+use crate::world::level::storage::tag_value_input;
 
 const DATA_PAINTING_VARIANT_ID: usize = 9;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.5, 0.5);
@@ -105,10 +106,10 @@ impl Painting {
     }
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
-        let direction = input.get("facing").and_then(|tag| codec::int(tag).ok()).map_or(Direction::South, |value| Direction::from_2d_data_value(value as i8 as i32));
+        let direction = tag_value_input::read_or_error(input, "facing", |tag| codec::int(tag)).map_or(Direction::South, |value| Direction::from_2d_data_value(value as i8 as i32));
         block_attached_entity::read_additional_save_data(&mut self.entity, input);
         hanging_entity::set_direction(&mut self.entity, direction);
-        if let Some(variant) = input.get("variant").and_then(Nbt::as_str).and_then(|name| variant_utils::read_variant(painting_variant::REGISTRY, name)) {
+        if let Some(variant) = variant_utils::read_variant_field(input, "variant", painting_variant::REGISTRY) {
             self.set_variant(variant);
         }
     }

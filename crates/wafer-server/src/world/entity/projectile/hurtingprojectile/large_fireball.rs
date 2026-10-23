@@ -10,6 +10,7 @@ use crate::world::entity::{EntityDimensions, EntityId};
 use crate::world::level::server_explosion::ExplosionInteraction;
 use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::HitResult;
+use crate::world::level::storage::tag_value_input;
 
 const ENTITY_TYPE: &str = "minecraft:fireball";
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(1.0, 1.0);
@@ -54,7 +55,7 @@ impl Projectile {
         self.fireball_read_additional_save_data(input);
         let explosion_power = match input.get("ExplosionPower") {
             Some(Nbt::Byte(value)) => *value,
-            Some(value) => value.as_i64().map_or(DEFAULT_EXPLOSION_POWER, |value| value as i8),
+            Some(_) => tag_value_input::get_i64(input, "ExplosionPower").map_or(DEFAULT_EXPLOSION_POWER, |value| value as i8),
             None => DEFAULT_EXPLOSION_POWER,
         };
         if let ProjectileKind::LargeFireball(large_fireball) = &mut self.kind {

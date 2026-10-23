@@ -30,6 +30,7 @@ use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::update_flags::UPDATE_ALL;
+use crate::world::level::storage::tag_value_input;
 
 pub const HAS_EGG: usize = 18;
 pub const LAYING_EGG: usize = 19;
@@ -190,15 +191,12 @@ impl Turtle {
     }
 
     pub fn read_home_pos(mob: &mut Mob, input: &Nbt) {
-        let home_pos = match input.get("home_pos") {
-            Some(Nbt::IntArray(v)) if v.len() == 3 => BlockPos::new(v[0], v[1], v[2]),
-            _ => mob.entity.block_position(),
-        };
+        let home_pos = tag_value_input::read(input, "home_pos", crate::util::extra_codecs::block_pos).unwrap_or_else(|| mob.entity.block_position());
         set_home_pos(mob, home_pos);
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let has_egg = input.get("has_egg").and_then(Nbt::as_i64).map_or(DEFAULT_HAS_EGG, |v| v != 0);
+        let has_egg = tag_value_input::get_i64(input, "has_egg").map_or(DEFAULT_HAS_EGG, |v| v != 0);
         set_has_egg(&mut mob.entity, has_egg);
     }
 }

@@ -39,12 +39,13 @@ use crate::world::item::enchantment::enchantment_helper;
 use crate::world::item::enchantment::providers::vanilla_enchantment_providers;
 use crate::world::level::BlockGetter;
 use crate::world::level::block;
-use crate::world::level::chunk::serialization::{state_from_nbt, state_to_nbt};
+use crate::world::level::chunk::serialization::state_to_nbt;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::update_flags::UPDATE_ALL;
+use crate::world::level::storage::tag_value_input;
 
 const SPEED_MODIFIER_ATTACKING_ID: &str = "minecraft:attacking";
 const SPEED_MODIFIER_ATTACKING: AttributeModifier = AttributeModifier { id: Cow::Borrowed(SPEED_MODIFIER_ATTACKING_ID), amount: 0.15f32 as f64, operation: Operation::AddValue };
@@ -171,7 +172,7 @@ impl Enderman {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let carried_block_state = input.get("carriedBlockState").and_then(state_from_nbt).filter(|block_state| !block_state.is_air());
+        let carried_block_state = tag_value_input::read_or_error(input, "carriedBlockState", crate::world::level::chunk::serialization::decode_block_state).filter(|block_state| !block_state.is_air());
         set_carried_block(&mut mob.entity, carried_block_state);
     }
 }

@@ -29,6 +29,7 @@ use crate::world::item::trading::merchant_offers::MerchantOffers;
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_CONVERTING_ID: usize = 19;
 pub const DATA_VILLAGER_DATA: usize = 20;
@@ -181,7 +182,7 @@ impl ZombieVillager {
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         Zombie::read_additional_save_data(mob, input);
         let villager_data_optional = input.get("VillagerData").and_then(VillagerData::from_nbt);
-        let finalized = input.get("VillagerDataFinalized").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let finalized = tag_value_input::get_i64(input, "VillagerDataFinalized").is_some_and(|v| v != 0);
         if finalized || villager_data_optional.is_some() {
             set_villager_data_finalized(mob, true);
             let villager_data = match villager_data_optional {
@@ -190,12 +191,12 @@ impl ZombieVillager {
             };
             mob.entity.data.set(DATA_VILLAGER_DATA, DataValue::VillagerData(villager_data));
         }
-        let trade_offers = input.get("Offers").and_then(|offers| MerchantOffers::decode(offers).ok());
+        let trade_offers = tag_value_input::read_or_error(input, "Offers", MerchantOffers::decode);
         let gossips = input.get("Gossips").and_then(GossipContainer::from_nbt);
         let zombie_villager = zombie_villager_mut(mob);
         zombie_villager.trade_offers = trade_offers;
         zombie_villager.gossips = gossips;
-        let conversion_time = input.get("ConversionTime").and_then(Nbt::as_i64).map_or(NOT_CONVERTING, |v| v as i32);
+        let conversion_time = tag_value_input::get_i64(input, "ConversionTime").map_or(NOT_CONVERTING, |v| v as i32);
         if conversion_time != NOT_CONVERTING {
             let conversion_starter = input.get("ConversionPlayer").and_then(crate::world::entity::entity_save::uuid_from_nbt);
             Self::start_converting_detached(mob, conversion_starter, conversion_time);
@@ -203,7 +204,7 @@ impl ZombieVillager {
             mob.entity.data.set(DATA_CONVERTING_ID, DataValue::Boolean(false));
             zombie_villager_mut(mob).villager_conversion_time = NOT_CONVERTING;
         }
-        zombie_villager_mut(mob).villager_xp = input.get("Xp").and_then(Nbt::as_i64).map_or(DEFAULT_XP, |v| v as i32);
+        zombie_villager_mut(mob).villager_xp = tag_value_input::get_i64(input, "Xp").map_or(DEFAULT_XP, |v| v as i32);
     }
 
     fn start_converting_detached(mob: &mut Mob, player: Option<u128>, time: i32) {
@@ -255,7 +256,7 @@ impl ServerLevel {
     }
 
     pub fn zombie_villager_read_level_dependent_save_data(&mut self, id: EntityId, input: &Nbt) {
-        let conversion_time = input.get("ConversionTime").and_then(Nbt::as_i64).map_or(NOT_CONVERTING, |v| v as i32);
+        let conversion_time = tag_value_input::get_i64(input, "ConversionTime").map_or(NOT_CONVERTING, |v| v as i32);
         if conversion_time != NOT_CONVERTING {
             let conversion_starter = input.get("ConversionPlayer").and_then(crate::world::entity::entity_save::uuid_from_nbt);
             self.start_converting(id, conversion_starter, conversion_time);

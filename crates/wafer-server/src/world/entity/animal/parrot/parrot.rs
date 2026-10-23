@@ -35,6 +35,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_VARIANT_ID: usize = 20;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.5, 0.9).with_eye_height(0.54).with_passenger_attachments(&[Vec3::new(0.0, 0.4625f32 as f64, 0.0)]);
@@ -261,7 +262,7 @@ impl Parrot {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         crate::world::entity::tamable_animal::TamableAnimal::read_additional_save_data(mob, input);
-        let variant = input.get("Variant").and_then(Nbt::as_i64).map_or(Variant::RedBlue, |id| Variant::by_id(id as i32));
+        let variant = tag_value_input::get_i64(input, "Variant").map_or(Variant::RedBlue, |id| Variant::by_id(id as i32));
         set_variant(&mut mob.entity, variant);
     }
 }

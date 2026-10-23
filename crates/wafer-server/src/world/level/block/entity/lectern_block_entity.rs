@@ -9,6 +9,7 @@ use crate::world::entity::{EntityId, ItemEntity, LevelEntity};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, values};
 use crate::world::level::block::lectern_block;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_PAGE: usize = 0;
 pub const SLOT_BOOK: usize = 0;
@@ -57,7 +58,7 @@ impl LecternBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.book = input.get("Book").and_then(|book| ItemStack::from_nbt(book).ok()).map(resolve_book).unwrap_or_else(ItemStack::empty);
+        self.book = tag_value_input::read(input, "Book", ItemStack::from_nbt_partial).map(resolve_book).unwrap_or_else(ItemStack::empty);
         self.page_count = get_page_count(&self.book);
         self.page = int_or(input, "Page", 0).max(0).min(self.page_count - 1);
     }

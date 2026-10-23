@@ -6,6 +6,7 @@ use crate::world::entity::data::DataValue;
 use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::raid::raider::Raider;
 use crate::world::entity::{EntityId, sound_event};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_SPELL_CASTING_ID: usize = 17;
 const DEFAULT_SPELLCASTING_TICKS: i32 = 0;
@@ -53,7 +54,7 @@ pub fn spellcaster_illager_mut(mob: &mut Mob) -> &mut SpellcasterIllager {
 impl SpellcasterIllager {
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
         self.raider.read_additional_save_data(input);
-        self.spell_casting_tick_count = input.get("SpellTicks").and_then(Nbt::as_i64).map_or(DEFAULT_SPELLCASTING_TICKS, |v| v as i32);
+        self.spell_casting_tick_count = tag_value_input::get_i64(input, "SpellTicks").map_or(DEFAULT_SPELLCASTING_TICKS, |v| v as i32);
     }
 
     pub fn add_additional_save_data(&self, output: &mut Vec<(String, Nbt)>) {

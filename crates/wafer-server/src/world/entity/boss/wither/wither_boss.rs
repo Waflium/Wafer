@@ -31,6 +31,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::server_explosion::ExplosionInteraction;
 use crate::world::scores::player_team::PlayerTeam;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_TARGET_A: usize = 16;
 pub const DATA_TARGET_B: usize = 17;
@@ -130,7 +131,7 @@ impl WitherBoss {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let invulnerable_ticks = input.get("Invul").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_INVULNERABLE_TICKS);
+        let invulnerable_ticks = tag_value_input::get_numeric(input, "Invul").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_INVULNERABLE_TICKS);
         set_invulnerable_ticks(&mut mob.entity, invulnerable_ticks);
         WitherBoss::on_custom_name_set(mob);
     }

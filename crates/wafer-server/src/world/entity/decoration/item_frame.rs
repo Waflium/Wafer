@@ -17,6 +17,7 @@ use crate::world::level::block::entity::{byte_or, float_or};
 use crate::world::level::block::is_diode;
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 const DATA_ITEM: usize = 9;
 const DATA_ROTATION: usize = 10;
@@ -140,11 +141,11 @@ impl ItemFrame {
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
         block_attached_entity::read_additional_save_data(&mut self.entity, input);
-        let item_stack = input.get("Item").and_then(|tag| ItemStack::from_nbt(tag).ok()).unwrap_or_else(ItemStack::empty);
+        let item_stack = tag_value_input::read(input, "Item", ItemStack::from_nbt_partial).unwrap_or_else(ItemStack::empty);
         self.set_item_data(item_stack);
         self.entity.data.set(DATA_ROTATION, DataValue::Int(byte_or(input, "ItemRotation", 0) as i32 % NUM_ROTATIONS));
         self.drop_chance = float_or(input, "ItemDropChance", DEFAULT_DROP_CHANCE);
-        let facing = input.get("Facing").and_then(|tag| codec::int(tag).ok()).map_or(Direction::Down, |value| Direction::from_3d_data_value(value as i8 as i32));
+        let facing = tag_value_input::read_or_error(input, "Facing", |tag| codec::int(tag)).map_or(Direction::Down, |value| Direction::from_3d_data_value(value as i8 as i32));
         set_direction(&mut self.entity, facing);
         self.entity.set_shared_flag(flags::INVISIBLE, byte_or(input, "Invisible", 0) != 0);
         self.fixed = byte_or(input, "Fixed", 0) != 0;

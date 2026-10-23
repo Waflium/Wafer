@@ -11,6 +11,7 @@ use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind};
 use crate::world::entity::{Entity, EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 const DATA_SHEARED: usize = 16;
 const SHEARED_TAG_NAME: &str = "sheared";
@@ -42,7 +43,7 @@ impl Bogged {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let sheared = input.get(SHEARED_TAG_NAME).and_then(Nbt::as_i64).map_or(DEFAULT_SHEARED, |v| v != 0);
+        let sheared = tag_value_input::get_i64(input, SHEARED_TAG_NAME).map_or(DEFAULT_SHEARED, |v| v != 0);
         set_sheared(&mut mob.entity, sheared);
     }
 

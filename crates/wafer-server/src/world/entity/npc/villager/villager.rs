@@ -41,6 +41,7 @@ use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::trading::merchant_offer::MerchantOffer;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_VILLAGER_DATA: usize = 19;
 pub const DATA_VILLAGER_DATA_FINALIZED: usize = 20;
@@ -304,16 +305,19 @@ impl Villager {
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
         AbstractVillager::read_additional_save_data(mob, nbt);
-        let villager_data_optional = nbt.get("VillagerData").and_then(VillagerData::from_nbt);
-        let finalized = nbt.get("VillagerDataFinalized").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let villager_data_optional = tag_value_input::read_or_error(nbt, "VillagerData", |tag| {
+            crate::util::codec::map(tag)?;
+            VillagerData::from_nbt(tag).ok_or_else(|| "Invalid villager data".to_string())
+        });
+        let finalized = tag_value_input::get_i64(nbt, "VillagerDataFinalized").is_some_and(|v| v != 0);
         if finalized || villager_data_optional.is_some() {
             set_villager_data_finalized(&mut mob.entity, true);
             let villager_data = villager_data_optional.unwrap_or_else(create_default_villager_data);
             mob.entity.data.set(DATA_VILLAGER_DATA, DataValue::VillagerData(villager_data));
         }
-        let long = |key: &str, default: i64| nbt.get(key).and_then(Nbt::as_i64).unwrap_or(default);
+        let long = |key: &str, default: i64| tag_value_input::get_i64(nbt, key).unwrap_or(default);
         let villager = villager_mut(mob);
-        villager.food_level = nbt.get("FoodLevel").and_then(Nbt::as_i64).map_or(DEFAULT_FOOD_LEVEL as i32, |v| v as i8 as i32);
+        villager.food_level = tag_value_input::get_i64(nbt, "FoodLevel").map_or(DEFAULT_FOOD_LEVEL as i32, |v| v as i8 as i32);
         villager.gossips.clear();
         if let Some(gossips) = nbt.get("Gossips").and_then(GossipContainer::from_nbt) {
             villager.gossips.put_all(&gossips);

@@ -9,6 +9,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::BlockEntityKind;
+use crate::world::level::storage::tag_value_input;
 
 #[derive(Clone, Debug, Default)]
 pub struct VaultBlockEntity {
@@ -29,11 +30,11 @@ impl VaultBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        if let Some(server_data) = input.get(vault_server_data::TAG_NAME).and_then(|tag| VaultServerData::decode(tag).ok()) {
+        if let Some(server_data) = tag_value_input::read_or_error(input, vault_server_data::TAG_NAME, |tag| VaultServerData::decode(tag)) {
             self.server_data.set(&server_data);
         }
-        self.config = input.get(vault_config::TAG_NAME).and_then(|tag| VaultConfig::decode(tag).ok()).unwrap_or_default();
-        if let Some(shared_data) = input.get(vault_shared_data::TAG_NAME).and_then(|tag| VaultSharedData::decode(tag).ok()) {
+        self.config = tag_value_input::read_or_error(input, vault_config::TAG_NAME, |tag| VaultConfig::decode(tag)).unwrap_or_default();
+        if let Some(shared_data) = tag_value_input::read_or_error(input, vault_shared_data::TAG_NAME, |tag| VaultSharedData::decode(tag)) {
             self.shared_data.set(&shared_data);
         }
     }

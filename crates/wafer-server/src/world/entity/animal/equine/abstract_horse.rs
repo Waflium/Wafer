@@ -32,6 +32,7 @@ use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::simple_container::{SimpleContainer, SimpleContainerKind};
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const CHEST_SLOT_OFFSET: i32 = 499;
 pub const INVENTORY_SLOT_OFFSET: i32 = 500;
@@ -299,13 +300,13 @@ impl AbstractHorse {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let get_boolean = |key: &str| input.get(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let get_boolean = |key: &str| tag_value_input::get_i64(input, key).is_some_and(|v| v != 0);
         set_eating(&mut mob.entity, get_boolean("EatingHaystack"));
         set_bred(&mut mob.entity, get_boolean("Bred"));
-        let temper = input.get("Temper").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_TEMPER);
+        let temper = tag_value_input::get_numeric(input, "Temper").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_TEMPER);
         abstract_horse_mut(mob).temper = temper;
         set_tamed(&mut mob.entity, get_boolean("Tame"));
-        abstract_horse_mut(mob).owner = EntityReference::read(input, "Owner");
+        abstract_horse_mut(mob).owner = EntityReference::read_reporting_old_owner(input, "Owner");
     }
 }
 

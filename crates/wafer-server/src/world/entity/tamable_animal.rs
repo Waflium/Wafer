@@ -23,6 +23,7 @@ use crate::world::level::pathfinder::pathfinding_context::PathfindingContext;
 use crate::world::level::pathfinder::walk_node_evaluator;
 use crate::world::scores::player_team::PlayerTeam;
 use crate::world::InteractionHand;
+use crate::world::level::storage::tag_value_input;
 
 pub const TELEPORT_WHEN_DISTANCE_IS_SQ: f64 = 144.0;
 pub const DATA_FLAGS_ID: usize = 18;
@@ -103,7 +104,7 @@ impl TamableAnimal {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        match EntityReference::read(input, "Owner") {
+        match EntityReference::read_reporting_old_owner(input, "Owner") {
             Some(owner) => {
                 set_owner_reference(&mut mob.entity, Some(owner));
                 set_tame(mob, true, false);
@@ -113,7 +114,7 @@ impl TamableAnimal {
                 set_tame(mob, false, true);
             }
         }
-        let ordered_to_sit = input.get("Sitting").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let ordered_to_sit = tag_value_input::get_i64(input, "Sitting").is_some_and(|v| v != 0);
         tamable_animal_mut(mob).ordered_to_sit = ordered_to_sit;
         set_in_sitting_pose(&mut mob.entity, ordered_to_sit);
     }

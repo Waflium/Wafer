@@ -7,6 +7,7 @@ use super::mob::{Mob, MobKind};
 use crate::server::level::ServerLevel;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::block::entity::int_value;
+use crate::world::level::storage::tag_value_input;
 
 pub const TAG_ANGER_END_TIME: &str = "anger_end_time";
 pub const TAG_ANGRY_AT: &str = "angry_at";
@@ -72,9 +73,9 @@ impl ServerLevel {
     }
 
     pub fn read_persistent_anger_save_data(&mut self, id: EntityId, input: &Nbt) {
-        if let Some(end_time) = input.get(TAG_ANGER_END_TIME).and_then(Nbt::as_i64) {
+        if let Some(end_time) = tag_value_input::get_i64(input, TAG_ANGER_END_TIME) {
             self.set_persistent_anger_end_time(id, end_time);
-        } else if let Some(anger_time) = input.get("AngerTime").and_then(int_value) {
+        } else if let Some(anger_time) = tag_value_input::get_numeric(input, "AngerTime").and_then(int_value) {
             self.set_time_to_remain_angry(id, anger_time as i64);
         } else {
             self.set_persistent_anger_end_time(id, NO_ANGER_END_TIME);

@@ -22,6 +22,7 @@ use crate::world::entity::mob::{self, Mob, MobKind};
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, RemovalReason, sound_event};
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 pub const ID_SIZE: usize = 18;
 pub const MIN_SIZE: i32 = 1;
@@ -177,12 +178,12 @@ impl Mob {
     }
 
     pub fn abstract_cube_mob_read_size(&mut self, nbt: &Nbt) {
-        let size = nbt.get("Size").and_then(crate::world::level::block::entity::int_value).unwrap_or(0);
+        let size = tag_value_input::get_numeric(nbt, "Size").and_then(crate::world::level::block::entity::int_value).unwrap_or(0);
         self.set_size(size + 1, false);
     }
 
     pub fn abstract_cube_mob_read_was_on_ground(&mut self, nbt: &Nbt) {
-        let was_on_ground = nbt.get("wasOnGround").and_then(Nbt::as_i64).is_some_and(|v| v != 0);
+        let was_on_ground = tag_value_input::get_i64(nbt, "wasOnGround").is_some_and(|v| v != 0);
         self.abstract_cube_mob_mut().expect("a cube mob").was_on_ground = was_on_ground;
     }
 

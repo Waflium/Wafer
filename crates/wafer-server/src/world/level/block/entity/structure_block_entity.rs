@@ -15,6 +15,7 @@ use crate::world::level::levelgen::structure::templatesystem::structure_place_se
 use crate::world::level::levelgen::structure::templatesystem::structure_processor::StructureProcessor;
 use crate::world::level::levelgen::structure::templatesystem::structure_template::StructureTemplate;
 use crate::world::level::levelgen::structure::templatesystem::structure_template_manager;
+use crate::world::level::storage::tag_value_input;
 
 const SCAN_CORNER_BLOCKS_RANGE: i32 = 80;
 pub const MAX_OFFSET_PER_AXIS: i32 = 48;
@@ -106,7 +107,7 @@ impl StructureBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        let string_or = |key: &str| input.get(key).and_then(Nbt::as_str).unwrap_or_default().to_owned();
+        let string_or = |key: &str| tag_value_input::get_string(input, key).unwrap_or_default().to_owned();
         let int_or = |key: &str, default: i32| super::int_or(input, key, default);
         let bool_or = |key: &str, default: bool| super::byte_or(input, key, default as i8) != 0;
         self.set_structure_name(&string_or("name"));
@@ -126,7 +127,7 @@ impl StructureBlockEntity {
         self.show_air = bool_or("showair", false);
         self.show_bounding_box = bool_or("showboundingbox", true);
         self.integrity = super::float_or(input, "integrity", 1.0);
-        self.seed = input.get("seed").and_then(super::long_value).unwrap_or(0);
+        self.seed = tag_value_input::get_numeric(input, "seed").and_then(super::long_value).unwrap_or(0);
     }
 
     pub fn get_structure_name(&self) -> String {

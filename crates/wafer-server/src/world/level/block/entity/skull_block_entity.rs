@@ -1,6 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::world::item::component::{self as dc, DataComponentType};
+use crate::world::level::storage::tag_value_input;
 
 const TAG_PROFILE: &str = "profile";
 const TAG_NOTE_BLOCK_SOUND: &str = "note_block_sound";
@@ -27,9 +28,9 @@ impl SkullBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.owner = input.get(TAG_PROFILE).and_then(|profile| dc::PROFILE.decode(profile).ok());
-        self.note_block_sound = input.get(TAG_NOTE_BLOCK_SOUND).and_then(|sound| dc::NOTE_BLOCK_SOUND.decode(sound).ok());
-        self.custom_name = input.get(TAG_CUSTOM_NAME).and_then(|name| dc::CUSTOM_NAME.decode(name).ok());
+        self.owner = tag_value_input::read_or_error(input, TAG_PROFILE, |profile| dc::PROFILE.decode(profile));
+        self.note_block_sound = tag_value_input::read_or_error(input, TAG_NOTE_BLOCK_SOUND, |sound| dc::NOTE_BLOCK_SOUND.decode(sound));
+        self.custom_name = tag_value_input::read_or_error(input, TAG_CUSTOM_NAME, |name| dc::CUSTOM_NAME.decode(name));
     }
 
     pub fn get_owner_profile(&self) -> Option<&Nbt> {

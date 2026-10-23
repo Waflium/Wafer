@@ -21,6 +21,7 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, sound_event};
 use crate::world::level::BlockGetter;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::world::level::storage::tag_value_input;
 
 pub const ID_SIZE: usize = 16;
 const XP_REWARD: i32 = 5;
@@ -117,11 +118,8 @@ impl Phantom {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        phantom_mut(mob).anchor_point = match input.get("anchor_pos") {
-            Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])),
-            _ => None,
-        };
-        let size = input.get("size").and_then(Nbt::as_i64).map_or(0, |v| v as i32);
+        phantom_mut(mob).anchor_point = tag_value_input::read(input, "anchor_pos", crate::util::extra_codecs::block_pos);
+        let size = tag_value_input::get_i64(input, "size").map_or(0, |v| v as i32);
         Phantom::set_phantom_size(mob, size);
     }
 

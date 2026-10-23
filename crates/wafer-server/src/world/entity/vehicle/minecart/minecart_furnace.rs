@@ -9,6 +9,7 @@ use crate::world::entity::EntityId;
 use crate::world::entity::data::DataValue;
 use crate::world::item::ItemStack;
 use crate::world::{InteractionHand, InteractionResult};
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_ID_FUEL: usize = 13;
 const FUEL_TICKS_PER_ITEM: i32 = 3600;
@@ -62,11 +63,11 @@ impl MinecartFurnace {
     }
 
     pub fn read_additional_save_data(minecart: &mut AbstractMinecart, input: &Nbt) {
-        let x_push = input.get("PushX").and_then(Nbt::as_f64).unwrap_or(DEFAULT_PUSH.x);
-        let z_push = input.get("PushZ").and_then(Nbt::as_f64).unwrap_or(DEFAULT_PUSH.z);
+        let x_push = tag_value_input::get_f64(input, "PushX").unwrap_or(DEFAULT_PUSH.x);
+        let z_push = tag_value_input::get_f64(input, "PushZ").unwrap_or(DEFAULT_PUSH.z);
         let furnace = furnace_mut(minecart);
         furnace.push = Vec3::new(x_push, 0.0, z_push);
-        furnace.fuel = input.get("Fuel").and_then(Nbt::as_i64).map_or(DEFAULT_FUEL, |v| v as i16) as i32;
+        furnace.fuel = tag_value_input::get_i64(input, "Fuel").map_or(DEFAULT_FUEL, |v| v as i16) as i32;
     }
 
     fn calculate_new_push_along(&self, delta_movement: Vec3) -> Vec3 {

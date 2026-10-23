@@ -119,6 +119,46 @@ pub fn state_from_nbt(nbt: &Nbt) -> Option<BlockState> {
     }
 }
 
+pub fn decode_block_state(nbt: &Nbt) -> Result<BlockState, String> {
+    let unknown_block = |name: &str| match crate::resources::identifier::read(name) {
+        Ok(id) => match Block::by_name(&id) {
+            Some(block) => Ok(block),
+            None => Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:block]: {id}")),
+        },
+        Err(error) => Err(error),
+    };
+    let text = crate::nbt::to_string(nbt);
+    let (first, second) = match nbt {
+        Nbt::String(name) => match unknown_block(name) {
+            Ok(block) => return Ok(block.default_state()),
+            Err(error) => (error, format!("Not a map: {text}")),
+        },
+        Nbt::Compound(_) => {
+            let second = match nbt.get("id") {
+                None => format!("No key id in MapLike[{text}]"),
+                Some(Nbt::String(name)) => match unknown_block(name) {
+                    Ok(block) => {
+                        let mut state = block.default_state();
+                        if let Some(Nbt::Compound(properties)) = nbt.get("properties") {
+                            for (name, value) in properties {
+                                if let Some(updated) = value.as_str().and_then(|value| state.with_property_by_name(name, value)) {
+                                    state = updated;
+                                }
+                            }
+                        }
+                        return Ok(state);
+                    }
+                    Err(error) => error,
+                },
+                Some(_) => "Not a string".to_string(),
+            };
+            ("Not a string".to_string(), second)
+        }
+        _ => ("Not a string".to_string(), format!("Not a map: {text}")),
+    };
+    Err(format!("Failed to parse either. First: {first}; Second: {second}"))
+}
+
 fn mixed_list(items: Vec<Nbt>) -> Nbt {
     Nbt::List(items)
 }
