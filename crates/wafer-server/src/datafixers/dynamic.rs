@@ -307,6 +307,17 @@ impl Dynamic {
         self.remove(old_field_name).set_field_if_present(new_field_name, value)
     }
 
+    pub fn copy_field(source: &Dynamic, source_key: &str, target: Dynamic, target_key: &str) -> Dynamic {
+        Dynamic::copy_and_fix_field(source, source_key, target, target_key, |value| value)
+    }
+
+    pub fn copy_and_fix_field(source: &Dynamic, source_key: &str, target: Dynamic, target_key: &str, fixer: impl FnOnce(Dynamic) -> Dynamic) -> Dynamic {
+        match source.get(source_key).result() {
+            Some(value) => target.set(target_key, fixer(value)),
+            None => target,
+        }
+    }
+
     pub fn as_number(&self) -> DataResult<Number> {
         match &self.value {
             Some(tag) => get_number_value(tag),
@@ -449,6 +460,13 @@ impl Dynamic {
         self.as_stream().into_iter().map(f).collect()
     }
 
+    pub fn as_map<K, V>(&self, mut key_mapper: impl FnMut(Dynamic) -> K, mut value_mapper: impl FnMut(Dynamic) -> V) -> Vec<(K, V)> {
+        match self.get_map_values().value {
+            Some(entries) => entries.into_iter().map(|(key, value)| (key_mapper(key), value_mapper(value))).collect(),
+            None => Vec::new(),
+        }
+    }
+
     pub fn as_long_stream(&self) -> Vec<i64> {
         self.as_long_stream_opt().value.unwrap_or_default()
     }
@@ -553,6 +571,13 @@ impl OptionalDynamic {
 
     pub fn as_list<T>(self, f: impl FnMut(Dynamic) -> T) -> Vec<T> {
         self.as_stream().into_iter().map(f).collect()
+    }
+
+    pub fn as_map<K, V>(self, key_mapper: impl FnMut(Dynamic) -> K, value_mapper: impl FnMut(Dynamic) -> V) -> Vec<(K, V)> {
+        match self.result() {
+            Some(dynamic) => dynamic.as_map(key_mapper, value_mapper),
+            None => Vec::new(),
+        }
     }
 
     pub fn as_long_stream(self) -> Vec<i64> {

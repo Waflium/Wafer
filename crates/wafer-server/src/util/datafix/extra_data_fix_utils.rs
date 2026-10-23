@@ -39,6 +39,12 @@ pub fn patch_sub_type(ty: &Arc<Type>, find: &Arc<Type>, replace: &Arc<Type>) -> 
     types::patch_sub_type(ty, find, replace)
 }
 
+pub type TypedFilter = Box<dyn Fn(Typed) -> Typed + Send + Sync>;
+
+pub fn chain_all_filters(fixers: Vec<TypedFilter>) -> impl Fn(Typed) -> Typed + Send + Sync + 'static {
+    move |typed| fixers.iter().fold(typed, |typed, fixer| fixer(typed))
+}
+
 pub fn fix_string_field(dynamic: Dynamic, field_name: &str, fix: impl FnOnce(&str) -> String) -> Dynamic {
     let created = |value: String| Dynamic::new(wafer_protocol::nbt::Nbt::String(value));
     dynamic.update(field_name, |field| match field.as_string().into_result() {

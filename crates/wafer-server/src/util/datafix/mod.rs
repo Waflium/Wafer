@@ -6,4 +6,6 @@ pub mod schemas;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_from_3500;
 pub mod data_fix_types;

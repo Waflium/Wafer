@@ -98,7 +98,7 @@ fn resolves(ty: &Arc<Type>, finder: &OpticFinder) -> bool {
     match &**ty {
         Type::Named(_, element) | Type::Hook(element, _, _) | Type::List(element) => resolves(element, finder),
         Type::RecursivePoint(..) => resolves(&ty.unfold(), finder),
-        Type::Product(first, second) | Type::Sum(first, second) => resolves(first, finder) || resolves(second, finder),
+        Type::Product(first, second) | Type::Sum(first, second) | Type::CompoundList(first, second) => resolves(first, finder) || resolves(second, finder),
         Type::TaggedChoice(choice) => choice.types.iter().any(|(_, element)| resolves(element, finder)),
         _ => false,
     }
@@ -149,6 +149,17 @@ fn visit(ty: &Arc<Type>, value: &mut Value, finder: &OpticFinder, f: &mut dyn Fn
                 visit(element, value, finder, f);
             }
         }
+        (Type::CompoundList(key, element), Value::CompoundList(entries)) => {
+            if resolves(key, finder) {
+                for (key_value, _) in entries {
+                    visit(key, key_value, finder, f);
+                }
+            } else if resolves(element, finder) {
+                for (_, entry_value) in entries {
+                    visit(element, entry_value, finder, f);
+                }
+            }
+        }
         (Type::TaggedChoice(choice), Value::Choice(key, inner)) => {
             if let Some(element) = choice.get(key)
                 && resolves(element, finder)
@@ -183,6 +194,9 @@ pub fn with_focus_type(ty: &Arc<Type>, finder: &OpticFinder, new_focus: &Arc<Typ
             if resolves(first, finder) { Arc::new(Type::Product(sub(first), second.clone())) } else { Arc::new(Type::Product(first.clone(), sub(second))) }
         }
         Type::Sum(first, second) => Arc::new(Type::Sum(sub(first), sub(second))),
+        Type::CompoundList(key, element) => {
+            if resolves(key, finder) { Arc::new(Type::CompoundList(sub(key), element.clone())) } else { Arc::new(Type::CompoundList(key.clone(), sub(element))) }
+        }
         Type::TaggedChoice(choice) => Arc::new(Type::TaggedChoice(Arc::new(crate::datafixers::types::TaggedChoiceType {
             name: choice.name.clone(),
             key_type: choice.key_type,
