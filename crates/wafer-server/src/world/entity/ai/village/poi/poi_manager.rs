@@ -38,8 +38,6 @@ impl SectionData for PoiSection {
     }
 }
 
-pub const MAX_VILLAGE_DISTANCE: i32 = 6;
-
 fn block_section_key(pos: BlockPos) -> i64 {
     section_key(pos.x >> 4, pos.y >> 4, pos.z >> 4)
 }

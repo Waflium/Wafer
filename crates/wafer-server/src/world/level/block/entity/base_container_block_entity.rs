@@ -26,7 +26,7 @@ impl BaseContainerBlockEntity {
 
     pub fn load_additional(&mut self, input: &Nbt) {
         self.lock_key = input.get("lock").and_then(|lock| dc::LOCK.decode(lock).ok());
-        self.name = input.get("CustomName").and_then(|name| dc::CUSTOM_NAME.decode(name).ok());
+        self.name = crate::network::chat::component_serialization::parse_custom_name_safe(input, "CustomName");
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

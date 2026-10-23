@@ -8,7 +8,7 @@ use crate::commands::source::{CommandSource, CommandSourceStack};
 use crate::network::chat::Component;
 use crate::server::Server;
 use crate::world::entity::EntityId;
-use crate::world::item::component as dc;
+use crate::network::chat::component_serialization::parse_custom_name_safe;
 
 const NO_LAST_EXECUTION: i64 = -1;
 
@@ -51,10 +51,6 @@ impl Default for BaseCommandBlock {
             custom_name: None,
         }
     }
-}
-
-fn parse_custom_name_safe(input: &Nbt, key: &str) -> Option<Nbt> {
-    input.get(key).and_then(|name| dc::CUSTOM_NAME.decode(name).ok())
 }
 
 impl BaseCommandBlock {

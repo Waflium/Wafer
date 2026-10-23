@@ -136,6 +136,7 @@ fn either_error(tag: &Nbt, list_error: String, map_error: String) -> String {
 }
 
 pub fn decode(tag: &Nbt) -> Result<Nbt, String> {
+    crate::network::chat::component_serialization::decode(tag)?;
     let snbt = || nbt::to_string(tag);
     match tag {
         Nbt::String(s) => Ok(Nbt::String(s.clone())),

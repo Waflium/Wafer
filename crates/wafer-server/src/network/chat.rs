@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod component_serialization_tests;
 pub mod component_serialization;
 pub mod component_utils;
 pub mod last_seen_messages;

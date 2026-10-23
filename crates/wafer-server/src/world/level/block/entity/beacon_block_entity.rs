@@ -121,7 +121,7 @@ impl BeaconBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
         self.primary_power = load_effect(input, TAG_PRIMARY);
         self.secondary_power = load_effect(input, TAG_SECONDARY);
-        self.name = input.get("CustomName").and_then(|name| dc::CUSTOM_NAME.decode(name).ok());
+        self.name = crate::network::chat::component_serialization::parse_custom_name_safe(input, "CustomName");
         self.lock_key = input.get("lock").and_then(|lock| dc::LOCK.decode(lock).ok());
     }
 

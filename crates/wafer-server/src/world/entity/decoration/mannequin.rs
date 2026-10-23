@@ -156,7 +156,7 @@ impl Mannequin {
         self.set_pose(pose);
         self.set_immovable(input.get("immovable").and_then(Nbt::as_i64).is_some_and(|v| v != 0));
         self.set_hide_description(input.get("hide_description").and_then(Nbt::as_i64).is_some_and(|v| v != 0));
-        let description = input.get("description").and_then(|tag| crate::network::chat::component_serialization::decode(tag).ok()).map_or_else(default_description, |c| c.to_nbt());
+        let description = input.get("description").and_then(crate::network::chat::component_serialization::decode_or_partial).map_or_else(default_description, |c| c.to_nbt());
         self.set_description(description);
     }
 

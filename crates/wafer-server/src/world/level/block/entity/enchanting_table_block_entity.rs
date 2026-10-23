@@ -15,7 +15,7 @@ impl EnchantingTableBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.name = input.get("CustomName").and_then(|name| dc::CUSTOM_NAME.decode(name).ok());
+        self.name = crate::network::chat::component_serialization::parse_custom_name_safe(input, "CustomName");
     }
 
     pub fn set_custom_name(&mut self, name: Option<Nbt>) {

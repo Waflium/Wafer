@@ -396,7 +396,7 @@ impl Entity {
     }
 
     pub fn set_custom_name(&mut self, name: Option<Nbt>) {
-        let name = name.and_then(|name| crate::network::chat::component_serialization::decode(&name).ok()).map(|name| name.to_nbt());
+        let name = name.and_then(|name| crate::network::chat::component_serialization::decode_or_partial(&name)).map(|name| name.to_nbt());
         self.data.set(data::ids::CUSTOM_NAME, DataValue::OptionalComponent(name));
     }
 

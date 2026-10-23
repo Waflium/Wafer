@@ -35,7 +35,7 @@ impl BannerBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.name = input.get("CustomName").and_then(|name| dc::CUSTOM_NAME.decode(name).ok());
+        self.name = crate::network::chat::component_serialization::parse_custom_name_safe(input, "CustomName");
         self.patterns = input.get(TAG_PATTERNS).and_then(|patterns| dc::BANNER_PATTERNS.decode(patterns).ok()).unwrap_or(Nbt::List(Vec::new()));
     }
 

@@ -7,28 +7,105 @@ use crate::commands::arguments::selector::entity_selector::EntitySelector;
 use crate::commands::arguments::selector::entity_selector_parser::EntitySelectorParser;
 use crate::commands::brigadier::{StringReader, tr};
 
-struct Error {
-    message: String,
-    partial: bool,
+struct DataResult<T> {
+    value: Option<T>,
+    error: Option<String>,
 }
 
-impl Error {
-    fn new(message: impl Into<String>) -> Error {
-        Error { message: message.into(), partial: false }
+impl<T> DataResult<T> {
+    fn success(value: T) -> DataResult<T> {
+        DataResult { value: Some(value), error: None }
     }
 
-    fn partial(self) -> Error {
-        Error { partial: true, ..self }
+    fn error(message: impl Into<String>) -> DataResult<T> {
+        DataResult { value: None, error: Some(message.into()) }
+    }
+
+    fn from_result(result: std::result::Result<T, String>) -> DataResult<T> {
+        match result {
+            Ok(value) => DataResult::success(value),
+            Err(message) => DataResult::error(message),
+        }
+    }
+
+    fn is_success(&self) -> bool {
+        self.error.is_none()
+    }
+
+    fn map<U>(self, f: impl FnOnce(T) -> U) -> DataResult<U> {
+        DataResult { value: self.value.map(f), error: self.error }
+    }
+
+    fn flat_map<U>(self, f: impl FnOnce(T) -> DataResult<U>) -> DataResult<U> {
+        let Some(value) = self.value else { return DataResult { value: None, error: self.error } };
+        let second = f(value);
+        let error = match (self.error, second.error) {
+            (Some(first), Some(second)) => Some(format!("{first}; {second}")),
+            (first, second) => first.or(second),
+        };
+        DataResult { value: second.value, error }
+    }
+
+    fn into_result(self) -> std::result::Result<T, String> {
+        match self.error {
+            None => Ok(self.value.expect("a successful value")),
+            Some(message) => Err(message),
+        }
     }
 }
 
-impl From<String> for Error {
-    fn from(message: String) -> Error {
-        Error::new(message)
+fn record_error(errors: &[&Option<String>]) -> Option<String> {
+    let messages: Vec<&str> = errors.iter().rev().filter_map(|error| error.as_deref()).collect();
+    (!messages.is_empty()).then(|| messages.join("; "))
+}
+
+fn either<T>(first: DataResult<T>, second: impl FnOnce() -> DataResult<T>) -> DataResult<T> {
+    if first.is_success() {
+        return first;
+    }
+    let second = second();
+    if second.is_success() {
+        return second;
+    }
+    if first.value.is_some() {
+        return first;
+    }
+    if second.value.is_some() {
+        return second;
+    }
+    DataResult::error(format!("Failed to parse either. First: {}; Second: {}", first.error.expect("an error"), second.error.expect("an error")))
+}
+
+fn optional<T>(tag: Option<&Nbt>, decode: impl FnOnce(&Nbt) -> DataResult<T>) -> DataResult<Option<T>> {
+    match tag {
+        None => DataResult::success(None),
+        Some(tag) => {
+            let result = decode(tag);
+            DataResult { value: Some(result.value), error: result.error }
+        }
     }
 }
 
-type Result<T> = std::result::Result<T, Error>;
+fn list<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T>> {
+    let Nbt::List(items) = tag else { return DataResult::error(format!("Not a list: {}", snbt(tag))) };
+    let mut elements = Vec::new();
+    let mut errors = Vec::new();
+    for item in items {
+        let result = decode(item);
+        if let Some(error) = result.error {
+            errors.push(error);
+        }
+        if let Some(value) = result.value {
+            elements.push(value);
+        }
+    }
+    errors.reverse();
+    DataResult { value: Some(elements), error: (!errors.is_empty()).then(|| errors.join("; ")) }
+}
+
+fn non_empty_list<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T>> {
+    list(tag, decode).flat_map(|elements| if elements.is_empty() { DataResult::error("List must have contents") } else { DataResult::success(elements) })
+}
 
 const STYLE_KEYS: [&str; 11] = ["color", "shadow_color", "bold", "italic", "underlined", "strikethrough", "obfuscated", "click_event", "hover_event", "insertion", "font"];
 
@@ -40,81 +117,88 @@ fn get<'a>(fields: &'a [(String, Nbt)], key: &str) -> Option<&'a Nbt> {
     fields.iter().find(|(k, _)| k == key).map(|(_, v)| v)
 }
 
-fn no_key(key: &str, fields: &[(String, Nbt)]) -> Error {
-    Error::new(format!("No key {key} in MapLike[{}]", snbt(&Nbt::Compound(fields.to_vec()))))
+fn no_key(key: &str, fields: &[(String, Nbt)]) -> String {
+    format!("No key {key} in MapLike[{}]", snbt(&Nbt::Compound(fields.to_vec())))
 }
 
-fn required<'a>(fields: &'a [(String, Nbt)], key: &str) -> Result<&'a Nbt> {
-    get(fields, key).ok_or_else(|| no_key(key, fields))
-}
-
-fn string(tag: &Nbt) -> Result<String> {
-    match tag {
-        Nbt::String(s) => Ok(s.clone()),
-        _ => Err(Error::new("Not a string")),
+fn required<T>(fields: &[(String, Nbt)], key: &str, decode: impl FnOnce(&Nbt) -> DataResult<T>) -> DataResult<T> {
+    match get(fields, key) {
+        Some(tag) => decode(tag),
+        None => DataResult::error(no_key(key, fields)),
     }
 }
 
-fn boolean(tag: &Nbt) -> Result<bool> {
-    tag.as_f64().map(|v| v != 0.0).ok_or_else(|| Error::new("Not a number"))
+fn string(tag: &Nbt) -> DataResult<String> {
+    match tag {
+        Nbt::String(s) => DataResult::success(s.clone()),
+        _ => DataResult::error("Not a string"),
+    }
 }
 
-fn int(tag: &Nbt) -> Result<i32> {
+fn boolean(tag: &Nbt) -> DataResult<bool> {
+    match tag.as_f64() {
+        Some(value) => DataResult::success(value != 0.0),
+        None => DataResult::error("Not a number"),
+    }
+}
+
+fn number(tag: &Nbt) -> Option<f64> {
     match tag {
-        Nbt::Byte(v) => Ok(*v as i32),
-        Nbt::Short(v) => Ok(*v as i32),
-        Nbt::Int(v) => Ok(*v),
-        Nbt::Long(v) => Ok(*v as i32),
-        Nbt::Float(v) => Ok(*v as i32),
-        Nbt::Double(v) => Ok(*v as i32),
-        _ => Err(Error::new("Not a number")),
+        Nbt::Byte(v) => Some(*v as f64),
+        Nbt::Short(v) => Some(*v as f64),
+        Nbt::Int(v) => Some(*v as f64),
+        Nbt::Long(v) => Some(*v as f64),
+        Nbt::Float(v) => Some(*v as f64),
+        Nbt::Double(v) => Some(*v),
+        _ => None,
+    }
+}
+
+fn int(tag: &Nbt) -> DataResult<i32> {
+    match tag {
+        Nbt::Byte(v) => DataResult::success(*v as i32),
+        Nbt::Short(v) => DataResult::success(*v as i32),
+        Nbt::Int(v) => DataResult::success(*v),
+        Nbt::Long(v) => DataResult::success(*v as i32),
+        Nbt::Float(v) => DataResult::success(*v as i32),
+        Nbt::Double(v) => DataResult::success(*v as i32),
+        _ => DataResult::error("Not a number"),
+    }
+}
+
+fn float(tag: &Nbt) -> DataResult<f32> {
+    match number(tag) {
+        Some(value) => DataResult::success(value as f32),
+        None => DataResult::error("Not a number"),
     }
 }
 
 pub fn decode(tag: &Nbt) -> std::result::Result<Component, String> {
-    decode_component(tag).map_err(|e| e.message)
+    decode_component(tag).into_result()
+}
+
+pub fn decode_or_partial(tag: &Nbt) -> Option<Component> {
+    decode_component(tag).value
+}
+
+pub fn parse_custom_name_safe(input: &Nbt, key: &str) -> Option<Nbt> {
+    input.get(key).and_then(decode_or_partial).map(|name| name.to_nbt())
 }
 
 pub fn decode_style_fields(fields: &[(String, Nbt)]) -> std::result::Result<Style, String> {
-    style_fields(fields).map_err(|e| e.message)
+    style_fields(fields).into_result()
 }
 
-fn decode_component(tag: &Nbt) -> Result<Component> {
-    let special = match tag {
-        Nbt::String(s) => return Ok(Component::literal(s.clone())),
-        Nbt::List(items) => match decode_list(items) {
-            Ok(list) => return Ok(create_from_list(list)),
-            Err(e) if e.partial => return Err(e),
-            Err(e) => format!("Failed to parse either. First: Not a string; Second: {}", e.message),
-        },
-        _ => format!("Failed to parse either. First: Not a string; Second: Not a list: {}", snbt(tag)),
+fn decode_component(tag: &Nbt) -> DataResult<Component> {
+    let literal = match tag {
+        Nbt::String(s) => DataResult::success(Component::literal(s.clone())),
+        _ => DataResult::error("Not a string"),
     };
-    let full = match tag {
+    let special = either(literal, || non_empty_list(tag, decode_component).map(create_from_list));
+    either(special, || match tag {
         Nbt::Compound(fields) => decode_full(fields),
-        _ => Err(Error::new(format!("Not a map: {}", snbt(tag)))),
-    };
-    full.map_err(|e| if e.partial { e } else { Error::new(format!("Failed to parse either. First: {special}; Second: {}", e.message)) })
-}
-
-fn decode_list(items: &[Nbt]) -> Result<Vec<Component>> {
-    let mut list = Vec::new();
-    let mut errors = Vec::new();
-    for item in items {
-        match decode_component(item) {
-            Ok(component) => list.push(component),
-            Err(e) => errors.push(e.message),
-        }
-    }
-    if !errors.is_empty() {
-        if list.is_empty() {
-            errors.push("List must have contents".into());
-        }
-        return Err(Error::new(errors.join("; ")).partial());
-    }
-    if list.is_empty() {
-        return Err(Error::new("List must have contents"));
-    }
-    Ok(list)
+        _ => DataResult::error(format!("Not a map: {}", snbt(tag))),
+    })
 }
 
 fn create_from_list(list: Vec<Component>) -> Component {
@@ -124,75 +208,84 @@ fn create_from_list(list: Vec<Component>) -> Component {
     result
 }
 
-fn decode_full(fields: &[(String, Nbt)]) -> Result<Component> {
-    let contents = decode_contents(fields)?;
-    let siblings = match get(fields, "extra") {
-        Some(Nbt::List(items)) => decode_list(items).map_err(Error::partial)?,
-        Some(other) => return Err(Error::new(format!("Not a list: {}", snbt(other))).partial()),
-        None => Vec::new(),
+fn decode_full(fields: &[(String, Nbt)]) -> DataResult<Component> {
+    let contents = decode_contents(fields);
+    let extra = optional(get(fields, "extra"), |tag| non_empty_list(tag, decode_component));
+    let style = style_fields(fields);
+    let error = record_error(&[&contents.error, &extra.error, &style.error]);
+    let value = match (contents.value, extra.value, style.value) {
+        (Some(contents), Some(siblings), Some(style)) => Some(Component { contents, style, siblings: siblings.unwrap_or_default() }),
+        _ => None,
     };
-    let style = style_fields(fields)?;
-    Ok(Component { contents, style, siblings })
+    DataResult { value, error }
 }
 
 const CONTENT_TYPES: [&str; 7] = ["text", "translatable", "keybind", "score", "selector", "nbt", "object"];
 
-fn decode_contents(fields: &[(String, Nbt)]) -> Result<Contents> {
+fn decode_contents(fields: &[(String, Nbt)]) -> DataResult<Contents> {
     if let Some(kind) = get(fields, "type") {
-        let kind = string(kind)?;
+        let Some(kind) = string(kind).value else { return DataResult::error("Not a string") };
         if !CONTENT_TYPES.contains(&kind.as_str()) {
-            return Err(Error::new(format!("Unknown ID: {kind}")));
+            return DataResult::error(format!("Unknown ID: {kind}"));
         }
         return decode_content_type(&kind, fields);
     }
     for kind in CONTENT_TYPES {
-        if let Ok(contents) = decode_content_type(kind, fields) {
-            return Ok(contents);
+        let contents = decode_content_type(kind, fields);
+        if contents.is_success() {
+            return contents;
         }
     }
-    Err(Error::new("No matching codec found"))
+    DataResult::error("No matching codec found")
 }
 
-fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> Result<Contents> {
+fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> DataResult<Contents> {
     match kind {
-        "text" => Ok(Contents::Literal(string(required(fields, "text")?)?)),
+        "text" => required(fields, "text", string).map(Contents::Literal),
         "translatable" => {
-            let key = string(required(fields, "translate")?)?;
-            let fallback = get(fields, "fallback").and_then(|f| string(f).ok());
-            let args = match get(fields, "with") {
-                Some(Nbt::List(items)) => items.iter().map(decode_arg).collect::<Result<Vec<_>>>().map_err(Error::partial)?,
-                Some(other) => return Err(Error::new(format!("Not a list: {}", snbt(other))).partial()),
-                None => Vec::new(),
+            let key = required(fields, "translate", string);
+            let fallback = get(fields, "fallback").and_then(|f| string(f).value);
+            let args = optional(get(fields, "with"), |tag| list(tag, decode_arg));
+            let error = record_error(&[&key.error, &args.error]);
+            let value = match (key.value, args.value) {
+                (Some(key), Some(args)) => Some(Contents::Translatable { key, fallback, args: args.unwrap_or_default() }),
+                _ => None,
             };
-            Ok(Contents::Translatable { key, fallback, args })
+            DataResult { value, error }
         }
-        "keybind" => Ok(Contents::Keybind(string(required(fields, "keybind")?)?)),
-        "score" => {
-            let score = required(fields, "score")?;
-            let Nbt::Compound(score) = score else { return Err(Error::new(format!("Not a map: {}", snbt(score)))) };
-            let name = string(required(score, "name")?)?;
-            let objective = string(required(score, "objective")?)?;
-            let selector = compile_selector(&name).ok().map(Box::new);
-            Ok(Contents::Score { name, selector, objective })
-        }
+        "keybind" => required(fields, "keybind", string).map(Contents::Keybind),
+        "score" => required(fields, "score", |score| {
+            let Nbt::Compound(score) = score else { return DataResult::error(format!("Not a map: {}", snbt(score))) };
+            let name = required(score, "name", |name| either(string(name), || DataResult::error("Not a string")));
+            let objective = required(score, "objective", string);
+            let error = record_error(&[&name.error, &objective.error]);
+            let value = match (name.value, objective.value) {
+                (Some(name), Some(objective)) => {
+                    let selector = compile_selector(&name).ok().map(Box::new);
+                    Some(Contents::Score { name, selector, objective })
+                }
+                _ => None,
+            };
+            DataResult { value, error }
+        }),
         "selector" => {
-            let pattern = string(required(fields, "selector")?)?;
-            let selector = Box::new(compile_selector(&pattern).map_err(Error::new)?);
-            let separator = match get(fields, "separator") {
-                Some(separator) => Some(Box::new(decode_component(separator).map_err(Error::partial)?)),
-                None => None,
+            let selector = required(fields, "selector", |pattern| {
+                string(pattern).flat_map(|pattern| DataResult::from_result(compile_selector(&pattern)).map(|selector| (pattern, selector)))
+            });
+            let separator = optional(get(fields, "separator"), decode_component);
+            let error = record_error(&[&selector.error, &separator.error]);
+            let value = match (selector.value, separator.value) {
+                (Some((pattern, selector)), Some(separator)) => Some(Contents::Selector { pattern, selector: Box::new(selector), separator: separator.map(Box::new) }),
+                _ => None,
             };
-            Ok(Contents::Selector { pattern, selector, separator })
+            DataResult { value, error }
         }
-        "nbt" => {
-            string(required(fields, "nbt")?)?;
-            Ok(Contents::Other(content_fields(fields)))
-        }
+        "nbt" => required(fields, "nbt", string).map(|_| Contents::Other(content_fields(fields))),
         _ => {
             if get(fields, "object").is_none() && get(fields, "sprite").is_none() && get(fields, "player").is_none() {
-                return Err(no_key("object", fields));
+                return DataResult::error(no_key("object", fields));
             }
-            Ok(Contents::Other(content_fields(fields)))
+            DataResult::success(Contents::Other(content_fields(fields)))
         }
     }
 }
@@ -216,8 +309,8 @@ fn compile_selector(pattern: &str) -> std::result::Result<EntitySelector, String
     result.map_err(|e| format!("Invalid selector component: {pattern}: {}", e.get_message()))
 }
 
-fn decode_arg(tag: &Nbt) -> Result<Arg> {
-    Ok(match tag {
+fn decode_arg(tag: &Nbt) -> DataResult<Arg> {
+    let primitive = match tag {
         Nbt::String(s) => Arg::String(s.clone()),
         Nbt::Byte(v) => Arg::Byte(*v),
         Nbt::Short(v) => Arg::Short(*v),
@@ -226,81 +319,83 @@ fn decode_arg(tag: &Nbt) -> Result<Arg> {
         Nbt::Float(v) => Arg::Float(*v),
         Nbt::Double(v) => Arg::Double(*v),
         other => {
-            let component = decode_component(other).map_err(|e| {
-                if e.partial { e } else { Error::new(format!("Failed to parse either. First: This value needs to be parsed as component; Second: {}", e.message)) }
-            })?;
-            match component.contents {
+            return either(DataResult::error("This value needs to be parsed as component"), || decode_component(other)).map(|component| match component.contents {
                 Contents::Literal(text) if component.style.is_empty() && component.siblings.is_empty() => Arg::String(text),
                 _ => Arg::Component(component),
-            }
+            });
         }
+    };
+    DataResult::success(primitive)
+}
+
+fn style_fields(fields: &[(String, Nbt)]) -> DataResult<Style> {
+    let color = optional(get(fields, "color"), |color| string(color).flat_map(|color| DataResult::from_result(TextColor::parse_color(&color))));
+    let shadow_color = optional(get(fields, "shadow_color"), argb_color);
+    let bold = optional(get(fields, "bold"), boolean);
+    let italic = optional(get(fields, "italic"), boolean);
+    let underlined = optional(get(fields, "underlined"), boolean);
+    let strikethrough = optional(get(fields, "strikethrough"), boolean);
+    let obfuscated = optional(get(fields, "obfuscated"), boolean);
+    let click_event = optional(get(fields, "click_event"), |click| DataResult::from_result(click_event(click)));
+    let hover_event = optional(get(fields, "hover_event"), hover_event);
+    let insertion = optional(get(fields, "insertion"), string);
+    let font = optional(get(fields, "font"), |font| {
+        string(font).flat_map(|font| DataResult::from_result(crate::resources::identifier::read(&font).map(|_| parse_identifier(&font).expect("a valid identifier"))))
+    });
+    let error = record_error(&[
+        &color.error,
+        &shadow_color.error,
+        &bold.error,
+        &italic.error,
+        &underlined.error,
+        &strikethrough.error,
+        &obfuscated.error,
+        &click_event.error,
+        &hover_event.error,
+        &insertion.error,
+        &font.error,
+    ]);
+    let style = Style {
+        color: color.value.flatten(),
+        shadow_color: shadow_color.value.flatten(),
+        bold: bold.value.flatten(),
+        italic: italic.value.flatten(),
+        underlined: underlined.value.flatten(),
+        strikethrough: strikethrough.value.flatten(),
+        obfuscated: obfuscated.value.flatten(),
+        click_event: click_event.value.flatten(),
+        hover_event: hover_event.value.flatten(),
+        insertion: insertion.value.flatten(),
+        font: font.value.flatten(),
+    };
+    DataResult { value: Some(style), error }
+}
+
+fn argb_color(tag: &Nbt) -> DataResult<i32> {
+    either(int(tag), || {
+        list(tag, float).flat_map(|channels| {
+            if channels.len() != 4 {
+                return DataResult::error("Input is not a list of 4 elements");
+            }
+            let channel = |f: f32| wafer_core::mth::floor((f * 255.0) as f64) & 0xFF;
+            DataResult::success(channel(channels[3]) << 24 | channel(channels[0]) << 16 | channel(channels[1]) << 8 | channel(channels[2]))
+        })
     })
 }
 
-fn style_fields(fields: &[(String, Nbt)]) -> Result<Style> {
-    style_fields_strict(fields).map_err(Error::partial)
-}
-
-fn style_fields_strict(fields: &[(String, Nbt)]) -> Result<Style> {
-    let mut style = Style::default();
-    if let Some(color) = get(fields, "color") {
-        style.color = Some(TextColor::parse_color(&string(color)?)?);
-    }
-    if let Some(shadow) = get(fields, "shadow_color") {
-        style.shadow_color = Some(argb_color(shadow)?);
-    }
-    for (key, slot) in [
-        ("bold", &mut style.bold),
-        ("italic", &mut style.italic),
-        ("underlined", &mut style.underlined),
-        ("strikethrough", &mut style.strikethrough),
-        ("obfuscated", &mut style.obfuscated),
-    ] {
-        if let Some(value) = get(fields, key) {
-            *slot = Some(boolean(value)?);
-        }
-    }
-    if let Some(click) = get(fields, "click_event") {
-        style.click_event = Some(click_event(click)?);
-    }
-    if let Some(hover) = get(fields, "hover_event") {
-        style.hover_event = Some(hover_event(hover)?);
-    }
-    if let Some(insertion) = get(fields, "insertion") {
-        style.insertion = Some(string(insertion)?);
-    }
-    if let Some(font) = get(fields, "font") {
-        let font = string(font)?;
-        style.font = Some(parse_identifier(&font).ok_or_else(|| Error::new(format!("Not a valid resource location: {font}")))?);
-    }
-    Ok(style)
-}
-
-fn argb_color(tag: &Nbt) -> Result<i32> {
-    if let Ok(value) = int(tag) {
-        return Ok(value);
-    }
-    let Nbt::List(items) = tag else { return Err(Error::new(format!("Not a list: {}", snbt(tag)))) };
-    let channels = items.iter().map(|i| i.as_f64().map(|v| v as f32).ok_or_else(|| Error::new("Not a number"))).collect::<Result<Vec<f32>>>()?;
-    if channels.len() != 4 {
-        return Err(Error::new(format!("Input is not a list of 4 elements: {}", snbt(tag))));
-    }
-    let channel = |f: f32| wafer_core::mth::floor((f * 255.0) as f64) & 0xFF;
-    Ok(channel(channels[3]) << 24 | channel(channels[0]) << 16 | channel(channels[1]) << 8 | channel(channels[2]))
-}
-
-fn click_event(tag: &Nbt) -> Result<ClickEvent> {
-    let Nbt::Compound(fields) = tag else { return Err(Error::new(format!("Not a map: {}", snbt(tag)))) };
-    let action = string(required(fields, "action")?)?;
+fn click_event(tag: &Nbt) -> std::result::Result<ClickEvent, String> {
+    let Nbt::Compound(fields) = tag else { return Err(format!("Not a map: {}", snbt(tag))) };
+    let field = |key: &str| required(fields, key, string).into_result();
+    let action = field("action")?;
     Ok(match action.as_str() {
-        "open_url" => ClickEvent::OpenUrl(string(required(fields, "url")?)?),
-        "run_command" => ClickEvent::RunCommand(string(required(fields, "command")?)?),
-        "suggest_command" => ClickEvent::SuggestCommand(string(required(fields, "command")?)?),
-        "copy_to_clipboard" => ClickEvent::CopyToClipboard(string(required(fields, "value")?)?),
+        "open_url" => ClickEvent::OpenUrl(field("url")?),
+        "run_command" => ClickEvent::RunCommand(field("command")?),
+        "suggest_command" => ClickEvent::SuggestCommand(field("command")?),
+        "copy_to_clipboard" => ClickEvent::CopyToClipboard(field("value")?),
         "change_page" => {
-            let page = int(required(fields, "page")?)?;
+            let page = required(fields, "page", int).into_result()?;
             if page <= 0 {
-                return Err(Error::new(format!("Value must be positive: {page}")));
+                return Err(format!("Value must be positive: {page}"));
             }
             ClickEvent::ChangePage(page)
         }
@@ -308,48 +403,65 @@ fn click_event(tag: &Nbt) -> Result<ClickEvent> {
             let action = if action == "custom" { "custom" } else { "show_dialog" };
             ClickEvent::Other { action, fields: fields.iter().filter(|(k, _)| k != "action").cloned().collect() }
         }
-        "open_file" => return Err(Error::new("Click event type not allowed: OPEN_FILE")),
-        other => return Err(Error::new(format!("Unknown element name:{other}"))),
+        "open_file" => return Err("Click event type not allowed: OPEN_FILE".into()),
+        other => return Err(format!("Unknown element name:{other}")),
     })
 }
 
-fn hover_event(tag: &Nbt) -> Result<HoverEvent> {
-    let Nbt::Compound(fields) = tag else { return Err(Error::new(format!("Not a map: {}", snbt(tag)))) };
-    let action = string(required(fields, "action")?)?;
-    Ok(match action.as_str() {
-        "show_text" => HoverEvent::ShowText(Box::new(decode_component(required(fields, "value")?)?)),
+fn hover_event(tag: &Nbt) -> DataResult<HoverEvent> {
+    let Nbt::Compound(fields) = tag else { return DataResult::error(format!("Not a map: {}", snbt(tag))) };
+    let action = match required(fields, "action", string).into_result() {
+        Ok(action) => action,
+        Err(message) => return DataResult::error(message),
+    };
+    match action.as_str() {
+        "show_text" => required(fields, "value", decode_component).map(|value| HoverEvent::ShowText(Box::new(value))),
         "show_item" => {
-            let raw = string(required(fields, "id")?)?;
-            let id = parse_identifier(&raw)
-                .and_then(|id| registry::ITEM.iter().find(|&&i| i == id))
-                .ok_or_else(|| Error::new(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: {raw}")))?;
-            let count = match get(fields, "count") {
-                Some(count) => int(count)?,
-                None => 1,
+            let id = required(fields, "id", |raw| {
+                string(raw).flat_map(|raw| match parse_identifier(&raw).and_then(|id| registry::ITEM.iter().find(|&&i| i == id)) {
+                    Some(id) => DataResult::success(*id),
+                    None => DataResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: {raw}")),
+                })
+            });
+            let count = optional(get(fields, "count"), |count| {
+                int(count).flat_map(|count| {
+                    if (1..=99).contains(&count) { DataResult::success(count) } else { DataResult::error(format!("Value must be within range [1;99]: {count}")) }
+                })
+            });
+            let components = optional(get(fields, "components"), |components| match components {
+                Nbt::Compound(c) => DataResult::success(c.clone()),
+                other => DataResult::error(format!("Not a map: {}", snbt(other))),
+            });
+            let error = record_error(&[&id.error, &count.error, &components.error]);
+            let value = match (id.value, count.value, components.value) {
+                (Some(id), Some(count), Some(components)) => Some(HoverEvent::ShowItem { id, count: count.unwrap_or(1), components: components.unwrap_or_default() }),
+                _ => None,
             };
-            let components = match get(fields, "components") {
-                Some(Nbt::Compound(c)) => c.clone(),
-                Some(other) => return Err(Error::new(format!("Not a map: {}", snbt(other)))),
-                None => Vec::new(),
-            };
-            HoverEvent::ShowItem { id, count, components }
+            DataResult { value, error }
         }
         "show_entity" => {
-            let raw = string(required(fields, "id")?)?;
-            let id = parse_identifier(&raw)
-                .and_then(|id| registry::ENTITY_TYPE.iter().find(|&&t| t == id))
-                .ok_or_else(|| Error::new(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_type]: {raw}")))?;
-            let uuid = match required(fields, "uuid")? {
-                Nbt::IntArray(ints) if ints.len() == 4 => ints.iter().fold(0u128, |acc, &i| acc << 32 | i as u32 as u128),
-                Nbt::String(s) => crate::commands::arguments::java_uuid_from_string(s).ok_or_else(|| Error::new(format!("Invalid UUID {s}")))?,
-                other => return Err(Error::new(format!("Not an int array: {}", snbt(other)))),
+            let id = required(fields, "id", |raw| {
+                string(raw).flat_map(|raw| match parse_identifier(&raw).and_then(|id| registry::ENTITY_TYPE.iter().find(|&&t| t == id)) {
+                    Some(id) => DataResult::success(*id),
+                    None => DataResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_type]: {raw}")),
+                })
+            });
+            let uuid = required(fields, "uuid", |uuid| match uuid {
+                Nbt::IntArray(ints) if ints.len() == 4 => DataResult::success(ints.iter().fold(0u128, |acc, &i| acc << 32 | i as u32 as u128)),
+                Nbt::String(s) => match crate::commands::arguments::java_uuid_from_string(s) {
+                    Some(uuid) => DataResult::success(uuid),
+                    None => DataResult::error(format!("Invalid UUID {s}")),
+                },
+                other => DataResult::error(format!("Not an int array: {}", snbt(other))),
+            });
+            let name = optional(get(fields, "name"), decode_component);
+            let error = record_error(&[&id.error, &uuid.error, &name.error]);
+            let value = match (id.value, uuid.value, name.value) {
+                (Some(id), Some(uuid), Some(name)) => Some(HoverEvent::ShowEntity { id, uuid, name: name.map(Box::new) }),
+                _ => None,
             };
-            let name = match get(fields, "name") {
-                Some(name) => Some(Box::new(decode_component(name)?)),
-                None => None,
-            };
-            HoverEvent::ShowEntity { id, uuid, name }
+            DataResult { value, error }
         }
-        other => return Err(Error::new(format!("Unknown element name:{other}"))),
-    })
+        other => DataResult::error(format!("Unknown element name:{other}")),
+    }
 }
