@@ -97,6 +97,7 @@ use crate::util::datafix::fixes::jukebox_ticks_since_song_started_fix::JukeboxTi
 use crate::util::datafix::fixes::legacy_block_property_rename_and_fix::LegacyBlockPropertyRenameAndFix;
 use crate::util::datafix::fixes::legacy_block_rename_fix::LegacyBlockRenameFix;
 use crate::util::datafix::fixes::legacy_dragon_fight_fix::LegacyDragonFightFix;
+use crate::util::datafix::fixes::legacy_hover_event_fix::LegacyHoverEventFix;
 use crate::util::datafix::fixes::legacy_world_border_fix::LegacyWorldBorderFix;
 use crate::util::datafix::fixes::level_dat_difficulty_fix::LevelDatDifficultyFix;
 use crate::util::datafix::fixes::level_dat_to_saved_data_preparation_fix::LevelDatToSavedDataPreparationFix;
@@ -109,6 +110,7 @@ use crate::util::datafix::fixes::mob_effect_id_fix::MobEffectIdFix;
 use crate::util::datafix::fixes::mob_spawner_entity_identifiers_fix::MobSpawnerEntityIdentifiersFix;
 use crate::util::datafix::fixes::named_entity_convert_unchecked_fix::NamedEntityConvertUncheckedFix;
 use crate::util::datafix::fixes::namespaced_type_rename_fix::NamespacedTypeRenameFix;
+use crate::util::datafix::fixes::ominous_banner_rarity_fix::OminousBannerRarityFix;
 use crate::util::datafix::fixes::options_accessibility_onboard_fix::OptionsAccessibilityOnboardFix;
 use crate::util::datafix::fixes::options_ambient_occlusion_fix::OptionsAmbientOcclusionFix;
 use crate::util::datafix::fixes::options_force_default_graphics_api_fix::OptionsForceDefaultGraphicsApiFix;
@@ -152,6 +154,7 @@ use crate::util::datafix::fixes::trial_spawner_config_fix::TrialSpawnerConfigFix
 use crate::util::datafix::fixes::trial_spawner_config_in_registry_fix::TrialSpawnerConfigInRegistryFix;
 use crate::util::datafix::fixes::trident_animation_fix::TridentAnimationFix;
 use crate::util::datafix::fixes::unfilled_buried_treasure_map_fix::UnfilledBuriedTreasureMapFix;
+use crate::util::datafix::fixes::unflatten_text_component_fix::UnflattenTextComponentFix;
 use crate::util::datafix::fixes::variant_rename_fix::VariantRenameFix;
 use crate::util::datafix::fixes::villager_set_can_pick_up_loot_fix::VillagerSetCanPickUpLootFix;
 use crate::util::datafix::fixes::villager_set_villager_data_finalized::VillagerSetVillagerDataFinalized;
@@ -762,7 +765,8 @@ fn add_fixers(fixer_upper: &mut DataFixerBuilder) {
     let v3945 = fixer_upper.add_schema(3945, &NAMESPACED_SCHEMA);
     fixer_upper.add_fixer(AttributeModifierIdFix::new(&v3945));
     fixer_upper.add_fixer(JukeboxTicksSinceSongStartedFix::new(&v3945));
-    fixer_upper.add_schema(4054, &NAMESPACED_SCHEMA);
+    let v4054 = fixer_upper.add_schema(4054, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(OminousBannerRarityFix::new(&v4054));
     let v4055 = fixer_upper.add_schema(4055, &NAMESPACED_SCHEMA);
     fixer_upper.add_fixer(AttributeIdPrefixFix::new(&v4055));
     let v4059 = fixer_upper.add_schema(4059, &V4059);
@@ -805,8 +809,10 @@ fn add_fixers(fixer_upper: &mut DataFixerBuilder) {
     fixer_upper.add_fixer(EntityAttributeBaseValueFix::new(&v4187, "Llama follow range fix", "minecraft:llama", "minecraft:follow_range", |value| if value == 40.0 { 16.0 } else { value }));
     fixer_upper.add_fixer(EntityAttributeBaseValueFix::new(&v4187, "Piglin Brute follow range fix", "minecraft:piglin_brute", "minecraft:follow_range", |value| if value == 16.0 { 12.0 } else { value }));
     fixer_upper.add_fixer(EntityAttributeBaseValueFix::new(&v4187, "Warden follow range fix", "minecraft:warden", "minecraft:follow_range", |value| if value == 16.0 { 24.0 } else { value }));
-    fixer_upper.add_schema(4290, &V4290);
+    let v4290 = fixer_upper.add_schema(4290, &V4290);
+    fixer_upper.add_fixer(UnflattenTextComponentFix::new(&v4290));
     let v4291 = fixer_upper.add_schema(4291, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(LegacyHoverEventFix::new(&v4291));
     fixer_upper.add_fixer(TextComponentStringifiedFlagsFix::new(&v4291));
     let v4292 = fixer_upper.add_schema(4292, &V4292);
     fixer_upper.add_fixer(TextComponentHoverAndClickEventFix::new(&v4292));
