@@ -105,6 +105,12 @@ impl BoundingBox {
         (min.z..=max.z).flat_map(move |z| (min.y..=max.y).flat_map(move |y| (min.x..=max.x).map(move |x| BlockPos::new(x, y, z))))
     }
 
+    pub fn encapsulate(mut self, pos: BlockPos) -> BoundingBox {
+        self.min = BlockPos::new(self.min.x.min(pos.x), self.min.y.min(pos.y), self.min.z.min(pos.z));
+        self.max = BlockPos::new(self.max.x.max(pos.x), self.max.y.max(pos.y), self.max.z.max(pos.z));
+        self
+    }
+
     pub fn of(content: BlockPos) -> BoundingBox {
         BoundingBox { min: content, max: content }
     }

@@ -42,7 +42,7 @@ impl TemplatePlaceSettings {
 pub struct TemplateStructurePiece {
     pub piece: StructurePiece,
     pub template_name: String,
-    pub template: &'static StructureTemplate,
+    pub template: std::sync::Arc<StructureTemplate>,
     pub place_settings: TemplatePlaceSettings,
     pub template_position: BlockPos,
 }

@@ -120,6 +120,7 @@ mod spawner_block;
 mod sponge_block;
 mod stair_block;
 mod stonecutter_block;
+mod structure_block;
 mod target_block;
 pub mod tnt_block;
 mod torch_block;
@@ -761,6 +762,7 @@ fn for_class(class: &str, block: Block) -> Option<Box<dyn BlockBehaviour>> {
         "SnowLayerBlock" => Box::new(snow_layer_block::SnowLayerBlock),
         "StairBlock" => Box::new(stair_block::StairBlock),
         "StonecutterBlock" => Box::new(stonecutter_block::StonecutterBlock),
+        "StructureBlock" => Box::new(structure_block::StructureBlock),
         "TrapDoorBlock" => Box::new(trap_door_block::TrapDoorBlock::new(block)),
         "WallBlock" => Box::new(wall_block::WallBlock),
         "WeatheringCopperBarsBlock" => Box::new(weathering_copper_bars_block::WeatheringCopperBarsBlock),

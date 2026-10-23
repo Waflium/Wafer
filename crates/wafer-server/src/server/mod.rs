@@ -294,6 +294,7 @@ impl Server {
         let data_configuration = data.data_configuration.clone();
         let new_world = !data.initialized;
         let world_dir = config.world.clone().map(|root| WorldDir { root });
+        crate::world::level::levelgen::structure::templatesystem::structure_template_manager::set_generated_dir(world_dir.as_ref().map(WorldDir::generated));
         let mut clocks = ServerClockManager::new();
         let game_rules = GameRules::default();
         if !new_world {

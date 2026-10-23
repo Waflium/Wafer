@@ -1,4 +1,3 @@
-use wafer_core::random::LegacyRandomSource;
 use wafer_core::{BlockPos, ChunkPos};
 
 use crate::commands::arguments::coordinates::{ERROR_NOT_LOADED, get_loaded_block_pos};
@@ -11,6 +10,7 @@ use crate::core::holder_set::HolderSet;
 use crate::network::chat::Component;
 use crate::server::Server;
 use crate::server::level::ServerLevel;
+use crate::world::level::block::entity::structure_block_entity::create_random;
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::feature::feature::{self, Feature};
@@ -190,10 +190,6 @@ pub fn place_template_with(server: &mut Server, context: &CommandContext, source
     let seed = if context.has_argument("seed") { context.get_int("seed") } else { 0 };
     let strict = context.nodes.iter().any(|n| wafer_data::commands::CommandNode::get(n.node).name == "strict");
     place_template(server, source, context.get_identifier("template"), pos, rotation, mirror, integrity, seed, strict)
-}
-
-fn create_random(seed: i64) -> LegacyRandomSource {
-    if seed == 0 { LegacyRandomSource::create() } else { LegacyRandomSource::new(seed) }
 }
 
 #[allow(clippy::too_many_arguments)]

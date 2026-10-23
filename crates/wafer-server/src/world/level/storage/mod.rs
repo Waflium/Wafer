@@ -144,6 +144,10 @@ impl WorldDir {
     pub fn data(&self, name: &str) -> PathBuf {
         self.root.join("data/minecraft").join(format!("{name}.dat"))
     }
+    pub fn generated(&self) -> PathBuf {
+        self.root.join("generated")
+    }
+
     pub fn data_folder(&self) -> PathBuf {
         self.root.join("data")
     }

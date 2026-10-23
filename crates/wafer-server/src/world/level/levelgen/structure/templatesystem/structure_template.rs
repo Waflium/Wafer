@@ -19,18 +19,22 @@ use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::structure::BoundingBox;
 
+#[derive(Clone)]
 pub struct StructureTemplate {
     palettes: Vec<Palette>,
     entity_info_list: Vec<StructureEntityInfo>,
     size: BlockPos,
+    author: String,
 }
 
+#[derive(Clone)]
 pub struct StructureEntityInfo {
     pub pos: Vec3,
     pub block_pos: BlockPos,
     pub nbt: Nbt,
 }
 
+#[derive(Clone)]
 pub struct Palette {
     blocks: Vec<StructureBlockInfo>,
     cached_jigsaws: std::sync::OnceLock<Vec<JigsawBlockInfo>>,
@@ -137,6 +141,35 @@ fn build_info_list(mut full_block_list: Vec<StructureBlockInfo>, mut block_entit
     block_info_list
 }
 
+#[derive(Default)]
+struct SimplePalette {
+    ids: Vec<Option<BlockState>>,
+    last_id: usize,
+}
+
+impl SimplePalette {
+    fn id_for(&mut self, state: BlockState) -> usize {
+        if let Some(id) = self.ids.iter().position(|&s| s == Some(state)) {
+            return id;
+        }
+        let id = self.last_id;
+        self.last_id += 1;
+        self.add_mapping(state, id);
+        id
+    }
+
+    fn add_mapping(&mut self, state: BlockState, id: usize) {
+        if self.ids.len() <= id {
+            self.ids.resize(id + 1, None);
+        }
+        self.ids[id] = Some(state);
+    }
+}
+
+fn int_list_tag(x: i32, y: i32, z: i32) -> Nbt {
+    Nbt::List(vec![Nbt::Int(x), Nbt::Int(y), Nbt::Int(z)])
+}
+
 fn int_list(tag: Option<&Nbt>) -> [i32; 3] {
     let list = tag.map(Nbt::as_list).unwrap_or(&[]);
     let int_or = |i: usize| match list.get(i) {
@@ -147,7 +180,107 @@ fn int_list(tag: Option<&Nbt>) -> [i32; 3] {
 }
 
 impl StructureTemplate {
-    pub const EMPTY: StructureTemplate = StructureTemplate { palettes: Vec::new(), entity_info_list: Vec::new(), size: BlockPos::ZERO };
+    pub fn empty() -> StructureTemplate {
+        StructureTemplate { palettes: Vec::new(), entity_info_list: Vec::new(), size: BlockPos::ZERO, author: "?".into() }
+    }
+
+    pub fn get_author(&self) -> &str {
+        &self.author
+    }
+
+    pub fn set_author(&mut self, author: String) {
+        self.author = author;
+    }
+
+    pub fn fill_from_world(&mut self, level: &mut ServerLevel, position: BlockPos, size: BlockPos, inlude_entities: bool, ignore_blocks: &[wafer_data::Block]) {
+        if size.x < 1 || size.y < 1 || size.z < 1 {
+            return;
+        }
+        let corner2 = position.offset(size.x, size.y, size.z).offset(-1, -1, -1);
+        let mut full_block_list = Vec::new();
+        let mut block_entities_list = Vec::new();
+        let mut other_blocks_list = Vec::new();
+        let min_corner = BlockPos::new(position.x.min(corner2.x), position.y.min(corner2.y), position.z.min(corner2.z));
+        let max_corner = BlockPos::new(position.x.max(corner2.x), position.y.max(corner2.y), position.z.max(corner2.z));
+        self.size = size;
+        level.find_blocks_in(min_corner, max_corner).filter_state(|state| !ignore_blocks.contains(&state.block())).for_each(level, |level, pos, state| {
+            let relative_pos = BlockPos::new(pos.x - min_corner.x, pos.y - min_corner.y, pos.z - min_corner.z);
+            let nbt = level.get_block_entity(pos).map(|block_entity| block_entity.save_with_id());
+            add_to_lists(StructureBlockInfo { pos: relative_pos, state, nbt }, &mut full_block_list, &mut block_entities_list, &mut other_blocks_list);
+        });
+        let block_info_list = build_info_list(full_block_list, block_entities_list, other_blocks_list);
+        self.palettes.clear();
+        self.palettes.push(Palette { blocks: block_info_list, cached_jigsaws: std::sync::OnceLock::new() });
+        if inlude_entities {
+            self.fill_entity_list(level, min_corner, max_corner);
+        } else {
+            self.entity_info_list.clear();
+        }
+    }
+
+    fn fill_entity_list(&mut self, level: &mut ServerLevel, min_corner: BlockPos, max_corner: BlockPos) {
+        let area = wafer_core::AABB::new(min_corner.x as f64, min_corner.y as f64, min_corner.z as f64, (max_corner.x + 1) as f64, (max_corner.y + 1) as f64, (max_corner.z + 1) as f64);
+        let entities = level.get_entities_matching(None, &area, |level, id| !level.players.contains_key(&id));
+        self.entity_info_list.clear();
+        for id in entities {
+            let entity = level.entity_ref(id).unwrap();
+            let pos = Vec3::new(entity.x() - min_corner.x as f64, entity.y() - min_corner.y as f64, entity.z() - min_corner.z as f64);
+            let block_pos = if matches!(level.entities.get(&id), Some(LevelEntity::Painting(_))) {
+                let painting_pos = entity.block_attached_pos();
+                BlockPos::new(painting_pos.x - min_corner.x, painting_pos.y - min_corner.y, painting_pos.z - min_corner.z)
+            } else {
+                BlockPos::containing(pos.x, pos.y, pos.z)
+            };
+            let nbt = level.save_entity(id).unwrap_or(Nbt::Compound(Vec::new()));
+            self.entity_info_list.push(StructureEntityInfo { pos, block_pos, nbt });
+        }
+    }
+
+    pub fn save(&self) -> Nbt {
+        let mut tag = Vec::new();
+        if self.palettes.is_empty() {
+            tag.push(("blocks".to_string(), Nbt::List(Vec::new())));
+            tag.push(("palette".to_string(), Nbt::List(Vec::new())));
+        } else {
+            let mut palettes: Vec<SimplePalette> = (0..self.palettes.len()).map(|_| SimplePalette::default()).collect();
+            let mut block_list = Vec::new();
+            let main_palette_blocks = self.palettes[0].blocks();
+            for (i, block_info) in main_palette_blocks.iter().enumerate() {
+                let mut block_tag = vec![("pos".to_string(), int_list_tag(block_info.pos.x, block_info.pos.y, block_info.pos.z))];
+                let id = palettes[0].id_for(block_info.state);
+                block_tag.push(("state".to_string(), Nbt::Int(id as i32)));
+                if let Some(nbt) = &block_info.nbt {
+                    block_tag.push(("nbt".to_string(), nbt.clone()));
+                }
+                block_list.push(Nbt::Compound(block_tag));
+                for p in 1..self.palettes.len() {
+                    palettes[p].add_mapping(self.palettes[p].blocks()[i].state, id);
+                }
+            }
+            tag.push(("blocks".to_string(), Nbt::List(block_list)));
+            let palette_tag = |palette: &SimplePalette| Nbt::List(palette.ids.iter().flatten().map(|&state| crate::nbt::write_block_state(state)).collect());
+            if palettes.len() == 1 {
+                tag.push(("palette".to_string(), palette_tag(&palettes[0])));
+            } else {
+                tag.push(("palettes".to_string(), Nbt::List(palettes.iter().map(palette_tag).collect())));
+            }
+        }
+        let entity_list = self
+            .entity_info_list
+            .iter()
+            .map(|entity_info| {
+                Nbt::Compound(vec![
+                    ("pos".to_string(), Nbt::List(vec![Nbt::Double(entity_info.pos.x), Nbt::Double(entity_info.pos.y), Nbt::Double(entity_info.pos.z)])),
+                    ("blockPos".to_string(), int_list_tag(entity_info.block_pos.x, entity_info.block_pos.y, entity_info.block_pos.z)),
+                    ("nbt".to_string(), entity_info.nbt.clone()),
+                ])
+            })
+            .collect();
+        tag.push(("entities".to_string(), Nbt::List(entity_list)));
+        tag.push(("size".to_string(), int_list_tag(self.size.x, self.size.y, self.size.z)));
+        tag.push(("DataVersion".to_string(), Nbt::Int(wafer_data::WORLD_VERSION)));
+        Nbt::Compound(tag)
+    }
 
     pub fn get_size(&self) -> BlockPos {
         self.size
@@ -379,7 +512,7 @@ impl StructureTemplate {
                 Some(StructureEntityInfo { pos, block_pos: BlockPos::new(x, y, z), nbt })
             })
             .collect();
-        StructureTemplate { palettes, entity_info_list, size }
+        StructureTemplate { palettes, entity_info_list, size, author: "?".into() }
     }
 }
 

@@ -227,7 +227,7 @@ impl RuinedPortalPiece {
         let mirror = Mirror::by_legacy_name(tag.get("Mirror").and_then(Nbt::as_str)?)?;
         let rotation = Rotation::by_legacy_name(tag.get("Rotation").and_then(Nbt::as_str)?)?;
         let template = TemplateStructurePiece::load(RUINED_PORTAL, tag, |location| {
-            make_settings(mirror, rotation, vertical_placement, pivot(structure_template_manager::get_or_create(location)), &properties)
+            make_settings(mirror, rotation, vertical_placement, pivot(&structure_template_manager::get_or_create(location)), &properties)
         })?;
         Some(RuinedPortalPiece { template, vertical_placement, properties })
     }

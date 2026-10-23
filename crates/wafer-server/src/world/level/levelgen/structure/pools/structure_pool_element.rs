@@ -60,7 +60,7 @@ impl SinglePoolElement {
         })
     }
 
-    fn get_template(&self) -> &'static StructureTemplate {
+    fn get_template(&self) -> std::sync::Arc<StructureTemplate> {
         structure_template_manager::get_or_create(&self.template)
     }
 

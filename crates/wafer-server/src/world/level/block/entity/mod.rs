@@ -41,6 +41,7 @@ pub mod the_end_gateway_block_entity;
 pub mod trial_spawner_block_entity;
 pub mod shulker_box_block_entity;
 pub mod skull_block_entity;
+pub mod structure_block_entity;
 pub mod spawner_block_entity;
 pub mod trialspawner;
 pub mod vault;
@@ -144,6 +145,7 @@ pub enum BlockEntityKind {
     Jigsaw(jigsaw_block_entity::JigsawBlockEntity),
     PistonMoving(piston_moving_block_entity::PistonMovingBlockEntity),
     CommandBlock(command_block_entity::CommandBlockEntity),
+    StructureBlock(structure_block_entity::StructureBlockEntity),
     Other(Vec<(String, Nbt)>),
 }
 
@@ -205,6 +207,7 @@ impl BlockEntity {
             types::END_GATEWAY => BlockEntityKind::EndGateway(the_end_gateway_block_entity::TheEndGatewayBlockEntity::default()),
             types::JIGSAW => BlockEntityKind::Jigsaw(jigsaw_block_entity::JigsawBlockEntity::default()),
             types::COMMAND_BLOCK => BlockEntityKind::CommandBlock(command_block_entity::CommandBlockEntity::new(state.is_block(wafer_data::blocks::CHAIN_COMMAND_BLOCK))),
+            types::STRUCTURE_BLOCK => BlockEntityKind::StructureBlock(structure_block_entity::StructureBlockEntity::new(state)),
             types::PISTON => BlockEntityKind::PistonMoving(piston_moving_block_entity::PistonMovingBlockEntity::default()),
             _ => BlockEntityKind::Other(Vec::new()),
         };
@@ -327,6 +330,7 @@ impl BlockEntity {
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.load_additional(input, state),
             BlockEntityKind::PistonMoving(piston) => piston.load_additional(input),
             BlockEntityKind::CommandBlock(command_block) => command_block.load_additional(input),
+            BlockEntityKind::StructureBlock(structure_block) => structure_block.load_additional(input),
             BlockEntityKind::Other(data) => {
                 let _ = state;
                 *data = match input {
@@ -377,6 +381,7 @@ impl BlockEntity {
             BlockEntityKind::Jigsaw(jigsaw) => jigsaw.save_additional(output),
             BlockEntityKind::PistonMoving(piston) => piston.save_additional(output),
             BlockEntityKind::CommandBlock(command_block) => command_block.save_additional(output),
+            BlockEntityKind::StructureBlock(structure_block) => structure_block.save_additional(output),
             BlockEntityKind::Other(data) => output.extend(data.iter().cloned()),
         }
     }

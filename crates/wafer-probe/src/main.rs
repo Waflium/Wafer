@@ -314,6 +314,27 @@ async fn main() -> anyhow::Result<()> {
                             })
                             .await?;
                         }
+                        ["structure", x, y, z, update_type, mode, name, ox, oy, oz, sx, sy, sz, mirror, rotation, integrity, seed, flags] => {
+                            let (x, y, z): (i32, i32, i32) = (x.parse()?, y.parse()?, z.parse()?);
+                            let bytes: Vec<i8> = [ox, oy, oz, sx, sy, sz].iter().map(|v| v.parse()).collect::<Result<_, _>>()?;
+                            let (update_type, mode, mirror, rotation): (i32, i32, i32, i32) = (update_type.parse()?, mode.parse()?, mirror.parse()?, rotation.parse()?);
+                            let (integrity, seed, flags): (f32, i64, u8) = (integrity.parse()?, seed.parse()?, flags.parse()?);
+                            let name = if *name == "-" { "" } else { name };
+                            send(&mut wr, codec, play::serverbound::SET_STRUCTURE_BLOCK, |w| {
+                                w.position(x, y, z);
+                                w.varint(update_type);
+                                w.varint(mode);
+                                w.string(name);
+                                bytes.iter().for_each(|&b| w.u8(b as u8));
+                                w.varint(mirror);
+                                w.varint(rotation);
+                                w.string("");
+                                w.f32(integrity);
+                                w.varlong(seed);
+                                w.u8(flags);
+                            })
+                            .await?;
+                        }
                         ["rot", y_rot, x_rot] => {
                             let (y_rot, x_rot): (f32, f32) = (y_rot.parse()?, x_rot.parse()?);
                             send(&mut wr, codec, play::serverbound::MOVE_PLAYER_ROT, |w| {

@@ -27,6 +27,10 @@ use crate::world::level::BlockGetter;
 use crate::world::level::block::BlockHitResult;
 use crate::world::level::block::entity::BlockEntityKind;
 use crate::world::level::block::entity::jigsaw_block_entity::{JigsawBlockEntity, JointType};
+use crate::world::level::block::entity::structure_block_entity::UpdateType;
+use crate::world::level::block::mirror::Mirror;
+use crate::world::level::block::rotation::Rotation;
+use wafer_data::properties::StructureMode;
 use crate::world::level::levelgen::structure::pools::structure_template_pool::TemplatePoolHolder;
 use crate::world::level::levelgen::structure::templatesystem::structure_template::get_front_facing;
 use wafer_protocol::nbt::Nbt;
@@ -276,6 +280,43 @@ impl ServerLevel {
                 let placement_priority = r.varint()?;
                 let jigsaw = JigsawBlockEntity { name, target, pool, joint, final_state, placement_priority, selection_priority };
                 self.handle_set_jigsaw_block(id, BlockPos::new(pos.0, pos.1, pos.2), jigsaw);
+            }
+            serverbound::SET_STRUCTURE_BLOCK => {
+                let (x, y, z) = r.position()?;
+                let mut read_enum = |len: usize| -> anyhow::Result<usize> {
+                    let ordinal = r.varint()?;
+                    usize::try_from(ordinal).ok().filter(|&ordinal| ordinal < len).ok_or_else(|| anyhow::anyhow!("Unknown enum ordinal {ordinal}"))
+                };
+                let update_type = UpdateType::VALUES[read_enum(UpdateType::VALUES.len())?];
+                let mode = StructureMode::VALUES[read_enum(StructureMode::VALUES.len())?];
+                let name = r.string(32767)?.to_owned();
+                let mut clamped = |min: i32, max: i32| -> anyhow::Result<i32> { Ok((r.u8()? as i8 as i32).clamp(min, max)) };
+                let offset = BlockPos::new(clamped(-48, 48)?, clamped(-48, 48)?, clamped(-48, 48)?);
+                let size = BlockPos::new(clamped(0, 48)?, clamped(0, 48)?, clamped(0, 48)?);
+                let mirror = r.varint()?;
+                let mirror = *usize::try_from(mirror).ok().and_then(|ordinal| Mirror::VALUES.get(ordinal)).ok_or_else(|| anyhow::anyhow!("Unknown enum ordinal {mirror}"))?;
+                let rotation = Rotation::VALUES[r.varint()?.rem_euclid(4) as usize];
+                let data = r.string(128)?.to_owned();
+                let integrity = r.f32()?.clamp(0.0, 1.0);
+                let seed = r.varlong()?;
+                let flags = r.u8()? as i8;
+                let packet = SetStructureBlock {
+                    update_type,
+                    mode,
+                    name,
+                    offset,
+                    size,
+                    mirror,
+                    rotation,
+                    data,
+                    ignore_entities: flags & 1 != 0,
+                    strict: flags & 8 != 0,
+                    show_air: flags & 2 != 0,
+                    show_bounding_box: flags & 4 != 0,
+                    integrity,
+                    seed,
+                };
+                self.handle_set_structure_block(id, BlockPos::new(x, y, z), packet);
             }
             serverbound::JIGSAW_GENERATE => {
                 let pos = r.position()?;
@@ -799,6 +840,23 @@ fn was_block_placement_attempt(player: &crate::server::level::server_player::Ser
         && !player.cooldowns.is_on_cooldown(stack)
 }
 
+struct SetStructureBlock {
+    update_type: UpdateType,
+    mode: StructureMode,
+    name: String,
+    offset: BlockPos,
+    size: BlockPos,
+    mirror: Mirror,
+    rotation: Rotation,
+    data: String,
+    ignore_entities: bool,
+    strict: bool,
+    show_air: bool,
+    show_bounding_box: bool,
+    integrity: f32,
+    seed: i64,
+}
+
 impl ServerLevel {
     fn handle_set_beacon_packet(&mut self, id: EntityId, primary: Option<wafer_data::MobEffect>, secondary: Option<wafer_data::MobEffect>) {
         if self.player(id).container_menu.as_ref().is_none_or(|menu| menu.kind != crate::world::inventory::abstract_container_menu::MenuKind::Beacon) {
@@ -900,6 +958,62 @@ impl ServerLevel {
         jigsaw.joint = packet.joint;
         jigsaw.placement_priority = packet.placement_priority;
         jigsaw.selection_priority = packet.selection_priority;
+        self.block_entity_set_changed(block_pos);
+        self.send_block_updated(block_pos, state, state);
+    }
+
+    fn handle_set_structure_block(&mut self, id: EntityId, block_pos: BlockPos, packet: SetStructureBlock) {
+        if !self.can_use_game_master_blocks(id) {
+            return;
+        }
+        let state = self.block_state(block_pos);
+        if self.structure_block_entity(block_pos).is_none() {
+            return;
+        }
+        self.structure_block_entity_set_mode(block_pos, packet.mode);
+        let structure = self.structure_block_entity(block_pos).unwrap();
+        structure.set_structure_name(&packet.name);
+        structure.structure_pos = packet.offset;
+        structure.structure_size = packet.size;
+        structure.mirror = packet.mirror;
+        structure.rotation = packet.rotation;
+        structure.meta_data = packet.data;
+        structure.ignore_entities = packet.ignore_entities;
+        structure.strict = packet.strict;
+        structure.show_air = packet.show_air;
+        structure.show_bounding_box = packet.show_bounding_box;
+        structure.integrity = packet.integrity;
+        structure.seed = packet.seed;
+        if structure.has_structure_name() {
+            let actual_structure_name = Component::literal(&structure.get_structure_name());
+            let message = |key: &str| Component::translatable_with(key, vec![actual_structure_name.clone().into()]);
+            match packet.update_type {
+                UpdateType::SaveArea => {
+                    let key = if self.structure_block_entity_save_structure(block_pos) { "structure_block.save_success" } else { "structure_block.save_failure" };
+                    self.send_system_message(id, &message(key));
+                }
+                UpdateType::LoadArea => {
+                    let key = if !self.structure_block_entity_is_structure_loadable(block_pos) {
+                        "structure_block.load_not_found"
+                    } else if self.structure_block_entity_place_structure_if_same_size(block_pos) {
+                        "structure_block.load_success"
+                    } else {
+                        "structure_block.load_prepare"
+                    };
+                    self.send_system_message(id, &message(key));
+                }
+                UpdateType::ScanArea => {
+                    if self.structure_block_entity_detect_size(block_pos) {
+                        self.send_system_message(id, &message("structure_block.size_success"));
+                    } else {
+                        self.send_system_message(id, &Component::translatable("structure_block.size_failure"));
+                    }
+                }
+                UpdateType::UpdateData => {}
+            }
+        } else {
+            self.send_system_message(id, &Component::translatable_with("structure_block.invalid_structure_name", vec![Component::literal(&packet.name).into()]));
+        }
         self.block_entity_set_changed(block_pos);
         self.send_block_updated(block_pos, state, state);
     }

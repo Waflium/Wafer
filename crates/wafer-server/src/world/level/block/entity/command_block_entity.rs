@@ -121,6 +121,7 @@ impl ServerLevel {
     }
 
     pub fn block_entity_loaded(&mut self, pos: BlockPos) {
+        self.structure_block_entity_update_block_state(pos);
         let mode = self.command_block_entity_get_mode(pos);
         let Some(entity) = self.command_block_entity(pos) else { return };
         if std::mem::take(&mut entity.automatic_set_by_load) && mode != Mode::Sequence {

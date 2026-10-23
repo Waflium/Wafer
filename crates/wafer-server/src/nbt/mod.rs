@@ -242,6 +242,14 @@ fn java_decimal(nan: bool, infinite: bool, negative: bool, zero: bool, plain: bo
     format!("{sign}{whole}.{fraction}")
 }
 
+pub fn write_block_state(state: wafer_data::BlockState) -> Nbt {
+    let mut tag = vec![("id".to_string(), Nbt::String(state.block().name().into()))];
+    if state.block().possible_states().nth(1).is_some() {
+        tag.push(("properties".to_string(), Nbt::Compound(state.properties().map(|(name, value)| (name.to_string(), Nbt::String(value.into()))).collect())));
+    }
+    Nbt::Compound(tag)
+}
+
 pub fn read_block_state(tag: &Nbt) -> wafer_data::BlockState {
     let Some(block) = tag.get("id").and_then(Nbt::as_str).and_then(wafer_data::Block::by_name) else {
         return wafer_data::blocks::AIR.default_state();

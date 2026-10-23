@@ -344,8 +344,8 @@ fn chunk_packets_list_block_entities() {
 fn unported_block_entities_keep_their_data() {
     let (mut level, _) = level_with_player();
     let pos = BlockPos::new(0, -60, 0);
-    level.set_block(pos, blocks::STRUCTURE_BLOCK.default_state(), UPDATE_ALL);
-    let tag = crate::nbt::parse_fully("{id:\"minecraft:structure_block\",x:0,y:-60,z:0,name:\"minecraft:a\",extra:1b}").unwrap();
+    level.set_block(pos, blocks::TEST_INSTANCE_BLOCK.default_state(), UPDATE_ALL);
+    let tag = crate::nbt::parse_fully("{id:\"minecraft:test_instance_block\",x:0,y:-60,z:0,name:\"minecraft:a\",extra:1b}").unwrap();
     level.get_block_entity(pos).unwrap().load_with_components(&tag);
     let saved = level.block_entity_data(pos).unwrap();
     assert_eq!(saved.get("name"), tag.get("name"));

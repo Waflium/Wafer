@@ -47,8 +47,8 @@ impl TemplateFeature {
         let template_entry = self.templates.get_random_or_throw(random);
         let rotation = template_entry.rotations[random.next_int_bounded(template_entry.rotations.len() as i32) as usize];
         let template = structure_template_manager::get_or_create(&template_entry.template);
-        let offset_x = self.get_rotated_offset(rotation, Axis::X, template);
-        let offset_z = self.get_rotated_offset(rotation, Axis::Z, template);
+        let offset_x = self.get_rotated_offset(rotation, Axis::X, &template);
+        let offset_z = self.get_rotated_offset(rotation, Axis::Z, &template);
         let pos = origin.offset(offset_x.x, offset_x.y, offset_x.z).offset(offset_z.x, offset_z.y, offset_z.z);
         let settings = StructurePlaceSettings {
             rotation,
