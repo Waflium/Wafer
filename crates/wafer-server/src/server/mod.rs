@@ -58,7 +58,7 @@ use crate::network::login::{Profile, Verdict};
 use crate::world::clock::ServerClockManager;
 use crate::world::entity::EntityId;
 use crate::world::level::chunk::{ChunkGenerator, FlatLevelSource};
-use crate::world::level::levelgen::NoiseBasedChunkGenerator;
+use crate::world::level::levelgen::world_dimensions::WorldDimensions;
 use crate::world::level::chunk::storage::RegionStorage;
 use crate::world::level::gamerules::GameRules;
 use crate::world::level::border::border_change_listener::write_initialize_border;
@@ -102,11 +102,12 @@ pub const OVERWORLD: &str = "minecraft:overworld";
 pub const THE_NETHER: &str = "minecraft:the_nether";
 pub const THE_END: &str = "minecraft:the_end";
 
-fn create_level(config: &ServerConfig, world_dir: Option<&WorldDir>, dimension: &'static str, generator: ChunkGenerator, generate_structures: bool, seed: i64) -> ServerLevel {
+fn create_level(config: &ServerConfig, world_dir: Option<&WorldDir>, dimension: &'static str, generator: ChunkGenerator, is_debug: bool, generate_structures: bool, seed: i64) -> ServerLevel {
     let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension).expect("a dimension type");
     let dimension_type = &DIMENSION_TYPES[dimension_type_id as usize];
     let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes));
     let mut chunks = ChunkCache::new(dimension_type, generator, storage);
+    chunks.is_debug = is_debug;
     chunks.generate_structures = generate_structures;
     chunks.set_seed(seed);
     if let Some(dir) = world_dir {
@@ -277,11 +278,11 @@ impl Server {
             Some(data) => data,
             None => {
                 let seed = config.seed.unwrap_or_else(rand::random);
-                let generator = match config.level_type {
-                    LevelType::Flat => ChunkGenerator::Flat(FlatLevelSource::default()),
-                    LevelType::Normal => ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::overworld(seed))),
-                };
-                WorldData::new_world(seed, generator, true, config.game_mode, config.difficulty, false, data_configuration.clone())
+                let mut dimensions = WorldDimensions::normal(seed);
+                if config.level_type == LevelType::Flat {
+                    dimensions.overworld = ChunkGenerator::Flat(FlatLevelSource::default());
+                }
+                WorldData::new_world(seed, dimensions, true, config.game_mode, config.difficulty, false, data_configuration.clone())
             }
         };
         world_data.data_configuration = data_configuration;
@@ -308,16 +309,18 @@ impl Server {
         }
         let mut load_listener = level::progress::LoggingLevelLoadListener::for_dedicated_server();
         let spawn = (!new_world).then_some(data.spawn);
-        let (seed, game_time, generator, game_type, difficulty, difficulty_locked, hardcore) =
-            (data.seed, data.game_time, data.generator, data.game_type, data.difficulty, data.difficulty_locked, data.hardcore);
-        let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, generator, generate_structures, seed);
+        let is_debug = data.dimensions.is_debug();
+        let (seed, game_time, dimensions, mut game_type, mut difficulty, mut difficulty_locked, hardcore) =
+            (data.seed, data.game_time, data.dimensions, data.game_type, data.difficulty, data.difficulty_locked, data.hardcore);
+        let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, dimensions.overworld, is_debug, generate_structures, seed);
         overworld.chunks.game_rules = game_rules.clone();
         dedicated::set_overworld_created();
-        if new_world {
+        if new_world && !is_debug {
             load_listener.start(level::progress::Stage::PrepareGlobalSpawn, 0);
         }
         let spawn = match spawn {
             Some(spawn) => spawn,
+            None if is_debug => RespawnData::of(OVERWORLD, BlockPos::new(0, 80, 0), 0.0, 0.0),
             None => {
                 let spawn = RespawnData::of(OVERWORLD, level::player_spawn_finder::initial_spawn(&mut overworld.chunks), 0.0, 0.0);
                 if bonus_chest && let Some(feature) = crate::world::level::levelgen::feature::feature::feature("minecraft:bonus_chest") {
@@ -328,15 +331,19 @@ impl Server {
                 spawn
             }
         };
-        if new_world {
+        if new_world && !is_debug {
             load_listener.finish(level::progress::Stage::PrepareGlobalSpawn);
         }
+        if new_world && is_debug {
+            difficulty = crate::world::difficulty::Difficulty::Peaceful;
+            difficulty_locked = true;
+            game_rules.set(wafer_data::game_rule::ADVANCE_WEATHER, 0);
+            clocks.move_to_time_marker(ServerClockManager::id_of(OVERWORLD).unwrap(), "minecraft:noon");
+            game_type = GameType::Spectator;
+        }
         let mut levels = vec![overworld];
-        for (dimension, generator) in [
-            (THE_NETHER, ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::nether(seed)))),
-            (THE_END, ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::end(seed)))),
-        ] {
-            levels.push(create_level(&config, world_dir.as_ref(), dimension, generator, generate_structures, seed));
+        for (dimension, generator) in [(THE_NETHER, dimensions.nether), (THE_END, dimensions.end)] {
+            levels.push(create_level(&config, world_dir.as_ref(), dimension, generator, is_debug, generate_structures, seed));
         }
         for (index, level) in levels.iter_mut().enumerate() {
             level.index = index;
@@ -687,7 +694,11 @@ impl Server {
             hardcore: self.hardcore,
             clocks: self.clocks.to_nbt(),
             weather: self.weather.get(),
-            generator: self.overworld().chunks.generator.clone(),
+            dimensions: WorldDimensions {
+                overworld: self.overworld().chunks.generator.clone(),
+                nether: self.levels.iter().find(|level| level.dimension == THE_NETHER).expect("the nether").chunks.generator.clone(),
+                end: self.levels.iter().find(|level| level.dimension == THE_END).expect("the end").chunks.generator.clone(),
+            },
             generate_structures: self.generate_structures,
             bonus_chest: self.bonus_chest,
             initialized: true,

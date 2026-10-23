@@ -27,6 +27,7 @@ impl ServerLevel {
         }
         match &self.chunks.generator {
             ChunkGenerator::Flat(flat) => flat.biome,
+            ChunkGenerator::Debug(debug) => debug.biome(),
             ChunkGenerator::Noise(noise) => noise.get_noise_biome(&mut SamplerContext::cached(), quart_x, quart_y, quart_z),
         }
     }

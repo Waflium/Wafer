@@ -68,7 +68,7 @@ pub fn fill(
             }
         });
         if previous_changed_count != changed_count {
-            chunk.unsaved = true;
+            chunk.mark_unsaved();
             true
         } else {
             false

@@ -52,6 +52,7 @@ struct Samplers {
 }
 
 pub struct NoiseBasedChunkGenerator {
+    pub settings_key: String,
     pub settings: Arc<NoiseGeneratorSettings>,
     pub biome_source: BiomeSource,
     pub state: RandomState,
@@ -65,20 +66,21 @@ pub struct NoiseBasedChunkGenerator {
 
 impl NoiseBasedChunkGenerator {
     pub fn overworld(seed: i64) -> NoiseBasedChunkGenerator {
-        let settings = WORLDGEN.noise_settings["minecraft:overworld"].clone();
-        let biome_source = MultiNoiseBiomeSource::from_preset("minecraft:overworld").expect("overworld biome source");
-        NoiseBasedChunkGenerator::new(settings, BiomeSource::MultiNoise(biome_source), seed)
+        NoiseBasedChunkGenerator::with_settings("minecraft:overworld", BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:overworld").expect("overworld biome source")), seed)
     }
 
     pub fn nether(seed: i64) -> NoiseBasedChunkGenerator {
-        let settings = WORLDGEN.noise_settings["minecraft:nether"].clone();
-        let biome_source = MultiNoiseBiomeSource::from_preset("minecraft:nether").expect("nether biome source");
-        NoiseBasedChunkGenerator::new(settings, BiomeSource::MultiNoise(biome_source), seed)
+        NoiseBasedChunkGenerator::with_settings("minecraft:nether", BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:nether").expect("nether biome source")), seed)
     }
 
     pub fn end(seed: i64) -> NoiseBasedChunkGenerator {
-        let settings = WORLDGEN.noise_settings["minecraft:end"].clone();
-        NoiseBasedChunkGenerator::new(settings, BiomeSource::TheEnd(TheEndBiomeSource::create()), seed)
+        NoiseBasedChunkGenerator::with_settings("minecraft:end", BiomeSource::TheEnd(TheEndBiomeSource::create()), seed)
+    }
+
+    pub fn with_settings(settings_key: &str, biome_source: BiomeSource, seed: i64) -> NoiseBasedChunkGenerator {
+        let mut generator = NoiseBasedChunkGenerator::new(WORLDGEN.noise_settings[settings_key].clone(), biome_source, seed);
+        generator.settings_key = settings_key.to_string();
+        generator
     }
 
     pub fn new(settings: Arc<NoiseGeneratorSettings>, biome_source: BiomeSource, seed: i64) -> NoiseBasedChunkGenerator {
@@ -90,6 +92,7 @@ impl NoiseBasedChunkGenerator {
             aquifer: settings.aquifers.as_ref().map(|config| AquiferSamplers::new(&state, config)),
         };
         NoiseBasedChunkGenerator {
+            settings_key: String::new(),
             picker: FluidPicker::new(settings.sea_level, settings.default_fluid),
             zoom_seed: biome::obfuscate_seed(seed),
             biome_cache: Mutex::new(HashMap::new()),
@@ -138,6 +141,7 @@ impl NoiseBasedChunkGenerator {
         let sections = dimension.height as usize / 16;
         let source = match &self.biome_source {
             BiomeSource::MultiNoise(source) => source,
+            BiomeSource::Fixed(biome) => return ChunkBiomes { min_quart_y, quarts: vec![*biome; sections * 64] },
             BiomeSource::TheEnd(source) => {
                 let mut quarts = vec![Biome(0); sections * 64];
                 for quart_y in 0..size_y {
@@ -439,6 +443,7 @@ impl NoiseBasedChunkGenerator {
                 source.get_noise_biome(&climate::target(temperature, humidity, continentalness, erosion, depth, weirdness))
             }
             BiomeSource::TheEnd(source) => source.get_noise_biome(quart_x, quart_y, quart_z, |x, y, z| self.samplers.climate[3].sample_value(ctx, x, y, z) as f64),
+            BiomeSource::Fixed(biome) => *biome,
         }
     }
 

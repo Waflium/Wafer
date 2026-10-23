@@ -39,6 +39,9 @@ pub fn strict(server: &mut Server, context: &CommandContext, source: &CommandSou
 
 fn set_block(server: &mut Server, source: &CommandSourceStack, pos: BlockPos, block: &BlockInput, mode: Mode, keep: bool, strict: bool) -> Result<i32, CommandSyntaxException> {
     let level = &mut server.levels[source.level];
+    if level.is_debug() {
+        return Err(ERROR_FAILED.create());
+    }
     if keep && !level.block_state(pos).is_air() {
         return Err(ERROR_FAILED.create());
     }

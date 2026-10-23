@@ -221,6 +221,7 @@ pub struct LevelChunk {
     pub structures: ChunkStructures,
     pub post_processing: Vec<Vec<u16>>,
     pub game_event_listener_registry_sections: FastMap<i32, EuclideanGameEventListenerRegistry>,
+    unsaved_listener: Option<std::sync::mpsc::Sender<i64>>,
 }
 
 impl LevelChunk {
@@ -246,6 +247,22 @@ impl LevelChunk {
             proto: None,
             structures: ChunkStructures::default(),
             game_event_listener_registry_sections: FastMap::default(),
+            unsaved_listener: None,
+        }
+    }
+
+    pub fn set_unsaved_listener(&mut self, unsaved_listener: std::sync::mpsc::Sender<i64>) {
+        if self.unsaved {
+            let _ = unsaved_listener.send(self.pos.pack());
+        }
+        self.unsaved_listener = Some(unsaved_listener);
+    }
+
+    pub fn mark_unsaved(&mut self) {
+        let was_unsaved = self.unsaved;
+        self.unsaved = true;
+        if !was_unsaved && let Some(unsaved_listener) = &self.unsaved_listener {
+            let _ = unsaved_listener.send(self.pos.pack());
         }
     }
 
@@ -327,7 +344,7 @@ impl LevelChunk {
                 sections[((y - min_y) >> 4) as usize].block_state(x, (y & 15) as usize, z)
             });
         }
-        self.unsaved = true;
+        self.mark_unsaved();
         Some(old)
     }
 
@@ -410,6 +427,7 @@ impl LevelChunk {
 pub enum ChunkGenerator {
     Flat(FlatLevelSource),
     Noise(std::sync::Arc<crate::world::level::levelgen::NoiseBasedChunkGenerator>),
+    Debug(crate::world::level::levelgen::debug_level_source::DebugLevelSource),
 }
 
 impl From<FlatLevelSource> for ChunkGenerator {
@@ -442,6 +460,11 @@ impl ChunkGenerator {
                 }
                 chunk
             }
+            ChunkGenerator::Debug(debug) => {
+                let mut chunk = debug.generate(pos, dimension);
+                chunk.proto = Some(Box::default());
+                chunk
+            }
             ChunkGenerator::Noise(noise) => noise.generate_with_beardifier(pos, dimension, beardifier).into_level_chunk(dimension),
         }
     }
@@ -453,6 +476,11 @@ impl ChunkGenerator {
                     *section = LevelChunkSection::new(flat.biome);
                 }
             }
+            ChunkGenerator::Debug(debug) => {
+                for section in &mut chunk.sections {
+                    *section = LevelChunkSection::new(debug.biome());
+                }
+            }
             ChunkGenerator::Noise(noise) => {
                 crate::world::level::levelgen::NoiseBasedChunkGenerator::fill_biomes_from_noise(&mut chunk.sections, &noise.chunk_biomes(chunk.pos, dimension));
             }
@@ -462,13 +490,14 @@ impl ChunkGenerator {
     pub fn sea_level(&self) -> i32 {
         match self {
             ChunkGenerator::Flat(flat) => flat.sea_level(),
+            ChunkGenerator::Debug(debug) => debug.sea_level(),
             ChunkGenerator::Noise(noise) => noise.sea_level(),
         }
     }
 
     pub fn origin(&self) -> ChunkPos {
         match self {
-            ChunkGenerator::Flat(_) => ChunkPos::new(0, 0),
+            ChunkGenerator::Flat(_) | ChunkGenerator::Debug(_) => ChunkPos::new(0, 0),
             ChunkGenerator::Noise(noise) => noise.origin(),
         }
     }
@@ -476,7 +505,7 @@ impl ChunkGenerator {
     pub fn spawn_height(&self, min_y: i32, height: i32) -> i32 {
         match self {
             ChunkGenerator::Flat(flat) => min_y + height.min(flat.layers.iter().map(|&(_, count)| count as i32).sum()),
-            ChunkGenerator::Noise(_) => 64,
+            ChunkGenerator::Noise(_) | ChunkGenerator::Debug(_) => 64,
         }
     }
 }

@@ -5,11 +5,10 @@ pub mod saved_data_storage;
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use wafer_core::BlockPos;
-use wafer_data::{Block, BlockState, VERSION_NAME, WORLD_VERSION};
+use wafer_data::{VERSION_NAME, WORLD_VERSION};
 use wafer_protocol::nbt::Nbt;
 use flate2::Compression;
 use flate2::read::GzDecoder;
@@ -18,9 +17,7 @@ use flate2::write::GzEncoder;
 use crate::server::level::game_mode::GameType;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::chunk::storage::{decode_nbt, encode_nbt};
-use crate::world::level::chunk::{Biome, ChunkGenerator, FlatLevelSource};
-use crate::world::level::levelgen::NoiseBasedChunkGenerator;
-use crate::world::level::levelgen::flat::StructureOverrides;
+use crate::world::level::levelgen::world_dimensions::WorldDimensions;
 use crate::world::level::saveddata::weather_data::WeatherData;
 use crate::world::level::validation::directory_validator::{DirectoryValidator, SymlinkTargetAllowList};
 use crate::world::level::validation::path_allow_list::PathAllowList;
@@ -242,7 +239,7 @@ pub struct WorldData {
     pub hardcore: bool,
     pub clocks: Nbt,
     pub weather: WeatherData,
-    pub generator: ChunkGenerator,
+    pub dimensions: WorldDimensions,
     pub generate_structures: bool,
     pub bonus_chest: bool,
     pub initialized: bool,
@@ -255,7 +252,7 @@ pub struct WorldData {
 impl WorldData {
     pub fn new_world(
         seed: i64,
-        generator: ChunkGenerator,
+        dimensions: WorldDimensions,
         generate_structures: bool,
         game_type: GameType,
         difficulty: Difficulty,
@@ -272,7 +269,7 @@ impl WorldData {
             hardcore,
             clocks: Nbt::Compound(Vec::new()),
             weather: WeatherData::default(),
-            generator,
+            dimensions,
             generate_structures,
             bonus_chest: false,
             initialized: false,
@@ -302,38 +299,8 @@ impl WorldData {
         let settings_file = read_dat(&dir.data("world_gen_settings"))?.ok_or_else(|| invalid("world_gen_settings.dat is missing"))?;
         let worldgen = settings_file.get("data").ok_or_else(|| invalid("world_gen_settings.dat has no data"))?;
         let seed = worldgen.get("seed").and_then(Nbt::as_i64).unwrap_or(0);
-        let overworld = worldgen.get("dimensions").and_then(|d| d.get("minecraft:overworld")).and_then(|d| d.get("generator"));
-        let generator = match overworld.and_then(|g| g.get("type")).and_then(Nbt::as_str) {
-            Some("minecraft:flat") => {
-                let settings = overworld.and_then(|g| g.get("settings")).ok_or_else(|| invalid("flat settings missing"))?;
-                let mut flat_layers = Vec::new();
-                for layer in settings.get("layers").map(Nbt::as_list).unwrap_or(&[]) {
-                    let name = layer.get("block").and_then(Nbt::as_str).unwrap_or("minecraft:air");
-                    let state = Block::by_name(name).map(Block::default_state).ok_or_else(|| invalid(&format!("unknown block {name}")))?;
-                    flat_layers.push((state, layer.get("height").and_then(Nbt::as_i64).unwrap_or(1) as u32));
-                }
-                ChunkGenerator::Flat(FlatLevelSource {
-                    layers: flat_layers,
-                    biome: settings.get("biome").and_then(Nbt::as_str).and_then(Biome::by_name).unwrap_or(FlatLevelSource::default().biome),
-                    structure_overrides: settings.get("structure_overrides").and_then(StructureOverrides::from_nbt),
-                    lakes: settings.get("lakes").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
-                    features: settings.get("features").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
-                    generation: Default::default(),
-                })
-            }
-            Some("minecraft:noise") => {
-                let generator = overworld.unwrap();
-                let settings = generator.get("settings").and_then(Nbt::as_str);
-                let source = generator.get("biome_source");
-                let preset = source.and_then(|s| s.get("preset")).and_then(Nbt::as_str);
-                let source_type = source.and_then(|s| s.get("type")).and_then(Nbt::as_str);
-                if settings != Some("minecraft:overworld") || source_type != Some("minecraft:multi_noise") || preset != Some("minecraft:overworld") {
-                    return Err(invalid("only the default overworld noise generator is supported"));
-                }
-                ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::overworld(seed)))
-            }
-            _ => return Err(invalid("only superflat and normal overworlds can be loaded")),
-        };
+        let dimensions = worldgen.get("dimensions").ok_or_else(|| invalid("world_gen_settings.dat has no dimensions"))?;
+        let dimensions = WorldDimensions::from_nbt(dimensions, seed).map_err(|e| invalid(&e))?;
         let clocks = read_dat(&dir.data("world_clocks"))?.and_then(|c| c.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new()));
         let weather = read_dat(&dir.data("weather"))?.and_then(|w| w.get("data").and_then(WeatherData::from_nbt)).unwrap_or_default();
         Ok(Some(WorldData {
@@ -346,7 +313,7 @@ impl WorldData {
             hardcore: flag("hardcore"),
             clocks,
             weather,
-            generator,
+            dimensions,
             generate_structures: worldgen.get("generate_structures").and_then(Nbt::as_i64).is_none_or(|v| v != 0),
             bonus_chest: worldgen.get("bonus_chest").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
             initialized: level.get("initialized").and_then(Nbt::as_i64).is_none_or(|v| v != 0),
@@ -410,52 +377,11 @@ impl WorldData {
     }
 
     pub fn save_saved_data(&self, dir: &WorldDir) -> io::Result<()> {
-        let noise_generator = |settings: &str, biome_source: Nbt| {
-            compound(vec![("settings", string(settings)), ("biome_source", biome_source), ("type", string("minecraft:noise"))])
-        };
-        let noise = |name: &str, biome_source: Nbt| {
-            compound(vec![
-                ("generator", noise_generator(&format!("minecraft:{name}"), biome_source)),
-                ("type", string(&format!("minecraft:the_{name}"))),
-            ])
-        };
-        let (overworld_generator, generate_structures) = match &self.generator {
-            ChunkGenerator::Flat(flat) => {
-                let layers = flat
-                    .layers
-                    .iter()
-                    .map(|&(state, height): &(BlockState, u32)| compound(vec![("block", string(state.block().name())), ("height", Nbt::Int(height as i32))]))
-                    .collect();
-                let mut settings = vec![("features", Nbt::Byte(flat.features as i8)), ("biome", string(flat.biome.name())), ("layers", Nbt::List(layers))];
-                if let Some(overrides) = &flat.structure_overrides {
-                    settings.push(("structure_overrides", overrides.to_nbt()));
-                }
-                settings.push(("lakes", Nbt::Byte(flat.lakes as i8)));
-                (compound(vec![("settings", compound(settings)), ("type", string("minecraft:flat"))]), self.generate_structures as i8)
-            }
-            ChunkGenerator::Noise(_) => (
-                noise_generator(
-                    "minecraft:overworld",
-                    compound(vec![("preset", string("minecraft:overworld")), ("type", string("minecraft:multi_noise"))]),
-                ),
-                self.generate_structures as i8,
-            ),
-        };
         let generation = compound(vec![
             ("bonus_chest", Nbt::Byte(self.bonus_chest as i8)),
             ("seed", Nbt::Long(self.seed)),
-            ("generate_structures", Nbt::Byte(generate_structures)),
-            (
-                "dimensions",
-                compound(vec![
-                    ("minecraft:overworld", compound(vec![("generator", overworld_generator), ("type", string("minecraft:overworld"))])),
-                    (
-                        "minecraft:the_nether",
-                        noise("nether", compound(vec![("preset", string("minecraft:nether")), ("type", string("minecraft:multi_noise"))])),
-                    ),
-                    ("minecraft:the_end", noise("end", compound(vec![("type", string("minecraft:the_end"))]))),
-                ]),
-            ),
+            ("generate_structures", Nbt::Byte(self.generate_structures as i8)),
+            ("dimensions", self.dimensions.to_nbt()),
         ]);
         write_dat(&dir.data("world_gen_settings"), &data_file(generation))?;
 

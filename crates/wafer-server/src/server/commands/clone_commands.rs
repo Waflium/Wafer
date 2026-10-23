@@ -130,6 +130,9 @@ fn clone_blocks(
     if !has_chunks_at(&server.levels[from_dimension], start, end) || !has_chunks_at(&server.levels[to_dimension], destination_pos, destination_end) {
         return Err(ERROR_NOT_LOADED.create());
     }
+    if server.levels[to_dimension].is_debug() {
+        return Err(ERROR_FAILED.create());
+    }
     let mut solid = Vec::new();
     let mut block_entities = Vec::new();
     let mut other = Vec::new();

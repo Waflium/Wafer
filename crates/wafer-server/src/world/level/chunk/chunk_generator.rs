@@ -32,6 +32,7 @@ impl ChunkGenerator {
     pub fn possible_biomes(&self) -> Vec<Biome> {
         match self {
             ChunkGenerator::Flat(flat) => vec![flat.biome],
+            ChunkGenerator::Debug(debug) => vec![debug.biome()],
             ChunkGenerator::Noise(noise) => noise.biome_source.possible_biomes(),
         }
     }
@@ -39,6 +40,7 @@ impl ChunkGenerator {
     fn is_possible_biome(&self, biome: Biome) -> bool {
         match self {
             ChunkGenerator::Flat(flat) => biome == flat.biome,
+            ChunkGenerator::Debug(debug) => biome == debug.biome(),
             ChunkGenerator::Noise(noise) => noise.features_per_step().1[biome.0 as usize],
         }
     }
@@ -46,18 +48,20 @@ impl ChunkGenerator {
     pub fn get_noise_biome(&self, ctx: &mut SamplerContext, quart_x: i32, quart_y: i32, quart_z: i32) -> Biome {
         match self {
             ChunkGenerator::Flat(flat) => flat.biome,
+            ChunkGenerator::Debug(debug) => debug.biome(),
             ChunkGenerator::Noise(noise) => noise.get_noise_biome(ctx, quart_x, quart_y, quart_z),
         }
     }
 
     pub fn find_biome_horizontal(&self, origin_x: i32, origin_y: i32, origin_z: i32, search_radius: i32, allowed: &HolderSet, random: &mut impl RandomSource) -> Option<(i32, i32, i32)> {
-        match self {
-            ChunkGenerator::Flat(flat) => allowed.contains(flat.biome.0 as i32).then(|| {
+        match (self, self.fixed_biome()) {
+            (_, Some(biome)) => allowed.contains(biome.0 as i32).then(|| {
                 let x = origin_x - search_radius + random.next_int_bounded(search_radius * 2 + 1);
                 let z = origin_z - search_radius + random.next_int_bounded(search_radius * 2 + 1);
                 (x, origin_y, z)
             }),
-            ChunkGenerator::Noise(noise) => noise.find_biome_horizontal(origin_x, origin_y, origin_z, search_radius, allowed, random),
+            (ChunkGenerator::Noise(noise), None) => noise.find_biome_horizontal(origin_x, origin_y, origin_z, search_radius, allowed, random),
+            _ => None,
         }
     }
 
@@ -72,6 +76,9 @@ impl ChunkGenerator {
         min_y: i32,
         max_y: i32,
     ) -> Option<(BlockPos, Biome)> {
+        if let Some(biome) = self.fixed_biome() {
+            return allowed(biome).then(|| (BlockPos::new(origin.x, origin.y.clamp(min_y + 1, max_y + 1), origin.z), biome));
+        }
         let candidate_biomes: Vec<Biome> = self.possible_biomes().into_iter().filter(|&biome| allowed(biome)).collect();
         if candidate_biomes.is_empty() {
             return None;
@@ -95,8 +102,17 @@ impl ChunkGenerator {
         None
     }
 
+    fn fixed_biome(&self) -> Option<Biome> {
+        match self {
+            ChunkGenerator::Flat(flat) => Some(flat.biome),
+            ChunkGenerator::Debug(debug) => Some(debug.biome()),
+            ChunkGenerator::Noise(noise) => noise.biome_source.fixed_biome(),
+        }
+    }
+
     pub fn get_base_height(&self, x: i32, z: i32, kind: HeightmapType, min_y: i32, height: i32) -> i32 {
         match self {
+            ChunkGenerator::Debug(debug) => debug.get_base_height(kind),
             ChunkGenerator::Flat(flat) => flat.get_base_height(kind, min_y, height),
             ChunkGenerator::Noise(noise) => noise.get_base_height(x, z, kind, min_y, height),
         }
@@ -109,6 +125,7 @@ impl ChunkGenerator {
     pub fn get_base_column(&self, x: i32, z: i32, min_y: i32, height: i32) -> NoiseColumn {
         match self {
             ChunkGenerator::Flat(flat) => flat.get_base_column(min_y, height),
+            ChunkGenerator::Debug(debug) => debug.get_base_column(),
             ChunkGenerator::Noise(noise) => noise.get_base_column(x, z, min_y, height),
         }
     }
@@ -116,6 +133,7 @@ impl ChunkGenerator {
     pub fn min_y(&self) -> i32 {
         match self {
             ChunkGenerator::Flat(_) => 0,
+            ChunkGenerator::Debug(debug) => debug.min_y(),
             ChunkGenerator::Noise(noise) => noise.min_y(),
         }
     }
@@ -123,6 +141,7 @@ impl ChunkGenerator {
     pub fn gen_depth(&self) -> i32 {
         match self {
             ChunkGenerator::Flat(_) => 384,
+            ChunkGenerator::Debug(debug) => debug.gen_depth(),
             ChunkGenerator::Noise(noise) => noise.gen_depth(),
         }
     }
@@ -130,13 +149,14 @@ impl ChunkGenerator {
     pub fn get_biome_generation_settings(&self, biome: Biome) -> &BiomeGenerationSettings {
         match self {
             ChunkGenerator::Flat(flat) => flat.adjust_generation_settings(biome),
-            ChunkGenerator::Noise(_) => biome_generation_settings::get(biome),
+            ChunkGenerator::Noise(_) | ChunkGenerator::Debug(_) => biome_generation_settings::get(biome),
         }
     }
 
     fn features_per_step(&self) -> &[StepFeatureData] {
         match self {
             ChunkGenerator::Flat(flat) => flat.features_per_step(),
+            ChunkGenerator::Debug(_) => &[],
             ChunkGenerator::Noise(noise) => &noise.features_per_step().0,
         }
     }
@@ -153,6 +173,9 @@ impl ChunkGenerator {
     }
 
     pub fn apply_biome_decoration(&self, level: &mut WorldGenRegion, structure_starts: &[Vec<Arc<StructureStart>>]) {
+        if let ChunkGenerator::Debug(debug) = self {
+            return debug.apply_biome_decoration(level);
+        }
         let center_pos = level.get_center();
         let origin = BlockPos::new(center_pos.min_block_x(), level.get_min_y(), center_pos.min_block_z());
         let feature_list = self.features_per_step();

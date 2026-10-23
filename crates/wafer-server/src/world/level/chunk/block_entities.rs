@@ -232,7 +232,7 @@ impl LevelChunk {
             if state.has_block_entity() {
                 BlockEntity::new_for(pos, state)
             } else {
-                warn!("Tried to load a DUMMY block entity @ {pos:?} but found not block entity block {state:?} at location");
+                warn!("Tried to load a DUMMY block entity @ BlockPos{{x={}, y={}, z={}}} but found not block entity block {} at location", pos.x, pos.y, pos.z, state_to_string(state));
                 None
             }
         } else {
@@ -244,7 +244,7 @@ impl LevelChunk {
                 self.block_entities.map.contains_key(&pos)
             }
             None => {
-                warn!("Tried to load a block entity for block {state:?} but failed at location {pos:?}");
+                warn!("Tried to load a block entity for block {} but failed at location BlockPos{{x={}, y={}, z={}}}", state_to_string(state), pos.x, pos.y, pos.z);
                 false
             }
         }
@@ -346,4 +346,10 @@ impl LevelChunk {
             }
         }
     }
+}
+
+fn state_to_string(state: wafer_data::BlockState) -> String {
+    let state = format!("{state:?}");
+    let (name, properties) = state.split_at(state.find('[').unwrap_or(state.len()));
+    format!("Block{{{name}}}{properties}")
 }

@@ -15,7 +15,8 @@ use crate::world::flag::FeatureFlagSet;
 use crate::world::level::data_pack_config::DataPackConfig;
 use crate::world::level::world_data_configuration::WorldDataConfiguration;
 use crate::world::level::chunk::ChunkGenerator;
-use crate::world::level::levelgen::{NoiseBasedChunkGenerator, flat};
+use crate::world::level::levelgen::flat;
+use crate::world::level::levelgen::world_dimensions::WorldDimensions;
 use crate::world::level::storage::{self, WorldData, WorldDir};
 use crate::world::level::validation::content_validation_message;
 use crate::{Listen, ServerConfig, serve_world};
@@ -298,10 +299,10 @@ fn load_or_create_config(properties: &DedicatedServerProperties, level_data: Opt
 
 fn create_new_world_data(properties: &DedicatedServerProperties, data_configuration: WorldDataConfiguration, bonus_chest: bool) -> WorldData {
     let seed = properties.seed.unwrap_or_else(rand::random);
-    let generator = create_dimensions(properties, seed);
+    let dimensions = create_dimensions(properties, seed);
     let mut world_data = WorldData::new_world(
         seed,
-        generator,
+        dimensions,
         properties.generate_structures,
         properties.game_mode,
         properties.difficulty,
@@ -312,7 +313,7 @@ fn create_new_world_data(properties: &DedicatedServerProperties, data_configurat
     world_data
 }
 
-fn create_dimensions(properties: &DedicatedServerProperties, seed: i64) -> ChunkGenerator {
+fn create_dimensions(properties: &DedicatedServerProperties, seed: i64) -> WorldDimensions {
     let presets = wafer_data::WORLD_PRESETS;
     let level_type = properties.level_type.as_str();
     let preset = crate::resources::identifier::parse(level_type)
@@ -327,6 +328,7 @@ fn create_dimensions(properties: &DedicatedServerProperties, seed: i64) -> Chunk
         warn!("Failed to parse level-type {level_type}, defaulting to minecraft:normal");
         "minecraft:normal".to_string()
     });
+    let mut dimensions = WorldDimensions::from_preset(&preset, seed).unwrap_or_else(|_| WorldDimensions::normal(seed));
     if preset == "minecraft:flat" {
         let settings: serde_json::Value = serde_json::from_str(if properties.generator_settings.is_empty() { "{}" } else { &properties.generator_settings })
             .unwrap_or_else(|_| serde_json::json!({}));
@@ -334,9 +336,11 @@ fn create_dimensions(properties: &DedicatedServerProperties, seed: i64) -> Chunk
         if let Some(error) = parsed.error {
             error!("{error}");
         }
-        return ChunkGenerator::Flat(parsed.value.unwrap_or_default());
+        if let Some(flat) = parsed.value {
+            dimensions.overworld = ChunkGenerator::Flat(flat);
+        }
     }
-    ChunkGenerator::Noise(std::sync::Arc::new(NoiseBasedChunkGenerator::overworld(seed)))
+    dimensions
 }
 
 fn absolute(path: &Path) -> PathBuf {

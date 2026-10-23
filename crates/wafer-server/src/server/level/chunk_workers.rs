@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::io;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, LazyLock, Mutex};
 use std::thread;
 
@@ -81,18 +82,24 @@ enum IoRequest {
 #[derive(Clone)]
 pub struct IoWorker {
     requests: Sender<IoRequest>,
+    pub active_chunk_writes: Arc<AtomicUsize>,
 }
 
 impl IoWorker {
     pub fn new(mut storage: RegionStorage) -> IoWorker {
         let (requests, incoming) = channel::<IoRequest>();
+        let active_chunk_writes = Arc::new(AtomicUsize::new(0));
+        let active = active_chunk_writes.clone();
         thread::Builder::new()
             .name("IO-Worker".into())
             .spawn(move || {
                 for request in incoming {
                     match request {
                         IoRequest::Read { pos, reply } => reply(storage.read(pos)),
-                        IoRequest::Write { pos, nbt } => write(&mut storage, pos, &nbt),
+                        IoRequest::Write { pos, nbt } => {
+                            write(&mut storage, pos, &nbt);
+                            active.fetch_sub(1, Ordering::Relaxed);
+                        }
                         IoRequest::Clear { pos } => {
                             if storage.clear(pos).is_err() {
                                 error!("Failed to store chunk [{}, {}]", pos.x, pos.z);
@@ -101,13 +108,14 @@ impl IoWorker {
                         IoRequest::WriteChunk(save) => {
                             let ChunkToSave { chunk, status, block_entities, game_time, block_ticks, fluid_ticks, light } = *save;
                             write(&mut storage, chunk.pos, &serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light));
+                            active.fetch_sub(1, Ordering::Relaxed);
                         }
                         IoRequest::Flush { flush, reply } => drop(reply.send(if flush { storage.flush() } else { Ok(()) })),
                     }
                 }
             })
             .expect("IO worker thread");
-        IoWorker { requests }
+        IoWorker { requests, active_chunk_writes }
     }
 
     pub fn read(&self, pos: ChunkPos, reply: impl FnOnce(io::Result<Option<Nbt>>) + Send + 'static) {
@@ -121,6 +129,7 @@ impl IoWorker {
     }
 
     pub fn write(&self, pos: ChunkPos, nbt: Nbt) {
+        self.active_chunk_writes.fetch_add(1, Ordering::Relaxed);
         let _ = self.requests.send(IoRequest::Write { pos, nbt });
     }
 
@@ -129,6 +138,7 @@ impl IoWorker {
     }
 
     pub fn write_chunk(&self, save: ChunkToSave) {
+        self.active_chunk_writes.fetch_add(1, Ordering::Relaxed);
         let _ = self.requests.send(IoRequest::WriteChunk(Box::new(save)));
     }
 

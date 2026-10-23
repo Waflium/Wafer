@@ -188,7 +188,7 @@ impl ProtoChunk {
         if missing {
             chunk.prime_heightmaps();
         }
-        chunk.unsaved = true;
+        chunk.mark_unsaved();
         chunk
     }
 }

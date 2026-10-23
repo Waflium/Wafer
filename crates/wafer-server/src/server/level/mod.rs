@@ -602,6 +602,10 @@ impl ServerLevel {
         self.entity_manager.visible_entity_storage.all_entities()
     }
 
+    pub fn is_debug(&self) -> bool {
+        self.chunks.is_debug
+    }
+
     pub fn is_in_valid_bounds(&self, pos: BlockPos) -> bool {
         !self.chunks.is_outside_build_height(pos.y) && (-30_000_000..30_000_000).contains(&pos.x) && (-30_000_000..30_000_000).contains(&pos.z)
     }
@@ -616,6 +620,9 @@ impl ServerLevel {
 
     pub fn set_block_removing(&mut self, pos: BlockPos, state: BlockState, flags: i32, update_limit: i32, removed: &mut Option<BlockEntity>) -> bool {
         if !self.is_in_valid_bounds(pos) {
+            return false;
+        }
+        if self.is_debug() {
             return false;
         }
         let Some(old) = self.chunks.set_block_state(pos, state) else { return false };
@@ -1438,8 +1445,10 @@ impl ServerLevel {
     }
 
     pub fn tick_after_block_ticks(&mut self, runs: bool) {
-        if runs {
+        if !self.is_debug() && runs {
             self.tick_fluid_ticks();
+        }
+        if runs {
             self.raids_tick();
         }
         if runs {
@@ -1447,10 +1456,12 @@ impl ServerLevel {
         }
         self.chunks.run_distance_manager_updates();
         self.process_chunk_events();
-        if runs {
-            self.tick_chunks();
+        if !self.is_debug() {
+            if runs {
+                self.tick_chunks();
+            }
+            self.broadcast_changed_chunks();
         }
-        self.broadcast_changed_chunks();
         self.tick_chunk_map();
         self.chunks.tick_unloads(self.no_save, false);
         self.unload_block_entities();
@@ -1549,7 +1560,7 @@ impl ServerLevel {
     }
 
     pub fn begin_block_ticks(&mut self, runs: bool) {
-        if runs {
+        if !self.is_debug() && runs {
             let entity_manager = &self.entity_manager;
             let due = self.chunks.collect_block_ticks(self.game_time, 65536, |c| entity_manager.are_entities_loaded(c.pack()));
             self.block_ticks_to_run.extend(due);

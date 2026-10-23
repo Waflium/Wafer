@@ -112,6 +112,9 @@ fn fill_blocks(
     let hollow_core = BlockInput { state: blocks::AIR.default_state(), properties: Vec::new(), tag: None };
     let level = &mut server.levels[source.level];
     let mut updated: Vec<(BlockPos, BlockState)> = Vec::new();
+    if level.is_debug() {
+        return Err(ERROR_FAILED.create());
+    }
     let mut count = 0;
     for pos in region.positions() {
         let passes = match &filter {

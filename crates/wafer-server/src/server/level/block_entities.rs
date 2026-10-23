@@ -41,7 +41,7 @@ impl ServerLevel {
         if self.chunks.loaded_chunk(pos.chunk()).is_some()
             && let Some(chunk) = self.chunks.chunk_if_present(pos.chunk())
         {
-            chunk.unsaved = true;
+            chunk.mark_unsaved();
         }
     }
 

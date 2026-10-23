@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use super::structure::structure_start::StructureStart;
 use crate::world::level::chunk::chunk_generator_structure_state::ChunkGeneratorStructureState;
-use crate::world::level::chunk::{ChunkGenerator, ChunkStructures, HeightmapType, LevelChunk};
+use crate::world::level::biome::MultiNoiseBiomeSource;
+use crate::world::level::biome::biome_source::BiomeSource;
+use crate::world::level::chunk::{Biome, ChunkGenerator, ChunkStructures, HeightmapType, LevelChunk};
 use crate::world::level::chunk::proto_chunk::ProtoChunk;
 use crate::world::level::lighting::level_light_engine::LevelLightEngine;
 
@@ -396,6 +398,67 @@ fn end_terrain_matches_vanilla() {
         12345 3 3 7ea1733d5554bcbd bddfa60e8e080325 eb7a5d6cf507ba25 # [the_end] {}
         12345 70 0 9c735bed0a722325 613b62e1f86a2b25 c0b014328067f325 # [small_end_islands] {}
         12345 100 100 d9ba5491db252927 2a12bf9db6eedf25 16ce5c6fc605f9e5 # [end_midlands] {}
+        ",
+    );
+}
+
+fn multi_noise_overworld() -> BiomeSource {
+    BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:overworld").unwrap())
+}
+
+#[test]
+fn amplified_terrain_matches_vanilla() {
+    check_dimension(
+        |seed| NoiseBasedChunkGenerator::with_settings("minecraft:amplified", multi_noise_overworld(), seed),
+        "minecraft:overworld",
+        "
+        12345 0 0 c35ea558ff38ef0f 36904c9711f99c25 62c2237a1214cd67 # [lush_caves, ocean] {lava=39, deepslate_iron_ore=12}
+        12345 4 -4 58d0f903b5302ca4 72b8f9725df8aa8c c287fbfda0f0cc9b # [dark_forest, deep_dark, lush_caves] {}
+        12345 -168 112 982b1399d2f60180 0b3d58d6f13ffda5 eb520e72c6895b65 # [badlands, eroded_badlands] {deepslate_iron_ore=7}
+        12345 -24 -12 6cef3a559905902a bf74d6305ccd4997 4cbf40c588b4fb7c # [deep_dark, jagged_peaks, ocean] {deepslate_iron_ore=5, lava=42}
+        12345 24 36 ce41b2de2c253cd1 435268ce44b12b91 6a2beea6cac2bae5 # [deep_dark, frozen_peaks] {packed_ice=612, snow_block=42}
+        12345 -108 -88 adf87eff3d700c4b d5371f834a7d701d b9dc45c083b559e5 # [dripstone_caves, lush_caves, mangrove_swamp] {deepslate_iron_ore=96, raw_iron_block=2}
+        12345 80 44 8d4150c955afb4d5 8fe743a601163515 89b2dbf67972cced # [frozen_ocean, sulfur_caves] {}
+        12345 46 24 39001ff6550d2664 0ba4b42faeada047 1fdb4ec640aeb73d # [frozen_ocean, lush_caves, snowy_beach] {copper_ore=31, packed_ice=5842, snow_block=246}
+        12345 8 -8 0f92883c4c226e41 f017643c124ab41b 110ef54462621eb6 # [deep_dark, frozen_peaks, grove, lush_caves] {snow_block=15, packed_ice=18}
+        ",
+    );
+}
+
+#[test]
+fn large_biomes_terrain_matches_vanilla() {
+    check_dimension(
+        |seed| NoiseBasedChunkGenerator::with_settings("minecraft:large_biomes", multi_noise_overworld(), seed),
+        "minecraft:overworld",
+        "
+        12345 0 0 76a21d243aa30b57 60e84b83a1657725 cee012079f8deaa0 # [deep_frozen_ocean] {lava=39, deepslate_iron_ore=12}
+        12345 4 -4 f32cd6df056e6313 60e84b83a1657725 9fe1720b939d6ef1 # [deep_frozen_ocean] {packed_ice=1579}
+        12345 -168 112 c7719b4eeec76d1c 2a03d27c090f8725 cfa376519c2b73e2 # [cold_ocean] {deepslate_iron_ore=7}
+        12345 -24 -12 0a1ff86d4c93ac50 a8d8d9bc9be6fa05 319ac3d510a6a704 # [deep_frozen_ocean, lush_caves] {deepslate_iron_ore=5, lava=42}
+        12345 24 36 4fee132bb721bb46 13bb4fa0f6947325 e8d3fd75efadac44 # [frozen_ocean] {}
+        12345 -108 -88 eefe3a4218c1d68f 60e84b83a1657725 ce9f19b3b531918a # [deep_frozen_ocean] {deepslate_iron_ore=96, raw_iron_block=2, lava=19}
+        12345 80 44 c6bf4c7bd513bcdc 13bb4fa0f6947325 e4c24d3acf72d15d # [frozen_ocean] {}
+        12345 46 24 0c148025bbbaad4f 13bb4fa0f6947325 44f524e93565e725 # [frozen_ocean] {copper_ore=30, packed_ice=8518, snow_block=486}
+        12345 8 -8 50551673fb147eb5 13bb4fa0f6947325 2536be964aba1b64 # [frozen_ocean] {packed_ice=6346, snow_block=62}
+        ",
+    );
+}
+
+#[test]
+fn single_biome_terrain_matches_vanilla() {
+    check_dimension(
+        |seed| NoiseBasedChunkGenerator::with_settings("minecraft:overworld", BiomeSource::Fixed(Biome::by_name("minecraft:plains").unwrap()), seed),
+        "minecraft:overworld",
+        "
+        12345 0 0 c35ea558ff38ef0f cab0113ba0cf3b25 62c2237a1214cd67 # [plains] {lava=39, deepslate_iron_ore=12}
+        12345 4 -4 aeeb60c0be0d3650 cab0113ba0cf3b25 5784fcd85243d0be # [plains] {}
+        12345 -168 112 741fdc64a31b409a cab0113ba0cf3b25 0c04628b69b42fa5 # [plains] {deepslate_iron_ore=7}
+        12345 -24 -12 51249c1709140b2d cab0113ba0cf3b25 d3148b1c939eb290 # [plains] {deepslate_iron_ore=5, lava=71}
+        12345 24 36 9c846da1ab772847 cab0113ba0cf3b25 c0893a7856c3c125 # [plains] {}
+        12345 -108 -88 31b3e62244f3ab83 cab0113ba0cf3b25 8a1481f6d27f8925 # [plains] {deepslate_iron_ore=96, raw_iron_block=2, lava=19}
+        12345 80 44 8e3f709bfd1cd041 cab0113ba0cf3b25 89b2dbf67972cced # [plains] {}
+        12345 46 24 188cc6f0e1f7bce2 cab0113ba0cf3b25 e877a009b2b03e79 # [plains] {copper_ore=31}
+        12345 8 -8 6aa8576ddb5b1ddb cab0113ba0cf3b25 a4d7e646e3a18aa5 # [plains] {}
         ",
     );
 }
