@@ -553,8 +553,10 @@ impl Mob {
 
     pub fn set_custom_name(&mut self, name: Option<Nbt>) {
         self.entity.set_custom_name(name.clone());
-        if let MobKind::Vindicator(_) = self.kind {
-            Vindicator::on_custom_name_set(self, name.as_ref());
+        match self.kind {
+            MobKind::Vindicator(_) => Vindicator::on_custom_name_set(self, name.as_ref()),
+            MobKind::Wither(_) => super::boss::wither::wither_boss::WitherBoss::on_custom_name_set(self),
+            _ => {}
         }
     }
 

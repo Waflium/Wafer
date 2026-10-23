@@ -14,6 +14,8 @@ pub mod crackiness;
 pub mod data;
 pub mod decoration;
 #[cfg(test)]
+mod data_tests;
+#[cfg(test)]
 mod entity_data_layout_tests;
 #[cfg(test)]
 mod effect_tests;

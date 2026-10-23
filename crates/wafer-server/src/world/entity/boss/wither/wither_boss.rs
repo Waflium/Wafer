@@ -132,10 +132,12 @@ impl WitherBoss {
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         let invulnerable_ticks = input.get("Invul").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_INVULNERABLE_TICKS);
         set_invulnerable_ticks(&mut mob.entity, invulnerable_ticks);
-        if mob.entity.has_custom_name() {
-            let name = display_name(&mob.entity);
-            wither_mut(mob).boss_event.as_mut().expect("a boss event").name = name;
-        }
+        WitherBoss::on_custom_name_set(mob);
+    }
+
+    pub fn on_custom_name_set(mob: &mut Mob) {
+        let name = display_name(&mob.entity);
+        wither_mut(mob).boss_event.as_mut().expect("a boss event").set_name(name);
     }
 }
 
@@ -236,13 +238,6 @@ impl ServerLevel {
     fn wither_set_boss_event_progress(&mut self, id: EntityId, progress: f32) {
         if let Some(boss_event) = self.wither_boss_event_mut(id) {
             boss_event.set_progress(progress);
-        }
-    }
-
-    fn wither_update_boss_event_name(&mut self, id: EntityId) {
-        let name = display_name(self.entity(id));
-        if let Some(boss_event) = self.wither_boss_event_mut(id) {
-            boss_event.set_name(name);
         }
     }
 
@@ -353,7 +348,6 @@ impl ServerLevel {
     }
 
     pub fn wither_custom_server_ai_step(&mut self, id: EntityId) {
-        self.wither_update_boss_event_name(id);
         let invulnerable_ticks = get_invulnerable_ticks(self.entity(id));
         if invulnerable_ticks > 0 {
             let new_count = invulnerable_ticks - 1;

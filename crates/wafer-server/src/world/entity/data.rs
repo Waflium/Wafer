@@ -93,7 +93,21 @@ pub enum DataValue {
     ZombieNautilusVariant(i32),
 }
 
+fn float_equals(a: f32, b: f32) -> bool {
+    (a.is_nan() && b.is_nan()) || a.to_bits() == b.to_bits()
+}
+
 impl DataValue {
+    fn java_equals(&self, other: &DataValue) -> bool {
+        match (self, other) {
+            (DataValue::Float(a), DataValue::Float(b)) => float_equals(*a, *b),
+            (DataValue::Vector3(a), DataValue::Vector3(b)) => float_equals(a.x, b.x) && float_equals(a.y, b.y) && float_equals(a.z, b.z),
+            (DataValue::Quaternion(a), DataValue::Quaternion(b)) => float_equals(a.x, b.x) && float_equals(a.y, b.y) && float_equals(a.z, b.z) && float_equals(a.w, b.w),
+            (DataValue::Rotations(a), DataValue::Rotations(b)) => a.iter().zip(b).all(|(a, b)| float_equals(*a, *b)),
+            _ => self == other,
+        }
+    }
+
     pub fn serializer_id(&self) -> i32 {
         match self {
             DataValue::Byte(_) => 0,
@@ -256,7 +270,7 @@ impl SynchedEntityData {
 
     pub fn set_forced(&mut self, id: usize, value: DataValue) {
         let item = &mut self.items[id];
-        item.set_to_default = value == item.initial;
+        item.set_to_default = value.java_equals(&item.initial);
         item.value = value;
         item.dirty = true;
         self.is_dirty = true;
@@ -265,8 +279,8 @@ impl SynchedEntityData {
     pub fn set(&mut self, id: usize, value: DataValue) {
         let item = &mut self.items[id];
         let compared_by_identity = matches!(value, DataValue::ItemStack(Some(_)));
-        if compared_by_identity || item.value != value {
-            item.set_to_default = !compared_by_identity && value == item.initial;
+        if compared_by_identity || !item.value.java_equals(&value) {
+            item.set_to_default = !compared_by_identity && value.java_equals(&item.initial);
             item.value = value;
             item.dirty = true;
             self.is_dirty = true;
