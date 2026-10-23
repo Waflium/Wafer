@@ -1,7 +1,7 @@
 use wafer_data::items;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
@@ -12,8 +12,10 @@ pub struct FillPlayerHead {
 }
 
 impl FillPlayerHead {
-    pub fn decode(tag: &Nbt) -> DataResult<FillPlayerHead> {
-        Ok(FillPlayerHead { entity_target: codec::decode_field(tag, "entity", EntityTarget::decode)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<FillPlayerHead> {
+        let mut record = codec::Record::default();
+        let entity_target = record.required(tag, "entity", EntityTarget::decode);
+        record.build(|| Some(FillPlayerHead { entity_target: entity_target? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

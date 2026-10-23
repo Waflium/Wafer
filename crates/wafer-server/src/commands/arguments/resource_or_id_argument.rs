@@ -103,7 +103,7 @@ pub fn loot_table(reader: &mut StringReader) -> Result<ResourceOrId<LootTable>, 
 }
 
 pub fn loot_modifier(reader: &mut StringReader) -> Result<ResourceOrId<LootItemFunction>, CommandSyntaxException> {
-    parse(reader, LootItemFunction::decode_direct)
+    parse(reader, |tag| LootItemFunction::decode_direct(tag).into_result())
 }
 
 pub fn loot_predicate(reader: &mut StringReader) -> Result<ResourceOrId<LootItemCondition>, CommandSyntaxException> {

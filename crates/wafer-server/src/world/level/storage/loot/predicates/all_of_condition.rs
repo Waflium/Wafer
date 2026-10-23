@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::loot_item_condition::LootItemCondition;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::validatable;
 use crate::world::level::storage::loot::validation_context::ValidationContext;
@@ -12,8 +12,10 @@ pub struct AllOfCondition {
 }
 
 impl AllOfCondition {
-    pub fn decode(tag: &Nbt) -> DataResult<AllOfCondition> {
-        Ok(AllOfCondition { terms: codec::decode_field(tag, "terms", LootItemCondition::decode_holder_list)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<AllOfCondition> {
+        let mut record = codec::Record::default();
+        let terms = record.required(tag, "terms", LootItemCondition::decode_holder_list_partial);
+        record.build(|| Some(AllOfCondition { terms: terms? }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

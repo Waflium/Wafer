@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::list_operation::ListOperation;
 use super::set_name_function::{SetNameFunction, decode_component};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
@@ -15,12 +15,12 @@ pub struct SetLoreFunction {
 }
 
 impl SetLoreFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetLoreFunction> {
-        let lore = codec::decode_field(tag, "lore", |t| codec::list_of(t, decode_component))?;
-        if lore.len() > 256 {
-            return Err(format!("Too long: {}, expected range [0-256]", lore.len()));
-        }
-        Ok(SetLoreFunction { lore, mode: ListOperation::decode(tag, 256)?, resolution_context: codec::decode_optional(tag, "entity", EntityTarget::decode)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetLoreFunction> {
+        let mut record = codec::Record::default();
+        let lore = record.required(tag, "lore", |t| codec::sized_list_partial(t, 256, decode_component));
+        let mode = record.absorb(ListOperation::decode(tag, 256));
+        let resolution_context = record.optional(tag, "entity", EntityTarget::decode);
+        record.build(|| Some(SetLoreFunction { lore: lore?, mode: mode?, resolution_context }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

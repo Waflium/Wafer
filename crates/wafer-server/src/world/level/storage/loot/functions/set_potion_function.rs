@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::codec::registry_id;
@@ -12,7 +12,7 @@ pub struct SetPotionFunction {
 
 pub fn decode_potion(tag: &Nbt) -> DataResult<String> {
     let id = codec::identifier(tag)?;
-    registry_id("minecraft:potion", &id)?;
+    registry_id("minecraft:potion", &id).map_err(|_| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:potion]: {id}"))?;
     Ok(id)
 }
 
@@ -29,8 +29,10 @@ pub fn with_potion(item_stack: &mut ItemStack, potion: &str) {
 }
 
 impl SetPotionFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetPotionFunction> {
-        Ok(SetPotionFunction { potion: codec::decode_field(tag, "id", decode_potion)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetPotionFunction> {
+        let mut record = codec::Record::default();
+        let potion = record.required(tag, "id", decode_potion);
+        record.build(|| Some(SetPotionFunction { potion: potion? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

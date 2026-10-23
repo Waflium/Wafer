@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, DataComponentType};
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -10,8 +10,9 @@ pub struct ToggleTooltips {
 }
 
 impl ToggleTooltips {
-    pub fn decode(tag: &Nbt) -> DataResult<ToggleTooltips> {
-        let values = codec::decode_field(tag, "toggles", |t| {
+    pub fn decode(tag: &Nbt) -> DecodeResult<ToggleTooltips> {
+        let mut record = codec::Record::default();
+        let values = record.required(tag, "toggles", |t| {
             codec::unbounded_map(
                 t,
                 |k| {
@@ -20,8 +21,8 @@ impl ToggleTooltips {
                 },
                 codec::bool_value,
             )
-        })?;
-        Ok(ToggleTooltips { values })
+        });
+        record.build(|| Some(ToggleTooltips { values: values? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

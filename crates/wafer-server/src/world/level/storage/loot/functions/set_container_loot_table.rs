@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::RegistryElement;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -13,15 +13,17 @@ pub struct SetContainerLootTable {
 }
 
 impl SetContainerLootTable {
-    pub fn decode(tag: &Nbt) -> DataResult<SetContainerLootTable> {
-        let loot_table_id = codec::decode_field(tag, "loot_table_id", |t| match t {
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetContainerLootTable> {
+        let mut record = codec::Record::default();
+        let loot_table_id = record.required(tag, "loot_table_id", |t| match t {
             Nbt::String(_) => {
                 let id = codec::identifier(t)?;
                 if LootTable::contains_key(&id) { Ok(id) } else { Err(format!("Missing element ResourceKey[minecraft:loot_table / {id}]")) }
             }
-            _ => Err("Only tag names supported".into()),
-        })?;
-        Ok(SetContainerLootTable { loot_table_id, seed: codec::decode_or(tag, "seed", 0, codec::long)? })
+            _ => Err("Only tag names supported".to_string()),
+        });
+        let seed = record.with_default(tag, "seed", 0, codec::long);
+        record.build(|| Some(SetContainerLootTable { loot_table_id: loot_table_id?, seed }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

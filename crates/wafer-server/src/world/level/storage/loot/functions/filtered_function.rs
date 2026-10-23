@@ -3,7 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use super::loot_item_function::LootItemFunction;
 use crate::advancements::predicates::item_predicate::ItemPredicate;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::validatable;
@@ -16,12 +16,12 @@ pub struct FilteredFunction {
 }
 
 impl FilteredFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<FilteredFunction> {
-        Ok(FilteredFunction {
-            filter: codec::decode_field(tag, "item_filter", ItemPredicate::decode)?,
-            on_pass: codec::decode_optional(tag, "on_pass", LootItemFunction::decode_holder)?,
-            on_fail: codec::decode_optional(tag, "on_fail", LootItemFunction::decode_holder)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<FilteredFunction> {
+        let mut record = codec::Record::default();
+        let filter = record.required(tag, "item_filter", ItemPredicate::decode);
+        let on_pass = record.optional(tag, "on_pass", LootItemFunction::decode_holder);
+        let on_fail = record.optional(tag, "on_fail", LootItemFunction::decode_holder);
+        record.build(|| Some(FilteredFunction { filter: filter?, on_pass, on_fail }))
     }
 
     pub fn run(&self, item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

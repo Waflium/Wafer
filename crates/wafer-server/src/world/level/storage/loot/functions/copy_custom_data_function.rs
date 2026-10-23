@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::arguments::nbt_path_argument::NbtPath;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -53,12 +53,15 @@ struct CopyOperation {
 }
 
 impl CopyOperation {
-    fn decode(tag: &Nbt) -> DataResult<CopyOperation> {
-        Ok(CopyOperation {
-            source_path: codec::decode_field(tag, "source", NbtPath::decode)?,
-            target_path: codec::decode_field(tag, "target", NbtPath::decode)?,
-            op: codec::decode_field(tag, "op", |t| codec::string_enum(t, &[("replace", MergeStrategy::Replace), ("append", MergeStrategy::Append), ("merge", MergeStrategy::Merge)]))?,
-        })
+    fn decode(tag: &Nbt) -> DecodeResult<CopyOperation> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = codec::Record::default();
+        let source_path = record.required(tag, "source", NbtPath::decode);
+        let target_path = record.required(tag, "target", NbtPath::decode);
+        let op = record.required(tag, "op", |t| codec::string_enum(t, &[("replace", MergeStrategy::Replace), ("append", MergeStrategy::Append), ("merge", MergeStrategy::Merge)]));
+        record.build(|| Some(CopyOperation { source_path: source_path?, target_path: target_path?, op: op? }))
     }
 }
 
@@ -68,11 +71,11 @@ pub struct CopyCustomDataFunction {
 }
 
 impl CopyCustomDataFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<CopyCustomDataFunction> {
-        Ok(CopyCustomDataFunction {
-            source: codec::decode_field(tag, "source", NbtProvider::decode)?,
-            operations: codec::decode_field(tag, "ops", |t| codec::list_of(t, CopyOperation::decode))?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<CopyCustomDataFunction> {
+        let mut record = codec::Record::default();
+        let source = record.required(tag, "source", NbtProvider::decode);
+        let operations = record.required(tag, "ops", |t| codec::list_partial(t, CopyOperation::decode));
+        record.build(|| Some(CopyCustomDataFunction { source: source?, operations: operations? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

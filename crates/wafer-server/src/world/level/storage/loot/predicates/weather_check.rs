@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 
 pub struct WeatherCheck {
@@ -9,11 +9,11 @@ pub struct WeatherCheck {
 }
 
 impl WeatherCheck {
-    pub fn decode(tag: &Nbt) -> DataResult<WeatherCheck> {
-        Ok(WeatherCheck {
-            is_raining: codec::decode_optional(tag, "raining", codec::bool_value)?,
-            is_thundering: codec::decode_optional(tag, "thundering", codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<WeatherCheck> {
+        let mut record = codec::Record::default();
+        let is_raining = record.optional(tag, "raining", codec::bool_value);
+        let is_thundering = record.optional(tag, "thundering", codec::bool_value);
+        record.build(|| Some(WeatherCheck { is_raining, is_thundering }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

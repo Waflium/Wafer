@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use super::list_operation::ListOperation;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -32,13 +32,15 @@ pub struct SetWrittenBookPagesFunction {
 }
 
 impl SetWrittenBookPagesFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetWrittenBookPagesFunction> {
-        let pages = codec::decode_field(tag, "pages", |t| {
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetWrittenBookPagesFunction> {
+        let mut record = codec::Record::default();
+        let pages = record.required(tag, "pages", |t| {
             let probe = Nbt::Compound(vec![("title".into(), Nbt::String(String::new())), ("author".into(), Nbt::String(String::new())), ("pages".into(), t.clone())]);
             let content = dc::WRITTEN_BOOK_CONTENT.decode(&probe)?;
-            Ok(content.get("pages").map_or(Vec::new(), |p| p.as_list().to_vec()))
-        })?;
-        Ok(SetWrittenBookPagesFunction { pages, page_operation: ListOperation::decode(tag, i32::MAX)? })
+            Ok::<Vec<Nbt>, String>(content.get("pages").map_or(Vec::new(), |p| p.as_list().to_vec()))
+        });
+        let page_operation = record.absorb(ListOperation::decode(tag, i32::MAX));
+        record.build(|| Some(SetWrittenBookPagesFunction { pages: pages?, page_operation: page_operation? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

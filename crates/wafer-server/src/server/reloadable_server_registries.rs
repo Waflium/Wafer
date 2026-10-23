@@ -238,7 +238,7 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
         let predicates = decode_registry(PREDICATE, &sources[1], LootItemCondition::decode, &mut errors);
         let context_float_providers = decode_registry(CONTEXT_FLOAT_PROVIDER, &sources[2], ContextFloatProvider::decode, &mut errors);
         let context_int_providers = decode_registry(CONTEXT_INT_PROVIDER, &sources[3], ContextIntProvider::decode, &mut errors);
-        let item_modifiers = decode_registry(ITEM_MODIFIER, &sources[4], LootItemFunction::decode_typed, &mut errors);
+        let item_modifiers = decode_registry(ITEM_MODIFIER, &sources[4], |tag| LootItemFunction::decode_typed(tag).into_result(), &mut errors);
         let slot_sources = decode_registry(SLOT_SOURCE, &sources[5], SlotSource::decode_typed, &mut errors);
         let mut decoded_advancements = decode_registry(ADVANCEMENT, &sources[6], Advancement::decode, &mut errors);
         let advancements: Vec<&'static AdvancementHolder> = sources[6]

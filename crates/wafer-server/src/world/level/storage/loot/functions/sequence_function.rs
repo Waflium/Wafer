@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::loot_item_function::LootItemFunction;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::validatable;
@@ -13,12 +13,14 @@ pub struct SequenceFunction {
 }
 
 impl SequenceFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SequenceFunction> {
-        Ok(SequenceFunction { functions: codec::decode_field(tag, "functions", LootItemFunction::decode_list)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SequenceFunction> {
+        let mut record = codec::Record::default();
+        let functions = record.required(tag, "functions", LootItemFunction::decode_holder_set);
+        record.build(|| Some(SequenceFunction { functions: functions? }))
     }
 
-    pub fn decode_inline(tag: &Nbt) -> Result<SequenceFunction, codec::DecodeError> {
-        Ok(SequenceFunction { functions: LootItemFunction::decode_holder_set(tag)? })
+    pub fn decode_inline(tag: &Nbt) -> DecodeResult<SequenceFunction> {
+        LootItemFunction::decode_holder_set(tag).map(|functions| SequenceFunction { functions })
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

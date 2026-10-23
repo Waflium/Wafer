@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::list_operation::StandAlone;
 use super::set_written_book_pages_function::put;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -13,20 +13,11 @@ pub struct SetFireworksFunction {
 }
 
 impl SetFireworksFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetFireworksFunction> {
-        let explosion = |t: &Nbt| dc::FIREWORK_EXPLOSION.decode(t);
-        let flight_duration = codec::decode_optional(tag, "flight_duration", |t| {
-            let value = codec::int(t)?;
-            if !(0..=255).contains(&value) {
-                return Err(format!("Value must be within range [0;255]: {value}"));
-            }
-            Ok(value)
-        })?;
-        let explosions = match codec::optional_field(tag, "explosions") {
-            Some(t) => Some(StandAlone::decode(t, explosion, 256)?),
-            None => None,
-        };
-        Ok(SetFireworksFunction { explosions, flight_duration })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetFireworksFunction> {
+        let mut record = codec::Record::default();
+        let explosions = record.optional(tag, "explosions", |t| StandAlone::decode(t, |explosion| dc::FIREWORK_EXPLOSION.decode(explosion), 256));
+        let flight_duration = record.optional(tag, "flight_duration", |t| Ok::<i32, String>(codec::int(t)? as i8 as u8 as i32));
+        record.build(|| Some(SetFireworksFunction { explosions, flight_duration }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

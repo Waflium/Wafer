@@ -3,7 +3,7 @@ use wafer_data::{MobEffect, items};
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -17,14 +17,17 @@ struct EffectEntry {
 }
 
 impl EffectEntry {
-    fn decode(tag: &Nbt) -> DataResult<EffectEntry> {
-        Ok(EffectEntry {
-            effect: codec::decode_field(tag, "type", |t| {
-                let id = codec::identifier(t)?;
-                MobEffect::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:mob_effect]: {id}"))
-            })?,
-            duration: codec::decode_field(tag, "duration", ContextIntProvider::decode_holder)?,
-        })
+    fn decode(tag: &Nbt) -> DecodeResult<EffectEntry> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = codec::Record::default();
+        let effect = record.required(tag, "type", |t| {
+            let id = codec::identifier(t)?;
+            MobEffect::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:mob_effect]: {id}"))
+        });
+        let duration = record.required(tag, "duration", ContextIntProvider::decode_holder);
+        record.build(|| Some(EffectEntry { effect: effect?, duration: duration? }))
     }
 }
 
@@ -33,14 +36,19 @@ pub struct SetStewEffectFunction {
 }
 
 impl SetStewEffectFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetStewEffectFunction> {
-        let effects = codec::decode_or(tag, "effects", Vec::new(), |t| codec::list_of(t, EffectEntry::decode))?;
-        for (i, entry) in effects.iter().enumerate() {
-            if effects[..i].iter().any(|seen| seen.effect == entry.effect) {
-                return Err(format!("Encountered duplicate mob effect: '{}'", entry.effect.info().name));
-            }
-        }
-        Ok(SetStewEffectFunction { effects })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetStewEffectFunction> {
+        let mut record = codec::Record::default();
+        let effects = record.with_default(tag, "effects", Vec::new(), |t| {
+            codec::list_partial(t, EffectEntry::decode).validate(|effects| {
+                for (i, entry) in effects.iter().enumerate() {
+                    if effects[..i].iter().any(|seen| seen.effect == entry.effect) {
+                        return Err(format!("Encountered duplicate mob effect: '{}'", entry.effect.info().name));
+                    }
+                }
+                Ok(())
+            })
+        });
+        record.build(|| Some(SetStewEffectFunction { effects }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

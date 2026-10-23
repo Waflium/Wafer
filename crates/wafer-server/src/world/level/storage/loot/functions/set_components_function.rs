@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component::DataComponentPatch;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -10,8 +10,10 @@ pub struct SetComponentsFunction {
 }
 
 impl SetComponentsFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetComponentsFunction> {
-        Ok(SetComponentsFunction { components: codec::decode_field(tag, "components", DataComponentPatch::from_nbt)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetComponentsFunction> {
+        let mut record = codec::Record::default();
+        let components = record.required(tag, "components", DataComponentPatch::from_nbt);
+        record.build(|| Some(SetComponentsFunction { components: components? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

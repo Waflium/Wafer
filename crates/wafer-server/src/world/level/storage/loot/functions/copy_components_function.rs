@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::component::data_component_getter::DataComponentGetter;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::entity_components::EntityComponents;
 use crate::world::item::ItemStack;
 use crate::world::item::component::DataComponentType;
@@ -23,12 +23,12 @@ fn decode_component_type(tag: &Nbt) -> DataResult<DataComponentType> {
 }
 
 impl CopyComponentsFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<CopyComponentsFunction> {
-        Ok(CopyComponentsFunction {
-            source: codec::decode_field(tag, "source", |t| LootContextArg::decode(t, GETTER))?,
-            include: codec::decode_optional(tag, "include", |t| codec::list_of(t, decode_component_type))?,
-            exclude: codec::decode_optional(tag, "exclude", |t| codec::list_of(t, decode_component_type))?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<CopyComponentsFunction> {
+        let mut record = codec::Record::default();
+        let source = record.required(tag, "source", |t| LootContextArg::decode(t, GETTER));
+        let include = record.optional(tag, "include", |t| codec::list_partial(t, |e| DecodeResult::from(decode_component_type(e))));
+        let exclude = record.optional(tag, "exclude", |t| codec::list_partial(t, |e| DecodeResult::from(decode_component_type(e))));
+        record.build(|| Some(CopyComponentsFunction { source: source?, include, exclude }))
     }
 
     fn baked_predicate(&self, ty: DataComponentType) -> bool {

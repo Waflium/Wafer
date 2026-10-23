@@ -1,7 +1,7 @@
 use wafer_data::Block;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -12,21 +12,25 @@ pub struct CopyBlockState {
 }
 
 impl CopyBlockState {
-    pub fn decode(tag: &Nbt) -> DataResult<CopyBlockState> {
-        let block = codec::decode_field(tag, "block", |t| {
+    pub fn decode(tag: &Nbt) -> DecodeResult<CopyBlockState> {
+        let mut record = codec::Record::default();
+        let block = record.required(tag, "block", |t| {
             let id = codec::identifier(t)?;
             Block::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:block]: {id}"))
-        })?;
-        let names = codec::decode_field(tag, "properties", |t| codec::list_of(t, |p| Ok(codec::string(p)?.to_string())))?;
-        let mut properties = Vec::new();
-        for name in names {
-            if let Some((name, _)) = block.property_by_name(&name)
-                && !properties.contains(&name)
-            {
-                properties.push(name);
+        });
+        let names = record.required(tag, "properties", |t| codec::list_partial(t, |p| DecodeResult::from(codec::string(p).map(str::to_string))));
+        record.build(|| {
+            let block = block?;
+            let mut properties = Vec::new();
+            for name in names? {
+                if let Some((name, _)) = block.property_by_name(&name)
+                    && !properties.contains(&name)
+                {
+                    properties.push(name);
+                }
             }
-        }
-        Ok(CopyBlockState { properties })
+            Some(CopyBlockState { properties })
+        })
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

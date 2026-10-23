@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::list_operation::StandAlone;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, codec as component_codec};
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -32,14 +32,13 @@ fn color_provider(tag: &Nbt) -> DataResult<Holder<ContextIntProvider>> {
 }
 
 impl SetCustomModelDataFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetCustomModelDataFunction> {
-        let stand_alone = |key: &str| codec::optional_field(tag, key);
-        Ok(SetCustomModelDataFunction {
-            floats: stand_alone("floats").map(|t| StandAlone::decode(t, ContextFloatProvider::decode_holder, i32::MAX)).transpose()?,
-            flags: stand_alone("flags").map(|t| StandAlone::decode(t, codec::bool_value, i32::MAX)).transpose()?,
-            strings: stand_alone("strings").map(|t| StandAlone::decode(t, |s| Ok(codec::string(s)?.to_string()), i32::MAX)).transpose()?,
-            colors: stand_alone("colors").map(|t| StandAlone::decode(t, color_provider, i32::MAX)).transpose()?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetCustomModelDataFunction> {
+        let mut record = codec::Record::default();
+        let floats = record.optional(tag, "floats", |t| StandAlone::decode(t, ContextFloatProvider::decode_holder, i32::MAX));
+        let flags = record.optional(tag, "flags", |t| StandAlone::decode(t, codec::bool_value, i32::MAX));
+        let strings = record.optional(tag, "strings", |t| StandAlone::decode(t, |s| Ok::<String, String>(codec::string(s)?.to_string()), i32::MAX));
+        let colors = record.optional(tag, "colors", |t| StandAlone::decode(t, color_provider, i32::MAX));
+        record.build(|| Some(SetCustomModelDataFunction { floats, flags, strings, colors }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

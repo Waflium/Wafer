@@ -2,7 +2,7 @@ use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, codec as component_codec};
 use crate::world::item::dye_color::DyeColor;
@@ -41,8 +41,10 @@ fn apply_dyes(current_dye: Option<i32>, dyes: &[DyeColor]) -> i32 {
 }
 
 impl SetRandomDyesFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetRandomDyesFunction> {
-        Ok(SetRandomDyesFunction { number_of_dyes: codec::decode_field(tag, "number_of_dyes", ContextIntProvider::decode_holder)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetRandomDyesFunction> {
+        let mut record = codec::Record::default();
+        let number_of_dyes = record.required(tag, "number_of_dyes", ContextIntProvider::decode_holder);
+        record.build(|| Some(SetRandomDyesFunction { number_of_dyes: number_of_dyes? }))
     }
 
     pub fn run(&self, item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

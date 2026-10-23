@@ -59,7 +59,7 @@ impl LootTable {
             param_set: codec::optional_field(tag, "type").and_then(|t| codec::identifier(t).ok()).and_then(|name| loot_context_param_sets::by_name(&name)).unwrap_or(&loot_context_param_sets::ALL_PARAMS),
             random_sequence: codec::decode_optional(tag, "random_sequence", codec::identifier)?,
             pools: codec::decode_or(tag, "pools", Vec::new(), |t| codec::list_of(t, LootPool::decode))?,
-            modifier: codec::decode_optional(tag, "modifier", LootItemFunction::decode_holder)?,
+            modifier: codec::decode_optional(tag, "modifier", |t| LootItemFunction::decode_holder(t).into_result())?,
         })
     }
 

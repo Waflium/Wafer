@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::entity::data::{DataValue, ids};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
@@ -15,8 +15,10 @@ pub struct CopyNameFunction {
 }
 
 impl CopyNameFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<CopyNameFunction> {
-        Ok(CopyNameFunction { source: codec::decode_field(tag, "source", |t| LootContextArg::decode(t, ENTITY_OR_BLOCK))? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<CopyNameFunction> {
+        let mut record = codec::Record::default();
+        let source = record.required(tag, "source", |t| LootContextArg::decode(t, ENTITY_OR_BLOCK));
+        record.build(|| Some(CopyNameFunction { source: source? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

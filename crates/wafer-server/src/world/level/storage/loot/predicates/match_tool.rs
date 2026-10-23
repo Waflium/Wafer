@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::advancements::predicates::item_predicate::ItemPredicate;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
@@ -10,8 +10,10 @@ pub struct MatchTool {
 }
 
 impl MatchTool {
-    pub fn decode(tag: &Nbt) -> DataResult<MatchTool> {
-        Ok(MatchTool { predicate: codec::decode_optional(tag, "predicate", ItemPredicate::decode)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<MatchTool> {
+        let mut record = codec::Record::default();
+        let predicate = record.optional(tag, "predicate", ItemPredicate::decode);
+        record.build(|| Some(MatchTool { predicate }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

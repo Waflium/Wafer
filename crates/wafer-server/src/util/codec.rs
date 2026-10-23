@@ -20,6 +20,69 @@ pub fn record_errors(errors: &[Option<&String>]) -> DataResult<()> {
     if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
 }
 
+pub struct DecodeResult<T> {
+    pub value: Option<T>,
+    pub error: Option<String>,
+}
+
+impl<T> DecodeResult<T> {
+    pub fn success(value: T) -> DecodeResult<T> {
+        DecodeResult { value: Some(value), error: None }
+    }
+
+    pub fn error(message: impl Into<String>) -> DecodeResult<T> {
+        DecodeResult { value: None, error: Some(message.into()) }
+    }
+
+    pub fn is_success(&self) -> bool {
+        self.error.is_none()
+    }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> DecodeResult<U> {
+        DecodeResult { value: self.value.map(f), error: self.error }
+    }
+
+    pub fn flat_map<U>(self, f: impl FnOnce(T) -> DecodeResult<U>) -> DecodeResult<U> {
+        let Some(value) = self.value else { return DecodeResult { value: None, error: self.error } };
+        let second = f(value);
+        let error = match (self.error, second.error) {
+            (Some(first), Some(second)) => Some(format!("{first}; {second}")),
+            (first, second) => first.or(second),
+        };
+        DecodeResult { value: second.value, error }
+    }
+
+    pub fn validate(self, validator: impl FnOnce(&T) -> DataResult<()>) -> DecodeResult<T> {
+        self.flat_map(|value| match validator(&value) {
+            Ok(()) => DecodeResult::success(value),
+            Err(error) => DecodeResult::error(error),
+        })
+    }
+
+    pub fn into_result(self) -> DataResult<T> {
+        match self.error {
+            None => Ok(self.value.expect("a successful value")),
+            Some(message) => Err(message),
+        }
+    }
+
+    pub fn into_decode_error(self) -> Result<T, DecodeError> {
+        match self.error {
+            None => Ok(self.value.expect("a successful value")),
+            Some(message) => Err(DecodeError { message, partial: self.value.is_some() }),
+        }
+    }
+}
+
+impl<T> From<DataResult<T>> for DecodeResult<T> {
+    fn from(result: DataResult<T>) -> DecodeResult<T> {
+        match result {
+            Ok(value) => DecodeResult::success(value),
+            Err(message) => DecodeResult::error(message),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Record(Vec<String>);
 
@@ -36,6 +99,37 @@ impl Record {
 
     pub fn finish(self) -> DataResult<()> {
         if self.0.is_empty() { Ok(()) } else { Err(self.0.into_iter().rev().collect::<Vec<_>>().join("; ")) }
+    }
+
+    pub fn absorb<T>(&mut self, result: DecodeResult<T>) -> Option<T> {
+        if let Some(error) = result.error {
+            self.0.push(error);
+        }
+        result.value
+    }
+
+    pub fn required<T, R: Into<DecodeResult<T>>>(&mut self, tag: &Nbt, name: &str, decode: impl FnOnce(&Nbt) -> R) -> Option<T> {
+        match field(tag, name) {
+            Ok(value) => self.absorb(decode(value).into()),
+            Err(error) => {
+                self.0.push(error);
+                None
+            }
+        }
+    }
+
+    pub fn optional<T, R: Into<DecodeResult<T>>>(&mut self, tag: &Nbt, name: &str, decode: impl FnOnce(&Nbt) -> R) -> Option<T> {
+        let value = tag.get(name)?;
+        self.absorb(decode(value).into())
+    }
+
+    pub fn with_default<T, R: Into<DecodeResult<T>>>(&mut self, tag: &Nbt, name: &str, default: T, decode: impl FnOnce(&Nbt) -> R) -> T {
+        self.optional(tag, name, decode).unwrap_or(default)
+    }
+
+    pub fn build<T>(self, build: impl FnOnce() -> Option<T>) -> DecodeResult<T> {
+        let error = if self.0.is_empty() { None } else { Some(self.0.into_iter().rev().collect::<Vec<_>>().join("; ")) };
+        DecodeResult { value: build(), error }
     }
 }
 
@@ -181,39 +275,92 @@ pub fn either_first_partial<A, B>(
     }
 }
 
-pub fn holder_set<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -> DataResult<T>) -> Result<Vec<T>, DecodeError> {
+pub fn either_result<A, B>(first: DecodeResult<A>, second: impl FnOnce() -> DecodeResult<B>) -> DecodeResult<Result<A, B>> {
+    if first.is_success() {
+        return first.map(Ok);
+    }
+    let second = second();
+    if second.is_success() {
+        return second.map(Err);
+    }
+    if first.value.is_some() {
+        return first.map(Ok);
+    }
+    if second.value.is_some() {
+        return second.map(Err);
+    }
+    DecodeResult::error(format!(
+        "Failed to parse either. First: {}; Second: {}",
+        first.error.expect("an error"),
+        second.error.expect("an error")
+    ))
+}
+
+pub fn list_partial<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
+    sized_list_partial(tag, usize::MAX, decode)
+}
+
+pub fn sized_list_partial<T>(tag: &Nbt, max_size: usize, decode: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
+    let items = match list(tag) {
+        Ok(items) => items,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let mut elements = Vec::with_capacity(items.len().min(max_size));
+    let mut errors: Vec<String> = Vec::new();
+    for item in &items {
+        if elements.len() >= max_size {
+            continue;
+        }
+        let result = decode(item);
+        if let Some(error) = result.error {
+            errors.push(error);
+        }
+        if let Some(value) = result.value {
+            elements.push(value);
+        }
+    }
+    if items.len() > max_size {
+        return DecodeResult { value: Some(elements), error: Some(format!("List is too long: {}, expected range [0-{max_size}]", items.len())) };
+    }
+    errors.reverse();
+    DecodeResult { value: Some(elements), error: (!errors.is_empty()).then(|| errors.join("; ")) }
+}
+
+pub fn holder_set_partial<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
     let tag_error = match tag {
         Nbt::String(name) => match name.strip_prefix('#') {
             Some(location) => {
-                let location = crate::resources::identifier::read(location).map_err(|message| DecodeError { message, partial: false })?;
-                return Err(DecodeError { message: format!("Missing tag: '{location}' in '{registry}'"), partial: false });
+                return match crate::resources::identifier::read(location) {
+                    Ok(location) => DecodeResult::error(format!("Missing tag: '{location}' in '{registry}'")),
+                    Err(message) => DecodeResult::error(message),
+                };
             }
             None => "Not a tag id".to_string(),
         },
         _ => "Not a string".to_string(),
     };
-    let compact_error = match tag {
-        Nbt::List(_) | Nbt::ByteArray(_) | Nbt::IntArray(_) | Nbt::LongArray(_) => {
-            let mut elements = Vec::new();
-            let mut errors: Vec<String> = Vec::new();
-            for value in list(tag).unwrap_or_default().iter() {
-                match element(value) {
-                    Ok(value) => elements.push(value),
-                    Err(error) => errors.push(error),
-                }
+    let compact = compact_list_partial(tag, element);
+    if compact.value.is_some() {
+        return compact;
+    }
+    DecodeResult::error(format!("Failed to parse either. First: {tag_error}; Second: {}", compact.error.expect("an error")))
+}
+
+pub fn compact_list_partial<T>(tag: &Nbt, element: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
+    match tag {
+        Nbt::List(_) | Nbt::ByteArray(_) | Nbt::IntArray(_) | Nbt::LongArray(_) => list_partial(tag, element),
+        single => {
+            let result = element(single);
+            if result.value.is_some() {
+                return result.map(|value| vec![value]);
             }
-            if errors.is_empty() {
-                return Ok(elements);
-            }
-            errors.reverse();
-            return Err(DecodeError { message: errors.join("; "), partial: true });
+            DecodeResult::error(format!("Failed to parse either. First: Not a list: {}; Second: {}", crate::nbt::to_string(single), result.error.expect("an error")))
         }
-        single => match element(single) {
-            Ok(value) => return Ok(vec![value]),
-            Err(error) => format!("Failed to parse either. First: Not a list: {}; Second: {error}", crate::nbt::to_string(single)),
-        },
-    };
-    Err(DecodeError { message: format!("Failed to parse either. First: {tag_error}; Second: {compact_error}"), partial: false })
+    }
+}
+
+pub fn holder_set<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -> DataResult<T>) -> Result<Vec<T>, DecodeError> {
+    holder_set_partial(tag, registry, |value| element(value).into()).into_decode_error()
 }
 
 pub fn string_enum<T: Copy>(tag: &Nbt, values: &[(&str, T)]) -> DataResult<T> {
@@ -243,6 +390,13 @@ pub fn unbounded_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value
     map(tag)?.iter().map(|(k, v)| Ok((key(k)?, value(v)?))).collect()
 }
 
+fn map_entry_order(fields: &[(String, Nbt)]) -> Vec<usize> {
+    if crate::nbt::is_json_source() {
+        return (0..fields.len()).collect();
+    }
+    wafer_protocol::nbt::java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>())
+}
+
 fn map_entry_failures(errors: Vec<String>, failed: Vec<(String, Nbt)>) -> String {
     let messages: Vec<String> = errors.into_iter().rev().collect();
     format!("{} missed input: {}", messages.join("; "), crate::nbt::to_string(&Nbt::Compound(failed)))
@@ -253,7 +407,7 @@ pub fn base_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: imp
     let mut entries = Vec::with_capacity(fields.len());
     let mut errors = Vec::new();
     let mut failed = Vec::new();
-    for i in wafer_protocol::nbt::java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>()) {
+    for i in map_entry_order(fields) {
         let (field_key, field_value) = &fields[i];
         match (key(field_key), value(field_value)) {
             (Ok(key), Ok(value)) => entries.push((key, value)),
@@ -266,12 +420,12 @@ pub fn base_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: imp
     if errors.is_empty() { Ok(entries) } else { Err(map_entry_failures(errors, failed)) }
 }
 
-pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&K, &Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
+pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, mut value: impl FnMut(&K, &Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
     let fields = map(tag)?;
     let mut entries = Vec::with_capacity(fields.len());
     let mut errors = Vec::new();
     let mut failed = Vec::new();
-    for i in wafer_protocol::nbt::java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>()) {
+    for i in map_entry_order(fields) {
         let (field_key, field_value) = &fields[i];
         match key(field_key) {
             Ok(key) => match value(&key, field_value) {

@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::crafting::recipe_holder::RecipeHolder;
 use crate::world::item::crafting::recipe_manager::RecipeManager;
@@ -13,8 +13,10 @@ pub struct SmeltItemFunction {
 }
 
 impl SmeltItemFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SmeltItemFunction> {
-        Ok(SmeltItemFunction { use_input_count: codec::decode_or(tag, "use_input_count", true, codec::bool_value)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SmeltItemFunction> {
+        let mut record = codec::Record::default();
+        let use_input_count = record.with_default(tag, "use_input_count", true, codec::bool_value);
+        record.build(|| Some(SmeltItemFunction { use_input_count }))
     }
 
     pub fn run(&self, item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

@@ -4,7 +4,7 @@ use wafer_data::items;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::codec::registry;
@@ -20,12 +20,12 @@ pub struct EnchantRandomlyFunction {
 }
 
 impl EnchantRandomlyFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<EnchantRandomlyFunction> {
-        Ok(EnchantRandomlyFunction {
-            options: codec::decode_optional(tag, "options", |t| HolderSet::decode("minecraft:enchantment", t))?,
-            only_compatible: codec::decode_or(tag, "only_compatible", true, codec::bool_value)?,
-            include_additional_cost_component: codec::decode_or(tag, "include_additional_cost_component", false, codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<EnchantRandomlyFunction> {
+        let mut record = codec::Record::default();
+        let options = record.optional(tag, "options", |t| HolderSet::decode_partial("minecraft:enchantment", t));
+        let only_compatible = record.with_default(tag, "only_compatible", true, codec::bool_value);
+        let include_additional_cost_component = record.with_default(tag, "include_additional_cost_component", false, codec::bool_value);
+        record.build(|| Some(EnchantRandomlyFunction { options, only_compatible, include_additional_cost_component }))
     }
 
     pub fn run(&self, item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

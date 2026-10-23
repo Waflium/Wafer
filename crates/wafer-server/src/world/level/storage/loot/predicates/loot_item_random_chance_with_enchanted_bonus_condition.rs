@@ -1,7 +1,7 @@
 use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::level_based_value::LevelBasedValue;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -14,15 +14,19 @@ pub struct LootItemRandomChanceWithEnchantedBonusCondition {
 }
 
 impl LootItemRandomChanceWithEnchantedBonusCondition {
-    pub fn decode(tag: &Nbt) -> DataResult<LootItemRandomChanceWithEnchantedBonusCondition> {
-        let unenchanted_chance = codec::decode_field(tag, "unenchanted_chance", codec::float)?;
-        if !(0.0..=1.0).contains(&unenchanted_chance) {
-            return Err(format!("Value {unenchanted_chance} outside of range [0.0:1.0]"));
-        }
-        Ok(LootItemRandomChanceWithEnchantedBonusCondition {
-            unenchanted_chance,
-            enchanted_chance: codec::decode_field(tag, "enchanted_chance", LevelBasedValue::decode)?,
-            enchantment: codec::decode_field(tag, "enchantment", Enchantment::decode_holder)?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<LootItemRandomChanceWithEnchantedBonusCondition> {
+        let mut record = codec::Record::default();
+        let unenchanted_chance = record.required(tag, "unenchanted_chance", |t| {
+            let value = codec::float(t)?;
+            if !(0.0..=1.0).contains(&value) {
+                return Err(format!("Value {value} outside of range [0.0:1.0]"));
+            }
+            Ok(value)
+        });
+        let enchanted_chance = record.required(tag, "enchanted_chance", LevelBasedValue::decode);
+        let enchantment = record.required(tag, "enchantment", Enchantment::decode_holder);
+        record.build(|| {
+            Some(LootItemRandomChanceWithEnchantedBonusCondition { unenchanted_chance: unenchanted_chance?, enchanted_chance: enchanted_chance?, enchantment: enchantment? })
         })
     }
 

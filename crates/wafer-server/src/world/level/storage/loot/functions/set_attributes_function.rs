@@ -2,7 +2,7 @@ use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::entity::attributes::{Attribute, Operation};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
@@ -22,29 +22,30 @@ struct Modifier {
 }
 
 impl Modifier {
-    fn decode(tag: &Nbt) -> DataResult<Modifier> {
-        let slots = codec::decode_field(tag, "slot", |t| {
-            codec::compact_list_of(t, |s| {
-                let name = codec::string(s)?;
-                EQUIPMENT_SLOT_GROUPS.into_iter().find(|&group| group == name).ok_or_else(|| format!("Unknown element name:{name}"))
-            })
-        })?;
-        if slots.is_empty() {
-            return Err("List must have contents".to_string());
+    fn decode(tag: &Nbt) -> DecodeResult<Modifier> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
         }
-        Ok(Modifier {
-            id: codec::decode_field(tag, "id", codec::identifier)?,
-            attribute: codec::decode_field(tag, "attribute", |t| {
-                let id = codec::identifier(t)?;
-                Attribute::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:attribute]: {id}"))
-            })?,
-            operation: codec::decode_field(tag, "operation", |t| {
-                let name = codec::string(t)?;
-                Operation::by_name(name).ok_or_else(|| format!("Unknown element name:{name}"))
-            })?,
-            amount: codec::decode_field(tag, "amount", ContextFloatProvider::decode_holder)?,
-            slots,
-        })
+        let mut record = codec::Record::default();
+        let id = record.required(tag, "id", codec::identifier);
+        let attribute = record.required(tag, "attribute", |t| {
+            let id = codec::identifier(t)?;
+            Attribute::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:attribute]: {id}"))
+        });
+        let operation = record.required(tag, "operation", |t| {
+            let name = codec::string(t)?;
+            Operation::by_name(name).ok_or_else(|| format!("Unknown element name:{name}"))
+        });
+        let amount = record.required(tag, "amount", ContextFloatProvider::decode_holder);
+        let slots = record.required(tag, "slot", |t| {
+            codec::compact_list_partial(t, |s| {
+                DecodeResult::from(
+                    codec::string(s).and_then(|name| EQUIPMENT_SLOT_GROUPS.into_iter().find(|&group| group == name).ok_or_else(|| format!("Unknown element name:{name}"))),
+                )
+            })
+            .validate(|slots| if slots.is_empty() { Err("List must have contents".to_string()) } else { Ok(()) })
+        });
+        record.build(|| Some(Modifier { id: id?, attribute: attribute?, operation: operation?, amount: amount?, slots: slots? }))
     }
 }
 
@@ -54,11 +55,11 @@ pub struct SetAttributesFunction {
 }
 
 impl SetAttributesFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetAttributesFunction> {
-        Ok(SetAttributesFunction {
-            modifiers: codec::decode_field(tag, "modifiers", |t| codec::list_of(t, Modifier::decode))?,
-            replace: codec::decode_or(tag, "replace", true, codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetAttributesFunction> {
+        let mut record = codec::Record::default();
+        let modifiers = record.required(tag, "modifiers", |t| codec::list_partial(t, Modifier::decode));
+        let replace = record.with_default(tag, "replace", true, codec::bool_value);
+        record.build(|| Some(SetAttributesFunction { modifiers: modifiers?, replace }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

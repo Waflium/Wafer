@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::codec as component_codec;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -16,33 +16,42 @@ impl HolderSet {
     }
 
     pub fn decode(registry: &'static str, tag: &Nbt) -> DataResult<HolderSet> {
+        HolderSet::decode_partial(registry, tag).into_result()
+    }
+
+    pub fn decode_partial(registry: &'static str, tag: &Nbt) -> DecodeResult<HolderSet> {
         if let Nbt::String(s) = tag
             && let Some(tag_name) = s.strip_prefix('#')
         {
-            let key = crate::resources::identifier::read(tag_name)?;
+            let key = match crate::resources::identifier::read(tag_name) {
+                Ok(key) => key,
+                Err(error) => return DecodeResult::error(error),
+            };
             if !component_codec::tag_exists(registry, &key)
                 && let Some(error) = crate::core::data_registries::missing_tag(registry, &key)
             {
-                return Err(error);
+                return DecodeResult::error(error);
             }
-            return Ok(HolderSet::named(registry, key));
+            return DecodeResult::success(HolderSet::named(registry, key));
         }
         if codec::is_nbt_ops() {
-            let ids = codec::holder_set(tag, registry, |element| {
+            return codec::holder_set_partial(tag, registry, |element| {
+                DecodeResult::from(codec::identifier(element).and_then(|key| {
+                    if !component_codec::registry(registry).contains(&key.as_str()) {
+                        return Err(format!("Failed to get element {key} from registry {registry}"));
+                    }
+                    component_codec::registry_id(registry, &key)
+                }))
+            })
+            .map(HolderSet::Direct);
+        }
+        DecodeResult::from(
+            codec::compact_list_of(tag, |element| {
                 let key = codec::identifier(element)?;
-                if !component_codec::registry(registry).contains(&key.as_str()) {
-                    return Err(format!("Failed to get element {key} from registry {registry}"));
-                }
                 component_codec::registry_id(registry, &key)
             })
-            .map_err(|error| error.message)?;
-            return Ok(HolderSet::Direct(ids));
-        }
-        let ids = codec::compact_list_of(tag, |element| {
-            let key = codec::identifier(element)?;
-            component_codec::registry_id(registry, &key)
-        })?;
-        Ok(HolderSet::Direct(ids))
+            .map(HolderSet::Direct),
+        )
     }
 
     pub fn contents(&self) -> &[i32] {

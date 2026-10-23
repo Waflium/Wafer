@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -19,12 +19,12 @@ pub struct EnchantedCountIncreaseFunction {
 }
 
 impl EnchantedCountIncreaseFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<EnchantedCountIncreaseFunction> {
-        Ok(EnchantedCountIncreaseFunction {
-            enchantment: codec::decode_field(tag, "enchantment", Enchantment::decode_holder)?,
-            count: codec::decode_field(tag, "count", ContextFloatProvider::decode_holder)?,
-            limit: codec::decode_or(tag, "limit", NO_LIMIT, codec::int)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<EnchantedCountIncreaseFunction> {
+        let mut record = codec::Record::default();
+        let enchantment = record.required(tag, "enchantment", Enchantment::decode_holder);
+        let count = record.required(tag, "count", ContextFloatProvider::decode_holder);
+        let limit = record.with_default(tag, "limit", NO_LIMIT, codec::int);
+        record.build(|| Some(EnchantedCountIncreaseFunction { enchantment: enchantment?, count: count?, limit }))
     }
 
     fn has_limit(&self) -> bool {

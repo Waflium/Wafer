@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -11,11 +11,11 @@ pub struct SetBannerPatternFunction {
 }
 
 impl SetBannerPatternFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetBannerPatternFunction> {
-        Ok(SetBannerPatternFunction {
-            patterns: codec::decode_field(tag, "patterns", |t| dc::BANNER_PATTERNS.decode(t))?,
-            append: codec::decode_field(tag, "append", codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetBannerPatternFunction> {
+        let mut record = codec::Record::default();
+        let patterns = record.required(tag, "patterns", |t| dc::BANNER_PATTERNS.decode(t));
+        let append = record.required(tag, "append", codec::bool_value);
+        record.build(|| Some(SetBannerPatternFunction { patterns: patterns?, append: append? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

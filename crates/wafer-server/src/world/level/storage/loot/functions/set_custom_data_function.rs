@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::advancements::predicates::nbt_predicate::NbtPredicate;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -11,9 +11,15 @@ pub struct SetCustomDataFunction {
 }
 
 impl SetCustomDataFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetCustomDataFunction> {
-        let Nbt::Compound(fields) = codec::decode_field(tag, "tag", NbtPredicate::decode)?.tag else { unreachable!("compound tag") };
-        Ok(SetCustomDataFunction { tag: fields })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetCustomDataFunction> {
+        let mut record = codec::Record::default();
+        let fields = record.required(tag, "tag", |t| {
+            NbtPredicate::decode(t).map(|predicate| {
+                let Nbt::Compound(fields) = predicate.tag else { unreachable!("compound tag") };
+                fields
+            })
+        });
+        record.build(|| Some(SetCustomDataFunction { tag: fields? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

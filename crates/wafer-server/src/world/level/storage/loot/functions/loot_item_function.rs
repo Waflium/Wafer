@@ -43,7 +43,7 @@ use super::smelt_item_function::SmeltItemFunction;
 use super::toggle_tooltips::ToggleTooltips;
 use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -114,74 +114,78 @@ impl RegistryElement for LootItemFunction {
 }
 
 impl LootItemFunction {
-    pub fn decode_holder(tag: &Nbt) -> DataResult<Holder<LootItemFunction>> {
-        Holder::decode(tag, LootItemFunction::decode_direct)
+    pub fn decode_holder(tag: &Nbt) -> DecodeResult<Holder<LootItemFunction>> {
+        Holder::decode_partial(tag, LootItemFunction::decode_direct)
     }
 
-    pub fn decode_direct(tag: &Nbt) -> DataResult<LootItemFunction> {
-        match codec::either_or_partial(tag, LootItemFunction::decode_typed, SequenceFunction::decode_inline)? {
-            Ok(function) => Ok(function),
-            Err(sequence) => Ok(LootItemFunction { condition: None, function: LootItemFunctionType::Sequence(sequence) }),
+    pub fn decode_direct(tag: &Nbt) -> DecodeResult<LootItemFunction> {
+        codec::either_result(LootItemFunction::decode_typed(tag), || SequenceFunction::decode_inline(tag)).map(|function| match function {
+            Ok(function) => function,
+            Err(sequence) => LootItemFunction { condition: None, function: LootItemFunctionType::Sequence(sequence) },
+        })
+    }
+
+    pub fn decode_holder_set(tag: &Nbt) -> DecodeResult<Vec<Holder<LootItemFunction>>> {
+        codec::holder_set_partial(tag, Self::REGISTRY, |t| Holder::decode_partial(t, LootItemFunction::decode_typed))
+    }
+
+    pub fn decode_typed(tag: &Nbt) -> DecodeResult<LootItemFunction> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
         }
-    }
-
-    pub fn decode_list(tag: &Nbt) -> DataResult<Vec<Holder<LootItemFunction>>> {
-        LootItemFunction::decode_holder_set(tag).map_err(|error| error.message)
-    }
-
-    pub fn decode_holder_set(tag: &Nbt) -> Result<Vec<Holder<LootItemFunction>>, codec::DecodeError> {
-        codec::holder_set(tag, Self::REGISTRY, |t| Holder::decode(t, LootItemFunction::decode_typed))
-    }
-
-    pub fn decode_typed(tag: &Nbt) -> DataResult<LootItemFunction> {
-        codec::map(tag)?;
-        let ty = codec::decode_field(tag, "type", codec::identifier)?;
-        let function = match ty.as_str() {
-            "minecraft:set_count" => LootItemFunctionType::SetCount(SetItemCountFunction::decode(tag)?),
-            "minecraft:set_item" => LootItemFunctionType::SetItem(SetItemFunction::decode(tag)?),
-            "minecraft:enchant_with_levels" => LootItemFunctionType::EnchantWithLevels(EnchantWithLevelsFunction::decode(tag)?),
-            "minecraft:enchant_randomly" => LootItemFunctionType::EnchantRandomly(EnchantRandomlyFunction::decode(tag)?),
-            "minecraft:set_enchantments" => LootItemFunctionType::SetEnchantments(SetEnchantmentsFunction::decode(tag)?),
-            "minecraft:set_custom_data" => LootItemFunctionType::SetCustomData(SetCustomDataFunction::decode(tag)?),
-            "minecraft:set_components" => LootItemFunctionType::SetComponents(SetComponentsFunction::decode(tag)?),
-            "minecraft:furnace_smelt" => LootItemFunctionType::FurnaceSmelt(SmeltItemFunction::decode(tag)?),
-            "minecraft:enchanted_count_increase" => LootItemFunctionType::EnchantedCountIncrease(EnchantedCountIncreaseFunction::decode(tag)?),
-            "minecraft:set_damage" => LootItemFunctionType::SetDamage(SetItemDamageFunction::decode(tag)?),
-            "minecraft:set_attributes" => LootItemFunctionType::SetAttributes(SetAttributesFunction::decode(tag)?),
-            "minecraft:set_name" => LootItemFunctionType::SetName(SetNameFunction::decode(tag)?),
-            "minecraft:exploration_map" => LootItemFunctionType::ExplorationMap(ExplorationMapFunction::decode(tag)?),
-            "minecraft:set_stew_effect" => LootItemFunctionType::SetStewEffect(SetStewEffectFunction::decode(tag)?),
-            "minecraft:copy_name" => LootItemFunctionType::CopyName(CopyNameFunction::decode(tag)?),
-            "minecraft:set_contents" => LootItemFunctionType::SetContents(SetContainerContents::decode(tag)?),
-            "minecraft:modify_contents" => LootItemFunctionType::ModifyContents(ModifyContainerContents::decode(tag)?),
-            "minecraft:filtered" => LootItemFunctionType::Filtered(FilteredFunction::decode(tag)?),
-            "minecraft:limit_count" => LootItemFunctionType::LimitCount(LimitCount::decode(tag)?),
-            "minecraft:apply_bonus" => LootItemFunctionType::ApplyBonus(ApplyBonusCount::decode(tag)?),
-            "minecraft:set_loot_table" => LootItemFunctionType::SetLootTable(SetContainerLootTable::decode(tag)?),
-            "minecraft:explosion_decay" => LootItemFunctionType::ExplosionDecay(ApplyExplosionDecay),
-            "minecraft:set_lore" => LootItemFunctionType::SetLore(SetLoreFunction::decode(tag)?),
-            "minecraft:fill_player_head" => LootItemFunctionType::FillPlayerHead(FillPlayerHead::decode(tag)?),
-            "minecraft:copy_custom_data" => LootItemFunctionType::CopyCustomData(CopyCustomDataFunction::decode(tag)?),
-            "minecraft:copy_state" => LootItemFunctionType::CopyState(CopyBlockState::decode(tag)?),
-            "minecraft:set_banner_pattern" => LootItemFunctionType::SetBannerPattern(SetBannerPatternFunction::decode(tag)?),
-            "minecraft:set_potion" => LootItemFunctionType::SetPotion(SetPotionFunction::decode(tag)?),
-            "minecraft:set_random_dyes" => LootItemFunctionType::SetRandomDyes(SetRandomDyesFunction::decode(tag)?),
-            "minecraft:set_random_potion" => LootItemFunctionType::SetRandomPotion(SetRandomPotionFunction::decode(tag)?),
-            "minecraft:set_instrument" => LootItemFunctionType::SetInstrument(SetInstrumentFunction::decode(tag)?),
-            "minecraft:sequence" => LootItemFunctionType::Sequence(SequenceFunction::decode(tag)?),
-            "minecraft:copy_components" => LootItemFunctionType::CopyComponents(CopyComponentsFunction::decode(tag)?),
-            "minecraft:set_fireworks" => LootItemFunctionType::SetFireworks(SetFireworksFunction::decode(tag)?),
-            "minecraft:set_firework_explosion" => LootItemFunctionType::SetFireworkExplosion(SetFireworkExplosionFunction::decode(tag)?),
-            "minecraft:set_book_cover" => LootItemFunctionType::SetBookCover(SetBookCoverFunction::decode(tag)?),
-            "minecraft:set_written_book_pages" => LootItemFunctionType::SetWrittenBookPages(SetWrittenBookPagesFunction::decode(tag)?),
-            "minecraft:set_writable_book_pages" => LootItemFunctionType::SetWritableBookPages(SetWritableBookPagesFunction::decode(tag)?),
-            "minecraft:toggle_tooltips" => LootItemFunctionType::ToggleTooltips(ToggleTooltips::decode(tag)?),
-            "minecraft:set_ominous_bottle_amplifier" => LootItemFunctionType::SetOminousBottleAmplifier(SetOminousBottleAmplifierFunction::decode(tag)?),
-            "minecraft:set_custom_model_data" => LootItemFunctionType::SetCustomModelData(SetCustomModelDataFunction::decode(tag)?),
-            "minecraft:discard" => LootItemFunctionType::Discard,
-            other => return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_function_type]: {other}")),
+        let ty = match codec::decode_field(tag, "type", codec::identifier) {
+            Ok(ty) => ty,
+            Err(error) => return DecodeResult::error(error),
         };
-        Ok(LootItemFunction { condition: codec::decode_optional(tag, "condition", LootItemCondition::decode_holder)?, function })
+        let function = match ty.as_str() {
+            "minecraft:set_count" => SetItemCountFunction::decode(tag).map(LootItemFunctionType::SetCount),
+            "minecraft:set_item" => SetItemFunction::decode(tag).map(LootItemFunctionType::SetItem),
+            "minecraft:enchant_with_levels" => EnchantWithLevelsFunction::decode(tag).map(LootItemFunctionType::EnchantWithLevels),
+            "minecraft:enchant_randomly" => EnchantRandomlyFunction::decode(tag).map(LootItemFunctionType::EnchantRandomly),
+            "minecraft:set_enchantments" => SetEnchantmentsFunction::decode(tag).map(LootItemFunctionType::SetEnchantments),
+            "minecraft:set_custom_data" => SetCustomDataFunction::decode(tag).map(LootItemFunctionType::SetCustomData),
+            "minecraft:set_components" => SetComponentsFunction::decode(tag).map(LootItemFunctionType::SetComponents),
+            "minecraft:furnace_smelt" => SmeltItemFunction::decode(tag).map(LootItemFunctionType::FurnaceSmelt),
+            "minecraft:enchanted_count_increase" => EnchantedCountIncreaseFunction::decode(tag).map(LootItemFunctionType::EnchantedCountIncrease),
+            "minecraft:set_damage" => SetItemDamageFunction::decode(tag).map(LootItemFunctionType::SetDamage),
+            "minecraft:set_attributes" => SetAttributesFunction::decode(tag).map(LootItemFunctionType::SetAttributes),
+            "minecraft:set_name" => SetNameFunction::decode(tag).map(LootItemFunctionType::SetName),
+            "minecraft:exploration_map" => ExplorationMapFunction::decode(tag).map(LootItemFunctionType::ExplorationMap),
+            "minecraft:set_stew_effect" => SetStewEffectFunction::decode(tag).map(LootItemFunctionType::SetStewEffect),
+            "minecraft:copy_name" => CopyNameFunction::decode(tag).map(LootItemFunctionType::CopyName),
+            "minecraft:set_contents" => SetContainerContents::decode(tag).map(LootItemFunctionType::SetContents),
+            "minecraft:modify_contents" => ModifyContainerContents::decode(tag).map(LootItemFunctionType::ModifyContents),
+            "minecraft:filtered" => FilteredFunction::decode(tag).map(LootItemFunctionType::Filtered),
+            "minecraft:limit_count" => LimitCount::decode(tag).map(LootItemFunctionType::LimitCount),
+            "minecraft:apply_bonus" => ApplyBonusCount::decode(tag).map(LootItemFunctionType::ApplyBonus),
+            "minecraft:set_loot_table" => SetContainerLootTable::decode(tag).map(LootItemFunctionType::SetLootTable),
+            "minecraft:explosion_decay" => DecodeResult::success(LootItemFunctionType::ExplosionDecay(ApplyExplosionDecay)),
+            "minecraft:set_lore" => SetLoreFunction::decode(tag).map(LootItemFunctionType::SetLore),
+            "minecraft:fill_player_head" => FillPlayerHead::decode(tag).map(LootItemFunctionType::FillPlayerHead),
+            "minecraft:copy_custom_data" => CopyCustomDataFunction::decode(tag).map(LootItemFunctionType::CopyCustomData),
+            "minecraft:copy_state" => CopyBlockState::decode(tag).map(LootItemFunctionType::CopyState),
+            "minecraft:set_banner_pattern" => SetBannerPatternFunction::decode(tag).map(LootItemFunctionType::SetBannerPattern),
+            "minecraft:set_potion" => SetPotionFunction::decode(tag).map(LootItemFunctionType::SetPotion),
+            "minecraft:set_random_dyes" => SetRandomDyesFunction::decode(tag).map(LootItemFunctionType::SetRandomDyes),
+            "minecraft:set_random_potion" => SetRandomPotionFunction::decode(tag).map(LootItemFunctionType::SetRandomPotion),
+            "minecraft:set_instrument" => SetInstrumentFunction::decode(tag).map(LootItemFunctionType::SetInstrument),
+            "minecraft:sequence" => SequenceFunction::decode(tag).map(LootItemFunctionType::Sequence),
+            "minecraft:copy_components" => CopyComponentsFunction::decode(tag).map(LootItemFunctionType::CopyComponents),
+            "minecraft:set_fireworks" => SetFireworksFunction::decode(tag).map(LootItemFunctionType::SetFireworks),
+            "minecraft:set_firework_explosion" => SetFireworkExplosionFunction::decode(tag).map(LootItemFunctionType::SetFireworkExplosion),
+            "minecraft:set_book_cover" => SetBookCoverFunction::decode(tag).map(LootItemFunctionType::SetBookCover),
+            "minecraft:set_written_book_pages" => SetWrittenBookPagesFunction::decode(tag).map(LootItemFunctionType::SetWrittenBookPages),
+            "minecraft:set_writable_book_pages" => SetWritableBookPagesFunction::decode(tag).map(LootItemFunctionType::SetWritableBookPages),
+            "minecraft:toggle_tooltips" => ToggleTooltips::decode(tag).map(LootItemFunctionType::ToggleTooltips),
+            "minecraft:set_ominous_bottle_amplifier" => SetOminousBottleAmplifierFunction::decode(tag).map(LootItemFunctionType::SetOminousBottleAmplifier),
+            "minecraft:set_custom_model_data" => SetCustomModelDataFunction::decode(tag).map(LootItemFunctionType::SetCustomModelData),
+            "minecraft:discard" => DecodeResult::success(LootItemFunctionType::Discard),
+            other => return DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_function_type]: {other}")),
+        };
+        let mut record = codec::Record::default();
+        let condition = record.optional(tag, "condition", LootItemCondition::decode_holder_partial);
+        let function = record.absorb(function);
+        record.build(|| Some(LootItemFunction { condition, function: function? }))
     }
 
     pub fn apply(&self, item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

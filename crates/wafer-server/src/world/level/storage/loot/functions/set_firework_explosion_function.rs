@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use super::set_written_book_pages_function::put;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -21,14 +21,14 @@ fn color_list(tag: &Nbt) -> DataResult<Nbt> {
 }
 
 impl SetFireworkExplosionFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetFireworkExplosionFunction> {
-        Ok(SetFireworkExplosionFunction {
-            shape: codec::decode_optional(tag, "shape", |t| codec::string_enum(t, SHAPES))?,
-            colors: codec::decode_optional(tag, "colors", color_list)?,
-            fade_colors: codec::decode_optional(tag, "fade_colors", color_list)?,
-            trail: codec::decode_optional(tag, "trail", codec::bool_value)?,
-            twinkle: codec::decode_optional(tag, "twinkle", codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetFireworkExplosionFunction> {
+        let mut record = codec::Record::default();
+        let shape = record.optional(tag, "shape", |t| codec::string_enum(t, SHAPES));
+        let colors = record.optional(tag, "colors", color_list);
+        let fade_colors = record.optional(tag, "fade_colors", color_list);
+        let trail = record.optional(tag, "trail", codec::bool_value);
+        let twinkle = record.optional(tag, "twinkle", codec::bool_value);
+        record.build(|| Some(SetFireworkExplosionFunction { shape, colors, fade_colors, trail, twinkle }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {

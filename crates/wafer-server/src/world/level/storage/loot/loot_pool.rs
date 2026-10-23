@@ -30,7 +30,7 @@ impl LootPool {
         Ok(LootPool {
             entries: codec::decode_field(tag, "entries", |t| codec::list_of(t, loot_pool_entries::decode))?,
             condition: codec::decode_optional(tag, "condition", LootItemCondition::decode_holder)?,
-            modifier: codec::decode_optional(tag, "modifier", LootItemFunction::decode_holder)?,
+            modifier: codec::decode_optional(tag, "modifier", |t| LootItemFunction::decode_holder(t).into_result())?,
             rolls: codec::decode_field(tag, "rolls", ContextIntProvider::decode_holder)?,
             bonus_rolls: codec::decode_or(tag, "bonus_rolls", floats::exactly(0.0), ContextFloatProvider::decode_holder)?,
         })

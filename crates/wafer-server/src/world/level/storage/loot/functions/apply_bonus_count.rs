@@ -1,7 +1,7 @@
 use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::enchantment_helper::get_item_enchantment_level;
@@ -44,10 +44,10 @@ pub struct ApplyBonusCount {
 }
 
 impl ApplyBonusCount {
-    pub fn decode(tag: &Nbt) -> DataResult<ApplyBonusCount> {
+    fn decode_formula(tag: &Nbt) -> DataResult<Formula> {
         let formula_type = codec::decode_field(tag, "formula", codec::identifier)?;
         let parameters = codec::optional_field(tag, "parameters");
-        let formula = match formula_type.as_str() {
+        Ok(match formula_type.as_str() {
             "minecraft:binomial_with_bonus_count" => {
                 let parameters = parameters.ok_or("No key parameters")?;
                 Formula::BinomialWithBonusCount {
@@ -61,8 +61,14 @@ impl ApplyBonusCount {
                 Formula::UniformBonusCount { bonus_multiplier: codec::decode_field(parameters, "bonusMultiplier", codec::int)? }
             }
             other => return Err(format!("No formula type with id: '{other}'")),
-        };
-        Ok(ApplyBonusCount { enchantment: codec::decode_field(tag, "enchantment", Enchantment::decode_holder)?, formula })
+        })
+    }
+
+    pub fn decode(tag: &Nbt) -> DecodeResult<ApplyBonusCount> {
+        let mut record = codec::Record::default();
+        let enchantment = record.required(tag, "enchantment", Enchantment::decode_holder);
+        let formula = record.absorb(ApplyBonusCount::decode_formula(tag).into());
+        record.build(|| Some(ApplyBonusCount { enchantment: enchantment?, formula: formula? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

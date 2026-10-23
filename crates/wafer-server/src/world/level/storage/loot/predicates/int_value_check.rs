@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::int_range_predicate::IntRangePredicate;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::ints::ContextIntProvider;
@@ -14,11 +14,11 @@ pub struct IntValueCheck {
 }
 
 impl IntValueCheck {
-    pub fn decode(tag: &Nbt) -> DataResult<IntValueCheck> {
-        Ok(IntValueCheck {
-            value: codec::decode_field(tag, "value", ContextIntProvider::decode_holder)?,
-            range: codec::decode_field(tag, "test", IntRangePredicate::decode)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<IntValueCheck> {
+        let mut record = codec::Record::default();
+        let value = record.required(tag, "value", ContextIntProvider::decode_holder);
+        let range = record.required(tag, "test", IntRangePredicate::decode);
+        record.build(|| Some(IntValueCheck { value: value?, range: range? }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

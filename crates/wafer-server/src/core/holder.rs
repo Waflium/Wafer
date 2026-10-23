@@ -2,7 +2,7 @@ use std::sync::OnceLock;
 
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 
 pub trait RegistryElement: Sized + Send + Sync + 'static {
     const REGISTRY: &'static str;
@@ -38,13 +38,17 @@ impl<T: RegistryElement> Holder<T> {
     }
 
     pub fn decode(tag: &Nbt, direct: impl FnOnce(&Nbt) -> DataResult<T>) -> DataResult<Holder<T>> {
-        let Ok(key) = codec::identifier(tag) else { return Ok(Holder::direct(direct(tag)?)) };
+        Holder::decode_partial(tag, |tag| direct(tag).into()).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt, direct: impl FnOnce(&Nbt) -> DecodeResult<T>) -> DecodeResult<Holder<T>> {
+        let Ok(key) = codec::identifier(tag) else { return direct(tag).map(Holder::direct) };
         if T::contains_key(&key) {
-            Ok(Holder::Reference(key, OnceLock::new()))
+            DecodeResult::success(Holder::Reference(key, OnceLock::new()))
         } else if codec::is_nbt_ops() {
-            Err(format!("Failed to get element {key} from registry {}", T::REGISTRY))
+            DecodeResult::error(format!("Failed to get element {key} from registry {}", T::REGISTRY))
         } else {
-            Err(format!("Missing element ResourceKey[{} / {key}]", T::REGISTRY))
+            DecodeResult::error(format!("Missing element ResourceKey[{} / {key}]", T::REGISTRY))
         }
     }
 }

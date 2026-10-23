@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::codec::registry;
@@ -20,12 +20,12 @@ pub struct EnchantWithLevelsFunction {
 }
 
 impl EnchantWithLevelsFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<EnchantWithLevelsFunction> {
-        Ok(EnchantWithLevelsFunction {
-            levels: codec::decode_field(tag, "levels", ContextIntProvider::decode_holder)?,
-            options: codec::decode_optional(tag, "options", |t| HolderSet::decode("minecraft:enchantment", t))?,
-            include_additional_cost_component: codec::decode_or(tag, "include_additional_cost_component", false, codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<EnchantWithLevelsFunction> {
+        let mut record = codec::Record::default();
+        let levels = record.required(tag, "levels", ContextIntProvider::decode_holder);
+        let options = record.optional(tag, "options", |t| HolderSet::decode_partial("minecraft:enchantment", t));
+        let include_additional_cost_component = record.with_default(tag, "include_additional_cost_component", false, codec::bool_value);
+        record.build(|| Some(EnchantWithLevelsFunction { levels: levels?, options, include_additional_cost_component }))
     }
 
     pub fn run(&self, item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

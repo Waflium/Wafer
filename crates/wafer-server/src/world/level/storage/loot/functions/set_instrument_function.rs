@@ -2,7 +2,7 @@ use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::codec::registry;
@@ -13,8 +13,10 @@ pub struct SetInstrumentFunction {
 }
 
 impl SetInstrumentFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetInstrumentFunction> {
-        Ok(SetInstrumentFunction { options: codec::decode_field(tag, "options", |t| HolderSet::decode("minecraft:instrument", t))? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetInstrumentFunction> {
+        let mut record = codec::Record::default();
+        let options = record.required(tag, "options", |t| HolderSet::decode_partial("minecraft:instrument", t));
+        record.build(|| Some(SetInstrumentFunction { options: options? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

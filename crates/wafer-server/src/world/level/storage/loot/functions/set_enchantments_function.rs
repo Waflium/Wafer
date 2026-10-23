@@ -3,7 +3,7 @@ use wafer_data::items;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::enchantment_helper::update_enchantments;
@@ -18,13 +18,13 @@ pub struct SetEnchantmentsFunction {
 }
 
 impl SetEnchantmentsFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetEnchantmentsFunction> {
-        Ok(SetEnchantmentsFunction {
-            enchantments: codec::decode_or(tag, "enchantments", Vec::new(), |t| {
-                codec::unbounded_map(t, |k| Enchantment::decode_holder(&Nbt::String(k.to_string())), ContextIntProvider::decode_holder)
-            })?,
-            add: codec::decode_or(tag, "add", false, codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetEnchantmentsFunction> {
+        let mut record = codec::Record::default();
+        let enchantments = record.with_default(tag, "enchantments", Vec::new(), |t| {
+            codec::unbounded_map(t, |k| Enchantment::decode_holder(&Nbt::String(k.to_string())), ContextIntProvider::decode_holder)
+        });
+        let add = record.with_default(tag, "add", false, codec::bool_value);
+        record.build(|| Some(SetEnchantmentsFunction { enchantments, add }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

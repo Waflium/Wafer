@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::container_component_manipulator::ContainerComponentManipulator;
 use crate::world::level::storage::loot::container_component_manipulators;
@@ -17,11 +17,11 @@ pub struct SetContainerContents {
 }
 
 impl SetContainerContents {
-    pub fn decode(tag: &Nbt) -> DataResult<SetContainerContents> {
-        Ok(SetContainerContents {
-            component: codec::decode_field(tag, "component", container_component_manipulators::decode)?,
-            entries: codec::decode_field(tag, "entries", |t| codec::list_of(t, loot_pool_entries::decode))?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetContainerContents> {
+        let mut record = codec::Record::default();
+        let component = record.required(tag, "component", container_component_manipulators::decode);
+        let entries = record.required(tag, "entries", |t| codec::list_partial(t, |entry| DecodeResult::from(loot_pool_entries::decode(entry))));
+        record.build(|| Some(SetContainerContents { component: component?, entries: entries? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

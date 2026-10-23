@@ -22,7 +22,7 @@ use super::time_check::TimeCheck;
 use super::weather_check::WeatherCheck;
 use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::validatable::Validatable;
 use crate::world::level::storage::loot::validation_context::ValidationContext;
@@ -65,40 +65,55 @@ impl RegistryElement for LootItemCondition {
 
 impl LootItemCondition {
     pub fn decode_holder(tag: &Nbt) -> DataResult<Holder<LootItemCondition>> {
-        Holder::decode(tag, LootItemCondition::decode)
+        LootItemCondition::decode_holder_partial(tag).into_result()
+    }
+
+    pub fn decode_holder_partial(tag: &Nbt) -> DecodeResult<Holder<LootItemCondition>> {
+        Holder::decode_partial(tag, LootItemCondition::decode_partial)
     }
 
     pub fn decode_holder_list(tag: &Nbt) -> DataResult<Vec<Holder<LootItemCondition>>> {
-        crate::world::level::storage::loot::providers::number::decode_holder_list(tag, LootItemCondition::decode_holder)
+        LootItemCondition::decode_holder_list_partial(tag).into_result()
+    }
+
+    pub fn decode_holder_list_partial(tag: &Nbt) -> DecodeResult<Vec<Holder<LootItemCondition>>> {
+        codec::holder_set_partial(tag, Self::REGISTRY, |t| Holder::decode_partial(t, LootItemCondition::decode_partial))
     }
 
     pub fn decode(tag: &Nbt) -> DataResult<LootItemCondition> {
-        let ty = codec::decode_field(tag, "type", codec::identifier)?;
-        Ok(match ty.as_str() {
-            "minecraft:inverted" => LootItemCondition::Inverted(InvertedLootItemCondition::decode(tag)?),
-            "minecraft:any_of" => LootItemCondition::AnyOf(AnyOfCondition::decode(tag)?),
-            "minecraft:all_of" => LootItemCondition::AllOf(AllOfCondition::decode(tag)?),
-            "minecraft:random_chance" => LootItemCondition::RandomChance(LootItemRandomChanceCondition::decode(tag)?),
+        LootItemCondition::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<LootItemCondition> {
+        let ty = match codec::decode_field(tag, "type", codec::identifier) {
+            Ok(ty) => ty,
+            Err(error) => return DecodeResult::error(error),
+        };
+        match ty.as_str() {
+            "minecraft:inverted" => InvertedLootItemCondition::decode(tag).map(LootItemCondition::Inverted),
+            "minecraft:any_of" => AnyOfCondition::decode(tag).map(LootItemCondition::AnyOf),
+            "minecraft:all_of" => AllOfCondition::decode(tag).map(LootItemCondition::AllOf),
+            "minecraft:random_chance" => LootItemRandomChanceCondition::decode(tag).map(LootItemCondition::RandomChance),
             "minecraft:random_chance_with_enchanted_bonus" => {
-                LootItemCondition::RandomChanceWithEnchantedBonus(LootItemRandomChanceWithEnchantedBonusCondition::decode(tag)?)
+                LootItemRandomChanceWithEnchantedBonusCondition::decode(tag).map(LootItemCondition::RandomChanceWithEnchantedBonus)
             }
-            "minecraft:entity_properties" => LootItemCondition::EntityProperties(LootItemEntityPropertyCondition::decode(tag)?),
-            "minecraft:killed_by_player" => LootItemCondition::KilledByPlayer(LootItemKilledByPlayerCondition),
-            "minecraft:entity_scores" => LootItemCondition::EntityScores(EntityHasScoreCondition::decode(tag)?),
-            "minecraft:match_block" => LootItemCondition::MatchBlock(MatchBlock::decode(tag)?),
-            "minecraft:match_tool" => LootItemCondition::MatchTool(MatchTool::decode(tag)?),
-            "minecraft:table_bonus" => LootItemCondition::TableBonus(BonusLevelTableCondition::decode(tag)?),
-            "minecraft:survives_explosion" => LootItemCondition::SurvivesExplosion(ExplosionCondition),
-            "minecraft:damage_source_properties" => LootItemCondition::DamageSourceProperties(DamageSourceCondition::decode(tag)?),
-            "minecraft:location_check" => LootItemCondition::LocationCheck(LocationCheck::decode(tag)?),
-            "minecraft:weather_check" => LootItemCondition::WeatherCheck(WeatherCheck::decode(tag)?),
-            "minecraft:time_check" => LootItemCondition::TimeCheck(TimeCheck::decode(tag)?),
-            "minecraft:int_value_check" => LootItemCondition::IntValueCheck(IntValueCheck::decode(tag)?),
-            "minecraft:float_value_check" => LootItemCondition::FloatValueCheck(FloatValueCheck::decode(tag)?),
-            "minecraft:enchantment_active_check" => LootItemCondition::EnchantmentActiveCheck(EnchantmentActiveCheck::decode(tag)?),
-            "minecraft:environment_attribute_check" => LootItemCondition::EnvironmentAttributeCheck(EnvironmentAttributeCheck::decode(tag)?),
-            other => return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_condition_type]: {other}")),
-        })
+            "minecraft:entity_properties" => LootItemEntityPropertyCondition::decode(tag).map(LootItemCondition::EntityProperties),
+            "minecraft:killed_by_player" => DecodeResult::success(LootItemCondition::KilledByPlayer(LootItemKilledByPlayerCondition)),
+            "minecraft:entity_scores" => EntityHasScoreCondition::decode(tag).map(LootItemCondition::EntityScores),
+            "minecraft:match_block" => DecodeResult::from(MatchBlock::decode(tag)).map(LootItemCondition::MatchBlock),
+            "minecraft:match_tool" => MatchTool::decode(tag).map(LootItemCondition::MatchTool),
+            "minecraft:table_bonus" => BonusLevelTableCondition::decode(tag).map(LootItemCondition::TableBonus),
+            "minecraft:survives_explosion" => DecodeResult::success(LootItemCondition::SurvivesExplosion(ExplosionCondition)),
+            "minecraft:damage_source_properties" => DamageSourceCondition::decode(tag).map(LootItemCondition::DamageSourceProperties),
+            "minecraft:location_check" => LocationCheck::decode(tag).map(LootItemCondition::LocationCheck),
+            "minecraft:weather_check" => WeatherCheck::decode(tag).map(LootItemCondition::WeatherCheck),
+            "minecraft:time_check" => TimeCheck::decode(tag).map(LootItemCondition::TimeCheck),
+            "minecraft:int_value_check" => IntValueCheck::decode(tag).map(LootItemCondition::IntValueCheck),
+            "minecraft:float_value_check" => FloatValueCheck::decode(tag).map(LootItemCondition::FloatValueCheck),
+            "minecraft:enchantment_active_check" => EnchantmentActiveCheck::decode(tag).map(LootItemCondition::EnchantmentActiveCheck),
+            "minecraft:environment_attribute_check" => DecodeResult::from(EnvironmentAttributeCheck::decode(tag)).map(LootItemCondition::EnvironmentAttributeCheck),
+            other => DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_condition_type]: {other}")),
+        }
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

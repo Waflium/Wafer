@@ -2,8 +2,8 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::commands::arguments::selector::entity_world::LevelWorld;
 use crate::commands::source::{Anchor, CommandResultCallback, CommandSource, CommandSourceStack, Names};
-use crate::network::chat::{Component, component_utils};
-use crate::util::codec::{self, DataResult};
+use crate::network::chat::{Component, component_serialization, component_utils};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, DataComponentType};
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
@@ -24,8 +24,11 @@ impl Target {
     }
 }
 
-pub fn decode_component(tag: &Nbt) -> DataResult<Nbt> {
-    dc::CUSTOM_NAME.decode(tag)
+pub fn decode_component(tag: &Nbt) -> DecodeResult<Nbt> {
+    match dc::CUSTOM_NAME.decode(tag) {
+        Ok(value) => DecodeResult::success(value),
+        Err(error) => DecodeResult { value: component_serialization::decode_or_partial(tag).map(|component| component.to_nbt()), error: Some(error) },
+    }
 }
 
 pub struct SetNameFunction {
@@ -35,12 +38,12 @@ pub struct SetNameFunction {
 }
 
 impl SetNameFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetNameFunction> {
-        Ok(SetNameFunction {
-            name: codec::decode_optional(tag, "name", decode_component)?,
-            resolution_context: codec::decode_optional(tag, "entity", EntityTarget::decode)?,
-            target: codec::decode_or(tag, "target", Target::CustomName, |t| codec::string_enum(t, &[("custom_name", Target::CustomName), ("item_name", Target::ItemName)]))?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetNameFunction> {
+        let mut record = codec::Record::default();
+        let name = record.optional(tag, "name", decode_component);
+        let resolution_context = record.optional(tag, "entity", EntityTarget::decode);
+        let target = record.with_default(tag, "target", Target::CustomName, |t| codec::string_enum(t, &[("custom_name", Target::CustomName), ("item_name", Target::ItemName)]));
+        record.build(|| Some(SetNameFunction { name, resolution_context, target }))
     }
 
     pub fn create_resolver<'a>(context: &'a LootContext, entity_target: Option<EntityTarget>) -> impl Fn(&Nbt) -> Nbt + 'a {

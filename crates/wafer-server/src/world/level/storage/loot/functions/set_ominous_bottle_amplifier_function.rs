@@ -2,7 +2,7 @@ use wafer_core::mth;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -15,8 +15,10 @@ pub struct SetOminousBottleAmplifierFunction {
 }
 
 impl SetOminousBottleAmplifierFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetOminousBottleAmplifierFunction> {
-        Ok(SetOminousBottleAmplifierFunction { amplifier: codec::decode_field(tag, "amplifier", ContextIntProvider::decode_holder)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetOminousBottleAmplifierFunction> {
+        let mut record = codec::Record::default();
+        let amplifier = record.required(tag, "amplifier", ContextIntProvider::decode_holder);
+        record.build(|| Some(SetOminousBottleAmplifierFunction { amplifier: amplifier? }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

@@ -1,7 +1,7 @@
 use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::enchantment_helper::get_item_enchantment_level;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -13,12 +13,13 @@ pub struct BonusLevelTableCondition {
 }
 
 impl BonusLevelTableCondition {
-    pub fn decode(tag: &Nbt) -> DataResult<BonusLevelTableCondition> {
-        let values = codec::decode_field(tag, "chances", |t| codec::list_of(t, codec::float))?;
-        if values.is_empty() {
-            return Err("List must have contents".into());
-        }
-        Ok(BonusLevelTableCondition { enchantment: codec::decode_field(tag, "enchantment", Enchantment::decode_holder)?, values })
+    pub fn decode(tag: &Nbt) -> DecodeResult<BonusLevelTableCondition> {
+        let mut record = codec::Record::default();
+        let enchantment = record.required(tag, "enchantment", Enchantment::decode_holder);
+        let values = record.required(tag, "chances", |t| {
+            codec::list_partial(t, |value| DecodeResult::from(codec::float(value))).validate(|values| if values.is_empty() { Err("List must have contents".to_string()) } else { Ok(()) })
+        });
+        record.build(|| Some(BonusLevelTableCondition { enchantment: enchantment?, values: values? }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

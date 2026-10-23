@@ -4,7 +4,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
 use crate::server::level::chunk_level::ChunkStatus;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::{ItemStack, map_item};
 use crate::world::level::levelgen::structure::structure::StructureHolder;
 use crate::world::level::saveddata::maps::map_decoration_type::MapDecorationTypeHolder;
@@ -27,17 +27,17 @@ pub struct ExplorationMapFunction {
 }
 
 impl ExplorationMapFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<ExplorationMapFunction> {
-        Ok(ExplorationMapFunction {
-            destination: codec::decode_field(tag, "destination", |t| HolderSet::decode("minecraft:worldgen/structure", t))?,
-            map_decoration: codec::decode_or(tag, "decoration", DEFAULT_DECORATION, |t| {
-                let key = codec::identifier(t)?;
-                MapDecorationTypeHolder::by_name(&key).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:map_decoration_type]: {key}"))
-            })?,
-            zoom: codec::decode_or(tag, "zoom", DEFAULT_ZOOM, |t| Ok(codec::int(t)? as i8))?,
-            search_radius: codec::decode_or(tag, "search_radius", DEFAULT_SEARCH_RADIUS, codec::int)?,
-            skip_known_structures: codec::decode_or(tag, "skip_existing_chunks", DEFAULT_SKIP_EXISTING, codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<ExplorationMapFunction> {
+        let mut record = codec::Record::default();
+        let destination = record.required(tag, "destination", |t| HolderSet::decode_partial("minecraft:worldgen/structure", t));
+        let map_decoration = record.with_default(tag, "decoration", DEFAULT_DECORATION, |t| {
+            let key = codec::identifier(t)?;
+            MapDecorationTypeHolder::by_name(&key).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:map_decoration_type]: {key}"))
+        });
+        let zoom = record.with_default(tag, "zoom", DEFAULT_ZOOM, |t| Ok::<i8, String>(codec::int(t)? as i8));
+        let search_radius = record.with_default(tag, "search_radius", DEFAULT_SEARCH_RADIUS, codec::int);
+        let skip_known_structures = record.with_default(tag, "skip_existing_chunks", DEFAULT_SKIP_EXISTING, codec::bool_value);
+        record.build(|| Some(ExplorationMapFunction { destination: destination?, map_decoration, zoom, search_radius, skip_known_structures }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

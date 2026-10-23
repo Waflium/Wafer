@@ -2,7 +2,7 @@ use wafer_core::mth;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::floats::ContextFloatProvider;
@@ -15,11 +15,11 @@ pub struct SetItemDamageFunction {
 }
 
 impl SetItemDamageFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetItemDamageFunction> {
-        Ok(SetItemDamageFunction {
-            damage: codec::decode_field(tag, "damage", ContextFloatProvider::decode_holder)?,
-            add: codec::decode_or(tag, "add", false, codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetItemDamageFunction> {
+        let mut record = codec::Record::default();
+        let damage = record.required(tag, "damage", ContextFloatProvider::decode_holder);
+        let add = record.with_default(tag, "add", false, codec::bool_value);
+        record.build(|| Some(SetItemDamageFunction { damage: damage?, add }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

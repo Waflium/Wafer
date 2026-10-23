@@ -3,7 +3,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::set_potion_function::with_potion;
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component::codec::registry;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -13,8 +13,10 @@ pub struct SetRandomPotionFunction {
 }
 
 impl SetRandomPotionFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetRandomPotionFunction> {
-        Ok(SetRandomPotionFunction { options: codec::decode_optional(tag, "options", |t| HolderSet::decode("minecraft:potion", t))? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetRandomPotionFunction> {
+        let mut record = codec::Record::default();
+        let options = record.optional(tag, "options", |t| HolderSet::decode_partial("minecraft:potion", t));
+        record.build(|| Some(SetRandomPotionFunction { options }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

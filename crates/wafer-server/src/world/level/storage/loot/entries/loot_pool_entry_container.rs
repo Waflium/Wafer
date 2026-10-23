@@ -32,7 +32,7 @@ impl LootPoolEntryContainer {
     pub fn decode(tag: &Nbt, entry: LootPoolEntryContainerType) -> DataResult<LootPoolEntryContainer> {
         Ok(LootPoolEntryContainer {
             condition: codec::decode_optional(tag, "condition", LootItemCondition::decode_holder)?,
-            modifier: codec::decode_optional(tag, "modifier", LootItemFunction::decode_holder)?,
+            modifier: codec::decode_optional(tag, "modifier", |t| LootItemFunction::decode_holder(t).into_result())?,
             entry,
         })
     }

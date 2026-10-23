@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::advancements::predicates::damage_source_predicate::DamageSourcePredicate;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
@@ -10,8 +10,10 @@ pub struct DamageSourceCondition {
 }
 
 impl DamageSourceCondition {
-    pub fn decode(tag: &Nbt) -> DataResult<DamageSourceCondition> {
-        Ok(DamageSourceCondition { predicate: codec::decode_optional(tag, "predicate", DamageSourcePredicate::decode)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<DamageSourceCondition> {
+        let mut record = codec::Record::default();
+        let predicate = record.optional(tag, "predicate", DamageSourcePredicate::decode);
+        record.build(|| Some(DamageSourceCondition { predicate }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

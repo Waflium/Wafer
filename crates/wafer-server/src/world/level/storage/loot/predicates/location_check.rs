@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::advancements::predicates::location_predicate::LocationPredicate;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
@@ -11,12 +11,15 @@ pub struct LocationCheck {
 }
 
 impl LocationCheck {
-    pub fn decode(tag: &Nbt) -> DataResult<LocationCheck> {
-        let offset = |key| codec::decode_or(tag, key, 0, codec::int);
-        Ok(LocationCheck {
-            predicate: codec::decode_optional(tag, "predicate", LocationPredicate::decode)?,
-            offset: (offset("offsetX")?, offset("offsetY")?, offset("offsetZ")?),
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<LocationCheck> {
+        let mut record = codec::Record::default();
+        let predicate = record.optional(tag, "predicate", LocationPredicate::decode);
+        let mut offset_record = codec::Record::default();
+        let x = offset_record.with_default(tag, "offsetX", 0, codec::int);
+        let y = offset_record.with_default(tag, "offsetY", 0, codec::int);
+        let z = offset_record.with_default(tag, "offsetZ", 0, codec::int);
+        let offset = record.absorb(offset_record.build(|| Some((x, y, z))));
+        record.build(|| Some(LocationCheck { predicate, offset: offset? }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

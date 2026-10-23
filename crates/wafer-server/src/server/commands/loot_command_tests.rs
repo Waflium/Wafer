@@ -190,3 +190,45 @@ fn malformed_entity_predicates_print_vanilla_errors() {
         ]
     );
 }
+
+#[test]
+fn malformed_loot_functions_print_vanilla_errors() {
+    let mut server = flat_server();
+    run(&mut server, "setblock 0 -60 0 minecraft:chest");
+    let name_error = "Failed to parse structure: Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: 5; Second: Not a map: 5";
+    let lore_error = "Failed to parse structure: Failed to parse either. First: No key mode in MapLike[{lore:5,type:\"minecraft:set_lore\"}]; Not a list: 5; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {lore:5,type:\"minecraft:set_lore\"}; Second: No key mode in MapLike[{lore:5,type:\"minecraft:set_lore\"}]; Not a list: 5";
+    let table = |function: &str| format!("loot spawn 0 -60 0 loot {{pools:[{{rolls:1,entries:[{{type:\"minecraft:item\",name:\"minecraft:stone\",modifier:{function}}}]}}]}}");
+    assert_eq!(run(&mut server, &table("{type:\"minecraft:set_name\",name:5}")), [name_error, "...me:5}}]}]}<--[HERE]"]);
+    assert_eq!(run(&mut server, &table("{type:\"minecraft:set_lore\",lore:5}")), [lore_error, "...re:5}}]}]}<--[HERE]"]);
+    assert_eq!(
+        run(&mut server, &table("{function:\"minecraft:set_name\",name:5}")),
+        [
+            "Failed to parse structure: Failed to parse either. First: No key type in MapLike[{function:\"minecraft:set_name\",name:5}]; Second: Failed to parse either. First: Not a string; Second: Failed to parse either. First: Not a list: {function:\"minecraft:set_name\",name:5}; Second: No key type in MapLike[{function:\"minecraft:set_name\",name:5}]",
+            "...me:5}}]}]}<--[HERE]"
+        ]
+    );
+    let modify = |function: &str| format!("item modify block 0 -60 0 container.0 {function}");
+    assert_eq!(run(&mut server, &modify("{type:\"minecraft:set_lore\",lore:5}")), [lore_error, "...e\",lore:5}<--[HERE]"]);
+    assert_eq!(run(&mut server, &modify("{type:\"minecraft:set_name\",name:5}")), [name_error, "...e\",name:5}<--[HERE]"]);
+    assert_eq!(
+        run(&mut server, &modify("[{type:\"minecraft:set_name\",name:5},{type:\"minecraft:set_count\"}]")),
+        [
+            "Failed to parse structure: No key count in MapLike[{type:\"minecraft:set_count\"}]; Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: 5; Second: Not a map: 5",
+            "...t_count\"}]<--[HERE]"
+        ]
+    );
+    assert_eq!(
+        run(&mut server, &modify("{type:\"minecraft:set_name\",name:5,entity:\"x\",target:\"y\",condition:5}")),
+        [
+            "Failed to parse structure: Unknown element name:y; Unknown element name:x; Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: 5; Second: Not a map: 5; Not a map: 5",
+            "...ndition:5}<--[HERE]"
+        ]
+    );
+    assert_eq!(
+        run(&mut server, &modify("{type:\"minecraft:set_lore\",mode:\"append\",lore:[\"a\",{text:1}],condition:5}")),
+        [
+            "Failed to parse structure: Failed to parse either. First: Failed to parse either. First: Not a string; Second: Not a list: {text:1}; Second: No matching codec found; Not a map: 5",
+            "...ndition:5}<--[HERE]"
+        ]
+    );
+}

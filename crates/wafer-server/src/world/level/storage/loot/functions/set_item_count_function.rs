@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::ints::ContextIntProvider;
@@ -14,11 +14,11 @@ pub struct SetItemCountFunction {
 }
 
 impl SetItemCountFunction {
-    pub fn decode(tag: &Nbt) -> DataResult<SetItemCountFunction> {
-        Ok(SetItemCountFunction {
-            count: codec::decode_field(tag, "count", ContextIntProvider::decode_holder)?,
-            add: codec::decode_or(tag, "add", false, codec::bool_value)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<SetItemCountFunction> {
+        let mut record = codec::Record::default();
+        let count = record.required(tag, "count", ContextIntProvider::decode_holder);
+        let add = record.with_default(tag, "add", false, codec::bool_value);
+        record.build(|| Some(SetItemCountFunction { count: count?, add }))
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

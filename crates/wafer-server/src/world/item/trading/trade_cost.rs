@@ -4,7 +4,7 @@ use wafer_protocol::nbt::Nbt;
 use super::item_cost::{ItemCost, decode_item};
 use crate::core::component::data_component_exact_predicate::DataComponentExactPredicate;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::ints::{self, ContextIntProvider};
@@ -18,13 +18,15 @@ pub struct TradeCost {
 }
 
 impl TradeCost {
-    pub fn decode(tag: &Nbt) -> DataResult<TradeCost> {
-        codec::map(tag)?;
-        Ok(TradeCost {
-            item: codec::decode_field(tag, "id", decode_item)?,
-            count: codec::decode_or(tag, "count", ints::exactly(1), ContextIntProvider::decode_holder)?,
-            components: codec::decode_or(tag, "components", DataComponentExactPredicate::default(), DataComponentExactPredicate::decode)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<TradeCost> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = codec::Record::default();
+        let item = record.required(tag, "id", decode_item);
+        let count = record.with_default(tag, "count", ints::exactly(1), ContextIntProvider::decode_holder);
+        let components = record.with_default(tag, "components", DataComponentExactPredicate::default(), DataComponentExactPredicate::decode);
+        record.build(|| Some(TradeCost { item: item?, count, components }))
     }
 
     pub fn to_item_cost(&self, loot_context: &mut LootContext, additional_cost: i32) -> ItemCost {

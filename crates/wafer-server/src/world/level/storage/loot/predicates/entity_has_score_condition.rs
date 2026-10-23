@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::int_range_predicate::IntRangePredicate;
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
 use crate::world::scores::score_holder::ScoreHolder;
@@ -14,11 +14,11 @@ pub struct EntityHasScoreCondition {
 }
 
 impl EntityHasScoreCondition {
-    pub fn decode(tag: &Nbt) -> DataResult<EntityHasScoreCondition> {
-        Ok(EntityHasScoreCondition {
-            scores: codec::decode_field(tag, "scores", |t| codec::unbounded_map(t, |k| Ok(k.to_string()), IntRangePredicate::decode))?,
-            entity_target: codec::decode_field(tag, "entity", EntityTarget::decode)?,
-        })
+    pub fn decode(tag: &Nbt) -> DecodeResult<EntityHasScoreCondition> {
+        let mut record = codec::Record::default();
+        let scores = record.required(tag, "scores", |t| codec::unbounded_map(t, |k| Ok(k.to_string()), IntRangePredicate::decode));
+        let entity_target = record.required(tag, "entity", EntityTarget::decode);
+        record.build(|| Some(EntityHasScoreCondition { scores: scores?, entity_target: entity_target? }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

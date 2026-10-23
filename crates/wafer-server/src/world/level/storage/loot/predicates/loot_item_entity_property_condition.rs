@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::advancements::predicates::entity::entity_predicate::EntityPredicate;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::loot_context::{EntityTarget, LootContext};
 use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
@@ -11,12 +11,11 @@ pub struct LootItemEntityPropertyCondition {
 }
 
 impl LootItemEntityPropertyCondition {
-    pub fn decode(tag: &Nbt) -> DataResult<LootItemEntityPropertyCondition> {
+    pub fn decode(tag: &Nbt) -> DecodeResult<LootItemEntityPropertyCondition> {
         let mut record = codec::Record::default();
-        let predicate = record.field(codec::decode_optional(tag, "predicate", EntityPredicate::decode));
-        let entity_target = record.field(codec::decode_field(tag, "entity", EntityTarget::decode));
-        record.finish()?;
-        Ok(LootItemEntityPropertyCondition { predicate: predicate.unwrap(), entity_target: entity_target.unwrap() })
+        let predicate = record.optional(tag, "predicate", EntityPredicate::decode);
+        let entity_target = record.required(tag, "entity", EntityTarget::decode);
+        record.build(|| Some(LootItemEntityPropertyCondition { predicate, entity_target: entity_target? }))
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {
