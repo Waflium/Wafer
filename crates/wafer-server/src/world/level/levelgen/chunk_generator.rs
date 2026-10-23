@@ -142,6 +142,17 @@ impl NoiseBasedChunkGenerator {
         let source = match &self.biome_source {
             BiomeSource::MultiNoise(source) => source,
             BiomeSource::Fixed(biome) => return ChunkBiomes { min_quart_y, quarts: vec![*biome; sections * 64] },
+            BiomeSource::Checkerboard(source) => {
+                let mut quarts = vec![Biome(0); sections * 64];
+                for quart_y in 0..size_y {
+                    for x in 0..4 {
+                        for z in 0..4 {
+                            quarts[((quart_y * 4 + x) * 4 + z) as usize] = source.get_noise_biome(min_quart_x + x, min_quart_z + z);
+                        }
+                    }
+                }
+                return ChunkBiomes { min_quart_y, quarts };
+            }
             BiomeSource::TheEnd(source) => {
                 let mut quarts = vec![Biome(0); sections * 64];
                 for quart_y in 0..size_y {
@@ -444,6 +455,7 @@ impl NoiseBasedChunkGenerator {
             }
             BiomeSource::TheEnd(source) => source.get_noise_biome(quart_x, quart_y, quart_z, |x, y, z| self.samplers.climate[3].sample_value(ctx, x, y, z) as f64),
             BiomeSource::Fixed(biome) => *biome,
+            BiomeSource::Checkerboard(source) => source.get_noise_biome(quart_x, quart_z),
         }
     }
 

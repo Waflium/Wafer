@@ -183,6 +183,16 @@ impl MultiNoiseBiomeSource {
         Ok(MultiNoiseBiomeSource { preset: name.to_owned(), parameters: ParameterList::new(values) })
     }
 
+    pub fn from_parameters(biomes: &Value) -> Result<MultiNoiseBiomeSource, String> {
+        let mut values = Vec::new();
+        for entry in biomes.as_array().ok_or("Not a list")? {
+            let biome_name = entry["biome"].as_str().ok_or("No key biome")?;
+            let biome = Biome::by_name(biome_name).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/biome]: {biome_name}"))?;
+            values.push((ParameterPoint::parse_report(&entry["parameters"])?, biome));
+        }
+        Ok(MultiNoiseBiomeSource { preset: String::new(), parameters: ParameterList::new(values) })
+    }
+
     pub fn get_noise_biome(&self, target: &TargetPoint) -> Biome {
         *self.parameters.find_value(target)
     }

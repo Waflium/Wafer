@@ -245,6 +245,13 @@ impl WorldgenRegistries {
         Ok(WorldgenRegistries { noises, noise_settings })
     }
 
+    pub fn parse_inline_settings(&self, json: &Value) -> Result<Arc<NoiseGeneratorSettings>, String> {
+        let sources: HashMap<&'static str, &'static str> = crate::core::data_registries::json_entries("minecraft:worldgen/density_function").iter().copied().collect();
+        let mut parser = Parser { noises: &self.noises, sources: &sources, parsed: HashMap::new() };
+        let mut materials = material::MaterialParser::new();
+        Ok(Arc::new(Self::parse_settings("inline", json, &mut parser, &mut materials)?))
+    }
+
     fn parse_settings(
         name: &str,
         json: &Value,

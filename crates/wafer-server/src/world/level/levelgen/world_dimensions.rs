@@ -71,9 +71,17 @@ impl WorldDimensions {
 
 fn biome_source_from_json(json: &Value) -> Result<BiomeSource, String> {
     match json["type"].as_str() {
-        Some("minecraft:multi_noise") => {
-            let preset = json["preset"].as_str().ok_or("Only multi noise biome source presets are supported")?;
-            Ok(BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset(preset)?))
+        Some("minecraft:multi_noise") => match json["preset"].as_str() {
+            Some(preset) => Ok(BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset(preset)?)),
+            None => Ok(BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_parameters(&json["biomes"])?)),
+        },
+        Some("minecraft:checkerboard") => {
+            let biomes = crate::core::holder_set::HolderSet::decode("minecraft:worldgen/biome", &crate::world::item::component::json_to_nbt(&json["biomes"]))?;
+            let allowed: Vec<Biome> = biomes.contents().iter().map(|&id| Biome(id as u16)).collect();
+            if allowed.is_empty() {
+                return Err("Empty biome list".into());
+            }
+            Ok(BiomeSource::Checkerboard(crate::world::level::biome::biome_source::CheckerboardColumnBiomeSource::new(allowed, json["scale"].as_i64().unwrap_or(2) as i32)))
         }
         Some("minecraft:the_end") => Ok(BiomeSource::TheEnd(TheEndBiomeSource::create())),
         Some("minecraft:fixed") => {
@@ -92,12 +100,16 @@ pub fn generator_from_json(json: &Value, seed: i64) -> Result<ChunkGenerator, St
         }
         Some("minecraft:debug") => Ok(ChunkGenerator::Debug(DebugLevelSource)),
         Some("minecraft:noise") => {
-            let settings = json["settings"].as_str().ok_or("Only named noise settings are supported")?;
-            if !WORLDGEN.noise_settings.contains_key(settings) {
-                return Err(format!("Unknown noise settings {settings}"));
-            }
             let biome_source = biome_source_from_json(&json["biome_source"])?;
-            Ok(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::with_settings(settings, biome_source, seed))))
+            match &json["settings"] {
+                Value::String(settings) => {
+                    if !WORLDGEN.noise_settings.contains_key(settings) {
+                        return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/noise_settings]: {settings}"));
+                    }
+                    Ok(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::with_settings(settings, biome_source, seed))))
+                }
+                inline => Ok(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::new(WORLDGEN.parse_inline_settings(inline)?, biome_source, seed)))),
+            }
         }
         other => Err(format!("Unknown chunk generator type {other:?}")),
     }
@@ -129,6 +141,11 @@ fn biome_source_to_nbt(source: &BiomeSource) -> Nbt {
         BiomeSource::MultiNoise(source) => Nbt::Compound(vec![("preset".into(), Nbt::String(source.preset.clone())), ("type".into(), Nbt::String("minecraft:multi_noise".into()))]),
         BiomeSource::TheEnd(_) => Nbt::Compound(vec![("type".into(), Nbt::String("minecraft:the_end".into()))]),
         BiomeSource::Fixed(biome) => Nbt::Compound(vec![("biome".into(), Nbt::String(biome.name().into())), ("type".into(), Nbt::String("minecraft:fixed".into()))]),
+        BiomeSource::Checkerboard(source) => Nbt::Compound(vec![
+            ("biomes".into(), Nbt::List(source.allowed_biomes.iter().map(|biome| Nbt::String(biome.name().into())).collect())),
+            ("scale".into(), Nbt::Int(source.size)),
+            ("type".into(), Nbt::String("minecraft:checkerboard".into())),
+        ]),
     }
 }
 
