@@ -15,8 +15,10 @@ impl HolderSet {
             && let Some(tag_name) = s.strip_prefix('#')
         {
             let key = crate::resources::identifier::read(tag_name)?;
-            if !component_codec::tag_exists(registry, &key) {
-                return Err(format!("Missing tag: '{key}' in '{registry}'"));
+            if !component_codec::tag_exists(registry, &key)
+                && let Some(error) = crate::core::data_registries::missing_tag(registry, &key)
+            {
+                return Err(error);
             }
             let contents = wafer_data::tag(registry, &key);
             return Ok(HolderSet::Named(key, contents));

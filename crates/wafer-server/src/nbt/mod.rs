@@ -59,6 +59,10 @@ pub fn with_json_source<R>(f: impl FnOnce() -> R) -> R {
     result
 }
 
+pub fn is_json_source() -> bool {
+    JSON_SOURCE.with(Cell::get)
+}
+
 pub fn to_string(tag: &Nbt) -> String {
     let mut out = String::new();
     if JSON_SOURCE.with(Cell::get) {

@@ -5,6 +5,10 @@ use super::moon_brightness_check::MoonBrightnessCheck;
 use super::spawn_context::SpawnContext;
 use super::structure_check::StructureCheck;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
+use crate::advancements::predicates::min_max_bounds::Doubles;
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::custom::DecodeOnly;
+use crate::world::item::component::types::{self, Pair, req};
 
 pub enum SpawnCondition {
     Biome(BiomeCheck),
@@ -28,4 +32,13 @@ impl SpawnCondition {
             SpawnCondition::Structure(check) => check.test(context),
         }
     }
+}
+
+pub fn codec() -> Pair {
+    let cases = vec![
+        ("minecraft:structure", vec![req("structures", types::holder_set("minecraft:worldgen/structure"))]),
+        ("minecraft:moon_brightness", vec![req("range", (Codec::Custom(Box::new(DecodeOnly(|tag| Doubles::decode(tag).map(drop)))), Stream::Custom))]),
+        ("minecraft:biome", vec![req("biomes", types::holder_set("minecraft:worldgen/biome"))]),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:spawn_condition_type"), cases })), Stream::Dispatch)
 }

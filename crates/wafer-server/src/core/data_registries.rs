@@ -155,6 +155,7 @@ static PACK_ELEMENTS: Mutex<Vec<PackElement>> = Mutex::new(Vec::new());
 
 thread_local! {
     static UNBOUND: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
+    static UNBOUND_TAGS: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
 }
 
 pub fn unknown_reference(registry: &str, key: &str) -> String {
@@ -164,6 +165,19 @@ pub fn unknown_reference(registry: &str, key: &str) -> String {
         }
     });
     unknown_reference_message(registry, key)
+}
+
+pub fn missing_tag(registry: &str, tag: &str) -> Option<String> {
+    let loading = registry == "minecraft:dimension" || active().is_some_and(|registries| registries.contains_key(registry));
+    let recorded = loading
+        && UNBOUND_TAGS.with(|unbound| match unbound.borrow_mut().as_mut() {
+            Some(unbound) => {
+                unbound.push((registry.to_string(), tag.to_string()));
+                true
+            }
+            None => false,
+        });
+    if recorded { None } else { Some(format!("Missing tag: '{tag}' in '{registry}'")) }
 }
 
 fn unknown_reference_message(registry: &str, key: &str) -> String {
@@ -255,10 +269,28 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     *PACK_ELEMENTS.lock().unwrap() = pack_elements;
 }
 
+fn group_unbound(unbound: Vec<(String, String)>) -> BTreeMap<String, Vec<String>> {
+    let mut by_registry: BTreeMap<String, Vec<(String, ())>> = BTreeMap::new();
+    for (registry, key) in unbound {
+        let keys = by_registry.entry(registry).or_default();
+        if !keys.iter().any(|(k, _)| *k == key) {
+            keys.push((key, ()));
+        }
+    }
+    by_registry
+        .into_iter()
+        .map(|(registry, mut keys)| {
+            crate::tags::identifier_order(&mut keys);
+            (registry, keys.into_iter().map(|(key, _)| key).collect())
+        })
+        .collect()
+}
+
 pub fn validate() -> Result<(), String> {
     let pack_elements = std::mem::take(&mut *PACK_ELEMENTS.lock().unwrap());
     let mut errors = LoadingErrors(Default::default());
     UNBOUND.with(|unbound| unbound.replace(Some(Vec::new())));
+    UNBOUND_TAGS.with(|unbound| unbound.replace(Some(Vec::new())));
     for element in &pack_elements {
         let decoded = element.json.as_ref().map_err(Clone::clone).and_then(|json| crate::nbt::with_json_source(|| decode(element.registry, json)));
         let unbound = UNBOUND.with(|unbound| unbound.borrow().as_ref().and_then(|unbound| unbound.last().map(|(registry, key)| unknown_reference_message(registry, key))));
@@ -269,16 +301,14 @@ pub fn validate() -> Result<(), String> {
             Ok(()) => {}
         }
     }
-    let mut unbound_by_registry: BTreeMap<String, Vec<(String, ())>> = BTreeMap::new();
-    for (registry, key) in UNBOUND.with(|unbound| unbound.take()).unwrap_or_default() {
-        let keys = unbound_by_registry.entry(registry).or_default();
-        if !keys.iter().any(|(k, _)| *k == key) {
-            keys.push((key, ()));
+    let unbound_values = group_unbound(UNBOUND.with(|unbound| unbound.take()).unwrap_or_default());
+    let unbound_tags = group_unbound(UNBOUND_TAGS.with(|unbound| unbound.take()).unwrap_or_default());
+    for (registry, keys) in &unbound_tags {
+        if !unbound_values.contains_key(registry) {
+            errors.0.insert(("minecraft:root".to_string(), registry.clone()), format!("java.lang.IllegalStateException: Unbound tags in registry ResourceKey[minecraft:root / {registry}]: [{}]", keys.join(", ")));
         }
     }
-    for (registry, mut keys) in unbound_by_registry {
-        crate::tags::identifier_order(&mut keys);
-        let keys: Vec<String> = keys.into_iter().map(|(key, _)| key).collect();
+    for (registry, keys) in unbound_values {
         errors.0.insert(("minecraft:root".to_string(), registry.clone()), format!("java.lang.IllegalStateException: Unbound values in registry ResourceKey[minecraft:root / {registry}]: [{}]", keys.join(", ")));
     }
     if errors.0.is_empty() {
@@ -312,8 +342,32 @@ fn decode(registry: &str, json: &Value) -> Result<(), String> {
         "minecraft:trade_set" => crate::world::item::trading::trade_set::TradeSet::decode(&json_to_nbt(json)).map(drop),
         "minecraft:trial_spawner" => crate::world::level::block::entity::trialspawner::trial_spawner_config::TrialSpawnerConfig::decode_direct(&json_to_nbt(json)).map(drop),
         "minecraft:painting_variant" => crate::world::entity::decoration::painting::painting_variant::PaintingVariant::decode(&json_to_nbt(json)).map(drop),
+        "minecraft:damage_type" => decode_with(crate::world::damagesource::damage_type::direct_codec(), json),
+        "minecraft:banner_pattern" => decode_with(crate::world::level::block::entity::banner_pattern::direct_codec(), json),
+        "minecraft:decorated_pot_pattern" => decode_with(crate::world::level::block::entity::decorated_pot_pattern::codec(), json),
+        "minecraft:trim_pattern" => decode_with(crate::world::item::equipment::trim::trim_pattern::direct_codec(), json),
+        "minecraft:trim_material" => decode_with(crate::world::item::equipment::trim::trim_material::direct_codec(), json),
+        "minecraft:jukebox_song" => decode_with(crate::world::item::jukebox_song::direct_codec(), json),
+        "minecraft:instrument" => decode_with(crate::world::item::instrument::direct_codec(), json),
+        "minecraft:chat_type" => decode_with(crate::network::chat_type::direct_codec(), json),
+        "minecraft:wolf_variant" => decode_with(crate::world::entity::animal::wolf::wolf_variant::direct_codec(), json),
+        "minecraft:wolf_sound_variant" => decode_with(crate::world::entity::animal::wolf::wolf_sound_variant::direct_codec(), json),
+        "minecraft:pig_variant" => decode_with(crate::world::entity::animal::pig::pig_variant::direct_codec(), json),
+        "minecraft:pig_sound_variant" => decode_with(crate::world::entity::animal::pig::pig_sound_variant::direct_codec(), json),
+        "minecraft:cow_variant" => decode_with(crate::world::entity::animal::cow::cow_variant::direct_codec(), json),
+        "minecraft:cow_sound_variant" => decode_with(crate::world::entity::animal::cow::cow_sound_variant::direct_codec(), json),
+        "minecraft:chicken_variant" => decode_with(crate::world::entity::animal::chicken_variant::direct_codec(), json),
+        "minecraft:chicken_sound_variant" => decode_with(crate::world::entity::animal::chicken_sound_variant::direct_codec(), json),
+        "minecraft:frog_variant" => decode_with(crate::world::entity::animal::frog::frog_variant::direct_codec(), json),
+        "minecraft:cat_variant" => decode_with(crate::world::entity::animal::feline::cat_variant::direct_codec(), json),
+        "minecraft:cat_sound_variant" => decode_with(crate::world::entity::animal::feline::cat_sound_variant::direct_codec(), json),
+        "minecraft:zombie_nautilus_variant" => decode_with(crate::world::entity::animal::nautilus::zombie_nautilus_variant::direct_codec(), json),
         _ => Ok(()),
     }
+}
+
+fn decode_with(codec: crate::world::item::component::types::Pair, json: &Value) -> Result<(), String> {
+    codec.0.decode(&crate::world::item::component::json_to_nbt(json)).map(drop)
 }
 
 #[cfg(test)]
@@ -336,5 +390,20 @@ mod tests {
                 assert!(registry.json_entries()[id as usize].1 != "null", "{} {}", builtin.name, builtin.entries[id as usize]);
             }
         }
+    }
+
+    #[test]
+    fn vanilla_entries_decode() {
+        let mut failures = Vec::new();
+        let names: Vec<&str> = wafer_data::builtin_synced_registries().iter().map(|registry| registry.name).chain(super::UNSYNCHRONIZED.iter().map(|&(name, _)| name)).collect();
+        for name in names {
+            for &(id, json) in super::json_entries(name) {
+                let json: serde_json::Value = serde_json::from_str(json).unwrap();
+                if let Err(e) = crate::nbt::with_json_source(|| super::decode(name, &json)) {
+                    failures.push(format!("{name} {id}: {e}"));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
     }
 }

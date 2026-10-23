@@ -9,6 +9,22 @@ use crate::util::codec::{self, DataResult};
 pub static ERROR_EMPTY: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.range.empty");
 pub static ERROR_SWAPPED: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.range.swapped");
 
+pub trait JavaToString {
+    fn java_to_string(&self) -> String;
+}
+
+impl JavaToString for i32 {
+    fn java_to_string(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl JavaToString for f64 {
+    fn java_to_string(&self) -> String {
+        crate::nbt::java_double_to_string(*self)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Bounds<T> {
     pub min: Option<T>,
@@ -30,7 +46,7 @@ impl<T: Copy + PartialOrd> Bounds<T> {
 
     fn decode(tag: &Nbt, number: fn(&Nbt) -> DataResult<T>) -> DataResult<Bounds<T>>
     where
-        T: std::fmt::Display,
+        T: JavaToString,
     {
         let bounds = match codec::either(
             tag,
@@ -46,7 +62,7 @@ impl<T: Copy + PartialOrd> Bounds<T> {
         if let (Some(min), Some(max)) = (bounds.min, bounds.max)
             && min > max
         {
-            return Err(format!("Swapped bounds in range: Optional[{min}] is higher than Optional[{max}]"));
+            return Err(format!("Swapped bounds in range: Optional[{}] is higher than Optional[{}]", min.java_to_string(), max.java_to_string()));
         }
         Ok(bounds)
     }

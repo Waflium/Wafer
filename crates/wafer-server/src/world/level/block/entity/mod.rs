@@ -1,6 +1,7 @@
 pub mod abstract_furnace_block_entity;
 mod barrel_block_entity;
 pub mod banner_block_entity;
+pub mod banner_pattern;
 pub mod base_container_block_entity;
 pub mod beacon_block_entity;
 pub mod beehive_block_entity;
@@ -18,6 +19,7 @@ pub mod container_openers_counter;
 pub mod crafter_block_entity;
 pub mod decorated_pot_block_entity;
 mod dispenser_block_entity;
+pub mod decorated_pot_pattern;
 pub mod enchanting_table_block_entity;
 pub mod ender_chest_block_entity;
 pub mod hopper;

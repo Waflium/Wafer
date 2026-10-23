@@ -802,3 +802,23 @@ mod tests {
         assert_eq!(BlockPosCodec.read(&mut Reader::new(w.as_slice())).unwrap(), pos);
     }
 }
+
+pub struct DecodeOnly(pub fn(&Nbt) -> Result<(), String>);
+
+impl Custom for DecodeOnly {
+    fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
+        (self.0)(tag).map(|_| tag.clone())
+    }
+
+    fn hash(&self, value: &Nbt) -> HashCode {
+        hash_ops::hash_nbt(value)
+    }
+
+    fn write(&self, _value: &Nbt, _w: &mut Writer) -> Result<(), String> {
+        Err("Not encodable".into())
+    }
+
+    fn read(&self, _r: &mut Reader) -> Result<Nbt, String> {
+        Err("Not decodable from a stream".into())
+    }
+}

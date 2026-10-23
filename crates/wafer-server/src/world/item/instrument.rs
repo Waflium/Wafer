@@ -4,6 +4,8 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::sounds::sound_event::SoundEvent;
 use crate::world::item::component::{self as dc};
+use crate::world::item::component::types::{self, Pair, record, req, def};
+use crate::world::item::component::text;
 
 #[derive(Clone, Debug)]
 pub struct Instrument {
@@ -45,4 +47,14 @@ impl Instrument {
             None => Instrument::decode_direct(tag),
         }
     }
+}
+
+pub fn direct_codec() -> Pair {
+    record(vec![
+        req("sound_event", types::sound_event()),
+        req("use_duration", types::float(types::non_negative_float())),
+        req("range", types::float(types::positive_float())),
+        def("durability_damage", types::var_int(types::non_negative_int()), types::i(0)),
+        req("description", text::text()),
+    ])
 }

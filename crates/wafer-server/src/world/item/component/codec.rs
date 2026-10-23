@@ -132,6 +132,7 @@ fn range_error<T: std::fmt::Display>(kind: RangeError, value: String, min: T, ma
 fn number(tag: &Nbt) -> Result<&Nbt, String> {
     match tag {
         Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) => Ok(tag),
+        _ if nbt::is_json_source() => Err(format!("Not a number: {}", nbt::to_string(tag))),
         _ => Err("Not a number".into()),
     }
 }
@@ -434,7 +435,10 @@ fn decode_holder_set(reg: &'static str, tag: &Nbt) -> Result<Nbt, String> {
     match tag {
         Nbt::String(s) if s.starts_with('#') => {
             let id = identifier(&Nbt::String(s[1..].into())).map_err(|e| format!("Failed to parse either. First: {e}; Second: Not a list"))?;
-            if tag_exists(reg, &id) { Ok(Nbt::String(format!("#{id}"))) } else { Err(format!("Missing tag: '{id}' in '{reg}'")) }
+            match tag_exists(reg, &id).then_some(()).map_or_else(|| crate::core::data_registries::missing_tag(reg, &id), |_| None) {
+                None => Ok(Nbt::String(format!("#{id}"))),
+                Some(error) => Err(error),
+            }
         }
         Nbt::String(_) => element.decode(tag),
         _ => {
@@ -493,6 +497,7 @@ fn decode_fields(fields: &[Field], tag: &Nbt, input: &[(String, Nbt)], out: &mut
             },
         }
     }
+    errors.reverse();
     join(errors)
 }
 

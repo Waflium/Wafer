@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use serde_json::Value;
+use crate::world::item::component::types::{self, Pair, record, req};
 
 pub const REGISTRY: &str = "minecraft:wolf_sound_variant";
 
@@ -44,4 +45,20 @@ pub fn sound_variant(id: i32) -> &'static WolfSoundVariant {
             .collect()
     });
     &all[id as usize]
+}
+
+fn sound_set_codec() -> Pair {
+    record(vec![
+        req("ambient_sound", types::sound_event()),
+        req("death_sound", types::sound_event()),
+        req("growl_sound", types::sound_event()),
+        req("hurt_sound", types::sound_event()),
+        req("pant_sound", types::sound_event()),
+        req("whine_sound", types::sound_event()),
+        req("step_sound", types::sound_event()),
+    ])
+}
+
+pub fn direct_codec() -> Pair {
+    record(vec![req("adult_sounds", sound_set_codec()), req("baby_sounds", sound_set_codec())])
 }

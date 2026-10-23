@@ -1,4 +1,6 @@
 use super::spawn_condition::SpawnCondition;
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::types::{Pair, opt, record, req};
 
 pub struct Selector {
     pub condition: Option<SpawnCondition>,
@@ -20,4 +22,8 @@ pub fn select<T: Copy>(entries: &[(T, Selector)], mut test: impl FnMut(&SpawnCon
         }
     });
     unpacked_entries.into_iter().map(|(entry, _)| *entry).collect()
+}
+
+pub fn selector_codec(condition: Pair) -> Pair {
+    record(vec![opt("condition", condition), req("priority", (Codec::int(), Stream::Int))])
 }

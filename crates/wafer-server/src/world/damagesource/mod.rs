@@ -1,5 +1,6 @@
 pub mod combat_rules;
 pub mod combat_tracker;
+pub mod damage_type;
 
 use wafer_core::Vec3;
 use wafer_data::{DamageScaling, DamageType, Tag};

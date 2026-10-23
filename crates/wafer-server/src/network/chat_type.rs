@@ -7,6 +7,8 @@ use crate::network::chat::{ChatFormatting, Component};
 use crate::server::Server;
 use crate::world::entity::EntityId;
 use crate::world::entity::player::profile_public_key::now_millis;
+use crate::world::item::component::types::{self, Pair, record, req, def};
+use crate::world::item::component::text;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ChatType {
@@ -98,4 +100,16 @@ pub fn source_send_chat_message(server: &mut Server, source: &CommandSourceStack
         Some(player) => server.player_mut(player).send_chat_message(message, chat_type),
         None => source.send_system_message(server, &chat_type.decorate(message.decorated_content())),
     }
+}
+
+fn decoration_codec() -> Pair {
+    record(vec![
+        req("translation_key", types::string()),
+        req("parameters", types::list(types::enumeration(&["sender", "target", "content"]))),
+        def("style", text::style(), types::compound(&[])),
+    ])
+}
+
+pub fn direct_codec() -> Pair {
+    record(vec![req("chat", decoration_codec()), req("narration", decoration_codec())])
 }

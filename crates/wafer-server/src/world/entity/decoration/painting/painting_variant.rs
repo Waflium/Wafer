@@ -16,10 +16,10 @@ pub struct PaintingVariant {
 
 impl PaintingVariant {
     pub fn decode(tag: &Nbt) -> DataResult<PaintingVariant> {
-        let asset_id = codec::decode_field(tag, "asset_id", codec::identifier);
         let width = codec::decode_field(tag, "width", |tag| codec::int_range(tag, 1, 16));
         let height = codec::decode_field(tag, "height", |tag| codec::int_range(tag, 1, 16));
-        codec::record_errors(&[asset_id.as_ref().err(), width.as_ref().err(), height.as_ref().err()])?;
+        let asset_id = codec::decode_field(tag, "asset_id", codec::identifier);
+        codec::record_errors(&[width.as_ref().err(), height.as_ref().err(), asset_id.as_ref().err()])?;
         Ok(PaintingVariant { width: width?, height: height? })
     }
 

@@ -5,6 +5,9 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc};
+use crate::world::item::component::types::{self, Pair, record, req};
+use crate::world::item::component::text;
+use crate::world::item::component::codec::{Codec, RangeError};
 
 const SONG_END_PADDING_TICKS: i64 = 20;
 
@@ -61,4 +64,13 @@ impl JukeboxSong {
     pub fn from_stack(stack: &ItemStack) -> Option<JukeboxSong> {
         stack.get(dc::JUKEBOX_PLAYABLE).and_then(JukeboxSong::decode)
     }
+}
+
+pub fn direct_codec() -> Pair {
+    record(vec![
+        req("sound_event", types::sound_event()),
+        req("description", text::text()),
+        req("length_in_seconds", types::float(types::positive_float())),
+        req("comparator_output", types::var_int(Codec::Int(0, 15, RangeError::Within))),
+    ])
 }

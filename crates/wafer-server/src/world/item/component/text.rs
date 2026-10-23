@@ -49,6 +49,10 @@ fn contents() -> Vec<Contents> {
     ]
 }
 
+pub fn style() -> Pair {
+    record(style_fields())
+}
+
 fn style_fields() -> Vec<super::codec::Field> {
     let click = Dispatch {
         key: "action",

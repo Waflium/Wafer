@@ -297,7 +297,7 @@ fn firework_explosion() -> Pair {
 }
 
 fn trim_material() -> Pair {
-    holder("minecraft:trim_material", record(vec![req("palette_id", identifier()), req("description", text::text())]))
+    holder("minecraft:trim_material", crate::world::item::equipment::trim::trim_material::direct_codec())
 }
 
 fn written_title() -> Pair {
@@ -510,26 +510,14 @@ pub fn build() -> Vec<TypeInfo> {
             req("material", trim_material()),
             req(
                 "pattern",
-                holder(
-                    "minecraft:trim_pattern",
-                    record(vec![req("asset_id", identifier()), req("description", text::text()), always("decal", bool(), b(false))]),
-                ),
+                holder("minecraft:trim_pattern", crate::world::item::equipment::trim::trim_pattern::direct_codec()),
             ),
         ])),
         p(nbt(Codec::Map(Box::new(Codec::Element("minecraft:block")), Box::new(Codec::string())))),
         p(custom::typed_entity_data("minecraft:entity_type")),
         p(nbt(custom::custom_data_codec())),
         p(custom::typed_entity_data("minecraft:block_entity_type")),
-        p(holder(
-            "minecraft:instrument",
-            record(vec![
-                req("sound_event", sound_event()),
-                req("use_duration", float(non_negative_float())),
-                req("range", float(positive_float())),
-                def("durability_damage", var_int(non_negative_int()), i(0)),
-                req("description", text::text()),
-            ]),
-        )),
+        p(holder("minecraft:instrument", crate::world::item::instrument::direct_codec())),
         p(trim_material()),
         p(var_int(Codec::Int(0, 4, RangeError::Within))),
         p((Codec::Holder("minecraft:jukebox_song", None), Stream::Holder("minecraft:jukebox_song", None))),
@@ -546,7 +534,7 @@ pub fn build() -> Vec<TypeInfo> {
         p(list(record(vec![
             req(
                 "pattern",
-                holder("minecraft:banner_pattern", record(vec![req("asset_id", identifier()), req("translation_key", string())])),
+                holder("minecraft:banner_pattern", crate::world::level::block::entity::banner_pattern::direct_codec()),
             ),
             req("color", dye_color()),
         ]))),

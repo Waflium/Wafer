@@ -16,6 +16,8 @@ use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::{InteractionHand, InteractionResult};
 
 pub mod ageable_water_creature;
+pub mod chicken_sound_variant;
+pub mod chicken_variant;
 pub mod dolphin;
 pub mod parrot;
 pub mod allay;

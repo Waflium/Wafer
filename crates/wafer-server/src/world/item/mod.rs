@@ -7,6 +7,7 @@ pub mod block_item;
 pub mod boat_item;
 pub mod bottle_item;
 pub mod compass_item;
+pub mod equipment;
 pub mod written_book_item;
 pub mod bow_item;
 pub mod bucket_item;

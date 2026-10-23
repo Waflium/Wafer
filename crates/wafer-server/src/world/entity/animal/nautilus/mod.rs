@@ -5,3 +5,4 @@ pub mod nautilus_ai;
 mod nautilus_tests;
 pub mod zombie_nautilus;
 pub mod zombie_nautilus_ai;
+pub mod zombie_nautilus_variant;

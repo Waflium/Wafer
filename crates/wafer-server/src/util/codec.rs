@@ -16,7 +16,7 @@ pub fn no_key(key: &str, map: &serde_json::Value) -> String {
 }
 
 pub fn record_errors(errors: &[Option<&String>]) -> DataResult<()> {
-    let errors: Vec<&str> = errors.iter().flatten().map(|e| e.as_str()).collect();
+    let errors: Vec<&str> = errors.iter().rev().flatten().map(|e| e.as_str()).collect();
     if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
 }
 
