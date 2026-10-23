@@ -44,6 +44,8 @@ pub mod trial_spawner_block_entity;
 pub mod shulker_box_block_entity;
 pub mod skull_block_entity;
 pub mod structure_block_entity;
+pub mod test_block_entity;
+pub mod test_instance_block_entity;
 pub mod spawner_block_entity;
 pub mod trialspawner;
 pub mod vault;
@@ -148,6 +150,8 @@ pub enum BlockEntityKind {
     PistonMoving(piston_moving_block_entity::PistonMovingBlockEntity),
     CommandBlock(command_block_entity::CommandBlockEntity),
     StructureBlock(structure_block_entity::StructureBlockEntity),
+    TestBlock(test_block_entity::TestBlockEntity),
+    TestInstanceBlock(test_instance_block_entity::TestInstanceBlockEntity),
     Other(Vec<(String, Nbt)>),
 }
 
@@ -210,6 +214,8 @@ impl BlockEntity {
             types::JIGSAW => BlockEntityKind::Jigsaw(jigsaw_block_entity::JigsawBlockEntity::default()),
             types::COMMAND_BLOCK => BlockEntityKind::CommandBlock(command_block_entity::CommandBlockEntity::new(state.is_block(wafer_data::blocks::CHAIN_COMMAND_BLOCK))),
             types::STRUCTURE_BLOCK => BlockEntityKind::StructureBlock(structure_block_entity::StructureBlockEntity::new(state)),
+            types::TEST_BLOCK => BlockEntityKind::TestBlock(test_block_entity::TestBlockEntity::new(state)),
+            types::TEST_INSTANCE_BLOCK => BlockEntityKind::TestInstanceBlock(test_instance_block_entity::TestInstanceBlockEntity::default()),
             types::PISTON => BlockEntityKind::PistonMoving(piston_moving_block_entity::PistonMovingBlockEntity::default()),
             _ => BlockEntityKind::Other(Vec::new()),
         };
@@ -333,6 +339,8 @@ impl BlockEntity {
             BlockEntityKind::PistonMoving(piston) => piston.load_additional(input),
             BlockEntityKind::CommandBlock(command_block) => command_block.load_additional(input),
             BlockEntityKind::StructureBlock(structure_block) => structure_block.load_additional(input),
+            BlockEntityKind::TestBlock(test_block) => test_block.load_additional(input),
+            BlockEntityKind::TestInstanceBlock(test_instance) => test_instance.load_additional(input),
             BlockEntityKind::Other(data) => {
                 let _ = state;
                 *data = match input {
@@ -384,6 +392,8 @@ impl BlockEntity {
             BlockEntityKind::PistonMoving(piston) => piston.save_additional(output),
             BlockEntityKind::CommandBlock(command_block) => command_block.save_additional(output),
             BlockEntityKind::StructureBlock(structure_block) => structure_block.save_additional(output),
+            BlockEntityKind::TestBlock(test_block) => test_block.save_additional(output),
+            BlockEntityKind::TestInstanceBlock(test_instance) => test_instance.save_additional(output),
             BlockEntityKind::Other(data) => output.extend(data.iter().cloned()),
         }
     }

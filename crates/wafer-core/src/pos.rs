@@ -15,7 +15,17 @@ const PACKED_Y_MASK: i64 = (1 << PACKED_Y_LENGTH) - 1;
 const Z_OFFSET: u32 = PACKED_Y_LENGTH;
 const X_OFFSET: u32 = PACKED_Y_LENGTH + PACKED_HORIZONTAL_LENGTH;
 
+impl std::fmt::Display for BlockPos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BlockPos{{x={}, y={}, z={}}}", self.x, self.y, self.z)
+    }
+}
+
 impl BlockPos {
+    pub fn to_short_string(self) -> String {
+        format!("{}, {}, {}", self.x, self.y, self.z)
+    }
+
     pub const ZERO: BlockPos = BlockPos::new(0, 0, 0);
 
     pub const fn new(x: i32, y: i32, z: i32) -> BlockPos {

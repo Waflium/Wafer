@@ -113,6 +113,17 @@ impl<T: Copy + Eq + Hash> LevelChunkTicks<T> {
         self.per_position.contains(&(pos, ty))
     }
 
+    fn remove_if(&mut self, test: impl Fn(&ScheduledTick<T>) -> bool) {
+        let per_position = &mut self.per_position;
+        self.queue.retain(|tick| {
+            let remove = test(tick);
+            if remove {
+                per_position.remove(&(tick.pos, tick.ty));
+            }
+            !remove
+        });
+    }
+
     pub fn pack(&self, current_tick: i64) -> Vec<SavedTick<T>> {
         let mut out: Vec<SavedTick<T>> = self.pending.clone().unwrap_or_default();
         let mut sorted: Vec<&ScheduledTick<T>> = self.queue.iter().collect();
@@ -254,6 +265,17 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
         }
         self.to_run_this_tick = out.iter().map(|t| (t.pos, t.ty)).collect();
         out
+    }
+
+    pub fn clear_area(&mut self, area: &BoundingBox) {
+        for x in area.min.x >> 4..=area.max.x >> 4 {
+            for z in area.min.z >> 4..=area.max.z >> 4 {
+                if let Some(container) = self.containers.get_mut(&ChunkPos::new(x, z)) {
+                    container.remove_if(|tick| area.is_inside(tick.pos));
+                }
+            }
+        }
+        self.to_run_this_tick.retain(|(pos, _)| !area.is_inside(*pos));
     }
 
     pub fn copy_area(&mut self, area: &BoundingBox, offset: BlockPos) {

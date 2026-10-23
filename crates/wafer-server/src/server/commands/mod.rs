@@ -102,6 +102,7 @@ pub fn executors() -> Vec<(String, CommandFn)> {
     let mut all: Vec<(String, CommandFn)> = EXECUTORS.iter().map(|&(path, f)| (path.to_string(), f)).collect();
     all.extend(game_rule_command::executors());
     all.extend(debug_command::executors());
+    all.extend(crate::gametest::framework::test_command::executors());
     all.extend(fill_command::executors());
     all.extend(clone_commands::executors());
     all.extend(data::executors());

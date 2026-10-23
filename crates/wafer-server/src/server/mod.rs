@@ -217,6 +217,7 @@ pub struct Server {
     pub seed: i64,
     pub tick_count: i32,
     debug_command_profiler: Option<commands::debug_command::TimeProfiler>,
+    pub(crate) game_test_ticker: crate::gametest::framework::game_test_ticker::GameTestTicker,
     debug_command_profiler_delay_start: bool,
     ticks_until_autosave: i32,
     pub tick_rate_manager: ServerTickRateManager,
@@ -444,6 +445,7 @@ impl Server {
             seed,
             tick_count: 0,
             debug_command_profiler: None,
+            game_test_ticker: Default::default(),
             debug_command_profiler_delay_start: false,
             ticks_until_autosave: AUTOSAVE_INTERVAL,
             tick_rate_manager,
@@ -929,6 +931,7 @@ impl Server {
                     serverbound::SET_GAME_RULE => self.handle_set_game_rule(id, &packet),
                     serverbound::CHANGE_DIFFICULTY => self.handle_change_difficulty(id, &packet),
                     serverbound::LOCK_DIFFICULTY => self.handle_lock_difficulty(id, &packet),
+                    serverbound::TEST_INSTANCE_BLOCK_ACTION => self.handle_test_instance_block_action(id, &packet),
                     serverbound::ENTITY_TAG_QUERY => self.handle_entity_tag_query(id, &packet),
                     serverbound::BLOCK_ENTITY_TAG_QUERY => self.handle_block_entity_tag_query(id, &packet),
                     serverbound::SPECTATOR_ACTION => self.handle_spectator_action(id, &packet),
@@ -1542,6 +1545,9 @@ impl Server {
         self.tick_prepare_spawns();
         self.handle_console_inputs();
         self.tick_player_list();
+        if self.tick_rate_manager.runs_normally() {
+            crate::gametest::framework::game_test_ticker::tick(self);
+        }
         self.update_scoreboard_waypoints();
         for id in self.player_ids() {
             self.entity_level_mut(id).send_next_chunks(id);
@@ -1965,12 +1971,26 @@ pub fn run(
     Ok(())
 }
 
-fn crash_frames() -> Vec<String> {
+thread_local! {
+    static PANIC_FRAMES: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
+}
+
+fn backtrace_frames() -> Vec<String> {
     std::backtrace::Backtrace::force_capture()
         .to_string()
         .lines()
         .filter_map(|line| line.trim().split_once(": ").map(|(_, frame)| frame.to_string()))
         .collect()
+}
+
+pub(crate) fn capture_panic_frames() {
+    let frames = backtrace_frames();
+    let start = frames.iter().rposition(|frame| frame.starts_with("std::panicking::") || frame.starts_with("core::panicking::") || frame.starts_with("core::option::")).map_or(0, |i| i + 1);
+    PANIC_FRAMES.set(Some(frames[start..].to_vec()));
+}
+
+fn crash_frames() -> Vec<String> {
+    PANIC_FRAMES.take().unwrap_or_else(backtrace_frames)
 }
 
 fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Event>, tasks: &std::sync::mpsc::Receiver<ServerTask>, timing: &dedicated::server_watchdog::ServerTiming) {

@@ -986,6 +986,14 @@ impl ServerLevel {
         }
     }
 
+    pub fn clear_block_events(&mut self, bounding_box: &crate::world::level::levelgen::structure::BoundingBox) {
+        self.block_events.retain(|(pos, ..)| !bounding_box.is_inside(*pos));
+    }
+
+    pub fn are_entities_actually_loaded_and_ticking(&self, pos: ChunkPos) -> bool {
+        self.entity_manager.is_ticking(pos) && self.entity_manager.are_entities_loaded(pos.pack())
+    }
+
     fn run_block_events(&mut self) {
         while !self.block_events.is_empty() {
             let (pos, block, b0, b1) = self.block_events.remove(0);

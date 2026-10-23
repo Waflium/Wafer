@@ -129,6 +129,7 @@ pub enum ArgumentType {
     Dialog,
     TemplateRotation,
     TemplateMirror,
+    ResourceSelector { registry: String },
     Unsupported(&'static str),
 }
 
@@ -178,6 +179,7 @@ pub enum ArgumentValue {
     ResourceOrId(resource_or_id_argument::RawResourceOrId),
     Rotation(crate::world::level::block::rotation::Rotation),
     Mirror(crate::world::level::block::mirror::Mirror),
+    ResourceSelector(Vec<String>),
 }
 
 impl ArgumentType {
@@ -248,6 +250,7 @@ impl ArgumentType {
             "minecraft:dialog" => ArgumentType::Dialog,
             "minecraft:template_rotation" => ArgumentType::TemplateRotation,
             "minecraft:template_mirror" => ArgumentType::TemplateMirror,
+            "minecraft:resource_selector" => ArgumentType::ResourceSelector { registry: registry() },
             other => ArgumentType::Unsupported(other),
         }
     }
@@ -416,6 +419,19 @@ impl ArgumentType {
                     None => return Err(ERROR_INVALID_ENUM_VALUE.create_with_context(reader, id)),
                 }
             }
+            ArgumentType::ResourceSelector { ref registry } => {
+                let start = reader.cursor;
+                while reader.can_read() && (is_allowed_in_identifier(reader.peek()) || reader.peek() == b'*' as u16 || reader.peek() == b'?' as u16) {
+                    reader.skip();
+                }
+                let pattern = reader.substring(start, reader.cursor);
+                let pattern = if pattern.contains(':') { pattern } else { format!("minecraft:{pattern}") };
+                let results: Vec<String> = registry_elements(registry).into_iter().filter(|id| wildcard_match(id, &pattern)).map(str::to_string).collect();
+                if results.is_empty() {
+                    return Err(ERROR_NO_MATCHES.create_with_context(reader, pattern, registry.as_str()));
+                }
+                ArgumentValue::ResourceSelector(results)
+            }
             ArgumentType::Unsupported(parser) => {
                 return Err(super::brigadier::DISPATCHER_PARSE_EXCEPTION.create_with_context(reader, format!("{parser} arguments are not supported yet")));
             }
@@ -453,6 +469,39 @@ pub static ERROR_INVALID_ID: SimpleCommandExceptionType = SimpleCommandException
 pub static ERROR_INVALID_UUID: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.uuid.invalid");
 pub static ERROR_UNKNOWN_RESOURCE: Dynamic2CommandExceptionType =
     Dynamic2CommandExceptionType(|id, registry| tr("argument.resource.not_found", vec![id, registry]));
+pub static ERROR_NO_MATCHES: Dynamic2CommandExceptionType =
+    Dynamic2CommandExceptionType(|selector, registry| tr("argument.resource_selector.not_found", vec![selector, registry]));
+
+pub fn registry_elements(registry: &str) -> Vec<&'static str> {
+    let entries = crate::core::data_registries::json_entries(registry);
+    match crate::core::data_registries::get(registry) {
+        Some(data_registry) => data_registry.network_order().map(|id| entries[id as usize].0).collect(),
+        None => entries.iter().map(|&(name, _)| name).collect(),
+    }
+}
+
+pub fn wildcard_match(text: &str, pattern: &str) -> bool {
+    let (text, pattern): (Vec<char>, Vec<char>) = (text.chars().collect(), pattern.chars().collect());
+    let (mut t, mut p, mut star, mut mark) = (0, 0, None, 0);
+    while t < text.len() {
+        if p < pattern.len() && (pattern[p] == '?' || pattern[p] == text[t]) {
+            t += 1;
+            p += 1;
+        } else if p < pattern.len() && pattern[p] == '*' {
+            star = Some(p);
+            mark = t;
+            p += 1;
+        } else if let Some(star) = star {
+            p = star + 1;
+            mark += 1;
+            t = mark;
+        } else {
+            return false;
+        }
+    }
+    pattern[p..].iter().all(|&c| c == '*')
+}
+
 pub static ERROR_UNKNOWN_TAG: Dynamic2CommandExceptionType =
     Dynamic2CommandExceptionType(|id, registry| tr("argument.resource_tag.not_found", vec![id, registry]));
 pub static ERROR_INVALID_ENUM_VALUE: DynamicCommandExceptionType = DynamicCommandExceptionType(|value| tr("argument.enum.invalid", vec![value]));

@@ -30,7 +30,7 @@ use crate::world::level::block::entity::jigsaw_block_entity::{JigsawBlockEntity,
 use crate::world::level::block::entity::structure_block_entity::UpdateType;
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
-use wafer_data::properties::StructureMode;
+use wafer_data::properties::{StructureMode, TestBlockMode};
 use crate::world::level::levelgen::structure::pools::structure_template_pool::TemplatePoolHolder;
 use crate::world::level::levelgen::structure::templatesystem::structure_template::get_front_facing;
 use wafer_protocol::nbt::Nbt;
@@ -280,6 +280,12 @@ impl ServerLevel {
                 let placement_priority = r.varint()?;
                 let jigsaw = JigsawBlockEntity { name, target, pool, joint, final_state, placement_priority, selection_priority };
                 self.handle_set_jigsaw_block(id, BlockPos::new(pos.0, pos.1, pos.2), jigsaw);
+            }
+            serverbound::SET_TEST_BLOCK => {
+                let (x, y, z) = r.position()?;
+                let mode = usize::try_from(r.varint()?).ok().and_then(|id| TestBlockMode::VALUES.get(id).copied()).unwrap_or(TestBlockMode::Start);
+                let message = r.string(32767)?.to_owned();
+                self.handle_set_test_block(id, BlockPos::new(x, y, z), mode, message);
             }
             serverbound::SET_STRUCTURE_BLOCK => {
                 let (x, y, z) = r.position()?;
@@ -962,6 +968,21 @@ impl ServerLevel {
         self.send_block_updated(block_pos, state, state);
     }
 
+    fn handle_set_test_block(&mut self, id: EntityId, block_pos: BlockPos, mode: TestBlockMode, message: String) {
+        if !self.can_use_game_master_blocks(id) {
+            return;
+        }
+        let initial_state = self.block_state(block_pos);
+        if self.test_block_entity(block_pos).is_none() {
+            return;
+        }
+        self.test_block_entity_set_mode(block_pos, mode);
+        self.test_block_entity(block_pos).unwrap().set_message(message);
+        self.block_entity_set_changed(block_pos);
+        let state = self.block_state(block_pos);
+        self.send_block_updated(block_pos, initial_state, state);
+    }
+
     fn handle_set_structure_block(&mut self, id: EntityId, block_pos: BlockPos, packet: SetStructureBlock) {
         if !self.can_use_game_master_blocks(id) {
             return;
@@ -1272,6 +1293,49 @@ impl crate::server::Server {
             warn!("Player {} tried to change difficulty to translation{{key='options.difficulty.{}', args=[]}} without required permissions", player.profile.name, difficulty.key());
         } else {
             self.set_difficulty(difficulty, false);
+        }
+        Ok(())
+    }
+
+    pub(in crate::server) fn handle_test_instance_block_action(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
+        use crate::world::level::block::entity::test_instance_block_entity::{self, Data};
+        let mut r = packet.reader();
+        let (x, y, z) = r.position()?;
+        let pos = BlockPos::new(x, y, z);
+        let action = r.varint()?;
+        let action = if (0..=6).contains(&action) { action } else { 0 };
+        let data = Data::read(&mut r)?;
+        let Some(level) = self.level_of(id) else { return Ok(()) };
+        if !self.levels[level].can_use_game_master_blocks(id) || self.levels[level].test_instance_block_entity(pos).is_none() {
+            return Ok(());
+        }
+        if action != 1 && action != 0 {
+            self.levels[level].test_instance_block_entity_set(pos, data);
+            let mut feedback = Vec::new();
+            match action {
+                3 => self.levels[level].test_instance_block_entity_reset_test(pos, &mut feedback),
+                4 => {
+                    self.levels[level].test_instance_block_entity_save_test(pos, &mut feedback);
+                }
+                5 => {
+                    self.levels[level].test_instance_block_entity_export_test(pos, &mut feedback);
+                }
+                6 => test_instance_block_entity::run_test(self, level, pos, &mut feedback),
+                _ => {}
+            }
+            for message in &feedback {
+                self.player(id).send_system_message(message, false);
+            }
+            let state = self.levels[level].block_state(pos);
+            self.levels[level].send_block_updated(pos, wafer_data::blocks::AIR.default_state(), state);
+        } else {
+            let test = data.test.as_deref().and_then(crate::gametest::framework::game_test_instance::GameTestInstance::get);
+            let status = match test {
+                Some((_, test)) => test.describe(),
+                None => Component::translatable("test_instance.description.no_test").with_color(crate::network::chat::ChatFormatting::Red),
+            };
+            let size = if action == 1 { data.test.as_deref().and_then(test_instance_block_entity::get_structure_size) } else { None };
+            self.player(id).connection.send(clientbound::TEST_INSTANCE_BLOCK_STATUS, |w| test_instance_block_entity::write_status(w, &status, size));
         }
         Ok(())
     }
