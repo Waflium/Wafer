@@ -3448,6 +3448,11 @@ impl ServerLevel {
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::ZombieVillager(_))) {
             self.zombie_villager_read_level_dependent_save_data(id, input);
         }
+        if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Zombie(_) | MobKind::Husk(_) | MobKind::ZombieVillager(_) | MobKind::Drowned(_) | MobKind::ZombifiedPiglin(_)))
+            && let Some(door_pos) = crate::world::entity::monster::zombie::zombie::Zombie::take_stopped_break_door_pos(self.mob_mut(id).expect("a zombie"))
+        {
+            self.destroy_block_progress(id, door_pos, -1);
+        }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Enderman(_) | MobKind::Wolf(_) | MobKind::IronGolem(_) | MobKind::ZombifiedPiglin(_) | MobKind::PolarBear(_) | MobKind::Bee(_))) {
             self.read_persistent_anger_save_data(id, input);
         }

@@ -67,6 +67,7 @@ use crate::world::entity::monster::cubemob::abstract_cube_mob::{CubeMobAttackGoa
 use crate::world::entity::animal::squid::squid::{SquidFleeGoal, SquidRandomMovementGoal};
 use super::golem_random_stroll_in_village_goal::GolemRandomStrollInVillageGoal;
 use super::move_back_to_village_goal::MoveBackToVillageGoal;
+use super::move_through_village_goal::MoveThroughVillageGoal;
 use super::move_towards_target_goal::MoveTowardsTargetGoal;
 use super::offer_flower_goal::OfferFlowerGoal;
 use super::target::defend_village_target_goal::DefendVillageTargetGoal;
@@ -218,6 +219,7 @@ pub enum Goal {
     SquidFlee(SquidFleeGoal),
     MoveTowardsTarget(MoveTowardsTargetGoal),
     MoveBackToVillage(MoveBackToVillageGoal),
+    MoveThroughVillage(MoveThroughVillageGoal),
     GolemRandomStrollInVillage(GolemRandomStrollInVillageGoal),
     OfferFlower(OfferFlowerGoal),
     DefendVillageTarget(DefendVillageTargetGoal),
@@ -389,6 +391,7 @@ impl Goal {
             Goal::SquidFlee(goal) => goal.can_use(level, mob),
             Goal::MoveTowardsTarget(goal) => goal.can_use(level, mob),
             Goal::MoveBackToVillage(goal) => goal.can_use(level, mob),
+            Goal::MoveThroughVillage(goal) => goal.can_use(level, mob),
             Goal::GolemRandomStrollInVillage(goal) => goal.can_use(level, mob),
             Goal::OfferFlower(goal) => goal.can_use(level, mob),
             Goal::DefendVillageTarget(goal) => goal.can_use(level, mob),
@@ -579,6 +582,7 @@ impl Goal {
             Goal::SquidFlee(goal) => goal.can_use(level, mob),
             Goal::MoveTowardsTarget(goal) => goal.can_continue_to_use(level, mob),
             Goal::MoveBackToVillage(goal) => goal.random_stroll_goal.can_continue_to_use(level, mob),
+            Goal::MoveThroughVillage(goal) => goal.can_continue_to_use(level, mob),
             Goal::GolemRandomStrollInVillage(goal) => goal.random_stroll_goal.can_continue_to_use(level, mob),
             Goal::OfferFlower(goal) => goal.can_continue_to_use(),
             Goal::DefendVillageTarget(goal) => goal.target_goal.can_continue_to_use(level, mob),
@@ -764,6 +768,7 @@ impl Goal {
             Goal::SquidFlee(goal) => goal.start(),
             Goal::MoveTowardsTarget(goal) => goal.start(level, mob),
             Goal::MoveBackToVillage(goal) => goal.random_stroll_goal.start(level, mob),
+            Goal::MoveThroughVillage(goal) => goal.start(level, mob),
             Goal::GolemRandomStrollInVillage(goal) => goal.random_stroll_goal.start(level, mob),
             Goal::OfferFlower(goal) => goal.start(level, mob),
             Goal::DefendVillageTarget(goal) => goal.start(level, mob),
@@ -965,6 +970,7 @@ impl Goal {
             Goal::SquidRandomMovement(_) | Goal::SquidFlee(_) => {}
             Goal::MoveTowardsTarget(goal) => goal.stop(),
             Goal::MoveBackToVillage(goal) => goal.random_stroll_goal.stop(level, mob),
+            Goal::MoveThroughVillage(goal) => goal.stop(level, mob),
             Goal::GolemRandomStrollInVillage(goal) => goal.random_stroll_goal.stop(level, mob),
             Goal::OfferFlower(goal) => goal.stop(level, mob),
             Goal::DefendVillageTarget(goal) => goal.target_goal.stop(level, mob),
@@ -1112,7 +1118,7 @@ impl Goal {
             Goal::CubeMobRandomDirection(goal) => goal.tick(level, mob),
             Goal::SquidRandomMovement(goal) => goal.tick(level, mob),
             Goal::SquidFlee(goal) => goal.tick(level, mob),
-            Goal::MoveTowardsTarget(_) | Goal::MoveBackToVillage(_) | Goal::GolemRandomStrollInVillage(_) | Goal::DefendVillageTarget(_) => {}
+            Goal::MoveTowardsTarget(_) | Goal::MoveBackToVillage(_) | Goal::MoveThroughVillage(_) | Goal::GolemRandomStrollInVillage(_) | Goal::DefendVillageTarget(_) => {}
             Goal::OfferFlower(goal) => goal.tick(level, mob),
             Goal::CatAvoidEntity(goal) => goal.avoid_entity_goal.tick(level, mob),
             Goal::CatRelaxOnOwner(goal) => goal.tick(level, mob, adjusted_tick_delay(16)),
@@ -1283,7 +1289,7 @@ impl Goal {
             Goal::VindicatorJohnnyAttack(_) => Flag::Target.bit(),
             Goal::NearestHealableRaiderTarget(_) | Goal::NearestAttackableWitchTarget(_) => Flag::Target.bit(),
             Goal::CubeMobAttack(_) | Goal::CubeMobRandomDirection(_) | Goal::SulfurCubeTempt(_) | Goal::SulfurCubeSearchForItems(_) => Flag::Look.bit(),
-            Goal::MoveTowardsTarget(_) | Goal::MoveBackToVillage(_) | Goal::GolemRandomStrollInVillage(_) => Flag::Move.bit(),
+            Goal::MoveTowardsTarget(_) | Goal::MoveBackToVillage(_) | Goal::MoveThroughVillage(_) | Goal::GolemRandomStrollInVillage(_) => Flag::Move.bit(),
             Goal::OfferFlower(_) => Flag::Move.bit() | Flag::Look.bit(),
             Goal::DefendVillageTarget(_) => Flag::Target.bit(),
             Goal::CubeMobFloat(_) | Goal::CubeMobKeepOnJumping(_) => Flag::Jump.bit() | Flag::Move.bit(),

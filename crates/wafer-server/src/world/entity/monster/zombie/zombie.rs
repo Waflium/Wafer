@@ -12,6 +12,7 @@ use crate::world::effect::MobEffectInstance;
 use crate::world::entity::ai::MobAi;
 use crate::world::entity::ai::goal::break_door_goal::BreakDoorGoal;
 use crate::world::entity::ai::goal::goal::Goal;
+use crate::world::entity::ai::goal::move_through_village_goal::MoveThroughVillageGoal;
 use crate::world::entity::ai::goal::spear_use_goal::SpearUseGoal;
 use crate::world::entity::ai::goal::look_at_player_goal::LookAtPlayerGoal;
 use crate::world::entity::ai::goal::random_look_around_goal::RandomLookAroundGoal;
@@ -64,6 +65,7 @@ fn door_breaking_predicate(difficulty: Difficulty) -> bool {
 
 pub struct Zombie {
     break_door_goal: Option<BreakDoorGoal>,
+    stopped_break_door_pos: Option<wafer_core::BlockPos>,
     can_break_doors: bool,
     pub drowning_tracker: ConversionTracker,
 }
@@ -72,6 +74,7 @@ impl Default for Zombie {
     fn default() -> Zombie {
         Zombie {
             break_door_goal: Some(BreakDoorGoal::new(door_breaking_predicate)),
+            stopped_break_door_pos: None,
             can_break_doors: DEFAULT_CAN_BREAK_DOORS,
             drowning_tracker: ConversionTracker::new(DATA_DROWNED_CONVERSION_ID, "InWaterTime", 600, "DrownedConversionTime", 300),
         }
@@ -195,6 +198,7 @@ impl Zombie {
     fn add_behaviour_goals(ai: &mut MobAi) {
         ai.goal_selector.add_goal(2, Goal::SpearUse(SpearUseGoal::new(1.0, 1.0, 10.0, 2.0)));
         ai.goal_selector.add_goal(3, Goal::ZombieAttack(ZombieAttackGoal::new(1.0, false)));
+        ai.goal_selector.add_goal(6, Goal::MoveThroughVillage(MoveThroughVillageGoal::new(1.0, true, 4, Zombie::can_break_doors)));
         ai.goal_selector.add_goal(7, Goal::WaterAvoidingRandomStroll(WaterAvoidingRandomStrollGoal::new(1.0)));
         let target_selector = &mut ai.target_selector;
         target_selector.add_goal(1, Goal::HurtByTarget(HurtByTargetGoal::new(&[]).set_alert_others(&["minecraft:zombified_piglin"])));
@@ -231,11 +235,19 @@ impl Zombie {
     }
 
     fn remove_break_door_goal(mob: &mut Mob) {
-        if let Some(wrapped_goal) = mob.ai.goal_selector.remove_goal(|goal| matches!(goal, Goal::BreakDoor(_)))
-            && let Goal::BreakDoor(break_door_goal) = wrapped_goal.into_goal()
-        {
-            zombie_mut(mob).break_door_goal = Some(break_door_goal);
+        if let Some(wrapped_goal) = mob.ai.goal_selector.remove_goal(|goal| matches!(goal, Goal::BreakDoor(_))) {
+            let was_running = wrapped_goal.is_running();
+            if let Goal::BreakDoor(break_door_goal) = wrapped_goal.into_goal() {
+                if was_running {
+                    zombie_mut(mob).stopped_break_door_pos = Some(break_door_goal.door_interact_goal.door_pos);
+                }
+                zombie_mut(mob).break_door_goal = Some(break_door_goal);
+            }
         }
+    }
+
+    pub fn take_stopped_break_door_pos(mob: &mut Mob) -> Option<wafer_core::BlockPos> {
+        zombie_mut(mob).stopped_break_door_pos.take()
     }
 
     pub fn set_baby(mob: &mut Mob, baby: bool) {

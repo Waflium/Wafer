@@ -26,6 +26,7 @@ pub mod look_at_player_goal;
 pub mod look_at_trading_player_goal;
 pub mod melee_attack_goal;
 pub mod move_back_to_village_goal;
+pub mod move_through_village_goal;
 pub mod move_to_block_goal;
 pub mod move_towards_restriction_goal;
 pub mod move_towards_target_goal;

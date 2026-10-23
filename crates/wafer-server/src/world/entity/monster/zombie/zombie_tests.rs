@@ -258,3 +258,36 @@ fn zombies_infect_villagers_on_hard() {
     assert_eq!(converted, Some(data));
     assert!(level.entity_ref(villager).is_none_or(|e| e.is_removed()));
 }
+
+#[test]
+fn zombies_walk_through_villages_at_night() {
+    use crate::world::entity::ai::goal::goal::Goal;
+    use crate::world::entity::ai::village::poi::poi_types::PoiType;
+    let mut level = testing::level();
+    level.difficulty = Difficulty::Normal;
+    let player = testing::player(&mut level, Vec3::new(0.5, -60.0, -30.5), 0.0, 0.0);
+    level.player_mut(player).set_game_mode_for_player(crate::server::level::game_mode::GameType::Creative, None);
+    for x in -1..=1 {
+        for z in -1..=1 {
+            let pos = BlockPos::new(8 + x * 6, -60, 8 + z * 6);
+            level.chunks.poi_manager.add(pos, PoiType::Home);
+            level.chunks.poi_manager.take(&|poi_type| poi_type == PoiType::Home, |_, found| found == pos, pos, 1);
+        }
+    }
+    let mut clocks = crate::world::clock::ServerClockManager::new();
+    clocks.set_total_ticks(crate::world::clock::ServerClockManager::id_of("minecraft:overworld").unwrap(), 18000);
+    level.sync_clocks(&clocks);
+    level.update_sky_brightness();
+    let zombie = add(&mut level, Zombie::create(), Vec3::new(-10.5, -60.0, -10.5));
+    let running = |level: &ServerLevel| {
+        level.mob(zombie).unwrap().ai.goal_selector.get_available_goals().iter().any(|goal| goal.is_running() && matches!(goal.get_goal(), Goal::MoveThroughVillage(_)))
+    };
+    let mut ran = false;
+    for _ in 0..400 {
+        level.tick();
+        ran |= running(&level);
+    }
+    assert!(ran);
+    let pos = level.entity(zombie).position();
+    assert!(pos.x > -6.0 && pos.z > -6.0);
+}
