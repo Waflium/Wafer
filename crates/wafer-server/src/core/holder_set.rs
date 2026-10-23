@@ -6,10 +6,15 @@ use crate::world::item::component::codec as component_codec;
 #[derive(Clone, Debug, PartialEq)]
 pub enum HolderSet {
     Direct(Vec<i32>),
-    Named(String, &'static [i32]),
+    Named(String, &'static wafer_data::TagContents),
 }
 
 impl HolderSet {
+    pub fn named(registry: &'static str, key: String) -> HolderSet {
+        let tag = wafer_data::tag_contents(registry, &key);
+        HolderSet::Named(key, tag)
+    }
+
     pub fn decode(registry: &'static str, tag: &Nbt) -> DataResult<HolderSet> {
         if let Nbt::String(s) = tag
             && let Some(tag_name) = s.strip_prefix('#')
@@ -20,8 +25,7 @@ impl HolderSet {
             {
                 return Err(error);
             }
-            let contents = wafer_data::tag(registry, &key);
-            return Ok(HolderSet::Named(key, contents));
+            return Ok(HolderSet::named(registry, key));
         }
         let ids = codec::compact_list_of(tag, |element| {
             let key = codec::identifier(element)?;
@@ -33,7 +37,7 @@ impl HolderSet {
     pub fn contents(&self) -> &[i32] {
         match self {
             HolderSet::Direct(ids) => ids,
-            HolderSet::Named(_, ids) => ids,
+            HolderSet::Named(_, tag) => tag.get(),
         }
     }
 

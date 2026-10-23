@@ -22,8 +22,8 @@ pub use item::{
 pub use mob_effect::{AttributeInfo, EffectAttributeModifier, EffectInstanceTemplate, MobEffect, MobEffectCategory, MobEffectInfo, Sentiment};
 pub use properties::{Property, PropertyValue};
 pub use registries::{
-    DimensionType, RegistryTags, SyncedRegistry, bind_tags, builtin_synced_registries, dimension_types, dynamic_tag, packet_name, set_data_registry_entries, set_dimension_types, prepare_tags, registry_entries, registry_id, registry_names, set_synced_registries,
-    synced_registries, tag, tags, with_pending_tags,
+    DimensionType, RegistryTags, SyncedRegistry, TagContents, bind_tags, builtin_synced_registries, dimension_types, dynamic_tag, packet_name, set_data_registry_entries, set_dimension_types, prepare_tags, registry_entries, registry_id, registry_names, set_synced_registries,
+    synced_registries, tag, tag_contents, tags, with_pending_tags,
 };
 pub use tag::Tag;
 

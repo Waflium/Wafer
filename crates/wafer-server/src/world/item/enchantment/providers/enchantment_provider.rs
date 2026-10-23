@@ -62,11 +62,7 @@ pub fn parse_enchantments(json: &Value) -> Result<HolderSet, String> {
 
 pub fn enchantment_names(enchantments: &HolderSet) -> Vec<&'static str> {
     let names = codec::registry("minecraft:enchantment");
-    let ids = match enchantments {
-        HolderSet::Named(key, _) => wafer_data::tag("minecraft:enchantment", key),
-        HolderSet::Direct(ids) => ids,
-    };
-    ids.iter().map(|&id| names[id as usize]).collect()
+    enchantments.contents().iter().map(|&id| names[id as usize]).collect()
 }
 
 pub fn int_range(json: &Value, min: i32, max: i32) -> Result<i32, String> {

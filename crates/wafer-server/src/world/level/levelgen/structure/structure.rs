@@ -76,7 +76,7 @@ pub fn parse_biome_holder_set(json: &Value) -> Result<HolderSet, String> {
     let id = |name: &str| registry.id_of(&resource(name)).map(|id| id as i32).ok_or_else(|| format!("unknown biome {name}"));
     match json {
         Value::String(s) => match s.strip_prefix('#') {
-            Some(tag) => Ok(HolderSet::Named(resource(tag), wafer_data::tag("minecraft:worldgen/biome", &resource(tag)))),
+            Some(tag) => Ok(HolderSet::named("minecraft:worldgen/biome", resource(tag))),
             None => Ok(HolderSet::Direct(vec![id(s)?])),
         },
         Value::Array(list) => Ok(HolderSet::Direct(list.iter().map(|v| id(v.as_str().ok_or("biome ids are strings")?)).collect::<Result<_, _>>()?)),

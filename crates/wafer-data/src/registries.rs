@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{LazyLock, RwLock};
 
@@ -112,6 +113,60 @@ pub fn tag(registry: &str, name: &str) -> &'static [i32] {
     tags().iter().find(|r| r.registry == registry).and_then(|r| r.tags.iter().find(|t| t.0 == name)).map_or(&[], |t| t.1)
 }
 
+#[derive(Debug)]
+pub struct TagContents {
+    registry: &'static str,
+    name: &'static str,
+    bound: AtomicPtr<&'static [i32]>,
+}
+
+impl PartialEq for TagContents {
+    fn eq(&self, other: &TagContents) -> bool {
+        self.registry == other.registry && self.name == other.name
+    }
+}
+
+impl TagContents {
+    pub fn get(&self) -> &'static [i32] {
+        if PENDING_TAGS.with(Cell::get).is_some() {
+            return tag(self.registry, self.name);
+        }
+        unsafe { *self.bound.load(Ordering::Acquire) }
+    }
+}
+
+type TagContentsByRegistry = Vec<(&'static str, HashMap<Box<str>, &'static TagContents>)>;
+
+static TAG_CONTENTS: RwLock<TagContentsByRegistry> = RwLock::new(Vec::new());
+
+fn bound_tag(bound: &[RegistryTags], registry: &str, name: &str) -> &'static [i32] {
+    bound.iter().find(|r| r.registry == registry).and_then(|r| r.tags.iter().find(|t| t.0 == name)).map_or(&[], |t| t.1)
+}
+
+fn bound_slot(bound: &[RegistryTags], registry: &str, name: &str) -> *mut &'static [i32] {
+    Box::into_raw(Box::new(bound_tag(bound, registry, name)))
+}
+
+pub fn tag_contents(registry: &'static str, name: &str) -> &'static TagContents {
+    let find = |all: &TagContentsByRegistry| all.iter().find(|(r, _)| *r == registry).and_then(|(_, tags)| tags.get(name)).copied();
+    if let Some(contents) = find(&TAG_CONTENTS.read().expect("tag contents")) {
+        return contents;
+    }
+    let mut all = TAG_CONTENTS.write().expect("tag contents");
+    if let Some(contents) = find(&all) {
+        return contents;
+    }
+    let name_static: &'static str = Box::leak(name.to_owned().into_boxed_str());
+    let contents: &'static TagContents = Box::leak(Box::new(TagContents { registry, name: name_static, bound: AtomicPtr::new(bound_slot(bound_tags(), registry, name)) }));
+    match all.iter_mut().find(|(r, _)| *r == registry) {
+        Some((_, tags)) => {
+            tags.insert(name.into(), contents);
+        }
+        None => all.push((registry, HashMap::from([(name.into(), contents)]))),
+    }
+    contents
+}
+
 fn same_tags(current: &[RegistryTags], tags: &[(String, Vec<(String, Vec<i32>)>)]) -> bool {
     current.len() == tags.len()
         && current.iter().zip(tags).all(|(current, (registry, tags))| {
@@ -167,6 +222,12 @@ pub fn bind_tags(bound: &'static [RegistryTags]) {
     for (registry, tag) in DYNAMIC_TAGS.read().expect("dynamic tags").iter() {
         let registry_tags = bound.iter().find(|r| r.registry == *registry).map_or(&[][..], |r| r.tags);
         tag.bind(registry_tags.iter().find(|t| t.0 == tag.name).map_or(&[], |t| t.1));
+    }
+    let all = TAG_CONTENTS.write().expect("tag contents");
+    for (registry, tags) in all.iter() {
+        for contents in tags.values() {
+            contents.bound.store(bound_slot(bound, registry, contents.name), Ordering::Release);
+        }
     }
     *BOUND_TAGS.write().expect("bound tags") = Some(bound);
 }

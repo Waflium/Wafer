@@ -15,8 +15,7 @@ use crate::world::phys::hit_result::HitResult;
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.3125, 0.3125).with_eye_height(0.0);
 
 pub fn explosion_damage_calculator(knockback_multiplier: Option<f32>) -> ExplosionDamageCalculator {
-    let key = "minecraft:blocks_wind_charge_explosions";
-    let immune_blocks = HolderSet::Named(key.to_string(), wafer_data::tag("minecraft:block", key));
+    let immune_blocks = HolderSet::named("minecraft:block", "minecraft:blocks_wind_charge_explosions".to_string());
     ExplosionDamageCalculator::Simple { explodes_blocks: true, damages_entities: false, knockback_multiplier, immune_blocks: Some(immune_blocks) }
 }
 
