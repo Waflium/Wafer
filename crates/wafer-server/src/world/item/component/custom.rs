@@ -269,7 +269,7 @@ impl Custom for TypedEntityData {
     fn write(&self, value: &Nbt, w: &mut Writer) -> Result<(), String> {
         let Nbt::Compound(fields) = value else { return Err("not a compound".into()) };
         let id = value.get("id").and_then(Nbt::as_str).unwrap_or("");
-        w.varint(codec::registry_id(self.0, id)?);
+        w.varint(codec::network_registry_id(self.0, id)?);
         Nbt::Compound(fields.iter().filter(|(k, _)| k != "id").cloned().collect()).write(w);
         Ok(())
     }

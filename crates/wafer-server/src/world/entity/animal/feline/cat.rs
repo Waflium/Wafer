@@ -82,7 +82,7 @@ pub fn cat_mut(mob: &mut Mob) -> &mut Cat {
 
 fn spawn_selectors() -> &'static SpawnPrioritySelectors {
     static SELECTORS: OnceLock<SpawnPrioritySelectors> = OnceLock::new();
-    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, wafer_data::CAT_VARIANTS))
+    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, crate::core::data_registries::json_entries("minecraft:cat_variant")))
 }
 
 pub fn is_food(item_stack: &ItemStack) -> bool {

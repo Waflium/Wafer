@@ -115,7 +115,7 @@ pub fn wolf_mut(mob: &mut Mob) -> &mut Wolf {
 
 fn spawn_selectors() -> &'static SpawnPrioritySelectors {
     static SELECTORS: OnceLock<SpawnPrioritySelectors> = OnceLock::new();
-    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, wafer_data::WOLF_VARIANTS))
+    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, crate::core::data_registries::json_entries("minecraft:wolf_variant")))
 }
 
 pub fn prey_selector(_mob: EntityId, target: EntityId, level: &ServerLevel) -> bool {

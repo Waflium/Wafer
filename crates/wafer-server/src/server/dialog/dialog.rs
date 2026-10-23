@@ -276,7 +276,7 @@ pub fn validate(tag: &Nbt) -> Result<(), String> {
 
 pub fn write_holder(dialog: &RawResourceOrId, w: &mut Writer) {
     match dialog {
-        RawResourceOrId::Reference(id) => w.varint(wafer_data::SyncedRegistry::get("minecraft:dialog").id_of(id).expect("registered dialog") as i32 + 1),
+        RawResourceOrId::Reference(id) => w.varint(crate::core::data_registries::network_id("minecraft:dialog", wafer_data::SyncedRegistry::get("minecraft:dialog").id_of(id).expect("registered dialog")) + 1),
         RawResourceOrId::Inline(value) => {
             w.varint(0);
             DIRECT.0.decode(value).expect("validated dialog").write(w);

@@ -67,13 +67,13 @@ pub struct PigSoundVariant {
 
 fn spawn_selectors() -> &'static SpawnPrioritySelectors {
     static SELECTORS: OnceLock<SpawnPrioritySelectors> = OnceLock::new();
-    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, wafer_data::PIG_VARIANTS))
+    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, crate::core::data_registries::json_entries("minecraft:pig_variant")))
 }
 
 pub fn sound_variant(id: i32) -> &'static PigSoundVariant {
     static SOUND_VARIANTS: OnceLock<Vec<PigSoundVariant>> = OnceLock::new();
     let all = SOUND_VARIANTS.get_or_init(|| {
-        let json: HashMap<&str, Value> = wafer_data::PIG_SOUND_VARIANTS.iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
+        let json: HashMap<&str, Value> = crate::core::data_registries::json_entries("minecraft:pig_sound_variant").iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
         let set = |v: &Value| PigSoundSet {
             ambient_sound: v["ambient_sound"].as_str().unwrap_or_default().to_string(),
             hurt_sound: v["hurt_sound"].as_str().unwrap_or_default().to_string(),

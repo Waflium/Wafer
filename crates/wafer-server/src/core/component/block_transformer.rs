@@ -100,7 +100,7 @@ pub struct BlockTransformer {
 }
 
 static BLOCK_TRANSFORMERS: LazyLock<Vec<(&'static str, BlockTransformer)>> = LazyLock::new(|| {
-    wafer_data::BLOCK_TRANSFORMERS
+    crate::core::data_registries::json_entries("minecraft:block_transformer")
         .iter()
         .filter_map(|&(name, json)| {
             let value: Value = serde_json::from_str(json).ok()?;

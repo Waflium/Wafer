@@ -69,7 +69,7 @@ fn parse_states(json: &Value) -> Result<Vec<BlockState>, String> {
 }
 
 static BLOCK_STATE_PROVIDERS: LazyLock<Vec<BlockStateProvider>> = LazyLock::new(|| {
-    wafer_data::BLOCK_STATE_PROVIDERS
+    crate::core::data_registries::json_entries("minecraft:worldgen/block_state_provider")
         .iter()
         .map(|(name, json)| {
             let json: Value = serde_json::from_str(json).expect("block state provider json");
@@ -88,7 +88,7 @@ impl BlockStateProviderHolder {
         match json {
             Value::String(name) => {
                 let name = resource(name);
-                wafer_data::BLOCK_STATE_PROVIDERS
+                crate::core::data_registries::json_entries("minecraft:worldgen/block_state_provider")
                     .iter()
                     .position(|(n, _)| *n == name)
                     .map(|i| BlockStateProviderHolder::Reference(i as u32))

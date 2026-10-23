@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{LazyLock, RwLock};
 
 use crate::{BUILTIN_REGISTRIES, FEATURES, PACKET_NAMES, STRUCTURES, SYNCED_REGISTRIES, TAGS, TRADE_SETS, TYPED_TAGS, VILLAGER_TRADES};
@@ -8,8 +9,23 @@ static FEATURE_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| FEATURES.it
 static VILLAGER_TRADE_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| VILLAGER_TRADES.iter().map(|trade| trade.0).collect());
 static TRADE_SET_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| TRADE_SETS.iter().map(|trade_set| trade_set.0).collect());
 
+static ACTIVE_SYNCED_REGISTRIES: AtomicPtr<Vec<SyncedRegistry>> = AtomicPtr::new(std::ptr::null_mut());
+
+pub fn synced_registries() -> &'static [SyncedRegistry] {
+    let active = ACTIVE_SYNCED_REGISTRIES.load(Ordering::Acquire);
+    if active.is_null() { SYNCED_REGISTRIES } else { unsafe { &*active } }
+}
+
+pub fn set_synced_registries(registries: Vec<SyncedRegistry>) {
+    ACTIVE_SYNCED_REGISTRIES.store(Box::into_raw(Box::new(registries)), Ordering::Release);
+}
+
+pub fn builtin_synced_registries() -> &'static [SyncedRegistry] {
+    SYNCED_REGISTRIES
+}
+
 pub fn registry_entries(name: &str) -> Option<&'static [&'static str]> {
-    BUILTIN_REGISTRIES.iter().find(|r| r.0 == name).map(|r| r.1).or_else(|| SYNCED_REGISTRIES.iter().find(|r| r.name == name).map(|r| r.entries)).or_else(|| {
+    BUILTIN_REGISTRIES.iter().find(|r| r.0 == name).map(|r| r.1).or_else(|| synced_registries().iter().find(|r| r.name == name).map(|r| r.entries)).or_else(|| {
         match name {
             "minecraft:worldgen/structure" => Some(&STRUCTURE_NAMES[..]),
             "minecraft:worldgen/feature" => Some(&FEATURE_NAMES[..]),
@@ -35,7 +51,7 @@ pub struct SyncedRegistry {
 
 impl SyncedRegistry {
     pub fn get(name: &str) -> &'static SyncedRegistry {
-        SYNCED_REGISTRIES
+        synced_registries()
             .iter()
             .find(|r| r.name == name)
             .unwrap_or_else(|| panic!("{name} is not a synchronized registry"))

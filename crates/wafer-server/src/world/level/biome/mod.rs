@@ -42,7 +42,7 @@ static CLIMATE: LazyLock<Vec<ClimateSettings>> = LazyLock::new(|| {
         .entries
         .iter()
         .map(|name| {
-            let source = wafer_data::BIOMES.iter().find(|(n, _)| n == name).map(|(_, s)| *s).expect("biome data");
+            let source = crate::core::data_registries::json_entries("minecraft:worldgen/biome").iter().find(|(n, _)| n == name).map(|(_, s)| *s).expect("biome data");
             let json: Value = serde_json::from_str(source).expect("biome json");
             ClimateSettings {
                 has_precipitation: json["has_precipitation"].as_bool().expect("biome precipitation"),
@@ -59,7 +59,7 @@ pub static BIOME_ATTRIBUTES: LazyLock<Vec<EnvironmentAttributeMap>> = LazyLock::
         .entries
         .iter()
         .map(|name| {
-            let source = wafer_data::BIOMES.iter().find(|(n, _)| n == name).map(|(_, s)| *s).expect("biome data");
+            let source = crate::core::data_registries::json_entries("minecraft:worldgen/biome").iter().find(|(n, _)| n == name).map(|(_, s)| *s).expect("biome data");
             let json: Value = serde_json::from_str(source).expect("biome json");
             match json.get("attributes") {
                 Some(attributes) => EnvironmentAttributeMap::parse(attributes, true).unwrap_or_else(|e| panic!("attributes of {name}: {e}")),

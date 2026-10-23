@@ -49,7 +49,7 @@ pub struct FrogNodeEvaluator;
 
 fn spawn_selectors() -> &'static SpawnPrioritySelectors {
     static SELECTORS: OnceLock<SpawnPrioritySelectors> = OnceLock::new();
-    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, wafer_data::FROG_VARIANTS))
+    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, crate::core::data_registries::json_entries("minecraft:frog_variant")))
 }
 
 pub fn default_variant() -> i32 {

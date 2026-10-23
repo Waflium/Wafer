@@ -1569,7 +1569,7 @@ impl ServerLevel {
     fn broadcast_damage_event(&self, id: EntityId, source: &DamageSource) {
         let packet = encode(clientbound::DAMAGE_EVENT, |p| {
             p.varint(id);
-            p.varint(source.ty.0 as i32);
+            p.varint(crate::core::data_registries::network_id("minecraft:damage_type", source.ty.0 as i32));
             p.varint(source.causing_entity.map_or(-1, |e| e) + 1);
             p.varint(source.direct_entity.map_or(-1, |e| e) + 1);
             match source.damage_source_position {

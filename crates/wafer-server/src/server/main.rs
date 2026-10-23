@@ -227,6 +227,7 @@ pub fn main(args: Vec<String>) {
     let (init_mode, initial_data_config) = load_or_create_config(properties, level_data.as_ref());
     let data_configuration = configure_pack_repository(&mut pack_repository, &initial_data_config, init_mode, safe_mode);
     let resource_manager = MultiPackResourceManager::new(pack_repository.open_all_selected());
+    crate::core::data_registries::load(&resource_manager);
     let worker_properties = properties.clone();
     let worker_data_configuration = data_configuration.clone();
     let bonus_chest = options.has("bonusChest");

@@ -269,6 +269,7 @@ impl Server {
         let initial_data_config = saved.as_ref().map_or_else(WorldDataConfiguration::default_configuration, |data| data.data_configuration.clone());
         let data_configuration = configure_pack_repository(&mut pack_repository, &initial_data_config, saved.is_none(), false);
         let resource_manager = MultiPackResourceManager::new(pack_repository.open_all_selected());
+        crate::core::data_registries::load(&resource_manager);
         let postponed_tags = crate::tags::load_tags_for_existing_registries(&resource_manager);
         let mut data_packs = ReloadableServerResources::load_resources(&resource_manager, postponed_tags, config.function_permission_level).map_err(std::io::Error::other)?;
         data_packs.update_components_and_static_registry_tags();

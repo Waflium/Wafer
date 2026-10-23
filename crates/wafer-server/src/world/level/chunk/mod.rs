@@ -55,10 +55,10 @@ impl PaletteValue for BlockState {
 
 impl PaletteValue for Biome {
     fn global_id(self) -> u32 {
-        self.0 as u32
+        crate::core::data_registries::biome_network_id(self.0 as u32)
     }
     fn from_global_id(id: u32) -> Option<Biome> {
-        ((id as usize) < Biome::count()).then_some(Biome(id as u16))
+        ((id as usize) < Biome::count()).then(|| Biome(crate::core::data_registries::biome_from_network_id(id) as u16))
     }
 }
 

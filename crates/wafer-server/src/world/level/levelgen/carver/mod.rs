@@ -58,7 +58,7 @@ fn load_biome_carvers() -> Result<Vec<Vec<Arc<WorldCarver>>>, String> {
         let json: Value = serde_json::from_str(source).map_err(|e| format!("{name}: {e}"))?;
         carvers.insert(name, Arc::new(WorldCarver::parse(&json).map_err(|e| format!("{name}: {e}"))?));
     }
-    let biomes: HashMap<&str, &str> = wafer_data::BIOMES.iter().copied().collect();
+    let biomes: HashMap<&str, &str> = crate::core::data_registries::json_entries("minecraft:worldgen/biome").iter().copied().collect();
     SyncedRegistry::get("minecraft:worldgen/biome")
         .entries
         .iter()

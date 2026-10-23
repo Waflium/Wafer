@@ -18,7 +18,7 @@ static SETTINGS: LazyLock<Vec<BiomeGenerationSettings>> = LazyLock::new(|| {
         .entries
         .iter()
         .map(|name| {
-            let source = wafer_data::BIOMES.iter().find(|(n, _)| n == name).map(|(_, s)| *s).expect("biome data");
+            let source = crate::core::data_registries::json_entries("minecraft:worldgen/biome").iter().find(|(n, _)| n == name).map(|(_, s)| *s).expect("biome data");
             let json: Value = serde_json::from_str(source).expect("biome json");
             let features: Vec<Vec<u32>> = json["features"]
                 .as_array()

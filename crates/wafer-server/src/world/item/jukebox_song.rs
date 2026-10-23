@@ -28,7 +28,7 @@ impl JukeboxSong {
         static SONGS: OnceLock<Vec<(&'static str, JukeboxSong)>> = OnceLock::new();
         SONGS.get_or_init(|| {
             let registry = SyncedRegistry::get("minecraft:jukebox_song");
-            wafer_data::JUKEBOX_SONGS
+            crate::core::data_registries::json_entries("minecraft:jukebox_song")
                 .iter()
                 .map(|&(name, json)| {
                     let tag = dc::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));

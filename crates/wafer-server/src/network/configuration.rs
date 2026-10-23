@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::time::Duration;
 
 use wafer_data::packets::configuration::{clientbound, serverbound};
-use wafer_data::{SYNCED_REGISTRIES, VERSION_NAME};
+use wafer_data::VERSION_NAME;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
@@ -331,13 +331,21 @@ fn decoder_exception() -> Component {
 }
 
 fn send_registries(w: &mut PacketWriter) {
-    for registry in SYNCED_REGISTRIES {
+    for registry in wafer_data::synced_registries() {
+        let data = crate::core::data_registries::get(registry.name);
         w.queue(clientbound::REGISTRY_DATA, |p| {
             p.string(registry.name);
             p.varint(registry.entries.len() as i32);
-            for entry in registry.entries {
-                p.string(entry);
-                p.bool(false);
+            let order: Vec<i32> = data.map_or_else(|| (0..registry.entries.len() as i32).collect(), |data| data.network_order().collect());
+            for id in order {
+                p.string(registry.entries[id as usize]);
+                match data.and_then(|data| data.network_contents(id)) {
+                    Some(contents) => {
+                        p.bool(true);
+                        crate::world::item::component::json_to_nbt(contents).write(p);
+                    }
+                    None => p.bool(false),
+                }
             }
         });
     }
@@ -388,7 +396,7 @@ pub fn write_tags(p: &mut wafer_protocol::Writer) {
         for (name, ids) in registry.tags {
             p.string(name);
             p.varint(ids.len() as i32);
-            ids.iter().for_each(|&id| p.varint(id));
+            ids.iter().for_each(|&id| p.varint(crate::core::data_registries::network_id(registry.registry, id)));
         }
     }
 }

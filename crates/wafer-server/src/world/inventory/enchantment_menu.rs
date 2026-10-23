@@ -82,7 +82,7 @@ impl ServerLevel {
                     let list = state.get_enchantment_list(&item_stack, i, state.costs[i]);
                     if !list.is_empty() {
                         let ench = &list[state.random.next_int_bounded(list.len() as i32) as usize];
-                        state.enchant_clue[i] = codec::registry_id("minecraft:enchantment", &ench.enchantment).unwrap_or(-1);
+                        state.enchant_clue[i] = codec::network_registry_id("minecraft:enchantment", &ench.enchantment).unwrap_or(-1);
                         state.level_clue[i] = ench.level;
                     }
                 }

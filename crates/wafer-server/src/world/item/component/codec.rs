@@ -207,8 +207,12 @@ pub fn registry_id(name: &str, entry: &str) -> Result<i32, String> {
     registry(name).iter().position(|e| *e == entry).map(|i| i as i32).ok_or_else(|| format!("Can't find id for '{entry}' in registry {name}"))
 }
 
+pub fn network_registry_id(name: &str, entry: &str) -> Result<i32, String> {
+    registry_id(name, entry).map(|id| crate::core::data_registries::network_id(name, id))
+}
+
 fn registry_entry(name: &str, id: i32) -> Result<&'static str, String> {
-    registry(name).get(id as usize).copied().ok_or_else(|| format!("No value with id {id} in registry {name}"))
+    registry(name).get(crate::core::data_registries::from_network_id(name, id) as usize).copied().ok_or_else(|| format!("No value with id {id} in registry {name}"))
 }
 
 pub fn tag_exists(registry: &str, tag: &str) -> bool {
@@ -606,9 +610,9 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
             w.string(s)
         }
         Stream::Identifier => w.string(value.as_str().unwrap_or("")),
-        Stream::Registry(reg) => w.varint(registry_id(reg, value.as_str().unwrap_or(""))?),
+        Stream::Registry(reg) => w.varint(network_registry_id(reg, value.as_str().unwrap_or(""))?),
         Stream::Holder(reg, direct_stream) => match value {
-            Nbt::String(id) => w.varint(registry_id(reg, id)? + 1),
+            Nbt::String(id) => w.varint(network_registry_id(reg, id)? + 1),
             direct => {
                 w.varint(0);
                 match (codec, direct_stream) {
@@ -624,13 +628,13 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
             }
             Nbt::String(id) => {
                 w.varint(2);
-                w.varint(registry_id(reg, id)?);
+                w.varint(network_registry_id(reg, id)?);
             }
             other => {
                 let items = other.as_list();
                 w.varint(items.len() as i32 + 1);
                 for item in items {
-                    w.varint(registry_id(reg, item.as_str().unwrap_or(""))?);
+                    w.varint(network_registry_id(reg, item.as_str().unwrap_or(""))?);
                 }
             }
         },
@@ -674,7 +678,7 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
             let name = value.get(d.key).and_then(Nbt::as_str).unwrap_or("");
             let index = d.cases.iter().position(|(n, _)| *n == name).ok_or_else(|| format!("Unknown type {name}"))?;
             match d.selector {
-                Selector::Registry(reg) => w.varint(registry_id(reg, name)?),
+                Selector::Registry(reg) => w.varint(network_registry_id(reg, name)?),
                 Selector::Enum => w.varint(index as i32),
             }
             write_fields(&d.cases[index].1, value, w)?;

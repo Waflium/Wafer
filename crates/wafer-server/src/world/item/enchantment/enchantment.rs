@@ -105,14 +105,14 @@ impl RegistryElement for Enchantment {
     const REGISTRY: &'static str = "minecraft:enchantment";
 
     fn contains_key(key: &str) -> bool {
-        wafer_data::ENCHANTMENTS.iter().any(|(name, _)| *name == key)
+        crate::core::data_registries::json_entries("minecraft:enchantment").iter().any(|(name, _)| *name == key)
     }
 
     fn lookup(key: &str) -> Option<&'static Enchantment> {
         static ENCHANTMENTS: OnceLock<HashMap<&'static str, Enchantment>> = OnceLock::new();
         ENCHANTMENTS
             .get_or_init(|| {
-                wafer_data::ENCHANTMENTS
+                crate::core::data_registries::json_entries("minecraft:enchantment")
                     .iter()
                     .map(|&(name, json)| {
                         let tag = crate::world::item::component::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));
@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn every_vanilla_enchantment_decodes() {
-        let errors: Vec<String> = wafer_data::ENCHANTMENTS
+        let errors: Vec<String> = crate::core::data_registries::json_entries("minecraft:enchantment")
             .iter()
             .filter_map(|&(name, json)| Enchantment::decode(&json_to_nbt(&serde_json::from_str(json).unwrap())).err().map(|e| format!("{name}: {e}")))
             .collect();

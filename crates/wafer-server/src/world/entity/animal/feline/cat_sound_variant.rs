@@ -40,7 +40,7 @@ fn sound_set(v: &Value) -> CatSoundSet {
 pub fn sound_variant(id: i32) -> &'static CatSoundVariant {
     static SOUND_VARIANTS: OnceLock<Vec<CatSoundVariant>> = OnceLock::new();
     let all = SOUND_VARIANTS.get_or_init(|| {
-        let json: HashMap<&str, Value> = wafer_data::CAT_SOUND_VARIANTS.iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
+        let json: HashMap<&str, Value> = crate::core::data_registries::json_entries("minecraft:cat_sound_variant").iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
         wafer_data::SyncedRegistry::get(REGISTRY)
             .entries
             .iter()

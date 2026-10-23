@@ -68,7 +68,7 @@ impl Bound {
 
     pub fn write(&self, w: &mut Writer) {
         let id = SyncedRegistry::get("minecraft:chat_type").id_of(self.chat_type.name()).expect("a chat type");
-        w.varint(id + 1);
+        w.varint(crate::core::data_registries::network_id("minecraft:chat_type", id) + 1);
         self.name.write(w);
         w.bool(self.target_name.is_some());
         if let Some(target) = &self.target_name {

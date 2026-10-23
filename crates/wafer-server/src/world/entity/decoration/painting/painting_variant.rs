@@ -22,7 +22,7 @@ static VARIANTS: LazyLock<Vec<PaintingVariant>> = LazyLock::new(|| {
         .entries
         .iter()
         .map(|name| {
-            let json = wafer_data::PAINTING_VARIANTS.iter().find(|(id, _)| id == name).map(|(_, json)| *json).expect("vanilla painting variant");
+            let json = crate::core::data_registries::json_entries("minecraft:painting_variant").iter().find(|(id, _)| id == name).map(|(_, json)| *json).expect("vanilla painting variant");
             let json: Value = serde_json::from_str(json).expect("vanilla JSON");
             PaintingVariant { width: json["width"].as_i64().unwrap_or(1) as i32, height: json["height"].as_i64().unwrap_or(1) as i32 }
         })

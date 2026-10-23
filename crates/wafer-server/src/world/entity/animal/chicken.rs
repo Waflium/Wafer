@@ -86,13 +86,13 @@ fn sound_variants() -> &'static SyncedRegistry {
 
 fn spawn_selectors() -> &'static SpawnPrioritySelectors {
     static SELECTORS: OnceLock<SpawnPrioritySelectors> = OnceLock::new();
-    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load("minecraft:chicken_variant", wafer_data::CHICKEN_VARIANTS))
+    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load("minecraft:chicken_variant", crate::core::data_registries::json_entries("minecraft:chicken_variant")))
 }
 
 pub fn sound_variant(id: i32) -> &'static ChickenSoundVariant {
     static SOUND_VARIANTS: OnceLock<Vec<ChickenSoundVariant>> = OnceLock::new();
     let all = SOUND_VARIANTS.get_or_init(|| {
-        let json: HashMap<&str, Value> = wafer_data::CHICKEN_SOUND_VARIANTS.iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
+        let json: HashMap<&str, Value> = crate::core::data_registries::json_entries("minecraft:chicken_sound_variant").iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
         let set = |v: &Value| SoundSet {
             ambient_sound: v["ambient_sound"].as_str().unwrap_or_default().to_string(),
             death_sound: v["death_sound"].as_str().unwrap_or_default().to_string(),

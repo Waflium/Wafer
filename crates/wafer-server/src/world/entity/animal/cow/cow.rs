@@ -29,13 +29,13 @@ pub struct Cow {
 
 fn spawn_selectors() -> &'static SpawnPrioritySelectors {
     static SELECTORS: OnceLock<SpawnPrioritySelectors> = OnceLock::new();
-    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, wafer_data::COW_VARIANTS))
+    SELECTORS.get_or_init(|| SpawnPrioritySelectors::load(VARIANT_REGISTRY, crate::core::data_registries::json_entries("minecraft:cow_variant")))
 }
 
 pub fn sound_variant(id: i32) -> &'static CowSoundVariant {
     static SOUND_VARIANTS: OnceLock<Vec<CowSoundVariant>> = OnceLock::new();
     let all = SOUND_VARIANTS.get_or_init(|| {
-        let json: HashMap<&str, Value> = wafer_data::COW_SOUND_VARIANTS.iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
+        let json: HashMap<&str, Value> = crate::core::data_registries::json_entries("minecraft:cow_sound_variant").iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
         wafer_data::SyncedRegistry::get(SOUND_VARIANT_REGISTRY).entries.iter().map(|name| classic_sounds_from(&json[name])).collect()
     });
     &all[id as usize]

@@ -21,7 +21,10 @@ pub use item::{
 };
 pub use mob_effect::{AttributeInfo, EffectAttributeModifier, EffectInstanceTemplate, MobEffect, MobEffectCategory, MobEffectInfo, Sentiment};
 pub use properties::{Property, PropertyValue};
-pub use registries::{DimensionType, RegistryTags, SyncedRegistry, bind_tags, packet_name, prepare_tags, registry_entries, registry_id, registry_names, tag, tags, with_pending_tags};
+pub use registries::{
+    DimensionType, RegistryTags, SyncedRegistry, bind_tags, builtin_synced_registries, packet_name, prepare_tags, registry_entries, registry_id, registry_names, set_synced_registries,
+    synced_registries, tag, tags, with_pending_tags,
+};
 pub use tag::Tag;
 
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));

@@ -173,12 +173,12 @@ impl DataValue {
             DataValue::Pose(p) => w.varint(*p as i32),
             DataValue::HumanoidArm(a) => w.varint(*a),
             DataValue::BlockState(s) => w.varint(s.id() as i32),
-            DataValue::CowVariant(id)
-            | DataValue::CowSoundVariant(id)
-            | DataValue::PigVariant(id)
-            | DataValue::PigSoundVariant(id)
-            | DataValue::ChickenVariant(id)
-            | DataValue::ChickenSoundVariant(id) => w.varint(*id),
+            DataValue::CowVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:cow_variant", *id)),
+            DataValue::CowSoundVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:cow_sound_variant", *id)),
+            DataValue::PigVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:pig_variant", *id)),
+            DataValue::PigSoundVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:pig_sound_variant", *id)),
+            DataValue::ChickenVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:chicken_variant", *id)),
+            DataValue::ChickenSoundVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:chicken_sound_variant", *id)),
             DataValue::OptionalBlockState(s) => w.varint(s.map_or(0, |s| s.id() as i32)),
             DataValue::Long(v) => w.varlong(*v),
             DataValue::OptionalLivingEntityReference(v) => {
@@ -187,10 +187,12 @@ impl DataValue {
                     w.uuid(*uuid);
                 }
             }
-            DataValue::WolfVariant(id) | DataValue::WolfSoundVariant(id) => w.varint(*id),
-            DataValue::CatVariant(id) | DataValue::CatSoundVariant(id) => w.varint(*id),
+            DataValue::WolfVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:wolf_variant", *id)),
+            DataValue::WolfSoundVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:wolf_sound_variant", *id)),
+            DataValue::CatVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:cat_variant", *id)),
+            DataValue::CatSoundVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:cat_sound_variant", *id)),
             DataValue::ArmadilloState(id) | DataValue::CopperGolemState(id) | DataValue::WeatheringCopperState(id) => w.varint(*id),
-            DataValue::FrogVariant(id) => w.varint(*id),
+            DataValue::FrogVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:frog_variant", *id)),
             DataValue::VillagerData(data) => data.write(w),
             DataValue::Vector3(v) => {
                 w.f32(v.x);
@@ -198,10 +200,10 @@ impl DataValue {
                 w.f32(v.z);
             }
             DataValue::Direction(direction) => w.varint(direction.ordinal() as i32),
-            DataValue::PaintingVariant(id) => w.varint(*id + 1),
+            DataValue::PaintingVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:painting_variant", *id) + 1),
             DataValue::DyeColor(id) => w.varint(*id),
             DataValue::SnifferState(id) => w.varint(*id),
-            DataValue::ZombieNautilusVariant(id) => w.varint(*id),
+            DataValue::ZombieNautilusVariant(id) => w.varint(crate::core::data_registries::network_id("minecraft:zombie_nautilus_variant", *id)),
             DataValue::ResolvableProfile(profile) => {
                 let _ = crate::world::item::component::PROFILE.write(profile, w);
             }

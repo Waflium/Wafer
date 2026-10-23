@@ -117,7 +117,7 @@ impl SulfurCubeArchetype {
     pub fn registered() -> &'static [SulfurCubeArchetype] {
         static ARCHETYPES: OnceLock<Vec<SulfurCubeArchetype>> = OnceLock::new();
         ARCHETYPES.get_or_init(|| {
-            wafer_data::SULFUR_CUBE_ARCHETYPES
+            crate::core::data_registries::json_entries("minecraft:sulfur_cube_archetype")
                 .iter()
                 .map(|&(_, json)| SulfurCubeArchetype::parse(&serde_json::from_str(json).expect("vanilla JSON")).expect("vanilla sulfur cube archetype"))
                 .collect()

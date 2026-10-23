@@ -48,7 +48,7 @@ struct RespawnTransition {
 impl Server {
     pub fn create_common_spawn_info(&self, p: &mut Writer, level_index: usize, player: &ServerPlayer) {
         let level = &self.levels[level_index];
-        p.varint(level.dimension_type_id);
+        p.varint(crate::core::data_registries::network_id("minecraft:dimension_type", level.dimension_type_id));
         p.string(level.dimension);
         p.i64(hashed_seed(self.seed));
         p.varint(player.game_mode.game_type.id());
