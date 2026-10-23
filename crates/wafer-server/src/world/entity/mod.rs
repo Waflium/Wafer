@@ -44,6 +44,8 @@ pub mod display;
 #[cfg(test)]
 mod display_tests;
 #[cfg(test)]
+mod entity_type_tests;
+#[cfg(test)]
 mod interaction_tests;
 pub mod item;
 pub mod leashable;

@@ -10,6 +10,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::attributes::Attribute;
 use super::entity_attachments::EntityAttachment;
+use super::entity_type::EntityType;
 use super::move_simulation_type::MoveSimulationType;
 use super::{EntityDimensions, ItemEntity, LevelEntity, data, relative};
 use crate::world::damagesource::DamageSource;
@@ -857,14 +858,12 @@ impl ServerLevel {
     }
 
     pub fn get_loot_table(&self, id: EntityId) -> Option<String> {
-        if let Some(mob) = self.mob(id) {
-            return mob.loot_table_id();
+        if let Some(mob) = self.mob(id)
+            && mob.loot_table.is_some()
+        {
+            return mob.loot_table.clone();
         }
-        if let Some(part) = self.dragon_part_entity(id) {
-            let type_id = wafer_data::registry::ENTITY_TYPE[part.entity_type as usize];
-            return Some(format!("minecraft:entities/{}", type_id.trim_start_matches("minecraft:")));
-        }
-        self.is_player(id).then(|| "minecraft:entities/player".to_string())
+        EntityType::by_id(self.entity_ref(id)?.entity_type).get_default_loot_table()
     }
 
     pub fn force_set_rotation(&mut self, id: EntityId, y_rot: f32, relative_y: bool, x_rot: f32, relative_x: bool) {

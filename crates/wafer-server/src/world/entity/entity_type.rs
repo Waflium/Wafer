@@ -21,6 +21,7 @@ pub struct EntityType {
     height: f32,
     spawn_dimensions_scale: f32,
     allowed_in_peaceful: bool,
+    no_loot_table: bool,
 }
 
 impl EntityType {
@@ -34,6 +35,13 @@ impl EntityType {
 
     pub fn get_key(&self) -> &'static str {
         wafer_data::registry::ENTITY_TYPE[self.id as usize]
+    }
+
+    pub fn get_default_loot_table(&self) -> Option<String> {
+        if self.no_loot_table {
+            return None;
+        }
+        Some(format!("minecraft:entities/{}", self.get_key().trim_start_matches("minecraft:")))
     }
 
     pub fn get_category(&self) -> MobCategory {
@@ -106,7 +114,12 @@ impl Builder {
             height: 1.8,
             spawn_dimensions_scale: 1.0,
             allowed_in_peaceful: true,
+            no_loot_table: false,
         })
+    }
+
+    pub const fn no_loot_table(self) -> Builder {
+        Builder(EntityType { no_loot_table: true, ..self.0 })
     }
 
     pub const fn sized(self, width: f32, height: f32) -> Builder {

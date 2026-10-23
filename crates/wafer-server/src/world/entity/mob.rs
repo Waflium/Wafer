@@ -1558,14 +1558,6 @@ impl Mob {
         self.default_dimensions().scale(scale)
     }
 
-    pub fn loot_table_id(&self) -> Option<String> {
-        if self.loot_table.is_some() {
-            return self.loot_table.clone();
-        }
-        let id = wafer_data::registry::ENTITY_TYPE[self.entity.entity_type as usize];
-        Some(format!("minecraft:entities/{}", id.trim_start_matches("minecraft:")))
-    }
-
     pub fn save(&self, out: &mut Vec<(String, Nbt)>) {
         let living = &self.living;
         out.push(("Health".into(), Nbt::Float(self.health)));
