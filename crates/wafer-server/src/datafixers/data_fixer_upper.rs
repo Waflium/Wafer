@@ -12,12 +12,24 @@ use super::value::{self, Value};
 
 struct Plan {
     steps: Vec<Step>,
+    segments: Vec<Segment>,
     new_type: Arc<Type>,
 }
 
 struct Step {
     rule: Arc<EverywhereRule>,
     ty: Arc<Type>,
+}
+
+enum Segment {
+    Single(usize),
+    Fused(FusedRun),
+}
+
+struct FusedRun {
+    ty: Arc<Type>,
+    rules: Vec<Arc<EverywhereRule>>,
+    clusters: Vec<(Arc<RecursiveTypeFamily>, Vec<Vec<usize>>)>,
 }
 
 pub struct DataFixerUpper {
@@ -42,8 +54,12 @@ impl DataFixerUpper {
             error!("{}", decoded.error.unwrap_or_default());
             return input;
         };
-        for step in plan.steps.iter() {
-            if let Err(message) = apply_everywhere(&step.ty, &mut value, &step.rule) {
+        for segment in plan.segments.iter() {
+            let result = match segment {
+                Segment::Single(index) => apply_everywhere(&plan.steps[*index].ty, &mut value, &plan.steps[*index].rule),
+                Segment::Fused(run) => apply_fused(&run.ty, &mut value, run),
+            };
+            if let Err(message) = result {
                 error!("{message}");
                 return input;
             }
@@ -85,7 +101,8 @@ impl DataFixerUpper {
                 }
             }
         }
-        let plan = Arc::new(Plan { steps, new_type: current });
+        let segments = build_segments(&steps);
+        let plan = Arc::new(Plan { steps, segments, new_type: current });
         self.plans.lock().unwrap().insert(key, plan.clone());
         plan
     }
@@ -172,6 +189,127 @@ fn layer_everywhere(ty: &Arc<Type>, value: &mut Value, rule: &EverywhereRule) ->
     }
     let ty = apply(ty, value, rule)?;
     for_each_child(&ty, value, &mut |child_type, child| layer_everywhere(child_type, child, rule))
+}
+
+fn type_matches(ty: &Arc<Type>, rule_type: &Arc<Type>) -> bool {
+    if matches!(&**ty, Type::RecursivePoint(..)) {
+        return false;
+    }
+    if equals(rule_type, ty, true) {
+        return true;
+    }
+    match &**ty {
+        Type::Named(_, element) | Type::Field(_, element) | Type::Hook(element, _, _) | Type::List(element) => type_matches(element, rule_type),
+        Type::Product(first, second) | Type::Sum(first, second) | Type::CompoundList(first, second) => type_matches(first, rule_type) || type_matches(second, rule_type),
+        Type::TaggedChoice(choice) => choice.types.iter().any(|(_, element)| type_matches(element, rule_type)),
+        _ => false,
+    }
+}
+
+fn collect_families(ty: &Arc<Type>, families: &mut Vec<Arc<RecursiveTypeFamily>>) {
+    match &**ty {
+        Type::RecursivePoint(family, _) => {
+            if !families.iter().any(|known| Arc::ptr_eq(known, family)) {
+                families.push(family.clone());
+            }
+        }
+        Type::Named(_, element) | Type::Field(_, element) | Type::Hook(element, _, _) | Type::List(element) => collect_families(element, families),
+        Type::Product(first, second) | Type::Sum(first, second) | Type::CompoundList(first, second) => {
+            collect_families(first, families);
+            collect_families(second, families);
+        }
+        Type::TaggedChoice(choice) => choice.types.iter().for_each(|(_, element)| collect_families(element, families)),
+        _ => {}
+    }
+}
+
+fn preserves_type(step: &Step) -> bool {
+    Arc::ptr_eq(&step.rule.ty, &step.rule.new_type)
+}
+
+fn is_fold_only(step: &Step) -> bool {
+    !type_matches(&step.ty, &step.rule.ty)
+}
+
+fn build_segments(steps: &[Step]) -> Vec<Segment> {
+    let mut segments = Vec::new();
+    let mut index = 0;
+    while index < steps.len() {
+        let mut end = index + 1;
+        if is_fold_only(&steps[index]) {
+            while end < steps.len() && preserves_type(&steps[end - 1]) && Arc::ptr_eq(&steps[end].ty, &steps[index].ty) && is_fold_only(&steps[end]) {
+                end += 1;
+            }
+        }
+        if end - index > 1 {
+            let rules: Vec<Arc<EverywhereRule>> = steps[index..end].iter().map(|step| step.rule.clone()).collect();
+            let mut families = Vec::new();
+            collect_families(&steps[index].ty, &mut families);
+            let clusters = families.into_iter().map(|family| (family.clone(), fuse_clusters(&family, &rules))).collect();
+            segments.push(Segment::Fused(FusedRun { ty: steps[index].ty.clone(), rules, clusters }));
+        } else {
+            segments.push(Segment::Single(index));
+        }
+        index = end;
+    }
+    segments
+}
+
+fn fuse_clusters(family: &Arc<RecursiveTypeFamily>, rules: &[Arc<EverywhereRule>]) -> Vec<Vec<usize>> {
+    let mut clusters: Vec<Vec<usize>> = Vec::new();
+    let mut accumulated: Vec<bool> = Vec::new();
+    for (index, rule) in rules.iter().enumerate() {
+        let set: Vec<bool> = (0..family.size()).map(|member| type_matches(family.unfold(member), &rule.ty)).collect();
+        if !set.contains(&true) {
+            continue;
+        }
+        let fusable = !clusters.is_empty() && {
+            let same = accumulated == set && set.iter().filter(|matched| **matched).count() == 1;
+            let different = !accumulated.iter().zip(&set).any(|(a, b)| *a && *b);
+            same || different
+        };
+        if fusable {
+            clusters.last_mut().unwrap().push(index);
+            accumulated = accumulated.iter().zip(&set).map(|(a, b)| *a || *b).collect();
+        } else {
+            clusters.push(vec![index]);
+            accumulated = set;
+        }
+    }
+    clusters
+}
+
+fn apply_fused(ty: &Arc<Type>, value: &mut Value, run: &FusedRun) -> Result<(), String> {
+    if let Type::RecursivePoint(family, index) = &**ty {
+        return fold_fused(family, *index, value, run);
+    }
+    for_each_child(ty, value, &mut |child_type, child| apply_fused(child_type, child, run))
+}
+
+fn fold_fused(family: &Arc<RecursiveTypeFamily>, index: usize, value: &mut Value, run: &FusedRun) -> Result<(), String> {
+    match run.clusters.iter().find(|(known, _)| Arc::ptr_eq(known, family)) {
+        Some((_, clusters)) => {
+            for cluster in clusters {
+                fold_cluster(family, index, value, &run.rules, cluster)?;
+            }
+            Ok(())
+        }
+        None => {
+            for rule in &run.rules {
+                fold(family, index, value, rule)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+fn fold_cluster(family: &Arc<RecursiveTypeFamily>, index: usize, value: &mut Value, rules: &[Arc<EverywhereRule>], cluster: &[usize]) -> Result<(), String> {
+    let layer = family.unfold(index).clone();
+    for_each_recursion_point(&layer, value, &mut |family, index, child| fold_cluster(family, index, child, rules, cluster))?;
+    for rule in cluster {
+        layer_everywhere(&layer, value, &rules[*rule])?;
+    }
+    Ok(())
 }
 
 fn for_each_recursion_point(

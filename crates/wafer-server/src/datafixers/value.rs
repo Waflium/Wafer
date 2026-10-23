@@ -238,6 +238,9 @@ pub fn encode(ty: &Arc<Type>, value: &Value, prefix: Option<Nbt>) -> DataResult<
         (Type::Hook(element, _, post_write), value) => encode(element, value, prefix).map(|result| post_write(Dynamic::of(result)).value),
         (Type::Field(name, element), value) => {
             let encoded = encode_start(element, value);
+            if encoded.value.is_none() {
+                return DataResult { value: None, error: encoded.error };
+            }
             let error = encoded.error.clone();
             let mut values = Vec::new();
             if let Some(Some(encoded)) = encoded.value {
@@ -254,39 +257,43 @@ pub fn encode(ty: &Arc<Type>, value: &Value, prefix: Option<Nbt>) -> DataResult<
         (Type::List(element), Value::List(values)) => {
             let mut encoded = Vec::new();
             let mut error = None;
+            let mut lost = false;
             for value in values {
                 let result = encode_start(element, value);
                 error = combine(error, result.error);
+                lost |= result.value.is_none();
                 if let Some(Some(tag)) = result.value {
                     encoded.push(tag);
                 }
             }
             let built = merge_to_list(prefix, encoded);
-            DataResult { value: built.value, error: combine(error, built.error) }
+            DataResult { value: if lost { None } else { built.value }, error: combine(error, built.error) }
         }
         (Type::CompoundList(key, element), Value::CompoundList(entries)) => {
             let mut encoded = Vec::new();
             let mut error = None;
+            let mut lost = false;
             for (key_value, entry_value) in entries {
                 let key_result = encode_start(key, key_value);
                 let value_result = encode_start(element, entry_value);
                 error = combine(error, combine(key_result.error, value_result.error));
+                lost |= key_result.value.is_none() || value_result.value.is_none();
                 if let (Some(Some(Nbt::String(key))), Some(Some(value))) = (key_result.value, value_result.value) {
                     encoded.push((key, value));
                 }
             }
             let built = merge_to_map(prefix, encoded);
-            DataResult { value: built.value, error: combine(error, built.error) }
+            DataResult { value: if lost { None } else { built.value }, error: combine(error, built.error) }
         }
         (Type::TaggedChoice(choice), Value::Choice(key, inner)) => {
-            let Some(choice_type) = choice.get(key) else { return DataResult { value: Some(prefix), error: Some(format!("Unsupported key: {key}")) } };
+            let Some(choice_type) = choice.get(key) else { return DataResult { value: None, error: Some(format!("Unsupported key: {key}")) } };
             let encoded = encode_start(choice_type, inner);
             let mut values = Vec::new();
-            let mut error = encoded.error.clone();
+            let error = encoded.error.clone();
             match encoded.value {
                 Some(Some(Nbt::Compound(entries))) => values.extend(entries),
-                Some(other) => error = combine(error, Some(not_a_map(&other))),
-                None => {}
+                Some(other) => return DataResult { value: None, error: combine(error, Some(not_a_map(&other))) },
+                None => return DataResult { value: None, error },
             }
             put(&mut values, &choice.name, Nbt::String(key.clone()));
             let built = merge_to_map(prefix, values);

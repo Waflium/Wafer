@@ -1,4 +1,5 @@
-use std::sync::{Arc, OnceLock};
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
 use super::dsl::{ConstType, HookFunction, TypeTemplate};
 use super::schemas::schema::Schema;
@@ -155,31 +156,65 @@ pub fn and_all(types: Vec<Arc<Type>>) -> Arc<Type> {
     types.fold(last, |result, ty| and(ty, result))
 }
 
+type FamilyPair = (usize, usize);
+
+type FamilyEqualityCache = HashMap<FamilyPair, (Arc<RecursiveTypeFamily>, Arc<RecursiveTypeFamily>, bool)>;
+
+static FAMILY_EQUALITY: LazyLock<Mutex<FamilyEqualityCache>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
 pub fn equals(a: &Arc<Type>, b: &Arc<Type>, ignore_recursion_points: bool) -> bool {
+    equals_assuming(a, b, ignore_recursion_points, &mut Vec::new())
+}
+
+fn equals_assuming(a: &Arc<Type>, b: &Arc<Type>, ignore_recursion_points: bool, assumed: &mut Vec<FamilyPair>) -> bool {
     if Arc::ptr_eq(a, b) {
         return true;
     }
     match (&**a, &**b) {
         (Type::Const(x), Type::Const(y)) => x == y,
         (Type::Remainder, Type::Remainder) | (Type::EmptyPart, Type::EmptyPart) => true,
-        (Type::Named(n1, e1), Type::Named(n2, e2)) | (Type::Field(n1, e1), Type::Field(n2, e2)) => n1 == n2 && equals(e1, e2, ignore_recursion_points),
+        (Type::Named(n1, e1), Type::Named(n2, e2)) | (Type::Field(n1, e1), Type::Field(n2, e2)) => n1 == n2 && equals_assuming(e1, e2, ignore_recursion_points, assumed),
         (Type::Product(a1, b1), Type::Product(a2, b2)) | (Type::Sum(a1, b1), Type::Sum(a2, b2)) | (Type::CompoundList(a1, b1), Type::CompoundList(a2, b2)) => {
-            equals(a1, a2, ignore_recursion_points) && equals(b1, b2, ignore_recursion_points)
+            equals_assuming(a1, a2, ignore_recursion_points, assumed) && equals_assuming(b1, b2, ignore_recursion_points, assumed)
         }
-        (Type::List(e1), Type::List(e2)) => equals(e1, e2, ignore_recursion_points),
+        (Type::List(e1), Type::List(e2)) => equals_assuming(e1, e2, ignore_recursion_points, assumed),
         (Type::TaggedChoice(c1), Type::TaggedChoice(c2)) => {
             Arc::ptr_eq(c1, c2)
                 || (c1.name == c2.name
                     && c1.key_type == c2.key_type
                     && c1.types.len() == c2.types.len()
-                    && c1.types.iter().all(|(key, ty)| c2.get(key).is_some_and(|other| equals(ty, other, ignore_recursion_points))))
+                    && c1.types.iter().all(|(key, ty)| c2.get(key).is_some_and(|other| equals_assuming(ty, other, ignore_recursion_points, assumed))))
         }
         (Type::Hook(e1, pre1, post1), Type::Hook(e2, pre2, post2)) => {
-            std::ptr::fn_addr_eq(*pre1, *pre2) && std::ptr::fn_addr_eq(*post1, *post2) && equals(e1, e2, ignore_recursion_points)
+            std::ptr::fn_addr_eq(*pre1, *pre2) && std::ptr::fn_addr_eq(*post1, *post2) && equals_assuming(e1, e2, ignore_recursion_points, assumed)
         }
-        (Type::RecursivePoint(f1, i1), Type::RecursivePoint(f2, i2)) => (ignore_recursion_points || Arc::ptr_eq(f1, f2)) && i1 == i2,
+        (Type::RecursivePoint(f1, i1), Type::RecursivePoint(f2, i2)) => i1 == i2 && (ignore_recursion_points || families_equal(f1, f2, assumed)),
         _ => false,
     }
+}
+
+fn families_equal(f1: &Arc<RecursiveTypeFamily>, f2: &Arc<RecursiveTypeFamily>, assumed: &mut Vec<FamilyPair>) -> bool {
+    if Arc::ptr_eq(f1, f2) {
+        return true;
+    }
+    let key = (Arc::as_ptr(f1) as usize, Arc::as_ptr(f2) as usize);
+    if assumed.contains(&key) {
+        return true;
+    }
+    let outermost = assumed.is_empty();
+    if outermost && let Some((_, _, equal)) = FAMILY_EQUALITY.lock().unwrap().get(&key) {
+        return *equal;
+    }
+    let equal = f1.size() == f2.size() && {
+        assumed.push(key);
+        let equal = (0..f1.size()).all(|index| equals_assuming(f1.unfold(index), f2.unfold(index), false, assumed));
+        assumed.pop();
+        equal
+    };
+    if outermost {
+        FAMILY_EQUALITY.lock().unwrap().insert(key, (f1.clone(), f2.clone(), equal));
+    }
+    equal
 }
 
 #[cfg(test)]
