@@ -13,3 +13,6 @@ wafer-protocol = { path = "crates/wafer-protocol" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std", "signal", "sync", "time"] }
 serde_json = "1"
 anyhow = "1"
+
+[profile.release]
+debug = "line-tables-only"

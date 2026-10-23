@@ -120,6 +120,7 @@ fn resolve(name: &str) -> Result<&'static str, String> {
 pub fn main(args: Vec<String>) {
     std::panic::set_hook(Box::new(|info| {
         if std::thread::current().name() == Some("Server thread") {
+            crate::server::capture_panic_frames();
             return;
         }
         let message = info.payload().downcast_ref::<String>().map(String::as_str).or_else(|| info.payload().downcast_ref::<&str>().copied()).unwrap_or("");
