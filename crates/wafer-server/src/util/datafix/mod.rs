@@ -8,6 +8,8 @@ pub mod schemas;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_from_1022;
+#[cfg(test)]
 mod tests_from_1456;
 #[cfg(test)]
 mod tests_from_3500;
