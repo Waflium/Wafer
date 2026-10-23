@@ -36,7 +36,7 @@ impl PositionPredicate {
 pub struct LocationPredicate {
     position: Option<PositionPredicate>,
     biomes: Option<HolderSet>,
-    structures: Option<Vec<String>>,
+    structures: Option<HolderSet>,
     dimension: Option<String>,
     smokey: Option<bool>,
     light: Option<LightPredicate>,
@@ -51,7 +51,7 @@ impl LocationPredicate {
         Ok(LocationPredicate {
             position: codec::decode_optional(tag, "position", PositionPredicate::decode)?,
             biomes: codec::decode_optional(tag, "biomes", |t| HolderSet::decode("minecraft:worldgen/biome", t))?,
-            structures: codec::decode_optional(tag, "structures", |t| codec::compact_list_of(t, |s| Ok(codec::string(s)?.to_string())))?,
+            structures: codec::decode_optional(tag, "structures", |t| HolderSet::decode("minecraft:worldgen/structure", t))?,
             dimension: codec::decode_optional(tag, "dimension", codec::identifier)?,
             smokey: codec::decode_optional(tag, "smokey", codec::bool_value)?,
             light: codec::decode_optional(tag, "light", LightPredicate::decode)?,
@@ -73,7 +73,7 @@ impl LocationPredicate {
         if self.biomes.as_ref().is_some_and(|biomes| !(loaded && biomes.contains(level.get_biome(pos).0 as i32))) {
             return false;
         }
-        if self.structures.is_some() {
+        if self.structures.as_ref().is_some_and(|structures| !(loaded && level.get_structure_with_piece_at(pos, &|structure| structures.contains(structure.0 as i32)).is_some())) {
             return false;
         }
         if self.smokey.is_some_and(|smokey| !(loaded && smokey == campfire_block::is_smokey_pos(level, pos))) {
