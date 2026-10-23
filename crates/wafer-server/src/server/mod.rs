@@ -39,7 +39,7 @@ use wafer_core::random::{LegacyRandomSource, RandomSource};
 
 use wafer_core::BlockPos;
 use wafer_data::packets::play::{clientbound, serverbound};
-use wafer_data::{DIMENSION_TYPES, SyncedRegistry, game_rule};
+use wafer_data::{SyncedRegistry, game_rule};
 use wafer_protocol::nbt::{Nbt, text};
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
@@ -104,7 +104,7 @@ pub const THE_END: &str = "minecraft:the_end";
 
 fn create_level(config: &ServerConfig, world_dir: Option<&WorldDir>, dimension: &'static str, generator: ChunkGenerator, is_debug: bool, generate_structures: bool, seed: i64) -> ServerLevel {
     let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension).expect("a dimension type");
-    let dimension_type = &DIMENSION_TYPES[dimension_type_id as usize];
+    let dimension_type = &wafer_data::dimension_types()[dimension_type_id as usize];
     let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes));
     let mut chunks = ChunkCache::new(dimension_type, generator, storage);
     chunks.is_debug = is_debug;

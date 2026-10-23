@@ -2,6 +2,8 @@ use std::cell::Cell;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{LazyLock, RwLock};
 
+use crate::Tag;
+use std::sync::atomic::AtomicU64;
 use crate::{BUILTIN_REGISTRIES, FEATURES, PACKET_NAMES, STRUCTURES, SYNCED_REGISTRIES, TAGS, TRADE_SETS, TYPED_TAGS, VILLAGER_TRADES};
 
 static STRUCTURE_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| STRUCTURES.iter().map(|structure| structure.0).collect());
@@ -124,6 +126,24 @@ pub fn prepare_tags(tags: Vec<(String, Vec<(String, Vec<i32>)>)>) -> &'static [R
     prepared.leak()
 }
 
+static DYNAMIC_TAGS: RwLock<Vec<(&'static str, &'static Tag)>> = RwLock::new(Vec::new());
+
+pub fn dynamic_tag(registry: &'static str, name: &str) -> &'static Tag {
+    if let Some(tag) = TYPED_TAGS.iter().find(|(r, _)| *r == registry).and_then(|(_, tags)| tags.iter().copied().find(|t| t.name == name)) {
+        return tag;
+    }
+    let mut dynamic = DYNAMIC_TAGS.write().expect("dynamic tags");
+    if let Some((_, tag)) = dynamic.iter().find(|(r, t)| *r == registry && t.name == name) {
+        return tag;
+    }
+    let size = registry_entries(registry).map_or(0, <[&str]>::len) + 4096;
+    let bits: &'static [AtomicU64] = Box::leak((0..size.div_ceil(64)).map(|_| AtomicU64::new(0)).collect());
+    let tag: &'static Tag = Box::leak(Box::new(Tag::new(Box::leak(name.to_owned().into_boxed_str()), bits)));
+    tag.bind(self::tag(registry, name));
+    dynamic.push((registry, tag));
+    tag
+}
+
 pub fn bind_tags(bound: &'static [RegistryTags]) {
     if std::ptr::eq(bound, bound_tags()) {
         return;
@@ -134,7 +154,22 @@ pub fn bind_tags(bound: &'static [RegistryTags]) {
             tag.bind(registry_tags.iter().find(|t| t.0 == tag.name).map_or(&[], |t| t.1));
         }
     }
+    for (registry, tag) in DYNAMIC_TAGS.read().expect("dynamic tags").iter() {
+        let registry_tags = bound.iter().find(|r| r.registry == *registry).map_or(&[][..], |r| r.tags);
+        tag.bind(registry_tags.iter().find(|t| t.0 == tag.name).map_or(&[], |t| t.1));
+    }
     *BOUND_TAGS.write().expect("bound tags") = Some(bound);
+}
+
+static ACTIVE_DIMENSION_TYPES: AtomicPtr<Vec<DimensionType>> = AtomicPtr::new(std::ptr::null_mut());
+
+pub fn dimension_types() -> &'static [DimensionType] {
+    let active = ACTIVE_DIMENSION_TYPES.load(Ordering::Acquire);
+    if active.is_null() { crate::DIMENSION_TYPES } else { unsafe { &*active } }
+}
+
+pub fn set_dimension_types(dimension_types: Vec<DimensionType>) {
+    ACTIVE_DIMENSION_TYPES.store(Box::into_raw(Box::new(dimension_types)), Ordering::Release);
 }
 
 pub struct DimensionType {

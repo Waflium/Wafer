@@ -90,6 +90,33 @@ pub fn json_entries(registry: &str) -> &'static [(&'static str, &'static str)] {
     get(registry).map_or(&[], DataRegistry::json_entries)
 }
 
+fn leak(value: String) -> &'static str {
+    Box::leak(value.into_boxed_str())
+}
+
+fn dimension_type(name: &'static str, v: &Value) -> wafer_data::DimensionType {
+    let int = |key: &str| v[key].as_i64().unwrap_or(0);
+    let infiniburn = v["infiniburn"].as_str().unwrap_or("").trim_start_matches('#');
+    wafer_data::DimensionType {
+        name,
+        min_y: int("min_y") as i32,
+        height: int("height") as u32,
+        logical_height: int("logical_height") as u32,
+        coordinate_scale: v["coordinate_scale"].as_f64().unwrap_or(1.0),
+        has_skylight: v["has_skylight"].as_bool().unwrap_or(false),
+        has_ceiling: v["has_ceiling"].as_bool().unwrap_or(false),
+        has_ender_dragon_fight: v["has_ender_dragon_fight"].as_bool().unwrap_or(false),
+        has_fixed_time: v["has_fixed_time"].as_bool().unwrap_or(false),
+        ambient_light: v["ambient_light"].as_f64().unwrap_or(0.0) as f32,
+        infiniburn: wafer_data::dynamic_tag("minecraft:block", infiniburn),
+        default_clock: v["default_clock"].as_str().map(|clock| leak(clock.to_owned())),
+        attributes: leak(v.get("attributes").map_or("{}".to_owned(), Value::to_string)),
+        timelines: leak(v["timelines"].to_string()),
+        monster_spawn_light_level: leak(v["monster_spawn_light_level"].to_string()),
+        monster_spawn_block_light_limit: int("monster_spawn_block_light_limit") as i32,
+    }
+}
+
 fn file_key(id: &str) -> (Vec<u16>, Vec<u16>) {
     let (namespace, path) = id.split_once(':').unwrap_or(("minecraft", id));
     (format!("{path}.json").encode_utf16().collect(), namespace.encode_utf16().collect())
@@ -139,6 +166,9 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
         registries.insert(builtin.name, DataRegistry { name: builtin.name, to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) });
     }
     wafer_data::set_synced_registries(synced);
+    let dimension_registry = &registries["minecraft:dimension_type"];
+    let dimension_entries = wafer_data::SyncedRegistry::get("minecraft:dimension_type").entries;
+    wafer_data::set_dimension_types(dimension_entries.iter().zip(&dimension_registry.elements).map(|(&name, json)| dimension_type(name, json)).collect());
     let registries: &'static HashMap<&'static str, DataRegistry> = Box::leak(Box::new(registries));
     BIOMES.store((&registries["minecraft:worldgen/biome"] as *const DataRegistry).cast_mut(), Ordering::Release);
     ACTIVE.store((registries as *const HashMap<&'static str, DataRegistry>).cast_mut(), Ordering::Release);

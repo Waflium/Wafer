@@ -1118,7 +1118,8 @@ fn tags(
                 .with_context(|| format!("resolving tag #{tag} of {registry}"))?;
             writeln!(out, "({tag:?}, &{values:?}),")?;
             if module.is_some() {
-                let mut bits = vec![0u64; ids.len().div_ceil(64)];
+                let capacity = if synced.contains_key(registry) { ids.len() + 4096 } else { ids.len() };
+                let mut bits = vec![0u64; capacity.div_ceil(64)];
                 for v in &values {
                     bits[*v as usize / 64] |= 1 << (*v as usize % 64);
                 }
