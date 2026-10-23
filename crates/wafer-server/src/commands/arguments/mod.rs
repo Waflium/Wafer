@@ -931,6 +931,7 @@ pub fn list_suggestions(
         ArgumentType::BlockPredicate => return blocks::block_state_parser::fill_suggestions(&builder, true, true),
         ArgumentType::ItemStack => return item::item_parser::fill_suggestions(&builder),
         ArgumentType::ItemPredicate => return item::item_predicate_argument::fill_suggestions(&builder),
+        ArgumentType::NbtTag | ArgumentType::Component | ArgumentType::Style => return crate::nbt::parse_for_suggestions(&builder),
         ArgumentType::Particle => shared_suggestion_provider::suggest_resource(wafer_data::registry::PARTICLE_TYPE.iter(), &mut builder),
         ArgumentType::Feature => shared_suggestion_provider::suggest_resource(crate::core::data_registries::json_entries("minecraft:worldgen/feature").iter().map(|f| f.0), &mut builder),
         ArgumentType::Dialog => shared_suggestion_provider::suggest_resource(wafer_data::SyncedRegistry::get("minecraft:dialog").entries.iter(), &mut builder),

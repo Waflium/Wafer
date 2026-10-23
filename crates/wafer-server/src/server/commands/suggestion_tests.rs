@@ -145,6 +145,78 @@ fn nbt_paths_have_no_suggestions() {
 }
 
 #[test]
+fn snbt_arguments_suggest_through_the_packrat_parser() {
+    let server = server();
+    let numbers = &[".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S", "u", "U"];
+    let cases: &[(&str, usize, &[&str])] = &[
+        ("/tellraw @s {", 13, &["\"", "'", "}"]),
+        ("/tellraw @s {\"", 14, &["\"", "'", "\\"]),
+        ("/tellraw @s {\"a\"", 16, &[":"]),
+        ("/tellraw @s {\"a\":1,", 19, &["\"", "'", "}"]),
+        ("/tellraw @s {a", 14, &[":"]),
+        ("/tellraw @s {a:1b", 17, &[",", "}"]),
+        ("/tellraw @s {a:1s", 17, &[",", "b", "B", "i", "I", "l", "L", "s", "S", "}"]),
+        ("/tellraw @s {a:1u", 17, &["b", "B", "i", "I", "l", "L", "s", "S"]),
+        ("/tellraw @s {a:0x", 17, &["(", "bool", "false", "true", "uuid"]),
+        ("/tellraw @s {a:0xF", 18, &[",", "b", "B", "i", "I", "l", "L", "s", "S", "u", "U", "}"]),
+        ("/tellraw @s {a:01", 17, &["(", ".", "bool", "d", "D", "e", "E", "f", "F", "false", "true", "uuid"]),
+        ("/tellraw @s {a:1.", 17, &[",", "d", "D", "e", "E", "f", "F", "}"]),
+        ("/tellraw @s {a:1.5e", 19, &["+", "-"]),
+        ("/tellraw @s {a:1.5e5", 20, &[",", "d", "D", "f", "F", "}"]),
+        ("/tellraw @s {a:-", 16, &["(", ".", "0", "bool", "false", "true", "uuid"]),
+        ("/tellraw @s {a:[", 16, &["]", "B", "I", "L"]),
+        ("/tellraw @s {a:[1,", 18, &["]"]),
+        ("/tellraw @s {a:[B", 17, &["(", ",", ";", "]"]),
+        ("/tellraw @s {a:[B;", 18, &["+", "-", "0", "]"]),
+        ("/tellraw @s {a:[B;1", 19, &[",", "]", "b", "B", "i", "I", "l", "L", "s", "S", "u", "U"]),
+        ("/tellraw @s {a:[B;1b", 20, &[",", "]"]),
+        ("/tellraw @s {a:[X", 17, &["(", ",", "]"]),
+        ("/tellraw @s {a:bool", 19, &["(", ",", "}"]),
+        ("/tellraw @s {a:bool(", 20, &[")"]),
+        ("/tellraw @s {a:bool(1)", 22, &[",", "}"]),
+        ("/tellraw @s {a:uuid(\"", 21, &["\"", "'", "\\"]),
+        ("/tellraw @s {a:foo(1,", 21, &[")"]),
+        ("/tellraw @s {a:tru", 18, &["(", ",", "}"]),
+        ("/tellraw @s {a:\"x\\", 18, &["\"", "'", "\\", "b", "f", "n", "N", "r", "s", "t", "u", "U", "x"]),
+        ("/tellraw @s {a:\"x\\N", 19, &["{"]),
+        ("/tellraw @s {a:\"x\\N{a", 21, &["}"]),
+        ("/tellraw @s {a:'say \"", 21, &["\"", "'", "\\"]),
+        ("/tellraw @s {\"\":1", 17, &[".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S", "u", "U"]),
+        ("/tellraw @s {a:{b:1},c", 22, &[":"]),
+        ("/tellraw @s {a:-abc", 19, &["(", "bool", "false", "true", "uuid"]),
+        ("/tellraw @s {a:1.5fx", 0, &[]),
+        ("/tellraw @s {a:0x1uL", 20, &[",", "}"]),
+        ("/tellraw @s {a:9999999999", 25, numbers),
+        ("/tellraw @s [", 13, &["]", "B", "I", "L"]),
+        ("/tellraw @s [B;1,2,3]", 0, &[]),
+        ("/tellraw @s [ B ;", 17, &["+", "-", "0", "]"]),
+        ("/tellraw @s tr", 14, &["("]),
+        ("/tellraw @s 0", 13, &[".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S", "u", "U", "x", "X"]),
+        ("/tellraw @s 1.0", 15, &["d", "D", "e", "E", "f", "F"]),
+        ("/tellraw @s 1b", 0, &[]),
+        ("/tellraw @s -x", 14, &["(", "bool", "false", "true", "uuid"]),
+        ("/tellraw @s \"abc\\", 17, &["\"", "'", "\\", "b", "f", "n", "N", "r", "s", "t", "u", "U", "x"]),
+        ("/tellraw @s {}", 0, &[]),
+        ("/tellraw @s ", 0, &[]),
+        ("/title @s title {", 17, &["\"", "'", "}"]),
+        ("/title @s title {a:bool(", 24, &[")"]),
+        ("/title @s subtitle [", 20, &["]", "B", "I", "L"]),
+        ("/data modify entity @s Inventory append value {a:[B;", 52, &["+", "-", "0", "]"]),
+        ("/data modify storage a:b c set value {\"", 39, &["\"", "'", "\\"]),
+        ("/data modify block ~ ~ ~ Items merge value {a:1", 47, &[",", ".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S", "u", "U", "}"]),
+        ("/scoreboard players display numberformat @s o styled {", 54, &["\"", "'", "}"]),
+        ("/bossbar set a:b name {a:1", 26, &[",", ".", "b", "B", "d", "D", "e", "E", "f", "F", "i", "I", "l", "L", "s", "S", "u", "U", "}"]),
+        ("/data merge entity @s {", 0, &[]),
+        ("/data get entity @s [", 0, &[]),
+        ("/summon pig ~ ~ ~ {\"", 0, &[]),
+        ("/execute if data storage a:b c {a:1", 0, &[]),
+    ];
+    for &(command, start, expected) in cases {
+        assert_eq!(suggest(&server, command), (start, start, texts(expected)), "{command}");
+    }
+}
+
+#[test]
 fn heightmaps_suggest_the_kept_types() {
     let server = server();
     assert_eq!(suggest(&server, "/execute positioned over "), (25, 25, ["motion_blocking", "motion_blocking_no_leaves", "ocean_floor", "world_surface"].map(String::from).to_vec()));

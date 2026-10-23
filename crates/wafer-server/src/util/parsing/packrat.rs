@@ -38,6 +38,7 @@ pub enum SuggestionSupplier {
     Empty,
     Characters(Vec<char>),
     Resources(ResourceKind),
+    BuiltinIds,
 }
 
 struct ErrorEntry {

@@ -1,7 +1,9 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::brigadier::{DynamicCommandExceptionType, SimpleCommandExceptionType, tr, utf16};
-use crate::util::parsing::packrat::{Delayed, ParseState};
+use crate::util::parsing::packrat::{Delayed, ParseState, Reason, SuggestionSupplier};
+
+pub const BUILTIN_IDS: [&str; 4] = ["false", "true", "bool", "uuid"];
 
 static ERROR_NUMBER_PARSE_FAILURE: DynamicCommandExceptionType = DynamicCommandExceptionType(|m| tr("snbt.parser.number_parse_failure", vec![m]));
 static ERROR_EXPECTED_HEX_ESCAPE: DynamicCommandExceptionType = DynamicCommandExceptionType(|l| tr("snbt.parser.expected_hex_escape", vec![l]));
@@ -661,7 +663,7 @@ fn unquoted_string_or_builtin(s: &mut State) -> Option<Nbt> {
     }
     let first = contents.encode_utf16().next().unwrap();
     if !is_allowed_to_start_unquoted_string(first) {
-        s.store_delayed(s.mark(), simple(&ERROR_INVALID_UNQUOTED_START));
+        s.store_suggesting(s.mark(), SuggestionSupplier::BuiltinIds, Reason::Delayed(simple(&ERROR_INVALID_UNQUOTED_START)));
         return None;
     }
     if let Some(arguments) = arguments {

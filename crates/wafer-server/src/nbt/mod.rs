@@ -8,7 +8,9 @@ use std::cell::Cell;
 use wafer_protocol::nbt::{Nbt, double_tag_value, float_tag_value, java_hash_map_order};
 
 use crate::commands::brigadier::{CommandSyntaxException, SimpleCommandExceptionType, StringReader};
-use crate::util::parsing::packrat::ParseState;
+use crate::commands::shared_suggestion_provider;
+use crate::commands::suggestion::{Suggestions, SuggestionsBuilder};
+use crate::util::parsing::packrat::{ParseState, SuggestionSupplier};
 
 pub static ERROR_TRAILING_DATA: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.nbt.trailing");
 pub static ERROR_EXPECTED_COMPOUND: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.nbt.expected.compound");
@@ -17,6 +19,27 @@ pub fn parse_as_argument(reader: &mut StringReader) -> Result<Nbt, CommandSyntax
     let mut state = ParseState::new(reader);
     let result = snbt_grammar::literal(&mut state);
     state.finish(result)
+}
+
+pub fn parse_for_suggestions(builder: &SuggestionsBuilder) -> Suggestions {
+    let input = builder.input().to_vec();
+    let mut reader = StringReader::new(&input);
+    reader.cursor = builder.start();
+    let mut state = ParseState::for_suggestions(&mut reader);
+    let result = snbt_grammar::literal(&mut state);
+    let (cursor, entries) = state.finish_suggestions(&result);
+    if entries.is_empty() {
+        return Suggestions::empty();
+    }
+    let mut offset = builder.create_offset(cursor);
+    for entry in entries {
+        match entry {
+            SuggestionSupplier::Characters(characters) => shared_suggestion_provider::suggest(characters.iter().map(char::to_string), &mut offset),
+            SuggestionSupplier::BuiltinIds => shared_suggestion_provider::suggest(snbt_grammar::BUILTIN_IDS, &mut offset),
+            SuggestionSupplier::Empty | SuggestionSupplier::Resources(_) => {}
+        }
+    }
+    offset.build()
 }
 
 pub fn parse_compound_as_argument(reader: &mut StringReader) -> Result<Nbt, CommandSyntaxException> {

@@ -47,7 +47,7 @@ pub fn parse_for_suggestions<C: Context>(builder: &SuggestionsBuilder, context: 
         match entry {
             SuggestionSupplier::Resources(kind) => shared_suggestion_provider::suggest_resource(context.list_resources(kind), &mut offset),
             SuggestionSupplier::Characters(characters) => shared_suggestion_provider::suggest(characters.iter().map(char::to_string), &mut offset),
-            SuggestionSupplier::Empty => {}
+            SuggestionSupplier::Empty | SuggestionSupplier::BuiltinIds => {}
         }
     }
     offset.build()

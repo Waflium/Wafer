@@ -259,7 +259,11 @@ async fn main() -> anyhow::Result<()> {
                 if ticks_loaded >= 20 && script_wait > 0 {
                     script_wait -= 1;
                 } else if ticks_loaded >= 20 && let Some(line) = script.next() {
-                    lines.extend(line.split(';').map(str::trim));
+                    if line.starts_with("suggest ") {
+                        lines.push(line.as_str());
+                    } else {
+                        lines.extend(line.split(';').map(str::trim));
+                    }
                 }
                 for line in lines {
                     let words: Vec<&str> = line.split_whitespace().collect();
