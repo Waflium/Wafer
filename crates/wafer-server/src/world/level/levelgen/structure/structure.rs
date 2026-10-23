@@ -24,11 +24,11 @@ pub struct StructureHolder(pub u16);
 impl StructureHolder {
     pub fn by_name(name: &str) -> Option<StructureHolder> {
         let name = resource(name);
-        wafer_data::STRUCTURES.iter().position(|(n, _)| *n == name).map(|i| StructureHolder(i as u16))
+        crate::core::data_registries::json_entries("minecraft:worldgen/structure").iter().position(|(n, _)| *n == name).map(|i| StructureHolder(i as u16))
     }
 
     pub fn key(self) -> &'static str {
-        wafer_data::STRUCTURES[self.0 as usize].0
+        crate::core::data_registries::json_entries("minecraft:worldgen/structure")[self.0 as usize].0
     }
 
     pub fn value(self) -> &'static Structure {
@@ -36,12 +36,12 @@ impl StructureHolder {
     }
 
     pub fn all() -> impl Iterator<Item = StructureHolder> {
-        (0..wafer_data::STRUCTURES.len()).map(|i| StructureHolder(i as u16))
+        (0..crate::core::data_registries::json_entries("minecraft:worldgen/structure").len()).map(|i| StructureHolder(i as u16))
     }
 }
 
 static STRUCTURES: LazyLock<Vec<Structure>> = LazyLock::new(|| {
-    wafer_data::STRUCTURES
+    crate::core::data_registries::json_entries("minecraft:worldgen/structure")
         .iter()
         .map(|(name, source)| {
             let json: Value = serde_json::from_str(source).expect("structure json");

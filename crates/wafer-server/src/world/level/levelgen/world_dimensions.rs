@@ -29,7 +29,7 @@ impl WorldDimensions {
     }
 
     pub fn from_preset(preset: &str, seed: i64) -> Result<WorldDimensions, String> {
-        let json = wafer_data::WORLD_PRESETS.iter().find(|(name, _)| *name == preset).ok_or_else(|| format!("Unknown world preset {preset}"))?.1;
+        let json = crate::core::data_registries::json_entries("minecraft:worldgen/world_preset").iter().find(|(name, _)| *name == preset).ok_or_else(|| format!("Unknown world preset {preset}"))?.1;
         let json: Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
         WorldDimensions::from_json(&json["dimensions"], seed)
     }

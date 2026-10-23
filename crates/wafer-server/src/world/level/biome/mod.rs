@@ -169,7 +169,7 @@ pub struct MultiNoiseBiomeSource {
 
 impl MultiNoiseBiomeSource {
     pub fn from_preset(name: &str) -> Result<MultiNoiseBiomeSource, String> {
-        let source = wafer_data::BIOME_SOURCE_PARAMETER_LISTS.iter().find(|(n, _)| *n == name).ok_or_else(|| format!("unknown preset {name}"))?.1;
+        let source = crate::core::data_registries::json_entries("minecraft:worldgen/multi_noise_biome_source_parameter_list").iter().find(|(n, _)| *n == name).ok_or_else(|| format!("unknown preset {name}"))?.1;
         let json: Value = serde_json::from_str(source).map_err(|e| e.to_string())?;
         let preset = json.get("preset").and_then(Value::as_str).ok_or("preset")?;
         let report = wafer_data::BIOME_PARAMETERS.iter().find(|(n, _)| *n == preset).ok_or_else(|| format!("no parameters for {preset}"))?.1;

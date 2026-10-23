@@ -49,7 +49,7 @@ impl VillagerTrade {
     pub fn by_id(id: i32) -> &'static VillagerTrade {
         static TRADES: OnceLock<Vec<VillagerTrade>> = OnceLock::new();
         &TRADES.get_or_init(|| {
-            wafer_data::VILLAGER_TRADES
+            crate::core::data_registries::json_entries("minecraft:villager_trade")
                 .iter()
                 .map(|&(name, json)| {
                     let tag = crate::world::item::component::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));

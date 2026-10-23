@@ -50,16 +50,16 @@ pub const EMPTY: &str = "minecraft:empty";
 impl TemplatePoolHolder {
     pub fn by_name(name: &str) -> Option<TemplatePoolHolder> {
         let name = resource(name);
-        wafer_data::TEMPLATE_POOLS.binary_search_by(|(n, _)| (*n).cmp(name.as_str())).ok().map(|i| TemplatePoolHolder(i as u16))
+        crate::core::data_registries::json_entries("minecraft:worldgen/template_pool").iter().position(|(n, _)| *n == name.as_str()).map(|i| TemplatePoolHolder(i as u16))
     }
 
     pub fn key(self) -> &'static str {
-        wafer_data::TEMPLATE_POOLS[self.0 as usize].0
+        crate::core::data_registries::json_entries("minecraft:worldgen/template_pool")[self.0 as usize].0
     }
 
     pub fn value(self) -> &'static StructureTemplatePool {
         POOLS[self.0 as usize].get_or_init(|| {
-            let (name, source) = wafer_data::TEMPLATE_POOLS[self.0 as usize];
+            let (name, source) = crate::core::data_registries::json_entries("minecraft:worldgen/template_pool")[self.0 as usize];
             let json: Value = serde_json::from_str(source).expect("template pool json");
             StructureTemplatePool::parse(&json).unwrap_or_else(|e| panic!("template pool {name}: {e}"))
         })
@@ -70,7 +70,7 @@ impl TemplatePoolHolder {
     }
 }
 
-static POOLS: LazyLock<Vec<OnceLock<StructureTemplatePool>>> = LazyLock::new(|| (0..wafer_data::TEMPLATE_POOLS.len()).map(|_| OnceLock::new()).collect());
+static POOLS: LazyLock<Vec<OnceLock<StructureTemplatePool>>> = LazyLock::new(|| (0..crate::core::data_registries::json_entries("minecraft:worldgen/template_pool").len()).map(|_| OnceLock::new()).collect());
 
 pub struct StructureTemplatePool {
     templates: Vec<Arc<StructurePoolElement>>,

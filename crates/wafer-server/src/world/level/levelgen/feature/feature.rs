@@ -118,7 +118,7 @@ pub enum Feature {
 }
 
 static FEATURES: LazyLock<Vec<Feature>> = LazyLock::new(|| {
-    wafer_data::FEATURES
+    crate::core::data_registries::json_entries("minecraft:worldgen/feature")
         .iter()
         .map(|(name, json)| {
             let json: Value = serde_json::from_str(json).expect("feature json");
@@ -129,7 +129,7 @@ static FEATURES: LazyLock<Vec<Feature>> = LazyLock::new(|| {
 
 pub fn feature_index(name: &str) -> Option<u32> {
     let name = resource(name);
-    wafer_data::FEATURES.iter().position(|(n, _)| *n == name).map(|i| i as u32)
+    crate::core::data_registries::json_entries("minecraft:worldgen/feature").iter().position(|(n, _)| *n == name).map(|i| i as u32)
 }
 
 pub fn feature(name: &str) -> Option<&'static Feature> {

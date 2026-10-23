@@ -295,7 +295,7 @@ impl StructureProcessorList {
     }
 }
 
-static PROCESSOR_LISTS: LazyLock<Vec<OnceLock<StructureProcessorList>>> = LazyLock::new(|| (0..wafer_data::PROCESSOR_LISTS.len()).map(|_| OnceLock::new()).collect());
+static PROCESSOR_LISTS: LazyLock<Vec<OnceLock<StructureProcessorList>>> = LazyLock::new(|| (0..crate::core::data_registries::json_entries("minecraft:worldgen/processor_list").len()).map(|_| OnceLock::new()).collect());
 
 pub enum StructureProcessorListHolder {
     Reference(usize),
@@ -307,7 +307,7 @@ impl StructureProcessorListHolder {
         match json {
             Value::String(name) => {
                 let name = resource(name);
-                wafer_data::PROCESSOR_LISTS
+                crate::core::data_registries::json_entries("minecraft:worldgen/processor_list")
                     .iter()
                     .position(|(n, _)| *n == name)
                     .map(StructureProcessorListHolder::Reference)
@@ -320,7 +320,7 @@ impl StructureProcessorListHolder {
 
     pub fn to_nbt(&self) -> Nbt {
         match self {
-            StructureProcessorListHolder::Reference(index) => Nbt::String(wafer_data::PROCESSOR_LISTS[*index].0.to_owned()),
+            StructureProcessorListHolder::Reference(index) => Nbt::String(crate::core::data_registries::json_entries("minecraft:worldgen/processor_list")[*index].0.to_owned()),
             StructureProcessorListHolder::Direct(_) => Nbt::Compound(vec![("processors".to_owned(), Nbt::List(Vec::new()))]),
         }
     }
@@ -328,7 +328,7 @@ impl StructureProcessorListHolder {
     pub fn value(&self) -> &StructureProcessorList {
         match self {
             StructureProcessorListHolder::Reference(index) => PROCESSOR_LISTS[*index].get_or_init(|| {
-                let (name, source) = wafer_data::PROCESSOR_LISTS[*index];
+                let (name, source) = crate::core::data_registries::json_entries("minecraft:worldgen/processor_list")[*index];
                 let json: Value = serde_json::from_str(source).expect("processor list json");
                 StructureProcessorList::parse(&json).unwrap_or_else(|e| panic!("processor list {name}: {e}"))
             }),

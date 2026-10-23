@@ -31,7 +31,7 @@ impl TradeSet {
         static TRADE_SETS: OnceLock<HashMap<&'static str, TradeSet>> = OnceLock::new();
         TRADE_SETS
             .get_or_init(|| {
-                wafer_data::TRADE_SETS
+                crate::core::data_registries::json_entries("minecraft:trade_set")
                     .iter()
                     .map(|&(name, json)| {
                         let tag = crate::world::item::component::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));

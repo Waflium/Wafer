@@ -18,6 +18,11 @@ fn geysers_wait_erupt_and_go_dormant_again() {
     let mut server = testing::server();
     server.levels[0].chunks.chunk(ChunkPos::new(0, 0));
     run(&mut server, "forceload add 0 0");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !server.levels[0].chunks.is_ticking(ChunkPos::new(0, 0)) && std::time::Instant::now() < deadline {
+        server.levels[0].finish_chunk_work();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
     let pos = BlockPos::new(4, -61, 0);
     run(&mut server, "fill 3 -62 -1 5 -58 1 glass");
     run(&mut server, "setblock 4 -62 0 magma_block");

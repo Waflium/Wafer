@@ -26,7 +26,17 @@ pub fn builtin_synced_registries() -> &'static [SyncedRegistry] {
     SYNCED_REGISTRIES
 }
 
+static ACTIVE_DATA_REGISTRIES: AtomicPtr<Vec<(&'static str, &'static [&'static str])>> = AtomicPtr::new(std::ptr::null_mut());
+
+pub fn set_data_registry_entries(registries: Vec<(&'static str, &'static [&'static str])>) {
+    ACTIVE_DATA_REGISTRIES.store(Box::into_raw(Box::new(registries)), Ordering::Release);
+}
+
 pub fn registry_entries(name: &str) -> Option<&'static [&'static str]> {
+    let active = ACTIVE_DATA_REGISTRIES.load(Ordering::Acquire);
+    if !active.is_null() && let Some((_, entries)) = unsafe { &*active }.iter().find(|(registry, _)| *registry == name) {
+        return Some(entries);
+    }
     BUILTIN_REGISTRIES.iter().find(|r| r.0 == name).map(|r| r.1).or_else(|| synced_registries().iter().find(|r| r.name == name).map(|r| r.entries)).or_else(|| {
         match name {
             "minecraft:worldgen/structure" => Some(&STRUCTURE_NAMES[..]),

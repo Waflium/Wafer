@@ -12,7 +12,7 @@ pub struct PlacedFeature {
 }
 
 static PLACED_FEATURES: LazyLock<Vec<PlacedFeature>> = LazyLock::new(|| {
-    wafer_data::PLACED_FEATURES
+    crate::core::data_registries::json_entries("minecraft:worldgen/placed_feature")
         .iter()
         .map(|(name, json)| {
             let json: Value = serde_json::from_str(json).expect("placed feature json");
@@ -23,7 +23,7 @@ static PLACED_FEATURES: LazyLock<Vec<PlacedFeature>> = LazyLock::new(|| {
 
 pub fn placed_feature_index(name: &str) -> Option<u32> {
     let name = resource(name);
-    wafer_data::PLACED_FEATURES.iter().position(|(n, _)| *n == name).map(|i| i as u32)
+    crate::core::data_registries::json_entries("minecraft:worldgen/placed_feature").iter().position(|(n, _)| *n == name).map(|i| i as u32)
 }
 
 static INLINE_PLACED_FEATURES: Mutex<Vec<&'static PlacedFeature>> = Mutex::new(Vec::new());

@@ -155,7 +155,7 @@ impl StructurePoolElement {
             ]),
             StructurePoolElement::Feature { feature, projection } => Nbt::Compound(vec![
                 ("element_type".to_owned(), Nbt::String("minecraft:feature_pool_element".to_owned())),
-                ("feature".to_owned(), Nbt::String(wafer_data::PLACED_FEATURES[*feature as usize].0.to_owned())),
+                ("feature".to_owned(), Nbt::String(crate::core::data_registries::json_entries("minecraft:worldgen/placed_feature")[*feature as usize].0.to_owned())),
                 ("projection".to_owned(), Nbt::String(projection.get_name().to_owned())),
             ]),
             StructurePoolElement::Empty => Nbt::Compound(vec![("element_type".to_owned(), Nbt::String("minecraft:empty_pool_element".to_owned()))]),

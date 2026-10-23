@@ -96,7 +96,7 @@ impl MaterialParser {
             if let Some(rule) = self.rules.get(&name) {
                 return Ok(rule.clone());
             }
-            let rule = self.rule(&source(wafer_data::MATERIAL_RULES, &name)?, parser).map_err(|e| format!("{name}: {e}"))?;
+            let rule = self.rule(&source(crate::core::data_registries::json_entries("minecraft:worldgen/material_rule"), &name)?, parser).map_err(|e| format!("{name}: {e}"))?;
             self.rules.insert(name, rule.clone());
             return Ok(rule);
         }
@@ -133,7 +133,7 @@ impl MaterialParser {
             if let Some(condition) = self.conditions.get(&name) {
                 return Ok(condition.clone());
             }
-            let condition = self.condition(&source(wafer_data::MATERIAL_CONDITIONS, &name)?).map_err(|e| format!("{name}: {e}"))?;
+            let condition = self.condition(&source(crate::core::data_registries::json_entries("minecraft:worldgen/material_condition"), &name)?).map_err(|e| format!("{name}: {e}"))?;
             self.conditions.insert(name, condition.clone());
             return Ok(condition);
         }

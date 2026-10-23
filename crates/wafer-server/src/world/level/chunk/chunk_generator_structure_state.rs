@@ -72,7 +72,7 @@ impl ChunkGeneratorStructureState {
 
     fn generate_positions(&self, generator: &ChunkGenerator) -> Vec<Vec<StructureSetHolder>> {
         let possible_biomes = generator.possible_biomes();
-        let mut placements_for_structure = vec![Vec::new(); wafer_data::STRUCTURES.len()];
+        let mut placements_for_structure = vec![Vec::new(); crate::core::data_registries::json_entries("minecraft:worldgen/structure").len()];
         for &set in &self.possible_structure_sets {
             let structure_set = set.value();
             let mut has_any_placeable_structures = false;

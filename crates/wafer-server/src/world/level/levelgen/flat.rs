@@ -23,7 +23,7 @@ impl StructureOverrides {
     }
 
     fn from_strings<'a>(single: Option<&'a str>, list: Option<Vec<&'a str>>) -> Option<StructureOverrides> {
-        let structure_set = |id: &str| crate::resources::identifier::parse(id).ok().filter(|id| wafer_data::STRUCTURE_SETS.iter().any(|(name, _)| name == id));
+        let structure_set = |id: &str| crate::resources::identifier::parse(id).ok().filter(|id| crate::core::data_registries::json_entries("minecraft:worldgen/structure_set").iter().any(|(name, _)| name == id));
         match (single, list) {
             (Some(tag), _) if tag.starts_with('#') => crate::resources::identifier::parse(&tag[1..]).ok().map(StructureOverrides::Tag),
             (Some(id), _) => structure_set(id).map(|id| StructureOverrides::Direct(vec![id])),

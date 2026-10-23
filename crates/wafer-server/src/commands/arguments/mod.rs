@@ -839,7 +839,7 @@ pub fn list_suggestions(
             let tags = wafer_data::tags().iter().find(|r| r.registry == registry).map_or(&[][..], |r| r.tags);
             shared_suggestion_provider::suggest_resource_with_prefix(tags.iter().map(|t| t.0), &mut builder, "#");
             match registry.as_str() {
-                "minecraft:worldgen/structure" => shared_suggestion_provider::suggest_resource(wafer_data::STRUCTURES.iter().map(|s| s.0), &mut builder),
+                "minecraft:worldgen/structure" => shared_suggestion_provider::suggest_resource(crate::core::data_registries::json_entries("minecraft:worldgen/structure").iter().map(|s| s.0), &mut builder),
                 _ => shared_suggestion_provider::suggest_resource(wafer_data::registry_entries(registry).unwrap_or_default().iter(), &mut builder),
             }
         }
@@ -861,7 +861,7 @@ pub fn list_suggestions(
         ArgumentType::SlotSource => slot_source_argument::list_suggestions(&mut builder),
         ArgumentType::ItemSlot => slot_argument::list_suggestions(&mut builder),
         ArgumentType::Particle => shared_suggestion_provider::suggest_resource(wafer_data::registry::PARTICLE_TYPE.iter(), &mut builder),
-        ArgumentType::Feature => shared_suggestion_provider::suggest_resource(wafer_data::FEATURES.iter().map(|f| f.0), &mut builder),
+        ArgumentType::Feature => shared_suggestion_provider::suggest_resource(crate::core::data_registries::json_entries("minecraft:worldgen/feature").iter().map(|f| f.0), &mut builder),
         ArgumentType::Dialog => shared_suggestion_provider::suggest_resource(wafer_data::SyncedRegistry::get("minecraft:dialog").entries.iter(), &mut builder),
         ArgumentType::TemplateRotation => {
             shared_suggestion_provider::suggest(["none", "clockwise_90", "180", "counterclockwise_90"], &mut builder)

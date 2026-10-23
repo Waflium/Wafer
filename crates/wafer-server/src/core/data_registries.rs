@@ -129,13 +129,31 @@ fn file_key(id: &str) -> (Vec<u16>, Vec<u16>) {
     (format!("{path}.json").encode_utf16().collect(), namespace.encode_utf16().collect())
 }
 
-pub fn load(resource_manager: &MultiPackResourceManager) {
-    let mut synced = Vec::new();
-    let mut registries = HashMap::new();
-    for builtin in wafer_data::builtin_synced_registries() {
-        let directory = builtin.name.strip_prefix("minecraft:").unwrap_or(builtin.name);
+const UNSYNCHRONIZED: &[(&str, &[(&str, &str)])] = &[
+    ("minecraft:worldgen/density_function", wafer_data::DENSITY_FUNCTIONS),
+    ("minecraft:worldgen/noise", wafer_data::NOISES),
+    ("minecraft:worldgen/noise_settings", wafer_data::NOISE_SETTINGS),
+    ("minecraft:worldgen/material_rule", wafer_data::MATERIAL_RULES),
+    ("minecraft:worldgen/material_condition", wafer_data::MATERIAL_CONDITIONS),
+    ("minecraft:worldgen/world_preset", wafer_data::WORLD_PRESETS),
+    ("minecraft:worldgen/multi_noise_biome_source_parameter_list", wafer_data::BIOME_SOURCE_PARAMETER_LISTS),
+    ("minecraft:worldgen/carver", wafer_data::CARVERS),
+    ("minecraft:worldgen/structure", wafer_data::STRUCTURES),
+    ("minecraft:worldgen/structure_set", wafer_data::STRUCTURE_SETS),
+    ("minecraft:worldgen/template_pool", wafer_data::TEMPLATE_POOLS),
+    ("minecraft:worldgen/feature", wafer_data::FEATURES),
+    ("minecraft:worldgen/placed_feature", wafer_data::PLACED_FEATURES),
+    ("minecraft:worldgen/processor_list", wafer_data::PROCESSOR_LISTS),
+    ("minecraft:trial_spawner", wafer_data::TRIAL_SPAWNER_CONFIGS),
+    ("minecraft:villager_trade", wafer_data::VILLAGER_TRADES),
+    ("minecraft:trade_set", wafer_data::TRADE_SETS),
+];
+
+fn load_registry(resource_manager: &MultiPackResourceManager, name: &'static str, builtin: &[&'static str]) -> (DataRegistry, &'static [&'static str]) {
+    {
+        let directory = name.strip_prefix("minecraft:").unwrap_or(name);
         let resources = resource_manager.list_resources(directory, ".json");
-        let mut entries: Vec<&'static str> = builtin.entries.to_vec();
+        let mut entries: Vec<&'static str> = builtin.to_vec();
         let mut contents: Vec<Option<Value>> = vec![None; entries.len()];
         let mut elements: Vec<Value> = vec![Value::Null; entries.len()];
         for (location, resource) in &resources {
@@ -169,10 +187,27 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
             to_network[id as usize] = network_id as i32;
         }
         let json: Vec<(&'static str, &'static str)> = entries.iter().zip(&elements).map(|(&name, element)| (name, &*Box::leak(element.to_string().into_boxed_str()))).collect();
-        synced.push(SyncedRegistry { name: builtin.name, entries: Box::leak(entries.into_boxed_slice()) });
-        registries.insert(builtin.name, DataRegistry { name: builtin.name, to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) });
+        (DataRegistry { name, to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) }, Box::leak(entries.into_boxed_slice()))
+    }
+}
+
+pub fn load(resource_manager: &MultiPackResourceManager) {
+    let mut synced = Vec::new();
+    let mut registries = HashMap::new();
+    for builtin in wafer_data::builtin_synced_registries() {
+        let (registry, entries) = load_registry(resource_manager, builtin.name, builtin.entries);
+        synced.push(SyncedRegistry { name: builtin.name, entries });
+        registries.insert(builtin.name, registry);
     }
     wafer_data::set_synced_registries(synced);
+    let mut unsynchronized = Vec::new();
+    for &(name, table) in UNSYNCHRONIZED {
+        let builtin: Vec<&'static str> = table.iter().map(|&(entry, _)| entry).collect();
+        let (registry, entries) = load_registry(resource_manager, name, &builtin);
+        unsynchronized.push((name, entries));
+        registries.insert(name, registry);
+    }
+    wafer_data::set_data_registry_entries(unsynchronized);
     let mut stems: Vec<(&'static str, Value)> = Vec::new();
     for (location, resource) in resource_manager.list_resources("dimension", ".json") {
         let (namespace, path) = location.split_once(':').unwrap();

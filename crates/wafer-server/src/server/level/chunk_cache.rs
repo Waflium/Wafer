@@ -1161,7 +1161,7 @@ impl ChunkCache {
     fn apply_biome_decoration(&mut self, center: ChunkPos) {
         let mut structure_starts = Vec::new();
         if self.generate_structures {
-            structure_starts.resize_with(wafer_data::STRUCTURES.len(), Vec::new);
+            structure_starts.resize_with(crate::core::data_registries::json_entries("minecraft:worldgen/structure").len(), Vec::new);
             let referenced: Vec<StructureHolder> = self.chunk_structures(center).map(|structures| structures.references.keys().copied().collect()).unwrap_or_default();
             for structure in referenced {
                 structure_starts[structure.0 as usize] = self.starts_for_structure(center, structure);

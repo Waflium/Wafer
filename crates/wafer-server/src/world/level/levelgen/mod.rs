@@ -229,15 +229,15 @@ pub fn parse_noise(json: &Value) -> Result<NormalNoise, String> {
 impl WorldgenRegistries {
     fn load() -> Result<WorldgenRegistries, String> {
         let mut noises = HashMap::new();
-        for (name, source) in wafer_data::NOISES {
+        for (name, source) in crate::core::data_registries::json_entries("minecraft:worldgen/noise") {
             let json: Value = serde_json::from_str(source).map_err(|e| format!("{name}: {e}"))?;
             noises.insert(name.to_string(), Arc::new(parse_noise(&json).map_err(|e| format!("{name}: {e}"))?));
         }
-        let sources: HashMap<&'static str, &'static str> = wafer_data::DENSITY_FUNCTIONS.iter().copied().collect();
+        let sources: HashMap<&'static str, &'static str> = crate::core::data_registries::json_entries("minecraft:worldgen/density_function").iter().copied().collect();
         let mut parser = Parser { noises: &noises, sources: &sources, parsed: HashMap::new() };
         let mut materials = material::MaterialParser::new();
         let mut noise_settings = HashMap::new();
-        for (name, source) in wafer_data::NOISE_SETTINGS {
+        for (name, source) in crate::core::data_registries::json_entries("minecraft:worldgen/noise_settings") {
             let json: Value = serde_json::from_str(source).map_err(|e| format!("{name}: {e}"))?;
             let settings = Self::parse_settings(name, &json, &mut parser, &mut materials).map_err(|e| format!("{name}: {e}"))?;
             noise_settings.insert(name.to_string(), Arc::new(settings));

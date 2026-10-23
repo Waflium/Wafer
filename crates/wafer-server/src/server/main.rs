@@ -315,7 +315,7 @@ fn create_new_world_data(properties: &DedicatedServerProperties, data_configurat
 }
 
 fn create_dimensions(properties: &DedicatedServerProperties, seed: i64) -> WorldDimensions {
-    let presets = wafer_data::WORLD_PRESETS;
+    let presets = crate::core::data_registries::json_entries("minecraft:worldgen/world_preset");
     let level_type = properties.level_type.as_str();
     let preset = crate::resources::identifier::parse(level_type)
         .ok()
