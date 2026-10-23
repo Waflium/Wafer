@@ -104,6 +104,54 @@ fn resolves(ty: &Arc<Type>, finder: &OpticFinder) -> bool {
     }
 }
 
+fn review(ty: &Arc<Type>, finder: &OpticFinder, new_value: &Value) -> Option<Value> {
+    if let Match::Found(_) = finder.matches(ty) {
+        return Some(new_value.clone());
+    }
+    match &**ty {
+        Type::Named(_, element) | Type::Hook(element, _, _) => review(element, finder, new_value),
+        Type::RecursivePoint(..) => review(&ty.unfold(), finder, new_value),
+        Type::Sum(first, _) if resolves(first, finder) => review(first, finder, new_value).map(|built| Value::Left(Box::new(built))),
+        Type::Sum(_, second) if resolves(second, finder) => review(second, finder, new_value).map(|built| Value::Right(Box::new(built))),
+        _ => None,
+    }
+}
+
+fn set_value(ty: &Arc<Type>, value: &mut Value, finder: &OpticFinder, new_value: &Value) {
+    if let Match::Found(_) = finder.matches(ty) {
+        visit(ty, value, finder, &mut |_, focus| *focus = new_value.clone());
+        return;
+    }
+    match (&**ty, &mut *value) {
+        (Type::Named(_, element) | Type::Hook(element, _, _), value) => set_value(element, value, finder, new_value),
+        (Type::RecursivePoint(..), value) => set_value(&ty.unfold(), value, finder, new_value),
+        (Type::Product(first, second), Value::Pair(first_value, second_value)) => {
+            if resolves(first, finder) {
+                set_value(first, first_value, finder, new_value);
+            } else {
+                set_value(second, second_value, finder, new_value);
+            }
+        }
+        (Type::Sum(first, _), Value::Left(inner)) if resolves(first, finder) => set_value(first, inner, finder, new_value),
+        (Type::Sum(_, second), Value::Right(inner)) if resolves(second, finder) => set_value(second, inner, finder, new_value),
+        (Type::Sum(first, _), Value::Right(_)) => {
+            if resolves(first, finder)
+                && let Some(built) = review(first, finder, new_value)
+            {
+                *value = Value::Left(Box::new(built));
+            }
+        }
+        (Type::Sum(_, second), Value::Left(_)) => {
+            if resolves(second, finder)
+                && let Some(built) = review(second, finder, new_value)
+            {
+                *value = Value::Right(Box::new(built));
+            }
+        }
+        _ => visit(ty, value, finder, &mut |_, focus| *focus = new_value.clone()),
+    }
+}
+
 fn visit(ty: &Arc<Type>, value: &mut Value, finder: &OpticFinder, f: &mut dyn FnMut(&Arc<Type>, &mut Value)) {
     if let Match::Found(focus) = finder.matches(ty) {
         match (finder, &**ty, value) {
@@ -203,55 +251,6 @@ pub fn with_focus_type(ty: &Arc<Type>, finder: &OpticFinder, new_focus: &Arc<Typ
             types: choice.types.iter().map(|(key, element)| (key.clone(), sub(element))).collect(),
         }))),
         _ => ty.clone(),
-    }
-}
-
-fn directly_matches(ty: &Arc<Type>, finder: &OpticFinder) -> bool {
-    match finder.matches(ty) {
-        Match::Found(_) => true,
-        Match::Stop => false,
-        Match::Continue => match &**ty {
-            Type::Named(_, element) | Type::Hook(element, _, _) => directly_matches(element, finder),
-            _ => false,
-        },
-    }
-}
-
-fn build_absent(ty: &Arc<Type>, value: &mut Value, finder: &OpticFinder, new_value: &Value) {
-    if let Match::Found(_) = finder.matches(ty) {
-        return;
-    }
-    let built = match (&**ty, &mut *value) {
-        (Type::Named(_, element) | Type::Hook(element, _, _), value) => {
-            build_absent(element, value, finder, new_value);
-            None
-        }
-        (Type::RecursivePoint(..), value) => {
-            build_absent(&ty.unfold(), value, finder, new_value);
-            None
-        }
-        (Type::Product(first, second), Value::Pair(first_value, second_value)) => {
-            if resolves(first, finder) {
-                build_absent(first, first_value, finder, new_value);
-            } else {
-                build_absent(second, second_value, finder, new_value);
-            }
-            None
-        }
-        (Type::Sum(first, _), Value::Left(inner)) if resolves(first, finder) => {
-            build_absent(first, inner, finder, new_value);
-            None
-        }
-        (Type::Sum(_, second), Value::Right(inner)) if resolves(second, finder) => {
-            build_absent(second, inner, finder, new_value);
-            None
-        }
-        (Type::Sum(first, _), Value::Right(_)) if directly_matches(first, finder) => Some(Value::Left(Box::new(new_value.clone()))),
-        (Type::Sum(_, second), Value::Left(_)) if directly_matches(second, finder) => Some(Value::Right(Box::new(new_value.clone()))),
-        _ => None,
-    };
-    if let Some(built) = built {
-        *value = built;
     }
 }
 
@@ -373,8 +372,9 @@ impl Typed {
     }
 
     pub fn set(mut self, finder: &OpticFinder, new_value: Typed) -> Typed {
-        build_absent(&self.ty, &mut self.value, finder, &new_value.value);
-        self.update(finder, |_| new_value.value.clone())
+        self.check(finder);
+        set_value(&self.ty.clone(), &mut self.value, finder, &new_value.value);
+        self
     }
 
     pub fn with_type(self, ty: Arc<Type>) -> Typed {

@@ -4,7 +4,8 @@ use crate::datafixers::data_fix::DataFixBase;
 use crate::datafixers::dsl::TypeReference;
 use crate::datafixers::dynamic::Dynamic;
 use crate::datafixers::schemas::schema::Schema;
-use crate::datafixers::typed::{Typed, named_choice};
+use crate::datafixers::typed::{OpticFinder, Typed, named_choice};
+use crate::datafixers::types::Type;
 
 pub struct AbstractUUIDFix {
     pub base: DataFixBase,
@@ -15,11 +16,22 @@ impl AbstractUUIDFix {
     pub fn new(output_schema: &Arc<Schema>, type_reference: TypeReference) -> AbstractUUIDFix {
         AbstractUUIDFix { base: DataFixBase::new(output_schema, false), type_reference }
     }
+}
 
-    pub fn update_named_choice(input_schema: &Schema, output_schema: &Schema, type_reference: TypeReference, input: Typed, name: &str, function: impl Fn(Dynamic) -> Dynamic) -> Typed {
+pub struct NamedChoiceUpdate {
+    finder: OpticFinder,
+    new_type: Arc<Type>,
+}
+
+impl NamedChoiceUpdate {
+    pub fn new(input_schema: &Schema, output_schema: &Schema, type_reference: TypeReference, name: &str) -> NamedChoiceUpdate {
         let old_type = input_schema.get_choice_type(type_reference, name);
         let new_type = output_schema.get_choice_type(type_reference, name);
-        input.update_typed(&named_choice(name, old_type), Some(&new_type), |typed_tag| typed_tag.update_remainder(&function))
+        NamedChoiceUpdate { finder: named_choice(name, old_type), new_type }
+    }
+
+    pub fn update(&self, input: Typed, function: impl Fn(Dynamic) -> Dynamic) -> Typed {
+        input.update_typed(&self.finder, Some(&self.new_type), |typed_tag| typed_tag.update_remainder(&function))
     }
 }
 

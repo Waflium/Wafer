@@ -1,7 +1,9 @@
 use std::sync::OnceLock;
 
 use crate::datafixers::data_fixer_upper::{DataFixerBuilder, DataFixerUpper};
+use crate::util::datafix::fixes::abstract_arrow_pickup_fix::AbstractArrowPickupFix;
 use crate::util::datafix::fixes::add_field_fix::AddFieldFix;
+use crate::util::datafix::fixes::add_flag_if_not_present_fix::AddFlagIfNotPresentFix;
 use crate::util::datafix::fixes::add_new_choices::AddNewChoices;
 use crate::util::datafix::fixes::advancements_rename_fix::AdvancementsRenameFix;
 use crate::util::datafix::fixes::area_effect_cloud_duration_scale_fix::AreaEffectCloudDurationScaleFix;
@@ -12,6 +14,8 @@ use crate::util::datafix::fixes::attributes_rename_legacy::AttributesRenameLegac
 use crate::util::datafix::fixes::banner_entity_custom_name_to_override_component_fix::BannerEntityCustomNameToOverrideComponentFix;
 use crate::util::datafix::fixes::banner_pattern_format_fix::BannerPatternFormatFix;
 use crate::util::datafix::fixes::beehive_field_rename_fix::BeehiveFieldRenameFix;
+use crate::util::datafix::fixes::biome_fix;
+use crate::util::datafix::fixes::bit_storage_align_fix::BitStorageAlignFix;
 use crate::util::datafix::fixes::blending_data_fix::BlendingDataFix;
 use crate::util::datafix::fixes::blending_data_no_value_height_fix::BlendingDataNoValueHeightFix;
 use crate::util::datafix::fixes::blending_data_remove_from_nether_end_fix::BlendingDataRemoveFromNetherEndFix;
@@ -20,12 +24,19 @@ use crate::util::datafix::fixes::block_entity_id_fix::BlockEntityIdFix;
 use crate::util::datafix::fixes::block_entity_rename_fix::BlockEntityRenameFix;
 use crate::util::datafix::fixes::block_entity_shulker_box_color_fix::BlockEntityShulkerBoxColorFix;
 use crate::util::datafix::fixes::block_entity_sign_double_sided_editable_text_fix::BlockEntitySignDoubleSidedEditableTextFix;
+use crate::util::datafix::fixes::block_entity_uuid_fix::BlockEntityUUIDFix;
 use crate::util::datafix::fixes::block_pos_format_and_renames_fix::BlockPosFormatAndRenamesFix;
 use crate::util::datafix::fixes::block_state_field_names_fix::BlockStateFieldNamesFix;
 use crate::util::datafix::fixes::boat_split_fix::BoatSplitFix;
+use crate::util::datafix::fixes::cauldron_rename_fix::CauldronRenameFix;
+use crate::util::datafix::fixes::caves_and_cliffs_renames;
 use crate::util::datafix::fixes::chested_horses_inventory_zero_indexing_fix::ChestedHorsesInventoryZeroIndexingFix;
+use crate::util::datafix::fixes::chunk_biome_fix::ChunkBiomeFix;
 use crate::util::datafix::fixes::chunk_delete_ignored_light_data_fix::ChunkDeleteIgnoredLightDataFix;
 use crate::util::datafix::fixes::chunk_delete_light_fix::ChunkDeleteLightFix;
+use crate::util::datafix::fixes::chunk_height_and_biome_fix::ChunkHeightAndBiomeFix;
+use crate::util::datafix::fixes::chunk_proto_tick_list_fix::ChunkProtoTickListFix;
+use crate::util::datafix::fixes::chunk_renames_fix::ChunkRenamesFix;
 use crate::util::datafix::fixes::chunk_ticket_unpack_pos_fix::ChunkTicketUnpackPosFix;
 use crate::util::datafix::fixes::container_block_entity_lock_predicate_fix::ContainerBlockEntityLockPredicateFix;
 use crate::util::datafix::fixes::copper_golem_weather_state_fix::CopperGolemWeatherStateFix;
@@ -55,17 +66,22 @@ use crate::util::datafix::fixes::entity_horse_split_fix::EntityHorseSplitFix;
 use crate::util::datafix::fixes::entity_id_fix::EntityIdFix;
 use crate::util::datafix::fixes::entity_minecart_identifiers_fix::EntityMinecartIdentifiersFix;
 use crate::util::datafix::fixes::entity_painting_item_frame_direction_fix::EntityPaintingItemFrameDirectionFix;
+use crate::util::datafix::fixes::entity_projectile_owner_fix::EntityProjectileOwnerFix;
 use crate::util::datafix::fixes::entity_redundant_chance_tags_fix::EntityRedundantChanceTagsFix;
 use crate::util::datafix::fixes::entity_riding_to_passengers_fix::EntityRidingToPassengersFix;
 use crate::util::datafix::fixes::entity_salmon_size_fix::EntitySalmonSizeFix;
 use crate::util::datafix::fixes::entity_shulker_color_fix::EntityShulkerColorFix;
+use crate::util::datafix::fixes::entity_shulker_rotation_fix::EntityShulkerRotationFix;
 use crate::util::datafix::fixes::entity_skeleton_split_fix::EntitySkeletonSplitFix;
 use crate::util::datafix::fixes::entity_spawner_item_variant_component_fix::EntitySpawnerItemVariantComponentFix;
 use crate::util::datafix::fixes::entity_string_uuid_fix::EntityStringUuidFix;
 use crate::util::datafix::fixes::entity_tipped_arrow_fix::EntityTippedArrowFix;
+use crate::util::datafix::fixes::entity_uuid_fix::EntityUUIDFix;
 use crate::util::datafix::fixes::entity_variant_fix::EntityVariantFix;
 use crate::util::datafix::fixes::entity_zombie_split_fix::EntityZombieSplitFix;
 use crate::util::datafix::fixes::entity_zombie_villager_type_fix::EntityZombieVillagerTypeFix;
+use crate::util::datafix::fixes::entity_zombified_piglin_rename_fix::EntityZombifiedPiglinRenameFix;
+use crate::util::datafix::fixes::entity_zombified_piglin_rename_fix;
 use crate::util::datafix::fixes::equipment_format_fix::EquipmentFormatFix;
 use crate::util::datafix::fixes::equippable_asset_rename_fix::EquippableAssetRenameFix;
 use crate::util::datafix::fixes::explorer_map_item_fix::ExplorerMapItemFix;
@@ -76,9 +92,12 @@ use crate::util::datafix::fixes::fire_resistant_to_damage_resistant_component_fi
 use crate::util::datafix::fixes::fix_projectile_stored_item::FixProjectileStoredItem;
 use crate::util::datafix::fixes::fix_wolf_health::FixWolfHealth;
 use crate::util::datafix::fixes::food_to_consumable_fix::FoodToConsumableFix;
+use crate::util::datafix::fixes::force_poi_rebuild::ForcePoiRebuild;
 use crate::util::datafix::fixes::forced_chunk_to_ticket_fix::ForcedChunkToTicketFix;
+use crate::util::datafix::fixes::furnace_recipe_fix::FurnaceRecipeFix;
 use crate::util::datafix::fixes::game_rule_registry_fix::GameRuleRegistryFix;
 use crate::util::datafix::fixes::goat_horn_id_fix::GoatHornIdFix;
+use crate::util::datafix::fixes::gossip_uuid_fix::GossipUUIDFix;
 use crate::util::datafix::fixes::horse_body_armor_item_fix::HorseBodyArmorItemFix;
 use crate::util::datafix::fixes::inline_block_pos_format_fix::InlineBlockPosFormatFix;
 use crate::util::datafix::fixes::invalid_block_entity_lock_fix::InvalidBlockEntityLockFix;
@@ -92,20 +111,28 @@ use crate::util::datafix::fixes::item_spawn_egg_fix::ItemSpawnEggFix;
 use crate::util::datafix::fixes::item_stack_componentization_fix::ItemStackComponentizationFix;
 use crate::util::datafix::fixes::item_stack_custom_name_to_override_component_fix::ItemStackCustomNameToOverrideComponentFix;
 use crate::util::datafix::fixes::item_stack_spawn_egg_fix::ItemStackSpawnEggFix;
+use crate::util::datafix::fixes::item_stack_uuid_fix::ItemStackUUIDFix;
 use crate::util::datafix::fixes::item_water_potion_fix::ItemWaterPotionFix;
+use crate::util::datafix::fixes::jigsaw_properties_fix::JigsawPropertiesFix;
 use crate::util::datafix::fixes::jukebox_ticks_since_song_started_fix::JukeboxTicksSinceSongStartedFix;
 use crate::util::datafix::fixes::legacy_block_property_rename_and_fix::LegacyBlockPropertyRenameAndFix;
 use crate::util::datafix::fixes::legacy_block_rename_fix::LegacyBlockRenameFix;
+use crate::util::datafix::fixes::legacy_dimension_id_fix::LegacyDimensionIdFix;
 use crate::util::datafix::fixes::legacy_dragon_fight_fix::LegacyDragonFightFix;
 use crate::util::datafix::fixes::legacy_hover_event_fix::LegacyHoverEventFix;
+use crate::util::datafix::fixes::legacy_jigsaw_rotation_fix::LegacyJigsawRotationFix;
 use crate::util::datafix::fixes::legacy_world_border_fix::LegacyWorldBorderFix;
 use crate::util::datafix::fixes::level_dat_difficulty_fix::LevelDatDifficultyFix;
 use crate::util::datafix::fixes::level_dat_to_saved_data_preparation_fix::LevelDatToSavedDataPreparationFix;
+use crate::util::datafix::fixes::level_legacy_world_gen_settings_fix::LevelLegacyWorldGenSettingsFix;
+use crate::util::datafix::fixes::level_uuid_fix::LevelUUIDFix;
 use crate::util::datafix::fixes::lock_component_predicate_fix::LockComponentPredicateFix;
 use crate::util::datafix::fixes::lodestone_compass_component_fix::LodestoneCompassComponentFix;
 use crate::util::datafix::fixes::map_banner_block_pos_format_fix::MapBannerBlockPosFormatFix;
 use crate::util::datafix::fixes::map_color_component_removal_fix::MapColorComponentRemovalFix;
+use crate::util::datafix::fixes::memory_expiry_data_fix::MemoryExpiryDataFix;
 use crate::util::datafix::fixes::merge_terrain_chunk_status_fix::MergeTerrainChunkStatusFix;
+use crate::util::datafix::fixes::missing_dimension_fix::MissingDimensionFix;
 use crate::util::datafix::fixes::mob_effect_id_fix::MobEffectIdFix;
 use crate::util::datafix::fixes::mob_spawner_entity_identifiers_fix::MobSpawnerEntityIdentifiersFix;
 use crate::util::datafix::fixes::named_entity_convert_unchecked_fix::NamedEntityConvertUncheckedFix;
@@ -113,6 +140,7 @@ use crate::util::datafix::fixes::namespaced_type_rename_fix::NamespacedTypeRenam
 use crate::util::datafix::fixes::ominous_banner_rarity_fix::OminousBannerRarityFix;
 use crate::util::datafix::fixes::options_accessibility_onboard_fix::OptionsAccessibilityOnboardFix;
 use crate::util::datafix::fixes::options_ambient_occlusion_fix::OptionsAmbientOcclusionFix;
+use crate::util::datafix::fixes::options_fancy_graphics_to_graphics_mode_fix::OptionsFancyGraphicsToGraphicsModeFix;
 use crate::util::datafix::fixes::options_force_default_graphics_api_fix::OptionsForceDefaultGraphicsApiFix;
 use crate::util::datafix::fixes::options_force_vbo_fix::OptionsForceVBOFix;
 use crate::util::datafix::fixes::options_graphics_mode_split_fix::OptionsGraphicsModeSplitFix;
@@ -120,18 +148,23 @@ use crate::util::datafix::fixes::options_lower_case_language_fix::OptionsLowerCa
 use crate::util::datafix::fixes::options_menu_blurriness_fix::OptionsMenuBlurrinessFix;
 use crate::util::datafix::fixes::options_music_toast_fix::OptionsMusicToastFix;
 use crate::util::datafix::fixes::options_programmer_art_fix::OptionsProgrammerArtFix;
+use crate::util::datafix::fixes::options_rename_field_fix::OptionsRenameFieldFix;
 use crate::util::datafix::fixes::options_set_graphics_preset_to_custom_fix::OptionsSetGraphicsPresetToCustomFix;
+use crate::util::datafix::fixes::overreaching_tick_fix::OverreachingTickFix;
 use crate::util::datafix::fixes::particle_unflattening_fix::ParticleUnflatteningFix;
 use crate::util::datafix::fixes::player_equipment_fix::PlayerEquipmentFix;
 use crate::util::datafix::fixes::player_head_block_profile_fix::PlayerHeadBlockProfileFix;
 use crate::util::datafix::fixes::player_respawn_data_fix::PlayerRespawnDataFix;
+use crate::util::datafix::fixes::player_uuid_fix::PlayerUUIDFix;
 use crate::util::datafix::fixes::poi_type_remove_fix::PoiTypeRemoveFix;
+use crate::util::datafix::fixes::poi_type_rename_fix::PoiTypeRenameFix;
 use crate::util::datafix::fixes::pot_decorations_block_entity_unflattening_fix::PotDecorationsBlockEntityUnflatteningFix;
 use crate::util::datafix::fixes::pot_decorations_component_unflattening_fix::PotDecorationsComponentUnflatteningFix;
 use crate::util::datafix::fixes::primed_tnt_block_state_fixer::PrimedTntBlockStateFixer;
 use crate::util::datafix::fixes::projectile_stored_weapon_fix::ProjectileStoredWeaponFix;
 use crate::util::datafix::fixes::raid_renames_data_fix::RaidRenamesDataFix;
 use crate::util::datafix::fixes::random_sequence_settings_fix::RandomSequenceSettingsFix;
+use crate::util::datafix::fixes::redstone_wire_connections_fix::RedstoneWireConnectionsFix;
 use crate::util::datafix::fixes::references::*;
 use crate::util::datafix::fixes::remap_chunk_status_fix::RemapChunkStatusFix;
 use crate::util::datafix::fixes::remove_block_entity_tag_fix::RemoveBlockEntityTagFix;
@@ -140,10 +173,18 @@ use crate::util::datafix::fixes::remove_empty_item_in_brushable_block_fix::Remov
 use crate::util::datafix::fixes::rename_enchantments_fix::RenameEnchantmentsFix;
 use crate::util::datafix::fixes::rename_nameplate_to_name_tag_fix::RenameNameplateToNameTagFix;
 use crate::util::datafix::fixes::saddle_equipment_slot_fix::SaddleEquipmentSlotFix;
+use crate::util::datafix::fixes::saved_data_feature_pool_element_fix::SavedDataFeaturePoolElementFix;
+use crate::util::datafix::fixes::saved_data_uuid_fix::SavedDataUUIDFix;
 use crate::util::datafix::fixes::scoreboard_display_slot_fix::ScoreboardDisplaySlotFix;
 use crate::util::datafix::fixes::sign_text_strict_json_fix::SignTextStrictJsonFix;
 use crate::util::datafix::fixes::signs_op_flag_fix::SignsOpFlagFix;
+use crate::util::datafix::fixes::spawner_data_fix::SpawnerDataFix;
+use crate::util::datafix::fixes::stats_rename_fix::StatsRenameFix;
 use crate::util::datafix::fixes::stonecutter_recipe_rename_fix;
+use crate::util::datafix::fixes::strider_gravity_fix::StriderGravityFix;
+use crate::util::datafix::fixes::structure_reference_count_fix::StructureReferenceCountFix;
+use crate::util::datafix::fixes::structure_settings_flatten_fix::StructureSettingsFlattenFix;
+use crate::util::datafix::fixes::structures_become_configured_fix::StructuresBecomeConfiguredFix;
 use crate::util::datafix::fixes::swing_animation_component_split_fix::SwingAnimationComponentSplitFix;
 use crate::util::datafix::fixes::text_component_hover_and_click_event_fix::TextComponentHoverAndClickEventFix;
 use crate::util::datafix::fixes::text_component_stringified_flags_fix::TextComponentStringifiedFlagsFix;
@@ -156,9 +197,14 @@ use crate::util::datafix::fixes::trident_animation_fix::TridentAnimationFix;
 use crate::util::datafix::fixes::unfilled_buried_treasure_map_fix::UnfilledBuriedTreasureMapFix;
 use crate::util::datafix::fixes::unflatten_text_component_fix::UnflattenTextComponentFix;
 use crate::util::datafix::fixes::variant_rename_fix::VariantRenameFix;
+use crate::util::datafix::fixes::villager_follow_range_fix::VillagerFollowRangeFix;
 use crate::util::datafix::fixes::villager_set_can_pick_up_loot_fix::VillagerSetCanPickUpLootFix;
 use crate::util::datafix::fixes::villager_set_villager_data_finalized::VillagerSetVillagerDataFinalized;
+use crate::util::datafix::fixes::wall_property_fix::WallPropertyFix;
 use crate::util::datafix::fixes::world_border_warning_time_fix::WorldBorderWarningTimeFix;
+use crate::util::datafix::fixes::world_gen_settings_disallow_old_custom_worlds_fix::WorldGenSettingsDisallowOldCustomWorldsFix;
+use crate::util::datafix::fixes::world_gen_settings_fix::WorldGenSettingsFix;
+use crate::util::datafix::fixes::world_gen_settings_height_and_biome_fix::WorldGenSettingsHeightAndBiomeFix;
 use crate::util::datafix::fixes::world_spawn_data_fix::WorldSpawnDataFix;
 use crate::util::datafix::fixes::write_and_read_fix::WriteAndReadFix;
 use crate::util::datafix::fixes::written_book_pages_strict_json_fix::WrittenBookPagesStrictJsonFix;
@@ -429,69 +475,280 @@ fn add_fixers(fixer_upper: &mut DataFixerBuilder) {
     fixer_upper.add_schema(1955, &NAMESPACED_SCHEMA);
     fixer_upper.add_schema(1961, &NAMESPACED_SCHEMA);
     fixer_upper.add_schema(1963, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2100, &V2100);
-    fixer_upper.add_schema(2202, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2209, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2211, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2218, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2501, &V2501);
-    fixer_upper.add_schema(2502, &V2502);
-    fixer_upper.add_schema(2503, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2505, &V2505);
-    fixer_upper.add_schema(2508, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2509, &V2509);
-    fixer_upper.add_schema(2511, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema_with_sub_version(2511, 1, &V2511_1);
-    fixer_upper.add_schema(2514, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2516, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2518, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2519, &V2519);
-    fixer_upper.add_schema(2522, &V2522);
-    fixer_upper.add_schema(2523, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2527, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2528, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2529, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2531, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2533, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2535, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2537, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2538, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2550, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2551, &V2551);
-    fixer_upper.add_schema(2552, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2553, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2556, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2558, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2568, &V2568);
-    fixer_upper.add_schema(2571, &V2571);
-    fixer_upper.add_schema(2679, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2680, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2684, &V2684);
-    fixer_upper.add_schema(2686, &V2686);
-    fixer_upper.add_schema(2688, &V2688);
-    fixer_upper.add_schema(2690, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2691, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2693, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2696, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2700, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2701, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2702, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2704, &V2704);
-    fixer_upper.add_schema(2707, &V2707);
-    fixer_upper.add_schema(2710, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2717, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2825, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2831, &V2831);
-    fixer_upper.add_schema(2832, &V2832);
-    fixer_upper.add_schema(2833, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2838, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2841, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2842, &V2842);
-    fixer_upper.add_schema(2843, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2846, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2852, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2967, &NAMESPACED_SCHEMA);
-    fixer_upper.add_schema(2970, &NAMESPACED_SCHEMA);
+    let v2100 = fixer_upper.add_schema(2100, &V2100);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2100, "Added Bee and Bee Stinger", ENTITY));
+    fixer_upper.add_fixer(AddNewChoices::new(&v2100, "Add beehive", BLOCK_ENTITY));
+    fixer_upper.add_fixer(NamespacedTypeRenameFix::new(&v2100, "Rename sugar recipe", RECIPE, create_renamer("minecraft:sugar", "minecraft:sugar_from_sugar_cane")));
+    fixer_upper.add_fixer(AdvancementsRenameFix::new(
+        &v2100,
+        false,
+        "Rename sugar recipe advancement",
+        create_renamer("minecraft:recipes/misc/sugar", "minecraft:recipes/misc/sugar_from_sugar_cane"),
+    ));
+    let v2202 = fixer_upper.add_schema(2202, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(ChunkBiomeFix::new(&v2202, false));
+    let v2209 = fixer_upper.add_schema(2209, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(ItemRenameFix::create(&v2209, "Rename bee_hive item to beehive", create_renamer("minecraft:bee_hive", "minecraft:beehive")));
+    fixer_upper.add_fixer(PoiTypeRenameFix::new(&v2209, "Rename bee_hive poi to beehive", create_renamer("minecraft:bee_hive", "minecraft:beehive")));
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(&v2209, "Rename bee_hive block to beehive", create_renamer("minecraft:bee_hive", "minecraft:beehive")));
+    let v2211 = fixer_upper.add_schema(2211, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(StructureReferenceCountFix::new(&v2211, false));
+    let v2218 = fixer_upper.add_schema(2218, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(ForcePoiRebuild::new(&v2218, false));
+    let v2501 = fixer_upper.add_schema(2501, &V2501);
+    fixer_upper.add_fixer(FurnaceRecipeFix::new(&v2501, true));
+    let v2502 = fixer_upper.add_schema(2502, &V2502);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2502, "Added Hoglin", ENTITY));
+    let v2503 = fixer_upper.add_schema(2503, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(WallPropertyFix::new(&v2503, false));
+    fixer_upper.add_fixer(AdvancementsRenameFix::new(
+        &v2503,
+        false,
+        "Composter category change",
+        create_renamer("minecraft:recipes/misc/composter", "minecraft:recipes/decorations/composter"),
+    ));
+    let v2505 = fixer_upper.add_schema(2505, &V2505);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2505, "Added Piglin", ENTITY));
+    fixer_upper.add_fixer(MemoryExpiryDataFix::new(&v2505, "minecraft:villager"));
+    let v2508 = fixer_upper.add_schema(2508, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(ItemRenameFix::create(
+        &v2508,
+        "Renamed fungi items to fungus",
+        create_renamer_map(&[("minecraft:warped_fungi", "minecraft:warped_fungus"), ("minecraft:crimson_fungi", "minecraft:crimson_fungus")]),
+    ));
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(
+        &v2508,
+        "Renamed fungi blocks to fungus",
+        create_renamer_map(&[("minecraft:warped_fungi", "minecraft:warped_fungus"), ("minecraft:crimson_fungi", "minecraft:crimson_fungus")]),
+    ));
+    let v2509 = fixer_upper.add_schema(2509, &V2509);
+    fixer_upper.add_fixer(EntityZombifiedPiglinRenameFix::new(&v2509));
+    fixer_upper.add_fixer(ItemRenameFix::create(&v2509, "Rename zombie pigman egg item", create_renamer_map(entity_zombified_piglin_rename_fix::RENAMED_IDS)));
+    let v2511 = fixer_upper.add_schema(2511, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(EntityProjectileOwnerFix::new(&v2511));
+    let v2511_1 = fixer_upper.add_schema_with_sub_version(2511, 1, &V2511_1);
+    fixer_upper.add_fixer(NamedEntityConvertUncheckedFix::new(&v2511_1, "SplashPotionItemFieldRenameFix", ENTITY, "minecraft:potion"));
+    let v2514 = fixer_upper.add_schema(2514, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(EntityUUIDFix::new(&v2514));
+    fixer_upper.add_fixer(BlockEntityUUIDFix::new(&v2514));
+    fixer_upper.add_fixer(PlayerUUIDFix::new(&v2514));
+    fixer_upper.add_fixer(LevelUUIDFix::new(&v2514));
+    fixer_upper.add_fixer(SavedDataUUIDFix::new(&v2514));
+    fixer_upper.add_fixer(ItemStackUUIDFix::new(&v2514));
+    let v2516 = fixer_upper.add_schema(2516, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(GossipUUIDFix::new(&v2516, "minecraft:villager"));
+    fixer_upper.add_fixer(GossipUUIDFix::new(&v2516, "minecraft:zombie_villager"));
+    let v2518 = fixer_upper.add_schema(2518, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(JigsawPropertiesFix::new(&v2518, false));
+    fixer_upper.add_fixer(LegacyJigsawRotationFix::new(&v2518));
+    let v2519 = fixer_upper.add_schema(2519, &V2519);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2519, "Added Strider", ENTITY));
+    let v2522 = fixer_upper.add_schema(2522, &V2522);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2522, "Added Zoglin", ENTITY));
+    let v2523 = fixer_upper.add_schema(2523, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(AttributesRenameLegacy::new(
+        &v2523,
+        "Attribute renames",
+        create_renamer_no_namespace(&[
+            ("generic.maxHealth", "minecraft:generic.max_health"),
+            ("Max Health", "minecraft:generic.max_health"),
+            ("zombie.spawnReinforcements", "minecraft:zombie.spawn_reinforcements"),
+            ("Spawn Reinforcements Chance", "minecraft:zombie.spawn_reinforcements"),
+            ("horse.jumpStrength", "minecraft:horse.jump_strength"),
+            ("Jump Strength", "minecraft:horse.jump_strength"),
+            ("generic.followRange", "minecraft:generic.follow_range"),
+            ("Follow Range", "minecraft:generic.follow_range"),
+            ("generic.knockbackResistance", "minecraft:generic.knockback_resistance"),
+            ("Knockback Resistance", "minecraft:generic.knockback_resistance"),
+            ("generic.movementSpeed", "minecraft:generic.movement_speed"),
+            ("Movement Speed", "minecraft:generic.movement_speed"),
+            ("generic.flyingSpeed", "minecraft:generic.flying_speed"),
+            ("Flying Speed", "minecraft:generic.flying_speed"),
+            ("generic.attackDamage", "minecraft:generic.attack_damage"),
+            ("generic.attackKnockback", "minecraft:generic.attack_knockback"),
+            ("generic.attackSpeed", "minecraft:generic.attack_speed"),
+            ("generic.armorToughness", "minecraft:generic.armor_toughness"),
+        ]),
+    ));
+    let v2527 = fixer_upper.add_schema(2527, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(BitStorageAlignFix::new(&v2527));
+    let v2528 = fixer_upper.add_schema(2528, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(ItemRenameFix::create(
+        &v2528,
+        "Rename soul fire torch and soul fire lantern",
+        create_renamer_map(&[("minecraft:soul_fire_torch", "minecraft:soul_torch"), ("minecraft:soul_fire_lantern", "minecraft:soul_lantern")]),
+    ));
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(
+        &v2528,
+        "Rename soul fire torch and soul fire lantern",
+        create_renamer_map(&[
+            ("minecraft:soul_fire_torch", "minecraft:soul_torch"),
+            ("minecraft:soul_fire_wall_torch", "minecraft:soul_wall_torch"),
+            ("minecraft:soul_fire_lantern", "minecraft:soul_lantern"),
+        ]),
+    ));
+    let v2529 = fixer_upper.add_schema(2529, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(StriderGravityFix::new(&v2529, false));
+    let v2531 = fixer_upper.add_schema(2531, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(RedstoneWireConnectionsFix::new(&v2531));
+    let v2533 = fixer_upper.add_schema(2533, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(VillagerFollowRangeFix::new(&v2533));
+    let v2535 = fixer_upper.add_schema(2535, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(EntityShulkerRotationFix::new(&v2535));
+    let v2537 = fixer_upper.add_schema(2537, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(LegacyDimensionIdFix::new(&v2537));
+    let v2538 = fixer_upper.add_schema(2538, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(LevelLegacyWorldGenSettingsFix::new(&v2538));
+    let v2550 = fixer_upper.add_schema(2550, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(WorldGenSettingsFix::new(&v2550));
+    let v2551 = fixer_upper.add_schema(2551, &V2551);
+    fixer_upper.add_fixer(WriteAndReadFix::new(&v2551, "add types to WorldGenData", WORLD_GEN_SETTINGS));
+    let v2552 = fixer_upper.add_schema(2552, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(NamespacedTypeRenameFix::new(&v2552, "Nether biome rename", BIOME, create_renamer("minecraft:nether", "minecraft:nether_wastes")));
+    let v2553 = fixer_upper.add_schema(2553, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(NamespacedTypeRenameFix::new(&v2553, "Biomes fix", BIOME, create_renamer_map(biome_fix::BIOMES)));
+    let v2556 = fixer_upper.add_schema(2556, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(OptionsFancyGraphicsToGraphicsModeFix::new(&v2556));
+    let v2558 = fixer_upper.add_schema(2558, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(MissingDimensionFix::new(&v2558, false));
+    fixer_upper.add_fixer(OptionsRenameFieldFix::new(&v2558, false, "Rename swapHands setting", "key_key.swapHands", "key_key.swapOffhand"));
+    let v2568 = fixer_upper.add_schema(2568, &V2568);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2568, "Added Piglin Brute", ENTITY));
+    let v2571 = fixer_upper.add_schema(2571, &V2571);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2571, "Added Goat", ENTITY));
+    let v2679 = fixer_upper.add_schema(2679, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(CauldronRenameFix::new(&v2679, false));
+    let v2680 = fixer_upper.add_schema(2680, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(ItemRenameFix::create(&v2680, "Renamed grass path item to dirt path", create_renamer("minecraft:grass_path", "minecraft:dirt_path")));
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(&v2680, "Renamed grass path block to dirt path", create_renamer("minecraft:grass_path", "minecraft:dirt_path")));
+    let v2684 = fixer_upper.add_schema(2684, &V2684);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2684, "Added Sculk Sensor", BLOCK_ENTITY));
+    let v2686 = fixer_upper.add_schema(2686, &V2686);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2686, "Added Axolotl", ENTITY));
+    let v2688 = fixer_upper.add_schema(2688, &V2688);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2688, "Added Glow Squid", ENTITY));
+    fixer_upper.add_fixer(AddNewChoices::new(&v2688, "Added Glow Item Frame", ENTITY));
+    let v2690 = fixer_upper.add_schema(2690, &NAMESPACED_SCHEMA);
+    let copper_blocks_to_rename: &'static [(&'static str, &'static str)] = &[
+        ("minecraft:weathered_copper_block", "minecraft:oxidized_copper_block"),
+        ("minecraft:semi_weathered_copper_block", "minecraft:weathered_copper_block"),
+        ("minecraft:lightly_weathered_copper_block", "minecraft:exposed_copper_block"),
+        ("minecraft:weathered_cut_copper", "minecraft:oxidized_cut_copper"),
+        ("minecraft:semi_weathered_cut_copper", "minecraft:weathered_cut_copper"),
+        ("minecraft:lightly_weathered_cut_copper", "minecraft:exposed_cut_copper"),
+        ("minecraft:weathered_cut_copper_stairs", "minecraft:oxidized_cut_copper_stairs"),
+        ("minecraft:semi_weathered_cut_copper_stairs", "minecraft:weathered_cut_copper_stairs"),
+        ("minecraft:lightly_weathered_cut_copper_stairs", "minecraft:exposed_cut_copper_stairs"),
+        ("minecraft:weathered_cut_copper_slab", "minecraft:oxidized_cut_copper_slab"),
+        ("minecraft:semi_weathered_cut_copper_slab", "minecraft:weathered_cut_copper_slab"),
+        ("minecraft:lightly_weathered_cut_copper_slab", "minecraft:exposed_cut_copper_slab"),
+        ("minecraft:waxed_semi_weathered_copper", "minecraft:waxed_weathered_copper"),
+        ("minecraft:waxed_lightly_weathered_copper", "minecraft:waxed_exposed_copper"),
+        ("minecraft:waxed_semi_weathered_cut_copper", "minecraft:waxed_weathered_cut_copper"),
+        ("minecraft:waxed_lightly_weathered_cut_copper", "minecraft:waxed_exposed_cut_copper"),
+        ("minecraft:waxed_semi_weathered_cut_copper_stairs", "minecraft:waxed_weathered_cut_copper_stairs"),
+        ("minecraft:waxed_lightly_weathered_cut_copper_stairs", "minecraft:waxed_exposed_cut_copper_stairs"),
+        ("minecraft:waxed_semi_weathered_cut_copper_slab", "minecraft:waxed_weathered_cut_copper_slab"),
+        ("minecraft:waxed_lightly_weathered_cut_copper_slab", "minecraft:waxed_exposed_cut_copper_slab"),
+    ];
+    fixer_upper.add_fixer(ItemRenameFix::create(&v2690, "Renamed copper block items to new oxidized terms", create_renamer_map(copper_blocks_to_rename)));
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(&v2690, "Renamed copper blocks to new oxidized terms", create_renamer_map(copper_blocks_to_rename)));
+    let v2691 = fixer_upper.add_schema(2691, &NAMESPACED_SCHEMA);
+    let waxed_copper_rename: &'static [(&'static str, &'static str)] = &[
+        ("minecraft:waxed_copper", "minecraft:waxed_copper_block"),
+        ("minecraft:oxidized_copper_block", "minecraft:oxidized_copper"),
+        ("minecraft:weathered_copper_block", "minecraft:weathered_copper"),
+        ("minecraft:exposed_copper_block", "minecraft:exposed_copper"),
+    ];
+    fixer_upper.add_fixer(ItemRenameFix::create(&v2691, "Rename copper item suffixes", create_renamer_map(waxed_copper_rename)));
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(&v2691, "Rename copper blocks suffixes", create_renamer_map(waxed_copper_rename)));
+    let v2693 = fixer_upper.add_schema(2693, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(AddFlagIfNotPresentFix::new(&v2693, WORLD_GEN_SETTINGS, "has_increased_height_already", false));
+    let v2696 = fixer_upper.add_schema(2696, &NAMESPACED_SCHEMA);
+    let grimstone_blocks_to_rename: &'static [(&'static str, &'static str)] = &[
+        ("minecraft:grimstone", "minecraft:deepslate"),
+        ("minecraft:grimstone_slab", "minecraft:cobbled_deepslate_slab"),
+        ("minecraft:grimstone_stairs", "minecraft:cobbled_deepslate_stairs"),
+        ("minecraft:grimstone_wall", "minecraft:cobbled_deepslate_wall"),
+        ("minecraft:polished_grimstone", "minecraft:polished_deepslate"),
+        ("minecraft:polished_grimstone_slab", "minecraft:polished_deepslate_slab"),
+        ("minecraft:polished_grimstone_stairs", "minecraft:polished_deepslate_stairs"),
+        ("minecraft:polished_grimstone_wall", "minecraft:polished_deepslate_wall"),
+        ("minecraft:grimstone_tiles", "minecraft:deepslate_tiles"),
+        ("minecraft:grimstone_tile_slab", "minecraft:deepslate_tile_slab"),
+        ("minecraft:grimstone_tile_stairs", "minecraft:deepslate_tile_stairs"),
+        ("minecraft:grimstone_tile_wall", "minecraft:deepslate_tile_wall"),
+        ("minecraft:grimstone_bricks", "minecraft:deepslate_bricks"),
+        ("minecraft:grimstone_brick_slab", "minecraft:deepslate_brick_slab"),
+        ("minecraft:grimstone_brick_stairs", "minecraft:deepslate_brick_stairs"),
+        ("minecraft:grimstone_brick_wall", "minecraft:deepslate_brick_wall"),
+        ("minecraft:chiseled_grimstone", "minecraft:chiseled_deepslate"),
+    ];
+    fixer_upper.add_fixer(ItemRenameFix::create(&v2696, "Renamed grimstone block items to deepslate", create_renamer_map(grimstone_blocks_to_rename)));
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(&v2696, "Renamed grimstone blocks to deepslate", create_renamer_map(grimstone_blocks_to_rename)));
+    let v2700 = fixer_upper.add_schema(2700, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(
+        &v2700,
+        "Renamed cave vines blocks",
+        create_renamer_map(&[("minecraft:cave_vines_head", "minecraft:cave_vines"), ("minecraft:cave_vines_body", "minecraft:cave_vines_plant")]),
+    ));
+    let v2701 = fixer_upper.add_schema(2701, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(SavedDataFeaturePoolElementFix::new(&v2701));
+    let v2702 = fixer_upper.add_schema(2702, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(AbstractArrowPickupFix::new(&v2702));
+    let v2704 = fixer_upper.add_schema(2704, &V2704);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2704, "Added Goat", ENTITY));
+    let v2707 = fixer_upper.add_schema(2707, &V2707);
+    fixer_upper.add_fixer(AddNewChoices::new(&v2707, "Added Marker", ENTITY));
+    fixer_upper.add_fixer(AddFlagIfNotPresentFix::new(&v2707, WORLD_GEN_SETTINGS, "has_increased_height_already", true));
+    let v2710 = fixer_upper.add_schema(2710, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(StatsRenameFix::new(&v2710, "Renamed play_one_minute stat to play_time", &[("minecraft:play_one_minute", "minecraft:play_time")]));
+    let v2717 = fixer_upper.add_schema(2717, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(ItemRenameFix::create(
+        &v2717,
+        "Rename azalea_leaves_flowers",
+        create_renamer_map(&[("minecraft:azalea_leaves_flowers", "minecraft:flowering_azalea_leaves")]),
+    ));
+    fixer_upper.add_fixer(LegacyBlockRenameFix::create(
+        &v2717,
+        "Rename azalea_leaves_flowers items",
+        create_renamer_map(&[("minecraft:azalea_leaves_flowers", "minecraft:flowering_azalea_leaves")]),
+    ));
+    let v2825 = fixer_upper.add_schema(2825, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(AddFlagIfNotPresentFix::new(&v2825, WORLD_GEN_SETTINGS, "has_increased_height_already", false));
+    let v2831 = fixer_upper.add_schema(2831, &V2831);
+    fixer_upper.add_fixer(SpawnerDataFix::new(&v2831));
+    let v2832 = fixer_upper.add_schema(2832, &V2832);
+    fixer_upper.add_fixer(WorldGenSettingsHeightAndBiomeFix::new(&v2832));
+    fixer_upper.add_fixer(ChunkHeightAndBiomeFix::new(&v2832));
+    let v2833 = fixer_upper.add_schema(2833, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(WorldGenSettingsDisallowOldCustomWorldsFix::new(&v2833));
+    let v2838 = fixer_upper.add_schema(2838, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(NamespacedTypeRenameFix::new(&v2838, "Caves and Cliffs biome renames", BIOME, create_renamer_map(caves_and_cliffs_renames::RENAMES)));
+    let v2841 = fixer_upper.add_schema(2841, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(ChunkProtoTickListFix::new(&v2841));
+    let v2842 = fixer_upper.add_schema(2842, &V2842);
+    fixer_upper.add_fixer(ChunkRenamesFix::new(&v2842));
+    let v2843 = fixer_upper.add_schema(2843, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(OverreachingTickFix::new(&v2843));
+    fixer_upper.add_fixer(NamespacedTypeRenameFix::new(&v2843, "Remove Deep Warm Ocean", BIOME, create_renamer("minecraft:deep_warm_ocean", "minecraft:warm_ocean")));
+    let v2846 = fixer_upper.add_schema(2846, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(AdvancementsRenameFix::new(
+        &v2846,
+        false,
+        "Rename some C&C part 2 advancements",
+        create_renamer_map(&[
+            ("minecraft:husbandry/play_jukebox_in_meadows", "minecraft:adventure/play_jukebox_in_meadows"),
+            ("minecraft:adventure/caves_and_cliff", "minecraft:adventure/fall_from_world_height"),
+            ("minecraft:adventure/ride_strider_in_overworld_lava", "minecraft:nether/ride_strider_in_overworld_lava"),
+        ]),
+    ));
+    let v2852 = fixer_upper.add_schema(2852, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(WorldGenSettingsDisallowOldCustomWorldsFix::new(&v2852));
+    let v2967 = fixer_upper.add_schema(2967, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(StructureSettingsFlattenFix::new(&v2967));
+    let v2970 = fixer_upper.add_schema(2970, &NAMESPACED_SCHEMA);
+    fixer_upper.add_fixer(StructuresBecomeConfiguredFix::new(&v2970));
     let v3076 = fixer_upper.add_schema(3076, &V3076);
     fixer_upper.add_fixer(AddNewChoices::new(&v3076, "Added Sculk Catalyst", BLOCK_ENTITY));
     let v3077 = fixer_upper.add_schema(3077, &NAMESPACED_SCHEMA);
