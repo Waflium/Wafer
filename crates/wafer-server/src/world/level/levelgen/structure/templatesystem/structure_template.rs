@@ -609,7 +609,7 @@ fn create_entity_ignore_exception(level: &mut impl WorldGenLevel, tag: &Nbt) -> 
         warn!("Skipping Entity with id {}", id.unwrap_or("[invalid]"));
         return None;
     };
-    entity.load(tag).ok()?;
+    entity.load_with(tag, |entity, tag| level.load_team(entity, tag)).ok()?;
     if let LevelEntity::Mob(mob) = &mut entity
         && let Some((neutral_mob, entity)) = mob.neutral_mob_mut()
     {

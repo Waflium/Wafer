@@ -31,7 +31,7 @@ pub fn execute(level: &mut ServerLevel, source: &BlockSource, mut dispensed: Ite
         && let LevelEntity::Boat(boat) = &mut entity
     {
         boat.set_initial_pos(spawn_x, spawn_y + y_offset, spawn_z);
-        apply_default_stack_config(&mut entity, &dispensed);
+        apply_default_stack_config(level, &mut entity, &dispensed);
         entity.entity_mut().set_y_rot(direction.to_y_rot());
         level.add_fresh_entity(entity);
         dispensed.shrink(1);

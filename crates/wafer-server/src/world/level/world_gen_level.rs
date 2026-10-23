@@ -1,9 +1,11 @@
 use wafer_core::BlockPos;
 use wafer_data::{BlockState, FluidState};
+use wafer_protocol::nbt::Nbt;
 
 use super::chunk::ChunkGenerator;
 use super::levelgen::material::WorldGenerationContext;
 use super::server_level_accessor::ServerLevelAccessor;
+use crate::world::entity::Entity;
 
 pub trait WorldGenLevel: ServerLevelAccessor {
     fn get_seed(&self) -> i64;
@@ -19,6 +21,8 @@ pub trait WorldGenLevel: ServerLevelAccessor {
     fn get_fluid_state(&mut self, pos: BlockPos) -> FluidState {
         self.get_block_state(pos).fluid_state()
     }
+
+    fn load_team(&mut self, entity: &Entity, nbt: &Nbt);
 
     fn get_height_of_level(&self) -> i32;
 

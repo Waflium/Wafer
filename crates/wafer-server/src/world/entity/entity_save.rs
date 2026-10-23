@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use wafer_core::hash_map::java_hash_map_order;
 use wafer_core::random::{RandomSource, java_string_hash};
 use wafer_core::{AABB, Axis, BlockPos, Vec3, mth};
@@ -19,7 +21,8 @@ use crate::world::level::block::entity::int_value;
 use crate::world::level::chunk::serialization::state_to_nbt;
 use crate::world::level::collision::{Collider, shapes_collide};
 use crate::world::level::storage::tag_value_input;
-use crate::world::level::storage::uuid_ints;
+use crate::world::level::storage::{format_uuid, uuid_ints};
+use crate::world::scores::scoreboard::Scoreboard;
 
 const ENTITY_TYPE_LOGGER: &str = "net.minecraft.world.entity.EntityType";
 
@@ -175,6 +178,20 @@ impl Entity {
         }
         Ok(())
     }
+
+    pub fn load_team(&self, nbt: &Nbt, scoreboard: &RefCell<Scoreboard>) {
+        if let Some(team_name) = tag_value_input::get_string(nbt, "Team") {
+            add_loaded_entity_to_team(scoreboard, self.uuid, team_name);
+        }
+    }
+}
+
+pub fn add_loaded_entity_to_team(scoreboard: &RefCell<Scoreboard>, uuid: u128, team_name: &str) {
+    let mut scoreboard = scoreboard.borrow_mut();
+    let success = scoreboard.get_player_team(team_name).is_some() && scoreboard.add_player_to_team(&format_uuid(uuid), team_name);
+    if !success {
+        warn!("Unable to add entity to team \"{team_name}\" (that team probably doesn't exist)");
+    }
 }
 
 impl LevelEntity {
@@ -306,8 +323,18 @@ impl LevelEntity {
         }
     }
 
+    #[cfg(test)]
     pub fn load(&mut self, nbt: &Nbt) -> Result<(), String> {
+        self.load_with(nbt, |_, _| {})
+    }
+
+    pub fn load_in_level(&mut self, nbt: &Nbt, scoreboard: &RefCell<Scoreboard>) -> Result<(), String> {
+        self.load_with(nbt, |entity, nbt| entity.load_team(nbt, scoreboard))
+    }
+
+    pub fn load_with(&mut self, nbt: &Nbt, load_team: impl FnOnce(&Entity, &Nbt)) -> Result<(), String> {
         self.entity_mut().load(nbt)?;
+        load_team(self.entity(), nbt);
         match self {
             LevelEntity::Item(item) => {
                 item.health = number(nbt, "Health").map_or(5, |v| v as i16 as i32);
@@ -397,11 +424,7 @@ impl LevelEntity {
     }
 }
 
-pub fn apply_default_stack_config(entity: &mut LevelEntity, item_stack: &ItemStack) -> Option<Nbt> {
-    apply_default_stack_config_in_level(None, entity, item_stack)
-}
-
-pub fn apply_default_stack_config_in_level(level: Option<&ServerLevel>, entity: &mut LevelEntity, item_stack: &ItemStack) -> Option<Nbt> {
+pub fn apply_default_stack_config(level: &ServerLevel, entity: &mut LevelEntity, item_stack: &ItemStack) -> Option<Nbt> {
     match &mut *entity {
         LevelEntity::Mob(mob) => mob.apply_components_from_item_stack(item_stack),
         LevelEntity::Painting(painting) => painting.apply_components_from_item_stack(item_stack),
@@ -425,7 +448,7 @@ fn only_op_can_set_nbt(entity_type: &str) -> bool {
     matches!(entity_type, "minecraft:falling_block" | "minecraft:command_block_minecart" | "minecraft:spawner_minecart")
 }
 
-fn update_custom_entity_tag(level: Option<&ServerLevel>, entity: &mut LevelEntity, entity_data: &Nbt) -> Option<Nbt> {
+fn update_custom_entity_tag(level: &ServerLevel, entity: &mut LevelEntity, entity_data: &Nbt) -> Option<Nbt> {
     let Nbt::Compound(fields) = entity_data else { return None };
     let entity_type = wafer_data::registry::ENTITY_TYPE[entity.entity().entity_type as usize];
     if fields.iter().find(|(k, _)| k == "id").and_then(|(_, v)| v.as_str()) != Some(entity_type) {
@@ -440,8 +463,8 @@ fn update_custom_entity_tag(level: Option<&ServerLevel>, entity: &mut LevelEntit
     let uuid = entity.entity().uuid;
     crate::nbt::merge(&mut tag, &unsafe_data);
     let tag = Nbt::Compound(tag);
-    let converted = level.map_or(std::borrow::Cow::Borrowed(&tag), |level| level.with_old_owner_converted(entity, &tag));
-    if let Err(e) = entity.load(&converted) {
+    let converted = level.with_old_owner_converted(entity, &tag);
+    if let Err(e) = entity.load_in_level(&converted, &level.scoreboard) {
         error!("{e}");
     }
     entity.entity_mut().uuid = uuid;
@@ -662,7 +685,7 @@ impl ServerLevel {
             entity = self.finalize_spawn_detached(entity, &difficulty, spawn_reason, None).0;
         }
         if let Some(item_stack) = item_stack
-            && let Some(tag) = apply_default_stack_config_in_level(Some(self), &mut entity, item_stack)
+            && let Some(tag) = apply_default_stack_config(self, &mut entity, item_stack)
         {
             entity = self.reassess_weapon_goal_detached(entity);
             entity = self.read_level_dependent_save_data_detached(entity, &tag);
@@ -787,7 +810,7 @@ impl ServerLevel {
             warn!("Skipping Entity with id {entity_type}");
             return None;
         };
-        if let Err(e) = entity.load(&self.with_old_owner_converted(&entity, nbt)) {
+        if let Err(e) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt), &self.scoreboard) {
             error!("{e}");
             return None;
         }
@@ -849,4 +872,36 @@ mod tests {
         let bolt = super::super::lightning_bolt::LightningBolt::new(Vec3::ZERO);
         assert_eq!(LevelEntity::LightningBolt(bolt).save(), None);
     }
-}
+
+    fn marker_tag(uuid: u128, team: Nbt) -> Nbt {
+        Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:marker".into())), ("UUID".into(), uuid_ints(uuid)), ("Team".into(), team)])
+    }
+
+    fn team_of(level: &ServerLevel, uuid: u128) -> Option<String> {
+        level.scoreboard.borrow().get_players_team(&format_uuid(uuid)).map(|team| team.name().to_string())
+    }
+
+    #[test]
+    fn team_field_adds_loaded_entities_to_the_team() {
+        let mut level = testing::level();
+        level.scoreboard.borrow_mut().add_player_team("red");
+        level.load_entity(&marker_tag(1, Nbt::String("red".into()))).unwrap();
+        level.load_entity(&marker_tag(2, Nbt::String("blue".into()))).unwrap();
+        level.load_entity(&marker_tag(3, Nbt::Int(5))).unwrap();
+        assert_eq!(team_of(&level, 1).as_deref(), Some("red"));
+        assert_eq!(team_of(&level, 2), None);
+        assert_eq!(team_of(&level, 3), None);
+    }
+
+    #[test]
+    fn team_field_in_entity_data_adds_the_entity_to_the_team() {
+        let mut level = testing::level();
+        level.scoreboard.borrow_mut().add_player_team("red");
+        let mut entity = ServerLevel::create_entity("minecraft:marker").unwrap();
+        let uuid = entity.entity().uuid;
+        let data = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:marker".into())), ("Team".into(), Nbt::String("red".into()))]);
+        let mut stack = ItemStack::new(wafer_data::items::STONE, 1);
+        stack.set(crate::world::item::component::ENTITY_DATA, Some(data));
+        apply_default_stack_config(&level, &mut entity, &stack).unwrap();
+        assert_eq!(team_of(&level, uuid).as_deref(), Some("red"));
+    }}

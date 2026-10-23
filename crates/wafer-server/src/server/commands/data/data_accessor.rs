@@ -57,10 +57,13 @@ impl DataAccessor {
         match self {
             DataAccessor::Entity(id) => {
                 let level = server.entity_level_mut(*id);
+                let scoreboard = level.scoreboard.clone();
                 if let Some(part) = level.dragon_part_entity_mut(*id) {
                     let uuid = part.uuid;
                     if let Err(e) = part.load(&tag) {
                         error!("{e}");
+                    } else {
+                        part.load_team(&tag, &scoreboard);
                     }
                     part.uuid = uuid;
                     return Ok(());
@@ -79,7 +82,7 @@ impl DataAccessor {
                 let entity = level.entities.get_mut(id).expect("the entity");
                 let uuid = entity.entity().uuid;
                 let previous_dimensions = entity.entity().dimensions;
-                if let Err(e) = entity.load(&converted) {
+                if let Err(e) = entity.load_in_level(&converted, &level.scoreboard) {
                     error!("{e}");
                 }
                 entity.entity_mut().uuid = uuid;

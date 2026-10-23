@@ -19,7 +19,7 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
             return (InteractionResult::Pass, None);
         }
     }
-    let Some(mut boat) = get_boat(&hit_result, &item_stack) else { return (InteractionResult::Fail, None) };
+    let Some(mut boat) = get_boat(level, &hit_result, &item_stack) else { return (InteractionResult::Fail, None) };
     let y_rot = level.entity(player).y_rot;
     boat.entity_mut().set_y_rot(y_rot);
     let boat_box = boat.entity().bounding_box();
@@ -34,11 +34,11 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
     (InteractionResult::SUCCESS, Some(item_stack))
 }
 
-fn get_boat(hit_result: &BlockHitResult, item_stack: &ItemStack) -> Option<LevelEntity> {
+fn get_boat(level: &ServerLevel, hit_result: &BlockHitResult, item_stack: &ItemStack) -> Option<LevelEntity> {
     let mut entity = ServerLevel::create_entity(item_stack.item.name())?;
     let LevelEntity::Boat(boat) = &mut entity else { return None };
     let location = hit_result.location;
     boat.set_initial_pos(location.x, location.y, location.z);
-    apply_default_stack_config(&mut entity, item_stack);
+    apply_default_stack_config(level, &mut entity, item_stack);
     Some(entity)
 }

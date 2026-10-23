@@ -1001,6 +1001,7 @@ impl Server {
         };
         if let Some(nbt) = &saved {
             player.load_nbt(nbt);
+            player.entity.load_team(nbt, &self.scoreboard);
             let level = &mut self.levels[level_index];
             if let Some(bed_position) = ServerPlayer::saved_sleeping_pos(nbt).filter(|&pos| level.has_chunk_at(pos)) {
                 let state = crate::world::level::BlockGetter::block_state(level, bed_position);

@@ -93,6 +93,7 @@ pub struct ChunkCache {
     ticking_ready: Vec<ChunkPos>,
     structure_starts_available: Vec<(ChunkPos, FastMap<StructureHolder, i32>)>,
     world_gen_chunk_entities: Vec<Vec<wafer_protocol::nbt::Nbt>>,
+    world_gen_entity_teams: Vec<(u128, String)>,
     full_status_changes: VecDeque<(ChunkPos, FullChunkStatus)>,
     full_status_tasks: VecDeque<(ChunkPos, FullChunkStatus)>,
     last_chunk: Cell<[Option<(ChunkPos, bool)>; 4]>,
@@ -154,6 +155,7 @@ impl ChunkCache {
             ticking_ready: Vec::new(),
             structure_starts_available: Vec::new(),
             world_gen_chunk_entities: Vec::new(),
+            world_gen_entity_teams: Vec::new(),
             full_status_changes: VecDeque::new(),
             full_status_tasks: VecDeque::new(),
             last_chunk: Cell::new([None; 4]),
@@ -354,6 +356,10 @@ impl ChunkCache {
 
     pub fn take_world_gen_chunk_entities(&mut self) -> Vec<Vec<wafer_protocol::nbt::Nbt>> {
         std::mem::take(&mut self.world_gen_chunk_entities)
+    }
+
+    pub fn take_world_gen_entity_teams(&mut self) -> Vec<(u128, String)> {
+        std::mem::take(&mut self.world_gen_entity_teams)
     }
 
     pub fn take_structure_starts_available(&mut self) -> Vec<(ChunkPos, FastMap<StructureHolder, i32>)> {
@@ -1209,7 +1215,7 @@ impl ChunkCache {
             lit[i] = self.holders.get(pos.pack()).is_some_and(|h| h.status_done(&self.holders.futures, ChunkStatus::InitializeLight));
             taken.push((pos, chunk, terrain));
         }
-        let (result, light_tasks, poi_updates) = {
+        let (result, light_tasks, poi_updates, entity_teams) = {
             let mut iter = taken.iter_mut();
             let cache: [Option<&mut LevelChunk>; 9] = std::array::from_fn(|_| iter.next().and_then(|(_, c, _)| c.as_mut()));
             let generation = WorldGenerationContext {
@@ -1225,7 +1231,7 @@ impl ChunkCache {
             region.level_data = self.region_level_data;
             region.environment_attributes = Some(&self.static_environment_attributes);
             let result = f(&mut region, &generator);
-            (result, std::mem::take(&mut region.light_tasks), std::mem::take(&mut region.poi_updates))
+            (result, std::mem::take(&mut region.light_tasks), std::mem::take(&mut region.poi_updates), std::mem::take(&mut region.entity_teams))
         };
         for (i, (pos, chunk, terrain)) in taken.into_iter().enumerate() {
             if let Some(mut chunk) = chunk {
@@ -1250,6 +1256,7 @@ impl ChunkCache {
         for (pos, old, new) in poi_updates {
             self.poi_manager.update_on_block_state_change(pos, old, new);
         }
+        self.world_gen_entity_teams.extend(entity_teams);
         result
     }
 
@@ -1755,6 +1762,20 @@ mod tests {
 
     fn overworld() -> &'static DimensionType {
         &wafer_data::DIMENSION_TYPES[0]
+    }
+
+    #[test]
+    fn world_gen_entity_teams_are_applied_by_the_level() {
+        use crate::world::level::world_gen_level::WorldGenLevel;
+        let mut level = testing::level();
+        level.scoreboard.borrow_mut().add_player_team("red");
+        let entity = ServerLevel::create_entity("minecraft:marker").unwrap();
+        let uuid = crate::world::level::storage::format_uuid(entity.entity().uuid);
+        let nbt = wafer_protocol::nbt::Nbt::Compound(vec![("Team".into(), wafer_protocol::nbt::Nbt::String("red".into()))]);
+        level.chunks.with_region(ChunkPos::new(0, 0), |region, _| region.load_team(entity.entity(), &nbt));
+        assert!(level.scoreboard.borrow().get_players_team(&uuid).is_none());
+        level.process_chunk_events();
+        assert_eq!(level.scoreboard.borrow().get_players_team(&uuid).map(|team| team.name().to_string()).as_deref(), Some("red"));
     }
 
     #[test]

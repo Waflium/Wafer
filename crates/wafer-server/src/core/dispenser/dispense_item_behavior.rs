@@ -171,7 +171,7 @@ fn execute_armor_stand(level: &mut ServerLevel, source: &BlockSource, mut dispen
         return dispensed;
     };
     entity.entity_mut().set_y_rot(direction.to_y_rot());
-    if let Some(tag) = crate::world::entity::entity_save::apply_default_stack_config(&mut entity, &dispensed) {
+    if let Some(tag) = crate::world::entity::entity_save::apply_default_stack_config(level, &mut entity, &dispensed) {
         entity = level.read_level_dependent_save_data_detached(entity, &tag);
     }
     crate::world::level::server_level_accessor::ServerLevelAccessor::add_fresh_entity_with_passengers(level, entity);

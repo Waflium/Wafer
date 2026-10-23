@@ -3535,7 +3535,7 @@ impl crate::server::Server {
         }
         let mut new_entity = ServerLevel::create_entity(registry::ENTITY_TYPE[old_entity.entity_type as usize])?;
         let saved = Nbt::Compound(old_entity.data.clone().unwrap_or_default());
-        let _ = new_entity.load(&saved);
+        let _ = new_entity.load_in_level(&saved, &self.levels[transition.new_level].scoreboard);
         let new_entity = self.levels[transition.new_level].reassess_weapon_goal_detached(new_entity);
         let mut new_entity = self.levels[transition.new_level].read_level_dependent_save_data_detached(new_entity, &saved);
         let e = new_entity.entity_mut();

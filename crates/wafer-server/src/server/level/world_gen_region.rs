@@ -48,6 +48,7 @@ pub struct WorldGenRegion<'a> {
     pub environment_attributes: Option<&'a EnvironmentAttributeSystem>,
     pub light_tasks: Vec<RegionLightTask>,
     pub poi_updates: Vec<(BlockPos, BlockState, BlockState)>,
+    pub entity_teams: Vec<(u128, String)>,
     pub structure_starts: Option<Arc<Vec<Vec<Arc<StructureStart>>>>>,
 }
 
@@ -108,6 +109,7 @@ impl<'a> WorldGenRegion<'a> {
             environment_attributes: None,
             light_tasks: Vec::new(),
             poi_updates: Vec::new(),
+            entity_teams: Vec::new(),
             structure_starts: None,
         }
     }
@@ -324,6 +326,12 @@ impl crate::world::level::world_gen_level::WorldGenLevel for WorldGenRegion<'_> 
 
     fn get_block_state(&mut self, pos: BlockPos) -> BlockState {
         WorldGenRegion::get_block_state(self, pos)
+    }
+
+    fn load_team(&mut self, entity: &crate::world::entity::Entity, nbt: &wafer_protocol::nbt::Nbt) {
+        if let Some(team_name) = crate::world::level::storage::tag_value_input::get_string(nbt, "Team") {
+            self.entity_teams.push((entity.uuid, team_name.to_string()));
+        }
     }
 
     fn get_height_of_level(&self) -> i32 {

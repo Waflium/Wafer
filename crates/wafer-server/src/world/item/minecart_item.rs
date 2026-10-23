@@ -36,7 +36,7 @@ pub fn create_minecart(level: &mut ServerLevel, spawn_pos: Vec3, entity_type: &s
     let mut entity = ServerLevel::create_entity(entity_type)?;
     let LevelEntity::Minecart(minecart) = &mut entity else { return None };
     minecart.set_initial_pos(spawn_pos.x, spawn_pos.y, spawn_pos.z);
-    apply_default_stack_config(&mut entity, item_stack);
+    apply_default_stack_config(level, &mut entity, item_stack);
     if !use_experimental_movement(level) {
         return Some(entity);
     }

@@ -2336,6 +2336,10 @@ impl crate::world::level::world_gen_level::WorldGenLevel for ServerLevel {
         }
     }
 
+    fn load_team(&mut self, entity: &crate::world::entity::Entity, nbt: &Nbt) {
+        entity.load_team(nbt, &self.scoreboard);
+    }
+
     fn get_block_state(&mut self, pos: BlockPos) -> BlockState {
         self.chunks.block_state(pos)
     }

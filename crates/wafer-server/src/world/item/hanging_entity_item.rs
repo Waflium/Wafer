@@ -61,7 +61,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
         "minecraft:glow_item_frame" => LevelEntity::ItemFrame(ItemFrame::new(true, block_pos, clicked_face)),
         _ => return InteractionResult::SUCCESS,
     };
-    apply_default_stack_config(&mut entity, &item_in_hand);
+    apply_default_stack_config(level, &mut entity, &item_in_hand);
     if survives(level, &entity) {
         let e = entity.entity();
         if !e.is_silent() {
