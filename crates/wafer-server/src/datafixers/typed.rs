@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::dynamic::{DataResult, Dynamic};
-use super::types::{Type, equals};
+use super::types::{Type, choice_order, equals};
 use super::value::{self, Value};
 
 #[derive(Clone)]
@@ -265,7 +265,13 @@ pub fn point(ty: &Arc<Type>) -> Option<Value> {
         Type::Sum(first, second) => point(second).map(|value| Value::Right(Box::new(value))).or_else(|| point(first).map(|value| Value::Left(Box::new(value)))),
         Type::List(_) => Some(Value::List(Vec::new())),
         Type::CompoundList(..) => Some(Value::CompoundList(Vec::new())),
-        Type::TaggedChoice(choice) => choice.types.iter().find_map(|(key, element)| point(element).map(|value| Value::Choice(key.clone(), Box::new(value)))),
+        Type::TaggedChoice(choice) => {
+            let keys: Vec<&str> = choice.types.iter().map(|(key, _)| key.as_str()).collect();
+            choice_order::point_order(&keys).into_iter().find_map(|item| {
+                let (key, element) = &choice.types[item];
+                point(element).map(|value| Value::Choice(key.clone(), Box::new(value)))
+            })
+        }
     }
 }
 

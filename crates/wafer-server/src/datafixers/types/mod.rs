@@ -1,3 +1,5 @@
+pub mod choice_order;
+
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
