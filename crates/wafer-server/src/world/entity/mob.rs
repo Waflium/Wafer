@@ -3658,7 +3658,7 @@ impl ServerLevel {
     fn enchant_spawned_equipment(&mut self, id: EntityId, slot: EquipmentSlot, chance: f32, difficulty: &DifficultyInstance) {
         let Some(mut item_stack) = self.item_by_slot(id, slot) else { return };
         if self.random.next_float() < chance * difficulty.get_special_multiplier() {
-            enchantment_helper::enchant_item_from_provider(&mut item_stack, &vanilla_enchantment_providers::MOB_SPAWN_EQUIPMENT, difficulty, &mut self.random);
+            enchantment_helper::enchant_item_from_provider(&mut item_stack, vanilla_enchantment_providers::MOB_SPAWN_EQUIPMENT, difficulty, &mut self.random);
             self.living_set_item_slot(id, slot, item_stack);
         }
     }

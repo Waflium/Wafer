@@ -246,10 +246,11 @@ pub fn get_enchantment_cost(random: &mut impl RandomSource, slot: i32, mut bookc
 
 pub fn enchant_item_from_provider(
     item_stack: &mut ItemStack,
-    provider: &super::providers::enchantment_provider::EnchantmentProvider,
+    provider_key: &str,
     difficulty: &crate::world::difficulty_instance::DifficultyInstance,
     random: &mut impl RandomSource,
 ) {
+    let Some(provider) = super::providers::enchantment_provider::get(provider_key) else { return };
     let item = item_stack.clone();
     update_enchantments(item_stack, |enchantments| provider.enchant(&item, enchantments, random, difficulty));
 }

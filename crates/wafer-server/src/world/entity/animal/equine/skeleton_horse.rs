@@ -256,7 +256,7 @@ impl SkeletonTrapGoal {
         let mut stack = level.item_by_slot(skeleton, slot).unwrap_or_else(ItemStack::empty);
         stack.set(dc::ENCHANTMENTS, Some(ItemEnchantments::default().to_nbt()));
         let mut random = std::mem::replace(&mut level.entity_mut(skeleton).random, wafer_core::random::LegacyRandomSource::new(0));
-        enchantment_helper::enchant_item_from_provider(&mut stack, &vanilla_enchantment_providers::MOB_SPAWN_EQUIPMENT, difficulty, &mut random);
+        enchantment_helper::enchant_item_from_provider(&mut stack, vanilla_enchantment_providers::MOB_SPAWN_EQUIPMENT, difficulty, &mut random);
         level.entity_mut(skeleton).random = random;
         level.living_set_item_slot(skeleton, slot, stack);
     }

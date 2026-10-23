@@ -503,7 +503,7 @@ impl ServerLevel {
         let Some(carrying_block) = get_carried_block(self.entity(id)) else { return };
         let mut fake_tool = ItemStack::new(items::DIAMOND_AXE, 1);
         let difficulty = self.current_difficulty_at(self.entity(id).block_position());
-        enchantment_helper::enchant_item_from_provider(&mut fake_tool, &vanilla_enchantment_providers::ENDERMAN_LOOT_DROP, &difficulty, &mut self.entity_mut(id).random);
+        enchantment_helper::enchant_item_from_provider(&mut fake_tool, vanilla_enchantment_providers::ENDERMAN_LOOT_DROP, &difficulty, &mut self.entity_mut(id).random);
         let position = self.entity(id).position();
         let mut params = LootParams::new(self);
         params.origin = Some(position);

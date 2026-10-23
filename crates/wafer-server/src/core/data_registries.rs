@@ -8,7 +8,6 @@ use crate::server::packs::repository::VANILLA_ID;
 use crate::server::packs::resources::MultiPackResourceManager;
 
 pub struct DataRegistry {
-    pub name: &'static str,
     to_network: Vec<i32>,
     from_network: Vec<i32>,
     contents: Vec<Option<Value>>,
@@ -31,10 +30,6 @@ impl DataRegistry {
 
     pub fn network_contents(&self, id: i32) -> Option<&Value> {
         self.contents.get(id as usize).and_then(Option::as_ref)
-    }
-
-    pub fn element(&self, id: i32) -> Option<&Value> {
-        self.elements.get(id as usize)
     }
 
     pub fn json_entries(&self) -> &'static [(&'static str, &'static str)] {
@@ -78,10 +73,6 @@ pub fn network_id(registry: &str, id: i32) -> i32 {
 
 pub fn from_network_id(registry: &str, network_id: i32) -> i32 {
     get(registry).map_or(network_id, |registry| registry.from_network_id(network_id))
-}
-
-pub fn element(registry: &str, id: i32) -> Option<&'static Value> {
-    get(registry)?.element(id)
 }
 
 pub fn json_entries(registry: &str) -> &'static [(&'static str, &'static str)] {
@@ -147,6 +138,7 @@ const UNSYNCHRONIZED: &[(&str, &[(&str, &str)])] = &[
     ("minecraft:trial_spawner", wafer_data::TRIAL_SPAWNER_CONFIGS),
     ("minecraft:villager_trade", wafer_data::VILLAGER_TRADES),
     ("minecraft:trade_set", wafer_data::TRADE_SETS),
+    ("minecraft:enchantment_provider", &[]),
 ];
 
 fn load_registry(resource_manager: &MultiPackResourceManager, name: &'static str, builtin: &[&'static str]) -> (DataRegistry, &'static [&'static str]) {
@@ -187,7 +179,7 @@ fn load_registry(resource_manager: &MultiPackResourceManager, name: &'static str
             to_network[id as usize] = network_id as i32;
         }
         let json: Vec<(&'static str, &'static str)> = entries.iter().zip(&elements).map(|(&name, element)| (name, &*Box::leak(element.to_string().into_boxed_str()))).collect();
-        (DataRegistry { name, to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) }, Box::leak(entries.into_boxed_slice()))
+        (DataRegistry { to_network, from_network, contents, elements, json: Box::leak(json.into_boxed_slice()) }, Box::leak(entries.into_boxed_slice()))
     }
 }
 
@@ -244,7 +236,7 @@ mod tests {
             for id in 0..builtin.entries.len() as i32 {
                 assert_eq!(registry.network_id(id), id, "{} {}", builtin.name, builtin.entries[id as usize]);
                 assert!(registry.network_contents(id).is_none(), "{} {}", builtin.name, builtin.entries[id as usize]);
-                assert!(registry.element(id).is_some_and(|element| !element.is_null()), "{} {}", builtin.name, builtin.entries[id as usize]);
+                assert!(registry.json_entries()[id as usize].1 != "null", "{} {}", builtin.name, builtin.entries[id as usize]);
             }
         }
     }

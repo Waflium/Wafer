@@ -1,21 +1,98 @@
+use std::sync::OnceLock;
+
+use serde_json::Value;
 use wafer_core::random::RandomSource;
 
+use super::enchantments_by_cost::EnchantmentsByCost;
 use super::enchantments_by_cost_with_difficulty::EnchantmentsByCostWithDifficulty;
 use super::single_enchantment::SingleEnchantment;
+use crate::core::holder_set::HolderSet;
 use crate::world::difficulty_instance::DifficultyInstance;
 use crate::world::item::ItemStack;
+use crate::world::item::component::codec;
 use crate::world::item::component::values::ItemEnchantments;
 
 pub enum EnchantmentProvider {
+    ByCost(EnchantmentsByCost),
     ByCostWithDifficulty(EnchantmentsByCostWithDifficulty),
     Single(SingleEnchantment),
 }
 
 impl EnchantmentProvider {
+    pub fn parse(json: &Value) -> Result<EnchantmentProvider, String> {
+        let kind = json["type"].as_str().ok_or("No key type in MapLike")?;
+        match crate::resources::identifier::read(kind)?.as_str() {
+            "minecraft:by_cost" => Ok(EnchantmentProvider::ByCost(EnchantmentsByCost::parse(json)?)),
+            "minecraft:by_cost_with_difficulty" => Ok(EnchantmentProvider::ByCostWithDifficulty(EnchantmentsByCostWithDifficulty::parse(json)?)),
+            "minecraft:single" => Ok(EnchantmentProvider::Single(SingleEnchantment::parse(json)?)),
+            other => Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:enchantment_provider_type]: {other}")),
+        }
+    }
+
     pub fn enchant(&self, item: &ItemStack, item_enchantments: &mut ItemEnchantments, random: &mut impl RandomSource, difficulty: &DifficultyInstance) {
         match self {
+            EnchantmentProvider::ByCost(provider) => provider.enchant(item, item_enchantments, random),
             EnchantmentProvider::ByCostWithDifficulty(provider) => provider.enchant(item, item_enchantments, random, difficulty),
             EnchantmentProvider::Single(provider) => provider.enchant(item_enchantments, random),
+        }
+    }
+}
+
+pub fn get(key: &str) -> Option<&'static EnchantmentProvider> {
+    static PROVIDERS: OnceLock<Vec<(&'static str, EnchantmentProvider)>> = OnceLock::new();
+    PROVIDERS
+        .get_or_init(|| {
+            let mut providers = Vec::new();
+            for &(name, json) in crate::core::data_registries::json_entries("minecraft:enchantment_provider") {
+                match serde_json::from_str(json).map_err(|e| e.to_string()).and_then(|json: Value| EnchantmentProvider::parse(&json)) {
+                    Ok(provider) => providers.push((name, provider)),
+                    Err(e) => error!("Failed to parse enchantment provider {name}: {e}"),
+                }
+            }
+            providers
+        })
+        .iter()
+        .find(|(name, _)| *name == key)
+        .map(|(_, provider)| provider)
+}
+
+pub fn parse_enchantments(json: &Value) -> Result<HolderSet, String> {
+    HolderSet::decode("minecraft:enchantment", &crate::world::item::component::json_to_nbt(json))
+}
+
+pub fn enchantment_names(enchantments: &HolderSet) -> Vec<&'static str> {
+    let names = codec::registry("minecraft:enchantment");
+    let ids = match enchantments {
+        HolderSet::Named(key, _) => wafer_data::tag("minecraft:enchantment", key),
+        HolderSet::Direct(ids) => ids,
+    };
+    ids.iter().map(|&id| names[id as usize]).collect()
+}
+
+pub fn int_range(json: &Value, min: i32, max: i32) -> Result<i32, String> {
+    let value = json.as_i64().ok_or_else(|| format!("Not a number: {json}"))? as i32;
+    if value < min || value > max {
+        return Err(format!("Value must be within range [{min};{max}]: {value}"));
+    }
+    Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::vanilla_enchantment_providers;
+
+    #[test]
+    fn vanilla_providers_load() {
+        for key in [
+            vanilla_enchantment_providers::MOB_SPAWN_EQUIPMENT,
+            vanilla_enchantment_providers::PILLAGER_SPAWN_CROSSBOW,
+            vanilla_enchantment_providers::RAID_PILLAGER_POST_WAVE_3,
+            vanilla_enchantment_providers::RAID_PILLAGER_POST_WAVE_5,
+            vanilla_enchantment_providers::RAID_VINDICATOR,
+            vanilla_enchantment_providers::RAID_VINDICATOR_POST_WAVE_5,
+            vanilla_enchantment_providers::ENDERMAN_LOOT_DROP,
+        ] {
+            assert!(super::get(key).is_some(), "{key}");
         }
     }
 }

@@ -164,7 +164,7 @@ impl ServerLevel {
             && let Some(mut weapon) = self.item_by_slot(id, EquipmentSlot::Mainhand)
             && weapon.is(items::CROSSBOW)
         {
-            enchantment_helper::enchant_item_from_provider(&mut weapon, &vanilla_enchantment_providers::PILLAGER_SPAWN_CROSSBOW, difficulty, &mut self.random);
+            enchantment_helper::enchant_item_from_provider(&mut weapon, vanilla_enchantment_providers::PILLAGER_SPAWN_CROSSBOW, difficulty, &mut self.random);
             self.set_item_slot(id, EquipmentSlot::Mainhand, weapon);
         }
     }

@@ -193,9 +193,9 @@ impl ServerLevel {
         }
         let mut crossbow = ItemStack::new(wafer_data::items::CROSSBOW, 1);
         let provider = if wave > raid::get_num_groups(crate::world::difficulty::Difficulty::Normal) {
-            Some(&vanilla_enchantment_providers::RAID_PILLAGER_POST_WAVE_5)
+            Some(vanilla_enchantment_providers::RAID_PILLAGER_POST_WAVE_5)
         } else if wave > raid::get_num_groups(crate::world::difficulty::Difficulty::Easy) {
-            Some(&vanilla_enchantment_providers::RAID_PILLAGER_POST_WAVE_3)
+            Some(vanilla_enchantment_providers::RAID_PILLAGER_POST_WAVE_3)
         } else {
             None
         };
@@ -214,7 +214,7 @@ impl ServerLevel {
         let enchant_odds = self.raider_current_raid(id).expect("a raid").get_enchant_odds();
         let should_enchant = self.entity_mut(id).random.next_float() <= enchant_odds;
         if should_enchant {
-            let provider = if wave > raid::get_num_groups(crate::world::difficulty::Difficulty::Normal) { &vanilla_enchantment_providers::RAID_VINDICATOR_POST_WAVE_5 } else { &vanilla_enchantment_providers::RAID_VINDICATOR };
+            let provider = if wave > raid::get_num_groups(crate::world::difficulty::Difficulty::Normal) { vanilla_enchantment_providers::RAID_VINDICATOR_POST_WAVE_5 } else { vanilla_enchantment_providers::RAID_VINDICATOR };
             let pos = self.entity(id).block_position();
             let difficulty = self.get_current_difficulty_at(pos);
             let mut random = self.entity(id).random.clone();
