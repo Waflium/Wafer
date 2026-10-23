@@ -269,6 +269,10 @@ pub fn positive_modulo(input: i32, m: i32) -> i32 {
     input.rem_euclid(m)
 }
 
+pub fn positive_ceil_div(input: i32, divisor: i32) -> i32 {
+    -(-input).div_euclid(divisor)
+}
+
 pub fn positive_modulo_d(input: f64, m: f64) -> f64 {
     (input % m + m) % m
 }

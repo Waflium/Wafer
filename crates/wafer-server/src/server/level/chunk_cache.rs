@@ -73,6 +73,7 @@ pub struct ChunkCache {
     pub light_engine: ThreadedLevelLightEngine,
     light_changes: Vec<(LightLayer, i64)>,
     ticking_light_changes: Vec<(LightLayer, i64)>,
+    waiting_for_light: FastSet<ChunkPos>,
     pub block_ticks: LevelTicks<Block>,
     pub fluid_ticks: LevelTicks<Fluid>,
     pub game_time: i64,
@@ -133,6 +134,7 @@ impl ChunkCache {
             light_engine: ThreadedLevelLightEngine::new(dimension.min_y, dimension.height as i32, dimension.has_skylight),
             light_changes: Vec::new(),
             ticking_light_changes: Vec::new(),
+            waiting_for_light: FastSet::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
             game_time: 0,
@@ -414,7 +416,19 @@ impl ChunkCache {
     }
 
     pub fn chunk_to_send(&self, pos: ChunkPos) -> bool {
-        self.is_ticking(pos)
+        self.is_ticking(pos) && !self.waiting_for_light.contains(&pos)
+    }
+
+    pub fn wait_for_light_before_sending(&mut self, center_chunk: ChunkPos, chunk_radius: i32) {
+        let affected_light_chunk_radius = chunk_radius + 1;
+        for x in center_chunk.x - affected_light_chunk_radius..=center_chunk.x + affected_light_chunk_radius {
+            for z in center_chunk.z - affected_light_chunk_radius..=center_chunk.z + affected_light_chunk_radius {
+                let pos = ChunkPos::new(x, z);
+                if self.holders.map.contains_key(&pos.pack()) {
+                    self.waiting_for_light.insert(pos);
+                }
+            }
+        }
     }
 
     pub fn is_position_ticking(&self, pos: ChunkPos) -> bool {
@@ -1394,6 +1408,7 @@ impl ChunkCache {
             self.run_light_batch();
         }
         self.on_light_updates();
+        self.waiting_for_light.clear();
     }
 
     fn on_light_updates(&mut self) {

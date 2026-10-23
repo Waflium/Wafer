@@ -556,7 +556,10 @@ impl ServerLevel {
             fight.set_dirty();
         }
         let exit_portal_location = self.fight().exit_portal_location.expect("an exit portal location");
-        EndPodiumFeature::new(activated).place(self, exit_portal_location);
+        if EndPodiumFeature::new(activated).place(self, exit_portal_location) {
+            let chunk_radius = wafer_core::mth::positive_ceil_div(4, 16);
+            self.chunks.wait_for_light_before_sending(exit_portal_location.chunk(), chunk_radius);
+        }
     }
 
     fn dragon_fight_create_new_dragon(&mut self) -> Option<EntityId> {
