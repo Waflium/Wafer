@@ -94,6 +94,7 @@ pub struct ChunkCache {
     structure_starts_available: Vec<(ChunkPos, FastMap<StructureHolder, i32>)>,
     world_gen_chunk_entities: Vec<Vec<wafer_protocol::nbt::Nbt>>,
     full_status_changes: VecDeque<(ChunkPos, FullChunkStatus)>,
+    full_status_tasks: VecDeque<(ChunkPos, FullChunkStatus)>,
     last_chunk: Cell<[Option<(ChunkPos, bool)>; 4]>,
     server_view_distance: i32,
     live_futures: usize,
@@ -154,6 +155,7 @@ impl ChunkCache {
             structure_starts_available: Vec::new(),
             world_gen_chunk_entities: Vec::new(),
             full_status_changes: VecDeque::new(),
+            full_status_tasks: VecDeque::new(),
             last_chunk: Cell::new([None; 4]),
             server_view_distance: 0,
             live_futures: 0,
@@ -517,6 +519,10 @@ impl ChunkCache {
             self.distance_manager.run_main_thread_task(&mut self.holders, task);
             return true;
         }
+        if let Some(change) = self.full_status_tasks.pop_front() {
+            self.full_status_changes.push_back(change);
+            return true;
+        }
         self.run_worldgen()
     }
 
@@ -561,7 +567,7 @@ impl ChunkCache {
                 Waiter::FullStatus { future, node, holder, token, status } => {
                     let confirmed = self.holders.get(node).is_some_and(|h| h.id == holder && h.pending_full_state_confirmation == token);
                     if confirmed && self.holders.futures.is_success(future) {
-                        self.full_status_changes.push_back((ChunkPos::unpack(node), status));
+                        self.full_status_tasks.push_back((ChunkPos::unpack(node), status));
                     }
                 }
             }

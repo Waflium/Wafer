@@ -16,6 +16,7 @@ fn server() -> Server {
         }
     }
     run(&mut server, "forceload add -16 -16 63 31");
+    server.levels[0].finish_chunk_work();
     server
 }
 
