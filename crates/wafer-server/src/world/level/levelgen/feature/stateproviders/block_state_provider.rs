@@ -7,7 +7,9 @@ use wafer_data::{Block, BlockState};
 use serde_json::Value;
 use wafer_protocol::nbt::Nbt;
 
+use crate::core::holder_set::HolderSet;
 use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::json_to_nbt;
 use crate::world::item::component::types::{self, Pair, opt, record, req};
 use crate::world::level::block::state::block_state;
 use crate::world::level::levelgen::blockpredicates::block_predicate;
@@ -88,7 +90,7 @@ pub enum BlockStateProvider {
     Noise(NoiseProvider),
     DualNoise { variety: (i32, i32), slow_noise: NoiseStack, slow_scale: f32, provider: NoiseProvider },
     NoiseThreshold { noise: NoiseStack, scale: f32, threshold: f32, high_chance: f32, default_state: BlockState, low_states: Vec<BlockState>, high_states: Vec<BlockState> },
-    RandomBlock(&'static [i32]),
+    RandomBlock(HolderSet),
     RandomizedInt { source: BlockStateProviderHolder, property: String, values: IntProvider },
     Rotated { state: BlockStateProviderHolder, direction: Option<Direction> },
     RuleBased { fallback: Option<BlockStateProviderHolder>, rules: Vec<(BlockPredicate, BlockStateProviderHolder)> },
@@ -211,10 +213,7 @@ impl BlockStateProvider {
                     high_states: parse_states(field("high_states")?)?,
                 }
             }
-            "random_block" => {
-                let blocks = field("blocks")?.as_str().and_then(|s| s.strip_prefix('#')).ok_or("random_block needs a block tag")?;
-                BlockStateProvider::RandomBlock(wafer_data::tag("minecraft:block", &resource(blocks)))
-            }
+            "random_block" => BlockStateProvider::RandomBlock(HolderSet::decode("minecraft:block", &json_to_nbt(field("blocks")?))?),
             "randomized_int" => BlockStateProvider::RandomizedInt {
                 source: BlockStateProviderHolder::parse(field("source")?)?,
                 property: field("property")?.as_str().ok_or("bad property")?.to_owned(),
@@ -299,6 +298,7 @@ impl BlockStateProvider {
     pub fn get_optional_state(&self, level: &mut impl WorldGenLevel, random: &mut impl RandomSource, pos: BlockPos) -> Option<BlockState> {
         match self {
             BlockStateProvider::RandomBlock(blocks) => {
+                let blocks = blocks.contents();
                 if blocks.is_empty() {
                     return None;
                 }

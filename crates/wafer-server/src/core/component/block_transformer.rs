@@ -2,13 +2,15 @@ use std::sync::LazyLock;
 
 use wafer_core::{BlockPos, Direction};
 use wafer_data::properties::{CHEST_TYPE, ChestType};
-use wafer_data::{EquipmentSlot, registry, registry_id};
+use wafer_data::EquipmentSlot;
 use wafer_protocol::nbt::Nbt;
 use serde_json::Value;
 
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::sounds::sound_event::SoundEvent;
 use crate::world::entity::EntityId;
 use crate::world::item::component as dc;
+use crate::world::item::component::json_to_nbt;
 use crate::world::item::component::types::{self, Pair, def, opt, record, req};
 use crate::world::level::levelgen::feature::stateproviders::block_state_provider;
 use crate::world::item::context::BlockPlaceContext;
@@ -77,7 +79,7 @@ pub enum TransformType {
 
 pub struct BlockTransformData {
     block_state_provider: BlockStateProviderHolder,
-    sound: Option<i32>,
+    sound: Option<SoundEvent>,
     particle: TransformParticle,
     disallowed_faces: Vec<Direction>,
     loot: Option<String>,
@@ -94,7 +96,10 @@ impl BlockTransformData {
         let flag = |key: &str, default: bool| json.get(key).and_then(Value::as_bool).unwrap_or(default);
         Some(BlockTransformData {
             block_state_provider: BlockStateProviderHolder::parse(json.get("block_state_provider")?).ok()?,
-            sound: string("sound").map(|sound| registry_id(registry::SOUND_EVENT, sound)),
+            sound: match json.get("sound") {
+                Some(sound) => Some(SoundEvent::from_nbt(&json_to_nbt(sound))?),
+                None => None,
+            },
             particle: match string("particle") {
                 Some("scrape") => TransformParticle::Scrape,
                 Some("wax_on") => TransformParticle::WaxOn,
@@ -195,8 +200,8 @@ impl BlockTransformer {
                 }
             }
             level.set_block(pos, updated_shape, UPDATE_ALL_IMMEDIATE);
-            if let Some(sound) = transform_data.sound {
-                level.play_sound(player, pos, sound, SoundSource::Blocks, 1.0, 1.0);
+            if let Some(sound) = &transform_data.sound {
+                level.play_sound(player, pos, sound.clone(), SoundSource::Blocks, 1.0, 1.0);
             }
             transform_data.particle.send(level, player, pos);
             level.game_event_at_with(crate::world::level::gameevent::game_event::BLOCK_CHANGE, pos, crate::world::level::gameevent::game_event::Context::of_entity_and_state(player, Some(updated_shape)));
@@ -212,5 +217,25 @@ impl BlockTransformer {
             return InteractionResult::SUCCESS;
         }
         InteractionResult::Pass
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::BlockTransformData;
+    use crate::sounds::sound_event::SoundEvent;
+
+    #[test]
+    fn sounds_are_registered_or_direct() {
+        let data = |sound: serde_json::Value| BlockTransformData::parse(&json!({"block_state_provider": {"type": "minecraft:simple", "state": {"id": "minecraft:stone"}}, "sound": sound}));
+        let registered = data(json!("minecraft:item.axe.strip")).unwrap();
+        assert!(matches!(registered.sound, Some(SoundEvent::Reference(_))));
+        let direct = data(json!({"sound_id": "t:custom_sound", "range": 24.0})).unwrap();
+        assert_eq!(direct.sound, Some(SoundEvent::Direct { location: "t:custom_sound".to_string(), fixed_range: Some(24.0) }));
+        let without_range = data(json!({"sound_id": "t:custom_sound"})).unwrap();
+        assert_eq!(without_range.sound, Some(SoundEvent::Direct { location: "t:custom_sound".to_string(), fixed_range: None }));
+        assert!(data(json!("t:nope")).is_none());
     }
 }

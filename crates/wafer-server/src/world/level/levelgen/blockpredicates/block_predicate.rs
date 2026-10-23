@@ -5,6 +5,7 @@ use wafer_data::{Block, BlockState, Fluid, Tag, block_tags, fluid_tags};
 use serde_json::Value;
 use wafer_protocol::nbt::Nbt;
 
+use crate::core::holder_set::HolderSet;
 use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
 use crate::world::item::component::custom;
 use crate::world::item::component::types::{self, Pair, def, req};
@@ -14,6 +15,7 @@ use crate::world::level::block::state::block_state;
 use crate::world::level::levelgen::material::vertical_anchor_codec;
 use crate::world::level::levelgen::material::{VerticalAnchor, WorldGenerationContext};
 use crate::world::level::levelgen::parse_block_state;
+use crate::world::level::levelgen::structure::structure::parse_biome_holder_set;
 
 pub enum BlockSet {
     Tag(&'static Tag),
@@ -126,6 +128,7 @@ pub enum BlockPredicate {
     MatchingBlocks { offset: (i32, i32, i32), blocks: BlockSet },
     MatchingBlockTag { offset: (i32, i32, i32), tag: &'static Tag },
     MatchingFluids { offset: (i32, i32, i32), fluids: FluidSet },
+    MatchingBiomes { biomes: HolderSet },
     Solid { offset: (i32, i32, i32) },
     Replaceable { offset: (i32, i32, i32) },
     WouldSurvive { offset: (i32, i32, i32), state: BlockState },
@@ -157,6 +160,7 @@ impl BlockPredicate {
                 BlockPredicate::MatchingBlockTag { offset: parse_offset(json)?, tag: block_tags::by_name(&resource(tag)).ok_or_else(|| format!("unknown block tag {tag}"))? }
             }
             "matching_fluids" => BlockPredicate::MatchingFluids { offset: parse_offset(json)?, fluids: FluidSet::parse(json.get("fluids").ok_or("missing fluids")?)? },
+            "matching_biomes" => BlockPredicate::MatchingBiomes { biomes: parse_biome_holder_set(json.get("biomes").ok_or("missing biomes")?)? },
             "solid" => BlockPredicate::Solid { offset: parse_offset(json)? },
             "replaceable" => BlockPredicate::Replaceable { offset: parse_offset(json)? },
             "would_survive" => BlockPredicate::WouldSurvive { offset: parse_offset(json)?, state: parse_block_state(json.get("state").ok_or("missing state")?)? },
@@ -189,6 +193,7 @@ impl BlockPredicate {
             BlockPredicate::MatchingBlocks { offset, blocks } => blocks.contains(level.get_block_state(at(*offset)).block()),
             BlockPredicate::MatchingBlockTag { offset, tag } => level.get_block_state(at(*offset)).is(tag),
             BlockPredicate::MatchingFluids { offset, fluids } => fluids.contains(level.get_block_state(at(*offset)).fluid_state().fluid),
+            BlockPredicate::MatchingBiomes { biomes } => biomes.contains(level.get_biome(origin).0 as i32),
             BlockPredicate::Solid { offset } => level.get_block_state(at(*offset)).is_solid(),
             BlockPredicate::Replaceable { offset } => level.get_block_state(at(*offset)).can_be_replaced(),
             BlockPredicate::WouldSurvive { offset, state } => block::of(*state).can_survive(*state, level, at(*offset)),
