@@ -332,6 +332,20 @@ impl Contents {
                 };
                 format!("NbtContents[nbtPath={path}, interpreting={}, plain={}, separator={separator}, dataSource={data_source}]", flag("interpret"), flag("plain"))
             }
+            Contents::NbtContents(contents) => {
+                let separator = contents.separator.as_ref().map_or_else(|| "Optional.empty".to_string(), |separator| format!("Optional[{}]", separator.java_to_string()));
+                let data_source = match &contents.data_source {
+                    nbt_contents::DataSource::Entity(selector) => format!("EntityDataSource[selector={}]", selector.source()),
+                    nbt_contents::DataSource::Block(coordinates) => format!("BlockDataSource[coordinates={}]", coordinates.source()),
+                    nbt_contents::DataSource::Storage(id) => format!("storage={id}"),
+                };
+                format!(
+                    "NbtContents[nbtPath={}, interpreting={}, plain={}, separator={separator}, dataSource={data_source}]",
+                    contents.nbt_path.source(),
+                    contents.interpreting,
+                    contents.plain
+                )
+            }
             Contents::Nbt(_) => String::new(),
         }
     }
