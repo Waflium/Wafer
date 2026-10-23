@@ -1,5 +1,5 @@
 use wafer_core::Vec3;
-use wafer_data::{damage_types, mob_effects};
+use wafer_data::{blocks, damage_types, mob_effects};
 
 use super::elder_guardian::ElderGuardian;
 use super::guardian::{self, Guardian};
@@ -11,6 +11,8 @@ use crate::world::entity::ai::goal::goal::{Flag, Goal};
 use crate::world::entity::attributes::Attribute;
 use crate::world::entity::mob::Mob;
 use crate::world::entity::{EntityId, LevelEntity};
+use crate::world::level::levelgen::structure::BoundingBox;
+use crate::world::level::update_flags::UPDATE_ALL;
 
 fn add(level: &mut ServerLevel, mut mob: Mob, pos: Vec3) -> EntityId {
     mob.entity.snap_to(pos.x, pos.y, pos.z, 0.0, 0.0);
@@ -64,6 +66,9 @@ fn elder_guardians_give_survival_players_mining_fatigue() {
     let mut level = testing::level();
     let near = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
     level.player_mut(near).game_mode.game_type = GameType::Survival;
+    for pos in BoundingBox::new(7, -60, -3, 14, -56, 4).positions().filter(|pos| !(8..=13).contains(&pos.x) || !(-2..=3).contains(&pos.z) || pos.y == -56) {
+        level.set_block(pos, blocks::BARRIER.default_state(), UPDATE_ALL);
+    }
     let elder = add(&mut level, ElderGuardian::create(), Vec3::new(10.5, -60.0, 0.5));
     for _ in 0..1201 {
         level.tick();

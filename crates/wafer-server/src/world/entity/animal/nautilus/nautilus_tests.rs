@@ -39,6 +39,15 @@ fn nautiluses_breathe_under_water() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 8.5), 180.0, 0.0);
     flood(&mut level);
+    for x in -5i32..=5 {
+        for z in -5i32..=5 {
+            for y in -60..=-55 {
+                if x.abs() == 5 || z.abs() == 5 || y == -55 {
+                    level.set_block(wafer_core::BlockPos::new(x, y, z), blocks::GLASS.default_state(), 3);
+                }
+            }
+        }
+    }
     let id = add(&mut level, "minecraft:nautilus", Vec3::new(0.5, -58.0, 0.5));
     for _ in 0..400 {
         level.tick();

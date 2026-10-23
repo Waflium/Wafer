@@ -38,8 +38,14 @@ fn joined(seed: i64) -> Server {
     let mut server = server();
     server.set_game_rule(game_rule::SPAWN_MONSTERS, 0);
     testing::server_player(&mut server, Vec3::new(8.5, -60.0, 8.5), 0.0, 0.0);
-    server.overworld_mut().chunks.run_until_idle();
-    server.overworld_mut().process_chunk_events();
+    let distance = server.overworld().simulation_distance;
+    let ticking = |server: &Server| (-distance..=distance).all(|x| (-distance..=distance).all(|z| server.overworld().chunks.is_ticking(ChunkPos::new(x, z))));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !ticking(&server) && std::time::Instant::now() < deadline {
+        server.overworld_mut().chunks.run_until_idle();
+        server.overworld_mut().process_chunk_events();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
     server.overworld_mut().random = LegacyRandomSource::new(seed);
     server
 }
