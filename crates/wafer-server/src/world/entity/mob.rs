@@ -1025,6 +1025,9 @@ impl Mob {
         if old_age < 0 && new_age >= 0 || old_age >= 0 && new_age < 0 {
             self.entity.data.set(ids::AGEABLE_BABY, DataValue::Boolean(new_age < 0));
             self.age_boundary_reached();
+            if let Some(ageable) = self.ageable_mut() {
+                ageable.age_boundary_pending = true;
+            }
             return true;
         }
         false
@@ -3451,6 +3454,9 @@ impl ServerLevel {
             self.zombie_villager_read_level_dependent_save_data(id, input);
         }
         self.do_pending_water_splash(id);
+        if !self.is_villager(id) {
+            self.age_boundary_reached(id);
+        }
         if matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::EnderDragon(_)))
             && let Some(phase) = super::boss::enderdragon::ender_dragon::take_ended_phase(self.mob_mut(id).expect("an ender dragon"))
         {

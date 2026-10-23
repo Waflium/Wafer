@@ -19,6 +19,7 @@ pub struct AgeableMob {
     pub forced_age: i32,
     pub forced_age_timer: i32,
     pub age_lock_particle_timer: i32,
+    pub age_boundary_pending: bool,
 }
 
 pub fn can_use_golden_dandelion(item_in_hand: &ItemStack, is_baby: bool, cooldown: i32, mob: &Mob) -> bool {
@@ -216,13 +217,34 @@ impl ServerLevel {
         if mob.set_age(age) {
             self.do_pending_water_splash(id);
             self.refresh_mob_dimensions(id);
-            if self.is_villager(id) {
-                self.villager_age_boundary_reached(id);
-            } else if self.is_turtle(id) {
-                self.turtle_age_boundary_reached(id);
-            } else if self.is_happy_ghast(id) {
-                self.happy_ghast_age_boundary_reached(id);
-            }
+            self.age_boundary_reached(id);
+        }
+    }
+
+    pub fn age_boundary_reached(&mut self, id: EntityId) {
+        let Some(ageable) = self.mob_mut(id).and_then(Mob::ageable_mut) else { return };
+        if !std::mem::take(&mut ageable.age_boundary_pending) {
+            return;
+        }
+        if !matches!(self.mob(id).map(|mob| &mob.kind), Some(MobKind::Goat(_) | MobKind::Hoglin(_))) {
+            self.ageable_mob_age_boundary_reached(id);
+        }
+        if self.is_villager(id) {
+            self.villager_age_boundary_reached(id);
+        } else if self.is_turtle(id) {
+            self.turtle_age_boundary_reached(id);
+        } else if self.is_happy_ghast(id) {
+            self.happy_ghast_age_boundary_reached(id);
+        }
+    }
+
+    fn ageable_mob_age_boundary_reached(&mut self, id: EntityId) {
+        if !self.is_baby(id)
+            && let Some(vehicle) = self.vehicle(id)
+            && self.is_boat(vehicle)
+            && !self.boat(vehicle).has_enough_space_for(self.entity(id))
+        {
+            self.stop_riding(id);
         }
     }
 
