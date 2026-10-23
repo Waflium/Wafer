@@ -20,17 +20,28 @@ pub struct EntityFlagsPredicate {
 impl EntityFlagsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityFlagsPredicate> {
         codec::map(tag)?;
-        let flag = |key| codec::decode_optional(tag, key, codec::bool_value);
+        let mut record = codec::Record::default();
+        let mut flag = |key| record.field(codec::decode_optional(tag, key, codec::bool_value));
+        let is_on_ground = flag("is_on_ground");
+        let is_on_fire = flag("is_on_fire");
+        let is_crouching = flag("is_sneaking");
+        let is_sprinting = flag("is_sprinting");
+        let is_swimming = flag("is_swimming");
+        let is_flying = flag("is_flying");
+        let is_baby = flag("is_baby");
+        let is_in_water = flag("is_in_water");
+        let is_fall_flying = flag("is_fall_flying");
+        record.finish()?;
         Ok(EntityFlagsPredicate {
-            is_on_ground: flag("is_on_ground")?,
-            is_on_fire: flag("is_on_fire")?,
-            is_crouching: flag("is_sneaking")?,
-            is_sprinting: flag("is_sprinting")?,
-            is_swimming: flag("is_swimming")?,
-            is_flying: flag("is_flying")?,
-            is_baby: flag("is_baby")?,
-            is_in_water: flag("is_in_water")?,
-            is_fall_flying: flag("is_fall_flying")?,
+            is_on_ground: is_on_ground.unwrap(),
+            is_on_fire: is_on_fire.unwrap(),
+            is_crouching: is_crouching.unwrap(),
+            is_sprinting: is_sprinting.unwrap(),
+            is_swimming: is_swimming.unwrap(),
+            is_flying: is_flying.unwrap(),
+            is_baby: is_baby.unwrap(),
+            is_in_water: is_in_water.unwrap(),
+            is_fall_flying: is_fall_flying.unwrap(),
         })
     }
 

@@ -11,14 +11,14 @@ pub struct DataComponentExactPredicate {
 
 impl DataComponentExactPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<DataComponentExactPredicate> {
-        let expected_components = codec::map(tag)?
-            .iter()
-            .map(|(id, value)| {
+        let expected_components = codec::dispatched_map(
+            tag,
+            |id| {
                 let id = crate::resources::identifier::read(id)?;
-                let ty = DataComponentType::by_name(&id).ok_or_else(|| format!("No element named '{id}' in registry minecraft:data_component_type"))?;
-                Ok((ty, ty.decode(value)?))
-            })
-            .collect::<DataResult<_>>()?;
+                DataComponentType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {id}"))
+            },
+            |ty, value| ty.decode(value),
+        )?;
         Ok(DataComponentExactPredicate { expected_components })
     }
 

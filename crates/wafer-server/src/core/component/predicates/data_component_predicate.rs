@@ -41,32 +41,41 @@ pub enum DataComponentPredicate {
 
 impl DataComponentPredicate {
     pub fn decode_map(tag: &Nbt) -> DataResult<Vec<DataComponentPredicate>> {
-        codec::map(tag)?.iter().map(|(key, value)| DataComponentPredicate::decode(key, value)).collect()
+        Ok(codec::dispatched_map(tag, |key| DataComponentPredicate::codec(&crate::resources::identifier::read(key)?), |decode, value| decode(value))?
+            .into_iter()
+            .map(|(_, predicate)| predicate)
+            .collect())
     }
 
-    pub fn decode(key: &str, tag: &Nbt) -> DataResult<DataComponentPredicate> {
-        let id = crate::resources::identifier::read(key)?;
-        Ok(match id.as_str() {
-            "minecraft:damage" => DataComponentPredicate::Damage(DamagePredicate::decode(tag)?),
-            "minecraft:enchantments" => DataComponentPredicate::Enchantments(EnchantmentsPredicate::decode(dc::ENCHANTMENTS, tag)?),
-            "minecraft:stored_enchantments" => DataComponentPredicate::StoredEnchantments(EnchantmentsPredicate::decode(dc::STORED_ENCHANTMENTS, tag)?),
-            "minecraft:potion_contents" => DataComponentPredicate::Potions(PotionsPredicate::decode(tag)?),
-            "minecraft:custom_data" => DataComponentPredicate::CustomData(CustomDataPredicate::decode(tag)?),
-            "minecraft:container" => DataComponentPredicate::Container(ContainerPredicate::decode(tag)?),
-            "minecraft:bundle_contents" => DataComponentPredicate::BundleContents(BundlePredicate::decode(tag)?),
-            "minecraft:firework_explosion" => DataComponentPredicate::FireworkExplosion(FireworkExplosionPredicate::decode(tag)?),
-            "minecraft:fireworks" => DataComponentPredicate::Fireworks(FireworksPredicate::decode(tag)?),
-            "minecraft:writable_book_content" => DataComponentPredicate::WritableBook(WritableBookPredicate::decode(tag)?),
-            "minecraft:written_book_content" => DataComponentPredicate::WrittenBook(WrittenBookPredicate::decode(tag)?),
-            "minecraft:attribute_modifiers" => DataComponentPredicate::AttributeModifiers(AttributeModifiersPredicate::decode(tag)?),
-            "minecraft:trim" => DataComponentPredicate::ArmorTrim(TrimPredicate::decode(tag)?),
-            "minecraft:jukebox_playable" => DataComponentPredicate::JukeboxPlayable(JukeboxPlayablePredicate::decode(tag)?),
-            "minecraft:villager/variant" => DataComponentPredicate::VillagerVariant(VillagerTypePredicate::decode(tag)?),
-            other => match DataComponentType::by_name(other) {
-                Some(ty) => DataComponentPredicate::AnyValue(AnyValue { ty }),
-                None => return Err(format!("Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_predicate_type]: {other}; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {other}")),
-            },
-        })
+    fn codec(id: &str) -> DataResult<Box<dyn Fn(&Nbt) -> DataResult<DataComponentPredicate>>> {
+        let concrete: Option<fn(&Nbt) -> DataResult<DataComponentPredicate>> = match id {
+            "minecraft:damage" => Some(|tag| Ok(DataComponentPredicate::Damage(DamagePredicate::decode(tag)?))),
+            "minecraft:enchantments" => Some(|tag| Ok(DataComponentPredicate::Enchantments(EnchantmentsPredicate::decode(dc::ENCHANTMENTS, tag)?))),
+            "minecraft:stored_enchantments" => Some(|tag| Ok(DataComponentPredicate::StoredEnchantments(EnchantmentsPredicate::decode(dc::STORED_ENCHANTMENTS, tag)?))),
+            "minecraft:potion_contents" => Some(|tag| Ok(DataComponentPredicate::Potions(PotionsPredicate::decode(tag)?))),
+            "minecraft:custom_data" => Some(|tag| Ok(DataComponentPredicate::CustomData(CustomDataPredicate::decode(tag)?))),
+            "minecraft:container" => Some(|tag| Ok(DataComponentPredicate::Container(ContainerPredicate::decode(tag)?))),
+            "minecraft:bundle_contents" => Some(|tag| Ok(DataComponentPredicate::BundleContents(BundlePredicate::decode(tag)?))),
+            "minecraft:firework_explosion" => Some(|tag| Ok(DataComponentPredicate::FireworkExplosion(FireworkExplosionPredicate::decode(tag)?))),
+            "minecraft:fireworks" => Some(|tag| Ok(DataComponentPredicate::Fireworks(FireworksPredicate::decode(tag)?))),
+            "minecraft:writable_book_content" => Some(|tag| Ok(DataComponentPredicate::WritableBook(WritableBookPredicate::decode(tag)?))),
+            "minecraft:written_book_content" => Some(|tag| Ok(DataComponentPredicate::WrittenBook(WrittenBookPredicate::decode(tag)?))),
+            "minecraft:attribute_modifiers" => Some(|tag| Ok(DataComponentPredicate::AttributeModifiers(AttributeModifiersPredicate::decode(tag)?))),
+            "minecraft:trim" => Some(|tag| Ok(DataComponentPredicate::ArmorTrim(TrimPredicate::decode(tag)?))),
+            "minecraft:jukebox_playable" => Some(|tag| Ok(DataComponentPredicate::JukeboxPlayable(JukeboxPlayablePredicate::decode(tag)?))),
+            "minecraft:villager/variant" => Some(|tag| Ok(DataComponentPredicate::VillagerVariant(VillagerTypePredicate::decode(tag)?))),
+            _ => None,
+        };
+        if let Some(concrete) = concrete {
+            return Ok(Box::new(concrete));
+        }
+        match DataComponentType::by_name(id) {
+            Some(ty) => Ok(Box::new(move |tag| {
+                codec::map(tag)?;
+                Ok(DataComponentPredicate::AnyValue(AnyValue { ty }))
+            })),
+            None => Err(format!("Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_predicate_type]: {id}; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {id}")),
+        }
     }
 
     pub fn matches(&self, components: &(impl DataComponentGetter + ?Sized)) -> bool {

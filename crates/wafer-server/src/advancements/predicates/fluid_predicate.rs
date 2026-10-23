@@ -16,10 +16,11 @@ pub struct FluidPredicate {
 impl FluidPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<FluidPredicate> {
         codec::map(tag)?;
-        Ok(FluidPredicate {
-            fluids: codec::decode_optional(tag, "fluids", |t| HolderSet::decode("minecraft:fluid", t))?,
-            properties: codec::decode_optional(tag, "state", StatePropertiesPredicate::decode)?,
-        })
+        let mut record = codec::Record::default();
+        let fluids = record.field(codec::decode_optional(tag, "fluids", |t| HolderSet::decode("minecraft:fluid", t)));
+        let properties = record.field(codec::decode_optional(tag, "state", StatePropertiesPredicate::decode));
+        record.finish()?;
+        Ok(FluidPredicate { fluids: fluids.unwrap(), properties: properties.unwrap() })
     }
 
     pub fn matches(&self, level: &mut ServerLevel, pos: BlockPos) -> bool {

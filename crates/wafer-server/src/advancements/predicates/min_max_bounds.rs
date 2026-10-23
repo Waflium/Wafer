@@ -4,7 +4,7 @@ use crate::commands::brigadier::{
     CommandSyntaxException, DynamicCommandExceptionType, READER_INVALID_DOUBLE, READER_INVALID_FLOAT, READER_INVALID_INT, SimpleCommandExceptionType,
     StringReader,
 };
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeError};
 
 pub static ERROR_EMPTY: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.range.empty");
 pub static ERROR_SWAPPED: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.range.swapped");
@@ -48,11 +48,14 @@ impl<T: Copy + PartialOrd> Bounds<T> {
     where
         T: JavaToString,
     {
-        let bounds = match codec::either(
+        let bounds = match codec::either_first_partial(
             tag,
             |t| {
-                codec::map(t)?;
-                Ok(Bounds { min: codec::decode_optional(t, "min", number)?, max: codec::decode_optional(t, "max", number)? })
+                codec::map(t).map_err(|message| DecodeError { message, partial: false })?;
+                match (codec::decode_optional(t, "min", number), codec::decode_optional(t, "max", number)) {
+                    (Ok(min), Ok(max)) => Ok(Bounds { min, max }),
+                    (min, max) => Err(DecodeError { message: codec::record_errors(&[min.as_ref().err(), max.as_ref().err()]).unwrap_err(), partial: true }),
+                }
             },
             number,
         )? {

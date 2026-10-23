@@ -17,10 +17,11 @@ pub struct TrimPredicate {
 impl TrimPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<TrimPredicate> {
         codec::map(tag)?;
-        Ok(TrimPredicate {
-            material: codec::decode_optional(tag, "material", |t| HolderSet::decode("minecraft:trim_material", t))?,
-            pattern: codec::decode_optional(tag, "pattern", |t| HolderSet::decode("minecraft:trim_pattern", t))?,
-        })
+        let mut record = codec::Record::default();
+        let material = record.field(codec::decode_optional(tag, "material", |t| HolderSet::decode("minecraft:trim_material", t)));
+        let pattern = record.field(codec::decode_optional(tag, "pattern", |t| HolderSet::decode("minecraft:trim_pattern", t)));
+        record.finish()?;
+        Ok(TrimPredicate { material: material.unwrap(), pattern: pattern.unwrap() })
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

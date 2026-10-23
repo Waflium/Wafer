@@ -12,7 +12,7 @@ pub struct SlotsPredicate {
 
 impl SlotsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<SlotsPredicate> {
-        let slots = codec::unbounded_map(tag, |name| slot_ranges::name_to_ids(name).ok_or_else(|| format!("Unknown element name:{name}")), ItemPredicate::decode)?;
+        let slots = codec::base_map(tag, |name| slot_ranges::name_to_ids(name).ok_or_else(|| format!("Unknown element name:{name}")), ItemPredicate::decode)?;
         Ok(SlotsPredicate { slots })
     }
 

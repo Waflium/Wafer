@@ -139,3 +139,27 @@ fn loot_arguments_suggest_registry_elements() {
     let suggestions = completion_suggestions(&server, &source, "/item replace block 0 0 0 weapon.").unwrap();
     assert_eq!(suggestions.list.into_iter().map(|s| s.text).collect::<Vec<_>>(), ["weapon.*", "weapon.mainhand", "weapon.offhand"]);
 }
+
+#[test]
+fn malformed_entity_predicates_print_vanilla_errors() {
+    let mut server = flat_server();
+    let predicate = |inner: &str| format!("execute if predicate {{type:\"minecraft:entity_properties\",entity:\"this\",predicate:{inner}}}");
+    assert_eq!(
+        run(&mut server, &predicate("{flags:{is_baby:\"x\"}}")),
+        ["Failed to parse structure: Not a number missed input: {flags:{is_baby:\"x\"}}", "...aby:\"x\"}}}<--[HERE]"]
+    );
+    assert_eq!(
+        run(&mut server, &predicate("{bogus:1,flags:{is_baby:\"x\"}}")),
+        [
+            "Failed to parse structure: Not a number; Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_sub_predicate_type]: minecraft:bogus; Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_sub_predicate_type]: minecraft:bogus missed input: {bogus:1,flags:{is_baby:\"x\"}}",
+            "...aby:\"x\"}}}<--[HERE]"
+        ]
+    );
+    assert_eq!(
+        run(&mut server, &predicate("{\"minecraft:type_specific/player\":{looking_at:{team:5}}}")),
+        [
+            "Failed to parse structure: Not a string missed input: {team:5} missed input: {\"minecraft:type_specific/player\":{looking_at:{team:5}}}",
+            "...team:5}}}}<--[HERE]"
+        ]
+    );
+}

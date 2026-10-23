@@ -13,10 +13,11 @@ pub struct RaiderPredicate {
 impl RaiderPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<RaiderPredicate> {
         codec::map(tag)?;
-        Ok(RaiderPredicate {
-            has_raid: codec::decode_or(tag, "has_raid", false, codec::bool_value)?,
-            is_captain: codec::decode_or(tag, "is_captain", false, codec::bool_value)?,
-        })
+        let mut record = codec::Record::default();
+        let has_raid = record.field(codec::decode_or(tag, "has_raid", false, codec::bool_value));
+        let is_captain = record.field(codec::decode_or(tag, "is_captain", false, codec::bool_value));
+        record.finish()?;
+        Ok(RaiderPredicate { has_raid: has_raid.unwrap(), is_captain: is_captain.unwrap() })
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

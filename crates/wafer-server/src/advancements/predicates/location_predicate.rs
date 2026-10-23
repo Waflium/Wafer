@@ -20,11 +20,12 @@ struct PositionPredicate {
 impl PositionPredicate {
     fn decode(tag: &Nbt) -> DataResult<PositionPredicate> {
         codec::map(tag)?;
-        Ok(PositionPredicate {
-            x: codec::decode_or(tag, "x", Doubles::ANY, Doubles::decode)?,
-            y: codec::decode_or(tag, "y", Doubles::ANY, Doubles::decode)?,
-            z: codec::decode_or(tag, "z", Doubles::ANY, Doubles::decode)?,
-        })
+        let mut record = codec::Record::default();
+        let x = record.field(codec::decode_or(tag, "x", Doubles::ANY, Doubles::decode));
+        let y = record.field(codec::decode_or(tag, "y", Doubles::ANY, Doubles::decode));
+        let z = record.field(codec::decode_or(tag, "z", Doubles::ANY, Doubles::decode));
+        record.finish()?;
+        Ok(PositionPredicate { x: x.unwrap(), y: y.unwrap(), z: z.unwrap() })
     }
 
     fn matches(&self, x: f64, y: f64, z: f64) -> bool {
@@ -45,19 +46,51 @@ pub struct LocationPredicate {
     can_see_sky: Option<bool>,
 }
 
+fn decode_structures(tag: &Nbt) -> DataResult<HolderSet> {
+    const REGISTRY: &str = "minecraft:worldgen/structure";
+    if let Nbt::String(name) = tag
+        && name.starts_with('#')
+    {
+        return HolderSet::decode(REGISTRY, tag);
+    }
+    codec::holder_set(tag, REGISTRY, |element| {
+        let id = codec::identifier(element)?;
+        if crate::core::data_registries::json_entries(REGISTRY).iter().any(|(key, _)| *key == id) {
+            Ok(id)
+        } else if codec::is_nbt_ops() {
+            Err(format!("Failed to get element {id} from registry {REGISTRY}"))
+        } else {
+            Err(format!("Missing element ResourceKey[{REGISTRY} / {id}]"))
+        }
+    })
+    .map_err(|error| error.message)?;
+    HolderSet::decode(REGISTRY, tag)
+}
+
 impl LocationPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<LocationPredicate> {
         codec::map(tag)?;
+        let mut record = codec::Record::default();
+        let position = record.field(codec::decode_optional(tag, "position", PositionPredicate::decode));
+        let biomes = record.field(codec::decode_optional(tag, "biomes", |t| HolderSet::decode("minecraft:worldgen/biome", t)));
+        let structures = record.field(codec::decode_optional(tag, "structures", decode_structures));
+        let dimension = record.field(codec::decode_optional(tag, "dimension", codec::identifier));
+        let smokey = record.field(codec::decode_optional(tag, "smokey", codec::bool_value));
+        let light = record.field(codec::decode_optional(tag, "light", LightPredicate::decode));
+        let block = record.field(codec::decode_optional(tag, "block", BlockPredicate::decode));
+        let fluid = record.field(codec::decode_optional(tag, "fluid", FluidPredicate::decode));
+        let can_see_sky = record.field(codec::decode_optional(tag, "can_see_sky", codec::bool_value));
+        record.finish()?;
         Ok(LocationPredicate {
-            position: codec::decode_optional(tag, "position", PositionPredicate::decode)?,
-            biomes: codec::decode_optional(tag, "biomes", |t| HolderSet::decode("minecraft:worldgen/biome", t))?,
-            structures: codec::decode_optional(tag, "structures", |t| HolderSet::decode("minecraft:worldgen/structure", t))?,
-            dimension: codec::decode_optional(tag, "dimension", codec::identifier)?,
-            smokey: codec::decode_optional(tag, "smokey", codec::bool_value)?,
-            light: codec::decode_optional(tag, "light", LightPredicate::decode)?,
-            block: codec::decode_optional(tag, "block", BlockPredicate::decode)?,
-            fluid: codec::decode_optional(tag, "fluid", FluidPredicate::decode)?,
-            can_see_sky: codec::decode_optional(tag, "can_see_sky", codec::bool_value)?,
+            position: position.unwrap(),
+            biomes: biomes.unwrap(),
+            structures: structures.unwrap(),
+            dimension: dimension.unwrap(),
+            smokey: smokey.unwrap(),
+            light: light.unwrap(),
+            block: block.unwrap(),
+            fluid: fluid.unwrap(),
+            can_see_sky: can_see_sky.unwrap(),
         })
     }
 

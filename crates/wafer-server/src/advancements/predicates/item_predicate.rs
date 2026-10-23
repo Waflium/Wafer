@@ -16,11 +16,12 @@ pub struct ItemPredicate {
 impl ItemPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<ItemPredicate> {
         codec::map(tag)?;
-        Ok(ItemPredicate {
-            items: codec::decode_optional(tag, "items", |t| HolderSet::decode("minecraft:item", t))?,
-            count: codec::decode_or(tag, "count", Ints::ANY, Ints::decode)?,
-            components: DataComponentMatchers::decode(tag)?,
-        })
+        let mut record = codec::Record::default();
+        let items = record.field(codec::decode_optional(tag, "items", |t| HolderSet::decode("minecraft:item", t)));
+        let count = record.field(codec::decode_or(tag, "count", Ints::ANY, Ints::decode));
+        let components = record.field(DataComponentMatchers::decode(tag));
+        record.finish()?;
+        Ok(ItemPredicate { items: items.unwrap(), count: count.unwrap(), components: components.unwrap() })
     }
 
     pub fn test(&self, item_stack: &ItemStack) -> bool {

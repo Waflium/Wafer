@@ -16,10 +16,11 @@ pub struct LightningBoltPredicate {
 impl LightningBoltPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<LightningBoltPredicate> {
         codec::map(tag)?;
-        Ok(LightningBoltPredicate {
-            blocks_set_on_fire: codec::decode_or(tag, "blocks_set_on_fire", Ints::ANY, Ints::decode)?,
-            entity_struck: codec::decode_optional(tag, "entity_struck", |t| Ok(Box::new(EntityPredicate::decode(t)?)))?,
-        })
+        let mut record = codec::Record::default();
+        let blocks_set_on_fire = record.field(codec::decode_or(tag, "blocks_set_on_fire", Ints::ANY, Ints::decode));
+        let entity_struck = record.field(codec::decode_optional(tag, "entity_struck", |t| Ok(Box::new(EntityPredicate::decode(t)?))));
+        record.finish()?;
+        Ok(LightningBoltPredicate { blocks_set_on_fire: blocks_set_on_fire.unwrap(), entity_struck: entity_struck.unwrap() })
     }
 
     pub fn matches(&self, level: &mut ServerLevel, entity: EntityId, position: Option<Vec3>) -> bool {

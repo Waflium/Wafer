@@ -14,8 +14,11 @@ pub struct EntityTagPredicate {
 impl EntityTagPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityTagPredicate> {
         codec::map(tag)?;
-        let strings = |key| codec::decode_optional(tag, key, |t| codec::list_of(t, |s| Ok(codec::string(s)?.to_string())));
-        Ok(EntityTagPredicate { any_of: strings("any_of")?, all_of: strings("all_of")?, none_of: strings("none_of")? })
+        let mut record = codec::Record::default();
+        let mut strings = |key| record.field(codec::decode_optional(tag, key, |t| codec::list_of(t, |s| Ok(codec::string(s)?.to_string()))));
+        let (any_of, all_of, none_of) = (strings("any_of"), strings("all_of"), strings("none_of"));
+        record.finish()?;
+        Ok(EntityTagPredicate { any_of: any_of.unwrap(), all_of: all_of.unwrap(), none_of: none_of.unwrap() })
     }
 
     pub fn matches_tags(&self, tags: &[String]) -> bool {

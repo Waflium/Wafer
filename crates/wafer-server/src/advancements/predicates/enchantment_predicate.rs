@@ -15,10 +15,11 @@ pub struct EnchantmentPredicate {
 impl EnchantmentPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EnchantmentPredicate> {
         codec::map(tag)?;
-        Ok(EnchantmentPredicate {
-            enchantments: codec::decode_optional(tag, "enchantments", |t| HolderSet::decode("minecraft:enchantment", t))?,
-            level: codec::decode_or(tag, "levels", Ints::ANY, Ints::decode)?,
-        })
+        let mut record = codec::Record::default();
+        let enchantments = record.field(codec::decode_optional(tag, "enchantments", |t| HolderSet::decode("minecraft:enchantment", t)));
+        let level = record.field(codec::decode_or(tag, "levels", Ints::ANY, Ints::decode));
+        record.finish()?;
+        Ok(EnchantmentPredicate { enchantments: enchantments.unwrap(), level: level.unwrap() })
     }
 
     pub fn contained_in(&self, item_enchantments: &ItemEnchantments) -> bool {

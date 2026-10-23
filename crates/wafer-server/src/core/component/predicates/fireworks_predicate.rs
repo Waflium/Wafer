@@ -15,10 +15,11 @@ pub struct FireworksPredicate {
 impl FireworksPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<FireworksPredicate> {
         codec::map(tag)?;
-        Ok(FireworksPredicate {
-            explosions: codec::decode_optional(tag, "explosions", |t| CollectionPredicate::decode(t, FireworkPredicate::decode))?,
-            flight_duration: codec::decode_or(tag, "flight_duration", Ints::ANY, Ints::decode)?,
-        })
+        let mut record = codec::Record::default();
+        let explosions = record.field(codec::decode_optional(tag, "explosions", |t| CollectionPredicate::decode(t, FireworkPredicate::decode)));
+        let flight_duration = record.field(codec::decode_or(tag, "flight_duration", Ints::ANY, Ints::decode));
+        record.finish()?;
+        Ok(FireworksPredicate { explosions: explosions.unwrap(), flight_duration: flight_duration.unwrap() })
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

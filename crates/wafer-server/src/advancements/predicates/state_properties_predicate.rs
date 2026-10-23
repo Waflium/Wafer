@@ -68,7 +68,7 @@ pub struct StatePropertiesPredicate {
 
 impl StatePropertiesPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<StatePropertiesPredicate> {
-        let properties = codec::unbounded_map(tag, |k| Ok(k.to_string()), ValueMatcher::decode)?
+        let properties = codec::base_map(tag, |k| Ok(k.to_string()), ValueMatcher::decode)?
             .into_iter()
             .map(|(name, value_matcher)| PropertyMatcher { name, value_matcher })
             .collect();

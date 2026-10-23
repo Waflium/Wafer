@@ -20,6 +20,25 @@ pub fn record_errors(errors: &[Option<&String>]) -> DataResult<()> {
     if errors.is_empty() { Ok(()) } else { Err(errors.join("; ")) }
 }
 
+#[derive(Default)]
+pub struct Record(Vec<String>);
+
+impl Record {
+    pub fn field<T>(&mut self, result: DataResult<T>) -> Option<T> {
+        match result {
+            Ok(value) => Some(value),
+            Err(error) => {
+                self.0.push(error);
+                None
+            }
+        }
+    }
+
+    pub fn finish(self) -> DataResult<()> {
+        if self.0.is_empty() { Ok(()) } else { Err(self.0.into_iter().rev().collect::<Vec<_>>().join("; ")) }
+    }
+}
+
 pub fn optional_field<'a>(tag: &'a Nbt, name: &str) -> Option<&'a Nbt> {
     tag.get(name)
 }
@@ -147,6 +166,21 @@ pub fn either_or_partial<A, B>(
     }
 }
 
+pub fn either_first_partial<A, B>(
+    tag: &Nbt,
+    first: impl FnOnce(&Nbt) -> Result<A, DecodeError>,
+    second: impl FnOnce(&Nbt) -> DataResult<B>,
+) -> DataResult<Result<A, B>> {
+    match first(tag) {
+        Ok(a) => Ok(Ok(a)),
+        Err(first_error) => match second(tag) {
+            Ok(b) => Ok(Err(b)),
+            Err(_) if first_error.partial => Err(first_error.message),
+            Err(second_error) => Err(format!("Failed to parse either. First: {}; Second: {second_error}", first_error.message)),
+        },
+    }
+}
+
 pub fn holder_set<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -> DataResult<T>) -> Result<Vec<T>, DecodeError> {
     let tag_error = match tag {
         Nbt::String(name) => match name.strip_prefix('#') {
@@ -207,4 +241,51 @@ pub fn to_json(tag: &Nbt) -> serde_json::Value {
 
 pub fn unbounded_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
     map(tag)?.iter().map(|(k, v)| Ok((key(k)?, value(v)?))).collect()
+}
+
+fn map_entry_failures(errors: Vec<String>, failed: Vec<(String, Nbt)>) -> String {
+    let messages: Vec<String> = errors.into_iter().rev().collect();
+    format!("{} missed input: {}", messages.join("; "), crate::nbt::to_string(&Nbt::Compound(failed)))
+}
+
+pub fn base_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
+    let fields = map(tag)?;
+    let mut entries = Vec::with_capacity(fields.len());
+    let mut errors = Vec::new();
+    let mut failed = Vec::new();
+    for i in wafer_protocol::nbt::java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>()) {
+        let (field_key, field_value) = &fields[i];
+        match (key(field_key), value(field_value)) {
+            (Ok(key), Ok(value)) => entries.push((key, value)),
+            (key, value) => {
+                errors.push([value.err(), key.err()].into_iter().flatten().collect::<Vec<_>>().join("; "));
+                failed.push((field_key.clone(), field_value.clone()));
+            }
+        }
+    }
+    if errors.is_empty() { Ok(entries) } else { Err(map_entry_failures(errors, failed)) }
+}
+
+pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&K, &Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
+    let fields = map(tag)?;
+    let mut entries = Vec::with_capacity(fields.len());
+    let mut errors = Vec::new();
+    let mut failed = Vec::new();
+    for i in wafer_protocol::nbt::java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>()) {
+        let (field_key, field_value) = &fields[i];
+        match key(field_key) {
+            Ok(key) => match value(&key, field_value) {
+                Ok(value) => entries.push((key, value)),
+                Err(error) => {
+                    errors.push(error);
+                    failed.push((field_key.clone(), field_value.clone()));
+                }
+            },
+            Err(error) => {
+                errors.push(format!("{error}; {error}"));
+                failed.push((field_key.clone(), field_value.clone()));
+            }
+        }
+    }
+    if errors.is_empty() { Ok(entries) } else { Err(map_entry_failures(errors, failed)) }
 }

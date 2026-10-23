@@ -15,10 +15,14 @@ pub struct EntityPredicate {
 
 impl EntityPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityPredicate> {
-        let mut parts = codec::map(tag)?
-            .iter()
-            .map(|(key, value)| EntitySubPredicate::decode(&crate::resources::identifier::read(key)?, value))
-            .collect::<DataResult<Vec<_>>>()?;
+        let mut parts: Vec<EntitySubPredicate> = codec::dispatched_map(
+            tag,
+            |key| EntitySubPredicate::codec(&crate::resources::identifier::read(key)?),
+            |decode, value| decode(value),
+        )?
+        .into_iter()
+        .map(|(_, part)| part)
+        .collect();
         if parts.len() > 1 {
             parts.sort_by_key(EntitySubPredicate::predicate_type_order);
         }

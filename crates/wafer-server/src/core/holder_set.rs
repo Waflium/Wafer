@@ -27,6 +27,17 @@ impl HolderSet {
             }
             return Ok(HolderSet::named(registry, key));
         }
+        if codec::is_nbt_ops() {
+            let ids = codec::holder_set(tag, registry, |element| {
+                let key = codec::identifier(element)?;
+                if !component_codec::registry(registry).contains(&key.as_str()) {
+                    return Err(format!("Failed to get element {key} from registry {registry}"));
+                }
+                component_codec::registry_id(registry, &key)
+            })
+            .map_err(|error| error.message)?;
+            return Ok(HolderSet::Direct(ids));
+        }
         let ids = codec::compact_list_of(tag, |element| {
             let key = codec::identifier(element)?;
             component_codec::registry_id(registry, &key)

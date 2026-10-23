@@ -19,15 +19,19 @@ pub struct MovementPredicate {
 impl MovementPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<MovementPredicate> {
         codec::map(tag)?;
-        let bound = |key| codec::decode_or(tag, key, Doubles::ANY, Doubles::decode);
+        let mut record = codec::Record::default();
+        let mut bound = |key| record.field(codec::decode_or(tag, key, Doubles::ANY, Doubles::decode));
+        let (x, y, z) = (bound("x"), bound("y"), bound("z"));
+        let (speed, horizontal_speed, vertical_speed, fall_distance) = (bound("speed"), bound("horizontal_speed"), bound("vertical_speed"), bound("fall_distance"));
+        record.finish()?;
         Ok(MovementPredicate {
-            x: bound("x")?,
-            y: bound("y")?,
-            z: bound("z")?,
-            speed: bound("speed")?,
-            horizontal_speed: bound("horizontal_speed")?,
-            vertical_speed: bound("vertical_speed")?,
-            fall_distance: bound("fall_distance")?,
+            x: x.unwrap(),
+            y: y.unwrap(),
+            z: z.unwrap(),
+            speed: speed.unwrap(),
+            horizontal_speed: horizontal_speed.unwrap(),
+            vertical_speed: vertical_speed.unwrap(),
+            fall_distance: fall_distance.unwrap(),
         })
     }
 

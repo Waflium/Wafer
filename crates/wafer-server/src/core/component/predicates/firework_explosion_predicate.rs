@@ -15,11 +15,12 @@ pub struct FireworkPredicate {
 impl FireworkPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<FireworkPredicate> {
         codec::map(tag)?;
-        Ok(FireworkPredicate {
-            shape: codec::decode_optional(tag, "shape", |t| codec::string_enum(t, SHAPES))?,
-            twinkle: codec::decode_optional(tag, "has_twinkle", codec::bool_value)?,
-            trail: codec::decode_optional(tag, "has_trail", codec::bool_value)?,
-        })
+        let mut record = codec::Record::default();
+        let shape = record.field(codec::decode_optional(tag, "shape", |t| codec::string_enum(t, SHAPES)));
+        let twinkle = record.field(codec::decode_optional(tag, "has_twinkle", codec::bool_value));
+        let trail = record.field(codec::decode_optional(tag, "has_trail", codec::bool_value));
+        record.finish()?;
+        Ok(FireworkPredicate { shape: shape.unwrap(), twinkle: twinkle.unwrap(), trail: trail.unwrap() })
     }
 
     pub fn test(&self, firework_explosion: &Nbt) -> bool {

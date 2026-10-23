@@ -14,10 +14,11 @@ pub struct DamagePredicate {
 impl DamagePredicate {
     pub fn decode(tag: &Nbt) -> DataResult<DamagePredicate> {
         codec::map(tag)?;
-        Ok(DamagePredicate {
-            durability: codec::decode_or(tag, "durability", Ints::ANY, Ints::decode)?,
-            damage: codec::decode_or(tag, "damage", Ints::ANY, Ints::decode)?,
-        })
+        let mut record = codec::Record::default();
+        let durability = record.field(codec::decode_or(tag, "durability", Ints::ANY, Ints::decode));
+        let damage = record.field(codec::decode_or(tag, "damage", Ints::ANY, Ints::decode));
+        record.finish()?;
+        Ok(DamagePredicate { durability: durability.unwrap(), damage: damage.unwrap() })
     }
 
     pub fn matches(&self, components: &(impl DataComponentGetter + ?Sized)) -> bool {

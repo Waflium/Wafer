@@ -15,7 +15,11 @@ impl FoodPredicate {
 
     pub fn decode(tag: &Nbt) -> DataResult<FoodPredicate> {
         codec::map(tag)?;
-        Ok(FoodPredicate { level: codec::decode_or(tag, "level", Ints::ANY, Ints::decode)?, saturation: codec::decode_or(tag, "saturation", Doubles::ANY, Doubles::decode)? })
+        let mut record = codec::Record::default();
+        let level = record.field(codec::decode_or(tag, "level", Ints::ANY, Ints::decode));
+        let saturation = record.field(codec::decode_or(tag, "saturation", Doubles::ANY, Doubles::decode));
+        record.finish()?;
+        Ok(FoodPredicate { level: level.unwrap(), saturation: saturation.unwrap() })
     }
 
     pub fn matches(&self, food: &FoodData) -> bool {

@@ -40,13 +40,14 @@ pub struct WrittenBookPredicate {
 impl WrittenBookPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<WrittenBookPredicate> {
         codec::map(tag)?;
-        Ok(WrittenBookPredicate {
-            pages: codec::decode_optional(tag, "pages", |t| CollectionPredicate::decode(t, PagePredicate::decode))?,
-            author: codec::decode_optional(tag, "author", |t| Ok(codec::string(t)?.to_string()))?,
-            title: codec::decode_optional(tag, "title", |t| Ok(codec::string(t)?.to_string()))?,
-            generation: codec::decode_or(tag, "generation", Ints::ANY, Ints::decode)?,
-            resolved: codec::decode_optional(tag, "resolved", codec::bool_value)?,
-        })
+        let mut record = codec::Record::default();
+        let pages = record.field(codec::decode_optional(tag, "pages", |t| CollectionPredicate::decode(t, PagePredicate::decode)));
+        let author = record.field(codec::decode_optional(tag, "author", |t| Ok(codec::string(t)?.to_string())));
+        let title = record.field(codec::decode_optional(tag, "title", |t| Ok(codec::string(t)?.to_string())));
+        let generation = record.field(codec::decode_or(tag, "generation", Ints::ANY, Ints::decode));
+        let resolved = record.field(codec::decode_optional(tag, "resolved", codec::bool_value));
+        record.finish()?;
+        Ok(WrittenBookPredicate { pages: pages.unwrap(), author: author.unwrap(), title: title.unwrap(), generation: generation.unwrap(), resolved: resolved.unwrap() })
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

@@ -12,10 +12,11 @@ pub struct LootItemEntityPropertyCondition {
 
 impl LootItemEntityPropertyCondition {
     pub fn decode(tag: &Nbt) -> DataResult<LootItemEntityPropertyCondition> {
-        Ok(LootItemEntityPropertyCondition {
-            predicate: codec::decode_optional(tag, "predicate", EntityPredicate::decode)?,
-            entity_target: codec::decode_field(tag, "entity", EntityTarget::decode)?,
-        })
+        let mut record = codec::Record::default();
+        let predicate = record.field(codec::decode_optional(tag, "predicate", EntityPredicate::decode));
+        let entity_target = record.field(codec::decode_field(tag, "entity", EntityTarget::decode));
+        record.finish()?;
+        Ok(LootItemEntityPropertyCondition { predicate: predicate.unwrap(), entity_target: entity_target.unwrap() })
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

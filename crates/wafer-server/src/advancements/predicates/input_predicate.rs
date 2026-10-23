@@ -17,15 +17,18 @@ pub struct InputPredicate {
 impl InputPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<InputPredicate> {
         codec::map(tag)?;
-        let flag = |key| codec::decode_optional(tag, key, codec::bool_value);
+        let mut record = codec::Record::default();
+        let mut flag = |key| record.field(codec::decode_optional(tag, key, codec::bool_value));
+        let (forward, backward, left, right, jump, sneak, sprint) = (flag("forward"), flag("backward"), flag("left"), flag("right"), flag("jump"), flag("sneak"), flag("sprint"));
+        record.finish()?;
         Ok(InputPredicate {
-            forward: flag("forward")?,
-            backward: flag("backward")?,
-            left: flag("left")?,
-            right: flag("right")?,
-            jump: flag("jump")?,
-            sneak: flag("sneak")?,
-            sprint: flag("sprint")?,
+            forward: forward.unwrap(),
+            backward: backward.unwrap(),
+            left: left.unwrap(),
+            right: right.unwrap(),
+            jump: jump.unwrap(),
+            sneak: sneak.unwrap(),
+            sprint: sprint.unwrap(),
         })
     }
 

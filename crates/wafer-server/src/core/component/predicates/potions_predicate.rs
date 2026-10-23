@@ -16,10 +16,11 @@ pub struct PotionsPredicate {
 impl PotionsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<PotionsPredicate> {
         codec::map(tag)?;
-        Ok(PotionsPredicate {
-            potions: codec::decode_optional(tag, "potions", |t| HolderSet::decode("minecraft:potion", t))?,
-            effects: codec::decode_optional(tag, "effects", |t| CollectionPredicate::decode(t, MobEffectsPredicate::decode))?,
-        })
+        let mut record = codec::Record::default();
+        let potions = record.field(codec::decode_optional(tag, "potions", |t| HolderSet::decode("minecraft:potion", t)));
+        let effects = record.field(codec::decode_optional(tag, "effects", |t| CollectionPredicate::decode(t, MobEffectsPredicate::decode)));
+        record.finish()?;
+        Ok(PotionsPredicate { potions: potions.unwrap(), effects: effects.unwrap() })
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

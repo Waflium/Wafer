@@ -20,13 +20,14 @@ pub struct DamagePredicate {
 impl DamagePredicate {
     pub fn decode(tag: &Nbt) -> DataResult<DamagePredicate> {
         codec::map(tag)?;
-        Ok(DamagePredicate {
-            dealt_damage: codec::decode_or(tag, "dealt", Doubles::ANY, Doubles::decode)?,
-            taken_damage: codec::decode_or(tag, "taken", Doubles::ANY, Doubles::decode)?,
-            source_entity: codec::decode_optional(tag, "source_entity", EntityPredicate::decode)?,
-            blocked: codec::decode_optional(tag, "blocked", codec::bool_value)?,
-            ty: codec::decode_optional(tag, "type", DamageSourcePredicate::decode)?,
-        })
+        let mut record = codec::Record::default();
+        let dealt_damage = record.field(codec::decode_or(tag, "dealt", Doubles::ANY, Doubles::decode));
+        let taken_damage = record.field(codec::decode_or(tag, "taken", Doubles::ANY, Doubles::decode));
+        let source_entity = record.field(codec::decode_optional(tag, "source_entity", EntityPredicate::decode));
+        let blocked = record.field(codec::decode_optional(tag, "blocked", codec::bool_value));
+        let ty = record.field(codec::decode_optional(tag, "type", DamageSourcePredicate::decode));
+        record.finish()?;
+        Ok(DamagePredicate { dealt_damage: dealt_damage.unwrap(), taken_damage: taken_damage.unwrap(), source_entity: source_entity.unwrap(), blocked: blocked.unwrap(), ty: ty.unwrap() })
     }
 
     pub fn matches(&self, level: &mut ServerLevel, player: EntityId, source: &DamageSource, original_damage: f32, actual_damage: f32, blocked: bool) -> bool {

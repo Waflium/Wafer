@@ -23,12 +23,13 @@ pub struct BlockPredicate {
 impl BlockPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<BlockPredicate> {
         codec::map(tag)?;
-        Ok(BlockPredicate {
-            blocks: codec::decode_optional(tag, "blocks", |t| HolderSet::decode("minecraft:block", t))?,
-            properties: codec::decode_optional(tag, "state", StatePropertiesPredicate::decode)?,
-            nbt: codec::decode_optional(tag, "nbt", NbtPredicate::decode)?,
-            components: DataComponentMatchers::decode(tag)?,
-        })
+        let mut record = codec::Record::default();
+        let blocks = record.field(codec::decode_optional(tag, "blocks", |t| HolderSet::decode("minecraft:block", t)));
+        let properties = record.field(codec::decode_optional(tag, "state", StatePropertiesPredicate::decode));
+        let nbt = record.field(codec::decode_optional(tag, "nbt", NbtPredicate::decode));
+        let components = record.field(DataComponentMatchers::decode(tag));
+        record.finish()?;
+        Ok(BlockPredicate { blocks: blocks.unwrap(), properties: properties.unwrap(), nbt: nbt.unwrap(), components: components.unwrap() })
     }
 
     pub fn matches(&self, level: &mut ServerLevel, pos: BlockPos) -> bool {

@@ -16,12 +16,13 @@ pub struct MobEffectInstancePredicate {
 impl MobEffectInstancePredicate {
     fn decode(tag: &Nbt) -> DataResult<MobEffectInstancePredicate> {
         codec::map(tag)?;
-        Ok(MobEffectInstancePredicate {
-            amplifier: codec::decode_or(tag, "amplifier", Ints::ANY, Ints::decode)?,
-            duration: codec::decode_or(tag, "duration", Ints::ANY, Ints::decode)?,
-            ambient: codec::decode_optional(tag, "ambient", codec::bool_value)?,
-            visible: codec::decode_optional(tag, "visible", codec::bool_value)?,
-        })
+        let mut record = codec::Record::default();
+        let amplifier = record.field(codec::decode_or(tag, "amplifier", Ints::ANY, Ints::decode));
+        let duration = record.field(codec::decode_or(tag, "duration", Ints::ANY, Ints::decode));
+        let ambient = record.field(codec::decode_optional(tag, "ambient", codec::bool_value));
+        let visible = record.field(codec::decode_optional(tag, "visible", codec::bool_value));
+        record.finish()?;
+        Ok(MobEffectInstancePredicate { amplifier: amplifier.unwrap(), duration: duration.unwrap(), ambient: ambient.unwrap(), visible: visible.unwrap() })
     }
 
     pub fn matches(&self, instance: Option<&MobEffectInstance>) -> bool {
@@ -43,7 +44,7 @@ pub struct MobEffectsPredicate {
 
 impl MobEffectsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<MobEffectsPredicate> {
-        let effect_map = codec::unbounded_map(
+        let effect_map = codec::base_map(
             tag,
             |key| {
                 let id = crate::resources::identifier::read(key)?;

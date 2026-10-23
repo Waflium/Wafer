@@ -13,10 +13,11 @@ pub struct DataComponentMatchers {
 
 impl DataComponentMatchers {
     pub fn decode(tag: &Nbt) -> DataResult<DataComponentMatchers> {
-        Ok(DataComponentMatchers {
-            exact: codec::decode_or(tag, "components", DataComponentExactPredicate::default(), DataComponentExactPredicate::decode)?,
-            partial: codec::decode_or(tag, "predicates", Vec::new(), DataComponentPredicate::decode_map)?,
-        })
+        let mut record = codec::Record::default();
+        let exact = record.field(codec::decode_or(tag, "components", DataComponentExactPredicate::default(), DataComponentExactPredicate::decode));
+        let partial = record.field(codec::decode_or(tag, "predicates", Vec::new(), DataComponentPredicate::decode_map));
+        record.finish()?;
+        Ok(DataComponentMatchers { exact: exact.unwrap(), partial: partial.unwrap() })
     }
 
     pub fn test(&self, values: &(impl DataComponentGetter + ?Sized)) -> bool {

@@ -21,15 +21,18 @@ pub struct EntityEquipmentPredicate {
 impl EntityEquipmentPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityEquipmentPredicate> {
         codec::map(tag)?;
-        let slot = |key| codec::decode_optional(tag, key, ItemPredicate::decode);
+        let mut record = codec::Record::default();
+        let mut slot = |key| record.field(codec::decode_optional(tag, key, ItemPredicate::decode));
+        let (head, chest, legs, feet, body, mainhand, offhand) = (slot("head"), slot("chest"), slot("legs"), slot("feet"), slot("body"), slot("mainhand"), slot("offhand"));
+        record.finish()?;
         Ok(EntityEquipmentPredicate {
-            head: slot("head")?,
-            chest: slot("chest")?,
-            legs: slot("legs")?,
-            feet: slot("feet")?,
-            body: slot("body")?,
-            mainhand: slot("mainhand")?,
-            offhand: slot("offhand")?,
+            head: head.unwrap(),
+            chest: chest.unwrap(),
+            legs: legs.unwrap(),
+            feet: feet.unwrap(),
+            body: body.unwrap(),
+            mainhand: mainhand.unwrap(),
+            offhand: offhand.unwrap(),
         })
     }
 

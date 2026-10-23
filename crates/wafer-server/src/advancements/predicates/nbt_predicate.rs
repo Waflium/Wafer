@@ -12,15 +12,16 @@ pub struct NbtPredicate {
 
 impl NbtPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<NbtPredicate> {
-        match tag {
+        let flattened_error = match tag {
             Nbt::String(snbt) => match crate::nbt::parse_fully(snbt) {
-                Ok(tag @ Nbt::Compound(_)) => Ok(NbtPredicate { tag }),
-                Ok(other) => Err(format!("Expected compound tag, got {}", crate::nbt::to_string(&other))),
-                Err(e) => Err(e.get_message()),
+                Ok(tag @ Nbt::Compound(_)) => return Ok(NbtPredicate { tag }),
+                Ok(other) => format!("Expected compound tag, got {}", crate::nbt::to_string(&other)),
+                Err(e) => e.get_message(),
             },
-            Nbt::Compound(_) => Ok(NbtPredicate { tag: tag.clone() }),
-            other => Err(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
-        }
+            Nbt::Compound(_) => return Ok(NbtPredicate { tag: tag.clone() }),
+            _ => "Not a string".to_string(),
+        };
+        Err(format!("Failed to parse either. First: {flattened_error}; Second: Not a compound tag: {}", crate::nbt::to_string(tag)))
     }
 
     pub fn matches_components(&self, components: &(impl DataComponentGetter + ?Sized)) -> bool {
