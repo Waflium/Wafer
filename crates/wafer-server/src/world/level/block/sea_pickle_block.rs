@@ -18,8 +18,8 @@ fn is_dead(state: BlockState) -> bool {
 }
 
 impl Vegetation for SeaPickleBlock {
-    fn may_place_on(&self, state: BlockState, _level: &mut dyn LevelReader, _pos: BlockPos) -> bool {
-        !VoxelShape::from_boxes(state.collision_shape()).face_shape(Direction::Up).is_empty() || state.is_face_sturdy(Direction::Up, SupportType::Full)
+    fn may_place_on(&self, state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
+        !VoxelShape::from_boxes(state.collision_shape()).face_shape(Direction::Up).is_empty() || level.is_face_sturdy_at(pos, state, Direction::Up, SupportType::Full)
     }
 }
 

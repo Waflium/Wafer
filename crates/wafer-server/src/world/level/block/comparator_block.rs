@@ -155,13 +155,13 @@ impl BlockBehaviour for ComparatorBlock {
     fn update_shape(
         &self,
         state: BlockState,
-        _level: &mut dyn LevelAccessor,
+        level: &mut dyn LevelAccessor,
         _pos: BlockPos,
         direction: Direction,
-        _neighbour_pos: BlockPos,
+        neighbour_pos: BlockPos,
         neighbour_state: BlockState,
     ) -> BlockState {
-        if direction == Direction::Down && !diode_block::can_survive_on(neighbour_state) { blocks::AIR.default_state() } else { state }
+        if direction == Direction::Down && !diode_block::can_survive_on(level, neighbour_pos, neighbour_state) { blocks::AIR.default_state() } else { state }
     }
 
     fn can_survive(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {

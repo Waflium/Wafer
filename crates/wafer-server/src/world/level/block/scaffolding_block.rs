@@ -24,7 +24,7 @@ pub fn get_distance(level: &mut dyn LevelReader, pos: BlockPos) -> i32 {
     let mut distance = STABILITY_MAX_DISTANCE;
     if below.is_block(blocks::SCAFFOLDING) {
         distance = below.get(STABILITY_DISTANCE);
-    } else if below.is_face_sturdy(Direction::Up, SupportType::Full) {
+    } else if level.is_face_sturdy_at(below_pos, below, Direction::Up, SupportType::Full) {
         return 0;
     }
     for direction in Direction::PLANE_HORIZONTAL {

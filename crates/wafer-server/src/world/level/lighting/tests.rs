@@ -400,7 +400,7 @@ fn saved_light_is_loaded_back() {
             }
         }
     }
-    built.save(0, false).unwrap();
+    built.save(0, true).unwrap();
     let mut loaded = ChunkCache::new(overworld(), FlatLevelSource::default(), Some(RegionStorage::new(dir.clone(), false)));
     loaded.prepare_ticking_chunk(ChunkPos::new(0, 0));
     loaded.prepare_ticking_chunk(ChunkPos::new(1, 0));

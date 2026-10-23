@@ -46,7 +46,8 @@ impl BlockBehaviour for LadderBlock {
     fn can_survive(&self, state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
         let direction = state.get(HORIZONTAL_FACING);
         let support = pos.relative(direction.opposite());
-        level.block_state(support).is_face_sturdy(direction, SupportType::Full)
+        let support_state = level.block_state(support);
+        level.is_face_sturdy_at(support, support_state, direction, SupportType::Full)
     }
 
     fn update_shape(

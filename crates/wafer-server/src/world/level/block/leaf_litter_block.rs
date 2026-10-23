@@ -35,6 +35,7 @@ impl BlockBehaviour for LeafLitterBlock {
     }
 
     fn can_survive(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
-        level.block_state(pos.below()).is_face_sturdy(Direction::Up, SupportType::Full)
+        let below = level.block_state(pos.below());
+        level.is_face_sturdy_at(pos.below(), below, Direction::Up, SupportType::Full)
     }
 }

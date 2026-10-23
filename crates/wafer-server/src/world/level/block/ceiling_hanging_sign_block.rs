@@ -51,7 +51,8 @@ impl BlockBehaviour for CeilingHangingSignBlock {
     }
 
     fn can_survive(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
-        level.block_state(pos.above()).is_face_sturdy(Direction::Down, SupportType::Center)
+        let above = level.block_state(pos.above());
+        level.is_face_sturdy_at(pos.above(), above, Direction::Down, SupportType::Center)
     }
 
     fn get_state_for_placement(&self, block: Block, ctx: &BlockPlaceContext, level: &mut ServerLevel) -> Option<BlockState> {

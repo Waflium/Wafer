@@ -40,8 +40,9 @@ impl WallBlock {
         state.is(&block_tags::WALLS) || !is_exception_for_connection(state) && face_solid || block.is_instance_of("IronBarsBlock") || connected_fence_gate
     }
 
-    fn connects_to_neighbour(neighbour: BlockState, opposite: Direction) -> bool {
-        Self::connects_to(neighbour, neighbour.is_face_sturdy(opposite, SupportType::Full), opposite)
+    fn connects_to_neighbour(level: &mut dyn LevelReader, neighbour_pos: BlockPos, neighbour: BlockState, opposite: Direction) -> bool {
+        let face_solid = level.is_face_sturdy_at(neighbour_pos, neighbour, opposite, SupportType::Full);
+        Self::connects_to(neighbour, face_solid, opposite)
     }
 
     fn top_update(state: BlockState, top_pos: BlockPos, top_neighbour: BlockState) -> BlockState {
@@ -52,12 +53,12 @@ impl WallBlock {
         Self::update_wall_shape(state, top_pos, top_neighbour, north, east, south, west)
     }
 
-    fn side_update(level: &mut dyn LevelReader, pos: BlockPos, state: BlockState, neighbour: BlockState, direction: Direction) -> BlockState {
+    fn side_update(level: &mut dyn LevelReader, pos: BlockPos, state: BlockState, neighbour_pos: BlockPos, neighbour: BlockState, direction: Direction) -> BlockState {
         let opposite = direction.opposite();
-        let north = if direction == Direction::North { Self::connects_to_neighbour(neighbour, opposite) } else { is_connected(state, NORTH_WALL) };
-        let east = if direction == Direction::East { Self::connects_to_neighbour(neighbour, opposite) } else { is_connected(state, EAST_WALL) };
-        let south = if direction == Direction::South { Self::connects_to_neighbour(neighbour, opposite) } else { is_connected(state, SOUTH_WALL) };
-        let west = if direction == Direction::West { Self::connects_to_neighbour(neighbour, opposite) } else { is_connected(state, WEST_WALL) };
+        let north = if direction == Direction::North { Self::connects_to_neighbour(level, neighbour_pos, neighbour, opposite) } else { is_connected(state, NORTH_WALL) };
+        let east = if direction == Direction::East { Self::connects_to_neighbour(level, neighbour_pos, neighbour, opposite) } else { is_connected(state, EAST_WALL) };
+        let south = if direction == Direction::South { Self::connects_to_neighbour(level, neighbour_pos, neighbour, opposite) } else { is_connected(state, SOUTH_WALL) };
+        let west = if direction == Direction::West { Self::connects_to_neighbour(level, neighbour_pos, neighbour, opposite) } else { is_connected(state, WEST_WALL) };
         let above = pos.above();
         let above_state = level.block_state(above);
         Self::update_wall_shape(state, above, above_state, north, east, south, west)
@@ -149,10 +150,10 @@ impl BlockBehaviour for WallBlock {
         let south_state = level.block_state(pos.south());
         let west_state = level.block_state(pos.west());
         let top_state = level.block_state(top_pos);
-        let north = Self::connects_to_neighbour(north_state, Direction::South);
-        let east = Self::connects_to_neighbour(east_state, Direction::West);
-        let south = Self::connects_to_neighbour(south_state, Direction::North);
-        let west = Self::connects_to_neighbour(west_state, Direction::East);
+        let north = Self::connects_to_neighbour(level, pos.north(), north_state, Direction::South);
+        let east = Self::connects_to_neighbour(level, pos.east(), east_state, Direction::West);
+        let south = Self::connects_to_neighbour(level, pos.south(), south_state, Direction::North);
+        let west = Self::connects_to_neighbour(level, pos.west(), west_state, Direction::East);
         let state = block.default_state().set(WATERLOGGED, water);
         Some(Self::update_wall_shape(state, top_pos, top_state, north, east, south, west))
     }
@@ -170,7 +171,7 @@ impl BlockBehaviour for WallBlock {
         match direction {
             Direction::Down => state,
             Direction::Up => Self::top_update(state, neighbour_pos, neighbour_state),
-            _ => Self::side_update(level, pos, state, neighbour_state, direction),
+            _ => Self::side_update(level, pos, state, neighbour_pos, neighbour_state, direction),
         }
     }
 }

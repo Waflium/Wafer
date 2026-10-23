@@ -47,14 +47,17 @@ impl BlockBehaviour for FenceBlock {
         let east_state = level.block_state(east);
         let south_state = level.block_state(south);
         let west_state = level.block_state(west);
-        let sturdy = |state: BlockState, face: Direction| state.is_face_sturdy(face, SupportType::Full);
+        let north_sturdy = level.is_face_sturdy_at(north, north_state, Direction::South, SupportType::Full);
+        let east_sturdy = level.is_face_sturdy_at(east, east_state, Direction::West, SupportType::Full);
+        let south_sturdy = level.is_face_sturdy_at(south, south_state, Direction::North, SupportType::Full);
+        let west_sturdy = level.is_face_sturdy_at(west, west_state, Direction::East, SupportType::Full);
         Some(
             block
                 .default_state()
-                .set(NORTH, Self::connects_to(block, north_state, sturdy(north_state, Direction::South), Direction::South))
-                .set(EAST, Self::connects_to(block, east_state, sturdy(east_state, Direction::West), Direction::West))
-                .set(SOUTH, Self::connects_to(block, south_state, sturdy(south_state, Direction::North), Direction::North))
-                .set(WEST, Self::connects_to(block, west_state, sturdy(west_state, Direction::East), Direction::East))
+                .set(NORTH, Self::connects_to(block, north_state, north_sturdy, Direction::South))
+                .set(EAST, Self::connects_to(block, east_state, east_sturdy, Direction::West))
+                .set(SOUTH, Self::connects_to(block, south_state, south_sturdy, Direction::North))
+                .set(WEST, Self::connects_to(block, west_state, west_sturdy, Direction::East))
                 .set(WATERLOGGED, water),
         )
     }
@@ -65,7 +68,7 @@ impl BlockBehaviour for FenceBlock {
         level: &mut dyn LevelAccessor,
         pos: BlockPos,
         direction: Direction,
-        _neighbour_pos: BlockPos,
+        neighbour_pos: BlockPos,
         neighbour_state: BlockState,
     ) -> BlockState {
         schedule_water_tick(state, level, pos);
@@ -73,7 +76,7 @@ impl BlockBehaviour for FenceBlock {
             return state;
         }
         let opposite = direction.opposite();
-        let face_solid = neighbour_state.is_face_sturdy(opposite, SupportType::Full);
+        let face_solid = level.is_face_sturdy_at(neighbour_pos, neighbour_state, opposite, SupportType::Full);
         state.set(property_by_direction(direction), Self::connects_to(state.block(), neighbour_state, face_solid, opposite))
     }
 }

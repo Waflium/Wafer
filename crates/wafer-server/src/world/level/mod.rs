@@ -58,6 +58,10 @@ pub trait BlockGetter {
     fn fluid_state(&mut self, pos: BlockPos) -> FluidState {
         self.block_state(pos).fluid_state()
     }
+
+    fn is_face_sturdy_at(&mut self, _pos: BlockPos, state: BlockState, direction: Direction, support: wafer_data::SupportType) -> bool {
+        state.is_face_sturdy(direction, support)
+    }
 }
 
 pub trait LevelReader: BlockGetter {

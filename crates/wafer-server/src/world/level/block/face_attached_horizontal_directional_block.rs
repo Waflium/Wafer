@@ -16,7 +16,8 @@ pub fn get_connected_direction(state: BlockState) -> Direction {
 
 pub fn can_attach(level: &mut dyn LevelReader, pos: BlockPos, direction: Direction) -> bool {
     let relative = pos.relative(direction);
-    level.block_state(relative).is_face_sturdy_full(direction.opposite())
+    let relative_state = level.block_state(relative);
+    level.is_face_sturdy_at(relative, relative_state, direction.opposite(), wafer_data::SupportType::Full)
 }
 
 pub fn can_survive(state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {

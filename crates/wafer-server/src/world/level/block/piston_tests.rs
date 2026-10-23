@@ -96,3 +96,38 @@ fn pistons_lift_entities_half_a_block_per_tick() {
     assert_eq!(out, vec!["Pig has the following entity data: [6.5d, -47.99d, 6.5d]".to_string()]);
 }
 
+
+#[test]
+fn carpet_duplicators_keep_running() {
+    let mut server = server();
+    for command in [
+        "setblock 3 -58 5 oak_planks",
+        "setblock 3 -58 6 oak_planks",
+        "setblock 5 -58 5 slime_block",
+        "setblock 5 -58 6 slime_block",
+        "setblock 5 -57 6 slime_block",
+        "setblock 5 -56 6 slime_block",
+        "setblock 4 -58 5 observer[facing=east]",
+        "setblock 4 -58 6 sticky_piston[facing=east]",
+        "setblock 6 -58 6 dead_brain_coral_wall_fan[facing=east]",
+        "setblock 3 -57 5 redstone_wire[north=side,south=side]",
+        "setblock 3 -57 6 redstone_wire[north=side,south=side]",
+        "setblock 2 -58 6 lever[face=wall,facing=west]",
+        "setblock 6 -57 6 white_carpet",
+        "setblock 6 -56 6 white_carpet",
+    ] {
+        run(&mut server, command);
+    }
+    for _ in 0..100 {
+        server.tick();
+    }
+    let carpets: i32 = server.levels[0]
+        .entities
+        .values()
+        .filter_map(|entity| match entity {
+            crate::world::entity::LevelEntity::Item(item) if item.item.is(wafer_data::items::WHITE_CARPET) => Some(item.item.count),
+            _ => None,
+        })
+        .sum();
+    assert!(carpets > 10, "only {carpets} carpets were duplicated");
+}

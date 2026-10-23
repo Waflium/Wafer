@@ -105,7 +105,10 @@ impl BlockBehaviour for BellBlock {
                 return Some(state);
             }
         } else {
-            let sturdy = |level: &mut ServerLevel, at: BlockPos, face: Direction| level.block_state(at).is_face_sturdy(face, SupportType::Full);
+            let sturdy = |level: &mut ServerLevel, at: BlockPos, face: Direction| {
+                let at_state = level.block_state(at);
+                level.is_face_sturdy_at(at, at_state, face, SupportType::Full)
+            };
             let double_attached = axis == Axis::X && sturdy(level, pos.west(), Direction::East) && sturdy(level, pos.east(), Direction::West)
                 || axis == Axis::Z && sturdy(level, pos.north(), Direction::South) && sturdy(level, pos.south(), Direction::North);
             let mut state = block
@@ -124,19 +127,19 @@ impl BlockBehaviour for BellBlock {
         None
     }
 
-    fn update_shape(&self, state: BlockState, level: &mut dyn LevelAccessor, pos: BlockPos, direction: Direction, _: BlockPos, neighbour_state: BlockState) -> BlockState {
+    fn update_shape(&self, state: BlockState, level: &mut dyn LevelAccessor, pos: BlockPos, direction: Direction, neighbour_pos: BlockPos, neighbour_state: BlockState) -> BlockState {
         let attachment = state.get(BELL_ATTACHMENT);
         let connected_direction = get_connected_direction(state).opposite();
         if connected_direction == direction && !self.can_survive(state, level, pos) && attachment != BellAttachType::DoubleWall {
             return blocks::AIR.default_state();
         }
         if direction.axis() == state.get(HORIZONTAL_FACING).axis() {
-            if attachment == BellAttachType::DoubleWall && !neighbour_state.is_face_sturdy(direction, SupportType::Full) {
+            if attachment == BellAttachType::DoubleWall && !level.is_face_sturdy_at(neighbour_pos, neighbour_state, direction, SupportType::Full) {
                 return state.set(BELL_ATTACHMENT, BellAttachType::SingleWall).set(HORIZONTAL_FACING, direction.opposite());
             }
             if attachment == BellAttachType::SingleWall
                 && connected_direction.opposite() == direction
-                && neighbour_state.is_face_sturdy(state.get(HORIZONTAL_FACING), SupportType::Full)
+                && level.is_face_sturdy_at(neighbour_pos, neighbour_state, state.get(HORIZONTAL_FACING), SupportType::Full)
             {
                 return state.set(BELL_ATTACHMENT, BellAttachType::DoubleWall);
             }

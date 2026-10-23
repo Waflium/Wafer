@@ -31,7 +31,7 @@ fn touches_liquid(level: &mut dyn LevelReader, pos: BlockPos) -> bool {
         if direction != Direction::Down || can_solidify(block_state) {
             test_pos = pos.relative(direction);
             let block_state = level.block_state(test_pos);
-            if can_solidify(block_state) && !block_state.is_face_sturdy(direction.opposite(), SupportType::Full) {
+            if can_solidify(block_state) && !level.is_face_sturdy_at(test_pos, block_state, direction.opposite(), SupportType::Full) {
                 return true;
             }
         }

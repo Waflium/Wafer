@@ -17,7 +17,8 @@ impl BlockBehaviour for HangingRootsBlock {
     }
 
     fn can_survive(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
-        level.block_state(pos.above()).is_face_sturdy(Direction::Down, SupportType::Full)
+        let above = level.block_state(pos.above());
+        level.is_face_sturdy_at(pos.above(), above, Direction::Down, SupportType::Full)
     }
 
     fn update_shape(&self, state: BlockState, level: &mut dyn LevelAccessor, pos: BlockPos, direction: Direction, _: BlockPos, _: BlockState) -> BlockState {

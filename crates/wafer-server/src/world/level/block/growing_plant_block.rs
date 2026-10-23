@@ -45,7 +45,7 @@ pub fn can_survive(plant: &GrowingPlant, head: Block, body: Block, can_attach_to
     if !can_attach_to(attached_to_state) {
         return false;
     }
-    attached_to_state.is_block(head) || attached_to_state.is_block(body) || attached_to_state.is_face_sturdy(plant.growth_direction, SupportType::Full)
+    attached_to_state.is_block(head) || attached_to_state.is_block(body) || level.is_face_sturdy_at(attached_to_pos, attached_to_state, plant.growth_direction, SupportType::Full)
 }
 
 pub fn tick(state: BlockState, level: &mut ServerLevel, pos: BlockPos) {

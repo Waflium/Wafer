@@ -59,8 +59,8 @@ fn should_connect_to(state: BlockState, level: &mut dyn LevelReader, pos: BlockP
     super::of(state).should_redstone_wire_connect_to(state, level, pos, direction)
 }
 
-fn can_survive_on(state: BlockState) -> bool {
-    state.is_face_sturdy_full(Direction::Up) || state.is_block(blocks::HOPPER)
+fn can_survive_on(level: &mut dyn LevelReader, pos: BlockPos, state: BlockState) -> bool {
+    level.is_face_sturdy_at(pos, state, Direction::Up, wafer_data::SupportType::Full) || state.is_block(blocks::HOPPER)
 }
 
 pub fn get_block_signal(level: &mut ServerLevel, pos: BlockPos) -> i32 {
@@ -134,9 +134,9 @@ impl RedstoneWireBlock {
         let relative_pos = pos.relative(direction);
         let relative_state = level.block_state(relative_pos);
         if can_connect_up {
-            let is_placeable_above = relative_state.block().is_instance_of("TrapDoorBlock") || can_survive_on(relative_state);
+            let is_placeable_above = relative_state.block().is_instance_of("TrapDoorBlock") || can_survive_on(level, relative_pos, relative_state);
             if is_placeable_above && should_connect_to_pos(level, relative_pos.above()) {
-                if relative_state.is_face_sturdy_full(direction.opposite()) {
+                if level.is_face_sturdy_at(relative_pos, relative_state, direction.opposite(), wafer_data::SupportType::Full) {
                     return RedstoneSide::Up;
                 }
                 return RedstoneSide::Side;
@@ -224,11 +224,11 @@ impl BlockBehaviour for RedstoneWireBlock {
         level: &mut dyn LevelAccessor,
         pos: BlockPos,
         direction: Direction,
-        _neighbour_pos: BlockPos,
+        neighbour_pos: BlockPos,
         neighbour_state: BlockState,
     ) -> BlockState {
         if direction == Direction::Down {
-            return if !can_survive_on(neighbour_state) { blocks::AIR.default_state() } else { state };
+            return if !can_survive_on(level, neighbour_pos, neighbour_state) { blocks::AIR.default_state() } else { state };
         }
         if direction == Direction::Up {
             return self.get_connection_state(level, state, pos);
@@ -263,7 +263,8 @@ impl BlockBehaviour for RedstoneWireBlock {
     }
 
     fn can_survive(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
-        can_survive_on(level.block_state(pos.below()))
+        let below = level.block_state(pos.below());
+        can_survive_on(level, pos.below(), below)
     }
 
     fn on_place(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, old_state: BlockState, _moved_by_piston: bool) {

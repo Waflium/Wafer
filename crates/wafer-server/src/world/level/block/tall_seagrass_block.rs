@@ -15,8 +15,8 @@ use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 pub struct TallSeagrassBlock;
 
 impl Vegetation for TallSeagrassBlock {
-    fn may_place_on(&self, state: BlockState, _level: &mut dyn LevelReader, _pos: BlockPos) -> bool {
-        may_place_on_seagrass_support(state)
+    fn may_place_on(&self, state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
+        may_place_on_seagrass_support(state, level, pos)
     }
 }
 

@@ -13,7 +13,8 @@ pub struct WallTorchBlock;
 
 pub fn can_survive_facing(level: &mut dyn LevelReader, pos: BlockPos, facing: Direction) -> bool {
     let relative_pos = pos.relative(facing.opposite());
-    level.block_state(relative_pos).is_face_sturdy_full(facing)
+    let relative_state = level.block_state(relative_pos);
+    level.is_face_sturdy_at(relative_pos, relative_state, facing, wafer_data::SupportType::Full)
 }
 
 pub fn update_shape(state: BlockState, level: &mut dyn LevelAccessor, pos: BlockPos, direction: Direction) -> BlockState {

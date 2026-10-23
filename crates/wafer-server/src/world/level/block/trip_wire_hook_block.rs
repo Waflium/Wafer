@@ -146,7 +146,7 @@ impl BlockBehaviour for TripWireHookBlock {
         let direction = state.get(HORIZONTAL_FACING);
         let relative = pos.relative(direction.opposite());
         let block_state = level.block_state(relative);
-        direction.axis().is_horizontal() && block_state.is_face_sturdy_full(direction)
+        direction.axis().is_horizontal() && level.is_face_sturdy_at(relative, block_state, direction, wafer_data::SupportType::Full)
     }
 
     fn update_shape(

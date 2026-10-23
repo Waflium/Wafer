@@ -251,7 +251,8 @@ mod huge_mushroom_block;
 mod infested_rotated_pillar_block;
 mod jigsaw_block;
 mod lectern_block;
-mod moving_piston_block;
+pub mod moving_piston_block;
+pub mod support_type;
 pub mod nether_portal_block;
 pub mod piston_base_block;
 pub mod piston_math;
@@ -638,13 +639,14 @@ pub fn is_diode(state: BlockState) -> bool {
 }
 
 pub fn can_support_rigid_block(level: &mut dyn LevelReader, pos: BlockPos) -> bool {
-    level.block_state(pos).is_face_sturdy(Direction::Up, wafer_data::SupportType::Rigid)
+    let state = level.block_state(pos);
+    level.is_face_sturdy_at(pos, state, Direction::Up, wafer_data::SupportType::Rigid)
 }
 
 pub fn can_support_center(level: &mut dyn LevelReader, pos: BlockPos, direction: Direction) -> bool {
     let state = level.block_state(pos);
     (direction != Direction::Down || !state.is(&wafer_data::block_tags::UNSTABLE_BOTTOM_CENTER))
-        && state.is_face_sturdy(direction, wafer_data::SupportType::Center)
+        && level.is_face_sturdy_at(pos, state, direction, wafer_data::SupportType::Center)
 }
 
 pub struct PlainBlock;

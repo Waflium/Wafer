@@ -34,14 +34,17 @@ impl BlockBehaviour for IronBarsBlock {
         let south_state = level.block_state(south);
         let west_state = level.block_state(west);
         let east_state = level.block_state(east);
-        let sturdy = |state: BlockState, face: Direction| state.is_face_sturdy(face, SupportType::Full);
+        let north_sturdy = level.is_face_sturdy_at(north, north_state, Direction::South, SupportType::Full);
+        let south_sturdy = level.is_face_sturdy_at(south, south_state, Direction::North, SupportType::Full);
+        let west_sturdy = level.is_face_sturdy_at(west, west_state, Direction::East, SupportType::Full);
+        let east_sturdy = level.is_face_sturdy_at(east, east_state, Direction::West, SupportType::Full);
         Some(
             block
                 .default_state()
-                .set(NORTH, attaches_to(north_state, sturdy(north_state, Direction::South)))
-                .set(SOUTH, attaches_to(south_state, sturdy(south_state, Direction::North)))
-                .set(WEST, attaches_to(west_state, sturdy(west_state, Direction::East)))
-                .set(EAST, attaches_to(east_state, sturdy(east_state, Direction::West)))
+                .set(NORTH, attaches_to(north_state, north_sturdy))
+                .set(SOUTH, attaches_to(south_state, south_sturdy))
+                .set(WEST, attaches_to(west_state, west_sturdy))
+                .set(EAST, attaches_to(east_state, east_sturdy))
                 .set(WATERLOGGED, water),
         )
     }
@@ -52,14 +55,14 @@ impl BlockBehaviour for IronBarsBlock {
         level: &mut dyn LevelAccessor,
         pos: BlockPos,
         direction: Direction,
-        _neighbour_pos: BlockPos,
+        neighbour_pos: BlockPos,
         neighbour_state: BlockState,
     ) -> BlockState {
         schedule_water_tick(state, level, pos);
         if !direction.axis().is_horizontal() {
             return state;
         }
-        let face_solid = neighbour_state.is_face_sturdy(direction.opposite(), SupportType::Full);
+        let face_solid = level.is_face_sturdy_at(neighbour_pos, neighbour_state, direction.opposite(), SupportType::Full);
         state.set(property_by_direction(direction), attaches_to(neighbour_state, face_solid))
     }
 }

@@ -40,7 +40,7 @@ impl WallHangingSignBlock {
         if attach_state.is(&block_tags::WALL_HANGING_SIGNS) {
             attach_state.get(HORIZONTAL_FACING).axis() == state.get(HORIZONTAL_FACING).axis()
         } else {
-            attach_state.is_face_sturdy(attach_face, SupportType::Full)
+            level.is_face_sturdy_at(attach_pos, attach_state, attach_face, SupportType::Full)
         }
     }
 }

@@ -216,7 +216,7 @@ impl BlockBehaviour for DoorBlock {
 
     fn can_survive(&self, state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
         let below = level.block_state(pos.below());
-        if state.get(DOUBLE_BLOCK_HALF) == DoubleBlockHalf::Lower { below.is_face_sturdy(Direction::Up, SupportType::Full) } else { below.is_block(state.block()) }
+        if state.get(DOUBLE_BLOCK_HALF) == DoubleBlockHalf::Lower { level.is_face_sturdy_at(pos.below(), below, Direction::Up, SupportType::Full) } else { below.is_block(state.block()) }
     }
 }
 

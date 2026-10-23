@@ -64,10 +64,10 @@ impl BlockBehaviour for RepeaterBlock {
         level: &mut dyn LevelAccessor,
         pos: BlockPos,
         direction: Direction,
-        _neighbour_pos: BlockPos,
+        neighbour_pos: BlockPos,
         neighbour_state: BlockState,
     ) -> BlockState {
-        if direction == Direction::Down && !diode_block::can_survive_on(neighbour_state) {
+        if direction == Direction::Down && !diode_block::can_survive_on(level, neighbour_pos, neighbour_state) {
             blocks::AIR.default_state()
         } else if direction.axis() != state.get(HORIZONTAL_FACING).axis() {
             state.set(LOCKED, self.is_locked(level, pos, state))

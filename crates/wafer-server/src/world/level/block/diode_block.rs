@@ -87,12 +87,13 @@ pub fn should_prioritize(level: &mut ServerLevel, pos: BlockPos, state: BlockSta
     is_diode(opposite_state) && opposite_state.get(HORIZONTAL_FACING) != direction
 }
 
-pub fn can_survive_on(neighbor_state: BlockState) -> bool {
-    neighbor_state.is_face_sturdy(Direction::Up, SupportType::Rigid)
+pub fn can_survive_on(level: &mut dyn LevelReader, neighbor_pos: BlockPos, neighbor_state: BlockState) -> bool {
+    level.is_face_sturdy_at(neighbor_pos, neighbor_state, Direction::Up, SupportType::Rigid)
 }
 
 pub fn can_survive(level: &mut dyn LevelReader, pos: BlockPos) -> bool {
-    can_survive_on(level.block_state(pos.below()))
+    let below = level.block_state(pos.below());
+    can_survive_on(level, pos.below(), below)
 }
 
 pub fn tick(diode: &(impl DiodeBlock + ?Sized), state: BlockState, level: &mut ServerLevel, pos: BlockPos) {

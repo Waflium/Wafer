@@ -34,7 +34,8 @@ pub fn update_shape(behaviour: &dyn BlockBehaviour, state: BlockState, level: &m
 
 pub fn can_survive(level: &mut dyn LevelReader, pos: BlockPos) -> bool {
     let below = pos.below();
-    level.block_state(below).is_face_sturdy(Direction::Up, SupportType::Full)
+    let state = level.block_state(below);
+    level.is_face_sturdy_at(below, state, Direction::Up, SupportType::Full)
 }
 
 pub struct BaseCoralPlantTypeBlock;

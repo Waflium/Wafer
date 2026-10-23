@@ -40,7 +40,7 @@ pub fn can_burn(state: BlockState) -> bool {
 pub fn get_state_for_placement(level: &mut dyn LevelReader, pos: BlockPos) -> BlockState {
     let below_state = level.block_state(pos.below());
     let mut result = blocks::FIRE.default_state();
-    if !can_burn(below_state) && !below_state.is_face_sturdy_full(Direction::Up) {
+    if !can_burn(below_state) && !level.is_face_sturdy_at(pos.below(), below_state, Direction::Up, wafer_data::SupportType::Full) {
         for direction in Direction::VALUES {
             if let Some(property) = property_by_direction(direction) {
                 result = result.set(property, can_burn(level.block_state(pos.relative(direction))));
@@ -111,7 +111,8 @@ impl BlockBehaviour for FireBlock {
     }
 
     fn can_survive(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
-        level.block_state(pos.below()).is_face_sturdy_full(Direction::Up) || is_valid_fire_location(level, pos)
+        let below = level.block_state(pos.below());
+        level.is_face_sturdy_at(pos.below(), below, Direction::Up, wafer_data::SupportType::Full) || is_valid_fire_location(level, pos)
     }
 
     fn tick(&self, mut state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
@@ -138,7 +139,8 @@ impl BlockBehaviour for FireBlock {
         if !infini_burn {
             if !is_valid_fire_location(level, pos) {
                 let below = pos.below();
-                if !level.block_state(below).is_face_sturdy_full(Direction::Up) || age > 3 {
+                let below_state = level.block_state(below);
+                if !level.is_face_sturdy_at(below, below_state, Direction::Up, wafer_data::SupportType::Full) || age > 3 {
                     level.remove_block(pos, false);
                 }
                 return;

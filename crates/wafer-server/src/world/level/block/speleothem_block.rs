@@ -118,7 +118,7 @@ pub fn calculate_speleothem_thickness(
 fn is_valid_speleothem_placement(this: &(impl SpeleothemBlock + ?Sized), level: &mut dyn LevelReader, pos: BlockPos, tip_direction: Direction) -> bool {
     let behind_pos = pos.relative(tip_direction.opposite());
     let behind_state = level.block_state(behind_pos);
-    behind_state.is_face_sturdy(tip_direction, SupportType::Full) || is_speleothem_with_direction(behind_state, tip_direction) && behind_state.is_block(this.block())
+    level.is_face_sturdy_at(behind_pos, behind_state, tip_direction, SupportType::Full) || is_speleothem_with_direction(behind_state, tip_direction) && behind_state.is_block(this.block())
 }
 
 fn is_speleothem_with_direction(block_state: BlockState, tip_direction: Direction) -> bool {

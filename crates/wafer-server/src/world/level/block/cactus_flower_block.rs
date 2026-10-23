@@ -10,7 +10,7 @@ pub struct CactusFlowerBlock;
 impl Vegetation for CactusFlowerBlock {
     fn may_place_on(&self, _state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
         let block_below = level.block_state(pos);
-        block_below.is(&block_tags::SUPPORT_OVERRIDE_CACTUS_FLOWER) || block_below.is_face_sturdy(Direction::Up, SupportType::Center)
+        block_below.is(&block_tags::SUPPORT_OVERRIDE_CACTUS_FLOWER) || level.is_face_sturdy_at(pos, block_below, Direction::Up, SupportType::Center)
     }
 }
 

@@ -133,7 +133,8 @@ impl MultifaceSpreader {
                 }
                 if source_pos.dist_manhattan(placement_pos) == 2 {
                     let neighbour_pos = source_pos.relative(placement_direction.opposite());
-                    if level.block_state(neighbour_pos).is_face_sturdy(placement_direction, SupportType::Full) {
+                    let neighbour_state = level.block_state(neighbour_pos);
+                    if level.is_face_sturdy_at(neighbour_pos, neighbour_state, placement_direction, SupportType::Full) {
                         return false;
                     }
                 }

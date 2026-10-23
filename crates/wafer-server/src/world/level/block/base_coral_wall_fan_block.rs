@@ -30,7 +30,8 @@ impl BlockBehaviour for BaseCoralWallFanBlock {
     fn can_survive(&self, state: BlockState, level: &mut dyn LevelReader, pos: BlockPos) -> bool {
         let facing: Direction = state.get(HORIZONTAL_FACING);
         let relative_pos = pos.relative(facing.opposite());
-        level.block_state(relative_pos).is_face_sturdy(facing, SupportType::Full)
+        let relative_state = level.block_state(relative_pos);
+        level.is_face_sturdy_at(relative_pos, relative_state, facing, SupportType::Full)
     }
 
     fn get_state_for_placement(&self, block: Block, ctx: &BlockPlaceContext, level: &mut ServerLevel) -> Option<BlockState> {
