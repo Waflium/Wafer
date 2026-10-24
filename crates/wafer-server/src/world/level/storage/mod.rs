@@ -52,6 +52,26 @@ pub fn read_saved_data_dat(path: &Path, data_fix_type: crate::util::datafix::dat
     }))
 }
 
+pub fn read_saved_data<T>(file: &Path, thread: &str, id: &str, data_fix_type: DataFixTypes, decode: impl FnOnce(&Nbt) -> crate::util::codec::DecodeResult<T>) -> Option<T> {
+    match read_saved_data_dat(file, data_fix_type) {
+        Ok(Some(tag)) => {
+            let decoded = crate::util::codec::with_nbt_ops(|| match tag.get("data") {
+                Some(data) => decode(data),
+                None => crate::util::codec::DecodeResult::error("Not a map: null"),
+            });
+            if let Some(error) = decoded.error {
+                error!(thread: thread, "Failed to parse saved data for 'SavedDataType[minecraft:{id}]': {error}");
+            }
+            decoded.value
+        }
+        Ok(None) => None,
+        Err(_) => {
+            error!(thread: thread, "Error loading saved data: SavedDataType[minecraft:{id}]");
+            None
+        }
+    }
+}
+
 pub fn write_dat(path: &Path, nbt: &Nbt) -> io::Result<()> {
     fs::create_dir_all(path.parent().unwrap())?;
     let tmp = path.with_extension("dat_tmp");

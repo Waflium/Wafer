@@ -2,7 +2,8 @@ use wafer_protocol::nbt::Nbt;
 
 use super::criteria::{ObjectiveCriteria, RenderType};
 use crate::network::chat::numbers::NumberFormat;
-use crate::network::chat::{Component, HoverEvent};
+use crate::network::chat::{Component, HoverEvent, component_serialization};
+use crate::util::codec::{self, DecodeResult, Record};
 
 pub type ObjectiveId = u32;
 
@@ -106,17 +107,17 @@ pub struct PackedObjective {
 }
 
 impl PackedObjective {
-    pub fn from_nbt(tag: &Nbt) -> Result<PackedObjective, String> {
-        use crate::network::chat::component_serialization::decode;
-        let name = tag.get("Name").and_then(Nbt::as_str).ok_or("No key Name")?.to_string();
-        let criteria = match tag.get("CriteriaName").and_then(Nbt::as_str) {
-            Some(criteria) => ObjectiveCriteria::from_codec(criteria)?,
-            None => ObjectiveCriteria::DUMMY,
-        };
-        let display_name = decode(tag.get("DisplayName").ok_or("No key DisplayName")?)?;
-        let render_type = tag.get("RenderType").and_then(Nbt::as_str).map_or(Ok(RenderType::Integer), |r| RenderType::by_name(r).ok_or(format!("Unknown element name:{r}")))?;
-        let display_auto_update = tag.get("display_auto_update").and_then(Nbt::as_f64).is_some_and(|v| v != 0.0);
-        let number_format = tag.get("format").map(NumberFormat::from_nbt).transpose()?;
-        Ok(PackedObjective { name, criteria, display_name, render_type, display_auto_update, number_format })
+    pub fn decode(tag: &Nbt) -> DecodeResult<PackedObjective> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let name = record.required(tag, "Name", |name| codec::string(name).map(str::to_string));
+        let criteria = record.with_default(tag, "CriteriaName", ObjectiveCriteria::DUMMY, |criteria| codec::string(criteria).and_then(ObjectiveCriteria::from_codec));
+        let display_name = record.required(tag, "DisplayName", component_serialization::decode_partial);
+        let render_type = record.with_default(tag, "RenderType", RenderType::Integer, |render_type| codec::enum_by_name(render_type, RenderType::by_name));
+        let display_auto_update = record.with_default(tag, "display_auto_update", false, codec::bool_value);
+        let number_format = record.optional(tag, "format", NumberFormat::from_nbt);
+        record.build(|| Some(PackedObjective { name: name?, criteria, display_name: display_name?, render_type, display_auto_update, number_format }))
     }
 }

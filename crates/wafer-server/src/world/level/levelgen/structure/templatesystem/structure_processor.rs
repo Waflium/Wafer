@@ -207,12 +207,12 @@ impl StructureProcessor {
                     return Some(processed_block_info);
                 }
                 let Some(nbt) = &processed_block_info.nbt else {
-                    warn!("Jigsaw block at {:?} is missing nbt, will not replace", _target_position);
+                    warn!("Jigsaw block at {} is missing nbt, will not replace", _target_position);
                     return Some(processed_block_info);
                 };
                 let state_string = nbt.get("final_state").and_then(Nbt::as_str).unwrap_or("minecraft:air");
                 let Some(block_state) = parse_block_state_string(state_string) else {
-                    error!("Failed to parse jigsaw replacement state '{state_string}' at {:?}", _target_position);
+                    error!("Failed to parse jigsaw replacement state '{state_string}' at {}", _target_position);
                     return None;
                 };
                 if block_state.is_block(blocks::STRUCTURE_VOID) {

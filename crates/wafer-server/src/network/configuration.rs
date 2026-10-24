@@ -409,7 +409,7 @@ pub fn write_tags(p: &mut wafer_protocol::Writer) {
 pub fn write_resource_pack_push(info: &ServerResourcePackInfo, p: &mut wafer_protocol::Writer) {
     p.uuid(info.id);
     p.string(&info.url);
-    p.string(&info.hash);
+    p.string_max(&info.hash, 40);
     p.bool(info.is_required);
     p.bool(info.prompt.is_some());
     if let Some(prompt) = &info.prompt {

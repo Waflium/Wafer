@@ -186,17 +186,17 @@ impl LevelChunk {
         let pos = entity.pos();
         let state = self.block_state(pos);
         if !state.has_block_entity() {
-            warn!("Trying to set block entity {:?} at position {pos:?}, but state {state:?} does not allow it", entity.ty());
+            warn!("Trying to set block entity {:?} at position {pos}, but state {state:?} does not allow it", entity.ty());
             return false;
         }
         let cached = entity.block_state();
         if state != cached {
             if !entity.ty().is_valid(state) {
-                warn!("Trying to set block entity {:?} at position {pos:?}, but state {state:?} does not allow it", entity.ty());
+                warn!("Trying to set block entity {:?} at position {pos}, but state {state:?} does not allow it", entity.ty());
                 return false;
             }
             if state.block() != cached.block() {
-                warn!("Block state mismatch on block entity {:?} in position {pos:?}, {state:?} != {cached:?}, updating", entity.ty());
+                warn!("Block state mismatch on block entity {:?} in position {pos}, {state:?} != {cached:?}, updating", entity.ty());
             }
             entity.set_block_state(state);
         }

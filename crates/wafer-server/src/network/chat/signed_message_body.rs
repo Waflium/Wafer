@@ -26,7 +26,7 @@ impl SignedMessageBody {
     }
 
     pub fn write_packed(&self, w: &mut Writer, cache: &MessageSignatureCache) {
-        w.string(&self.content);
+        w.string_max(&self.content, 256);
         w.i64(self.time_stamp);
         w.i64(self.salt);
         w.varint(self.last_seen.entries.len() as i32);

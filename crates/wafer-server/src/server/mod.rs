@@ -402,9 +402,9 @@ impl Server {
         }
         let weather = Rc::new(WeatherDataCell::new(weather, weather_dirty));
         let default_game_type = Rc::new(Cell::new(game_type));
-        let scoreboard_save_data = ScoreboardSaveData::load(world_dir.as_ref().map(WorldDir::data_folder));
+        let mut scoreboard_save_data = ScoreboardSaveData::load(world_dir.as_ref().map(WorldDir::data_folder));
         let scoreboard = Rc::new(RefCell::new(Scoreboard::default()));
-        scoreboard.borrow_mut().load(scoreboard_save_data.data());
+        scoreboard.borrow_mut().load(scoreboard_save_data.take_packed());
         let command_storage = Rc::new(RefCell::new(CommandStorage::new(world_dir.as_ref().map(WorldDir::data_folder))));
         let random_sequences = Rc::new(RefCell::new(RandomSequences::load(world_dir.as_ref().map(WorldDir::data_folder))));
         let data_storage = Rc::new(RefCell::new(SavedDataStorage::new(world_dir.as_ref().map(WorldDir::data_folder))));
@@ -1984,9 +1984,15 @@ pub fn run(
     server.build_server_status();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_server_loop(&mut server, &mut events, &tasks, &timing)));
     if let Err(panic) = result {
-        let message = panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
+        let (reported, message) = match panic.downcast::<crate::crash_report::ReportedException>() {
+            Ok(reported) => {
+                let message = format!("net.minecraft.ReportedException: {}\nCaused by: {}", reported.0.title(), reported.0.exception());
+                (Some(reported.0), message)
+            }
+            Err(panic) => (None, panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()),
+        };
         error!("Encountered an unexpected exception\n{message}");
-        let mut report = crate::crash_report::CrashReport::new("Exception in server tick loop", message, crash_frames());
+        let mut report = reported.unwrap_or_else(|| crate::crash_report::CrashReport::new("Exception in server tick loop", message, crash_frames()));
         dedicated::server_watchdog::fill_system_report(&mut report, &server.watchdog_snapshot());
         let file = crate::crash_report::crash_report_file(Path::new("."));
         if report.save_to_file(&file) {
@@ -2031,7 +2037,7 @@ pub(crate) fn capture_panic_frames() {
     PANIC_FRAMES.set(Some(frames[start..].to_vec()));
 }
 
-fn crash_frames() -> Vec<String> {
+pub(crate) fn crash_frames() -> Vec<String> {
     PANIC_FRAMES.take().unwrap_or_else(backtrace_frames)
 }
 

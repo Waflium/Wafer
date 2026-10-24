@@ -138,6 +138,7 @@ pub struct Outbound {
     sender: mpsc::UnboundedSender<Vec<u8>>,
     codec: Codec,
     io_thread: Arc<str>,
+    marks_fallbacks: bool,
 }
 
 impl Outbound {
@@ -149,7 +150,20 @@ impl Outbound {
         let _ = self.sender.send(packet);
     }
 
-    pub fn send_with_fallback(&self, id: i32, body: impl FnOnce(&mut Writer), fallback: impl FnOnce() -> Option<Vec<u8>>) {
+    fn send_marked(&self, packet: Vec<u8>, fallback_type: Option<i32>) {
+        match fallback_type {
+            Some(fallback_type) if self.marks_fallbacks => {
+                let mut marked = Writer::new();
+                marked.bytes(&FALLBACK_MARKER);
+                marked.varint(fallback_type);
+                marked.bytes(&packet);
+                self.send_raw(marked.into_inner());
+            }
+            _ => self.send_raw(packet),
+        }
+    }
+
+    pub fn send_with_fallback(&self, id: i32, body: impl FnOnce(&mut Writer), fallback_type: Option<i32>, fallback: impl FnOnce() -> Option<Vec<u8>>) {
         if self.sender.is_closed() {
             return;
         }
@@ -173,11 +187,19 @@ impl Outbound {
             }
             return;
         }
-        self.send_raw(packet);
+        self.send_marked(packet, fallback_type);
     }
 }
 
 const FAULTED_PACKET: [u8; 5] = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
+const FALLBACK_MARKER: [u8; 5] = [0xFF, 0xFF, 0xFF, 0xFF, 0x0E];
+
+fn split_fallback(item: &[u8]) -> (Option<i32>, &[u8]) {
+    let Some(rest) = item.strip_prefix(&FALLBACK_MARKER) else { return (None, item) };
+    let mut r = Reader::new(rest);
+    let Ok(fallback_type) = r.varint() else { return (None, item) };
+    (Some(fallback_type), &rest[rest.len() - r.remaining()..])
+}
 
 pub fn encode(id: i32, body: impl FnOnce(&mut Writer)) -> Vec<u8> {
     let mut w = Writer::new();
@@ -245,8 +267,9 @@ pub fn spawn_io(
             let mut frames = Vec::new();
             let mut fault = None;
             let mut next = Some(first);
-            while let Some(packet) = next.take().or_else(|| rx.try_recv().ok()) {
-                if let Some((id, chain)) = encoding_fault(&packet) {
+            while let Some(item) = next.take().or_else(|| rx.try_recv().ok()) {
+                let packet = split_fallback(&item).1;
+                if let Some((id, chain)) = encoding_fault(packet) {
                     let (packet_type, wrapper, causes) = encoder_exception(id, chain);
                     error!(thread: &write_thread, "Error sending packet {packet_type}\n{wrapper}{causes}");
                     if is_skippable(id) {
@@ -255,11 +278,20 @@ pub fn spawn_io(
                     fault = Some(vec![wrapper]);
                     break;
                 }
-                match w.codec.try_encode(&packet) {
+                match w.codec.try_encode(packet) {
                     Ok(frame) => frames.extend(frame),
                     Err(cause) => {
                         fault = Some(cause);
                         break;
+                    }
+                }
+            }
+            if fault.is_some() {
+                rx.close();
+                while let Ok(item) = rx.try_recv() {
+                    if let (Some(fallback_type), _) = split_fallback(&item) {
+                        let name = wafer_data::packet_name("play", "clientbound", fallback_type).unwrap_or_default();
+                        warn!(thread: &write_thread, "Failed to deliver packet, sending fallback clientbound/{name}\nio.netty.channel.StacklessClosedChannelException\n\tat io.netty.channel.AbstractChannel$AbstractUnsafe.write(Object, ChannelPromise)(Unknown Source)");
                     }
                 }
             }
@@ -282,7 +314,7 @@ pub fn spawn_io(
         }
         let _ = w.half.shutdown().await;
     });
-    Outbound { sender, codec, io_thread }
+    Outbound { sender, codec, io_thread, marks_fallbacks: true }
 }
 
 #[cfg(test)]
@@ -293,7 +325,7 @@ impl Outbound {
 
     pub fn capture() -> (Outbound, mpsc::UnboundedReceiver<Vec<u8>>) {
         let (sender, rx) = mpsc::unbounded_channel();
-        (Outbound { sender, codec: Codec::default(), io_thread: Arc::from("Netty NIO IO #1") }, rx)
+        (Outbound { sender, codec: Codec::default(), io_thread: Arc::from("Netty NIO IO #1"), marks_fallbacks: false }, rx)
     }
 }
 
@@ -316,5 +348,20 @@ mod tests {
         assert_eq!(causes, "\nCaused by: io.netty.handler.codec.EncoderException: String too big (was 40000 characters, max 32767)");
         assert!(is_skippable(SYSTEM_CHAT));
         assert!(!is_skippable(SET_ENTITY_DATA));
+    }
+
+    #[test]
+    fn fallback_markers_survive_the_queue() {
+        let packet = encode(SYSTEM_CHAT, |w| w.string("hi"));
+        let (out, _rx) = Outbound::capture();
+        let out = Outbound { marks_fallbacks: true, ..out };
+        let (sender, mut rx) = mpsc::unbounded_channel();
+        let out = Outbound { sender, ..out };
+        out.send_with_fallback(SYSTEM_CHAT, |w| w.string("hi"), Some(SYSTEM_CHAT), || None);
+        out.send_with_fallback(SYSTEM_CHAT, |w| w.string("hi"), None, || None);
+        let marked = rx.try_recv().unwrap();
+        assert_eq!(split_fallback(&marked), (Some(SYSTEM_CHAT), &packet[..]));
+        let plain = rx.try_recv().unwrap();
+        assert_eq!(split_fallback(&plain), (None, &packet[..]));
     }
 }

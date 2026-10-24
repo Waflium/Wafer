@@ -33,7 +33,7 @@ impl DispenserBlock {
     fn dispense_from(&self, level: &mut ServerLevel, state: BlockState, pos: BlockPos) {
         let expected = if self.dropper { block_entity_types::DROPPER } else { block_entity_types::DISPENSER };
         if !level.get_block_entity(pos).is_some_and(|e| e.ty() == expected) {
-            warn!("Ignoring dispensing attempt for {} without matching block entity at {pos:?}", if self.dropper { "Dropper" } else { "Dispenser" });
+            warn!("Ignoring dispensing attempt for {} without matching block entity at {pos}", if self.dropper { "Dropper" } else { "Dispenser" });
             return;
         }
         level.unpack_loot_table(pos, None);

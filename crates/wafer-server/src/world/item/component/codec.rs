@@ -761,8 +761,9 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
         Stream::Double => w.f64(as_f64(value)),
         Stream::Utf8(max) => {
             let s = value.as_str().unwrap_or("");
-            if s.encode_utf16().count() > *max {
-                return Err(format!("String too big (was {} characters, max {max})", s.len()));
+            let length = s.encode_utf16().count();
+            if length > *max {
+                return Err(format!("String too big (was {length} characters, max {max})"));
             }
             w.string(s)
         }

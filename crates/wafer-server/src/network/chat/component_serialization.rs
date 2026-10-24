@@ -207,6 +207,11 @@ pub fn decode(tag: &Nbt) -> std::result::Result<Component, String> {
     decode_component(tag).into_result()
 }
 
+pub fn decode_partial(tag: &Nbt) -> crate::util::codec::DecodeResult<Component> {
+    let result = decode_component(tag);
+    crate::util::codec::DecodeResult { value: result.value, error: result.error }
+}
+
 pub fn decode_or_partial(tag: &Nbt) -> Option<Component> {
     decode_component(tag).value
 }

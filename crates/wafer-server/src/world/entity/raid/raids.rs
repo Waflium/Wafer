@@ -12,7 +12,8 @@ use crate::server::level::ServerLevel;
 use crate::world::attribute::environment_attributes;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::village::poi::poi_manager::Occupancy;
-use crate::world::level::storage::{read_saved_data_dat, write_dat};
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::world::level::storage::{read_saved_data, write_dat};
 
 pub struct Raids {
     dir: Option<PathBuf>,
@@ -33,25 +34,34 @@ impl Raids {
     }
 
     pub fn load(dir: Option<PathBuf>) -> Raids {
-        let data = dir.as_deref().and_then(|dir| match read_saved_data_dat(&Raids::file(dir), DataFixTypes::SavedDataRaids) {
-            Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
-            Err(_) => {
-                error!("Error loading saved data: SavedDataType[minecraft:raids]");
-                None
-            }
-        });
-        let field = |name: &str| data.as_ref().and_then(|d| d.get(name)).and_then(Nbt::as_i64).map(|v| v as i32);
-        let (Some(next_id), Some(tick)) = (field("next_id"), field("tick")) else { return Raids::empty(dir) };
+        let decoded = dir.as_deref().and_then(|dir| read_saved_data(&Raids::file(dir), "Server thread", "raids", DataFixTypes::SavedDataRaids, Raids::decode));
+        let Some((raids, next_id, tick)) = decoded else { return Raids::empty(dir) };
         let mut raid_map = OpenHashMap::new();
-        if let Some(Nbt::List(raids)) = data.as_ref().and_then(|d| d.get("raids")) {
-            for entry in raids {
-                let Some(id) = entry.get("id").and_then(Nbt::as_i64).map(|v| v as i32) else { continue };
-                if let Some(raid) = Raid::load(entry) {
-                    raid_map.insert(id, raid);
-                }
-            }
+        for (id, raid) in raids {
+            raid_map.insert(id, raid);
         }
         Raids { dir, raid_map, detached: Vec::new(), next_id, tick, dirty: false }
+    }
+
+    fn decode_raid_with_id(tag: &Nbt) -> DecodeResult<(i32, Raid)> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let id = record.required(tag, "id", codec::int);
+        let raid = record.absorb(Raid::decode(tag));
+        record.build(|| Some((id?, raid?)))
+    }
+
+    fn decode(data: &Nbt) -> DecodeResult<(Vec<(i32, Raid)>, i32, i32)> {
+        if let Err(error) = codec::map(data) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let raids = record.with_default(data, "raids", Vec::new(), |raids| codec::list_partial(raids, Raids::decode_raid_with_id));
+        let next_id = record.required(data, "next_id", codec::int);
+        let tick = record.required(data, "tick", codec::int);
+        record.build(|| Some((raids, next_id?, tick?)))
     }
 
     pub fn set_dirty(&mut self) {
@@ -196,5 +206,58 @@ impl ServerLevel {
         }
         self.raids.set_dirty();
         Some(raid_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RAID: &str = "started:1b,active:1b,ticks_active:5L,raid_omen_level:1,groups_spawned:0,cooldown_ticks:0,post_raid_ticks:0,total_health:1.5f,group_count:3,center:[I;1,2,3]";
+
+    #[test]
+    fn decode_errors_match_vanilla() {
+        let keys = [
+            "heroes_of_the_village",
+            "center",
+            "status",
+            "group_count",
+            "total_health",
+            "post_raid_ticks",
+            "cooldown_ticks",
+            "groups_spawned",
+            "raid_omen_level",
+            "ticks_active",
+            "active",
+            "started",
+        ];
+        let missing = keys.iter().map(|key| format!("No key {key} in MapLike[{{id:1}}]")).collect::<Vec<_>>().join("; ");
+        let cases: Vec<(String, Option<String>, Option<usize>)> = vec![
+            ("{}".into(), Some("No key tick in MapLike[{}]; No key next_id in MapLike[{}]".into()), None),
+            ("{next_id:1,tick:2}".into(), None, Some(0)),
+            ("{next_id:1}".into(), Some("No key tick in MapLike[{next_id:1}]".into()), None),
+            (r#"{next_id:"x",tick:"y"}"#.into(), Some("Not a number; Not a number".into()), None),
+            ("{raids:5,next_id:1,tick:2}".into(), Some("Not a list: 5".into()), Some(0)),
+            ("{raids:[5],next_id:1,tick:2}".into(), Some("Not a map: 5".into()), Some(0)),
+            ("{raids:[{id:1}],next_id:1,tick:2}".into(), Some(missing), Some(0)),
+            (format!(r#"{{raids:[{{id:1,{RAID},status:"ongoing",heroes_of_the_village:[]}}],next_id:1,tick:2}}"#), None, Some(1)),
+            (
+                format!(r#"{{raids:[{{id:1,{RAID},status:"ongoing",heroes_of_the_village:[[I;1,2,3,4],[I;1]]}}],next_id:1,tick:2}}"#),
+                Some("Input is not a list of 4 ints".into()),
+                Some(1),
+            ),
+            (format!(r#"{{raids:[{{id:2,{RAID},status:"bad",heroes_of_the_village:[]}}],next_id:1,tick:2}}"#), Some("Unknown element name:bad".into()), Some(0)),
+            (
+                format!(r#"{{raids:[{{id:2,{RAID},status:"loss",heroes_of_the_village:[]}},{{id:4,{RAID},status:"loss",heroes_of_the_village:[]}}],next_id:7,tick:2}}"#),
+                None,
+                Some(2),
+            ),
+        ];
+        for (input, error, count) in cases {
+            let tag = crate::nbt::parse_fully(&input).ok().unwrap();
+            let result = codec::with_nbt_ops(|| Raids::decode(&tag));
+            assert_eq!(result.error, error, "{input}");
+            assert_eq!(result.value.map(|(raids, _, _)| raids.len()), count, "{input}");
+        }
     }
 }

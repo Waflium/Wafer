@@ -51,6 +51,8 @@ pub mod item;
 pub mod leashable;
 #[cfg(test)]
 mod leashable_tests;
+#[cfg(test)]
+mod level_entity_rotation_tests;
 pub mod lightning_bolt;
 pub mod living_entity;
 pub mod marker;
@@ -189,6 +191,29 @@ impl LevelEntity {
             LevelEntity::Painting(painting) => decoration::hanging_entity::get_direction(&painting.entity).ordinal() as i32,
             LevelEntity::ItemFrame(frame) => decoration::hanging_entity::get_direction(&frame.entity).ordinal() as i32,
             _ => 0,
+        }
+    }
+
+    pub fn set_y_body_rot(&mut self, y_body_rot: f32) {
+        match self {
+            LevelEntity::Mob(mob) => {
+                if matches!(mob.kind, mob::MobKind::Silverfish(_) | mob::MobKind::Endermite(_)) {
+                    mob.entity.set_y_rot(y_body_rot);
+                }
+                mob.living.y_body_rot = y_body_rot;
+            }
+            LevelEntity::ArmorStand(stand) => stand.set_y_body_rot(y_body_rot),
+            LevelEntity::Mannequin(mannequin) => mannequin.living.y_body_rot = y_body_rot,
+            _ => {}
+        }
+    }
+
+    pub fn set_y_head_rot(&mut self, y_head_rot: f32) {
+        match self {
+            LevelEntity::Mob(mob) => mob.set_y_head_rot(y_head_rot),
+            LevelEntity::ArmorStand(stand) => stand.set_y_head_rot(y_head_rot),
+            LevelEntity::Mannequin(mannequin) => mannequin.entity.y_head_rot = y_head_rot,
+            _ => {}
         }
     }
 

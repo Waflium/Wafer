@@ -127,7 +127,7 @@ impl TemplateStructurePiece {
                 let target_state = match crate::commands::arguments::blocks::block_state_parser::parse_for_block(&mut reader, true) {
                     Ok(result) => result.state,
                     Err(_) => {
-                        error!("Error while parsing blockstate {state_string} in jigsaw block @ {:?}", jigsaw_block.pos);
+                        error!("Error while parsing blockstate {state_string} in jigsaw block @ {}", jigsaw_block.pos);
                         blocks::AIR.default_state()
                     }
                 };

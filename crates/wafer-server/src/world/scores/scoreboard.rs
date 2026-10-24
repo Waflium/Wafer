@@ -5,9 +5,10 @@ use wafer_protocol::nbt::Nbt;
 
 use super::criteria::{ObjectiveCriteria, RenderType};
 use super::display_slot::DisplaySlot;
-use super::objective::{Objective, ObjectiveId, PackedObjective};
+use super::objective::{Objective, ObjectiveId};
 use super::player_team::{PackedTeam, PlayerTeam};
 use super::score::{PlayerScores, Score};
+use super::scoreboard_save_data::PackedScoreboardSaveData;
 use super::score_holder::ScoreHolder;
 use super::team::{CollisionRule, Visibility};
 use super::team_color::TeamColor;
@@ -413,42 +414,27 @@ impl Scoreboard {
         Nbt::Compound(fields)
     }
 
-    pub fn load(&mut self, data: &Nbt) {
-        for objective in data.get("Objectives").map_or(&[][..], Nbt::as_list) {
-            match PackedObjective::from_nbt(objective) {
-                Ok(o) => {
-                    if self.objectives_by_name.contains_key(&o.name) {
-                        error!("An objective with the name '{}' already exists!", o.name);
-                        continue;
-                    }
-                    self.add_objective(&o.name, o.criteria, o.display_name, o.render_type, o.display_auto_update, o.number_format);
-                }
-                Err(e) => error!("Failed to load objective: {e}"),
+    pub fn load(&mut self, data: PackedScoreboardSaveData) {
+        for o in data.objectives {
+            if self.objectives_by_name.contains_key(&o.name) {
+                error!("An objective with the name '{}' already exists!", o.name);
+                continue;
             }
+            self.add_objective(&o.name, o.criteria, o.display_name, o.render_type, o.display_auto_update, o.number_format);
         }
-        for score in data.get("PlayerScores").map_or(&[][..], Nbt::as_list) {
-            let (Some(owner), Some(objective)) = (score.get("Name").and_then(Nbt::as_str), score.get("Objective").and_then(Nbt::as_str)) else { continue };
-            let Some(&id) = self.objectives_by_name.get(objective) else {
-                error!("Unknown objective {objective} for name {owner}, ignoring");
+        for score in data.scores {
+            let Some(&id) = self.objectives_by_name.get(&score.objective) else {
+                error!("Unknown objective {} for name {}, ignoring", score.objective, score.owner);
                 continue;
             };
-            match Score::unpack(score) {
-                Ok(s) => self.player_scores.get_or_insert_with(owner, PlayerScores::default).set_score(id, s),
-                Err(e) => error!("Failed to load score: {e}"),
-            }
+            self.player_scores.get_or_insert_with(&score.owner, PlayerScores::default).set_score(id, score.score);
         }
-        if let Some(Nbt::Compound(slots)) = data.get("DisplaySlots") {
-            for (slot, name) in slots {
-                let Some(slot) = DisplaySlot::by_name(slot) else { continue };
-                let objective = name.as_str().and_then(|n| self.objectives_by_name.get(n).copied());
-                self.set_display_objective(slot, objective);
-            }
+        for (slot, name) in data.display_slots {
+            let objective = self.objectives_by_name.get(&name).copied();
+            self.set_display_objective(slot, objective);
         }
-        for team in data.get("Teams").map_or(&[][..], Nbt::as_list) {
-            match PackedTeam::from_nbt(team) {
-                Ok(packed) => self.load_player_team(packed),
-                Err(e) => error!("Failed to load team: {e}"),
-            }
+        for team in data.teams {
+            self.load_player_team(team);
         }
     }
 

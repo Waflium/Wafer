@@ -441,6 +441,8 @@ impl StructureTemplate {
             y_rot += entity_mirror(entity.entity_mut(), mirror) - entity.entity().y_rot;
             let x_rot = entity.entity().x_rot;
             entity.entity_mut().snap_to(pos.x, pos.y, pos.z, y_rot, x_rot);
+            entity.set_y_body_rot(y_rot);
+            entity.set_y_head_rot(y_rot);
             if finalize_entities && let LevelEntity::Mob(mob) = &mut entity {
                 let difficulty = level.get_current_difficulty_at(BlockPos::containing(pos.x, pos.y, pos.z));
                 crate::world::entity::mob::finalize_spawn(level, mob, &difficulty, EntitySpawnReason::Structure, None);

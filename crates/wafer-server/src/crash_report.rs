@@ -14,6 +14,27 @@ pub struct CrashReportCategory {
 }
 
 impl CrashReportCategory {
+    pub fn format_location(min_y: i32, max_y: i32, x: i32, y: i32, z: i32) -> String {
+        let (section_x, section_y, section_z) = (x >> 4, y >> 4, z >> 4);
+        let (min_block_x, min_block_z) = (section_x << 4, section_z << 4);
+        let (max_block_x, max_block_z) = (((section_x + 1) << 4) - 1, ((section_z + 1) << 4) - 1);
+        let (region_x, region_z) = (x >> 9, z >> 9);
+        format!(
+            "World: ({x},{y},{z}), Section: (at {},{},{} in {section_x},{section_y},{section_z}; chunk contains blocks {min_block_x},{min_y},{min_block_z} to {max_block_x},{max_y},{max_block_z}), Region: ({region_x},{region_z}; contains chunks {},{} to {},{}, blocks {},{min_y},{} to {},{max_y},{})",
+            x & 15,
+            y & 15,
+            z & 15,
+            region_x << 5,
+            region_z << 5,
+            ((region_x + 1) << 5) - 1,
+            ((region_z + 1) << 5) - 1,
+            region_x << 9,
+            region_z << 9,
+            ((region_x + 1) << 9) - 1,
+            ((region_z + 1) << 9) - 1,
+        )
+    }
+
     pub fn set_detail(&mut self, key: &str, value: impl Into<String>) -> &mut CrashReportCategory {
         self.entries.push((key.to_string(), value.into()));
         self
@@ -41,7 +62,17 @@ pub struct CrashReport {
     system_report: Vec<(String, String)>,
 }
 
+pub struct ReportedException(pub CrashReport);
+
 impl CrashReport {
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn exception(&self) -> &str {
+        &self.exception
+    }
+
     pub fn new(title: &str, exception: String, stack_trace: Vec<String>) -> CrashReport {
         CrashReport { title: title.to_string(), exception, stack_trace, details: Vec::new(), system_report: system_report() }
     }

@@ -153,7 +153,7 @@ pub struct ServerLevel {
     pub pending_system_broadcasts: Vec<crate::network::chat::Component>,
     pub pending_broadcasts: Vec<Vec<u8>>,
     pub pending_function_executions: Vec<(String, EntityId)>,
-    pub pending_book_opens: Vec<(EntityId, crate::world::InteractionHand)>,
+    pub pending_book_opens: Vec<crate::world::item::written_book_item::PendingBookOpen>,
     pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32))>,
     entity_tick_range: Option<(usize, usize)>,
     pub rain_level: f32,
@@ -634,7 +634,7 @@ impl ServerLevel {
             let existing = self.chunks.block_entity(pos, EntityCreationType::Check).map(|e| e.is_valid_block_state(state));
             if existing == Some(false) {
                 let ty = self.chunks.block_entity_ref(pos).map(BlockEntity::ty);
-                warn!("Found mismatched block entity @ {pos:?}: type = {ty:?}, state = {state:?}");
+                warn!("Found mismatched block entity @ {pos}: type = {}, state = {state:?}", ty.map_or("null", |ty| ty.name()));
                 if let Some(entity) = self.chunks.remove_block_entity(pos) {
                     self.block_entity_set_removed(pos, &entity);
                 }

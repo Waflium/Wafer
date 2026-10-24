@@ -240,11 +240,14 @@ impl ServerLevel {
         phantom(mob).move_target_point.distance_to_sqr(mob.entity.position()) < 4.0
     }
 
-    fn phantom_set_anchor_above_target(&mut self, id: EntityId) {
+    pub(super) fn phantom_set_anchor_above_target(&mut self, id: EntityId) {
         if phantom(self.mob(id).expect("a phantom")).anchor_point.is_none() {
             return;
         }
-        let Some(target) = self.get_target(id) else { return };
+        let Some(target) = self.get_target(id) else {
+            let exception = "java.lang.NullPointerException: Cannot invoke \"net.minecraft.world.entity.LivingEntity.blockPosition()\" because the return value of \"net.minecraft.world.entity.monster.Phantom.getTarget()\" is null".to_string();
+            std::panic::resume_unwind(Box::new(self.ticking_entity_exception(id, "net.minecraft.world.entity.monster.Phantom", exception)));
+        };
         let target_pos = self.entity(target).block_position();
         let sea_level = self.sea_level();
         let mob = self.mob_mut(id).expect("a phantom");

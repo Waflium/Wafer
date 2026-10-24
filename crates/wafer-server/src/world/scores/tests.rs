@@ -213,7 +213,9 @@ fn save_data_matches_vanilla() {
     let tag = Nbt::read(&mut Reader::new(&bytes)).unwrap();
     let loaded = testing::level();
     let mut loaded = loaded.scoreboard.borrow_mut();
-    loaded.load(&tag);
+    let packed = crate::util::codec::with_nbt_ops(|| super::scoreboard_save_data::PackedScoreboardSaveData::decode(&tag));
+    assert!(packed.error.is_none());
+    loaded.load(packed.value.unwrap());
     let mut w = Writer::new();
     loaded.store().write(&mut w);
     assert_eq!(hex(w.as_slice()), SAVE);

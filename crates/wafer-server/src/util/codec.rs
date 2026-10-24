@@ -410,6 +410,11 @@ pub fn string_enum<T: Copy>(tag: &Nbt, values: &[(&str, T)]) -> DataResult<T> {
     values.iter().find(|(n, _)| *n == name).map(|(_, v)| *v).ok_or_else(|| format!("Unknown element name:{name}"))
 }
 
+pub fn enum_by_name<T>(tag: &Nbt, by_name: impl FnOnce(&str) -> Option<T>) -> DataResult<T> {
+    let name = string(tag)?;
+    by_name(name).ok_or_else(|| format!("Unknown element name:{name}"))
+}
+
 pub fn to_json(tag: &Nbt) -> serde_json::Value {
     use serde_json::Value;
     match tag {

@@ -4,6 +4,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::server::Server;
 use crate::server::server_function_manager::ServerFunctionManager;
+use crate::util::codec::{self, DataResult};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TimerCallback {
@@ -29,12 +30,12 @@ impl TimerCallback {
         }
     }
 
-    fn parse(nbt: &Nbt) -> Option<TimerCallback> {
-        let id = crate::resources::identifier::read(nbt.get("id")?.as_str()?).ok()?;
-        match crate::resources::identifier::read(nbt.get("type")?.as_str()?).ok()?.as_str() {
-            "minecraft:function" => Some(TimerCallback::Function(id)),
-            "minecraft:function_tag" => Some(TimerCallback::FunctionTag(id)),
-            _ => None,
+    fn decode(nbt: &Nbt) -> DataResult<TimerCallback> {
+        let kind = codec::identifier(codec::field(nbt, "type")?)?;
+        match kind.as_str() {
+            "minecraft:function" => Ok(TimerCallback::Function(codec::identifier(codec::field(nbt, "id")?)?)),
+            "minecraft:function_tag" => Ok(TimerCallback::FunctionTag(codec::identifier(codec::field(nbt, "id")?)?)),
+            _ => Err(format!("Unknown element id: {kind}")),
         }
     }
 

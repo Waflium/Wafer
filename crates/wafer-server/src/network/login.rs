@@ -32,18 +32,21 @@ pub struct Profile {
 impl Profile {
     pub fn write(&self, p: &mut wafer_protocol::Writer) {
         p.uuid(self.uuid);
-        p.string(&self.name);
+        p.string_max(&self.name, 16);
         self.write_properties(p);
     }
 
     pub fn write_properties(&self, p: &mut wafer_protocol::Writer) {
+        if self.properties.len() > 16 {
+            p.fail(format!("io.netty.handler.codec.EncoderException: {} elements exceeded max size of: 16", self.properties.len()));
+        }
         p.varint(self.properties.len() as i32);
         for property in &self.properties {
-            p.string(&property.name);
+            p.string_max(&property.name, 64);
             p.string(&property.value);
             p.bool(property.signature.is_some());
             if let Some(signature) = &property.signature {
-                p.string(signature);
+                p.string_max(signature, 1024);
             }
         }
     }

@@ -26,6 +26,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path_type::PathType;
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 pub const NAUTILUS_SHELL_CHANCE: f32 = 0.03;
 const ZOMBIE_NAUTILUS_JOCKEY_CHANCE: f32 = 0.5;
@@ -326,14 +327,14 @@ impl DrownedGoToBeachGoal {
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        self.move_to_block_goal.can_use(level, mob, &is_valid_beach_target)
+        self.move_to_block_goal.can_use(level, mob, &|level, pos| is_valid_beach_target(level, mob, pos))
             && !level.is_bright_outside()
             && level.entity(mob).is_in_water()
             && level.entity(mob).y() >= (level.sea_level() - 3) as f64
     }
 
-    pub fn can_continue_to_use(&self, level: &ServerLevel) -> bool {
-        self.move_to_block_goal.can_continue_to_use(level, &is_valid_beach_target)
+    pub fn can_continue_to_use(&self, level: &ServerLevel, mob: EntityId) -> bool {
+        self.move_to_block_goal.can_continue_to_use(level, &|level, pos| is_valid_beach_target(level, mob, pos))
     }
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
@@ -346,11 +347,12 @@ impl DrownedGoToBeachGoal {
     }
 }
 
-fn is_valid_beach_target(level: &ServerLevel, pos: BlockPos) -> bool {
+fn is_valid_beach_target(level: &ServerLevel, mob: EntityId, pos: BlockPos) -> bool {
     let region = PathNavigationRegion::new(level);
     let above = pos.above();
     if region.get_block_state(above).is_air() && region.get_block_state(above.above()).is_air() {
-        is_face_full(&region.get_block_state(pos).collision_voxel_shape(), Direction::Up)
+        let context = CollisionContext::of(level, mob);
+        is_face_full(&region.get_state_collision_shape_in_context(region.get_block_state(pos), pos, &context), Direction::Up)
     } else {
         false
     }

@@ -9,7 +9,8 @@ use indexmap::IndexMap;
 use super::TimerCallback;
 use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::server::Server;
-use crate::world::level::storage::{read_saved_data_dat, write_dat};
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::world::level::storage::{read_saved_data, write_dat};
 
 struct Event {
     trigger_time: i64,
@@ -33,36 +34,31 @@ impl TimerQueue {
     pub fn load(dir: Option<PathBuf>) -> TimerQueue {
         let mut queue = TimerQueue { dir, queue: BTreeMap::new(), sequential_id: 0, events: IndexMap::new(), dirty: false };
         let Some(dir) = queue.dir.clone() else { return queue };
-        let data = match read_saved_data_dat(&TimerQueue::file(&dir), DataFixTypes::SavedDataScheduledEvents) {
-            Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
-            Err(_) => {
-                error!("Error loading saved data: SavedDataType[minecraft:scheduled_events]");
-                None
-            }
-        };
-        let Some(data) = data else {
-            queue.dirty = true;
-            return queue;
-        };
-        let parsed: Option<Vec<(i64, String, TimerCallback)>> = match data.get("events") {
-            Some(Nbt::List(events)) => events
-                .iter()
-                .map(|event| {
-                    let trigger_time = event.get("trigger_time").and_then(Nbt::as_i64)?;
-                    let id = event.get("id").and_then(Nbt::as_str)?.to_string();
-                    Some((trigger_time, id, TimerCallback::parse(event.get("callback")?)?))
-                })
-                .collect(),
-            _ => None,
-        };
-        match parsed {
+        match read_saved_data(&TimerQueue::file(&dir), "main", "scheduled_events", DataFixTypes::SavedDataScheduledEvents, TimerQueue::decode) {
             Some(events) => events.into_iter().for_each(|(time, id, callback)| queue.schedule(&id, time, callback)),
-            None => {
-                error!("Error loading saved data: SavedDataType[minecraft:scheduled_events]");
-                queue.dirty = true;
-            }
+            None => queue.dirty = true,
         }
         queue
+    }
+
+    fn decode_event(tag: &Nbt) -> DecodeResult<(i64, String, TimerCallback)> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let trigger_time = record.required(tag, "trigger_time", codec::long);
+        let id = record.required(tag, "id", |id| codec::string(id).map(str::to_string));
+        let callback = record.required(tag, "callback", TimerCallback::decode);
+        record.build(|| Some((trigger_time?, id?, callback?)))
+    }
+
+    fn decode(data: &Nbt) -> DecodeResult<Vec<(i64, String, TimerCallback)>> {
+        if let Err(error) = codec::map(data) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let events = record.required(data, "events", |events| codec::list_partial(events, TimerQueue::decode_event));
+        record.build(|| events)
     }
 
     pub fn tick(server: &mut Server, current_tick: i64) {
@@ -133,5 +129,42 @@ impl TimerQueue {
         write_dat(&TimerQueue::file(dir), &file)?;
         self.dirty = false;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_errors_match_vanilla() {
+        let ok = r#"{trigger_time:1L,id:"a",callback:{type:"minecraft:function",id:"x:y"}}"#;
+        let cases: Vec<(String, Option<&str>, Option<usize>)> = vec![
+            ("{}".into(), Some("No key events in MapLike[{}]"), None),
+            ("{events:5}".into(), Some("Not a list: 5"), None),
+            ("{events:[]}".into(), None, Some(0)),
+            ("{events:[5]}".into(), Some("Not a map: 5"), Some(0)),
+            ("{events:[{}]}".into(), Some("No key callback in MapLike[{}]; No key id in MapLike[{}]; No key trigger_time in MapLike[{}]"), Some(0)),
+            (format!("{{events:[{ok}]}}"), None, Some(1)),
+            (format!(r#"{{events:[{ok},{{trigger_time:"q",id:"b",callback:{{type:"minecraft:function",id:"x:y"}}}}]}}"#), Some("Not a number"), Some(1)),
+            (r#"{events:[{trigger_time:1L,id:"a",callback:{type:"minecraft:bad",id:"x:y"}}]}"#.into(), Some("Unknown element id: minecraft:bad"), Some(0)),
+            (r#"{events:[{trigger_time:1L,id:"a",callback:{type:"minecraft:function"}}]}"#.into(), Some(r#"No key id in MapLike[{type:"minecraft:function"}]"#), Some(0)),
+            (r#"{events:[{trigger_time:1L,id:"a",callback:{id:"x:y"}}]}"#.into(), Some(r#"No key type in MapLike[{id:"x:y"}]"#), Some(0)),
+            (r#"{events:[{trigger_time:1L,id:5,callback:{type:"minecraft:function_tag",id:"x:y"}}]}"#.into(), Some("Not a string"), Some(0)),
+            (format!(r#"{{events:[{ok},5,{{trigger_time:2L,id:"b",callback:{{type:"minecraft:function",id:"x:y"}}}}]}}"#), Some("Not a map: 5"), Some(2)),
+            (r#"{events:[{trigger_time:1L,id:"a",callback:5}]}"#.into(), Some("Not a map: 5"), Some(0)),
+            (
+                r#"{events:[{trigger_time:1L,id:"a",callback:{type:"minecraft:function",id:"BAD"}}]}"#.into(),
+                Some("Not a valid resource location: BAD Non [a-z0-9/._-] character in path of location: minecraft:BAD"),
+                Some(0),
+            ),
+            (r#"{events:[{trigger_time:1L,id:"a",callback:{type:5,id:"x:y"}}]}"#.into(), Some("Not a string"), Some(0)),
+        ];
+        for (input, error, count) in cases {
+            let tag = crate::nbt::parse_fully(&input).ok().unwrap();
+            let result = codec::with_nbt_ops(|| TimerQueue::decode(&tag));
+            assert_eq!(result.error.as_deref(), error, "{input}");
+            assert_eq!(result.value.map(|events| events.len()), count, "{input}");
+        }
     }
 }

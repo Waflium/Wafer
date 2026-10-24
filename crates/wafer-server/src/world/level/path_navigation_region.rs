@@ -8,6 +8,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::level::block::entity::BlockEntityKind;
 use crate::world::level::block::{moving_piston_block, shulker_box_block};
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 pub struct PathNavigationRegion<'a> {
     pub level: &'a ServerLevel,
@@ -40,6 +41,14 @@ impl<'a> PathNavigationRegion<'a> {
             Cow::Borrowed(shulker_box_block::shape_of(shulker, state))
         } else {
             state.get_collision_shape(pos)
+        }
+    }
+
+    pub fn get_state_collision_shape_in_context(&self, state: BlockState, pos: BlockPos, context: &CollisionContext) -> Cow<'static, VoxelShape> {
+        if state.is_block(blocks::MOVING_PISTON) || state.has_dynamic_shape() && state.block().is_instance_of("ShulkerBoxBlock") {
+            self.get_state_collision_shape(state, pos)
+        } else {
+            context.get_moved_collision_shape(state, pos)
         }
     }
 

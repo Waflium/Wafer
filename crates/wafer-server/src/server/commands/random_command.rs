@@ -28,7 +28,7 @@ fn random_sample(server: &mut Server, context: &CommandContext, source: &Command
     let value = if context.has_argument("sequence") {
         let seed = server.seed;
         let mut random_sequences = server.random_sequences.borrow_mut();
-        wafer_core::mth::random_between_inclusive(random_sequences.get(context.get_identifier("sequence"), seed), min, max)
+        wafer_core::mth::random_between_inclusive(&mut random_sequences.get(context.get_identifier("sequence"), seed), min, max)
     } else {
         wafer_core::mth::random_between_inclusive(&mut server.levels[source.level].random, min, max)
     };

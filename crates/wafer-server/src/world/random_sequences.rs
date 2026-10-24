@@ -2,7 +2,7 @@ use std::io;
 use std::path::PathBuf;
 
 use wafer_core::fastutil::Object2ObjectOpenHashMap;
-use wafer_core::random::{XoroshiroRandomSource, mix_stafford13, seed_from_hash_of};
+use wafer_core::random::{RandomSource, XoroshiroRandomSource, mix_stafford13, seed_from_hash_of};
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
@@ -21,6 +21,53 @@ fn create_sequence(seed: i64, key: Option<&str>) -> XoroshiroRandomSource {
         hi ^= key_hi;
     }
     XoroshiroRandomSource::from_parts(mix_stafford13(lo), mix_stafford13(hi))
+}
+
+pub struct DirtyMarkingRandomSource<'a> {
+    random: &'a mut XoroshiroRandomSource,
+    dirty: &'a mut bool,
+}
+
+impl RandomSource for DirtyMarkingRandomSource<'_> {
+    fn set_seed(&mut self, seed: i64) {
+        *self.dirty = true;
+        self.random.set_seed(seed);
+    }
+
+    fn next_int(&mut self) -> i32 {
+        *self.dirty = true;
+        self.random.next_int()
+    }
+
+    fn next_int_bounded(&mut self, bound: i32) -> i32 {
+        *self.dirty = true;
+        self.random.next_int_bounded(bound)
+    }
+
+    fn next_long(&mut self) -> i64 {
+        *self.dirty = true;
+        self.random.next_long()
+    }
+
+    fn next_boolean(&mut self) -> bool {
+        *self.dirty = true;
+        self.random.next_boolean()
+    }
+
+    fn next_float(&mut self) -> f32 {
+        *self.dirty = true;
+        self.random.next_float()
+    }
+
+    fn next_double(&mut self) -> f64 {
+        *self.dirty = true;
+        self.random.next_double()
+    }
+
+    fn next_gaussian(&mut self) -> f64 {
+        *self.dirty = true;
+        self.random.next_gaussian()
+    }
 }
 
 pub struct RandomSequences {
@@ -106,13 +153,25 @@ impl RandomSequences {
         create_sequence(seed, include_sequence_id.then_some(key))
     }
 
-    pub fn get(&mut self, key: &str, world_seed: i64) -> &mut XoroshiroRandomSource {
+    pub fn sequence(&mut self, key: &str, world_seed: i64) -> &mut XoroshiroRandomSource {
         if !self.sequences.contains_key(key) {
             let sequence = self.create_sequence(key, world_seed, self.salt, self.include_world_seed, self.include_sequence_id);
             self.sequences.insert(key.to_string(), sequence);
         }
-        self.dirty = true;
         self.sequences.get_mut(key).unwrap()
+    }
+
+    pub fn get(&mut self, key: &str, world_seed: i64) -> DirtyMarkingRandomSource<'_> {
+        self.sequence(key, world_seed);
+        DirtyMarkingRandomSource { random: self.sequences.get_mut(key).unwrap(), dirty: &mut self.dirty }
+    }
+
+    pub fn write_back(&mut self, key: &str, world_seed: i64, random: &XoroshiroRandomSource) {
+        let current = self.sequence(key, world_seed);
+        if current.state() != random.state() {
+            *current = random.clone();
+            self.dirty = true;
+        }
     }
 
     pub fn keys(&self) -> impl Iterator<Item = &str> {
@@ -175,8 +234,6 @@ impl RandomSequences {
 
 #[cfg(test)]
 mod tests {
-    use wafer_core::random::RandomSource;
-
     use super::*;
 
     #[test]
@@ -231,6 +288,15 @@ mod tests {
             let expected: Option<Vec<String>> = keys.map(|keys| keys.iter().map(|key| key.to_string()).collect());
             assert_eq!(decoded, expected, "{input}");
         }
+    }
+
+    #[test]
+    fn get_marks_dirty_only_when_drawing() {
+        let mut sequences = RandomSequences::empty(None);
+        let _ = sequences.get("minecraft:a", 42);
+        assert!(!sequences.dirty);
+        sequences.get("minecraft:a", 42).next_int();
+        assert!(sequences.dirty);
     }
 
     #[test]

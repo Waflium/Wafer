@@ -49,7 +49,7 @@ impl NearestVisibleLivingEntities {
 
     pub fn contains(&self, level: &mut ServerLevel, target_entity: EntityId) -> bool {
         match self.0.nearby_entities.iter().position(|&e| e == target_entity) {
-            Some(index) => level.entity_ref(target_entity).is_some() && self.line_of_sight_test(level, index),
+            Some(index) => self.0.line_of_sight[index].get().unwrap_or_else(|| level.entity_ref(target_entity).is_some() && self.line_of_sight_test(level, index)),
             None => false,
         }
     }

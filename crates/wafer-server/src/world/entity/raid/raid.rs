@@ -5,12 +5,13 @@ use wafer_data::{EquipmentSlot, blocks, mob_effects};
 use wafer_protocol::nbt::Nbt;
 
 use crate::network::chat::Component;
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::util::extra_codecs;
 use crate::server::level::server_boss_event::{BossBarColor, BossBarOverlay, ServerBossEvent};
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::util::java_collections::JavaObjectHashSet;
 use crate::world::difficulty::Difficulty;
 use crate::world::effect::MobEffectInstance;
-use crate::world::entity::entity_save::uuid_from_nbt;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::entity_types;
 use crate::world::entity::mob::Mob;
@@ -47,7 +48,7 @@ pub enum RaidStatus {
 }
 
 impl RaidStatus {
-    const VALUES: [RaidStatus; 4] = [RaidStatus::Ongoing, RaidStatus::Victory, RaidStatus::Loss, RaidStatus::Stopped];
+    const NAMES: [(&'static str, RaidStatus); 4] = [("ongoing", RaidStatus::Ongoing), ("victory", RaidStatus::Victory), ("loss", RaidStatus::Loss), ("stopped", RaidStatus::Stopped)];
 
     fn get_serialized_name(self) -> &'static str {
         match self {
@@ -56,10 +57,6 @@ impl RaidStatus {
             RaidStatus::Loss => "loss",
             RaidStatus::Stopped => "stopped",
         }
-    }
-
-    fn by_name(name: &str) -> Option<RaidStatus> {
-        RaidStatus::VALUES.into_iter().find(|status| status.get_serialized_name() == name)
     }
 }
 
@@ -171,38 +168,35 @@ impl Raid {
         raid
     }
 
-    pub fn load(input: &Nbt) -> Option<Raid> {
-        let bool_field = |name: &str| input.get(name).and_then(Nbt::as_i64).map(|value| value != 0);
-        let int_field = |name: &str| input.get(name).and_then(Nbt::as_i64).map(|value| value as i32);
-        let started = bool_field("started")?;
-        let active = bool_field("active")?;
-        let ticks_active = input.get("ticks_active").and_then(Nbt::as_i64)?;
-        let raid_omen_level = int_field("raid_omen_level")?;
-        let groups_spawned = int_field("groups_spawned")?;
-        let raid_cooldown_ticks = int_field("cooldown_ticks")?;
-        let post_raid_ticks = int_field("post_raid_ticks")?;
-        let total_health = input.get("total_health").and_then(Nbt::as_f64)? as f32;
-        let num_groups = int_field("group_count")?;
-        let status = input.get("status").and_then(Nbt::as_str).and_then(RaidStatus::by_name)?;
-        let center = match input.get("center")? {
-            Nbt::IntArray(p) if p.len() == 3 => BlockPos::new(p[0], p[1], p[2]),
-            _ => return None,
-        };
-        let Some(Nbt::List(heroes)) = input.get("heroes_of_the_village") else { return None };
-        let heroes: Vec<u128> = heroes.iter().map(uuid_from_nbt).collect::<Option<Vec<u128>>>()?;
-        let mut raid = Raid::with_fields(center, num_groups, status);
-        raid.started = started;
-        raid.active = active;
-        raid.ticks_active = ticks_active;
-        raid.raid_omen_level = raid_omen_level;
-        raid.groups_spawned = groups_spawned;
-        raid.raid_cooldown_ticks = raid_cooldown_ticks;
-        raid.post_raid_ticks = post_raid_ticks;
-        raid.total_health = total_health;
-        for hero in heroes {
-            raid.heroes_of_the_village.insert(hero);
-        }
-        Some(raid)
+    pub fn decode(input: &Nbt) -> DecodeResult<Raid> {
+        let mut record = Record::default();
+        let started = record.required(input, "started", codec::bool_value);
+        let active = record.required(input, "active", codec::bool_value);
+        let ticks_active = record.required(input, "ticks_active", codec::long);
+        let raid_omen_level = record.required(input, "raid_omen_level", codec::int);
+        let groups_spawned = record.required(input, "groups_spawned", codec::int);
+        let raid_cooldown_ticks = record.required(input, "cooldown_ticks", codec::int);
+        let post_raid_ticks = record.required(input, "post_raid_ticks", codec::int);
+        let total_health = record.required(input, "total_health", codec::float);
+        let num_groups = record.required(input, "group_count", codec::int);
+        let status = record.required(input, "status", |status| codec::string_enum(status, &RaidStatus::NAMES));
+        let center = record.required(input, "center", extra_codecs::block_pos);
+        let heroes = record.required(input, "heroes_of_the_village", |heroes| codec::list_partial(heroes, extra_codecs::uuid));
+        record.build(|| {
+            let mut raid = Raid::with_fields(center?, num_groups?, status?);
+            raid.started = started?;
+            raid.active = active?;
+            raid.ticks_active = ticks_active?;
+            raid.raid_omen_level = raid_omen_level?;
+            raid.groups_spawned = groups_spawned?;
+            raid.raid_cooldown_ticks = raid_cooldown_ticks?;
+            raid.post_raid_ticks = post_raid_ticks?;
+            raid.total_health = total_health?;
+            for hero in heroes? {
+                raid.heroes_of_the_village.insert(hero);
+            }
+            Some(raid)
+        })
     }
 
     pub fn save(&self, output: &mut Vec<(String, Nbt)>) {

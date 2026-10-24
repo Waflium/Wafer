@@ -3678,6 +3678,40 @@ pub fn get_collision_horizontal_escape_vector(collider_width: f64, colliding_wid
 }
 
 impl ServerLevel {
+    pub fn ticking_entity_exception(&self, id: EntityId, class_name: &str, exception: String) -> crate::crash_report::ReportedException {
+        use crate::crash_report::{CrashReport, CrashReportCategory, ReportedException};
+        let mut report = CrashReport::new("Ticking entity", exception, crate::server::crash_frames());
+        let entity = self.entity(id);
+        let (x, y, z) = (entity.x(), entity.y(), entity.z());
+        let movement = entity.delta_movement;
+        let name = self.find_entity(id).map(|found| found.name().get_string()).unwrap_or_default();
+        let location = CrashReportCategory::format_location(self.chunks.min_y(), self.chunks.max_y(), mth::floor(x), mth::floor(y), mth::floor(z));
+        let describe = |other: EntityId| {
+            let other_entity = self.entity(other);
+            let other_name = self.find_entity(other).map(|found| found.name().get_string()).unwrap_or_default();
+            format!(
+                "{}['{other_name}'/{other}, l='ServerLevel[{}]', x={:.2}, y={:.2}, z={:.2}]",
+                registry::ENTITY_TYPE[other_entity.entity_type as usize],
+                self.level_name,
+                other_entity.x(),
+                other_entity.y(),
+                other_entity.z()
+            )
+        };
+        let vehicle = self.vehicle(id).map_or("null".to_string(), describe);
+        let passengers = format!("[{}]", self.passengers(id).iter().map(|&passenger| describe(passenger)).collect::<Vec<_>>().join(", "));
+        let category = report.add_category("Entity being ticked");
+        category.set_detail("Entity Type", format!("{} ({class_name})", registry::ENTITY_TYPE[entity.entity_type as usize]));
+        category.set_detail("Entity ID", id.to_string());
+        category.set_detail("Entity Name", name);
+        category.set_detail("Entity's Exact location", format!("{x:.2}, {y:.2}, {z:.2}"));
+        category.set_detail("Entity's Block location", location);
+        category.set_detail("Entity's Momentum", format!("{:.2}, {:.2}, {:.2}", movement.x, movement.y, movement.z));
+        category.set_detail("Entity's Passengers", passengers);
+        category.set_detail("Entity's Vehicle", vehicle);
+        ReportedException(report)
+    }
+
     pub fn vehicle(&self, id: EntityId) -> Option<EntityId> {
         self.entity_ref(id).and_then(|e| e.vehicle)
     }

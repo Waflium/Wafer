@@ -1,8 +1,9 @@
 use wafer_protocol::nbt::Nbt;
 
 use super::objective::ObjectiveId;
-use crate::network::chat::Component;
 use crate::network::chat::numbers::NumberFormat;
+use crate::network::chat::{Component, component_serialization};
+use crate::util::codec::{self, DecodeResult, Record};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Score {
@@ -38,14 +39,13 @@ impl Score {
         }
     }
 
-    pub fn unpack(tag: &Nbt) -> Result<Score, String> {
-        use crate::network::chat::component_serialization::decode;
-        Ok(Score {
-            value: tag.get("Score").and_then(Nbt::as_i64).map_or(0, |v| v as i32),
-            locked: tag.get("Locked").and_then(Nbt::as_f64).is_some_and(|v| v != 0.0),
-            display: tag.get("display").map(decode).transpose()?,
-            number_format: tag.get("format").map(NumberFormat::from_nbt).transpose()?,
-        })
+    pub fn decode_packed(tag: &Nbt) -> DecodeResult<Score> {
+        let mut record = Record::default();
+        let value = record.with_default(tag, "Score", 0, codec::int);
+        let locked = record.with_default(tag, "Locked", false, codec::bool_value);
+        let display = record.optional(tag, "display", component_serialization::decode_partial);
+        let number_format = record.optional(tag, "format", NumberFormat::from_nbt);
+        record.build(|| Some(Score { value, locked, display, number_format }))
     }
 }
 

@@ -590,7 +590,11 @@ impl ServerLevel {
         if let InteractionResult::Success { swing_source, .. } = result
             && result.should_swing()
         {
-            self.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
+            let send_to_swinging_entity = swing_source != SwingSource::Predicted;
+            match self.pending_book_opens.iter_mut().find(|pending| pending.player == id) {
+                Some(pending) => pending.swing = Some((swing_animation, send_to_swinging_entity)),
+                None => self.swing_and_reset_attack_strength(id, hand, swing_animation, send_to_swinging_entity),
+            }
         }
     }
 
@@ -1783,6 +1787,32 @@ mod server_tests {
         assert!(!book.has(crate::world::item::component::WRITABLE_BOOK_CONTENT));
         let content = crate::world::item::component::values::WrittenBookContent::from_nbt(book.get(crate::world::item::component::WRITTEN_BOOK_CONTENT).unwrap());
         assert_eq!((content.title.as_str(), content.author.as_str(), content.pages.len(), content.resolved), ("Title", "Alice", 2, true));
+    }
+
+    #[test]
+    fn written_books_open_before_the_swing_is_sent() {
+        let mut server = server();
+        let (alice, mut alice_packets) = join(&mut server, "Alice");
+        let mut book = crate::world::item::ItemStack::new(wafer_data::items::WRITTEN_BOOK, 1);
+        book.set_value(
+            crate::world::item::component::WRITTEN_BOOK_CONTENT,
+            wafer_protocol::nbt::Nbt::Compound(vec![("title".into(), wafer_protocol::nbt::Nbt::Compound(vec![("raw".into(), wafer_protocol::nbt::Nbt::String("T".into()))])), ("author".into(), wafer_protocol::nbt::Nbt::String("me".into()))]),
+        );
+        server.levels[0].player_mut(alice).inventory.slots[crate::world::item::HOTBAR_START] = Some(book);
+        packets(&mut alice_packets);
+        let use_item = packet(serverbound::USE_ITEM, |w| {
+            w.varint(0);
+            w.varint(1);
+            w.f32(0.0);
+            w.f32(0.0);
+        });
+        server.levels[0].handle_game_packet(alice, &use_item).unwrap();
+        assert!(server.levels[0].living(alice).swing_state.current_swing.is_none());
+        assert!(packets(&mut alice_packets).is_empty());
+        server.open_pending_books(0);
+        assert!(server.levels[0].living(alice).swing_state.current_swing.is_some());
+        let ids: Vec<i32> = packets(&mut alice_packets).into_iter().map(|(id, _)| id).collect();
+        assert_eq!(ids, [clientbound::OPEN_BOOK]);
     }
 
     #[test]

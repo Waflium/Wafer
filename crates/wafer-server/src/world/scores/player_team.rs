@@ -2,7 +2,8 @@ use wafer_protocol::nbt::Nbt;
 
 use super::team::{CollisionRule, Visibility};
 use super::team_color::TeamColor;
-use crate::network::chat::{Component, HoverEvent, Style};
+use crate::network::chat::{Component, HoverEvent, Style, component_serialization};
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::util::java_collections::JavaHashSet;
 
 pub struct PlayerTeam {
@@ -169,24 +170,36 @@ pub struct PackedTeam {
 }
 
 impl PackedTeam {
-    pub fn from_nbt(tag: &Nbt) -> Result<PackedTeam, String> {
-        use crate::network::chat::component_serialization::decode;
-        let name = tag.get("Name").and_then(Nbt::as_str).ok_or("No key Name")?.to_string();
-        let component = |key: &str| tag.get(key).map(decode).transpose();
-        let flag = |key: &str| tag.get(key).and_then(Nbt::as_f64).is_none_or(|v| v != 0.0);
-        let visibility = |key: &str| tag.get(key).and_then(Nbt::as_str).map_or(Ok(Visibility::Always), |v| Visibility::by_name(v).ok_or(format!("Unknown element name:{v}")));
-        Ok(PackedTeam {
-            name,
-            display_name: component("DisplayName")?,
-            color: tag.get("TeamColor").and_then(Nbt::as_str).and_then(TeamColor::by_name),
-            allow_friendly_fire: flag("AllowFriendlyFire"),
-            see_friendly_invisibles: flag("SeeFriendlyInvisibles"),
-            member_name_prefix: component("MemberNamePrefix")?.unwrap_or_else(Component::empty),
-            member_name_suffix: component("MemberNameSuffix")?.unwrap_or_else(Component::empty),
-            name_tag_visibility: visibility("NameTagVisibility")?,
-            death_message_visibility: visibility("DeathMessageVisibility")?,
-            collision_rule: tag.get("CollisionRule").and_then(Nbt::as_str).and_then(CollisionRule::by_name).unwrap_or(CollisionRule::Always),
-            players: tag.get("Players").map(|p| p.as_list().iter().filter_map(|n| n.as_str().map(String::from)).collect()).unwrap_or_default(),
+    pub fn decode(tag: &Nbt) -> DecodeResult<PackedTeam> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let name = record.required(tag, "Name", |name| codec::string(name).map(str::to_string));
+        let display_name = record.optional(tag, "DisplayName", component_serialization::decode_partial);
+        let color = record.optional(tag, "TeamColor", |color| codec::enum_by_name(color, TeamColor::by_name));
+        let allow_friendly_fire = record.with_default(tag, "AllowFriendlyFire", true, codec::bool_value);
+        let see_friendly_invisibles = record.with_default(tag, "SeeFriendlyInvisibles", true, codec::bool_value);
+        let member_name_prefix = record.with_default(tag, "MemberNamePrefix", Component::empty(), component_serialization::decode_partial);
+        let member_name_suffix = record.with_default(tag, "MemberNameSuffix", Component::empty(), component_serialization::decode_partial);
+        let name_tag_visibility = record.with_default(tag, "NameTagVisibility", Visibility::Always, |visibility| codec::enum_by_name(visibility, Visibility::by_name));
+        let death_message_visibility = record.with_default(tag, "DeathMessageVisibility", Visibility::Always, |visibility| codec::enum_by_name(visibility, Visibility::by_name));
+        let collision_rule = record.with_default(tag, "CollisionRule", CollisionRule::Always, |rule| codec::enum_by_name(rule, CollisionRule::by_name));
+        let players = record.with_default(tag, "Players", Vec::new(), |players| codec::list_partial(players, |player| codec::string(player).map(str::to_string).into()));
+        record.build(|| {
+            Some(PackedTeam {
+                name: name?,
+                display_name,
+                color,
+                allow_friendly_fire,
+                see_friendly_invisibles,
+                member_name_prefix,
+                member_name_suffix,
+                name_tag_visibility,
+                death_message_visibility,
+                collision_rule,
+                players,
+            })
         })
     }
 }

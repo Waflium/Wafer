@@ -213,6 +213,7 @@ impl ServerPlayer {
                 message.write(w);
                 w.bool(overlay);
             },
+            self.accepts_system_messages(false).then_some(clientbound::SYSTEM_CHAT),
             fallback,
         );
     }
@@ -563,7 +564,7 @@ impl ServerPlayer {
 
     pub fn write_info(&self, p: &mut Writer) {
         p.uuid(self.profile.uuid);
-        p.string(&self.profile.name);
+        p.string_max(&self.profile.name, 16);
         self.profile.write_properties(p);
         self.write_chat_session(p);
         p.varint(self.game_mode.game_type.id());
@@ -1015,6 +1016,7 @@ impl ServerLevel {
                     p.varint(id);
                     message.write(p);
                 },
+                Some(clientbound::PLAYER_COMBAT_KILL),
                 fallback,
             );
             match self.team_of(id).map(|t| t.death_message_visibility()) {

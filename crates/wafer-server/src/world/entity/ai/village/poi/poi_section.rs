@@ -67,7 +67,7 @@ impl PoiSection {
             if old.poi_type == record.poi_type {
                 return false;
             }
-            error!("POI data mismatch: already registered at {:?}", record.pos);
+            error!("POI data mismatch: already registered at {}", record.pos);
         }
         self.records.insert(key, record);
         match self.by_type.iter_mut().find(|(poi_type, _)| *poi_type == record.poi_type) {
@@ -85,7 +85,7 @@ impl PoiSection {
 
     pub fn remove(&mut self, pos: BlockPos) -> bool {
         let Some(record) = self.records.remove(section_relative_pos(pos)) else {
-            error!("POI data mismatch: never registered at {pos:?}");
+            error!("POI data mismatch: never registered at {pos}");
             return false;
         };
         if let Some((_, positions)) = self.by_type.iter_mut().find(|(poi_type, _)| *poi_type == record.poi_type) {

@@ -92,6 +92,28 @@ fn phantoms_swoop_at_and_bite_survival_players() {
 }
 
 #[test]
+fn setting_the_anchor_without_a_target_crashes_like_vanilla() {
+    let mut level = night_level();
+    let mut mob = Phantom::create();
+    mob.entity.snap_to(3.5, -40.0, 7.5, 0.0, 0.0);
+    let id = mob.entity.id;
+    let difficulty = level.current_difficulty_at(BlockPos::new(3, -40, 7));
+    let (mob, _) = level.finalize_spawn_detached(LevelEntity::Mob(Box::new(mob)), &difficulty, EntitySpawnReason::Natural, None);
+    level.add_fresh_entity(mob);
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| level.phantom_set_anchor_above_target(id))).unwrap_err();
+    let reported = panic.downcast::<crate::crash_report::ReportedException>().unwrap();
+    assert_eq!(reported.0.title(), "Ticking entity");
+    assert_eq!(
+        reported.0.exception(),
+        "java.lang.NullPointerException: Cannot invoke \"net.minecraft.world.entity.LivingEntity.blockPosition()\" because the return value of \"net.minecraft.world.entity.monster.Phantom.getTarget()\" is null"
+    );
+    let report = reported.0.get_friendly_report();
+    assert!(report.contains("-- Entity being ticked --"));
+    assert!(report.contains("Entity Type: minecraft:phantom (net.minecraft.world.entity.monster.Phantom)"));
+    assert!(report.contains("Entity's Exact location: 3.50, -40.00, 7.50"));
+}
+
+#[test]
 fn phantoms_spawn_above_sleepless_players_at_night() {
     let mut level = night_level();
     let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);

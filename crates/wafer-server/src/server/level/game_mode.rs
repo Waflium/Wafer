@@ -380,7 +380,7 @@ impl ServerLevel {
         gm.is_destroying_block = false;
         let current = gm.destroy_pos;
         if current != pos {
-            warn!("Mismatch in destroy block pos: {current:?} {pos:?}");
+            warn!("Mismatch in destroy block pos: {current} {pos}");
             self.destroy_block_progress(player, current, -1);
         }
         self.destroy_block_progress(player, pos, -1);

@@ -304,7 +304,7 @@ impl BlockEntity {
             return None;
         };
         let Some(mut entity) = BlockEntity::new(ty, pos, state) else {
-            error!("Failed to create block entity {} for block {state:?} at position {pos:?} ", ty.name());
+            error!("Failed to create block entity {} for block {state:?} at position {pos} ", ty.name());
             return None;
         };
         let _collector = tag_value_input::ScopedCollector::new(entity.problem_path(), BLOCK_ENTITY_LOGGER).logging_as("Server thread");

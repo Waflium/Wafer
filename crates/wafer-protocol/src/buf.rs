@@ -252,11 +252,15 @@ impl Writer {
     }
 
     pub fn string(&mut self, s: &str) {
+        self.string_max(s, DEFAULT_STRING_MAX_LEN);
+    }
+
+    pub fn string_max(&mut self, s: &str, max_len: usize) {
         let s = &*crate::java_string::to_utf8_lossy(s);
-        if s.len() > DEFAULT_STRING_MAX_LEN {
+        if s.len() > max_len {
             let length = s.encode_utf16().count();
-            if length > DEFAULT_STRING_MAX_LEN {
-                self.fail(format!("io.netty.handler.codec.EncoderException: String too big (was {length} characters, max {DEFAULT_STRING_MAX_LEN})"));
+            if length > max_len {
+                self.fail(format!("io.netty.handler.codec.EncoderException: String too big (was {length} characters, max {max_len})"));
             }
         }
         self.varint(s.len() as i32);
@@ -370,6 +374,16 @@ mod tests {
         assert!(w.faults().is_empty());
         w.string(&"a".repeat(32768));
         assert_eq!(w.faults(), ["io.netty.handler.codec.EncoderException: String too big (was 32768 characters, max 32767)"]);
+    }
+
+    #[test]
+    fn string_max_fails_over_its_own_limit() {
+        let mut w = Writer::new();
+        w.string_max(&"a".repeat(16), 16);
+        w.string_max(&"\u{20AC}".repeat(16), 16);
+        assert!(w.faults().is_empty());
+        w.string_max(&"a".repeat(17), 16);
+        assert_eq!(w.faults(), ["io.netty.handler.codec.EncoderException: String too big (was 17 characters, max 16)"]);
     }
 
     #[test]

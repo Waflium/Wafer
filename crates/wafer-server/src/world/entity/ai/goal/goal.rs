@@ -544,7 +544,7 @@ impl Goal {
             Goal::DrownedGoToWater(goal) => goal.can_continue_to_use(level, mob),
             Goal::DrownedTridentAttack(goal) => goal.ranged_attack_goal.can_continue_to_use(level, mob),
             Goal::DrownedAttack(goal) => goal.can_continue_to_use(level, mob),
-            Goal::DrownedGoToBeach(goal) => goal.can_continue_to_use(level),
+            Goal::DrownedGoToBeach(goal) => goal.can_continue_to_use(level, mob),
             Goal::DrownedSwimUp(goal) => goal.can_continue_to_use(level, mob),
             Goal::ClimbOnTopOfPowderSnow(goal) => goal.can_use(level, mob),
             Goal::SilverfishWakeUpFriends => SilverfishWakeUpFriendsGoal::can_use(level, mob),
