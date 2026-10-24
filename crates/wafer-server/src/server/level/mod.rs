@@ -11,6 +11,8 @@ pub mod events;
 pub mod lent_levels;
 pub mod game_mode;
 #[cfg(test)]
+mod chunk_entities_tests;
+#[cfg(test)]
 mod natural_spawner_tests;
 pub mod section_tracker;
 pub mod server_player;
@@ -91,6 +93,8 @@ pub const RAIN_DURATION: (i32, i32) = (12000, 24000);
 pub const THUNDER_DELAY: (i32, i32) = (12000, 180000);
 pub const THUNDER_DURATION: (i32, i32) = (3600, 15600);
 
+const WORLD_GEN_CHUNK_ENTITIES_LOGGER: &str = "net.minecraft.world.level.chunk.status.ChunkStatusTasks";
+const LEGACY_CHUNK_ENTITIES_LOGGER: &str = "net.minecraft.world.level.chunk.storage.SerializableChunkData";
 const GAME_EVENT_START_RAINING: u8 = 1;
 const GAME_EVENT_STOP_RAINING: u8 = 2;
 const GAME_EVENT_RAIN_LEVEL_CHANGE: u8 = 7;
@@ -1177,9 +1181,27 @@ impl ServerLevel {
         true
     }
 
-    pub fn add_world_gen_chunk_entities(&mut self, entities: &[Nbt]) {
-        for nbt in entities {
-            for entity in self.load_entity_recursive(nbt, &mut |_| {}) {
+    pub fn add_legacy_chunk_entities(&mut self, pos: ChunkPos, entities: &[Nbt]) {
+        let _collector = crate::world::level::storage::tag_value_input::ScopedCollector::new(
+            crate::util::problem_reporter::PathElement::Text(format!("chunk@[{}, {}]", pos.x, pos.z)),
+            LEGACY_CHUNK_ENTITIES_LOGGER,
+        );
+        for (index, nbt) in entities.iter().enumerate() {
+            let _scope = crate::world::level::storage::tag_value_input::enter_child(crate::util::problem_reporter::PathElement::Indexed(index));
+            for entity in self.load_entity_recursive_in_scope(nbt, &mut |_| {}) {
+                self.add_entity(entity);
+            }
+        }
+    }
+
+    pub fn add_world_gen_chunk_entities(&mut self, pos: ChunkPos, entities: &[Nbt]) {
+        let _collector = crate::world::level::storage::tag_value_input::ScopedCollector::new(
+            crate::util::problem_reporter::PathElement::Text(format!("chunk@[{}, {}]", pos.x, pos.z)),
+            WORLD_GEN_CHUNK_ENTITIES_LOGGER,
+        );
+        for (index, nbt) in entities.iter().enumerate() {
+            let _scope = crate::world::level::storage::tag_value_input::enter_child(crate::util::problem_reporter::PathElement::Indexed(index));
+            for entity in self.load_entity_recursive_in_scope(nbt, &mut |_| {}) {
                 self.add_entity(entity);
             }
         }

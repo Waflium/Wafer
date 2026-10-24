@@ -7,6 +7,7 @@ use super::throwable_item_projectile;
 use crate::server::Server;
 use crate::server::level::ticket::TicketType;
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::damagesource::DamageSource;
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind};
@@ -14,6 +15,7 @@ use crate::world::entity::relative::relative;
 use crate::world::entity::{EntityId, LevelEntity, RemovalReason, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};
+use crate::world::level::storage::tag_value_input;
 use crate::world::phys::hit_result::HitResult;
 
 const ENTITY_TYPE: &str = "minecraft:ender_pearl";
@@ -317,19 +319,17 @@ impl Server {
     }
 
     pub fn load_and_spawn_ender_pearls(&mut self, player_input: &Nbt) {
-        for pearl_input in player_input.get("ender_pearls").map_or(&[][..], Nbt::as_list) {
-            self.load_and_spawn_ender_pearl(pearl_input);
-        }
+        tag_value_input::for_each_child(player_input, "ender_pearls", |pearl_input| self.load_and_spawn_ender_pearl(pearl_input));
     }
 
     fn load_and_spawn_ender_pearl(&mut self, pearl_input: &Nbt) {
-        let Some(pearl_level_key) = pearl_input.get("ender_pearl_dimension").and_then(Nbt::as_str).and_then(crate::commands::arguments::parse_identifier) else { return };
+        let Some(pearl_level_key) = tag_value_input::read(pearl_input, "ender_pearl_dimension", |tag| DecodeResult::from(codec::identifier(tag))) else { return };
         let Some(pearl_level) = self.get_level(&pearl_level_key) else {
             warn!("Trying to load ender pearl without level (ResourceKey[minecraft:dimension / {pearl_level_key}]) being loaded, skipping");
             return;
         };
         let level = &mut self.levels[pearl_level];
-        let mut loaded = level.load_entity_recursive(pearl_input, &mut |_| {}).into_iter();
+        let mut loaded = level.load_entity_recursive_in_scope(pearl_input, &mut |_| {}).into_iter();
         let pearl = loaded.next().and_then(|pearl| {
             let chunk_pos = pearl.entity().chunk_position();
             level.add_entity(pearl).then_some(chunk_pos)

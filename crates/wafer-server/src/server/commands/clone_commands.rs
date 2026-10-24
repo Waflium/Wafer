@@ -14,6 +14,9 @@ use crate::server::Server;
 use crate::server::level::ServerLevel;
 use crate::world::level::BlockGetter;
 use crate::world::level::levelgen::structure::BoundingBox;
+use crate::world::level::storage::tag_value_input;
+
+const CLONE_COMMANDS_LOGGER: &str = "net.minecraft.server.commands.CloneCommands";
 
 static ERROR_OVERLAP: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.clone.overlap");
 static ERROR_AREA_TOO_LARGE: Dynamic2CommandExceptionType = Dynamic2CommandExceptionType(|max, count| tr("commands.clone.toobig", vec![max, count]));
@@ -137,6 +140,7 @@ fn clone_blocks(
     let mut block_entities = Vec::new();
     let mut other = Vec::new();
     let mut clear = VecDeque::new();
+    let _collector = tag_value_input::ScopedCollector::new_empty(CLONE_COMMANDS_LOGGER);
     let offset = BlockPos::new(destination.min.x - from.min.x, destination.min.y - from.min.y, destination.min.z - from.min.z);
     for z in from.min.z..=from.max.z {
         for y in from.min.y..=from.max.y {
@@ -200,6 +204,7 @@ fn clone_blocks(
         if let Some(block_entity_info) = info.block_entity_info.take()
             && let Some(new_block_entity) = level.get_block_entity(info.pos)
         {
+            let _scope = tag_value_input::enter_child(new_block_entity.problem_path());
             new_block_entity.load_custom_only(&block_entity_info.tag);
             new_block_entity.set_components(block_entity_info.components);
             level.block_entity_loaded(info.pos);

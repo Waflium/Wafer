@@ -100,7 +100,8 @@ pub struct ChunkCache {
     unsaved_listener: (std::sync::mpsc::Sender<i64>, Receiver<i64>),
     ticking_ready: Vec<ChunkPos>,
     structure_starts_available: Vec<(ChunkPos, FastMap<StructureHolder, i32>)>,
-    world_gen_chunk_entities: Vec<Vec<wafer_protocol::nbt::Nbt>>,
+    world_gen_chunk_entities: Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)>,
+    legacy_chunk_entities: Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)>,
     world_gen_entity_teams: Vec<(u128, String)>,
     world_gen_entity_sounds: Vec<(Vec3, i32, SoundSource, f32, f32)>,
     pub scoreboard: Rc<RefCell<Scoreboard>>,
@@ -166,6 +167,7 @@ impl ChunkCache {
             ticking_ready: Vec::new(),
             structure_starts_available: Vec::new(),
             world_gen_chunk_entities: Vec::new(),
+            legacy_chunk_entities: Vec::new(),
             world_gen_entity_teams: Vec::new(),
             world_gen_entity_sounds: Vec::new(),
             scoreboard: Rc::default(),
@@ -367,8 +369,12 @@ impl ChunkCache {
         self.io.clone()
     }
 
-    pub fn take_world_gen_chunk_entities(&mut self) -> Vec<Vec<wafer_protocol::nbt::Nbt>> {
+    pub fn take_world_gen_chunk_entities(&mut self) -> Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)> {
         std::mem::take(&mut self.world_gen_chunk_entities)
+    }
+
+    pub fn take_legacy_chunk_entities(&mut self) -> Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)> {
+        std::mem::take(&mut self.legacy_chunk_entities)
     }
 
     pub fn take_world_gen_entity_teams(&mut self) -> Vec<(u128, String)> {
@@ -1108,8 +1114,11 @@ impl ChunkCache {
                         let proto = *proto;
                         proto_ticks = Some((LevelChunkTicks::with_pending(proto.block_ticks.scheduled_ticks()), LevelChunkTicks::with_pending(proto.fluid_ticks.scheduled_ticks())));
                         if !proto.entities.is_empty() {
-                            self.world_gen_chunk_entities.push(proto.entities);
+                            self.world_gen_chunk_entities.push((pos, proto.entities));
                         }
+                    }
+                    if !chunk.legacy_entities.is_empty() {
+                        self.legacy_chunk_entities.push((pos, std::mem::take(&mut chunk.legacy_entities)));
                     }
                     chunk.loaded = true;
                     chunk.register_all_block_entities_after_level_load(&mut self.block_entity_tickers);

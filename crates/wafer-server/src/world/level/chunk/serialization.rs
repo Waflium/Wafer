@@ -374,6 +374,7 @@ pub fn read(nbt: &Nbt, dimension: &DimensionType, seed: i64) -> io::Result<ReadC
     let block_ticks = ticks_from_nbt(nbt.get("block_ticks"), Block::by_name);
     let fluid_ticks = ticks_from_nbt(nbt.get("fluid_ticks"), fluid_by_name);
     if status == ChunkStatus::Full {
+        chunk.legacy_entities = nbt.get("entities").map(Nbt::as_list).unwrap_or(&[]).to_vec();
         return Ok(ReadChunk { chunk, status, block_ticks: LevelChunkTicks::with_pending(block_ticks), fluid_ticks: LevelChunkTicks::with_pending(fluid_ticks), light });
     }
     let mut proto = ProtoChunkData::default();

@@ -324,8 +324,11 @@ impl ServerLevel {
         for (position, sound, source, volume, pitch) in self.chunks.take_world_gen_entity_sounds() {
             self.play_sound_at(None, position.x, position.y, position.z, sound, source, volume, pitch);
         }
-        for entities in self.chunks.take_world_gen_chunk_entities().iter() {
-            self.add_world_gen_chunk_entities(entities);
+        for (pos, entities) in self.chunks.take_legacy_chunk_entities().iter() {
+            self.add_legacy_chunk_entities(*pos, entities);
+        }
+        for (pos, entities) in self.chunks.take_world_gen_chunk_entities().iter() {
+            self.add_world_gen_chunk_entities(*pos, entities);
         }
         for (pos, starts) in self.chunks.take_structure_starts_available() {
             self.structure_check.on_structure_load(pos, starts);
