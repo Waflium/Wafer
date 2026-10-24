@@ -11,6 +11,10 @@ use crate::world::level::biome::biome_source::BiomeSource;
 use crate::world::level::biome::the_end_biome_source::TheEndBiomeSource;
 use crate::world::level::chunk::{Biome, ChunkGenerator, FlatLevelSource};
 use super::flat::StructureOverrides;
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::world::item::component::codec::{Codec, RangeError};
+use crate::world::item::component::types;
+use crate::world::level::dimension::dimension_type;
 
 #[derive(Clone)]
 pub struct WorldDimensions {
@@ -67,6 +71,113 @@ impl WorldDimensions {
             ("minecraft:the_end".into(), stem(&self.end, "minecraft:the_end")),
         ])
     }
+}
+
+const CHUNK_GENERATOR_TYPES: [&str; 3] = ["minecraft:noise", "minecraft:flat", "minecraft:debug"];
+const BIOME_SOURCE_TYPES: [&str; 4] = ["minecraft:fixed", "minecraft:multi_noise", "minecraft:checkerboard", "minecraft:the_end"];
+
+fn holder(registry: &'static str) -> Codec {
+    Codec::Holder(registry, None)
+}
+
+fn decode_dispatch_type(tag: &Nbt, registry: &str, types: &[&str]) -> Result<String, String> {
+    let ty = codec::identifier(codec::field(tag, "type")?)?;
+    if types.contains(&ty.as_str()) { Ok(ty) } else { Err(format!("Unknown registry key in ResourceKey[minecraft:root / {registry}]: {ty}")) }
+}
+
+pub fn decode_level_stem(tag: &Nbt) -> DecodeResult<()> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let mut record = Record::default();
+    let ty = record.required(tag, "type", |ty| DecodeResult::from(types::holder("minecraft:dimension_type", dimension_type::direct_codec()).0.decode(ty)));
+    let generator = record.required(tag, "generator", decode_chunk_generator);
+    record.build(|| ty.and(generator))
+}
+
+pub fn decode_world_preset(tag: &Nbt) -> DecodeResult<()> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let mut record = Record::default();
+    let dimensions = record.required(tag, "dimensions", |dimensions| {
+        codec::base_map_partial(dimensions, |key| codec::identifier(&Nbt::String(key.to_string())), decode_level_stem)
+    });
+    record.build(|| dimensions).validate(|dimensions| {
+        if dimensions.iter().any(|(key, _)| key == "minecraft:overworld") { Ok(()) } else { Err("Missing overworld dimension".to_string()) }
+    })
+    .map(drop)
+}
+
+fn decode_chunk_generator(tag: &Nbt) -> DecodeResult<()> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let ty = match decode_dispatch_type(tag, "minecraft:worldgen/chunk_generator", &CHUNK_GENERATOR_TYPES) {
+        Ok(ty) => ty,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let mut record = Record::default();
+    let decoded = match ty.as_str() {
+        "minecraft:noise" => {
+            let biome_source = record.required(tag, "biome_source", decode_biome_source);
+            let settings = record.required(tag, "settings", decode_noise_settings);
+            biome_source.and(settings)
+        }
+        "minecraft:flat" => record.required(tag, "settings", |settings| {
+            let parsed = flat::parse_settings(&codec::to_json(settings));
+            DecodeResult { value: parsed.value.map(drop), error: parsed.error }
+        }),
+        _ => Some(()),
+    };
+    record.build(|| decoded)
+}
+
+fn decode_noise_settings(tag: &Nbt) -> DecodeResult<()> {
+    match tag {
+        Nbt::String(_) => DecodeResult::from(holder("minecraft:worldgen/noise_settings").decode(tag).map(drop)),
+        inline => DecodeResult::from(super::validate("minecraft:worldgen/noise_settings", &codec::to_json(inline))),
+    }
+}
+
+fn decode_biome_source(tag: &Nbt) -> DecodeResult<()> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let ty = match decode_dispatch_type(tag, "minecraft:worldgen/biome_source", &BIOME_SOURCE_TYPES) {
+        Ok(ty) => ty,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let mut record = Record::default();
+    let decoded = match ty.as_str() {
+        "minecraft:fixed" => record.required(tag, "biome", |biome| DecodeResult::from(holder("minecraft:worldgen/biome").decode(biome).map(drop))),
+        "minecraft:checkerboard" => {
+            let biomes = record.required(tag, "biomes", |biomes| DecodeResult::from(Codec::HolderSet("minecraft:worldgen/biome").decode(biomes).map(drop)));
+            record.with_default(tag, "scale", 2, |scale| Codec::Int(0, 62, RangeError::Outside).decode(scale).map(|scale| scale.as_i64().unwrap_or(2) as i32));
+            biomes
+        }
+        "minecraft:multi_noise" => return decode_multi_noise(tag),
+        _ => Some(()),
+    };
+    record.build(|| decoded)
+}
+
+fn decode_multi_noise(tag: &Nbt) -> DecodeResult<()> {
+    let biomes = match tag.get("biomes") {
+        Some(biomes) => DecodeResult::from(MultiNoiseBiomeSource::from_parameters(&codec::to_json(biomes)).map(drop)),
+        None => DecodeResult::error(codec::no_key("biomes", &codec::to_json(tag))),
+    };
+    if biomes.is_success() {
+        return biomes;
+    }
+    let preset = match tag.get("preset") {
+        Some(preset) => DecodeResult::from(holder("minecraft:worldgen/multi_noise_biome_source_parameter_list").decode(preset).map(drop)),
+        None => DecodeResult::error(codec::no_key("preset", &codec::to_json(tag))),
+    };
+    if preset.is_success() {
+        return preset;
+    }
+    DecodeResult::error(format!("{}; {}", preset.error.unwrap_or_default(), biomes.error.unwrap_or_default()))
 }
 
 fn biome_source_from_json(json: &Value) -> Result<BiomeSource, String> {
@@ -172,5 +283,48 @@ pub fn generator_to_nbt(generator: &ChunkGenerator) -> Nbt {
             ("type".into(), Nbt::String("minecraft:noise".into())),
         ]),
         ChunkGenerator::Debug(_) => Nbt::Compound(vec![("type".into(), Nbt::String("minecraft:debug".into()))]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::item::component::json_to_nbt;
+
+    fn stem_error(json: &str) -> String {
+        let value: Value = serde_json::from_str(json).unwrap();
+        crate::nbt::with_json_source(|| decode_level_stem(&json_to_nbt(&value)).into_result().err().expect("a decode error"))
+    }
+
+    fn preset_error(json: &str) -> String {
+        let value: Value = serde_json::from_str(json).unwrap();
+        crate::nbt::with_json_source(|| decode_world_preset(&json_to_nbt(&value)).into_result().err().expect("a decode error"))
+    }
+
+    #[test]
+    fn a_stem_reports_its_fields_in_vanilla_order() {
+        assert_eq!(stem_error("{}"), "No key generator in MapLike[{}]; No key type in MapLike[{}]");
+        assert_eq!(stem_error(r#"{"type":"ta:nope","generator":{"type":"minecraft:nope"}}"#), "Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/chunk_generator]: minecraft:nope; Failed to get element ta:nope from registry minecraft:dimension_type");
+        assert_eq!(stem_error(r#"{"type":"minecraft:overworld","generator":{"type":"minecraft:noise"}}"#), r#"No key settings in MapLike[{"type":"minecraft:noise"}]; No key biome_source in MapLike[{"type":"minecraft:noise"}]"#);
+    }
+
+    #[test]
+    fn biome_sources_report_dispatch_and_field_errors() {
+        let noise = |source: &str| format!(r#"{{"type":"minecraft:overworld","generator":{{"type":"minecraft:noise","settings":"minecraft:overworld","biome_source":{source}}}}}"#);
+        assert!(stem_error(&noise(r#"{}"#)).ends_with("No key type in MapLike[{}]"));
+        assert!(stem_error(&noise(r#"{"type":"minecraft:fixed","biome":"minecraft:nope"}"#)).ends_with("Failed to get element minecraft:nope from registry minecraft:worldgen/biome"));
+        assert!(stem_error(&noise(r#"{"type":"minecraft:checkerboard","biomes":"minecraft:plains","scale":99}"#)).ends_with("Value 99 outside of range [0:62]"));
+        assert!(stem_error(&noise(r#"{"type":"minecraft:multi_noise"}"#))
+            .ends_with(r#"No key preset in MapLike[{"type":"minecraft:multi_noise"}]; No key biomes in MapLike[{"type":"minecraft:multi_noise"}]"#));
+    }
+
+    #[test]
+    fn a_world_preset_needs_an_overworld() {
+        assert_eq!(preset_error(r#"{"dimensions":{}}"#), "Missing overworld dimension");
+        assert_eq!(preset_error("{}"), "No key dimensions in MapLike[{}]");
+        assert_eq!(
+            preset_error(r#"{"dimensions":{"ta:x":{"type":"minecraft:overworld"}}}"#),
+            r#"No key generator in MapLike[{"type":"minecraft:overworld"}] missed input: {"ta:x":{"type":"minecraft:overworld"}}; Missing overworld dimension"#
+        );
     }
 }

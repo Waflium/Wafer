@@ -203,6 +203,13 @@ fn decode_string_rgb_color(tag: Nbt) -> Result<Nbt, String> {
     Ok(Nbt::String(hex_color(argb::transparent(color), 6)))
 }
 
+fn check_string_rgb_hex(value: Nbt) -> Result<Nbt, String> {
+    parse_hex_color(&value, 6)?;
+    Ok(value)
+}
+
 pub fn string_rgb_color() -> Pair {
-    types::transform(decode_string_rgb_color)
+    let hex = Codec::Normalize(Box::new(Codec::string()), check_string_rgb_hex);
+    let numeric = Codec::Either(Box::new(Codec::int()), Box::new(types::vector(3)));
+    (Codec::Normalize(Box::new(Codec::Either(Box::new(hex), Box::new(numeric))), decode_string_rgb_color), types::transform(decode_string_rgb_color).1)
 }

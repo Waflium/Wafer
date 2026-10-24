@@ -3,6 +3,8 @@ use wafer_protocol::nbt::Nbt;
 use serde_json::Value;
 
 use crate::world::level::chunk::Biome;
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::world::item::component::values::decode_item;
 use crate::world::level::chunk::FlatLevelSource;
 
 const Y_SIZE: i64 = 4064;
@@ -52,6 +54,19 @@ impl StructureOverrides {
 pub struct Parsed {
     pub value: Option<FlatLevelSource>,
     pub error: Option<String>,
+}
+
+pub fn decode_preset(tag: &Nbt) -> DecodeResult<()> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let mut record = Record::default();
+    let display = record.required(tag, "display", |display| DecodeResult::from(decode_item(display)));
+    let settings = record.required(tag, "settings", |settings| {
+        let parsed = parse_settings(&codec::to_json(settings));
+        DecodeResult { value: parsed.value.map(drop), error: parsed.error }
+    });
+    record.build(|| display.and(settings))
 }
 
 pub fn parse_settings(json: &Value) -> Parsed {

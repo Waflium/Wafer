@@ -337,10 +337,16 @@ fn validate_timelines(errors: &mut LoadingErrors) {
 
 pub fn validate() -> Result<(), JavaThrowable> {
     let pack_elements = std::mem::take(&mut *PACK_ELEMENTS.lock().unwrap());
+    let (dimensions, worldgen): (Vec<&PackElement>, Vec<&PackElement>) = pack_elements.iter().partition(|element| element.registry == "minecraft:dimension");
+    validate_registries(&worldgen, true)?;
+    validate_registries(&dimensions, false)
+}
+
+fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool) -> Result<(), JavaThrowable> {
     let mut errors = LoadingErrors(Default::default());
-    UNBOUND.with(|unbound| unbound.replace(Some(Vec::new())));
-    UNBOUND_TAGS.with(|unbound| unbound.replace(Some(Vec::new())));
-    for element in &pack_elements {
+    UNBOUND.with(|unbound| unbound.replace(worldgen_stage.then(Vec::new)));
+    UNBOUND_TAGS.with(|unbound| unbound.replace(worldgen_stage.then(Vec::new)));
+    for element in pack_elements {
         let decoded = match &element.json {
             Ok(json) => crate::nbt::with_json_source(|| decode(element.registry, json)).map_err(ElementFailure::Decode),
             Err(throwable) => Err(ElementFailure::Parse(throwable.clone())),
@@ -363,7 +369,7 @@ pub fn validate() -> Result<(), JavaThrowable> {
         errors.0.insert(("minecraft:root".to_string(), registry.clone()), registry_load_task::unbound_values(&format!("ResourceKey[minecraft:root / {registry}]"), &keys));
     }
     let mut validation_stage = false;
-    if errors.0.is_empty() {
+    if errors.0.is_empty() && worldgen_stage {
         validation_stage = true;
         validate_timelines(&mut errors);
     }
@@ -388,9 +394,11 @@ fn decode(registry: &str, json: &Value) -> Result<(), String> {
         "minecraft:worldgen/template_pool" => levelgen::structure::pools::structure_template_pool::StructureTemplatePool::parse(json).map(drop),
         "minecraft:worldgen/processor_list" => levelgen::structure::templatesystem::structure_processor::StructureProcessorList::parse(json).map(drop),
         "minecraft:worldgen/configured_carver" | "minecraft:worldgen/carver" => levelgen::carver::WorldCarver::parse(json).map(drop),
-        "minecraft:worldgen/world_preset" => levelgen::world_dimensions::WorldDimensions::from_json(&json["dimensions"], 0).map(drop),
+        "minecraft:worldgen/world_preset" => levelgen::world_dimensions::decode_world_preset(&json_to_nbt(json)).into_result().map(drop),
+        "minecraft:worldgen/flat_level_generator_preset" => levelgen::flat::decode_preset(&json_to_nbt(json)).into_result().map(drop),
+        "minecraft:worldgen/multi_noise_biome_source_parameter_list" => crate::world::level::biome::decode_parameter_list(&json_to_nbt(json)),
         "minecraft:worldgen/biome" => crate::world::level::biome::validate(json),
-        "minecraft:dimension" => levelgen::world_dimensions::WorldDimensions::stem_from_json(json, 0).map(drop),
+        "minecraft:dimension" => levelgen::world_dimensions::decode_level_stem(&json_to_nbt(json)).into_result().map(drop),
         "minecraft:enchantment" => crate::world::item::enchantment::enchantment::Enchantment::decode(&json_to_nbt(json)).map(drop),
         "minecraft:enchantment_provider" => crate::world::item::enchantment::providers::enchantment_provider::EnchantmentProvider::parse(json).map(drop),
         "minecraft:villager_trade" => crate::world::item::trading::villager_trade::VillagerTrade::decode(&json_to_nbt(json)).map(drop),

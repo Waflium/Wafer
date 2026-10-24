@@ -42,24 +42,21 @@ pub enum Precipitation {
 }
 
 pub fn validate(json: &Value) -> Result<(), String> {
-    use crate::util::codec;
+    use crate::util::codec::{self, DecodeResult, Record};
     let tag = crate::world::item::component::json_to_nbt(json);
-    codec::decode_field(&tag, "has_precipitation", codec::bool_value)?;
-    codec::decode_field(&tag, "temperature", codec::float)?;
-    codec::decode_field(&tag, "downfall", codec::float)?;
-    codec::field(&tag, "effects")?;
-    network_codec().0.decode(&tag)?;
-    if let Some(attributes) = json.get("attributes") {
-        EnvironmentAttributeMap::parse(attributes, true)?.encode_network()?;
-    }
-    for step in json.get("features").and_then(Value::as_array).into_iter().flatten() {
-        for feature in step.as_array().into_iter().flatten() {
-            let name = feature.as_str().ok_or_else(|| format!("Not a string: {feature}"))?;
-            crate::world::level::levelgen::placement::placed_feature::placed_feature_index(name)
-                .ok_or_else(|| crate::core::data_registries::unknown_reference("minecraft:worldgen/placed_feature", &crate::world::level::levelgen::blockpredicates::block_predicate::resource(name)))?;
-        }
-    }
-    Ok(())
+    codec::map(&tag)?;
+    let mut record = Record::default();
+    record.required(&tag, "has_precipitation", codec::bool_value);
+    record.required(&tag, "temperature", codec::float);
+    record.optional(&tag, "temperature_modifier", |modifier| codec::string_enum(modifier, &[("none", ()), ("frozen", ())]));
+    record.required(&tag, "downfall", codec::float);
+    record.optional(&tag, "attributes", |attributes| {
+        DecodeResult::from(EnvironmentAttributeMap::parse(&codec::to_json(attributes), true).and_then(|map| map.encode_network()))
+    });
+    record.required(&tag, "effects", |effects| biome_special_effects::codec().0.decode_partial(effects));
+    record.required(&tag, "carvers", |carvers| DecodeResult::from(Codec::HolderSet("minecraft:worldgen/carver").decode(carvers)));
+    record.required(&tag, "features", |features| Codec::List(Box::new(Codec::HolderSet("minecraft:worldgen/placed_feature")), 0, usize::MAX).decode_partial(features));
+    record.build(|| Some(())).into_result()
 }
 
 fn network_codec() -> Pair {
@@ -214,6 +211,17 @@ pub struct MultiNoiseBiomeSource {
     pub parameters: ParameterList<Biome>,
 }
 
+pub fn decode_parameter_list(tag: &Nbt) -> Result<(), String> {
+    use crate::util::codec::{self, Record};
+    codec::map(tag)?;
+    let mut record = Record::default();
+    record.required(tag, "preset", |preset| {
+        let name = codec::identifier(preset)?;
+        if ["minecraft:nether", "minecraft:overworld"].contains(&name.as_str()) { Ok(()) } else { Err(format!("Unknown preset: {name}")) }
+    });
+    record.build(|| Some(())).into_result()
+}
+
 impl MultiNoiseBiomeSource {
     pub fn from_preset(name: &str) -> Result<MultiNoiseBiomeSource, String> {
         let source = crate::core::data_registries::json_entries("minecraft:worldgen/multi_noise_biome_source_parameter_list").iter().find(|(n, _)| *n == name).ok_or_else(|| format!("unknown preset {name}"))?.1;
@@ -306,4 +314,27 @@ pub fn obfuscate_seed(seed: i64) -> i64 {
     use sha2::{Digest, Sha256};
     let hash = Sha256::digest(seed.to_le_bytes());
     i64::from_le_bytes(hash[..8].try_into().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn validation_error(json: &str) -> String {
+        let value: Value = serde_json::from_str(json).unwrap();
+        crate::nbt::with_json_source(|| validate(&value).err().expect("a validation error"))
+    }
+
+    #[test]
+    fn a_biome_reports_every_field_error_in_vanilla_order() {
+        assert_eq!(
+            validation_error("{}"),
+            "No key features in MapLike[{}]; No key carvers in MapLike[{}]; No key effects in MapLike[{}]; No key downfall in MapLike[{}]; No key temperature in MapLike[{}]; No key has_precipitation in MapLike[{}]"
+        );
+        let json = r##"{"temperature":"x","downfall":0.5,"has_precipitation":"maybe","effects":{"water_color":"x"},"carvers":[],"features":"y"}"##;
+        assert_eq!(
+            validation_error(json),
+            "Not a json array: \"y\"; Failed to parse either. First: Hex color must begin with #; Second: Failed to parse either. First: Not a number: \"x\"; Second: Not a json array: \"x\"; Not a number: \"x\"; Not a boolean: \"maybe\""
+        );
+    }
 }
