@@ -3,11 +3,14 @@ pub mod tag_entry;
 use std::collections::HashMap;
 use std::fmt;
 
-use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use self::tag_entry::{Lookup, TagEntry};
+use crate::resources::registry_load_task::{self, TagLoadContext};
 use crate::server::packs::resources::MultiPackResourceManager;
+use crate::util::codec::{self, Record};
 use crate::util::dependency_sorter::{DependencySorter, Entry};
+use crate::util::java_throwable::JavaThrowable;
 use crate::util::java_collections::{JavaHashMap, identifier_hash};
 
 pub struct EntryWithSource {
@@ -34,6 +37,7 @@ impl Entry for SortingEntry<'_> {
 }
 
 pub struct TagLoader {
+    context: Option<TagLoadContext>,
     directory: String,
 }
 
@@ -43,17 +47,12 @@ struct TagFile {
 }
 
 impl TagFile {
-    fn parse(value: &Value) -> Result<TagFile, String> {
-        let object = value.as_object().ok_or_else(|| format!("Not a map: {value}"))?;
-        let values = object.get("values").ok_or_else(|| format!("No key values in MapLike[{value}]"))?;
-        let values = values.as_array().ok_or_else(|| format!("Not a list: {values}"))?;
-        let entries = values.iter().map(TagEntry::parse).collect::<Result<Vec<_>, _>>()?;
-        let replace = match object.get("replace") {
-            None => false,
-            Some(Value::Bool(replace)) => *replace,
-            Some(other) => return Err(format!("Not a boolean: {other}")),
-        };
-        Ok(TagFile { entries, replace })
+    fn decode(value: &Nbt) -> Result<TagFile, String> {
+        codec::map(value)?;
+        let mut record = Record::default();
+        let entries = record.required(value, "values", |values| codec::list_partial(values, TagEntry::decode_partial));
+        let replace = record.with_default(value, "replace", false, codec::bool_value);
+        record.build(|| Some(TagFile { entries: entries?, replace })).into_result()
     }
 }
 
@@ -67,7 +66,7 @@ pub fn tags_dir_path(registry: &str) -> String {
     }
 }
 
-pub fn load_tags_for_existing_registries(resource_manager: &MultiPackResourceManager) -> PendingTags {
+pub fn load_tags_for_existing_registries(resource_manager: &MultiPackResourceManager, startup: bool) -> PendingTags {
     let mut registries: Vec<&str> = wafer_data::registry_names().collect();
     registries.sort_unstable();
     registries.dedup();
@@ -75,7 +74,8 @@ pub fn load_tags_for_existing_registries(resource_manager: &MultiPackResourceMan
     for registry in registries {
         let entries = wafer_data::registry_entries(registry).unwrap_or_default();
         let ids: HashMap<&str, i32> = entries.iter().enumerate().map(|(id, &entry)| (entry, id as i32)).collect();
-        let loader = TagLoader::new(&tags_dir_path(registry));
+        let context = startup.then(|| if crate::core::data_registries::get(registry).is_some() { TagLoadContext::DynamicRegistry } else { TagLoadContext::ExistingRegistries });
+        let loader = TagLoader::with_context(&tags_dir_path(registry), context);
         let tags = loader.build(&loader.load(resource_manager), &|id, _| ids.get(id).copied(), &|a, b| a == b);
         if tags.len() == 0 {
             continue;
@@ -100,7 +100,25 @@ pub fn identifier_order<T>(entries: &mut [(String, T)]) {
 
 impl TagLoader {
     pub fn new(directory: &str) -> TagLoader {
-        TagLoader { directory: directory.to_string() }
+        TagLoader::with_context(directory, None)
+    }
+
+    pub fn with_context(directory: &str, context: Option<TagLoadContext>) -> TagLoader {
+        TagLoader { context, directory: directory.to_string() }
+    }
+
+    fn parse_failed(&self, error: JavaThrowable) -> JavaThrowable {
+        match self.context {
+            Some(context) => registry_load_task::tag_parse_failed(context, error),
+            None => error.without_stack_trace(),
+        }
+    }
+
+    fn decode_failed(&self, message: &str) -> JavaThrowable {
+        match self.context {
+            Some(context) => registry_load_task::tag_decode_failed(context, message),
+            None => JavaThrowable::new(format!("java.lang.IllegalStateException: {message}"), Vec::new()),
+        }
     }
 
     fn file_to_id(&self, location: &str) -> String {
@@ -119,13 +137,13 @@ impl TagLoader {
                 let parsed = resource
                     .supplier
                     .read()
-                    .map_err(|e| format!("java.io.IOException: {e}"))
-                    .and_then(|bytes| crate::util::gson::parse_strict_bytes(&bytes))
+                    .map_err(|e| JavaThrowable::new(format!("java.io.IOException: {e}"), Vec::new()))
+                    .and_then(|bytes| crate::util::gson::parse_strict_bytes_throwable(&bytes).map_err(|error| self.parse_failed(error)))
                     .and_then(|element| {
                         if builders.get(&id).is_none() {
                             builders.insert(id.clone(), Vec::new());
                         }
-                        TagFile::parse(&element).map_err(|e| format!("java.lang.IllegalStateException: {e}"))
+                        crate::nbt::with_json_source(|| TagFile::decode(&crate::world::item::component::json_to_nbt(&element))).map_err(|message| self.decode_failed(&message))
                     });
                 match parsed {
                     Ok(parsed) => {
@@ -136,7 +154,7 @@ impl TagLoader {
                         contents.extend(parsed.entries.into_iter().map(|entry| EntryWithSource { entry, source: resource.source_pack_id.clone() }));
                     }
                     Err(exception) => {
-                        error!("Couldn't read tag list {id} from {location} in data pack {}\n{exception}", resource.source_pack_id);
+                        error!("Couldn't read tag list {id} from {location} in data pack {}\n{}", resource.source_pack_id, exception.print_stack_trace().trim_end());
                     }
                 }
             }
@@ -197,7 +215,22 @@ impl<V: Clone> Lookup<V> for TagLookup<'_, V> {
 
 #[cfg(test)]
 mod tests {
-    use super::load_tags_for_existing_registries;
+    use super::{TagFile, load_tags_for_existing_registries};
+
+    fn decode_error(json: &str) -> String {
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        crate::nbt::with_json_source(|| TagFile::decode(&crate::world::item::component::json_to_nbt(&value)).err().expect("a decode error"))
+    }
+
+    #[test]
+    fn tag_files_report_vanilla_json_messages() {
+        assert_eq!(decode_error(r#"{"values":5}"#), "Not a json array: 5");
+        assert_eq!(decode_error("[]"), "Not a JSON object: []");
+        assert_eq!(decode_error("null"), "Not a JSON object: null");
+        assert_eq!(decode_error("{}"), "No key values in MapLike[{}]");
+        assert_eq!(decode_error(r#"{"values":[5]}"#), "Failed to parse either. First: Not a string: 5; Second: Not a JSON object: 5");
+        assert_eq!(decode_error(r#"{"values":[],"replace":"x"}"#), "Not a boolean: \"x\"");
+    }
     use crate::server::packs::repository::PackRepository;
     use crate::server::packs::resources::MultiPackResourceManager;
 
@@ -206,7 +239,7 @@ mod tests {
         let mut repository = PackRepository::create_vanilla_trusted_repository();
         repository.reload();
         repository.set_selected(&["vanilla"]);
-        let loaded = load_tags_for_existing_registries(&MultiPackResourceManager::new(repository.open_all_selected()));
+        let loaded = load_tags_for_existing_registries(&MultiPackResourceManager::new(repository.open_all_selected()), false);
         let built_in: Vec<(String, Vec<(String, Vec<i32>)>)> = wafer_data::TAGS
             .iter()
             .map(|registry| (registry.registry.to_string(), registry.tags.iter().map(|(name, values)| (name.to_string(), values.to_vec())).collect()))

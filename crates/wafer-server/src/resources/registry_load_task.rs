@@ -184,6 +184,82 @@ pub fn timeline_marker_defined_multiple_times(message: String) -> JavaThrowable 
     JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: {message}"), frames)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TagLoadContext {
+    ExistingRegistries,
+    DynamicRegistry,
+    FunctionLibrary,
+}
+
+const TAG_LOAD_PENDING_TAGS: &str = "net.minecraft.tags.TagLoader.loadPendingTags(TagLoader.java:163)";
+const TAG_LOAD_EXISTING_LAMBDA: &str = "net.minecraft.tags.TagLoader.lambda$loadTagsForExistingRegistries$0(TagLoader.java:139)";
+const TAG_LOAD_EXISTING_PIPELINE: [&str; 11] = [
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "com.google.common.collect.CollectSpliterators$1.lambda$forEachRemaining$0(CollectSpliterators.java:125)",
+    "java.base/java.util.HashMap$EntrySpliterator.forEachRemaining(HashMap.java:1859)",
+    "com.google.common.collect.CollectSpliterators$1.forEachRemaining(CollectSpliterators.java:125)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:723)",
+    "net.minecraft.tags.TagLoader.loadTagsForExistingRegistries(TagLoader.java:141)",
+];
+const TAG_LOAD_WORLD_LOADER: [&str; 4] = [
+    "net.minecraft.server.WorldLoader.lambda$load$0(WorldLoader.java:33)",
+    "java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1171)",
+    "java.base/java.util.concurrent.CompletableFuture$Completion.exec(CompletableFuture.java:504)",
+    FORK_JOIN_TAIL[0],
+];
+const TAG_LOAD_REGISTRY: [&str; 4] = [
+    "net.minecraft.tags.TagLoader.loadTagsForRegistry(TagLoader.java:150)",
+    "net.minecraft.resources.ResourceManagerRegistryLoadTask.lambda$load$3(ResourceManagerRegistryLoadTask.java:62)",
+    "java.base/java.util.concurrent.CompletableFuture$UniAccept.tryFire(CompletableFuture.java:739)",
+    "java.base/java.util.concurrent.CompletableFuture$Completion.exec(CompletableFuture.java:504)",
+];
+const TAG_LOAD_FUNCTIONS: [&str; 6] = [
+    "net.minecraft.server.ServerFunctionLibrary.lambda$reload$0(ServerFunctionLibrary.java:71)",
+    ASYNC_SUPPLY[0],
+    "net.minecraft.server.packs.resources.SimpleReloadInstance.lambda$prepareTasks$1(SimpleReloadInstance.java:51)",
+    "java.base/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.compute(ForkJoinTask.java:1753)",
+    "java.base/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.compute(ForkJoinTask.java:1745)",
+    "java.base/java.util.concurrent.ForkJoinTask$InterruptibleTask.exec(ForkJoinTask.java:1662)",
+];
+
+fn tag_load_frames(context: TagLoadContext, line: &'static str) -> Vec<&'static str> {
+    let mut frames = vec![line];
+    match context {
+        TagLoadContext::ExistingRegistries => {
+            frames.push(TAG_LOAD_PENDING_TAGS);
+            frames.push(TAG_LOAD_EXISTING_LAMBDA);
+            frames.extend(TAG_LOAD_EXISTING_PIPELINE);
+            frames.extend(TAG_LOAD_WORLD_LOADER);
+            frames.extend(&FORK_JOIN_TAIL[1..]);
+        }
+        TagLoadContext::DynamicRegistry => {
+            frames.extend(TAG_LOAD_REGISTRY);
+            frames.extend(FORK_JOIN_TAIL);
+        }
+        TagLoadContext::FunctionLibrary => {
+            frames.extend(TAG_LOAD_FUNCTIONS);
+            frames.extend(FORK_JOIN_TAIL);
+        }
+    }
+    frames
+}
+
+pub fn tag_decode_failed(context: TagLoadContext, message: &str) -> JavaThrowable {
+    let mut frames = DATA_RESULT_GET_OR_THROW.to_vec();
+    frames.extend(tag_load_frames(context, "net.minecraft.tags.TagLoader.load(TagLoader.java:61)"));
+    JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: {message}"), frames)
+}
+
+pub fn tag_parse_failed(context: TagLoadContext, mut parse_error: JavaThrowable) -> JavaThrowable {
+    append_frames(&mut parse_error, &tag_load_frames(context, "net.minecraft.tags.TagLoader.load(TagLoader.java:59)"));
+    parse_error
+}
+
 pub fn registry_loading_failed(validation_stage: bool) -> JavaThrowable {
     let lambda = if validation_stage { LOAD_COMPLETION_VALIDATE_ERRORS } else { LOAD_COMPLETION_FREEZE_ERRORS };
     let completion = |first: &'static str| {

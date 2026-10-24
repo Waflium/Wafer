@@ -17,6 +17,12 @@ impl JavaThrowable {
         self
     }
 
+    pub fn without_stack_trace(mut self) -> JavaThrowable {
+        self.stack_trace.clear();
+        self.cause = self.cause.take().map(|cause| Box::new(cause.without_stack_trace()));
+        self
+    }
+
     pub fn print_stack_trace(&self) -> String {
         let mut out = String::new();
         out.push_str(&self.description);

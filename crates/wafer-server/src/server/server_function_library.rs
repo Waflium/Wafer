@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::commands::create_compilation_context;
 use crate::commands::functions::CommandFunction;
 use crate::server::packs::resources::MultiPackResourceManager;
+use crate::resources::registry_load_task::TagLoadContext;
 use crate::tags::{TagLoader, identifier_order};
 use crate::util::java_collections::{JavaHashMap, identifier_hash};
 
@@ -66,7 +67,7 @@ impl ServerFunctionLibrary {
     }
 
     pub fn reload(resource_manager: &MultiPackResourceManager, function_compilation_permission: i32) -> ServerFunctionLibrary {
-        let tags_loader = TagLoader::new(TAG_DIRECTORY);
+        let tags_loader = TagLoader::with_context(TAG_DIRECTORY, Some(TagLoadContext::FunctionLibrary));
         let mut functions_to_load: Vec<_> = resource_manager.list_resources(FUNCTION_DIRECTORY, FUNCTION_EXTENSION).into_iter().collect();
         identifier_order(&mut functions_to_load);
         let mut result: JavaHashMap<usize> = JavaHashMap::new(identifier_hash);

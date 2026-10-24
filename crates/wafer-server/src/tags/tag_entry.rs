@@ -1,8 +1,9 @@
 use std::fmt;
 
-use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use crate::resources::identifier;
+use crate::util::codec::{self, DecodeResult, Record};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TagEntry {
@@ -18,24 +19,21 @@ pub trait Lookup<T> {
 }
 
 impl TagEntry {
-    pub fn parse(value: &Value) -> Result<TagEntry, String> {
-        match value {
-            Value::String(name) => tag_or_element_id(name).map(|(id, tag)| TagEntry { id, tag, required: true }),
-            Value::Object(object) => {
-                let id = match object.get("id") {
-                    Some(Value::String(name)) => tag_or_element_id(name)?,
-                    Some(other) => return Err(format!("Not a string: {other}")),
-                    None => return Err(format!("No key id in MapLike[{value}]")),
-                };
-                let required = match object.get("required") {
-                    None => true,
-                    Some(Value::Bool(required)) => *required,
-                    Some(other) => return Err(format!("Not a boolean: {other}")),
-                };
-                Ok(TagEntry { id: id.0, tag: id.1, required })
-            }
-            other => Err(format!("Not a string: {other}")),
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<TagEntry> {
+        let first = DecodeResult::from(codec::string(tag).and_then(tag_or_element_id)).map(|(id, tag)| TagEntry { id, tag, required: true });
+        codec::either_result(first, || TagEntry::decode_full(tag)).map(|either| match either {
+            Ok(entry) | Err(entry) => entry,
+        })
+    }
+
+    fn decode_full(tag: &Nbt) -> DecodeResult<TagEntry> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
         }
+        let mut record = Record::default();
+        let id = record.required(tag, "id", |id| codec::string(id).and_then(tag_or_element_id));
+        let required = record.with_default(tag, "required", true, codec::bool_value);
+        record.build(|| id.map(|(id, tag)| TagEntry { id, tag, required }))
     }
 
     pub fn build<T>(&self, lookup: &dyn Lookup<T>, output: &mut dyn FnMut(T)) -> bool {

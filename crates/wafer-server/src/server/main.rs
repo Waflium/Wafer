@@ -236,7 +236,7 @@ pub fn main(args: Vec<String>) {
         std::thread::Builder::new()
             .name("Worker-Main-1".into())
             .spawn_scoped(scope, || {
-                let postponed_tags = wafer_data::prepare_tags(load_tags_for_existing_registries(&resource_manager));
+                let postponed_tags = wafer_data::prepare_tags(load_tags_for_existing_registries(&resource_manager, true));
                 wafer_data::with_pending_tags(postponed_tags, crate::core::data_registries::validate)?;
                 let world_data = level_data.unwrap_or_else(|| {
                     info!("No existing world data, creating new world");
