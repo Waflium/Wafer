@@ -99,10 +99,6 @@ pub fn identifier_order<T>(entries: &mut [(String, T)]) {
 }
 
 impl TagLoader {
-    pub fn new(directory: &str) -> TagLoader {
-        TagLoader::with_context(directory, None)
-    }
-
     pub fn with_context(directory: &str, context: Option<TagLoadContext>) -> TagLoader {
         TagLoader { context, directory: directory.to_string() }
     }
