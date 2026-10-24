@@ -122,7 +122,7 @@ pub struct JsonReader {
 
 impl JsonReader {
     pub fn new(input: &str) -> JsonReader {
-        let buffer: Vec<u16> = input.encode_utf16().collect();
+        let buffer: Vec<u16> = wafer_protocol::java_string::utf16_units(input).collect();
         let skip_bom = buffer.first() == Some(&0xfeff);
         JsonReader {
             strictness: Strictness::LegacyStrict,
@@ -502,7 +502,7 @@ impl JsonReader {
             PEEKED_BUFFERED => self.peeked_string.take().unwrap_or_default(),
             PEEKED_LONG => self.peeked_long.to_string(),
             PEEKED_NUMBER => {
-                let result = String::from_utf16_lossy(&self.buffer[self.pos..self.pos + self.peeked_number_length]);
+                let result = wafer_protocol::java_string::from_utf16(&self.buffer[self.pos..self.pos + self.peeked_number_length]);
                 self.pos += self.peeked_number_length;
                 result
             }
@@ -546,7 +546,7 @@ impl JsonReader {
             if c == quote {
                 self.pos = p;
                 builder.extend_from_slice(&self.buffer[start..p - 1]);
-                return Ok(String::from_utf16_lossy(&builder));
+                return Ok(wafer_protocol::java_string::from_utf16(&builder));
             }
             if c == 0x5c {
                 self.pos = p;
@@ -576,7 +576,7 @@ impl JsonReader {
                 _ => i += 1,
             }
         }
-        let result = String::from_utf16_lossy(&self.buffer[self.pos..self.pos + i]);
+        let result = wafer_protocol::java_string::from_utf16(&self.buffer[self.pos..self.pos + i]);
         self.pos += i;
         Ok(result)
     }
@@ -768,7 +768,7 @@ impl JsonReader {
                         0x61..=0x66 => c - 0x61 + 10,
                         0x41..=0x46 => c - 0x41 + 10,
                         _ => {
-                            let text = String::from_utf16_lossy(&self.buffer[self.pos..self.pos + 4]);
+                            let text = wafer_protocol::java_string::from_utf16(&self.buffer[self.pos..self.pos + 4]);
                             return Err(self.syntax_error(&format!("Malformed Unicode escape \\u{text}"), jr!("readEscapeCharacter", 1768)));
                         }
                     };

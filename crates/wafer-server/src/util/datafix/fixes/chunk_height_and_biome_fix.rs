@@ -7,7 +7,7 @@ use crate::datafixers::schemas::schema::Schema;
 use crate::datafixers::typed::find_field;
 use crate::util::datafix::fixes::chunk_proto_tick_list_fix::PoorMansPalettedContainer;
 use crate::util::datafix::fixes::references::CHUNK;
-use crate::util::datafix::fixes::world_gen_settings_fix::java_parse_int;
+use crate::util::java_integer::parse_int;
 
 const OLD_SECTION_COUNT: usize = 16;
 const NEW_SECTION_COUNT: usize = 24;
@@ -278,7 +278,7 @@ fn shift_upgrade_data(upgrade_data: Dynamic) -> Dynamic {
         let mut shifted_indices: Vec<(Dynamic, Dynamic)> = Vec::new();
         if let Ok(entries) = indices.get_map_values().into_result() {
             for (index, data) in entries {
-                if let Some(Some(parsed)) = index.as_string().into_result().ok().map(|index| java_parse_int(&index)) {
+                if let Some(Some(parsed)) = index.as_string().into_result().ok().map(|index| parse_int(&index)) {
                     let shifted_index = parsed.wrapping_sub(NEW_MIN_SECTION_Y);
                     let key = index.create_string(shifted_index.to_string());
                     match shifted_indices.iter_mut().find(|(existing, _)| *existing == key) {

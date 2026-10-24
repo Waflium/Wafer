@@ -797,6 +797,27 @@ impl<T: JavaHashCode + PartialEq + Copy> JavaObjectHashSet<T> {
 }
 
 
+pub fn identity_hash_code() -> i32 {
+    thread_local! {
+        static STATE: std::cell::Cell<[u32; 4]> = std::cell::Cell::new([
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1234567, |elapsed| elapsed.subsec_nanos()),
+            842502087,
+            0x8767,
+            273326509,
+        ]);
+    }
+    STATE.with(|state| {
+        let [x, y, z, w] = state.get();
+        let t = x ^ (x << 11);
+        let next = (w ^ (w >> 19)) ^ (t ^ (t >> 8));
+        state.set([y, z, w, next]);
+        match (next & 0x7FFF_FFFF) as i32 {
+            0 => 0xBAD,
+            hash => hash,
+        }
+    })
+}
+
 pub fn identifier_hash(id: &str) -> i32 {
     let (namespace, path) = id.split_once(':').unwrap_or(("minecraft", id));
     java_string_hash(namespace).wrapping_mul(31).wrapping_add(java_string_hash(path))
@@ -874,6 +895,16 @@ impl<V> JavaHashMap<V> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identity_hash_codes_are_positive_and_distinct() {
+        let hashes: Vec<i32> = (0..1000).map(|_| identity_hash_code()).collect();
+        assert!(hashes.iter().all(|&hash| hash > 0));
+        let mut sorted = hashes.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert!(sorted.len() > 990);
+    }
 
     #[test]
     #[ignore]

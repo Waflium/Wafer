@@ -4,6 +4,7 @@ use crate::datafixers::data_fix::{DataFix, DataFixBase, TypeRewriteRule};
 use crate::datafixers::dynamic::Dynamic;
 use crate::datafixers::schemas::schema::Schema;
 use crate::util::datafix::fixes::references::LEVEL;
+use crate::util::java_integer::parse_int;
 
 pub struct GameRuleRegistryFix {
     base: DataFixBase,
@@ -115,9 +116,9 @@ fn fix_game_rules(game_rules: Dynamic) -> Dynamic {
 
 fn convert_integer(old_value: Dynamic, min: i32, max: i32) -> Dynamic {
     let string_value = old_value.as_string_or("");
-    match string_value.parse::<i32>() {
-        Ok(parsed_value) => old_value.create_int(parsed_value.clamp(min, max)),
-        Err(_) => old_value,
+    match parse_int(&string_value) {
+        Some(parsed_value) => old_value.create_int(parsed_value.clamp(min, max)),
+        None => old_value,
     }
 }
 

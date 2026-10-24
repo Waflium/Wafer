@@ -11,8 +11,9 @@ use crate::datafixers::typed::{OpticFinder, Typed, field_finder, find_field, typ
 use crate::datafixers::types::{Type, equals, list, named, remainder_type};
 use crate::datafixers::value::Value;
 use crate::util::datafix::fixes::references::{BLOCK_STATE, CHUNK};
-use crate::util::datafix::fixes::world_gen_settings_fix::java_parse_int;
 use crate::util::datafix::packed_bit_storage::PackedBitStorage;
+use crate::util::java_collections::identity_hash_code;
+use crate::util::java_integer::{number_format_exception, parse_int};
 
 const DIRECTIONS: [[i32; 3]; 6] = [[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]];
 const DECAY_DISTANCE: i32 = 7;
@@ -97,7 +98,11 @@ impl DataFix for LeavesFix {
                     let keys: Vec<i32> = leaves_sections.iter().map(LeavesSection::get_index).collect();
                     for (position, key) in keys.iter().enumerate() {
                         if keys[..position].contains(key) {
-                            panic!("Duplicate key {key}");
+                            panic!(
+                                "java.lang.IllegalStateException: Duplicate key {key} (attempted merging values net.minecraft.util.datafix.fixes.LeavesFix$LeavesSection@{:x} and net.minecraft.util.datafix.fixes.LeavesFix$LeavesSection@{:x})",
+                                identity_hash_code(),
+                                identity_hash_code()
+                            );
                         }
                     }
                     let order = java_hash_map_key_order(&keys);
@@ -259,7 +264,7 @@ impl LeavesSection {
             0
         } else {
             let distance = self.section.palette[block as usize].get("Properties").get("distance").as_string_or("");
-            java_parse_int(&distance).unwrap_or_else(|| panic!("For input string: \"{distance}\""))
+            parse_int(&distance).unwrap_or_else(|| panic!("{}", number_format_exception(&distance)))
         }
     }
 

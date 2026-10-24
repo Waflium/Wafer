@@ -20,7 +20,7 @@ pub fn write_value(out: &mut String, value: &JsonElement, sort_keys: bool) {
             out.push('{');
             let mut entries: Vec<&(String, JsonElement)> = members.iter().collect();
             if sort_keys {
-                entries.sort_by(|(a, _), (b, _)| a.encode_utf16().cmp(b.encode_utf16()));
+                entries.sort_by(|(a, _), (b, _)| wafer_protocol::java_string::utf16_units(a).cmp(wafer_protocol::java_string::utf16_units(b)));
             }
             for (i, (name, element)) in entries.into_iter().enumerate() {
                 if i > 0 {

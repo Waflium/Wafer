@@ -9,6 +9,7 @@ use crate::datafixers::types::{Type, and_all, const_type, equals, field, list, n
 use crate::datafixers::value::Value;
 use crate::util::datafix::extra_data_fix_utils;
 use crate::util::datafix::fixes::references::TEXT_COMPONENT;
+use crate::util::java_integer::parse_int;
 use crate::util::uri::URI;
 
 pub struct TextComponentHoverAndClickEventFix {
@@ -126,16 +127,7 @@ fn parse_old_page(value: &Dynamic) -> Option<i32> {
     if let Ok(number_value) = value.as_number().into_result() {
         return Some(number_value.int_value());
     }
-    java_parse_int(&value.as_string_or(""))
-}
-
-fn java_parse_int(s: &str) -> Option<i32> {
-    let digits = s.strip_prefix(['-', '+']).unwrap_or(s);
-    if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    let magnitude = digits.bytes().try_fold(0i64, |v, c| v.checked_mul(10)?.checked_add((c - b'0') as i64).filter(|&v| v <= 1 << 31))?;
-    i32::try_from(if s.starts_with('-') { -magnitude } else { magnitude }).ok()
+    parse_int(&value.as_string_or(""))
 }
 
 fn validate_uri(uri: &str) -> bool {

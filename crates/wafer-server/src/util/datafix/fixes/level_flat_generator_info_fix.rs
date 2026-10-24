@@ -6,6 +6,7 @@ use crate::datafixers::schemas::schema::Schema;
 use crate::util::datafix::fixes::block_state_data;
 use crate::util::datafix::fixes::entity_block_state_fix::EntityBlockStateFix;
 use crate::util::datafix::fixes::references::LEVEL;
+use crate::util::java_integer::parse_int;
 
 const GENERATOR_OPTIONS: &str = "generatorOptions";
 const DEFAULT: &str = "minecraft:bedrock,2*minecraft:dirt,minecraft:grass_block;1;village";
@@ -85,12 +86,7 @@ impl LevelFlatGeneratorInfoFix {
 }
 
 fn to_int(input: &str, default_value: i32) -> i32 {
-    let digits = input.strip_prefix(['-', '+']).unwrap_or(input);
-    if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
-        return default_value;
-    }
-    let magnitude = digits.bytes().try_fold(0i64, |value, c| value.checked_mul(10)?.checked_add((c - b'0') as i64).filter(|&value| value <= 1 << 31));
-    magnitude.map(|magnitude| if input.starts_with('-') { -magnitude } else { magnitude }).and_then(|value| i32::try_from(value).ok()).unwrap_or(default_value)
+    parse_int(input).unwrap_or(default_value)
 }
 
 impl DataFix for LevelFlatGeneratorInfoFix {

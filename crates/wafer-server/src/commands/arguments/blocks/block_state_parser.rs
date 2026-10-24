@@ -9,6 +9,7 @@ use crate::commands::brigadier::{
 use crate::commands::shared_suggestion_provider;
 use crate::commands::suggestion::{Suggestions, SuggestionsBuilder};
 use crate::nbt;
+use crate::util::java_integer::parse_int;
 
 pub static ERROR_NO_TAGS_ALLOWED: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.block.tag.disallowed");
 pub static ERROR_UNKNOWN_BLOCK: DynamicCommandExceptionType = DynamicCommandExceptionType(|id| tr("argument.block.id.invalid", vec![id]));
@@ -111,7 +112,7 @@ pub fn parse_for_testing(reader: &mut StringReader, allow_nbt: bool) -> Result<P
 pub fn property_value(values: &'static [&'static str], raw: &str) -> Option<&'static str> {
     let integer = values.iter().all(|v| v.parse::<i32>().is_ok());
     if integer {
-        let value = java_parse_int(raw)?;
+        let value = parse_int(raw)?;
         values.iter().copied().find(|v| v.parse::<i32>() == Ok(value))
     } else {
         values.iter().copied().find(|v| *v == raw)
@@ -130,15 +131,6 @@ fn add_suggestions(builder: &mut SuggestionsBuilder, values: &[&str]) {
             builder.suggest(*value);
         }
     }
-}
-
-fn java_parse_int(s: &str) -> Option<i32> {
-    let digits = s.strip_prefix(['-', '+']).unwrap_or(s);
-    if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    let magnitude = digits.bytes().try_fold(0i64, |v, c| v.checked_mul(10)?.checked_add((c - b'0') as i64).filter(|&v| v <= 1 << 31))?;
-    i32::try_from(if s.starts_with('-') { -magnitude } else { magnitude }).ok()
 }
 
 impl<'r, 'a> BlockStateParser<'r, 'a> {
@@ -462,5 +454,20 @@ impl<'r, 'a> BlockStateParser<'r, 'a> {
                 Err(ERROR_INVALID_VALUE.create_with_context(self.reader, self.id.as_str(), property, raw))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::property_value;
+
+    #[test]
+    fn integer_properties_accept_every_decimal_digit_like_integer_parse_int() {
+        let values: &'static [&'static str] = &["0", "1", "2", "3", "4", "5", "6", "7"];
+        assert_eq!(property_value(values, "\u{663}"), Some("3"));
+        assert_eq!(property_value(values, "+\u{664}"), Some("4"));
+        assert_eq!(property_value(values, "\u{FF15}"), Some("5"));
+        assert_eq!(property_value(values, "\u{1D7D3}"), None);
+        assert_eq!(property_value(values, "8"), None);
     }
 }

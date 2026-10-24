@@ -12,6 +12,8 @@ mod tests_from_1022;
 #[cfg(test)]
 mod tests_from_1456;
 #[cfg(test)]
+mod tests_java_parity;
+#[cfg(test)]
 mod tests_from_3500;
 pub mod data_fix_types;
 

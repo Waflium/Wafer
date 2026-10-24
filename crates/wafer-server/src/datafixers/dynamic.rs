@@ -134,7 +134,7 @@ pub struct Dynamic {
 
 impl Dynamic {
     pub fn new(value: Nbt) -> Dynamic {
-        Dynamic { value: Some(value) }
+        Dynamic::of(Some(value))
     }
 
     pub fn empty() -> Dynamic {
@@ -142,7 +142,7 @@ impl Dynamic {
     }
 
     pub fn of(value: Option<Nbt>) -> Dynamic {
-        Dynamic { value }
+        Dynamic { value: value.filter(|value| !matches!(value, Nbt::End)) }
     }
 
     pub fn get_value(&self) -> Option<&Nbt> {
@@ -205,9 +205,7 @@ impl Dynamic {
         let mut map = Vec::new();
         for (key, value) in entries {
             let Some(Nbt::String(key)) = key.value else { panic!("Cannot create map with non-string key: {}", snbt(&key.value)) };
-            if let Some(value) = value.value {
-                put(&mut map, &key, value);
-            }
+            put(&mut map, &key, value.value.unwrap_or(Nbt::End));
         }
         Dynamic::new(Nbt::Compound(map))
     }
@@ -261,16 +259,12 @@ impl Dynamic {
     pub fn set(self, key: &str, value: Dynamic) -> Dynamic {
         match self.value {
             Some(Nbt::Compound(mut entries)) => {
-                if let Some(value) = value.value {
-                    put(&mut entries, key, value);
-                }
+                put(&mut entries, key, value.value.unwrap_or(Nbt::End));
                 Dynamic::new(Nbt::Compound(entries))
             }
             None => {
                 let mut entries = Vec::new();
-                if let Some(value) = value.value {
-                    put(&mut entries, key, value);
-                }
+                put(&mut entries, key, value.value.unwrap_or(Nbt::End));
                 Dynamic::new(Nbt::Compound(entries))
             }
             other => Dynamic { value: other },

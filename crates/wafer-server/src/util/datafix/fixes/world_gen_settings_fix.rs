@@ -4,6 +4,7 @@ use crate::datafixers::data_fix::{DataFix, DataFixBase, TypeRewriteRule};
 use crate::datafixers::dynamic::Dynamic;
 use crate::datafixers::schemas::schema::Schema;
 use crate::util::datafix::fixes::references::WORLD_GEN_SETTINGS;
+use crate::util::java_integer::parse_int;
 
 static DEFAULTS: [(&str, StructureFeatureConfiguration); 9] = [
     ("minecraft:village", StructureFeatureConfiguration { spacing: 32, separation: 8, salt: 10387312 }),
@@ -236,17 +237,8 @@ fn fix_flat_structures(creator: &Dynamic, settings: Option<&Dynamic>) -> Vec<(Dy
     structure_builder
 }
 
-pub fn java_parse_int(input: &str) -> Option<i32> {
-    let digits = input.strip_prefix(['-', '+']).unwrap_or(input);
-    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    let magnitude = digits.bytes().try_fold(0i64, |value, byte| value.checked_mul(10)?.checked_add((byte - b'0') as i64).filter(|value| *value <= 1 << 31))?;
-    i32::try_from(if input.starts_with('-') { -magnitude } else { magnitude }).ok()
-}
-
 fn get_int(input: &str, def: i32) -> i32 {
-    java_parse_int(input).unwrap_or(def)
+    parse_int(input).unwrap_or(def)
 }
 
 fn get_int_min(input: &str, def: i32, min: i32) -> i32 {

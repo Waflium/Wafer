@@ -1,5 +1,6 @@
 mod buf;
 mod frame;
+pub mod java_string;
 pub mod nbt;
 
 pub use buf::{DecodeError, Reader, Writer};

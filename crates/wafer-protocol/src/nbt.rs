@@ -1,3 +1,4 @@
+use crate::java_string::{from_utf16, utf16_units};
 use crate::{DecodeError, Reader, Writer};
 
 #[derive(Clone, Debug)]
@@ -159,6 +160,9 @@ impl Nbt {
                 for &i in &java_hash_map_order(&fields.iter().map(|f| f.0.as_str()).collect::<Vec<_>>()) {
                     let (name, value) = &fields[i];
                     w.u8(value.tag_id());
+                    if matches!(value, Nbt::End) {
+                        continue;
+                    }
                     write_string(w, name);
                     value.write_payload(w);
                 }
@@ -178,7 +182,7 @@ impl Nbt {
 
 fn write_string(w: &mut Writer, s: &str) {
     let mut bytes = Vec::with_capacity(s.len());
-    for unit in s.encode_utf16() {
+    for unit in utf16_units(s) {
         match unit {
             0x0001..=0x007F => bytes.push(unit as u8),
             0x0000 | 0x0080..=0x07FF => {
@@ -193,7 +197,7 @@ fn write_string(w: &mut Writer, s: &str) {
         }
     }
     if bytes.len() > u16::MAX as usize {
-        let units: Vec<u16> = s.encode_utf16().collect();
+        let units: Vec<u16> = utf16_units(s).collect();
         let display = |units: &[u16]| char::decode_utf16(units.iter().copied()).map(|c| c.unwrap_or('?')).collect::<String>();
         let message = format!(
             "java.io.UTFDataFormatException: encoded string ({}...{}) too long: {} bytes",
@@ -231,7 +235,7 @@ fn read_string(r: &mut Reader) -> Result<String, DecodeError> {
         units.push(unit);
         i += size;
     }
-    String::from_utf16(&units).map_err(|_| DecodeError::InvalidUtf8)
+    Ok(from_utf16(&units))
 }
 
 fn read_len(r: &mut Reader) -> Result<usize, DecodeError> {

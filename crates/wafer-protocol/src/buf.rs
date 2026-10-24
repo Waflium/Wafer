@@ -252,6 +252,7 @@ impl Writer {
     }
 
     pub fn string(&mut self, s: &str) {
+        let s = &*crate::java_string::to_utf8_lossy(s);
         if s.len() > DEFAULT_STRING_MAX_LEN {
             let length = s.encode_utf16().count();
             if length > DEFAULT_STRING_MAX_LEN {

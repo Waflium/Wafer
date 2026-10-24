@@ -2,10 +2,19 @@ use crate::datafixers::dsl::TypeReference;
 use crate::datafixers::dynamic::Dynamic;
 use crate::util::datafix::data_fixers::get_data_fixer;
 
+pub(super) fn escape_lone_surrogates(text: &str) -> String {
+    text.chars()
+        .map(|c| match wafer_protocol::java_string::lone_surrogate_unit(c) {
+            Some(unit) => format!("\\u{unit:04x}"),
+            None => c.to_string(),
+        })
+        .collect()
+}
+
 fn update(ty: &'static str, from: i32, to: i32, input: &str) -> String {
     let input = crate::nbt::parse_fully(input).expect("valid snbt");
     let output = get_data_fixer().update(TypeReference(ty), Dynamic::new(input), from, to);
-    crate::nbt::to_string(output.get_value().expect("a value"))
+    escape_lone_surrogates(&crate::nbt::to_string(output.get_value().expect("a value")))
 }
 
 fn update_catching(ty: &'static str, from: i32, to: i32, input: &str) -> String {

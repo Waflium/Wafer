@@ -18,8 +18,9 @@ pub mod fraction;
 pub mod hash_ops;
 pub mod inclusive_range;
 pub mod java_collections;
-pub mod java_throwable;
+pub mod java_integer;
 pub mod java_nio;
+pub mod java_throwable;
 pub mod java_uuid;
 pub mod keyframe_track;
 pub mod parsing;
@@ -52,6 +53,21 @@ pub fn parse_and_validate_untrusted_uri(uri: &str) -> Result<uri::URI, uri::URIS
         }
         Some(_) => Ok(parsed),
     }
+}
+
+thread_local! {
+    static CATCHING_EXCEPTION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+pub fn is_catching_exception() -> bool {
+    CATCHING_EXCEPTION.with(std::cell::Cell::get)
+}
+
+pub fn catch_exception<T>(function: impl FnOnce() -> T) -> Result<T, String> {
+    let outer = CATCHING_EXCEPTION.with(|catching| catching.replace(true));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(function));
+    CATCHING_EXCEPTION.with(|catching| catching.set(outer));
+    result.map_err(|payload| payload.downcast_ref::<String>().cloned().or_else(|| payload.downcast_ref::<&str>().map(|message| message.to_string())).unwrap_or_default())
 }
 
 pub fn write_and_read_typed_or_throw(
@@ -247,6 +263,16 @@ mod tests {
         super::shuffle(&mut list, &mut random);
         assert_eq!(list, [4, 6, 2, 1, 7, 9, 8, 5, 3, 0]);
         assert_eq!(random.next_int(), 392236186);
+    }
+
+    #[test]
+    fn caught_exceptions_return_their_message_and_reset_the_flag() {
+        assert!(!super::is_catching_exception());
+        assert_eq!(super::catch_exception(|| 5), Ok(5));
+        assert_eq!(super::catch_exception(|| -> i32 { panic!("{}", "boom") }), Err("boom".to_string()));
+        assert_eq!(super::catch_exception(|| -> i32 { panic!("static") }), Err("static".to_string()));
+        assert!(!super::is_catching_exception());
+        assert_eq!(super::catch_exception(|| super::catch_exception(|| -> i32 { panic!("inner") }).unwrap_err() + &super::is_catching_exception().to_string()), Ok("innertrue".to_string()));
     }
 }
 

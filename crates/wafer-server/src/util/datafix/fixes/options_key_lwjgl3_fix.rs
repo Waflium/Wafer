@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::datafixers::data_fix::{DataFix, DataFixBase, TypeRewriteRule};
 use crate::datafixers::schemas::schema::Schema;
 use crate::util::datafix::fixes::references::OPTIONS;
+use crate::util::java_integer;
 
 pub const KEY_UNKNOWN: &str = "key.unknown";
 
@@ -125,15 +126,7 @@ fn map_get_or_default(key: i32) -> &'static str {
 }
 
 fn parse_int(input: &str) -> i32 {
-    let digits = input.strip_prefix(['-', '+']).unwrap_or(input);
-    if digits.is_empty() || !digits.bytes().all(|c| c.is_ascii_digit()) {
-        panic!("For input string: \"{input}\"");
-    }
-    let magnitude = digits.bytes().try_fold(0i64, |value, c| value.checked_mul(10)?.checked_add((c - b'0') as i64).filter(|&value| value <= 1 << 31));
-    match magnitude.map(|magnitude| if input.starts_with('-') { -magnitude } else { magnitude }).and_then(|value| i32::try_from(value).ok()) {
-        Some(value) => value,
-        None => panic!("For input string: \"{input}\""),
-    }
+    java_integer::parse_int(input).unwrap_or_else(|| panic!("{}", java_integer::number_format_exception(input)))
 }
 
 pub struct OptionsKeyLwjgl3Fix {

@@ -1349,13 +1349,16 @@ impl ChunkCache {
         self.in_flight += 1;
         self.io.as_ref().unwrap().read(pos, move |read| {
             chunk_workers::execute(move || {
-                let result = read.and_then(|nbt| {
-                    nbt.map(|nbt| {
-                        let nbt = simple_region_storage::upgrade_chunk_tag(nbt, -1, context.as_ref(), current_version(), DataFixTypes::Chunk);
-                        serialization::read(&nbt, dimension, seed)
+                let result = crate::util::catch_exception(|| {
+                    read.and_then(|nbt| {
+                        nbt.map(|nbt| {
+                            let nbt = simple_region_storage::upgrade_chunk_tag(nbt, -1, context.as_ref(), current_version(), DataFixTypes::Chunk);
+                            serialization::read(&nbt, dimension, seed)
+                        })
+                        .transpose()
                     })
-                    .transpose()
-                });
+                })
+                .unwrap_or_else(|message| Err(io::Error::other(message)));
                 let _ = results.send(WorkResult::Loaded { pos, token, result });
             });
         });
@@ -1365,8 +1368,8 @@ impl ChunkCache {
         let pos = job.pos;
         let read = match result {
             Ok(read) => read,
-            Err(_) => {
-                error!("Failed to load chunk {},{}", pos.x, pos.z);
+            Err(e) => {
+                error!("Failed to load chunk {},{}\n{e}", pos.x, pos.z);
                 None
             }
         };
@@ -1970,6 +1973,22 @@ mod tests {
         cache.clear_cache();
         cache.block_state(BlockPos::new(80, -61, -40));
         assert!(has_unknown_ticket(&cache));
+    }
+
+    #[test]
+    fn chunks_whose_data_fixers_throw_are_regenerated() {
+        let dir = std::env::temp_dir().join(format!("wafer-failing-chunk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut storage = RegionStorage::new(dir.clone(), false);
+        let tag = crate::nbt::parse_fully(
+            r#"{DataVersion:1495,Level:{xPos:0,zPos:0,Sections:[{Y:0b,Palette:[{Name:"minecraft:air"}]},{Y:0b,Palette:[{Name:"minecraft:stone"}]}]}}"#,
+        )
+        .unwrap();
+        storage.write(ChunkPos::new(0, 0), &tag).unwrap();
+        storage.flush().unwrap();
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), Some(storage));
+        assert_eq!(cache.block_state(BlockPos::new(1, -61, 1)), blocks::GRASS_BLOCK.default_state());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

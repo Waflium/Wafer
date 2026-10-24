@@ -51,7 +51,7 @@ impl Visitor {
 
     fn visit(&mut self, tag: &Nbt) {
         match tag {
-            Nbt::End => self.text("END"),
+            Nbt::End => {}
             Nbt::String(value) => {
                 let mut quoted = String::new();
                 quote_and_escape(value, &mut quoted);

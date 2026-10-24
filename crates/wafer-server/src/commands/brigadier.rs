@@ -231,7 +231,7 @@ fn is(c: u16, range: std::ops::RangeInclusive<u8>) -> bool {
 }
 
 pub fn utf16(units: &[u16]) -> String {
-    String::from_utf16_lossy(units)
+    wafer_protocol::java_string::from_utf16(units)
 }
 
 pub fn is_whitespace(c: u16) -> bool {

@@ -26,6 +26,7 @@ fn quote(s: &str) -> String {
 
 fn canonical(tag: &Nbt, out: &mut String) {
     match tag {
+        Nbt::End => out.push_str("END"),
         Nbt::Compound(entries) => {
             let mut sorted: Vec<&(String, Nbt)> = entries.iter().collect();
             sorted.sort_by(|a, b| a.0.encode_utf16().cmp(b.0.encode_utf16()));

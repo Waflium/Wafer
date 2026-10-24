@@ -104,6 +104,24 @@ fn resolves(ty: &Arc<Type>, finder: &OpticFinder) -> bool {
     }
 }
 
+fn is_cartesian(ty: &Arc<Type>, finder: &OpticFinder) -> bool {
+    if let Match::Found(_) = finder.matches(ty) {
+        return true;
+    }
+    match &**ty {
+        Type::Named(_, element) | Type::Hook(element, _, _) => is_cartesian(element, finder),
+        Type::RecursivePoint(..) => is_cartesian(&ty.unfold(), finder),
+        Type::Product(first, second) => {
+            if resolves(first, finder) {
+                is_cartesian(first, finder)
+            } else {
+                is_cartesian(second, finder)
+            }
+        }
+        _ => false,
+    }
+}
+
 fn review(ty: &Arc<Type>, finder: &OpticFinder, new_value: &Value) -> Option<Value> {
     if let Match::Found(_) = finder.matches(ty) {
         return Some(new_value.clone());
@@ -304,6 +322,13 @@ impl Typed {
         }
     }
 
+    fn check_cartesian(&self, finder: &OpticFinder) {
+        self.check(finder);
+        if !is_cartesian(&self.ty, finder) {
+            panic!("java.lang.IllegalArgumentException: Couldn't upcast");
+        }
+    }
+
     pub fn get_optional_typed(&self, finder: &OpticFinder) -> Option<Typed> {
         self.check(finder);
         let mut found = None;
@@ -321,6 +346,7 @@ impl Typed {
     }
 
     pub fn get_typed(&self, finder: &OpticFinder) -> Typed {
+        self.check_cartesian(finder);
         self.get_optional_typed(finder).expect("a value at the optic")
     }
 
@@ -391,6 +417,7 @@ impl Typed {
     }
 
     pub fn get_remainder(&self) -> Dynamic {
+        self.check_cartesian(&OpticFinder::Remainder);
         match self.get_optional(&OpticFinder::Remainder) {
             Some(Value::Dynamic(dynamic)) => dynamic,
             _ => panic!("No remainder in {:?}", self.ty),

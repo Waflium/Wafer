@@ -5,8 +5,8 @@ use crate::datafixers::dynamic::Dynamic;
 use crate::datafixers::json_ops;
 use crate::datafixers::schemas::schema::Schema;
 use crate::util::datafix::fixes::references::LEVEL;
-use crate::util::datafix::fixes::world_gen_settings_fix::java_parse_int;
 use crate::util::gson;
+use crate::util::java_integer::parse_int;
 
 const MAP: &[(&str, &str)] = &[
     ("0", "minecraft:ocean"),
@@ -213,7 +213,7 @@ fn convert(flat_option_string: &str) -> Dynamic {
 fn get_layer_info_from_string(input: &str) -> Option<(i32, String)> {
     let parts = java_split(input, '*', 2);
     let height = if parts.len() == 2 {
-        match java_parse_int(parts[0]) {
+        match parse_int(parts[0]) {
             Some(height) => height,
             None => return None,
         }

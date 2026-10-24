@@ -133,7 +133,7 @@ fn format_record(out: &mut Vec<u8>, record: &Record) {
         ThreadName::Current(thread) => thread.name().unwrap_or(""),
         ThreadName::Named(name) => name,
     };
-    let _ = write!(out, "[{}] [{thread_name}/{}]: {}", time.format("%H:%M:%S"), record.level.name(), record.message);
+    let _ = write!(out, "[{}] [{thread_name}/{}]: {}", time.format("%H:%M:%S"), record.level.name(), wafer_protocol::java_string::to_utf8_lossy(&record.message));
     out.push(b'\n');
 }
 

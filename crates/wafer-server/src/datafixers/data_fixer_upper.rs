@@ -54,6 +54,10 @@ impl DataFixerUpper {
             error!("{}", decoded.error.unwrap_or_default());
             return input;
         };
+        if !types::equals(&self.get_type(ty, new_version), &plan.new_type, true) {
+            error!("Rewritten type doesn't match");
+            return input;
+        }
         for segment in plan.segments.iter() {
             let result = match segment {
                 Segment::Single(index) => apply_everywhere(&plan.steps[*index].ty, &mut value, &plan.steps[*index].rule),
