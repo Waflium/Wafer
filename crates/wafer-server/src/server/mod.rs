@@ -1018,6 +1018,7 @@ impl Server {
         player.latency = cookie.latency;
         player.chat = ChatState::new(player.profile.uuid, &self.config);
         player.set_game_mode_for_player(self.calculate_game_mode_for_new_player(None), None);
+        let mut collector = crate::world::level::storage::tag_value_input::ScopedCollector::new_empty(network::prepare_spawn_task::PREPARE_SPAWN_TASK_LOGGER);
         let saved = self.load_player_data(&player.profile.name, player.profile.uuid);
         let prepared = self.prepare_spawn_tasks.iter().position(|t| t.uuid == player.profile.uuid && t.reply.is_none());
         let (level_index, position, y_rot, x_rot) = match prepared {
@@ -1163,6 +1164,7 @@ impl Server {
             self.load_and_spawn_ender_pearls(nbt);
             self.levels[level_index].load_and_spawn_parent_vehicle(id, nbt);
         }
+        collector.set_root(crate::util::problem_reporter::PathElement::Text(self.levels[level_index].entity_to_string(id)));
     }
 
     fn tick_player_list(&mut self) {

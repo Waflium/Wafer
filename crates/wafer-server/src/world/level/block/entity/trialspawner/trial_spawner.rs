@@ -13,6 +13,8 @@ use crate::core::dispenser::default_dispense_item_behavior;
 use crate::core::holder::Holder;
 use crate::server::level::{ServerLevel, events};
 use crate::util::codec::{self, DataResult};
+use crate::util::problem_reporter::PathElement;
+use crate::world::level::storage::tag_value_input::ScopedCollector;
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::{LevelEntity, mob, spawn_placements};
@@ -28,6 +30,7 @@ use crate::world::level::storage::loot::loot_table::LootTable;
 use crate::world::level::update_flags::UPDATE_ALL;
 
 pub const DETECT_PLAYER_SPAWN_BUFFER: i64 = 40;
+const TRIAL_SPAWNER_LOGGER: &str = "net.minecraft.world.level.block.entity.trialspawner.TrialSpawner";
 const DEFAULT_TARGET_COOLDOWN_LENGTH: i32 = 36000;
 const DEFAULT_PLAYER_SCAN_RANGE: i32 = 14;
 const MAX_MOB_TRACKING_DISTANCE: i32 = 47;
@@ -144,6 +147,7 @@ impl TrialSpawner {
     pub fn spawn_mob(&self, data: &mut TrialSpawnerStateData, level: &mut ServerLevel, spawner_pos: BlockPos) -> Option<u128> {
         let next_spawn_data = data.get_or_create_next_spawn_data(self, level, spawner_pos);
         let input = next_spawn_data.get_entity_to_spawn();
+        let _collector = ScopedCollector::new(PathElement::Text(format!("spawner@BlockPos{{x={}, y={}, z={}}}", spawner_pos.x, spawner_pos.y, spawner_pos.z)), TRIAL_SPAWNER_LOGGER);
         let entity_type = base_spawner::entity_type_by(input)?;
         let spawn_pos = match base_spawner::read_spawn_pos(input) {
             Some(spawn_pos) => spawn_pos,

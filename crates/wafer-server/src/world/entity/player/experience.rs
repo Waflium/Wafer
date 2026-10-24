@@ -7,7 +7,7 @@ use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::entity::EntityId;
 use crate::world::entity::data::{DataValue, ids};
 use crate::world::entity::sound_event;
-use crate::world::level::block::entity::{float_value, int_value};
+use crate::world::level::block::entity::{float_or, int_or};
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub struct Experience {
@@ -39,10 +39,10 @@ impl Experience {
     }
 
     pub fn load(&mut self, nbt: &Nbt, random: &mut impl RandomSource) {
-        self.progress = nbt.get("XpP").and_then(float_value).unwrap_or(0.0);
-        self.level = nbt.get("XpLevel").and_then(int_value).unwrap_or(0);
-        self.total = nbt.get("XpTotal").and_then(int_value).unwrap_or(0);
-        self.enchantment_seed = nbt.get("XpSeed").and_then(int_value).unwrap_or(0);
+        self.progress = float_or(nbt, "XpP", 0.0);
+        self.level = int_or(nbt, "XpLevel", 0);
+        self.total = int_or(nbt, "XpTotal", 0);
+        self.enchantment_seed = int_or(nbt, "XpSeed", 0);
         if self.enchantment_seed == 0 {
             self.enchantment_seed = random.next_int();
         }

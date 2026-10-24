@@ -124,7 +124,7 @@ pub fn save_all_items(output: &mut Vec<(String, Nbt)>, items: &[ItemStack], also
     }
 }
 
-fn decode_item_stack_with_slot(entry: &Nbt) -> DecodeResult<(usize, ItemStack)> {
+pub(crate) fn decode_item_stack_with_slot(entry: &Nbt) -> DecodeResult<(usize, ItemStack)> {
     let slot = match entry.get("Slot") {
         Some(tag) => codec::number(tag).map(|number| component_codec::as_i64(number) as u8 as usize),
         None => Ok(0),

@@ -16,6 +16,7 @@ use crate::network::chat::component_serialization;
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DecodeResult};
 use crate::util::extra_codecs;
+use crate::util::problem_reporter::PathElement;
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::int_value;
 use crate::world::level::chunk::serialization::state_to_nbt;
@@ -25,6 +26,7 @@ use crate::world::level::storage::{format_uuid, uuid_ints};
 use crate::world::scores::scoreboard::Scoreboard;
 
 const ENTITY_TYPE_LOGGER: &str = "net.minecraft.world.entity.EntityType";
+const TYPED_ENTITY_DATA_LOGGER: &str = "net.minecraft.world.item.component.TypedEntityData";
 
 pub fn uuid_from_nbt(nbt: &Nbt) -> Option<u128> {
     let ints: [i32; 4] = match nbt {
@@ -460,6 +462,7 @@ fn update_custom_entity_tag(level: &ServerLevel, entity: &mut LevelEntity, entit
     if only_op_can_set_nbt(entity_type) {
         return None;
     }
+    let mut collector = tag_value_input::ScopedCollector::new_empty(TYPED_ENTITY_DATA_LOGGER);
     let unsafe_data: Vec<(String, Nbt)> = fields.iter().filter(|(k, _)| k != "id").cloned().collect();
     let mut tag = Vec::new();
     entity.save_without_id(&mut tag);
@@ -471,6 +474,7 @@ fn update_custom_entity_tag(level: &ServerLevel, entity: &mut LevelEntity, entit
         panic!("{}", loading_entity_exception(&e));
     }
     entity.entity_mut().uuid = uuid;
+    collector.set_root(PathElement::Text(level.detached_entity_to_string(entity)));
     Some(tag)
 }
 

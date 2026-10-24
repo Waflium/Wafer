@@ -14,11 +14,14 @@ use crate::world::entity::entity_reference::EntityReference;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::{Entity, LevelEntity, neutral_mob};
+use crate::world::level::storage::tag_value_input::{ScopedCollector, enter_child};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::block;
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::structure::BoundingBox;
+
+const STRUCTURE_TEMPLATE_LOGGER: &str = "net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate";
 
 #[derive(Clone)]
 pub struct StructureTemplate {
@@ -327,6 +330,7 @@ impl StructureTemplate {
         let (mut min_x, mut min_y, mut min_z) = (i32::MAX, i32::MAX, i32::MAX);
         let (mut max_x, mut max_y, mut max_z) = (i32::MIN, i32::MIN, i32::MIN);
         let processed_block_info_list = process_block_infos(level, position, reference_pos, settings, block_info_list, random);
+        let _collector = ScopedCollector::new_empty(STRUCTURE_TEMPLATE_LOGGER);
         for block_info in processed_block_info_list {
             let block_pos = block_info.pos;
             if bounding_box.is_some_and(|bounding_box| !bounding_box.is_inside(block_pos)) {
@@ -357,6 +361,7 @@ impl StructureTemplate {
                         None => nbt.push(("LootTableSeed".into(), seed)),
                     }
                 }
+                let _child = enter_child(block_entity.problem_path());
                 block_entity.load_with_components(&Nbt::Compound(nbt));
             }
             if let Some(previous_fluid_state) = previous_fluid_state {

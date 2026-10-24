@@ -93,3 +93,31 @@ fn nothing_is_reported_without_a_collector() {
     let input = parse("{Health:\"x\"}");
     assert_eq!(get_f64(&input, "Health"), None);
 }
+
+#[test]
+fn read_map_reports_a_failure_to_decode_from_map() {
+    let report = report_of(
+        PathElement::Empty,
+        |input| {
+            let decoded = read_map(input, crate::world::entity::player::abilities::Abilities::decode);
+            assert!(decoded.is_some());
+        },
+        "{flySpeed:\"x\",walkSpeed:0.5f}",
+    );
+    assert_eq!(report, ": Failed to decode from map: Not a number");
+}
+
+#[test]
+fn child_enters_a_field_scope_only_for_compounds() {
+    let report = report_of(
+        PathElement::Text("root".into()),
+        |input| {
+            let (tag, scope) = child(input, "inner").expect("compound child");
+            get_f64(tag, "Health");
+            drop(scope);
+            assert!(child(input, "text").is_none());
+        },
+        "{inner:{Health:\"x\"},text:\"y\"}",
+    );
+    assert_eq!(report, "root:\n  .inner: Expected field 'Health' to contain number, but got STRING\n  Expected field 'text' to contain value of type COMPOUND, but got STRING");
+}

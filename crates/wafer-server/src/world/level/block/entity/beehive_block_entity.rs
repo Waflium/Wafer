@@ -95,7 +95,10 @@ impl Occupant {
     pub fn create_entity(&self, level: &mut ServerLevel, hive_pos: BlockPos) -> Option<LevelEntity> {
         let Nbt::Compound(mut entity_tag) = self.entity_data.clone() else { return None };
         entity_tag.retain(|(key, _)| !IGNORED_BEE_TAGS.contains(&key.as_str()));
-        let mut entity = level.load_entity(&Nbt::Compound(entity_tag))?;
+        let collector = tag_value_input::ScopedCollector::new_empty("net.minecraft.world.entity.EntityType");
+        let entity = level.load_entity(&Nbt::Compound(entity_tag));
+        drop(collector);
+        let mut entity = entity?;
         if !entity_type_tags::BEEHIVE_INHABITORS.contains(entity.entity().entity_type as usize) {
             return None;
         }

@@ -204,7 +204,7 @@ fn color_from_floats(v: &Nbt, alpha: bool) -> Result<Nbt, String> {
     Ok(Nbt::Int(((a << 24) | (channel(get(0)) << 16) | (channel(get(1)) << 8) | channel(get(2))) as i32))
 }
 
-fn vector(size: usize) -> Codec {
+pub fn vector(size: usize) -> Codec {
     Codec::Normalize(Box::new(Codec::list(Codec::float())), if size == 3 { fixed_size_3 } else { fixed_size_4 })
 }
 

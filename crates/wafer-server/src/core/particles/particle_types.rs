@@ -212,6 +212,7 @@ fn block_state_options() -> Pair {
 }
 
 fn network_options(tag: Nbt) -> Result<Nbt, String> {
+    crate::world::item::component::codec::map(&tag)?;
     let ty = tag.get("type").ok_or_else(|| format!("No key type in MapLike[{}]", crate::nbt::to_string(&tag)))?;
     let id = codec::identifier(ty)?;
     let name = wafer_data::registry::PARTICLE_TYPE

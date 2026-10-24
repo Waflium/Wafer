@@ -30,14 +30,11 @@ impl PlayerEnderChestContainer {
         self.active_chest == Some((pos, id))
     }
 
-    pub fn from_slots(&mut self, list: &[Nbt]) {
+    pub fn from_decoded_slots(&mut self, entries: Vec<(usize, ItemStack)>) {
         self.items = vec![ItemStack::empty(); CONTAINER_SIZE];
-        for entry in list {
-            let Some(slot) = entry.get("Slot").and_then(Nbt::as_i64).map(|slot| slot as i8 as i32) else { continue };
-            if let Ok(stack) = ItemStack::from_nbt(entry)
-                && (0..CONTAINER_SIZE as i32).contains(&slot)
-            {
-                self.items[slot as usize] = stack;
+        for (slot, stack) in entries {
+            if slot < CONTAINER_SIZE {
+                self.items[slot] = stack;
             }
         }
     }

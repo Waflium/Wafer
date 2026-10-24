@@ -92,18 +92,11 @@ fn normalize_environment_attribute_check(condition: Nbt) -> Result<Nbt, String> 
     }
     let attribute = condition.get("attribute").and_then(Nbt::as_str).and_then(EnvironmentAttributeInfo::by_name).expect("a decoded attribute");
     let value = condition.get("value").expect("a decoded value");
+    let decoded = attribute.ty.condition_value_codec().0.decode(value)?;
+    let parsed = attribute.parse_value(&codec::to_json(if attribute.ty == AttributeType::MobSpawnSettings { &decoded } else { value }))?;
     let encoded = match attribute.ty {
-        AttributeType::Boolean
-        | AttributeType::Float
-        | AttributeType::AngleDegrees
-        | AttributeType::RgbColor
-        | AttributeType::ArgbColor
-        | AttributeType::MoonPhase
-        | AttributeType::Particle
-        | AttributeType::AmbientParticles
-        | AttributeType::BackgroundMusic
-        | AttributeType::AmbientSounds => attribute.ty.encode_value(&attribute.parse_value(&codec::to_json(value))?)?,
-        _ => value.clone(),
+        AttributeType::RgbColor | AttributeType::ArgbColor => attribute.ty.encode_value(&parsed)?,
+        _ => decoded,
     };
     let Nbt::Compound(fields) = condition else { unreachable!("a condition is a compound") };
     Ok(Nbt::Compound(fields.into_iter().map(|(key, field)| if key == "value" { (key, encoded.clone()) } else { (key, field) }).collect()))

@@ -6,15 +6,18 @@ use wafer_protocol::nbt::Nbt;
 use super::spawn_data::SpawnData;
 use crate::server::level::ServerLevel;
 use crate::server::level::events;
+use crate::util::problem_reporter::PathElement;
 use crate::util::random::WeightedList;
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::entity_type::EntityType;
+use crate::world::item::component::codec::Codec;
 use crate::world::entity::{LevelEntity, mob, spawn_placements};
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::storage::tag_value_input;
 
+const BASE_SPAWNER_LOGGER: &str = "net.minecraft.world.level.BaseSpawner";
 pub const SPAWN_DATA_TAG: &str = "SpawnData";
 const EVENT_SPAWN: i32 = 1;
 const DEFAULT_SPAWN_DELAY: i32 = 20;
@@ -61,14 +64,12 @@ fn short_value(tag: &Nbt) -> Option<i32> {
 }
 
 pub fn read_spawn_pos(entity_tag: &Nbt) -> Option<Vec3> {
-    match entity_tag.get("Pos").map(crate::util::codec::list)?.ok()?[..] {
-        [ref x, ref y, ref z] => Some(Vec3::new(crate::util::codec::double(x).ok()?, crate::util::codec::double(y).ok()?, crate::util::codec::double(z).ok()?)),
-        _ => None,
-    }
+    tag_value_input::read(entity_tag, "Pos", crate::util::extra_codecs::vec3)
 }
 
 pub fn entity_type_by(entity_tag: &Nbt) -> Option<&'static EntityType> {
-    let id = entity_tag.get("id").and_then(Nbt::as_str)?;
+    let id = tag_value_input::read_or_error(entity_tag, "id", |tag| Codec::Element("minecraft:entity_type").decode(tag))?;
+    let id = id.as_str()?;
     EntityType::by_name(id).filter(|_| crate::server::commands::summon_command::MODELLED.contains(&id))
 }
 
@@ -103,6 +104,15 @@ impl BaseSpawner {
         }
     }
 
+    fn problem_path(&self, pos: BlockPos) -> String {
+        let class = if self.entity_owner.is_some() {
+            "net.minecraft.world.entity.vehicle.minecart.MinecartSpawner$1"
+        } else {
+            "net.minecraft.world.level.block.entity.SpawnerBlockEntity$1"
+        };
+        format!("{class}@{:x}", pos.as_long() as u32)
+    }
+
     fn is_near_player(&self, level: &ServerLevel, pos: BlockPos) -> bool {
         level.has_nearby_alive_player(pos.x as f64 + 0.5, pos.y as f64 + 0.5, pos.z as f64 + 0.5, self.required_player_range as f64)
     }
@@ -125,6 +135,7 @@ impl BaseSpawner {
         let next_spawn_data = self.next_spawn_data.as_ref().expect("the next spawn data");
         let entity_tag = next_spawn_data.get_entity_to_spawn();
         for _ in 0..self.spawn_count {
+            let _collector = tag_value_input::ScopedCollector::new(PathElement::Text(self.problem_path(pos)), BASE_SPAWNER_LOGGER);
             let Some(entity_type) = entity_type_by(entity_tag) else {
                 self.delay(level, pos);
                 return;

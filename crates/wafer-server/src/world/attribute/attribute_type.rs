@@ -10,12 +10,78 @@ use crate::core::particles::particle_types;
 use crate::util::argb;
 use crate::util::extra_codecs::hex_color;
 use crate::util::tri_state::TriState;
+use wafer_protocol::{Reader, Writer};
+
+use crate::util::hash_ops::{self, HashCode};
+use crate::util::valueproviders::int_provider_codec;
+use crate::world::item::component::codec::{Codec, Custom, Stream};
 use crate::world::item::component::json_to_nbt;
-use crate::world::item::component::types::Pair;
+use crate::world::item::component::text;
+use crate::world::item::component::types::{self, Pair};
 use crate::world::entity::schedule::Activity;
 use crate::world::level::biome::mob_spawn_settings::MobSpawnSettings;
 use crate::world::level::levelgen::density_function::{float, resource_name};
 use crate::world::level::moon_phase::MoonPhase;
+
+const MOB_CATEGORIES: [&str; 8] = ["monster", "creature", "ambient", "axolotls", "underground_water_creature", "water_creature", "water_ambient", "misc"];
+
+fn check_hex_color<const DIGITS: usize>(value: Nbt) -> Result<Nbt, String> {
+    let string = value.as_str().unwrap_or_default();
+    let Some(hex) = string.strip_prefix('#') else { return Err("Hex color must begin with #".to_string()) };
+    let digits = hex.encode_utf16().count();
+    if digits != DIGITS {
+        return Err(format!("Hex color is wrong size, expected {DIGITS} digits but got {digits}"));
+    }
+    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("Invalid color value: {string}"));
+    }
+    Ok(value)
+}
+
+fn string_color_codec<const DIGITS: usize>(components: usize) -> Pair {
+    let hex = Codec::Normalize(Box::new(Codec::string()), check_hex_color::<DIGITS>);
+    let numeric = Codec::Either(Box::new(types::vector(components)), Box::new(Codec::int()));
+    (Codec::Either(Box::new(hex), Box::new(numeric)), Stream::Nbt)
+}
+
+struct SpawnDataList(Codec);
+
+impl Custom for SpawnDataList {
+    fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
+        let result = self.0.decode_partial(tag);
+        match (result.value, result.error) {
+            (Some(list), Some(error)) => {
+                if crate::core::data_registries::is_loading() {
+                    error!("Spawn data: {error}");
+                }
+                Ok(list)
+            }
+            (Some(list), None) => Ok(list),
+            (None, error) => Err(error.unwrap_or_default()),
+        }
+    }
+
+    fn hash(&self, value: &Nbt) -> HashCode {
+        hash_ops::hash_nbt(value)
+    }
+
+    fn write(&self, value: &Nbt, w: &mut Writer) -> Result<(), String> {
+        value.write(w);
+        Ok(())
+    }
+
+    fn read(&self, r: &mut Reader) -> Result<Nbt, String> {
+        Nbt::read(r).map_err(|e| e.to_string())
+    }
+}
+
+fn tri_state_value(value: Nbt) -> Result<Nbt, String> {
+    Ok(match value.as_str() {
+        Some("true") => Nbt::Byte(1),
+        Some("false") => Nbt::Byte(0),
+        _ => value,
+    })
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum AttributeType {
@@ -204,6 +270,48 @@ impl AttributeType {
             ),
             (ty, value) => return Err(format!("{ty:?} is not synchronized with {value:?}")),
         })
+    }
+
+    pub fn condition_value_codec(self) -> Pair {
+        match self {
+            AttributeType::Boolean => types::bool(),
+            AttributeType::Particle => particle_types::dispatch_codec(),
+            AttributeType::BackgroundMusic => background_music::codec(),
+            AttributeType::AmbientSounds => ambient_sounds::codec(),
+            AttributeType::AmbientParticles => types::list(types::record(vec![
+                types::req("particle", particle_types::dispatch_codec()),
+                types::req("probability", types::float(types::codec_float_range(0.0, 1.0))),
+            ])),
+            AttributeType::Float | AttributeType::AngleDegrees => (Codec::float(), Stream::Float),
+            AttributeType::MoonPhase => types::enumeration(&["full_moon", "waning_gibbous", "third_quarter", "waning_crescent", "new_moon", "waxing_crescent", "first_quarter", "waxing_gibbous"]),
+            AttributeType::RgbColor => string_color_codec::<6>(3),
+            AttributeType::ArgbColor => string_color_codec::<8>(4),
+            AttributeType::TriState => (Codec::Normalize(Box::new(Codec::Either(Box::new(Codec::Bool), Box::new(Codec::Enum(&["true", "false", "default"])))), tri_state_value), Stream::Nbt),
+            AttributeType::Integer => (Codec::int(), Stream::Int),
+            AttributeType::Activity => types::by_name("minecraft:activity"),
+            AttributeType::BedRule => types::record(vec![
+                types::req("can_sleep", types::enumeration(&["always", "when_dark", "never"])),
+                types::req("can_set_spawn", types::enumeration(&["always", "when_dark", "never"])),
+                types::def("destroy_on_use", types::bool(), types::b(false)),
+                types::def("destroy_on_leave", types::bool(), types::b(false)),
+                types::opt("error_message", text::text()),
+            ]),
+            AttributeType::MobSpawnSettings => {
+                let spawner = types::record(vec![
+                    types::req("type", types::by_name("minecraft:entity_type")),
+                    types::req("count", int_provider_codec()),
+                    types::req("weight", types::var_int(types::non_negative_int())),
+                ]);
+                let cost = types::record(vec![types::req("energy_budget", (Codec::Double, Stream::Double)), types::req("charge", (Codec::Double, Stream::Double))]);
+                types::record(vec![
+                    types::req(
+                        "spawns_by_category",
+                        (Codec::Map(Box::new(Codec::Enum(&MOB_CATEGORIES)), Box::new(Codec::Custom(Box::new(SpawnDataList(Codec::list(spawner.0)))))), Stream::Nbt),
+                    ),
+                    types::req("spawn_costs", (Codec::Map(Box::new(types::by_name("minecraft:entity_type").0), Box::new(cost.0)), Stream::Nbt)),
+                ])
+            }
+        }
     }
 
     pub fn to_float(self, value: &Value) -> Option<f32> {

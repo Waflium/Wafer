@@ -385,6 +385,7 @@ pub fn to_json(tag: &Nbt) -> serde_json::Value {
     use serde_json::Value;
     match tag {
         Nbt::End => Value::Null,
+        Nbt::Byte(v) if crate::nbt::is_json_source() => Value::Bool(*v != 0),
         Nbt::Byte(v) => Value::from(*v),
         Nbt::Short(v) => Value::from(*v),
         Nbt::Int(v) => Value::from(*v),

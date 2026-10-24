@@ -13,7 +13,10 @@ impl AttributeRange {
 
     pub fn validate(self, value: &Value) -> Result<(), String> {
         match (self, value) {
-            (AttributeRange::Float(min, max), Value::Float(v)) if !(*v >= min && *v <= max) => Err(format!("{v} is not in range [{min}; {max}]")),
+            (AttributeRange::Float(min, max), Value::Float(v)) if !(*v >= min && *v <= max) => {
+                let java = crate::nbt::java_float_to_string;
+                Err(format!("{} is not in range [{}; {}]", java(*v), java(min), java(max)))
+            }
             _ => Ok(()),
         }
     }

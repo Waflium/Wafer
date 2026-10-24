@@ -6,6 +6,7 @@ use crate::server::level::ServerLevel;
 use crate::world::damagesource::DamageSource;
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::EntityId;
+use crate::world::level::block::entity::{float_or, int_or};
 
 pub mod constants {
     pub const MAX_FOOD: i32 = 20;
@@ -59,8 +60,8 @@ impl FoodData {
     }
 
     pub fn load(nbt: &Nbt) -> FoodData {
-        let int = |key: &str, default: i32| nbt.get(key).and_then(Nbt::as_i64).map_or(default, |v| v as i32);
-        let float = |key: &str, default: f32| nbt.get(key).and_then(Nbt::as_f64).map_or(default, |v| v as f32);
+        let int = |key: &str, default: i32| int_or(nbt, key, default);
+        let float = |key: &str, default: f32| float_or(nbt, key, default);
         FoodData {
             food_level: int("foodLevel", 20),
             tick_timer: int("foodTickTimer", 0),

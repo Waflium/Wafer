@@ -120,6 +120,14 @@ pub fn read<T>(input: &Nbt, name: &str, decode: impl FnOnce(&Nbt) -> DecodeResul
     result.value
 }
 
+pub fn read_map<T>(input: &Nbt, decode: impl FnOnce(&Nbt) -> DecodeResult<T>) -> Option<T> {
+    let result = codec::with_nbt_ops(|| decode(input));
+    if let Some(message) = &result.error {
+        report(|| Problem::new(format!("Failed to decode from map: {message}")));
+    }
+    result.value
+}
+
 pub fn read_or_error<T>(input: &Nbt, name: &str, decode: impl FnOnce(&Nbt) -> Result<T, String>) -> Option<T> {
     let tag = input.get(name)?;
     match codec::with_nbt_ops(|| decode(tag)) {
@@ -180,6 +188,11 @@ pub fn get_int_array<'a>(input: &'a Nbt, name: &str) -> Option<&'a [i32]> {
         Nbt::IntArray(values) => Some(values),
         _ => None,
     }
+}
+
+pub fn child<'a>(input: &'a Nbt, name: &str) -> Option<(&'a Nbt, ChildScope)> {
+    let tag = get_optional_typed_tag(input, name, "COMPOUND", |tag| matches!(tag, Nbt::Compound(_)))?;
+    Some((tag, enter_child(PathElement::Field(name.to_string()))))
 }
 
 pub fn children_list<'a>(input: &'a Nbt, name: &str) -> Option<&'a [Nbt]> {

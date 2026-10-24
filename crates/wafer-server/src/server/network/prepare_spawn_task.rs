@@ -5,8 +5,25 @@ use tokio::sync::oneshot;
 use crate::server::Server;
 use crate::server::level::game_mode::GameType;
 use crate::server::level::ticket::TicketType;
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::util::extra_codecs;
+use crate::world::level::storage::tag_value_input;
 
 const SPAWN_RADIUS: i32 = 3;
+pub(crate) const PREPARE_SPAWN_TASK_LOGGER: &str = "net.minecraft.server.network.config.PrepareSpawnTask";
+
+type SavedPosition = (Option<String>, Option<Vec3>, Option<(f32, f32)>);
+
+fn decode_saved_position(tag: &Nbt) -> DecodeResult<SavedPosition> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let mut record = Record::default();
+    let dimension = record.optional(tag, "Dimension", |dimension| DecodeResult::from(codec::identifier(dimension)));
+    let position = record.optional(tag, "Pos", extra_codecs::vec3);
+    let rotation = record.optional(tag, "Rotation", extra_codecs::vec2);
+    record.build(|| Some((dimension, position, rotation)))
+}
 
 pub(crate) struct PrepareSpawnTask {
     pub uuid: u128,
@@ -39,14 +56,8 @@ impl Server {
     }
 
     pub(crate) fn spawn_position(&mut self, saved: Option<&Nbt>) -> (usize, Vec3, f32, f32) {
-        let saved_dimension = saved.and_then(|nbt| nbt.get("Dimension")).and_then(Nbt::as_str);
-        let saved_position = saved.and_then(|nbt| nbt.get("Pos")).map(Nbt::as_list).filter(|p| p.len() == 3).and_then(|p| {
-            Some(Vec3::new(p[0].as_f64()?, p[1].as_f64()?, p[2].as_f64()?))
-        });
-        let saved_rotation = saved.and_then(|nbt| nbt.get("Rotation")).map(Nbt::as_list).filter(|r| r.len() == 2).and_then(|r| {
-            Some((r[0].as_f64()? as f32, r[1].as_f64()? as f32))
-        });
-        let spawn_level = saved_dimension.and_then(|dimension| self.get_level(dimension)).unwrap_or_else(|| self.get_level(&self.spawn.dimension).unwrap_or(0));
+        let (saved_dimension, saved_position, saved_rotation) = saved.and_then(|nbt| tag_value_input::read_map(nbt, decode_saved_position)).unwrap_or_default();
+        let spawn_level = saved_dimension.and_then(|dimension| self.get_level(&dimension)).unwrap_or_else(|| self.get_level(&self.spawn.dimension).unwrap_or(0));
         let adventure = self.default_game_type.get() == GameType::Adventure;
         let spawn_pos = self.spawn.pos;
         let position = saved_position.unwrap_or_else(|| self.levels[spawn_level].find_spawn(spawn_pos, adventure));
@@ -55,6 +66,7 @@ impl Server {
     }
 
     pub(crate) fn start_prepare_spawn(&mut self, uuid: u128, name: &str, reply: oneshot::Sender<()>) {
+        let _collector = tag_value_input::ScopedCollector::new_empty(PREPARE_SPAWN_TASK_LOGGER);
         let saved = self.load_player_data(name, uuid);
         let (level, position, y_rot, x_rot) = self.spawn_position(saved.as_ref());
         self.prepare_spawn_tasks.push(PrepareSpawnTask { uuid, level, position, angle: (y_rot, x_rot), reply: Some(reply), chunk_load_requested: false });

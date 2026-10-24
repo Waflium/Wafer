@@ -16,7 +16,13 @@ use crate::network::chat::{Arg, ChatFormatting, Component};
 use crate::network::configuration::ClientInfo;
 use crate::network::connection::Outbound;
 use crate::network::login::Profile;
+use crate::util::codec::{self, DecodeResult};
+use crate::util::extra_codecs;
+use crate::util::problem_reporter::PathElement;
 use crate::util::tick_throttler::TickThrottler;
+use crate::world::level::block::entity::base_container_block_entity::decode_item_stack_with_slot;
+use crate::world::level::block::entity::int_or;
+use crate::world::level::storage::tag_value_input;
 use super::game_mode::GameType;
 use crate::server::network::chat::ChatState;
 use crate::server::network::chunk_sender::PlayerChunkSender;
@@ -31,26 +37,25 @@ use crate::world::entity::{Entity, EntityDimensions, EntityId, entity_event, fla
 use crate::world::scores::criteria::ObjectiveCriteria;
 use crate::world::scores::score_holder::ScoreHolder;
 use crate::world::scores::team::Visibility;
-use wafer_data::{MobEffect, game_rule};
+use wafer_data::{EquipmentSlot, MobEffect, game_rule};
 use crate::world::inventory::abstract_container_menu::AbstractContainerMenu;
 use crate::world::item::component as dc;
 use crate::world::item::{Inventory, ItemStack, OFFHAND, inventory_slot, map_item, protocol_slot};
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::entity::monster::warden::warden_spawn_tracker::WardenSpawnTracker;
 use crate::world::entity::player::abilities::Abilities;
-use crate::world::level::block::entity::int_value;
 use crate::world::entity::player::player_model_part::PlayerModelPart;
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};
 use crate::world::level::storage::RespawnData;
 use crate::world::InteractionHand;
 use crate::stats::server_stats_counter::ServerStatsCounter;
-use crate::world::waypoints::waypoint::Icon;
 use crate::stats::stat::Stat;
 use crate::stats::stats;
 use crate::stats::stats_counter::StatsCounter;
 use crate::world::food::constants::{EXHAUSTION_SPRINT, EXHAUSTION_SWIM};
 
 pub const DIMENSIONS: EntityDimensions = crate::world::entity::avatar::STANDING_DIMENSIONS;
+const SERVER_PLAYER_LOGGER: &str = "net.minecraft.server.level.ServerPlayer";
 const GAME_EVENT_WIN_GAME: u8 = 4;
 
 const CREATIVE_BLOCK_INTERACTION_RANGE_MODIFIER: AttributeModifier =
@@ -484,62 +489,33 @@ impl ServerPlayer {
 
     pub fn load_nbt(&mut self, nbt: &Nbt) -> Result<(), String> {
         self.entity.load(nbt)?;
-        if let Some(abilities) = nbt.get("abilities") {
-            self.abilities = Abilities::load(abilities);
-        }
-        self.respawn_config = nbt.get("respawn").and_then(|r| {
-            let forced = r.get("forced").and_then(Nbt::as_i64).is_some_and(|f| f != 0);
-            Some(RespawnConfig { respawn_data: RespawnData::from_nbt(r)?, forced })
-        });
-        self.warden_spawn_tracker = nbt.get("warden_spawn_tracker").and_then(WardenSpawnTracker::from_nbt).unwrap_or_default();
-        let number = |key: &str| nbt.get(key).and_then(Nbt::as_f64);
-        self.entered_nether_position = nbt.get("entered_nether_pos").map(Nbt::as_list).filter(|p| p.len() == 3).and_then(|p| {
-            Some(Vec3::new(p[0].as_f64()?, p[1].as_f64()?, p[2].as_f64()?))
-        });
-        self.current_explosion_impact_pos = nbt.get("last_explosion_impact_pos").map(Nbt::as_list).filter(|p| p.len() == 3).and_then(|p| {
-            Some(Vec3::new(p[0].as_f64()?, p[1].as_f64()?, p[2].as_f64()?))
-        });
-        self.seen_credits = number("seenCredits").is_some_and(|v| v != 0.0);
-        self.spawn_extra_particles_on_fall = nbt.get("spawn_extra_particles_on_fall").and_then(int_value).is_some_and(|v| v as i8 != 0);
-        self.raid_omen_position = match nbt.get("raid_omen_position") {
-            Some(Nbt::IntArray(p)) if p.len() == 3 => Some(BlockPos::new(p[0], p[1], p[2])),
-            _ => None,
-        };
-        if let Some(post_effects) = nbt.get("post_effects").and_then(|list| {
-            list.as_list().iter().map(|p| p.as_str().and_then(crate::commands::arguments::parse_identifier)).collect::<Option<Vec<String>>>()
-        }) {
-            self.post_effects.extend(post_effects);
-        }
-        let compound = |key: &str| nbt.get(key).filter(|tag| matches!(tag, Nbt::Compound(_))).cloned().unwrap_or(Nbt::Compound(Vec::new()));
-        self.set_shoulder_entity_left(compound("ShoulderEntityLeft"));
-        self.set_shoulder_entity_right(compound("ShoulderEntityRight"));
-        if let Some(attributes) = nbt.get("attributes") {
-            self.living.attributes.load(attributes);
-        }
-        self.living.active_effects.clear();
-        for effect in nbt.get("active_effects").map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(MobEffectInstance::from_nbt) {
-            match self.living.active_effects.binary_search_by_key(&effect.effect, |e| e.effect) {
-                Ok(index) => self.living.active_effects[index] = effect,
-                Err(index) => self.living.active_effects.insert(index, effect),
+        let mut health = 0.0;
+        let mut absorption = 0.0;
+        let mut equipment: [Option<ItemStack>; 8] = Default::default();
+        crate::world::entity::living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut health, &mut absorption, &mut equipment, nbt);
+        self.health = health;
+        self.entity.data.set(ids::PLAYER_ABSORPTION, DataValue::Float(absorption));
+        for (slot, index) in [(EquipmentSlot::Offhand, OFFHAND), (EquipmentSlot::Feet, 8), (EquipmentSlot::Legs, 7), (EquipmentSlot::Chest, 6), (EquipmentSlot::Head, 5)] {
+            if let Some(stack) = equipment[slot as usize].take() {
+                self.inventory.slots[index] = Some(stack);
             }
-            self.living.effects_dirty = true;
         }
-        let max_health = self.living.attributes.value(Attribute::MaxHealth) as f32;
-        self.health = mth::clamp_f(number("Health").map_or(max_health, |v| v as f32), 0.0, max_health);
-        self.entity.data.set(ids::HEALTH, DataValue::Float(self.health));
+        for (slot, stack) in tag_value_input::list_or_empty(nbt, "Inventory", decode_item_stack_with_slot) {
+            if let Some(slot) = protocol_slot(slot as u8 as i8) {
+                self.inventory.slots[slot] = Some(stack);
+            }
+        }
+        self.inventory.selected = (int_or(nbt, "SelectedItemSlot", 0).max(0) as usize).min(8);
+        self.sleep_counter = tag_value_input::get_i64(nbt, "SleepTimer").map_or(0, |v| v as i16 as i32);
+        self.experience.load(nbt, &mut self.entity.random);
+        self.set_score(int_or(nbt, "Score", 0));
         self.food_data = crate::world::food::FoodData::load(nbt);
+        if let Some(abilities) = tag_value_input::read(nbt, "abilities", Abilities::decode) {
+            self.abilities = abilities;
+        }
         let walking_speed = self.abilities.walking_speed as f64;
         self.living.attributes.instance(Attribute::MovementSpeed).expect("players have movement speed").set_base_value(walking_speed);
-        self.living.hurt_time = number("HurtTime").map_or(0, |v| v as i32);
-        self.living.death_time = number("DeathTime").map_or(0, |v| v as i32);
-        self.entity.set_shared_flag(flags::FALL_FLYING, number("FallFlying").is_some_and(|v| v != 0.0));
-        self.living.last_hurt_by_player = nbt.get("last_hurt_by_player").and_then(crate::world::entity::entity_save::uuid_from_nbt);
-        self.living.last_hurt_by_player_memory_time = number("last_hurt_by_player_memory_time").map_or(0, |v| v as i32);
-        self.living.last_hurt_by_mob = nbt.get("last_hurt_by_mob").and_then(crate::world::entity::entity_save::uuid_from_nbt);
-        self.living.last_hurt_by_mob_timestamp = self.entity.tick_count - number("ticks_since_last_hurt_by_mob").map_or(0, |v| v as i32);
-        self.living.current_impulse_context_reset_grace_time = number("current_impulse_context_reset_grace_time").map_or(0, |v| v as i32);
-        self.living.current_impulse_impact_pos = nbt.get("current_explosion_impact_pos").map(Nbt::as_list).filter(|p| p.len() == 3).and_then(|p| Some(Vec3::new(p[0].as_f64()?, p[1].as_f64()?, p[2].as_f64()?)));
-        self.entity.data.set(ids::PLAYER_ABSORPTION, DataValue::Float(number("AbsorptionAmount").map_or(0.0, |v| v as f32).max(0.0)));
+        self.ender_chest_inventory.from_decoded_slots(tag_value_input::list_or_empty(nbt, "EnderItems", decode_item_stack_with_slot));
         self.last_death_location = nbt.get("LastDeathLocation").and_then(|l| {
             let dimension = l.get("dimension").and_then(Nbt::as_str)?.to_owned();
             match l.get("pos")? {
@@ -547,28 +523,31 @@ impl ServerPlayer {
                 _ => None,
             }
         });
-        self.inventory.selected = number("SelectedItemSlot").map_or(0, |v| v as usize).min(8);
-        for entry in nbt.get("Inventory").map(Nbt::as_list).unwrap_or(&[]) {
-            let slot = entry.get("Slot").and_then(Nbt::as_i64).and_then(|s| protocol_slot(s as i8));
-            if let (Some(slot), Ok(stack)) = (slot, ItemStack::from_nbt(entry)) {
-                self.inventory.slots[slot] = Some(stack);
-            }
-        }
-        if let Some(equipment) = nbt.get("equipment") {
-            for (name, slot) in [("offhand", OFFHAND), ("feet", 8), ("legs", 7), ("chest", 6), ("head", 5)] {
-                if let Some(Ok(stack)) = equipment.get(name).map(ItemStack::from_nbt) {
-                    self.inventory.slots[slot] = Some(stack);
-                }
-            }
-        }
-        self.living.locator_bar_icon = nbt.get("locator_bar_icon").and_then(Icon::from_nbt).unwrap_or_default();
-        self.ender_chest_inventory.from_slots(nbt.get("EnderItems").map(Nbt::as_list).unwrap_or(&[]));
+        self.warden_spawn_tracker = nbt.get("warden_spawn_tracker").and_then(WardenSpawnTracker::from_nbt).unwrap_or_default();
+        self.entered_nether_position = tag_value_input::read(nbt, "entered_nether_pos", extra_codecs::vec3);
+        self.current_explosion_impact_pos = tag_value_input::read(nbt, "last_explosion_impact_pos", extra_codecs::vec3);
+        self.seen_credits = tag_value_input::get_boolean(nbt, "seenCredits").unwrap_or(false);
         if let Some(recipe_book) = nbt.get(crate::stats::server_recipe_book::RECIPE_BOOK_TAG) {
             self.recipe_book.load_untrusted(recipe_book);
         }
-        self.experience.load(nbt, &mut self.entity.random);
-        self.set_score(nbt.get("Score").and_then(crate::world::level::block::entity::int_value).unwrap_or(0));
-        self.sleep_counter = number("SleepTimer").map_or(0, |v| v as i16 as i32);
+        self.respawn_config = nbt.get("respawn").and_then(|r| {
+            let forced = r.get("forced").and_then(Nbt::as_i64).is_some_and(|f| f != 0);
+            Some(RespawnConfig { respawn_data: RespawnData::from_nbt(r)?, forced })
+        });
+        self.spawn_extra_particles_on_fall = tag_value_input::get_boolean(nbt, "spawn_extra_particles_on_fall").unwrap_or(false);
+        self.raid_omen_position = tag_value_input::read(nbt, "raid_omen_position", extra_codecs::block_pos);
+        if let Some(post_effects) = tag_value_input::read(nbt, "post_effects", |tag| codec::list_partial(tag, |effect| DecodeResult::from(codec::identifier(effect)))) {
+            self.post_effects.extend(post_effects);
+        }
+        let compound = |key: &str| {
+            tag_value_input::read_or_error(nbt, key, |tag| match tag {
+                Nbt::Compound(_) => Ok(tag.clone()),
+                other => Err(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
+            })
+            .unwrap_or(Nbt::Compound(Vec::new()))
+        };
+        self.set_shoulder_entity_left(compound("ShoulderEntityLeft"));
+        self.set_shoulder_entity_right(compound("ShoulderEntityRight"));
         let p = self.entity.position();
         self.last_section_pos = (mth::floor(p.x) >> 4, mth::floor(p.y) >> 4, mth::floor(p.z) >> 4);
         Ok(())
@@ -742,9 +721,11 @@ impl ServerLevel {
     }
 
     pub fn load_and_spawn_parent_vehicle(&mut self, id: EntityId, player_input: &Nbt) {
-        let Some(root_tag) = player_input.get("RootVehicle") else { return };
-        let entity_tag = root_tag.get("Entity").cloned().unwrap_or(Nbt::Compound(Vec::new()));
-        let loaded = self.load_entity_recursive(&entity_tag, &mut |_| {});
+        let Some((root_tag, _root_scope)) = tag_value_input::child(player_input, "RootVehicle") else { return };
+        let loaded = match tag_value_input::child(root_tag, "Entity") {
+            Some((entity_tag, _entity_scope)) => self.load_entity_recursive_in_scope(entity_tag, &mut |_| {}),
+            None => Vec::new(),
+        };
         let mut added = Vec::new();
         for entity in loaded {
             let entity_id = entity.entity().id;
@@ -753,7 +734,7 @@ impl ServerLevel {
             }
         }
         let Some(&vehicle) = added.first() else { return };
-        let attach_to = root_tag.get("Attach").and_then(crate::world::entity::entity_save::uuid_from_nbt);
+        let attach_to = tag_value_input::read(root_tag, "Attach", crate::world::entity::entity_save::decode_uuid);
         if attach_to == Some(self.entity(vehicle).uuid) {
             self.start_riding(id, vehicle, true, false);
         } else {
@@ -997,7 +978,11 @@ impl ServerLevel {
         if is_empty_compound(tag) {
             return;
         }
-        let Some(mut entity) = self.load_entity(tag) else { return };
+        let _collector = crate::world::level::storage::tag_value_input::ScopedCollector::new(PathElement::Text(self.entity_to_string(id)), SERVER_PLAYER_LOGGER);
+        let child = crate::world::level::storage::tag_value_input::enter_child(PathElement::Text(".shoulder".to_string()));
+        let loaded = self.load_entity(tag);
+        drop(child);
+        let Some(mut entity) = loaded else { return };
         let e = self.entity(id);
         let (x, y, z, uuid) = (e.x(), e.y(), e.z(), e.uuid);
         if let crate::world::entity::LevelEntity::Mob(mob) = &mut entity

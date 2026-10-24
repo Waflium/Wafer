@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult};
-use crate::world::attribute::Value;
+use crate::world::attribute::{AttributeType, Value};
 use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
@@ -15,7 +15,10 @@ impl EnvironmentAttributeCheck {
     pub fn decode(tag: &Nbt) -> DataResult<EnvironmentAttributeCheck> {
         let name = codec::decode_field(tag, "attribute", codec::identifier)?;
         let attribute = EnvironmentAttributeInfo::by_name(&name).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:environment_attribute]: {name}"))?;
-        let value = codec::decode_field(tag, "value", |t| attribute.parse_value(&codec::to_json(t)))?;
+        let value = codec::decode_field(tag, "value", |t| {
+            let decoded = attribute.ty.condition_value_codec().0.decode(t)?;
+            attribute.parse_value(&codec::to_json(if attribute.ty == AttributeType::MobSpawnSettings { &decoded } else { t }))
+        })?;
         Ok(EnvironmentAttributeCheck { attribute, value })
     }
 
