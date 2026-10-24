@@ -87,6 +87,7 @@ pub fn report(problem: impl FnOnce() -> Problem) {
 
 pub fn type_name(tag: &Nbt) -> &'static str {
     match tag {
+        Nbt::End => "END",
         Nbt::Byte(_) => "BYTE",
         Nbt::Short(_) => "SHORT",
         Nbt::Int(_) => "INT",

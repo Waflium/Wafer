@@ -62,11 +62,10 @@ pub fn to_full(tag: &Nbt) -> Result<Nbt, String> {
 }
 
 fn decode(tag: Nbt) -> Result<Nbt, String> {
-    let state = match &tag {
-        Nbt::String(_) => decode_block(&tag)?,
-        other => decode_state(other)?,
-    };
-    Ok(encode(state))
+    match decode_block(&tag) {
+        Ok(state) => Ok(encode(state)),
+        Err(first) => decode_state(&tag).map(encode).map_err(|second| format!("Failed to parse either. First: {first}; Second: {second}")),
+    }
 }
 
 pub fn codec() -> Pair {

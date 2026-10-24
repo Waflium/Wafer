@@ -40,6 +40,7 @@ pub fn suggest_function(server: &Server, _context: &CommandContext, _source: &Co
 
 fn type_name(tag: &Nbt) -> &'static str {
     match tag {
+        Nbt::End => "END",
         Nbt::Byte(_) => "BYTE",
         Nbt::Short(_) => "SHORT",
         Nbt::Int(_) => "INT",

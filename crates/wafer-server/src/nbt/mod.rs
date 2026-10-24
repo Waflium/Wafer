@@ -104,6 +104,7 @@ pub fn to_string(tag: &Nbt) -> String {
 
 fn write_json(tag: &Nbt, out: &mut String) {
     match tag {
+        Nbt::End => out.push_str("null"),
         Nbt::String(s) => out.push_str(&serde_json::to_string(s).expect("string")),
         Nbt::Byte(v) => out.push_str(if *v != 0 { "true" } else { "false" }),
         Nbt::Short(v) => out.push_str(&v.to_string()),
@@ -140,6 +141,7 @@ fn write_json(tag: &Nbt, out: &mut String) {
 fn write(tag: &Nbt, out: &mut String) {
     let join = |out: &mut String, items: Vec<String>| out.push_str(&items.join(","));
     match tag {
+        Nbt::End => out.push_str("END"),
         Nbt::String(s) => quote_and_escape(s, out),
         Nbt::Byte(v) => out.push_str(&format!("{v}b")),
         Nbt::Short(v) => out.push_str(&format!("{v}s")),

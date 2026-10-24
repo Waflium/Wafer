@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record, either_result};
 use crate::world::item::component::types::{self, Pair};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -31,22 +31,45 @@ impl InclusiveRange {
     }
 
     pub fn decode_int(tag: &Nbt) -> DataResult<InclusiveRange> {
-        if let Ok(min) = codec::int(tag) {
-            return InclusiveRange::create(min, min);
-        }
-        let array = codec::list_of(tag, codec::int).and_then(|list| match list[..] {
-            [min, max] => InclusiveRange::create(min, max),
-            _ => Err(format!("Input is not a list of 2 elements: {list:?}")),
-        });
-        array.or_else(|array_error| {
-            let min = codec::decode_field(tag, "min_inclusive", codec::int).map_err(|_| array_error.clone())?;
-            let max = codec::decode_field(tag, "max_inclusive", codec::int).map_err(|_| array_error)?;
-            InclusiveRange::create(min, max)
-        })
+        let array = || {
+            codec::list_partial(tag, |element| DecodeResult::from(codec::int(element))).flat_map(|list| {
+                let fixed = match list.len() {
+                    2 => DecodeResult::success(list),
+                    size if size > 2 => DecodeResult { value: Some(list[..2].to_vec()), error: Some("Input is not a list of 2 elements".to_string()) },
+                    _ => DecodeResult::error("Input is not a list of 2 elements"),
+                };
+                fixed.flat_map(|list| DecodeResult::from(InclusiveRange::create(list[0], list[1])))
+            })
+        };
+        let object = || match codec::map(tag) {
+            Err(error) => DecodeResult::error(error),
+            Ok(_) => {
+                let mut record = Record::default();
+                let min = record.required(tag, "min_inclusive", codec::int);
+                let max = record.required(tag, "max_inclusive", codec::int);
+                record.build(|| Some((min?, max?))).flat_map(|(min, max)| DecodeResult::from(InclusiveRange::create(min, max)))
+            }
+        };
+        let array_or_object = || either_result(array(), object).map(|either| either.unwrap_or_else(|range| range));
+        either_result(DecodeResult::from(codec::int(tag)), array_or_object)
+            .flat_map(|either| match either {
+                Ok(min) => DecodeResult::from(InclusiveRange::create(min, min)),
+                Err(range) => DecodeResult::success(range),
+            })
+            .into_result()
     }
 
-    pub fn int_codec() -> Pair {
-        types::transform(|tag| InclusiveRange::decode_int(&tag).map(|range| range.encode_int()))
+    pub fn int_codec_in<const MIN: i32, const MAX: i32>() -> Pair {
+        types::transform(|tag| {
+            let range = InclusiveRange::decode_int(&tag)?;
+            if range.min_inclusive < MIN {
+                return Err(format!("Range limit too low, expected at least {MIN} [{}-{}]", range.min_inclusive, range.max_inclusive));
+            }
+            if range.max_inclusive > MAX {
+                return Err(format!("Range limit too high, expected at most {MAX} [{}-{}]", range.min_inclusive, range.max_inclusive));
+            }
+            Ok(range.encode_int())
+        })
     }
 
     pub fn encode_int(&self) -> Nbt {

@@ -1,6 +1,5 @@
 use serde_json::{Map, Value};
 
-use crate::commands::arguments::java_uuid_from_string;
 use crate::world::level::storage::format_uuid;
 
 pub type DecodeResult<T> = Result<T, Vec<String>>;
@@ -93,10 +92,7 @@ impl<'a> Fields<'a> {
 
 pub fn uuid(value: &Value) -> DecodeResult<u128> {
     let s = string(value)?;
-    java_uuid_from_string(&s).ok_or_else(|| {
-        let reason = if s.len() > 36 { "UUID string too large".to_string() } else { format!("Invalid UUID string: {s}") };
-        vec![format!("Invalid UUID {s}: {reason}")]
-    })
+    crate::util::java_uuid::from_string(&s).map_err(|reason| vec![format!("Invalid UUID {s}: {reason}")])
 }
 
 pub fn encode_uuid(id: u128) -> Value {

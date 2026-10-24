@@ -384,6 +384,7 @@ pub fn string_enum<T: Copy>(tag: &Nbt, values: &[(&str, T)]) -> DataResult<T> {
 pub fn to_json(tag: &Nbt) -> serde_json::Value {
     use serde_json::Value;
     match tag {
+        Nbt::End => Value::Null,
         Nbt::Byte(v) => Value::from(*v),
         Nbt::Short(v) => Value::from(*v),
         Nbt::Int(v) => Value::from(*v),
@@ -403,14 +404,14 @@ pub fn unbounded_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value
     map(tag)?.iter().map(|(k, v)| Ok((key(k)?, value(v)?))).collect()
 }
 
-fn map_entry_order(fields: &[(String, Nbt)]) -> Vec<usize> {
+pub(crate) fn map_entry_order(fields: &[(String, Nbt)]) -> Vec<usize> {
     if crate::nbt::is_json_source() {
         return (0..fields.len()).collect();
     }
     wafer_protocol::nbt::java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>())
 }
 
-fn map_entry_failures(errors: Vec<String>, failed: Vec<(String, Nbt)>) -> String {
+pub(crate) fn map_entry_failures(errors: Vec<String>, failed: Vec<(String, Nbt)>) -> String {
     let messages: Vec<String> = errors.into_iter().rev().collect();
     format!("{} missed input: {}", messages.join("; "), crate::nbt::to_string(&Nbt::Compound(failed)))
 }

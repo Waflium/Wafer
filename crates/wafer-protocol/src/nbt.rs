@@ -2,6 +2,7 @@ use crate::{DecodeError, Reader, Writer};
 
 #[derive(Clone, Debug)]
 pub enum Nbt {
+    End,
     Byte(i8),
     Short(i16),
     Int(i32),
@@ -27,6 +28,7 @@ pub fn double_tag_value(v: f64) -> f64 {
 impl PartialEq for Nbt {
     fn eq(&self, other: &Nbt) -> bool {
         match (self, other) {
+            (Nbt::End, Nbt::End) => true,
             (Nbt::Byte(a), Nbt::Byte(b)) => a == b,
             (Nbt::Short(a), Nbt::Short(b)) => a == b,
             (Nbt::Int(a), Nbt::Int(b)) => a == b,
@@ -47,6 +49,7 @@ impl PartialEq for Nbt {
 impl Nbt {
     fn tag_id(&self) -> u8 {
         match self {
+            Nbt::End => 0,
             Nbt::Byte(_) => 1,
             Nbt::Short(_) => 2,
             Nbt::Int(_) => 3,
@@ -81,7 +84,7 @@ impl Nbt {
 
     pub fn get(&self, key: &str) -> Option<&Nbt> {
         match self {
-            Nbt::Compound(fields) => fields.iter().find(|(k, _)| k == key).map(|(_, v)| v),
+            Nbt::Compound(fields) => fields.iter().find(|(k, v)| k == key && !matches!(v, Nbt::End)).map(|(_, v)| v),
             _ => None,
         }
     }
@@ -125,6 +128,7 @@ impl Nbt {
 
     fn write_payload(&self, w: &mut Writer) {
         match self {
+            Nbt::End => {}
             Nbt::Byte(v) => w.u8(*v as u8),
             Nbt::Short(v) => w.bytes(&v.to_be_bytes()),
             Nbt::Int(v) => w.bytes(&v.to_be_bytes()),

@@ -46,18 +46,18 @@ pub fn direct_codec() -> Pair {
     let noise = || vec![req("seed", (Codec::long(), Stream::Long)), req("noise", parameters_codec()), req("scale", types::float(types::positive_float()))];
     let noise_provider = || {
         let mut fields = noise();
-        fields.push(req("states", types::list(block_state::codec())));
+        fields.push(req("states", types::non_empty_list(block_state::codec())));
         fields
     };
-    let mut dual_noise = vec![req("variety", InclusiveRange::int_codec()), req("slow_noise", parameters_codec()), req("slow_scale", types::float(types::positive_float()))];
+    let mut dual_noise = vec![req("variety", InclusiveRange::int_codec_in::<1, 64>()), req("slow_noise", parameters_codec()), req("slow_scale", types::float(types::positive_float()))];
     dual_noise.extend(noise_provider());
     let mut noise_threshold = noise();
     noise_threshold.extend([
         req("threshold", types::float(types::codec_float_range(-1.0, 1.0))),
         req("high_chance", types::float(types::codec_float_range(0.0, 1.0))),
         req("default_state", block_state::codec()),
-        req("low_states", types::list(block_state::codec())),
-        req("high_states", types::list(block_state::codec())),
+        req("low_states", types::non_empty_list(block_state::codec())),
+        req("high_states", types::non_empty_list(block_state::codec())),
     ]);
     let cases = vec![
         ("minecraft:copy_properties", vec![req("source", provider_holder())]),
@@ -75,13 +75,13 @@ pub fn direct_codec() -> Pair {
             ],
         ),
         ("minecraft:simple", vec![req("state", block_state::codec())]),
-        ("minecraft:weighted", vec![req("entries", types::list(record(vec![req("data", block_state::codec()), req("weight", types::var_int(types::non_negative_int()))])))]),
+        ("minecraft:weighted", vec![req("entries", types::non_empty_weighted_list(record(vec![req("data", block_state::codec()), req("weight", types::var_int(types::non_negative_int()))])))]),
     ];
     let typed = Codec::Normalize(
-        Box::new(Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:block_state_provider_type"), cases }))),
+        Box::new(Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/block_state_provider_type"), cases }))),
         simple_provider_to_full,
     );
-    (Codec::Either(Box::new(block_state::full_codec().0), Box::new(typed)), Stream::Nbt)
+    (Codec::Xor(Box::new(block_state::full_codec().0), Box::new(typed)), Stream::Nbt)
 }
 
 pub enum BlockStateProvider {

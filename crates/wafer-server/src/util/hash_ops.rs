@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 pub type HashCode = u32;
 
+const TAG_EMPTY: u8 = 1;
 const TAG_MAP_START: u8 = 2;
 const TAG_MAP_END: u8 = 3;
 const TAG_LIST_START: u8 = 4;
@@ -176,6 +177,7 @@ pub fn create_long_list(values: &[i64]) -> HashCode {
 
 pub fn hash_nbt(tag: &Nbt) -> HashCode {
     match tag {
+        Nbt::End => hash_bytes(&[TAG_EMPTY]),
         Nbt::Byte(v) => create_byte(*v),
         Nbt::Short(v) => create_short(*v),
         Nbt::Int(v) => create_int(*v),

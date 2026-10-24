@@ -233,13 +233,8 @@ pub fn lenient_uuid() -> Pair {
 
 fn uuid_from_string(value: &Nbt) -> Result<Nbt, String> {
     let s = codec::string(value)?;
-    let parts: Vec<&str> = s.split('-').collect();
-    let parsed = (parts.len() == 5)
-        .then(|| parts.iter().map(|p| u64::from_str_radix(p, 16).ok()).collect::<Option<Vec<u64>>>())
-        .flatten()
-        .ok_or_else(|| format!("Invalid UUID {s}: Invalid UUID string: {s}"))?;
-    let msb = (parsed[0] << 32) | ((parsed[1] & 0xFFFF) << 16) | (parsed[2] & 0xFFFF);
-    let lsb = ((parsed[3] & 0xFFFF) << 48) | (parsed[4] & 0xFFFF_FFFF_FFFF);
+    let uuid = crate::util::java_uuid::from_string(s).map_err(|message| format!("Invalid UUID {s}: {message}"))?;
+    let (msb, lsb) = ((uuid >> 64) as u64, uuid as u64);
     Ok(Nbt::IntArray(vec![(msb >> 32) as i32, msb as i32, (lsb >> 32) as i32, lsb as i32]))
 }
 

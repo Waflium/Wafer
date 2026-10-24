@@ -9,6 +9,7 @@ use crate::commands::arguments::parse_identifier;
 use crate::commands::arguments::selector::entity_selector::EntitySelector;
 use crate::commands::arguments::selector::entity_selector_parser::EntitySelectorParser;
 use crate::util::compilable_string::{CompilableString, command_parser_helper};
+use crate::world::item::component::{DataComponentPatch, custom};
 use crate::world::level::storage::tag_value_input;
 
 struct DataResult<T> {
@@ -130,7 +131,7 @@ fn snbt(tag: &Nbt) -> String {
 }
 
 fn get<'a>(fields: &'a [(String, Nbt)], key: &str) -> Option<&'a Nbt> {
-    fields.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+    fields.iter().find(|(k, v)| k == key && !matches!(v, Nbt::End)).map(|(_, v)| v)
 }
 
 fn no_key(key: &str, fields: &[(String, Nbt)]) -> String {
@@ -319,13 +320,36 @@ fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> DataResult<Conte
             DataResult { value, error }
         }
         "nbt" => decode_nbt_contents(fields),
-        _ => {
-            if get(fields, "object").is_none() && get(fields, "sprite").is_none() && get(fields, "player").is_none() {
-                return DataResult::error(no_key("object", fields));
-            }
-            DataResult::success(Contents::Other(content_fields(fields)))
-        }
+        _ => decode_object_contents(fields),
     }
+}
+
+fn decode_object_contents(fields: &[(String, Nbt)]) -> DataResult<Contents> {
+    let info = create_legacy_component_matcher("object", &["atlas", "player"], fields, |kind, fields| match kind {
+        "atlas" => {
+            let atlas = optional(get(fields, "atlas"), identifier);
+            let sprite = required(fields, "sprite", identifier);
+            let error = record_error(&[&atlas.error, &sprite.error]);
+            DataResult { value: error.is_none().then_some(()), error }
+        }
+        _ => {
+            let player = required(fields, "player", |player| DataResult::from_result(custom::profile().0.decode(player)));
+            let hat = optional(get(fields, "hat"), boolean);
+            let error = record_error(&[&player.error, &hat.error]);
+            DataResult { value: error.is_none().then_some(()), error }
+        }
+    });
+    let fallback = optional(get(fields, "fallback"), decode_component);
+    let error = record_error(&[&info.error, &fallback.error]);
+    let value = match (info.value, fallback.value) {
+        (Some(()), Some(_)) => Some(Contents::Other(content_fields(fields))),
+        _ => None,
+    };
+    DataResult { value, error }
+}
+
+fn identifier(tag: &Nbt) -> DataResult<String> {
+    string(tag).flat_map(|id| DataResult::from_result(crate::resources::identifier::read(&id)))
 }
 
 fn content_fields(fields: &[(String, Nbt)]) -> Vec<(String, Nbt)> {
@@ -481,9 +505,9 @@ fn unknown_registry_key(registry: &str, raw: &str) -> String {
 fn nbt_uuid(tag: &Nbt) -> DataResult<u128> {
     match tag {
         Nbt::IntArray(ints) if ints.len() == 4 => DataResult::success(ints.iter().fold(0u128, |acc, &i| acc << 32 | i as u32 as u128)),
-        Nbt::String(s) => match crate::commands::arguments::java_uuid_from_string(s) {
-            Some(uuid) => DataResult::success(uuid),
-            None => DataResult::error(format!("Invalid UUID {s}")),
+        Nbt::String(s) => match crate::util::java_uuid::from_string(s) {
+            Ok(uuid) => DataResult::success(uuid),
+            Err(message) => DataResult::error(format!("Invalid UUID {s}: {message}")),
         },
         other => DataResult::error(format!("Not an int array: {}", snbt(other))),
     }
@@ -504,9 +528,9 @@ fn json_uuid(tag: &Nbt) -> DataResult<u128> {
             }
             DataResult::success(items.iter().fold(0u128, |acc, item| acc << 32 | int(item).value.unwrap_or(0) as u32 as u128))
         }
-        Nbt::String(s) => match crate::commands::arguments::java_uuid_from_string(s) {
-            Some(uuid) => DataResult::success(uuid),
-            None => either(format!("Not a json array: {}", snbt(tag)), format!("Invalid UUID {s}: Invalid UUID string: {s}")),
+        Nbt::String(s) => match crate::util::java_uuid::from_string(s) {
+            Ok(uuid) => DataResult::success(uuid),
+            Err(message) => either(format!("Not a json array: {}", snbt(tag)), format!("Invalid UUID {s}: {message}")),
         },
         other => either(format!("Not a json array: {}", snbt(other)), format!("Not a string: {}", snbt(other))),
     }
@@ -523,6 +547,7 @@ fn hover_event(tag: &Nbt) -> DataResult<HoverEvent> {
         "show_item" => {
             let id = required(fields, "id", |raw| {
                 string(raw).flat_map(|raw| match parse_identifier(&raw).and_then(|id| registry::ITEM.iter().find(|&&i| i == id)) {
+                    Some(&"minecraft:air") => DataResult::error("Item must not be minecraft:air"),
                     Some(id) => DataResult::success(*id),
                     None => DataResult::error(unknown_registry_key("minecraft:item", &raw)),
                 })
@@ -532,9 +557,11 @@ fn hover_event(tag: &Nbt) -> DataResult<HoverEvent> {
                     if (1..=99).contains(&count) { DataResult::success(count) } else { DataResult::error(format!("Value must be within range [1;99]: {count}")) }
                 })
             });
-            let components = optional(get(fields, "components"), |components| match components {
-                Nbt::Compound(c) => DataResult::success(c.clone()),
-                other => DataResult::error(not_a_map(other)),
+            let components = optional(get(fields, "components"), |components| {
+                DataResult::from_result(DataComponentPatch::from_nbt(components).map(|patch| match patch.to_nbt() {
+                    Nbt::Compound(fields) => fields,
+                    _ => Vec::new(),
+                }))
             });
             let error = record_error(&[&id.error, &count.error, &components.error]);
             let value = match (id.value, count.value, components.value) {

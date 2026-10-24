@@ -36,6 +36,7 @@ fn convert_number(number: &Number) -> Nbt {
 pub fn convert_from_nbt(input: Option<&Nbt>) -> Value {
     let Some(input) = input else { return Value::Null };
     match input {
+        Nbt::End => Value::Null,
         Nbt::Byte(value) => Value::from(*value),
         Nbt::Short(value) => Value::from(*value),
         Nbt::Int(value) => Value::from(*value),
@@ -165,6 +166,7 @@ fn long_value_exact(text: &str) -> Result<Option<i64>, String> {
 
 pub fn convert_nbt_to_element(input: &Nbt) -> JsonElement {
     match input {
+        Nbt::End => JsonElement::Null,
         Nbt::Byte(value) => JsonElement::Number(value.to_string()),
         Nbt::Short(value) => JsonElement::Number(value.to_string()),
         Nbt::Int(value) => JsonElement::Number(value.to_string()),

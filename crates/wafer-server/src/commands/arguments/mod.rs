@@ -585,18 +585,7 @@ fn parse_uuid(reader: &mut StringReader) -> Result<u128, CommandSyntaxException>
 }
 
 pub fn java_uuid_from_string(s: &str) -> Option<u128> {
-    if s.len() > 36 {
-        return None;
-    }
-    let parts: Vec<&str> = s.split('-').collect();
-    if parts.len() != 5 || parts.iter().any(|p| p.is_empty()) {
-        return None;
-    }
-    let parse = |p: &str| i64::from_str_radix(p, 16).ok().map(|v| v as u64);
-    let (a, b, c, d, e) = (parse(parts[0])?, parse(parts[1])?, parse(parts[2])?, parse(parts[3])?, parse(parts[4])?);
-    let most = (a & 0xFFFF_FFFF) << 32 | (b & 0xFFFF) << 16 | (c & 0xFFFF);
-    let least = (d & 0xFFFF) << 48 | (e & 0xFFFF_FFFF_FFFF);
-    Some((most as u128) << 64 | least as u128)
+    crate::util::java_uuid::from_string(s).ok()
 }
 
 static TYPES: LazyLock<Vec<Option<ArgumentType>>> = LazyLock::new(|| {

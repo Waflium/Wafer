@@ -37,7 +37,7 @@ fn block_transform_data_codec() -> Pair {
 }
 
 pub fn direct_codec() -> Pair {
-    types::list_max(block_transform_data_codec(), 200)
+    types::list_sized(block_transform_data_codec(), 1, 200)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

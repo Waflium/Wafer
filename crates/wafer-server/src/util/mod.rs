@@ -19,6 +19,7 @@ pub mod hash_ops;
 pub mod inclusive_range;
 pub mod java_collections;
 pub mod java_nio;
+pub mod java_uuid;
 pub mod keyframe_track;
 pub mod parsing;
 pub mod png_info;

@@ -22,7 +22,7 @@ pub mod values;
 use std::sync::LazyLock;
 
 use wafer_data::{Item, registry};
-use wafer_protocol::nbt::{Nbt, java_hash_map_order};
+use wafer_protocol::nbt::Nbt;
 use wafer_protocol::{Reader, Writer};
 
 use crate::util::hash_ops::HashCode;
@@ -126,7 +126,7 @@ impl DataComponentMap {
 pub fn json_to_nbt(v: &serde_json::Value) -> Nbt {
     use serde_json::Value;
     match v {
-        Value::Null => Nbt::Compound(Vec::new()),
+        Value::Null => Nbt::End,
         Value::Bool(b) => Nbt::Byte(*b as i8),
         Value::Number(n) => match n.as_i64() {
             Some(i) => Nbt::Long(i),
@@ -225,44 +225,29 @@ impl DataComponentPatch {
     }
 
     pub fn from_nbt(tag: &Nbt) -> Result<DataComponentPatch, String> {
-        let fields = codec::map(tag)?;
-        let keys: Vec<&str> = fields.iter().map(|(k, _)| k.as_str()).collect();
+        let entries = crate::util::codec::dispatched_map(
+            tag,
+            |key| {
+                let (removed, name) = match key.strip_prefix('!') {
+                    Some(name) => (true, name),
+                    None => (false, key),
+                };
+                let id = crate::commands::arguments::parse_identifier(name);
+                match id.as_deref().and_then(DataComponentType::by_name) {
+                    Some(ty) if ty.is_transient() => Err(format!("'{}' is not a persistent component", id.unwrap_or_default())),
+                    Some(ty) => Ok((ty, removed)),
+                    None => Err(format!("No component with type: '{}'", id.unwrap_or_else(|| "null".to_string()))),
+                }
+            },
+            |&(ty, removed), value| {
+                if removed { codec::map(value).map(|_| None) } else { ty.decode(value).map(Some) }
+            },
+        )?;
         let mut patch = DataComponentPatch::default();
-        let mut errors = Vec::new();
-        for i in java_hash_map_order(&keys) {
-            let (key, value) = &fields[i];
-            let (removed, name) = match key.strip_prefix('!') {
-                Some(name) => (true, name),
-                None => (false, key.as_str()),
-            };
-            let Some(id) = crate::commands::arguments::parse_identifier(name) else {
-                errors.push(format!("Not a valid resource location: {name}"));
-                continue;
-            };
-            let ty = match DataComponentType::by_name(&id) {
-                Some(ty) if ty.is_transient() => {
-                    errors.push(format!("'{id}' is not a persistent component"));
-                    continue;
-                }
-                Some(ty) => ty,
-                None => {
-                    errors.push(format!("No component with type: '{id}'"));
-                    continue;
-                }
-            };
-            if removed {
-                match codec::map(value) {
-                    Ok(_) => patch.put(ty, None),
-                    Err(e) => errors.push(e),
-                }
-            } else {
-                match ty.decode(value) {
-                    Ok(v) => patch.put(ty, Some(v)),
-                    Err(e) => errors.push(e),
-                }
-            }
+        for ((ty, _), value) in entries {
+            patch.put(ty, value);
         }
-        if errors.is_empty() { Ok(patch) } else { Err(errors.join("; ")) }
+        Ok(patch)
     }
 
     pub fn write(&self, w: &mut Writer, delimited: bool) -> Result<(), String> {

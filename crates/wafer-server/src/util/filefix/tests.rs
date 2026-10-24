@@ -51,6 +51,7 @@ fn canonical(tag: &Nbt, out: &mut String) {
             out.push(']');
         }
         Nbt::String(value) => out.push_str(&quote(value)),
+        Nbt::End => out.push_str("END"),
         Nbt::Byte(value) => out.push_str(&format!("{value}b")),
         Nbt::Short(value) => out.push_str(&format!("{value}s")),
         Nbt::Int(value) => out.push_str(&value.to_string()),

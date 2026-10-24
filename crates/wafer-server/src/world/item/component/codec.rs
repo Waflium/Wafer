@@ -3,6 +3,7 @@ use wafer_protocol::{Reader, Writer};
 
 use crate::commands::arguments::parse_identifier;
 use crate::nbt;
+use crate::util::codec::DecodeResult;
 use crate::util::hash_ops::{self, HashCode};
 
 pub trait Custom: Send + Sync {
@@ -69,11 +70,13 @@ pub enum Codec {
     Lazy(fn() -> &'static (Codec, Stream)),
     Normalize(Box<Codec>, fn(Nbt) -> Result<Nbt, String>),
     List(Box<Codec>, usize, usize),
+    SizedList(Box<Codec>, usize, usize),
     Compact(Box<Codec>),
     Map(Box<Codec>, Box<Codec>),
     Record(Vec<Field>),
     Dispatch(Box<Dispatch>),
     Either(Box<Codec>, Box<Codec>),
+    Xor(Box<Codec>, Box<Codec>),
     Alt(Box<Codec>, Box<Codec>, fn(&Nbt) -> Result<Nbt, String>),
     Compound,
     AnyTag,
@@ -305,7 +308,14 @@ impl Codec {
             Codec::Holder(reg, direct) => match (tag, direct) {
                 (Nbt::String(_), _) => {
                     let id = identifier(tag)?;
-                    if registry(reg).contains(&id.as_str()) { Ok(Nbt::String(id)) } else { Err(format!("Failed to get element {id} from registry {reg}")) }
+                    if registry(reg).contains(&id.as_str()) {
+                        Ok(Nbt::String(id))
+                    } else if !crate::util::codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(reg).is_some() {
+                        crate::core::data_registries::unknown_reference(reg, &id);
+                        Ok(Nbt::String(id))
+                    } else {
+                        Err(format!("Failed to get element {id} from registry {reg}"))
+                    }
                 }
                 (_, Some(direct)) => direct.decode(tag),
                 (_, None) => Err("Not a string".into()),
@@ -319,53 +329,143 @@ impl Codec {
                 let s = string(tag)?;
                 if names.iter().any(|(n, _)| *n == s) { Ok(Nbt::String(s.into())) } else { Err(format!("Unknown element name:{s}")) }
             }
-            Codec::Lazy(pair) => pair().0.decode(tag),
-            Codec::Normalize(inner, f) => f(inner.decode(tag)?),
-            Codec::List(elem, min, max) => {
-                if *min > 1 {
-                    let decoded = list(tag)?.iter().filter(|item| elem.decode(item).is_ok()).count();
-                    if decoded < *min {
-                        return Err(format!("List is too short: {decoded}, expected range [{min}-{max}]"));
-                    }
-                }
-                let out = decode_list(elem, tag)?;
-                if out.len() > *max {
-                    return Err(format!("List is too long: {} > {max}", out.len()));
-                }
-                if out.len() < *min {
-                    return Err("List must have contents".into());
-                }
-                Ok(Nbt::List(out))
-            }
-            Codec::Compact(elem) => match decode_list(elem, tag) {
-                Ok(mut items) if items.len() == 1 => Ok(items.pop().unwrap()),
-                Ok(items) => Ok(Nbt::List(items)),
-                Err(first) => elem.decode(tag).map_err(|second| format!("Failed to parse either. First: {first}; Second: {second}")),
-            },
-            Codec::Map(key, value) => {
-                let fields = map(tag)?;
-                let mut out = Vec::with_capacity(fields.len());
-                let mut errors = Vec::new();
-                for (k, v) in fields {
-                    match (key.decode(&Nbt::String(k.clone())), value.decode(v)) {
-                        (Ok(Nbt::String(k)), Ok(v)) => out.push((k, v)),
-                        (Err(e), _) | (_, Err(e)) => errors.push(e),
-                        (Ok(_), Ok(_)) => errors.push("key is not a string".into()),
-                    }
-                }
-                join(errors)?;
-                Ok(Nbt::Compound(out))
-            }
-            Codec::Record(fields) => decode_record(fields, tag),
-            Codec::Dispatch(d) => decode_dispatch(d, tag),
-            Codec::Either(a, b) => a.decode(tag).or_else(|first| b.decode(tag).map_err(|second| format!("Failed to parse either. First: {first}; Second: {second}"))),
-            Codec::Alt(a, b, convert) => a
-                .decode(tag)
-                .or_else(|first| b.decode(tag).and_then(|v| convert(&v)).map_err(|second| format!("Failed to parse either. First: {first}; Second: {second}"))),
+            Codec::Lazy(_)
+            | Codec::Normalize(..)
+            | Codec::List(..)
+            | Codec::SizedList(..)
+            | Codec::Compact(_)
+            | Codec::Map(..)
+            | Codec::Record(_)
+            | Codec::Dispatch(_)
+            | Codec::Either(..)
+            | Codec::Xor(..)
+            | Codec::Alt(..) => self.decode_partial(tag).into_result(),
             Codec::Compound => map(tag).map(|_| tag.clone()),
             Codec::AnyTag => Ok(tag.clone()),
             Codec::Uuid => decode_uuid(tag),
             Codec::Custom(c) => c.decode(tag),
+        }
+    }
+
+    pub fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
+        match self {
+            Codec::Lazy(pair) => pair().0.decode_partial(tag),
+            Codec::Holder(_, Some(direct)) if !matches!(tag, Nbt::String(_)) => direct.decode_partial(tag),
+            Codec::Normalize(inner, f) => inner.decode_partial(tag).flat_map(|value| DecodeResult::from(f(value))),
+            Codec::List(elem, min, max) => {
+                let items = match list(tag) {
+                    Ok(items) => items,
+                    Err(error) => return DecodeResult::error(error),
+                };
+                let (out, mut errors) = decode_elements(elem, &items);
+                if *min > 1 && out.len() < *min {
+                    return DecodeResult::error(format!("List is too short: {}, expected range [{min}-{max}]", out.len()));
+                }
+                if out.len() > *max {
+                    return DecodeResult::error(format!("List is too long: {} > {max}", out.len()));
+                }
+                errors.reverse();
+                if out.len() < *min {
+                    errors.push("List must have contents".into());
+                    return DecodeResult { value: None, error: Some(errors.join("; ")) };
+                }
+                DecodeResult { value: Some(Nbt::List(out)), error: (!errors.is_empty()).then(|| errors.join("; ")) }
+            }
+            Codec::SizedList(elem, min, max) => {
+                let items = match list(tag) {
+                    Ok(items) => items,
+                    Err(error) => return DecodeResult::error(error),
+                };
+                let (out, mut errors) = decode_elements_up_to(elem, &items, *max);
+                if out.len() < *min {
+                    return DecodeResult::error(format!("List is too short: {}, expected range [{min}-{max}]", out.len()));
+                }
+                if items.len() > *max {
+                    return DecodeResult { value: Some(Nbt::List(out)), error: Some(format!("List is too long: {}, expected range [{min}-{max}]", items.len())) };
+                }
+                errors.reverse();
+                DecodeResult { value: Some(Nbt::List(out)), error: (!errors.is_empty()).then(|| errors.join("; ")) }
+            }
+            Codec::Compact(elem) => {
+                let first = match list(tag) {
+                    Ok(items) => {
+                        let (out, mut errors) = decode_elements(elem, &items);
+                        errors.reverse();
+                        DecodeResult { value: Some(out), error: (!errors.is_empty()).then(|| errors.join("; ")) }
+                    }
+                    Err(error) => DecodeResult::error(error),
+                };
+                crate::util::codec::either_result(first, || elem.decode_partial(tag)).map(|either| match either {
+                    Ok(mut items) if items.len() == 1 => items.pop().unwrap(),
+                    Ok(items) => Nbt::List(items),
+                    Err(single) => single,
+                })
+            }
+            Codec::Map(key, value) => {
+                let fields = match map(tag) {
+                    Ok(fields) => fields,
+                    Err(error) => return DecodeResult::error(error),
+                };
+                let mut out = Vec::with_capacity(fields.len());
+                let mut errors = Vec::new();
+                let mut failed = Vec::new();
+                for i in crate::util::codec::map_entry_order(fields) {
+                    let (k, v) = &fields[i];
+                    let key_result = key.decode_partial(&Nbt::String(k.clone()));
+                    let value_result = value.decode_partial(v);
+                    let entry_error = match (&value_result.error, &key_result.error) {
+                        (Some(value_error), Some(key_error)) => Some(format!("{value_error}; {key_error}")),
+                        (Some(error), None) | (None, Some(error)) => Some(error.clone()),
+                        (None, None) => None,
+                    };
+                    if let (Some(Nbt::String(key)), Some(value)) = (key_result.value, value_result.value) {
+                        out.push((key, value));
+                    }
+                    if let Some(error) = entry_error {
+                        errors.push(error);
+                        failed.push((k.clone(), v.clone()));
+                    }
+                }
+                let error = (!errors.is_empty()).then(|| crate::util::codec::map_entry_failures(errors, failed));
+                DecodeResult { value: Some(Nbt::Compound(out)), error }
+            }
+            Codec::Record(fields) => {
+                let input = match map(tag) {
+                    Ok(input) => input,
+                    Err(error) => return DecodeResult::error(error),
+                };
+                let mut out = Vec::new();
+                let mut errors = Vec::new();
+                let complete = decode_fields(fields, tag, input, &mut out, &mut errors);
+                finish_record(complete.then(|| Nbt::Compound(out)), errors)
+            }
+            Codec::Dispatch(d) => decode_dispatch(d, tag),
+            Codec::Either(a, b) => crate::util::codec::either_result(a.decode_partial(tag), || b.decode_partial(tag)).map(|either| either.unwrap_or_else(|value| value)),
+            Codec::Xor(a, b) => {
+                let first = a.decode_partial(tag);
+                let second = b.decode_partial(tag);
+                match (first.is_success(), second.is_success()) {
+                    (true, true) => {
+                        let message = format!(
+                            "Both alternatives read successfully, can not pick the correct one; first: (Left[{}], {}) second: (Right[{}], {})",
+                            nbt::to_string(first.value.as_ref().unwrap_or(&Nbt::End)),
+                            nbt::to_string(tag),
+                            nbt::to_string(second.value.as_ref().unwrap_or(&Nbt::End)),
+                            nbt::to_string(tag)
+                        );
+                        DecodeResult { value: first.value, error: Some(message) }
+                    }
+                    (true, false) => first,
+                    (false, true) => second,
+                    (false, false) => DecodeResult {
+                        value: first.value.and(second.value),
+                        error: Some(format!("{}; {}", second.error.unwrap_or_default(), first.error.unwrap_or_default())),
+                    },
+                }
+            }
+            Codec::Alt(a, b, convert) => crate::util::codec::either_result(a.decode_partial(tag), || b.decode_partial(tag).flat_map(|value| DecodeResult::from(convert(&value))))
+                .map(|either| either.unwrap_or_else(|value| value)),
+            _ => DecodeResult::from(self.decode(tag)),
         }
     }
 
@@ -374,7 +474,7 @@ impl Codec {
             Codec::Unit => hash_ops::create_map(Vec::new()),
             Codec::Bool => hash_ops::create_boolean(as_i64(value) != 0),
             Codec::Holder(_, Some(direct)) if !matches!(value, Nbt::String(_)) => direct.hash(value),
-            Codec::List(elem, _, _) => hash_ops::create_list(value.as_list().iter().map(|v| elem.hash(v))),
+            Codec::List(elem, _, _) | Codec::SizedList(elem, _, _) => hash_ops::create_list(value.as_list().iter().map(|v| elem.hash(v))),
             Codec::Compact(elem) => match value {
                 Nbt::List(items) if !elem.accepts(value) => hash_ops::create_list(items.iter().map(|v| elem.hash(v))),
                 single => elem.hash(single),
@@ -391,7 +491,7 @@ impl Codec {
                     None => hash_ops::hash_nbt(value),
                 }
             }
-            Codec::Either(a, b) | Codec::Alt(a, b, _) => {
+            Codec::Either(a, b) | Codec::Xor(a, b) | Codec::Alt(a, b, _) => {
                 if matches!(self, Codec::Alt(..)) || a.accepts(value) {
                     a.hash(value)
                 } else {
@@ -430,22 +530,34 @@ impl Codec {
     }
 }
 
-fn decode_list(elem: &Codec, tag: &Nbt) -> Result<Vec<Nbt>, String> {
-    let items = list(tag)?;
-    let mut out = Vec::with_capacity(items.len());
+fn decode_elements(elem: &Codec, items: &[Nbt]) -> (Vec<Nbt>, Vec<String>) {
+    decode_elements_up_to(elem, items, usize::MAX)
+}
+
+fn decode_elements_up_to(elem: &Codec, items: &[Nbt], max: usize) -> (Vec<Nbt>, Vec<String>) {
+    let mut out = Vec::with_capacity(items.len().min(max));
     let mut errors = Vec::new();
-    for item in &items {
-        match elem.decode(item) {
-            Ok(v) => out.push(v),
-            Err(e) => errors.push(e),
+    for item in items {
+        if out.len() >= max {
+            continue;
+        }
+        let result = elem.decode_partial(item);
+        if let Some(error) = result.error {
+            errors.push(error);
+        }
+        if let Some(value) = result.value {
+            out.push(value);
         }
     }
-    join(errors)?;
-    Ok(out)
+    (out, errors)
+}
+
+fn finish_record(value: Option<Nbt>, mut errors: Vec<String>) -> DecodeResult<Nbt> {
+    errors.reverse();
+    DecodeResult { value, error: (!errors.is_empty()).then(|| errors.join("; ")) }
 }
 
 fn decode_holder_set(reg: &'static str, tag: &Nbt) -> Result<Nbt, String> {
-    let element = Codec::Element(reg);
     match tag {
         Nbt::String(s) if s.starts_with('#') => {
             let id = identifier(&Nbt::String(s[1..].into())).map_err(|e| format!("Failed to parse either. First: {e}; Second: Not a list"))?;
@@ -454,13 +566,22 @@ fn decode_holder_set(reg: &'static str, tag: &Nbt) -> Result<Nbt, String> {
                 Some(error) => Err(error),
             }
         }
-        Nbt::String(_) => element.decode(tag),
         _ => {
-            let items = list(tag).map_err(|e| format!("Failed to parse either. First: Not a string; Second: {e}"))?;
-            let mut out = Vec::new();
-            for item in &items {
-                out.push(element.decode(item)?);
-            }
+            let result = crate::util::codec::holder_set_partial(tag, reg, |item| {
+                let id = match identifier(item) {
+                    Ok(id) => id,
+                    Err(error) => return crate::util::codec::DecodeResult::error(error),
+                };
+                if registry(reg).contains(&id.as_str()) {
+                    crate::util::codec::DecodeResult::success(Nbt::String(id))
+                } else if !crate::util::codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(reg).is_some() {
+                    crate::core::data_registries::unknown_reference(reg, &id);
+                    crate::util::codec::DecodeResult::success(Nbt::String(id))
+                } else {
+                    crate::util::codec::DecodeResult::error(format!("Failed to get element {id} from registry {reg}"))
+                }
+            });
+            let mut out = result.into_result()?;
             if out.len() == 1 { Ok(out.pop().unwrap()) } else { Ok(Nbt::List(out)) }
         }
     }
@@ -484,61 +605,78 @@ fn decode_uuid(tag: &Nbt) -> Result<Nbt, String> {
     }
 }
 
-fn decode_record(fields: &[Field], tag: &Nbt) -> Result<Nbt, String> {
-    let input = map(tag)?;
-    let mut out = Vec::new();
-    decode_fields(fields, tag, input, &mut out)?;
-    Ok(Nbt::Compound(out))
-}
-
-fn decode_fields(fields: &[Field], tag: &Nbt, input: &[(String, Nbt)], out: &mut Vec<(String, Nbt)>) -> Result<(), String> {
-    let mut errors = Vec::new();
+fn decode_fields(fields: &[Field], tag: &Nbt, input: &[(String, Nbt)], out: &mut Vec<(String, Nbt)>, errors: &mut Vec<String>) -> bool {
+    let mut complete = true;
     for field in fields {
-        let present = input.iter().find(|(k, _)| k == field.name).map(|(_, v)| v);
+        let present = input.iter().find(|(k, v)| k == field.name && !matches!(v, Nbt::End)).map(|(_, v)| v);
         match (&field.kind, present) {
-            (Kind::Required, None) => errors.push(missing_key(field.name, tag)),
+            (Kind::Required, None) => {
+                errors.push(missing_key(field.name, tag));
+                complete = false;
+            }
             (Kind::AlwaysPresent(default), None) => out.push((field.name.into(), default.clone())),
             (_, None) => {}
-            (kind, Some(v)) => match field.codec.decode(v) {
-                Ok(v) => match kind {
-                    Kind::Default(d) | Kind::Lenient(d) if *d == v => {}
-                    _ => out.push((field.name.into(), v)),
-                },
-                Err(e) => match kind {
-                    Kind::Lenient(_) | Kind::LenientOptional => {}
-                    _ => errors.push(e),
-                },
-            },
+            (kind, Some(v)) => {
+                let result = field.codec.decode_partial(v);
+                let failed = result.error.is_some();
+                let lenient = matches!(kind, Kind::Lenient(_) | Kind::LenientOptional);
+                if let Some(error) = result.error
+                    && !lenient
+                {
+                    errors.push(error);
+                }
+                match result.value {
+                    _ if lenient && failed => {}
+                    Some(v) => match kind {
+                        Kind::Default(d) | Kind::Lenient(d) if *d == v => {}
+                        _ => out.push((field.name.into(), v)),
+                    },
+                    None => {
+                        if matches!(kind, Kind::Required | Kind::Plain) {
+                            complete = false;
+                        }
+                    }
+                }
+            }
         }
     }
-    errors.reverse();
-    join(errors)
+    complete
 }
 
-fn decode_dispatch(d: &Dispatch, tag: &Nbt) -> Result<Nbt, String> {
-    let input = map(tag)?;
-    let Some((_, ty)) = input.iter().find(|(k, _)| k == d.key) else { return Err(missing_key(d.key, tag)) };
+fn decode_dispatch(d: &Dispatch, tag: &Nbt) -> DecodeResult<Nbt> {
+    let input = match map(tag) {
+        Ok(input) => input,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let Some((_, ty)) = input.iter().find(|(k, v)| k == d.key && !matches!(v, Nbt::End)) else { return DecodeResult::error(missing_key(d.key, tag)) };
     let name = match d.selector {
         Selector::Registry(reg) => {
-            let id = identifier(ty)?;
+            let id = match identifier(ty) {
+                Ok(id) => id,
+                Err(error) => return DecodeResult::error(error),
+            };
             if !d.cases.iter().any(|(n, _)| *n == id) {
-                return Err(format!("Unknown registry key in ResourceKey[minecraft:root / {reg}]: {id}"));
+                return DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / {reg}]: {id}"));
             }
             id
         }
         Selector::Enum => {
-            let s = string(ty)?;
+            let s = match string(ty) {
+                Ok(s) => s,
+                Err(error) => return DecodeResult::error(error),
+            };
             if !d.cases.iter().any(|(n, _)| *n == s) {
-                return Err(format!("Unknown element name:{s}"));
+                return DecodeResult::error(format!("Unknown element name:{s}"));
             }
             s.to_string()
         }
     };
     let (_, fields) = d.cases.iter().find(|(n, _)| *n == name).unwrap();
     let mut out = Vec::new();
-    decode_fields(fields, tag, input, &mut out)?;
+    let mut errors = Vec::new();
+    let complete = decode_fields(fields, tag, input, &mut out, &mut errors);
     out.push((d.key.to_string(), Nbt::String(name)));
-    Ok(Nbt::Compound(out))
+    finish_record(complete.then(|| Nbt::Compound(out)), errors)
 }
 
 fn hash_record(fields: &[Field], value: &Nbt, key: Option<&str>) -> HashCode {
@@ -566,7 +704,7 @@ fn elements<'a>(codec: &Codec, value: &'a Nbt) -> Vec<&'a Nbt> {
 
 fn element_codec(codec: &Codec) -> &Codec {
     match codec {
-        Codec::List(elem, _, _) | Codec::Compact(elem) => elem,
+        Codec::List(elem, _, _) | Codec::SizedList(elem, _, _) | Codec::Compact(elem) => elem,
         other => other,
     }
 }

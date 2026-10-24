@@ -47,6 +47,23 @@ pub fn list_max(p: Pair, max: usize) -> Pair {
     (Codec::list_max(p.0, max), Stream::List(Box::new(p.1), max))
 }
 
+pub fn list_sized(p: Pair, min: usize, max: usize) -> Pair {
+    (Codec::SizedList(Box::new(p.0), min, max), Stream::List(Box::new(p.1), max))
+}
+
+pub fn non_empty_list(p: Pair) -> Pair {
+    (Codec::List(Box::new(p.0), 1, MAX), Stream::List(Box::new(p.1), MAX))
+}
+
+fn non_zero_total_weight(list: Nbt) -> Result<Nbt, String> {
+    let total: i64 = list.as_list().iter().filter_map(|entry| entry.get("weight")).map(super::codec::as_i64).sum();
+    if total == 0 { Err("Weighted list must contain at least one entry with non-zero weight".into()) } else { Ok(list) }
+}
+
+pub fn non_empty_weighted_list(p: Pair) -> Pair {
+    (Codec::Normalize(Box::new(Codec::list(p.0)), non_zero_total_weight), Stream::List(Box::new(p.1), MAX))
+}
+
 pub fn bool() -> Pair {
     (Codec::Bool, Stream::Bool)
 }

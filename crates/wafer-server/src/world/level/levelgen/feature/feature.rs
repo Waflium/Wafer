@@ -139,6 +139,7 @@ pub fn feature(name: &str) -> Option<&'static Feature> {
 fn nbt_to_json(nbt: &wafer_protocol::nbt::Nbt) -> Value {
     use wafer_protocol::nbt::Nbt;
     match nbt {
+        Nbt::End => Value::Null,
         Nbt::Byte(b) => Value::Bool(*b != 0),
         Nbt::Short(v) => Value::from(*v),
         Nbt::Int(v) => Value::from(*v),
