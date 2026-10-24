@@ -535,7 +535,7 @@ fn does_block_have_partial_collision(path_type: PathType) -> bool {
 
 pub fn get_floor_level(level: &PathNavigationRegion, pos: BlockPos) -> f64 {
     let target = pos.below();
-    let shape = level.get_block_state(target).collision_voxel_shape();
+    let shape = level.get_state_collision_shape(level.get_block_state(target), target);
     target.y as f64 + if shape.is_empty() { 0.0 } else { shape.max(Axis::Y) }
 }
 

@@ -332,7 +332,7 @@ fn effects_and_attributes_are_saved_with_the_player() {
     assert!(at("AbsorptionAmount") < at("attributes") && at("attributes") < at("active_effects") && at("active_effects") < at("DataVersion"));
     let mut other = testing::level();
     let loaded = testing::player(&mut other, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
-    other.player_mut(loaded).load_nbt(&nbt);
+    other.player_mut(loaded).load_nbt(&nbt).unwrap();
     assert_eq!(other.player(loaded).living.active_effects, level.player(id).living.active_effects);
     assert_eq!(other.max_health(loaded), 24.0);
     assert_eq!(other.player(loaded).health, 24.0);

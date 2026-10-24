@@ -141,12 +141,9 @@ impl Entity {
         if !pos.x.is_finite() || !pos.y.is_finite() || !pos.z.is_finite() {
             return Err("Entity has invalid position".into());
         }
-        if !y_rot.is_finite() || !x_rot.is_finite() {
-            return Err("Entity has invalid rotation".into());
-        }
         self.set_pos(pos);
-        self.y_rot = y_rot % 360.0;
-        self.x_rot = x_rot.clamp(-90.0, 90.0) % 360.0;
+        self.set_y_rot(y_rot % 360.0);
+        self.set_x_rot(x_rot);
         self.y_head_rot = self.y_rot;
         self.set_old_pos_and_rot();
         self.fall_distance = number(nbt, "fall_distance").unwrap_or(0.0);
@@ -184,6 +181,12 @@ impl Entity {
             add_loaded_entity_to_team(scoreboard, self.uuid, team_name);
         }
     }
+}
+
+pub const LOADING_ENTITY_NBT: &str = "Loading entity NBT";
+
+pub fn loading_entity_exception(cause: &str) -> String {
+    format!("net.minecraft.ReportedException: {LOADING_ENTITY_NBT}\nCaused by: java.lang.IllegalStateException: {cause}")
 }
 
 pub fn add_loaded_entity_to_team(scoreboard: &RefCell<Scoreboard>, uuid: u128, team_name: &str) {
@@ -465,7 +468,7 @@ fn update_custom_entity_tag(level: &ServerLevel, entity: &mut LevelEntity, entit
     let tag = Nbt::Compound(tag);
     let converted = level.with_old_owner_converted(entity, &tag);
     if let Err(e) = entity.load_in_level(&converted, &level.scoreboard) {
-        error!("{e}");
+        panic!("{}", loading_entity_exception(&e));
     }
     entity.entity_mut().uuid = uuid;
     Some(tag)
@@ -811,7 +814,7 @@ impl ServerLevel {
             return None;
         };
         if let Err(e) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt), &self.scoreboard) {
-            error!("{e}");
+            warn!("Exception loading entity: \n{}", loading_entity_exception(&e));
             return None;
         }
         let entity = self.reassess_weapon_goal_detached(entity);
@@ -904,4 +907,32 @@ mod tests {
         stack.set(crate::world::item::component::ENTITY_DATA, Some(data));
         apply_default_stack_config(&level, &mut entity, &stack).unwrap();
         assert_eq!(team_of(&level, uuid).as_deref(), Some("red"));
-    }}
+    }
+
+    fn positioned_marker_tag(pos: [f64; 3], rotation: [f32; 2]) -> Nbt {
+        Nbt::Compound(vec![
+            ("id".into(), Nbt::String("minecraft:marker".into())),
+            ("Pos".into(), Nbt::List(pos.iter().map(|&v| Nbt::Double(v)).collect())),
+            ("Rotation".into(), Nbt::List(rotation.iter().map(|&v| Nbt::Float(v)).collect())),
+        ])
+    }
+
+    #[test]
+    fn entities_with_a_non_finite_position_are_not_loaded() {
+        let mut level = testing::level();
+        assert!(level.load_entity(&positioned_marker_tag([f64::NAN, 0.0, 0.0], [0.0, 0.0])).is_none());
+        let mut entity = ServerLevel::create_entity("minecraft:marker").unwrap();
+        assert_eq!(entity.load(&positioned_marker_tag([0.0, 0.0, f64::NAN], [0.0, 0.0])), Err("Entity has invalid position".to_string()));
+        assert!(level.load_entity(&positioned_marker_tag([1.0, 2.0, 3.0], [0.0, 0.0])).is_some());
+        assert_eq!(loading_entity_exception("Entity has invalid position"), "net.minecraft.ReportedException: Loading entity NBT\nCaused by: java.lang.IllegalStateException: Entity has invalid position");
+    }
+
+    #[test]
+    fn non_finite_rotations_are_discarded_while_the_entity_loads() {
+        let mut level = testing::level();
+        let entity = level.load_entity(&positioned_marker_tag([1.0, 2.0, 3.0], [f32::NAN, 10.0])).expect("a marker");
+        assert_eq!((entity.entity().y_rot, entity.entity().x_rot), (0.0, 10.0));
+        let entity = level.load_entity(&positioned_marker_tag([1.0, 2.0, 3.0], [400.0, f32::INFINITY])).expect("a marker");
+        assert_eq!((entity.entity().y_rot, entity.entity().x_rot), (40.0, 0.0));
+    }
+}

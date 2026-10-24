@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::sync::{Arc, TryLockError};
 use crate::world::level::levelgen::below_zero_retrogen;
 
@@ -12,6 +13,8 @@ use crate::world::entity::LevelEntity;
 use crate::world::level::collision::for_each_block_collision;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::phys::shapes::collision_context::CollisionContext;
+use crate::world::scores::scoreboard::Scoreboard;
+use super::SoundSource;
 use crate::world::level::biome;
 use crate::world::level::block::entity::BlockEntity;
 use crate::world::level::chunk::{Biome, ChunkGenerator, HeightmapType, LevelChunk};
@@ -51,6 +54,8 @@ pub struct WorldGenRegion<'a> {
     pub light_tasks: Vec<RegionLightTask>,
     pub poi_updates: Vec<(BlockPos, BlockState, BlockState)>,
     pub entity_teams: Vec<(u128, String)>,
+    pub entity_sounds: Vec<(Vec3, i32, SoundSource, f32, f32)>,
+    pub scoreboard: Option<&'a RefCell<Scoreboard>>,
     pub structure_starts: Option<Arc<Vec<Vec<Arc<StructureStart>>>>>,
 }
 
@@ -114,6 +119,8 @@ impl<'a> WorldGenRegion<'a> {
             light_tasks: Vec::new(),
             poi_updates: Vec::new(),
             entity_teams: Vec::new(),
+            entity_sounds: Vec::new(),
+            scoreboard: None,
             structure_starts: None,
         }
     }
@@ -348,9 +355,15 @@ impl crate::world::level::world_gen_level::WorldGenLevel for WorldGenRegion<'_> 
     }
 
     fn load_team(&mut self, entity: &crate::world::entity::Entity, nbt: &wafer_protocol::nbt::Nbt) {
-        if let Some(team_name) = crate::world::level::storage::tag_value_input::get_string(nbt, "Team") {
-            self.entity_teams.push((entity.uuid, team_name.to_string()));
+        let Some(team_name) = crate::world::level::storage::tag_value_input::get_string(nbt, "Team") else { return };
+        match self.scoreboard {
+            Some(scoreboard) if scoreboard.try_borrow_mut().is_ok() => crate::world::entity::entity_save::add_loaded_entity_to_team(scoreboard, entity.uuid, team_name),
+            _ => self.entity_teams.push((entity.uuid, team_name.to_string())),
         }
+    }
+
+    fn play_entity_sound(&mut self, position: Vec3, sound: i32, source: SoundSource, volume: f32, pitch: f32) {
+        self.entity_sounds.push((position, sound, source, volume, pitch));
     }
 
     fn get_height_of_level(&self) -> i32 {

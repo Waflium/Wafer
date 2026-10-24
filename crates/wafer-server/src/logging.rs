@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::fmt;
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
@@ -82,8 +83,23 @@ pub fn shutdown() {
     }
 }
 
+thread_local! {
+    static THREAD_NAME: RefCell<Option<&'static str>> = const { RefCell::new(None) };
+}
+
+pub fn with_thread_name<R>(name: &'static str, run: impl FnOnce() -> R) -> R {
+    let previous = THREAD_NAME.with(|current| current.replace(Some(name)));
+    let result = run();
+    THREAD_NAME.with(|current| *current.borrow_mut() = previous);
+    result
+}
+
 pub fn log(level: Level, args: fmt::Arguments) {
-    submit(level, ThreadName::Current(thread::current()), args);
+    let thread = match THREAD_NAME.with(|current| *current.borrow()) {
+        Some(name) => ThreadName::Named(name.to_string()),
+        None => ThreadName::Current(thread::current()),
+    };
+    submit(level, thread, args);
 }
 
 pub fn log_as(thread: &str, level: Level, args: fmt::Arguments) {
@@ -268,6 +284,18 @@ macro_rules! error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thread_names_are_overridden_only_while_running() {
+        let name = || THREAD_NAME.with(|current| *current.borrow());
+        assert_eq!(name(), None);
+        with_thread_name("Worker-Main-1", || {
+            assert_eq!(name(), Some("Worker-Main-1"));
+            with_thread_name("Worker-Main-2", || assert_eq!(name(), Some("Worker-Main-2")));
+            assert_eq!(name(), Some("Worker-Main-1"));
+        });
+        assert_eq!(name(), None);
+    }
 
     #[test]
     fn rollover_indices_follow_log4j() {

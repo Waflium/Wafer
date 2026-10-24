@@ -47,7 +47,7 @@ pub fn create(range: i32, speed_modifier: f32) -> OneShot {
 }
 
 fn can_stand_on(level: &mut ServerLevel, pos: BlockPos, state: BlockState, context: &CollisionContext) -> bool {
-    if !context.get_collision_shape(state, pos).0.is_empty() {
+    if !level.get_state_collision_shape_in_context(state, pos, context).is_empty() {
         return false;
     }
     let below_pos = pos.relative(Direction::Down);

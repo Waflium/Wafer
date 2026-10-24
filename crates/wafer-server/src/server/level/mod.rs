@@ -229,6 +229,7 @@ impl ServerLevel {
     ) -> ServerLevel {
         chunks.set_view_distance(view_distance);
         chunks.set_simulation_distance(simulation_distance);
+        let scoreboard = chunks.scoreboard.clone();
         let structure_check = crate::world::level::levelgen::structure::structure_check::StructureCheck::new(chunks.chunk_scan_access(), chunks.generator.clone(), chunks.dimension, chunks.seed);
         let mut level = ServerLevel {
             level_name: String::new(),
@@ -284,7 +285,7 @@ impl ServerLevel {
             block_events: Vec::new(),
             game_time: 0,
             redstone_torch_toggles: Vec::new(),
-            scoreboard: Rc::default(),
+            scoreboard,
             world_border: WorldBorder::new(Settings::DEFAULT, None),
             raids: crate::world::entity::raid::raids::Raids::load(None),
             pending_portal_teleport: None,
@@ -673,7 +674,9 @@ impl ServerLevel {
             self.chunk_map.block_changed(pos);
         }
         self.path_types_by_pos_cache.get_mut().invalidate(pos);
-        if join_is_not_empty(&old.get_collision_shape(pos), &current.get_collision_shape(pos), BooleanOp::NotSame) {
+        let old_shape = self.get_state_collision_shape(old, pos);
+        let new_shape = self.get_state_collision_shape(current, pos);
+        if join_is_not_empty(&old_shape, &new_shape, BooleanOp::NotSame) {
             let navigations_to_update: Vec<EntityId> = self
                 .entities
                 .iter()
@@ -2188,6 +2191,14 @@ impl BlockGetter for ServerLevel {
         }
     }
 
+    fn get_state_collision_shape_in_context(&mut self, state: BlockState, pos: BlockPos, context: &crate::world::phys::shapes::collision_context::CollisionContext) -> std::borrow::Cow<'static, wafer_core::shapes::VoxelShape> {
+        if state.is_block(blocks::MOVING_PISTON) || state.has_dynamic_shape() && state.block().is_instance_of("ShulkerBoxBlock") {
+            self.get_state_collision_shape(state, pos)
+        } else {
+            context.get_moved_collision_shape(state, pos)
+        }
+    }
+
     fn is_shulker_box_closed(&mut self, pos: BlockPos) -> bool {
         match self.get_block_entity(pos).map(|entity| &entity.kind) {
             Some(crate::world::level::block::entity::BlockEntityKind::ShulkerBox(shulker)) => shulker.is_closed(),
@@ -2305,6 +2316,10 @@ impl crate::world::level::world_gen_level::WorldGenLevel for ServerLevel {
 
     fn load_team(&mut self, entity: &crate::world::entity::Entity, nbt: &Nbt) {
         entity.load_team(nbt, &self.scoreboard);
+    }
+
+    fn play_entity_sound(&mut self, position: wafer_core::Vec3, sound: i32, source: SoundSource, volume: f32, pitch: f32) {
+        self.play_sound_at(None, position.x, position.y, position.z, sound, source, volume, pitch);
     }
 
     fn get_block_state(&mut self, pos: BlockPos) -> BlockState {

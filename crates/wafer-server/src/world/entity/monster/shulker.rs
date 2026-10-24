@@ -341,8 +341,8 @@ impl ServerLevel {
         }
         let state = self.block_state(pos);
         let context = CollisionContext::of(self, entity);
-        let (shape, offset) = context.get_collision_shape(state, pos);
-        wafer_core::shapes::is_face_full(&shape.moved(offset[0], offset[1], offset[2]), face)
+        let shape = self.get_state_collision_shape_in_context(state, pos, &context);
+        wafer_core::shapes::is_face_full(&shape, face)
     }
 
     pub fn shulker_teleport_somewhere(&mut self, id: EntityId) -> bool {

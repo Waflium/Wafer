@@ -482,8 +482,8 @@ impl ServerPlayer {
         }
     }
 
-    pub fn load_nbt(&mut self, nbt: &Nbt) {
-        let _ = self.entity.load(nbt);
+    pub fn load_nbt(&mut self, nbt: &Nbt) -> Result<(), String> {
+        self.entity.load(nbt)?;
         if let Some(abilities) = nbt.get("abilities") {
             self.abilities = Abilities::load(abilities);
         }
@@ -571,6 +571,7 @@ impl ServerPlayer {
         self.sleep_counter = number("SleepTimer").map_or(0, |v| v as i16 as i32);
         let p = self.entity.position();
         self.last_section_pos = (mth::floor(p.x) >> 4, mth::floor(p.y) >> 4, mth::floor(p.z) >> 4);
+        Ok(())
     }
 
     pub fn write_chat_session(&self, p: &mut Writer) {

@@ -828,7 +828,7 @@ mod tests {
         .unwrap();
         assert_eq!(entry, &expected);
         let other = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
-        level.player_mut(other).load_nbt(&saved);
+        level.player_mut(other).load_nbt(&saved).unwrap();
         assert_eq!(level.player(other).inventory.slots[36], Some(sword));
     }
 }

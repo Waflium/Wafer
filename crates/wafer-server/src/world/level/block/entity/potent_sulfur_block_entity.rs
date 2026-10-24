@@ -148,15 +148,15 @@ fn get_unobstructed_block_count(level: &mut ServerLevel, pos: BlockPos, water_bl
     for i in 0..geyser_force_height {
         let current_pos = pos.relative_n(wafer_core::Direction::Up, i);
         let state = level.block_state(current_pos);
-        if !is_geyser_passable_block(state, current_pos, &geyser_position_context) {
+        if !is_geyser_passable_block(level, state, current_pos, &geyser_position_context) {
             return i;
         }
     }
     geyser_force_height
 }
 
-fn is_geyser_passable_block(state: BlockState, pos: BlockPos, context: &CollisionContext) -> bool {
-    if !state.is_air() && !state.is_block(blocks::WATER) { context.get_collision_shape(state, pos).0.is_empty() } else { true }
+fn is_geyser_passable_block(level: &mut ServerLevel, state: BlockState, pos: BlockPos, context: &CollisionContext) -> bool {
+    if !state.is_air() && !state.is_block(blocks::WATER) { level.get_state_collision_shape_in_context(state, pos, context).is_empty() } else { true }
 }
 
 fn find_noxious_gas_source_block(level: &mut ServerLevel, origin: BlockPos) -> Option<BlockPos> {
@@ -166,8 +166,8 @@ fn find_noxious_gas_source_block(level: &mut ServerLevel, origin: BlockPos) -> O
     while pos.y <= max_y {
         let state = level.block_state(pos);
         let is_water_logged = level.fluid_state(pos).is_source_of_type(Fluid::Water);
-        if !is_water_logged || !state.is_block(blocks::WATER) && !is_geyser_passable_block(state, pos, &geyser_position_context) {
-            if state.is_air() || is_geyser_passable_block(state, pos, &geyser_position_context) {
+        if !is_water_logged || !state.is_block(blocks::WATER) && !is_geyser_passable_block(level, state, pos, &geyser_position_context) {
+            if state.is_air() || is_geyser_passable_block(level, state, pos, &geyser_position_context) {
                 return Some(pos);
             }
             break;
@@ -181,7 +181,7 @@ pub fn can_be_reached_by_noxious_gas(level: &mut ServerLevel, source_block: Bloc
     let block_pos = BlockPos::containing_vec(pos);
     let geyser_position_context = CollisionContext::position_context(block_pos.below().y as f64);
     let state = level.block_state(block_pos);
-    if !is_geyser_passable_block(state, block_pos, &geyser_position_context) {
+    if !is_geyser_passable_block(level, state, block_pos, &geyser_position_context) {
         return false;
     }
     if pos.distance_to_sqr(Vec3::at_center_of(source_block)) > 9.0 {

@@ -366,7 +366,7 @@ impl Server {
             Some(spawn) => spawn,
             None if is_debug => RespawnData::of(OVERWORLD, BlockPos::new(0, 80, 0), 0.0, 0.0),
             None => {
-                let spawn = RespawnData::of(OVERWORLD, level::player_spawn_finder::initial_spawn(&mut overworld.chunks), 0.0, 0.0);
+                let spawn = RespawnData::of(OVERWORLD, level::player_spawn_finder::initial_spawn(&mut overworld), 0.0, 0.0);
                 if bonus_chest && let Some(feature) = crate::world::level::levelgen::feature::feature::feature("minecraft:bonus_chest") {
                     let mut random = std::mem::replace(&mut overworld.random, wafer_core::random::LegacyRandomSource::new(0));
                     feature.place(&mut overworld, &mut random, spawn.pos);
@@ -418,6 +418,7 @@ impl Server {
             level.weather = weather.clone();
             level.default_game_type = default_game_type.clone();
             level.scoreboard = scoreboard.clone();
+            level.chunks.scoreboard = scoreboard.clone();
             level.command_storage = command_storage.clone();
             level.random_sequences = random_sequences.clone();
             level.server_data_storage = data_storage.clone();
@@ -1011,7 +1012,6 @@ impl Server {
 
     fn place_new_player(&mut self, conn: ConnId, profile: Profile, cookie: CommonListenerCookie, out: Outbound, address: std::net::SocketAddr) {
         let old_name = self.name_to_id_cache.get_by_id(profile.uuid).map_or_else(|| profile.name.clone(), |p| p.name);
-        self.name_to_id_cache.add(NameAndId { id: profile.uuid, name: profile.name.clone() });
         let mut player = ServerPlayer::new(profile, cookie.client_information, out, self.effective_respawn_data.pos);
         player.stats = self.get_player_stats(&player.profile);
         player.advancements = self.get_player_advancements(player.profile.uuid);
@@ -1029,7 +1029,13 @@ impl Server {
             None => self.spawn_position(saved.as_ref()),
         };
         if let Some(nbt) = &saved {
-            player.load_nbt(nbt);
+            if let Err(cause) = player.load_nbt(nbt) {
+                error!("Couldn't place player in world\n{}", crate::world::entity::entity_save::loading_entity_exception(&cause));
+                let reason = crate::network::chat::translate("multiplayer.disconnect.invalid_player_data");
+                info!("{} ({}) lost connection: {}", player.profile.name, format_uuid(player.profile.uuid), reason.get_string());
+                player.connection.send(clientbound::DISCONNECT, |p| reason.write(p));
+                return;
+            }
             player.entity.load_team(nbt, &self.scoreboard);
             let level = &mut self.levels[level_index];
             if let Some(bed_position) = ServerPlayer::saved_sleeping_pos(nbt).filter(|&pos| level.has_chunk_at(pos)) {
@@ -1042,9 +1048,10 @@ impl Server {
             let (game_type, previous) = ServerPlayer::saved_game_types(nbt);
             player.set_game_mode_for_player(self.calculate_game_mode_for_new_player(game_type), previous);
         }
+        self.name_to_id_cache.add(NameAndId { id: player.profile.uuid, name: player.profile.name.clone() });
         player.entity.set_pos(position);
-        player.entity.y_rot = y_rot;
-        player.entity.x_rot = x_rot;
+        player.entity.set_y_rot(y_rot);
+        player.entity.set_x_rot(x_rot);
         let position = player.entity.position();
         info!(
             "{}[{}] logged in with entity id {} at ({}, {}, {})",

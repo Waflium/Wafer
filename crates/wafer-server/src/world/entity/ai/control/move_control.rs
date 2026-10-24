@@ -154,7 +154,7 @@ impl ServerLevel {
                 mob.set_speed(speed);
                 let pos = self.entity(id).block_position();
                 let state = self.block_state(pos);
-                let shape = state.collision_voxel_shape();
+                let shape = self.get_state_collision_shape(state, pos);
                 let e = self.entity(id);
                 let max_up_step = self.max_up_step(id) as f64;
                 let width = e.dimensions.width;

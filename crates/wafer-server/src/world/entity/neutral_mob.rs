@@ -28,6 +28,16 @@ pub trait NeutralMob {
     }
 }
 
+pub fn read_persistent_anger_end_time(input: &Nbt, game_time: i64) -> i64 {
+    if let Some(end_time) = tag_value_input::get_i64(input, TAG_ANGER_END_TIME) {
+        end_time
+    } else if let Some(anger_time) = tag_value_input::get_numeric(input, "AngerTime").and_then(int_value) {
+        game_time + anger_time as i64
+    } else {
+        NO_ANGER_END_TIME
+    }
+}
+
 fn neutral_mob(mob: &Mob) -> &dyn NeutralMob {
     mob.neutral_mob().expect("a neutral mob")
 }
@@ -73,13 +83,8 @@ impl ServerLevel {
     }
 
     pub fn read_persistent_anger_save_data(&mut self, id: EntityId, input: &Nbt) {
-        if let Some(end_time) = tag_value_input::get_i64(input, TAG_ANGER_END_TIME) {
-            self.set_persistent_anger_end_time(id, end_time);
-        } else if let Some(anger_time) = tag_value_input::get_numeric(input, "AngerTime").and_then(int_value) {
-            self.set_time_to_remain_angry(id, anger_time as i64);
-        } else {
-            self.set_persistent_anger_end_time(id, NO_ANGER_END_TIME);
-        }
+        let end_time = read_persistent_anger_end_time(input, self.game_time);
+        self.set_persistent_anger_end_time(id, end_time);
         self.set_persistent_anger_target(id, EntityReference::read(input, TAG_ANGRY_AT));
         let target = EntityReference::get_living_entity(self.get_persistent_anger_target(id), self);
         self.set_target(id, target);

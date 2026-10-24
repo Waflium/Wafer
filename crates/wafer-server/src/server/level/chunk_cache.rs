@@ -1,13 +1,14 @@
 use wafer_core::hash_map::{FastMap, FastSet};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 use std::io;
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use indexmap::IndexSet;
 
-use wafer_core::{BlockPos, ChunkPos};
+use wafer_core::{BlockPos, ChunkPos, Vec3};
 use wafer_data::{Block, BlockState, DimensionType, Fluid, blocks};
 use wafer_protocol::Writer;
 
@@ -18,7 +19,9 @@ use super::chunk_workers::{self, ChunkToSave, IoWorker, MainThreadWakeup, Result
 use super::distance_manager::DistanceManager;
 use super::threaded_level_light_engine::{LightTask, TaskType, ThreadedLevelLightEngine};
 use super::ticket::{Ticket, TicketType};
+use super::SoundSource;
 use crate::world::difficulty::Difficulty;
+use crate::world::scores::scoreboard::Scoreboard;
 use crate::world::entity::ai::village::poi::poi_manager::PoiManager;
 use crate::world::level::BlockGetter;
 use crate::world::level::levelgen::debug_level_source;
@@ -44,6 +47,8 @@ use crate::world::level::levelgen::random_state::RandomState;
 use crate::world::level::light_layer::LightLayer;
 use crate::world::level::lighting::{self, section};
 use crate::world::ticks::{LevelChunkTicks, LevelTicks};
+
+const WORLD_GEN_THREAD_NAME: &str = "Worker-Main-1";
 
 struct Job {
     pos: ChunkPos,
@@ -97,6 +102,8 @@ pub struct ChunkCache {
     structure_starts_available: Vec<(ChunkPos, FastMap<StructureHolder, i32>)>,
     world_gen_chunk_entities: Vec<Vec<wafer_protocol::nbt::Nbt>>,
     world_gen_entity_teams: Vec<(u128, String)>,
+    world_gen_entity_sounds: Vec<(Vec3, i32, SoundSource, f32, f32)>,
+    pub scoreboard: Rc<RefCell<Scoreboard>>,
     full_status_changes: VecDeque<(ChunkPos, FullChunkStatus)>,
     full_status_tasks: VecDeque<(ChunkPos, FullChunkStatus)>,
     last_chunk: Cell<[Option<(ChunkPos, bool)>; 4]>,
@@ -160,6 +167,8 @@ impl ChunkCache {
             structure_starts_available: Vec::new(),
             world_gen_chunk_entities: Vec::new(),
             world_gen_entity_teams: Vec::new(),
+            world_gen_entity_sounds: Vec::new(),
+            scoreboard: Rc::default(),
             full_status_changes: VecDeque::new(),
             full_status_tasks: VecDeque::new(),
             last_chunk: Cell::new([None; 4]),
@@ -364,6 +373,10 @@ impl ChunkCache {
 
     pub fn take_world_gen_entity_teams(&mut self) -> Vec<(u128, String)> {
         std::mem::take(&mut self.world_gen_entity_teams)
+    }
+
+    pub fn take_world_gen_entity_sounds(&mut self) -> Vec<(Vec3, i32, SoundSource, f32, f32)> {
+        std::mem::take(&mut self.world_gen_entity_sounds)
     }
 
     pub fn take_structure_starts_available(&mut self) -> Vec<(ChunkPos, FastMap<StructureHolder, i32>)> {
@@ -1240,7 +1253,7 @@ impl ChunkCache {
         });
     }
 
-    fn with_region<R>(&mut self, center: ChunkPos, f: impl FnOnce(&mut WorldGenRegion, &ChunkGenerator) -> R) -> R {
+    pub(crate) fn with_region<R>(&mut self, center: ChunkPos, f: impl FnOnce(&mut WorldGenRegion, &ChunkGenerator) -> R) -> R {
         let dimension = self.dimension;
         let generator = self.generator.clone();
         let region_random_state = self.region_random_state.clone();
@@ -1257,7 +1270,7 @@ impl ChunkCache {
             lit[i] = self.holders.get(pos.pack()).is_some_and(|h| h.status_done(&self.holders.futures, ChunkStatus::InitializeLight));
             taken.push((pos, chunk, terrain));
         }
-        let (result, light_tasks, poi_updates, entity_teams) = {
+        let (result, light_tasks, poi_updates, entity_teams, entity_sounds) = {
             let mut iter = taken.iter_mut();
             let cache: [Option<&mut LevelChunk>; 9] = std::array::from_fn(|_| iter.next().and_then(|(_, c, _)| c.as_mut()));
             let generation = WorldGenerationContext {
@@ -1272,8 +1285,15 @@ impl ChunkCache {
             let mut region = WorldGenRegion::new(center, cache, writable, lit, &generator, random_state, dimension, generation, &self.light_engine.engine, self.difficulty);
             region.level_data = self.region_level_data;
             region.environment_attributes = Some(&self.static_environment_attributes);
-            let result = f(&mut region, &generator);
-            (result, std::mem::take(&mut region.light_tasks), std::mem::take(&mut region.poi_updates), std::mem::take(&mut region.entity_teams))
+            region.scoreboard = Some(&self.scoreboard);
+            let result = crate::logging::with_thread_name(WORLD_GEN_THREAD_NAME, || f(&mut region, &generator));
+            (
+                result,
+                std::mem::take(&mut region.light_tasks),
+                std::mem::take(&mut region.poi_updates),
+                std::mem::take(&mut region.entity_teams),
+                std::mem::take(&mut region.entity_sounds),
+            )
         };
         for (i, (pos, chunk, terrain)) in taken.into_iter().enumerate() {
             if let Some(mut chunk) = chunk {
@@ -1299,6 +1319,7 @@ impl ChunkCache {
             self.poi_manager.update_on_block_state_change(pos, old, new);
         }
         self.world_gen_entity_teams.extend(entity_teams);
+        self.world_gen_entity_sounds.extend(entity_sounds);
         result
     }
 
@@ -1824,7 +1845,7 @@ mod tests {
     }
 
     #[test]
-    fn world_gen_entity_teams_are_applied_by_the_level() {
+    fn world_gen_entity_teams_are_joined_while_the_region_runs() {
         use crate::world::level::world_gen_level::WorldGenLevel;
         let mut level = testing::level();
         level.scoreboard.borrow_mut().add_player_team("red");
@@ -1832,9 +1853,32 @@ mod tests {
         let uuid = crate::world::level::storage::format_uuid(entity.entity().uuid);
         let nbt = wafer_protocol::nbt::Nbt::Compound(vec![("Team".into(), wafer_protocol::nbt::Nbt::String("red".into()))]);
         level.chunks.with_region(ChunkPos::new(0, 0), |region, _| region.load_team(entity.entity(), &nbt));
-        assert!(level.scoreboard.borrow().get_players_team(&uuid).is_none());
+        assert_eq!(level.scoreboard.borrow().get_players_team(&uuid).map(|team| team.name().to_string()).as_deref(), Some("red"));
+    }
+
+    #[test]
+    fn world_gen_entity_teams_wait_for_a_borrowed_scoreboard() {
+        use crate::world::level::world_gen_level::WorldGenLevel;
+        let mut level = testing::level();
+        level.scoreboard.borrow_mut().add_player_team("red");
+        let entity = ServerLevel::create_entity("minecraft:marker").unwrap();
+        let uuid = crate::world::level::storage::format_uuid(entity.entity().uuid);
+        let nbt = wafer_protocol::nbt::Nbt::Compound(vec![("Team".into(), wafer_protocol::nbt::Nbt::String("red".into()))]);
+        let scoreboard = level.scoreboard.clone();
+        let guard = scoreboard.borrow();
+        level.chunks.with_region(ChunkPos::new(0, 0), |region, _| region.load_team(entity.entity(), &nbt));
+        assert!(guard.get_players_team(&uuid).is_none());
+        drop(guard);
         level.process_chunk_events();
         assert_eq!(level.scoreboard.borrow().get_players_team(&uuid).map(|team| team.name().to_string()).as_deref(), Some("red"));
+    }
+
+    #[test]
+    fn world_gen_entity_sounds_are_queued_for_the_level() {
+        use crate::world::level::world_gen_level::WorldGenLevel;
+        let mut level = testing::level();
+        level.chunks.with_region(ChunkPos::new(0, 0), |region, _| region.play_entity_sound(Vec3::new(1.0, 2.0, 3.0), 0, crate::server::level::SoundSource::Neutral, 1.0, 1.0));
+        assert_eq!(level.chunks.take_world_gen_entity_sounds().len(), 1);
     }
 
     #[test]

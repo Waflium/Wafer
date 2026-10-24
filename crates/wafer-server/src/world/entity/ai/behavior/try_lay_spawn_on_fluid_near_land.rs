@@ -23,7 +23,7 @@ pub fn create(spawn_block: Block) -> OneShot {
             for direction in Direction::PLANE_HORIZONTAL {
                 let relative_pos = below_pos.relative(direction);
                 let relative_state = level.block_state(relative_pos);
-                if relative_state.collision_voxel_shape().face_shape(Direction::Up).is_empty()
+                if level.get_state_collision_shape(relative_state, relative_pos).face_shape(Direction::Up).is_empty()
                     && (level.fluid_state(relative_pos).is(&fluid_tags::SUPPORTS_FROGSPAWN) || relative_state.is(&block_tags::SUPPORTS_FROGSPAWN))
                 {
                     let spawn_pos = relative_pos.above();

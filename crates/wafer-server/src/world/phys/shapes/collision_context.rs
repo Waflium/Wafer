@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use wafer_core::shapes::VoxelShape;
@@ -176,6 +177,11 @@ impl CollisionContext {
 
     pub fn get_collision_shape(&self, state: BlockState, pos: BlockPos) -> (&'static VoxelShape, [f64; 3]) {
         if self.is_ignored(pos) { (&EMPTY, [0.0; 3]) } else { self.get_state_collision_shape(state, pos) }
+    }
+
+    pub fn get_moved_collision_shape(&self, state: BlockState, pos: BlockPos) -> Cow<'static, VoxelShape> {
+        let (shape, offset) = self.get_collision_shape(state, pos);
+        if offset == [0.0; 3] { Cow::Borrowed(shape) } else { Cow::Owned(shape.moved(offset[0], offset[1], offset[2])) }
     }
 
     pub fn get_block_collision_shape(&self, state: BlockState, pos: BlockPos, fluid_above: impl FnOnce() -> FluidState) -> (&'static VoxelShape, [f64; 3]) {

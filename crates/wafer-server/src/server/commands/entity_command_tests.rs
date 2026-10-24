@@ -492,7 +492,7 @@ fn tag() {
     assert_eq!(run(&mut server, "tag @e[tag=b] list"), ["The 2 entities have 1 total tag(s): b"]);
     let saved = server.levels[0].player(alice.id).to_nbt("minecraft:overworld");
     let bob = join(&mut server, "Bob", ORIGIN);
-    server.levels[0].player_mut(bob.id).load_nbt(&saved);
+    server.levels[0].player_mut(bob.id).load_nbt(&saved).unwrap();
     assert_eq!(server.levels[0].entity(bob.id).tags, ["b"]);
 }
 

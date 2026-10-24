@@ -321,6 +321,9 @@ impl ServerLevel {
         for (uuid, team_name) in self.chunks.take_world_gen_entity_teams() {
             crate::world::entity::entity_save::add_loaded_entity_to_team(&self.scoreboard, uuid, &team_name);
         }
+        for (position, sound, source, volume, pitch) in self.chunks.take_world_gen_entity_sounds() {
+            self.play_sound_at(None, position.x, position.y, position.z, sound, source, volume, pitch);
+        }
         for entities in self.chunks.take_world_gen_chunk_entities().iter() {
             self.add_world_gen_chunk_entities(entities);
         }

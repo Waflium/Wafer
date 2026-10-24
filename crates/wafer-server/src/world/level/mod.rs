@@ -47,6 +47,7 @@ use wafer_core::shapes::{self, VoxelShape};
 use wafer_core::{BlockPos, Direction};
 use wafer_data::{Block, BlockState, Fluid, FluidState, SupportType};
 
+use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::ticks::TickPriority;
 
 pub fn is_in_spawnable_bounds(pos: BlockPos) -> bool {
@@ -68,6 +69,10 @@ pub trait BlockGetter {
 
     fn get_state_collision_shape(&mut self, state: BlockState, pos: BlockPos) -> Cow<'static, VoxelShape> {
         state.get_collision_shape(pos)
+    }
+
+    fn get_state_collision_shape_in_context(&mut self, state: BlockState, pos: BlockPos, context: &CollisionContext) -> Cow<'static, VoxelShape> {
+        context.get_moved_collision_shape(state, pos)
     }
 
     fn is_shulker_box_closed(&mut self, _pos: BlockPos) -> bool {

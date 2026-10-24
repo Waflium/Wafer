@@ -1,4 +1,4 @@
-use wafer_core::{BlockPos, ChunkPos};
+use wafer_core::{Axis, BlockPos, ChunkPos, Vec3};
 use wafer_data::blocks;
 use wafer_data::properties::EXTENDED;
 
@@ -7,6 +7,9 @@ use crate::commands::source::CommandSourceStack;
 use crate::server::Server;
 use crate::server::level::testing;
 use crate::world::level::BlockGetter;
+use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::level::path_navigation_region::PathNavigationRegion;
+use crate::world::phys::shapes::collision_context::CollisionContext;
 
 fn server() -> Server {
     let mut server = testing::server();
@@ -94,6 +97,31 @@ fn pistons_lift_entities_half_a_block_per_tick() {
     server.tick();
     let out = run(&mut server, "data get entity 00000001-0000-0002-0000-000300000001 Pos");
     assert_eq!(out, vec!["Pig has the following entity data: [6.5d, -47.99d, 6.5d]".to_string()]);
+}
+
+#[test]
+fn clips_and_pathfinding_see_the_live_shape_of_moving_pistons() {
+    let mut server = server();
+    run(&mut server, "setblock 12 -50 12 piston[facing=up]");
+    run(&mut server, "setblock 13 -50 12 redstone_block");
+    server.tick();
+    let pos = BlockPos::new(12, -49, 12);
+    let state = state(&mut server, 12, -49, 12);
+    assert!(state.is_block(blocks::MOVING_PISTON));
+    let level = &mut server.levels[0];
+    let live = crate::world::level::block::moving_piston_block::get_collision_shape(level, pos);
+    assert!(!live.is_empty());
+    let top = pos.y as f64 + live.max(Axis::Y);
+    assert_eq!(level.get_state_collision_shape(state, pos).max(Axis::Y), live.max(Axis::Y));
+    assert_eq!(PathNavigationRegion::new(level).get_state_collision_shape(state, pos).max(Axis::Y), live.max(Axis::Y));
+    assert_eq!(level.get_state_collision_shape_in_context(state, pos, &CollisionContext::EMPTY).max(Axis::Y), live.max(Axis::Y));
+    for block in [ClipBlock::Collider, ClipBlock::Visual] {
+        let context = ClipContext { from: Vec3::new(12.5, -45.0, 12.5), to: Vec3::new(12.5, -49.5, 12.5), block, fluid: ClipFluid::None, collision_context: CollisionContext::EMPTY };
+        let result = level.clip(&context);
+        assert!(!result.miss);
+        assert_eq!(result.hit.block_pos, pos);
+        assert!((result.hit.location.y - top).abs() < 1.0e-9, "{result:?} {top}");
+    }
 }
 
 

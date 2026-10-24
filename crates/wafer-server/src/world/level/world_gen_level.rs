@@ -1,10 +1,11 @@
-use wafer_core::BlockPos;
+use wafer_core::{BlockPos, Vec3};
 use wafer_data::{BlockState, FluidState};
 use wafer_protocol::nbt::Nbt;
 
 use super::chunk::ChunkGenerator;
 use super::levelgen::material::WorldGenerationContext;
 use super::server_level_accessor::ServerLevelAccessor;
+use crate::server::level::SoundSource;
 use crate::world::entity::Entity;
 
 pub trait WorldGenLevel: ServerLevelAccessor {
@@ -23,6 +24,8 @@ pub trait WorldGenLevel: ServerLevelAccessor {
     }
 
     fn load_team(&mut self, entity: &Entity, nbt: &Nbt);
+
+    fn play_entity_sound(&mut self, position: Vec3, sound: i32, source: SoundSource, volume: f32, pitch: f32);
 
     fn get_height_of_level(&self) -> i32;
 

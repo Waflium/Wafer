@@ -195,12 +195,23 @@ fn warden_spawn_tracker_ticks_and_survives_saving_and_respawn() {
     assert_eq!(saved.get("warden_spawn_tracker"), Some(&WardenSpawnTracker::new(0, 2, 0).to_nbt()));
     assert_eq!(saved.get("spawn_extra_particles_on_fall"), Some(&Nbt::Byte(1)));
     let mut loaded = ServerPlayer::new(Profile { uuid: 2, name: "Bob".into(), properties: Vec::new() }, ClientInfo::default(), Outbound::detached(), BlockPos::ZERO);
-    loaded.load_nbt(&saved);
+    loaded.load_nbt(&saved).unwrap();
     assert_eq!((loaded.warden_spawn_tracker, loaded.spawn_extra_particles_on_fall), (WardenSpawnTracker::new(0, 2, 0), true));
 
     server.respawn(alice, false, crate::world::entity::RemovalReason::Killed);
     assert_eq!(server.player(alice).warden_spawn_tracker, WardenSpawnTracker::new(0, 2, 0));
     assert!(!server.player(alice).spawn_extra_particles_on_fall);
+}
+
+#[test]
+fn players_with_a_non_finite_position_fail_to_load() {
+    let mut server = testing::server();
+    let alice = join(&mut server, "Alice");
+    let Nbt::Compound(mut fields) = server.save_player_with_ender_pearls(alice) else { unreachable!("player data is a compound") };
+    fields.retain(|(key, _)| key != "Pos");
+    fields.push(("Pos".into(), Nbt::List(vec![Nbt::Double(f64::NAN), Nbt::Double(0.0), Nbt::Double(0.0)])));
+    let mut loaded = ServerPlayer::new(Profile { uuid: 2, name: "Bob".into(), properties: Vec::new() }, ClientInfo::default(), Outbound::detached(), BlockPos::ZERO);
+    assert_eq!(loaded.load_nbt(&Nbt::Compound(fields)), Err("Entity has invalid position".to_string()));
 }
 
 #[test]

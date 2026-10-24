@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::commands::arguments::coordinates::get_loaded_block_pos;
 use crate::commands::arguments::nbt_path_argument::NbtPath;
 use crate::commands::brigadier::{CommandContext, CommandSyntaxException, SimpleCommandExceptionType};
+use crate::commands::unexpected_error;
 use crate::commands::source::CommandSourceStack;
 use crate::nbt::text_component_tag_visitor::to_pretty_component;
 use crate::network::chat::{Arg, Component};
@@ -12,6 +13,7 @@ use crate::server::Server;
 use crate::util::java_format_fixed;
 use crate::util::problem_reporter::PathElement;
 use crate::world::entity::EntityId;
+use crate::world::entity::entity_save::LOADING_ENTITY_NBT;
 use crate::world::level::storage::tag_value_input;
 
 const ENTITY_DATA_ACCESSOR_LOGGER: &str = "net.minecraft.server.commands.data.EntityDataAccessor";
@@ -60,11 +62,10 @@ impl DataAccessor {
                 let scoreboard = level.scoreboard.clone();
                 if let Some(part) = level.dragon_part_entity_mut(*id) {
                     let uuid = part.uuid;
-                    if let Err(e) = part.load(&tag) {
-                        error!("{e}");
-                    } else {
-                        part.load_team(&tag, &scoreboard);
+                    if part.load(&tag).is_err() {
+                        return Err(unexpected_error(LOADING_ENTITY_NBT));
                     }
+                    part.load_team(&tag, &scoreboard);
                     part.uuid = uuid;
                     return Ok(());
                 }
@@ -82,8 +83,8 @@ impl DataAccessor {
                 let entity = level.entities.get_mut(id).expect("the entity");
                 let uuid = entity.entity().uuid;
                 let previous_dimensions = entity.entity().dimensions;
-                if let Err(e) = entity.load_in_level(&converted, &level.scoreboard) {
-                    error!("{e}");
+                if entity.load_in_level(&converted, &level.scoreboard).is_err() {
+                    return Err(unexpected_error(LOADING_ENTITY_NBT));
                 }
                 entity.entity_mut().uuid = uuid;
                 level.item_frame_loaded(*id, previous_framed_item);

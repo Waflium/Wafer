@@ -17,6 +17,7 @@ use crate::world::item::ItemStack;
 use crate::world::level::block::chest_block;
 use crate::world::level::block::entity::BlockEntityKind;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
+use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::phys::shapes::collision_context::CollisionContext;
 
 pub const TARGET_INTERACTION_TIME: i32 = 60;
@@ -405,7 +406,7 @@ impl TransportItemsBetweenContainers {
     fn is_within_target_distance(&self, distance: f64, target: TransportItemTarget, level: &ServerLevel, body: EntityId, from_pos: Vec3) -> bool {
         let bounding_box = level.entity(body).bounding_box();
         let moved_bound_box = AABB::of_size(from_pos, bounding_box.x_size(), bounding_box.y_size(), bounding_box.z_size());
-        bounds(target.state.collision_voxel_shape()).inflate(distance, 0.5, distance).move_to_block(target.pos).intersects(&moved_bound_box)
+        bounds(&PathNavigationRegion::new(level).get_state_collision_shape(target.state, target.pos)).inflate(distance, 0.5, distance).move_to_block(target.pos).intersects(&moved_bound_box)
     }
 
     fn target_is_reachable_from_position(&self, level: &mut ServerLevel, can_reach_target: bool, pos: Vec3, target: TransportItemTarget, body: EntityId) -> bool {

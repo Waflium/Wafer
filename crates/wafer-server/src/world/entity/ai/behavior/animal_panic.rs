@@ -61,7 +61,7 @@ impl AnimalPanic {
 fn look_for_water(level: &ServerLevel, mob: EntityId) -> Option<BlockPos> {
     let mob_position = level.entity(mob).block_position();
     let region = PathNavigationRegion::new(level);
-    if !region.get_block_state(mob_position).collision_voxel_shape().is_empty() {
+    if !region.get_state_collision_shape(region.get_block_state(mob_position), mob_position).is_empty() {
         return None;
     }
     let mut block_matcher = BlockPos::within_box_by_manhattan_distance(mob_position, 5, 1, 5).filter(|&pos| is_water(region.get_block_state(pos)));

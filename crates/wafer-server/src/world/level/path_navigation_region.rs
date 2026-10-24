@@ -1,8 +1,13 @@
+use std::borrow::Cow;
+
+use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, BlockPos};
 use wafer_data::{BlockState, FluidState, blocks};
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
+use crate::world::level::block::entity::BlockEntityKind;
+use crate::world::level::block::{moving_piston_block, shulker_box_block};
 
 pub struct PathNavigationRegion<'a> {
     pub level: &'a ServerLevel,
@@ -22,6 +27,20 @@ impl<'a> PathNavigationRegion<'a> {
 
     pub fn get_fluid_state(&self, pos: BlockPos) -> FluidState {
         self.get_block_state(pos).fluid_state()
+    }
+
+    pub fn get_state_collision_shape(&self, state: BlockState, pos: BlockPos) -> Cow<'static, VoxelShape> {
+        if state.is_block(blocks::MOVING_PISTON) {
+            Cow::Owned(moving_piston_block::get_collision_shape(self.level, pos))
+        } else if state.has_dynamic_shape() && state.block().is_instance_of("ShulkerBoxBlock") {
+            let shulker = match self.level.chunks.block_entity_ref(pos).map(|entity| &entity.kind) {
+                Some(BlockEntityKind::ShulkerBox(shulker)) => Some(shulker),
+                _ => None,
+            };
+            Cow::Borrowed(shulker_box_block::shape_of(shulker, state))
+        } else {
+            state.get_collision_shape(pos)
+        }
     }
 
     pub fn no_collision(&self, entity: EntityId, aabb: &AABB) -> bool {

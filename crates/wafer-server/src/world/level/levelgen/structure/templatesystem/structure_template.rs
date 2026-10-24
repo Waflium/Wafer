@@ -7,9 +7,10 @@ use wafer_data::{BlockState, blocks};
 use wafer_protocol::nbt::Nbt;
 
 use super::structure_place_settings::StructurePlaceSettings;
-use crate::server::level::{ServerLevel, UPDATE_SHAPE_ORDER};
+use crate::server::level::{ServerLevel, SoundSource, UPDATE_SHAPE_ORDER};
 use crate::world::entity::decoration::block_attached_entity::BlockAttachedKind;
 use crate::world::entity::decoration::hanging_entity;
+use crate::world::entity::entity_reference::EntityReference;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::{Entity, LevelEntity, neutral_mob};
@@ -602,7 +603,7 @@ fn set_tag(tag: &mut Vec<(String, Nbt)>, key: &str, value: Nbt) {
     }
 }
 
-fn create_entity_ignore_exception(level: &mut impl WorldGenLevel, tag: &Nbt) -> Option<LevelEntity> {
+pub(super) fn create_entity_ignore_exception(level: &mut impl WorldGenLevel, tag: &Nbt) -> Option<LevelEntity> {
     let id = tag.get("id").and_then(Nbt::as_str);
     let entity_type = id.and_then(EntityType::by_name).filter(|ty| ty.can_spawn(level.get_difficulty()));
     let Some(mut entity) = entity_type.and(id).and_then(ServerLevel::create_entity) else {
@@ -613,8 +614,14 @@ fn create_entity_ignore_exception(level: &mut impl WorldGenLevel, tag: &Nbt) -> 
     if let LevelEntity::Mob(mob) = &mut entity
         && let Some((neutral_mob, entity)) = mob.neutral_mob_mut()
     {
-        let end_time = tag.get(neutral_mob::TAG_ANGER_END_TIME).and_then(Nbt::as_i64).unwrap_or(neutral_mob::NO_ANGER_END_TIME);
+        let end_time = neutral_mob::read_persistent_anger_end_time(tag, level.get_game_time());
         neutral_mob.set_persistent_anger_end_time(entity, end_time);
+        neutral_mob.set_persistent_anger_target(EntityReference::read(tag, neutral_mob::TAG_ANGRY_AT));
+    }
+    if let LevelEntity::ItemFrame(frame) = &mut entity
+        && let Some((position, sound)) = frame.take_pending_add_item_sound()
+    {
+        level.play_entity_sound(position, sound, SoundSource::Neutral, 1.0, 1.0);
     }
     Some(entity)
 }

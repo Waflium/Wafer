@@ -516,12 +516,16 @@ impl Entity {
     pub fn set_y_rot(&mut self, y_rot: f32) {
         if y_rot.is_finite() {
             self.y_rot = y_rot;
+        } else {
+            error!("Invalid entity rotation: {}, discarding.", crate::nbt::java_float_to_string(y_rot));
         }
     }
 
     pub fn set_x_rot(&mut self, x_rot: f32) {
         if x_rot.is_finite() {
             self.x_rot = (x_rot % 360.0).clamp(-90.0, 90.0);
+        } else {
+            error!("Invalid entity rotation: {}, discarding.", crate::nbt::java_float_to_string(x_rot));
         }
     }
 
@@ -3534,7 +3538,9 @@ impl crate::server::Server {
         }
         let mut new_entity = ServerLevel::create_entity(registry::ENTITY_TYPE[old_entity.entity_type as usize])?;
         let saved = Nbt::Compound(old_entity.data.clone().unwrap_or_default());
-        let _ = new_entity.load_in_level(&saved, &self.levels[transition.new_level].scoreboard);
+        if let Err(e) = new_entity.load_in_level(&saved, &self.levels[transition.new_level].scoreboard) {
+            panic!("{}", super::entity_save::loading_entity_exception(&e));
+        }
         let new_entity = self.levels[transition.new_level].reassess_weapon_goal_detached(new_entity);
         let mut new_entity = self.levels[transition.new_level].read_level_dependent_save_data_detached(new_entity, &saved);
         let e = new_entity.entity_mut();

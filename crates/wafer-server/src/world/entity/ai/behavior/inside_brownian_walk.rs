@@ -7,6 +7,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::memory::walk_target::WalkTarget;
+use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::phys::shapes::collision_context::CollisionContext;
 
@@ -14,10 +15,10 @@ fn loaded_and_entity_can_stand_on(level: &mut ServerLevel, pos: BlockPos, entity
     if !level.has_chunk_at(pos) {
         return false;
     }
-    let state = crate::world::level::BlockGetter::block_state(level, pos);
+    let state = BlockGetter::block_state(level, pos);
     let context = CollisionContext::of(level, entity);
-    let (shape, offset) = context.get_collision_shape(state, pos);
-    wafer_core::shapes::is_face_full(&shape.moved(offset[0], offset[1], offset[2]), Direction::Up)
+    let shape = level.get_state_collision_shape_in_context(state, pos, &context);
+    wafer_core::shapes::is_face_full(&shape, Direction::Up)
 }
 
 pub fn create(speed_modifier: f32) -> OneShot {

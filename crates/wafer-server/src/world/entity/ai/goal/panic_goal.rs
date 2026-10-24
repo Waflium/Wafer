@@ -72,7 +72,7 @@ impl PanicGoal {
     pub fn look_for_water(&self, level: &ServerLevel, mob: EntityId, xz_dist: i32) -> Option<BlockPos> {
         let mob_position = level.entity(mob).block_position();
         let region = PathNavigationRegion::new(level);
-        if !region.get_block_state(mob_position).collision_voxel_shape().is_empty() {
+        if !region.get_state_collision_shape(region.get_block_state(mob_position), mob_position).is_empty() {
             return None;
         }
         BlockPos::within_box_by_manhattan_distance(mob_position, xz_dist, 1, xz_dist).find(|&pos| region.get_block_state(pos).fluid_state().is(&fluid_tags::WATER))

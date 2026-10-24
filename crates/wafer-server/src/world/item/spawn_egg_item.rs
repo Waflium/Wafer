@@ -53,7 +53,7 @@ pub fn use_on(level: &mut ServerLevel, player: EntityId, hand: InteractionHand, 
         }
         return InteractionResult::SUCCESS;
     }
-    let spawn_pos = if block_state.collision_voxel_shape().is_empty() { pos } else { pos.relative(clicked_face) };
+    let spawn_pos = if level.get_state_collision_shape(block_state, pos).is_empty() { pos } else { pos.relative(clicked_face) };
     let moved_up = pos != spawn_pos && clicked_face == Direction::Up;
     let result = spawn_mob(level, entity_type, Some(player), &mut item_stack, spawn_pos, true, moved_up);
     level.player_mut(player).update_item_in_hand(hand, &item_stack);

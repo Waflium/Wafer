@@ -30,11 +30,12 @@ pub fn create(range: i32, speed_modifier: f32, fluid_tag: &'static Tag) -> OneSh
             let context = CollisionContext::of(level, body);
             let found = BlockPos::within_box_by_manhattan_distance(body_block_pos, range, range, range).filter(|pos| pos.differs_horizontally(body_block_pos)).find(|&pos| {
                 let state = level.block_state(pos);
-                if !context.get_collision_shape(state, pos).0.is_empty() {
+                if !level.get_state_collision_shape_in_context(state, pos, &context).is_empty() {
                     return false;
                 }
                 let below = pos.relative(Direction::Down);
-                if context.get_collision_shape(level.block_state(below), pos).0.is_empty() {
+                let below_state = level.block_state(below);
+                if level.get_state_collision_shape_in_context(below_state, pos, &context).is_empty() {
                     return false;
                 }
                 Direction::PLANE_HORIZONTAL.into_iter().any(|direction| {

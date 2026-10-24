@@ -55,6 +55,7 @@ enum ClipShape {
     Empty,
     Block,
     Voxel(&'static VoxelShape, Vec3),
+    Owned(VoxelShape),
     Boxes(Vec<AABB>),
 }
 
@@ -68,6 +69,7 @@ impl ClipShape {
                 (&owned, Vec3::ZERO)
             }
             ClipShape::Voxel(shape, offset) => (*shape, *offset),
+            ClipShape::Owned(shape) => (shape, Vec3::ZERO),
             ClipShape::Boxes(boxes) => {
                 owned = VoxelShape::from_boxes(boxes);
                 (&owned, Vec3::ZERO)
@@ -304,6 +306,9 @@ impl ServerLevel {
             && let Some(shape) = self.shulker_box_clip_shape(state, pos)
         {
             return shape;
+        }
+        if state.is_block(blocks::MOVING_PISTON) {
+            return ClipShape::Owned(crate::world::level::block::moving_piston_block::get_collision_shape(self, pos));
         }
         let (shape, offset) = ctx.collision_context.get_block_collision_shape(state, pos, || self.block_state(pos.above()).fluid_state());
         ClipShape::Voxel(shape, Vec3::new(offset[0], offset[1], offset[2]))

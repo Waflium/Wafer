@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use wafer_core::shapes::VoxelShape;
 use wafer_core::{AABB, Axis, BlockPos, Direction, Vec3};
 use wafer_data::{BlockState, block_tags};
@@ -25,13 +27,13 @@ pub fn is_block_floor_valid(block_floor_height: f64) -> bool {
     !block_floor_height.is_infinite() && block_floor_height < 1.0
 }
 
-pub fn non_climbable_shape(level: &mut ServerLevel, pos: BlockPos) -> &'static VoxelShape {
+pub fn non_climbable_shape(level: &mut ServerLevel, pos: BlockPos) -> Cow<'static, VoxelShape> {
     static EMPTY: std::sync::LazyLock<VoxelShape> = std::sync::LazyLock::new(VoxelShape::empty);
     let block_state = level.block_state(pos);
     if !block_state.is(&block_tags::CLIMBABLE) && !(block_state.block().is_instance_of("TrapDoorBlock") && block_state.get(OPEN)) {
-        block_state.collision_voxel_shape()
+        level.get_state_collision_shape(block_state, pos)
     } else {
-        &EMPTY
+        Cow::Borrowed(&EMPTY)
     }
 }
 
@@ -67,7 +69,8 @@ pub fn find_ceiling_from(level: &mut ServerLevel, pos: BlockPos, blocks: i32) ->
     let mut cursor = pos;
     let mut y = 0;
     while y < blocks {
-        let collision_shape = level.block_state(cursor).collision_voxel_shape();
+        let state = level.block_state(cursor);
+        let collision_shape = level.get_state_collision_shape(state, cursor);
         if !collision_shape.is_empty() {
             return (pos.y + y) as f64 + collision_shape.min(Axis::Y);
         }
@@ -87,11 +90,14 @@ pub fn get_block_floor_height_non_climbable(level: &mut ServerLevel, pos: BlockP
 }
 
 pub fn get_block_floor_height(level: &mut ServerLevel, pos: BlockPos) -> f64 {
-    let block_shape = level.block_state(pos).collision_voxel_shape();
+    let state = level.block_state(pos);
+    let block_shape = level.get_state_collision_shape(state, pos);
     if !block_shape.is_empty() {
         return block_shape.max(Axis::Y);
     }
-    let below_floor = level.block_state(pos.below()).collision_voxel_shape().max(Axis::Y);
+    let below = pos.below();
+    let below_state = level.block_state(below);
+    let below_floor = level.get_state_collision_shape(below_state, below).max(Axis::Y);
     if below_floor >= 1.0 { below_floor - 1.0 } else { f64::NEG_INFINITY }
 }
 

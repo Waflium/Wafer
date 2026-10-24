@@ -184,6 +184,11 @@ impl ItemFrame {
         self.sound("minecraft:entity.item_frame.place", "minecraft:entity.glow_item_frame.place")
     }
 
+    pub fn take_pending_add_item_sound(&mut self) -> Option<(Vec3, i32)> {
+        let position = self.pending_add_item_sound.take()?;
+        (!self.entity.is_silent()).then(|| (position, self.get_add_item_sound()))
+    }
+
     pub fn get_add_item_sound(&self) -> i32 {
         self.sound("minecraft:entity.item_frame.add_item", "minecraft:entity.glow_item_frame.add_item")
     }
@@ -218,12 +223,9 @@ impl ServerLevel {
 
     pub fn item_frame_flush_pending_sounds(&mut self, id: EntityId) {
         let Some(LevelEntity::ItemFrame(frame)) = self.find_entity_mut(id) else { return };
-        let Some(position) = frame.pending_add_item_sound.take() else { return };
-        let sound = frame.get_add_item_sound();
-        if !frame.entity.is_silent() {
-            let source = self.sound_source(id);
-            self.play_sound_at(None, position.x, position.y, position.z, sound, source, 1.0, 1.0);
-        }
+        let Some((position, sound)) = frame.take_pending_add_item_sound() else { return };
+        let source = self.sound_source(id);
+        self.play_sound_at(None, position.x, position.y, position.z, sound, source, 1.0, 1.0);
     }
 
     pub fn item_frame_item(&self, id: EntityId) -> Option<ItemStack> {

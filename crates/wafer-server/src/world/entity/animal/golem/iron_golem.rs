@@ -171,8 +171,8 @@ impl IronGolem {
         let below_pos = pos.below();
         let below = level.block_state(below_pos);
         let collision_context = CollisionContext::of_detached(&mob.entity);
-        let (shape, offset) = collision_context.get_collision_shape(below, below_pos);
-        if !is_face_full(&shape.moved(offset[0], offset[1], offset[2]), Direction::Up) {
+        let shape = level.get_state_collision_shape_in_context(below, below_pos, &collision_context);
+        if !is_face_full(&shape, Direction::Up) {
             return false;
         }
         let entity_type = &entity_types::IRON_GOLEM;
