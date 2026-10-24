@@ -11,7 +11,7 @@ use super::predicates::loot_item_condition::LootItemCondition;
 use super::providers::number::floats::{self, ContextFloatProvider};
 use super::providers::number::ints::ContextIntProvider;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use super::validatable::{self, Validatable};
 use super::validation_context::ValidationContext;
@@ -26,14 +26,20 @@ pub struct LootPool {
 
 impl LootPool {
     pub fn decode(tag: &Nbt) -> DataResult<LootPool> {
-        codec::map(tag)?;
-        Ok(LootPool {
-            entries: codec::decode_field(tag, "entries", |t| codec::list_of(t, loot_pool_entries::decode))?,
-            condition: codec::decode_optional(tag, "condition", LootItemCondition::decode_holder)?,
-            modifier: codec::decode_optional(tag, "modifier", |t| LootItemFunction::decode_holder(t).into_result())?,
-            rolls: codec::decode_field(tag, "rolls", ContextIntProvider::decode_holder)?,
-            bonus_rolls: codec::decode_or(tag, "bonus_rolls", floats::exactly(0.0), ContextFloatProvider::decode_holder)?,
-        })
+        LootPool::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<LootPool> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let entries = record.required(tag, "entries", |entries| codec::list_partial(entries, |entry| DecodeResult::from(loot_pool_entries::decode(entry))));
+        let condition = record.optional(tag, "condition", LootItemCondition::decode_holder_partial);
+        let modifier = record.optional(tag, "modifier", LootItemFunction::decode_holder);
+        let rolls = record.required(tag, "rolls", ContextIntProvider::decode_holder);
+        let bonus_rolls = record.with_default(tag, "bonus_rolls", floats::exactly(0.0), ContextFloatProvider::decode_holder);
+        record.build(|| Some(LootPool { entries: entries?, condition, modifier, rolls: rolls?, bonus_rolls }))
     }
 
     fn add_random_item<'a>(&self, result: &mut dyn FnMut(&mut LootContext<'a>, ItemStack), context: &mut LootContext<'a>) {

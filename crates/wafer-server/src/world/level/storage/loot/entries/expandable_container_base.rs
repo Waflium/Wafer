@@ -2,10 +2,11 @@ use wafer_data::Item;
 use wafer_protocol::nbt::Nbt;
 
 use super::loot_pool_entry::{LootPoolEntry, LootPoolEntryKind};
+use super::loot_pool_entry_container::EntryCommonFields;
 use super::uniform_container_base::UniformContainerBase;
 use crate::core::holder::Holder;
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, Record};
 use crate::world::level::storage::loot::functions::loot_item_function::LootItemFunction;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::loot_table::LootTable;
@@ -22,12 +23,14 @@ pub struct ExpandableContainerBase {
 }
 
 impl ExpandableContainerBase {
-    pub fn decode(tag: &Nbt, ty: &str) -> DataResult<ExpandableContainerBase> {
+    pub fn decode_in(record: &mut Record, tag: &Nbt, ty: &str) -> Option<(ExpandableContainerBase, EntryCommonFields)> {
         let entry = match ty {
-            "minecraft:tag" => ExpandableEntry::TagEntry(codec::decode_field(tag, "items", |t| HolderSet::decode("minecraft:item", t))?),
-            _ => ExpandableEntry::NestedLootTable(codec::decode_field(tag, "value", LootTable::decode_list)?),
+            "minecraft:tag" => record.required(tag, "items", |t| HolderSet::decode("minecraft:item", t)).map(ExpandableEntry::TagEntry),
+            _ => record.required(tag, "value", LootTable::decode_holder_set).map(ExpandableEntry::NestedLootTable),
         };
-        Ok(ExpandableContainerBase { base: UniformContainerBase::decode(tag)?, expand: codec::decode_or(tag, "expand", false, codec::bool_value)?, entry })
+        let expand = record.with_default(tag, "expand", false, codec::bool_value);
+        let (base, common) = UniformContainerBase::decode_in(record, tag);
+        Some((ExpandableContainerBase { base, expand, entry: entry? }, common))
     }
 
     pub fn expand_raw<'a, 'e>(

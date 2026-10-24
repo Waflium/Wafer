@@ -2,9 +2,10 @@ use wafer_data::Item;
 use wafer_protocol::nbt::Nbt;
 
 use super::loot_pool_entry::{LootPoolEntry, LootPoolEntryKind};
+use super::loot_pool_entry_container::EntryCommonFields;
 use super::uniform_container_base::UniformContainerBase;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, Record};
 use crate::world::item::slot::slot_source::SlotSource;
 use crate::world::level::storage::loot::functions::loot_item_function::LootItemFunction;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -22,17 +23,19 @@ pub struct SingleEntryContainerBase {
 }
 
 impl SingleEntryContainerBase {
-    pub fn decode(tag: &Nbt, ty: &str) -> DataResult<SingleEntryContainerBase> {
+    pub fn decode_in(record: &mut Record, tag: &Nbt, ty: &str) -> Option<(SingleEntryContainerBase, EntryCommonFields)> {
         let entry = match ty {
-            "minecraft:item" => SingleEntry::LootItem(codec::decode_field(tag, "name", |t| {
+            "minecraft:item" => record.required(tag, "name", |t| {
                 let id = codec::identifier(t)?;
                 Item::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: {id}"))
-            })?),
-            "minecraft:dynamic" => SingleEntry::DynamicLoot(codec::decode_field(tag, "name", codec::identifier)?),
-            "minecraft:slots" => SingleEntry::SlotLoot(codec::decode_field(tag, "slot_source", SlotSource::decode_holder)?),
-            _ => SingleEntry::EmptyLootItem,
+            })
+            .map(SingleEntry::LootItem),
+            "minecraft:dynamic" => record.required(tag, "name", codec::identifier).map(SingleEntry::DynamicLoot),
+            "minecraft:slots" => record.required(tag, "slot_source", SlotSource::decode_holder).map(SingleEntry::SlotLoot),
+            _ => Some(SingleEntry::EmptyLootItem),
         };
-        Ok(SingleEntryContainerBase { base: UniformContainerBase::decode(tag)?, entry })
+        let (base, common) = UniformContainerBase::decode_in(record, tag);
+        Some((SingleEntryContainerBase { base, entry: entry? }, common))
     }
 
     pub fn expand_raw<'a, 'e>(

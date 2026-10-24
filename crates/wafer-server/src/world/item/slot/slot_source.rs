@@ -7,7 +7,7 @@ use crate::world::entity::slot_access::LevelSlot;
 use crate::advancements::predicates::item_predicate::ItemPredicate;
 use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, Record};
 use crate::world::inventory::slot_ranges::{self, SlotRange};
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::container_component_manipulator::ContainerComponentManipulator;
@@ -92,13 +92,15 @@ impl SlotSource {
                     Ok(value)
                 })?,
             },
-            "minecraft:slot_range" => SlotSource::SlotRange {
-                source: codec::decode_or(tag, "source", LootContextArg::Container, |t| LootContextArg::decode(t, SOURCE_CODEC))?,
-                slot_range: codec::decode_field(tag, "slots", |t| {
+            "minecraft:slot_range" => {
+                let mut record = Record::default();
+                let source = record.with_default(tag, "source", LootContextArg::Container, |t| LootContextArg::decode(t, SOURCE_CODEC));
+                let slot_range = record.required(tag, "slots", |t| {
                     let name = codec::string(t)?;
-                    slot_ranges::name_to_ids(name).ok_or_else(|| format!("Unknown slot range: {name}"))
-                })?,
-            },
+                    slot_ranges::name_to_ids(name).ok_or_else(|| format!("Unknown element name:{name}"))
+                });
+                record.build(|| Some(SlotSource::SlotRange { source, slot_range: slot_range? })).into_result()?
+            }
             "minecraft:contents" => SlotSource::Contents { slot_source: slot_source()?, component: codec::decode_field(tag, "component", container_component_manipulators::decode)? },
             "minecraft:empty" => SlotSource::Empty,
             other => return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:slot_source_type]: {other}")),

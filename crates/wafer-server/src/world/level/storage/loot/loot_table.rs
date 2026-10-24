@@ -9,7 +9,7 @@ use super::loot_pool::LootPool;
 use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::container::ContainerRef;
 use crate::world::item::ItemStack;
 use super::parameters::loot_context_param_sets::{self, ContextKeySet};
@@ -54,13 +54,19 @@ pub fn create_stack_splitter<'a>(output: &mut dyn FnMut(&mut LootContext<'a>, It
 
 impl LootTable {
     pub fn decode(tag: &Nbt) -> DataResult<LootTable> {
-        codec::map(tag)?;
-        Ok(LootTable {
-            param_set: codec::optional_field(tag, "type").and_then(|t| codec::identifier(t).ok()).and_then(|name| loot_context_param_sets::by_name(&name)).unwrap_or(&loot_context_param_sets::ALL_PARAMS),
-            random_sequence: codec::decode_optional(tag, "random_sequence", codec::identifier)?,
-            pools: codec::decode_or(tag, "pools", Vec::new(), |t| codec::list_of(t, LootPool::decode))?,
-            modifier: codec::decode_optional(tag, "modifier", |t| LootItemFunction::decode_holder(t).into_result())?,
-        })
+        LootTable::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<LootTable> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let param_set = codec::optional_field(tag, "type").and_then(|t| codec::identifier(t).ok()).and_then(|name| loot_context_param_sets::by_name(&name)).unwrap_or(&loot_context_param_sets::ALL_PARAMS);
+        let random_sequence = record.optional(tag, "random_sequence", |sequence| DecodeResult::from(codec::identifier(sequence)));
+        let pools = record.with_default(tag, "pools", Vec::new(), |pools| codec::list_partial(pools, LootPool::decode_partial));
+        let modifier = record.optional(tag, "modifier", LootItemFunction::decode_holder);
+        record.build(|| Some(LootTable { param_set, random_sequence, pools, modifier }))
     }
 
     pub fn decode_holder(tag: &Nbt) -> DataResult<Holder<LootTable>> {

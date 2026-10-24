@@ -11,7 +11,7 @@ use super::expandable_container_base::ExpandableContainerBase;
 use super::loot_pool_entry::LootPoolEntry;
 use super::single_entry_container_base::SingleEntryContainerBase;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::Record;
 use crate::world::level::storage::loot::functions::loot_item_function::LootItemFunction;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -22,6 +22,11 @@ pub enum LootPoolEntryContainerType {
     Composite(CompositeEntryBase),
 }
 
+pub struct EntryCommonFields {
+    condition: Option<Holder<LootItemCondition>>,
+    modifier: Option<Holder<LootItemFunction>>,
+}
+
 pub struct LootPoolEntryContainer {
     pub(super) condition: Option<Holder<LootItemCondition>>,
     modifier: Option<Holder<LootItemFunction>>,
@@ -29,12 +34,14 @@ pub struct LootPoolEntryContainer {
 }
 
 impl LootPoolEntryContainer {
-    pub fn decode(tag: &Nbt, entry: LootPoolEntryContainerType) -> DataResult<LootPoolEntryContainer> {
-        Ok(LootPoolEntryContainer {
-            condition: codec::decode_optional(tag, "condition", LootItemCondition::decode_holder)?,
-            modifier: codec::decode_optional(tag, "modifier", |t| LootItemFunction::decode_holder(t).into_result())?,
-            entry,
-        })
+    pub fn decode_common_in(record: &mut Record, tag: &Nbt) -> EntryCommonFields {
+        let condition = record.optional(tag, "condition", LootItemCondition::decode_holder_partial);
+        let modifier = record.optional(tag, "modifier", LootItemFunction::decode_holder);
+        EntryCommonFields { condition, modifier }
+    }
+
+    pub fn new(common: EntryCommonFields, entry: LootPoolEntryContainerType) -> LootPoolEntryContainer {
+        LootPoolEntryContainer { condition: common.condition, modifier: common.modifier, entry }
     }
 
     fn expand_raw<'a, 'e>(
