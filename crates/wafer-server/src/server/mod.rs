@@ -830,7 +830,7 @@ impl Server {
         self.stopping = true;
     }
 
-    pub fn reload_resources<S: AsRef<str>>(&mut self, packs_to_enable: &[S]) -> Result<(), String> {
+    pub fn reload_resources<S: AsRef<str>>(&mut self, packs_to_enable: &[S]) -> Result<(), crate::util::java_throwable::JavaThrowable> {
         let packs_to_load = packs_to_enable.iter().filter_map(|id| self.pack_repository.pack(id.as_ref())).map(|pack| pack.open()).collect();
         let resource_manager = MultiPackResourceManager::new(packs_to_load);
         let postponed_tags = wafer_data::prepare_tags(crate::tags::load_tags_for_existing_registries(&resource_manager));

@@ -4,6 +4,7 @@ use super::packs::resources::MultiPackResourceManager;
 use super::reloadable_server_registries::{self, LoadResult, ReloadableRegistries};
 use super::server_advancement_manager::ServerAdvancementManager;
 use super::server_function_library::{ServerFunctionLibrary, worker_name};
+use crate::util::java_throwable::JavaThrowable;
 use crate::world::item::crafting::recipe_manager::RecipeManager;
 
 pub struct ReloadableServerResources {
@@ -15,7 +16,7 @@ pub struct ReloadableServerResources {
 }
 
 impl ReloadableServerResources {
-    pub fn load_resources(resource_manager: &MultiPackResourceManager, postponed_tags: &'static [RegistryTags], function_compilation_permission: i32) -> Result<ReloadableServerResources, String> {
+    pub fn load_resources(resource_manager: &MultiPackResourceManager, postponed_tags: &'static [RegistryTags], function_compilation_permission: i32) -> Result<ReloadableServerResources, JavaThrowable> {
         let (loaded, advancements) = std::thread::scope(|scope| {
             std::thread::Builder::new()
                 .name(worker_name())

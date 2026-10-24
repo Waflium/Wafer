@@ -9,7 +9,9 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::server::packs::repository::VANILLA_ID;
 use crate::server::packs::resources::MultiPackResourceManager;
+use crate::resources::registry_load_task::{self, ElementFailure};
 use crate::server::reloadable_server_registries::LoadingErrors;
+use crate::util::java_throwable::JavaThrowable;
 
 pub struct DataRegistry {
     name: &'static str,
@@ -152,7 +154,8 @@ struct PackElement {
     registry: &'static str,
     id: String,
     pack: String,
-    json: Result<Value, String>,
+    resource_count: usize,
+    json: Result<Value, JavaThrowable>,
 }
 
 static PACK_ELEMENTS: Mutex<Vec<PackElement>> = Mutex::new(Vec::new());
@@ -188,11 +191,14 @@ fn unknown_reference_message(registry: &str, key: &str) -> String {
     format!("Unknown registry key in ResourceKey[minecraft:root / {registry}]: {key}")
 }
 
-fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, pack_elements: &mut Vec<PackElement>) -> Option<Value> {
-    let json = resource.supplier.read().map_err(|e| e.to_string()).and_then(|bytes| crate::util::gson::parse_strict_bytes(&bytes));
+fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, resource_count: usize, pack_elements: &mut Vec<PackElement>) -> Option<Value> {
+    let json = match resource.supplier.read() {
+        Ok(bytes) => crate::util::gson::parse_strict_bytes_throwable(&bytes),
+        Err(error) => Err(JavaThrowable::new(format!("java.io.IOException: {error}"), Vec::new())),
+    };
     let parsed = json.as_ref().ok().cloned();
     if resource.source_pack_id != VANILLA_ID {
-        pack_elements.push(PackElement { registry, id: id.to_string(), pack: resource.source_pack_id.clone(), json });
+        pack_elements.push(PackElement { registry, id: id.to_string(), pack: resource.source_pack_id.clone(), resource_count, json });
     }
     parsed
 }
@@ -211,7 +217,7 @@ fn load_registry(
     for (location, resource) in &resources {
         let (namespace, path) = location.split_once(':').unwrap();
         let id = format!("{namespace}:{}", &path[directory.len() + 1..path.len() - ".json".len()]);
-        let Some(json) = read_element(name, &id, resource, pack_elements) else { continue };
+        let Some(json) = read_element(name, &id, resource, resources.len(), pack_elements) else { continue };
         let index = match entries.iter().position(|&entry| entry == id) {
             Some(index) => index,
             None => {
@@ -256,10 +262,11 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     }
     wafer_data::set_data_registry_entries(unsynchronized);
     let mut stems: Vec<(&'static str, Value)> = Vec::new();
-    for (location, resource) in resource_manager.list_resources("dimension", ".json") {
+    let dimension_resources = resource_manager.list_resources("dimension", ".json");
+    for (location, resource) in &dimension_resources {
         let (namespace, path) = location.split_once(':').unwrap();
         let id = format!("{namespace}:{}", &path["dimension".len() + 1..path.len() - ".json".len()]);
-        if let Some(json) = read_element("minecraft:dimension", &id, &resource, &mut pack_elements) {
+        if let Some(json) = read_element("minecraft:dimension", &id, resource, dimension_resources.len(), &mut pack_elements) {
             stems.push((leak(id), json));
         }
     }
@@ -319,7 +326,7 @@ fn validate_timelines(errors: &mut LoadingErrors) {
             if defined.contains(&key) {
                 errors.0.insert(
                     (REGISTRY.to_string(), id.to_string()),
-                    format!("java.lang.IllegalStateException: ResourceKey[minecraft:clock_time_marker / {}] was defined multiple times in {}", key.1, key.0),
+                    registry_load_task::timeline_marker_defined_multiple_times(format!("ResourceKey[minecraft:clock_time_marker / {}] was defined multiple times in {}", key.1, key.0)),
                 );
             } else {
                 defined.push(key);
@@ -328,18 +335,20 @@ fn validate_timelines(errors: &mut LoadingErrors) {
     }
 }
 
-pub fn validate() -> Result<(), String> {
+pub fn validate() -> Result<(), JavaThrowable> {
     let pack_elements = std::mem::take(&mut *PACK_ELEMENTS.lock().unwrap());
     let mut errors = LoadingErrors(Default::default());
     UNBOUND.with(|unbound| unbound.replace(Some(Vec::new())));
     UNBOUND_TAGS.with(|unbound| unbound.replace(Some(Vec::new())));
     for element in &pack_elements {
-        let decoded = element.json.as_ref().map_err(Clone::clone).and_then(|json| crate::nbt::with_json_source(|| decode(element.registry, json)));
+        let decoded = match &element.json {
+            Ok(json) => crate::nbt::with_json_source(|| decode(element.registry, json)).map_err(ElementFailure::Decode),
+            Err(throwable) => Err(ElementFailure::Parse(throwable.clone())),
+        };
         let unbound = UNBOUND.with(|unbound| unbound.borrow().as_ref().and_then(|unbound| unbound.last().map(|(registry, key)| unknown_reference_message(registry, key))));
         match decoded {
-            Err(cause) if unbound.as_ref() == Some(&cause) => {}
-            Err(cause) if element.json.is_err() => errors.parse_error(element.registry, &element.id, &element.pack, cause),
-            Err(cause) => errors.parse_error(element.registry, &element.id, &element.pack, format!("java.lang.IllegalStateException: {cause}")),
+            Err(ElementFailure::Decode(cause)) if unbound.as_ref() == Some(&cause) => {}
+            Err(failure) => errors.parse_error(element.registry, &element.id, &element.pack, element.resource_count, failure),
             Ok(()) => {}
         }
     }
@@ -347,21 +356,22 @@ pub fn validate() -> Result<(), String> {
     let unbound_tags = group_unbound(UNBOUND_TAGS.with(|unbound| unbound.take()).unwrap_or_default());
     for (registry, keys) in &unbound_tags {
         if !unbound_values.contains_key(registry) {
-            errors.0.insert(("minecraft:root".to_string(), registry.clone()), format!("java.lang.IllegalStateException: Unbound tags in registry ResourceKey[minecraft:root / {registry}]: [{}]", keys.join(", ")));
+            errors.0.insert(("minecraft:root".to_string(), registry.clone()), registry_load_task::unbound_tags(&format!("ResourceKey[minecraft:root / {registry}]"), keys));
         }
     }
     for (registry, keys) in unbound_values {
-        errors.0.insert(("minecraft:root".to_string(), registry.clone()), format!("java.lang.IllegalStateException: Unbound values in registry ResourceKey[minecraft:root / {registry}]: [{}]", keys.join(", ")));
+        errors.0.insert(("minecraft:root".to_string(), registry.clone()), registry_load_task::unbound_values(&format!("ResourceKey[minecraft:root / {registry}]"), &keys));
     }
+    let mut validation_stage = false;
     if errors.0.is_empty() {
+        validation_stage = true;
         validate_timelines(&mut errors);
     }
     if errors.0.is_empty() {
         return Ok(());
     }
-    let report = errors.report();
-    error!("{report}");
-    Err(report)
+    error!("{}", errors.report());
+    Err(registry_load_task::registry_loading_failed(validation_stage))
 }
 
 fn decode(registry: &str, json: &Value) -> Result<(), String> {

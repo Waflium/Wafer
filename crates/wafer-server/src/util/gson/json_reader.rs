@@ -19,14 +19,51 @@ pub enum JsonToken {
     EndDocument,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JsonReaderErrorKind {
+    EndOfInput,
+    Malformed,
+    IllegalState,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum JsonReaderError {
-    EndOfInput(String),
-    Malformed(String),
-    IllegalState(String),
+pub struct JsonReaderError {
+    pub kind: JsonReaderErrorKind,
+    pub message: String,
+    pub stack_trace: Vec<&'static str>,
+}
+
+impl JsonReaderError {
+    fn new(kind: JsonReaderErrorKind, message: String, stack_trace: Vec<&'static str>) -> JsonReaderError {
+        JsonReaderError { kind, message, stack_trace }
+    }
+
+    pub(super) fn in_method(mut self, frame: &'static str) -> JsonReaderError {
+        self.stack_trace.push(frame);
+        self
+    }
+}
+
+macro_rules! jr {
+    ($method:literal, $line:literal) => {
+        concat!("com.google.gson.stream.JsonReader.", $method, "(JsonReader.java:", $line, ")")
+    };
 }
 
 type Result<T> = std::result::Result<T, JsonReaderError>;
+
+pub(super) trait Traced<T> {
+    fn at(self, frame: &'static str) -> Result<T>;
+}
+
+impl<T> Traced<T> for Result<T> {
+    fn at(self, frame: &'static str) -> Result<T> {
+        self.map_err(|mut error| {
+            error.stack_trace.push(frame);
+            error
+        })
+    }
+}
 
 const PEEKED_NONE: u8 = 0;
 const PEEKED_BEGIN_OBJECT: u8 = 1;
@@ -118,55 +155,55 @@ impl JsonReader {
     }
 
     pub fn begin_array(&mut self) -> Result<()> {
-        if self.peeked_or_peek()? == PEEKED_BEGIN_ARRAY {
-            self.push(EMPTY_ARRAY)?;
+        if self.peeked_or_peek().at(jr!("beginArray", 461))? == PEEKED_BEGIN_ARRAY {
+            self.push(EMPTY_ARRAY).at(jr!("beginArray", 464))?;
             *self.top_index() = 0;
             self.peeked = PEEKED_NONE;
             Ok(())
         } else {
-            Err(self.unexpected_token_error("BEGIN_ARRAY")?)
+            Err(self.unexpected_token_error("BEGIN_ARRAY").at(jr!("beginArray", 468))?.in_method(jr!("beginArray", 468)))
         }
     }
 
     pub fn end_array(&mut self) -> Result<()> {
-        if self.peeked_or_peek()? == PEEKED_END_ARRAY {
+        if self.peeked_or_peek().at(jr!("endArray", 481))? == PEEKED_END_ARRAY {
             self.pop();
             *self.top_index() += 1;
             self.peeked = PEEKED_NONE;
             Ok(())
         } else {
-            Err(self.unexpected_token_error("END_ARRAY")?)
+            Err(self.unexpected_token_error("END_ARRAY").at(jr!("endArray", 488))?.in_method(jr!("endArray", 488)))
         }
     }
 
     pub fn begin_object(&mut self) -> Result<()> {
-        if self.peeked_or_peek()? == PEEKED_BEGIN_OBJECT {
-            self.push(EMPTY_OBJECT)?;
+        if self.peeked_or_peek().at(jr!("beginObject", 501))? == PEEKED_BEGIN_OBJECT {
+            self.push(EMPTY_OBJECT).at(jr!("beginObject", 504))?;
             self.peeked = PEEKED_NONE;
             Ok(())
         } else {
-            Err(self.unexpected_token_error("BEGIN_OBJECT")?)
+            Err(self.unexpected_token_error("BEGIN_OBJECT").at(jr!("beginObject", 507))?.in_method(jr!("beginObject", 507)))
         }
     }
 
     pub fn end_object(&mut self) -> Result<()> {
-        if self.peeked_or_peek()? == PEEKED_END_OBJECT {
+        if self.peeked_or_peek().at(jr!("endObject", 520))? == PEEKED_END_OBJECT {
             self.pop();
             *self.top_index() += 1;
             self.peeked = PEEKED_NONE;
             Ok(())
         } else {
-            Err(self.unexpected_token_error("END_OBJECT")?)
+            Err(self.unexpected_token_error("END_OBJECT").at(jr!("endObject", 528))?.in_method(jr!("endObject", 528)))
         }
     }
 
     pub fn has_next(&mut self) -> Result<bool> {
-        let p = self.peeked_or_peek()?;
+        let p = self.peeked_or_peek().at(jr!("hasNext", 536))?;
         Ok(p != PEEKED_END_OBJECT && p != PEEKED_END_ARRAY && p != PEEKED_EOF)
     }
 
     pub fn peek(&mut self) -> Result<JsonToken> {
-        Ok(match self.peeked_or_peek()? {
+        Ok(match self.peeked_or_peek().at(jr!("peek", 545))? {
             PEEKED_BEGIN_OBJECT => JsonToken::BeginObject,
             PEEKED_END_OBJECT => JsonToken::EndObject,
             PEEKED_BEGIN_ARRAY => JsonToken::BeginArray,
@@ -187,36 +224,36 @@ impl JsonReader {
         if peek_stack == EMPTY_ARRAY {
             self.stack[top] = NONEMPTY_ARRAY;
         } else if peek_stack == NONEMPTY_ARRAY {
-            match self.next_non_whitespace(true)? {
+            match self.next_non_whitespace(true).at(jr!("doPeek", 588))? {
                 0x2c => {}
-                0x3b => self.check_lenient()?,
+                0x3b => self.check_lenient().at(jr!("doPeek", 594))?,
                 0x5d => {
                     self.peeked = PEEKED_END_ARRAY;
                     return Ok(self.peeked);
                 }
-                _ => return Err(self.syntax_error("Unterminated array")),
+                _ => return Err(self.syntax_error("Unterminated array", jr!("doPeek", 598))),
             }
         } else if peek_stack == EMPTY_OBJECT || peek_stack == NONEMPTY_OBJECT {
             self.stack[top] = DANGLING_NAME;
             if peek_stack == NONEMPTY_OBJECT {
-                match self.next_non_whitespace(true)? {
+                match self.next_non_whitespace(true).at(jr!("doPeek", 604))? {
                     0x2c => {}
-                    0x3b => self.check_lenient()?,
+                    0x3b => self.check_lenient().at(jr!("doPeek", 610))?,
                     0x7d => {
                         self.peeked = PEEKED_END_OBJECT;
                         return Ok(self.peeked);
                     }
-                    _ => return Err(self.syntax_error("Unterminated object")),
+                    _ => return Err(self.syntax_error("Unterminated object", jr!("doPeek", 614))),
                 }
             }
-            let c = self.next_non_whitespace(true)?;
+            let c = self.next_non_whitespace(true).at(jr!("doPeek", 617))?;
             match c {
                 0x22 => {
                     self.peeked = PEEKED_DOUBLE_QUOTED_NAME;
                     return Ok(self.peeked);
                 }
                 0x27 => {
-                    self.check_lenient()?;
+                    self.check_lenient().at(jr!("doPeek", 623))?;
                     self.peeked = PEEKED_SINGLE_QUOTED_NAME;
                     return Ok(self.peeked);
                 }
@@ -225,53 +262,53 @@ impl JsonReader {
                         self.peeked = PEEKED_END_OBJECT;
                         return Ok(self.peeked);
                     }
-                    return Err(self.syntax_error("Expected name"));
+                    return Err(self.syntax_error("Expected name", jr!("doPeek", 631)));
                 }
                 _ => {
-                    self.check_lenient()?;
+                    self.check_lenient().at(jr!("doPeek", 634))?;
                     self.pos -= 1;
-                    if self.is_literal(c as u16)? {
+                    if self.is_literal(c as u16).at(jr!("doPeek", 636))? {
                         self.peeked = PEEKED_UNQUOTED_NAME;
                         return Ok(self.peeked);
                     }
-                    return Err(self.syntax_error("Expected name"));
+                    return Err(self.syntax_error("Expected name", jr!("doPeek", 640)));
                 }
             }
         } else if peek_stack == DANGLING_NAME {
             self.stack[top] = NONEMPTY_OBJECT;
-            match self.next_non_whitespace(true)? {
+            match self.next_non_whitespace(true).at(jr!("doPeek", 646))? {
                 0x3a => {}
                 0x3d => {
-                    self.check_lenient()?;
+                    self.check_lenient().at(jr!("doPeek", 651))?;
                     if self.pos < self.limit() && self.buffer[self.pos] == b'>' as u16 {
                         self.pos += 1;
                     }
                 }
-                _ => return Err(self.syntax_error("Expected ':'")),
+                _ => return Err(self.syntax_error("Expected ':'", jr!("doPeek", 657))),
             }
         } else if peek_stack == EMPTY_DOCUMENT {
             if self.strictness == Strictness::Lenient {
-                self.consume_non_execute_prefix()?;
+                self.consume_non_execute_prefix().at(jr!("doPeek", 661))?;
             }
             self.stack[top] = NONEMPTY_DOCUMENT;
         } else if peek_stack == NONEMPTY_DOCUMENT {
-            let c = self.next_non_whitespace(false)?;
+            let c = self.next_non_whitespace(false).at(jr!("doPeek", 665))?;
             if c == -1 {
                 self.peeked = PEEKED_EOF;
                 return Ok(self.peeked);
             }
-            self.check_lenient()?;
+            self.check_lenient().at(jr!("doPeek", 670))?;
             self.pos -= 1;
         }
 
-        let c = self.next_non_whitespace(true)?;
+        let c = self.next_non_whitespace(true).at(jr!("doPeek", 677))?;
         match c {
             0x22 => {
                 self.peeked = PEEKED_DOUBLE_QUOTED;
                 Ok(self.peeked)
             }
             0x27 => {
-                self.check_lenient()?;
+                self.check_lenient().at(jr!("doPeek", 697))?;
                 self.peeked = PEEKED_SINGLE_QUOTED;
                 Ok(self.peeked)
             }
@@ -285,9 +322,9 @@ impl JsonReader {
             }
             0x5d | 0x2c | 0x3b => {
                 if peek_stack != EMPTY_ARRAY && peek_stack != NONEMPTY_ARRAY {
-                    return Err(self.syntax_error("Unexpected value"));
+                    return Err(self.syntax_error("Unexpected value", jr!("doPeek", 694)));
                 }
-                self.check_lenient()?;
+                self.check_lenient().at(jr!("doPeek", 689))?;
                 self.pos -= 1;
                 self.peeked = PEEKED_NULL;
                 Ok(self.peeked)
@@ -298,18 +335,18 @@ impl JsonReader {
             }
             _ => {
                 self.pos -= 1;
-                let result = self.peek_keyword()?;
+                let result = self.peek_keyword().at(jr!("doPeek", 713))?;
                 if result != PEEKED_NONE {
                     return Ok(result);
                 }
-                let result = self.peek_number()?;
+                let result = self.peek_number().at(jr!("doPeek", 718))?;
                 if result != PEEKED_NONE {
                     return Ok(result);
                 }
-                if !self.is_literal(self.buffer[self.pos])? {
-                    return Err(self.syntax_error("Expected value"));
+                if !self.is_literal(self.buffer[self.pos]).at(jr!("doPeek", 723))? {
+                    return Err(self.syntax_error("Expected value", jr!("doPeek", 724)));
                 }
-                self.check_lenient()?;
+                self.check_lenient().at(jr!("doPeek", 727))?;
                 self.peeked = PEEKED_UNQUOTED;
                 Ok(self.peeked)
             }
@@ -339,7 +376,7 @@ impl JsonReader {
                 return Ok(PEEKED_NONE);
             }
         }
-        if self.pos + length < self.limit() && self.is_literal(self.buffer[self.pos + length])? {
+        if self.pos + length < self.limit() && self.is_literal(self.buffer[self.pos + length]).at(jr!("peekKeyword", 772))? {
             return Ok(PEEKED_NONE);
         }
         self.pos += length;
@@ -394,7 +431,7 @@ impl JsonReader {
                 }
                 _ => {
                     if !(0x30..=0x39).contains(&c) {
-                        if self.is_literal(c)? {
+                        if self.is_literal(c).at(jr!("peekNumber", 847))? {
                             return Ok(PEEKED_NONE);
                         }
                         break;
@@ -436,7 +473,7 @@ impl JsonReader {
     fn is_literal(&self, c: u16) -> Result<bool> {
         match c {
             0x23 | 0x2f | 0x3b | 0x3d | 0x5c => {
-                self.check_lenient()?;
+                self.check_lenient().at(jr!("isLiteral", 902))?;
                 Ok(false)
             }
             0x09 | 0x0a | 0x0c | 0x0d | 0x20 | 0x2c | 0x3a | 0x5b | 0x5d | 0x7b | 0x7d => Ok(false),
@@ -445,11 +482,11 @@ impl JsonReader {
     }
 
     pub fn next_name(&mut self) -> Result<String> {
-        let result = match self.peeked_or_peek()? {
-            PEEKED_UNQUOTED_NAME => self.next_unquoted_value()?,
-            PEEKED_SINGLE_QUOTED_NAME => self.next_quoted_value(b'\'' as u16)?,
-            PEEKED_DOUBLE_QUOTED_NAME => self.next_quoted_value(b'"' as u16)?,
-            _ => return Err(self.unexpected_token_error("a name")?),
+        let result = match self.peeked_or_peek().at(jr!("nextName", 928))? {
+            PEEKED_UNQUOTED_NAME => self.next_unquoted_value().at(jr!("nextName", 932))?,
+            PEEKED_SINGLE_QUOTED_NAME => self.next_quoted_value(b'\'' as u16).at(jr!("nextName", 934))?,
+            PEEKED_DOUBLE_QUOTED_NAME => self.next_quoted_value(b'"' as u16).at(jr!("nextName", 936))?,
+            _ => return Err(self.unexpected_token_error("a name").at(jr!("nextName", 938))?.in_method(jr!("nextName", 938))),
         };
         self.peeked = PEEKED_NONE;
         let index = self.stack.len() - 1;
@@ -458,10 +495,10 @@ impl JsonReader {
     }
 
     pub fn next_string(&mut self) -> Result<String> {
-        let result = match self.peeked_or_peek()? {
-            PEEKED_UNQUOTED => self.next_unquoted_value()?,
-            PEEKED_SINGLE_QUOTED => self.next_quoted_value(b'\'' as u16)?,
-            PEEKED_DOUBLE_QUOTED => self.next_quoted_value(b'"' as u16)?,
+        let result = match self.peeked_or_peek().at(jr!("nextString", 954))? {
+            PEEKED_UNQUOTED => self.next_unquoted_value().at(jr!("nextString", 958))?,
+            PEEKED_SINGLE_QUOTED => self.next_quoted_value(b'\'' as u16).at(jr!("nextString", 960))?,
+            PEEKED_DOUBLE_QUOTED => self.next_quoted_value(b'"' as u16).at(jr!("nextString", 962))?,
             PEEKED_BUFFERED => self.peeked_string.take().unwrap_or_default(),
             PEEKED_LONG => self.peeked_long.to_string(),
             PEEKED_NUMBER => {
@@ -469,7 +506,7 @@ impl JsonReader {
                 self.pos += self.peeked_number_length;
                 result
             }
-            _ => return Err(self.unexpected_token_error("a string")?),
+            _ => return Err(self.unexpected_token_error("a string").at(jr!("nextString", 972))?.in_method(jr!("nextString", 972))),
         };
         self.peeked = PEEKED_NONE;
         *self.top_index() += 1;
@@ -477,10 +514,10 @@ impl JsonReader {
     }
 
     pub fn next_boolean(&mut self) -> Result<bool> {
-        let result = match self.peeked_or_peek()? {
+        let result = match self.peeked_or_peek().at(jr!("nextBoolean", 987))? {
             PEEKED_TRUE => true,
             PEEKED_FALSE => false,
-            _ => return Err(self.unexpected_token_error("a boolean")?),
+            _ => return Err(self.unexpected_token_error("a boolean").at(jr!("nextBoolean", 998))?.in_method(jr!("nextBoolean", 998))),
         };
         self.peeked = PEEKED_NONE;
         *self.top_index() += 1;
@@ -488,8 +525,8 @@ impl JsonReader {
     }
 
     pub fn next_null(&mut self) -> Result<()> {
-        if self.peeked_or_peek()? != PEEKED_NULL {
-            return Err(self.unexpected_token_error("null")?);
+        if self.peeked_or_peek().at(jr!("nextNull", 1009))? != PEEKED_NULL {
+            return Err(self.unexpected_token_error("null").at(jr!("nextNull", 1015))?.in_method(jr!("nextNull", 1015)));
         }
         self.peeked = PEEKED_NONE;
         *self.top_index() += 1;
@@ -504,7 +541,7 @@ impl JsonReader {
             let c = self.buffer[p];
             p += 1;
             if self.strictness == Strictness::Strict && c < 32 {
-                return Err(self.syntax_error("Unescaped control characters (\\u0000-\\u001F) are not allowed in strict mode"));
+                return Err(self.syntax_error("Unescaped control characters (\\u0000-\\u001F) are not allowed in strict mode", jr!("nextQuotedValue", 1140)));
             }
             if c == quote {
                 self.pos = p;
@@ -514,7 +551,7 @@ impl JsonReader {
             if c == 0x5c {
                 self.pos = p;
                 builder.extend_from_slice(&self.buffer[start..p - 1]);
-                let escaped = self.read_escape_character()?;
+                let escaped = self.read_escape_character().at(jr!("nextQuotedValue", 1159))?;
                 builder.push(escaped);
                 p = self.pos;
                 start = p;
@@ -524,7 +561,7 @@ impl JsonReader {
             }
         }
         self.pos = p;
-        Err(self.syntax_error("Unterminated string"))
+        Err(self.syntax_error("Unterminated string", jr!("nextQuotedValue", 1176)))
     }
 
     fn next_unquoted_value(&mut self) -> Result<String> {
@@ -533,7 +570,7 @@ impl JsonReader {
             match self.buffer[self.pos + i] {
                 0x09 | 0x0a | 0x0c | 0x0d | 0x20 | 0x2c | 0x3a | 0x5b | 0x5d | 0x7b | 0x7d => break,
                 0x23 | 0x2f | 0x3b | 0x3d | 0x5c => {
-                    self.check_lenient()?;
+                    self.check_lenient().at(jr!("nextUnquotedValue", 1196))?;
                     break;
                 }
                 _ => i += 1,
@@ -546,7 +583,11 @@ impl JsonReader {
 
     fn push(&mut self, new_top: u8) -> Result<()> {
         if self.stack.len() - 1 >= self.nesting_limit {
-            return Err(JsonReaderError::Malformed(format!("Nesting limit {} reached{}", self.nesting_limit, self.location_string())));
+            return Err(JsonReaderError::new(
+                JsonReaderErrorKind::Malformed,
+                format!("Nesting limit {} reached{}", self.nesting_limit, self.location_string()),
+                vec![jr!("push", 1472)],
+            ));
         }
         self.stack.push(new_top);
         self.path_names.push(None);
@@ -566,7 +607,11 @@ impl JsonReader {
             if p == self.limit() {
                 self.pos = p;
                 if throw_on_eof {
-                    return Err(JsonReaderError::EndOfInput(format!("End of input{}", self.location_string())));
+                    return Err(JsonReaderError::new(
+                        JsonReaderErrorKind::EndOfInput,
+                        format!("End of input{}", self.location_string()),
+                        vec![jr!("nextNonWhitespace", 1605)],
+                    ));
                 }
                 return Ok(-1);
             }
@@ -581,12 +626,12 @@ impl JsonReader {
                     if p == self.limit() {
                         return Ok(c as i32);
                     }
-                    self.check_lenient()?;
+                    self.check_lenient().at(jr!("nextNonWhitespace", 1564))?;
                     match self.buffer[self.pos] {
                         0x2a => {
                             self.pos += 1;
                             if !self.skip_to(b"*/") {
-                                return Err(self.syntax_error("Unterminated comment"));
+                                return Err(self.syntax_error("Unterminated comment", jr!("nextNonWhitespace", 1571)));
                             }
                             p = self.pos + 2;
                         }
@@ -599,7 +644,7 @@ impl JsonReader {
                     }
                 } else if c == 0x23 {
                     self.pos = p;
-                    self.check_lenient()?;
+                    self.check_lenient().at(jr!("nextNonWhitespace", 1595))?;
                     self.skip_to_end_of_line();
                     p = self.pos;
                 } else {
@@ -612,7 +657,7 @@ impl JsonReader {
 
     fn check_lenient(&self) -> Result<()> {
         if self.strictness != Strictness::Lenient {
-            return Err(self.syntax_error("Use JsonReader.setStrictness(Strictness.LENIENT) to accept malformed JSON"));
+            return Err(self.syntax_error("Use JsonReader.setStrictness(Strictness.LENIENT) to accept malformed JSON", jr!("checkLenient", 1613)));
         }
         Ok(())
     }
@@ -686,7 +731,7 @@ impl JsonReader {
 
     fn read_escape_character(&mut self) -> Result<u16> {
         if self.pos == self.limit() {
-            return Err(self.syntax_error("Unterminated escape sequence"));
+            return Err(self.syntax_error("Unterminated escape sequence", jr!("readEscapeCharacter", 1747)));
         }
         let escaped = self.buffer[self.pos];
         self.pos += 1;
@@ -694,13 +739,13 @@ impl JsonReader {
             0x0a | 0x27 => {
                 if escaped == 0x0a {
                     if self.strictness == Strictness::Strict {
-                        return Err(self.syntax_error("Cannot escape a newline character in strict mode"));
+                        return Err(self.syntax_error("Cannot escape a newline character in strict mode", jr!("readEscapeCharacter", 1791)));
                     }
                     self.line_number += 1;
                     self.line_start = self.pos;
                 }
                 if self.strictness == Strictness::Strict {
-                    return Err(self.syntax_error("Invalid escaped character \"'\" in strict mode"));
+                    return Err(self.syntax_error("Invalid escaped character \"'\" in strict mode", jr!("readEscapeCharacter", 1799)));
                 }
                 Ok(escaped)
             }
@@ -712,7 +757,7 @@ impl JsonReader {
             0x74 => Ok(0x09),
             0x75 => {
                 if self.pos + 4 > self.limit() {
-                    return Err(self.syntax_error("Unterminated escape sequence"));
+                    return Err(self.syntax_error("Unterminated escape sequence", jr!("readEscapeCharacter", 1754)));
                 }
                 let mut result: u16 = 0;
                 for i in self.pos..self.pos + 4 {
@@ -724,33 +769,41 @@ impl JsonReader {
                         0x41..=0x46 => c - 0x41 + 10,
                         _ => {
                             let text = String::from_utf16_lossy(&self.buffer[self.pos..self.pos + 4]);
-                            return Err(self.syntax_error(&format!("Malformed Unicode escape \\u{text}")));
+                            return Err(self.syntax_error(&format!("Malformed Unicode escape \\u{text}"), jr!("readEscapeCharacter", 1768)));
                         }
                     };
                 }
                 self.pos += 4;
                 Ok(result)
             }
-            _ => Err(self.syntax_error("Invalid escape sequence")),
+            _ => Err(self.syntax_error("Invalid escape sequence", jr!("readEscapeCharacter", 1807))),
         }
     }
 
-    fn syntax_error(&self, message: &str) -> JsonReaderError {
-        JsonReaderError::Malformed(format!("{message}{}\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#malformed-json", self.location_string()))
+    fn syntax_error(&self, message: &str, caller: &'static str) -> JsonReaderError {
+        JsonReaderError::new(
+            JsonReaderErrorKind::Malformed,
+            format!("{message}{}\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#malformed-json", self.location_string()),
+            vec![jr!("syntaxError", 1817), caller],
+        )
     }
 
     fn unexpected_token_error(&mut self, expected: &str) -> Result<JsonReaderError> {
-        let peeked = self.peek()?;
+        let peeked = self.peek().at(jr!("unexpectedTokenError", 1821))?;
         let troubleshooting_id = if peeked == JsonToken::Null { "adapter-not-null-safe" } else { "unexpected-json-structure" };
-        Ok(JsonReaderError::IllegalState(format!(
-            "Expected {expected} but was {}{}\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#{troubleshooting_id}",
-            json_token_name(peeked),
-            self.location_string()
-        )))
+        Ok(JsonReaderError::new(
+            JsonReaderErrorKind::IllegalState,
+            format!(
+                "Expected {expected} but was {}{}\nSee https://github.com/google/gson/blob/main/Troubleshooting.md#{troubleshooting_id}",
+                json_token_name(peeked),
+                self.location_string()
+            ),
+            vec![jr!("unexpectedTokenError", 1831)],
+        ))
     }
 
     fn consume_non_execute_prefix(&mut self) -> Result<()> {
-        self.next_non_whitespace(true)?;
+        self.next_non_whitespace(true).at(jr!("consumeNonExecutePrefix", 1837))?;
         self.pos -= 1;
         if self.pos + 5 <= self.limit() {
             let p = self.pos;

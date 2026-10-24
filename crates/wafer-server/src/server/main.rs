@@ -242,7 +242,7 @@ pub fn main(args: Vec<String>) {
                     info!("No existing world data, creating new world");
                     create_new_world_data(&worker_properties, worker_data_configuration, bonus_chest)
                 });
-                Ok::<_, String>((postponed_tags, world_data))
+                Ok::<_, crate::util::java_throwable::JavaThrowable>((postponed_tags, world_data))
             })
             .expect("worker thread")
             .join()
@@ -250,9 +250,10 @@ pub fn main(args: Vec<String>) {
     });
     let (postponed_tags, mut world_data) = match loaded {
         Ok(loaded) => loaded,
-        Err(_) => {
+        Err(exception) => {
             warn!(
-                "Failed to load datapacks, can't proceed with server load. You can either fix your datapacks or reset to vanilla with --safeMode\njava.util.concurrent.ExecutionException: net.minecraft.ReportedException: Registry Loading\nCaused by: net.minecraft.ReportedException: Registry Loading\nCaused by: java.lang.IllegalStateException: Failed to load registries due to errors"
+                "Failed to load datapacks, can't proceed with server load. You can either fix your datapacks or reset to vanilla with --safeMode\n{}",
+                crate::resources::registry_load_task::execution_exception(exception).print_stack_trace().trim_end()
             );
             runtime.shutdown_background();
             return;
@@ -262,7 +263,8 @@ pub fn main(args: Vec<String>) {
         Ok(data_packs) => data_packs,
         Err(exception) => {
             warn!(
-                "Failed to load datapacks, can't proceed with server load. You can either fix your datapacks or reset to vanilla with --safeMode\njava.util.concurrent.ExecutionException: {exception}"
+                "Failed to load datapacks, can't proceed with server load. You can either fix your datapacks or reset to vanilla with --safeMode\n{}",
+                crate::resources::registry_load_task::execution_exception(exception).print_stack_trace().trim_end()
             );
             runtime.shutdown_background();
             return;

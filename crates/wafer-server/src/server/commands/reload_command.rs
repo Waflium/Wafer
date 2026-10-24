@@ -5,7 +5,7 @@ use crate::server::Server;
 
 pub fn reload_packs(server: &mut Server, selected_packs: &[String], source: &CommandSourceStack) {
     if let Err(exception) = server.reload_resources(selected_packs) {
-        warn!("Failed to execute reload\njava.util.concurrent.CompletionException: {exception}");
+        warn!("Failed to execute reload\n{}", crate::resources::registry_load_task::completion_exception(exception).print_stack_trace().trim_end());
         source.send_failure(server, Component::translatable("commands.reload.failure"));
     }
 }

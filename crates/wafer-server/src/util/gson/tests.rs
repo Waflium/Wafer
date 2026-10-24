@@ -95,3 +95,52 @@ fn gson_errors_match_the_vanilla_oracle() {
 fn gson_errors_match_the_vanilla_cases() {
     assert_eq!(check_errors(include_str!("error_cases.tsv")), 0);
 }
+
+fn render_trace(throwable: &crate::util::java_throwable::JavaThrowable) -> String {
+    let mut out = String::new();
+    let mut current = Some(throwable);
+    while let Some(entry) = current {
+        if !out.is_empty() {
+            out.push_str("Caused by: ");
+        }
+        out.push_str(&entry.description);
+        out.push('\n');
+        for frame in &entry.stack_trace {
+            out.push_str(&format!("\tat {frame}\n"));
+        }
+        current = entry.cause.as_deref();
+    }
+    out
+}
+
+fn check_traces(expected: &str) -> usize {
+    let mut failures = 0;
+    for line in expected.lines() {
+        let fields: Vec<&str> = line.split('\t').collect();
+        let input = String::from_utf16_lossy(&unhex(fields[0]));
+        let expected_trace = String::from_utf16_lossy(&unhex(fields[1]));
+        let actual = match super::parse_strict_throwable(&input) {
+            Ok(_) => "OK".to_string(),
+            Err(throwable) => render_trace(&throwable),
+        };
+        if actual != expected_trace {
+            failures += 1;
+            if failures <= 5 {
+                eprintln!("input {input:?}\n--- expected\n{expected_trace}--- actual\n{actual}");
+            }
+        }
+    }
+    failures
+}
+
+#[test]
+fn gson_stack_traces_match_the_vanilla_cases() {
+    assert_eq!(check_traces(include_str!("error_traces.tsv")), 0);
+}
+
+#[test]
+#[ignore]
+fn gson_stack_traces_match_the_vanilla_oracle() {
+    let path = std::env::var("GSON_TRACE_ORACLE").expect("GSON_TRACE_ORACLE");
+    assert_eq!(check_traces(&std::fs::read_to_string(path).unwrap()), 0);
+}

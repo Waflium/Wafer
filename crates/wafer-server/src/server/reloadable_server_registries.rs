@@ -9,7 +9,9 @@ use super::packs::repository::{PackRepository, VANILLA_ID};
 use super::packs::resources::MultiPackResourceManager;
 use crate::advancements::advancement::Advancement;
 use crate::advancements::advancement_holder::AdvancementHolder;
+use crate::resources::registry_load_task::{self, ElementFailure};
 use crate::tags::identifier_order;
+use crate::util::java_throwable::JavaThrowable;
 use crate::world::item::component::json_to_nbt;
 use crate::world::item::crafting::recipe::Recipe;
 use crate::world::item::crafting::recipe_holder::RecipeHolder;
@@ -141,21 +143,11 @@ fn run_validation<T: Validatable>(problems: &ProblemReporter, registry: &str, so
     }
 }
 
-fn exception_chain(causes: &[&str]) -> String {
-    let mut chain = causes[0].to_string();
-    for cause in causes {
-        chain.push_str("
-Caused by: ");
-        chain.push_str(cause);
-    }
-    chain
-}
-
 fn all_params<T>(_: &T) -> &'static ContextKeySet {
     &loot_context_param_sets::ALL_PARAMS
 }
 
-fn validate_loot_registries(registries: &ReloadableRegistries, sources: &[Vec<Source>]) -> Result<(), String> {
+fn validate_loot_registries(registries: &ReloadableRegistries, sources: &[Vec<Source>]) -> Result<(), JavaThrowable> {
     let problems = ProblemReporter::default();
     with_validating(registries, || {
         run_validation(&problems, PREDICATE, &sources[1], &registries.predicates, all_params);
@@ -167,7 +159,7 @@ fn validate_loot_registries(registries: &ReloadableRegistries, sources: &[Vec<So
     });
     problems.for_each(|id, problem| warn!("Found loot table element validation problem in {id}: {}", problem.description));
     if problems.has_fatal_problems() {
-        return Err(exception_chain(&["java.lang.IllegalStateException: Found loot table validation problems"]));
+        return Err(registry_load_task::loot_table_validation_failed());
     }
     Ok(())
 }
@@ -195,15 +187,15 @@ fn list_sources(resource_manager: &MultiPackResourceManager, registry: &str) -> 
         .collect()
 }
 
-pub struct LoadingErrors(pub BTreeMap<(String, String), String>);
+pub struct LoadingErrors(pub BTreeMap<(String, String), JavaThrowable>);
 
 impl LoadingErrors {
-    pub fn parse_error(&mut self, registry: &str, id: &str, pack: &str, cause: String) {
-        self.0.insert((registry.to_string(), id.to_string()), format!("java.lang.IllegalStateException: Failed to parse {id} from pack {pack}\nCaused by: {cause}"));
+    pub fn parse_error(&mut self, registry: &str, id: &str, pack: &str, resource_count: usize, failure: ElementFailure) {
+        self.0.insert((registry.to_string(), id.to_string()), registry_load_task::failed_to_parse(id, pack, resource_count, failure));
     }
 
     pub fn report(&self) -> String {
-        let mut by_registry: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
+        let mut by_registry: BTreeMap<&str, Vec<(&str, &JavaThrowable)>> = BTreeMap::new();
         for ((registry, id), error) in &self.0 {
             by_registry.entry(registry).or_default().push((id, error));
         }
@@ -215,7 +207,7 @@ impl LoadingErrors {
                 split(a.0).cmp(&split(b.0))
             });
             for (id, error) in elements {
-                collected_errors.push_str(&format!(">> Errors in element {id}:\n{error}\n"));
+                collected_errors.push_str(&format!(">> Errors in element {id}:\n{}", error.print_stack_trace()));
             }
         }
         format!("Registry loading errors:\n{collected_errors}")
@@ -225,19 +217,21 @@ impl LoadingErrors {
 fn decode_registry<T>(registry: &str, sources: &[Source], decode: fn(&Nbt) -> Result<T, String>, errors: &mut LoadingErrors) -> HashMap<String, T> {
     let mut elements = HashMap::with_capacity(sources.len());
     for source in sources {
-        let parsed = crate::util::gson::parse_strict_bytes(&source.bytes)
-            .and_then(|json| crate::nbt::with_json_source(|| decode(&json_to_nbt(&json))).map_err(|e| format!("java.lang.IllegalStateException: {e}")));
+        let parsed = match crate::util::gson::parse_strict_bytes_throwable(&source.bytes) {
+            Ok(json) => crate::nbt::with_json_source(|| decode(&json_to_nbt(&json))).map_err(ElementFailure::Decode),
+            Err(throwable) => Err(ElementFailure::Parse(throwable)),
+        };
         match parsed {
             Ok(element) => {
                 elements.insert(source.id.clone(), element);
             }
-            Err(cause) => errors.parse_error(registry, &source.id, &source.pack, cause),
+            Err(failure) => errors.parse_error(registry, &source.id, &source.pack, sources.len(), failure),
         }
     }
     elements
 }
 
-pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [RegistryTags], current: Option<&ReloadableRegistries>) -> Result<LoadResult, String> {
+pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [RegistryTags], current: Option<&ReloadableRegistries>) -> Result<LoadResult, JavaThrowable> {
     let sources: Vec<Vec<Source>> = RELOADABLE_REGISTRIES.iter().map(|registry| list_sources(resource_manager, registry)).collect();
     if current.is_some_and(|current| std::ptr::eq(current.tags, tags) && current.sources == sources) {
         return Ok(LoadResult::Unchanged);
@@ -277,11 +271,11 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
     });
     PENDING_KEYS.with(|pending| pending.replace(previous));
     for (registry, keys) in crate::core::data_registries::group_unbound(UNBOUND.with(|unbound| std::mem::take(&mut *unbound.borrow_mut()))) {
-        errors.0.insert(("minecraft:root".to_string(), registry.clone()), format!("java.lang.IllegalStateException: Unbound values in registry ResourceKey[minecraft:root / {registry}]: [{}]", keys.join(", ")));
+        errors.0.insert(("minecraft:root".to_string(), registry.clone()), registry_load_task::unbound_values(&format!("ResourceKey[minecraft:root / {registry}]"), &keys));
     }
     if !errors.0.is_empty() {
         error!("{}", errors.report());
-        return Err(exception_chain(&["net.minecraft.ReportedException: Registry Loading", "java.lang.IllegalStateException: Failed to load registries due to errors"]));
+        return Err(registry_load_task::registry_loading_failed(false));
     }
     wafer_data::with_pending_tags(tags, || validate_loot_registries(&registries, &sources))?;
     Ok(LoadResult::Loaded { registries: ReloadableRegistries { sources, ..registries }, recipes })
