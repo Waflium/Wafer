@@ -249,6 +249,34 @@ fn tag_load_frames(context: TagLoadContext, line: &'static str) -> Vec<&'static 
     frames
 }
 
+const FUNCTION_COMPLETION_FRAMES: [&str; 8] = [
+    "java.base/java.util.concurrent.CompletableFuture.wrapInCompletionException(CompletableFuture.java:323)",
+    "java.base/java.util.concurrent.CompletableFuture.encodeThrowable(CompletableFuture.java:359)",
+    "java.base/java.util.concurrent.CompletableFuture.completeThrowable(CompletableFuture.java:364)",
+    "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1791)",
+    "net.minecraft.server.packs.resources.SimpleReloadInstance.lambda$prepareTasks$1(SimpleReloadInstance.java:51)",
+    "java.base/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.compute(ForkJoinTask.java:1753)",
+    "java.base/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.compute(ForkJoinTask.java:1745)",
+    "java.base/java.util.concurrent.ForkJoinTask$InterruptibleTask.exec(ForkJoinTask.java:1662)",
+];
+
+const FUNCTION_COMPILE_FRAMES: [&str; 4] = [
+    "net.minecraft.commands.functions.CommandFunction.fromLines(CommandFunction.java:81)",
+    "net.minecraft.server.ServerFunctionLibrary.lambda$reload$3(ServerFunctionLibrary.java:85)",
+    ASYNC_SUPPLY[0],
+    "net.minecraft.server.packs.resources.SimpleReloadInstance.lambda$prepareTasks$1(SimpleReloadInstance.java:51)",
+];
+
+pub fn function_load_failed(cause_description: &str) -> JavaThrowable {
+    let mut cause_frames = FUNCTION_COMPILE_FRAMES.to_vec();
+    cause_frames.extend(&FUNCTION_COMPLETION_FRAMES[5..]);
+    cause_frames.extend(FORK_JOIN_TAIL);
+    let mut frames = FUNCTION_COMPLETION_FRAMES.to_vec();
+    frames.extend(FORK_JOIN_TAIL);
+    let cause = JavaThrowable::new(cause_description, cause_frames);
+    JavaThrowable::new(format!("java.util.concurrent.CompletionException: {cause_description}"), frames).with_cause(cause)
+}
+
 pub fn tag_decode_failed(context: TagLoadContext, message: &str) -> JavaThrowable {
     let mut frames = DATA_RESULT_GET_OR_THROW.to_vec();
     frames.extend(tag_load_frames(context, "net.minecraft.tags.TagLoader.load(TagLoader.java:61)"));

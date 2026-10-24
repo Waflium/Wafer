@@ -118,7 +118,7 @@ impl ServerFunctionLibrary {
                 Ok(function) => {
                     functions.insert(id.to_string(), Arc::new(function));
                 }
-                Err(exception) => error!("Failed to load function {id}\njava.util.concurrent.CompletionException: {exception}\nCaused by: {exception}"),
+                Err(exception) => error!("Failed to load function {id}\n{}", crate::resources::registry_load_task::function_load_failed(&exception).print_stack_trace().trim_end()),
             }
         }
         let tags = tags_loader.build(&tags, &|id, _| functions.get(id).cloned(), &Arc::ptr_eq);

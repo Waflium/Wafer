@@ -48,6 +48,24 @@ fn registry_loading_failures_name_their_stage() {
 }
 
 #[test]
+fn a_function_failure_wraps_the_compile_error_in_a_completion_exception() {
+    let trace = function_load_failed("java.lang.IllegalArgumentException: Whilst parsing command on line 1: nope").print_stack_trace();
+    assert!(trace.starts_with("java.util.concurrent.CompletionException: java.lang.IllegalArgumentException: Whilst parsing command on line 1: nope\n"));
+    assert!(trace.contains("Caused by: java.lang.IllegalArgumentException: Whilst parsing command on line 1: nope\n\tat net.minecraft.commands.functions.CommandFunction.fromLines(CommandFunction.java:81)\n"));
+    assert!(trace.ends_with("\t... 8 more\n"));
+}
+
+#[test]
+fn a_tag_failure_names_where_the_tags_are_loaded() {
+    let existing = tag_decode_failed(TagLoadContext::ExistingRegistries, "Not a json array: 5").print_stack_trace();
+    assert!(existing.contains("TagLoader.load(TagLoader.java:61)\n\tat net.minecraft.tags.TagLoader.loadPendingTags(TagLoader.java:163)"));
+    let dynamic = tag_decode_failed(TagLoadContext::DynamicRegistry, "Not a json array: 5").print_stack_trace();
+    assert!(dynamic.contains("TagLoader.loadTagsForRegistry(TagLoader.java:150)"));
+    let functions = tag_decode_failed(TagLoadContext::FunctionLibrary, "Not a json array: 5").print_stack_trace();
+    assert!(functions.contains("ServerFunctionLibrary.lambda$reload$0(ServerFunctionLibrary.java:71)"));
+}
+
+#[test]
 fn unbound_registry_errors_come_from_the_freeze() {
     let values = unbound_values("ResourceKey[minecraft:root / minecraft:worldgen/biome]", &["ta:foo".to_string(), "minecraft:nope".to_string()]).print_stack_trace();
     assert!(values.starts_with("java.lang.IllegalStateException: Unbound values in registry ResourceKey[minecraft:root / minecraft:worldgen/biome]: [ta:foo, minecraft:nope]\n\tat net.minecraft.core.MappedRegistry.freeze(MappedRegistry.java:300)\n"));
