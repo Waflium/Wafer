@@ -63,6 +63,8 @@ pub struct ChunkCache {
     terrain_chunks: FastMap<ChunkPos, LevelChunk>,
     structure_chunks: FastMap<ChunkPos, ChunkStructures>,
     loaded_structure_chunks: FastSet<ChunkPos>,
+    biome_chunks: FastMap<ChunkPos, Arc<crate::world::level::levelgen::chunk_generator::ChunkBiomes>>,
+    region_cache_for_blender: crate::util::FastIndexMap<i64, Arc<Vec<bool>>>,
     structure_state: Option<Arc<ChunkGeneratorStructureState>>,
     region_random_state: Option<Arc<RandomState>>,
     pub is_debug: bool,
@@ -129,6 +131,8 @@ impl ChunkCache {
             terrain_chunks: FastMap::default(),
             structure_chunks: FastMap::default(),
             loaded_structure_chunks: FastSet::default(),
+            biome_chunks: FastMap::default(),
+            region_cache_for_blender: Default::default(),
             structure_state,
             region_random_state: None,
             is_debug: false,
@@ -1050,20 +1054,32 @@ impl ChunkCache {
                 self.generate_spawn(pos);
                 self.complete_step(job);
             }
+            ChunkStatus::Biomes if generate => {
+                self.generate_biomes(pos);
+                self.complete_step(job);
+            }
             ChunkStatus::StructureReferences | ChunkStatus::Biomes | ChunkStatus::Spawn => self.complete_step(job),
             ChunkStatus::Terrain if generate => {
                 let beardifier = self.beardifier_for_structures_in_chunk(pos).map(Arc::new);
-                let upgrading = if self.is_upgrading(pos) { self.holders.get_mut(pos.pack()).unwrap().loaded.take() } else { None };
+                let blender = self.blender_for(pos);
+                let biomes: [Option<Arc<crate::world::level::levelgen::chunk_generator::ChunkBiomes>>; 9] =
+                    std::array::from_fn(|i| self.stored_biomes(ChunkPos::new(pos.x + i as i32 % 3 - 1, pos.z + i as i32 / 3 - 1)));
+                let upgrading = self.is_upgrading(pos);
+                let old = self.holders.get_mut(pos.pack()).unwrap().loaded.take();
                 let token = self.new_token(job);
                 let (generator, dimension, results) = (self.generator.clone(), self.dimension, self.results.0.clone());
                 self.in_flight += 1;
                 chunk_workers::execute(move || {
-                    let chunk = match upgrading {
-                        Some(mut chunk) => {
-                            generator.build_terrain_upgrading(&mut chunk, dimension, beardifier);
+                    let chunk = match old {
+                        Some(mut chunk) if upgrading => {
+                            generator.build_terrain_upgrading(&mut chunk, dimension, beardifier, biomes, &blender);
                             *chunk
                         }
-                        None => generator.generate_with_beardifier(pos, dimension, beardifier),
+                        old => {
+                            let mut chunk = generator.generate_blended(pos, dimension, beardifier, biomes, &blender);
+                            chunk.blending_data = old.and_then(|old| old.blending_data);
+                            chunk
+                        }
                     };
                     let _ = results.send(WorkResult::Generated { pos, token, chunk });
                 });
@@ -1130,6 +1146,189 @@ impl ChunkCache {
                 self.block_ticks.register_container(pos, block_ticks);
                 self.fluid_ticks.register_container(pos, fluid_ticks);
                 self.complete_step(job);
+            }
+        }
+    }
+
+    fn generate_biomes(&mut self, pos: ChunkPos) {
+        let ChunkGenerator::Noise(noise) = &self.generator else { return };
+        let noise = noise.clone();
+        let blender = self.blender_for(pos);
+        if self.is_upgrading(pos) {
+            let dimension = self.dimension;
+            if let Some(chunk) = self.holders.get_mut(pos.pack()).and_then(|holder| holder.loaded.as_deref_mut()) {
+                noise.fill_biomes_upgrading(chunk, dimension, &blender);
+            }
+        } else if !blender.is_empty() {
+            self.biome_chunks.insert(pos, noise.create_biomes_blended(pos, self.dimension, &blender));
+        }
+    }
+
+    fn stored_biomes(&self, pos: ChunkPos) -> Option<Arc<crate::world::level::levelgen::chunk_generator::ChunkBiomes>> {
+        if let Some(biomes) = self.biome_chunks.get(&pos) {
+            return Some(biomes.clone());
+        }
+        let chunk = self.upgrading_chunk(pos)?;
+        let has_biomes = self.highest_generated_status(pos).is_some_and(|status| status >= ChunkStatus::Biomes);
+        has_biomes.then(|| Arc::new(crate::world::level::levelgen::chunk_generator::ChunkBiomes::from_sections(chunk.min_y(), &chunk.sections)))
+    }
+
+    fn highest_generated_status(&self, pos: ChunkPos) -> Option<ChunkStatus> {
+        let persisted = self.holders.get(pos.pack()).and_then(|holder| holder.persisted_status)?;
+        let target = self.upgrading_chunk(pos).and_then(|chunk| chunk.proto.as_ref()).and_then(|proto| proto.below_zero_retrogen.as_ref()).map(|retrogen| retrogen.target_status());
+        Some(target.map_or(persisted, |target| target.max(persisted)))
+    }
+
+    fn is_old_noise_generation(&self, pos: ChunkPos) -> bool {
+        self.upgrading_chunk(pos).is_some_and(|chunk| chunk.blending_data.is_some())
+    }
+
+    fn get_or_update_blending_data(&mut self, pos: ChunkPos) -> Option<Arc<crate::world::level::levelgen::blending::blending_data::BlendingData>> {
+        use crate::world::level::levelgen::blending::blending_data::Direction8;
+        if !self.is_old_noise_generation(pos) || self.highest_generated_status(pos).is_none_or(|status| status < ChunkStatus::Biomes) {
+            return None;
+        }
+        let new_sides: Vec<Direction8> = Direction8::VALUES.into_iter().filter(|direction| !self.is_old_noise_generation(ChunkPos::new(pos.x + direction.step_x(), pos.z + direction.step_z()))).collect();
+        let chunk = self.upgrading_chunk_mut(pos)?;
+        let mut blending_data = chunk.blending_data.take()?;
+        if !blending_data.has_calculated_data() {
+            Arc::make_mut(&mut blending_data).calculate_data(chunk, &new_sides);
+        }
+        chunk.blending_data = Some(blending_data.clone());
+        Some(blending_data)
+    }
+
+    fn upgrading_chunk_mut(&mut self, pos: ChunkPos) -> Option<&mut LevelChunk> {
+        if self.terrain_chunks.contains_key(&pos) {
+            return self.terrain_chunks.get_mut(&pos);
+        }
+        if self.chunks.contains_key(&pos) {
+            return self.chunks.get_mut(&pos);
+        }
+        self.holders.get_mut(pos.pack()).and_then(|holder| holder.loaded.as_deref_mut())
+    }
+
+    fn blender_for(&mut self, center: ChunkPos) -> Arc<crate::world::level::levelgen::blending::blender::Blender> {
+        use crate::world::level::levelgen::blending::blender::{Blender, CarvingFilter, HEIGHT_BLENDING_RANGE_CHUNKS};
+        use crate::world::level::levelgen::blending::blending_data::Direction8;
+        if !self.is_old_chunk_around(center, HEIGHT_BLENDING_RANGE_CHUNKS) {
+            return Arc::new(Blender::empty());
+        }
+        let range = HEIGHT_BLENDING_RANGE_CHUNKS;
+        let max_dist_sq = (range + 1) * (range + 1);
+        let mut data = FastMap::default();
+        for dx in -range..=range {
+            for dz in -range..=range {
+                if dx * dx + dz * dz <= max_dist_sq {
+                    let pos = ChunkPos::new(center.x + dx, center.z + dz);
+                    if let Some(blending_data) = self.get_or_update_blending_data(pos) {
+                        data.insert(pos, blending_data);
+                    }
+                }
+            }
+        }
+        let old_sides: Vec<(Direction8, Arc<crate::world::level::levelgen::blending::blending_data::BlendingData>)> = Direction8::VALUES
+            .into_iter()
+            .filter_map(|direction| {
+                let side = ChunkPos::new(center.x + direction.step_x(), center.z + direction.step_z());
+                self.upgrading_chunk(side).and_then(|chunk| chunk.blending_data.clone()).map(|blending_data| (direction, blending_data))
+            })
+            .collect();
+        let center_blending_data = self.upgrading_chunk(center).and_then(|chunk| chunk.blending_data.clone());
+        let carving_filter = CarvingFilter::around_old_chunks(center_blending_data.as_deref(), &old_sides);
+        let blender = Blender::of(center, |x, z| data.get(&ChunkPos::new(x, z)).cloned(), carving_filter);
+        Arc::new(if blender.is_empty() { Blender::empty() } else { blender })
+    }
+
+    fn is_old_chunk_around(&mut self, pos: ChunkPos, range: i32) -> bool {
+        if self.io.is_none() {
+            return false;
+        }
+        let (from_x, from_z, to_x, to_z) = (pos.x - range, pos.z - range, pos.x + range, pos.z + range);
+        for region_x in from_x >> 5..=to_x >> 5 {
+            for region_z in from_z >> 5..=to_z >> 5 {
+                let data = self.get_or_create_old_data_for_region(region_x, region_z);
+                if !data.iter().any(|&old| old) {
+                    continue;
+                }
+                let (min_chunk_x, min_chunk_z) = (region_x << 5, region_z << 5);
+                let (start_x, start_z) = ((from_x - min_chunk_x).max(0), (from_z - min_chunk_z).max(0));
+                let (end_x, end_z) = ((to_x - min_chunk_x).min(31), (to_z - min_chunk_z).min(31));
+                for x in start_x..=end_x {
+                    for z in start_z..=end_z {
+                        if data[(z * 32 + x) as usize] {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn get_or_create_old_data_for_region(&mut self, region_x: i32, region_z: i32) -> Arc<Vec<bool>> {
+        let region_pos = ChunkPos::new(region_x, region_z).pack();
+        if let Some(index) = self.region_cache_for_blender.get_index_of(&region_pos) {
+            self.region_cache_for_blender.move_index(index, self.region_cache_for_blender.len() - 1);
+            return self.region_cache_for_blender[&region_pos].clone();
+        }
+        let io = self.io.as_ref().unwrap();
+        let mut result = vec![false; 1024];
+        for local_x in 0..32 {
+            for local_z in 0..32 {
+                let pos = ChunkPos::new((region_x << 5) + local_x, (region_z << 5) + local_z);
+                match io.scan_chunk(pos) {
+                    Ok(Some(tag)) => {
+                        let data_version = tag.get("DataVersion").and_then(wafer_protocol::nbt::Nbt::as_i64).unwrap_or(0);
+                        let has_blending_data = matches!(tag.get("blending_data"), Some(wafer_protocol::nbt::Nbt::Compound(_)));
+                        if data_version < 4997 || has_blending_data {
+                            result[(local_z * 32 + local_x) as usize] = true;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(e) => warn!("Failed to scan chunk {pos}: {e}"),
+                }
+            }
+        }
+        let result = Arc::new(result);
+        self.region_cache_for_blender.insert(region_pos, result.clone());
+        if self.region_cache_for_blender.len() > 1024 {
+            self.region_cache_for_blender.shift_remove_index(0);
+        }
+        result
+    }
+
+    fn generate_border_ticks(&mut self, center: ChunkPos) {
+        let neighbors_old = [(0, -1), (1, 0), (0, 1), (-1, 0)].map(|(dx, dz)| self.is_old_noise_generation(ChunkPos::new(center.x + dx, center.z + dz)));
+        let Some(chunk) = self.upgrading_chunk_mut(center) else { return };
+        let old_noise_generation = chunk.blending_data.is_some();
+        let Some(blending_data) = chunk.blending_data.clone() else { return };
+        let (old_min_y, old_max_y) = (blending_data.area_min_y(), blending_data.area_max_y());
+        let (origin_x, origin_z) = (center.min_block_x(), center.min_block_z());
+        if old_noise_generation {
+            for x in 0..16 {
+                for z in 0..16 {
+                    for y in [old_min_y - 1, old_min_y, old_max_y, old_max_y + 1] {
+                        generate_border_tick(chunk, BlockPos::new(origin_x + x, y, origin_z + z));
+                    }
+                }
+            }
+        }
+        for (i, (step_x, step_z)) in [(0, -1), (1, 0), (0, 1), (-1, 0)].into_iter().enumerate() {
+            if neighbors_old[i] == old_noise_generation {
+                continue;
+            }
+            let min_x = if step_x == 1 { 15 } else { 0 };
+            let max_x = if step_x == -1 { 0 } else { 15 };
+            let min_z = if step_z == 1 { 15 } else { 0 };
+            let max_z = if step_z == -1 { 0 } else { 15 };
+            for x in min_x..=max_x {
+                for z in min_z..=max_z {
+                    let max_y = old_max_y.min(chunk.get_height(HeightmapType::MotionBlocking, x, z)) + 1;
+                    for y in old_min_y..max_y {
+                        generate_border_tick(chunk, BlockPos::new(origin_x + x, y, origin_z + z));
+                    }
+                }
             }
         }
     }
@@ -1230,6 +1429,7 @@ impl ChunkCache {
 
     fn generate_features(&mut self, center: ChunkPos) {
         self.apply_biome_decoration(center);
+        self.generate_border_ticks(center);
         if let Some(chunk) = self.terrain_chunks.remove(&center) {
             self.chunks.insert(center, chunk);
         }
@@ -1403,7 +1603,7 @@ impl ChunkCache {
                     let mut chunk = chunk;
                     self.structure_chunks.insert(pos, std::mem::take(&mut chunk.structures));
                     self.loaded_structure_chunks.insert(pos);
-                    if chunk.proto.as_ref().is_some_and(|proto| proto.below_zero_retrogen.is_some()) {
+                    if chunk.blending_data.is_some() || chunk.proto.as_ref().is_some_and(|proto| proto.below_zero_retrogen.is_some()) {
                         self.holders.get_mut(pos.pack()).unwrap().loaded = Some(Box::new(chunk));
                     }
                 } else {
@@ -1435,6 +1635,7 @@ impl ChunkCache {
         match result {
             WorkResult::Loaded { result, .. } => self.apply_loaded(job, result),
             WorkResult::Generated { mut chunk, .. } => {
+                self.biome_chunks.remove(&pos);
                 chunk.mark_unsaved();
                 chunk.structures = self.structure_chunks.remove(&pos).unwrap_or_default();
                 self.loaded_structure_chunks.remove(&pos);
@@ -1695,6 +1896,7 @@ impl ChunkCache {
         let terrain_chunk = self.terrain_chunks.remove(&chunk_pos);
         let structures = self.structure_chunks.remove(&chunk_pos);
         let loaded_structures = self.loaded_structure_chunks.remove(&chunk_pos);
+        self.biome_chunks.remove(&chunk_pos);
         let mut chunk = self.chunks.remove(&chunk_pos);
         if let Some(chunk) = &mut chunk {
             chunk.loaded = false;
@@ -2064,5 +2266,15 @@ mod tests {
         assert!(now.iter().all(|p| (2..=8).contains(&p.x) && (-3..=3).contains(&p.z)));
         let order: Vec<ChunkPos> = level.chunks.distance_manager.entity_ticking_chunks().into_iter().map(ChunkPos::unpack).collect();
         assert_eq!(now, order);
+    }
+}
+
+fn generate_border_tick(chunk: &mut LevelChunk, pos: BlockPos) {
+    let state = chunk.block_state(pos);
+    if state.is(&wafer_data::block_tags::LEAVES) {
+        chunk.mark_pos_for_post_processing(pos);
+    }
+    if !state.fluid_state().is_empty() {
+        chunk.mark_pos_for_post_processing(pos);
     }
 }

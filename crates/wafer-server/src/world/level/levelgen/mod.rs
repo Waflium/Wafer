@@ -1,6 +1,7 @@
 pub mod aquifer;
 pub mod beardifier;
 pub mod below_zero_retrogen;
+pub mod blending;
 pub mod blockpredicates;
 pub mod carver;
 pub mod chunk_generator;

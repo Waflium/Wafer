@@ -136,8 +136,8 @@ pub fn compile(function: &Df, ctx: &dyn CompileContext) -> Sampler {
             wafer_core::RandomSource::consume_count(&mut random, 17292);
             Sampler::EndIslands(Arc::new(SimplexNoise::new(&mut random, true)))
         }
-        F::Simple(SimpleType::BlendAlpha) => Sampler::Constant(1.0),
-        F::Simple(SimpleType::BlendOffset) => Sampler::Constant(0.0),
+        F::Simple(SimpleType::BlendAlpha) => Sampler::BlendAlpha,
+        F::Simple(SimpleType::BlendOffset) => Sampler::BlendOffset,
         F::Simple(SimpleType::Beardifier) => Sampler::Beardifier,
         F::Unary(kind, input) => {
             let op = match kind {

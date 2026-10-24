@@ -51,6 +51,8 @@ type B = Box<Sampler>;
 pub enum Sampler {
     Constant(f32),
     Beardifier,
+    BlendAlpha,
+    BlendOffset,
     Noise { noise: Arc<NoiseStack>, xz_scale: f64, y_scale: f64 },
     ShiftedXz { shift_x: B, shift_z: B, noise: Arc<NoiseStack>, xz_scale: f64, y_scale: f64 },
     ShiftedXyz { shift_x: B, shift_y: B, shift_z: B, noise: Arc<NoiseStack>, xz_scale: f64, y_scale: f64 },
@@ -113,6 +115,14 @@ impl Sampler {
             Constant(v) => out.fill(*v),
             Beardifier => match &ctx.beardifier {
                 Some(beardifier) => beardifier.sample_volume(out, volume),
+                None => out.fill(0.0),
+            },
+            BlendAlpha => match &ctx.blend {
+                Some(blend) => sample_xz(out, volume, |x, z| blend.get_alpha(x, z)),
+                None => out.fill(1.0),
+            },
+            BlendOffset => match &ctx.blend {
+                Some(blend) => sample_xz(out, volume, |x, z| blend.get_offset(x, z)),
                 None => out.fill(0.0),
             },
             Noise { noise, xz_scale, y_scale } => {
@@ -384,7 +394,19 @@ impl Sampler {
                 ctx.release(below_buffer);
             }
             Cache { id, input } => ctx.sample_volume_cached(*id, input, out, volume),
-            BlendDensity(input) => input.sample_volume(ctx, out, volume),
+            BlendDensity(input) => {
+                input.sample_volume(ctx, out, volume);
+                if let Some(blend) = ctx.blend.as_ref().filter(|blend| !blend.blender().is_empty()) {
+                    for z in 0..volume.size_z {
+                        for x in 0..volume.size_x {
+                            for y in 0..volume.size_y {
+                                let index = volume.index(x, y, z);
+                                out[index] = blend.blender().blend_density(volume.block_x(x), volume.block_y(y), volume.block_z(z), out[index]);
+                            }
+                        }
+                    }
+                }
+            }
             Interpolated { input, cell_xz, cell_y, .. } => {
                 let (xz, y) = (*cell_xz, *cell_y);
                 if (volume.step_x == xz || volume.size_x == 1)
@@ -514,6 +536,8 @@ impl Sampler {
         match self {
             Constant(v) => *v,
             Beardifier => ctx.beardifier.as_ref().map_or(0.0, |beardifier| beardifier.sample_value(x, y, z)),
+            BlendAlpha => ctx.blend.as_ref().map_or(1.0, |blend| blend.get_alpha(x, z)),
+            BlendOffset => ctx.blend.as_ref().map_or(0.0, |blend| blend.get_offset(x, z)),
             Noise { noise, xz_scale, y_scale } => noise.get(x as f64 * xz_scale, y as f64 * y_scale, z as f64 * xz_scale),
             ShiftedXyz { shift_x, shift_y, shift_z, noise, xz_scale, y_scale } => {
                 let nx = x as f64 * xz_scale + shift_x.sample_value(ctx, x, y, z) as f64;
@@ -617,7 +641,13 @@ impl Sampler {
                 if v < *threshold { below.sample_value(ctx, x, y, z) } else { above.sample_value(ctx, x, y, z) }
             }
             Cache { id, input } => ctx.sample_value_cached(*id, input, x, y, z),
-            BlendDensity(input) => input.sample_value(ctx, x, y, z),
+            BlendDensity(input) => {
+                let value = input.sample_value(ctx, x, y, z);
+                match ctx.blend.as_ref().filter(|blend| !blend.blender().is_empty()) {
+                    Some(blend) => blend.blender().blend_density(x, y, z, value),
+                    None => value,
+                }
+            }
             Interpolated { input, cell_xz, cell_y, .. } => {
                 let (xz, cy) = (*cell_xz, *cell_y);
                 let (xi, yi, zi) = (x.rem_euclid(xz), y.rem_euclid(cy), z.rem_euclid(xz));
@@ -825,4 +855,15 @@ fn end_island_height(noise: &SimplexNoise, section_x: i32, section_z: i32) -> f3
         }
     }
     doffs
+}
+
+fn sample_xz(out: &mut [f32], volume: &DensityVolume, value: impl Fn(i32, i32) -> f32) {
+    for z in 0..volume.size_z {
+        for x in 0..volume.size_x {
+            let v = value(volume.block_x(x), volume.block_z(z));
+            for y in 0..volume.size_y {
+                out[volume.index(x, y, z)] = v;
+            }
+        }
+    }
 }

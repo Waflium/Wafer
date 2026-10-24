@@ -238,6 +238,9 @@ pub fn write(chunk: &LevelChunk, status: ChunkStatus, block_entities: Vec<Nbt>, 
         ("InhabitedTime".into(), Nbt::Long(chunk.inhabited_time)),
         ("Status".into(), Nbt::String(format!("minecraft:{}", status.get_name()))),
     ];
+    if let Some(blending_data) = &chunk.blending_data {
+        tag.push(("blending_data".into(), blending_data.pack()));
+    }
     if let Some(retrogen) = chunk.proto.as_ref().and_then(|proto| proto.below_zero_retrogen.as_ref()) {
         tag.push(("below_zero_retrogen".into(), retrogen.encode()));
     }
@@ -357,6 +360,7 @@ pub fn read(nbt: &Nbt, dimension: &DimensionType, seed: i64) -> io::Result<ReadC
         }
     }
     chunk.structures = unpack_structure_data(chunk.pos, nbt.get("structures"), seed);
+    chunk.blending_data = nbt.get("blending_data").and_then(crate::world::level::levelgen::blending::blending_data::BlendingData::unpack).map(std::sync::Arc::new);
     let heightmap_data = |kind: HeightmapType| match nbt.get("Heightmaps").and_then(|h| h.get(kind.serialization_key())) {
         Some(Nbt::LongArray(data)) => Some(data),
         _ => None,

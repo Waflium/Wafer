@@ -219,6 +219,7 @@ pub struct LevelChunk {
     pub loaded: bool,
     pub proto: Option<Box<proto_chunk::ProtoChunkData>>,
     pub legacy_entities: Vec<Nbt>,
+    pub blending_data: Option<std::sync::Arc<crate::world::level::levelgen::blending::blending_data::BlendingData>>,
     pub structures: ChunkStructures,
     pub post_processing: Vec<Vec<u16>>,
     pub game_event_listener_registry_sections: FastMap<i32, EuclideanGameEventListenerRegistry>,
@@ -247,6 +248,7 @@ impl LevelChunk {
             loaded: false,
             proto: None,
             legacy_entities: Vec::new(),
+            blending_data: None,
             structures: ChunkStructures::default(),
             game_event_listener_registry_sections: FastMap::default(),
             unsaved_listener: None,
@@ -288,6 +290,11 @@ impl LevelChunk {
             other => other,
         };
         self.height_at(kind, x, z)
+    }
+
+    pub fn primed_worldgen_height(&self, kind: HeightmapType, x: i32, z: i32) -> Option<i32> {
+        let index = HeightmapType::WORLDGEN.iter().position(|&t| t == kind)?;
+        self.proto.as_ref()?.heightmaps[index].as_ref().map(|heightmap| heightmap.highest_taken((x & 15) as usize, (z & 15) as usize))
     }
 
     pub fn mark_pos_for_post_processing(&mut self, pos: BlockPos) {
@@ -479,9 +486,35 @@ impl ChunkGenerator {
         }
     }
 
-    pub fn build_terrain_upgrading(&self, chunk: &mut LevelChunk, dimension: &DimensionType, beardifier: Option<std::sync::Arc<crate::world::level::levelgen::beardifier::Beardifier>>) {
+    pub fn build_terrain_upgrading(
+        &self,
+        chunk: &mut LevelChunk,
+        dimension: &DimensionType,
+        beardifier: Option<std::sync::Arc<crate::world::level::levelgen::beardifier::Beardifier>>,
+        biomes: [Option<std::sync::Arc<crate::world::level::levelgen::chunk_generator::ChunkBiomes>>; 9],
+        blender: &std::sync::Arc<crate::world::level::levelgen::blending::blender::Blender>,
+    ) {
         if let ChunkGenerator::Noise(noise) = self {
-            noise.build_terrain_upgrading(chunk, dimension, beardifier);
+            let pos = chunk.pos;
+            let biomes = std::array::from_fn(|i| biomes[i].clone().unwrap_or_else(|| noise.chunk_biomes(ChunkPos::new(pos.x + i as i32 % 3 - 1, pos.z + i as i32 / 3 - 1), dimension)));
+            noise.build_terrain_upgrading(chunk, beardifier, &biomes, blender);
+        }
+    }
+
+    pub fn generate_blended(
+        &self,
+        pos: ChunkPos,
+        dimension: &DimensionType,
+        beardifier: Option<std::sync::Arc<crate::world::level::levelgen::beardifier::Beardifier>>,
+        biomes: [Option<std::sync::Arc<crate::world::level::levelgen::chunk_generator::ChunkBiomes>>; 9],
+        blender: &std::sync::Arc<crate::world::level::levelgen::blending::blender::Blender>,
+    ) -> LevelChunk {
+        match self {
+            ChunkGenerator::Noise(noise) if !blender.is_empty() || biomes.iter().any(Option::is_some) => {
+                let biomes = std::array::from_fn(|i| biomes[i].clone().unwrap_or_else(|| noise.chunk_biomes(ChunkPos::new(pos.x + i as i32 % 3 - 1, pos.z + i as i32 / 3 - 1), dimension)));
+                noise.generate_blended(pos, dimension, beardifier, &biomes, blender).into_level_chunk(dimension)
+            }
+            _ => self.generate_with_beardifier(pos, dimension, beardifier),
         }
     }
 
