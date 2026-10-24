@@ -116,7 +116,7 @@ pub fn set_celebrating(mob: &mut Mob, celebrating: bool) {
 }
 
 fn allowed_items(level: &ServerLevel, item: EntityId) -> bool {
-    let Some(LevelEntity::Item(item_entity)) = level.entities.get(&item) else { return false };
+    let Some(LevelEntity::Item(item_entity)) = level.find_entity(item) else { return false };
     !item_entity.has_pickup_delay() && level.is_alive(item) && ItemStack::matches(&item_entity.item, &raid::get_ominous_banner_instance())
 }
 
@@ -261,7 +261,7 @@ impl ServerLevel {
     }
 
     pub fn raider_pick_up_item(&mut self, id: EntityId, entity: EntityId) {
-        let Some(LevelEntity::Item(item_entity)) = self.entities.get(&entity) else { return self.mob_pick_up_item(id, entity) };
+        let Some(LevelEntity::Item(item_entity)) = self.find_entity(entity) else { return self.mob_pick_up_item(id, entity) };
         let item_stack = item_entity.item.clone();
         let has_raid_leader = self.raider_has_active_raid(id) && self.raider_current_raid(id).expect("an active raid").get_leader(self.raider(id).get_wave()).is_some();
         if self.raider_has_active_raid(id) && !has_raid_leader && ItemStack::matches(&item_stack, &raid::get_ominous_banner_instance()) {

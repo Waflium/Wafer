@@ -150,7 +150,7 @@ impl ServerLevel {
         if !self.is_using_item(id) {
             return;
         }
-        if let Some(player) = self.players.get(&id) {
+        if let Some(player) = self.find_player(id) {
             player.connection.send(clientbound::ENTITY_EVENT, |w| {
                 w.i32(id);
                 w.u8(EVENT_USE_ITEM_COMPLETE);
@@ -180,7 +180,7 @@ impl ServerLevel {
             None => result,
         };
         if let Some(use_cooldown) = before.get(dc::USE_COOLDOWN)
-            && let Some(player) = self.players.get_mut(&id)
+            && let Some(player) = self.find_player_mut(id)
         {
             let ticks = crate::world::item::item_cooldowns::use_cooldown_ticks(use_cooldown);
             player.cooldowns.add_cooldown(&before, ticks, &player.connection);

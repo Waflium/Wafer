@@ -112,7 +112,7 @@ impl CollisionContext {
         let e = level.entity(entity);
         let properties = EntityProperties {
             fall_distance: e.fall_distance,
-            is_falling_block: matches!(level.entities.get(&entity), Some(LevelEntity::FallingBlock(_))),
+            is_falling_block: matches!(level.find_entity(entity), Some(LevelEntity::FallingBlock(_))),
             can_walk_on_powder_snow: level.can_entity_walk_on_powder_snow(entity),
             liquid_collision_shape: level.get_liquid_collision_shape(entity),
             can_stand_on_lava: level.mob(entity).is_some_and(|mob| mob.can_stand_on_fluid(wafer_data::Fluid::Lava)),
@@ -122,12 +122,12 @@ impl CollisionContext {
     }
 
     fn main_hand_item(level: &ServerLevel, entity: EntityId) -> Item {
-        let stack = match level.entities.get(&entity) {
+        let stack = match level.find_entity(entity) {
             Some(LevelEntity::Mob(mob)) => mob.item_by_slot(EquipmentSlot::Mainhand),
             Some(LevelEntity::ArmorStand(stand)) => stand.item_by_slot(EquipmentSlot::Mainhand),
             Some(LevelEntity::Mannequin(mannequin)) => mannequin.item_by_slot(EquipmentSlot::Mainhand),
             Some(_) => None,
-            None => level.players.get(&entity).and_then(|player| player.inventory.slots[player.inventory.selected_slot()].as_ref()),
+            None => level.find_player(entity).and_then(|player| player.inventory.slots[player.inventory.selected_slot()].as_ref()),
         };
         stack.map_or(items::AIR, ItemStack::get_item)
     }

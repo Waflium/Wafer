@@ -486,7 +486,7 @@ impl EnchantmentEntityEffect {
                 let entity_type = registry::ENTITY_TYPE[contents[level.random.next_int_bounded(contents.len() as i32) as usize] as usize];
                 let Some(spawned) = level.spawn_entity_type(entity_type, block_pos, crate::world::entity::entity_spawn_reason::EntitySpawnReason::Triggered) else { return };
                 if let Some(owner) = item.owner.filter(|&owner| level.is_player(owner))
-                    && let Some(LevelEntity::LightningBolt(bolt)) = level.entities.get_mut(&spawned)
+                    && let Some(LevelEntity::LightningBolt(bolt)) = level.find_entity_mut(spawned)
                 {
                     bolt.cause = Some(owner);
                 }
@@ -534,7 +534,7 @@ impl EnchantmentEntityEffect {
                 let magnitude = magnitude.calculate(enchantment_level) as f64;
                 let impulse = Vec3::new(x * coordinate_scale.x * magnitude, y * coordinate_scale.y * magnitude, z * coordinate_scale.z * magnitude);
                 level.entity_mut(entity).add_delta_movement(impulse);
-                if let Some(player) = level.players.get_mut(&entity) {
+                if let Some(player) = level.find_player_mut(entity) {
                     let packet = crate::server::level::server_entity::set_entity_motion(entity, player.entity.delta_movement);
                     player.connection.send_raw(packet);
                     player.entity.sync_velocity = false;

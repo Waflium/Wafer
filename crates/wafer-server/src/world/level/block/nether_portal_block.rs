@@ -87,7 +87,7 @@ impl BlockBehaviour for NetherPortalBlock {
 }
 
 pub fn get_portal_transition_time(level: &ServerLevel, entity: EntityId) -> i32 {
-    match level.players.get(&entity) {
+    match level.find_player(entity) {
         Some(player) => {
             let rule = if player.abilities.invulnerable { game_rule::PLAYERS_NETHER_PORTAL_CREATIVE_DELAY } else { game_rule::PLAYERS_NETHER_PORTAL_DEFAULT_DELAY };
             level.game_rules.get_int(rule).max(0)

@@ -151,5 +151,5 @@ pub fn get_target_nearest_me(level: &ServerLevel, body: EntityId, target1: Entit
 
 pub fn get_living_entity_from_uuid_memory(level: &ServerLevel, body: EntityId, memory_type: crate::world::entity::ai::memory::memory_module_type::MemoryModuleType<u128>) -> Option<EntityId> {
     let uuid = level.get_brain(body).get_memory(memory_type).copied()?;
-    crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(level).filter(|&entity| level.is_living(entity))
+    level.entity_manager.visible_entity_storage.get(uuid).filter(|&entity| level.is_living(entity))
 }

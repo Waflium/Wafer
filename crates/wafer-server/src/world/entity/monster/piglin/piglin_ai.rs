@@ -286,11 +286,11 @@ fn is_baby_riding_baby(level: &ServerLevel, body: EntityId) -> bool {
 
 pub fn pick_up_item(level: &mut ServerLevel, body: EntityId, item_entity: EntityId) {
     stop_walking(level, body);
-    let Some(LevelEntity::Item(item)) = level.entities.get(&item_entity) else { return };
+    let Some(LevelEntity::Item(item)) = level.find_entity(item_entity) else { return };
     let taken = if item.item.is(items::GOLD_NUGGET) {
         let count = item.item.count;
         level.take(body, item_entity, count);
-        let Some(LevelEntity::Item(item)) = level.entities.get(&item_entity) else { return };
+        let Some(LevelEntity::Item(item)) = level.find_entity(item_entity) else { return };
         let taken = item.item.clone();
         level.discard(item_entity);
         taken
@@ -321,7 +321,7 @@ fn hold_in_offhand(level: &mut ServerLevel, body: EntityId, item_stack: ItemStac
 }
 
 fn remove_one_item_from_item_entity(level: &mut ServerLevel, item_entity: EntityId) -> ItemStack {
-    let Some(LevelEntity::Item(item)) = level.entities.get_mut(&item_entity) else { return ItemStack::empty() };
+    let Some(LevelEntity::Item(item)) = level.find_entity_mut(item_entity) else { return ItemStack::empty() };
     let removed_stack = item.item.split(1);
     if item.item.is_empty() {
         level.discard(item_entity);

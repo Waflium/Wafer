@@ -5,7 +5,7 @@ use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type;
 
 fn is_vehicle_valid(level: &ServerLevel, body: EntityId, vehicle: EntityId, max_walk_dist_to_ride_target: i32) -> bool {
-    level.is_alive(vehicle) && level.entity(vehicle).position().closer_than(level.entity(body).position(), max_walk_dist_to_ride_target as f64)
+    level.is_alive(vehicle) && level.entity(vehicle).position().closer_than(level.entity(body).position(), max_walk_dist_to_ride_target as f64) && level.is_in_level(vehicle)
 }
 
 pub fn create(max_walk_dist_to_ride_target: i32, dont_ride_if: fn(&ServerLevel, EntityId, EntityId) -> bool) -> OneShot {

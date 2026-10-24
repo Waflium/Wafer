@@ -224,21 +224,21 @@ impl AbstractMinecart {
 
 impl ServerLevel {
     pub fn minecart(&self, id: EntityId) -> &AbstractMinecart {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Minecart(minecart)) => minecart,
             _ => unreachable!("not a minecart"),
         }
     }
 
     pub fn minecart_mut(&mut self, id: EntityId) -> &mut AbstractMinecart {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Minecart(minecart)) => minecart,
             _ => unreachable!("not a minecart"),
         }
     }
 
     pub fn is_minecart(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::Minecart(_)))
+        matches!(self.find_entity(id), Some(LevelEntity::Minecart(_)))
     }
 
     pub fn abstract_minecart_passenger_attachment_point(&self, id: EntityId, passenger: EntityId) -> Vec3 {
@@ -451,7 +451,7 @@ impl ServerLevel {
                 let delta = to_position.subtract(self.entity(id).position());
                 self.entity_move(id, mover, delta);
             }
-            if mover == MoverType::Piston && let Some(LevelEntity::Minecart(minecart)) = self.entities.get_mut(&id) {
+            if mover == MoverType::Piston && let Some(LevelEntity::Minecart(minecart)) = self.find_entity_mut(id) {
                 minecart.set_on_rails(false);
             }
         } else {

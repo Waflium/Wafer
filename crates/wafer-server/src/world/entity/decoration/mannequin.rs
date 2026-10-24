@@ -197,18 +197,18 @@ fn read_hidden_layers(tag: &Nbt) -> Option<i8> {
 
 impl ServerLevel {
     pub fn is_mannequin(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::Mannequin(_)))
+        matches!(self.find_entity(id), Some(LevelEntity::Mannequin(_)))
     }
 
     pub fn mannequin(&self, id: EntityId) -> Option<&Mannequin> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Mannequin(mannequin)) => Some(mannequin),
             _ => None,
         }
     }
 
     pub fn mannequin_mut(&mut self, id: EntityId) -> Option<&mut Mannequin> {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Mannequin(mannequin)) => Some(mannequin),
             _ => None,
         }

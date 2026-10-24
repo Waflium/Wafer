@@ -95,13 +95,13 @@ impl ServerLevel {
     }
 
     fn block_attached_entity_tick_at_check_interval(&mut self, id: EntityId) {
-        if let Some(LevelEntity::Cushion(_)) = self.entities.get(&id) {
+        if let Some(LevelEntity::Cushion(_)) = self.find_entity(id) {
             self.cushion_tick_at_check_interval(id);
         }
     }
 
     fn block_attached_entity_survives(&mut self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::LeashKnot(_)) => self.leash_fence_knot_survives(id),
             Some(LevelEntity::Painting(_)) => self.hanging_entity_survives(id),
             Some(LevelEntity::ItemFrame(_)) => self.item_frame_survives(id),
@@ -111,7 +111,7 @@ impl ServerLevel {
     }
 
     pub fn block_attached_entity_drop_item(&mut self, id: EntityId, caused_by: Option<EntityId>) {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::LeashKnot(_)) => self.leash_fence_knot_drop_item(id, caused_by),
             Some(LevelEntity::Painting(_)) => self.painting_drop_item(id, caused_by),
             Some(LevelEntity::ItemFrame(_)) => self.item_frame_drop_item(id, caused_by),
@@ -121,7 +121,7 @@ impl ServerLevel {
     }
 
     pub fn block_attached_entity_kill(&mut self, id: EntityId, attributed_to: Option<EntityId>) {
-        if let Some(LevelEntity::ItemFrame(_)) = self.entities.get(&id) {
+        if let Some(LevelEntity::ItemFrame(_)) = self.find_entity(id) {
             self.item_frame_on_killed(id);
         }
         self.remove(id, RemovalReason::Killed);

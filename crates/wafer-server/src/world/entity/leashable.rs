@@ -123,11 +123,11 @@ fn compute_dampened_spring_interaction(pivot_point: Vec3, object_position: Vec3,
 
 impl ServerLevel {
     pub fn is_leashable(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::Mob(_) | LevelEntity::Boat(_)))
+        matches!(self.find_entity(id), Some(LevelEntity::Mob(_) | LevelEntity::Boat(_)))
     }
 
     pub fn get_leash_data(&self, id: EntityId) -> Option<&LeashData> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Mob(mob)) => mob.leash_data.as_ref(),
             Some(LevelEntity::Boat(boat)) => boat.leash_data.as_ref(),
             _ => None,
@@ -135,7 +135,7 @@ impl ServerLevel {
     }
 
     fn leash_data_slot(&mut self, id: EntityId) -> Option<&mut Option<LeashData>> {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Mob(mob)) => Some(&mut mob.leash_data),
             Some(LevelEntity::Boat(boat)) => Some(&mut boat.leash_data),
             _ => None,
@@ -263,7 +263,7 @@ impl ServerLevel {
             }
         }
         let initial_momentum = self.get_leash_data(id).map_or(0.0, |data| data.angular_momentum);
-        let Some(leash_holder) = self.get_leash_holder(id).filter(|&holder| self.entity_ref(holder).is_some()) else { return };
+        let Some(leash_holder) = self.get_leash_holder(id).filter(|&holder| self.entity_ref(holder).is_some() && self.is_in_level(holder)) else { return };
         let distance_to = self.leash_distance_to(id, leash_holder);
         self.when_leashed_to(id, leash_holder);
         if distance_to > self.leash_snap_distance(id) {
@@ -415,7 +415,7 @@ impl ServerLevel {
     }
 
     fn leash_holder_info(&self, holder: EntityId) -> LeashInfo {
-        match self.entities.get(&holder) {
+        match self.find_entity(holder) {
             Some(LevelEntity::LeashKnot(knot)) => LeashInfo::Pos(knot.entity.block_attached_pos()),
             _ => LeashInfo::Uuid(self.entity(holder).uuid),
         }
@@ -463,7 +463,7 @@ impl ServerLevel {
     }
 
     fn notify_leashee_removed(&mut self, holder: EntityId) {
-        if matches!(self.entities.get(&holder), Some(LevelEntity::LeashKnot(_))) && self.leashable_leashed_to(holder).is_empty() {
+        if matches!(self.find_entity(holder), Some(LevelEntity::LeashKnot(_))) && self.leashable_leashed_to(holder).is_empty() {
             self.discard(holder);
         }
     }

@@ -97,8 +97,8 @@ impl ServerLevel {
         if self.is_projectile(source_entity) {
             return self.projectile_get_owner(source_entity).filter(|&owner| self.is_player(owner));
         }
-        match self.entities.get(&source_entity) {
-            Some(LevelEntity::Item(item)) => item.thrower.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid)).filter(|&owner| self.is_player(owner)),
+        match self.find_entity(source_entity) {
+            Some(LevelEntity::Item(item)) => item.thrower.and_then(|uuid| crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(self)).filter(|&owner| self.is_player(owner)),
             _ => None,
         }
     }

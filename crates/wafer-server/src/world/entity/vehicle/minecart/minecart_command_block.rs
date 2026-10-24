@@ -47,7 +47,7 @@ impl MinecartCommandBlock {
 
 impl ServerLevel {
     pub fn minecart_command_block(&mut self, id: EntityId) -> Option<&mut BaseCommandBlock> {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(crate::world::entity::LevelEntity::Minecart(minecart)) => match &mut minecart.kind {
                 MinecartKind::CommandBlock(command_block) => Some(&mut command_block.command_block),
                 _ => None,

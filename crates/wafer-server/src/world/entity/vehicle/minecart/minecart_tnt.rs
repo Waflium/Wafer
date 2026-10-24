@@ -187,7 +187,7 @@ impl ServerLevel {
     }
 
     fn damage_source_ignites_tnt(&self, source: &DamageSource) -> bool {
-        match source.direct_entity.filter(|&direct| matches!(self.entities.get(&direct), Some(LevelEntity::Projectile(_)))) {
+        match source.direct_entity.filter(|&direct| matches!(self.find_entity(direct), Some(LevelEntity::Projectile(_)))) {
             Some(projectile) => self.is_on_fire(projectile),
             None => source.is(&damage_type_tags::IS_FIRE) || source.is(&damage_type_tags::IS_EXPLOSION),
         }

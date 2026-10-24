@@ -85,7 +85,7 @@ impl LlamaFollowCaravanGoal {
 
     pub fn tick(&mut self, level: &mut ServerLevel, llama: EntityId) {
         let Some(follows) = level.get_caravan_head(llama).filter(|&head| level.entity_ref(head).is_some()) else { return };
-        if level.get_leash_holder(llama).is_some_and(|holder| matches!(level.entities.get(&holder), Some(LevelEntity::LeashKnot(_)))) {
+        if level.get_leash_holder(llama).is_some_and(|holder| matches!(level.find_entity(holder), Some(LevelEntity::LeashKnot(_)))) {
             return;
         }
         let (e, f) = (level.entity(llama), level.entity(follows));

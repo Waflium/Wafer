@@ -192,9 +192,9 @@ impl ServerLevel {
     }
 
     pub fn structure_block_entity_created_by(&mut self, pos: BlockPos, creator: EntityId) {
-        let name = match self.players.get(&creator) {
+        let name = match self.find_player(creator) {
             Some(player) => player.profile.name.clone(),
-            None => self.entities.get(&creator).map_or_else(String::new, |entity| entity.name().get_string()),
+            None => self.find_entity(creator).map_or_else(String::new, |entity| entity.name().get_string()),
         };
         if let Some(entity) = self.structure_block_entity(pos) {
             entity.author = name;

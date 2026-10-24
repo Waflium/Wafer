@@ -147,7 +147,7 @@ impl ServerLevel {
                 let title = self.display_name(entity);
                 let container = ContainerRef::ChestVehicle(entity);
                 self.container_start_open(container, player);
-                let kind = match self.entities.get(&entity) {
+                let kind = match self.find_entity(entity) {
                     Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, MinecartKind::Hopper(_)) => MenuKind::Hopper,
                     _ => MenuKind::Chest { rows: 3 },
                 };

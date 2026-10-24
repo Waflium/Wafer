@@ -136,7 +136,7 @@ pub fn fall(level: &mut ServerLevel, pos: BlockPos, state: BlockState) -> Entity
 
 impl ServerLevel {
     pub fn falling_block(&mut self, id: EntityId) -> &mut FallingBlockEntity {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::FallingBlock(falling)) => falling,
             _ => unreachable!("not a falling block"),
         }
@@ -280,7 +280,7 @@ impl ServerLevel {
         let targets: Vec<EntityId> = self
             .get_entities(Some(id), &bb)
             .into_iter()
-            .filter(|&e| self.is_living(e) && self.is_alive(e) && !self.players.get(&e).is_some_and(|p| p.game_mode.game_type.is_creative()))
+            .filter(|&e| self.is_living(e) && self.is_alive(e) && !self.find_player(e).is_some_and(|p| p.game_mode.game_type.is_creative()))
             .collect();
         for target in targets {
             self.hurt(target, actual_damage_source, damage);

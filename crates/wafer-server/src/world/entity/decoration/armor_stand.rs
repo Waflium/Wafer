@@ -334,18 +334,18 @@ pub fn get_fall_sound() -> &'static str {
 
 impl ServerLevel {
     pub fn is_armor_stand(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::ArmorStand(_)))
+        matches!(self.find_entity(id), Some(LevelEntity::ArmorStand(_)))
     }
 
     pub fn armor_stand(&self, id: EntityId) -> Option<&ArmorStand> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ArmorStand(stand)) => Some(stand),
             _ => None,
         }
     }
 
     pub fn armor_stand_mut(&mut self, id: EntityId) -> Option<&mut ArmorStand> {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::ArmorStand(stand)) => Some(stand),
             _ => None,
         }
@@ -365,7 +365,7 @@ impl ServerLevel {
 
     pub fn armor_stand_push_entities(&mut self, id: EntityId) {
         let bb = self.entity(id).bounding_box();
-        let minecarts = self.get_entities_matching(Some(id), &bb, |level, entity| matches!(level.entities.get(&entity), Some(LevelEntity::Minecart(minecart)) if minecart.is_rideable()));
+        let minecarts = self.get_entities_matching(Some(id), &bb, |level, entity| matches!(level.find_entity(entity), Some(LevelEntity::Minecart(minecart)) if minecart.is_rideable()));
         for entity in minecarts {
             if self.entity(id).distance_to_sqr(self.entity(entity)) <= 0.2 {
                 self.push_entity(entity, id);

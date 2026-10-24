@@ -305,7 +305,7 @@ pub fn finalize_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), mob: &mut
 }
 
 fn can_pick_up_and_eat(level: &ServerLevel, entity: EntityId) -> bool {
-    match level.entities.get(&entity) {
+    match level.find_entity(entity) {
         Some(LevelEntity::Item(item)) => item.item.get_item().is(&item_tags::PANDA_EATS_FROM_GROUND) && level.is_alive(entity) && !item.has_pickup_delay(),
         _ => false,
     }
@@ -585,7 +585,7 @@ impl ServerLevel {
     pub fn panda_pick_up_item(&mut self, id: EntityId, entity: EntityId) {
         if self.item_by_slot(id, EquipmentSlot::Mainhand).is_none() && can_pick_up_and_eat(self, entity) {
             self.on_item_pickup(id, entity);
-            let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { return };
+            let Some(LevelEntity::Item(item)) = self.find_entity(entity) else { return };
             let item_stack = item.item.clone();
             let count = item_stack.count;
             self.set_item_slot(id, EquipmentSlot::Mainhand, item_stack);

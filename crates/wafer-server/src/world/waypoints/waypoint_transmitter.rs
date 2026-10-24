@@ -29,7 +29,7 @@ pub fn is_really_far(level: &ServerLevel, source: EntityId, receiver: EntityId) 
 }
 
 fn send(level: &ServerLevel, receiver: EntityId, packet: ClientboundTrackedWaypointPacket) {
-    if let Some(player) = level.players.get(&receiver) {
+    if let Some(player) = level.find_player(receiver) {
         player.connection.send_raw(packet.encode());
     }
 }

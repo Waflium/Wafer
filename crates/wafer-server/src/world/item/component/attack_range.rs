@@ -33,7 +33,7 @@ impl AttackRange {
     }
 
     pub fn effective_min_range(&self, level: &ServerLevel, entity: EntityId) -> f32 {
-        match level.players.get(&entity) {
+        match level.find_player(entity) {
             Some(player) if player.game_mode.game_type.is_creative() => self.min_creative_reach,
             Some(_) => self.min_reach,
             None => self.min_reach * self.mob_factor,
@@ -41,7 +41,7 @@ impl AttackRange {
     }
 
     pub fn effective_max_range(&self, level: &ServerLevel, entity: EntityId) -> f32 {
-        match level.players.get(&entity) {
+        match level.find_player(entity) {
             Some(player) if player.game_mode.game_type.is_creative() => self.max_creative_reach,
             Some(_) => self.max_reach,
             None => self.max_reach * self.mob_factor,

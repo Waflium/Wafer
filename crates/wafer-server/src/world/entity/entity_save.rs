@@ -698,7 +698,7 @@ impl ServerLevel {
     }
 
     pub fn save_as_passenger(&self, id: EntityId) -> Option<Nbt> {
-        let entity = self.entities.get(&id)?;
+        let entity = self.find_entity(id)?;
         if entity.entity().removal.is_some_and(|r| !r.should_save()) {
             return None;
         }
@@ -710,9 +710,9 @@ impl ServerLevel {
 
     pub fn save_without_id(&self, id: EntityId, out: &mut Vec<(String, Nbt)>) {
         let start = out.len();
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(player) => player.entity.save_without_id(out),
-            None => match self.entities.get(&id) {
+            None => match self.find_entity(id) {
                 Some(entity) => entity.save_without_id(out),
                 None => self.dragon_part_entity(id).expect("entity in this level").save_without_id(out),
             },
@@ -820,7 +820,7 @@ impl ServerLevel {
     }
 
     pub fn entity_tag_to_compare(&self, id: EntityId) -> Nbt {
-        if let Some(player) = self.players.get(&id) {
+        if let Some(player) = self.find_player(id) {
             let Nbt::Compound(mut fields) = self.save_player(id) else { unreachable!() };
             if let Some(selected) = player.inventory.slots[player.inventory.selected_slot()].as_ref().filter(|s| !s.is_empty()) {
                 fields.push(("SelectedItem".into(), selected.to_nbt()));

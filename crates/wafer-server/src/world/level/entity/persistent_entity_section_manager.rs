@@ -366,9 +366,9 @@ impl ServerLevel {
 
     pub fn entity_moved(&mut self, id: EntityId) {
         self.on_move(id);
-        let e = match self.players.get_mut(&id) {
+        let e = match self.find_player_mut(id) {
             Some(player) => &mut player.entity,
-            None => match self.entities.get_mut(&id) {
+            None => match self.find_entity_mut(id) {
                 Some(entity) => entity.entity_mut(),
                 None => return,
             },

@@ -20,7 +20,7 @@ pub fn write_inventory_to_tag(inventory: &SimpleContainer, output: &mut Vec<(Str
 
 impl ServerLevel {
     pub fn inventory_carrier_pick_up_item(&mut self, mob: EntityId, item_entity: EntityId, inventory: impl Fn(&mut ServerLevel) -> &mut SimpleContainer) {
-        let Some(LevelEntity::Item(item)) = self.entities.get(&item_entity) else { return };
+        let Some(LevelEntity::Item(item)) = self.find_entity(item_entity) else { return };
         let item_stack = item.item.clone();
         if self.wants_to_pick_up(mob, &item_stack) {
             let has_space = inventory(self).can_add_item(&item_stack);
@@ -31,7 +31,7 @@ impl ServerLevel {
             let count = item_stack.count;
             let remainder = inventory(self).add_item(&item_stack);
             self.take(mob, item_entity, count - remainder.count);
-            let Some(LevelEntity::Item(item)) = self.entities.get_mut(&item_entity) else { return };
+            let Some(LevelEntity::Item(item)) = self.find_entity_mut(item_entity) else { return };
             if remainder.is_empty() {
                 self.discard(item_entity);
             } else {

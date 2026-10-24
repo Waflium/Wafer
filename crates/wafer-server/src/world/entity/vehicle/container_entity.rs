@@ -74,7 +74,7 @@ impl ContainerEntity {
 
 impl ServerLevel {
     pub fn container_entity(&mut self, id: EntityId) -> Option<&mut ContainerEntity> {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Boat(boat)) => boat.container.as_mut(),
             Some(LevelEntity::Minecart(minecart)) => minecart.container.as_mut(),
             _ => None,
@@ -82,7 +82,7 @@ impl ServerLevel {
     }
 
     pub fn is_container_entity(&self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Boat(boat)) => boat.container.is_some(),
             Some(LevelEntity::Minecart(minecart)) => minecart.container.is_some(),
             _ => false,

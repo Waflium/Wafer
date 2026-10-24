@@ -109,7 +109,7 @@ impl ServerLevel {
             let moving = self.entity(id).bounding_box().move_vec(Vec3::new(0.0, 1.0, 0.0));
             let offset = offset_shape.collide([0.0; 3], [x, y, z], Axis::Y, &moving, -1.0);
             let dy = 1.0 + offset;
-            if let Some(player) = self.players.get_mut(&id) {
+            if let Some(player) = self.find_player_mut(id) {
                 player.teleport_relative(PositionMoveRotation { position: Vec3::new(0.0, dy, 0.0), delta_movement: Vec3::ZERO, y_rot: 0.0, x_rot: 0.0 }, relative::relative::ALL);
             } else {
                 let e = self.entity_mut(id);

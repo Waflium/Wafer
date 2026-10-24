@@ -66,7 +66,7 @@ impl EntityFlagsPredicate {
         }
         let living = level.is_living(entity);
         if let Some(is_flying) = self.is_flying {
-            let entity_is_flying = living && (e.is_fall_flying() || level.players.get(&entity).is_some_and(|p| p.abilities.flying));
+            let entity_is_flying = living && (e.is_fall_flying() || level.find_player(entity).is_some_and(|p| p.abilities.flying));
             if entity_is_flying != is_flying {
                 return false;
             }

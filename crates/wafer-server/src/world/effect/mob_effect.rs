@@ -112,7 +112,7 @@ impl ServerLevel {
                 true
             }
             mob_effects::SATURATION => {
-                if let Some(player) = self.players.get_mut(&id) {
+                if let Some(player) = self.find_player_mut(id) {
                     player.food_data.eat_with_modifier(amplifier + 1, 1.0);
                 }
                 true

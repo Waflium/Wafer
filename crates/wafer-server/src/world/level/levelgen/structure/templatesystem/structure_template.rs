@@ -225,7 +225,7 @@ impl StructureTemplate {
         for id in entities {
             let entity = level.entity_ref(id).unwrap();
             let pos = Vec3::new(entity.x() - min_corner.x as f64, entity.y() - min_corner.y as f64, entity.z() - min_corner.z as f64);
-            let block_pos = if matches!(level.entities.get(&id), Some(LevelEntity::Painting(_))) {
+            let block_pos = if matches!(level.find_entity(id), Some(LevelEntity::Painting(_))) {
                 let painting_pos = entity.block_attached_pos();
                 BlockPos::new(painting_pos.x - min_corner.x, painting_pos.y - min_corner.y, painting_pos.z - min_corner.z)
             } else {

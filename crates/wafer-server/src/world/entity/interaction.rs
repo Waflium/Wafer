@@ -118,14 +118,14 @@ impl Interaction {
 
 impl ServerLevel {
     fn interaction_mut(&mut self, id: EntityId) -> &mut Interaction {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Interaction(interaction)) => interaction,
             _ => unreachable!("an interaction"),
         }
     }
 
     fn interaction(&self, id: EntityId) -> &Interaction {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Interaction(interaction)) => interaction,
             _ => unreachable!("an interaction"),
         }
@@ -161,7 +161,7 @@ impl ServerLevel {
     }
 
     pub fn get_last_attacker(&self, id: EntityId) -> Option<EntityId> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Interaction(_)) => self.interaction_get_last_attacker(id),
             _ if self.is_living(id) => self.get_last_hurt_by_mob(id),
             _ => None,
@@ -169,7 +169,7 @@ impl ServerLevel {
     }
 
     pub fn targeting_get_target(&self, id: EntityId) -> Option<EntityId> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Interaction(_)) => self.interaction_get_target(id),
             Some(LevelEntity::Mob(_)) => self.get_target(id),
             _ => None,
@@ -177,7 +177,7 @@ impl ServerLevel {
     }
 
     pub fn traceable_get_owner(&self, id: EntityId) -> Option<EntityId> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Projectile(_)) => self.projectile_get_owner(id),
             Some(LevelEntity::Item(item)) => item.thrower.and_then(|thrower| EntityReference::of(thrower).get_entity(self)),
             Some(LevelEntity::PrimedTnt(tnt)) => EntityReference::get_living_entity(tnt.owner.map(EntityReference::of), self),

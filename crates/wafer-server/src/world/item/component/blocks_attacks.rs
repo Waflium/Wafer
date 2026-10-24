@@ -73,7 +73,7 @@ impl BlocksAttacks {
     pub fn disable(&self, level: &mut ServerLevel, user: EntityId, base_seconds: f32, blocking_with: &ItemStack) {
         let cooldown_ticks = self.disable_blocking_for_ticks(base_seconds);
         if cooldown_ticks > 0 {
-            if let Some(player) = level.players.get_mut(&user) {
+            if let Some(player) = level.find_player_mut(user) {
                 player.cooldowns.add_cooldown(blocking_with, cooldown_ticks, &player.connection);
             }
             level.stop_using_item(user);

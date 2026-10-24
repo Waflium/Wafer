@@ -104,7 +104,7 @@ impl ExplosionDamageCalculator {
     fn get_knockback_multiplier(&self, level: &ServerLevel, entity: EntityId) -> f32 {
         match *self {
             ExplosionDamageCalculator::Simple { knockback_multiplier, .. } => {
-                let creative_flying = level.players.get(&entity).is_some_and(|player| player.abilities.flying);
+                let creative_flying = level.find_player(entity).is_some_and(|player| player.abilities.flying);
                 if creative_flying { 0.0 } else { knockback_multiplier.unwrap_or(1.0) }
             }
             _ => 1.0,
@@ -174,7 +174,7 @@ impl ServerLevel {
     }
 
     fn ignore_explosion(&self, id: EntityId, explosion: &ServerExplosion) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ArmorStand(_)) => self.armor_stand_ignore_explosion(id, self.should_affect_blocklike_entities(explosion)),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, crate::world::entity::mob::MobKind::Warden(_)) => crate::world::entity::monster::warden::warden::is_digging_or_emerging(&mob.entity),
             Some(LevelEntity::Item(_)) => !self.should_affect_blocklike_entities(explosion),
@@ -414,7 +414,7 @@ impl ServerLevel {
             if dist > 1.0 {
                 continue;
             }
-            let is_tnt = matches!(self.entities.get(&id), Some(LevelEntity::PrimedTnt(_)));
+            let is_tnt = matches!(self.find_entity(id), Some(LevelEntity::PrimedTnt(_)));
             let origin = if is_tnt { self.entity(id).position() } else { self.entity(id).eye_position() };
             let direction = origin.subtract(c).normalize();
             let should_damage_entity = explosion.damage_calculator.should_damage_entity();
@@ -435,7 +435,7 @@ impl ServerLevel {
             if redirectable && self.is_projectile(id) {
                 let owner = explosion.damage_source.causing_entity.map(|owner| crate::world::entity::entity_reference::EntityReference::of(self.entity(owner).uuid));
                 self.projectile_set_owner_reference(id, owner);
-            } else if let Some(player) = self.players.get(&id)
+            } else if let Some(player) = self.find_player(id)
                 && !self.is_spectator(id)
                 && !(player.game_mode.game_type.is_creative() && player.abilities.flying)
             {

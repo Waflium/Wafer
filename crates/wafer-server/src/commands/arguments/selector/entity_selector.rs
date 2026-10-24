@@ -82,7 +82,7 @@ impl EntityPredicate {
         match self {
             EntityPredicate::Alive => level.is_alive(id),
             EntityPredicate::Name { name, inverted } => (world.entity_name(id) == *name) != *inverted,
-            EntityPredicate::GameMode { mode, inverted } => match level.players.get(&id) {
+            EntityPredicate::GameMode { mode, inverted } => match level.find_player(id) {
                 Some(player) => (player.game_mode.game_type == *mode) ^ *inverted,
                 None => false,
             },
@@ -107,9 +107,9 @@ impl EntityPredicate {
                 let rotation = mth::wrap_degrees(if x { e.x_rot } else { e.y_rot });
                 if min > max { rotation >= min || rotation <= max } else { rotation >= min && rotation <= max }
             }
-            EntityPredicate::Level(range) => level.players.get(&id).is_some_and(|p| range.matches(p.experience.level)),
+            EntityPredicate::Level(range) => level.find_player(id).is_some_and(|p| range.matches(p.experience.level)),
             EntityPredicate::Advancements(expected) => {
-                let Some(player) = level.players.get(&id) else { return false };
+                let Some(player) = level.find_player(id) else { return false };
                 let server_advancements = crate::server::server_advancement_manager::ServerAdvancementManager::get_bound();
                 expected.iter().all(|(name, predicate)| {
                     server_advancements.get(name).is_some_and(|advancement| predicate.test(&player.advancements.get_progress(advancement)))

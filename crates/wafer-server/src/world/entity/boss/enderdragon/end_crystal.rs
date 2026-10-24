@@ -53,7 +53,7 @@ impl EndCrystal {
 
 impl ServerLevel {
     fn end_crystal(&mut self, id: EntityId) -> &mut EndCrystal {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::EndCrystal(crystal)) => crystal,
             _ => unreachable!("not an end crystal"),
         }

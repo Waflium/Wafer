@@ -147,7 +147,7 @@ fn calculate_view_vector(x_rot: f32, y_rot: f32) -> Vec3 {
 
 impl ServerLevel {
     fn get_hand_holding_item_angle(&self, id: EntityId, item: wafer_data::Item) -> Vec3 {
-        let Some(player) = self.players.get(&id) else { return Vec3::ZERO };
+        let Some(player) = self.find_player(id) else { return Vec3::ZERO };
         let main_hand_is = player.item_in_hand(crate::world::InteractionHand::MainHand).is_some_and(|stack| stack.is(item));
         let off_hand_is = player.item_in_hand(crate::world::InteractionHand::OffHand).is_some_and(|stack| stack.is(item));
         let item_only_in_offhand = off_hand_is && !main_hand_is;

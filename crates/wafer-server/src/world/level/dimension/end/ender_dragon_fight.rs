@@ -288,7 +288,7 @@ impl ServerLevel {
             let respawn_crystals: Vec<EntityId> = crystal_uuids
                 .into_iter()
                 .filter_map(|uuid| EntityReference::of(uuid).get_entity(self))
-                .filter(|&crystal| matches!(self.entities.get(&crystal), Some(LevelEntity::EndCrystal(_))))
+                .filter(|&crystal| matches!(self.find_entity(crystal), Some(LevelEntity::EndCrystal(_))))
                 .collect();
             if respawn_crystals.is_empty() {
                 self.dragon_fight_abort_respawn_sequence();
@@ -507,7 +507,7 @@ impl ServerLevel {
     }
 
     fn dragon_fight_end_crystals_in(&self, area: &AABB) -> Vec<EntityId> {
-        self.get_entities_matching(None, area, |level, id| !level.is_spectator(id) && matches!(level.entities.get(&id), Some(LevelEntity::EndCrystal(_))))
+        self.get_entities_matching(None, area, |level, id| !level.is_spectator(id) && matches!(level.find_entity(id), Some(LevelEntity::EndCrystal(_))))
     }
 
     pub fn dragon_fight_set_dragon_killed(&mut self, dragon: EntityId) {
@@ -678,7 +678,7 @@ impl ServerLevel {
     pub fn dragon_fight_reset_spike_crystals(&mut self) {
         for spike in end_spike_feature::get_spikes_for_level(self.seed) {
             for crystal in self.dragon_fight_end_crystals_in(&spike.get_top_bounding_box()) {
-                if let Some(LevelEntity::EndCrystal(end_crystal)) = self.entities.get_mut(&crystal) {
+                if let Some(LevelEntity::EndCrystal(end_crystal)) = self.find_entity_mut(crystal) {
                     end_crystal.entity.invulnerable = false;
                     end_crystal.set_beam_target(None);
                 }

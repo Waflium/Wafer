@@ -215,7 +215,7 @@ impl ServerLevel {
         } else {
             if state == FishHookState::HookedInEntity {
                 if let Some(hooked_in) = hook(self.projectile(id)).hooked_in {
-                    if self.entity_ref(hooked_in).is_some_and(|e| !e.is_removed()) && self.can_interact_with_level(hooked_in) {
+                    if self.entity_ref(hooked_in).is_some_and(|e| !e.is_removed()) && self.can_interact_with_level(hooked_in) && self.is_in_level(hooked_in) {
                         let h = self.entity(hooked_in);
                         let pos = Vec3::new(h.x(), h.get_y(0.8), h.z());
                         self.entity_mut(id).set_pos(pos);
@@ -296,7 +296,7 @@ impl ServerLevel {
     }
 
     pub fn fishing_hook_can_hit_entity(&self, id: EntityId, entity: EntityId) -> bool {
-        self.projectile_base_can_hit_entity(id, entity) || self.is_alive(entity) && matches!(self.entities.get(&entity), Some(LevelEntity::Item(_)))
+        self.projectile_base_can_hit_entity(id, entity) || self.is_alive(entity) && matches!(self.find_entity(entity), Some(LevelEntity::Item(_)))
     }
 
     pub fn fishing_hook_on_hit_entity(&mut self, id: EntityId, hit_result: EntityHitResult) {
@@ -465,7 +465,7 @@ impl ServerLevel {
             self.fishing_hook_pull_entity(id, hooked_in);
             criteria_triggers::FISHING_ROD_HOOKED.trigger(self, owner, rod, id, &[]);
             self.broadcast_entity_event(id, 31);
-            dmg = if matches!(self.entities.get(&hooked_in), Some(LevelEntity::Item(_))) { 3 } else { 5 };
+            dmg = if matches!(self.find_entity(hooked_in), Some(LevelEntity::Item(_))) { 3 } else { 5 };
         } else if hook.nibble > 0 {
             let luck = hook.luck as f32 + self.attribute_value(owner, crate::world::entity::attributes::Attribute::Luck) as f32;
             let position = self.entity(id).position();

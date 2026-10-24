@@ -86,38 +86,6 @@ pub struct SpawnProtection {
     pub ops: Vec<(u128, i32)>,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct OtherLevelPlayer {
-    pub uuid: u128,
-    pub id: EntityId,
-    pub alive: bool,
-    pub won_game: bool,
-    pub accepting_messages: bool,
-    pub can_use_portal: bool,
-    pub seen_credits: bool,
-    pub position: Vec3,
-    pub y_rot: f32,
-    pub x_rot: f32,
-}
-
-impl OtherLevelPlayer {
-    pub fn of(level: &ServerLevel, id: EntityId) -> OtherLevelPlayer {
-        let player = level.player(id);
-        OtherLevelPlayer {
-            uuid: player.entity.uuid,
-            id,
-            alive: level.is_alive(id),
-            won_game: player.won_game,
-            accepting_messages: !player.disconnected,
-            can_use_portal: level.can_use_portal(id, true),
-            seen_credits: player.seen_credits,
-            position: player.entity.position(),
-            y_rot: player.entity.y_rot,
-            x_rot: player.entity.x_rot,
-        }
-    }
-}
-
 pub const RAIN_DELAY: (i32, i32) = (12000, 180000);
 pub const RAIN_DURATION: (i32, i32) = (12000, 24000);
 pub const THUNDER_DELAY: (i32, i32) = (12000, 180000);
@@ -175,7 +143,6 @@ pub struct ServerLevel {
     pub pending_portal_teleport: Option<crate::world::level::block::portal::PendingPortalTeleport>,
     pub pending_spectator_portal_use: Option<crate::world::level::block::portal::PendingSpectatorPortalUse>,
     pub pending_ender_pearl_teleport: Option<crate::world::entity::projectile::throwableitemprojectile::thrown_enderpearl::PendingEnderPearlTeleport>,
-    pub other_level_players: Vec<OtherLevelPlayer>,
     pub other_levels: Vec<ServerLevel>,
     pub other_level_ender_pearls: Vec<(u128, EntityId, bool)>,
     pub global_level_events: Vec<(i32, BlockPos, i32)>,
@@ -323,7 +290,6 @@ impl ServerLevel {
             pending_portal_teleport: None,
             pending_spectator_portal_use: None,
             pending_ender_pearl_teleport: None,
-            other_level_players: Vec::new(),
             other_levels: Vec::new(),
             other_level_ender_pearls: Vec::new(),
             global_level_events: Vec::new(),
@@ -593,17 +559,17 @@ impl ServerLevel {
     }
 
     pub fn player(&self, id: EntityId) -> &ServerPlayer {
-        &self.players[&id]
+        self.find_player(id).expect("player in this level")
     }
 
     pub fn player_mut(&mut self, id: EntityId) -> &mut ServerPlayer {
-        self.players.get_mut(&id).expect("player in this level")
+        self.find_player_mut(id).expect("player in this level")
     }
 
     pub fn entity_ref(&self, id: EntityId) -> Option<&Entity> {
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(p) => Some(&p.entity),
-            None => match self.entities.get(&id) {
+            None => match self.find_entity(id) {
                 Some(entity) => Some(entity.entity()),
                 None => self.dragon_part_entity(id),
             },
@@ -1185,7 +1151,7 @@ impl ServerLevel {
         dist: Vec3,
         speed: f64,
     ) -> bool {
-        let Some(player) = self.players.get(&player) else { return false };
+        let Some(player) = self.find_player(player) else { return false };
         if !Vec3::at_center_of(player.entity.block_position()).closer_than(pos, if override_limiter { 512.0 } else { 32.0 }) {
             return false;
         }
@@ -1281,7 +1247,7 @@ impl ServerLevel {
     }
 
     pub fn remove_entity(&mut self, id: EntityId) {
-        let reason = self.entities.get(&id).and_then(|e| e.entity().removal);
+        let reason = self.find_entity(id).and_then(|e| e.entity().removal);
         if let Some(reason) = reason {
             self.set_removed(id, reason);
         }
@@ -1300,7 +1266,7 @@ impl ServerLevel {
 
     fn remove_untracked_entities(&mut self) {
         for id in std::mem::take(&mut self.removed_entities) {
-            if let Some(reason) = self.entities.get(&id).and_then(|e| e.entity().removal) {
+            if let Some(reason) = self.find_entity(id).and_then(|e| e.entity().removal) {
                 self.record_dropped_suspect(id, Some(reason));
                 self.entities.swap_remove(&id);
             }
@@ -1403,7 +1369,7 @@ impl ServerLevel {
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
             for &id in section.entities() {
                 if Some(id) != except
-                    && let Some(LevelEntity::Item(item)) = self.entities.get(&id)
+                    && let Some(LevelEntity::Item(item)) = self.find_entity(id)
                     && !item.entity.is_removed()
                     && item.entity.bounding_box().intersects(area)
                 {
@@ -1580,7 +1546,7 @@ impl ServerLevel {
                 if !self.ticks_with_vehicle(id) {
                     self.tick_non_passenger(id);
                 }
-            } else if let Some(entity) = self.entities.get(&id) {
+            } else if let Some(entity) = self.find_entity(id) {
                 if entity.entity().is_removed() {
                     self.remove_entity(id);
                 } else if !self.tick_rate_manager.is_entity_frozen() {
@@ -1592,12 +1558,12 @@ impl ServerLevel {
                     } else if self.is_shulker_bullet(id) {
                         self.shulker_bullet_check_despawn(id);
                     }
-                    let in_range = self.entities.get(&id).is_some_and(|e| self.in_entity_ticking_range(e.entity().chunk_position()));
+                    let in_range = self.find_entity(id).is_some_and(|e| self.in_entity_ticking_range(e.entity().chunk_position()));
                     if in_range {
                         if !self.ticks_with_vehicle(id) {
                             self.tick_non_passenger(id);
                         }
-                    } else if self.entities.get(&id).is_some_and(|e| e.entity().is_removed()) {
+                    } else if self.find_entity(id).is_some_and(|e| e.entity().is_removed()) {
                         self.remove_entity(id);
                     }
                 }
@@ -1979,7 +1945,7 @@ impl ServerLevel {
     }
 
     fn tick_entity(&mut self, id: EntityId) {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Item(_)) => self.tick_item(id),
             Some(LevelEntity::LightningBolt(_)) => self.tick_lightning_bolt(id),
             Some(LevelEntity::EyeOfEnder(_)) => self.tick_eye_of_ender(id),
@@ -2038,7 +2004,7 @@ impl ServerLevel {
             None => return,
         }
         let teleporting = self.pending_portal_teleport.as_ref().is_some_and(|pending| pending.entity.id == id && pending.removed);
-        if !teleporting && self.entities.get(&id).is_some_and(|e| e.entity().is_removed()) {
+        if !teleporting && self.find_entity(id).is_some_and(|e| e.entity().is_removed()) {
             self.remove_entity(id);
         }
     }
@@ -2068,11 +2034,11 @@ impl ServerLevel {
     pub fn touch_entities(&mut self, player: EntityId) {
         let area = self.player_pickup_area(player);
         for id in self.get_entities(Some(player), &area) {
-            match self.entities.get(&id) {
+            match self.find_entity(id) {
                 Some(LevelEntity::Item(item)) if !item.entity.is_removed() => self.item_entity_player_touch(id, player),
                 Some(LevelEntity::Projectile(projectile)) if !projectile.entity.is_removed() && projectile.abstract_arrow().is_some() => {
                     self.player_touch(id, player);
-                    if self.entities.get(&id).is_some_and(|e| e.entity().is_removed()) {
+                    if self.find_entity(id).is_some_and(|e| e.entity().is_removed()) {
                         self.remove_entity(id);
                     }
                 }
@@ -2126,20 +2092,20 @@ impl ServerLevel {
         }
         let left = item_stack.count;
         self.take(player, id, original);
-        let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) else { return };
+        let Some(LevelEntity::Item(item)) = self.find_entity_mut(id) else { return };
         item.item.count = left;
         if left == 0 {
             self.discard(id);
-            let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) else { return };
+            let Some(LevelEntity::Item(item)) = self.find_entity_mut(id) else { return };
             item.item.count = original;
         }
-        let Some(LevelEntity::Item(item)) = self.entities.get(&id) else { return };
+        let Some(LevelEntity::Item(item)) = self.find_entity(id) else { return };
         let (picked, thrower) = (item.item.clone(), item.thrower);
         if left == 0 {
             self.remove_entity(id);
         }
         self.award_stat(player, crate::stats::stats::ITEM_PICKED_UP.get(picked_up_item.0), original);
-        let thrower = thrower.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid));
+        let thrower = thrower.and_then(|uuid| crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(self));
         if let Some(thrower) = thrower.filter(|&thrower| self.is_player(thrower)) {
             criteria_triggers::THROWN_ITEM_PICKED_UP_BY_ENTITY.trigger(self, thrower, &picked, player);
         }
@@ -2436,7 +2402,7 @@ impl crate::world::level::server_level_accessor::ServerLevelAccessor for ServerL
         let passengers = entity.entity().passengers.clone();
         ServerLevel::add_fresh_entity(self, entity);
         for passenger in passengers {
-            if self.entities.get(&passenger).is_some_and(|p| !self.entity_manager.is_loaded(p.entity().uuid))
+            if self.find_entity(passenger).is_some_and(|p| !self.entity_manager.is_loaded(p.entity().uuid))
                 && let Some(passenger) = self.entities.shift_remove(&passenger)
             {
                 self.add_fresh_entity_with_passengers(passenger);

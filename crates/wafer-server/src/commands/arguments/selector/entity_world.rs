@@ -27,9 +27,9 @@ pub trait EntityWorld {
 
     fn entity_name(&self, id: EntityId) -> String {
         let Some(level) = self.level_of_entity(id) else { return String::new() };
-        match level.players.get(&id) {
+        match level.find_player(id) {
             Some(p) => p.profile.name.clone(),
-            None => match level.entities.get(&id) {
+            None => match level.find_entity(id) {
                 Some(entity) => entity.name().get_string(),
                 None => level.dragon_part_entity(id).map_or_else(String::new, |part| crate::world::entity::entity_name(part).get_string()),
             },

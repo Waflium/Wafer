@@ -17,7 +17,7 @@ pub fn do_tick(level: &mut ServerLevel, body: EntityId) {
     items.sort_by(|&a, &b| position.distance_to_sqr(level.entity(a).position()).total_cmp(&position.distance_to_sqr(level.entity(b).position())));
     let mut nearest_visible_loved_item = None;
     for item in items {
-        let Some(LevelEntity::Item(item_entity)) = level.entities.get(&item) else { continue };
+        let Some(LevelEntity::Item(item_entity)) = level.find_entity(item) else { continue };
         let stack = item_entity.item.clone();
         if !level.wants_to_pick_up(body, &stack) {
             continue;

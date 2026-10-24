@@ -184,7 +184,7 @@ impl ServerLevel {
     }
 
     pub fn pillager_pick_up_item(&mut self, id: EntityId, entity: EntityId) {
-        let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { return };
+        let Some(LevelEntity::Item(item)) = self.find_entity(entity) else { return };
         let item_stack = item.item.clone();
         if item_stack.get_item().is_instance_of("BannerItem") {
             self.raider_pick_up_item(id, entity);
@@ -193,7 +193,7 @@ impl ServerLevel {
             let remainder = pillager_mut(self.mob_mut(id).expect("a pillager")).inventory.add_item(&item_stack);
             if remainder.is_empty() {
                 self.discard(entity);
-            } else if let Some(LevelEntity::Item(item)) = self.entities.get_mut(&entity) {
+            } else if let Some(LevelEntity::Item(item)) = self.find_entity_mut(entity) {
                 item.item.count = remainder.count;
             }
         }

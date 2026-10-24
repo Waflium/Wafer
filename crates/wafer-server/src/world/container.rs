@@ -96,7 +96,7 @@ impl ServerLevel {
         match container {
             ContainerRef::ChiseledBookShelf(pos) => self.chiseled_book_shelf(pos).map(|bookshelf| bookshelf.get_items_mut()),
             ContainerRef::Shelf(pos) => self.shelf(pos).map(|shelf| shelf.get_items_mut()),
-            ContainerRef::PlayerEnderChest(player) => self.players.get_mut(&player).map(|p| &mut p.ender_chest_inventory.items),
+            ContainerRef::PlayerEnderChest(player) => self.find_player_mut(player).map(|p| &mut p.ender_chest_inventory.items),
             ContainerRef::ChestVehicle(entity) => {
                 self.unpack_chest_vehicle_loot_table(entity, None);
                 self.container_entity(entity).map(|container| container.get_item_stacks())
@@ -563,7 +563,7 @@ impl ServerLevel {
             return;
         }
         if let ContainerRef::ChestVehicle(vehicle) = container {
-            match self.entities.get(&vehicle) {
+            match self.find_entity(vehicle) {
                 Some(LevelEntity::Boat(boat)) if boat.container.is_some() => self.abstract_chest_boat_stop_open(vehicle, player),
                 Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, MinecartKind::Chest(_)) => self.minecart_chest_stop_open(vehicle, player),
                 _ => {}

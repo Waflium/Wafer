@@ -191,7 +191,7 @@ impl ServerLevel {
 
     pub fn dragon_part_entity(&self, id: EntityId) -> Option<&Entity> {
         let &(parent, index) = self.dragon_parts.get(id)?;
-        match self.entities.get(&parent) {
+        match self.find_entity(parent) {
             Some(LevelEntity::Mob(mob)) => Some(&ender_dragon(mob).sub_entities[index].entity),
             _ => None,
         }
@@ -199,7 +199,7 @@ impl ServerLevel {
 
     pub fn dragon_part_entity_mut(&mut self, id: EntityId) -> Option<&mut Entity> {
         let &(parent, index) = self.dragon_parts.get(id)?;
-        match self.entities.get_mut(&parent) {
+        match self.find_entity_mut(parent) {
             Some(LevelEntity::Mob(mob)) => Some(&mut ender_dragon_mut(mob).sub_entities[index].entity),
             _ => None,
         }
@@ -391,7 +391,7 @@ impl ServerLevel {
         }
         if self.entity_mut(id).random.next_int_bounded(10) == 0 {
             let area = self.entity(id).bounding_box().inflate_all(32.0);
-            let crystals = self.get_entities_matching(None, &area, |level, e| matches!(level.entities.get(&e), Some(LevelEntity::EndCrystal(_))));
+            let crystals = self.get_entities_matching(None, &area, |level, e| matches!(level.find_entity(e), Some(LevelEntity::EndCrystal(_))));
             let mut nearest = None;
             let mut distance = f64::MAX;
             for crystal in crystals {

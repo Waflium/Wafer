@@ -43,7 +43,7 @@ impl PostTeleportTransition {
 }
 
 fn play_portal_sound(level: &ServerLevel, entity: EntityId) {
-    if let Some(player) = level.players.get(&entity) {
+    if let Some(player) = level.find_player(entity) {
         player.connection.send(clientbound::LEVEL_EVENT, |w| {
             w.i32(1032);
             w.position(0, 0, 0);

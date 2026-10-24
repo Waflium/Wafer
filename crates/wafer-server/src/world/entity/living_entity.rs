@@ -453,9 +453,9 @@ fn are_all_effects_ambient(effects: &[MobEffectInstance]) -> bool {
 
 impl ServerLevel {
     pub fn living(&self, id: EntityId) -> &LivingEntity {
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(p) => &p.living,
-            None => match self.entities.get(&id) {
+            None => match self.find_entity(id) {
                 Some(LevelEntity::ArmorStand(stand)) => &stand.living,
                 Some(LevelEntity::Mannequin(mannequin)) => &mannequin.living,
                 _ => &self.mob(id).expect("a living entity").living,
@@ -464,24 +464,24 @@ impl ServerLevel {
     }
 
     pub fn living_mut(&mut self, id: EntityId) -> &mut LivingEntity {
-        if self.players.contains_key(&id) {
+        if self.is_player(id) {
             return &mut self.player_mut(id).living;
         }
         if self.is_armor_stand(id) {
-            let Some(LevelEntity::ArmorStand(stand)) = self.entities.get_mut(&id) else { unreachable!("an armor stand") };
+            let Some(LevelEntity::ArmorStand(stand)) = self.find_entity_mut(id) else { unreachable!("an armor stand") };
             return &mut stand.living;
         }
         if self.is_mannequin(id) {
-            let Some(LevelEntity::Mannequin(mannequin)) = self.entities.get_mut(&id) else { unreachable!("a mannequin") };
+            let Some(LevelEntity::Mannequin(mannequin)) = self.find_entity_mut(id) else { unreachable!("a mannequin") };
             return &mut mannequin.living;
         }
         &mut self.mob_mut(id).expect("a living entity").living
     }
 
     pub fn entity_and_living(&self, id: EntityId) -> (&Entity, &LivingEntity) {
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(p) => (&p.entity, &p.living),
-            None => match self.entities.get(&id) {
+            None => match self.find_entity(id) {
                 Some(LevelEntity::ArmorStand(stand)) => (&stand.entity, &stand.living),
                 Some(LevelEntity::Mannequin(mannequin)) => (&mannequin.entity, &mannequin.living),
                 _ => {
@@ -493,16 +493,16 @@ impl ServerLevel {
     }
 
     pub fn entity_and_living_mut(&mut self, id: EntityId) -> (&mut Entity, &mut LivingEntity) {
-        if self.players.contains_key(&id) {
+        if self.is_player(id) {
             let p = self.player_mut(id);
             return (&mut p.entity, &mut p.living);
         }
         if self.is_armor_stand(id) {
-            let Some(LevelEntity::ArmorStand(stand)) = self.entities.get_mut(&id) else { unreachable!("an armor stand") };
+            let Some(LevelEntity::ArmorStand(stand)) = self.find_entity_mut(id) else { unreachable!("an armor stand") };
             return (&mut stand.entity, &mut stand.living);
         }
         if self.is_mannequin(id) {
-            let Some(LevelEntity::Mannequin(mannequin)) = self.entities.get_mut(&id) else { unreachable!("a mannequin") };
+            let Some(LevelEntity::Mannequin(mannequin)) = self.find_entity_mut(id) else { unreachable!("a mannequin") };
             return (&mut mannequin.entity, &mut mannequin.living);
         }
         let mob = self.mob_mut(id).expect("a living entity");
@@ -510,7 +510,7 @@ impl ServerLevel {
     }
 
     pub fn health(&self, id: EntityId) -> f32 {
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(p) => p.health,
             None => match self.armor_stand(id) {
                 Some(stand) => stand.health,
@@ -767,9 +767,9 @@ impl ServerLevel {
     }
 
     pub fn on_item_pickup(&mut self, id: EntityId, item_entity: EntityId) {
-        let Some(super::LevelEntity::Item(item)) = self.entities.get(&item_entity) else { return };
+        let Some(super::LevelEntity::Item(item)) = self.find_entity(item_entity) else { return };
         let item_stack = item.item.clone();
-        let owner = item.thrower.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid)).filter(|&owner| self.is_player(owner));
+        let owner = item.thrower.and_then(|uuid| crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(self)).filter(|&owner| self.is_player(owner));
         if let Some(owner) = owner {
             crate::advancements::triggers::criteria_triggers::THROWN_ITEM_PICKED_UP_BY_ENTITY.trigger(self, owner, &item_stack, id);
         }
@@ -929,7 +929,7 @@ impl ServerLevel {
 
     pub fn hurt_and_break(&mut self, owner: EntityId, slot: EquipmentSlot, amount: i32) {
         let Some(mut item_stack) = self.item_by_slot(owner, slot) else { return };
-        let new_amount = if !item_stack.is_damageable_item() || self.players.get(&owner).is_some_and(|p| p.abilities.instabuild) {
+        let new_amount = if !item_stack.is_damageable_item() || self.find_player(owner).is_some_and(|p| p.abilities.instabuild) {
             0
         } else if amount > 0 {
             self.process_durability_change(&item_stack, amount)
@@ -1053,6 +1053,9 @@ impl ServerLevel {
     }
 
     pub fn has_line_of_sight_with(&mut self, id: EntityId, target: EntityId, block_colliding_context: ClipBlock, fluid_colliding_context: ClipFluid, eye_height: f64) -> bool {
+        if !self.is_in_level(target) {
+            return false;
+        }
         let e = self.entity(id);
         let from = Vec3::new(e.x(), e.eye_y(), e.z());
         let t = self.entity(target);
@@ -1949,11 +1952,11 @@ impl ServerLevel {
     }
 
     pub fn get_last_hurt_by_mob(&self, id: EntityId) -> Option<EntityId> {
-        self.living(id).last_hurt_by_mob.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid)).filter(|&e| self.is_living(e))
+        self.living(id).last_hurt_by_mob.and_then(|uuid| crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(self)).filter(|&e| self.is_living(e))
     }
 
     pub fn get_last_hurt_by_player(&self, id: EntityId) -> Option<EntityId> {
-        self.living(id).last_hurt_by_player.as_ref().and_then(|&uuid| self.entity_manager.visible_entity_storage.get(uuid)).filter(|&p| self.is_player(p))
+        self.living(id).last_hurt_by_player.and_then(|uuid| crate::world::entity::entity_reference::EntityReference::of(uuid).get_player(self))
     }
 
     pub fn get_loot_table_seed(&self, id: EntityId) -> i64 {
@@ -2170,7 +2173,7 @@ impl ServerLevel {
             if e.is_eye_in_fluid(&fluid_tags::WATER) && !self.block_state(eye_pos).is_block(blocks::BUBBLE_COLUMN) {
                 let can_drown = !self.can_breathe_underwater(id)
                     && !self.has_water_breathing(id)
-                    && !self.players.get(&id).is_some_and(|p| p.abilities.invulnerable);
+                    && !self.find_player(id).is_some_and(|p| p.abilities.invulnerable);
                 if can_drown {
                     let supply = self.decrease_air_supply(id, self.entity(id).air_supply());
                     self.entity_mut(id).set_air_supply(supply);
@@ -2218,7 +2221,7 @@ impl ServerLevel {
         {
             self.living_mut(id).last_hurt_mob = None;
         }
-        if let Some(hurt_by) = self.living(id).last_hurt_by_mob.and_then(|uuid| self.entity_manager.visible_entity_storage.get(uuid)).filter(|&e| self.is_living(e)) {
+        if let Some(hurt_by) = self.living(id).last_hurt_by_mob.and_then(|uuid| crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(self)).filter(|&e| self.is_living(e)) {
             let alive = self.is_alive(hurt_by);
             let tick_count = self.entity(id).tick_count;
             let living = self.living_mut(id);
@@ -2847,7 +2850,7 @@ impl ServerLevel {
     }
 
     fn is_affected_by_fluids(&self, id: EntityId) -> bool {
-        self.players.get(&id).is_none_or(|p| !p.abilities_flying())
+        self.find_player(id).is_none_or(|p| !p.abilities_flying())
     }
 
     pub fn living_entity_is_pushable(&mut self, id: EntityId) -> bool {

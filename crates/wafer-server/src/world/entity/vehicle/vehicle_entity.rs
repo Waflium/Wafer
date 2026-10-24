@@ -52,7 +52,7 @@ pub fn get_hurt_dir(entity: &Entity) -> i32 {
 
 impl ServerLevel {
     pub fn is_vehicle_entity(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)))
+        matches!(self.find_entity(id), Some(LevelEntity::Minecart(_) | LevelEntity::Boat(_)))
     }
 
     pub fn vehicle_entity_hurt_server(&mut self, id: EntityId, source: DamageSource, damage: f32) -> bool {
@@ -82,7 +82,7 @@ impl ServerLevel {
     }
 
     fn should_source_destroy(&self, id: EntityId, source: &DamageSource) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, crate::world::entity::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_)) => self.minecart_tnt_should_source_destroy(source),
             _ => false,
         }
@@ -115,7 +115,7 @@ impl ServerLevel {
     }
 
     pub fn vehicle_drop_item(&self, id: EntityId) -> Item {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Minecart(minecart)) => minecart.get_drop_item(),
             Some(LevelEntity::Boat(boat)) => boat.get_drop_item(),
             _ => unreachable!("not a vehicle"),

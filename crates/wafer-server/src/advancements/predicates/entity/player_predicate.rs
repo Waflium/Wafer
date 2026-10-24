@@ -149,7 +149,7 @@ impl PlayerPredicate {
     }
 
     pub fn matches(&self, level: &mut ServerLevel, entity: EntityId) -> bool {
-        let Some(player) = level.players.get(&entity) else { return false };
+        let Some(player) = level.find_player(entity) else { return false };
         if !self.level.matches(player.experience.level) {
             return false;
         }

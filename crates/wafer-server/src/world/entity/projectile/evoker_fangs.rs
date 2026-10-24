@@ -56,14 +56,14 @@ impl EvokerFangs {
 
 impl ServerLevel {
     fn evoker_fangs(&mut self, id: EntityId) -> &mut EvokerFangs {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::EvokerFangs(fangs)) => fangs,
             _ => unreachable!("not evoker fangs"),
         }
     }
 
     pub fn evoker_fangs_owner(&self, id: EntityId) -> Option<EntityId> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::EvokerFangs(fangs)) => EntityReference::get_living_entity(fangs.owner, self),
             _ => None,
         }

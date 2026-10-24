@@ -73,7 +73,7 @@ fn play_sound(level: &mut ServerLevel, except: Option<EntityId>, causer: EntityI
 pub fn can_hit_entity(level: &ServerLevel, jabber: EntityId, target: EntityId) -> bool {
     if level.is_invulnerable_to_piercing_weapon(target) || !level.is_alive(target) {
         false
-    } else if matches!(level.entities.get(&target), Some(LevelEntity::Interaction(_))) {
+    } else if matches!(level.find_entity(target), Some(LevelEntity::Interaction(_))) {
         true
     } else if !level.can_be_hit_by_projectile(target) {
         false

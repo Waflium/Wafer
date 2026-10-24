@@ -85,7 +85,7 @@ impl BlockBehaviour for FrogspawnBlock {
     }
 
     fn entity_inside(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, entity: EntityId, _effects: &mut InsideBlockEffects, _is_precise: bool) {
-        if matches!(level.entities.get(&entity), Some(LevelEntity::FallingBlock(_))) {
+        if matches!(level.find_entity(entity), Some(LevelEntity::FallingBlock(_))) {
             self.destroy_block(level, pos);
         }
     }

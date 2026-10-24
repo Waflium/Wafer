@@ -1606,12 +1606,10 @@ impl Server {
             self.command_block_tick(index, pos);
         }
         self.levels[index].tick_after_block_ticks(runs);
-        self.update_other_level_players(index);
         while level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_entities() {
             self.run_pending_minecart_commands(index);
             self.handle_pending_portal_teleport(index);
             self.handle_pending_ender_pearl_teleport(index);
-            self.update_other_level_players(index);
             self.send_global_level_events();
         }
         level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_entities();

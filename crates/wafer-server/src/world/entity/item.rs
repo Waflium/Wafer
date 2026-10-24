@@ -116,7 +116,7 @@ impl ItemEntity {
 
 impl ServerLevel {
     fn item_entity(&mut self, id: EntityId) -> Option<&mut ItemEntity> {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Item(item)) => Some(item),
             _ => None,
         }
@@ -150,7 +150,7 @@ impl ServerLevel {
     }
 
     pub fn item_entity_should_play_lava_hurt_sound(&self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Item(item)) => item.health <= 0 || item.entity.tick_count % 10 == 0,
             _ => true,
         }

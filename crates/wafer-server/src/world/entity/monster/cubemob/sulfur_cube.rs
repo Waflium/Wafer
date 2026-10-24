@@ -521,13 +521,13 @@ impl ServerLevel {
     }
 
     pub fn sulfur_cube_pick_up_item(&mut self, id: EntityId, entity: EntityId) {
-        let Some(LevelEntity::Item(item_entity)) = self.entities.get(&entity) else { return };
+        let Some(LevelEntity::Item(item_entity)) = self.find_entity(entity) else { return };
         let item_stack = item_entity.item.clone();
         if self.mob(id).expect("a sulfur cube").sulfur_cube_can_hold_item(&item_stack) && self.sulfur_cube_ref(id).pickup_timer <= 0 {
             self.on_item_pickup(id, entity);
             let mut item_stack = item_stack;
             let one = item_stack.split(1);
-            if let Some(LevelEntity::Item(item_entity)) = self.entities.get_mut(&entity) {
+            if let Some(LevelEntity::Item(item_entity)) = self.find_entity_mut(entity) {
                 item_entity.set_item(item_stack);
             }
             self.set_item_slot(id, EquipmentSlot::Body, one);
@@ -755,7 +755,7 @@ impl SulfurCubeSearchForItemsGoal {
             return false;
         }
         let aabb = level.entity(mob).bounding_box().inflate(8.0, 8.0, 8.0);
-        let candidates = level.get_entities_matching(None, &aabb, |level, entity| match level.entities.get(&entity) {
+        let candidates = level.get_entities_matching(None, &aabb, |level, entity| match level.find_entity(entity) {
             Some(LevelEntity::Item(item)) => !item.has_pickup_delay() && level.is_alive(entity) && is_swallowable_item(&item.item),
             _ => false,
         });

@@ -185,7 +185,7 @@ impl ServerLevel {
         if self.item_by_slot(id, EquipmentSlot::Mainhand).is_some() {
             return;
         }
-        let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { return };
+        let Some(LevelEntity::Item(item)) = self.find_entity(entity) else { return };
         let item_stack = item.item.clone();
         if self.can_hold_item(id, &item_stack) {
             self.on_item_pickup(id, entity);
@@ -386,7 +386,7 @@ impl DolphinSwimWithPlayerGoal {
 }
 
 fn allowed_items(level: &ServerLevel, entity: EntityId) -> bool {
-    match level.entities.get(&entity) {
+    match level.find_entity(entity) {
         Some(LevelEntity::Item(item)) => item.pickup_delay <= 0 && level.is_alive(entity) && item.entity.is_in_water(),
         _ => false,
     }

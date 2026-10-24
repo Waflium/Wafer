@@ -34,6 +34,7 @@ pub fn create_with(
                 && level.can_attack(body, target)
                 && (!can_grow_tired_of_trying_to_reach_target || !is_tired_of_trying_to_reach_target(level, cant_reach_since.try_get(level, body)))
                 && level.is_alive(target)
+                && level.is_in_level(target)
                 && !stop_attacking_when(level, body, target)
             {
                 return true;

@@ -64,7 +64,7 @@ const ENDER_CHEST_SIZE: i32 = 27;
 
 impl ServerLevel {
     pub fn get_slot(&self, id: EntityId, slot: i32) -> Option<LevelSlot> {
-        if self.players.contains_key(&id) {
+        if self.is_player(id) {
             if slot == 499 {
                 return Some(LevelSlot::Carried(id));
             }
@@ -118,7 +118,7 @@ impl ServerLevel {
         if self.is_living(id) {
             return get_equipment_slot(slot).map(|slot| LevelSlot::Equipment { entity: id, slot });
         }
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Item(_)) if slot == 0 => Some(LevelSlot::Item(id)),
             Some(LevelEntity::Display(display)) if display.is_item_display() && slot == 0 => Some(LevelSlot::ItemDisplay(id)),
             Some(LevelEntity::ItemFrame(_)) if slot == 0 => Some(LevelSlot::ItemFrame(id)),
@@ -152,15 +152,15 @@ impl ServerLevel {
             LevelSlot::VillagerInventory(villager, index) => self.abstract_villager(villager).inventory.get_item(index).clone(),
             LevelSlot::PillagerInventory(pillager, index) => super::monster::illager::pillager::pillager(self.mob(pillager).expect("a pillager")).inventory.get_item(index).clone(),
             LevelSlot::PiglinInventory(piglin, index) => super::monster::piglin::piglin::piglin(self.mob(piglin).expect("a piglin")).inventory.get_item(index).clone(),
-            LevelSlot::Item(id) => match self.entities.get(&id) {
+            LevelSlot::Item(id) => match self.find_entity(id) {
                 Some(LevelEntity::Item(item)) => item.item.clone(),
                 _ => ItemStack::empty(),
             },
-            LevelSlot::ItemDisplay(id) => match self.entities.get(&id) {
+            LevelSlot::ItemDisplay(id) => match self.find_entity(id) {
                 Some(LevelEntity::Display(display)) => display.get_item_stack().cloned().unwrap_or_else(ItemStack::empty),
                 _ => ItemStack::empty(),
             },
-            LevelSlot::ItemFrame(id) => match self.entities.get(&id) {
+            LevelSlot::ItemFrame(id) => match self.find_entity(id) {
                 Some(LevelEntity::ItemFrame(frame)) => super::decoration::item_frame::get_item(&frame.entity).cloned().unwrap_or_else(ItemStack::empty),
                 _ => ItemStack::empty(),
             },
@@ -199,12 +199,12 @@ impl ServerLevel {
             LevelSlot::PillagerInventory(pillager, index) => super::monster::illager::pillager::pillager_mut(self.mob_mut(pillager).expect("a pillager")).inventory.set_item(index, item_stack),
             LevelSlot::PiglinInventory(piglin, index) => super::monster::piglin::piglin::piglin_mut(self.mob_mut(piglin).expect("a piglin")).inventory.set_item(index, item_stack),
             LevelSlot::Item(id) => {
-                if let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) {
+                if let Some(LevelEntity::Item(item)) = self.find_entity_mut(id) {
                     item.set_item(item_stack);
                 }
             }
             LevelSlot::ItemDisplay(id) => {
-                if let Some(LevelEntity::Display(display)) = self.entities.get_mut(&id) {
+                if let Some(LevelEntity::Display(display)) = self.find_entity_mut(id) {
                     display.set_item_stack(item_stack);
                 }
             }
@@ -241,17 +241,17 @@ impl ServerLevel {
             LevelSlot::PillagerInventory(pillager, index) => super::monster::illager::pillager::pillager_mut(self.mob_mut(pillager).expect("a pillager")).inventory.items[index] = item_stack,
             LevelSlot::PiglinInventory(piglin, index) => super::monster::piglin::piglin::piglin_mut(self.mob_mut(piglin).expect("a piglin")).inventory.items[index] = item_stack,
             LevelSlot::Item(id) => {
-                if let Some(LevelEntity::Item(item)) = self.entities.get_mut(&id) {
+                if let Some(LevelEntity::Item(item)) = self.find_entity_mut(id) {
                     item.item = item_stack;
                 }
             }
             LevelSlot::ItemDisplay(id) => {
-                if let Some(LevelEntity::Display(display)) = self.entities.get_mut(&id) {
+                if let Some(LevelEntity::Display(display)) = self.find_entity_mut(id) {
                     *display.item_stack_mut() = super::data::DataValue::ItemStack(Some(item_stack));
                 }
             }
             LevelSlot::ItemFrame(id) => {
-                if let Some(LevelEntity::ItemFrame(frame)) = self.entities.get_mut(&id) {
+                if let Some(LevelEntity::ItemFrame(frame)) = self.find_entity_mut(id) {
                     *frame.item_mut() = super::data::DataValue::ItemStack(Some(item_stack));
                 }
             }

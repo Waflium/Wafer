@@ -1274,7 +1274,7 @@ impl ServerLevel {
     }
 
     pub fn award_stat(&mut self, id: EntityId, stat: Stat, count: i32) {
-        let Some(player) = self.players.get_mut(&id) else { return };
+        let Some(player) = self.find_player_mut(id) else { return };
         player.stats.increment(stat, count);
         let criteria = stat.criteria();
         if self.scoreboard.borrow().objectives_by_criteria(&criteria).is_empty() {
@@ -1287,7 +1287,7 @@ impl ServerLevel {
     }
 
     pub fn reset_stat(&mut self, id: EntityId, stat: Stat) {
-        let Some(player) = self.players.get_mut(&id) else { return };
+        let Some(player) = self.find_player_mut(id) else { return };
         player.stats.set_value(stat, 0);
         let criteria = stat.criteria();
         if self.scoreboard.borrow().objectives_by_criteria(&criteria).is_empty() {

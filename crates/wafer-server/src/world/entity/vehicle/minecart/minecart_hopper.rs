@@ -90,7 +90,7 @@ impl ServerLevel {
             return true;
         }
         let area = self.entity(id).bounding_box().inflate(0.25, 0.0, 0.25);
-        let items: Vec<EntityId> = self.get_entities(None, &area).into_iter().filter(|&entity| matches!(self.entities.get(&entity), Some(crate::world::entity::LevelEntity::Item(_))) && self.is_alive(entity)).collect();
+        let items: Vec<EntityId> = self.get_entities(None, &area).into_iter().filter(|&entity| matches!(self.find_entity(entity), Some(crate::world::entity::LevelEntity::Item(_))) && self.is_alive(entity)).collect();
         for entity in items {
             if self.hopper_add_item_entity(ContainerRef::ChestVehicle(id), entity, true) {
                 return true;

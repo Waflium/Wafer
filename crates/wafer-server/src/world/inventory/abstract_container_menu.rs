@@ -1190,7 +1190,7 @@ impl ServerLevel {
         let taken = std::mem::replace(menu, AbstractContainerMenu::inventory());
         self.restore_container_menu(player, taken);
         criteria_triggers::INVENTORY_CHANGED.trigger(self, player, current);
-        if let Some(p) = self.players.get_mut(&player) {
+        if let Some(p) = self.find_player_mut(player) {
             let restored = if container_id == CONTAINER_ID { p.inventory_menu.take() } else { p.container_menu.take() };
             if let Some(restored) = restored {
                 *menu = restored;

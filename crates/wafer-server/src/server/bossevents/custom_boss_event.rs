@@ -11,7 +11,7 @@ use crate::world::level::storage::uuid_ints;
 const DEFAULT_MAX: i32 = 100;
 
 fn player_in(levels: &[ServerLevel], player: EntityId) -> &crate::server::level::server_player::ServerPlayer {
-    levels.iter().find_map(|level| level.players.get(&player)).expect("player on this server")
+    levels.iter().find_map(|level| level.find_player(player)).expect("player on this server")
 }
 
 pub struct CustomBossEvent {

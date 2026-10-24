@@ -31,7 +31,7 @@ impl LeashFenceKnotEntity {
     pub fn get_knot(level: &ServerLevel, pos: BlockPos) -> Option<EntityId> {
         let (x, y, z) = (pos.x as f64, pos.y as f64, pos.z as f64);
         let area = AABB::new(x - 1.0, y - 1.0, z - 1.0, x + 1.0, y + 1.0, z + 1.0);
-        level.get_entities(None, &area).into_iter().find(|&id| matches!(level.entities.get(&id), Some(LevelEntity::LeashKnot(knot)) if knot.entity.block_attached_pos() == pos))
+        level.get_entities(None, &area).into_iter().find(|&id| matches!(level.find_entity(id), Some(LevelEntity::LeashKnot(knot)) if knot.entity.block_attached_pos() == pos))
     }
 
     pub fn create_knot(level: &mut ServerLevel, pos: BlockPos) -> EntityId {
@@ -60,7 +60,7 @@ impl ServerLevel {
     }
 
     pub fn leash_fence_knot_survives(&mut self, id: EntityId) -> bool {
-        let Some(LevelEntity::LeashKnot(knot)) = self.entities.get(&id) else { return false };
+        let Some(LevelEntity::LeashKnot(knot)) = self.find_entity(id) else { return false };
         let pos = knot.entity.block_attached_pos();
         self.block_state(pos).is(&block_tags::FENCES)
     }

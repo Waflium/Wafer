@@ -133,6 +133,6 @@ impl ServerLevel {
     }
 
     pub fn is_painting(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::Painting(_)))
+        matches!(self.find_entity(id), Some(LevelEntity::Painting(_)))
     }
 }

@@ -69,7 +69,7 @@ pub fn random_short_fuse(fuse: i32, random: &mut impl RandomSource) -> i32 {
 
 impl ServerLevel {
     fn primed_tnt(&mut self, id: EntityId) -> &mut PrimedTnt {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::PrimedTnt(tnt)) => tnt,
             _ => unreachable!("not primed TNT"),
         }

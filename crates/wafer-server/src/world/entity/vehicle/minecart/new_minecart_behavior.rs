@@ -288,7 +288,7 @@ impl ServerLevel {
     }
 
     fn new_minecart_behavior_calculate_player_input_speed(&self, id: EntityId, delta_movement: Vec3) -> Vec3 {
-        let Some(player) = self.first_passenger(id).and_then(|passenger| self.players.get(&passenger)) else { return delta_movement };
+        let Some(player) = self.first_passenger(id).and_then(|passenger| self.find_player(passenger)) else { return delta_movement };
         let move_intent = player.get_last_client_move_intent();
         if move_intent.length_sqr() > 0.0 {
             let rider_movement = move_intent.normalize();

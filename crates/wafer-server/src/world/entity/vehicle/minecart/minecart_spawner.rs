@@ -43,7 +43,7 @@ impl ServerLevel {
         let pos = self.entity(id).block_position();
         let mut spawner = std::mem::take(spawner_mut(self.minecart_mut(id)));
         spawner.server_tick(self, pos);
-        if let Some(crate::world::entity::LevelEntity::Minecart(minecart)) = self.entities.get_mut(&id) {
+        if let Some(crate::world::entity::LevelEntity::Minecart(minecart)) = self.find_entity_mut(id) {
             *spawner_mut(minecart) = spawner;
         }
     }

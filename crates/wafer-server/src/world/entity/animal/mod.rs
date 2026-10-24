@@ -314,7 +314,7 @@ impl ServerLevel {
 
     pub fn get_love_cause(&self, id: EntityId) -> Option<EntityId> {
         let love_cause = self.mob(id)?.animal()?.love_cause?;
-        self.players.values().find(|p| p.profile.uuid == love_cause).map(|p| p.entity.id)
+        crate::world::entity::entity_reference::EntityReference::of(love_cause).get_player(self)
     }
 
     pub fn finalize_spawn_child_from_breeding(&mut self, id: EntityId, partner: EntityId, offspring: Option<EntityId>) {

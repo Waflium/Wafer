@@ -23,7 +23,7 @@ pub fn do_tick(level: &mut ServerLevel, body: EntityId) {
         None => level.get_brain_mut(body).erase_memory(memory_module_type::HURT_BY),
     }
     if let Some(hurt_by_entity) = level.get_brain(body).get_memory(memory_module_type::HURT_BY_ENTITY).copied()
-        && !level.is_alive(hurt_by_entity)
+        && (!level.is_alive(hurt_by_entity) || !level.is_in_level(hurt_by_entity))
     {
         level.get_brain_mut(body).erase_memory(memory_module_type::HURT_BY_ENTITY);
     }

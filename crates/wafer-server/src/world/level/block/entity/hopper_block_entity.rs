@@ -206,10 +206,10 @@ impl ServerLevel {
     }
 
     pub fn hopper_add_item_entity(&mut self, container: ContainerRef, item: EntityId, remove_now: bool) -> bool {
-        let Some(LevelEntity::Item(entity)) = self.entities.get(&item) else { return false };
+        let Some(LevelEntity::Item(entity)) = self.find_entity(item) else { return false };
         let copy = entity.item.copy();
         let result = self.add_item(None, container, copy, None);
-        let Some(LevelEntity::Item(entity)) = self.entities.get_mut(&item) else { return false };
+        let Some(LevelEntity::Item(entity)) = self.find_entity_mut(item) else { return false };
         if result.is_empty() {
             entity.set_item(ItemStack::empty());
             self.discard(item);
@@ -294,7 +294,7 @@ impl ServerLevel {
     }
 
     pub fn hopper_entity_inside(&mut self, pos: BlockPos, state: BlockState, entity: EntityId) {
-        let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { return };
+        let Some(LevelEntity::Item(item)) = self.find_entity(entity) else { return };
         let bb = item.entity.bounding_box().move_by(-pos.x as f64, -pos.y as f64, -pos.z as f64);
         if !item.item.is_empty() && bb.intersects(&SUCK_AABB) {
             self.hopper_try_move_items(pos, state, SuckAction::Item(entity));

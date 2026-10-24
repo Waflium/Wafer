@@ -123,7 +123,7 @@ impl ServerLevel {
         let pow = movement.horizontal_distance().min(2.0);
         e.set_delta_movement(Vec3::new(pow * x_d / length, movement.y, pow * z_d / length));
         let controlling_passenger = self.first_passenger(id);
-        let move_intent = match controlling_passenger.and_then(|p| self.players.get(&p)) {
+        let move_intent = match controlling_passenger.and_then(|p| self.find_player(p)) {
             Some(player) => player.get_last_client_move_intent(),
             None => Vec3::ZERO,
         };

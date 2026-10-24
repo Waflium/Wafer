@@ -83,14 +83,14 @@ impl OminousItemSpawner {
 }
 
 fn ominous_item_spawner(level: &ServerLevel, id: EntityId) -> &OminousItemSpawner {
-    match level.entities.get(&id) {
+    match level.find_entity(id) {
         Some(LevelEntity::OminousItemSpawner(spawner)) => spawner,
         _ => unreachable!("an ominous item spawner"),
     }
 }
 
 fn ominous_item_spawner_mut(level: &mut ServerLevel, id: EntityId) -> &mut OminousItemSpawner {
-    match level.entities.get_mut(&id) {
+    match level.find_entity_mut(id) {
         Some(LevelEntity::OminousItemSpawner(spawner)) => spawner,
         _ => unreachable!("an ominous item spawner"),
     }

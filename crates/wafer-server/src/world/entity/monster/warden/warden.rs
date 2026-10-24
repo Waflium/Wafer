@@ -298,7 +298,8 @@ impl ServerLevel {
     pub fn warden_can_target_entity(&self, id: EntityId, entity: Option<EntityId>) -> bool {
         let Some(entity) = entity.filter(|&entity| self.entity_ref(entity).is_some() && self.is_living(entity)) else { return false };
         let entity_type = self.entity(entity).entity_type;
-        entity_selector::no_creative_or_spectator(self, entity)
+        self.is_in_level(entity)
+            && entity_selector::no_creative_or_spectator(self, entity)
             && !self.is_allied_to(id, entity)
             && entity_type != registry_id(registry::ENTITY_TYPE, "minecraft:armor_stand")
             && entity_type != registry_id(registry::ENTITY_TYPE, "minecraft:warden")

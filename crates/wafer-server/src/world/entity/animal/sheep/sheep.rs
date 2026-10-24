@@ -174,6 +174,6 @@ impl ServerLevel {
     }
 
     pub fn is_sheep(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::Mob(mob)) if matches!(mob.kind, MobKind::Sheep(_)))
+        matches!(self.find_entity(id), Some(LevelEntity::Mob(mob)) if matches!(mob.kind, MobKind::Sheep(_)))
     }
 }

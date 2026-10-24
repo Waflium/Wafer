@@ -13,7 +13,7 @@ pub fn create(admire_duration: i32) -> OneShot {
         let _walk_disabled = i.absent(memory_module_type::DISABLE_WALK_TO_ADMIRE_ITEM);
         move |level: &mut ServerLevel, body: EntityId, _timestamp: i64| {
             let item_entity = nearest_item.get(level, body);
-            let Some(LevelEntity::Item(item)) = level.entities.get(&item_entity) else { return false };
+            let Some(LevelEntity::Item(item)) = level.find_entity(item_entity) else { return false };
             if !piglin_ai::is_loved_item(&item.item) {
                 return false;
             }

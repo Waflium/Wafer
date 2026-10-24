@@ -120,11 +120,11 @@ impl ServerLevel {
     }
 
     pub fn has_infinite_materials(&self, id: EntityId) -> bool {
-        self.players.get(&id).is_some_and(|p| p.abilities.instabuild)
+        self.find_player(id).is_some_and(|p| p.abilities.instabuild)
     }
 
     pub fn can_use_game_master_blocks(&self, id: EntityId) -> bool {
-        self.players.get(&id).is_some_and(|p| p.abilities.instabuild && self.profile_permission_level(p.profile.uuid) >= 2)
+        self.find_player(id).is_some_and(|p| p.abilities.instabuild && self.profile_permission_level(p.profile.uuid) >= 2)
     }
 
     pub fn block_action_restricted(&mut self, id: EntityId, pos: BlockPos, game_type: GameType) -> bool {
@@ -428,7 +428,7 @@ impl ServerLevel {
             e.set_delta_movement(e.delta_movement.multiply(0.6, 1.0, 0.6));
             self.set_sprinting(id, false);
         }
-        if let Some(target) = self.players.get_mut(&entity)
+        if let Some(target) = self.find_player_mut(entity)
             && target.entity.sync_velocity
         {
             let packet = set_entity_motion(entity, target.entity.delta_movement);

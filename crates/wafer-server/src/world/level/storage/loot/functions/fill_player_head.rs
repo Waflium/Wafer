@@ -22,7 +22,7 @@ impl FillPlayerHead {
         if !item_stack.is(items::PLAYER_HEAD) {
             return item_stack;
         }
-        let Some(player) = self.entity_target.get(&context.params).and_then(|id| context.params.level.players.get(&id)) else { return item_stack };
+        let Some(player) = self.entity_target.get(&context.params).and_then(|id| context.params.level.find_player(id)) else { return item_stack };
         let profile = &player.profile;
         let uuid = profile.uuid;
         let id = Nbt::IntArray(vec![(uuid >> 96) as i32, (uuid >> 64) as i32, (uuid >> 32) as i32, uuid as i32]);

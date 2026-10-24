@@ -153,7 +153,7 @@ fn is_covered_by_suffocating_blocks(level: &mut ServerLevel, bounding_box: &AABB
 }
 
 fn cushion(level: &ServerLevel, id: EntityId) -> &Cushion {
-    match level.entities.get(&id) {
+    match level.find_entity(id) {
         Some(LevelEntity::Cushion(cushion)) => cushion,
         _ => unreachable!("a cushion"),
     }
@@ -161,7 +161,7 @@ fn cushion(level: &ServerLevel, id: EntityId) -> &Cushion {
 
 impl ServerLevel {
     pub fn is_cushion(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::Cushion(_)))
+        matches!(self.find_entity(id), Some(LevelEntity::Cushion(_)))
     }
 
     pub fn cushion_drop_item(&mut self, id: EntityId, caused_by: Option<EntityId>) {
@@ -170,7 +170,7 @@ impl ServerLevel {
         if self.game_rules.get_bool(game_rule::ENTITY_DROPS) && !caused_by.is_some_and(|player| self.has_infinite_materials(player)) {
             let item_stack = cushion(self, id).get_cushion_item_stack_with_data();
             if let Some(item_entity) = self.spawn_at_location(id, item_stack, 0.0)
-                && caused_by.is_some_and(|entity| matches!(self.entities.get(&entity), Some(LevelEntity::LightningBolt(_))))
+                && caused_by.is_some_and(|entity| matches!(self.find_entity(entity), Some(LevelEntity::LightningBolt(_))))
             {
                 self.entity_mut(item_entity).invulnerable_time = LIGHTNING_DROP_INVULNERABLE_TICKS;
             }

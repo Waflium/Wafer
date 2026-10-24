@@ -204,7 +204,7 @@ pub fn lerp_rotation(mut rot_o: f32, rot: f32) -> f32 {
 
 impl ServerLevel {
     pub fn as_projectile(&self, id: EntityId) -> Option<&Projectile> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Projectile(projectile)) => Some(projectile),
             _ => None,
         }
@@ -215,7 +215,7 @@ impl ServerLevel {
     }
 
     pub fn projectile_mut(&mut self, id: EntityId) -> &mut Projectile {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Projectile(projectile)) => projectile,
             _ => unreachable!("not a projectile"),
         }
@@ -306,7 +306,7 @@ impl ServerLevel {
     pub fn can_break_block_in_adventure_mode(&mut self, id: EntityId, pos: BlockPos) -> bool {
         let owner = self.projectile_get_owner(id);
         let world_game_mode = self.default_game_type.get();
-        let adventure_owner = match owner.and_then(|owner| self.players.get(&owner)) {
+        let adventure_owner = match owner.and_then(|owner| self.find_player(owner)) {
             Some(player) => player.game_mode.game_type == GameType::Adventure,
             None => owner.is_some() || world_game_mode == GameType::Adventure,
         };

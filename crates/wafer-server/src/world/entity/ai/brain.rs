@@ -586,14 +586,14 @@ impl ServerLevel {
     }
 
     pub fn get_brain_if_present(&self, id: EntityId) -> Option<&Brain> {
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(player) => Some(&player.living.brain),
             None => self.mob(id).map(|mob| &mob.living.brain),
         }
     }
 
     pub fn get_brain_mut_if_present(&mut self, id: EntityId) -> Option<&mut Brain> {
-        if self.players.contains_key(&id) {
+        if self.is_player(id) {
             return Some(&mut self.player_mut(id).living.brain);
         }
         self.mob_mut(id).map(|mob| &mut mob.living.brain)

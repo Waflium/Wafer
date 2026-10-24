@@ -23,14 +23,14 @@ pub fn hurt_enemy(level: &mut ServerLevel, mob: EntityId, attacker: EntityId) {
     e.set_delta_movement(Vec3::new(movement.x, 0.01f32 as f64, movement.z));
     let impact_position = calculate_impact_position(level, attacker);
     level.living_mut(attacker).set_ignore_fall_damage_from_current_impulse(true, impact_position);
-    if let Some(player) = level.players.get(&attacker) {
+    if let Some(player) = level.find_player(attacker) {
         player.connection.send_raw(set_entity_motion(attacker, player.entity.delta_movement));
     }
     let source = level.sound_source(attacker);
     let e = level.entity(attacker);
     let (x, y, z, fall_distance) = (e.x(), e.y(), e.z(), e.fall_distance);
     if level.entity(mob).on_ground {
-        if let Some(player) = level.players.get_mut(&attacker) {
+        if let Some(player) = level.find_player_mut(attacker) {
             player.spawn_extra_particles_on_fall = true;
         }
         let sound = if fall_distance > SMASH_ATTACK_HEAVY_THRESHOLD as f64 { "minecraft:item.mace.smash_ground_heavy" } else { "minecraft:item.mace.smash_ground" };
@@ -86,7 +86,7 @@ fn knockback(level: &mut ServerLevel, attacker: EntityId, entity: EntityId) {
         let knockback_vector = direction.normalize().scale(knockback_power);
         if knockback_power > 0.0 {
             level.entity_mut(nearby).push(knockback_vector.x, SMASH_ATTACK_KNOCKBACK_POWER as f64, knockback_vector.z);
-            if let Some(other_player) = level.players.get(&nearby) {
+            if let Some(other_player) = level.find_player(nearby) {
                 other_player.connection.send_raw(set_entity_motion(nearby, other_player.entity.delta_movement));
             }
         }
@@ -99,7 +99,7 @@ fn knockback_predicate(level: &ServerLevel, attacker: EntityId, entity: EntityId
     let not_allied_to_player = !level.is_allied_to(attacker, nearby);
     let not_tamed_by_player = !(level.is_tamable_animal(nearby) && level.is_living(entity) && level.is_tame(nearby) && level.is_owned_by(nearby, entity));
     let within_range = level.entity(entity).distance_to_sqr(level.entity(nearby)) <= (SMASH_ATTACK_KNOCKBACK_RADIUS as f64).powf(2.0);
-    let not_flying_in_creative = !level.players.get(&nearby).is_some_and(|player| player.game_mode.game_type.is_creative() && player.abilities_flying());
+    let not_flying_in_creative = !level.find_player(nearby).is_some_and(|player| player.game_mode.game_type.is_creative() && player.abilities_flying());
     not_spectator && not_player && not_allied_to_player && not_tamed_by_player && within_range && not_flying_in_creative
 }
 

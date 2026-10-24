@@ -25,14 +25,15 @@ impl EntityReference {
     }
 
     pub fn get_entity(self, level: &ServerLevel) -> Option<EntityId> {
-        level.entity_manager.visible_entity_storage.get(self.uuid).filter(|&id| level.entity_ref(id).is_some_and(|e| !e.is_removed()))
+        level.get_entity_in_any_dimension(self.uuid).filter(|&id| level.entity_ref(id).is_some_and(|e| !e.is_removed()))
+    }
+
+    pub fn get_player(self, level: &ServerLevel) -> Option<EntityId> {
+        level.get_player_in_any_dimension(self.uuid).filter(|&id| level.entity_ref(id).is_some_and(|e| !e.is_removed()))
     }
 
     pub fn get_entity_in_any_dimension(self, level: &ServerLevel) -> Option<(&ServerLevel, EntityId)> {
-        if let Some(id) = self.get_entity(level) {
-            return Some((level, id));
-        }
-        level.other_levels.iter().find_map(|other_level| self.get_entity(other_level).map(|id| (other_level, id)))
+        self.get_entity(level).map(|id| (level.level_holding(id), id))
     }
 
     pub fn store(reference: Option<EntityReference>, output: &mut Vec<(String, Nbt)>, key: &str) {
@@ -57,6 +58,10 @@ impl EntityReference {
             let old_name = input.get(key).and_then(Nbt::as_str)?;
             convert_mob_owner_if_necessary(level.user_lookup.as_ref()?, old_name).map(EntityReference::of)
         })
+    }
+
+    pub fn get_player_entity(reference: Option<EntityReference>, level: &ServerLevel) -> Option<EntityId> {
+        reference?.get_player(level)
     }
 
     pub fn get_living_entity(reference: Option<EntityReference>, level: &ServerLevel) -> Option<EntityId> {

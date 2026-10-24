@@ -95,7 +95,7 @@ impl ServerLevel {
     pub fn hanging_entity_can_coexist(&self, view: &HangingView, allow_intersecting_same_type: bool) -> bool {
         !self.get_entities(None, &view.pop_box).into_iter().any(|other| {
             let Some(other_entity) = self.entity_ref(other) else { return false };
-            if !matches!(self.entities.get(&other), Some(LevelEntity::Painting(_) | LevelEntity::ItemFrame(_))) {
+            if !matches!(self.find_entity(other), Some(LevelEntity::Painting(_) | LevelEntity::ItemFrame(_))) {
                 return false;
             }
             let intersects_same_type = !allow_intersecting_same_type && other_entity.entity_type == view.entity_type;

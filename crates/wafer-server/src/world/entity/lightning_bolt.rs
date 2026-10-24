@@ -52,7 +52,7 @@ impl LightningBolt {
 
 impl ServerLevel {
     fn lightning_bolt(&mut self, id: EntityId) -> &mut LightningBolt {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::LightningBolt(bolt)) => bolt,
             _ => unreachable!("not a lightning bolt"),
         }

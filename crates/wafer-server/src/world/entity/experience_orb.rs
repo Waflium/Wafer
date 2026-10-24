@@ -54,7 +54,7 @@ pub fn experience_value(max_value: i32) -> i32 {
 
 impl ServerLevel {
     fn experience_orb(&mut self, id: EntityId) -> Option<&mut ExperienceOrb> {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::ExperienceOrb(orb)) => Some(orb),
             _ => None,
         }
@@ -119,7 +119,7 @@ impl ServerLevel {
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
             for &id in section.entities() {
                 if Some(id) != except
-                    && let Some(LevelEntity::ExperienceOrb(orb)) = self.entities.get(&id)
+                    && let Some(LevelEntity::ExperienceOrb(orb)) = self.find_entity(id)
                     && !orb.entity.is_removed()
                     && orb.entity.bounding_box().intersects(area)
                 {
@@ -209,7 +209,7 @@ impl ServerLevel {
         let position = orb.entity.position();
         let keep = orb
             .following_player
-            .filter(|&p| self.players.get(&p).is_some_and(|player| !player.entity.is_removed() && player.entity.position().distance_to_sqr(position) <= 64.0) && !self.is_spectator(p));
+            .filter(|&p| self.find_player(p).is_some_and(|player| !player.entity.is_removed() && player.entity.position().distance_to_sqr(position) <= 64.0) && !self.is_spectator(p));
         let following = match keep {
             Some(player) => Some(player),
             None => self.nearest_player(position, 8.0).filter(|&p| !self.is_spectator(p) && !self.is_dead_or_dying(p)),

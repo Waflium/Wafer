@@ -14,13 +14,13 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
     let area = level.player(player).entity.bounding_box().inflate_all(2.0);
     let clouds = level.get_entities_matching(None, &area, |level, id| {
         !level.is_spectator(id)
-            && matches!(level.entities.get(&id), Some(LevelEntity::AreaEffectCloud(_)))
+            && matches!(level.find_entity(id), Some(LevelEntity::AreaEffectCloud(_)))
             && level.is_alive(id)
             && level.area_effect_cloud_get_owner(id).is_some_and(|owner| level.is_ender_dragon(owner))
     });
     let item_stack = level.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
     if let Some(&cloud) = clouds.first() {
-        if let Some(LevelEntity::AreaEffectCloud(area_effect_cloud)) = level.entities.get_mut(&cloud) {
+        if let Some(LevelEntity::AreaEffectCloud(area_effect_cloud)) = level.find_entity_mut(cloud) {
             let radius = area_effect_cloud.get_radius();
             area_effect_cloud.set_radius(radius - 0.5);
         }

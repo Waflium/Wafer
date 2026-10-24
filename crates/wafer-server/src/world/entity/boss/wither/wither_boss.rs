@@ -513,7 +513,7 @@ impl ServerLevel {
     pub fn wither_drop_custom_death_loot(&mut self, id: EntityId, source: &DamageSource, killed_by_player: bool) {
         self.mob_drop_custom_death_loot(id, source, killed_by_player);
         if let Some(nether_star) = self.spawn_at_location(id, ItemStack::new(items::NETHER_STAR, 1), 0.0)
-            && let Some(LevelEntity::Item(item)) = self.entities.get_mut(&nether_star)
+            && let Some(LevelEntity::Item(item)) = self.find_entity_mut(nether_star)
         {
             item.age = -6000;
         }

@@ -216,7 +216,7 @@ impl ServerLevel {
             }
             CreakingInfo::Uuid(uuid) => uuid,
         };
-        match crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(self).filter(|&entity| self.is_creaking(entity)) {
+        match self.entity_manager.visible_entity_storage.get(uuid).filter(|&entity| self.is_creaking(entity)) {
             Some(resolved_creaking) => {
                 self.creaking_heart_set_creaking_info(pos, resolved_creaking);
                 Some(resolved_creaking)

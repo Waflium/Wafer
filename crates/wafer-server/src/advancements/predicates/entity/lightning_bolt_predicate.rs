@@ -29,7 +29,7 @@ impl LightningBoltPredicate {
     }
 
     pub fn matches(&self, level: &mut ServerLevel, entity: EntityId, position: Option<Vec3>) -> bool {
-        let Some(LevelEntity::LightningBolt(bolt)) = level.entities.get(&entity) else { return false };
+        let Some(LevelEntity::LightningBolt(bolt)) = level.find_entity(entity) else { return false };
         if !self.blocks_set_on_fire.matches(bolt.blocks_set_on_fire) {
             return false;
         }

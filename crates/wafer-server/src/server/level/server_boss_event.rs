@@ -219,7 +219,7 @@ impl ServerBossEvent {
 
     pub fn add_player(&mut self, levels: &[ServerLevel], player: EntityId) {
         if !self.players.contains(&player) {
-            let Some(connection) = levels.iter().find_map(|level| level.players.get(&player)).map(|p| p.connection.clone()) else { return };
+            let Some(connection) = levels.iter().find_map(|level| level.find_player(player)).map(|p| p.connection.clone()) else { return };
             if self.visible {
                 self.send(&connection, Operation::Add);
             }

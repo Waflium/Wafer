@@ -131,13 +131,13 @@ impl ServerLevel {
 
     fn on_enter_combat(&self, id: EntityId) {
         use wafer_data::packets::play::clientbound;
-        let Some(p) = self.players.get(&id) else { return };
+        let Some(p) = self.find_player(id) else { return };
         p.connection.send(clientbound::PLAYER_COMBAT_ENTER, |_| {});
     }
 
     fn on_leave_combat(&self, id: EntityId) {
         use wafer_data::packets::play::clientbound;
-        let Some(p) = self.players.get(&id) else { return };
+        let Some(p) = self.find_player(id) else { return };
         let duration = p.living.combat_tracker.combat_duration(p.entity.tick_count);
         p.connection.send(clientbound::PLAYER_COMBAT_END, |w| w.varint(duration));
     }

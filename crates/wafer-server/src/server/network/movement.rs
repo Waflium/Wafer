@@ -541,7 +541,7 @@ impl ServerLevel {
     }
 
     fn entity_plain_text_name(&self, id: EntityId) -> String {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(entity) => entity.name().get_string(),
             None => self.player(id).profile.name.clone(),
         }

@@ -11,7 +11,7 @@ use crate::world::entity::{EntityId, LevelEntity, sound_event};
 pub struct HoneyBlock;
 
 fn does_entity_do_honey_block_slide_effects(level: &ServerLevel, entity: EntityId) -> bool {
-    level.is_living(entity) || matches!(level.entities.get(&entity), Some(LevelEntity::PrimedTnt(_)))
+    level.is_living(entity) || matches!(level.find_entity(entity), Some(LevelEntity::PrimedTnt(_)))
 }
 
 fn get_old_delta_y(delta_y: f64) -> f64 {

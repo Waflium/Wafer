@@ -844,17 +844,17 @@ impl ServerLevel {
     }
 
     pub fn entity_mut(&mut self, id: EntityId) -> &mut Entity {
-        if self.players.contains_key(&id) {
-            return &mut self.players.get_mut(&id).expect("a player").entity;
+        if self.is_player(id) {
+            return &mut self.player_mut(id).entity;
         }
-        if self.entities.contains_key(&id) {
-            return self.entities.get_mut(&id).expect("entity in this level").entity_mut();
+        if self.find_entity(id).is_some() {
+            return self.find_entity_mut(id).expect("entity in this level").entity_mut();
         }
         self.dragon_part_entity_mut(id).expect("entity in this level")
     }
 
     pub fn is_player(&self, id: EntityId) -> bool {
-        self.players.contains_key(&id)
+        self.find_player(id).is_some()
     }
 
     pub fn get_loot_table(&self, id: EntityId) -> Option<String> {
@@ -876,7 +876,7 @@ impl ServerLevel {
             e.y_head_rot = absolute_y;
         }
         e.set_x_rot(absolute_x);
-        if let Some(player) = self.players.get(&id) {
+        if let Some(player) = self.find_player(id) {
             player.connection.send(wafer_data::packets::play::clientbound::PLAYER_ROTATION, |w| {
                 w.f32(y_rot);
                 w.bool(relative_y);
@@ -891,7 +891,7 @@ impl ServerLevel {
     }
 
     pub fn is_spectator(&self, id: EntityId) -> bool {
-        self.players.get(&id).is_some_and(|p| p.game_mode.game_type == GameType::Spectator)
+        self.find_player(id).is_some_and(|p| p.game_mode.game_type == GameType::Spectator)
     }
 
     pub fn can_be_hit_by_projectile(&self, id: EntityId) -> bool {
@@ -903,7 +903,7 @@ impl ServerLevel {
     }
 
     pub fn add_entity_data(&self, id: EntityId) -> i32 {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Projectile(_)) => self.projectile_add_data(id),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Warden(_)) => (mob.entity.pose() == super::data::Pose::Emerging) as i32,
             Some(entity) => entity.add_entity_data(),
@@ -941,7 +941,7 @@ impl ServerLevel {
     }
 
     pub fn known_speed(&self, id: EntityId) -> Vec3 {
-        if let Some(player) = self.players.get(&id) {
+        if let Some(player) = self.find_player(id) {
             return match self.vehicle(id) {
                 Some(vehicle) if self.controlling_passenger(vehicle) != Some(id) => self.known_speed(vehicle),
                 _ => player.known_movement,
@@ -961,7 +961,7 @@ impl ServerLevel {
     }
 
     pub fn known_movement(&self, id: EntityId) -> Vec3 {
-        if let Some(player) = self.players.get(&id) {
+        if let Some(player) = self.find_player(id) {
             return match self.vehicle(id) {
                 Some(vehicle) if self.controlling_passenger(vehicle) != Some(id) => self.known_movement(vehicle),
                 _ => player.known_movement,
@@ -979,7 +979,7 @@ impl ServerLevel {
     }
 
     pub fn is_alive(&self, id: EntityId) -> bool {
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(p) => !p.entity.is_removed() && p.health > 0.0,
             None => match self.mob(id) {
                 Some(mob) => !mob.entity.is_removed() && mob.health > 0.0,
@@ -989,7 +989,7 @@ impl ServerLevel {
     }
 
     pub fn fire_immune(&self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(super::LevelEntity::Item(item)) => !item.item.can_be_hurt_by(&crate::world::damagesource::DamageSource::new(wafer_data::damage_types::IN_FIRE)),
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Creaking(_)) && super::monster::creaking::creaking::is_heart_bound(&mob.entity) => true,
             _ => self.entity_ref(id).is_some_and(|e| super::entity_type::fire_immune(e.entity_type)),
@@ -1055,7 +1055,7 @@ impl ServerLevel {
 
     fn default_gravity(&self, id: EntityId) -> f64 {
         use super::projectile::projectile::ProjectileKind;
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(super::LevelEntity::Mob(mob)) if mob.is_squid() => super::animal::squid::squid::Squid::get_default_gravity(),
             None | Some(super::LevelEntity::Mob(_) | super::LevelEntity::ArmorStand(_) | super::LevelEntity::Mannequin(_)) => self.attribute_value(id, Attribute::Gravity),
             Some(super::LevelEntity::ExperienceOrb(_)) => 0.03,
@@ -1097,7 +1097,7 @@ impl ServerLevel {
     }
 
     pub fn air_drag(&self, id: EntityId) -> f32 {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Boat(_)) => 1.0,
             Some(LevelEntity::Minecart(_)) => 0.95,
             Some(LevelEntity::Projectile(projectile)) if !matches!(projectile.kind, super::projectile::projectile::ProjectileKind::FireworkRocket(_)) => 0.99,
@@ -1111,10 +1111,10 @@ impl ServerLevel {
     }
 
     fn movement_emission(&self, id: EntityId) -> MovementEmission {
-        if let Some(player) = self.players.get(&id) {
+        if let Some(player) = self.find_player(id) {
             return if player.abilities_flying() || player.entity.on_ground && player.entity.is_discrete() { MovementEmission::None } else { MovementEmission::All };
         }
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(super::LevelEntity::ExperienceOrb(_) | super::LevelEntity::FallingBlock(_) | super::LevelEntity::Item(_) | super::LevelEntity::PrimedTnt(_) | super::LevelEntity::EndCrystal(_)) => MovementEmission::None,
             Some(super::LevelEntity::Projectile(projectile)) if projectile.abstract_arrow().is_some() || matches!(projectile.kind, super::projectile::projectile::ProjectileKind::FishingHook(_)) => MovementEmission::None,
             Some(super::LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Silverfish(_) | super::mob::MobKind::Endermite(_) | super::mob::MobKind::Breeze(_)) => MovementEmission::Events,
@@ -1127,7 +1127,7 @@ impl ServerLevel {
     }
 
     pub fn is_pushed_by_fluid(&self, id: EntityId) -> bool {
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(p) => !p.abilities_flying(),
             None => match self.as_projectile(id) {
                 Some(projectile) if projectile.abstract_arrow().is_some() => self.abstract_arrow_is_pushed_by_fluid(id),
@@ -1158,7 +1158,7 @@ impl ServerLevel {
         if self.is_player(id) {
             return MoveSimulationType::AuthoritativeSideAndServer;
         }
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ExperienceOrb(_) | LevelEntity::FallingBlock(_) | LevelEntity::Item(_) | LevelEntity::PrimedTnt(_) | LevelEntity::Projectile(_)) => {
                 MoveSimulationType::ServerAndClient
             }
@@ -1175,7 +1175,7 @@ impl ServerLevel {
     }
 
     pub fn sound_source(&self, id: EntityId) -> SoundSource {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             None => SoundSource::Players,
             Some(super::LevelEntity::ExperienceOrb(_)) => SoundSource::Ambient,
             Some(_) if self.is_monster(id) => self.monster_get_sound_source(),
@@ -1313,7 +1313,7 @@ impl ServerLevel {
         {
             return factor;
         }
-        if self.players.get(&id).is_some_and(|p| p.abilities_flying() || p.entity.is_fall_flying()) {
+        if self.find_player(id).is_some_and(|p| p.abilities_flying() || p.entity.is_fall_flying()) {
             return 1.0;
         }
         let state = self.block_state(self.entity(id).block_position());
@@ -1467,7 +1467,7 @@ impl ServerLevel {
     }
 
     fn maybe_back_off_from_edge(&mut self, id: EntityId, delta: Vec3, mover: MoverType) -> Vec3 {
-        let Some(p) = self.players.get(&id) else { return delta };
+        let Some(p) = self.find_player(id) else { return delta };
         let max_down_step = self.max_up_step(id);
         let flying = p.abilities_flying();
         let shift = p.entity.is_shift_key_down();
@@ -1577,7 +1577,7 @@ impl ServerLevel {
     }
 
     pub fn reset_fall_distance(&mut self, id: EntityId) {
-        if let Some(p) = self.players.get(&id) {
+        if let Some(p) = self.find_player(id) {
             if p.health > 0.0
                 && let Some(starting_to_fall_position) = p.starting_to_fall_position
             {
@@ -1611,7 +1611,7 @@ impl ServerLevel {
             self.phantom_check_fall_damage(id);
             return;
         }
-        if self.players.get(&id).is_some_and(|p| p.spawn_extra_particles_on_fall) && on_ground && self.entity(id).fall_distance > 0.0 {
+        if self.find_player(id).is_some_and(|p| p.spawn_extra_particles_on_fall) && on_ground && self.entity(id).fall_distance > 0.0 {
             let centered = Vec3::at_center_of(pos).add(0.0, 0.5, 0.0);
             let particles = mth::clamp(50.0 * self.entity(id).fall_distance, 0.0, 200.0) as i32;
             self.send_block_particles(on_state, centered.x, centered.y, centered.z, particles, (0.3f32 as f64, 0.3f32 as f64, 0.3f32 as f64), 0.15f32 as f64);
@@ -1659,7 +1659,7 @@ impl ServerLevel {
                 self.reset_fall_distance(id);
             }
         }
-        if living && on_ground && let Some(p) = self.players.get_mut(&id) {
+        if living && on_ground && let Some(p) = self.find_player_mut(id) {
             p.living.last_climbable_pos = None;
         }
     }
@@ -1680,7 +1680,7 @@ impl ServerLevel {
     }
 
     pub fn cause_fall_damage(&mut self, id: EntityId, fall_distance: f64, damage_modifier: f32, damage_source: crate::world::damagesource::DamageSource) -> bool {
-        if let Some(LevelEntity::FallingBlock(_)) = self.entities.get(&id) {
+        if let Some(LevelEntity::FallingBlock(_)) = self.find_entity(id) {
             return self.falling_block_cause_fall_damage(id, fall_distance);
         }
         if self.is_player(id) {
@@ -1695,7 +1695,7 @@ impl ServerLevel {
         if self.is_llama(id) {
             return self.llama_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
-        if matches!(self.entities.get(&id), Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_))) {
+        if matches!(self.find_entity(id), Some(LevelEntity::Minecart(minecart)) if matches!(minecart.kind, super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_))) {
             return self.minecart_tnt_cause_fall_damage(id, fall_distance, damage_modifier, damage_source);
         }
         if self.is_abstract_horse(id) {
@@ -1954,7 +1954,7 @@ impl ServerLevel {
             return false;
         }
         let climbable = Self::is_state_climbable(state);
-        let on_rails = matches!(self.entities.get(&id), Some(LevelEntity::Minecart(minecart)) if minecart.is_on_rails());
+        let on_rails = matches!(self.find_entity(id), Some(LevelEntity::Minecart(minecart)) if minecart.is_on_rails());
         let e = self.entity(id);
         if (e.on_ground || climbable || e.is_crouching() && movement.y == 0.0 || on_rails) && !e.is_swimming() {
             if should_sound {
@@ -2368,7 +2368,7 @@ impl ServerLevel {
     }
 
     pub fn do_water_splash_effect(&mut self, id: EntityId) {
-        if self.is_spectator(id) || matches!(self.entities.get(&id), Some(super::LevelEntity::ExperienceOrb(_))) {
+        if self.is_spectator(id) || matches!(self.find_entity(id), Some(super::LevelEntity::ExperienceOrb(_))) {
             return;
         }
         let player = self.is_player(id);
@@ -2411,7 +2411,7 @@ impl ServerLevel {
             self.drowned_update_swimming(id);
             return;
         }
-        if self.players.get(&id).is_some_and(|p| p.abilities_flying()) {
+        if self.find_player(id).is_some_and(|p| p.abilities_flying()) {
             self.entity_mut(id).set_swimming(false);
             return;
         }
@@ -2514,7 +2514,7 @@ impl ServerLevel {
             self.send_bubble_column_particles(pos);
             return;
         }
-        if self.players.get(&id).is_some_and(|p| p.abilities_flying()) {
+        if self.find_player(id).is_some_and(|p| p.abilities_flying()) {
             return;
         }
         if self.can_simulate_movement(id) {
@@ -2546,7 +2546,7 @@ impl ServerLevel {
             self.reset_fall_distance(id);
             return;
         }
-        if self.players.get(&id).is_some_and(|p| p.abilities_flying()) {
+        if self.find_player(id).is_some_and(|p| p.abilities_flying()) {
             return;
         }
         if self.can_simulate_movement(id) {
@@ -2625,7 +2625,7 @@ impl ServerLevel {
     }
 
     pub fn teleport_relative(&mut self, id: EntityId, dx: f64, dy: f64, dz: f64) {
-        if let Some(p) = self.players.get_mut(&id) {
+        if let Some(p) = self.find_player_mut(id) {
             let destination = super::relative::PositionMoveRotation { position: Vec3::new(dx, dy, dz), delta_movement: Vec3::ZERO, y_rot: 0.0, x_rot: 0.0 };
             p.teleport_relative(destination, super::relative::relative::ALL);
         } else {
@@ -2647,11 +2647,11 @@ impl ServerLevel {
     }
 
     pub fn entity_make_stuck_in_block(&mut self, id: EntityId, _state: BlockState, speed_multiplier: Vec3) {
-        if !self.players.get(&id).is_some_and(|p| p.abilities_flying()) {
+        if !self.find_player(id).is_some_and(|p| p.abilities_flying()) {
             self.reset_fall_distance(id);
             self.entity_mut(id).stuck_speed_multiplier = speed_multiplier;
         }
-        if let Some(p) = self.players.get_mut(&id) {
+        if let Some(p) = self.find_player_mut(id) {
             p.living.try_reset_current_impulse_context();
         }
     }
@@ -2760,7 +2760,7 @@ impl ServerLevel {
             }
             return self.living_entity_hurt_server(id, source, damage);
         }
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ExperienceOrb(_)) => self.experience_orb_hurt_server(id, &source, damage),
             Some(LevelEntity::Item(_)) => self.item_entity_hurt_server(id, source, damage),
             Some(LevelEntity::FallingBlock(_)) => self.falling_block_hurt_server(id, source),
@@ -2804,7 +2804,7 @@ impl ServerLevel {
 
     pub fn is_invulnerable_to_base(&self, id: EntityId, source: &DamageSource) -> bool {
         let e = self.entity(id);
-        let creative_player = source.causing_entity.and_then(|c| self.players.get(&c)).is_some_and(|p| p.abilities.instabuild);
+        let creative_player = source.causing_entity.and_then(|c| self.find_player(c)).is_some_and(|p| p.abilities.instabuild);
         e.is_removed()
             || e.is_invulnerable() && !source.is(&damage_type_tags::BYPASSES_INVULNERABILITY) && !creative_player
             || source.is(&damage_type_tags::IS_FIRE) && self.fire_immune(id)
@@ -2812,14 +2812,14 @@ impl ServerLevel {
     }
 
     fn should_play_lava_hurt_sound(&self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Item(_)) => self.item_entity_should_play_lava_hurt_sound(id),
             _ => true,
         }
     }
 
     pub fn interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, location: Vec3) -> InteractionResult {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ArmorStand(_)) => return self.armor_stand_interact(id, player, hand, location),
             Some(LevelEntity::LeashKnot(_)) => return self.leash_fence_knot_interact(id, player, hand, location),
             Some(LevelEntity::ItemFrame(_)) => return self.item_frame_interact(id, player, hand),
@@ -2922,11 +2922,11 @@ impl ServerLevel {
         if let Some(stand) = self.armor_stand(id) {
             return !stand.is_marker();
         }
-        self.is_living(id) || matches!(self.entities.get(&id), Some(LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_)))
+        self.is_living(id) || matches!(self.find_entity(id), Some(LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_)))
     }
 
     pub fn is_attackable(&self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Item(_) | LevelEntity::ExperienceOrb(_) | LevelEntity::FallingBlock(_) | LevelEntity::EyeOfEnder(_)) => false,
             Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
                 super::projectile::projectile::ProjectileKind::FireworkRocket(_) => false,
@@ -2960,7 +2960,7 @@ impl ServerLevel {
     }
 
     pub fn dampens_vibrations(&self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Item(item)) => item.item.get_item().is(&wafer_data::item_tags::DAMPENS_VIBRATIONS),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Warden(_)) => true,
             _ => false,
@@ -3000,7 +3000,7 @@ impl ServerLevel {
             self.hurt_server(id, DamageSource::new(damage_types::GENERIC_KILL), f32::MAX);
             return;
         }
-        if matches!(self.entities.get(&id), Some(LevelEntity::EndCrystal(_))) {
+        if matches!(self.find_entity(id), Some(LevelEntity::EndCrystal(_))) {
             self.end_crystal_kill(id);
             return;
         }
@@ -3088,12 +3088,12 @@ impl ServerLevel {
 
     pub fn entity_to_string(&self, id: EntityId) -> String {
         let e = self.entity(id);
-        let (class, name) = if let Some(player) = self.players.get(&id) {
+        let (class, name) = if let Some(player) = self.find_player(id) {
             ("ServerPlayer", player.profile.name.clone())
         } else {
-            let name = self.entities.get(&id).map(|e| e.name().get_string()).unwrap_or_default();
+            let name = self.find_entity(id).map(|e| e.name().get_string()).unwrap_or_default();
             use super::projectile::projectile::ProjectileKind;
-            let class = match self.entities.get(&id) {
+            let class = match self.find_entity(id) {
                 Some(LevelEntity::Mob(mob)) => match mob.kind {
                     super::mob::MobKind::Chicken(_) => "Chicken",
                     super::mob::MobKind::Cow(_) => "Cow",
@@ -3304,7 +3304,7 @@ impl ServerLevel {
             self.send_teleport_transition_to_players(id, &transition);
         }
         transition.post_teleport_transition.on_transition(self, id);
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Item(_)) => self.merge_with_neighbours(id),
             Some(LevelEntity::PrimedTnt(tnt)) => tnt.used_portal = true,
             _ => {}
@@ -3336,12 +3336,12 @@ impl ServerLevel {
             })
         };
         for &passenger in &passengers {
-            if let Some(player) = self.players.get(&passenger) {
+            if let Some(player) = self.find_player(passenger) {
                 let packet = if controller == Some(passenger) { teleport(transition.position_move_rotation(), transition.relatives) } else { teleport(own, 0) };
                 player.connection.send_raw(packet);
             }
         }
-        let has_update_interval = self.entities.get(&id).is_none_or(|entity| entity.tracking_config().update_interval != crate::server::level::server_entity::UpdateInterval::Never);
+        let has_update_interval = self.find_entity(id).is_none_or(|entity| entity.tracking_config().update_interval != crate::server::level::server_entity::UpdateInterval::Never);
         let server_and_client = self.get_move_simulation_type(id) == MoveSimulationType::ServerAndClient;
         if !has_update_interval || server_and_client {
             let packet = teleport(own, 0);
@@ -3460,7 +3460,7 @@ impl ServerLevel {
         if removed {
             self.entity_mut(id).removal = Some(RemovalReason::ChangedDimension);
             let from_or_to_end = self.dimension == crate::server::THE_END || destination == Some(crate::server::THE_END);
-            if from_or_to_end && let Some(LevelEntity::FallingBlock(falling)) = self.entities.get_mut(&id) {
+            if from_or_to_end && let Some(LevelEntity::FallingBlock(falling)) = self.find_entity_mut(id) {
                 falling.force_tick_after_teleport_to_duplicate = true;
             }
         }
@@ -3468,7 +3468,7 @@ impl ServerLevel {
     }
 
     pub fn portal_entity(&self, id: EntityId) -> PortalEntity {
-        let data = self.entities.get(&id).map(|old| {
+        let data = self.find_entity(id).map(|old| {
             let mut data = Vec::new();
             old.save_without_id(&mut data);
             data
@@ -3611,8 +3611,11 @@ impl crate::server::Server {
     fn teleport_to_portal_destination(&mut self, level: usize, pending: &PendingPortalTeleport, transition: TeleportTransition) -> bool {
         let id = pending.entity.id;
         let (from, to) = (self.levels[level].dimension, self.levels[transition.new_level].dimension);
-        let current_level = &self.levels[level];
-        if !current_level.is_allowed_to_enter_portal(to) || from != to && !current_level.can_teleport(id, from, to) {
+        let mut lent = crate::server::level::lent_levels::LentLevels::lend(&mut self.levels, level);
+        let current_level = lent.level();
+        let allowed = current_level.is_allowed_to_enter_portal(to) && (from == to || current_level.can_teleport(id, from, to));
+        drop(lent);
+        if !allowed {
             return false;
         }
         if self.has_player(id) {
@@ -3745,7 +3748,7 @@ impl ServerLevel {
     }
 
     pub fn controlling_passenger(&self, id: EntityId) -> Option<EntityId> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_get_controlling_passenger(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_nautilus().is_some() => self.abstract_nautilus_get_controlling_passenger(id),
@@ -3779,7 +3782,7 @@ impl ServerLevel {
     }
 
     fn can_serialize(&self, id: EntityId) -> bool {
-        !self.is_player(id) && !matches!(self.entities.get(&id), Some(LevelEntity::LightningBolt(_)))
+        !self.is_player(id) && !matches!(self.find_entity(id), Some(LevelEntity::LightningBolt(_)))
     }
 
     pub fn start_riding(&mut self, id: EntityId, entity_to_ride: EntityId, force: bool, send_event_and_triggers: bool) -> bool {
@@ -3847,7 +3850,7 @@ impl ServerLevel {
     }
 
     pub fn can_add_passenger(&self, id: EntityId, _passenger: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_can_add_passenger(id),
             Some(LevelEntity::Marker(_)) => super::marker::Marker::can_add_passenger(),
             Some(LevelEntity::OminousItemSpawner(_)) => super::ominous_item_spawner::OminousItemSpawner::can_add_passenger(),
@@ -3860,7 +3863,7 @@ impl ServerLevel {
     }
 
     fn could_accept_passenger(&self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Marker(_)) => super::marker::Marker::could_accept_passenger(),
             Some(LevelEntity::OminousItemSpawner(_)) => super::ominous_item_spawner::OminousItemSpawner::could_accept_passenger(),
             _ => true,
@@ -4032,7 +4035,7 @@ impl ServerLevel {
     }
 
     pub fn dismount_location_for_passenger(&mut self, id: EntityId, passenger: EntityId) -> Vec3 {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_dismount_location_for_passenger(id, passenger),
             Some(LevelEntity::Boat(_)) => self.abstract_boat_dismount_location_for_passenger(id, passenger),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_dismount_location_for_passenger(id, passenger),
@@ -4113,7 +4116,7 @@ impl ServerLevel {
             p.set_pos(Vec3::new(x, y, z));
         }
         self.entity_moved(passenger);
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_position_rider(id, passenger),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Chicken(_)) => {
                 if self.is_living(passenger) {
@@ -4144,7 +4147,7 @@ impl ServerLevel {
     }
 
     fn passenger_attachment_point(&self, id: EntityId, passenger: EntityId) -> Vec3 {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Boat(_)) => self.abstract_boat_passenger_attachment_point(id, passenger),
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_passenger_attachment_point(id, passenger),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Camel(_) | super::mob::MobKind::CamelHusk(_)) => self.camel_passenger_attachment_point(id, passenger),
@@ -4187,7 +4190,7 @@ impl ServerLevel {
     }
 
     pub fn can_collide_with(&self, id: EntityId, entity: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Boat(_) | LevelEntity::Minecart(_)) => super::vehicle::boat::abstract_boat::can_vehicle_collide(self, id, entity),
             _ if self.is_wind_charge(id) && !self.abstract_wind_charge_can_collide_with(entity) => false,
             _ => self.can_be_collided_with(entity, Some(id)) && !self.is_passenger_of_same_vehicle(id, entity),
@@ -4195,7 +4198,7 @@ impl ServerLevel {
     }
 
     pub fn is_pushable_immutable(&self, id: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Boat(_) | LevelEntity::Minecart(_)) => true,
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::Bat(_)) => self.bat_is_pushable(id),
             Some(LevelEntity::Mob(mob)) if mob.abstract_horse().is_some() => self.abstract_horse_is_pushable(id),
@@ -4205,7 +4208,7 @@ impl ServerLevel {
     }
 
     pub fn push_entity(&mut self, id: EntityId, other: EntityId) {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Mob(mob)) if super::monster::shulker::is_shulker(mob) => {}
             Some(LevelEntity::Minecart(_)) => self.abstract_minecart_push(id, other),
             Some(LevelEntity::Boat(_)) => self.abstract_boat_push(id, other),
@@ -4270,7 +4273,7 @@ impl ServerLevel {
     }
 
     pub fn skip_attack_interaction(&mut self, id: EntityId, source: EntityId) -> bool {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ArmorStand(_)) => self.armor_stand_skip_attack_interaction(id, source),
             Some(LevelEntity::Interaction(_)) => self.interaction_skip_attack_interaction(id, source),
             Some(LevelEntity::LeashKnot(_) | LevelEntity::Painting(_) | LevelEntity::ItemFrame(_) | LevelEntity::Cushion(_)) => self.block_attached_entity_skip_attack_interaction(id, source),
@@ -4279,7 +4282,7 @@ impl ServerLevel {
     }
 
     pub fn get_piston_push_reaction(&self, id: EntityId) -> wafer_data::PushReaction {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Marker(_) | LevelEntity::AreaEffectCloud(_) | LevelEntity::Interaction(_) | LevelEntity::Display(_) | LevelEntity::OminousItemSpawner(_)) => wafer_data::PushReaction::IgnoreEntity,
             Some(LevelEntity::ArmorStand(stand)) if stand.is_marker() => wafer_data::PushReaction::IgnoreEntity,
             _ => wafer_data::PushReaction::PushPull,
@@ -4287,16 +4290,16 @@ impl ServerLevel {
     }
 
     pub fn is_ignoring_block_triggers(&self, id: EntityId) -> bool {
-        if let Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) = self.entities.get(&id) {
+        if let Some(LevelEntity::Marker(_) | LevelEntity::Interaction(_)) = self.find_entity(id) {
             return super::marker::Marker::is_ignoring_block_triggers();
         }
-        if let Some(LevelEntity::Display(_)) = self.entities.get(&id) {
+        if let Some(LevelEntity::Display(_)) = self.find_entity(id) {
             return super::display::Display::is_ignoring_block_triggers();
         }
-        if let Some(LevelEntity::OminousItemSpawner(_)) = self.entities.get(&id) {
+        if let Some(LevelEntity::OminousItemSpawner(_)) = self.find_entity(id) {
             return super::ominous_item_spawner::OminousItemSpawner::is_ignoring_block_triggers();
         }
-        if let Some(LevelEntity::ArmorStand(stand)) = self.entities.get(&id) {
+        if let Some(LevelEntity::ArmorStand(stand)) = self.find_entity(id) {
             return stand.is_marker();
         }
         match self.mob(id).map(|mob| &mob.kind) {
@@ -4322,7 +4325,7 @@ impl ServerLevel {
         } else if self.is_living(id) {
             self.living_entity_is_pushable(id)
         } else {
-            matches!(self.entities.get(&id), Some(LevelEntity::Boat(_) | LevelEntity::Minecart(_)))
+            matches!(self.find_entity(id), Some(LevelEntity::Boat(_) | LevelEntity::Minecart(_)))
         }
     }
 
@@ -4330,7 +4333,7 @@ impl ServerLevel {
         if self.is_player(id) {
             return !self.is_spectator(id) && !self.entity(id).is_removed();
         }
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ArmorStand(stand)) => !stand.entity.is_removed() && !stand.is_marker(),
             Some(LevelEntity::Mob(mob)) if matches!(mob.kind, super::mob::MobKind::EnderDragon(_)) => false,
             None | Some(LevelEntity::Mob(_) | LevelEntity::Mannequin(_) | LevelEntity::Minecart(_) | LevelEntity::Boat(_) | LevelEntity::PrimedTnt(_) | LevelEntity::FallingBlock(_)) => {

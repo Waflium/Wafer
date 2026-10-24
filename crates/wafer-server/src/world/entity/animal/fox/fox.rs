@@ -611,7 +611,7 @@ impl ServerLevel {
     }
 
     pub fn fox_pick_up_item(&mut self, id: EntityId, entity: EntityId) {
-        let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { return };
+        let Some(LevelEntity::Item(item)) = self.find_entity(entity) else { return };
         let mut item_stack = item.item.clone();
         if !self.fox_can_hold_item(id, &item_stack) {
             return;
@@ -627,7 +627,7 @@ impl ServerLevel {
         let in_mouth = item_stack.split(1);
         self.living_set_item_slot(id, EquipmentSlot::Mainhand, in_mouth);
         self.set_guaranteed_drop(id, EquipmentSlot::Mainhand);
-        if let Some(LevelEntity::Item(item)) = self.entities.get_mut(&entity) {
+        if let Some(LevelEntity::Item(item)) = self.find_entity_mut(entity) {
             item.item.count = item_stack.count;
         }
         self.take(id, entity, item_stack.count);
@@ -1162,7 +1162,7 @@ pub struct FoxSearchForItemsGoal;
 impl FoxSearchForItemsGoal {
     fn items(level: &ServerLevel, mob: EntityId) -> Vec<EntityId> {
         let area = level.entity(mob).bounding_box().inflate(8.0, 8.0, 8.0);
-        level.items_in(&area, None).into_iter().filter(|&item| matches!(level.entities.get(&item), Some(LevelEntity::Item(item)) if !item.has_pickup_delay())).collect()
+        level.items_in(&area, None).into_iter().filter(|&item| matches!(level.find_entity(item), Some(LevelEntity::Item(item)) if !item.has_pickup_delay())).collect()
     }
 
     pub fn can_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {

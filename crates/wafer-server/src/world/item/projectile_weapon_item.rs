@@ -60,7 +60,7 @@ impl ServerLevel {
     pub fn get_held_projectile(&self, entity: EntityId, valid: fn(&ItemStack) -> bool) -> HeldProjectile {
         for hand in [InteractionHand::OffHand, InteractionHand::MainHand] {
             if let Some(stack) = self.get_item_in_hand(entity, hand).filter(|stack| valid(stack)) {
-                let slot = match self.players.get(&entity) {
+                let slot = match self.find_player(entity) {
                     Some(player) => ProjectileSlot::Inventory(player.hand_slot(hand)),
                     None => ProjectileSlot::Equipment(hand.as_equipment_slot()),
                 };

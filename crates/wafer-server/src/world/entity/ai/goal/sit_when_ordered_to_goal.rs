@@ -21,7 +21,7 @@ impl SitWhenOrderedToGoal {
         if !e.on_ground {
             return false;
         }
-        let Some((owner_level, owner)) = level.get_owner_in_any_dimension(mob) else { return true };
+        let Some((owner_level, owner)) = level.get_owner_in_any_dimension(mob).filter(|&(owner_level, _)| owner_level.index == level.index) else { return true };
         if level.entity(mob).distance_to_sqr(owner_level.entity(owner)) < TELEPORT_WHEN_DISTANCE_IS_SQ && owner_level.get_last_hurt_by_mob(owner).is_some() { false } else { ordered_to_sit }
     }
 

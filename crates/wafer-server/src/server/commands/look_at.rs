@@ -34,7 +34,7 @@ impl LookAt {
             LookAt::Position(pos) => (pos, None),
         };
         level.entity_look_at(target, from, pos);
-        if let Some(player) = level.players.get(&target) {
+        if let Some(player) = level.find_player(target) {
             player.connection.send(clientbound::PLAYER_LOOK_AT, |w| {
                 w.varint(anchor_id(from));
                 w.f64(pos.x);

@@ -6,7 +6,7 @@ use wafer_protocol::nbt::Nbt;
 use super::throwable_item_projectile;
 use crate::server::Server;
 use crate::server::level::ticket::TicketType;
-use crate::server::level::{OtherLevelPlayer, ServerLevel, SoundSource};
+use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::damagesource::DamageSource;
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind};
@@ -24,15 +24,8 @@ pub struct ThrownEnderpearl {
     ticket_timer: i64,
 }
 
-#[derive(Clone, Copy)]
-pub enum Owner {
-    Entity(EntityId),
-    OtherLevelPlayer(OtherLevelPlayer),
-}
-
 pub struct PendingEnderPearlTeleport {
-    player: EntityId,
-    set_portal_cooldown: bool,
+    owner: EntityId,
     teleport_pos: Vec3,
 }
 
@@ -63,19 +56,11 @@ pub fn is_thrown_enderpearl(entity: &LevelEntity) -> bool {
 
 impl ServerLevel {
     pub fn is_thrown_enderpearl(&self, id: EntityId) -> bool {
-        self.entities.get(&id).is_some_and(is_thrown_enderpearl)
+        self.find_entity(id).is_some_and(is_thrown_enderpearl)
     }
 
-    pub fn other_level_player(&self, uuid: u128) -> Option<OtherLevelPlayer> {
-        self.other_level_players.iter().find(|player| player.uuid == uuid).copied()
-    }
-
-    pub fn thrown_enderpearl_get_owner(&self, id: EntityId) -> Option<Owner> {
-        let owner = self.projectile(id).owner?;
-        match owner.get_entity(self) {
-            Some(entity) => Some(Owner::Entity(entity)),
-            None => self.other_level_player(owner.get_uuid()).map(Owner::OtherLevelPlayer),
-        }
+    pub fn thrown_enderpearl_get_owner(&self, id: EntityId) -> Option<EntityId> {
+        self.projectile(id).owner?.get_entity(self)
     }
 
     pub fn thrown_enderpearl_deregister_from_current_owner(&mut self, id: EntityId) {
@@ -119,12 +104,9 @@ impl ServerLevel {
         self.player_mut(player).ender_pearls.retain(|&p| p != pearl);
     }
 
-    fn register_and_update_ender_pearl_ticket(&mut self, player: Owner, pearl: EntityId) -> i64 {
+    fn register_and_update_ender_pearl_ticket(&mut self, player: EntityId, pearl: EntityId) -> i64 {
         let chunk_pos = self.entity(pearl).chunk_position();
-        match player {
-            Owner::Entity(player) => self.register_ender_pearl(player, pearl),
-            Owner::OtherLevelPlayer(player) => self.other_level_ender_pearls.push((player.uuid, pearl, true)),
-        }
+        self.register_ender_pearl(player, pearl);
         self.reset_empty_time();
         self.place_ender_pearl_ticket(chunk_pos) - 1
     }
@@ -134,14 +116,8 @@ impl ServerLevel {
         TicketType::EnderPearl.timeout()
     }
 
-    fn find_owner_including_dead_player(&self, uuid: u128) -> Option<Owner> {
-        if let Some(entity) = self.entity_manager.visible_entity_storage.get(uuid) {
-            return Some(Owner::Entity(entity));
-        }
-        if let Some(player) = self.other_level_player(uuid) {
-            return Some(Owner::OtherLevelPlayer(player));
-        }
-        self.players.values().find(|p| p.profile.uuid == uuid).map(|p| Owner::Entity(p.entity.id))
+    fn find_owner_including_dead_player(&self, uuid: u128) -> Option<EntityId> {
+        self.get_entity_in_any_dimension(uuid).or_else(|| self.get_player_in_any_dimension(uuid))
     }
 
     pub fn thrown_enderpearl_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
@@ -157,14 +133,20 @@ impl ServerLevel {
         }
         let owner = self.thrown_enderpearl_get_owner(id);
         match owner.filter(|&owner| self.is_allowed_to_teleport_owner(owner)) {
-            Some(Owner::Entity(owner)) => {
+            Some(owner) => {
                 let teleport_pos = self.entity(id).old_position();
+                let same_level = self.is_in_level(owner);
                 if self.is_player(owner) {
                     if !self.player(owner).disconnected {
                         let e = self.entity(owner);
                         self.thrown_enderpearl_spawn_endermite(id, e.position(), e.y_rot, e.x_rot);
                         if self.is_on_portal_cooldown(id) {
-                            self.set_portal_cooldown(owner);
+                            self.level_holding_mut(owner).set_portal_cooldown(owner);
+                        }
+                        if !same_level {
+                            self.pending_ender_pearl_teleport = Some(PendingEnderPearlTeleport { owner, teleport_pos });
+                            self.discard(id);
+                            return;
                         }
                         let transition = TeleportTransition::with_relatives(self.index, teleport_pos, Vec3::ZERO, 0.0, 0.0, relative::ROTATION, PostTeleportTransition::DO_NOTHING);
                         self.server_player_teleport_same_dimension(owner, transition);
@@ -173,6 +155,10 @@ impl ServerLevel {
                         self.hurt_server(owner, DamageSource::new(damage_types::ENDER_PEARL), 5.0);
                         self.thrown_enderpearl_play_sound(teleport_pos);
                     }
+                } else if !same_level {
+                    self.pending_ender_pearl_teleport = Some(PendingEnderPearlTeleport { owner, teleport_pos });
+                    self.discard(id);
+                    return;
                 } else {
                     let (y_rot, x_rot) = (self.entity(owner).y_rot, self.entity(owner).x_rot);
                     let transition = TeleportTransition::new(self.index, teleport_pos, Vec3::ZERO, y_rot, x_rot, PostTeleportTransition::DO_NOTHING);
@@ -182,15 +168,6 @@ impl ServerLevel {
                         self.living_mut(owner).reset_current_impulse_context();
                     }
                     self.thrown_enderpearl_play_sound(teleport_pos);
-                }
-                self.discard(id);
-            }
-            Some(Owner::OtherLevelPlayer(player)) => {
-                let teleport_pos = self.entity(id).old_position();
-                if player.accepting_messages {
-                    self.thrown_enderpearl_spawn_endermite(id, player.position, player.y_rot, player.x_rot);
-                    let set_portal_cooldown = self.is_on_portal_cooldown(id);
-                    self.pending_ender_pearl_teleport = Some(PendingEnderPearlTeleport { player: player.id, set_portal_cooldown, teleport_pos });
                 }
                 self.discard(id);
             }
@@ -209,27 +186,19 @@ impl ServerLevel {
         }
     }
 
-    fn is_allowed_to_teleport_owner(&self, owner: Owner) -> bool {
-        match owner {
-            Owner::Entity(owner) if self.is_living(owner) => self.is_alive(owner) && !self.is_sleeping(owner),
-            Owner::Entity(owner) => self.is_alive(owner),
-            Owner::OtherLevelPlayer(player) => player.can_use_portal,
+    fn is_allowed_to_teleport_owner(&self, owner: EntityId) -> bool {
+        if !self.is_in_level(owner) {
+            return self.level_holding(owner).can_use_portal(owner, true);
         }
+        if self.is_living(owner) { self.is_alive(owner) && !self.is_sleeping(owner) } else { self.is_alive(owner) }
     }
 
     pub fn thrown_enderpearl_tick(&mut self, id: EntityId) {
         let position = self.entity(id).position();
         let (chunk_x, chunk_z) = (mth::floor(position.x) >> 4, mth::floor(position.z) >> 4);
         let owner = self.projectile(id).owner.and_then(|owner| self.find_owner_including_dead_player(owner.get_uuid()));
-        let owner_player = owner.filter(|&owner| match owner {
-            Owner::Entity(owner) => self.is_player(owner),
-            Owner::OtherLevelPlayer(_) => true,
-        });
-        let dead = match owner_player {
-            Some(Owner::Entity(player)) => !self.is_alive(player) && !self.player(player).won_game,
-            Some(Owner::OtherLevelPlayer(player)) => !player.alive && !player.won_game,
-            None => false,
-        };
+        let owner_player = owner.filter(|&owner| self.is_player(owner));
+        let dead = owner_player.is_some_and(|player| !self.is_alive(player) && !self.player(player).won_game);
         if dead && self.game_rules.get_bool(game_rule::ENDER_PEARLS_VANISH_ON_DEATH) {
             self.discard(id);
         } else {
@@ -259,17 +228,14 @@ impl ServerLevel {
     }
 
     pub fn thrown_enderpearl_can_teleport(&self, id: EntityId) -> Option<bool> {
-        match self.thrown_enderpearl_get_owner(id)? {
-            Owner::Entity(owner) => self.players.get(&owner).map(|player| player.seen_credits),
-            Owner::OtherLevelPlayer(player) => Some(player.seen_credits),
-        }
+        self.find_player(self.thrown_enderpearl_get_owner(id)?).map(|player| player.seen_credits)
     }
 
     pub fn thrown_enderpearl_on_inside_block(&mut self, id: EntityId, state: BlockState) {
         if state.is_block(blocks::END_GATEWAY)
             && let Some(player) = self.projectile_get_owner(id).filter(|&owner| self.is_player(owner))
         {
-            crate::advancements::triggers::criteria_triggers::ENTER_BLOCK.trigger(self, player, state);
+            crate::advancements::triggers::criteria_triggers::ENTER_BLOCK.trigger(self.level_holding_mut(player), player, state);
         }
     }
 
@@ -301,17 +267,6 @@ impl ServerLevel {
 }
 
 impl Server {
-    pub fn update_other_level_players(&mut self, index: usize) {
-        let mut players = std::mem::take(&mut self.levels[index].other_level_players);
-        players.clear();
-        for (other, level) in self.levels.iter().enumerate() {
-            if other != index {
-                players.extend(level.players.keys().map(|&id| OtherLevelPlayer::of(level, id)));
-            }
-        }
-        self.levels[index].other_level_players = players;
-    }
-
     pub fn flush_other_level_ender_pearls(&mut self) {
         for index in 0..self.levels.len() {
             for (uuid, pearl, registered) in std::mem::take(&mut self.levels[index].other_level_ender_pearls) {
@@ -328,16 +283,25 @@ impl Server {
 
     pub fn handle_pending_ender_pearl_teleport(&mut self, level: usize) {
         let Some(pending) = self.levels[level].pending_ender_pearl_teleport.take() else { return };
-        let Some(owner_level) = self.level_of(pending.player) else { return };
-        if pending.set_portal_cooldown {
-            self.levels[owner_level].set_portal_cooldown(pending.player);
-        }
-        let transition = TeleportTransition::with_relatives(level, pending.teleport_pos, Vec3::ZERO, 0.0, 0.0, relative::ROTATION, PostTeleportTransition::DO_NOTHING);
-        if let Some(new_owner) = self.server_player_teleport(pending.player, transition) {
-            let new_level = self.entity_level_mut(new_owner);
-            new_level.reset_fall_distance(new_owner);
-            new_level.living_mut(new_owner).reset_current_impulse_context();
-            new_level.hurt_server(new_owner, DamageSource::new(damage_types::ENDER_PEARL), 5.0);
+        let Some(owner_level) = self.level_of(pending.owner) else { return };
+        if self.levels[owner_level].is_player(pending.owner) {
+            let transition = TeleportTransition::with_relatives(level, pending.teleport_pos, Vec3::ZERO, 0.0, 0.0, relative::ROTATION, PostTeleportTransition::DO_NOTHING);
+            if let Some(new_owner) = self.server_player_teleport(pending.owner, transition) {
+                let new_level = self.entity_level_mut(new_owner);
+                new_level.reset_fall_distance(new_owner);
+                new_level.living_mut(new_owner).reset_current_impulse_context();
+                new_level.hurt_server(new_owner, DamageSource::new(damage_types::ENDER_PEARL), 5.0);
+            }
+        } else {
+            let owner = self.levels[owner_level].entity(pending.owner);
+            let transition = TeleportTransition::new(level, pending.teleport_pos, Vec3::ZERO, owner.y_rot, owner.x_rot, PostTeleportTransition::DO_NOTHING);
+            if let Some(new_owner) = self.teleport(pending.owner, transition) {
+                let new_level = self.entity_level_mut(new_owner);
+                new_level.reset_fall_distance(new_owner);
+                if new_level.is_living(new_owner) {
+                    new_level.living_mut(new_owner).reset_current_impulse_context();
+                }
+            }
         }
         self.levels[level].thrown_enderpearl_play_sound(pending.teleport_pos);
     }

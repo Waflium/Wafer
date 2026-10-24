@@ -60,7 +60,7 @@ impl DamageSource {
     }
 
     pub fn is_creative_player(&self, level: &ServerLevel) -> bool {
-        self.causing_entity.and_then(|e| level.players.get(&e)).is_some_and(|p| p.abilities.instabuild)
+        self.causing_entity.and_then(|e| level.find_player(e)).is_some_and(|p| p.abilities.instabuild)
     }
 
     pub fn get_weapon_item(&self, level: &ServerLevel) -> Option<crate::world::item::ItemStack> {
@@ -102,9 +102,9 @@ impl ServerLevel {
     }
 
     pub fn display_name(&self, id: EntityId) -> Component {
-        match self.players.get(&id) {
+        match self.find_player(id) {
             Some(p) => self.player_display_name(&p.profile.name, p.profile.uuid),
-            None => match self.entities.get(&id) {
+            None => match self.find_entity(id) {
                 Some(entity) => entity.display_name(self.team_of(id).as_deref()),
                 None => self.dragon_part_entity(id).map_or_else(Component::empty, |part| {
                     crate::world::entity::entity_display_name(part, crate::world::entity::entity_name(part), self.team_of(id).as_deref())
@@ -129,10 +129,9 @@ impl ServerLevel {
 
     pub fn kill_credit(&self, victim: EntityId) -> Option<EntityId> {
         let living = self.living(victim);
-        let lookup = |uuid: u128| self.entity_manager.visible_entity_storage.get(uuid);
         match living.last_hurt_by_player {
-            Some(player) => lookup(player).filter(|&p| self.is_player(p)),
-            None => living.last_hurt_by_mob.and_then(lookup).filter(|&e| self.is_living(e)),
+            Some(player) => crate::world::entity::entity_reference::EntityReference::of(player).get_player(self),
+            None => living.last_hurt_by_mob.and_then(|uuid| crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(self)).filter(|&e| self.is_living(e)),
         }
     }
 }

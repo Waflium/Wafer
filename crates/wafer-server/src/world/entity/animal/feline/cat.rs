@@ -311,7 +311,7 @@ impl CatRelaxOnOwnerGoal {
 
     pub fn stop(&mut self, level: &mut ServerLevel, mob: EntityId) {
         level.set_lying(mob, false);
-        let sleep_timer = self.owner_player.and_then(|owner| level.players.get(&owner)).map_or(0, |owner| owner.sleep_counter);
+        let sleep_timer = self.owner_player.and_then(|owner| level.find_player(owner)).map_or(0, |owner| owner.sleep_counter);
         if sleep_timer >= 100 {
             let roll = level.random.next_float();
             let position = level.entity(mob).position();

@@ -203,21 +203,21 @@ fn can_hurt_when_fixed(level: &ServerLevel, source: &DamageSource) -> bool {
 
 impl ServerLevel {
     fn item_frame(&self, id: EntityId) -> &ItemFrame {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ItemFrame(frame)) => frame,
             _ => unreachable!("an item frame"),
         }
     }
 
     fn item_frame_mut(&mut self, id: EntityId) -> &mut ItemFrame {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::ItemFrame(frame)) => frame,
             _ => unreachable!("an item frame"),
         }
     }
 
     pub fn item_frame_flush_pending_sounds(&mut self, id: EntityId) {
-        let Some(LevelEntity::ItemFrame(frame)) = self.entities.get_mut(&id) else { return };
+        let Some(LevelEntity::ItemFrame(frame)) = self.find_entity_mut(id) else { return };
         let Some(position) = frame.pending_add_item_sound.take() else { return };
         let sound = frame.get_add_item_sound();
         if !frame.entity.is_silent() {
@@ -227,7 +227,7 @@ impl ServerLevel {
     }
 
     pub fn item_frame_item(&self, id: EntityId) -> Option<ItemStack> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::ItemFrame(frame)) => get_item(&frame.entity).cloned(),
             _ => None,
         }
@@ -243,7 +243,7 @@ impl ServerLevel {
     }
 
     pub fn item_frame_is_fixed(&self, id: EntityId) -> bool {
-        matches!(self.entities.get(&id), Some(LevelEntity::ItemFrame(frame)) if frame.fixed)
+        matches!(self.find_entity(id), Some(LevelEntity::ItemFrame(frame)) if frame.fixed)
     }
 
     pub fn item_frame_survives(&mut self, id: EntityId) -> bool {
@@ -392,7 +392,7 @@ impl ServerLevel {
         let item_frames: Vec<EntityId> = self
             .get_entities(None, &area)
             .into_iter()
-            .filter(|&id| matches!(self.entities.get(&id), Some(LevelEntity::ItemFrame(frame)) if hanging_entity::get_direction(&frame.entity) == direction))
+            .filter(|&id| matches!(self.find_entity(id), Some(LevelEntity::ItemFrame(frame)) if hanging_entity::get_direction(&frame.entity) == direction))
             .collect();
         if item_frames.len() == 1 { Some(item_frames[0]) } else { None }
     }

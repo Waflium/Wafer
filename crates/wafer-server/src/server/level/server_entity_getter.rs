@@ -120,7 +120,7 @@ impl ServerLevel {
     }
 
     fn is_instance_of_mob_class(&self, mob: EntityId, other: EntityId) -> bool {
-        match (self.entities.get(&mob), self.entities.get(&other)) {
+        match (self.find_entity(mob), self.find_entity(other)) {
             (Some(LevelEntity::Mob(a)), Some(LevelEntity::Mob(b))) => match a.kind {
                 MobKind::Zombie(_) => b.is_zombie(),
                 MobKind::Spider(_) => b.is_spider(),
@@ -131,7 +131,7 @@ impl ServerLevel {
     }
 
     fn is_same_mob_class(&self, mob: EntityId, other: EntityId) -> bool {
-        match (self.entities.get(&mob), self.entities.get(&other)) {
+        match (self.find_entity(mob), self.find_entity(other)) {
             (Some(LevelEntity::Mob(a)), Some(LevelEntity::Mob(b))) => std::mem::discriminant(&a.kind) == std::mem::discriminant(&b.kind),
             _ => false,
         }

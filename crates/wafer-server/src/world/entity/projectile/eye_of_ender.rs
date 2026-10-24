@@ -80,7 +80,7 @@ fn update_delta_movement(old_movement: Vec3, position: Vec3, target: Vec3) -> Ve
 
 impl ServerLevel {
     fn eye_of_ender(&mut self, id: EntityId) -> &mut EyeOfEnder {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::EyeOfEnder(eye)) => eye,
             _ => unreachable!("not an eye of ender"),
         }

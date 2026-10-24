@@ -51,7 +51,7 @@ impl TriggerInstance {
         }
         if let Some(predicate) = &self.item {
             let mut matched = false;
-            if let Some(LevelEntity::Item(item)) = level.entities.get(&hooked_in)
+            if let Some(LevelEntity::Item(item)) = level.find_entity(hooked_in)
                 && predicate.test(&item.item)
             {
                 matched = true;

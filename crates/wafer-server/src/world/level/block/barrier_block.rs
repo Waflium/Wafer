@@ -14,7 +14,7 @@ use crate::world::level::LevelAccessor;
 pub struct BarrierBlock;
 
 fn is_creative(level: &ServerLevel, user: Option<EntityId>) -> bool {
-    user.and_then(|user| level.players.get(&user)).is_some_and(|p| p.game_mode.game_type == GameType::Creative)
+    user.and_then(|user| level.find_player(user)).is_some_and(|p| p.game_mode.game_type == GameType::Creative)
 }
 
 impl BlockBehaviour for BarrierBlock {

@@ -2443,14 +2443,14 @@ pub fn slot_name(slot: EquipmentSlot) -> &'static str {
 
 impl ServerLevel {
     pub fn mob(&self, id: EntityId) -> Option<&Mob> {
-        match self.entities.get(&id) {
+        match self.find_entity(id) {
             Some(LevelEntity::Mob(mob)) => Some(mob),
             _ => None,
         }
     }
 
     pub fn mob_mut(&mut self, id: EntityId) -> Option<&mut Mob> {
-        match self.entities.get_mut(&id) {
+        match self.find_entity_mut(id) {
             Some(LevelEntity::Mob(mob)) => Some(mob),
             _ => None,
         }
@@ -2592,7 +2592,7 @@ impl ServerLevel {
         for slot in EquipmentSlot::VALUES {
             let Some(item_stack) = self.item_by_slot(id, slot) else { continue };
             let Some(equippable) = item_stack.get(dc::EQUIPPABLE).map(item::component::values::Equippable::from_nbt) else { continue };
-            let creative = self.players.get(&player).is_some_and(|p| p.game_mode.game_type.is_creative());
+            let creative = self.find_player(player).is_some_and(|p| p.game_mode.game_type.is_creative());
             if equippable.can_be_sheared && (!crate::world::item::enchantment::enchantment_helper::has_prevent_armor_change(&item_stack) || creative) {
                 self.shear_item(id, player, hand, slot, item_stack);
                 let sound = equippable.shearing_sound.as_str().map_or(super::sound_event("minecraft:item.shears.snip"), super::sound_event);
@@ -2805,7 +2805,7 @@ impl ServerLevel {
             let (x, y, z) = self.get_pickup_reach(id);
             let area = self.entity(id).bounding_box().inflate(x, y, z);
             for entity in self.items_in(&area, None) {
-                let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { continue };
+                let Some(LevelEntity::Item(item)) = self.find_entity(entity) else { continue };
                 if !item.entity.is_removed() && !item.item.is_empty() && !item.has_pickup_delay() {
                     let stack = item.item.clone();
                     if self.wants_to_pick_up(id, &stack) {
@@ -2885,13 +2885,13 @@ impl ServerLevel {
     }
 
     pub fn mob_pick_up_item(&mut self, id: EntityId, entity: EntityId) {
-        let Some(LevelEntity::Item(item)) = self.entities.get(&entity) else { return };
+        let Some(LevelEntity::Item(item)) = self.find_entity(entity) else { return };
         let item_stack = item.item.copy();
         let equipped_with_stack = self.equip_item_if_possible(id, item_stack);
         if !equipped_with_stack.is_empty() {
             self.on_item_pickup(id, entity);
             self.take(id, entity, equipped_with_stack.count);
-            let Some(LevelEntity::Item(item)) = self.entities.get_mut(&entity) else { return };
+            let Some(LevelEntity::Item(item)) = self.find_entity_mut(entity) else { return };
             item.item.shrink(equipped_with_stack.count);
             if item.item.is_empty() {
                 self.discard(entity);
