@@ -206,6 +206,12 @@ pub struct ChunkPos {
     pub z: i32,
 }
 
+impl std::fmt::Display for ChunkPos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, {}]", self.x, self.z)
+    }
+}
+
 impl ChunkPos {
     pub const fn new(x: i32, z: i32) -> ChunkPos {
         ChunkPos { x, z }

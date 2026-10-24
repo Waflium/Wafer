@@ -865,7 +865,8 @@ fn teleport_between_dimensions() {
     for _ in 0..3 {
         server.tick();
     }
-    server.levels[2].finish_chunk_work();
+    let the_end = server.get_level("minecraft:the_end").unwrap();
+    server.levels[the_end].finish_chunk_work();
     let item = drop_item(&mut server, Vec3::new(1.5, -60.0, 1.5));
     assert_eq!(run(&mut server, "execute in minecraft:the_end run tp @e[type=item] 100 70 0"), ["Teleported Stone to 100.500000, 70.000000, 0.500000"]);
     assert_eq!(server.level_of(item), None);
@@ -875,7 +876,7 @@ fn teleport_between_dimensions() {
     }
     assert_eq!(run(&mut server, "execute in minecraft:the_end run data get entity @e[type=item,limit=1] Pos"), ["Stone has the following entity data: [100.5d, 62.574417918565516d, 0.5d]"]);
     assert_eq!(run(&mut server, "execute in minecraft:the_nether run tp Alice 0.5 100 0.5"), ["Teleported Alice to 0.500000, 100.000000, 0.500000"]);
-    assert_eq!(server.level_of(alice.id), Some(1));
+    assert_eq!(server.level_of(alice.id), Some(2));
     assert!(server.player(alice.id).is_changing_dimension);
     assert_eq!(run(&mut server, "data get entity Alice Dimension"), ["Alice has the following entity data: \"minecraft:the_nether\""]);
     run(&mut server, "tp Alice 0.5 -60 0.5");

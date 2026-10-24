@@ -23,6 +23,7 @@ use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 
 use crate::server::level::game_mode::GameType;
+use crate::server::log_save_failure;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::chunk::storage::{decode_compressed_nbt, decode_nbt, encode_nbt};
 use crate::world::level::levelgen::world_dimensions::WorldDimensions;
@@ -369,9 +370,10 @@ impl WorldData {
         })
     }
 
-    pub fn save(&self, dir: &WorldDir) -> io::Result<()> {
-        self.save_level_data(dir)?;
-        self.save_saved_data(dir)
+    pub fn save(&self, dir: &WorldDir, dirty: DirtySavedData) -> io::Result<()> {
+        let level_data = self.save_level_data(dir);
+        self.save_saved_data(dir, dirty);
+        level_data
     }
 
     pub fn save_level_data(&self, dir: &WorldDir) -> io::Result<()> {
@@ -419,19 +421,34 @@ impl WorldData {
         save_level_dat(dir, &level)
     }
 
-    pub fn save_saved_data(&self, dir: &WorldDir) -> io::Result<()> {
-        let generation = compound(vec![
-            ("bonus_chest", Nbt::Byte(self.bonus_chest as i8)),
-            ("seed", Nbt::Long(self.seed)),
-            ("generate_structures", Nbt::Byte(self.generate_structures as i8)),
-            ("dimensions", self.dimensions.to_nbt()),
-        ]);
-        write_dat(&dir.data("world_gen_settings"), &data_file(generation))?;
-
-        write_dat(&dir.data("world_clocks"), &data_file(self.clocks.clone()))?;
-        write_dat(&dir.data("weather"), &data_file(self.weather.to_nbt()))?;
-        write_dat(&dir.data("game_rules"), &data_file(self.game_rules.clone()))
+    pub fn save_saved_data(&self, dir: &WorldDir, dirty: DirtySavedData) {
+        if dirty.world_gen_settings {
+            let generation = compound(vec![
+                ("bonus_chest", Nbt::Byte(self.bonus_chest as i8)),
+                ("seed", Nbt::Long(self.seed)),
+                ("generate_structures", Nbt::Byte(self.generate_structures as i8)),
+                ("dimensions", self.dimensions.to_nbt()),
+            ]);
+            log_save_failure("world_gen_settings.dat", write_dat(&dir.data("world_gen_settings"), &data_file(generation)));
+        }
+        if dirty.world_clocks {
+            log_save_failure("world_clocks.dat", write_dat(&dir.data("world_clocks"), &data_file(self.clocks.clone())));
+        }
+        if dirty.weather {
+            log_save_failure("weather.dat", write_dat(&dir.data("weather"), &data_file(self.weather.to_nbt())));
+        }
+        if dirty.game_rules {
+            log_save_failure("game_rules.dat", write_dat(&dir.data("game_rules"), &data_file(self.game_rules.clone())));
+        }
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct DirtySavedData {
+    pub world_gen_settings: bool,
+    pub world_clocks: bool,
+    pub weather: bool,
+    pub game_rules: bool,
 }
 
 #[cfg(test)]

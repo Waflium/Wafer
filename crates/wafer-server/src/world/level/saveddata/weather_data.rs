@@ -1,4 +1,40 @@
+use std::cell::Cell;
+
 use wafer_protocol::nbt::Nbt;
+
+pub struct WeatherDataCell {
+    data: Cell<WeatherData>,
+    dirty: Cell<bool>,
+}
+
+impl Default for WeatherDataCell {
+    fn default() -> WeatherDataCell {
+        WeatherDataCell::new(WeatherData::default(), true)
+    }
+}
+
+impl WeatherDataCell {
+    pub fn new(data: WeatherData, dirty: bool) -> WeatherDataCell {
+        WeatherDataCell { data: Cell::new(data), dirty: Cell::new(dirty) }
+    }
+
+    pub fn get(&self) -> WeatherData {
+        self.data.get()
+    }
+
+    pub fn set(&self, data: WeatherData) {
+        self.data.set(data);
+        self.dirty.set(true);
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty.get()
+    }
+
+    pub fn set_dirty(&self, dirty: bool) {
+        self.dirty.set(dirty);
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WeatherData {

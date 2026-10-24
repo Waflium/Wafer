@@ -18,7 +18,7 @@ use crate::world::entity::monster::warden::warden_spawn_tracker::WardenSpawnTrac
 use crate::world::level::storage::uuid_ints;
 
 const ORIGIN: Vec3 = Vec3::new(0.5, -60.0, 0.5);
-const NETHER: usize = 1;
+const NETHER: usize = 2;
 
 fn join(server: &mut Server, name: &str) -> EntityId {
     let profile = Profile { uuid: offline_uuid(name), name: name.into(), properties: Vec::new() };

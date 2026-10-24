@@ -6,7 +6,9 @@ use wafer_core::random::{XoroshiroRandomSource, mix_stafford13, seed_from_hash_o
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::util::datafix::data_fix_types::DataFixTypes;
+use crate::util::extra_codecs;
 use crate::util::java_collections::identifier_hash;
 use crate::world::level::storage::{read_saved_data_dat, write_dat};
 
@@ -46,37 +48,57 @@ impl RandomSequences {
         dir.join("minecraft").join("random_sequences.dat")
     }
 
+    fn decode_sequence(tag: &Nbt) -> DecodeResult<XoroshiroRandomSource> {
+        match codec::field(tag, "source") {
+            Ok(source) => extra_codecs::fixed_size_longs(source, 2).map(|state| XoroshiroRandomSource::from_parts(state[0], state[1])),
+            Err(error) => DecodeResult::error(error),
+        }
+    }
+
+    fn decode(dir: Option<PathBuf>, data: &Nbt) -> DecodeResult<RandomSequences> {
+        if let Err(error) = codec::map(data) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let salt = record.required(data, "salt", codec::int);
+        let include_world_seed = record.with_default(data, "include_world_seed", true, codec::bool_value);
+        let include_sequence_id = record.with_default(data, "include_sequence_id", true, codec::bool_value);
+        let entries = record.required(data, "sequences", |tag| codec::base_map_partial(tag, crate::resources::identifier::read, RandomSequences::decode_sequence));
+        record.build(|| {
+            let mut sequences = RandomSequences::empty(dir);
+            sequences.salt = salt?;
+            sequences.include_world_seed = include_world_seed;
+            sequences.include_sequence_id = include_sequence_id;
+            for (key, sequence) in entries? {
+                sequences.sequences.insert(key, sequence);
+            }
+            Some(sequences)
+        })
+    }
+
     pub fn load(dir: Option<PathBuf>) -> RandomSequences {
-        let data = dir.as_deref().and_then(|dir| match read_saved_data_dat(&RandomSequences::file(dir), DataFixTypes::SavedDataRandomSequences) {
-            Ok(tag) => tag.and_then(|t| t.get("data").cloned()),
+        let parsed = dir.as_deref().and_then(|dir| match read_saved_data_dat(&RandomSequences::file(dir), DataFixTypes::SavedDataRandomSequences) {
+            Ok(Some(tag)) => {
+                let decoded = codec::with_nbt_ops(|| match tag.get("data") {
+                    Some(data) => RandomSequences::decode(Some(dir.to_path_buf()), data),
+                    None => DecodeResult::error("Not a map: null"),
+                });
+                if let Some(error) = decoded.error {
+                    error!(thread: "main", "Failed to parse saved data for 'SavedDataType[minecraft:random_sequences]': {error}");
+                }
+                decoded.value
+            }
+            Ok(None) => None,
             Err(_) => {
-                error!("Error loading saved data: SavedDataType[minecraft:random_sequences]");
+                error!(thread: "main", "Error loading saved data: SavedDataType[minecraft:random_sequences]");
                 None
             }
         });
-        let mut sequences = RandomSequences::empty(dir);
-        let Some(data) = data else {
+        parsed.unwrap_or_else(|| {
+            let mut sequences = RandomSequences::empty(dir);
             sequences.dirty = true;
-            return sequences;
-        };
-        let Some(salt) = data.get("salt").and_then(Nbt::as_i64) else { return sequences };
-        let flag = |key: &str| data.get(key).and_then(Nbt::as_i64).is_none_or(|v| v != 0);
-        sequences.salt = salt as i32;
-        sequences.include_world_seed = flag("include_world_seed");
-        sequences.include_sequence_id = flag("include_sequence_id");
-        if let Some(Nbt::Compound(entries)) = data.get("sequences") {
-            for (key, sequence) in entries {
-                let state = match sequence.get("source") {
-                    Some(Nbt::LongArray(v)) => v.clone(),
-                    Some(Nbt::List(v)) => v.iter().filter_map(Nbt::as_i64).collect(),
-                    _ => continue,
-                };
-                if let [lo, hi] = state[..] {
-                    sequences.sequences.insert(key.clone(), XoroshiroRandomSource::from_parts(lo, hi));
-                }
-            }
-        }
-        sequences
+            sequences
+        })
     }
 
     fn create_sequence(&self, key: &str, world_seed: i64, salt: i32, include_world_seed: bool, include_sequence_id: bool) -> XoroshiroRandomSource {
@@ -164,6 +186,51 @@ mod tests {
         let a: Vec<i32> = (0..3).map(|_| wafer_core::mth::random_between_inclusive(&mut a, 1, 100)).collect();
         let b: Vec<i32> = (0..3).map(|_| wafer_core::mth::random_between_inclusive(&mut b, -5, 5)).collect();
         assert_eq!((a, b), (vec![49, 82, 30], vec![4, -4, 0]));
+    }
+
+    #[test]
+    fn decode_errors_match_vanilla() {
+        let cases: [(&str, Option<&str>, Option<&[&str]>); 19] = [
+            ("5", Some("Not a map: 5"), None),
+            ("{}", Some("No key sequences in MapLike[{}]; No key salt in MapLike[{}]"), None),
+            ("{salt:1}", Some("No key sequences in MapLike[{salt:1}]"), None),
+            ("{sequences:{}}", Some("No key salt in MapLike[{sequences:{}}]"), None),
+            ("{salt:\"x\",sequences:{}}", Some("Not a number"), None),
+            ("{salt:1,sequences:5}", Some("Not a map: 5"), None),
+            ("{salt:1,sequences:[]}", Some("Not a map: []"), None),
+            ("{salt:1,sequences:{\"minecraft:a\":5}}", Some("Not a map: 5 missed input: {\"minecraft:a\":5}"), Some(&[])),
+            ("{salt:1,sequences:{\"minecraft:a\":{}}}", Some("No key source in MapLike[{}] missed input: {\"minecraft:a\":{}}"), Some(&[])),
+            ("{salt:1,sequences:{\"minecraft:a\":{source:5}}}", Some("Not a list missed input: {\"minecraft:a\":{source:5}}"), Some(&[])),
+            ("{salt:1,sequences:{\"minecraft:a\":{source:[L;1L]}}}", Some("Input is not a list of 2 longs missed input: {\"minecraft:a\":{source:[L;1L]}}"), Some(&[])),
+            (
+                "{salt:1,sequences:{\"minecraft:a\":{source:[L;1L,2L,3L]}}}",
+                Some("Input is not a list of 2 longs missed input: {\"minecraft:a\":{source:[L;1L,2L,3L]}}"),
+                Some(&["minecraft:a"]),
+            ),
+            (
+                "{salt:1,sequences:{\"minecraft:a\":{source:[\"x\",\"y\"]}}}",
+                Some("Some elements are not longs: [\"x\",\"y\"] missed input: {\"minecraft:a\":{source:[\"x\",\"y\"]}}"),
+                Some(&[]),
+            ),
+            ("{salt:1,sequences:{\"minecraft:a\":{source:[1,2]}}}", None, Some(&["minecraft:a"])),
+            ("{salt:1,sequences:{\"minecraft:a\":{source:[I;1,2]}}}", None, Some(&["minecraft:a"])),
+            ("{salt:1,include_world_seed:\"x\",sequences:{}}", Some("Not a number"), Some(&[])),
+            ("{salt:1,include_world_seed:2,sequences:{}}", None, Some(&[])),
+            ("{salt:\"x\",include_world_seed:\"y\",sequences:5}", Some("Not a map: 5; Not a number; Not a number"), None),
+            (
+                "{salt:1,sequences:{\"minecraft:a\":{source:[L;1L,2L]},\"minecraft:b\":{source:5},\"minecraft:c\":{}}}",
+                Some("Not a list; No key source in MapLike[{}] missed input: {\"minecraft:b\":{source:5},\"minecraft:c\":{}}"),
+                Some(&["minecraft:a"]),
+            ),
+        ];
+        for (input, error, keys) in cases {
+            let tag = crate::nbt::parse_fully(input).ok().unwrap();
+            let result = codec::with_nbt_ops(|| RandomSequences::decode(None, &tag));
+            assert_eq!(result.error.as_deref(), error, "{input}");
+            let decoded: Option<Vec<String>> = result.value.map(|sequences| sequences.keys().map(str::to_string).collect());
+            let expected: Option<Vec<String>> = keys.map(|keys| keys.iter().map(|key| key.to_string()).collect());
+            assert_eq!(decoded, expected, "{input}");
+        }
     }
 
     #[test]

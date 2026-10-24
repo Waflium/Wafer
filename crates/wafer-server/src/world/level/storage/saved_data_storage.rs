@@ -33,7 +33,7 @@ impl SavedDataStorage {
     fn read_saved_data<T>(&self, id: &str, data_fix_type: DataFixTypes, decode: impl FnOnce(&Nbt) -> Result<T, String>) -> Option<T> {
         let file = self.get_data_file(id)?;
         match read_saved_data_dat(&file, data_fix_type) {
-            Ok(Some(tag)) => match tag.get("data").ok_or_else(|| "No key data in MapLike".to_string()).and_then(decode) {
+            Ok(Some(tag)) => match tag.get("data").ok_or_else(|| "Not a map: null".to_string()).and_then(decode) {
                 Ok(data) => Some(data),
                 Err(error) => {
                     error!("Failed to parse saved data for 'SavedDataType[minecraft:{id}]': {error}");

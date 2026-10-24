@@ -433,6 +433,30 @@ pub fn base_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: imp
     if errors.is_empty() { Ok(entries) } else { Err(map_entry_failures(errors, failed)) }
 }
 
+pub fn base_map_partial<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&Nbt) -> DecodeResult<V>) -> DecodeResult<Vec<(K, V)>> {
+    let fields = match map(tag) {
+        Ok(fields) => fields,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let mut entries = Vec::with_capacity(fields.len());
+    let mut errors = Vec::new();
+    let mut failed = Vec::new();
+    for i in map_entry_order(fields) {
+        let (field_key, field_value) = &fields[i];
+        let key = key(field_key);
+        let DecodeResult { value, error } = value(field_value);
+        if error.is_some() || key.is_err() {
+            errors.push([error, key.as_ref().err().cloned()].into_iter().flatten().collect::<Vec<_>>().join("; "));
+            failed.push((field_key.clone(), field_value.clone()));
+        }
+        if let (Ok(key), Some(value)) = (key, value) {
+            entries.push((key, value));
+        }
+    }
+    let error = (!errors.is_empty()).then(|| map_entry_failures(errors, failed));
+    DecodeResult { value: Some(entries), error }
+}
+
 pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, mut value: impl FnMut(&K, &Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
     let fields = map(tag)?;
     let mut entries = Vec::with_capacity(fields.len());

@@ -294,7 +294,7 @@ fn unpack_structure_data(pos: ChunkPos, tag: Option<&Nbt>, seed: i64) -> ChunkSt
     if let Some(Nbt::Compound(references)) = tag.get("References") {
         for (key, entry) in references {
             let Some(structure) = StructureHolder::by_name(key) else {
-                warn!("Found reference to unknown structure '{key}' in chunk {pos:?}, discarding");
+                warn!("Found reference to unknown structure '{key}' in chunk {pos}, discarding");
                 continue;
             };
             let Nbt::LongArray(values) = entry else { continue };
@@ -302,7 +302,7 @@ fn unpack_structure_data(pos: ChunkPos, tag: Option<&Nbt>, seed: i64) -> ChunkSt
             for &value in values {
                 let ref_pos = ChunkPos::unpack(value);
                 if ref_pos.chessboard_distance(pos) > 8 {
-                    warn!("Found invalid structure reference [ {key} @ {ref_pos:?} ] for chunk {pos:?}.");
+                    warn!("Found invalid structure reference [ {key} @ {ref_pos} ] for chunk {pos}.");
                 } else {
                     set.add(value);
                 }

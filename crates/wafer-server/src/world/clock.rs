@@ -208,6 +208,7 @@ pub enum MoveResult {
 
 pub struct ServerClockManager {
     pub clocks: Vec<ClockInstance>,
+    pub dirty: bool,
 }
 
 impl ServerClockManager {
@@ -216,7 +217,7 @@ impl ServerClockManager {
     }
 
     pub fn new() -> ServerClockManager {
-        ServerClockManager { clocks: vec![ClockInstance::default(); Self::registry().entries.len()] }
+        ServerClockManager { clocks: vec![ClockInstance::default(); Self::registry().entries.len()], dirty: true }
     }
 
     pub fn id_of(name: &str) -> Option<usize> {
@@ -226,6 +227,7 @@ impl ServerClockManager {
     pub fn tick(&mut self, advance_time: bool) {
         if advance_time {
             self.clocks.iter_mut().for_each(ClockInstance::tick);
+            self.dirty = true;
         }
     }
 
@@ -267,9 +269,11 @@ impl ServerClockManager {
     pub fn set_total_ticks(&mut self, clock: usize, total_ticks: i64) {
         self.clocks[clock].total_ticks = total_ticks;
         self.clocks[clock].partial_tick = 0.0;
+        self.dirty = true;
     }
 
     pub fn move_to_time_marker(&mut self, clock: usize, marker: &str) -> MoveResult {
+        self.dirty = true;
         let instance = &mut self.clocks[clock];
         match Self::time_marker(clock, marker) {
             None => MoveResult::NoTimeMarkerFound,
@@ -285,6 +289,7 @@ impl ServerClockManager {
     pub fn add_ticks(&mut self, clock: usize, ticks: i32) {
         let instance = &mut self.clocks[clock];
         instance.total_ticks = (instance.total_ticks + ticks as i64).max(0);
+        self.dirty = true;
     }
 
     pub fn all(&self) -> Vec<usize> {

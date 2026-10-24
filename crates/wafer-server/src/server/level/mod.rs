@@ -61,7 +61,7 @@ use crate::world::level::natural_spawner;
 use crate::world::level::pathfinder::path_type_cache::PathTypeCache;
 use crate::world::level::redstone::experimental_redstone_utils;
 use crate::world::level::redstone::orientation::Orientation;
-use crate::world::level::saveddata::weather_data::WeatherData;
+use crate::world::level::saveddata::weather_data::WeatherDataCell;
 use game_mode::GameType;
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::level::saveddata::maps::map_item_saved_data::MapItemSavedData;
@@ -135,7 +135,7 @@ pub struct ServerLevel {
     pub no_save: bool,
     pub allow_flight: bool,
     pub entity_broadcast_range_percentage: i32,
-    pub weather: Rc<Cell<WeatherData>>,
+    pub weather: Rc<WeatherDataCell>,
     pub default_game_type: Rc<Cell<GameType>>,
     pub scoreboard: Rc<RefCell<Scoreboard>>,
     pub world_border: WorldBorder,

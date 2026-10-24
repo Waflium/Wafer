@@ -74,7 +74,7 @@ impl StructureCheck {
         let chunk_tag = match storage_access.scan_chunk(pos) {
             Ok(chunk_tag) => chunk_tag?,
             Err(e) => {
-                warn!("Failed to read chunk {pos:?}: {e}");
+                warn!("Failed to read chunk {pos}: {e}");
                 return Some(StructureCheckResult::ChunkLoadNeeded);
             }
         };

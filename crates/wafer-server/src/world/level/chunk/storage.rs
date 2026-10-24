@@ -150,8 +150,14 @@ impl RegionFile {
                 continue;
             }
             let (sector, count) = ((offset >> 8) as usize, (offset & 0xFF) as usize);
-            if sector < 2 || count == 0 || sector as u64 * SECTOR_BYTES > size {
-                warn!("Region file {} has an invalid sector at index: {i}", path.display());
+            if sector < 2 {
+                warn!("Region file {} has invalid sector at index: {i}; sector {sector} overlaps with header", path.display());
+                region.offsets[i] = 0;
+            } else if count == 0 {
+                warn!("Region file {} has an invalid sector at index: {i}; size has to be > 0", path.display());
+                region.offsets[i] = 0;
+            } else if sector as u64 * SECTOR_BYTES > size {
+                warn!("Region file {} has an invalid sector at index: {i}; sector {sector} is out of bounds", path.display());
                 region.offsets[i] = 0;
             } else {
                 region.used.force(sector, count);
@@ -178,24 +184,61 @@ impl RegionFile {
         let mut sectors = vec![0u8; (count * SECTOR_BYTES) as usize];
         let read = self.file.read(&mut sectors)?;
         if read < 5 {
+            error!("Chunk {pos} header is truncated: expected {} but read {read}", sectors.len());
             return Ok(None);
         }
-        let length = u32::from_be_bytes(sectors[..4].try_into().unwrap()) as usize;
+        let length = i32::from_be_bytes(sectors[..4].try_into().unwrap());
         let version = sectors[4];
         if length == 0 {
+            warn!("Chunk {pos} is allocated, but stream is missing");
             return Ok(None);
         }
+        let stream_length = length.wrapping_sub(1);
         let data = if version & EXTERNAL_STREAM_FLAG != 0 {
-            match &self.external {
-                Some(external) => external.read(pos)?,
-                None => fs::read(self.external_path(pos))?,
+            if stream_length != 0 {
+                warn!("Chunk has both internal and external streams");
             }
+            match &self.external {
+                Some(external) => match external.read(pos) {
+                    Ok(data) => data,
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+                    Err(e) => return Err(e),
+                },
+                None => {
+                    let external_file = self.external_path(pos);
+                    if !external_file.is_file() {
+                        error!("External chunk path {} is not file", external_file.display());
+                        return Ok(None);
+                    }
+                    fs::read(external_file)?
+                }
+            }
+        } else if stream_length > (read - 5) as i32 {
+            error!("Chunk {pos} stream is truncated: expected {stream_length} but read {}", read - 5);
+            return Ok(None);
+        } else if stream_length < 0 {
+            error!("Declared size {length} of chunk {pos} is negative");
+            return Ok(None);
         } else {
-            sectors.get(5..4 + length).ok_or_else(|| invalid("chunk data is truncated"))?.to_vec()
+            sectors[5..5 + stream_length as usize].to_vec()
         };
         let compression = version & !EXTERNAL_STREAM_FLAG;
+        if compression == 127 {
+            let mut raw = data.as_slice();
+            let mut name_length = [0u8; 2];
+            raw.read_exact(&mut name_length)?;
+            let mut name = vec![0u8; u16::from_be_bytes(name_length) as usize];
+            raw.read_exact(&mut name)?;
+            let name = String::from_utf8_lossy(&name);
+            match crate::resources::identifier::read(&name) {
+                Ok(id) => error!("Unrecognized custom compression {id}"),
+                Err(_) => error!("Invalid custom compression id {name}"),
+            }
+            return Ok(None);
+        }
         let Some(compression) = RegionFileVersion::from_id(compression) else {
-            return Err(invalid(&format!("unsupported chunk compression {compression}")));
+            error!("Chunk {pos} has invalid chunk stream version {compression}");
+            return Ok(None);
         };
         decode_nbt(&compression.decompress(&data)?).map(Some)
     }
@@ -213,7 +256,7 @@ impl RegionFile {
         let external = sectors_needed >= 256;
         let new_sector;
         if external {
-            warn!("Saving oversized chunk {pos:?} ({} bytes) to external file", record.len());
+            warn!("Saving oversized chunk {pos} ({} bytes}} to external file {}", record.len(), self.external_path(pos).display());
             sectors_needed = 1;
             new_sector = self.used.allocate(sectors_needed);
             let mut stub = Vec::from(1u32.to_be_bytes());
@@ -361,6 +404,43 @@ mod tests {
         assert_eq!(reopened.read(ChunkPos::new(0, 0)).unwrap(), Some(large.clone()));
         assert_eq!(reopened.read(ChunkPos::new(-1, 33)).unwrap(), Some(large));
         assert_eq!(reopened.read(ChunkPos::new(5, 5)).unwrap(), None);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn unreadable_chunks_read_as_missing() {
+        let dir = std::env::temp_dir().join(format!("wafer-region-unreadable-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mut store = RegionStorage::new(dir.clone(), false);
+        let tag = Nbt::Compound(vec![("a".into(), Nbt::Int(1))]);
+        let corruptions: [(i32, fn(&mut [u8])); 6] = [
+            (0, |chunk| chunk[..4].copy_from_slice(&0i32.to_be_bytes())),
+            (1, |chunk| chunk[..4].copy_from_slice(&(-5i32).to_be_bytes())),
+            (2, |chunk| chunk[..4].copy_from_slice(&i32::MAX.to_be_bytes())),
+            (3, |chunk| chunk[4] = 9),
+            (4, |chunk| chunk[4] = 2 | EXTERNAL_STREAM_FLAG),
+            (5, |chunk| {
+                chunk[4] = 127;
+                chunk[5..7].copy_from_slice(&7u16.to_be_bytes());
+                chunk[7..14].copy_from_slice(b"foo:bar");
+            }),
+        ];
+        for (x, _) in corruptions {
+            store.write(ChunkPos::new(x, 0), &tag).unwrap();
+        }
+        store.flush().unwrap();
+        drop(store);
+        let path = dir.join("r.0.0.mca");
+        let mut bytes = fs::read(&path).unwrap();
+        for (x, corrupt) in corruptions {
+            let sector = u32::from_be_bytes(bytes[x as usize * 4..x as usize * 4 + 4].try_into().unwrap()) >> 8;
+            corrupt(&mut bytes[sector as usize * 4096..]);
+        }
+        fs::write(&path, bytes).unwrap();
+        let mut store = RegionStorage::new(dir.clone(), false);
+        for (x, _) in corruptions {
+            assert_eq!(store.read(ChunkPos::new(x, 0)).unwrap(), None, "chunk {x}");
+        }
         fs::remove_dir_all(dir).unwrap();
     }
 

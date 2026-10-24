@@ -53,6 +53,42 @@ pub fn fixed_size_ints(tag: &Nbt, size: usize) -> DecodeResult<Vec<i32>> {
     }
 }
 
+pub fn fixed_size_longs(tag: &Nbt, size: usize) -> DecodeResult<Vec<i64>> {
+    let numeric = |value: &Nbt| match *value {
+        Nbt::Byte(v) => Some(v as i64),
+        Nbt::Short(v) => Some(v as i64),
+        Nbt::Int(v) => Some(v as i64),
+        Nbt::Long(v) => Some(v),
+        Nbt::Float(v) => Some(v as i64),
+        Nbt::Double(v) => Some(v as i64),
+        _ => None,
+    };
+    let mut longs: Vec<i64> = match tag {
+        Nbt::LongArray(values) => values.clone(),
+        Nbt::IntArray(values) => values.iter().map(|&v| v as i64).collect(),
+        Nbt::ByteArray(values) => values.iter().map(|&v| v as i64).collect(),
+        Nbt::List(values) => match values.iter().map(numeric).collect::<Option<Vec<i64>>>() {
+            Some(longs) => longs,
+            None => return DecodeResult::error(format!("Some elements are not longs: {}", crate::nbt::to_string(tag))),
+        },
+        _ => return DecodeResult::error("Not a list"),
+    };
+    if longs.len() == size {
+        return DecodeResult::success(longs);
+    }
+    let error = Some(format!("Input is not a list of {size} longs"));
+    if longs.len() > size {
+        longs.truncate(size);
+        DecodeResult { value: Some(longs), error }
+    } else {
+        DecodeResult { value: None, error }
+    }
+}
+
+pub fn uuid(tag: &Nbt) -> DecodeResult<u128> {
+    fixed_size_ints(tag, 4).map(|ints| ints.iter().fold(0u128, |acc, &v| acc << 32 | v as u32 as u128))
+}
+
 pub fn block_pos(tag: &Nbt) -> DecodeResult<wafer_core::BlockPos> {
     if let Nbt::IntArray(ints) = tag
         && let [x, y, z] = ints.as_slice()

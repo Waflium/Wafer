@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use wafer_data::{GameRule, GameRuleType};
 use wafer_protocol::nbt::Nbt;
@@ -9,6 +9,7 @@ use crate::world::flag::FeatureFlagSet;
 #[derive(Clone)]
 pub struct GameRules {
     values: Arc<[AtomicI32]>,
+    dirty: Arc<AtomicBool>,
     enabled_features: FeatureFlagSet,
 }
 
@@ -24,7 +25,15 @@ pub fn required_features(rule: GameRule) -> FeatureFlagSet {
 
 impl GameRules {
     pub fn new(enabled_features: FeatureFlagSet) -> GameRules {
-        GameRules { values: GameRule::all().map(|r| AtomicI32::new(r.info().default)).collect(), enabled_features }
+        GameRules { values: GameRule::all().map(|r| AtomicI32::new(r.info().default)).collect(), dirty: Arc::new(AtomicBool::new(true)), enabled_features }
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty.load(Ordering::Relaxed)
+    }
+
+    pub fn set_dirty(&self, dirty: bool) {
+        self.dirty.store(dirty, Ordering::Relaxed);
     }
 
     pub fn has(&self, rule: GameRule) -> bool {
@@ -50,6 +59,7 @@ impl GameRules {
     }
 
     pub fn set(&self, rule: GameRule, value: i32) {
+        self.set_dirty(true);
         self.values[rule.0 as usize].store(value, Ordering::Relaxed);
     }
 
@@ -85,7 +95,7 @@ impl GameRules {
                 (GameRuleType::Int, Nbt::Int(i)) if (info.min..=info.max).contains(i) => *i,
                 _ => continue,
             };
-            self.set(rule, value);
+            self.values[rule.0 as usize].store(value, Ordering::Relaxed);
         }
     }
 }

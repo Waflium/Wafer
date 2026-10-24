@@ -289,7 +289,7 @@ impl ServerLevel {
                     Vec::new()
                 }
                 Err(e) => {
-                    error!("Failed to load entity chunk {pos:?}: {e}");
+                    error!("Failed to load entity chunk {pos}: {e}");
                     continue;
                 }
             };

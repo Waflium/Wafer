@@ -165,7 +165,7 @@ impl EnderDragonFight {
     pub fn load(dir: Option<PathBuf>) -> EnderDragonFight {
         let Some(file) = dir.as_deref().map(EnderDragonFight::file) else { return EnderDragonFight::create_default(dir) };
         match read_saved_data_dat(&file, DataFixTypes::SavedDataEnderDragonFight) {
-            Ok(Some(tag)) => match tag.get("data").ok_or_else(|| "No key data in MapLike".to_string()).and_then(|data| EnderDragonFight::decode(dir.clone(), data)) {
+            Ok(Some(tag)) => match tag.get("data").ok_or_else(|| "Not a map: null".to_string()).and_then(|data| EnderDragonFight::decode(dir.clone(), data)) {
                 Ok(fight) => fight,
                 Err(error) => {
                     error!("Failed to parse saved data for 'SavedDataType[minecraft:ender_dragon_fight]': {error}");
@@ -202,7 +202,7 @@ impl EnderDragonFight {
             data.push(("exit_portal_location".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z])));
         }
         if !self.gateways.is_empty() {
-            data.push(("gateways".into(), Nbt::IntArray(self.gateways.clone())));
+            data.push(("gateways".into(), Nbt::List(self.gateways.iter().map(|&gateway| Nbt::Int(gateway)).collect())));
         }
         if !self.respawn_crystals.is_empty() {
             data.push(("respawn_crystals".into(), Nbt::List(self.respawn_crystals.iter().map(|&uuid| uuid_tag(uuid)).collect())));

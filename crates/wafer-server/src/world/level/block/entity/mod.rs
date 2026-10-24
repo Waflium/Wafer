@@ -283,7 +283,7 @@ impl BlockEntity {
         let int = |key: &str| tag_value_input::get_numeric(tag, key).and_then(int_value).unwrap_or(0);
         let (mut x, y, mut z) = (int("x"), int("y"), int("z"));
         if x >> 4 != base.x || z >> 4 != base.z {
-            warn!("Block entity {} found in a wrong chunk, expected position from chunk {base:?}", crate::nbt::to_string(tag));
+            warn!("Block entity {} found in a wrong chunk, expected position from chunk {base}", crate::nbt::to_string(tag));
             x = base.min_block_x() + (x & 15);
             z = base.min_block_z() + (z & 15);
         }

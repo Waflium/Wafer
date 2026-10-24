@@ -1,11 +1,12 @@
 use wafer_core::mth;
 use wafer_protocol::nbt::Nbt;
 
-use crate::network::chat::{Component, HoverEvent};
+use crate::network::chat::{Component, HoverEvent, component_serialization};
 use crate::server::level::ServerLevel;
 use crate::server::level::server_boss_event::{BossBarColor, BossBarOverlay, ServerBossEvent};
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::util::extra_codecs;
 use crate::world::entity::EntityId;
-use crate::world::entity::entity_save::uuid_from_nbt;
 use crate::world::level::storage::uuid_ints;
 
 const DEFAULT_MAX: i32 = 100;
@@ -107,33 +108,45 @@ impl CustomBossEvent {
         self.event.remove_player(player);
     }
 
-    pub fn load(id: u128, custom_id: String, packed: &Nbt) -> Option<CustomBossEvent> {
-        let flag = |key: &str| packed.get(key).map_or(Some(false), |v| v.as_i64().map(|v| v != 0));
-        let int = |key: &str, default: i32| packed.get(key).map_or(Some(default), |v| v.as_i64().map(|v| v as i32));
-        let mut custom = CustomBossEvent::new(id, custom_id, Component::from_nbt(packed.get("Name")?));
-        custom.value = int("Value", 0)?;
-        custom.max = int("Max", DEFAULT_MAX)?;
-        let event = &mut custom.event;
-        event.visible = flag("Visible")?;
-        event.progress = mth::clamp_f(custom.value as f32 / custom.max as f32, 0.0, 1.0);
-        event.color = match packed.get("Color") {
-            Some(color) => BossBarColor::by_name(color.as_str()?)?,
-            None => BossBarColor::White,
-        };
-        event.overlay = match packed.get("Overlay") {
-            Some(overlay) => BossBarOverlay::by_name(overlay.as_str()?)?,
-            None => BossBarOverlay::Progress,
-        };
-        event.darken_screen = flag("DarkenScreen")?;
-        event.play_boss_music = flag("PlayBossMusic")?;
-        event.create_world_fog = flag("CreateWorldFog")?;
-        for uuid in packed.get("Players").map_or(&[][..], Nbt::as_list) {
-            let uuid = uuid_from_nbt(uuid)?;
-            if !custom.players.contains(&uuid) {
-                custom.players.push(uuid);
-            }
+    pub fn load(id: u128, custom_id: String, packed: &Nbt) -> DecodeResult<CustomBossEvent> {
+        if let Err(error) = codec::map(packed) {
+            return DecodeResult::error(error);
         }
-        Some(custom)
+        let enum_name = |tag: &Nbt| codec::string(tag).map(str::to_string);
+        let mut record = Record::default();
+        let name = record.required(packed, "Name", component_serialization::decode);
+        let visible = record.with_default(packed, "Visible", false, codec::bool_value);
+        let value = record.with_default(packed, "Value", 0, codec::int);
+        let max = record.with_default(packed, "Max", DEFAULT_MAX, codec::int);
+        let color = record.with_default(packed, "Color", BossBarColor::White, |tag| {
+            enum_name(tag).and_then(|name| BossBarColor::by_name(&name).ok_or_else(|| format!("Unknown element name:{name}")))
+        });
+        let overlay = record.with_default(packed, "Overlay", BossBarOverlay::Progress, |tag| {
+            enum_name(tag).and_then(|name| BossBarOverlay::by_name(&name).ok_or_else(|| format!("Unknown element name:{name}")))
+        });
+        let darken_screen = record.with_default(packed, "DarkenScreen", false, codec::bool_value);
+        let play_boss_music = record.with_default(packed, "PlayBossMusic", false, codec::bool_value);
+        let create_world_fog = record.with_default(packed, "CreateWorldFog", false, codec::bool_value);
+        let players = record.with_default(packed, "Players", Vec::new(), |tag| codec::list_partial(tag, extra_codecs::uuid));
+        record.build(|| {
+            let mut custom = CustomBossEvent::new(id, custom_id, name?);
+            custom.value = value;
+            custom.max = max;
+            let event = &mut custom.event;
+            event.visible = visible;
+            event.progress = mth::clamp_f(custom.value as f32 / custom.max as f32, 0.0, 1.0);
+            event.color = color;
+            event.overlay = overlay;
+            event.darken_screen = darken_screen;
+            event.play_boss_music = play_boss_music;
+            event.create_world_fog = create_world_fog;
+            for uuid in players {
+                if !custom.players.contains(&uuid) {
+                    custom.players.push(uuid);
+                }
+            }
+            Some(custom)
+        })
     }
 
     pub fn pack(&self) -> Nbt {

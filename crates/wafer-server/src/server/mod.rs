@@ -76,10 +76,10 @@ use self::players::cached_user_name_to_id_resolver::CachedUserNameToIdResolver;
 use crate::world::stopwatches::Stopwatches;
 use self::server_tick_rate_manager::ServerTickRateManager;
 use self::bossevents::custom_boss_events::CustomBossEvents;
-use crate::world::level::saveddata::weather_data::WeatherData;
+use crate::world::level::saveddata::weather_data::WeatherDataCell;
 use crate::world::scores::scoreboard::Scoreboard;
 use crate::world::scores::scoreboard_save_data::ScoreboardSaveData;
-use crate::world::level::storage::{RespawnData, WorldData, WorldDir, write_dat};
+use crate::world::level::storage::{DirtySavedData, RespawnData, WorldData, WorldDir, write_dat};
 use level::ServerLevel;
 use self::network::prepare_spawn_task::PrepareSpawnTask;
 use level::game_mode::GameType;
@@ -205,7 +205,7 @@ pub struct Server {
     lost_connections: HashMap<ConnId, Component>,
     pub clocks: ServerClockManager,
     pub game_rules: GameRules,
-    pub weather: Rc<Cell<WeatherData>>,
+    pub weather: Rc<WeatherDataCell>,
     pub scoreboard: Rc<RefCell<Scoreboard>>,
     pub command_storage: Rc<RefCell<CommandStorage>>,
     pub random_sequences: Rc<RefCell<RandomSequences>>,
@@ -222,6 +222,7 @@ pub struct Server {
     pub(crate) game_test_ticker: crate::gametest::framework::game_test_ticker::GameTestTicker,
     debug_command_profiler_delay_start: bool,
     ticks_until_autosave: i32,
+    world_gen_settings_dirty: bool,
     pub tick_rate_manager: ServerTickRateManager,
     tick_times_nanos: [i64; 100],
     aggregated_tick_times_nanos: i64,
@@ -319,10 +320,14 @@ impl Server {
         let mut clocks = ServerClockManager::new();
         let game_rules = GameRules::new(data_configuration.enabled_features);
         crate::commands::set_enabled_features(data_configuration.enabled_features);
+        let saved_data_exists = |id: &str| world_dir.as_ref().is_some_and(|dir| dir.data(id).exists());
         if !new_world {
             game_rules.load(&data.game_rules);
             clocks.load(&data.clocks);
+            game_rules.set_dirty(!saved_data_exists("game_rules"));
+            clocks.dirty = !saved_data_exists("world_clocks");
         }
+        let weather_dirty = new_world || !saved_data_exists("weather");
         let weather = data.weather;
         let generate_structures = data.generate_structures;
         let bonus_chest = data.bonus_chest;
@@ -381,7 +386,7 @@ impl Server {
             game_type = GameType::Spectator;
         }
         let mut levels = vec![overworld];
-        for (dimension, generator) in [(THE_NETHER, dimensions.nether), (THE_END, dimensions.end)] {
+        for (dimension, generator) in [(THE_END, dimensions.end), (THE_NETHER, dimensions.nether)] {
             let (dimension_type, generator) = stem(dimension, generator);
             levels.push(create_level(&config, world_dir.as_ref(), dimension, &dimension_type, generator, is_debug, generate_structures, seed));
         }
@@ -395,7 +400,7 @@ impl Server {
             level.index = index;
             level.level_name = level_name.clone();
         }
-        let weather = Rc::new(Cell::new(weather));
+        let weather = Rc::new(WeatherDataCell::new(weather, weather_dirty));
         let default_game_type = Rc::new(Cell::new(game_type));
         let scoreboard_save_data = ScoreboardSaveData::load(world_dir.as_ref().map(WorldDir::data_folder));
         let scoreboard = Rc::new(RefCell::new(Scoreboard::default()));
@@ -455,6 +460,7 @@ impl Server {
             game_test_ticker: Default::default(),
             debug_command_profiler_delay_start: false,
             ticks_until_autosave: AUTOSAVE_INTERVAL,
+            world_gen_settings_dirty: true,
             tick_rate_manager,
             tick_times_nanos: [0; 100],
             aggregated_tick_times_nanos: 0,
@@ -769,7 +775,17 @@ impl Server {
             allow_commands: self.allow_commands,
             singleplayer_uuid: self.singleplayer_uuid.clone(),
         };
-        if data.save(dir).is_err() {
+        let dirty = DirtySavedData {
+            world_gen_settings: self.world_gen_settings_dirty,
+            world_clocks: self.clocks.dirty,
+            weather: self.weather.is_dirty(),
+            game_rules: self.game_rules.is_dirty(),
+        };
+        self.world_gen_settings_dirty = false;
+        self.clocks.dirty = false;
+        self.weather.set_dirty(false);
+        self.game_rules.set_dirty(false);
+        if data.save(dir, dirty).is_err() {
             error!("Failed to save level {}", dir.root.display());
         }
         log_save_failure("command_storage.dat", self.command_storage.borrow_mut().save());
@@ -867,6 +883,7 @@ impl Server {
     }
 
     pub fn modify_clock(&mut self, clock: usize) {
+        self.clocks.dirty = true;
         let advance_time = self.game_rules.get_bool(game_rule::ADVANCE_TIME);
         let game_time = self.overworld().game_time;
         for p in self.players() {
@@ -2097,6 +2114,33 @@ mod tests {
         let server = Server::new(config).unwrap();
         assert_eq!(server.spawn.pos, spawn);
         assert!(matches!(&server.levels[0].chunks.generator, ChunkGenerator::Noise(g) if g.seed() == 12345));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn saved_data_is_written_only_when_dirty() {
+        let dir = std::env::temp_dir().join(format!("wafer-dirty-saved-data-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let config = ServerConfig { world: Some(dir.clone()), ..crate::server::level::testing::flat_config() };
+        let mut server = crate::server::level::testing::server_with(config);
+        let file = |name: &str| dir.join("data/minecraft").join(format!("{name}.dat"));
+        let names = ["world_gen_settings", "world_clocks", "weather", "game_rules"];
+        let written = |server: &mut Server| {
+            server.save_everything(true, true, true);
+            let written: Vec<&str> = names.into_iter().filter(|name| file(name).exists()).collect();
+            names.into_iter().for_each(|name| {
+                let _ = std::fs::remove_file(file(name));
+            });
+            written
+        };
+        assert_eq!(written(&mut server), names);
+        assert_eq!(written(&mut server), Vec::<&str>::new());
+        server.game_rules.set(wafer_data::game_rule::KEEP_INVENTORY, 1);
+        assert_eq!(written(&mut server), ["game_rules"]);
+        server.clocks.set_total_ticks(0, 5);
+        assert_eq!(written(&mut server), ["world_clocks"]);
+        server.weather.set(server.weather.get());
+        assert_eq!(written(&mut server), ["weather"]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
