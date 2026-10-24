@@ -3,7 +3,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::advancement_type::AdvancementType;
 use crate::network::chat::{Component, component_serialization};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::component::values::ItemStackTemplate;
 use crate::world::item::crafting::display::slot_display::write_item_stack_template;
 
@@ -21,17 +21,23 @@ pub struct DisplayInfo {
 
 impl DisplayInfo {
     pub fn decode(tag: &Nbt) -> DataResult<DisplayInfo> {
-        codec::map(tag)?;
-        Ok(DisplayInfo {
-            icon: codec::decode_field(tag, "icon", ItemStackTemplate::decode)?,
-            title: codec::decode_field(tag, "title", component_serialization::decode)?,
-            description: codec::decode_field(tag, "description", component_serialization::decode)?,
-            background: codec::decode_optional(tag, "background", codec::identifier)?,
-            ty: codec::decode_or(tag, "frame", AdvancementType::Task, AdvancementType::decode)?,
-            show_toast: codec::decode_or(tag, "show_toast", true, codec::bool_value)?,
-            announce_to_chat: codec::decode_or(tag, "announce_to_chat", true, codec::bool_value)?,
-            hidden: codec::decode_or(tag, "hidden", false, codec::bool_value)?,
-        })
+        DisplayInfo::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<DisplayInfo> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let icon = record.required(tag, "icon", ItemStackTemplate::decode_partial);
+        let title = record.required(tag, "title", |title| DecodeResult::from(component_serialization::decode(title)));
+        let description = record.required(tag, "description", |description| DecodeResult::from(component_serialization::decode(description)));
+        let background = record.optional(tag, "background", |background| DecodeResult::from(codec::identifier(background)));
+        let ty = record.with_default(tag, "frame", AdvancementType::Task, |frame| DecodeResult::from(AdvancementType::decode(frame)));
+        let show_toast = record.with_default(tag, "show_toast", true, |show| DecodeResult::from(codec::bool_value(show)));
+        let announce_to_chat = record.with_default(tag, "announce_to_chat", true, |announce| DecodeResult::from(codec::bool_value(announce)));
+        let hidden = record.with_default(tag, "hidden", false, |hidden| DecodeResult::from(codec::bool_value(hidden)));
+        record.build(|| Some(DisplayInfo { icon: icon?, title: title?, description: description?, background, ty, show_toast, announce_to_chat, hidden }))
     }
 
     pub fn serialize_to_network(&self, output: &mut Writer) {

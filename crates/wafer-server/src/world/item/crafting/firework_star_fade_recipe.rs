@@ -5,7 +5,7 @@ use super::dye_recipe::get_dye;
 use super::firework_star_recipe::explosion;
 use super::ingredient::Ingredient;
 use super::transmute_recipe::create_with_original_components;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::values::{FireworkExplosion, ItemStackTemplate};
@@ -18,11 +18,15 @@ pub struct FireworkStarFadeRecipe {
 
 impl FireworkStarFadeRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<FireworkStarFadeRecipe> {
-        Ok(FireworkStarFadeRecipe {
-            target: codec::decode_field(tag, "target", Ingredient::decode)?,
-            dye: codec::decode_field(tag, "dye", Ingredient::decode)?,
-            result: codec::decode_field(tag, "result", ItemStackTemplate::decode)?,
-        })
+        FireworkStarFadeRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<FireworkStarFadeRecipe> {
+        let mut record = Record::default();
+        let target = record.required(tag, "target", Ingredient::decode);
+        let dye = record.required(tag, "dye", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| Some(FireworkStarFadeRecipe { target: target?, dye: dye?, result: result? }))
     }
 
     pub fn matches(&self, input: &CraftingInput) -> bool {

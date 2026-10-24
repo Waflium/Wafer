@@ -4,7 +4,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::Holder;
 use crate::server::level::{ServerLevel, SoundSource};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::crafting::recipe_holder::RecipeHolder;
 use crate::world::item::crafting::recipe_manager::RecipeManager;
@@ -21,13 +21,19 @@ pub struct AdvancementRewards {
 
 impl AdvancementRewards {
     pub fn decode(tag: &Nbt) -> DataResult<AdvancementRewards> {
-        codec::map(tag)?;
-        Ok(AdvancementRewards {
-            experience: codec::decode_or(tag, "experience", 0, codec::int)?,
-            loot: codec::decode_or(tag, "loot", Vec::new(), LootTable::decode_list)?,
-            recipes: codec::decode_or(tag, "recipes", Vec::new(), |t| codec::list_of(t, codec::identifier))?,
-            function: codec::decode_optional(tag, "function", codec::identifier)?,
-        })
+        AdvancementRewards::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<AdvancementRewards> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let experience = record.with_default(tag, "experience", 0, |experience| DecodeResult::from(codec::int(experience)));
+        let loot = record.with_default(tag, "loot", Vec::new(), |loot| DecodeResult::from(LootTable::decode_list(loot)));
+        let recipes = record.with_default(tag, "recipes", Vec::new(), |recipes| codec::list_partial(recipes, |recipe| DecodeResult::from(codec::identifier(recipe))));
+        let function = record.optional(tag, "function", |function| DecodeResult::from(codec::identifier(function)));
+        record.build(|| Some(AdvancementRewards { experience, loot, recipes, function }))
     }
 
     pub fn grant(&self, level: &mut ServerLevel, player: EntityId) {

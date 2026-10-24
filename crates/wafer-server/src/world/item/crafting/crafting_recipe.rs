@@ -22,7 +22,7 @@ use super::shapeless_recipe::ShapelessRecipe;
 use super::shield_decoration_recipe::ShieldDecorationRecipe;
 use super::transmute_recipe::TransmuteRecipe;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 
 #[derive(Clone, Debug)]
@@ -33,10 +33,14 @@ pub struct CraftingBookInfo {
 
 impl CraftingBookInfo {
     pub fn decode(tag: &Nbt) -> DataResult<CraftingBookInfo> {
-        Ok(CraftingBookInfo {
-            category: codec::decode_or(tag, "category", CraftingBookCategory::Misc, |t| codec::string_enum(t, &CraftingBookCategory::VALUES))?,
-            group: codec::decode_or(tag, "group", String::new(), |t| codec::string(t).map(str::to_string))?,
-        })
+        CraftingBookInfo::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<CraftingBookInfo> {
+        let mut record = Record::default();
+        let category = record.with_default(tag, "category", CraftingBookCategory::Misc, |category| codec::string_enum(category, &CraftingBookCategory::VALUES));
+        let group = record.with_default(tag, "group", String::new(), |group| codec::string(group).map(str::to_string));
+        record.build(|| Some(CraftingBookInfo { category, group }))
     }
 }
 

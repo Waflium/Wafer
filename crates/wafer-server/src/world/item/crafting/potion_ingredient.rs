@@ -5,7 +5,7 @@ use super::ingredient::Ingredient;
 use super::recipe_manager::RecipeManager;
 use super::recipe_property_set::BREWING_INPUTS;
 use crate::core::component::predicates::potions_predicate::PotionsPredicate;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 
@@ -16,7 +16,14 @@ pub struct PotionIngredient {
 
 impl PotionIngredient {
     pub fn decode(tag: &Nbt) -> DataResult<PotionIngredient> {
-        Ok(PotionIngredient { ingredient: codec::decode_field(tag, "item", Ingredient::decode)?, potions: codec::decode_optional(tag, "potion_contents", PotionsPredicate::decode)? })
+        PotionIngredient::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<PotionIngredient> {
+        let mut record = Record::default();
+        let ingredient = record.required(tag, "item", Ingredient::decode);
+        let potions = record.optional(tag, "potion_contents", PotionsPredicate::decode);
+        record.build(|| Some(PotionIngredient { ingredient: ingredient?, potions }))
     }
 
     pub fn test(&self, input: &ItemStack) -> bool {

@@ -4,7 +4,7 @@ use super::crafting_input::CraftingInput;
 use super::ingredient::Ingredient;
 use super::transmute_recipe::create_with_original_components_extra;
 use crate::advancements::predicates::min_max_bounds::{Bounds, Ints};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::values::ItemStackTemplate;
@@ -39,12 +39,16 @@ fn craft_copy(content: &Nbt) -> Nbt {
 
 impl BookCloningRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<BookCloningRecipe> {
-        Ok(BookCloningRecipe {
-            source: codec::decode_field(tag, "source", Ingredient::decode)?,
-            material: codec::decode_field(tag, "material", Ingredient::decode)?,
-            allowed_generations: codec::decode_or(tag, "allowed_generations", DEFAULT_BOOK_GENERATION_RANGES, decode_allowed_generations)?,
-            result: codec::decode_field(tag, "result", ItemStackTemplate::decode)?,
-        })
+        BookCloningRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<BookCloningRecipe> {
+        let mut record = Record::default();
+        let source = record.required(tag, "source", Ingredient::decode);
+        let material = record.required(tag, "material", Ingredient::decode);
+        let allowed_generations = record.with_default(tag, "allowed_generations", DEFAULT_BOOK_GENERATION_RANGES, decode_allowed_generations);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| Some(BookCloningRecipe { source: source?, material: material?, allowed_generations, result: result? }))
     }
 
     fn can_craft_copy(&self, written_book_content: &Nbt) -> bool {

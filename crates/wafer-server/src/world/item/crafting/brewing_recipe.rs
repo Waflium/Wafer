@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::brewing_input::BrewingInput;
 use super::potion_ingredient::PotionIngredient;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component::values::ItemStackTemplate;
 
@@ -14,11 +14,15 @@ pub struct BrewingRecipe {
 
 impl BrewingRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<BrewingRecipe> {
-        Ok(BrewingRecipe {
-            input: codec::decode_field(tag, "input", PotionIngredient::decode)?,
-            reagent: codec::decode_field(tag, "reagent", PotionIngredient::decode)?,
-            output: codec::decode_field(tag, "output", ItemStackTemplate::decode)?,
-        })
+        BrewingRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<BrewingRecipe> {
+        let mut record = Record::default();
+        let input = record.required(tag, "input", PotionIngredient::decode);
+        let reagent = record.required(tag, "reagent", PotionIngredient::decode);
+        let output = record.required(tag, "output", ItemStackTemplate::decode_partial);
+        record.build(|| Some(BrewingRecipe { input: input?, reagent: reagent?, output: output? }))
     }
 
     pub fn get_input(&self) -> &PotionIngredient {

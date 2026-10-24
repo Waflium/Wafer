@@ -7,7 +7,7 @@ use super::placement_info::PlacementInfo;
 use super::simple_smithing_recipe::SimpleSmithingRecipe;
 use super::smithing_recipe_input::SmithingRecipeInput;
 use super::transmute_recipe::create_with_original_components;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component::values::ItemStackTemplate;
 
@@ -21,13 +21,22 @@ pub struct SmithingTransformRecipe {
 
 impl SmithingTransformRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<SmithingTransformRecipe> {
-        let mut base = SimpleSmithingRecipe::decode(tag)?;
-        let template = codec::decode_optional(tag, "template", Ingredient::decode)?;
-        let base_ingredient = codec::decode_field(tag, "base", Ingredient::decode)?;
-        let addition = codec::decode_optional(tag, "addition", Ingredient::decode)?;
-        let result = codec::decode_field(tag, "result", ItemStackTemplate::decode)?;
-        base.placement_info = PlacementInfo::create_from_optionals(&[template.clone(), Some(base_ingredient.clone()), addition.clone()]);
-        Ok(SmithingTransformRecipe { base, template, base_ingredient, addition, result })
+        SmithingTransformRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<SmithingTransformRecipe> {
+        let mut record = Record::default();
+        let base = record.absorb(SimpleSmithingRecipe::decode_partial(tag));
+        let template = record.optional(tag, "template", Ingredient::decode);
+        let base_ingredient = record.required(tag, "base", Ingredient::decode);
+        let addition = record.optional(tag, "addition", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| {
+            let mut base = base?;
+            let base_ingredient = base_ingredient?;
+            base.placement_info = PlacementInfo::create_from_optionals(&[template.clone(), Some(base_ingredient.clone()), addition.clone()]);
+            Some(SmithingTransformRecipe { base, template, base_ingredient, addition, result: result? })
+        })
     }
 
     pub fn assemble(&self, input: &SmithingRecipeInput) -> ItemStack {

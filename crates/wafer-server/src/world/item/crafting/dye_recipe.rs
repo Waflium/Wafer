@@ -7,7 +7,7 @@ use super::ingredient::Ingredient;
 use super::normal_crafting_recipe::NormalCraftingRecipe;
 use super::placement_info::PlacementInfo;
 use super::transmute_recipe::create_with_original_components;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component::{self as dc, values};
 use crate::world::item::component::values::ItemStackTemplate;
@@ -26,12 +26,21 @@ pub fn get_dye(item_stack: &ItemStack) -> DyeColor {
 
 impl DyeRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<DyeRecipe> {
-        let mut base = NormalCraftingRecipe::decode(tag)?;
-        let target = codec::decode_field(tag, "target", Ingredient::decode)?;
-        let dye = codec::decode_field(tag, "dye", Ingredient::decode)?;
-        let result = codec::decode_field(tag, "result", ItemStackTemplate::decode)?;
-        base.placement_info = PlacementInfo::create_list(vec![target.clone(), dye.clone()]);
-        Ok(DyeRecipe { base, target, dye, result })
+        DyeRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<DyeRecipe> {
+        let mut record = Record::default();
+        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let target = record.required(tag, "target", Ingredient::decode);
+        let dye = record.required(tag, "dye", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| {
+            let mut base = base?;
+            let (target, dye) = (target?, dye?);
+            base.placement_info = PlacementInfo::create_list(vec![target.clone(), dye.clone()]);
+            Some(DyeRecipe { base, target, dye, result: result? })
+        })
     }
 
     pub fn matches(&self, input: &CraftingInput) -> bool {

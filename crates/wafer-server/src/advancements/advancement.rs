@@ -8,7 +8,7 @@ use super::display_info::DisplayInfo;
 use super::triggers::criterion::Criterion;
 use crate::network::chat::component_utils;
 use crate::network::chat::{Component, HoverEvent, Style};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::util::problem_reporter::{PathElement, ProblemReporter};
 use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
 
@@ -31,23 +31,31 @@ impl Advancement {
     }
 
     pub fn decode(tag: &Nbt) -> DataResult<Advancement> {
-        codec::map(tag)?;
-        let parent = codec::decode_optional(tag, "parent", codec::identifier)?;
-        let display = codec::decode_optional(tag, "display", DisplayInfo::decode)?;
-        let rewards = codec::decode_or(tag, "rewards", AdvancementRewards::default(), AdvancementRewards::decode)?;
-        let criteria = codec::decode_field(tag, "criteria", |t| codec::unbounded_map(t, |name| Ok(name.to_string()), Criterion::decode))?;
-        if criteria.is_empty() {
-            return Err("Advancement criteria cannot be empty".into());
+        Advancement::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<Advancement> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
         }
-        let requirements = match codec::decode_optional(tag, "requirements", AdvancementRequirements::decode)? {
-            Some(requirements) => requirements,
-            None => AdvancementRequirements::all_of(criteria.iter().map(|(name, _)| name.as_str())),
-        };
-        let sends_telemetry_event = codec::decode_or(tag, "sends_telemetry_event", false, codec::bool_value)?;
-        let name = display.as_ref().map(Advancement::decorate_name);
-        let advancement = Advancement { parent, display, rewards, criteria, requirements, sends_telemetry_event, name };
-        advancement.validate_codec()?;
-        Ok(advancement)
+        let mut record = Record::default();
+        let parent = record.optional(tag, "parent", |parent| DecodeResult::from(codec::identifier(parent)));
+        let display = record.optional(tag, "display", DisplayInfo::decode_partial);
+        let rewards = record.with_default(tag, "rewards", AdvancementRewards::default(), AdvancementRewards::decode_partial);
+        let criteria = record.required(tag, "criteria", |criteria| {
+            codec::base_map_partial(criteria, |name| Ok(name.to_string()), |criterion| DecodeResult::from(Criterion::decode(criterion)))
+                .validate(|criteria| if criteria.is_empty() { Err("Advancement criteria cannot be empty".into()) } else { Ok(()) })
+        });
+        let requirements = record.optional(tag, "requirements", |requirements| DecodeResult::from(AdvancementRequirements::decode(requirements)));
+        let sends_telemetry_event = record.with_default(tag, "sends_telemetry_event", false, |sends| DecodeResult::from(codec::bool_value(sends)));
+        record
+            .build(|| {
+                let criteria = criteria?;
+                let requirements = requirements.unwrap_or_else(|| AdvancementRequirements::all_of(criteria.iter().map(|(name, _)| name.as_str())));
+                let name = display.as_ref().map(Advancement::decorate_name);
+                Some(Advancement { parent, display, rewards, criteria, requirements, sends_telemetry_event, name })
+            })
+            .validate(Advancement::validate_codec)
     }
 
     fn validate_codec(&self) -> DataResult<()> {
@@ -98,5 +106,37 @@ impl Advancement {
 
     pub fn criterion(&self, name: &str) -> Option<&Criterion> {
         self.criteria.iter().find(|(criterion, _)| criterion == name).map(|(_, criterion)| criterion)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decode_error(json: &str) -> String {
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        crate::nbt::with_json_source(|| Advancement::decode(&crate::world::item::component::json_to_nbt(&value)).err().expect("a decode error"))
+    }
+
+    #[test]
+    fn a_criteria_map_without_valid_entries_is_empty() {
+        assert_eq!(
+            decode_error(r#"{"criteria":{"a":null}}"#),
+            r#"Not a JSON object: null missed input: {"a":null}; Advancement criteria cannot be empty"#
+        );
+    }
+
+    #[test]
+    fn a_failing_display_keeps_its_defaults_and_is_validated() {
+        let json = r#"{"display":{"icon":{"id":"minecraft:stone"},"title":"t","description":"d","frame":"nope"},"criteria":{"a":{"trigger":"minecraft:impossible"}}}"#;
+        assert_eq!(decode_error(json), "Unknown element name:nope; Visible advancement roots must have background");
+    }
+
+    #[test]
+    fn every_field_error_is_reported() {
+        let error = decode_error(r#"{"parent":5,"display":"x","rewards":5,"criteria":{},"requirements":"x","sends_telemetry_event":"x"}"#);
+        assert!(error.starts_with("Not a boolean: \"x\"; "), "{error}");
+        assert!(error.contains("Advancement criteria cannot be empty"), "{error}");
+        assert!(error.ends_with("Not a string: 5"), "{error}");
     }
 }

@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::crafting_input::CraftingInput;
 use super::ingredient::Ingredient;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 
 const MAX_SIZE: usize = 3;
 pub const EMPTY_SLOT: char = ' ';
@@ -51,10 +51,14 @@ fn decode_pattern(tag: &Nbt) -> DataResult<Vec<String>> {
 }
 
 fn decode_symbol(symbol: &str) -> DataResult<char> {
-    let mut chars = symbol.chars();
-    match (chars.next(), chars.next()) {
-        (Some(' '), None) => Err("Invalid key entry: ' ' is a reserved symbol.".into()),
-        (Some(c), None) => Ok(c),
+    match symbol.chars().next() {
+        Some(c) if symbol.encode_utf16().count() == 1 => {
+            if c == ' ' {
+                Err("Invalid key entry: ' ' is a reserved symbol.".into())
+            } else {
+                Ok(c)
+            }
+        }
         _ => Err(format!("Invalid key entry: '{symbol}' is an invalid symbol (must be 1 character only).")),
     }
 }
@@ -107,11 +111,14 @@ impl ShapedRecipePattern {
         ShapedRecipePattern::unpack(key, &pattern).expect("valid pattern")
     }
 
-    pub fn decode(tag: &Nbt) -> DataResult<ShapedRecipePattern> {
-        let key = codec::decode_field(tag, "key", |key| codec::unbounded_map(key, decode_symbol, Ingredient::decode))?;
-        let pattern = codec::decode_field(tag, "pattern", decode_pattern)?;
-        let pattern: Vec<Vec<char>> = pattern.iter().map(|line| line.chars().collect()).collect();
-        ShapedRecipePattern::unpack(&key, &pattern)
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<ShapedRecipePattern> {
+        let mut record = Record::default();
+        let key = record.required(tag, "key", |key| codec::strict_unbounded_map(key, decode_symbol, Ingredient::decode));
+        let pattern = record.required(tag, "pattern", decode_pattern);
+        record.build(|| Some((key?, pattern?))).flat_map(|(key, pattern)| {
+            let pattern: Vec<Vec<char>> = pattern.iter().map(|line| line.chars().collect()).collect();
+            DecodeResult::from(ShapedRecipePattern::unpack(&key, &pattern))
+        })
     }
 
     fn unpack(key: &[(char, Ingredient)], pattern: &[Vec<char>]) -> DataResult<ShapedRecipePattern> {
@@ -136,7 +143,8 @@ impl ShapedRecipePattern {
             }
         }
         if !unused_symbols.is_empty() {
-            return Err(format!("Key defines symbols that aren't used in pattern: {unused_symbols:?}"));
+            let unused: Vec<String> = unused_symbols.iter().map(char::to_string).collect();
+            return Err(format!("Key defines symbols that aren't used in pattern: {{{}}}", unused.join(", ")));
         }
         Ok(ShapedRecipePattern::new(width, height, ingredients))
     }

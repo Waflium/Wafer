@@ -9,7 +9,7 @@ use super::normal_crafting_recipe::NormalCraftingRecipe;
 use super::placement_info::PlacementInfo;
 use super::transmute_result::TransmuteResult;
 use crate::advancements::predicates::min_max_bounds::{Bounds, Ints};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component::values::ItemStackTemplate;
 
@@ -44,15 +44,22 @@ pub fn create_with_original_components_extra(target: &ItemStackTemplate, input: 
 
 impl TransmuteRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<TransmuteRecipe> {
-        let base = NormalCraftingRecipe::decode(tag)?;
-        let input = codec::decode_field(tag, "input", Ingredient::decode)?;
-        let material = codec::decode_field(tag, "material", Ingredient::decode)?;
-        let material_count = codec::decode_or(tag, "material_count", DEFAULT_MATERIAL_COUNT, decode_material_count)?;
-        let result = codec::decode_field(tag, "result", TransmuteResult::decode)?;
-        let add_material_count_to_result = codec::decode_or(tag, "add_material_count_to_result", false, codec::bool_value)?;
-        let mut recipe = TransmuteRecipe { base, input, material, material_count, result, add_material_count_to_result };
-        recipe.base.placement_info = recipe.create_placement_info();
-        Ok(recipe)
+        TransmuteRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<TransmuteRecipe> {
+        let mut record = Record::default();
+        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let input = record.required(tag, "input", Ingredient::decode);
+        let material = record.required(tag, "material", Ingredient::decode);
+        let material_count = record.with_default(tag, "material_count", DEFAULT_MATERIAL_COUNT, decode_material_count);
+        let result = record.required(tag, "result", TransmuteResult::decode_partial);
+        let add_material_count_to_result = record.with_default(tag, "add_material_count_to_result", false, codec::bool_value);
+        record.build(|| {
+            let mut recipe = TransmuteRecipe { base: base?, input: input?, material: material?, material_count, result: result?, add_material_count_to_result };
+            recipe.base.placement_info = recipe.create_placement_info();
+            Some(recipe)
+        })
     }
 
     fn compute_result_size(&self, material_count: i32) -> i32 {

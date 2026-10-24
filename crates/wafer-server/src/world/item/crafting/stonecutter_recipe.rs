@@ -22,7 +22,7 @@ impl Deref for StonecutterRecipe {
 
 impl StonecutterRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<StonecutterRecipe> {
-        Ok(StonecutterRecipe { base: SingleItemRecipe::decode(tag)? })
+        SingleItemRecipe::decode_partial(tag).map(|base| StonecutterRecipe { base }).into_result()
     }
 
     pub fn display(&self) -> Vec<RecipeDisplay> {

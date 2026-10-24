@@ -6,7 +6,7 @@ use super::display::slot_display::SlotDisplay;
 use super::ingredient::Ingredient;
 use super::normal_crafting_recipe::NormalCraftingRecipe;
 use super::placement_info::PlacementInfo;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::values::ItemStackTemplate;
@@ -20,13 +20,22 @@ pub struct ImbueRecipe {
 
 impl ImbueRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<ImbueRecipe> {
-        let mut base = NormalCraftingRecipe::decode(tag)?;
-        let source = codec::decode_field(tag, "source", Ingredient::decode)?;
-        let material = codec::decode_field(tag, "material", Ingredient::decode)?;
-        let result = codec::decode_field(tag, "result", ItemStackTemplate::decode)?;
-        let m = || material.clone();
-        base.placement_info = PlacementInfo::create_list(vec![m(), m(), m(), m(), source.clone(), m(), m(), m(), m()]);
-        Ok(ImbueRecipe { base, source, material, result })
+        ImbueRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<ImbueRecipe> {
+        let mut record = Record::default();
+        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let source = record.required(tag, "source", Ingredient::decode);
+        let material = record.required(tag, "material", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| {
+            let mut base = base?;
+            let (source, material) = (source?, material?);
+            let m = || material.clone();
+            base.placement_info = PlacementInfo::create_list(vec![m(), m(), m(), m(), source.clone(), m(), m(), m(), m()]);
+            Some(ImbueRecipe { base, source, material, result: result? })
+        })
     }
 
     pub fn matches(&self, input: &CraftingInput) -> bool {

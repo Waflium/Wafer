@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::crafting_input::CraftingInput;
 use super::ingredient::Ingredient;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component::values::ItemStackTemplate;
 use crate::world::item::component::{self as dc, DataComponentPatch};
@@ -16,12 +16,16 @@ pub struct FireworkRocketRecipe {
 
 impl FireworkRocketRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<FireworkRocketRecipe> {
-        Ok(FireworkRocketRecipe {
-            shell: codec::decode_field(tag, "shell", Ingredient::decode)?,
-            fuel: codec::decode_field(tag, "fuel", Ingredient::decode)?,
-            star: codec::decode_field(tag, "star", Ingredient::decode)?,
-            result: codec::decode_field(tag, "result", ItemStackTemplate::decode)?,
-        })
+        FireworkRocketRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<FireworkRocketRecipe> {
+        let mut record = Record::default();
+        let shell = record.required(tag, "shell", Ingredient::decode);
+        let fuel = record.required(tag, "fuel", Ingredient::decode);
+        let star = record.required(tag, "star", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| Some(FireworkRocketRecipe { shell: shell?, fuel: fuel?, star: star?, result: result? }))
     }
 
     pub fn matches(&self, input: &CraftingInput) -> bool {

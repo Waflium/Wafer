@@ -9,7 +9,7 @@ use super::loot_pool::LootPool;
 use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::container::ContainerRef;
 use crate::world::item::ItemStack;
 use super::parameters::loot_context_param_sets::{self, ContextKeySet};
@@ -68,7 +68,11 @@ impl LootTable {
     }
 
     pub fn decode_list(tag: &Nbt) -> DataResult<Vec<Holder<LootTable>>> {
-        codec::compact_list_of(tag, LootTable::decode_holder)
+        LootTable::decode_holder_set(tag).into_result()
+    }
+
+    pub fn decode_holder_set(tag: &Nbt) -> DecodeResult<Vec<Holder<LootTable>>> {
+        codec::holder_set_partial(tag, LootTable::REGISTRY, |element| Holder::decode_partial(element, |direct| DecodeResult::from(LootTable::decode(direct))))
     }
 
     pub fn get(key: &str) -> &'static LootTable {

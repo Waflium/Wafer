@@ -6,9 +6,11 @@ use super::ingredient::Ingredient;
 use super::placement_info::PlacementInfo;
 use super::simple_smithing_recipe::SimpleSmithingRecipe;
 use super::smithing_recipe_input::SmithingRecipeInput;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
+use crate::world::item::component::types;
+use crate::world::item::equipment::trim::trim_pattern;
 
 pub struct SmithingTrimRecipe {
     pub base: SimpleSmithingRecipe,
@@ -19,10 +21,7 @@ pub struct SmithingTrimRecipe {
 }
 
 fn decode_pattern(tag: &Nbt) -> DataResult<Nbt> {
-    match tag {
-        Nbt::String(id) => Ok(Nbt::String(codec::identifier(tag).map_err(|_| format!("Not a valid resource location: {id}"))?)),
-        other => Ok(other.clone()),
-    }
+    types::holder("minecraft:trim_pattern", trim_pattern::direct_codec()).0.decode(tag)
 }
 
 pub fn apply_trim(base_item: &ItemStack, material_item: &ItemStack, pattern: &Nbt) -> ItemStack {
@@ -39,13 +38,22 @@ pub fn apply_trim(base_item: &ItemStack, material_item: &ItemStack, pattern: &Nb
 
 impl SmithingTrimRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<SmithingTrimRecipe> {
-        let mut base = SimpleSmithingRecipe::decode(tag)?;
-        let template = codec::decode_field(tag, "template", Ingredient::decode)?;
-        let base_ingredient = codec::decode_field(tag, "base", Ingredient::decode)?;
-        let addition = codec::decode_field(tag, "addition", Ingredient::decode)?;
-        let pattern = codec::decode_field(tag, "pattern", decode_pattern)?;
-        base.placement_info = PlacementInfo::create_list(vec![template.clone(), base_ingredient.clone(), addition.clone()]);
-        Ok(SmithingTrimRecipe { base, template, base_ingredient, addition, pattern })
+        SmithingTrimRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<SmithingTrimRecipe> {
+        let mut record = Record::default();
+        let base = record.absorb(SimpleSmithingRecipe::decode_partial(tag));
+        let template = record.required(tag, "template", Ingredient::decode);
+        let base_ingredient = record.required(tag, "base", Ingredient::decode);
+        let addition = record.required(tag, "addition", Ingredient::decode);
+        let pattern = record.required(tag, "pattern", decode_pattern);
+        record.build(|| {
+            let mut base = base?;
+            let (template, base_ingredient, addition) = (template?, base_ingredient?, addition?);
+            base.placement_info = PlacementInfo::create_list(vec![template.clone(), base_ingredient.clone(), addition.clone()]);
+            Some(SmithingTrimRecipe { base, template, base_ingredient, addition, pattern: pattern? })
+        })
     }
 
     pub fn assemble(&self, input: &SmithingRecipeInput) -> ItemStack {

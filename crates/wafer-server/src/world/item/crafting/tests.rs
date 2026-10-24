@@ -49,6 +49,36 @@ fn crafts_shaped_and_shapeless_recipes() {
     assert_eq!(craft(2, &[Some(items::DIRT), None, None, None]).0, None);
 }
 
+fn decode_error(json: &str) -> String {
+    let value: serde_json::Value = serde_json::from_str(json).unwrap();
+    crate::nbt::with_json_source(|| super::recipe::Recipe::decode(&crate::world::item::component::json_to_nbt(&value)).err().expect("a decode error"))
+}
+
+#[test]
+fn recipe_fields_report_every_error_in_vanilla_order() {
+    assert_eq!(
+        decode_error(r#"{"type":"minecraft:smelting","result":{"id":"stone"}}"#),
+        r#"No key cookingtime in MapLike[{"type":"minecraft:smelting","result":{"id":"stone"}}]; No key ingredient in MapLike[{"type":"minecraft:smelting","result":{"id":"stone"}}]"#
+    );
+    assert_eq!(
+        decode_error(r#"{"type":"minecraft:crafting_shapeless","category":"nope","group":5,"ingredients":["minecraft:stone"],"result":{"id":"stone"}}"#),
+        "Not a string: 5; Unknown element name:nope"
+    );
+}
+
+#[test]
+fn list_and_item_errors_use_vanilla_wording() {
+    assert_eq!(decode_error(r#"{"type":"minecraft:crafting_shapeless","ingredients":[null],"result":{"id":"stone"}}"#), "List is too short: 0, expected range [1-9]");
+    assert_eq!(
+        decode_error(r#"{"type":"minecraft:crafting_shapeless","ingredients":["minecraft:stone"],"result":{"id":"nope"}}"#),
+        r#"Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: minecraft:nope; Second: Not a string: {"id":"nope"}"#
+    );
+    assert_eq!(
+        decode_error(r#"{"type":"minecraft:crafting_shaped","pattern":["a"],"key":{"a":"minecraft:stone","b":"minecraft:stone","c":"minecraft:stone"},"result":{"id":"stone"}}"#),
+        "Key defines symbols that aren't used in pattern: {b, c}"
+    );
+}
+
 #[test]
 fn crafts_special_recipes() {
     let (id, helmet) = craft(2, &[Some(items::LEATHER_HELMET), Some(items::RED_DYE), None, None]);

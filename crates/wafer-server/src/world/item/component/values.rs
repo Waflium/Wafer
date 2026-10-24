@@ -3,12 +3,22 @@
 use wafer_data::{Block, ItemUseAnimation, Rarity};
 use wafer_protocol::nbt::Nbt;
 
-use super::codec::{as_f32, as_f64, as_i32, as_i64};
+use super::codec::{Codec, RangeError, as_f32, as_f64, as_i32, as_i64};
 use super::types::compound;
 use crate::commands::arguments::registry_tag;
+use crate::util::codec::{DecodeResult, Record};
 use crate::network::chat::Component;
 use crate::sounds::sound_event::SoundEvent;
 use crate::world::item::consume_effects::ConsumeEffect;
+
+pub(crate) fn decode_item(tag: &Nbt) -> Result<String, String> {
+    let id = Codec::Element("minecraft:item").decode(tag)?;
+    let id = id.as_str().unwrap_or_default();
+    if id == "minecraft:air" {
+        return Err("Item must not be minecraft:air".to_string());
+    }
+    Ok(id.to_string())
+}
 
 fn string(v: Option<&Nbt>) -> Option<String> {
     v.and_then(Nbt::as_str).map(str::to_string)
@@ -288,17 +298,27 @@ impl ItemStackTemplate {
     }
 
     pub fn decode(tag: &Nbt) -> Result<ItemStackTemplate, String> {
-        if let Nbt::String(id) = tag {
-            let item = crate::commands::arguments::parse_identifier(id).filter(|id| wafer_data::Item::by_name(id).is_some()).ok_or_else(|| format!("Unknown item: {id}"))?;
-            return Ok(ItemStackTemplate { item, count: 1, components: Nbt::Compound(Vec::new()) });
+        ItemStackTemplate::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<ItemStackTemplate> {
+        let alternative = || DecodeResult::from(decode_item(tag)).map(|item| ItemStackTemplate { item, count: 1, components: Nbt::Compound(Vec::new()) });
+        crate::util::codec::either_result(ItemStackTemplate::decode_map_partial(tag), alternative).map(|either| match either {
+            Ok(template) | Err(template) => template,
+        })
+    }
+
+    fn decode_map_partial(tag: &Nbt) -> DecodeResult<ItemStackTemplate> {
+        if let Err(error) = crate::util::codec::map(tag) {
+            return DecodeResult::error(error);
         }
-        let id = string(tag.get("id")).ok_or("No key id in MapLike")?;
-        let item = crate::commands::arguments::parse_identifier(&id).filter(|id| wafer_data::Item::by_name(id).is_some()).ok_or_else(|| format!("Unknown item: {id}"))?;
-        let count = i32_or(tag.get("count"), 1);
-        if !(1..=99).contains(&count) {
-            return Err(format!("Value {count} outside of range [1:99]"));
-        }
-        Ok(ItemStackTemplate { item, count, components: tag.get("components").cloned().unwrap_or(Nbt::Compound(Vec::new())) })
+        let mut record = Record::default();
+        let item = record.required(tag, "id", |id| DecodeResult::from(decode_item(id)));
+        let count = record.with_default(tag, "count", 1, |count| DecodeResult::from(Codec::Int(1, 99, RangeError::Within).decode(count)).map(|count| as_i32(&count)));
+        let components = record.with_default(tag, "components", Nbt::Compound(Vec::new()), |components| {
+            DecodeResult::from(super::DataComponentPatch::from_nbt(components)).map(|_| components.clone())
+        });
+        record.build(|| Some(ItemStackTemplate { item: item?, count, components }))
     }
 
     pub fn item(&self) -> wafer_data::Item {

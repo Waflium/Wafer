@@ -334,6 +334,35 @@ pub fn sized_list_partial<T>(tag: &Nbt, max_size: usize, decode: impl Fn(&Nbt) -
     DecodeResult { value: Some(elements), error: (!errors.is_empty()).then(|| errors.join("; ")) }
 }
 
+pub fn list_between_partial<T>(tag: &Nbt, min: usize, max: usize, decode: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
+    let items = match list(tag) {
+        Ok(items) => items,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let mut elements = Vec::with_capacity(items.len().min(max));
+    let mut errors: Vec<String> = Vec::new();
+    for item in &items {
+        if elements.len() >= max {
+            continue;
+        }
+        let result = decode(item);
+        if let Some(error) = result.error {
+            errors.push(error);
+        }
+        if let Some(value) = result.value {
+            elements.push(value);
+        }
+    }
+    if elements.len() < min {
+        return DecodeResult::error(format!("List is too short: {}, expected range [{min}-{max}]", elements.len()));
+    }
+    if items.len() > max {
+        return DecodeResult { value: Some(elements), error: Some(format!("List is too long: {}, expected range [{min}-{max}]", items.len())) };
+    }
+    errors.reverse();
+    DecodeResult { value: Some(elements), error: (!errors.is_empty()).then(|| errors.join("; ")) }
+}
+
 pub fn holder_set_partial<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
     let tag_error = match tag {
         Nbt::String(name) => match name.strip_prefix('#') {
@@ -403,6 +432,21 @@ pub fn to_json(tag: &Nbt) -> serde_json::Value {
 
 pub fn unbounded_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
     map(tag)?.iter().map(|(k, v)| Ok((key(k)?, value(v)?))).collect()
+}
+
+pub fn strict_unbounded_map<K: std::fmt::Display, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
+    let fields = map(tag)?;
+    let mut entries = Vec::with_capacity(fields.len());
+    for i in map_entry_order(fields) {
+        let (name, element) = &fields[i];
+        match (key(name), value(element)) {
+            (Ok(key), Ok(value)) => entries.push((key, value)),
+            (Ok(key), Err(error)) => return Err(format!("Map entry '{key}' : {error}")),
+            (Err(error), Ok(_)) => return Err(error),
+            (Err(key_error), Err(value_error)) => return Err(format!("{key_error}; {value_error}")),
+        }
+    }
+    Ok(entries)
 }
 
 pub(crate) fn map_entry_order(fields: &[(String, Nbt)]) -> Vec<usize> {
@@ -481,4 +525,39 @@ pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, mut 
         }
     }
     if errors.is_empty() { Ok(entries) } else { Err(map_entry_failures(errors, failed)) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(snbt: &str) -> Nbt {
+        crate::nbt::parse_fully(snbt).expect("valid snbt")
+    }
+
+    fn int_element(tag: &Nbt) -> DecodeResult<i32> {
+        DecodeResult::from(int(tag))
+    }
+
+    #[test]
+    fn a_list_between_bounds_drops_failed_elements_and_checks_the_remaining_size() {
+        let too_short = list_between_partial(&parse("[\"a\"]"), 1, 3, int_element);
+        assert_eq!(too_short.error.as_deref(), Some("List is too short: 0, expected range [1-3]"));
+        assert!(too_short.value.is_none());
+        let too_long = list_between_partial(&parse("[1,2,3,4]"), 1, 3, int_element);
+        assert_eq!(too_long.error.as_deref(), Some("List is too long: 4, expected range [1-3]"));
+        assert_eq!(too_long.value, Some(vec![1, 2, 3]));
+        let partial = list_between_partial(&parse("[1,\"a\",2]"), 1, 3, int_element);
+        assert_eq!(partial.error.as_deref(), Some("Not a number: \"a\""));
+        assert_eq!(partial.value, Some(vec![1, 2]));
+    }
+
+    #[test]
+    fn a_strict_map_stops_at_the_first_failing_entry() {
+        let key = |name: &str| -> DataResult<String> { Ok(name.to_string()) };
+        assert_eq!(strict_unbounded_map(&parse("{a:1,b:\"x\",c:\"y\"}"), key, int).unwrap_err(), "Map entry 'b' : Not a number: \"x\"");
+        let bad_key = |name: &str| -> DataResult<String> { if name == "a" { Err("bad key".to_string()) } else { Ok(name.to_string()) } };
+        assert_eq!(strict_unbounded_map(&parse("{a:1}"), bad_key, int).unwrap_err(), "bad key");
+        assert_eq!(strict_unbounded_map(&parse("{a:1,b:2}"), key, int).unwrap(), vec![("a".to_string(), 1), ("b".to_string(), 2)]);
+    }
 }

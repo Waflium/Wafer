@@ -3,7 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use super::crafting_input::CraftingInput;
 use super::ingredient::Ingredient;
 use super::transmute_recipe::create_with_original_components;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::banner_item;
 use crate::world::item::component as dc;
@@ -20,7 +20,14 @@ pub fn banner_pattern_count(item_stack: &ItemStack) -> usize {
 
 impl BannerDuplicateRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<BannerDuplicateRecipe> {
-        Ok(BannerDuplicateRecipe { banner: codec::decode_field(tag, "banner", Ingredient::decode)?, result: codec::decode_field(tag, "result", ItemStackTemplate::decode)? })
+        BannerDuplicateRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<BannerDuplicateRecipe> {
+        let mut record = Record::default();
+        let banner = record.required(tag, "banner", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| Some(BannerDuplicateRecipe { banner: banner?, result: result? }))
     }
 
     pub fn matches(&self, input: &CraftingInput) -> bool {

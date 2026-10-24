@@ -7,7 +7,7 @@ use super::display::slot_display::SlotDisplay;
 use super::ingredient::Ingredient;
 use super::normal_crafting_recipe::NormalCraftingRecipe;
 use super::placement_info::PlacementInfo;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component::values::ItemStackTemplate;
 
@@ -19,14 +19,20 @@ pub struct ShapelessRecipe {
 
 impl ShapelessRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<ShapelessRecipe> {
-        let mut base = NormalCraftingRecipe::decode(tag)?;
-        let result = codec::decode_field(tag, "result", ItemStackTemplate::decode)?;
-        let ingredients = codec::decode_field(tag, "ingredients", |t| codec::list_of(t, Ingredient::decode))?;
-        if ingredients.is_empty() || ingredients.len() > 9 {
-            return Err(format!("List must have between 1 and 9 elements: {}", ingredients.len()));
-        }
-        base.placement_info = PlacementInfo::create_list(ingredients.clone());
-        Ok(ShapelessRecipe { base, result, ingredients })
+        ShapelessRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<ShapelessRecipe> {
+        let mut record = Record::default();
+        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        let ingredients = record.required(tag, "ingredients", |ingredients| codec::list_between_partial(ingredients, 1, 9, |element| DecodeResult::from(Ingredient::decode(element))));
+        record.build(|| {
+            let mut base = base?;
+            let ingredients = ingredients?;
+            base.placement_info = PlacementInfo::create_list(ingredients.clone());
+            Some(ShapelessRecipe { base, result: result?, ingredients })
+        })
     }
 
     pub fn matches(&self, input: &mut CraftingInput) -> bool {

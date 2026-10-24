@@ -9,7 +9,7 @@ use super::recipe_book_categories::RecipeBookCategory;
 use super::recipe_type::RecipeType;
 use super::smithing_recipe::SmithingRecipe;
 use super::stonecutter_recipe::StonecutterRecipe;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 
 pub static NOT_PLACEABLE: PlacementInfo = PlacementInfo::NOT_PLACEABLE;
 
@@ -20,7 +20,13 @@ pub struct CommonInfo {
 
 impl CommonInfo {
     pub fn decode(tag: &Nbt) -> DataResult<CommonInfo> {
-        Ok(CommonInfo { show_notification: codec::decode_or(tag, "show_notification", true, codec::bool_value)? })
+        CommonInfo::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<CommonInfo> {
+        let mut record = Record::default();
+        let show_notification = record.with_default(tag, "show_notification", true, codec::bool_value);
+        record.build(|| Some(CommonInfo { show_notification }))
     }
 }
 

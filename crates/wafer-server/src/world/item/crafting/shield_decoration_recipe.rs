@@ -4,7 +4,7 @@ use super::banner_duplicate_recipe::banner_pattern_count;
 use super::crafting_input::CraftingInput;
 use super::ingredient::Ingredient;
 use super::transmute_recipe::create_with_original_components;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::banner_item;
 use crate::world::item::component as dc;
@@ -19,11 +19,15 @@ pub struct ShieldDecorationRecipe {
 
 impl ShieldDecorationRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<ShieldDecorationRecipe> {
-        Ok(ShieldDecorationRecipe {
-            banner: codec::decode_field(tag, "banner", Ingredient::decode)?,
-            target: codec::decode_field(tag, "target", Ingredient::decode)?,
-            result: codec::decode_field(tag, "result", ItemStackTemplate::decode)?,
-        })
+        ShieldDecorationRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<ShieldDecorationRecipe> {
+        let mut record = Record::default();
+        let banner = record.required(tag, "banner", Ingredient::decode);
+        let target = record.required(tag, "target", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| Some(ShieldDecorationRecipe { banner: banner?, target: target?, result: result? }))
     }
 
     pub fn matches(&self, input: &CraftingInput) -> bool {

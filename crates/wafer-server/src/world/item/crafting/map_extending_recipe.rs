@@ -6,7 +6,7 @@ use super::shaped_recipe_pattern::ShapedRecipePattern;
 use super::transmute_recipe::create_with_original_components;
 use super::transmute_result::TransmuteResult;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::component as dc;
 use crate::world::item::component::map_post_processing::MapPostProcessing;
 use crate::world::item::{ItemStack, map_item};
@@ -23,11 +23,18 @@ fn find_filled_map(input: &CraftingInput) -> Option<&ItemStack> {
 
 impl MapExtendingRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<MapExtendingRecipe> {
-        let map = codec::decode_field(tag, "map", Ingredient::decode)?;
-        let material = codec::decode_field(tag, "material", Ingredient::decode)?;
-        let result = codec::decode_field(tag, "result", TransmuteResult::decode)?;
-        let pattern = ShapedRecipePattern::of(&[('#', material), ('x', map)], &["###", "#x#", "###"]);
-        Ok(MapExtendingRecipe { pattern, result })
+        MapExtendingRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<MapExtendingRecipe> {
+        let mut record = Record::default();
+        let map = record.required(tag, "map", Ingredient::decode);
+        let material = record.required(tag, "material", Ingredient::decode);
+        let result = record.required(tag, "result", TransmuteResult::decode_partial);
+        record.build(|| {
+            let pattern = ShapedRecipePattern::of(&[('#', material?), ('x', map?)], &["###", "#x#", "###"]);
+            Some(MapExtendingRecipe { pattern, result: result? })
+        })
     }
 
     pub fn matches(&self, input: &CraftingInput, level: &mut ServerLevel) -> bool {

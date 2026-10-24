@@ -8,7 +8,7 @@ use super::ingredient::Ingredient;
 use super::normal_crafting_recipe::NormalCraftingRecipe;
 use super::placement_info::PlacementInfo;
 use super::shaped_recipe_pattern::ShapedRecipePattern;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component::values::ItemStackTemplate;
 
@@ -20,11 +20,20 @@ pub struct ShapedRecipe {
 
 impl ShapedRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<ShapedRecipe> {
-        let mut base = NormalCraftingRecipe::decode(tag)?;
-        let pattern = ShapedRecipePattern::decode(tag)?;
-        let result = codec::decode_field(tag, "result", ItemStackTemplate::decode)?;
-        base.placement_info = PlacementInfo::create_from_optionals(pattern.ingredients());
-        Ok(ShapedRecipe { base, pattern, result })
+        ShapedRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<ShapedRecipe> {
+        let mut record = Record::default();
+        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let pattern = record.absorb(ShapedRecipePattern::decode_partial(tag));
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| {
+            let mut base = base?;
+            let pattern = pattern?;
+            base.placement_info = PlacementInfo::create_from_optionals(pattern.ingredients());
+            Some(ShapedRecipe { base, pattern, result: result? })
+        })
     }
 
     pub fn matches(&self, input: &CraftingInput) -> bool {

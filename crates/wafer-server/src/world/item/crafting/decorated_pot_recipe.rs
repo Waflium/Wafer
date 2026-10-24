@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::crafting_input::CraftingInput;
 use super::ingredient::Ingredient;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component::values::ItemStackTemplate;
 use crate::world::item::component::{self as dc, DataComponentPatch};
@@ -37,13 +37,17 @@ fn convert_to_optional(input: &ItemStack) -> Option<ItemStackTemplate> {
 
 impl DecoratedPotRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<DecoratedPotRecipe> {
-        Ok(DecoratedPotRecipe {
-            back_pattern: codec::decode_field(tag, "back", Ingredient::decode)?,
-            left_pattern: codec::decode_field(tag, "left", Ingredient::decode)?,
-            right_pattern: codec::decode_field(tag, "right", Ingredient::decode)?,
-            front_pattern: codec::decode_field(tag, "front", Ingredient::decode)?,
-            result: codec::decode_field(tag, "result", ItemStackTemplate::decode)?,
-        })
+        DecoratedPotRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<DecoratedPotRecipe> {
+        let mut record = Record::default();
+        let back_pattern = record.required(tag, "back", Ingredient::decode);
+        let left_pattern = record.required(tag, "left", Ingredient::decode);
+        let right_pattern = record.required(tag, "right", Ingredient::decode);
+        let front_pattern = record.required(tag, "front", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| Some(DecoratedPotRecipe { back_pattern: back_pattern?, left_pattern: left_pattern?, right_pattern: right_pattern?, front_pattern: front_pattern?, result: result? }))
     }
 
     pub fn matches(&self, input: &CraftingInput) -> bool {

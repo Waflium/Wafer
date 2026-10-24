@@ -3,7 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use super::crafting_input::CraftingInput;
 use super::dye_recipe::get_dye;
 use super::ingredient::Ingredient;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::item::component::values::ItemStackTemplate;
@@ -35,14 +35,18 @@ pub fn explosion(shape: &str, colors: Vec<i32>, fade_colors: Vec<i32>, has_trail
 
 impl FireworkStarRecipe {
     pub fn decode(tag: &Nbt) -> DataResult<FireworkStarRecipe> {
-        Ok(FireworkStarRecipe {
-            shapes: codec::decode_field(tag, "shapes", |shapes| codec::unbounded_map(shapes, decode_shape, Ingredient::decode))?,
-            trail: codec::decode_field(tag, "trail", Ingredient::decode)?,
-            twinkle: codec::decode_field(tag, "twinkle", Ingredient::decode)?,
-            fuel: codec::decode_field(tag, "fuel", Ingredient::decode)?,
-            dye: codec::decode_field(tag, "dye", Ingredient::decode)?,
-            result: codec::decode_field(tag, "result", ItemStackTemplate::decode)?,
-        })
+        FireworkStarRecipe::decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(tag: &Nbt) -> DecodeResult<FireworkStarRecipe> {
+        let mut record = Record::default();
+        let shapes = record.required(tag, "shapes", |shapes| codec::unbounded_map(shapes, decode_shape, Ingredient::decode));
+        let trail = record.required(tag, "trail", Ingredient::decode);
+        let twinkle = record.required(tag, "twinkle", Ingredient::decode);
+        let fuel = record.required(tag, "fuel", Ingredient::decode);
+        let dye = record.required(tag, "dye", Ingredient::decode);
+        let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
+        record.build(|| Some(FireworkStarRecipe { shapes: shapes?, trail: trail?, twinkle: twinkle?, fuel: fuel?, dye: dye?, result: result? }))
     }
 
     fn find_shape(&self, item_stack: &ItemStack) -> Option<&'static str> {
