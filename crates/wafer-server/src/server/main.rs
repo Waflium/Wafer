@@ -358,6 +358,7 @@ fn create_new_world_data(properties: &DedicatedServerProperties, data_configurat
         properties.difficulty,
         properties.hardcore,
         data_configuration,
+        properties.level_name.clone(),
     );
     world_data.bonus_chest = bonus_chest;
     world_data

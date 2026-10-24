@@ -139,7 +139,6 @@ fn create_level(
         level.dragon_fight = Some(crate::world::level::dimension::end::ender_dragon_fight::EnderDragonFight::load(world_dir.map(|d| d.dimension_data_folder(dimension))));
         level.dragon_fight_init(seed, wafer_core::BlockPos::ZERO);
     }
-    level.level_name = config.level_name.clone();
     level.allow_flight = config.allow_flight;
     level.set_max_chained_neighbor_updates(config.max_chained_neighbor_updates);
     level.entity_broadcast_range_percentage = config.entity_broadcast_range_percentage;
@@ -251,6 +250,9 @@ pub struct Server {
     bonus_chest: bool,
     server_brands: Vec<String>,
     was_modded: bool,
+    level_name: String,
+    allow_commands: bool,
+    singleplayer_uuid: Option<Nbt>,
     pub scheduled_events: TimerQueue,
     pub name_to_id_cache: Arc<CachedUserNameToIdResolver>,
     pub profile_resolver: Arc<players::profile_resolver::ProfileResolver>,
@@ -301,7 +303,7 @@ impl Server {
                 if config.level_type == LevelType::Flat {
                     dimensions.overworld = ChunkGenerator::Flat(FlatLevelSource::default());
                 }
-                WorldData::new_world(seed, dimensions, true, config.game_mode, config.difficulty, false, data_configuration.clone())
+                WorldData::new_world(seed, dimensions, true, config.game_mode, config.difficulty, false, data_configuration.clone(), config.level_name.clone())
             }
         };
         world_data.data_configuration = data_configuration;
@@ -325,6 +327,7 @@ impl Server {
         let generate_structures = data.generate_structures;
         let bonus_chest = data.bonus_chest;
         let (mut server_brands, was_modded) = (data.server_brands, data.was_modded);
+        let (level_name, allow_commands, singleplayer_uuid) = (data.level_name, data.allow_commands, data.singleplayer_uuid);
         if !server_brands.iter().any(|b| b == "vanilla") {
             server_brands.push("vanilla".into());
         }
@@ -332,7 +335,7 @@ impl Server {
         let spawn = (!new_world).then_some(data.spawn);
         let is_debug = data.dimensions.is_debug();
         let (seed, game_time, dimensions, mut game_type, mut difficulty, mut difficulty_locked, hardcore) =
-            (data.seed, data.game_time, data.dimensions, data.game_type, data.difficulty, data.difficulty_locked, data.hardcore);
+            (data.seed, data.game_time, data.dimensions, config.game_mode, data.difficulty, data.difficulty_locked, data.hardcore);
         let world_dimensions = dimensions.clone();
         let level_stems = crate::core::data_registries::level_stems();
         let stem = |name: &str, generator: ChunkGenerator| -> (String, ChunkGenerator) {
@@ -390,6 +393,7 @@ impl Server {
         }
         for (index, level) in levels.iter_mut().enumerate() {
             level.index = index;
+            level.level_name = level_name.clone();
         }
         let weather = Rc::new(Cell::new(weather));
         let default_game_type = Rc::new(Cell::new(game_type));
@@ -479,6 +483,9 @@ impl Server {
             bonus_chest,
             server_brands,
             was_modded,
+            level_name,
+            allow_commands,
+            singleplayer_uuid,
             scheduled_events: TimerQueue::load(world_dir.as_ref().map(WorldDir::data_folder)),
             name_to_id_cache: Arc::new(name_to_id_cache),
             profile_resolver: Arc::default(),
@@ -519,7 +526,7 @@ impl Server {
                 let pos = p.entity.position();
                 format!(
                     "ServerPlayer['{}'/{}, l='ServerLevel[{}]', x={:.2}, y={:.2}, z={:.2}]",
-                    p.profile.name, p.entity.id, self.config.level_name, pos.x, pos.y, pos.z
+                    p.profile.name, p.entity.id, self.level_name, pos.x, pos.y, pos.z
                 )
             })
             .collect();
@@ -735,7 +742,7 @@ impl Server {
         self.scoreboard.borrow_mut().store_to_save_data_if_dirty(&mut self.scoreboard_save_data);
         for level in &mut self.levels {
             if !silent {
-                info!("Saving chunks for level 'ServerLevel[{}]'/{}", self.config.level_name, level.dimension);
+                info!("Saving chunks for level 'ServerLevel[{}]'/{}", self.level_name, level.dimension);
             }
             let no_save = level.no_save && !force;
             level.save(dir, flush, no_save);
@@ -758,6 +765,9 @@ impl Server {
             was_modded: self.was_modded,
             game_rules: self.game_rules.to_nbt(),
             data_configuration: self.data_configuration.clone(),
+            level_name: self.level_name.clone(),
+            allow_commands: self.allow_commands,
+            singleplayer_uuid: self.singleplayer_uuid.clone(),
         };
         if data.save(dir).is_err() {
             error!("Failed to save level {}", dir.root.display());

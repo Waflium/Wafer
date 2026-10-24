@@ -124,7 +124,7 @@ impl MaterialSystem {
     }
 
     fn set_column(chunk: &mut ProtoChunk, x: i32, y: i32, z: i32, state: BlockState) {
-        if y >= chunk.min_y && y <= chunk.max_y() {
+        if y >= chunk.generation_min_y() && y <= chunk.generation_max_y() {
             chunk.set_block_state(x, y, z, state);
             if !state.fluid_state().is_empty() {
                 chunk.mark_pos_for_post_processing(x, y, z);
@@ -153,7 +153,7 @@ impl MaterialSystem {
         possible_biomes: Option<&[bool]>,
     ) {
         let (min_x, min_z) = (chunk.pos.min_block_x(), chunk.pos.min_block_z());
-        let (min_y, max_y) = (chunk.min_y, chunk.max_y());
+        let (min_y, max_y) = (chunk.generation_min_y(), chunk.generation_max_y());
         let max_block_y = match chunk.highest_filled_section_index() {
             Some(i) => ((chunk.min_y >> 4) + i as i32) * 16 + 15,
             None => ((chunk.min_y >> 4) - 1) * 16 + 15,
@@ -185,7 +185,7 @@ impl MaterialSystem {
                 let mut stone_above_depth = 0;
                 let mut water_height = i32::MIN;
                 let mut next_ceiling_stone_y = i32::MAX;
-                let end_y = min_y;
+                let end_y = chunk.min_y;
                 let mut y = height;
                 while y >= end_y {
                     let old = chunk.block_state(x, y, z);

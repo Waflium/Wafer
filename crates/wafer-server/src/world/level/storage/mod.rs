@@ -258,6 +258,9 @@ pub struct WorldData {
     pub was_modded: bool,
     pub game_rules: Nbt,
     pub data_configuration: WorldDataConfiguration,
+    pub level_name: String,
+    pub allow_commands: bool,
+    pub singleplayer_uuid: Option<Nbt>,
 }
 
 impl WorldData {
@@ -269,6 +272,7 @@ impl WorldData {
         difficulty: Difficulty,
         hardcore: bool,
         data_configuration: WorldDataConfiguration,
+        level_name: String,
     ) -> WorldData {
         WorldData {
             seed,
@@ -288,6 +292,9 @@ impl WorldData {
             was_modded: false,
             game_rules: Nbt::Compound(Vec::new()),
             data_configuration,
+            level_name,
+            allow_commands: false,
+            singleplayer_uuid: None,
         }
     }
 
@@ -332,11 +339,12 @@ impl WorldData {
         let dimensions = WorldDimensions::from_nbt(dimensions, seed).map_err(|e| invalid(&e))?;
         let clocks = read_saved_data_dat(&dir.data("world_clocks"), DataFixTypes::SavedDataWorldClocks)?.and_then(|c| c.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new()));
         let weather = read_saved_data_dat(&dir.data("weather"), DataFixTypes::SavedDataWeather)?.and_then(|w| w.get("data").and_then(WeatherData::from_nbt)).unwrap_or_default();
+        let game_type = GameType::by_id(level.get("GameType").and_then(Nbt::as_i64).unwrap_or(0) as i32);
         Ok(WorldData {
             seed,
             game_time: level.get("Time").and_then(Nbt::as_i64).unwrap_or(0),
             spawn,
-            game_type: GameType::by_id(level.get("GameType").and_then(Nbt::as_i64).unwrap_or(0) as i32),
+            game_type,
             difficulty: setting("difficulty").and_then(Nbt::as_str).and_then(Difficulty::by_name).unwrap_or(Difficulty::Normal),
             difficulty_locked: flag("locked"),
             hardcore: flag("hardcore"),
@@ -355,6 +363,9 @@ impl WorldData {
             was_modded: level.get("WasModded").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
             game_rules: read_saved_data_dat(&dir.data("game_rules"), DataFixTypes::SavedDataGameRules)?.and_then(|r| r.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new())),
             data_configuration: WorldDataConfiguration::parse(level),
+            level_name: level.get("LevelName").and_then(Nbt::as_str).unwrap_or("").to_string(),
+            allow_commands: level.get("allowCommands").and_then(Nbt::as_i64).map_or(game_type == GameType::Creative, |v| v != 0),
+            singleplayer_uuid: level.get("singleplayer_uuid").filter(|uuid| crate::world::entity::entity_save::decode_uuid(uuid).into_result().is_ok()).cloned(),
         })
     }
 
@@ -390,16 +401,19 @@ impl WorldData {
                     ("Name", string(VERSION_NAME)),
                 ]),
             ),
-            ("LevelName", string(&dir.root.file_name().unwrap_or_default().to_string_lossy())),
+            ("LevelName", string(&self.level_name)),
             ("initialized", Nbt::Byte(self.initialized as i8)),
             ("WasModded", Nbt::Byte(self.was_modded as i8)),
             ("DataVersion", Nbt::Int(WORLD_VERSION)),
-            ("allowCommands", Nbt::Byte(0)),
+            ("allowCommands", Nbt::Byte(self.allow_commands as i8)),
             ("DataPacks", self.data_configuration.data_packs.to_nbt()),
         ];
         if let Some(enabled_features) = self.data_configuration.encoded_enabled_features() {
             let after_version = data.iter().position(|(key, _)| *key == "version").unwrap() + 1;
             data.insert(after_version, ("enabled_features", enabled_features));
+        }
+        if let Some(singleplayer_uuid) = &self.singleplayer_uuid {
+            data.insert(1, ("singleplayer_uuid", singleplayer_uuid.clone()));
         }
         let level = compound(vec![("Data", compound(data))]);
         save_level_dat(dir, &level)

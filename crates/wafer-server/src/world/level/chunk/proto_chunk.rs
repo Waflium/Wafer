@@ -2,6 +2,7 @@ use wafer_core::ChunkPos;
 use wafer_data::{Block, BlockState, DimensionType, Fluid, blocks};
 
 use super::{Biome, Heightmap, HeightmapType, LevelChunk, LevelChunkSection};
+use crate::world::level::levelgen::below_zero_retrogen;
 use crate::world::ticks::ProtoChunkTicks;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -29,11 +30,12 @@ pub struct ProtoChunkData {
     pub block_ticks: ProtoChunkTicks<Block>,
     pub fluid_ticks: ProtoChunkTicks<Fluid>,
     pub entities: Vec<wafer_protocol::nbt::Nbt>,
+    pub below_zero_retrogen: Option<crate::world::level::levelgen::below_zero_retrogen::BelowZeroRetrogen>,
 }
 
 impl Default for ProtoChunkData {
     fn default() -> ProtoChunkData {
-        ProtoChunkData { heightmaps: [None, None], block_ticks: ProtoChunkTicks::default(), fluid_ticks: ProtoChunkTicks::default(), entities: Vec::new() }
+        ProtoChunkData { heightmaps: [None, None], block_ticks: ProtoChunkTicks::default(), fluid_ticks: ProtoChunkTicks::default(), entities: Vec::new(), below_zero_retrogen: None }
     }
 }
 
@@ -44,6 +46,7 @@ pub struct ProtoChunk {
     pub status: ChunkStatus,
     heightmaps: [Option<Heightmap>; 6],
     pub post_processing: Vec<Vec<u16>>,
+    pub upgrading: bool,
 }
 
 impl ProtoChunk {
@@ -57,7 +60,60 @@ impl ProtoChunk {
             status: ChunkStatus::Empty,
             heightmaps: Default::default(),
             post_processing: vec![Vec::new(); count],
+            upgrading: false,
         }
+    }
+
+    pub fn upgrading_from(chunk: &mut LevelChunk) -> ProtoChunk {
+        let mut heightmaps: [Option<Heightmap>; 6] = Default::default();
+        if let Some(proto) = chunk.proto.as_mut() {
+            for (i, kind) in HeightmapType::WORLDGEN.into_iter().enumerate() {
+                heightmaps[kind.id() as usize] = proto.heightmaps[i].take();
+            }
+        }
+        let mut proto = ProtoChunk {
+            pos: chunk.pos,
+            min_y: chunk.min_y(),
+            sections: std::mem::take(&mut chunk.sections),
+            status: ChunkStatus::Empty,
+            heightmaps,
+            post_processing: std::mem::take(&mut chunk.post_processing),
+            upgrading: true,
+        };
+        let missing: Vec<HeightmapType> = HeightmapType::WORLDGEN.into_iter().filter(|&kind| proto.heightmap(kind).is_none()).collect();
+        if !missing.is_empty() {
+            proto.prime_heightmaps(&missing);
+        }
+        proto
+    }
+
+    pub fn return_to(mut self, chunk: &mut LevelChunk) {
+        chunk.sections = std::mem::take(&mut self.sections);
+        chunk.post_processing = std::mem::take(&mut self.post_processing);
+        if let Some(proto) = chunk.proto.as_mut() {
+            for (i, kind) in HeightmapType::WORLDGEN.into_iter().enumerate() {
+                proto.heightmaps[i] = self.heightmaps[kind.id() as usize].take();
+            }
+        }
+        let mut missing = false;
+        for (i, kind) in HeightmapType::LIVE.into_iter().enumerate() {
+            match self.heightmaps[kind.id() as usize].take() {
+                Some(heightmap) => chunk.heightmaps[i] = heightmap,
+                None => missing = true,
+            }
+        }
+        if missing {
+            chunk.prime_heightmaps();
+        }
+        chunk.mark_unsaved();
+    }
+
+    pub fn generation_min_y(&self) -> i32 {
+        if self.upgrading { below_zero_retrogen::UPGRADE_MIN_Y } else { self.min_y }
+    }
+
+    pub fn generation_max_y(&self) -> i32 {
+        if self.upgrading { below_zero_retrogen::UPGRADE_MIN_Y + below_zero_retrogen::UPGRADE_HEIGHT - 1 } else { self.max_y() }
     }
 
     pub fn height(&self) -> i32 {

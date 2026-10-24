@@ -128,7 +128,7 @@ impl StructureHarness {
         let state = &self.state;
         self.starts.entry(pos).or_insert_with(|| {
             let mut structures = ChunkStructures::default();
-            generator.create_structures(state, pos, oracle_dimension_type(), &mut structures);
+            generator.create_structures(state, pos, oracle_dimension_type(), &mut structures, false);
             structures
         })
     }

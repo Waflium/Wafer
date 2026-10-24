@@ -237,8 +237,11 @@ pub fn write(chunk: &LevelChunk, status: ChunkStatus, block_entities: Vec<Nbt>, 
         ("LastUpdate".into(), Nbt::Long(last_update)),
         ("InhabitedTime".into(), Nbt::Long(chunk.inhabited_time)),
         ("Status".into(), Nbt::String(format!("minecraft:{}", status.get_name()))),
-        ("sections".into(), Nbt::List(sections)),
     ];
+    if let Some(retrogen) = chunk.proto.as_ref().and_then(|proto| proto.below_zero_retrogen.as_ref()) {
+        tag.push(("below_zero_retrogen".into(), retrogen.encode()));
+    }
+    tag.push(("sections".into(), Nbt::List(sections)));
     if chunk.light_correct {
         tag.push(("isLightOn".into(), Nbt::Byte(1)));
     }
@@ -385,6 +388,7 @@ pub fn read(nbt: &Nbt, dimension: &DimensionType, seed: i64) -> io::Result<ReadC
     proto.block_ticks = ProtoChunkTicks::load(block_ticks);
     proto.fluid_ticks = ProtoChunkTicks::load(fluid_ticks);
     proto.entities = nbt.get("entities").map(Nbt::as_list).unwrap_or(&[]).to_vec();
+    proto.below_zero_retrogen = nbt.get("below_zero_retrogen").and_then(crate::world::level::levelgen::below_zero_retrogen::BelowZeroRetrogen::decode);
     chunk.proto = Some(Box::new(proto));
     Ok(ReadChunk { chunk, status, block_ticks: LevelChunkTicks::default(), fluid_ticks: LevelChunkTicks::default(), light })
 }

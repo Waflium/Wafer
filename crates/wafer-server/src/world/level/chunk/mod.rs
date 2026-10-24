@@ -477,6 +477,12 @@ impl ChunkGenerator {
         }
     }
 
+    pub fn build_terrain_upgrading(&self, chunk: &mut LevelChunk, dimension: &DimensionType, beardifier: Option<std::sync::Arc<crate::world::level::levelgen::beardifier::Beardifier>>) {
+        if let ChunkGenerator::Noise(noise) = self {
+            noise.build_terrain_upgrading(chunk, dimension, beardifier);
+        }
+    }
+
     pub fn fill_biomes_from_noise(&self, chunk: &mut LevelChunk, dimension: &DimensionType) {
         match self {
             ChunkGenerator::Flat(flat) => {

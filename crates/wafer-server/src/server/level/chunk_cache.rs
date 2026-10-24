@@ -1006,11 +1006,12 @@ impl ChunkCache {
             ChunkStatus::StructureStarts if generate => match (&self.generator, &self.structure_state) {
                 (generator, Some(state)) if self.generate_structures => {
                     let (generator, state, dimension, results) = (generator.clone(), state.clone(), self.dimension, self.results.0.clone());
+                    let upgrading = self.is_upgrading(pos);
+                    let mut structures = if upgrading { self.structure_chunks.remove(&pos).unwrap_or_default() } else { ChunkStructures::default() };
                     let token = self.new_token(job);
                     self.in_flight += 1;
                     chunk_workers::execute(move || {
-                        let mut structures = ChunkStructures::default();
-                        generator.create_structures(&state, pos, dimension, &mut structures);
+                        generator.create_structures(&state, pos, dimension, &mut structures, upgrading);
                         let _ = results.send(WorkResult::StructureStarts { pos, token, structures });
                     });
                 }
@@ -1035,11 +1036,18 @@ impl ChunkCache {
             ChunkStatus::StructureReferences | ChunkStatus::Biomes | ChunkStatus::Spawn => self.complete_step(job),
             ChunkStatus::Terrain if generate => {
                 let beardifier = self.beardifier_for_structures_in_chunk(pos).map(Arc::new);
+                let upgrading = if self.is_upgrading(pos) { self.holders.get_mut(pos.pack()).unwrap().loaded.take() } else { None };
                 let token = self.new_token(job);
                 let (generator, dimension, results) = (self.generator.clone(), self.dimension, self.results.0.clone());
                 self.in_flight += 1;
                 chunk_workers::execute(move || {
-                    let chunk = generator.generate_with_beardifier(pos, dimension, beardifier);
+                    let chunk = match upgrading {
+                        Some(mut chunk) => {
+                            generator.build_terrain_upgrading(&mut chunk, dimension, beardifier);
+                            *chunk
+                        }
+                        None => generator.generate_with_beardifier(pos, dimension, beardifier),
+                    };
                     let _ = results.send(WorkResult::Generated { pos, token, chunk });
                 });
             }
@@ -1103,6 +1111,32 @@ impl ChunkCache {
                 self.fluid_ticks.register_container(pos, fluid_ticks);
                 self.complete_step(job);
             }
+        }
+    }
+
+    fn upgrading_chunk(&self, pos: ChunkPos) -> Option<&LevelChunk> {
+        if let Some(chunk) = self.terrain_chunks.get(&pos).or_else(|| self.chunks.get(&pos)) {
+            return Some(chunk);
+        }
+        self.holders.get(pos.pack()).and_then(|holder| holder.loaded.as_deref())
+    }
+
+    fn is_upgrading(&self, pos: ChunkPos) -> bool {
+        self.upgrading_chunk(pos).and_then(|chunk| chunk.proto.as_ref()).is_some_and(|proto| proto.below_zero_retrogen.is_some())
+    }
+
+    fn clear_below_zero_retrogen_on_reaching(&mut self, pos: ChunkPos, status: ChunkStatus) {
+        let chunk = match self.terrain_chunks.get_mut(&pos) {
+            Some(chunk) => Some(chunk),
+            None => match self.chunks.get_mut(&pos) {
+                Some(chunk) => Some(chunk),
+                None => self.holders.get_mut(pos.pack()).and_then(|holder| holder.loaded.as_deref_mut()),
+            },
+        };
+        if let Some(proto) = chunk.and_then(|chunk| chunk.proto.as_mut())
+            && proto.below_zero_retrogen.as_ref().is_some_and(|retrogen| status >= retrogen.target_status())
+        {
+            proto.below_zero_retrogen = None;
         }
     }
 
@@ -1199,7 +1233,11 @@ impl ChunkCache {
 
     fn generate_spawn(&mut self, center: ChunkPos) {
         let spawn_mobs = self.game_rules.get_bool(wafer_data::game_rule::SPAWN_MOBS);
-        self.with_region(center, |region, generator| generator.spawn_original_mobs(region, spawn_mobs));
+        self.with_region(center, |region, generator| {
+            if !region.is_center_upgrading() {
+                generator.spawn_original_mobs(region, spawn_mobs);
+            }
+        });
     }
 
     fn with_region<R>(&mut self, center: ChunkPos, f: impl FnOnce(&mut WorldGenRegion, &ChunkGenerator) -> R) -> R {
@@ -1327,8 +1365,12 @@ impl ChunkCache {
                     }
                 }
                 if status < ChunkStatus::Terrain {
-                    self.structure_chunks.insert(pos, chunk.structures);
+                    let mut chunk = chunk;
+                    self.structure_chunks.insert(pos, std::mem::take(&mut chunk.structures));
                     self.loaded_structure_chunks.insert(pos);
+                    if chunk.proto.as_ref().is_some_and(|proto| proto.below_zero_retrogen.is_some()) {
+                        self.holders.get_mut(pos.pack()).unwrap().loaded = Some(Box::new(chunk));
+                    }
                 } else {
                     let holder = self.holders.get_mut(pos.pack()).unwrap();
                     holder.loaded = Some(Box::new(chunk));
@@ -1383,6 +1425,13 @@ impl ChunkCache {
         if job.status != ChunkStatus::Empty && holder.persisted_status.is_some_and(|p| p < job.status) {
             holder.persisted_status = Some(job.status);
         }
+        if job.status != ChunkStatus::Empty {
+            self.clear_below_zero_retrogen_on_reaching(job.pos, job.status);
+        }
+        let Some(holder) = self.holders.get_mut(node).filter(|h| h.id == job.holder) else {
+            self.holders.futures.complete(job.work, false);
+            return;
+        };
         let index = job.status.index();
         let existing = holder.futures[index];
         let completed = match existing {

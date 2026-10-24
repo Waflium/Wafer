@@ -1,4 +1,5 @@
 use std::sync::{Arc, TryLockError};
+use crate::world::level::levelgen::below_zero_retrogen;
 
 use wafer_core::{AABB, BlockPos, ChunkPos, Vec3};
 use wafer_data::{Block, BlockState, DimensionType, Fluid, FluidState, blocks};
@@ -41,6 +42,7 @@ pub struct WorldGenRegion<'a> {
     generation: WorldGenerationContext,
     random: AlgorithmRandom,
     write_radius: i32,
+    center_upgrading: bool,
     light_engine: &'a LevelLightEngine,
     generator: &'a ChunkGenerator,
     difficulty: Difficulty,
@@ -88,6 +90,7 @@ impl<'a> WorldGenRegion<'a> {
     ) -> WorldGenRegion<'a> {
         let seed = random_state.seed;
         let random = random_state.random_factory(WORLDGEN_REGION_RANDOM).at(center.min_block_x(), 0, center.min_block_z());
+        let center_upgrading = cache[4].as_ref().and_then(|chunk| chunk.proto.as_ref()).is_some_and(|proto| proto.below_zero_retrogen.is_some());
         WorldGenRegion {
             cache,
             writable,
@@ -102,6 +105,7 @@ impl<'a> WorldGenRegion<'a> {
             generation,
             random,
             write_radius: 1,
+            center_upgrading,
             light_engine,
             generator,
             difficulty,
@@ -206,7 +210,22 @@ impl<'a> WorldGenRegion<'a> {
     }
 
     pub fn ensure_can_write(&self, pos: BlockPos) -> bool {
-        self.is_within_write_zone(pos.x >> 4, pos.z >> 4)
+        if !self.is_within_write_zone(pos.x >> 4, pos.z >> 4) {
+            return false;
+        }
+        !self.center_upgrading || (below_zero_retrogen::UPGRADE_MIN_Y..below_zero_retrogen::UPGRADE_MIN_Y + below_zero_retrogen::UPGRADE_HEIGHT).contains(&pos.y)
+    }
+
+    pub fn center_generation_bounds(&self) -> (i32, i32) {
+        if self.center_upgrading {
+            (below_zero_retrogen::UPGRADE_MIN_Y, below_zero_retrogen::UPGRADE_MIN_Y + below_zero_retrogen::UPGRADE_HEIGHT - 1)
+        } else {
+            (self.min_y, self.min_y + self.height - 1)
+        }
+    }
+
+    pub fn is_center_upgrading(&self) -> bool {
+        self.center_upgrading
     }
 
     pub fn set_block(&mut self, pos: BlockPos, state: BlockState, flags: i32) -> bool {

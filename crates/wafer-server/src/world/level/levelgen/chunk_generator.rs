@@ -18,9 +18,10 @@ use crate::world::level::biome::biome_source::BiomeSource;
 use crate::world::level::biome::the_end_biome_source::TheEndBiomeSource;
 use crate::world::level::biome::{self, MultiNoiseBiomeSource};
 use super::beardifier::Beardifier;
+use super::below_zero_retrogen::BelowZeroRetrogen;
 use crate::world::level::chunk::carving_mask::CarvingMask;
 use crate::world::level::chunk::proto_chunk::{ChunkStatus, ProtoChunk};
-use crate::world::level::chunk::{Biome, HeightmapType, LevelChunkSection};
+use crate::world::level::chunk::{Biome, HeightmapType, LevelChunk, LevelChunkSection};
 use crate::world::level::noise_column::NoiseColumn;
 
 const MAX_CACHED_BIOMES: usize = 16384;
@@ -34,6 +35,20 @@ pub struct ChunkBiomes {
 }
 
 impl ChunkBiomes {
+    pub fn from_sections(min_y: i32, sections: &[LevelChunkSection]) -> ChunkBiomes {
+        let mut quarts = vec![Biome(0); sections.len() * 64];
+        for (i, section) in sections.iter().enumerate() {
+            for x in 0..4 {
+                for y in 0..4 {
+                    for z in 0..4 {
+                        quarts[(((i * 4 + y) * 4 + x) * 4 + z) as usize] = section.biomes.get(x, y, z);
+                    }
+                }
+            }
+        }
+        ChunkBiomes { min_quart_y: quart_pos::from_block(min_y), quarts }
+    }
+
     pub fn get(&self, quart_x: i32, quart_y: i32, quart_z: i32) -> Biome {
         let max = self.min_quart_y + (self.quarts.len() / 16) as i32 - 1;
         let y = quart_y.clamp(self.min_quart_y, max) - self.min_quart_y;
@@ -249,15 +264,58 @@ impl NoiseBasedChunkGenerator {
         let mut chunk = ProtoChunk::new(pos, dimension);
         NoiseBasedChunkGenerator::fill_biomes_from_noise(&mut chunk.sections, biomes[4]);
         chunk.status = ChunkStatus::Biomes;
-        let noise = self.settings.noise.clamp_to(dimension.min_y, dimension.height as i32);
+        if self.fill_terrain(&mut chunk, biomes, beardifier) {
+            chunk.prime_heightmaps(&HeightmapType::LIVE);
+            chunk.status = ChunkStatus::Terrain;
+        }
+        chunk
+    }
+
+    pub fn build_terrain_upgrading(&self, level_chunk: &mut LevelChunk, dimension: &DimensionType, beardifier: Option<Arc<Beardifier>>) {
+        let pos = level_chunk.pos;
+        let region: Vec<Arc<ChunkBiomes>> = (0..9).map(|i| self.chunk_biomes(ChunkPos::new(pos.x + i % 3 - 1, pos.z + i / 3 - 1), dimension)).collect();
+        let mut chunk = ProtoChunk::upgrading_from(level_chunk);
+        let noise_biomes = &region[4];
+        let min_section = chunk.min_y >> 4;
+        for section_y in chunk.generation_min_y() >> 4..=chunk.generation_max_y() >> 4 {
+            let index = (section_y - min_section) as usize;
+            for x in 0..4 {
+                for y in 0..4 {
+                    for z in 0..4 {
+                        let (quart_x, quart_y, quart_z) = (quart_pos::from_block(pos.min_block_x()) + x, section_y * 4 + y, quart_pos::from_block(pos.min_block_z()) + z);
+                        let noise_biome = noise_biomes.get(quart_x, quart_y, quart_z);
+                        let biome = if BelowZeroRetrogen::is_retained_biome(noise_biome) { noise_biome } else { chunk.noise_biome(quart_x, 0, quart_z) };
+                        chunk.sections[index].biomes.set(x as usize, y as usize, z as usize, biome);
+                    }
+                }
+            }
+        }
+        chunk.status = ChunkStatus::Biomes;
+        let center = ChunkBiomes::from_sections(chunk.min_y, &chunk.sections);
+        let biomes: [&ChunkBiomes; 9] = std::array::from_fn(|i| if i == 4 { &center } else { &*region[i] });
+        self.fill_terrain(&mut chunk, biomes, beardifier);
+        if let Some(retrogen) = level_chunk.proto.as_ref().and_then(|proto| proto.below_zero_retrogen.clone()) {
+            BelowZeroRetrogen::replace_old_bedrock(&mut chunk);
+            if retrogen.has_bedrock_holes() {
+                retrogen.apply_bedrock_mask(&mut chunk);
+            }
+        }
+        chunk.prime_heightmaps(&HeightmapType::LIVE);
+        chunk.return_to(level_chunk);
+    }
+
+    fn fill_terrain(&self, chunk: &mut ProtoChunk, biomes: [&ChunkBiomes; 9], beardifier: Option<Arc<Beardifier>>) -> bool {
+        let pos = chunk.pos;
+        let generation_height = chunk.generation_max_y() - chunk.generation_min_y() + 1;
+        let noise = self.settings.noise.clamp_to(chunk.generation_min_y(), generation_height);
         if noise.height <= 0 {
-            return chunk;
+            return false;
         }
         let volume = DensityVolume::new(16, noise.height, 16, pos.min_block_x(), noise.min_y, pos.min_block_z());
         let mut ctx = SamplerContext::cached();
         ctx.beardifier = beardifier;
         let mut aquifer = self.create_aquifer(&mut ctx, &volume);
-        self.do_fill(&mut chunk, &mut ctx, &mut aquifer, &volume);
+        self.do_fill(chunk, &mut ctx, &mut aquifer, &volume);
 
         let mut possible = vec![false; wafer_data::SyncedRegistry::get("minecraft:worldgen/biome").entries.len()];
         for chunk_biomes in biomes {
@@ -273,13 +331,13 @@ impl NoiseBasedChunkGenerator {
             biomes[((cz + 1) * 3 + cx + 1) as usize].get(qx, qy, qz)
         };
         let generation = WorldGenerationContext {
-            min_gen_y: dimension.min_y.max(self.min_y()),
-            gen_depth: (dimension.height as i32).min(self.gen_depth()),
+            min_gen_y: chunk.generation_min_y().max(self.min_y()),
+            gen_depth: generation_height.min(self.gen_depth()),
             sea_level: self.sea_level(),
         };
         self.state.material_system().build_surface(
             &self.state,
-            &mut chunk,
+            chunk,
             &mut ctx,
             volume,
             &mut biome_getter,
@@ -287,10 +345,8 @@ impl NoiseBasedChunkGenerator {
             &self.settings.material_rule,
             Some(&possible),
         );
-        self.generate_carvers(&mut chunk, &mut ctx, &mut aquifer, &mut biome_getter, generation);
-        chunk.prime_heightmaps(&HeightmapType::LIVE);
-        chunk.status = ChunkStatus::Terrain;
-        chunk
+        self.generate_carvers(chunk, &mut ctx, &mut aquifer, &mut biome_getter, generation);
+        true
     }
 
     fn generate_carvers(
@@ -303,7 +359,8 @@ impl NoiseBasedChunkGenerator {
     ) {
         let pos = chunk.pos;
         let mut random = WorldgenRandom::legacy(0);
-        let max_y = generation.min_gen_y + generation.gen_depth - 1 - PROTECTED_BLOCKS_ON_TOP;
+        let protected_blocks_on_top = if chunk.upgrading { 0 } else { PROTECTED_BLOCKS_ON_TOP };
+        let max_y = generation.min_gen_y + generation.gen_depth - 1 - protected_blocks_on_top;
         let mut mask = CarvingMask::new(generation.min_gen_y + 1, max_y);
         let mut climate_ctx = SamplerContext::uncached();
         for dx in -CARVER_RANGE..=CARVER_RANGE {
