@@ -240,9 +240,10 @@ impl ServerLevel {
             vehicle_entity::set_damage(e, damage - 1.0);
         }
         self.entity_base_tick(id);
-        if self.entity(id).is_removed() {
-            return;
-        }
+        self.then_tick(move |level| level.tick_boat_end(id));
+    }
+
+    fn tick_boat_end(&mut self, id: EntityId) {
         if self.is_local_instance_authoritative(id) {
             if !self.first_passenger(id).is_some_and(|p| self.is_player(p)) {
                 self.boat_mut(id).set_paddle_state(false, false);
@@ -250,22 +251,13 @@ impl ServerLevel {
             self.float_boat(id);
             let delta = self.entity(id).delta_movement;
             self.move_entity(id, MoverType::SelfMove, delta);
-            if self.entity_ref(id).is_none_or(Entity::is_removed) {
-                return;
-            }
         } else {
             let boat = self.boat_mut(id);
             boat.entity.set_delta_movement(Vec3::ZERO);
             boat.delta_rotation = 0.0;
         }
         self.apply_effects_from_blocks(id);
-        if self.entity_ref(id).is_none_or(Entity::is_removed) {
-            return;
-        }
         self.apply_effects_from_blocks(id);
-        if self.entity_ref(id).is_none_or(Entity::is_removed) {
-            return;
-        }
         self.tick_bubble_column(id);
         for i in PADDLE_LEFT..=PADDLE_RIGHT {
             if self.get_paddle_state(id, i) {

@@ -223,9 +223,10 @@ impl ServerLevel {
 
     pub fn shulker_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if self.mob(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.shulker_tick_end(id));
+    }
+
+    fn shulker_tick_end(&mut self, id: EntityId) {
         let e = self.entity(id);
         let (block_position, attach_face) = (e.block_position(), get_attach_face(e));
         if !self.is_passenger(id) && !self.shulker_can_stay_at(id, block_position, attach_face) {

@@ -4,6 +4,7 @@ use super::abstract_minecart::{AbstractMinecart, MinecartKind};
 use crate::server::Server;
 use crate::server::command_origin::CommandOrigin;
 use crate::server::level::ServerLevel;
+use crate::server::level::tick_continuation::PendingServerWork;
 use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::entity::data::DataValue;
@@ -69,7 +70,7 @@ impl ServerLevel {
         let tick_count = self.entity(id).tick_count;
         let minecart = command_block_minecart_mut(self.minecart_mut(id));
         if state && tick_count - minecart.last_activated >= ACTIVATION_DELAY {
-            self.pending_minecart_command = Some(id);
+            self.pending_server_work = Some(PendingServerWork::MinecartCommand(id));
             self.suspend_tick(move |level| level.minecart_command_block_activated(id));
         }
     }
@@ -85,10 +86,8 @@ impl ServerLevel {
 }
 
 impl Server {
-    pub fn run_pending_minecart_command(&mut self, level: usize) {
-        if let Some(entity) = self.levels[level].pending_minecart_command.take()
-            && self.levels[level].minecart_command_block(entity).is_some()
-        {
+    pub fn run_pending_minecart_command(&mut self, level: usize, entity: EntityId) {
+        if self.levels[level].minecart_command_block(entity).is_some() {
             self.base_command_block_perform_command(CommandBlockOwner::Minecart(level, entity), CommandOrigin::MinecartCommandBlock);
         }
     }

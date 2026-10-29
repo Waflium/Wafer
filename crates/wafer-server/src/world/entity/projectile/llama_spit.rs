@@ -38,15 +38,13 @@ impl LlamaSpit {
 impl ServerLevel {
     pub fn llama_spit_tick(&mut self, id: EntityId) {
         self.projectile_base_tick(id);
-        if self.entity_ref(id).is_none_or(|e| e.is_removed()) {
-            return;
-        }
+        self.then_tick(move |level| level.llama_spit_tick_end(id));
+    }
+
+    fn llama_spit_tick_end(&mut self, id: EntityId) {
         let movement = self.entity(id).delta_movement;
         let hit_result = self.get_hit_result_on_move_vector(id, |level, entity| level.can_hit_entity(id, entity));
         self.hit_target_or_deflect_self(id, hit_result);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
         let e = self.entity(id);
         let (x, y, z) = (e.x() + movement.x, e.y() + movement.y, e.z() + movement.z);
         self.update_rotation(id);

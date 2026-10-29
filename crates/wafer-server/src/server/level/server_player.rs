@@ -803,8 +803,15 @@ impl ServerLevel {
     }
 
     pub fn server_player_do_tick(&mut self, id: EntityId) {
-        if !self.is_spectator(id) || !self.touching_unloaded_chunk(id) {
+        let ticks = !self.is_spectator(id) || !self.touching_unloaded_chunk(id);
+        if ticks {
             self.player_tick(id);
+        }
+        self.then_tick(move |level| level.server_player_do_tick_end(id, ticks));
+    }
+
+    fn server_player_do_tick_end(&mut self, id: EntityId, ticks: bool) {
+        if ticks {
             self.tick_food(id);
             self.award_stat(id, stats::PLAY_TIME, 1);
             self.award_stat(id, stats::TOTAL_WORLD_TIME, 1);

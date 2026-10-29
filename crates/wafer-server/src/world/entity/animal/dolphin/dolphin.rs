@@ -199,9 +199,10 @@ impl ServerLevel {
 
     pub fn dolphin_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if self.entity_ref(id).is_none_or(|e| e.is_removed()) {
-            return;
-        }
+        self.then_tick(move |level| level.dolphin_tick_end(id));
+    }
+
+    fn dolphin_tick_end(&mut self, id: EntityId) {
         if self.mob(id).expect("a dolphin").is_no_ai() {
             self.entity_mut(id).set_air_supply(TOTAL_AIR_SUPPLY);
             return;

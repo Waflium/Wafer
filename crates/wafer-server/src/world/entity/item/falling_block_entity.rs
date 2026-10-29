@@ -157,10 +157,11 @@ impl ServerLevel {
         let delta = self.entity(id).delta_movement;
         self.move_entity(id, MoverType::SelfMove, delta);
         self.apply_effects_from_blocks(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
         self.handle_portal(id);
+        self.then_tick(move |level| level.tick_falling_block_end(id, block));
+    }
+
+    fn tick_falling_block_end(&mut self, id: EntityId, block: wafer_data::Block) {
         let falling = self.falling_block(id);
         if !falling.entity.is_removed() || falling.force_tick_after_teleport_to_duplicate {
             let mut pos = falling.entity.block_position();

@@ -37,14 +37,13 @@ impl MinecartSpawner {
 impl ServerLevel {
     pub fn minecart_spawner_tick(&mut self, id: EntityId) {
         self.abstract_minecart_tick(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.minecart_spawner_tick_end(id));
+    }
+
+    fn minecart_spawner_tick_end(&mut self, id: EntityId) {
         let pos = self.entity(id).block_position();
         let mut spawner = std::mem::take(spawner_mut(self.minecart_mut(id)));
         spawner.server_tick(self, pos);
-        if let Some(crate::world::entity::LevelEntity::Minecart(minecart)) = self.find_entity_mut(id) {
-            *spawner_mut(minecart) = spawner;
-        }
+        *spawner_mut(self.minecart_mut(id)) = spawner;
     }
 }

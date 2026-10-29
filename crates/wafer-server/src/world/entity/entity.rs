@@ -28,6 +28,7 @@ use crate::world::level::gameevent::game_event::{self, Context};
 use crate::world::level::block;
 use crate::world::level::block::state::block_behaviour::{self, RenderShape};
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};
+use crate::server::level::tick_continuation::PendingServerWork;
 use crate::world::level::block::portal::{PendingPortalTeleport, Portal, PortalEntity};
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use super::portal_processor::PortalProcessor;
@@ -2505,6 +2506,10 @@ impl ServerLevel {
             e.boarding_cooldown -= 1;
         }
         self.handle_portal(id);
+        self.then_tick(move |level| level.entity_base_tick_end(id));
+    }
+
+    fn entity_base_tick_end(&mut self, id: EntityId) {
         if self.can_spawn_sprint_particle(id) {
             self.spawn_sprint_particle(id);
         }
@@ -3284,15 +3289,19 @@ impl ServerLevel {
         }
     }
 
-    fn remove_after_changing_dimensions(&mut self, id: EntityId) {
-        self.entity_mut(id).removal = Some(RemovalReason::ChangedDimension);
+    pub(crate) fn remove_after_changing_dimensions(&mut self, id: EntityId) {
+        self.set_removed(id, RemovalReason::ChangedDimension);
         if self.is_leashable(id) {
             self.remove_leash(id);
         }
         if self.is_living(id) {
             self.get_waypoint_manager().untrack_waypoint(self, id);
         }
-        self.remove_entity(id);
+        if let Some(mob) = self.mob_mut(id) {
+            for stack in mob.equipment.iter_mut() {
+                *stack = None;
+            }
+        }
     }
 
     pub fn set_portal_cooldown(&mut self, id: EntityId) {
@@ -3368,38 +3377,20 @@ impl ServerLevel {
         if teleport {
             self.set_portal_cooldown(id);
             if portal == Portal::EndGateway && !self.is_player(id) {
-                if let Some(transition) = crate::world::level::block::end_gateway_block::get_portal_destination_in_level(self, process.get_entry_position()) {
-                    self.teleport_same_dimension(id, transition);
+                if let Some(transition) = crate::world::level::block::end_gateway_block::get_portal_destination_in_level(self, process.get_entry_position())
+                    && self.is_allowed_to_enter_portal(self.dimension)
+                {
+                    self.teleport_in_level(id, transition);
                 }
                 return;
             }
-            let pending = self.capture_portal_teleport(id, portal, process.get_entry_position());
-            self.pending_portal_teleport = Some(pending);
+            self.pending_server_work = Some(PendingServerWork::PortalTeleport(PendingPortalTeleport { entity: id, portal, entry_position: process.get_entry_position() }));
         } else if process.has_expired() {
             self.entity_mut(id).portal_process = None;
         }
     }
 
-    fn capture_portal_teleport(&mut self, id: EntityId, portal: Portal, entry_position: BlockPos) -> PendingPortalTeleport {
-        let entity = self.portal_entity(id);
-        let destination = portal.get_destination_dimension(self.dimension);
-        let removed = entity.data.is_some() && destination.is_none_or(|destination| destination != self.dimension && self.is_allowed_to_enter_portal(destination));
-        if removed {
-            self.entity_mut(id).removal = Some(RemovalReason::ChangedDimension);
-            let from_or_to_end = self.dimension == crate::server::THE_END || destination == Some(crate::server::THE_END);
-            if from_or_to_end && let Some(LevelEntity::FallingBlock(falling)) = self.find_entity_mut(id) {
-                falling.force_tick_after_teleport_to_duplicate = true;
-            }
-        }
-        PendingPortalTeleport { entity, portal, entry_position, removed }
-    }
-
     pub fn portal_entity(&self, id: EntityId) -> PortalEntity {
-        let data = self.find_entity(id).map(|old| {
-            let mut data = Vec::new();
-            old.save_without_id(&mut data);
-            data
-        });
         let e = self.entity(id);
         PortalEntity {
             id,
@@ -3413,7 +3404,6 @@ impl ServerLevel {
             is_spectator: self.is_spectator(id),
             portal_cooldown: e.portal_cooldown,
             portal_process: e.portal_process,
-            data,
         }
     }
 }
@@ -3440,7 +3430,12 @@ impl crate::server::Server {
                 self.levels[old_level].stop_riding(id);
             }
             let old_entity = self.levels[old_level].portal_entity(id);
-            self.teleport_cross_dimension(old_level, &old_entity, transition)
+            let from_or_to_end = (self.levels[old_level].dimension == crate::server::THE_END) != (self.levels[transition.new_level].dimension == crate::server::THE_END);
+            let new_entity = self.teleport_cross_dimension(old_level, &old_entity, transition);
+            if let Some(LevelEntity::FallingBlock(falling)) = self.levels[old_level].find_entity_mut(id) {
+                falling.force_tick_after_teleport_to_duplicate = new_entity.is_some() && from_or_to_end;
+            }
+            new_entity
         } else {
             self.levels[old_level].teleport_in_level(id, transition)
         }
@@ -3460,7 +3455,12 @@ impl crate::server::Server {
             }
         }
         let mut new_entity = ServerLevel::create_entity(registry::ENTITY_TYPE[old_entity.entity_type as usize])?;
-        let saved = Nbt::Compound(old_entity.data.clone().unwrap_or_default());
+        let data = self.levels[old_level].find_entity(old_entity.id).map(|old| {
+            let mut data = Vec::new();
+            old.save_without_id(&mut data);
+            data
+        });
+        let saved = Nbt::Compound(data.unwrap_or_default());
         if let Err(e) = new_entity.load_in_level(&saved, &self.levels[transition.new_level].scoreboard) {
             panic!("{}", super::entity_save::loading_entity_report(&e));
         }
@@ -3471,6 +3471,9 @@ impl crate::server::Server {
         e.portal_process = old_entity.portal_process;
         if self.levels[old_level].entities.contains_key(&old_entity.id) {
             self.levels[old_level].remove_after_changing_dimensions(old_entity.id);
+            if self.levels[old_level].tick_continuation.root_id() != Some(old_entity.id) {
+                self.levels[old_level].remove_entity(old_entity.id);
+            }
         }
         let current = relative::PositionMoveRotation {
             position: old_entity.position,
@@ -3501,16 +3504,10 @@ impl crate::server::Server {
         Some(new_id)
     }
 
-    pub fn handle_pending_portal_teleport(&mut self, level: usize) {
-        let Some(pending) = self.levels[level].pending_portal_teleport.take() else { return };
-        let transition = pending.portal.get_portal_destination(self, level, &pending.entity, pending.entry_position);
-        let teleported = transition.is_some_and(|transition| self.teleport_to_portal_destination(level, &pending, transition));
-        if !teleported
-            && pending.removed
-            && let Some(old) = self.levels[level].entities.get_mut(&pending.entity.id)
-            && old.entity().removal == Some(RemovalReason::ChangedDimension)
-        {
-            old.entity_mut().removal = None;
+    pub fn handle_pending_portal_teleport(&mut self, level: usize, pending: PendingPortalTeleport) {
+        let entity = self.levels[level].portal_entity(pending.entity);
+        if let Some(transition) = pending.portal.get_portal_destination(self, level, &entity, pending.entry_position) {
+            self.teleport_to_portal_destination(level, pending.entity, transition);
         }
     }
 
@@ -3522,8 +3519,7 @@ impl crate::server::Server {
                 if self.levels[level].get_camera(pending.player) != pending.player {
                     self.set_camera(pending.player, None);
                 }
-                let portal_teleport = PendingPortalTeleport { entity, portal: pending.portal, entry_position: pending.pos, removed: false };
-                self.teleport_to_portal_destination(level, &portal_teleport, transition);
+                self.teleport_to_portal_destination(level, pending.player, transition);
             }
             None => {
                 let message = crate::network::chat::Component::translatable("spectator.cannot_teleport").with_color(crate::network::chat::ChatFormatting::Red);
@@ -3537,24 +3533,15 @@ impl crate::server::Server {
         }
     }
 
-    fn teleport_to_portal_destination(&mut self, level: usize, pending: &PendingPortalTeleport, transition: TeleportTransition) -> bool {
-        let id = pending.entity.id;
+    fn teleport_to_portal_destination(&mut self, level: usize, id: EntityId, transition: TeleportTransition) {
         let (from, to) = (self.levels[level].dimension, self.levels[transition.new_level].dimension);
         let mut lent = crate::server::level::lent_levels::LentLevels::lend(&mut self.levels, level);
         let current_level = lent.level();
         let allowed = current_level.is_allowed_to_enter_portal(to) && (from == to || current_level.can_teleport(id, from, to));
         drop(lent);
-        if !allowed {
-            return false;
+        if allowed {
+            self.teleport(id, transition);
         }
-        if self.has_player(id) {
-            self.server_player_teleport(id, transition);
-        } else if transition.new_level != level {
-            self.teleport_cross_dimension(level, &pending.entity, transition);
-        } else {
-            self.levels[level].teleport_same_dimension(id, transition);
-        }
-        true
     }
 }
 

@@ -6,7 +6,7 @@ use crate::world::entity::inside_block::InsideBlockEffects;
 use crate::world::level::BlockGetter;
 use crate::world::level::block;
 use crate::world::entity::EntityId;
-use crate::world::phys::hit_result::Type;
+use crate::world::phys::hit_result::{HitResult, Type};
 
 impl ServerLevel {
     pub fn throwable_projectile_tick(&mut self, id: EntityId) {
@@ -25,6 +25,10 @@ impl ServerLevel {
         self.update_rotation(id);
         self.apply_effects_from_blocks(id);
         self.projectile_base_tick(id);
+        self.then_tick(move |level| level.throwable_projectile_tick_end(id, result));
+    }
+
+    fn throwable_projectile_tick_end(&mut self, id: EntityId, result: HitResult) {
         if result.get_type() != Type::Miss && self.is_alive(id) {
             self.hit_target_or_deflect_self(id, result);
         }

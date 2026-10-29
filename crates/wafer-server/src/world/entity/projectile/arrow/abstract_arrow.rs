@@ -343,10 +343,8 @@ impl ServerLevel {
             if self.is_alive(id) {
                 self.apply_effects_from_blocks(id);
             }
-            if self.entities.contains_key(&id) {
-                let on_fire = self.entity(id).remaining_fire_ticks > 0;
-                self.entity_mut(id).set_shared_flag(crate::world::entity::flags::ON_FIRE, on_fire);
-            }
+            let on_fire = self.entity(id).remaining_fire_ticks > 0;
+            self.entity_mut(id).set_shared_flag(crate::world::entity::flags::ON_FIRE, on_fire);
             return;
         }
         self.abstract_arrow_mut(id).in_ground_time = 0;
@@ -373,9 +371,10 @@ impl ServerLevel {
             self.entity_moved(id);
             self.apply_effects_from_blocks(id);
         }
-        if !self.entities.contains_key(&id) {
-            return;
-        }
+        self.then_tick(move |level| level.abstract_arrow_tick_end(id, physics_enabled));
+    }
+
+    fn abstract_arrow_tick_end(&mut self, id: EntityId, physics_enabled: bool) {
         if !self.entity(id).is_in_water() {
             self.apply_inertia(id, self.air_drag(id));
         }
@@ -394,24 +393,41 @@ impl ServerLevel {
             self.entity_mut(id).set_pos(next_location);
             self.entity_moved(id);
             self.apply_effects_from_blocks_between(id, initial_position, next_location);
-            if self.entities.contains_key(&id) && self.entity(id).portal_process.is_some_and(|process| process.is_inside_portal_this_tick()) {
+            if self.entity(id).portal_process.is_some_and(|process| process.is_inside_portal_this_tick()) {
                 self.handle_portal(id);
             }
-            if entities_hit.is_empty() {
-                if self.is_alive(id) && !miss {
-                    self.hit_target_or_deflect_self(id, HitResult::Block { hit: block_hit_result, miss });
-                    self.entity_mut(id).needs_sync = true;
-                }
-                break;
-            } else if self.is_alive(id) && !self.entity(id).no_physics {
-                let deflection = self.hit_targets_or_deflect_self(id, &entities_hit);
-                self.entity_mut(id).needs_sync = true;
-                if self.projectile(id).get_pierce_level() > 0 && deflection == ProjectileDeflection::None {
-                    continue;
-                }
+            if self.tick_suspended() {
+                self.suspend_tick(move |level| level.step_move_and_hit_resume(id, block_hit_result, miss, entities_hit));
+                return;
+            }
+            if !self.step_move_and_hit_iteration_end(id, block_hit_result, miss, &entities_hit) {
                 break;
             }
         }
+    }
+
+    fn step_move_and_hit_resume(&mut self, id: EntityId, block_hit_result: BlockHitResult, miss: bool, entities_hit: Vec<EntityHitResult>) {
+        if self.step_move_and_hit_iteration_end(id, block_hit_result, miss, &entities_hit) {
+            self.step_move_and_hit(id, block_hit_result, miss);
+        }
+    }
+
+    fn step_move_and_hit_iteration_end(&mut self, id: EntityId, block_hit_result: BlockHitResult, miss: bool, entities_hit: &[EntityHitResult]) -> bool {
+        if entities_hit.is_empty() {
+            if self.is_alive(id) && !miss {
+                self.hit_target_or_deflect_self(id, HitResult::Block { hit: block_hit_result, miss });
+                self.entity_mut(id).needs_sync = true;
+            }
+            return false;
+        } else if self.is_alive(id) && !self.entity(id).no_physics {
+            let deflection = self.hit_targets_or_deflect_self(id, entities_hit);
+            self.entity_mut(id).needs_sync = true;
+            if self.projectile(id).get_pierce_level() > 0 && deflection == ProjectileDeflection::None {
+                return true;
+            }
+            return false;
+        }
+        true
     }
 
     fn hit_targets_or_deflect_self(&mut self, id: EntityId, entity_hit_results: &[EntityHitResult]) -> ProjectileDeflection {

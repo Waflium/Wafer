@@ -46,6 +46,10 @@ impl ServerLevel {
         self.tombstones.removed.retain(|_, (_, buried)| game_time - *buried <= TOMBSTONE_TICKS);
     }
 
+    pub(crate) fn has_own_tombstone(&self, id: EntityId) -> bool {
+        self.tombstones.removed.contains_key(&id)
+    }
+
     pub(crate) fn tombstone(&self, id: EntityId) -> Option<&LevelEntity> {
         match self.tombstones.removed.get(&id) {
             Some((entity, _)) => Some(entity),

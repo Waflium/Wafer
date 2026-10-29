@@ -60,6 +60,10 @@ impl ServerLevel {
 
     pub fn tick_lightning_bolt(&mut self, id: EntityId) {
         self.entity_base_tick(id);
+        self.then_tick(move |level| level.tick_lightning_bolt_end(id));
+    }
+
+    fn tick_lightning_bolt_end(&mut self, id: EntityId) {
         if self.lightning_bolt(id).life == START_LIFE {
             if matches!(self.difficulty, Difficulty::Normal | Difficulty::Hard) {
                 self.spawn_lightning_fire(id, 4);

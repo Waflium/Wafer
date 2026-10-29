@@ -2722,7 +2722,11 @@ impl ServerLevel {
 
     pub fn mob_tick(&mut self, id: EntityId) {
         self.living_entity_tick(id);
-        let no_controller = !self.controlling_passenger(id).is_some_and(|passenger| self.is_mob(passenger))
+        self.then_tick(move |level| level.mob_tick_end(id));
+    }
+
+    fn mob_tick_end(&mut self, id: EntityId) {
+        let no_controller =!self.controlling_passenger(id).is_some_and(|passenger| self.is_mob(passenger))
             || self.is_ravager(id) && self.controlling_passenger(id).is_some_and(|passenger| wafer_data::entity_type_tags::RAIDERS.contains(self.entity(passenger).entity_type as usize));
         let not_in_boat = !self.vehicle(id).is_some_and(|vehicle| self.is_boat(vehicle));
         if let Some(mob) = self.mob_mut(id)
@@ -2734,7 +2738,11 @@ impl ServerLevel {
 
     pub fn mob_base_tick(&mut self, id: EntityId) {
         self.living_entity_base_tick(id);
-        if self.mob(id).is_none() || !self.is_alive(id) {
+        self.then_tick(move |level| level.mob_base_tick_end(id));
+    }
+
+    fn mob_base_tick_end(&mut self, id: EntityId) {
+        if !self.is_alive(id) {
             return;
         }
         let mob = self.mob_mut(id).expect("a mob");

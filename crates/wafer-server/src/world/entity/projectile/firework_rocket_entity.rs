@@ -158,6 +158,10 @@ impl ServerLevel {
 
     pub fn firework_rocket_tick(&mut self, id: EntityId) {
         self.projectile_base_tick(id);
+        self.then_tick(move |level| level.firework_rocket_tick_end(id));
+    }
+
+    fn firework_rocket_tick_end(&mut self, id: EntityId) {
         let hit_result = if let Some(target) = self.projectile(id).firework_attached_to_target() {
             if firework(self.projectile_mut(id)).attached_to_entity.is_none() && self.entity_ref(target as EntityId).is_some() && self.is_living(target as EntityId) {
                 firework(self.projectile_mut(id)).attached_to_entity = Some(target as EntityId);

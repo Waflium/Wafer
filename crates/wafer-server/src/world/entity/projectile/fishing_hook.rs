@@ -171,9 +171,6 @@ impl ServerLevel {
         let seed = (self.entity(id).uuid as u64 as i64) ^ self.game_time;
         hook_mut(self.projectile_mut(id)).syncronized_random.set_seed(seed);
         self.projectile_base_tick(id);
-        if self.entity_ref(id).is_none_or(|e| e.is_removed()) {
-            return;
-        }
         let Some(owner) = self.fishing_hook_get_player_owner(id) else {
             self.discard(id);
             return;

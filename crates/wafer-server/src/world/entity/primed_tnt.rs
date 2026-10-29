@@ -77,13 +77,14 @@ impl ServerLevel {
 
     pub fn tick_primed_tnt(&mut self, id: EntityId) {
         self.handle_portal(id);
+        self.then_tick(move |level| level.tick_primed_tnt_end(id));
+    }
+
+    fn tick_primed_tnt_end(&mut self, id: EntityId) {
         self.apply_gravity(id);
         let delta = self.entity(id).delta_movement;
         self.move_entity(id, MoverType::SelfMove, delta);
         self.apply_effects_from_blocks(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
         let drag = self.air_drag(id) as f64;
         let e = self.entity_mut(id);
         e.set_delta_movement(e.delta_movement.scale(drag));

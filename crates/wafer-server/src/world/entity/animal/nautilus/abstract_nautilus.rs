@@ -298,9 +298,10 @@ impl ServerLevel {
 
     pub fn abstract_nautilus_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if self.mob(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.abstract_nautilus_tick_end(id));
+    }
+
+    fn abstract_nautilus_tick_end(&mut self, id: EntityId) {
         self.abstract_nautilus_apply_effects(id);
         let mob = self.mob(id).expect("an abstract nautilus");
         if is_dashing(&mob.entity) && abstract_nautilus(mob).dash_cooldown < DASH_COOLDOWN_TICKS - DASH_MINIMUM_DURATION_TICKS {

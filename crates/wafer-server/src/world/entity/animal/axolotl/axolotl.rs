@@ -311,6 +311,10 @@ impl ServerLevel {
     pub fn axolotl_base_tick(&mut self, id: EntityId) {
         let air_supply = self.entity(id).air_supply();
         self.mob_base_tick(id);
+        self.then_tick(move |level| level.axolotl_base_tick_end(id, air_supply));
+    }
+
+    fn axolotl_base_tick_end(&mut self, id: EntityId, air_supply: i32) {
         if self.mob(id).is_some_and(|mob| !mob.is_no_ai()) {
             self.axolotl_handle_air_supply(id, air_supply);
         }

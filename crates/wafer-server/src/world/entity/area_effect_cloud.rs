@@ -222,7 +222,7 @@ impl ServerLevel {
 
     pub fn tick_area_effect_cloud(&mut self, id: EntityId) {
         self.entity_tick(id);
-        self.area_effect_cloud_server_tick(id);
+        self.then_tick(move |level| level.area_effect_cloud_server_tick(id));
     }
 
     fn area_effect_cloud_server_tick(&mut self, id: EntityId) {

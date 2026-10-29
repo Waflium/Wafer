@@ -58,11 +58,13 @@ fn wind_charge(projectile: &mut Projectile) -> &mut WindCharge {
 impl ServerLevel {
     pub fn wind_charge_tick(&mut self, id: EntityId) {
         self.abstract_wind_charge_tick(id);
-        if self.as_projectile(id).is_some() {
-            let wind_charge = wind_charge(self.projectile_mut(id));
-            if wind_charge.no_deflect_ticks > 0 {
-                wind_charge.no_deflect_ticks -= 1;
-            }
+        self.then_tick(move |level| level.wind_charge_tick_end(id));
+    }
+
+    fn wind_charge_tick_end(&mut self, id: EntityId) {
+        let wind_charge = wind_charge(self.projectile_mut(id));
+        if wind_charge.no_deflect_ticks > 0 {
+            wind_charge.no_deflect_ticks -= 1;
         }
     }
 

@@ -307,9 +307,6 @@ impl ServerLevel {
 
     pub fn sulfur_cube_tick(&mut self, id: EntityId) {
         self.sulfur_cube_tick_fuse(id);
-        if self.entity_ref(id).is_none_or(|e| e.is_removed()) {
-            return;
-        }
         self.sulfur_cube_prime_when_on_powered_position(id);
         self.abstract_cube_mob_tick(id);
     }

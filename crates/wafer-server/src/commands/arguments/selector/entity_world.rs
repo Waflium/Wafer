@@ -78,11 +78,15 @@ pub trait EntityWorld {
         )
     }
 
+    fn level_of_entity_or_tombstone(&self, id: EntityId) -> Option<&ServerLevel> {
+        self.level_of_entity(id).or_else(|| self.levels().find(|level| level.has_own_tombstone(id)))
+    }
+
     fn entity_name(&self, id: EntityId) -> String {
-        let Some(level) = self.level_of_entity(id) else { return String::new() };
+        let Some(level) = self.level_of_entity_or_tombstone(id) else { return String::new() };
         match level.find_player(id) {
             Some(p) => p.profile.name.clone(),
-            None => match level.find_entity(id) {
+            None => match level.find_entity_or_tombstone(id) {
                 Some(entity) => entity.name().get_string(),
                 None => level.dragon_part_entity(id).map_or_else(String::new, |part| crate::world::entity::entity_name(part).get_string()),
             },
@@ -90,7 +94,7 @@ pub trait EntityWorld {
     }
 
     fn entity_display_name(&self, id: EntityId) -> Component {
-        match self.level_of_entity(id) {
+        match self.level_of_entity_or_tombstone(id) {
             Some(level) => level.display_name(id),
             None => Component::empty(),
         }

@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::throwable_item_projectile;
 use crate::server::Server;
+use crate::server::level::tick_continuation::PendingServerWork;
 use crate::server::level::ticket::TicketType;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::util::codec::{self, DecodeResult};
@@ -146,8 +147,8 @@ impl ServerLevel {
                             self.level_holding_mut(owner).set_portal_cooldown(owner);
                         }
                         if !same_level {
-                            self.pending_ender_pearl_teleport = Some(PendingEnderPearlTeleport { owner, teleport_pos });
-                            self.discard(id);
+                            self.pending_server_work = Some(PendingServerWork::EnderPearlTeleport(PendingEnderPearlTeleport { owner, teleport_pos }));
+                            self.suspend_tick(move |level| level.discard(id));
                             return;
                         }
                         let transition = TeleportTransition::with_relatives(self.index, teleport_pos, Vec3::ZERO, 0.0, 0.0, relative::ROTATION, PostTeleportTransition::DO_NOTHING);
@@ -158,8 +159,8 @@ impl ServerLevel {
                         self.thrown_enderpearl_play_sound(teleport_pos);
                     }
                 } else if !same_level {
-                    self.pending_ender_pearl_teleport = Some(PendingEnderPearlTeleport { owner, teleport_pos });
-                    self.discard(id);
+                    self.pending_server_work = Some(PendingServerWork::EnderPearlTeleport(PendingEnderPearlTeleport { owner, teleport_pos }));
+                    self.suspend_tick(move |level| level.discard(id));
                     return;
                 } else {
                     let (y_rot, x_rot) = (self.entity(owner).y_rot, self.entity(owner).x_rot);
@@ -206,6 +207,10 @@ impl ServerLevel {
         } else {
             self.throwable_projectile_tick(id);
         }
+        self.then_tick(move |level| level.thrown_enderpearl_tick_end(id, chunk_x, chunk_z, owner_player));
+    }
+
+    fn thrown_enderpearl_tick_end(&mut self, id: EntityId, chunk_x: i32, chunk_z: i32, owner_player: Option<EntityId>) {
         if self.is_alive(id) {
             let current_pos = BlockPos::containing_vec(self.entity(id).position());
             let pearl = thrown_enderpearl(self.projectile_mut(id));
@@ -283,8 +288,7 @@ impl Server {
         }
     }
 
-    pub fn handle_pending_ender_pearl_teleport(&mut self, level: usize) {
-        let Some(pending) = self.levels[level].pending_ender_pearl_teleport.take() else { return };
+    pub fn handle_pending_ender_pearl_teleport(&mut self, level: usize, pending: PendingEnderPearlTeleport) {
         let Some(owner_level) = self.level_of(pending.owner) else { return };
         if self.levels[owner_level].is_player(pending.owner) {
             let transition = TeleportTransition::with_relatives(level, pending.teleport_pos, Vec3::ZERO, 0.0, 0.0, relative::ROTATION, PostTeleportTransition::DO_NOTHING);

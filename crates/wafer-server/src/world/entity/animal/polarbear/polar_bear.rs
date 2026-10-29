@@ -175,7 +175,11 @@ impl ServerLevel {
 
     pub fn polar_bear_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        let Some(mob) = self.mob_mut(id) else { return };
+        self.then_tick(move |level| level.polar_bear_tick_end(id));
+    }
+
+    fn polar_bear_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob_mut(id).expect("a polar bear");
         let polar_bear = polar_bear_mut(mob);
         if polar_bear.warning_sound_ticks > 0 {
             polar_bear.warning_sound_ticks -= 1;

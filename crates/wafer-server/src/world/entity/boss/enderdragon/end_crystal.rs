@@ -62,10 +62,11 @@ impl ServerLevel {
     pub fn tick_end_crystal(&mut self, id: EntityId) {
         self.end_crystal(id).time += 1;
         self.apply_effects_from_blocks(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
         self.handle_portal(id);
+        self.then_tick(move |level| level.tick_end_crystal_end(id));
+    }
+
+    fn tick_end_crystal_end(&mut self, id: EntityId) {
         let pos = self.entity(id).block_position();
         if self.dragon_fight.is_some() && self.block_state(pos).is_air() {
             let fire = base_fire_block::get_state(self, pos);

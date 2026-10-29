@@ -447,9 +447,10 @@ impl ServerLevel {
 
     pub fn panda_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if self.mob(id).is_none_or(|mob| !matches!(mob.kind, MobKind::Panda(_))) {
-            return;
-        }
+        self.then_tick(move |level| level.panda_tick_end(id));
+    }
+
+    fn panda_tick_end(&mut self, id: EntityId) {
         if is_worried(self.entity(id)) {
             if self.is_thundering() && !self.entity(id).is_in_water() {
                 let e = self.entity_mut(id);

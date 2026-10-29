@@ -289,13 +289,11 @@ impl ServerLevel {
 
     pub fn allay_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if self.mob(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.allay_tick_end(id));
+    }
+
+    fn allay_tick_end(&mut self, id: EntityId) {
         self.vibration_ticker_tick(VibrationUser::Allay(id));
-        if self.mob(id).is_none() {
-            return;
-        }
         if self.is_panicking(id) {
             self.allay_set_dancing(id, false);
         }

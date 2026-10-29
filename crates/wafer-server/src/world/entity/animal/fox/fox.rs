@@ -638,9 +638,10 @@ impl ServerLevel {
 
     pub fn fox_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if !self.is_fox(id) {
-            return;
-        }
+        self.then_tick(move |level| level.fox_tick_end(id));
+    }
+
+    fn fox_tick_end(&mut self, id: EntityId) {
         if self.is_effective_ai(id) {
             let in_water = self.entity(id).is_in_water();
             if in_water || self.get_target(id).is_some() || self.is_thundering() {

@@ -73,9 +73,7 @@ impl ServerLevel {
     pub fn minecart_hopper_tick(&mut self, id: EntityId) {
         hopper_mut(self.minecart_mut(id)).consumed_item_this_frame = false;
         self.abstract_minecart_tick(id);
-        if self.entity_ref(id).is_some() {
-            self.minecart_hopper_try_consume_items(id);
-        }
+        self.then_tick(move |level| level.minecart_hopper_try_consume_items(id));
     }
 
     fn minecart_hopper_try_consume_items(&mut self, id: EntityId) {

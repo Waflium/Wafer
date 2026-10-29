@@ -252,9 +252,10 @@ impl ServerLevel {
 
     pub fn armadillo_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if self.mob(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.armadillo_tick_end(id));
+    }
+
+    fn armadillo_tick_end(&mut self, id: EntityId) {
         if is_scared(self.entity(id)) {
             self.clamp_head_rotation_to_body(id);
         }

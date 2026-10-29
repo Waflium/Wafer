@@ -2066,6 +2066,10 @@ impl ServerLevel {
 
     pub fn living_entity_tick(&mut self, id: EntityId) {
         self.entity_tick(id);
+        self.then_tick(move |level| level.living_entity_tick_end(id));
+    }
+
+    fn living_entity_tick_end(&mut self, id: EntityId) {
         self.updating_using_item(id);
         let arrow_count = self.get_arrow_count(id);
         if arrow_count > 0 {
@@ -2101,9 +2105,6 @@ impl ServerLevel {
         }
         if !self.entity(id).is_removed() {
             self.ai_step(id);
-        }
-        if !self.is_living(id) {
-            return;
         }
         let e = self.entity(id);
         let (xd, zd) = (e.x() - e.xo.x, e.z() - e.xo.z);
@@ -2177,6 +2178,10 @@ impl ServerLevel {
         }
         self.tick_enchantment_effects(id);
         self.entity_base_tick(id);
+        self.then_tick(move |level| level.living_entity_base_tick_end(id));
+    }
+
+    fn living_entity_base_tick_end(&mut self, id: EntityId) {
         if self.is_alive(id) {
             if self.is_in_wall(id) {
                 self.hurt_server(id, DamageSource::new(damage_types::IN_WALL), 1.0);

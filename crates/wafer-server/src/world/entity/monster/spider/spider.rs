@@ -168,10 +168,13 @@ impl Spider {
 impl ServerLevel {
     pub fn spider_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if let Some(mob) = self.mob_mut(id) {
-            let horizontal_collision = mob.entity.horizontal_collision;
-            set_climbing(&mut mob.entity, horizontal_collision);
-        }
+        self.then_tick(move |level| level.spider_tick_end(id));
+    }
+
+    fn spider_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob_mut(id).expect("a spider");
+        let horizontal_collision = mob.entity.horizontal_collision;
+        set_climbing(&mut mob.entity, horizontal_collision);
     }
 
     pub fn spider_make_stuck_in_block(&mut self, id: EntityId, state: BlockState, speed_multiplier: Vec3) {

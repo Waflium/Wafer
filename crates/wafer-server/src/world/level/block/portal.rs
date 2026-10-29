@@ -1,5 +1,4 @@
 use wafer_core::{BlockPos, Vec3};
-use wafer_protocol::nbt::Nbt;
 
 use super::{end_gateway_block, end_portal_block, nether_portal_block};
 use crate::server::Server;
@@ -89,13 +88,11 @@ pub struct PortalEntity {
     pub is_spectator: bool,
     pub portal_cooldown: i32,
     pub portal_process: Option<PortalProcessor>,
-    pub data: Option<Vec<(String, Nbt)>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct PendingPortalTeleport {
-    pub entity: PortalEntity,
+    pub entity: EntityId,
     pub portal: Portal,
     pub entry_position: BlockPos,
-    pub removed: bool,
 }

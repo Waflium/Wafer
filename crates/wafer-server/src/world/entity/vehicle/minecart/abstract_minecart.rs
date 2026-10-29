@@ -358,16 +358,16 @@ impl ServerLevel {
         self.check_below_world(id);
         self.entity_mut(id).compute_speed();
         self.handle_portal(id);
+        self.then_tick(move |level| level.abstract_minecart_behavior_tick(id));
+    }
+
+    fn abstract_minecart_behavior_tick(&mut self, id: EntityId) {
         if use_experimental_movement(self) {
             self.new_minecart_behavior_tick(id);
         } else {
             self.old_minecart_behavior_tick(id);
         }
-        if self.tick_suspended() {
-            self.suspend_tick(move |level| level.abstract_minecart_tick_end(id));
-            return;
-        }
-        self.abstract_minecart_tick_end(id);
+        self.then_tick(move |level| level.abstract_minecart_tick_end(id));
     }
 
     fn abstract_minecart_tick_end(&mut self, id: EntityId) {

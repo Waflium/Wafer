@@ -53,6 +53,10 @@ impl ServerLevel {
             }
         }
         self.living_entity_tick(id);
+        self.then_tick(move |level| level.player_tick_end(id));
+    }
+
+    fn player_tick_end(&mut self, id: EntityId) {
         let e = self.entity_mut(id);
         let nx = mth::clamp(e.x(), -2.9999999e7, 2.9999999e7);
         let nz = mth::clamp(e.z(), -2.9999999e7, 2.9999999e7);

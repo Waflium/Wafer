@@ -73,6 +73,10 @@ impl Projectile {
 impl ServerLevel {
     pub fn arrow_tick(&mut self, id: EntityId) {
         self.abstract_arrow_tick(id);
+        self.then_tick(move |level| level.arrow_tick_end(id));
+    }
+
+    fn arrow_tick_end(&mut self, id: EntityId) {
         let projectile = self.projectile(id);
         let in_ground_time = projectile.abstract_arrow().expect("an arrow").in_ground_time;
         if projectile.is_in_ground() && in_ground_time != 0 && !is_empty_potion_contents(projectile.arrow_potion_contents()) && in_ground_time >= EXPOSED_POTION_DECAY_TIME {

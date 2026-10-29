@@ -247,9 +247,7 @@ impl ServerLevel {
             self.strider_set_suffocating(id, !in_warm_blocks && !on_warm_strider);
         }
         self.mob_tick(id);
-        if self.entity_ref(id).is_some_and(|e| !e.is_removed()) {
-            self.strider_float(id);
-        }
+        self.then_tick(move |level| level.strider_float(id));
     }
 
     fn strider_is_being_tempted(&self, id: EntityId) -> bool {

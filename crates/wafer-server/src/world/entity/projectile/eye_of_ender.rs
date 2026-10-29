@@ -88,6 +88,10 @@ impl ServerLevel {
 
     pub fn tick_eye_of_ender(&mut self, id: EntityId) {
         self.entity_base_tick(id);
+        self.then_tick(move |level| level.tick_eye_of_ender_end(id));
+    }
+
+    fn tick_eye_of_ender_end(&mut self, id: EntityId) {
         let eye = self.eye_of_ender(id);
         let new_position = eye.entity.position().add_vec(eye.entity.delta_movement);
         if let Some(target) = eye.target {

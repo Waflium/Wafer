@@ -84,9 +84,10 @@ impl ServerLevel {
 
     pub fn minecart_tnt_tick(&mut self, id: EntityId) {
         self.abstract_minecart_tick(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.minecart_tnt_tick_end(id));
+    }
+
+    fn minecart_tnt_tick_end(&mut self, id: EntityId) {
         let tnt = tnt_mut(self.minecart_mut(id));
         if tnt.fuse > 0 {
             tnt.fuse -= 1;
@@ -95,7 +96,7 @@ impl ServerLevel {
             let speed_sqr = self.entity(id).delta_movement.horizontal_distance_sqr();
             self.minecart_tnt_explode(id, ignition_source, speed_sqr);
         }
-        if self.entity_ref(id).is_some_and(|e| e.horizontal_collision) {
+        if self.entity(id).horizontal_collision {
             let speed_sqr = self.entity(id).delta_movement.horizontal_distance_sqr();
             if speed_sqr >= 0.01f32 as f64 {
                 let ignition_source = self.minecart_tnt(id).ignition_source.clone();

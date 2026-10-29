@@ -99,10 +99,7 @@ fn ominous_item_spawner_mut(level: &mut ServerLevel, id: EntityId) -> &mut Omino
 impl ServerLevel {
     pub fn tick_ominous_item_spawner(&mut self, id: EntityId) {
         self.entity_tick(id);
-        if self.entity_ref(id).is_none_or(|e| e.is_removed()) {
-            return;
-        }
-        self.ominous_item_spawner_tick_server(id);
+        self.then_tick(move |level| level.ominous_item_spawner_tick_server(id));
     }
 
     fn ominous_item_spawner_tick_server(&mut self, id: EntityId) {

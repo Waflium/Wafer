@@ -657,7 +657,7 @@ impl ServerLevel {
 
     pub fn tick_connection(&mut self, id: EntityId) -> bool {
         self.tick_connection_start(id);
-        self.pending_portal_teleport = None;
+        self.drop_pending_server_work();
         self.tick_connection_end(id)
     }
 

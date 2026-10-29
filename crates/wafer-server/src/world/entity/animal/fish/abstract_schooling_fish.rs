@@ -117,9 +117,10 @@ impl ServerLevel {
 
     pub fn abstract_schooling_fish_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if self.mob(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.abstract_schooling_fish_tick_end(id));
+    }
+
+    fn abstract_schooling_fish_tick_end(&mut self, id: EntityId) {
         if self.has_followers(id) && self.random.next_int_bounded(200) == 1 {
             let area = self.entity(id).bounding_box().inflate(8.0, 8.0, 8.0);
             let neighbors = self.get_entities_of_class_same_kind(id, &area);

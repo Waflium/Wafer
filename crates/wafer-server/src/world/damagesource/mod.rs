@@ -104,7 +104,7 @@ impl ServerLevel {
     pub fn display_name(&self, id: EntityId) -> Component {
         match self.find_player(id) {
             Some(p) => self.player_display_name(&p.profile.name, p.profile.uuid),
-            None => match self.find_entity(id) {
+            None => match self.find_entity_or_tombstone(id) {
                 Some(entity) => entity.display_name(self.team_of(id).as_deref()),
                 None => self.dragon_part_entity(id).map_or_else(Component::empty, |part| {
                     crate::world::entity::entity_display_name(part, crate::world::entity::entity_name(part), self.team_of(id).as_deref())

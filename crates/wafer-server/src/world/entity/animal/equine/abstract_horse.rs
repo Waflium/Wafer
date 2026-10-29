@@ -738,7 +738,11 @@ impl ServerLevel {
 
     pub fn abstract_horse_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        let Some(mob) = self.mob_mut(id) else { return };
+        self.then_tick(move |level| level.abstract_horse_tick_end(id));
+    }
+
+    fn abstract_horse_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob_mut(id).expect("an abstract horse");
         let horse = abstract_horse_mut(mob);
         let mut close_mouth = false;
         if horse.mouth_counter > 0 {

@@ -338,6 +338,10 @@ impl Zombie {
 impl ServerLevel {
     pub fn zombie_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
+        self.then_tick(move |level| level.zombie_tick_end(id));
+    }
+
+    fn zombie_tick_end(&mut self, id: EntityId) {
         if self.mob(id).is_some_and(Zombie::converts_in_water) {
             let mob = self.mob(id).expect("a zombie");
             let conversion = Conversion {

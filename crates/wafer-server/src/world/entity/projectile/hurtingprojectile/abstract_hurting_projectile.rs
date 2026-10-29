@@ -8,7 +8,7 @@ use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind};
 use crate::world::entity::{EntityDimensions, EntityId};
 use crate::world::level::clip::ClipBlock;
 use crate::world::level::storage::tag_value_input;
-use crate::world::phys::hit_result::Type;
+use crate::world::phys::hit_result::{HitResult, Type};
 
 pub const INITAL_ACCELERATION_POWER: f64 = 0.1;
 pub const DEFLECTION_SCALE: f64 = 0.5;
@@ -80,9 +80,10 @@ impl ServerLevel {
         self.entity_moved(id);
         self.apply_effects_from_blocks(id);
         self.projectile_base_tick(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.abstract_hurting_projectile_tick_end(id, hit_result));
+    }
+
+    fn abstract_hurting_projectile_tick_end(&mut self, id: EntityId, hit_result: HitResult) {
         if self.should_burn(id) {
             self.ignite_for_seconds(id, 1.0);
         }

@@ -200,9 +200,10 @@ impl ServerLevel {
 
     pub fn shulker_bullet_tick(&mut self, id: EntityId) {
         self.projectile_base_tick(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.shulker_bullet_tick_end(id));
+    }
+
+    fn shulker_bullet_tick_end(&mut self, id: EntityId) {
         let final_target = shulker_bullet(self.projectile(id)).final_target.and_then(|target| target.get_entity(self));
         if final_target.is_none() {
             shulker_bullet_mut(self.projectile_mut(id)).final_target = None;
@@ -226,17 +227,15 @@ impl ServerLevel {
         e.set_pos(new_position);
         self.entity_moved(id);
         self.apply_effects_from_blocks(id);
-        if self.entities.contains_key(&id) && self.entity(id).portal_process.is_some_and(|process| process.is_inside_portal_this_tick()) {
+        if self.entity(id).portal_process.is_some_and(|process| process.is_inside_portal_this_tick()) {
             self.handle_portal(id);
         }
-        if self.entity_ref(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.shulker_bullet_tick_hit(id, hit_result, final_target));
+    }
+
+    fn shulker_bullet_tick_hit(&mut self, id: EntityId, hit_result: HitResult, final_target: Option<EntityId>) {
         if self.is_alive(id) && hit_result.get_type() != Type::Miss {
             self.hit_target_or_deflect_self(id, hit_result);
-        }
-        if self.entity_ref(id).is_none() {
-            return;
         }
         self.rotate_towards_movement(id, 0.5);
         let Some(final_target) = final_target else { return };

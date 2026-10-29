@@ -126,6 +126,10 @@ impl AbstractSkeleton {
 impl ServerLevel {
     pub fn abstract_skeleton_ride_tick(&mut self, id: EntityId) {
         self.entity_ride_tick(id);
+        self.then_tick(move |level| level.abstract_skeleton_ride_tick_end(id));
+    }
+
+    fn abstract_skeleton_ride_tick_end(&mut self, id: EntityId) {
         if let Some(vehicle) = self.controlled_vehicle(id).filter(|&vehicle| self.is_mob(vehicle)) {
             let y_body_rot = self.living(vehicle).y_body_rot;
             self.living_mut(id).y_body_rot = y_body_rot;

@@ -185,9 +185,10 @@ impl ServerLevel {
 
     pub fn copper_golem_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        if self.mob(id).is_none_or(|mob| mob.entity.is_removed()) {
-            return;
-        }
+        self.then_tick(move |level| level.copper_golem_tick_end(id));
+    }
+
+    fn copper_golem_tick_end(&mut self, id: EntityId) {
         let game_time = self.game_time;
         self.copper_golem_update_weathering(id, game_time);
     }

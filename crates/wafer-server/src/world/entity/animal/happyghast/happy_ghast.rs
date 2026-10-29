@@ -365,7 +365,11 @@ impl ServerLevel {
 
     pub fn happy_ghast_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        let Some(mob) = self.mob_mut(id) else { return };
+        self.then_tick(move |level| level.happy_ghast_tick_end(id));
+    }
+
+    fn happy_ghast_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob_mut(id).expect("a happy ghast");
         let ghast = happy_ghast_mut(mob);
         if ghast.leash_holder_time > 0 {
             ghast.leash_holder_time -= 1;

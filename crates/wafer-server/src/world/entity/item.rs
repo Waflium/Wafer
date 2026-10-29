@@ -116,7 +116,7 @@ impl ItemEntity {
 
 impl ServerLevel {
     fn item_entity(&mut self, id: EntityId) -> Option<&mut ItemEntity> {
-        match self.find_entity_mut(id) {
+        match self.find_entity_or_tombstone_mut(id) {
             Some(LevelEntity::Item(item)) => Some(item),
             _ => None,
         }
@@ -157,13 +157,17 @@ impl ServerLevel {
     }
 
     pub fn tick_item(&mut self, id: EntityId) {
-        let Some(item) = self.item_entity(id) else { return };
+        let item = self.item_entity(id).expect("an item entity");
         if item.item.is_empty() {
             self.discard(id);
             return;
         }
         self.entity_base_tick(id);
-        let Some(item) = self.item_entity(id) else { return };
+        self.then_tick(move |level| level.tick_item_end(id));
+    }
+
+    fn tick_item_end(&mut self, id: EntityId) {
+        let item = self.item_entity(id).expect("an item entity");
         if item.pickup_delay > 0 && item.pickup_delay != INFINITE_PICKUP_DELAY {
             item.pickup_delay -= 1;
         }
@@ -192,9 +196,6 @@ impl ServerLevel {
             let delta = e.delta_movement;
             self.move_entity(id, MoverType::SelfMove, delta);
             self.apply_effects_from_blocks(id);
-            if self.item_entity(id).is_none() {
-                return;
-            }
             let air_drag = self.air_drag(id);
             let mut ground_friction = air_drag;
             if self.entity(id).on_ground {
@@ -212,7 +213,7 @@ impl ServerLevel {
         if e.tick_count % rate == 0 && self.item_entity(id).is_some_and(|i| i.is_mergeable()) {
             self.merge_with_neighbours(id);
         }
-        let Some(item) = self.item_entity(id) else { return };
+        let item = self.item_entity(id).expect("an item entity");
         if item.age != INFINITE_LIFETIME {
             item.age += 1;
         }
@@ -222,7 +223,7 @@ impl ServerLevel {
         if e.delta_movement.subtract(old_movement).length_sqr() > 0.01 {
             e.needs_sync = true;
         }
-        let Some(item) = self.item_entity(id) else { return };
+        let item = self.item_entity(id).expect("an item entity");
         if item.age >= LIFETIME {
             self.discard(id);
         }

@@ -266,7 +266,11 @@ impl ServerLevel {
 
     pub fn camel_tick(&mut self, id: EntityId) {
         self.abstract_horse_tick(id);
-        let Some(mob) = self.mob(id) else { return };
+        self.then_tick(move |level| level.camel_tick_end(id));
+    }
+
+    fn camel_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob(id).expect("a camel");
         let e = &mob.entity;
         if is_dashing(e) && camel(mob).dash_cooldown < 50 && (e.on_ground || e.is_in_liquid() || self.is_passenger(id)) {
             self.camel_set_dashing(id, false);

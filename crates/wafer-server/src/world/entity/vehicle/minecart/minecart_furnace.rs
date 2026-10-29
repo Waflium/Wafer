@@ -82,7 +82,11 @@ impl MinecartFurnace {
 impl ServerLevel {
     pub fn minecart_furnace_tick(&mut self, id: EntityId) {
         self.abstract_minecart_tick(id);
-        let Some(crate::world::entity::LevelEntity::Minecart(minecart)) = self.find_entity_mut(id) else { return };
+        self.then_tick(move |level| level.minecart_furnace_tick_end(id));
+    }
+
+    fn minecart_furnace_tick_end(&mut self, id: EntityId) {
+        let minecart = self.minecart_mut(id);
         let furnace = furnace_mut(minecart);
         if furnace.fuel > 0 {
             furnace.fuel -= 1;

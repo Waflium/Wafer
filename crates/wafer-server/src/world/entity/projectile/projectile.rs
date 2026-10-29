@@ -283,9 +283,7 @@ impl ServerLevel {
         }
         self.check_left_owner(id);
         self.entity_tick(id);
-        if self.entities.contains_key(&id) {
-            self.projectile_mut(id).left_owner_checked = false;
-        }
+        self.then_tick(move |level| level.projectile_mut(id).left_owner_checked = false);
     }
 
     pub fn check_left_owner(&mut self, id: EntityId) {

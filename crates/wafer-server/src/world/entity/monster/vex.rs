@@ -188,7 +188,11 @@ impl ServerLevel {
     pub fn vex_tick(&mut self, id: EntityId) {
         self.entity_mut(id).no_physics = true;
         self.mob_tick(id);
-        let Some(mob) = self.mob_mut(id) else { return };
+        self.then_tick(move |level| level.vex_tick_end(id));
+    }
+
+    fn vex_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob_mut(id).expect("a vex");
         mob.entity.no_physics = false;
         mob.entity.set_no_gravity(true);
         let vex = vex_mut(mob);

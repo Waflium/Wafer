@@ -116,6 +116,10 @@ impl ServerLevel {
 
     pub fn bat_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
+        self.then_tick(move |level| level.bat_tick_end(id));
+    }
+
+    fn bat_tick_end(&mut self, id: EntityId) {
         let mob = self.mob_mut(id).expect("a bat");
         let is_resting = mob.is_resting();
         let e = &mut mob.entity;

@@ -367,6 +367,10 @@ impl ServerLevel {
 
     pub fn wolf_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
+        self.then_tick(move |level| level.wolf_tick_end(id));
+    }
+
+    fn wolf_tick_end(&mut self, id: EntityId) {
         if !self.is_alive(id) {
             return;
         }

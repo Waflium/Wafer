@@ -54,7 +54,7 @@ pub fn experience_value(max_value: i32) -> i32 {
 
 impl ServerLevel {
     fn experience_orb(&mut self, id: EntityId) -> Option<&mut ExperienceOrb> {
-        match self.find_entity_mut(id) {
+        match self.find_entity_or_tombstone_mut(id) {
             Some(LevelEntity::ExperienceOrb(orb)) => Some(orb),
             _ => None,
         }
@@ -132,9 +132,10 @@ impl ServerLevel {
 
     pub fn tick_experience_orb(&mut self, id: EntityId) {
         self.entity_base_tick(id);
-        if self.experience_orb(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.tick_experience_orb_end(id));
+    }
+
+    fn tick_experience_orb_end(&mut self, id: EntityId) {
         let colliding = !self.no_collision(&self.entity(id).bounding_box());
         if self.entity(id).is_eye_in_fluid(&fluid_tags::WATER) {
             let e = self.entity_mut(id);
@@ -154,12 +155,13 @@ impl ServerLevel {
             self.scan_for_merges(id);
         }
         self.follow_nearby_player(id);
-        let Some(orb) = self.entities[&id].as_experience_orb() else { return };
+        let orb = self.experience_orb(id).expect("ticking orb");
         if orb.following_player.is_none() && colliding {
             let e = &orb.entity;
             let bb = e.bounding_box();
             let (x, y, z) = (e.x(), (bb.min_y + bb.max_y) / 2.0, e.z());
-            if !self.no_collision(&bb.move_vec(e.delta_movement)) {
+            let moved = bb.move_vec(e.delta_movement);
+            if !self.no_collision(&moved) {
                 self.move_towards_closest_space(id, x, y, z);
                 self.entity_mut(id).needs_sync = true;
             }
@@ -168,9 +170,6 @@ impl ServerLevel {
         let fall_speed = delta.y;
         self.move_entity(id, MoverType::SelfMove, delta);
         self.apply_effects_from_blocks(id);
-        if self.experience_orb(id).is_none() {
-            return;
-        }
         let mut friction = self.air_drag(id);
         if self.entity(id).on_ground {
             friction *= self.friction_below(id);
@@ -182,7 +181,7 @@ impl ServerLevel {
             let m = e.delta_movement;
             e.set_delta_movement(Vec3::new(m.x, -fall_speed * 0.4, m.z));
         }
-        let Some(orb) = self.experience_orb(id) else { return };
+        let orb = self.experience_orb(id).expect("ticking orb");
         orb.age += 1;
         if orb.age >= LIFETIME {
             self.discard(id);

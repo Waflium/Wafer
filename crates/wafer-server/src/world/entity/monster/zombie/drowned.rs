@@ -252,9 +252,10 @@ impl ServerLevel {
 
     pub fn drowned_ride_tick(&mut self, id: EntityId) {
         self.entity_ride_tick(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
+        self.then_tick(move |level| level.drowned_ride_tick_end(id));
+    }
+
+    fn drowned_ride_tick_end(&mut self, id: EntityId) {
         if let Some(vehicle) = self.controlled_vehicle(id).filter(|&vehicle| self.is_mob(vehicle)) {
             let y_body_rot = self.living(vehicle).y_body_rot;
             self.living_mut(id).y_body_rot = y_body_rot;

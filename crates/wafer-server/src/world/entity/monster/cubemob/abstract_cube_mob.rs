@@ -291,7 +291,11 @@ impl ServerLevel {
         cube_mob.o_squish = cube_mob.squish;
         cube_mob.squish += (cube_mob.target_squish - cube_mob.squish) * 0.5;
         self.mob_tick(id);
-        let Some(mob) = self.mob_mut(id) else { return };
+        self.then_tick(move |level| level.abstract_cube_mob_tick_end(id));
+    }
+
+    fn abstract_cube_mob_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob_mut(id).expect("a cube mob");
         let on_ground = mob.entity.on_ground;
         let was_on_ground = mob.abstract_cube_mob().expect("a cube mob").was_on_ground;
         if on_ground && !was_on_ground {

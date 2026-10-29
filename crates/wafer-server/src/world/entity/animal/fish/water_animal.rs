@@ -59,6 +59,6 @@ impl ServerLevel {
     pub fn water_animal_base_tick(&mut self, id: EntityId) {
         let air_supply = self.entity(id).air_supply();
         self.mob_base_tick(id);
-        self.handle_air_supply(id, air_supply);
+        self.then_tick(move |level| level.handle_air_supply(id, air_supply));
     }
 }

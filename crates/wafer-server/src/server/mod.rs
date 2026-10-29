@@ -1638,8 +1638,8 @@ impl Server {
                 level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_start(id);
             }
             if let Some(level) = self.level_of(id) {
+                self.run_pending_server_work(level);
                 self.handle_pending_spectator_portal_use(level);
-                self.handle_pending_portal_teleport(level);
             }
             let connected = match self.level_of(id) {
                 Some(index) => level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_end(id),
@@ -1712,12 +1712,7 @@ impl Server {
         }
         level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_block_ticks(runs);
         while level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_entities() {
-            let suspended = self.levels[index].tick_continuation.is_suspended();
-            self.run_pending_minecart_command(index);
-            if !suspended {
-                self.handle_pending_portal_teleport(index);
-                self.handle_pending_ender_pearl_teleport(index);
-            }
+            self.run_pending_server_work(index);
             self.send_global_level_events();
         }
         level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_entities();

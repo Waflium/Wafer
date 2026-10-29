@@ -441,7 +441,11 @@ impl ServerLevel {
 
     pub fn bee_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        let Some(mob) = self.mob_mut(id) else { return };
+        self.then_tick(move |level| level.bee_tick_end(id));
+    }
+
+    fn bee_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob_mut(id).expect("a bee");
         let crops_grown = bee(mob).get_crops_grown_since_pollination();
         if has_nectar(&mob.entity) && crops_grown < MAX_CROPS_GROWABLE && mob.entity.random.next_float() < 0.05 {
             let mut i = 0;

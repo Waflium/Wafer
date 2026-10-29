@@ -76,6 +76,10 @@ impl ServerLevel {
 
     pub fn tick_evoker_fangs(&mut self, id: EntityId) {
         self.entity_base_tick(id);
+        self.then_tick(move |level| level.tick_evoker_fangs_end(id));
+    }
+
+    fn tick_evoker_fangs_end(&mut self, id: EntityId) {
         let fangs = self.evoker_fangs(id);
         fangs.warmup_delay_ticks -= 1;
         if fangs.warmup_delay_ticks < 0 {

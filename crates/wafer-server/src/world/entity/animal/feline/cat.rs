@@ -458,7 +458,11 @@ impl ServerLevel {
 
     pub fn cat_tick(&mut self, id: EntityId) {
         self.mob_tick(id);
-        let Some(mob) = self.mob(id) else { return };
+        self.then_tick(move |level| level.cat_tick_end(id));
+    }
+
+    fn cat_tick_end(&mut self, id: EntityId) {
+        let mob = self.mob(id).expect("a cat");
         let tempting = mob.ai.goal_selector.get_available_goals().iter().any(|goal| matches!(goal.get_goal(), Goal::CatTempt(goal) if goal.tempt_goal.is_running()));
         if tempting && !self.is_tame(id) && self.entity(id).tick_count % 100 == 0 {
             let sound = sound_event(&Cat::get_sound_set(mob).beg_for_food_sound);
