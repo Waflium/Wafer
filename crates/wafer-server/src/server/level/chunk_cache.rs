@@ -48,8 +48,6 @@ use crate::world::level::light_layer::LightLayer;
 use crate::world::level::lighting::{self, section};
 use crate::world::ticks::{LevelChunkTicks, LevelTicks};
 
-const WORLD_GEN_THREAD_NAME: &str = "Worker-Main-1";
-
 struct Job {
     pos: ChunkPos,
     holder: u64,
@@ -1295,7 +1293,7 @@ impl ChunkCache {
             region.level_data = self.region_level_data;
             region.environment_attributes = Some(&self.static_environment_attributes);
             region.scoreboard = Some(&self.scoreboard);
-            let result = crate::logging::with_thread_name(WORLD_GEN_THREAD_NAME, || f(&mut region, &generator));
+            let result = crate::logging::with_thread_name(super::chunk_workers::random_worker_name(), || f(&mut region, &generator));
             (
                 result,
                 std::mem::take(&mut region.light_tasks),

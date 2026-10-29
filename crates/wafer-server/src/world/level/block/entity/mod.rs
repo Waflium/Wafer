@@ -290,6 +290,10 @@ impl BlockEntity {
         BlockPos::new(x, y, z)
     }
 
+    pub fn to_java_string(&self) -> String {
+        format!("{}@{:x}", canonical_class_name(self.ty.name()), crate::util::java_collections::identity_hash_code())
+    }
+
     pub fn get_name_for_reporting(&self) -> String {
         format!("{} // {}", self.ty.name(), canonical_class_name(self.ty.name()))
     }

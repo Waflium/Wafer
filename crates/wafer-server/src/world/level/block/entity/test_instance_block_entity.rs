@@ -455,22 +455,23 @@ pub fn export(_structure_id: &str, feedback: &mut Vec<Component>) -> bool {
     true
 }
 
-pub fn run_test(server: &mut crate::server::Server, level: usize, pos: BlockPos, feedback: &mut Vec<Component>) {
+pub fn run_test(server: &mut crate::server::Server, level: usize, pos: BlockPos, player: crate::world::entity::EntityId) {
     use crate::gametest::framework::{game_test_info::GameTestInfo, game_test_runner, retry_options::RetryOptions, test_command};
     let Some(test) = server.levels[level].test_instance_block_entity_test_holder(pos) else {
-        feedback.push(Component::translatable_with("test_instance_block.error.no_test", vec![Arg::Int(pos.x), Arg::Int(pos.y), Arg::Int(pos.z)]).with_color(ChatFormatting::Red));
+        let message = Component::translatable_with("test_instance_block.error.no_test", vec![Arg::Int(pos.x), Arg::Int(pos.y), Arg::Int(pos.z)]).with_color(ChatFormatting::Red);
+        server.player(player).send_system_message(&message, false);
         return;
     };
     if !server.levels[level].test_instance_block_entity_place_structure(pos) {
-        feedback.push(
-            Component::translatable_with("test_instance_block.error.no_test_structure", vec![Arg::Int(pos.x), Arg::Int(pos.y), Arg::Int(pos.z)]).with_color(ChatFormatting::Red),
-        );
+        let message = Component::translatable_with("test_instance_block.error.no_test_structure", vec![Arg::Int(pos.x), Arg::Int(pos.y), Arg::Int(pos.z)]).with_color(ChatFormatting::Red);
+        server.player(player).send_system_message(&message, false);
         return;
     }
     server.levels[level].test_instance_block_entity_clear_error_markers(pos);
     test_command::stop_tests(server);
     server.game_test_ticker.forget_failed_tests();
-    feedback.push(Component::translatable_with("test_instance_block.starting", vec![Arg::String(test.0.to_string())]));
+    let message = Component::translatable_with("test_instance_block.starting", vec![Arg::String(test.0.to_string())]);
+    server.player(player).send_system_message(&message, false);
     server.game_test_ticker.reset_arena_if_idle();
     let rotation = server.levels[level].test_instance_block_entity(pos).map_or(Rotation::None, |entity| entity.data.rotation);
     let mut info = GameTestInfo::new(test, rotation, level, RetryOptions::no_retries());

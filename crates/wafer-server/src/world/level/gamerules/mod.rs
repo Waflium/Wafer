@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use wafer_data::{GameRule, GameRuleType};
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::codec::{self, DecodeResult};
 use crate::world::flag::FeatureFlagSet;
 
 #[derive(Clone)]
@@ -83,6 +84,22 @@ impl GameRules {
                 })
                 .collect(),
         )
+    }
+
+    pub fn decode_saved(data: &Nbt) -> DecodeResult<Nbt> {
+        let key = |name: &str| {
+            let id = crate::commands::arguments::parse_identifier(name).ok_or_else(|| format!("Not a valid resource location: {name}"))?;
+            GameRule::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: {id}"))
+        };
+        let value = |rule: &GameRule, tag: &Nbt| {
+            let info = rule.info();
+            match info.kind {
+                GameRuleType::Bool => codec::bool_value(tag).map(i32::from),
+                GameRuleType::Int => codec::int_range(tag, info.min, info.max),
+            }
+        };
+        let decoded = codec::dispatched_map_partial(data, key, value);
+        DecodeResult { value: decoded.value.map(|_| data.clone()), error: decoded.error }
     }
 
     pub fn load(&self, data: &Nbt) -> bool {

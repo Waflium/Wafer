@@ -19,6 +19,8 @@ pub mod hash_ops;
 pub mod inclusive_range;
 pub mod java_collections;
 pub mod java_integer;
+pub mod java_regex;
+pub mod java_simple_date_format;
 pub mod java_nio;
 pub mod java_throwable;
 pub mod java_uuid;

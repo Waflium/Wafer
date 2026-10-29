@@ -10,10 +10,33 @@ static ERROR_ALREADY_DISABLED: SimpleCommandExceptionType = SimpleCommandExcepti
 static ERROR_ALREADY_WHITELISTED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.whitelist.add.failed");
 static ERROR_NOT_WHITELISTED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.whitelist.remove.failed");
 
+const RELOAD_TAIL: [&str; 22] = [
+    "net.minecraft.server.dedicated.DedicatedPlayerList.loadWhiteList(DedicatedPlayerList.java:89)",
+    "net.minecraft.server.dedicated.DedicatedPlayerList.reloadWhiteList(DedicatedPlayerList.java:36)",
+    "net.minecraft.server.commands.WhitelistCommand.reload(WhitelistCommand.java:72)",
+    "net.minecraft.server.commands.WhitelistCommand.lambda$register$8(WhitelistCommand.java:66)",
+    "com.mojang.brigadier.context.ContextChain.runExecutable(ContextChain.java:73)",
+    "net.minecraft.commands.execution.tasks.ExecuteCommand.execute(ExecuteCommand.java:29)",
+    "net.minecraft.commands.execution.tasks.ExecuteCommand.execute(ExecuteCommand.java:13)",
+    "net.minecraft.commands.execution.UnboundEntryAction.lambda$bind$0(UnboundEntryAction.java:8)",
+    "net.minecraft.commands.execution.CommandQueueEntry.execute(CommandQueueEntry.java:8)",
+    "net.minecraft.commands.execution.ExecutionContext.runCommandQueue(ExecutionContext.java:106)",
+    "net.minecraft.commands.Commands.executeCommandInContext(Commands.java:438)",
+    "net.minecraft.commands.Commands.performCommand(Commands.java:370)",
+    "net.minecraft.commands.Commands.performPrefixedCommand(Commands.java:356)",
+    "net.minecraft.server.dedicated.DedicatedServer.handleConsoleInputs(DedicatedServer.java:412)",
+    "net.minecraft.server.dedicated.DedicatedServer.tickConnection(DedicatedServer.java:402)",
+    "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1127)",
+    "net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:980)",
+    "net.minecraft.server.dedicated.DedicatedServer.tickServer(DedicatedServer.java:278)",
+    "net.minecraft.server.MinecraftServer.processPacketsAndTick(MinecraftServer.java:1013)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:752)",
+    "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
 pub fn reload(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    if server.whitelist.load().is_err() {
-        warn!("Failed to load white-list: ");
-    }
+    server.whitelist.reload_logged("white-list", &RELOAD_TAIL);
     source.send_success(server, || Component::translatable("commands.whitelist.reloaded"), true);
     server.kick_unlisted_players();
     Ok(1)

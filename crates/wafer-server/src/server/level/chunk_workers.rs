@@ -18,6 +18,8 @@ use crate::world::ticks::SavedTick;
 
 type Job = Box<dyn FnOnce() + Send>;
 
+static IO_WORKER_COUNT: AtomicUsize = AtomicUsize::new(1);
+
 struct WorkerPool {
     jobs: Mutex<VecDeque<Job>>,
     available: Condvar,
@@ -50,6 +52,15 @@ static POOL: LazyLock<&'static WorkerPool> = LazyLock::new(|| {
     }
     pool
 });
+
+static WORKER_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+    let threads = thread::available_parallelism().map_or(1, |n| n.get()).saturating_sub(1).clamp(1, 255);
+    (1..=threads).map(|i| &*Box::leak(format!("Worker-Main-{i}").into_boxed_str())).collect()
+});
+
+pub fn random_worker_name() -> &'static str {
+    WORKER_NAMES[rand::random::<u32>() as usize % WORKER_NAMES.len()]
+}
 
 pub fn execute(job: impl FnOnce() + Send + 'static) {
     let pool = *POOL;
@@ -94,7 +105,7 @@ impl IoWorker {
         let active_chunk_writes = Arc::new(AtomicUsize::new(0));
         let active = active_chunk_writes.clone();
         thread::Builder::new()
-            .name("IO-Worker".into())
+            .name(format!("IO-Worker-{}", IO_WORKER_COUNT.fetch_add(1, Ordering::Relaxed)))
             .spawn(move || {
                 for request in incoming {
                     match request {

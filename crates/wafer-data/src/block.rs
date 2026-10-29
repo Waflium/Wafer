@@ -510,7 +510,7 @@ fn voxel(index: u16) -> &'static wafer_core::shapes::VoxelShape {
 
 impl std::fmt::Debug for BlockState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.block().name())?;
+        write!(f, "Block{{{}}}", self.block().name())?;
         let mut props = self.properties().peekable();
         if props.peek().is_some() {
             f.write_str("[")?;
@@ -548,7 +548,7 @@ mod tests {
         assert_eq!(turned.get(HORIZONTAL_FACING), Direction::East);
         assert_eq!(turned.get(HALF), Half::Top);
         assert!(!turned.get(WATERLOGGED));
-        assert_eq!(format!("{turned:?}"), "minecraft:oak_stairs[facing=east,half=top,shape=straight,waterlogged=false]");
+        assert_eq!(format!("{turned:?}"), "Block{minecraft:oak_stairs}[facing=east,half=top,shape=straight,waterlogged=false]");
         assert!(!blocks::STONE.default_state().has(SNOWY));
     }
 

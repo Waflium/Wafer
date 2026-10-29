@@ -42,7 +42,13 @@ impl ConfigEntry {
             EntryType::Prefix => Ok(Matcher::Prefix(self.pattern.clone())),
             EntryType::FileSystem => {
                 let (syntax, input) = self.pattern.split_once(':').expect("a syntax");
-                let expression = if syntax == "glob" { to_regex_pattern(input)? } else { format!("^(?:{input})$") };
+                if syntax == "regex" {
+                    let flags = if cfg!(windows) { crate::util::java_regex::WINDOWS_PATH_FLAGS } else { 0 };
+                    return crate::util::java_regex::compile(input, flags)
+                        .map(Matcher::Java)
+                        .map_err(|e| format!("java.util.regex.PatternSyntaxException: {}", e.message(LINE_SEPARATOR)));
+                }
+                let expression = to_regex_pattern(input)?;
                 let expression = if cfg!(windows) { format!("(?i){expression}") } else { expression };
                 Regex::new(&expression).map(Matcher::Regex).map_err(|e| format!("java.util.regex.PatternSyntaxException: {e}"))
             }
@@ -54,6 +60,7 @@ impl ConfigEntry {
 enum Matcher {
     Prefix(String),
     Regex(Regex),
+    Java(crate::util::java_regex::Pattern),
 }
 
 impl Matcher {
@@ -61,6 +68,7 @@ impl Matcher {
         match self {
             Matcher::Prefix(prefix) => path.starts_with(prefix.as_str()),
             Matcher::Regex(regex) => regex.is_match(path),
+            Matcher::Java(pattern) => pattern.matches(path),
         }
     }
 }

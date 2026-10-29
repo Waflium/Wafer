@@ -5,6 +5,7 @@ use wafer_data::{SyncedRegistry, TIMELINES};
 use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
 use crate::world::level::levelgen::density_function::resource_name;
 use crate::world::timeline::{AttributeTrack, AttributeTrackSampler};
@@ -299,6 +300,29 @@ impl ServerClockManager {
     pub fn to_nbt(&self) -> Nbt {
         let names = Self::registry().entries;
         Nbt::Compound(self.clocks.iter().enumerate().map(|(i, c)| (names[i].to_string(), c.to_nbt())).collect())
+    }
+
+    pub fn decode_saved(data: &Nbt) -> DecodeResult<Nbt> {
+        let key = |name: &str| {
+            let id = crate::commands::arguments::parse_identifier(name).ok_or_else(|| format!("Not a valid resource location: {name}"))?;
+            Self::id_of(&id).ok_or_else(|| format!("Failed to get element {id} from registry minecraft:world_clock"))
+        };
+        let value = |state: &Nbt| {
+            if let Err(error) = codec::map(state) {
+                return DecodeResult::error(error);
+            }
+            let mut record = Record::default();
+            let total_ticks = record.required(state, "total_ticks", codec::long);
+            record.optional(state, "partial_tick", codec::float);
+            record.optional(state, "rate", |rate| {
+                let rate = codec::float(rate)?;
+                if rate > 0.0 { Ok(rate) } else { Err(format!("Value must be positive: {}", crate::nbt::java_float_to_string(rate))) }
+            });
+            record.optional(state, "paused", codec::bool_value);
+            record.build(|| total_ticks.map(|_| ()))
+        };
+        let decoded = codec::base_map_partial(data, key, value);
+        DecodeResult { value: decoded.value.map(|_| data.clone()), error: decoded.error }
     }
 
     pub fn load(&mut self, nbt: &Nbt) {

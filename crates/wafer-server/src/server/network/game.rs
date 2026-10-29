@@ -1324,7 +1324,7 @@ impl crate::server::Server {
                 5 => {
                     self.levels[level].test_instance_block_entity_export_test(pos, &mut feedback);
                 }
-                6 => test_instance_block_entity::run_test(self, level, pos, &mut feedback),
+                6 => test_instance_block_entity::run_test(self, level, pos, id),
                 _ => {}
             }
             for message in &feedback {

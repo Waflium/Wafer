@@ -144,3 +144,29 @@ fn gson_stack_traces_match_the_vanilla_oracle() {
     let path = std::env::var("GSON_TRACE_ORACLE").expect("GSON_TRACE_ORACLE");
     assert_eq!(check_traces(&std::fs::read_to_string(path).unwrap()), 0);
 }
+
+#[test]
+fn user_list_arrays_fail_like_gson_from_json() {
+    let tail = ["net.minecraft.server.players.StoredUserList.load(StoredUserList.java:141)", "java.base/java.lang.Thread.run(Thread.java:1474)"];
+    assert!(matches!(super::from_json_array("", &tail), Ok(None)));
+    assert!(matches!(super::from_json_array("[]", &tail), Ok(Some(elements)) if elements.is_empty()));
+    let trace = super::from_json_array("[{", &tail).unwrap_err().print_stack_trace();
+    let expected = "com.google.gson.JsonSyntaxException: java.io.EOFException: End of input at line 1 column 3 path $[0].\n\
+        \tat com.google.gson.Gson.fromJson(Gson.java:1101)\n\
+        \tat com.google.gson.Gson.fromJson(Gson.java:981)\n\
+        \tat com.google.gson.Gson.fromJson(Gson.java:919)\n\
+        \tat net.minecraft.server.players.StoredUserList.load(StoredUserList.java:141)\n\
+        \tat java.base/java.lang.Thread.run(Thread.java:1474)\n\
+        Caused by: java.io.EOFException: End of input at line 1 column 3 path $[0].\n\
+        \tat com.google.gson.stream.JsonReader.nextNonWhitespace(JsonReader.java:1605)\n\
+        \tat com.google.gson.stream.JsonReader.doPeek(JsonReader.java:617)\n\
+        \tat com.google.gson.stream.JsonReader.hasNext(JsonReader.java:536)\n\
+        \tat com.google.gson.internal.bind.JsonElementTypeAdapter.read(JsonElementTypeAdapter.java:95)\n\
+        \tat com.google.gson.internal.bind.JsonElementTypeAdapter.read(JsonElementTypeAdapter.java:35)\n\
+        \tat com.google.gson.internal.bind.TypeAdapters$33$1.read(TypeAdapters.java:1060)\n\
+        \tat com.google.gson.Gson.fromJson(Gson.java:1080)\n\
+        \t... 4 more\n";
+    assert_eq!(trace, expected);
+    let trace = super::from_json_array("{\"a\":1}", &tail).unwrap_err().print_stack_trace();
+    assert!(trace.starts_with("com.google.gson.JsonSyntaxException: Expected a com.google.gson.JsonArray but was com.google.gson.JsonObject; at path $\n\tat com.google.gson.internal.bind.TypeAdapters$33$1.read(TypeAdapters.java:1068)\n"));
+}

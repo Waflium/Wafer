@@ -150,9 +150,9 @@ fn write_game_profile(info: &GameProfileInfo) -> Value {
 fn read_game_profile(json: &Value) -> Option<GameProfileInfo> {
     let name_and_id = NameAndId::from_json(json)?;
     let date = json.get("expiresOn")?.as_str()?;
-    match DateTime::parse_from_str(date, DATE_FORMAT) {
-        Ok(expiration_date) => Some(GameProfileInfo { name_and_id, expiration_date, last_access: 0 }),
-        Err(_) => {
+    match crate::util::java_simple_date_format::parse_date_time(date) {
+        Some(expiration_date) => Some(GameProfileInfo { name_and_id, expiration_date, last_access: 0 }),
+        None => {
             warn!("Failed to parse date {date}");
             None
         }

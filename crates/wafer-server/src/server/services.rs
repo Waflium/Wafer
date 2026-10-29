@@ -8,6 +8,7 @@ use rsa::pkcs8::DecodePublicKey;
 use crate::server::players::NameAndId;
 use crate::server::players::old_users_converter::{ConversionError, LookupException, ProfileLookupCallback};
 use crate::util::java_collections::JavaHashSet;
+use crate::util::java_throwable::JavaThrowable;
 use crate::util::signature_validator::SignatureValidator;
 
 const DISCOVERY_URL: &str = "https://discovery.minecraftservices.com/minecraft/client";
@@ -122,12 +123,25 @@ impl Services {
         retryable_fetch(services.key_set.clone(), Duration::from_secs(5 * 60), move || {
             let (http, this) = (client.clone(), this.clone());
             async move {
-                let url = this.url_async("authentication", "getPublicKeys").await?;
-                let response = get_json(&http, &url).await?;
+                let Some(url) = this.url_async_on("authentication", "getPublicKeys", Some(DISCOVERY_THREAD)).await else {
+                    warn!(thread: DISCOVERY_THREAD, "Failed to connect\n{}", services_unavailable().print_stack_trace().trim_end());
+                    this.url_async_on("authentication", "getPublicKeys", Some(DISCOVERY_THREAD)).await;
+                    warn!(thread: DISCOVERY_THREAD, "Failed to connect\n{}", services_unavailable().print_stack_trace().trim_end());
+                    return None;
+                };
+                let response = match client_get(&http, &url, &KEY_FETCH_CONTEXT).await {
+                    Ok(response) => response?,
+                    Err(throwable) => {
+                        for _ in 0..2 {
+                            error!(thread: DISCOVERY_THREAD, "Failed to request Minecraft Services public key\n{}", throwable.print_stack_trace().trim_end());
+                        }
+                        return None;
+                    }
+                };
                 let keys = response["playerCertificateKeys"].as_array().map(Vec::as_slice).unwrap_or_default();
                 let profile_keys = keys.iter().map(|k| parse_key(k["publicKey"].as_str()?)).collect::<Option<Vec<_>>>();
                 if profile_keys.is_none() {
-                    error!("Received malformed Minecraft Services public key data");
+                    error!(thread: DISCOVERY_THREAD, "Received malformed Minecraft Services public key data");
                 }
                 Some(ServicesKeySet { profile_keys: profile_keys? })
             }
@@ -140,13 +154,22 @@ impl Services {
     }
 
     pub async fn url_async(&self, service: &str, endpoint: &str) -> Option<String> {
+        self.url_async_on(service, endpoint, None).await
+    }
+
+    async fn url_async_on(&self, service: &str, endpoint: &str, thread: Option<&str>) -> Option<String> {
+        let service_name = service.to_uppercase();
+        let log = |message: String| match thread {
+            Some(thread) => crate::logging::log_as(thread, crate::logging::Level::Warn, format_args!("{message}")),
+            None => crate::logging::log(crate::logging::Level::Warn, format_args!("{message}")),
+        };
         let Some(discovery) = self.discovery.get_async().await else {
-            warn!("Services are unavailable, unable to fetch uri for {service}/{endpoint}");
+            log(format!("Services are unavailable, unable to fetch uri for {service_name}/{endpoint}"));
             return None;
         };
         let uri = discovery["discovery"][service]["endpoints"][endpoint]["uri"].as_str();
         if uri.is_none() {
-            warn!("Services are available, but unable to find uri for {service}/{endpoint}");
+            log(format!("Services are available, but unable to find uri for {service_name}/{endpoint}"));
         }
         uri.map(str::to_string)
     }
@@ -159,15 +182,18 @@ impl Services {
     pub fn find_profile_by_name(&self, name: &str) -> Option<NameAndId> {
         let (http, runtime) = self.http.as_ref()?;
         runtime.block_on(async {
-            let url = self.url_async("profiles", "getByName").await?.replace("{name}", &name.to_lowercase());
-            let found = match http.get(&url).send().await.and_then(reqwest::Response::error_for_status) {
-                Ok(response) if response.status() == reqwest::StatusCode::OK => response.json::<serde_json::Value>().await.ok(),
-                Ok(_) => None,
-                Err(_) => {
-                    warn!("Couldn't find profile with name: {name}");
-                    None
+            let Some(url) = self.url_async("profiles", "getByName").await else {
+                warn!("Couldn't find profile with name: {name}\n{}", services_unavailable_from_endpoint().print_stack_trace().trim_end());
+                return None;
+            };
+            let url = url.replace("{name}", &name.to_lowercase());
+            let found = match client_get(http, &url, &[]).await {
+                Ok(found) => found?,
+                Err(throwable) => {
+                    warn!("Couldn't find profile with name: {name}\n{}", throwable.print_stack_trace().trim_end());
+                    return None;
                 }
-            }?;
+            };
             let id = u128::from_str_radix(found["id"].as_str()?, 16).ok()?;
             Some(NameAndId { id, name: found["name"].as_str()?.to_string() })
         })
@@ -250,20 +276,20 @@ impl Services {
     pub fn fetch_game_profile(&self, id: u128) -> Option<crate::network::login::Profile> {
         let (http, runtime) = self.http.as_ref()?;
         runtime.block_on(async {
-            let endpoint = self.url_async("session", "getProfileById").await?.replace("{profileId}", &format!("{id:032x}"));
+            let Some(endpoint) = self.url_async("session", "getProfileById").await else {
+                warn!("Couldn't look up profile properties for {}\n{}", crate::world::level::storage::format_uuid(id), services_unavailable_from_endpoint().print_stack_trace().trim_end());
+                return None;
+            };
+            let endpoint = endpoint.replace("{profileId}", &format!("{id:032x}"));
             let separator = if endpoint.contains('?') { '&' } else { '?' };
             let url = format!("{endpoint}{separator}unsigned=false");
-            let response = match http.get(&url).send().await.and_then(reqwest::Response::error_for_status) {
-                Ok(response) => response,
-                Err(e) => {
-                    warn!("Couldn't look up profile properties for {}\ncom.mojang.authlib.exceptions.MinecraftClientHttpException: {e}", crate::world::level::storage::format_uuid(id));
+            let found = match client_get(http, &url, &[]).await {
+                Ok(found) => found?,
+                Err(throwable) => {
+                    warn!("Couldn't look up profile properties for {}\n{}", crate::world::level::storage::format_uuid(id), throwable.print_stack_trace().trim_end());
                     return None;
                 }
             };
-            if response.status() != reqwest::StatusCode::OK {
-                return None;
-            }
-            let found = response.json::<serde_json::Value>().await.ok()?;
             let id = u128::from_str_radix(found["id"].as_str()?, 16).ok()?;
             let properties = found["properties"]
                 .as_array()
@@ -287,14 +313,191 @@ impl Services {
     }
 }
 
+const DISCOVERY_THREAD: &str = "Minecraft Services Discovery";
+
+const POOL_FRAMES: [&str; 6] = [
+    "java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)",
+    "java.base/java.util.concurrent.FutureTask.run(FutureTask.java:328)",
+    "java.base/java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask.run(ScheduledThreadPoolExecutor.java:309)",
+    "java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)",
+    "java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+const DISCOVERY_CONTEXT: [&str; 2] = [
+    "com.mojang.authlib.services.MinecraftServicesDiscoveryService.lambda$createDiscoverySupplier$1(MinecraftServicesDiscoveryService.java:76)",
+    "com.mojang.authlib.services.RetryableFetch$1.run(RetryableFetch.java:42)",
+];
+
+const KEY_FETCH_CONTEXT: [&str; 0] = [];
+
+const HTTPS_CONNECT_FRAMES: [&str; 17] = [
+    "java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:284)",
+    "java.base/java.net.Socket.connect(Socket.java:659)",
+    "java.base/sun.security.ssl.SSLSocketImpl.connect(SSLSocketImpl.java:304)",
+    "java.base/sun.net.NetworkClient.doConnect(NetworkClient.java:161)",
+    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:516)",
+    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:604)",
+    "java.base/sun.net.www.protocol.https.HttpsClient.<init>(HttpsClient.java:206)",
+    "java.base/sun.net.www.protocol.https.HttpsClient.New(HttpsClient.java:288)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.getNewHttpClient(AbstractDelegateHttpsURLConnection.java:196)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1008)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:899)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.connect(HttpURLConnection.java:872)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:181)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1377)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1302)",
+    "java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:493)",
+    "java.base/sun.net.www.protocol.https.HttpsURLConnectionImpl.getResponseCode(HttpsURLConnectionImpl.java:307)",
+];
+
+const READ_SERVICE_RESPONSE_130: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:130)";
+const READ_SERVICE_RESPONSE_145: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:145)";
+const READ_SERVICE_RESPONSE_147: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:147)";
+const READ_SERVICE_RESPONSE_151: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:151)";
+const GET_WITH_ETAG: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.getWithEtag(MinecraftClient.java:81)";
+const CLIENT_GET: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.get(MinecraftClient.java:65)";
+
+enum IoFailure {
+    UnknownHost(String),
+    ConnectionRefused,
+    ConnectTimedOut,
+    ReadTimedOut,
+    Other(String),
+}
+
+fn classify_failure(error: &reqwest::Error, url: &str) -> IoFailure {
+    let mut chain = String::new();
+    let mut source: Option<&dyn std::error::Error> = Some(error);
+    let mut refused = false;
+    while let Some(current) = source {
+        chain.push_str(&current.to_string());
+        chain.push(' ');
+        if let Some(io) = current.downcast_ref::<std::io::Error>() {
+            refused |= io.kind() == std::io::ErrorKind::ConnectionRefused;
+        }
+        source = current.source();
+    }
+    let host = || reqwest::Url::parse(url).ok().and_then(|url| url.host_str().map(str::to_string)).unwrap_or_default();
+    if chain.contains("dns error") || chain.contains("failed to lookup address") || chain.contains("No such host") {
+        IoFailure::UnknownHost(host())
+    } else if refused {
+        IoFailure::ConnectionRefused
+    } else if error.is_timeout() && error.is_connect() {
+        IoFailure::ConnectTimedOut
+    } else if error.is_timeout() {
+        IoFailure::ReadTimedOut
+    } else {
+        IoFailure::Other(error.to_string())
+    }
+}
+
+fn connection_refused_message() -> &'static str {
+    if cfg!(windows) { "Connection refused: getsockopt" } else { "Connection refused" }
+}
+
+fn io_failure(url: &str, failure: IoFailure, context: &[&'static str]) -> JavaThrowable {
+    let outer_tail: Vec<&'static str> = [GET_WITH_ETAG, CLIENT_GET].into_iter().chain(context.iter().copied()).chain(POOL_FRAMES).collect();
+    let (cause_description, cause_head): (String, Vec<&'static str>) = match failure {
+        IoFailure::UnknownHost(host) => (format!("java.net.UnknownHostException: {host}"), [
+            "java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:569)",
+        ].into_iter().chain(HTTPS_CONNECT_FRAMES).collect()),
+        IoFailure::ConnectionRefused => (format!("java.net.ConnectException: {}", connection_refused_message()), [
+            "java.base/sun.nio.ch.Net.pollConnect(Native Method)",
+            "java.base/sun.nio.ch.Net.pollConnectNow(Net.java:639)",
+            "java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:543)",
+            "java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:594)",
+        ].into_iter().chain(HTTPS_CONNECT_FRAMES).collect()),
+        IoFailure::ConnectTimedOut => ("java.net.SocketTimeoutException: Connect timed out".to_string(), Vec::new()),
+        IoFailure::ReadTimedOut => ("java.net.SocketTimeoutException: Read timed out".to_string(), Vec::new()),
+        IoFailure::Other(message) => (format!("java.io.IOException: {message}"), Vec::new()),
+    };
+    let message = cause_description.split_once(": ").map_or(cause_description.clone(), |(_, message)| message.to_string());
+    let cause_trace: Vec<&'static str> = cause_head.into_iter().chain([READ_SERVICE_RESPONSE_130]).chain(outer_tail.iter().copied()).collect();
+    let outer_trace: Vec<&'static str> = [READ_SERVICE_RESPONSE_151].into_iter().chain(outer_tail.iter().copied()).collect();
+    JavaThrowable::new(format!("com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from {url} due to {message}"), outer_trace).with_cause(JavaThrowable::new(cause_description, cause_trace))
+}
+
+fn json_text(value: Option<&serde_json::Value>) -> String {
+    match value {
+        None | Some(serde_json::Value::Null) => "null".to_string(),
+        Some(serde_json::Value::String(text)) => text.clone(),
+        Some(other) => other.to_string(),
+    }
+}
+
+fn http_failure(url: &str, status: u16, content_type: Option<&str>, body: &str, context: &[&'static str]) -> JavaThrowable {
+    let tail: Vec<&'static str> = [READ_SERVICE_RESPONSE_147, GET_WITH_ETAG, CLIENT_GET].into_iter().chain(context.iter().copied()).chain(POOL_FRAMES).collect();
+    let (response, line) = if body.is_empty() {
+        ("null".to_string(), "com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:160)")
+    } else if content_type.is_some_and(|content_type| content_type.starts_with("text/html")) {
+        error!("Got an error with a html body connecting to {url}: {body}");
+        ("null".to_string(), "com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:167)")
+    } else {
+        let parsed: serde_json::Value = serde_json::from_str(body).unwrap_or_default();
+        let details = match parsed.get("details") {
+            Some(serde_json::Value::Object(map)) => format!("{{{}}}", map.iter().map(|(key, value)| format!("{key}={}", json_text(Some(value)))).collect::<Vec<_>>().join(", ")),
+            _ => "null".to_string(),
+        };
+        (
+            format!(
+                "ErrorResponse[path={}, error={}, errorMessage={}, details={details}]",
+                json_text(parsed.get("path")),
+                json_text(parsed.get("error")),
+                json_text(parsed.get("errorMessage"))
+            ),
+            "com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:170)",
+        )
+    };
+    JavaThrowable::new(format!("MinecraftClientHttpException[type=HTTP_ERROR, status={status}, response={response}]"), [line].into_iter().chain(tail).collect())
+}
+
+async fn client_get(http: &reqwest::Client, url: &str, context: &[&'static str]) -> Result<Option<serde_json::Value>, JavaThrowable> {
+    let response = http.get(url).send().await.map_err(|e| io_failure(url, classify_failure(&e, url), context))?;
+    let status = response.status().as_u16();
+    if status == 304 {
+        return Ok(None);
+    }
+    let content_type = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|value| value.to_str().ok()).map(str::to_string);
+    let body = response.text().await.map_err(|e| io_failure(url, classify_failure(&e, url), context))?;
+    if status >= 400 {
+        return Err(http_failure(url, status, content_type.as_deref(), &body, context));
+    }
+    if body.is_empty() {
+        return Ok(None);
+    }
+    serde_json::from_str(&body).map(Some).map_err(|_| {
+        let tail: Vec<&'static str> = [READ_SERVICE_RESPONSE_145, GET_WITH_ETAG, CLIENT_GET].into_iter().chain(context.iter().copied()).chain(POOL_FRAMES).collect();
+        JavaThrowable::new(format!("com.mojang.authlib.exceptions.MinecraftClientException: Failed to read value {body}"), ["com.mojang.authlib.minecraft.client.ObjectMapper.readValue(ObjectMapper.java:31)"].into_iter().chain(tail).collect())
+    })
+}
+
 async fn get_json(http: &reqwest::Client, url: &str) -> Option<serde_json::Value> {
-    match http.get(url).send().await.and_then(reqwest::Response::error_for_status) {
-        Ok(response) => response.json().await.ok(),
-        Err(_) => {
-            warn!("Failed to connect");
+    match client_get(http, url, &DISCOVERY_CONTEXT).await {
+        Ok(value) => value,
+        Err(throwable) => {
+            warn!(thread: DISCOVERY_THREAD, "Failed to connect\n{}", throwable.print_stack_trace().trim_end());
             None
         }
     }
+}
+
+fn services_unavailable_from_endpoint() -> JavaThrowable {
+    let frames = [
+        "com.mojang.authlib.services.MinecraftServicesDiscoveryService.getEndpoint(MinecraftServicesDiscoveryService.java:139)",
+        "com.mojang.authlib.services.MinecraftServicesDiscoveryService.getUrl(MinecraftServicesDiscoveryService.java:125)",
+    ];
+    JavaThrowable::new("com.mojang.authlib.exceptions.MinecraftClientException: Services are unavailable", frames.to_vec())
+}
+
+fn services_unavailable() -> JavaThrowable {
+    let frames = [
+        "com.mojang.authlib.services.MinecraftServicesDiscoveryService.getEndpoint(MinecraftServicesDiscoveryService.java:139)",
+        "com.mojang.authlib.services.MinecraftServicesDiscoveryService.getUrl(MinecraftServicesDiscoveryService.java:125)",
+        "com.mojang.authlib.services.MinecraftServicesDiscoveryService.lambda$getServicesKeySet$2(MinecraftServicesDiscoveryService.java:117)",
+        "com.mojang.authlib.services.RetryableFetch$1.run(RetryableFetch.java:40)",
+    ];
+    JavaThrowable::new("com.mojang.authlib.exceptions.MinecraftClientException: Services are unavailable", frames.into_iter().chain(POOL_FRAMES).collect())
 }
 
 fn parse_key(base64: &str) -> Option<RsaPublicKey> {

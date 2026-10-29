@@ -2,6 +2,8 @@ use std::cell::Cell;
 
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::codec::{self, DecodeResult, Record};
+
 pub struct WeatherDataCell {
     data: Cell<WeatherData>,
     dirty: Cell<bool>,
@@ -56,16 +58,17 @@ impl WeatherData {
         ])
     }
 
-    pub fn from_nbt(nbt: &Nbt) -> Option<WeatherData> {
-        let int = |key: &str| nbt.get(key)?.as_i64().map(|v| v as i32);
-        let bool = |key: &str| nbt.get(key)?.as_i64().map(|v| v != 0);
-        Some(WeatherData {
-            clear_weather_time: int("clear_weather_time")?,
-            rain_time: int("rain_time")?,
-            thunder_time: int("thunder_time")?,
-            raining: bool("raining")?,
-            thundering: bool("thundering")?,
-        })
+    pub fn decode(nbt: &Nbt) -> DecodeResult<WeatherData> {
+        if let Err(error) = codec::map(nbt) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let clear_weather_time = record.required(nbt, "clear_weather_time", codec::int);
+        let rain_time = record.required(nbt, "rain_time", codec::int);
+        let thunder_time = record.required(nbt, "thunder_time", codec::int);
+        let raining = record.required(nbt, "raining", codec::bool_value);
+        let thundering = record.required(nbt, "thundering", codec::bool_value);
+        record.build(|| Some(WeatherData { clear_weather_time: clear_weather_time?, rain_time: rain_time?, thunder_time: thunder_time?, raining: raining?, thundering: thundering? }))
     }
 }
 

@@ -8,12 +8,13 @@ use chrono::{DateTime, FixedOffset};
 use wafer_core::random::java_string_hash;
 
 use super::cached_user_name_to_id_resolver::CachedUserNameToIdResolver;
-use super::{Ban, IpBanEntry, NameAndId, OpEntry, StoredUserList, UserBanEntry, WhiteListEntry};
+use super::{Ban, IpBanEntry, LoadError, NameAndId, OpEntry, StoredUserList, UserBanEntry, WhiteListEntry};
 use crate::commands::arguments::java_uuid_from_string;
 use crate::network::login::offline_uuid;
 use crate::server::services::Services;
 use crate::util::java_collections::JavaHashMap;
 use crate::util::java_nio::{java_io_error, os_message};
+use crate::util::java_throwable::JavaThrowable;
 use crate::util::string_util::java_trim;
 use crate::world::level::storage::format_uuid;
 
@@ -136,22 +137,49 @@ fn split_pipe(line: &str) -> Vec<String> {
     while parts.last().is_some_and(String::is_empty) {
         parts.pop();
     }
-    if parts.is_empty() {
-        parts.push(String::new());
-    }
     parts
 }
 
-fn read_old_list_format(path: &Path, user_map: &mut UserMap) -> io::Result<Vec<String>> {
+pub enum ConvertFailure {
+    Io(io::Error),
+    Unchecked(JavaThrowable),
+}
+
+impl From<io::Error> for ConvertFailure {
+    fn from(error: io::Error) -> ConvertFailure {
+        ConvertFailure::Io(error)
+    }
+}
+
+fn read_old_list_format(path: &Path, user_map: &mut UserMap, tail: &[&'static str]) -> Result<Vec<String>, ConvertFailure> {
     let lines = read_lines(path)?;
     for line in &lines {
         let line = java_trim(line);
         if !line.starts_with('#') && !line.is_empty() {
             let parts = split_pipe(line);
-            user_map.insert(parts[0].to_lowercase(), parts);
+            let Some(name) = parts.first() else {
+                let stack_trace = ["net.minecraft.server.players.OldUsersConverter.readOldListFormat(OldUsersConverter.java:47)"].into_iter().chain(tail.iter().copied()).collect();
+                return Err(ConvertFailure::Unchecked(JavaThrowable::new("java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0", stack_trace)));
+            };
+            user_map.insert(name.to_lowercase(), parts);
         }
     }
     Ok(lines)
+}
+
+const CONVERT_USER_BANLIST_68: &str = "net.minecraft.server.players.OldUsersConverter.convertUserBanlist(OldUsersConverter.java:68)";
+const CONVERT_USER_BANLIST_75: &str = "net.minecraft.server.players.OldUsersConverter.convertUserBanlist(OldUsersConverter.java:75)";
+const CONVERT_IP_BANLIST_123: &str = "net.minecraft.server.players.OldUsersConverter.convertIpBanlist(OldUsersConverter.java:123)";
+const CONVERT_IP_BANLIST_130: &str = "net.minecraft.server.players.OldUsersConverter.convertIpBanlist(OldUsersConverter.java:130)";
+const CONVERT_OPS_LIST_156: &str = "net.minecraft.server.players.OldUsersConverter.convertOpsList(OldUsersConverter.java:156)";
+const CONVERT_WHITE_LIST_199: &str = "net.minecraft.server.players.OldUsersConverter.convertWhiteList(OldUsersConverter.java:199)";
+const CONVERT_OLD_USERS_622: &str = "net.minecraft.server.dedicated.DedicatedServer.convertOldUsers(DedicatedServer.java:622)";
+const CONVERT_OLD_USERS_633: &str = "net.minecraft.server.dedicated.DedicatedServer.convertOldUsers(DedicatedServer.java:633)";
+const CONVERT_OLD_USERS_644: &str = "net.minecraft.server.dedicated.DedicatedServer.convertOldUsers(DedicatedServer.java:644)";
+const CONVERT_OLD_USERS_655: &str = "net.minecraft.server.dedicated.DedicatedServer.convertOldUsers(DedicatedServer.java:655)";
+
+fn server_tail(converter: &'static str, convert_old_users: &'static str) -> [&'static str; 6] {
+    [converter, convert_old_users, crate::server::INIT_SERVER_FRAME, crate::server::RUN_SERVER_FRAME, crate::server::SPIN_FRAME, crate::server::THREAD_RUN_FRAME]
 }
 
 fn is_file(path: &Path) -> bool {
@@ -159,7 +187,7 @@ fn is_file(path: &Path) -> bool {
 }
 
 fn parse_date(date_string: &str) -> Option<DateTime<FixedOffset>> {
-    let millis = java_simple_date_parse(date_string)?;
+    let millis = crate::util::java_simple_date_format::parse(date_string)?;
     DateTime::from_timestamp_millis(millis).map(|date| date.fixed_offset())
 }
 
@@ -181,12 +209,15 @@ fn file_name(path: &Path) -> String {
     path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
-fn load_existing<E: super::StoredUserEntry>(list: &mut StoredUserList<E>, file: &Path) {
-    if file.exists()
-        && let Err(e) = list.load()
-    {
-        warn!("Could not load existing file {}\n{}", file_name(file), java_load_exception(&e, file));
+fn load_existing<E: super::StoredUserEntry>(list: &mut StoredUserList<E>, file: &Path, tail: &[&'static str]) -> Result<(), JavaThrowable> {
+    if file.exists() {
+        match list.load(tail) {
+            Ok(()) => {}
+            Err(LoadError::Io(e)) => warn!("Could not load existing file {}\n{}", file_name(file), java_load_exception(&e, file)),
+            Err(LoadError::Unchecked(throwable)) => return Err(throwable),
+        }
     }
+    Ok(())
 }
 
 fn java_load_exception(error: &io::Error, file: &Path) -> String {
@@ -210,18 +241,22 @@ impl OldUsersConverter<'_> {
         }
     }
 
-    pub fn convert_user_banlist(&self) -> bool {
+    pub fn convert_user_banlist(&self) -> Result<bool, JavaThrowable> {
         let file = self.resolve(USERBANLIST_FILE);
         let mut bans: StoredUserList<UserBanEntry> = StoredUserList::new(Some(file.clone()));
         let old_file = self.resolve(OLD_USERBANLIST);
         if !(old_file.exists() && is_file(&old_file)) {
-            return true;
+            return Ok(true);
         }
-        load_existing(&mut bans, &file);
+        load_existing(&mut bans, &file, &server_tail(CONVERT_USER_BANLIST_68, CONVERT_OLD_USERS_622))?;
         let mut user_map = UserMap::new(java_string_hash);
-        if let Err(e) = read_old_list_format(&old_file, &mut user_map) {
-            warn!("Could not read old user banlist to convert it!\n{}", java_io_message(&e));
-            return false;
+        match read_old_list_format(&old_file, &mut user_map, &server_tail(CONVERT_USER_BANLIST_75, CONVERT_OLD_USERS_622)) {
+            Ok(_) => {}
+            Err(ConvertFailure::Io(e)) => {
+                warn!("Could not read old user banlist to convert it!\n{}", java_io_message(&e));
+                return Ok(false);
+            }
+            Err(ConvertFailure::Unchecked(throwable)) => return Err(throwable),
         }
         let result = {
             let mut callback = UserBanCallback { converter: self, bans: &mut bans, user_map: &user_map };
@@ -230,53 +265,57 @@ impl OldUsersConverter<'_> {
         };
         if let Err(e) = result {
             error!("Conversion failed, please try again later\n{e}");
-            return false;
+            return Ok(false);
         }
         if let Err(e) = bans.save() {
             warn!("Could not read old user banlist to convert it!\n{}", java_load_exception(&e, &file));
-            return false;
+            return Ok(false);
         }
         rename_old_file(&old_file);
-        true
+        Ok(true)
     }
 
-    pub fn convert_ip_banlist(&self) -> bool {
+    pub fn convert_ip_banlist(&self) -> Result<bool, JavaThrowable> {
         let file = self.resolve(IPBANLIST_FILE);
         let mut ip_bans: StoredUserList<IpBanEntry> = StoredUserList::new(Some(file.clone()));
         let old_file = self.resolve(OLD_IPBANLIST);
         if !(old_file.exists() && is_file(&old_file)) {
-            return true;
+            return Ok(true);
         }
-        load_existing(&mut ip_bans, &file);
+        load_existing(&mut ip_bans, &file, &server_tail(CONVERT_IP_BANLIST_123, CONVERT_OLD_USERS_633))?;
         let mut user_map = UserMap::new(java_string_hash);
-        if let Err(e) = read_old_list_format(&old_file, &mut user_map) {
-            warn!("Could not parse old ip banlist to convert it!\n{}", java_io_message(&e));
-            return false;
+        match read_old_list_format(&old_file, &mut user_map, &server_tail(CONVERT_IP_BANLIST_130, CONVERT_OLD_USERS_633)) {
+            Ok(_) => {}
+            Err(ConvertFailure::Io(e)) => {
+                warn!("Could not parse old ip banlist to convert it!\n{}", java_io_message(&e));
+                return Ok(false);
+            }
+            Err(ConvertFailure::Unchecked(throwable)) => return Err(throwable),
         }
         for (key, user_def) in user_map.iter() {
             ip_bans.add(IpBanEntry { ip: key.to_string(), ban: user_def_ban(user_def) });
         }
         if let Err(e) = ip_bans.save() {
             warn!("Could not parse old ip banlist to convert it!\n{}", java_load_exception(&e, &file));
-            return false;
+            return Ok(false);
         }
         rename_old_file(&old_file);
-        true
+        Ok(true)
     }
 
-    pub fn convert_ops_list(&self) -> bool {
+    pub fn convert_ops_list(&self) -> Result<bool, JavaThrowable> {
         let file = self.resolve(OPLIST_FILE);
         let mut ops_list: StoredUserList<OpEntry> = StoredUserList::new(Some(file.clone()));
         let old_file = self.resolve(OLD_OPLIST);
         if !(old_file.exists() && is_file(&old_file)) {
-            return true;
+            return Ok(true);
         }
-        load_existing(&mut ops_list, &file);
+        load_existing(&mut ops_list, &file, &server_tail(CONVERT_OPS_LIST_156, CONVERT_OLD_USERS_644))?;
         let lines = match read_lines(&old_file) {
             Ok(lines) => lines,
             Err(e) => {
                 warn!("Could not read old oplist to convert it!\n{}", java_io_message(&e));
-                return false;
+                return Ok(false);
             }
         };
         let result = {
@@ -285,29 +324,29 @@ impl OldUsersConverter<'_> {
         };
         if let Err(e) = result {
             error!("Conversion failed, please try again later\n{e}");
-            return false;
+            return Ok(false);
         }
         if let Err(e) = ops_list.save() {
             warn!("Could not read old oplist to convert it!\n{}", java_load_exception(&e, &file));
-            return false;
+            return Ok(false);
         }
         rename_old_file(&old_file);
-        true
+        Ok(true)
     }
 
-    pub fn convert_white_list(&self) -> bool {
+    pub fn convert_white_list(&self) -> Result<bool, JavaThrowable> {
         let file = self.resolve(WHITELIST_FILE);
         let mut whitelist: StoredUserList<WhiteListEntry> = StoredUserList::new(Some(file.clone()));
         let old_file = self.resolve(OLD_WHITELIST);
         if !(old_file.exists() && is_file(&old_file)) {
-            return true;
+            return Ok(true);
         }
-        load_existing(&mut whitelist, &file);
+        load_existing(&mut whitelist, &file, &server_tail(CONVERT_WHITE_LIST_199, CONVERT_OLD_USERS_655))?;
         let lines = match read_lines(&old_file) {
             Ok(lines) => lines,
             Err(e) => {
                 warn!("Could not read old whitelist to convert it!\n{}", java_io_message(&e));
-                return false;
+                return Ok(false);
             }
         };
         let result = {
@@ -316,23 +355,23 @@ impl OldUsersConverter<'_> {
         };
         if let Err(e) = result {
             error!("Conversion failed, please try again later\n{e}");
-            return false;
+            return Ok(false);
         }
         if let Err(e) = whitelist.save() {
             warn!("Could not read old whitelist to convert it!\n{}", java_load_exception(&e, &file));
-            return false;
+            return Ok(false);
         }
         rename_old_file(&old_file);
-        true
+        Ok(true)
     }
 
-    pub fn convert_players(&self) -> bool {
-        let Some(world_directory) = self.world_directory else { return true };
+    pub fn convert_players(&self) -> Result<bool, JavaThrowable> {
+        let Some(world_directory) = self.world_directory else { return Ok(true) };
         let world_player_directory = world_directory.join("players");
         let world_new_player_directory = world_directory.join("players/data");
         let unknown_player_directory = world_directory.join("unknownplayers");
         if !(world_player_directory.exists() && world_player_directory.is_dir()) {
-            return true;
+            return Ok(true);
         }
         let mut player_names: Vec<String> = Vec::new();
         for entry in std::fs::read_dir(&world_player_directory).into_iter().flatten().flatten() {
@@ -353,12 +392,12 @@ impl OldUsersConverter<'_> {
         };
         if let Err(e) = self.lookup_players(player_names.iter().map(String::as_str), &mut callback) {
             error!("Conversion failed, please try again later\n{e}");
-            return false;
+            return Ok(false);
         }
-        true
+        Ok(true)
     }
 
-    pub fn convert_old_users(&self) -> bool {
+    pub fn convert_old_users(&self) -> Result<bool, JavaThrowable> {
         let mut user_banlist_converted = false;
         let mut retries = 0;
         while !user_banlist_converted && retries <= 2 {
@@ -366,7 +405,7 @@ impl OldUsersConverter<'_> {
                 warn!("Encountered a problem while converting the user banlist, retrying in a few seconds");
                 std::thread::sleep(RETRY_DELAY);
             }
-            user_banlist_converted = self.convert_user_banlist();
+            user_banlist_converted = self.convert_user_banlist()?;
             retries += 1;
         }
         let mut ip_banlist_converted = false;
@@ -376,7 +415,7 @@ impl OldUsersConverter<'_> {
                 warn!("Encountered a problem while converting the ip banlist, retrying in a few seconds");
                 std::thread::sleep(RETRY_DELAY);
             }
-            ip_banlist_converted = self.convert_ip_banlist();
+            ip_banlist_converted = self.convert_ip_banlist()?;
             retries += 1;
         }
         let mut op_list_converted = false;
@@ -386,7 +425,7 @@ impl OldUsersConverter<'_> {
                 warn!("Encountered a problem while converting the op list, retrying in a few seconds");
                 std::thread::sleep(RETRY_DELAY);
             }
-            op_list_converted = self.convert_ops_list();
+            op_list_converted = self.convert_ops_list()?;
             retries += 1;
         }
         let mut whitelist_converted = false;
@@ -396,7 +435,7 @@ impl OldUsersConverter<'_> {
                 warn!("Encountered a problem while converting the whitelist, retrying in a few seconds");
                 std::thread::sleep(RETRY_DELAY);
             }
-            whitelist_converted = self.convert_white_list();
+            whitelist_converted = self.convert_white_list()?;
             retries += 1;
         }
         let mut players_converted = false;
@@ -406,10 +445,10 @@ impl OldUsersConverter<'_> {
                 warn!("Encountered a problem while converting the player save files, retrying in a few seconds");
                 std::thread::sleep(RETRY_DELAY);
             }
-            players_converted = self.convert_players();
+            players_converted = self.convert_players()?;
             retries += 1;
         }
-        user_banlist_converted || ip_banlist_converted || op_list_converted || whitelist_converted || players_converted
+        Ok(user_banlist_converted || ip_banlist_converted || op_list_converted || whitelist_converted || players_converted)
     }
 
     pub fn are_old_userlists_removed(&self) -> bool {
@@ -611,173 +650,9 @@ impl ProfileLookupCallback for MobOwnerCallback<'_> {
     }
 }
 
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let year = if month <= 2 { year - 1 } else { year };
-    let era = year.div_euclid(400);
-    let year_of_era = year - era * 400;
-    let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    era * 146097 + day_of_era - 719468
-}
-
-fn skip_blanks(chars: &[char], index: &mut usize) {
-    while *index < chars.len() && (chars[*index] == ' ' || chars[*index] == '\t') {
-        *index += 1;
-    }
-}
-
-fn parse_number(chars: &[char], index: &mut usize) -> Option<i64> {
-    skip_blanks(chars, index);
-    let negative = chars.get(*index) == Some(&'-');
-    let start = if negative { *index + 1 } else { *index };
-    let mut end = start;
-    let mut value: i64 = 0;
-    while end < chars.len() && crate::util::java_integer::digit(chars[end]).is_some() {
-        value = value.checked_mul(10)?.checked_add(crate::util::java_integer::digit(chars[end])? as i64)?;
-        end += 1;
-    }
-    if end == start {
-        return None;
-    }
-    *index = end;
-    Some(if negative { -value } else { value })
-}
-
-fn expect_literal(chars: &[char], index: &mut usize, literal: char) -> Option<()> {
-    if chars.get(*index) == Some(&literal) {
-        *index += 1;
-        Some(())
-    } else {
-        None
-    }
-}
-
-fn parse_numeric_zone(chars: &[char], mut index: usize, sign: i64, colon: bool) -> Option<i64> {
-    let digit = |index: usize| chars.get(index).filter(|c| c.is_ascii_digit()).map(|c| *c as i64 - '0' as i64);
-    let mut hours = digit(index)? as i64;
-    index += 1;
-    match digit(index) {
-        Some(second) => {
-            hours = hours * 10 + second as i64;
-            index += 1;
-        }
-        None if !colon => return None,
-        None => {}
-    }
-    if hours > 23 {
-        return None;
-    }
-    if colon {
-        if chars.get(index) != Some(&':') {
-            return None;
-        }
-        index += 1;
-    }
-    let minutes = digit(index)? as i64 * 10 + digit(index + 1)? as i64;
-    if minutes > 59 {
-        return None;
-    }
-    Some(sign * (hours * 60 + minutes) * 60_000)
-}
-
-fn parse_zone(chars: &[char], index: &mut usize) -> Option<i64> {
-    skip_blanks(chars, index);
-    let start = *index;
-    match chars.get(start)? {
-        '+' => parse_numeric_zone(chars, start + 1, 1, false),
-        '-' => parse_numeric_zone(chars, start + 1, -1, false),
-        _ => {
-            let rest: String = chars[start..].iter().collect();
-            let lower = rest.to_ascii_lowercase();
-            if lower.starts_with("gmt") {
-                match chars.get(start + 3) {
-                    Some('+') => parse_numeric_zone(chars, start + 4, 1, true),
-                    Some('-') => parse_numeric_zone(chars, start + 4, -1, true),
-                    _ => Some(0),
-                }
-            } else if rest.starts_with("UTC") {
-                Some(0)
-            } else if rest.starts_with("EST") {
-                Some(-5 * 3_600_000)
-            } else {
-                None
-            }
-        }
-    }
-}
-
-pub fn java_simple_date_parse(text: &str) -> Option<i64> {
-    let chars: Vec<char> = text.chars().collect();
-    let mut index = 0;
-    let year = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, '-')?;
-    let month = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, '-')?;
-    let day = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, ' ')?;
-    let hour = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, ':')?;
-    let minute = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, ':')?;
-    let second = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, ' ')?;
-    let zone_offset = parse_zone(&chars, &mut index)?;
-    let month_index = month - 1;
-    let year = year.checked_add(month_index.div_euclid(12))?;
-    let days = days_from_civil(year, month_index.rem_euclid(12) + 1, 1).checked_add(day - 1)?;
-    let seconds = days.checked_mul(86_400)?.checked_add(hour.checked_mul(3600)?)?.checked_add(minute.checked_mul(60)?)?.checked_add(second)?;
-    seconds.checked_mul(1000)?.checked_sub(zone_offset)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn simple_date_format_parsing_matches_java() {
-        let cases: &[(&str, Option<i64>)] = &[
-            ("2013-04-01 10:00:00 -0500", Some(1364828400000)),
-            ("2013-04-01 10:00:00 +0900", Some(1364778000000)),
-            ("2013-04-01 10:00:00 +09:00", None),
-            ("2013-04-01 10:00:00 GMT", Some(1364810400000)),
-            ("2013-04-01 10:00:00 GMT+1", None),
-            ("2013-04-01 10:00:00 GMT+01:30", Some(1364805000000)),
-            ("2013-04-01 10:00:00 UTC", Some(1364810400000)),
-            ("2013-04-01 10:00:00 EST", Some(1364828400000)),
-            ("2013-04-01 10:00:00 PST", None),
-            ("2013-04-01 10:00:00 Z", None),
-            ("2013-04-01 10:00:00", None),
-            ("2013-04-01 10:00:00 -0500 trailing", Some(1364828400000)),
-            ("2013-04-01 10:00:00 -0500junk", Some(1364828400000)),
-            ("2013-4-1 1:2:3 -0500", Some(1364796123000)),
-            ("2013-13-01 10:00:00 -0500", Some(1388588400000)),
-            ("2013-02-30 10:00:00 -0500", Some(1362236400000)),
-            ("2013-04-01 25:61:61 -0500", Some(1364886121000)),
-            ("99999-04-01 10:00:00 -0500", Some(3093504274800000)),
-            (" 2013-04-01 10:00:00 -0500", Some(1364828400000)),
-            ("2013-04-01  10:00:00 -0500", Some(1364828400000)),
-            ("2013-04-01 10:00:00  -0500", Some(1364828400000)),
-            ("2013-04-01T10:00:00 -0500", None),
-            ("2013/04/01 10:00:00 -0500", None),
-            ("Forever", None),
-            ("", None),
-            ("2013-04-01 10:00:00 -2500", None),
-            ("2013-04-01 10:00:00 -0560", None),
-            ("2013-04-01 10:00:00 -05", None),
-            ("2013-04-01 10:00:00 -5", None),
-            ("2013-04-01 10:00:00 +1800", Some(1364745600000)),
-            ("2013-04-01 10:00:00 +1900", Some(1364742000000)),
-            ("+2013-04-01 10:00:00 -0500", None),
-            ("2013--04-01 10:00:00 -0500", Some(1343833200000)),
-            ("2013-04-01 10:00:00 -0500 ", Some(1364828400000)),
-            ("2013-04-01 10:00:00 America/New_York", None),
-            ("1969-12-31 23:59:59 +0000", Some(-1000)),
-            ("2013-04-01 10:00:00.5 -0500", None),
-        ];
-        for (text, expected) in cases {
-            assert_eq!(java_simple_date_parse(text), *expected, "{text:?}");
-        }
-    }
 
     #[test]
     fn pipe_split_drops_trailing_empty_strings_like_java() {
@@ -821,7 +696,7 @@ mod tests {
             uses_authentication: false,
             operator_permission_level: 3,
         };
-        assert!(converter.convert_old_users());
+        assert!(converter.convert_old_users().unwrap());
         assert!(converter.are_old_userlists_removed());
         assert_eq!(names_of(&dir.join("banned-players.json"), "name"), ["trail", "notch", "alex", "spaced  ", "dupe", "Existing", "steve"]);
         assert_eq!(names_of(&dir.join("banned-players.json"), "source"), ["(Unknown)", "Console", "Server", "", "Other", "x", "src"]);
@@ -863,7 +738,7 @@ mod tests {
             uses_authentication: false,
             operator_permission_level: 4,
         };
-        assert!(!converter.convert_user_banlist());
+        assert!(!converter.convert_user_banlist().unwrap());
         assert!(!converter.are_old_userlists_removed());
         assert!(dir.join("banned-players.txt").is_file());
         std::fs::remove_dir_all(dir).unwrap();

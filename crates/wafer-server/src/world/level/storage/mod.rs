@@ -379,8 +379,6 @@ impl WorldData {
         let seed = worldgen.get("seed").and_then(Nbt::as_i64).unwrap_or(0);
         let dimensions = worldgen.get("dimensions").ok_or_else(|| invalid("world_gen_settings.dat has no dimensions"))?;
         let dimensions = WorldDimensions::from_nbt(dimensions, seed).map_err(|e| invalid(&e))?;
-        let clocks = read_saved_data_dat(&dir.data("world_clocks"), DataFixTypes::SavedDataWorldClocks)?.and_then(|c| c.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new()));
-        let weather = read_saved_data_dat(&dir.data("weather"), DataFixTypes::SavedDataWeather)?.and_then(|w| w.get("data").and_then(WeatherData::from_nbt)).unwrap_or_default();
         let game_type = GameType::by_id(level.get("GameType").and_then(Nbt::as_i64).unwrap_or(0) as i32);
         Ok(WorldData {
             seed,
@@ -390,8 +388,8 @@ impl WorldData {
             difficulty: setting("difficulty").and_then(Nbt::as_str).and_then(Difficulty::by_name).unwrap_or(Difficulty::Normal),
             difficulty_locked: flag("locked"),
             hardcore: flag("hardcore"),
-            clocks,
-            weather,
+            clocks: Nbt::Compound(Vec::new()),
+            weather: WeatherData::default(),
             dimensions,
             generate_structures: worldgen.get("generate_structures").and_then(Nbt::as_i64).is_none_or(|v| v != 0),
             bonus_chest: worldgen.get("bonus_chest").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
@@ -403,7 +401,7 @@ impl WorldData {
                 brands
             }),
             was_modded: level.get("WasModded").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
-            game_rules: read_saved_data_dat(&dir.data("game_rules"), DataFixTypes::SavedDataGameRules)?.and_then(|r| r.get("data").cloned()).unwrap_or(Nbt::Compound(Vec::new())),
+            game_rules: Nbt::Compound(Vec::new()),
             data_configuration: WorldDataConfiguration::parse(level),
             level_name: level.get("LevelName").and_then(Nbt::as_str).unwrap_or("").to_string(),
             allow_commands: level.get("allowCommands").and_then(Nbt::as_i64).map_or(game_type == GameType::Creative, |v| v != 0),

@@ -186,17 +186,17 @@ impl LevelChunk {
         let pos = entity.pos();
         let state = self.block_state(pos);
         if !state.has_block_entity() {
-            warn!("Trying to set block entity {:?} at position {pos}, but state {state:?} does not allow it", entity.ty());
+            warn!("Trying to set block entity {} at position {pos}, but state {state:?} does not allow it", entity.to_java_string());
             return false;
         }
         let cached = entity.block_state();
         if state != cached {
             if !entity.ty().is_valid(state) {
-                warn!("Trying to set block entity {:?} at position {pos}, but state {state:?} does not allow it", entity.ty());
+                warn!("Trying to set block entity {} at position {pos}, but state {state:?} does not allow it", entity.to_java_string());
                 return false;
             }
             if state.block() != cached.block() {
-                warn!("Block state mismatch on block entity {:?} in position {pos}, {state:?} != {cached:?}, updating", entity.ty());
+                warn!("Block state mismatch on block entity {} in position {pos}, {state:?} != {cached:?}, updating", entity.to_java_string());
             }
             entity.set_block_state(state);
         }
@@ -232,7 +232,7 @@ impl LevelChunk {
             if state.has_block_entity() {
                 BlockEntity::new_for(pos, state)
             } else {
-                warn!("Tried to load a DUMMY block entity @ BlockPos{{x={}, y={}, z={}}} but found not block entity block {} at location", pos.x, pos.y, pos.z, state_to_string(state));
+                warn!("Tried to load a DUMMY block entity @ BlockPos{{x={}, y={}, z={}}} but found not block entity block {state:?} at location", pos.x, pos.y, pos.z);
                 None
             }
         } else {
@@ -244,7 +244,7 @@ impl LevelChunk {
                 self.block_entities.map.contains_key(&pos)
             }
             None => {
-                warn!("Tried to load a block entity for block {} but failed at location BlockPos{{x={}, y={}, z={}}}", state_to_string(state), pos.x, pos.y, pos.z);
+                warn!("Tried to load a block entity for block {state:?} but failed at location BlockPos{{x={}, y={}, z={}}}", pos.x, pos.y, pos.z);
                 false
             }
         }
@@ -346,10 +346,4 @@ impl LevelChunk {
             }
         }
     }
-}
-
-fn state_to_string(state: wafer_data::BlockState) -> String {
-    let state = format!("{state:?}");
-    let (name, properties) = state.split_at(state.find('[').unwrap_or(state.len()));
-    format!("Block{{{name}}}{properties}")
 }

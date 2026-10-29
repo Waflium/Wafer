@@ -15,6 +15,10 @@ use super::team_color::TeamColor;
 use crate::network::chat::Component;
 use crate::network::chat::numbers::NumberFormat;
 use crate::server::server_scoreboard::ServerScoreboard;
+use crate::util::java_throwable::JavaThrowable;
+
+const LIST12_FOR_EACH_FRAME: &str = "java.base/java.util.ImmutableCollections$List12.forEach(ImmutableCollections.java:683)";
+const ITERABLE_FOR_EACH_FRAME: &str = "java.base/java.lang.Iterable.forEach(Iterable.java:75)";
 
 pub struct PlayerScoreEntry<'a> {
     pub owner: &'a str,
@@ -414,11 +418,27 @@ impl Scoreboard {
         Nbt::Compound(fields)
     }
 
-    pub fn load(&mut self, data: PackedScoreboardSaveData) {
+    pub fn load(&mut self, data: PackedScoreboardSaveData) -> Result<(), JavaThrowable> {
+        let objective_count = data.objectives.len();
         for o in data.objectives {
             if self.objectives_by_name.contains_key(&o.name) {
-                error!("An objective with the name '{}' already exists!", o.name);
-                continue;
+                let for_each = if objective_count <= 2 { LIST12_FOR_EACH_FRAME } else { ITERABLE_FOR_EACH_FRAME };
+                return Err(JavaThrowable::new(
+                    format!("java.lang.IllegalArgumentException: An objective with the name '{}' already exists!", o.name),
+                    vec![
+                        "net.minecraft.world.scores.Scoreboard.addObjective(Scoreboard.java:49)",
+                        "net.minecraft.world.scores.Scoreboard.loadObjective(Scoreboard.java:405)",
+                        "net.minecraft.server.ServerScoreboard.lambda$load$0(ServerScoreboard.java:38)",
+                        for_each,
+                        "net.minecraft.server.ServerScoreboard.load(ServerScoreboard.java:38)",
+                        "net.minecraft.server.MinecraftServer.createLevels(MinecraftServer.java:445)",
+                        "net.minecraft.server.MinecraftServer.loadLevel(MinecraftServer.java:408)",
+                        "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:221)",
+                        crate::server::RUN_SERVER_FRAME,
+                        crate::server::SPIN_FRAME,
+                        crate::server::THREAD_RUN_FRAME,
+                    ],
+                ));
             }
             self.add_objective(&o.name, o.criteria, o.display_name, o.render_type, o.display_auto_update, o.number_format);
         }
@@ -436,6 +456,7 @@ impl Scoreboard {
         for team in data.teams {
             self.load_player_team(team);
         }
+        Ok(())
     }
 
     fn load_player_team(&mut self, packed: PackedTeam) {

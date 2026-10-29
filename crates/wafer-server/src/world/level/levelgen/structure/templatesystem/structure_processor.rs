@@ -235,9 +235,12 @@ impl StructureProcessor {
                     return Some(processed_block_info);
                 };
                 let state_string = nbt.get("final_state").and_then(Nbt::as_str).unwrap_or("minecraft:air");
-                let Some(block_state) = parse_block_state_string(state_string) else {
-                    error!("Failed to parse jigsaw replacement state '{state_string}' at {}", _target_position);
-                    return None;
+                let block_state = match try_parse_block_state_string(state_string) {
+                    Ok(block_state) => block_state,
+                    Err(e) => {
+                        error!("Failed to parse jigsaw replacement state '{state_string}' at {}: {}", _target_position, e.get_message());
+                        return None;
+                    }
                 };
                 if block_state.is_block(blocks::STRUCTURE_VOID) {
                     None
@@ -302,10 +305,14 @@ impl StructureProcessor {
     }
 }
 
-pub fn parse_block_state_string(state_string: &str) -> Option<BlockState> {
+fn try_parse_block_state_string(state_string: &str) -> Result<BlockState, crate::commands::brigadier::CommandSyntaxException> {
     let utf16: Vec<u16> = state_string.encode_utf16().collect();
     let mut reader = crate::commands::brigadier::StringReader::new(&utf16);
-    crate::commands::arguments::blocks::block_state_parser::parse_for_block(&mut reader, true).ok().map(|result| result.state)
+    crate::commands::arguments::blocks::block_state_parser::parse_for_block(&mut reader, true).map(|result| result.state)
+}
+
+pub fn parse_block_state_string(state_string: &str) -> Option<BlockState> {
+    try_parse_block_state_string(state_string).ok()
 }
 
 pub struct StructureProcessorList {

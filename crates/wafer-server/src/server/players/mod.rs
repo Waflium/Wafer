@@ -9,6 +9,7 @@ use serde_json::{Map, Value};
 use super::notifications::NotificationManager;
 use crate::commands::arguments::java_uuid_from_string;
 use crate::network::chat::{Arg, Component};
+use crate::util::java_throwable::JavaThrowable;
 use crate::world::level::storage::format_uuid;
 
 pub mod cached_user_name_to_id_resolver;
@@ -58,9 +59,45 @@ pub fn java_hash_set_order(users: Vec<NameAndId>) -> Vec<NameAndId> {
     java_hash_map_order(&hashes).into_iter().map(|i| unique[i].clone()).collect()
 }
 
+const STORED_USER_LIST_LOAD_141: &str = "net.minecraft.server.players.StoredUserList.load(StoredUserList.java:141)";
+const STORED_USER_LIST_LOAD_146: &str = "net.minecraft.server.players.StoredUserList.load(StoredUserList.java:146)";
+const STORED_USER_LIST_LOAD_147: &str = "net.minecraft.server.players.StoredUserList.load(StoredUserList.java:147)";
+const GSON_HELPER_CONVERT_TO_JSON_OBJECT: &str = "net.minecraft.util.GsonHelper.convertToJsonObject(GsonHelper.java:415)";
+
+const INIT_SERVER_213_FRAME: &str = "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:213)";
+const LOAD_USER_BAN_LIST_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.loadUserBanList(DedicatedPlayerList.java:65)";
+const LOAD_IP_BAN_LIST_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.loadIpBanList(DedicatedPlayerList.java:57)";
+const LOAD_OPS_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.loadOps(DedicatedPlayerList.java:73)";
+const LOAD_WHITE_LIST_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.loadWhiteList(DedicatedPlayerList.java:89)";
+const PLAYER_LIST_INIT_22_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.<init>(DedicatedPlayerList.java:22)";
+const PLAYER_LIST_INIT_24_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.<init>(DedicatedPlayerList.java:24)";
+const PLAYER_LIST_INIT_26_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.<init>(DedicatedPlayerList.java:26)";
+const PLAYER_LIST_INIT_27_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.<init>(DedicatedPlayerList.java:27)";
+
+pub enum LoadError {
+    Io(std::io::Error),
+    Unchecked(JavaThrowable),
+}
+
+pub struct EntryException {
+    pub description: String,
+    pub frames: Vec<&'static str>,
+}
+
+fn json_as_boolean(value: &Value) -> bool {
+    match value {
+        Value::Bool(value) => *value,
+        Value::String(value) => value.eq_ignore_ascii_case("true"),
+        _ => false,
+    }
+}
+
 pub trait StoredUserEntry: Clone {
     fn key(&self) -> String;
     fn from_json(object: &Value) -> Option<Self>;
+    fn create_entry(object: &Value) -> Result<Option<Self>, EntryException> {
+        Ok(Self::from_json(object))
+    }
     fn serialize(&self, object: &mut Map<String, Value>);
     fn has_expired(&self) -> bool {
         false
@@ -162,17 +199,30 @@ impl<E: StoredUserEntry> StoredUserList<E> {
         std::fs::write(file, crate::util::gson::json_writer::escape_html_safe(&serde_json::to_string_pretty(&Value::Array(array))?))
     }
 
-    pub fn load(&mut self) -> std::io::Result<()> {
+    pub fn load(&mut self, tail: &[&'static str]) -> Result<(), LoadError> {
         let Some(file) = &self.file else { return Ok(()) };
         if !file.exists() {
             return Ok(());
         }
-        let Ok(Value::Array(array)) = serde_json::from_str::<Value>(&std::fs::read_to_string(file)?) else {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("{} is not a JSON array", file.display())));
-        };
+        let text = std::fs::read(file).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()).map_err(LoadError::Io)?;
         self.entries.clear();
-        for object in &array {
-            let Some(entry) = E::from_json(object) else { continue };
+        let load_tail: Vec<&'static str> = [STORED_USER_LIST_LOAD_141].into_iter().chain(tail.iter().copied()).collect();
+        let Some(contents) = crate::util::gson::from_json_array(&text, &load_tail).map_err(LoadError::Unchecked)? else { return Ok(()) };
+        for element in contents {
+            let object = crate::util::gson::to_value(element);
+            if !object.is_object() {
+                let stack_trace = [GSON_HELPER_CONVERT_TO_JSON_OBJECT, STORED_USER_LIST_LOAD_146].into_iter().chain(tail.iter().copied()).collect();
+                let description = format!("com.google.gson.JsonSyntaxException: Expected entry to be a JsonObject, was {}", crate::server::jsonrpc::gson::type_name(Some(&object)));
+                return Err(LoadError::Unchecked(JavaThrowable::new(description, stack_trace)));
+            }
+            let entry = match E::create_entry(&object) {
+                Ok(Some(entry)) => entry,
+                Ok(None) => continue,
+                Err(exception) => {
+                    let stack_trace = exception.frames.into_iter().chain([STORED_USER_LIST_LOAD_147]).chain(tail.iter().copied()).collect();
+                    return Err(LoadError::Unchecked(JavaThrowable::new(exception.description, stack_trace)));
+                }
+            };
             let key = entry.key();
             match self.entries.iter_mut().find(|e| e.key() == key) {
                 Some(existing) => *existing = entry,
@@ -182,11 +232,34 @@ impl<E: StoredUserEntry> StoredUserList<E> {
         Ok(())
     }
 
-    fn load_logged(mut self, what: &str) -> StoredUserList<E> {
-        if self.load().is_err() {
-            warn!("Failed to load {what}: ");
+    fn log_load_io_failure(&self, what: &str, error: &std::io::Error) {
+        let exception = match &self.file {
+            Some(file) => crate::server::dedicated::settings::java_io_exception(error, file),
+            None => error.to_string(),
+        };
+        warn!("Failed to load {what}: \n{exception}");
+    }
+
+    fn load_io_only(mut self, what: &str, tail: &[&'static str]) -> Result<StoredUserList<E>, JavaThrowable> {
+        match self.load(tail) {
+            Ok(()) => {}
+            Err(LoadError::Io(error)) => self.log_load_io_failure(what, &error),
+            Err(LoadError::Unchecked(throwable)) => return Err(throwable),
         }
+        Ok(self)
+    }
+
+    pub fn load_logged(mut self, what: &str, tail: &[&'static str]) -> StoredUserList<E> {
+        self.reload_logged(what, tail);
         self
+    }
+
+    pub fn reload_logged(&mut self, what: &str, tail: &[&'static str]) {
+        match self.load(tail) {
+            Ok(()) => {}
+            Err(LoadError::Io(error)) => self.log_load_io_failure(what, &error),
+            Err(LoadError::Unchecked(throwable)) => warn!("Failed to load {what}: \n{}", throwable.print_stack_trace().trim_end()),
+        }
     }
 
     fn save_list_logged(&self, what: &str) {
@@ -212,8 +285,40 @@ impl StoredUserEntry for OpEntry {
         Some(OpEntry {
             user: NameAndId::from_json(object)?,
             level: object["level"].as_i64().map_or(0, |l| l.clamp(0, 4) as i32),
-            bypasses_player_limit: object["bypassesPlayerLimit"].as_bool().unwrap_or(false),
+            bypasses_player_limit: json_as_boolean(&object["bypassesPlayerLimit"]),
         })
+    }
+
+    fn create_entry(object: &Value) -> Result<Option<OpEntry>, EntryException> {
+        if let Some(level) = object.get("level") {
+            let text = match level {
+                Value::String(text) => Some(text.clone()),
+                Value::Bool(value) => Some(value.to_string()),
+                _ => None,
+            };
+            if let Some(text) = text
+                && crate::util::java_integer::parse_int(&text).is_none()
+            {
+                return Err(EntryException {
+                    description: format!("java.lang.NumberFormatException: {}", crate::util::java_integer::number_format_exception(&text)),
+                    frames: vec![
+                        "java.base/java.lang.NumberFormatException.forInputString(NumberFormatException.java:67)",
+                        "java.base/java.lang.Integer.parseInt(Integer.java:565)",
+                        "java.base/java.lang.Integer.parseInt(Integer.java:662)",
+                        "com.google.gson.JsonPrimitive.getAsInt(JsonPrimitive.java:232)",
+                        "net.minecraft.server.players.ServerOpListEntry.<init>(ServerOpListEntry.java:19)",
+                        "net.minecraft.server.players.ServerOpList.createEntry(ServerOpList.java:17)",
+                    ],
+                });
+            }
+        }
+        let level = match object.get("level") {
+            Some(Value::String(text)) => crate::util::java_integer::parse_int(text).map(i64::from),
+            Some(value) => value.as_i64(),
+            None => None,
+        };
+        let Some(user) = NameAndId::from_json(object) else { return Ok(None) };
+        Ok(Some(OpEntry { user, level: level.map_or(0, |l| l.clamp(0, 4) as i32), bypasses_player_limit: json_as_boolean(&object["bypassesPlayerLimit"]) }))
     }
 
     fn serialize(&self, object: &mut Map<String, Value>) {
@@ -313,7 +418,7 @@ impl Ban {
     }
 
     fn from_json(object: &Value) -> Ban {
-        let date = |key: &str| object[key].as_str().and_then(|s| DateTime::parse_from_str(s, DATE_FORMAT).ok());
+        let date = |key: &str| object[key].as_str().and_then(crate::util::java_simple_date_format::parse_date_time);
         Ban {
             created: date("created").unwrap_or_else(|| Local::now().fixed_offset()),
             source: object["source"].as_str().unwrap_or("(Unknown)").to_string(),
@@ -467,19 +572,22 @@ pub struct PlayerLists {
 }
 
 impl PlayerLists {
-    pub fn load(dir: Option<PathBuf>) -> PlayerLists {
+    pub fn load(dir: Option<PathBuf>) -> Result<PlayerLists, JavaThrowable> {
         let file = |name: &str| dir.as_ref().map(|d| d.join(name));
-        let bans = StoredUserList::new(file("banned-players.json")).load_logged("user banlist");
+        let tail = |frames: [&'static str; 2]| -> Vec<&'static str> {
+            frames.into_iter().chain([INIT_SERVER_213_FRAME, crate::server::RUN_SERVER_FRAME, crate::server::SPIN_FRAME, crate::server::THREAD_RUN_FRAME]).collect()
+        };
+        let bans = StoredUserList::new(file("banned-players.json")).load_io_only("user banlist", &tail([LOAD_USER_BAN_LIST_FRAME, PLAYER_LIST_INIT_22_FRAME]))?;
         bans.save_list_logged("user banlist");
-        let ip_bans = StoredUserList::new(file("banned-ips.json")).load_logged("ip banlist");
+        let ip_bans = StoredUserList::new(file("banned-ips.json")).load_io_only("ip banlist", &tail([LOAD_IP_BAN_LIST_FRAME, PLAYER_LIST_INIT_24_FRAME]))?;
         ip_bans.save_list_logged("ip banlist");
-        let ops = ServerOpList::new(file("ops.json")).load_logged("operators list");
-        let whitelist = StoredUserList::new(file("whitelist.json")).load_logged("white-list");
+        let ops = ServerOpList::new(file("ops.json")).load_logged("operators list", &tail([LOAD_OPS_FRAME, PLAYER_LIST_INIT_26_FRAME]));
+        let whitelist = StoredUserList::new(file("whitelist.json")).load_logged("white-list", &tail([LOAD_WHITE_LIST_FRAME, PLAYER_LIST_INIT_27_FRAME]));
         ops.save_list_logged("operators list");
         if whitelist.file.as_ref().is_some_and(|f| !f.exists()) {
             whitelist.save_list_logged("white-list");
         }
-        PlayerLists { ops, bans, ip_bans, whitelist }
+        Ok(PlayerLists { ops, bans, ip_bans, whitelist })
     }
 }
 

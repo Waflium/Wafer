@@ -229,6 +229,77 @@ pub fn from_json_object(json: &str) -> Result<Option<JsonElement>, String> {
     }
 }
 
+pub fn from_json_array(json: &str, tail: &[&'static str]) -> Result<Option<Vec<JsonElement>>, JavaThrowable> {
+    let from_json: Vec<&'static str> = [GSON_FROM_JSON_READER_981, GSON_FROM_JSON_READER_919].into_iter().chain(tail.iter().copied()).collect();
+    let syntax_exception = |error: JsonReaderError, frames: &[&'static str], throw_site: &'static str| {
+        let throw_site = match error.kind {
+            JsonReaderErrorKind::EndOfInput => GSON_FROM_JSON_EOF,
+            JsonReaderErrorKind::IllegalState => GSON_FROM_JSON_ILLEGAL_STATE,
+            JsonReaderErrorKind::Malformed => throw_site,
+        };
+        wrap_in_exception(
+            "com.google.gson.JsonSyntaxException",
+            to_throwable(error, frames),
+            [throw_site].into_iter().chain(from_json.iter().copied()).collect(),
+        )
+    };
+    let mut reader = JsonReader::new(json);
+    reader.strictness = Strictness::Lenient;
+    match reader.peek().at(GSON_FROM_JSON_PEEK) {
+        Ok(_) => {}
+        Err(error) if error.kind == JsonReaderErrorKind::EndOfInput => return Ok(None),
+        Err(error) => return Err(syntax_exception(error, &from_json, GSON_FROM_JSON_IO)),
+    }
+    let read_frames: Vec<&'static str> = [adapter!("read", 35), GSON_ARRAY_ADAPTER_READ, GSON_FROM_JSON_READ].into_iter().chain(from_json.iter().copied()).collect();
+    let element = match read_element(&mut reader, false) {
+        Ok(element) => element,
+        Err(error) => return Err(syntax_exception(error, &read_frames, GSON_FROM_JSON_IO)),
+    };
+    let elements = match element {
+        JsonElement::Array(elements) => elements,
+        other => {
+            let class = match other {
+                JsonElement::Object(_) => "JsonObject",
+                JsonElement::Null => "JsonNull",
+                _ => "JsonPrimitive",
+            };
+            let stack_trace = [GSON_ARRAY_ADAPTER_TYPE_CHECK, GSON_FROM_JSON_READ].into_iter().chain(from_json.iter().copied()).collect();
+            return Err(JavaThrowable::new(
+                format!("com.google.gson.JsonSyntaxException: Expected a com.google.gson.JsonArray but was com.google.gson.{class}; at path {}", reader.get_previous_path()),
+                stack_trace,
+            ));
+        }
+    };
+    reader.strictness = Strictness::LegacyStrict;
+    let consumption_frames: Vec<&'static str> = [GSON_FROM_JSON_READER_982, GSON_FROM_JSON_READER_919].into_iter().chain(tail.iter().copied()).collect();
+    match reader.peek().at(GSON_ASSERT_FULL_CONSUMPTION_PEEK) {
+        Ok(JsonToken::EndDocument) => Ok(Some(elements)),
+        Ok(_) => Err(JavaThrowable::new(
+            "com.google.gson.JsonSyntaxException: JSON document was not fully consumed.",
+            [GSON_ASSERT_FULL_CONSUMPTION_THROW].into_iter().chain(consumption_frames.iter().copied()).collect(),
+        )),
+        Err(error) => Err(wrap_in_exception(
+            "com.google.gson.JsonSyntaxException",
+            to_throwable(error, &consumption_frames),
+            [GSON_ASSERT_FULL_CONSUMPTION_MALFORMED].into_iter().chain(consumption_frames.iter().copied()).collect(),
+        )),
+    }
+}
+
+const GSON_FROM_JSON_READER_981: &str = "com.google.gson.Gson.fromJson(Gson.java:981)";
+const GSON_FROM_JSON_READER_982: &str = "com.google.gson.Gson.fromJson(Gson.java:982)";
+const GSON_FROM_JSON_READER_919: &str = "com.google.gson.Gson.fromJson(Gson.java:919)";
+const GSON_FROM_JSON_PEEK: &str = "com.google.gson.Gson.fromJson(Gson.java:1077)";
+const GSON_FROM_JSON_READ: &str = "com.google.gson.Gson.fromJson(Gson.java:1080)";
+const GSON_FROM_JSON_EOF: &str = "com.google.gson.Gson.fromJson(Gson.java:1101)";
+const GSON_FROM_JSON_ILLEGAL_STATE: &str = "com.google.gson.Gson.fromJson(Gson.java:1103)";
+const GSON_FROM_JSON_IO: &str = "com.google.gson.Gson.fromJson(Gson.java:1106)";
+const GSON_ARRAY_ADAPTER_READ: &str = "com.google.gson.internal.bind.TypeAdapters$33$1.read(TypeAdapters.java:1060)";
+const GSON_ARRAY_ADAPTER_TYPE_CHECK: &str = "com.google.gson.internal.bind.TypeAdapters$33$1.read(TypeAdapters.java:1068)";
+const GSON_ASSERT_FULL_CONSUMPTION_PEEK: &str = "com.google.gson.Gson.assertFullConsumption(Gson.java:1198)";
+const GSON_ASSERT_FULL_CONSUMPTION_THROW: &str = "com.google.gson.Gson.assertFullConsumption(Gson.java:1200)";
+const GSON_ASSERT_FULL_CONSUMPTION_MALFORMED: &str = "com.google.gson.Gson.assertFullConsumption(Gson.java:1202)";
+
 pub fn to_json_string(element: &JsonElement) -> String {
     let mut out = String::new();
     json_writer::write_value(&mut out, element, false);

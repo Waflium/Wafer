@@ -57,6 +57,7 @@ use crate::network::configuration::{ChatVisibility, CommonListenerCookie};
 use crate::network::server_status::Favicon;
 use crate::network::connection::{Outbound, Packet};
 use crate::network::login::{Profile, Verdict};
+use crate::util::java_throwable::JavaThrowable;
 use crate::world::clock::ServerClockManager;
 use crate::world::entity::EntityId;
 use crate::world::level::chunk::{ChunkGenerator, FlatLevelSource};
@@ -73,7 +74,7 @@ use crate::world::level::storage::command_storage::CommandStorage;
 use crate::world::level::storage::saved_data_storage::SavedDataStorage;
 use crate::world::random_sequences::RandomSequences;
 use crate::world::level::timers::timer_queue::TimerQueue;
-use self::players::NameAndId;
+use self::players::{NameAndId, PlayerLists};
 use self::players::cached_user_name_to_id_resolver::CachedUserNameToIdResolver;
 use crate::world::stopwatches::Stopwatches;
 use self::server_tick_rate_manager::ServerTickRateManager;
@@ -91,7 +92,7 @@ use self::packs::PackSource;
 use self::packs::repository::PackRepository;
 use self::packs::resources::MultiPackResourceManager;
 use self::reloadable_server_resources::ReloadableServerResources;
-use self::world_stem::WorldStem;
+use self::world_stem::{ConstructorSavedData, WorldStem};
 use self::server_function_manager::ServerFunctionManager;
 use self::jsonrpc::management_server::ManagementServer;
 use self::notifications::NotificationManager;
@@ -279,6 +280,10 @@ pub struct Server {
 
 impl Server {
     pub(crate) fn new(config: ServerConfig) -> std::io::Result<Server> {
+        Server::new_with_player_lists(config, None)
+    }
+
+    pub(crate) fn new_with_player_lists(config: ServerConfig, player_lists: Option<PlayerLists>) -> std::io::Result<Server> {
         let saved = match &config.world {
             Some(root) => WorldData::load(&WorldDir { root: root.clone() })?,
             None => None,
@@ -312,27 +317,28 @@ impl Server {
             }
         };
         world_data.data_configuration = data_configuration;
-        Server::with_world_stem(config, pack_repository, WorldStem { data_packs, world_data })
+        Server::with_world_stem(config, pack_repository, WorldStem { data_packs, world_data, saved_data: None, player_lists })
     }
 
     pub(crate) fn with_world_stem(config: ServerConfig, pack_repository: PackRepository, world_stem: WorldStem) -> std::io::Result<Server> {
-        let WorldStem { data_packs, world_data: data } = world_stem;
+        let WorldStem { data_packs, world_data: data, saved_data, player_lists } = world_stem;
         let data_configuration = data.data_configuration.clone();
         let new_world = !data.initialized;
         let world_dir = config.world.clone().map(|root| WorldDir { root });
         crate::world::level::levelgen::structure::templatesystem::structure_template_manager::set_generated_dir(world_dir.as_ref().map(WorldDir::generated));
+        let saved_data = saved_data.unwrap_or_else(|| ConstructorSavedData::load(world_dir.as_ref()));
+        let ConstructorSavedData { random_sequences, weather, game_rules: saved_game_rules, clocks: saved_clocks, custom_boss_events, scheduled_events } = saved_data;
         let mut clocks = ServerClockManager::new();
         let game_rules = GameRules::new(data_configuration.enabled_features);
         crate::commands::set_enabled_features(data_configuration.enabled_features);
-        let saved_data_exists = |id: &str| world_dir.as_ref().is_some_and(|dir| dir.data(id).exists());
-        if !new_world {
-            let game_rules_changed = game_rules.load(&data.game_rules);
-            clocks.load(&data.clocks);
-            game_rules.set_dirty(game_rules_changed);
-            clocks.dirty = !saved_data_exists("world_clocks");
+        let game_rules_changed = game_rules.load(&saved_game_rules.unwrap_or_else(|| Nbt::Compound(Vec::new())));
+        game_rules.set_dirty(game_rules_changed);
+        if let Some(saved_clocks) = &saved_clocks {
+            clocks.load(saved_clocks);
         }
-        let weather_dirty = new_world || !saved_data_exists("weather");
-        let weather = data.weather;
+        clocks.dirty = saved_clocks.is_none();
+        let weather_dirty = weather.is_none();
+        let weather = weather.unwrap_or_default();
         let generate_structures = data.generate_structures;
         let bonus_chest = data.bonus_chest;
         let (mut server_brands, was_modded) = (data.server_brands, data.was_modded);
@@ -363,6 +369,14 @@ impl Server {
         let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, &overworld_type, overworld_generator, is_debug, generate_structures, seed);
         overworld.chunks.game_rules = game_rules.clone();
         dedicated::set_overworld_created();
+        let mut scoreboard_save_data = ScoreboardSaveData::load(world_dir.as_ref().map(WorldDir::data_folder));
+        let scoreboard = Rc::new(RefCell::new(Scoreboard::default()));
+        if let Err(throwable) = scoreboard.borrow_mut().load(scoreboard_save_data.take_packed()) {
+            let saved_levels = vec![format!("'ServerLevel[{level_name}]'/minecraft:overworld")];
+            return Err(std::io::Error::other(StartupFailure { throwable, saving_players: true, saved_levels }));
+        }
+        let command_storage = Rc::new(RefCell::new(CommandStorage::new(world_dir.as_ref().map(WorldDir::data_folder))));
+        let stopwatches = Stopwatches::load(world_dir.as_ref().map(WorldDir::data_folder));
         if new_world && !is_debug {
             load_listener.start(level::progress::Stage::PrepareGlobalSpawn, 0);
         }
@@ -406,11 +420,7 @@ impl Server {
         }
         let weather = Rc::new(WeatherDataCell::new(weather, weather_dirty));
         let default_game_type = Rc::new(Cell::new(game_type));
-        let mut scoreboard_save_data = ScoreboardSaveData::load(world_dir.as_ref().map(WorldDir::data_folder));
-        let scoreboard = Rc::new(RefCell::new(Scoreboard::default()));
-        scoreboard.borrow_mut().load(scoreboard_save_data.take_packed());
-        let command_storage = Rc::new(RefCell::new(CommandStorage::new(world_dir.as_ref().map(WorldDir::data_folder))));
-        let random_sequences = Rc::new(RefCell::new(RandomSequences::load(world_dir.as_ref().map(WorldDir::data_folder))));
+        let random_sequences = Rc::new(RefCell::new(random_sequences));
         let data_storage = Rc::new(RefCell::new(SavedDataStorage::new(world_dir.as_ref().map(WorldDir::data_folder))));
         let tick_rate_manager = ServerTickRateManager::default();
         let main_thread_wakeup = levels[0].chunks.main_thread_wakeup();
@@ -436,7 +446,10 @@ impl Server {
         }
         let name_to_id_cache = CachedUserNameToIdResolver::load(config.server_dir.clone());
         name_to_id_cache.save();
-        let lists = players::PlayerLists::load(config.server_dir.clone());
+        let lists = match player_lists {
+            Some(lists) => lists,
+            None => PlayerLists::load(config.server_dir.clone()).map_err(|throwable| std::io::Error::other(StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() }))?,
+        };
         let (config_replies_to_status, config_accepts_transfers) = (config.replies_to_status, config.accepts_transfers);
         let mut server = Server {
             config,
@@ -499,12 +512,12 @@ impl Server {
             level_name,
             allow_commands,
             singleplayer_uuid,
-            scheduled_events: TimerQueue::load(world_dir.as_ref().map(WorldDir::data_folder)),
+            scheduled_events,
             name_to_id_cache: Arc::new(name_to_id_cache),
             profile_resolver: Arc::default(),
             task_sender: None,
-            custom_boss_events: CustomBossEvents::load(world_dir.as_ref().map(WorldDir::data_folder)),
-            stopwatches: Stopwatches::load(world_dir.as_ref().map(WorldDir::data_folder)),
+            custom_boss_events,
+            stopwatches,
             services: Services::offline(),
             functions: ServerFunctionManager::new(data_packs.function_library),
             pack_repository,
@@ -1953,20 +1966,17 @@ pub fn run(
             uses_authentication: config.online_mode,
             operator_permission_level: config.op_permission_level,
         };
-        if old_users_converter.convert_old_users() {
-            name_to_id_cache.save();
+        match old_users_converter.convert_old_users() {
+            Ok(true) => name_to_id_cache.save(),
+            Ok(false) => {}
+            Err(throwable) => {
+                report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() });
+                return Ok(());
+            }
         }
         if !old_users_converter.are_old_userlists_removed() {
-            error!("Encountered an unexpected exception\njava.lang.IllegalStateException: Failed to initialize server");
-            let report = crate::crash_report::CrashReport::new("Exception in server tick loop", "java.lang.IllegalStateException: Failed to initialize server".to_string(), crash_frames());
-            let file = crate::crash_report::crash_report_file(Path::new("."));
-            if report.save_to_file(&file) {
-                error!("This crash report has been saved to: {}", std::path::absolute(&file).unwrap_or(file).display());
-            } else {
-                error!("We were unable to save this crash report to disk.");
-            }
-            info!("Stopping server");
-            info!("Saving worlds");
+            let throwable = JavaThrowable::new("java.lang.IllegalStateException: Failed to initialize server", vec![RUN_SERVER_INITIALIZE_FRAME, SPIN_FRAME, THREAD_RUN_FRAME]);
+            report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() });
             return Ok(());
         }
     }
@@ -1985,10 +1995,30 @@ pub fn run(
     });
     runtime.spawn(crate::network::server_connection_listener::accept_connections(listener, context));
     let started = Instant::now();
+    let player_lists = match PlayerLists::load(config.server_dir.clone()) {
+        Ok(player_lists) => player_lists,
+        Err(throwable) => {
+            report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() });
+            return Ok(());
+        }
+    };
     info!("Preparing level \"{}\"", config.level_name);
-    let mut server = match world {
-        Some((pack_repository, world_stem)) => Server::with_world_stem(config, pack_repository, world_stem)?,
-        None => Server::new(config)?,
+    let created = match world {
+        Some((pack_repository, mut world_stem)) => {
+            world_stem.player_lists = Some(player_lists);
+            Server::with_world_stem(config, pack_repository, world_stem)
+        }
+        None => Server::new_with_player_lists(config, Some(player_lists)),
+    };
+    let mut server = match created {
+        Ok(server) => server,
+        Err(e) => match e.get_ref().and_then(|inner| inner.downcast_ref::<StartupFailure>()) {
+            Some(failure) => {
+                report_startup_failure(failure);
+                return Ok(());
+            }
+            None => return Err(e.into()),
+        },
     };
     server.attach_notification_manager(notification_manager, server_activity_monitor, listener_settings);
     if let Some(management_server) = &management_server {
@@ -2091,6 +2121,46 @@ pub(crate) fn capture_panic_frames(location: Option<String>) {
 
 pub(crate) fn crash_frames() -> Vec<String> {
     PANIC_FRAMES.take().unwrap_or_else(backtrace_frames)
+}
+
+pub(crate) const RUN_SERVER_INITIALIZE_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:774)";
+pub(crate) const RUN_SERVER_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)";
+pub(crate) const SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
+pub(crate) const THREAD_RUN_FRAME: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
+pub(crate) const INIT_SERVER_FRAME: &str = "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:206)";
+
+#[derive(Debug)]
+pub struct StartupFailure {
+    pub throwable: JavaThrowable,
+    pub saving_players: bool,
+    pub saved_levels: Vec<String>,
+}
+
+impl std::fmt::Display for StartupFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.throwable.fmt(formatter)
+    }
+}
+
+impl std::error::Error for StartupFailure {}
+
+pub(crate) fn report_startup_failure(failure: &StartupFailure) {
+    error!("Encountered an unexpected exception\n{}", failure.throwable.print_stack_trace().trim_end());
+    let report = crate::crash_report::CrashReport::new("Exception in server tick loop", failure.throwable.description.clone(), failure.throwable.stack_trace.iter().map(ToString::to_string).collect());
+    let file = crate::crash_report::crash_report_file(Path::new("."));
+    if report.save_to_file(&file) {
+        error!("This crash report has been saved to: {}", std::path::absolute(&file).unwrap_or(file).display());
+    } else {
+        error!("We were unable to save this crash report to disk.");
+    }
+    info!("Stopping server");
+    if failure.saving_players {
+        info!("Saving players");
+    }
+    info!("Saving worlds");
+    for level in &failure.saved_levels {
+        info!("Saving chunks for level {level}");
+    }
 }
 
 fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Event>, tasks: &std::sync::mpsc::Receiver<ServerTask>, timing: &dedicated::server_watchdog::ServerTiming) {

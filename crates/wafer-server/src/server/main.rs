@@ -7,7 +7,7 @@ use super::eula::Eula;
 use super::packs::repository::PackRepository;
 use super::packs::resources::MultiPackResourceManager;
 use super::reloadable_server_resources::ReloadableServerResources;
-use super::world_stem::WorldStem;
+use super::world_stem::{ConstructorSavedData, WorldStem};
 use super::configure_pack_repository;
 use crate::tags::{ExistingTagLoading, load_tags_for_existing_registries};
 use crate::world::flag::FeatureFlagSet;
@@ -283,6 +283,7 @@ pub fn main(args: Vec<String>) {
     let _ = std::fs::create_dir_all(world_dir.root.join("players/data"));
     let port = options.value_of("port").and_then(parse_int).filter(|&p| p >= 0).unwrap_or(properties.server_port);
     let listen = Listen::Bind { ip: properties.server_ip.clone(), port: port as u16 };
+    let saved_data = ConstructorSavedData::load(Some(&world_dir));
     let mut config = ServerConfig::from_properties(properties, &universe, level_name);
     if properties.code_of_conduct {
         match super::dedicated::read_code_of_conducts() {
@@ -294,7 +295,7 @@ pub fn main(args: Vec<String>) {
             }
         }
     }
-    let world_stem = WorldStem { data_packs, world_data };
+    let world_stem = WorldStem { data_packs, world_data, saved_data: Some(saved_data), player_lists: None };
     if let Err(e) = runtime.block_on(serve_world(listen, config, services, Some(settings), true, Some((pack_repository, world_stem)), management_server)) {
         error!("Encountered an unexpected exception\n{e:#}");
     }
