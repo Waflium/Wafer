@@ -174,6 +174,45 @@ pub fn start_console_thread(events: mpsc::UnboundedSender<Event>) {
     });
 }
 
+const GET_BY_NAME_FRAMES: [&str; 12] = [
+    "java.base/java.net.Inet6AddressImpl.lookupAllHostAddr(Native Method)",
+    "java.base/java.net.Inet6AddressImpl.lookupAllHostAddr(Inet6AddressImpl.java:52)",
+    "java.base/java.net.InetAddress$PlatformResolver.lookupByName(InetAddress.java:1134)",
+    "java.base/java.net.InetAddress.getAddressesFromNameService(InetAddress.java:1712)",
+    "java.base/java.net.InetAddress$NameServiceAddresses.get(InetAddress.java:1060)",
+    "java.base/java.net.InetAddress.getAllByName0(InetAddress.java:1702)",
+    "java.base/java.net.InetAddress.getAllByName(InetAddress.java:1582)",
+    "java.base/java.net.InetAddress.getByName(InetAddress.java:1492)",
+    "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:181)",
+    crate::server::RUN_SERVER_FRAME,
+    crate::server::SPIN_FRAME,
+    crate::server::THREAD_RUN_FRAME,
+];
+
+pub fn get_by_name(host: &str) -> Result<std::net::IpAddr, crate::util::java_throwable::JavaThrowable> {
+    let literal = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')).unwrap_or(host);
+    if let Ok(address) = literal.parse() {
+        return Ok(address);
+    }
+    let lookup = std::net::ToSocketAddrs::to_socket_addrs(&(host, 0)).map(|mut addresses| addresses.next());
+    match lookup {
+        Ok(Some(address)) => Ok(address.ip()),
+        Ok(None) => Err(unknown_host_exception(host, None)),
+        Err(error) => Err(unknown_host_exception(host, Some(&error))),
+    }
+}
+
+fn unknown_host_exception(host: &str, error: Option<&io::Error>) -> crate::util::java_throwable::JavaThrowable {
+    let reason = error.map_or_else(String::new, |error| {
+        let text = error.raw_os_error().map_or_else(|| error.to_string(), |code| io::Error::from_raw_os_error(code).to_string());
+        let text = text.strip_prefix("failed to lookup address information: ").unwrap_or(&text);
+        let text = text.find(" (os error ").map_or(text, |end| &text[..end]);
+        text.trim_end().trim_end_matches('.').to_string()
+    });
+    let message = if cfg!(windows) { format!("{reason} ({host})") } else { format!("{host}: {reason}") };
+    crate::util::java_throwable::JavaThrowable::new(format!("java.net.UnknownHostException: {message}"), GET_BY_NAME_FRAMES.to_vec())
+}
+
 pub fn java_bind_exception(error: &io::Error) -> String {
     let reason = match error.kind() {
         io::ErrorKind::AddrInUse => "Address already in use",
@@ -185,5 +224,20 @@ pub fn java_bind_exception(error: &io::Error) -> String {
         format!("io.netty.channel.unix.Errors$NativeIoException: bind(..) failed: {reason}")
     } else {
         format!("java.net.BindException: {reason}: bind")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn get_by_name_reads_literals_and_fails_like_java() {
+        assert_eq!(super::get_by_name("127.0.0.1").unwrap(), std::net::IpAddr::from([127, 0, 0, 1]));
+        assert_eq!(super::get_by_name("::1").unwrap(), std::net::IpAddr::from(std::net::Ipv6Addr::LOCALHOST));
+        assert_eq!(super::get_by_name("[::1]").unwrap(), std::net::IpAddr::from(std::net::Ipv6Addr::LOCALHOST));
+        let throwable = super::get_by_name("nonexistent.invalid").unwrap_err();
+        assert!(throwable.description.starts_with("java.net.UnknownHostException: "), "{}", throwable.description);
+        assert!(throwable.description.contains("nonexistent.invalid"), "{}", throwable.description);
+        assert!(!throwable.description.contains("os error"), "{}", throwable.description);
+        assert_eq!(throwable.stack_trace[8], "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:181)");
     }
 }

@@ -67,6 +67,47 @@ fn event_loop_type(use_native_transport: bool) -> &'static str {
     }
 }
 
+fn somaxconn() -> i32 {
+    if cfg!(windows) {
+        return 200;
+    }
+    std::fs::read_to_string("/proc/sys/net/core/somaxconn").ok().and_then(|value| value.trim().parse().ok()).unwrap_or(128)
+}
+
+fn bind(address: SocketAddr, dual_stack: bool) -> std::io::Result<TcpListener> {
+    let socket = socket2::Socket::new(socket2::Domain::for_address(address), socket2::Type::STREAM, Some(socket2::Protocol::TCP))?;
+    if dual_stack {
+        socket.set_only_v6(false)?;
+    }
+    if cfg!(unix) {
+        socket.set_reuse_address(true)?;
+    }
+    socket.bind(&address.into())?;
+    socket.listen(somaxconn())?;
+    socket.set_nonblocking(true)?;
+    TcpListener::from_std(socket.into())
+}
+
+pub fn start_tcp_server_listener(address: Option<std::net::IpAddr>, port: u16) -> std::io::Result<TcpListener> {
+    match address {
+        Some(address) => bind(SocketAddr::new(address, port), false),
+        None => match socket2::Socket::new(socket2::Domain::IPV6, socket2::Type::STREAM, Some(socket2::Protocol::TCP)) {
+            Ok(_) => bind(SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), port), true),
+            Err(_) => bind(SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), port), false),
+        },
+    }
+}
+
+fn remote_address(address: SocketAddr) -> SocketAddr {
+    match address {
+        SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
+            Some(v4) => SocketAddr::new(v4.into(), v6.port()),
+            None => address,
+        },
+        SocketAddr::V4(_) => address,
+    }
+}
+
 pub async fn accept_connections(listener: TcpListener, context: Arc<ListenerContext>) {
     let event_loop_type = event_loop_type(context.config.use_native_transport);
     let event_loops = std::thread::available_parallelism().map_or(1, |n| n.get()) * 2;
@@ -82,7 +123,7 @@ pub async fn accept_connections(listener: TcpListener, context: Arc<ListenerCont
 }
 
 async fn handle_connection(stream: TcpStream, context: &ListenerContext, io_thread: Arc<str>) -> anyhow::Result<()> {
-    let address = stream.peer_addr()?;
+    let address = remote_address(stream.peer_addr()?);
     let (mut r, mut w) = connection::split(stream)?;
     if context.settings.replies_to_status() && super::legacy_query_handler::handle(&mut r, &mut w, context).await? {
         return Ok(());
@@ -171,6 +212,25 @@ pub fn loggable_address(address: SocketAddr, log_ips: bool) -> String {
         SocketAddr::V6(v6) => {
             let segments = v6.ip().segments().map(|s| format!("{s:x}")).join(":");
             format!("/[{segments}]:{}", v6.port())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_wildcard_listener_accepts_ipv4_and_ipv6_like_java() {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let _guard = runtime.enter();
+        let listener = start_tcp_server_listener(None, 0).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        for target in ["127.0.0.1", "::1"] {
+            let target: std::net::IpAddr = target.parse().unwrap();
+            let client = std::net::TcpStream::connect((target, port)).unwrap();
+            let (stream, _) = runtime.block_on(listener.accept()).unwrap();
+            assert_eq!(remote_address(stream.peer_addr().unwrap()), client.local_addr().unwrap());
         }
     }
 }

@@ -1928,13 +1928,23 @@ pub fn run(
     info!("Starting minecraft server version {}", wafer_data::VERSION_NAME);
     info!("Loading properties");
     info!("Default game type: {}", config.game_mode.name().to_uppercase());
+    let local_address = match &listen {
+        crate::Listen::Bind { ip, .. } if !ip.is_empty() => match dedicated::get_by_name(ip) {
+            Ok(address) => Some(address),
+            Err(throwable) => {
+                report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() });
+                return Ok(());
+            }
+        },
+        _ => None,
+    };
     info!("Generating keypair");
     let keys = Arc::new(crate::network::encryption::ServerKeyPair::generate()?);
     let listener = match listen {
         crate::Listen::Bind { ip, port } => {
             info!("Starting Minecraft server on {}:{port}", if ip.is_empty() { "*" } else { &ip });
-            let address = if ip.is_empty() { format!("0.0.0.0:{port}") } else { format!("{ip}:{port}") };
-            match runtime.block_on(tokio::net::TcpListener::bind(&address)) {
+            let _guard = runtime.enter();
+            match crate::network::server_connection_listener::start_tcp_server_listener(local_address, port) {
                 Ok(listener) => listener,
                 Err(e) => {
                     warn!("**** FAILED TO BIND TO PORT!");
