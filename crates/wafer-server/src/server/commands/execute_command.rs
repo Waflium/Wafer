@@ -251,7 +251,7 @@ static ERROR_AREA_TOO_LARGE: crate::commands::brigadier::Dynamic2CommandExceptio
 fn test_block(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<bool, CommandSyntaxException> {
     let pos = crate::commands::arguments::coordinates::get_loaded_block_pos(server, context, source, "pos")?;
     let predicate = context.get_block_predicate("block").clone();
-    Ok(predicate.test(&mut server.levels[source.level], pos))
+    Ok(predicate.test(&mut server.lend_level(source.level), pos))
 }
 
 pub fn if_block(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Sources {

@@ -25,6 +25,45 @@ pub trait EntityWorld {
         self.level_of_entity(id).is_some_and(|level| level.players.contains_key(&id))
     }
 
+    fn owner(&self, level: &ServerLevel, id: EntityId) -> Option<(&ServerLevel, EntityId)> {
+        let uuid = level.get_owner_reference(id)?.get_uuid();
+        self.levels().find_map(|level| level.entity_manager.visible_entity_storage.get(uuid).filter(|&owner| level.is_living(owner) && !level.entity(owner).is_removed()).map(|owner| (level, owner)))
+    }
+
+    fn root_owner(&self, id: EntityId) -> Option<(&ServerLevel, EntityId)> {
+        let level = self.level_of_entity(id)?;
+        let mut seen = vec![id];
+        let mut owner = self.owner(level, id);
+        while let Some((owner_level, ownable_owner)) = owner.filter(|&(owner_level, owner)| owner_level.is_ownable_entity(owner)) {
+            let owners_owner = self.owner(owner_level, ownable_owner);
+            if owners_owner.is_some_and(|(_, owners_owner)| seen.contains(&owners_owner)) {
+                return None;
+            }
+            seen.push(ownable_owner);
+            owner = owners_owner;
+        }
+        owner
+    }
+
+    fn team_of(&self, id: EntityId) -> Option<std::cell::Ref<'_, crate::world::scores::player_team::PlayerTeam>> {
+        let level = self.level_of_entity(id)?;
+        if !level.is_tamable_animal(id) {
+            return level.entity_get_team(id);
+        }
+        if level.scoreboard.borrow().team_count() == 0 {
+            return None;
+        }
+        if let Some(own_team) = level.entity_get_team(id) {
+            return Some(own_team);
+        }
+        if level.is_tame(id)
+            && let Some((owner_level, owner)) = self.root_owner(id)
+        {
+            return owner_level.entity_get_team(owner);
+        }
+        None
+    }
+
     fn entity_tag_to_compare(&self, id: EntityId) -> wafer_protocol::nbt::Nbt {
         let level = self.level_of_entity(id).expect("entity in a loaded level");
         level.entity_tag_to_compare_with(id, &|pearl| self.level_of_entity(pearl).filter(|level| level.entities.contains_key(&pearl)).or_else(|| level.other_levels.iter().find(|level| level.entities.contains_key(&pearl))))

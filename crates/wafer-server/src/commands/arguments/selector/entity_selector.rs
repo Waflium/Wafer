@@ -86,7 +86,7 @@ impl EntityPredicate {
                 Some(player) => (player.game_mode.game_type == *mode) ^ *inverted,
                 None => false,
             },
-            EntityPredicate::Team { name, inverted } => (level.team_of(id).as_deref().map_or("", |t| t.name()) == name) != *inverted,
+            EntityPredicate::Team { name, inverted } => (world.team_of(id).as_deref().map_or("", |t| t.name()) == name) != *inverted,
             EntityPredicate::Type { entity_type, inverted } => (e.entity_type == *entity_type) != *inverted,
             EntityPredicate::TypeTag { tag, inverted } => wafer_data::tag("minecraft:entity_type", tag).contains(&e.entity_type) != *inverted,
             EntityPredicate::Tag { tag, inverted } => {

@@ -11,7 +11,7 @@ static ERROR_NOT_ON_TEAM: SimpleCommandExceptionType = SimpleCommandExceptionTyp
 pub fn team_msg(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let entity = source.entity_or_exception()?;
     let Some((team_name, display_name)) =
-        server.entity_level(entity).team_of(entity).map(|team| (team.name().to_string(), team.formatted_display_name()))
+        crate::commands::arguments::selector::entity_world::EntityWorld::team_of(server, entity).map(|team| (team.name().to_string(), team.formatted_display_name()))
     else {
         return Err(ERROR_NOT_ON_TEAM.create());
     };
