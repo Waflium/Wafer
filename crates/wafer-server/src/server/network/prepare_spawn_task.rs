@@ -7,6 +7,7 @@ use crate::server::level::game_mode::GameType;
 use crate::server::level::ticket::TicketType;
 use crate::util::codec::{self, DecodeResult, Record};
 use crate::util::extra_codecs;
+use crate::world::level::storage::player_data_storage::PlayerDataStorage;
 use crate::world::level::storage::tag_value_input;
 
 const SPAWN_RADIUS: i32 = 3;
@@ -30,11 +31,13 @@ pub(crate) struct PrepareSpawnTask {
     pub level: usize,
     pub position: Vec3,
     pub angle: (f32, f32),
-    pub reply: Option<oneshot::Sender<()>>,
+    pub reply: Option<oneshot::Sender<Result<(), ()>>>,
     chunk_load_requested: bool,
 }
 
 impl PrepareSpawnTask {
+    pub const TYPE: &str = "prepare_spawn";
+
     fn spawn_chunk(&self) -> ChunkPos {
         BlockPos::containing(self.position.x, self.position.y, self.position.z).chunk()
     }
@@ -42,17 +45,7 @@ impl PrepareSpawnTask {
 
 impl Server {
     pub(crate) fn load_player_data(&self, name: &str, uuid: u128) -> Option<Nbt> {
-        let dir = self.world_dir.as_ref()?;
-        match crate::world::level::storage::read_dat(&dir.player(uuid)) {
-            Ok(nbt) => nbt.map(|tag| {
-                let version = crate::nbt::get_data_version(&tag, -1);
-                crate::util::datafix::data_fix_types::DataFixTypes::Player.update_tag_to_current_version(tag, version)
-            }),
-            Err(_) => {
-                warn!("Failed to load player data for {name}");
-                None
-            }
-        }
+        PlayerDataStorage::new(self.world_dir.as_ref()?).load(name, uuid)
     }
 
     pub(crate) fn spawn_position(&mut self, saved: Option<&Nbt>) -> (usize, Vec3, f32, f32) {
@@ -65,11 +58,21 @@ impl Server {
         (spawn_level, position, y_rot, x_rot)
     }
 
-    pub(crate) fn start_prepare_spawn(&mut self, uuid: u128, name: &str, reply: oneshot::Sender<()>) {
-        let _collector = tag_value_input::ScopedCollector::new_empty(PREPARE_SPAWN_TASK_LOGGER);
-        let saved = self.load_player_data(name, uuid);
-        let (level, position, y_rot, x_rot) = self.spawn_position(saved.as_ref());
-        self.prepare_spawn_tasks.push(PrepareSpawnTask { uuid, level, position, angle: (y_rot, x_rot), reply: Some(reply), chunk_load_requested: false });
+    pub(crate) fn start_prepare_spawn(&mut self, uuid: u128, name: &str, reply: oneshot::Sender<Result<(), ()>>) {
+        let started = crate::util::catch_exception(|| {
+            let _collector = tag_value_input::ScopedCollector::new_empty(PREPARE_SPAWN_TASK_LOGGER);
+            let saved = self.load_player_data(name, uuid);
+            self.spawn_position(saved.as_ref())
+        });
+        match started {
+            Ok((level, position, y_rot, x_rot)) => {
+                self.prepare_spawn_tasks.push(PrepareSpawnTask { uuid, level, position, angle: (y_rot, x_rot), reply: Some(reply), chunk_load_requested: false })
+            }
+            Err(exception) => {
+                error!("Failed to start configuration task {}\n{exception}", PrepareSpawnTask::TYPE);
+                let _ = reply.send(Err(()));
+            }
+        }
     }
 
     pub(crate) fn tick_prepare_spawns(&mut self) {
@@ -91,7 +94,7 @@ impl Server {
                 .all(|dx| (-SPAWN_RADIUS..=SPAWN_RADIUS).all(|dz| chunks.has_chunk(ChunkPos::new(spawn_chunk.x + dx, spawn_chunk.z + dz))));
             let task = &mut self.prepare_spawn_tasks[index];
             if loaded && let Some(reply) = task.reply.take() {
-                if reply.send(()).is_err() {
+                if reply.send(Ok(())).is_err() {
                     self.prepare_spawn_tasks.swap_remove(index);
                     continue;
                 }

@@ -283,13 +283,21 @@ impl ServerLevel {
     pub fn process_pending_loads(&mut self) {
         while let Some((pos, read)) = self.entity_manager.permanent_storage.poll_read() {
             let entities = match read {
-                Ok(Some(tag)) => self.read_chunk_entities(pos, &tag),
+                Ok(Some(tag)) => match crate::util::catch_exception(|| self.read_chunk_entities(pos, &tag)) {
+                    Ok(entities) => entities,
+                    Err(exception) => {
+                        error!("Failed to read chunk {pos}\njava.util.concurrent.CompletionException: {exception}");
+                        continue;
+                    }
+                },
                 Ok(None) => {
                     self.entity_manager.permanent_storage.mark_empty(pos);
                     Vec::new()
                 }
                 Err(e) => {
-                    error!("Failed to load entity chunk {pos}: {e}");
+                    error!("Failed to load entity chunk {pos}\n{e}");
+                    error!("Failed to load chunk {},{}\n{e}", pos.x, pos.z);
+                    error!("Failed to read chunk {pos}\njava.util.concurrent.CompletionException: {e}");
                     continue;
                 }
             };

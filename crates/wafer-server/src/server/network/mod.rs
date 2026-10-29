@@ -4,3 +4,6 @@ pub mod game;
 pub mod movement;
 pub mod prepare_spawn_task;
 pub mod server_command_suggestions_provider;
+
+#[cfg(test)]
+mod prepare_spawn_task_tests;

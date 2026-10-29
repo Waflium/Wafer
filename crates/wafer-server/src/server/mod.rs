@@ -79,7 +79,7 @@ use self::bossevents::custom_boss_events::CustomBossEvents;
 use crate::world::level::saveddata::weather_data::WeatherDataCell;
 use crate::world::scores::scoreboard::Scoreboard;
 use crate::world::scores::scoreboard_save_data::ScoreboardSaveData;
-use crate::world::level::storage::{DirtySavedData, RespawnData, WorldData, WorldDir, write_dat};
+use crate::world::level::storage::{DirtySavedData, RespawnData, WorldData, WorldDir};
 use level::ServerLevel;
 use self::network::prepare_spawn_task::PrepareSpawnTask;
 use level::game_mode::GameType;
@@ -170,7 +170,7 @@ pub enum Event {
     Left { conn: ConnId, reason: Component },
     Console(String, bool),
     Verify { profile: Profile, address: std::net::SocketAddr, user_name: String, reply: tokio::sync::oneshot::Sender<Verdict> },
-    PrepareSpawn { uuid: u128, name: String, reply: tokio::sync::oneshot::Sender<()> },
+    PrepareSpawn { uuid: u128, name: String, reply: tokio::sync::oneshot::Sender<Result<(), ()>> },
     PrepareSpawnClosed { uuid: u128 },
     Halt,
     Rcon { command: String, reply: tokio::sync::oneshot::Sender<String> },
@@ -956,16 +956,20 @@ impl Server {
 
     fn save_player_data(&self, nbt: &Nbt, player: &ServerPlayer) {
         let Some(dir) = &self.world_dir else { return };
-        if write_dat(&dir.player(player.profile.uuid), nbt).is_err() {
-            warn!("Failed to save player data for {}", player.profile.name);
-        }
+        crate::world::level::storage::player_data_storage::PlayerDataStorage::new(dir).save(nbt, player.profile.uuid, &player.profile.name);
         player.stats.save();
         player.advancements.save();
     }
 
     fn handle(&mut self, event: Event) {
         match event {
-            Event::Join { conn, profile, cookie, out, address } => self.place_new_player(conn, profile, cookie, out, address),
+            Event::Join { conn, profile, cookie, out, address } => {
+                let (failed_profile, failed_out) = (profile.clone(), out.clone());
+                if let Err(exception) = crate::util::catch_exception(|| self.place_new_player(conn, profile, cookie, out, address)) {
+                    error!("Couldn't place player in world\n{exception}");
+                    disconnect_invalid_player_data(&failed_profile, &failed_out);
+                }
+            }
             Event::Packet { conn, packet } => {
                 let Some(&id) = self.connections.get(&conn) else { return };
                 self.player_mut(id).received_packets += 1;
@@ -1043,9 +1047,7 @@ impl Server {
         if let Some(nbt) = &saved {
             if let Err(cause) = player.load_nbt(nbt) {
                 error!("Couldn't place player in world\n{}", crate::world::entity::entity_save::loading_entity_exception(&cause));
-                let reason = crate::network::chat::translate("multiplayer.disconnect.invalid_player_data");
-                info!("{} ({}) lost connection: {}", player.profile.name, format_uuid(player.profile.uuid), reason.get_string());
-                player.connection.send(clientbound::DISCONNECT, |p| reason.write(p));
+                disconnect_invalid_player_data(&player.profile, &player.connection);
                 return;
             }
             player.entity.load_team(nbt, &self.scoreboard);
@@ -1763,6 +1765,12 @@ fn write_respawn_data(p: &mut wafer_protocol::Writer, data: &RespawnData) {
     p.position(data.pos.x, data.pos.y, data.pos.z);
     p.f32(data.yaw);
     p.f32(data.pitch);
+}
+
+fn disconnect_invalid_player_data(profile: &Profile, connection: &Outbound) {
+    let reason = crate::network::chat::translate("multiplayer.disconnect.invalid_player_data");
+    info!("{} ({}) lost connection: {}", profile.name, format_uuid(profile.uuid), reason.get_string());
+    connection.send(clientbound::DISCONNECT, |p| reason.write(p));
 }
 
 pub(crate) fn log_save_failure(file_name: &str, result: std::io::Result<()>) {

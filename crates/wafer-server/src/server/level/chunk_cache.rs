@@ -1366,6 +1366,10 @@ impl ChunkCache {
 
     fn apply_loaded(&mut self, job: Job, result: io::Result<Option<serialization::ReadChunk>>) {
         let pos = job.pos;
+        let result = match self.poi_manager.storage.prefetched_load_failure(pos) {
+            Some(exception) => Err(io::Error::other(exception)),
+            None => result,
+        };
         let read = match result {
             Ok(read) => read,
             Err(e) => {

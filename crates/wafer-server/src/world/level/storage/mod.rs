@@ -4,6 +4,7 @@ pub mod level_storage_source;
 pub mod level_summary;
 pub mod level_version;
 pub mod loot;
+pub mod player_data_storage;
 pub mod saved_data_storage;
 pub mod tag_value_input;
 
@@ -46,10 +47,27 @@ pub fn read_dat(path: &Path) -> io::Result<Option<Nbt>> {
 }
 
 pub fn read_saved_data_dat(path: &Path, data_fix_type: crate::util::datafix::data_fix_types::DataFixTypes) -> io::Result<Option<Nbt>> {
-    Ok(read_dat(path)?.map(|tag| {
-        let version = crate::nbt::get_data_version(&tag, 1343);
-        data_fix_type.update_tag_to_current_version(tag, version)
-    }))
+    if !path.exists() {
+        return Ok(None);
+    }
+    read_tag_from_disk(path, data_fix_type, WORLD_VERSION).map(Some)
+}
+
+pub fn read_tag_from_disk(data_file: &Path, data_fix_type: DataFixTypes, new_version: i32) -> io::Result<Nbt> {
+    let bytes = fs::read(data_file)?;
+    let tag = if is_gzip(&bytes) {
+        let mut decompressed = Vec::new();
+        GzDecoder::new(bytes.as_slice()).read_to_end(&mut decompressed)?;
+        decode_nbt(&decompressed)?
+    } else {
+        decode_nbt(&bytes)?
+    };
+    let version = crate::nbt::get_data_version(&tag, 1343);
+    crate::util::catch_exception(|| data_fix_type.update_tag(tag, version, new_version)).map_err(io::Error::other)
+}
+
+fn is_gzip(bytes: &[u8]) -> bool {
+    bytes.len() >= 2 && (bytes[0] as i32 | (bytes[1] as i32) << 8) == 35615
 }
 
 pub fn read_saved_data<T>(file: &Path, thread: &str, id: &str, data_fix_type: DataFixTypes, decode: impl FnOnce(&Nbt) -> crate::util::codec::DecodeResult<T>) -> Option<T> {
@@ -86,21 +104,34 @@ pub(crate) fn read_level_data_tag_raw(data_file: &Path) -> Result<Nbt, String> {
     decode_compressed_nbt(&bytes)
 }
 
+pub(crate) fn read_compressed(file: &Path) -> io::Result<Nbt> {
+    let mut bytes = Vec::new();
+    GzDecoder::new(File::open(file)?).read_to_end(&mut bytes)?;
+    decode_nbt(&bytes)
+}
+
+pub(crate) fn write_compressed(tag: &Nbt, file: &Path) -> io::Result<()> {
+    let mut gz = GzEncoder::new(fs::OpenOptions::new().write(true).create(true).truncate(true).open(file)?, Compression::default());
+    gz.write_all(&encode_nbt(tag))?;
+    gz.finish()?.sync_all()
+}
+
+pub(crate) fn create_temp_file(dir: &Path, prefix: &str, suffix: &str) -> io::Result<PathBuf> {
+    loop {
+        let path = dir.join(format!("{prefix}{}{suffix}", rand::random::<u64>()));
+        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(_) => return Ok(path),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 fn save_level_dat(dir: &WorldDir, root: &Nbt) -> io::Result<()> {
     fs::create_dir_all(&dir.root)?;
-    let data_file = dir.root.join(format!("level{}.dat", rand::random::<u64>()));
-    let mut gz = GzEncoder::new(File::create(&data_file)?, Compression::default());
-    gz.write_all(&encode_nbt(root))?;
-    gz.finish()?;
-    let (current, old) = (dir.level_dat(), dir.old_level_dat());
-    if current.exists() {
-        let _ = fs::remove_file(&old);
-        fs::rename(&current, &old)?;
-    }
-    if let Err(e) = fs::rename(&data_file, &current) {
-        let _ = fs::rename(&old, &current);
-        return Err(e);
-    }
+    let data_file = create_temp_file(&dir.root, "level", ".dat")?;
+    write_compressed(root, &data_file)?;
+    crate::util::safe_replace_file(&dir.level_dat(), &data_file, &dir.old_level_dat());
     Ok(())
 }
 
@@ -150,18 +181,8 @@ impl WorldDir {
             }
         }
     }
-    fn restore_level_data_from_old(&self) {
-        let (target, backup) = (self.level_dat(), self.corrupted_level_dat());
-        if target.exists() {
-            let _ = fs::remove_file(&backup);
-            if fs::rename(&target, &backup).is_err() {
-                return;
-            }
-        }
-        if fs::remove_file(&target).is_err() && target.exists() {
-            return;
-        }
-        let _ = fs::rename(self.old_level_dat(), &target);
+    fn restore_level_data_from_old(&self) -> bool {
+        crate::util::safe_replace_or_move_file(&self.level_dat(), &self.old_level_dat(), &self.corrupted_level_dat(), true)
     }
     pub fn player_advancements(&self, uuid: u128) -> PathBuf {
         self.root.join("players/advancements").join(format!("{}.json", format_uuid(uuid)))
@@ -480,3 +501,6 @@ mod tests {
         assert_eq!(format_uuid(0xd76279edcc573f1885f4367c1defa1ee), "d76279ed-cc57-3f18-85f4-367c1defa1ee");
     }
 }
+
+#[cfg(test)]
+mod player_data_storage_tests;

@@ -116,6 +116,23 @@ fn create_renamer<'a>(from: &'a std::path::Path, to: &'a std::path::Path, option
     }
 }
 
+fn create_deleter(target: &std::path::Path) -> Operation<'_> {
+    Operation {
+        description: format!("delete old {}", target.display()),
+        run: Box::new(move || match java_nio::delete_if_exists(target) {
+            Ok(_) => true,
+            Err(e) => {
+                warn!("Failed to delete\n{e}");
+                false
+            }
+        }),
+    }
+}
+
+fn create_file_deleted_check(target: &std::path::Path) -> Operation<'_> {
+    Operation { description: format!("verify that {} is deleted", target.display()), run: Box::new(move || !target.exists()) }
+}
+
 fn create_file_created_check(target: &std::path::Path) -> Operation<'_> {
     Operation { description: format!("verify that {} is present", target.display()), run: Box::new(move || java_nio::is_regular_file(target)) }
 }
@@ -147,6 +164,38 @@ pub fn safe_move_file(from_path: &std::path::Path, to_path: &std::path::Path, op
         &format!("move from  {} to {}", from_path.display(), to_path.display()),
         &[create_renamer(from_path, to_path, options), create_file_created_check(to_path)],
     )
+}
+
+pub fn safe_replace_file(target_path: &std::path::Path, new_path: &std::path::Path, backup_path: &std::path::Path) {
+    safe_replace_or_move_file(target_path, new_path, backup_path, false);
+}
+
+pub fn safe_replace_or_move_file(target_path: &std::path::Path, new_path: &std::path::Path, backup_path: &std::path::Path, no_rollback: bool) -> bool {
+    if target_path.exists()
+        && !run_with_retries(
+            10,
+            &format!("create backup {}", backup_path.display()),
+            &[create_deleter(backup_path), create_renamer(target_path, backup_path, &[]), create_file_created_check(backup_path)],
+        )
+    {
+        false
+    } else if !run_with_retries(10, &format!("remove old {}", target_path.display()), &[create_deleter(target_path), create_file_deleted_check(target_path)]) {
+        false
+    } else if !run_with_retries(
+        10,
+        &format!("replace {} with {}", target_path.display(), new_path.display()),
+        &[create_renamer(new_path, target_path, &[]), create_file_created_check(target_path)],
+    ) && !no_rollback
+    {
+        run_with_retries(
+            10,
+            &format!("restore {} from {}", target_path.display(), backup_path.display()),
+            &[create_renamer(backup_path, target_path, &[]), create_file_created_check(target_path)],
+        );
+        false
+    } else {
+        true
+    }
 }
 
 pub fn java_min_f(a: f32, b: f32) -> f32 {

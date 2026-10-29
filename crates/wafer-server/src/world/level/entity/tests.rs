@@ -198,3 +198,20 @@ fn entities_tick_only_in_entity_ticking_chunks() {
     level.tick();
     assert_eq!((level.entity(near).tick_count, level.entity(far).tick_count), (near_ticks + 1, far_ticks + 1));
 }
+
+#[test]
+fn a_data_fixer_exception_leaves_the_entity_chunk_pending() {
+    let dir = temp_dir("fixer-exception");
+    let pig = Nbt::Compound(vec![("id".into(), Nbt::String("Pig".into())), ("UUID".into(), Nbt::String("not a uuid".into()))]);
+    let broken = Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(100)), ("Entities".into(), Nbt::List(vec![pig])), ("Position".into(), Nbt::IntArray(vec![5, 0]))]);
+    RegionStorage::new(dir.join("entities"), false).write(ChunkPos::new(5, 0), &broken).unwrap();
+    let mut level = level_in(&dir);
+    testing::player(&mut level, Vec3::new(8.5, -60.0, 8.5), 0.0, 0.0);
+    for _ in 0..5 {
+        level.finish_chunk_work();
+        level.tick();
+    }
+    assert!(level.entity_manager.are_entities_loaded(ChunkPos::new(4, 0).pack()));
+    assert!(!level.entity_manager.are_entities_loaded(ChunkPos::new(5, 0).pack()));
+    let _ = std::fs::remove_dir_all(dir);
+}

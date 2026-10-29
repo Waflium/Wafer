@@ -94,7 +94,7 @@ struct ServerConfigurationPacketListener<'a> {
     config: &'a ServerConfig,
     profile: &'a Profile,
     events: &'a mpsc::UnboundedSender<Event>,
-    prepare_spawn: Option<oneshot::Receiver<()>>,
+    prepare_spawn: Option<oneshot::Receiver<Result<(), ()>>>,
     spawn_requested: bool,
     configuration_tasks: VecDeque<ConfigurationTask>,
     current_task: Option<ConfigurationTask>,
@@ -148,8 +148,11 @@ impl ServerConfigurationPacketListener<'_> {
         loop {
             let packet = tokio::select! {
                 packet = r.recv() => packet.map_err(|e| disconnection_reason(&e))?,
-                () = wait_for_spawn(&mut self.prepare_spawn) => {
+                started = wait_for_spawn(&mut self.prepare_spawn) => {
                     self.prepare_spawn = None;
+                    if started.is_err() {
+                        return Err(self.disconnect(w, Component::translatable("multiplayer.disconnect.configuration_error")).await);
+                    }
                     self.finish_current_task(w, ConfigurationTask::PrepareSpawn)?;
                     w.flush().await.map_err(|e| disconnection_reason(&e.into()))?;
                     continue;
@@ -436,10 +439,10 @@ pub fn read_client_information(data: &[u8]) -> anyhow::Result<ClientInfo> {
     })
 }
 
-async fn wait_for_spawn(prepare_spawn: &mut Option<oneshot::Receiver<()>>) {
+async fn wait_for_spawn(prepare_spawn: &mut Option<oneshot::Receiver<Result<(), ()>>>) -> Result<(), ()> {
     if let Some(ready) = prepare_spawn {
-        if ready.await.is_ok() {
-            return;
+        if let Ok(started) = ready.await {
+            return started;
         }
         *prepare_spawn = None;
     }

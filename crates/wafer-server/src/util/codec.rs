@@ -188,7 +188,7 @@ pub fn bool_value(tag: &Nbt) -> DataResult<bool> {
             _ => Err(format!("Not a boolean: {}", crate::nbt::to_string(tag))),
         };
     }
-    Ok(component_codec::as_i64(number(tag)?) != 0)
+    Ok(component_codec::as_f64(number(tag)?) != 0.0)
 }
 
 pub fn int(tag: &Nbt) -> DataResult<i32> {

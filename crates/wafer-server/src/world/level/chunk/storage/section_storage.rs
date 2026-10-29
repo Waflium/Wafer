@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, channel};
 
 use wafer_core::ChunkPos;
-use wafer_core::fastutil::{LongLinkedOpenHashSet, LongOpenHashSet};
+use wafer_core::fastutil::{Long2ObjectOpenHashMap, LongLinkedOpenHashSet, LongOpenHashSet};
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
@@ -33,6 +33,45 @@ impl<R: SectionData> PackedChunk<R> {
     }
 }
 
+type LoadResult<R> = Result<Option<PackedChunk<R>>, String>;
+
+enum PendingLoad<R> {
+    Reading(Receiver<LoadResult<R>>),
+    Done(LoadResult<R>),
+}
+
+impl<R> PendingLoad<R> {
+    fn get_now(&mut self) -> Option<&mut LoadResult<R>> {
+        if let PendingLoad::Reading(receiver) = self {
+            let result = match receiver.try_recv() {
+                Ok(result) => result,
+                Err(std::sync::mpsc::TryRecvError::Empty) => return None,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => Ok(None),
+            };
+            *self = PendingLoad::Done(result);
+        }
+        match self {
+            PendingLoad::Done(result) => Some(result),
+            PendingLoad::Reading(_) => None,
+        }
+    }
+
+    fn join(&mut self) -> &mut LoadResult<R> {
+        if let PendingLoad::Reading(receiver) = self {
+            let result = receiver.recv().unwrap_or(Ok(None));
+            *self = PendingLoad::Done(result);
+        }
+        match self {
+            PendingLoad::Done(result) => result,
+            PendingLoad::Reading(_) => unreachable!(),
+        }
+    }
+}
+
+fn completion_exception(cause: &str) -> ! {
+    panic!("java.util.concurrent.CompletionException: {cause}")
+}
+
 pub fn section_key(x: i32, y: i32, z: i32) -> i64 {
     ((x as i64 & 0x3FFFFF) << 42) | (y as i64 & 0xFFFFF) | ((z as i64 & 0x3FFFFF) << 20)
 }
@@ -56,7 +95,7 @@ pub struct SectionStorage<R> {
     min_section_y: i32,
     max_section_y: i32,
     loaded_chunks: LongOpenHashSet,
-    pending_loads: HashMap<i64, Receiver<Option<PackedChunk<R>>>>,
+    pending_loads: Long2ObjectOpenHashMap<PendingLoad<R>>,
     pub loaded_sections: std::cell::RefCell<Vec<i64>>,
 }
 
@@ -69,7 +108,7 @@ impl<R: SectionData> SectionStorage<R> {
             min_section_y,
             max_section_y,
             loaded_chunks: LongOpenHashSet::new(),
-            pending_loads: HashMap::new(),
+            pending_loads: Long2ObjectOpenHashMap::new(),
             loaded_sections: std::cell::RefCell::new(Vec::new()),
         }
     }
@@ -87,12 +126,30 @@ impl<R: SectionData> SectionStorage<R> {
     }
 
     fn unpack_pending_loads(&mut self) {
-        let ready: Vec<(i64, Option<PackedChunk<R>>)> =
-            self.pending_loads.iter().filter_map(|(&key, receiver)| receiver.try_recv().ok().map(|chunk| (key, chunk))).collect();
+        let mut ready = Vec::new();
+        let mut failure = None;
+        self.pending_loads.retain(|key, pending| {
+            if failure.is_some() {
+                return true;
+            }
+            match pending.get_now() {
+                None => true,
+                Some(Err(exception)) => {
+                    failure = Some(exception.clone());
+                    true
+                }
+                Some(Ok(chunk)) => {
+                    ready.push((key, chunk.take()));
+                    false
+                }
+            }
+        });
         for (key, chunk) in ready {
-            self.pending_loads.remove(&key);
             self.unpack_packed_chunk(ChunkPos::unpack(key), chunk);
             self.loaded_chunks.add(key);
+        }
+        if let Some(exception) = failure {
+            completion_exception(&exception);
         }
     }
 
@@ -121,7 +178,7 @@ impl<R: SectionData> SectionStorage<R> {
         if !self.storage.contains_key(&section_pos) {
             self.unpack_chunk(ChunkPos::new(section_x(section_pos), section_z(section_pos)));
         }
-        self.storage.get_mut(&section_pos).expect("unpacked section").as_mut()
+        self.storage.get_mut(&section_pos).unwrap_or_else(|| panic!("java.lang.IllegalStateException")).as_mut()
     }
 
     fn outside_stored_range(&self, section_pos: i64) -> bool {
@@ -139,11 +196,18 @@ impl<R: SectionData> SectionStorage<R> {
 
     pub fn prefetch(&mut self, chunk_pos: ChunkPos) {
         let key = chunk_pos.pack();
-        if self.loaded_chunks.contains(key) || self.pending_loads.contains_key(&key) {
+        if self.loaded_chunks.contains(key) || self.pending_loads.contains_key(key) {
             return;
         }
         let receiver = self.try_read(chunk_pos);
-        self.pending_loads.insert(key, receiver);
+        self.pending_loads.insert(key, PendingLoad::Reading(receiver));
+    }
+
+    pub fn prefetched_load_failure(&mut self, chunk_pos: ChunkPos) -> Option<String> {
+        match self.pending_loads.get_mut(chunk_pos.pack())?.join() {
+            Err(exception) => Some(exception.clone()),
+            Ok(_) => None,
+        }
     }
 
     fn unpack_chunk(&mut self, chunk_pos: ChunkPos) {
@@ -151,30 +215,34 @@ impl<R: SectionData> SectionStorage<R> {
         if !self.loaded_chunks.add(key) {
             return;
         }
-        let receiver = match self.pending_loads.remove(&key) {
-            Some(receiver) => receiver,
-            None => self.try_read(chunk_pos),
+        if !self.pending_loads.contains_key(key) {
+            let receiver = self.try_read(chunk_pos);
+            self.pending_loads.insert(key, PendingLoad::Reading(receiver));
+        }
+        let chunk = match self.pending_loads.get_mut(key).unwrap().join() {
+            Ok(chunk) => chunk.take(),
+            Err(exception) => completion_exception(exception),
         };
-        let chunk = receiver.recv().unwrap_or(None);
         self.unpack_packed_chunk(chunk_pos, chunk);
+        self.pending_loads.remove(key);
     }
 
-    fn try_read(&self, chunk_pos: ChunkPos) -> Receiver<Option<PackedChunk<R>>> {
+    fn try_read(&self, chunk_pos: ChunkPos) -> Receiver<LoadResult<R>> {
         let (sender, receiver) = channel();
         let (min_section_y, max_section_y) = (self.min_section_y, self.max_section_y);
         match &self.io {
             Some(io) => io.read(chunk_pos, move |read| {
                 let chunk = match read {
-                    Ok(tag) => tag.map(|tag| PackedChunk::parse(&tag, min_section_y, max_section_y)),
+                    Ok(tag) => crate::util::catch_exception(|| tag.map(|tag| PackedChunk::parse(&tag, min_section_y, max_section_y))),
                     Err(_) => {
                         error!("Error reading chunk [{}, {}] data from disk", chunk_pos.x, chunk_pos.z);
-                        None
+                        Ok(None)
                     }
                 };
                 let _ = sender.send(chunk);
             }),
             None => {
-                let _ = sender.send(None);
+                let _ = sender.send(Ok(None));
             }
         }
         receiver
