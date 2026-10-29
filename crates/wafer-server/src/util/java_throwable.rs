@@ -21,6 +21,12 @@ impl JavaThrowable {
         JavaThrowable { description: description.into(), stack_trace, cause: None, report: None }
     }
 
+    pub fn from_panic(message: &str) -> JavaThrowable {
+        let class = message.split_once(": ").map_or(message, |(class, _)| class);
+        let is_class_name = class.starts_with(char::is_lowercase) && !class.contains(' ') && class.rsplit_once('.').is_some_and(|(_, name)| name.starts_with(char::is_uppercase));
+        JavaThrowable::new(if is_class_name { message.to_string() } else { format!("java.lang.RuntimeException: {message}") }, Vec::new())
+    }
+
     pub fn with_report(mut self, report: ThrowableReport) -> JavaThrowable {
         self.report = Some(report);
         self

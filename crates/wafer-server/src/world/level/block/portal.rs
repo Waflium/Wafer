@@ -32,7 +32,6 @@ pub struct PendingSpectatorPortalUse {
     pub player: EntityId,
     pub portal: Portal,
     pub pos: BlockPos,
-    pub packets: Vec<Vec<u8>>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

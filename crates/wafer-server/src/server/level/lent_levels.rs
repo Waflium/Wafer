@@ -109,6 +109,16 @@ impl ServerLevel {
         }
     }
 
+    pub fn level_with_index_mut(&mut self, index: usize) -> &mut ServerLevel {
+        if self.index == index {
+            return self;
+        }
+        match self.other_levels.iter().position(|level| level.index == index) {
+            Some(position) => &mut self.other_levels[position],
+            None => self,
+        }
+    }
+
     pub fn level_with_player(&self, id: crate::world::entity::EntityId) -> Option<&ServerLevel> {
         if self.players.contains_key(&id) {
             Some(self)

@@ -428,12 +428,22 @@ impl ChunkCache {
         if self.chunk_absent(key, target_level) { UNLOADED } else { self.schedule_chunk_generation_task(key, status) }
     }
 
+    fn next_work_result(&self) -> WorkResult {
+        loop {
+            match self.results.1.recv_timeout(Duration::from_millis(50)) {
+                Ok(result) => return result,
+                Err(RecvTimeoutError::Timeout) => crate::crash_report::throw_delayed_exception(),
+                Err(RecvTimeoutError::Disconnected) => panic!("result channel"),
+            }
+        }
+    }
+
     fn managed_block(&mut self, future: FutureId) {
         let _scope = crate::server::main_thread_frames::chunk_source_block();
         while !self.holders.futures.is_done(future) {
             if !self.poll_task() {
                 assert!(self.in_flight > 0, "waiting for a chunk with nothing to wait for");
-                let result = self.results.1.recv().expect("result channel");
+                let result = self.next_work_result();
                 self.apply_work_result(result);
             }
         }
@@ -452,7 +462,7 @@ impl ChunkCache {
             if self.in_flight == 0 {
                 return;
             }
-            let result = self.results.1.recv().expect("result channel");
+            let result = self.next_work_result();
             self.apply_work_result(result);
         }
     }

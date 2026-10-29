@@ -3,6 +3,7 @@ use wafer_data::packets::play::clientbound;
 use wafer_data::{BlockState, EquipmentSlot, fluid_tags, mob_effects};
 
 use super::ServerLevel;
+use super::tick_continuation::PendingServerWork;
 use super::events::{PARTICLES_AND_SOUND_DESTROY_PROGRESS, PARTICLES_DESTROY_PROGRESS};
 use crate::advancements::triggers::criteria_triggers;
 use crate::world::effect::mob_effect_util;
@@ -467,7 +468,7 @@ impl ServerLevel {
                 return InteractionResult::CONSUME;
             }
             if let Some(portal) = crate::world::level::block::portal::of(state) {
-                self.pending_spectator_portal_use = Some(crate::world::level::block::portal::PendingSpectatorPortalUse { player, portal, pos, packets: Vec::new() });
+                self.pending_server_work = Some(PendingServerWork::SpectatorPortalUse(crate::world::level::block::portal::PendingSpectatorPortalUse { player, portal, pos }));
                 return InteractionResult::CONSUME;
             }
             return InteractionResult::Pass;

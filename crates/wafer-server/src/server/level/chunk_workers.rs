@@ -135,7 +135,7 @@ impl IoWorker {
                 let mut reporting: Option<IoReporting> = None;
                 for request in incoming {
                     match request {
-                        IoRequest::Read { pos, reply } => match storage.read(pos) {
+                        IoRequest::Read { pos, reply } => match guarded(|| storage.read(pos)) {
                             Err(e) if storage_exception::is_java_error(&e) => {
                                 let thread = thread::current();
                                 let name = thread.name().unwrap_or_default();
@@ -149,12 +149,12 @@ impl IoWorker {
                                 io::Error::new(e.kind(), failure)
                             })),
                         },
-                        IoRequest::ScanStructures { pos, reply } => reply(storage.scan_structures(pos).map_err(|e| {
+                        IoRequest::ScanStructures { pos, reply } => reply(guarded(|| storage.scan_structures(pos)).map_err(|e| {
                             let failure = storage_exception::on_scan_worker(&e);
                             warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
                             io::Error::new(e.kind(), failure)
                         })),
-                        IoRequest::ScanOldData { pos, reply } => reply(storage.scan_chunk(pos).map_err(|e| {
+                        IoRequest::ScanOldData { pos, reply } => reply(guarded(|| storage.scan_chunk(pos)).map_err(|e| {
                             let failure = storage_exception::on_scan_worker(&e);
                             warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
                             io::Error::new(e.kind(), failure)
@@ -164,16 +164,19 @@ impl IoWorker {
                             active.fetch_sub(1, Ordering::Relaxed);
                         }
                         IoRequest::Clear { pos } => {
-                            if let Err(e) = storage.clear(pos) {
+                            if let Err(e) = guarded(|| storage.clear(pos)) {
                                 store_failed(pos, &e, reporting.as_ref());
                             }
                         }
                         IoRequest::WriteChunk(save) => {
                             let ChunkToSave { chunk, status, block_entities, game_time, block_ticks, fluid_ticks, light } = *save;
-                            write(&mut storage, chunk.pos, &serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light), reporting.as_ref());
+                            match guarded(|| Ok(serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light))) {
+                                Ok(nbt) => write(&mut storage, chunk.pos, &nbt, reporting.as_ref()),
+                                Err(e) => store_failed(chunk.pos, &e, reporting.as_ref()),
+                            }
                             active.fetch_sub(1, Ordering::Relaxed);
                         }
-                        IoRequest::Flush { flush, reply } => drop(reply.send(if flush { storage.flush() } else { Ok(()) })),
+                        IoRequest::Flush { flush, reply } => drop(reply.send(if flush { guarded(|| storage.flush()) } else { Ok(()) })),
                         IoRequest::SetReporting(new_reporting) => reporting = Some(new_reporting),
                     }
                 }
@@ -229,8 +232,12 @@ impl IoWorker {
     }
 }
 
+fn guarded<T>(operation: impl FnOnce() -> io::Result<T>) -> io::Result<T> {
+    crate::util::catch_throwable(operation).unwrap_or_else(|throwable| Err(io::Error::other(throwable)))
+}
+
 fn write(storage: &mut RegionStorage, pos: ChunkPos, nbt: &Nbt, reporting: Option<&IoReporting>) {
-    if let Err(e) = storage.write(pos, nbt) {
+    if let Err(e) = guarded(|| storage.write(pos, nbt)) {
         store_failed(pos, &e, reporting);
     }
 }
@@ -285,4 +292,17 @@ impl ResultSender {
 pub fn results() -> (ResultSender, Receiver<WorkResult>) {
     let (sender, receiver) = channel();
     (ResultSender { sender, wakeup: Arc::default() }, receiver)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::util::java_throwable::JavaThrowable;
+
+    #[test]
+    fn a_panic_in_a_storage_operation_becomes_an_io_error() {
+        let failed: io::Result<()> = guarded(|| panic!("java.lang.IllegalStateException: boom"));
+        assert_eq!(JavaThrowable::from_io_error(&failed.unwrap_err()).description, "java.lang.IllegalStateException: boom");
+        assert_eq!(guarded(|| Ok(5)).unwrap(), 5);
+    }
 }

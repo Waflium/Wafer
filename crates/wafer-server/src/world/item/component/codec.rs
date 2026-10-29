@@ -254,7 +254,16 @@ pub fn registry(name: &str) -> &'static [&'static str] {
 }
 
 pub fn registry_id(name: &str, entry: &str) -> Result<i32, String> {
-    registry(name).iter().position(|e| *e == entry).map(|i| i as i32).ok_or_else(|| format!("Can't find id for '{entry}' in registry {name}"))
+    registry(name)
+        .iter()
+        .position(|e| *e == entry)
+        .map(|i| i as i32)
+        .filter(|&id| !crate::core::data_registries::is_entry_blocked(name, id))
+        .ok_or_else(|| format!("Can't find id for '{entry}' in registry {name}"))
+}
+
+pub fn registry_contains(name: &str, entry: &str) -> bool {
+    registry_id(name, entry).is_ok()
 }
 
 pub fn network_registry_id(name: &str, entry: &str) -> Result<i32, String> {
@@ -351,7 +360,7 @@ impl Codec {
             Codec::Identifier => identifier(tag).map(Nbt::String),
             Codec::Element(reg) => {
                 let id = identifier(tag)?;
-                if registry(reg).contains(&id.as_str()) {
+                if registry_contains(reg, &id) {
                     Ok(Nbt::String(id))
                 } else {
                     Err(format!("Unknown registry key in ResourceKey[minecraft:root / {reg}]: {id}"))
@@ -361,7 +370,7 @@ impl Codec {
             Codec::Holder(reg, direct) => match (tag, direct) {
                 (Nbt::String(_), _) if direct.is_none() || identifier(tag).is_ok() => {
                     let id = identifier(tag)?;
-                    if registry(reg).contains(&id.as_str()) {
+                    if registry_contains(reg, &id) {
                         crate::core::data_registries::known_reference(reg, &id);
                         Ok(Nbt::String(id))
                     } else if !crate::util::codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(reg).is_some() {
@@ -675,7 +684,7 @@ fn holder_set_element(reg: &'static str, item: &Nbt) -> crate::util::codec::Deco
         Ok(id) => id,
         Err(error) => return crate::util::codec::DecodeResult::error(error),
     };
-    if registry(reg).contains(&id.as_str()) {
+    if registry_contains(reg, &id) {
         crate::core::data_registries::known_reference(reg, &id);
         crate::util::codec::DecodeResult::success(Nbt::String(id))
     } else if !crate::util::codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(reg).is_some() {

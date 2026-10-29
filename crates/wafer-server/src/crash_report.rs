@@ -204,6 +204,13 @@ pub fn exception_of(panic: &Box<dyn std::any::Any + Send>) -> String {
     panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
 }
 
+pub fn throwable_of(panic: &Box<dyn std::any::Any + Send>) -> JavaThrowable {
+    match panic.downcast_ref::<JavaException>() {
+        Some(exception) => exception.0.clone(),
+        None => JavaThrowable::from_panic(&exception_of(panic)),
+    }
+}
+
 impl CrashReport {
     pub fn title(&self) -> &str {
         &self.title

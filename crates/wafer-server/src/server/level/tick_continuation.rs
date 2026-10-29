@@ -3,7 +3,8 @@ use std::collections::VecDeque;
 use super::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::projectile::throwableitemprojectile::thrown_enderpearl::PendingEnderPearlTeleport;
-use crate::world::level::block::portal::PendingPortalTeleport;
+use crate::world::item::written_book_item::PendingBookOpen;
+use crate::world::level::block::portal::{PendingPortalTeleport, PendingSpectatorPortalUse};
 
 type Resume = Box<dyn FnOnce(&mut ServerLevel)>;
 
@@ -11,6 +12,9 @@ pub enum PendingServerWork {
     MinecartCommand(EntityId),
     PortalTeleport(PendingPortalTeleport),
     EnderPearlTeleport(PendingEnderPearlTeleport),
+    SpectatorPortalUse(PendingSpectatorPortalUse),
+    BookOpen(PendingBookOpen),
+    Functions,
 }
 
 #[derive(Clone, Copy)]
@@ -53,6 +57,19 @@ impl ServerLevel {
         self.pending_server_work.is_some()
     }
 
+    pub fn trigger_resumably(&mut self, trigger: impl FnOnce(&mut ServerLevel)) {
+        self.resumable_triggers = true;
+        trigger(self);
+        self.resumable_triggers = false;
+        self.yield_for_functions();
+    }
+
+    pub fn yield_for_functions(&mut self) {
+        if self.pending_server_work.is_none() && !(self.pending_function_executions.is_empty() && self.pending_enchantment_functions.is_empty()) {
+            self.pending_server_work = Some(PendingServerWork::Functions);
+        }
+    }
+
     pub fn suspend_tick(&mut self, resume: impl FnOnce(&mut ServerLevel) + 'static) {
         self.tick_continuation.frames.push_back(Box::new(resume));
     }
@@ -70,6 +87,14 @@ impl ServerLevel {
         if self.tick_suspended() {
             self.tick_continuation.root = Some(TickRoot::Entity(id));
         }
+    }
+
+    pub(crate) fn handle_player_packet(&mut self, id: EntityId, packet: &crate::network::connection::Packet) -> anyhow::Result<()> {
+        let result = self.handle_game_packet(id, packet);
+        if self.tick_suspended() {
+            self.tick_continuation.root = Some(TickRoot::Player(id));
+        }
+        result
     }
 
     pub(crate) fn tick_root_player(&mut self, id: EntityId) {
@@ -114,6 +139,9 @@ impl crate::server::Server {
                 PendingServerWork::MinecartCommand(entity) => self.run_pending_minecart_command(index, entity),
                 PendingServerWork::PortalTeleport(pending) => self.handle_pending_portal_teleport(index, pending),
                 PendingServerWork::EnderPearlTeleport(pending) => self.handle_pending_ender_pearl_teleport(index, pending),
+                PendingServerWork::SpectatorPortalUse(pending) => self.handle_pending_spectator_portal_use(index, pending),
+                PendingServerWork::BookOpen(pending) => self.open_pending_book(index, pending),
+                PendingServerWork::Functions => self.run_level_tasks(),
             }
             index = self.follow_tick_continuation(index);
             super::lent_levels::LentLevels::lend(&mut self.levels, index).level().resume_entity_tick();

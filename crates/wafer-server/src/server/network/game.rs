@@ -473,49 +473,56 @@ impl ServerLevel {
         }
         let item_stack = self.player(id).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
         let swing_animation = item_stack.interact_animation();
+        let level_index = self.index;
         if self.is_under_spawn_protection(pos, id) {
             self.send_spawn_protection_message(id, pos);
+            self.send_use_item_on_block_updates(level_index, id, pos, direction);
         } else if self.player(id).movement.awaiting_position_from_client.is_none() && self.may_interact(id, pos) {
             let result = self.use_item_on(id, hand, hit);
-            if result.consumes_action() {
-                let item_after = self.player(id).item_in_hand(hand).filter(|stack| stack.is(item_stack.get_item())).unwrap_or_else(ItemStack::empty);
-                crate::advancements::triggers::criteria_triggers::ANY_BLOCK_USE.trigger(self, id, pos, &item_after);
-            }
-            let placement_attempt = was_block_placement_attempt(self.player(id), &item_stack);
-            let swing = |level: &mut ServerLevel| {
-                if let InteractionResult::Success { swing_source, .. } = result
-                    && result.should_swing()
-                {
-                    level.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
+            self.then_tick(move |level| {
+                if result.consumes_action() {
+                    let item_after = level.player(id).item_in_hand(hand).filter(|stack| stack.is(item_stack.get_item())).unwrap_or_else(ItemStack::empty);
+                    level.trigger_resumably(|level| crate::advancements::triggers::criteria_triggers::ANY_BLOCK_USE.trigger(level, id, pos, &item_after));
                 }
-            };
-            if direction == Direction::Up && !result.consumes_action() && pos.y >= max_y && placement_attempt {
-                self.send_build_limit_message(id, true, max_y);
-            } else {
-                swing(self);
-            }
-            if !result.consumes_action() && placement_attempt {
-                if direction == Direction::Up && pos.y >= max_y {
-                    self.send_build_limit_message(id, true, max_y);
-                } else if direction == Direction::Down && pos.y <= min_y {
-                    self.send_build_limit_message(id, false, min_y);
-                }
-            } else {
-                swing(self);
-            }
+                level.then_tick(move |level| {
+                    let placement_attempt = was_block_placement_attempt(level.player(id), &item_stack);
+                    let swing = |level: &mut ServerLevel| {
+                        if let InteractionResult::Success { swing_source, .. } = result
+                            && result.should_swing()
+                        {
+                            level.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
+                        }
+                    };
+                    if direction == Direction::Up && !result.consumes_action() && pos.y >= max_y && placement_attempt {
+                        level.send_build_limit_message(id, true, max_y);
+                    } else {
+                        swing(level);
+                    }
+                    if !result.consumes_action() && placement_attempt {
+                        if direction == Direction::Up && pos.y >= max_y {
+                            level.send_build_limit_message(id, true, max_y);
+                        } else if direction == Direction::Down && pos.y <= min_y {
+                            level.send_build_limit_message(id, false, min_y);
+                        }
+                    } else {
+                        swing(level);
+                    }
+                    level.send_use_item_on_block_updates(level_index, id, pos, direction);
+                });
+            });
         } else {
             self.send_build_limit_message(id, true, max_y);
+            self.send_use_item_on_block_updates(level_index, id, pos, direction);
         }
+    }
+
+    fn send_use_item_on_block_updates(&mut self, level_index: usize, id: EntityId, pos: BlockPos, direction: Direction) {
         for p in [pos, pos.relative(direction)] {
-            let state = crate::world::level::BlockGetter::block_state(self, p);
-            let packet = crate::network::connection::encode(clientbound::BLOCK_UPDATE, |w| {
+            let state = crate::world::level::BlockGetter::block_state(self.level_with_index_mut(level_index), p);
+            self.player(id).connection.send(clientbound::BLOCK_UPDATE, |w| {
                 w.position(p.x, p.y, p.z);
                 w.varint(state.id() as i32);
             });
-            match &mut self.pending_spectator_portal_use {
-                Some(pending) if pending.player == id => pending.packets.push(packet),
-                _ => self.player(id).connection.send_raw(packet),
-            }
         }
     }
 
@@ -565,11 +572,13 @@ impl ServerLevel {
         let result = self.interact_on(id, entity_id, hand, location);
         if let InteractionResult::Success { swing_source, was_item_interaction } = result {
             let awarded_for_stack = if was_item_interaction { used_item_stack.clone() } else { ItemStack::empty() };
-            crate::advancements::triggers::criteria_triggers::PLAYER_INTERACTED_WITH_ENTITY.trigger(self, id, &awarded_for_stack, entity_id);
-            if result.should_swing() {
-                let swing_animation = used_item_stack.interact_animation();
-                self.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
-            }
+            self.trigger_resumably(|level| crate::advancements::triggers::criteria_triggers::PLAYER_INTERACTED_WITH_ENTITY.trigger(level, id, &awarded_for_stack, entity_id));
+            self.then_tick(move |level| {
+                if result.should_swing() {
+                    let swing_animation = used_item_stack.interact_animation();
+                    level.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
+                }
+            });
         }
     }
 
@@ -588,15 +597,13 @@ impl ServerLevel {
             entity.abs_snap_rotation_to(target_y_rot, target_x_rot);
         }
         let result = self.use_item(id, hand);
-        if let InteractionResult::Success { swing_source, .. } = result
-            && result.should_swing()
-        {
-            let send_to_swinging_entity = swing_source != SwingSource::Predicted;
-            match self.pending_book_opens.iter_mut().find(|pending| pending.player == id) {
-                Some(pending) => pending.swing = Some((swing_animation, send_to_swinging_entity)),
-                None => self.swing_and_reset_attack_strength(id, hand, swing_animation, send_to_swinging_entity),
+        self.then_tick(move |level| {
+            if let InteractionResult::Success { swing_source, .. } = result
+                && result.should_swing()
+            {
+                level.swing_and_reset_attack_strength(id, hand, swing_animation, swing_source != SwingSource::Predicted);
             }
-        }
+        });
     }
 
     fn handle_container_click(&mut self, id: EntityId, r: &mut Reader) -> anyhow::Result<()> {
@@ -1807,13 +1814,62 @@ mod server_tests {
             w.f32(0.0);
             w.f32(0.0);
         });
-        server.levels[0].handle_game_packet(alice, &use_item).unwrap();
+        server.levels[0].handle_player_packet(alice, &use_item).unwrap();
         assert!(server.levels[0].living(alice).swing_state.current_swing.is_none());
         assert!(packets(&mut alice_packets).is_empty());
-        server.open_pending_books(0);
+        server.run_pending_server_work(0);
         assert!(server.levels[0].living(alice).swing_state.current_swing.is_some());
         let ids: Vec<i32> = packets(&mut alice_packets).into_iter().map(|(id, _)| id).collect();
         assert_eq!(ids, [clientbound::OPEN_BOOK]);
+    }
+
+    fn use_item_on_packet(x: i32, y: i32, z: i32) -> Packet {
+        packet(serverbound::USE_ITEM_ON, |w| {
+            w.varint(0);
+            w.position(x, y, z);
+            w.varint(1);
+            w.f32(0.5);
+            w.f32(1.0);
+            w.f32(0.5);
+            w.bool(false);
+            w.bool(false);
+            w.varint(1);
+        })
+    }
+
+    #[test]
+    fn spectators_teleport_through_portals_before_the_block_updates_follow() {
+        let mut server = server();
+        let (alice, mut alice_packets) = join(&mut server, "Alice");
+        run(&mut server, "setblock 2 -60 2 minecraft:end_portal");
+        server.levels[0].set_game_mode(alice, crate::server::level::game_mode::GameType::Spectator);
+        packets(&mut alice_packets);
+        server.levels[0].handle_player_packet(alice, &use_item_on_packet(2, -60, 2)).unwrap();
+        assert!(server.levels[0].tick_suspended());
+        assert!(packets(&mut alice_packets).is_empty());
+        server.run_pending_server_work(0);
+        let end = server.get_level("minecraft:the_end").unwrap();
+        assert_eq!(server.level_of(alice), Some(end));
+        let ids: Vec<i32> = packets(&mut alice_packets).into_iter().map(|(id, _)| id).collect();
+        let respawn = ids.iter().position(|&id| id == clientbound::RESPAWN).unwrap();
+        let updates: Vec<usize> = ids.iter().enumerate().filter(|&(_, &id)| id == clientbound::BLOCK_UPDATE).map(|(index, _)| index).collect();
+        assert_eq!(updates.len(), 2);
+        assert!(updates.iter().all(|&index| index > respawn));
+        assert!(!server.levels[end].tick_continuation.is_suspended());
+    }
+
+    #[test]
+    fn spectators_that_cannot_use_a_portal_get_the_message_before_the_block_updates() {
+        let mut server = server();
+        let (alice, mut alice_packets) = join(&mut server, "Alice");
+        run(&mut server, "setblock 2 -60 2 minecraft:end_gateway");
+        server.levels[0].set_game_mode(alice, crate::server::level::game_mode::GameType::Spectator);
+        packets(&mut alice_packets);
+        server.levels[0].handle_player_packet(alice, &use_item_on_packet(2, -60, 2)).unwrap();
+        server.run_pending_server_work(0);
+        assert_eq!(server.level_of(alice), Some(0));
+        let ids: Vec<i32> = packets(&mut alice_packets).into_iter().map(|(id, _)| id).collect();
+        assert_eq!(ids, [clientbound::SYSTEM_CHAT, clientbound::BLOCK_UPDATE, clientbound::BLOCK_UPDATE]);
     }
 
     #[test]

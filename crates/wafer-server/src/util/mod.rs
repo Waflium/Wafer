@@ -81,6 +81,13 @@ pub fn catch_exception<T>(function: impl FnOnce() -> T) -> Result<T, String> {
     result.map_err(|payload| crate::crash_report::exception_of(&payload))
 }
 
+pub fn catch_throwable<T>(function: impl FnOnce() -> T) -> Result<T, java_throwable::JavaThrowable> {
+    let outer = CATCHING_EXCEPTION.with(|catching| catching.replace(true));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(function));
+    CATCHING_EXCEPTION.with(|catching| catching.set(outer));
+    result.map_err(|payload| crate::crash_report::throwable_of(&payload))
+}
+
 pub fn write_and_read_typed_or_throw(
     typed: &crate::datafixers::typed::Typed,
     new_type: &std::sync::Arc<crate::datafixers::types::Type>,

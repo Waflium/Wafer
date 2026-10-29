@@ -1,6 +1,14 @@
 use super::*;
 
 #[test]
+fn a_panic_message_keeps_a_java_class_name_and_gets_one_otherwise() {
+    assert_eq!(JavaThrowable::from_panic("java.lang.IllegalStateException: boom").description, "java.lang.IllegalStateException: boom");
+    assert_eq!(JavaThrowable::from_panic("java.lang.ArithmeticException").description, "java.lang.ArithmeticException");
+    assert_eq!(JavaThrowable::from_panic("a world preset").description, "java.lang.RuntimeException: a world preset");
+    assert_eq!(JavaThrowable::from_panic("").description, "java.lang.RuntimeException: ");
+}
+
+#[test]
 fn prints_a_single_throwable_with_its_frames() {
     let throwable = JavaThrowable::new("java.lang.IllegalStateException: boom", vec!["a.B.c(B.java:1)", "a.B.d(B.java:2)"]);
     assert_eq!(throwable.print_stack_trace(), "java.lang.IllegalStateException: boom\n\tat a.B.c(B.java:1)\n\tat a.B.d(B.java:2)\n");

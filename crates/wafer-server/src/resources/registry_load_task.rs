@@ -189,6 +189,17 @@ pub fn timeline_marker_defined_multiple_times(message: String) -> JavaThrowable 
     JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: {message}"), frames)
 }
 
+const REGISTRY_VALIDATOR_NON_EMPTY: &str = "net.minecraft.resources.RegistryValidator.lambda$static$1(RegistryValidator.java:12)";
+
+pub fn registry_must_be_non_empty(registry: &str) -> JavaThrowable {
+    let mut frames = vec![REGISTRY_VALIDATOR_NON_EMPTY, VALIDATE_REGISTRY, VALIDATE_LAMBDA];
+    frames.extend(VALIDATE_PIPELINE);
+    frames.push(LOAD_COMPLETION_VALIDATE);
+    frames.extend(UNI_APPLY);
+    frames.extend(FORK_JOIN_TAIL);
+    JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: Registry must be non-empty: {registry}"), frames)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TagLoadContext<'a> {
     ExistingRegistries,
@@ -361,8 +372,13 @@ pub fn duplicate_value(value: &str) -> JavaThrowable {
 }
 
 pub fn world_data_supplier_frames() -> Vec<&'static str> {
+    let mut frames = vec!["net.minecraft.server.Main.lambda$main$1(Main.java:184)"];
+    frames.extend(world_data_loader_frames());
+    frames
+}
+
+pub fn world_data_loader_frames() -> Vec<&'static str> {
     let mut frames = vec![
-        "net.minecraft.server.Main.lambda$main$1(Main.java:184)",
         "net.minecraft.server.WorldLoader.lambda$load$2(WorldLoader.java:46)",
         "java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1171)",
         "java.base/java.util.concurrent.CompletableFuture$Completion.exec(CompletableFuture.java:504)",

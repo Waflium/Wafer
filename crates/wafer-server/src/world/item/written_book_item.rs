@@ -9,7 +9,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
-use crate::world::item::component::swing_animation::SwingAnimation;
+use crate::server::level::tick_continuation::PendingServerWork;
 use crate::world::{InteractionHand, InteractionResult};
 
 const MAX_PAGE_JSON_LENGTH: usize = 32767;
@@ -17,15 +17,15 @@ const MAX_PAGE_JSON_LENGTH: usize = 32767;
 pub struct PendingBookOpen {
     pub player: EntityId,
     pub hand: InteractionHand,
-    pub swing: Option<(SwingAnimation, bool)>,
 }
 
 pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand) -> (InteractionResult, Option<ItemStack>) {
     let item_stack = level.player(player).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
     if item_stack.has(dc::WRITTEN_BOOK_CONTENT) {
-        level.pending_book_opens.push(PendingBookOpen { player, hand, swing: None });
+        level.pending_server_work = Some(PendingServerWork::BookOpen(PendingBookOpen { player, hand }));
     }
-    level.award_stat(player, crate::stats::stats::ITEM_USED.get(item_stack.item.0), 1);
+    let item = item_stack.item.0;
+    level.then_tick(move |level| level.award_stat(player, crate::stats::stats::ITEM_USED.get(item), 1));
     (InteractionResult::SUCCESS, None)
 }
 
@@ -75,23 +75,18 @@ fn resolve_for_item(server: &Server, source: &CommandSourceStack, item_stack: &m
 }
 
 impl Server {
-    pub fn open_pending_books(&mut self, level: usize) {
-        for PendingBookOpen { player, hand, swing } in std::mem::take(&mut self.levels[level].pending_book_opens) {
-            if let Some(mut item_stack) = self.levels[level].players.get(&player).and_then(|p| p.item_in_hand(hand))
-                && item_stack.has(dc::WRITTEN_BOOK_CONTENT)
-            {
-                let source = CommandSourceStack::player(self, player);
-                let changed = resolve_for_item(self, &source, &mut item_stack);
-                let level = &mut self.levels[level];
-                level.player_mut(player).update_item_in_hand(hand, &item_stack);
-                if changed {
-                    level.broadcast_container_menu_changes(player);
-                }
-                level.player(player).connection.send(clientbound::OPEN_BOOK, |w| w.varint(hand as i32));
+    pub fn open_pending_book(&mut self, level: usize, PendingBookOpen { player, hand }: PendingBookOpen) {
+        if let Some(mut item_stack) = self.levels[level].players.get(&player).and_then(|p| p.item_in_hand(hand))
+            && item_stack.has(dc::WRITTEN_BOOK_CONTENT)
+        {
+            let source = CommandSourceStack::player(self, player);
+            let changed = resolve_for_item(self, &source, &mut item_stack);
+            let level = &mut self.levels[level];
+            level.player_mut(player).update_item_in_hand(hand, &item_stack);
+            if changed {
+                level.broadcast_container_menu_changes(player);
             }
-            if let Some((animation, send_to_swinging_entity)) = swing {
-                self.levels[level].swing_and_reset_attack_strength(player, hand, animation, send_to_swinging_entity);
-            }
+            level.player(player).connection.send(clientbound::OPEN_BOOK, |w| w.varint(hand as i32));
         }
     }
 }

@@ -152,7 +152,6 @@ pub struct ServerLevel {
     pub scoreboard: Rc<RefCell<Scoreboard>>,
     pub world_border: WorldBorder,
     pub raids: crate::world::entity::raid::raids::Raids,
-    pub pending_spectator_portal_use: Option<crate::world::level::block::portal::PendingSpectatorPortalUse>,
     pub other_levels: Vec<ServerLevel>,
     pub other_level_ender_pearls: Vec<(u128, EntityId, bool)>,
     pub global_level_events: Vec<(i32, BlockPos, i32)>,
@@ -160,9 +159,10 @@ pub struct ServerLevel {
     pub pending_broadcasts: Vec<Vec<u8>>,
     pub defer_full_status_changes: bool,
     pub pending_function_executions: Vec<(String, EntityId, CriterionTrigger)>,
-    pub pending_book_opens: Vec<crate::world::item::written_book_item::PendingBookOpen>,
     pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32), bool)>,
     pub enchantment_tick_player: bool,
+    pub in_enchantment_tick: bool,
+    pub resumable_triggers: bool,
     entity_tick_range: Option<(usize, usize)>,
     pub rain_level: f32,
     pub o_rain_level: f32,
@@ -304,7 +304,6 @@ impl ServerLevel {
             scoreboard,
             world_border: WorldBorder::new(Settings::DEFAULT, None),
             raids: crate::world::entity::raid::raids::Raids::load(None),
-            pending_spectator_portal_use: None,
             other_levels: Vec::new(),
             other_level_ender_pearls: Vec::new(),
             global_level_events: Vec::new(),
@@ -312,9 +311,10 @@ impl ServerLevel {
             pending_broadcasts: Vec::new(),
             defer_full_status_changes: false,
             pending_function_executions: Vec::new(),
-            pending_book_opens: Vec::new(),
             pending_enchantment_functions: Vec::new(),
             enchantment_tick_player: false,
+            in_enchantment_tick: false,
+            resumable_triggers: false,
             entity_tick_range: None,
             environment_attributes: EnvironmentAttributeSystem::default(),
             clock_ticks: ServerClockManager::new().clocks.iter().map(|c| c.total_ticks).collect(),
@@ -1640,7 +1640,7 @@ impl ServerLevel {
     }
 
     fn has_pending_server_work(&self) -> bool {
-        self.pending_server_work.is_some() || !self.pending_enchantment_functions.is_empty()
+        self.pending_server_work.is_some() || !self.pending_enchantment_functions.is_empty() || !self.pending_function_executions.is_empty()
     }
 
     pub(crate) fn guard_entity_tick(&mut self, id: EntityId, tick: impl FnOnce(&mut ServerLevel)) {
@@ -1960,11 +1960,19 @@ impl ServerLevel {
         }
         self.tick_container_menu(id);
         self.tick_camera(id);
-        criteria_triggers::TICK.trigger(self, id);
+        self.trigger_resumably(|level| criteria_triggers::TICK.trigger(level, id));
+        self.then_tick(move |level| level.tick_player_entity_levitation(id));
+    }
+
+    fn tick_player_entity_levitation(&mut self, id: EntityId) {
         if let Some(levitation_start_pos) = self.player(id).levitation_start_pos {
             let duration = self.entity(id).tick_count - self.player(id).levitation_start_time;
-            criteria_triggers::LEVITATION.trigger(self, id, levitation_start_pos, duration);
+            self.trigger_resumably(|level| criteria_triggers::LEVITATION.trigger(level, id, levitation_start_pos, duration));
         }
+        self.then_tick(move |level| level.tick_player_entity_end(id));
+    }
+
+    fn tick_player_entity_end(&mut self, id: EntityId) {
         self.track_start_falling_position(id);
         self.track_entered_or_exited_lava_on_vehicle(id);
         let p = self.player_mut(id);

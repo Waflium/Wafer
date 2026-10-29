@@ -1130,7 +1130,7 @@ impl Server {
                     serverbound::CHANGE_GAME_MODE => self.handle_change_game_mode(id, &packet),
                     serverbound::PICK_ITEM_FROM_ENTITY => self.handle_pick_item_from_entity(id, &packet),
                     serverbound::RESOURCE_PACK => self.handle_resource_pack_response(id, &packet),
-                    _ => self.entity_level_mut(id).handle_game_packet(id, &packet),
+                    _ => self.entity_level_mut(id).handle_player_packet(id, &packet),
                 }));
                 let result = match dispatched {
                     Ok(result) => result,
@@ -1143,7 +1143,7 @@ impl Server {
                     self.player_mut(id).disconnect("multiplayer.disconnect.invalid_packet");
                 }
                 if let Some(level) = self.level_of(id) {
-                    self.open_pending_books(level);
+                    self.run_pending_server_work(level);
                 }
                 self.entity_level_mut(id).entity_moved(id);
                 self.send_global_level_events();
@@ -1759,7 +1759,7 @@ impl Server {
             }
             if let Some(level) = self.level_of(id) {
                 self.run_pending_server_work(level);
-                self.handle_pending_spectator_portal_use(level);
+                self.run_level_tasks();
             }
             let connected = match self.level_of(id) {
                 Some(index) => level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_end(id),
@@ -2180,13 +2180,17 @@ pub fn run(
     }));
     let created = match created {
         Ok(created) => created,
-        Err(panic) => match panic.downcast::<crate::crash_report::ReportedException>() {
-            Ok(reported) => {
-                report_startup_crash(reported.0, startup_snapshot.as_ref());
-                dedicated::server_watchdog::linger()
-            }
-            Err(panic) => std::panic::resume_unwind(panic),
-        },
+        Err(panic) => {
+            let report = match panic.downcast::<crate::crash_report::ReportedException>() {
+                Ok(reported) => reported.0,
+                Err(panic) => match panic.downcast::<crate::crash_report::JavaException>() {
+                    Ok(exception) => crate::crash_report::CrashReport::of_exception("Exception in server tick loop", &exception.0),
+                    Err(panic) => crate::crash_report::CrashReport::new("Exception in server tick loop", crate::crash_report::exception_of(&panic), crash_frames()),
+                },
+            };
+            report_startup_crash(report, startup_snapshot.as_ref());
+            dedicated::server_watchdog::linger()
+        }
     };
     let mut server = match created {
         Ok(server) => server,

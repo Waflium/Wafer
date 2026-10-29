@@ -146,15 +146,14 @@ impl RegistryElement for Enchantment {
     const REGISTRY: &'static str = "minecraft:enchantment";
 
     fn contains_key(key: &str) -> bool {
-        crate::core::data_registries::json_entries("minecraft:enchantment").iter().any(|(name, _)| *name == key)
+        crate::core::data_registries::present_json_entries("minecraft:enchantment").any(|(name, _)| *name == key)
     }
 
     fn lookup(key: &str) -> Option<&'static Enchantment> {
         static ENCHANTMENTS: OnceLock<HashMap<&'static str, Enchantment>> = OnceLock::new();
         ENCHANTMENTS
             .get_or_init(|| {
-                crate::core::data_registries::json_entries("minecraft:enchantment")
-                    .iter()
+                crate::core::data_registries::present_json_entries("minecraft:enchantment")
                     .map(|&(name, json)| {
                         let tag = crate::world::item::component::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));
                         (name, Enchantment::decode(&tag).unwrap_or_else(|e| panic!("{name}: {e}")))
@@ -227,7 +226,7 @@ impl Enchantment {
 
     pub fn decode_holder(tag: &Nbt) -> DataResult<String> {
         let id = codec::identifier(tag)?;
-        if !crate::world::item::component::codec::registry("minecraft:enchantment").contains(&id.as_str()) {
+        if !crate::world::item::component::codec::registry_contains("minecraft:enchantment", &id) {
             return Err(format!("Failed to get element {id} from registry minecraft:enchantment"));
         }
         Ok(id)
@@ -411,11 +410,21 @@ impl Enchantment {
 
     pub fn tick(&'static self, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId) {
         let origin = level.entity(entity).position();
-        for effect in &self.effects.tick {
+        self.tick_from(level, enchantment_level, item, entity, origin, 0);
+    }
+
+    fn tick_from(&'static self, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId, origin: Vec3, first: usize) {
+        for index in first..self.effects.tick.len() {
+            let effect = &self.effects.tick[index];
             let matches = effect.matches(&mut entity_context(level, enchantment_level, entity, origin));
             if matches {
                 let position = level.entity(entity).position();
-                effect.effect.apply(level, enchantment_level, item, entity, position);
+                effect.effect.apply_resumable(level, enchantment_level, item, entity, position);
+            }
+            if level.tick_suspended() {
+                let item = item.clone();
+                level.suspend_tick(move |level| self.tick_from(level, enchantment_level, &item, entity, origin, index + 1));
+                return;
             }
         }
     }

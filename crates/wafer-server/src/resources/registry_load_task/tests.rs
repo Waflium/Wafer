@@ -48,6 +48,17 @@ fn registry_loading_failures_name_their_stage() {
 }
 
 #[test]
+fn an_empty_required_registry_fails_the_validation_stage() {
+    let trace = registry_must_be_non_empty("minecraft:wolf_variant").print_stack_trace();
+    let lines: Vec<&str> = trace.lines().collect();
+    assert_eq!(lines[0], "java.lang.IllegalStateException: Registry must be non-empty: minecraft:wolf_variant");
+    assert_eq!(lines[1], "\tat net.minecraft.resources.RegistryValidator.lambda$static$1(RegistryValidator.java:12)");
+    assert_eq!(lines[2], "\tat net.minecraft.resources.RegistryLoadTask.validateRegistry(RegistryLoadTask.java:93)");
+    assert_eq!(lines[3], "\tat net.minecraft.resources.RegistryDataLoader.lambda$load$4(RegistryDataLoader.java:266)");
+    assert!(trace.contains("\tat net.minecraft.resources.RegistryDataLoader.lambda$load$2(RegistryDataLoader.java:266)\n"));
+}
+
+#[test]
 fn a_function_failure_wraps_the_compile_error_in_a_completion_exception() {
     let trace = function_load_failed("java.lang.IllegalArgumentException: Whilst parsing command on line 1: nope").print_stack_trace();
     assert!(trace.starts_with("java.util.concurrent.CompletionException: java.lang.IllegalArgumentException: Whilst parsing command on line 1: nope\n"));

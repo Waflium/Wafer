@@ -90,7 +90,8 @@ pub fn load_tags_for_dimension_registry(resource_manager: &MultiPackResourceMana
 
 fn load_tags_for_registry(resource_manager: &MultiPackResourceManager, registry: &'static str, loading: ExistingTagLoading<'_>) -> Option<(String, Vec<(String, Vec<i32>)>)> {
     let entries = wafer_data::registry_entries(registry).unwrap_or_default();
-    let ids: HashMap<&str, i32> = entries.iter().enumerate().map(|(id, &entry)| (entry, id as i32)).collect();
+    let data = crate::core::data_registries::get(registry);
+    let ids: HashMap<&str, i32> = entries.iter().enumerate().filter(|&(id, _)| !data.is_some_and(|data| data.is_blocked(id as i32))).map(|(id, &entry)| (entry, id as i32)).collect();
     let dynamic = crate::core::data_registries::is_dynamic_registry(registry);
     let context = match loading {
         ExistingTagLoading::Startup if dynamic => TagLoadContext::DynamicRegistry,

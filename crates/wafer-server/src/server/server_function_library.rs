@@ -7,6 +7,7 @@ use crate::server::packs::resources::MultiPackResourceManager;
 use crate::resources::registry_load_task::TagLoadContext;
 use crate::tags::{TagLoader, identifier_order};
 use crate::util::java_collections::{JavaHashMap, identifier_hash};
+use crate::util::java_throwable::JavaThrowable;
 
 const FUNCTION_DIRECTORY: &str = "function";
 const FUNCTION_EXTENSION: &str = ".mcfunction";
@@ -66,7 +67,7 @@ impl ServerFunctionLibrary {
         self.tags.iter().map(|(id, _)| id)
     }
 
-    pub fn reload(resource_manager: &MultiPackResourceManager, function_compilation_permission: i32) -> ServerFunctionLibrary {
+    pub fn reload(resource_manager: &MultiPackResourceManager, function_compilation_permission: i32) -> Result<ServerFunctionLibrary, JavaThrowable> {
         let tags_loader = TagLoader::with_context(TAG_DIRECTORY, Some(TagLoadContext::FunctionLibrary));
         let mut functions_to_load: Vec<_> = resource_manager.list_resources(FUNCTION_DIRECTORY, FUNCTION_EXTENSION).into_iter().collect();
         identifier_order(&mut functions_to_load);
@@ -83,35 +84,47 @@ impl ServerFunctionLibrary {
         let next = AtomicUsize::new(0);
         let mut compiled: Vec<Option<Result<CommandFunction, String>>> = (0..sources.len()).map(|_| None).collect();
         let tags = std::thread::scope(|scope| {
-            let tags = std::thread::Builder::new().name(worker_name()).spawn_scoped(scope, || tags_loader.load(resource_manager)).expect("worker thread");
+            let tags = std::thread::Builder::new().name(worker_name()).spawn_scoped(scope, || crate::util::catch_throwable(|| tags_loader.load(resource_manager))).expect("worker thread");
             let handles: Vec<_> = (0..workers)
                 .map(|_| {
                     let (sources, next, compilation_context) = (&sources, &next, &compilation_context);
                     std::thread::Builder::new()
                         .name(worker_name())
                         .spawn_scoped(scope, move || {
-                            let mut done = Vec::new();
-                            loop {
-                                let index = next.fetch_add(1, Ordering::Relaxed);
-                                let Some((id, resource)) = sources.get(index) else { break };
-                                let function = resource.supplier.read().map_err(|e| format!("java.io.IOException: {e}")).and_then(|bytes| {
-                                    CommandFunction::from_lines(id, compilation_context, &read_lines(&bytes))
-                                        .map_err(|e| format!("java.lang.IllegalArgumentException: {e}"))
-                                });
-                                done.push((index, function));
-                            }
-                            done
+                            crate::util::catch_throwable(|| {
+                                let mut done = Vec::new();
+                                loop {
+                                    let index = next.fetch_add(1, Ordering::Relaxed);
+                                    let Some((id, resource)) = sources.get(index) else { break };
+                                    let function = resource.supplier.read().map_err(|e| format!("java.io.IOException: {e}")).and_then(|bytes| {
+                                        CommandFunction::from_lines(id, compilation_context, &read_lines(&bytes))
+                                            .map_err(|e| format!("java.lang.IllegalArgumentException: {e}"))
+                                    });
+                                    done.push((index, function));
+                                }
+                                done
+                            })
                         })
                         .expect("worker thread")
                 })
                 .collect();
+            let mut failure = None;
             for handle in handles {
-                for (index, function) in handle.join().expect("function compilation") {
-                    compiled[index] = Some(function);
+                match handle.join().unwrap_or_else(|payload| Err(crate::crash_report::throwable_of(&payload))) {
+                    Ok(done) => {
+                        for (index, function) in done {
+                            compiled[index] = Some(function);
+                        }
+                    }
+                    Err(throwable) => failure = failure.or(Some(throwable)),
                 }
             }
-            tags.join().expect("tag loading")
-        });
+            let tags = tags.join().unwrap_or_else(|payload| Err(crate::crash_report::throwable_of(&payload)));
+            match failure {
+                Some(throwable) => Err(throwable),
+                None => tags,
+            }
+        })?;
         let mut functions: JavaHashMap<Arc<CommandFunction>> = JavaHashMap::new(identifier_hash);
         for (id, &index) in result.iter() {
             match compiled[index].take().unwrap() {
@@ -122,6 +135,6 @@ impl ServerFunctionLibrary {
             }
         }
         let tags = tags_loader.build(&tags, &|id, _| functions.get(id).cloned(), &Arc::ptr_eq);
-        ServerFunctionLibrary { functions, tags }
+        Ok(ServerFunctionLibrary { functions, tags })
     }
 }

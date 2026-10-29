@@ -2,6 +2,7 @@ use wafer_core::java_string::JavaStr;
 use super::settings::{Properties, Settings};
 use crate::server::level::game_mode::GameType;
 use crate::util::java_integer::{number_format_exception, parse_int, parse_long};
+use crate::util::java_throwable::JavaThrowable;
 use crate::util::string_util::java_trim;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::chunk::unseeded_chunk_generator::UnseededChunkGenerator;
@@ -265,8 +266,22 @@ impl DedicatedServerProperties {
         WorldOptions::new(self.seed.unwrap_or_else(WorldOptions::random_seed), self.generate_structures, false)
     }
 
-    pub fn create_dimensions(&self) -> WorldDimensions {
-        let default_key = if world_presets::contains(NORMAL) { NORMAL } else { world_presets::first().expect("Invalid datapack contents: can't find default preset") };
+    pub fn create_dimensions(&self) -> Result<WorldDimensions, JavaThrowable> {
+        let default_key = if world_presets::contains(NORMAL) {
+            NORMAL
+        } else {
+            world_presets::first().ok_or_else(|| {
+                JavaThrowable::new(
+                    "java.lang.IllegalStateException: Invalid datapack contents: can't find default preset",
+                    vec![
+                        "net.minecraft.server.dedicated.DedicatedServerProperties$WorldDimensionData.lambda$create$1(DedicatedServerProperties.java:251)",
+                        "java.base/java.util.Optional.orElseThrow(Optional.java:403)",
+                        "net.minecraft.server.dedicated.DedicatedServerProperties$WorldDimensionData.create(DedicatedServerProperties.java:251)",
+                        "net.minecraft.server.dedicated.DedicatedServerProperties.createDimensions(DedicatedServerProperties.java:239)",
+                    ],
+                )
+            })?
+        };
         let key = crate::resources::identifier::parse(&self.level_type).ok().filter(|key| world_presets::contains(key));
         let key = key.unwrap_or_else(|| {
             warn!("Failed to parse level-type {}, defaulting to {default_key}", self.level_type);
@@ -283,10 +298,10 @@ impl DedicatedServerProperties {
                 error!("{error}");
             }
             if let Some(flat) = parsed.value {
-                return world_dimensions.replace_overworld_generator(UnseededChunkGenerator::Flat(flat));
+                return Ok(world_dimensions.replace_overworld_generator(UnseededChunkGenerator::Flat(flat)));
             }
         }
-        world_dimensions
+        Ok(world_dimensions)
     }
 
     pub fn with(&self, key: &str, value: String) -> Result<DedicatedServerProperties, InvalidProperty> {

@@ -438,6 +438,24 @@ impl EnchantmentEntityEffect {
         })
     }
 
+    pub fn apply_resumable(&'static self, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId, position: Vec3) {
+        match self {
+            EnchantmentEntityEffect::AllOf(effects) => EnchantmentEntityEffect::apply_all_from(effects, 0, level, enchantment_level, item, entity, position),
+            other => other.apply(level, enchantment_level, item, entity, position),
+        }
+    }
+
+    fn apply_all_from(effects: &'static [EnchantmentEntityEffect], first: usize, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId, position: Vec3) {
+        for index in first..effects.len() {
+            effects[index].apply_resumable(level, enchantment_level, item, entity, position);
+            if level.tick_suspended() {
+                let item = item.clone();
+                level.suspend_tick(move |level| EnchantmentEntityEffect::apply_all_from(effects, index + 1, level, enchantment_level, &item, entity, position));
+                return;
+            }
+        }
+    }
+
     pub fn apply(&self, level: &mut ServerLevel, enchantment_level: i32, item: &EnchantedItemInUse, entity: EntityId, position: Vec3) {
         match self {
             EnchantmentEntityEffect::AllOf(effects) => {
@@ -609,6 +627,9 @@ impl EnchantmentEntityEffect {
                 let rotation = (e.x_rot, e.y_rot);
                 let from_player_tick = level.enchantment_tick_player;
                 level.pending_enchantment_functions.push((function.clone(), entity, position, rotation, from_player_tick));
+                if level.in_enchantment_tick {
+                    level.yield_for_functions();
+                }
             }
             EnchantmentEntityEffect::SetBlockProperties { properties, offset, trigger_game_event } => {
                 let block_pos = BlockPos::containing(position.x, position.y, position.z).offset(offset.0, offset.1, offset.2);

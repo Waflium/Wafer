@@ -2,7 +2,7 @@ use wafer_core::java_string::JavaStr;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::atomic::{AtomicPtr, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 use serde_json::Value;
@@ -29,10 +29,19 @@ pub struct DataRegistry {
     network: Vec<OnceLock<Nbt>>,
     elements: Vec<Value>,
     json: &'static [(&'static str, &'static str)],
+    blocked: Vec<bool>,
     decoded: OnceLock<Box<dyn Any + Send + Sync>>,
 }
 
 impl DataRegistry {
+    pub fn is_blocked(&self, id: i32) -> bool {
+        self.blocked.get(id as usize).copied().unwrap_or(false)
+    }
+
+    pub fn size(&self) -> usize {
+        self.blocked.iter().filter(|&&blocked| !blocked).count()
+    }
+
     pub fn network_id(&self, id: i32) -> i32 {
         self.to_network.get(id as usize).copied().unwrap_or(id)
     }
@@ -172,6 +181,18 @@ pub fn json_entries(registry: &str) -> &'static [(&'static str, &'static str)] {
         });
     }
     get(registry).map_or(&[], DataRegistry::json_entries)
+}
+
+static ANY_BLOCKED: AtomicBool = AtomicBool::new(false);
+
+pub fn is_entry_blocked(registry: &str, id: i32) -> bool {
+    ANY_BLOCKED.load(Ordering::Acquire) && get(registry).is_some_and(|data| data.is_blocked(id))
+}
+
+pub fn present_json_entries(registry: &str) -> impl Iterator<Item = &'static (&'static str, &'static str)> {
+    let entries = json_entries(registry);
+    let data = get(registry);
+    entries.iter().enumerate().filter(move |&(id, _)| !data.is_some_and(|data| data.is_blocked(id as i32))).map(|(_, entry)| entry)
 }
 
 pub fn decoded<T: Any + Send + Sync>(registry: &str, decode: impl FnOnce(&'static [(&'static str, &'static str)]) -> T) -> &'static T {
@@ -399,16 +420,22 @@ fn load_registry(
     let mut entries: Vec<&'static str> = builtin.to_vec();
     let mut contents: Vec<Option<Value>> = vec![None; entries.len()];
     let mut elements: Vec<Value> = vec![Value::Null; entries.len()];
+    let mut blocked = vec![true; entries.len()];
     for (location, resource) in &resources {
         let (namespace, path) = location.split_once(':').unwrap();
         let id = format!("{namespace}:{}", &path[directory.len() + 1..path.len() - ".json".len()]);
+        let existing = entries.iter().position(|&entry| entry == id);
+        if let Some(index) = existing {
+            blocked[index] = false;
+        }
         let Some(json) = read_element(name, &id, resource, resources.len(), pack_elements) else { continue };
-        let index = match entries.iter().position(|&entry| entry == id) {
+        let index = match existing {
             Some(index) => index,
             None => {
                 entries.push(Box::leak(id.into_boxed_str()));
                 contents.push(None);
                 elements.push(Value::Null);
+                blocked.push(false);
                 entries.len() - 1
             }
         };
@@ -417,7 +444,7 @@ fn load_registry(
         }
         elements[index] = json;
     }
-    let mut from_network: Vec<i32> = (0..entries.len() as i32).collect();
+    let mut from_network: Vec<i32> = (0..entries.len() as i32).filter(|&id| !blocked[id as usize]).collect();
     from_network.sort_by_key(|&id| file_key(entries[id as usize]));
     let mut to_network = vec![0; entries.len()];
     for (network_id, &id) in from_network.iter().enumerate() {
@@ -425,7 +452,7 @@ fn load_registry(
     }
     let json: Vec<(&'static str, &'static str)> = entries.iter().zip(&elements).map(|(&name, element)| (name, &*Box::leak(element.to_string().into_boxed_str()))).collect();
     let network = (0..entries.len()).map(|_| OnceLock::new()).collect();
-    (DataRegistry { name, to_network, from_network, contents, network, elements, json: Box::leak(json.into_boxed_slice()), decoded: OnceLock::new() }, Box::leak(entries.into_boxed_slice()))
+    (DataRegistry { name, to_network, from_network, contents, network, elements, json: Box::leak(json.into_boxed_slice()), blocked, decoded: OnceLock::new() }, Box::leak(entries.into_boxed_slice()))
 }
 
 pub fn load(resource_manager: &MultiPackResourceManager) {
@@ -468,6 +495,7 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     let damage_type_entries = wafer_data::SyncedRegistry::get("minecraft:damage_type").entries;
     wafer_data::set_damage_types(damage_type_entries.iter().zip(&registries["minecraft:damage_type"].elements).map(|(&name, json)| damage_type_info(name, json)).collect());
     let registries: &'static HashMap<&'static str, DataRegistry> = Box::leak(Box::new(registries));
+    ANY_BLOCKED.store(registries.values().any(|registry| registry.blocked.contains(&true)), Ordering::Release);
     BIOMES.store((&registries["minecraft:worldgen/biome"] as *const DataRegistry).cast_mut(), Ordering::Release);
     ACTIVE.store((registries as *const HashMap<&'static str, DataRegistry>).cast_mut(), Ordering::Release);
     *PACK_ELEMENTS.lock().unwrap() = pack_elements;
@@ -505,6 +533,30 @@ pub fn group_unbound(unbound: Vec<(String, String)>) -> BTreeMap<String, Vec<Str
             (registry, keys.into_iter().map(|(key, _)| key).collect())
         })
         .collect()
+}
+
+const NON_EMPTY_REGISTRIES: [&str; 13] = [
+    "minecraft:wolf_variant",
+    "minecraft:wolf_sound_variant",
+    "minecraft:pig_variant",
+    "minecraft:pig_sound_variant",
+    "minecraft:frog_variant",
+    "minecraft:cat_variant",
+    "minecraft:cat_sound_variant",
+    "minecraft:cow_variant",
+    "minecraft:cow_sound_variant",
+    "minecraft:chicken_variant",
+    "minecraft:chicken_sound_variant",
+    "minecraft:zombie_nautilus_variant",
+    "minecraft:painting_variant",
+];
+
+fn validate_non_empty(errors: &mut LoadingErrors) {
+    for registry in NON_EMPTY_REGISTRIES {
+        if get(registry).is_none_or(|data| data.size() == 0) {
+            errors.0.insert(("minecraft:root".to_string(), registry.to_string()), registry_load_task::registry_must_be_non_empty(registry));
+        }
+    }
 }
 
 fn validate_timelines(errors: &mut LoadingErrors) {
@@ -594,6 +646,7 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool, tag
     let mut validation_stage = false;
     if errors.0.is_empty() && worldgen_stage {
         validation_stage = true;
+        validate_non_empty(&mut errors);
         validate_timelines(&mut errors);
     }
     if errors.0.is_empty() {
@@ -1282,5 +1335,24 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn vanilla_pack_blocks_no_entries() {
+        let names: Vec<&str> = wafer_data::builtin_synced_registries().iter().map(|registry| registry.name).chain(super::UNSYNCHRONIZED.iter().map(|&(name, _)| name)).collect();
+        for name in names {
+            super::json_entries(name);
+            let registry = super::get(name).unwrap();
+            assert_eq!(registry.size(), registry.json_entries().len(), "{name}");
+        }
+        assert!(!super::ANY_BLOCKED.load(std::sync::atomic::Ordering::Acquire));
+    }
+
+    #[test]
+    fn required_registries_are_never_empty_in_the_vanilla_pack() {
+        super::json_entries("minecraft:wolf_variant");
+        for name in super::NON_EMPTY_REGISTRIES {
+            assert!(super::get(name).unwrap().size() > 0, "{name}");
+        }
     }
 }

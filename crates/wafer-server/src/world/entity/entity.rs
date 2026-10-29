@@ -29,7 +29,7 @@ use crate::world::level::block;
 use crate::world::level::block::state::block_behaviour::{self, RenderShape};
 use crate::world::level::portal::teleport_transition::{PostTeleportTransition, TeleportTransition};
 use crate::server::level::tick_continuation::PendingServerWork;
-use crate::world::level::block::portal::{PendingPortalTeleport, Portal, PortalEntity};
+use crate::world::level::block::portal::{PendingPortalTeleport, PendingSpectatorPortalUse, Portal, PortalEntity};
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use super::portal_processor::PortalProcessor;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
@@ -3511,8 +3511,7 @@ impl crate::server::Server {
         }
     }
 
-    pub fn handle_pending_spectator_portal_use(&mut self, level: usize) {
-        let Some(pending) = self.levels[level].pending_spectator_portal_use.take() else { return };
+    pub fn handle_pending_spectator_portal_use(&mut self, level: usize, pending: PendingSpectatorPortalUse) {
         let entity = self.levels[level].portal_entity(pending.player);
         match pending.portal.get_portal_destination(self, level, &entity, pending.pos) {
             Some(transition) => {
@@ -3524,11 +3523,6 @@ impl crate::server::Server {
             None => {
                 let message = crate::network::chat::Component::translatable("spectator.cannot_teleport").with_color(crate::network::chat::ChatFormatting::Red);
                 self.levels[level].player(pending.player).send_overlay_message(&message);
-            }
-        }
-        if let Some(player) = self.get_player(pending.player) {
-            for packet in pending.packets {
-                player.connection.send_raw(packet);
             }
         }
     }

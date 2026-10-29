@@ -112,7 +112,11 @@ pub async fn accept_connections(listener: TcpListener, context: Arc<ListenerCont
     let event_loop_type = event_loop_type(context.config.use_native_transport);
     let event_loops = std::thread::available_parallelism().map_or(1, |n| n.get()) * 2;
     let mut channels = 0;
-    while let Ok((stream, _)) = listener.accept().await {
+    loop {
+        let Ok((stream, _)) = listener.accept().await else {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            continue;
+        };
         channels += 1;
         let io_thread: Arc<str> = Arc::from(format!("Netty {event_loop_type} IO #{}", channels % event_loops));
         let context = context.clone();

@@ -365,14 +365,43 @@ impl ServerLevel {
     }
 
     pub fn tick_enchantment_effects(&mut self, entity: EntityId) {
-        self.enchantment_tick_player = self.is_player(entity);
-        for slot in EquipmentSlot::VALUES {
+        let player = self.is_player(entity);
+        self.tick_enchantment_effects_from_slot(entity, player, 0);
+    }
+
+    fn tick_enchantment_effects_from_slot(&mut self, entity: EntityId, player: bool, first_slot: usize) {
+        self.enchantment_tick_player = player;
+        self.in_enchantment_tick = true;
+        for slot_index in first_slot..EquipmentSlot::VALUES.len() {
+            let slot = EquipmentSlot::VALUES[slot_index];
             let Some(piece) = self.item_by_slot(entity, slot) else { continue };
-            for (enchantment, level, item) in self.run_iteration_on_item_in_slot(&piece, slot, entity) {
-                enchantment.tick(self, level, &item, entity);
+            let items = self.run_iteration_on_item_in_slot(&piece, slot, entity);
+            if self.tick_enchantment_items(entity, player, slot_index, items, 0) {
+                return;
             }
         }
         self.enchantment_tick_player = false;
+        self.in_enchantment_tick = false;
+    }
+
+    fn tick_enchantment_items(&mut self, entity: EntityId, player: bool, slot_index: usize, items: Vec<(&'static Enchantment, i32, EnchantedItemInUse)>, first: usize) -> bool {
+        for index in first..items.len() {
+            let (enchantment, level, item) = &items[index];
+            enchantment.tick(self, *level, item, entity);
+            if self.tick_suspended() {
+                self.suspend_tick(move |level| {
+                    level.enchantment_tick_player = player;
+                    level.in_enchantment_tick = true;
+                    if !level.tick_enchantment_items(entity, player, slot_index, items, index + 1) {
+                        level.tick_enchantment_effects_from_slot(entity, player, slot_index + 1);
+                    }
+                });
+                self.enchantment_tick_player = false;
+                self.in_enchantment_tick = false;
+                return true;
+            }
+        }
+        false
     }
 
     pub fn process_durability_change(&mut self, item_stack: &ItemStack, amount: i32) -> i32 {

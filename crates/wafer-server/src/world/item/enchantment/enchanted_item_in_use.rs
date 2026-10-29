@@ -5,6 +5,7 @@ use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 
+#[derive(Clone)]
 pub struct EnchantedItemInUse {
     pub item_stack: ItemStack,
     pub in_slot: Option<EquipmentSlot>,

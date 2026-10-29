@@ -25,7 +25,7 @@ impl HolderSet {
                 Ok(key) => key,
                 Err(error) => return DecodeResult::error(error),
             };
-            if component_codec::registry(registry).contains(&key.as_str()) {
+            if component_codec::registry_contains(registry, &key) {
                 crate::core::data_registries::known_reference(registry, &key);
                 return DecodeResult::from(component_codec::registry_id(registry, &key));
             }

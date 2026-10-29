@@ -21,24 +21,27 @@ impl ReloadableServerResources {
             std::thread::Builder::new()
                 .name(worker_name())
                 .spawn_scoped(scope, || {
-                    let loaded = reloadable_server_registries::load(resource_manager, postponed_tags, Some(reloadable_server_registries::get()));
-                    let advancements = match &loaded {
-                        Ok(LoadResult::Loaded { registries, .. }) => Some(wafer_data::with_pending_tags(postponed_tags, || reloadable_server_registries::with_validating(registries, || ServerAdvancementManager::new(&registries.advancements)))),
-                        Ok(LoadResult::Unchanged) => Some(wafer_data::with_pending_tags(postponed_tags, || ServerAdvancementManager::new(&reloadable_server_registries::get().advancements))),
-                        Err(_) => None,
-                    };
-                    (loaded, advancements)
+                    crate::util::catch_throwable(|| {
+                        let loaded = reloadable_server_registries::load(resource_manager, postponed_tags, Some(reloadable_server_registries::get()));
+                        let advancements = match &loaded {
+                            Ok(LoadResult::Loaded { registries, .. }) => Some(wafer_data::with_pending_tags(postponed_tags, || reloadable_server_registries::with_validating(registries, || ServerAdvancementManager::new(&registries.advancements)))),
+                            Ok(LoadResult::Unchanged) => Some(wafer_data::with_pending_tags(postponed_tags, || ServerAdvancementManager::new(&reloadable_server_registries::get().advancements))),
+                            Err(_) => None,
+                        };
+                        (loaded, advancements)
+                    })
+                    .unwrap_or_else(|throwable| (Err(throwable), None))
                 })
                 .expect("worker thread")
                 .join()
-                .expect("reloadable registries")
+                .unwrap_or_else(|payload| (Err(crate::crash_report::throwable_of(&payload)), None))
         });
         let (registries, recipe_manager) = match loaded {
             Ok(LoadResult::Unchanged) => (None, None),
             Ok(LoadResult::Loaded { registries, recipes }) => (Some(registries), Some(RecipeManager::new(recipes))),
             Err(exception) => return Err(exception),
         };
-        let function_library = ServerFunctionLibrary::reload(resource_manager, function_compilation_permission);
+        let function_library = ServerFunctionLibrary::reload(resource_manager, function_compilation_permission)?;
         Ok(ReloadableServerResources { postponed_tags, registries, recipe_manager, advancements, function_library })
     }
 
