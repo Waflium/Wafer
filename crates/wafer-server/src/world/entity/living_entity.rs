@@ -451,44 +451,59 @@ fn are_all_effects_ambient(effects: &[MobEffectInstance]) -> bool {
     effects.iter().all(|e| !e.visible || e.ambient)
 }
 
+fn living_parts(entity: &LevelEntity) -> Option<(&Entity, &LivingEntity, f32)> {
+    match entity {
+        LevelEntity::ArmorStand(stand) => Some((&stand.entity, &stand.living, stand.health)),
+        LevelEntity::Mannequin(mannequin) => Some((&mannequin.entity, &mannequin.living, mannequin.health)),
+        LevelEntity::Mob(mob) => Some((&mob.entity, &mob.living, mob.health)),
+        _ => None,
+    }
+}
+
+fn living_parts_mut(entity: &mut LevelEntity) -> Option<(&mut Entity, &mut LivingEntity)> {
+    match entity {
+        LevelEntity::ArmorStand(stand) => {
+            let stand = &mut **stand;
+            Some((&mut stand.entity, &mut stand.living))
+        }
+        LevelEntity::Mannequin(mannequin) => {
+            let mannequin = &mut **mannequin;
+            Some((&mut mannequin.entity, &mut mannequin.living))
+        }
+        LevelEntity::Mob(mob) => {
+            let mob = &mut **mob;
+            Some((&mut mob.entity, &mut mob.living))
+        }
+        _ => None,
+    }
+}
+
 impl ServerLevel {
-    pub fn living(&self, id: EntityId) -> &LivingEntity {
+    fn living_parts(&self, id: EntityId) -> Option<(&Entity, &LivingEntity, f32)> {
         match self.find_player(id) {
-            Some(p) => &p.living,
-            None => match self.find_entity(id) {
-                Some(LevelEntity::ArmorStand(stand)) => &stand.living,
-                Some(LevelEntity::Mannequin(mannequin)) => &mannequin.living,
-                _ => &self.mob(id).expect("a living entity").living,
-            },
+            Some(p) => Some((&p.entity, &p.living, p.health)),
+            None => self.find_entity(id).and_then(living_parts).or_else(|| self.tombstone(id).and_then(living_parts)),
+        }
+    }
+
+    pub fn living(&self, id: EntityId) -> &LivingEntity {
+        match self.living_parts(id) {
+            Some((_, living, _)) => living,
+            None => &self.removed_placeholder().1,
         }
     }
 
     pub fn living_mut(&mut self, id: EntityId) -> &mut LivingEntity {
-        if self.is_player(id) {
-            return &mut self.player_mut(id).living;
-        }
-        if self.is_armor_stand(id) {
-            let Some(LevelEntity::ArmorStand(stand)) = self.find_entity_mut(id) else { unreachable!("an armor stand") };
-            return &mut stand.living;
-        }
-        if self.is_mannequin(id) {
-            let Some(LevelEntity::Mannequin(mannequin)) = self.find_entity_mut(id) else { unreachable!("a mannequin") };
-            return &mut mannequin.living;
-        }
-        &mut self.mob_mut(id).expect("a living entity").living
+        self.entity_and_living_mut(id).1
     }
 
     pub fn entity_and_living(&self, id: EntityId) -> (&Entity, &LivingEntity) {
-        match self.find_player(id) {
-            Some(p) => (&p.entity, &p.living),
-            None => match self.find_entity(id) {
-                Some(LevelEntity::ArmorStand(stand)) => (&stand.entity, &stand.living),
-                Some(LevelEntity::Mannequin(mannequin)) => (&mannequin.entity, &mannequin.living),
-                _ => {
-                    let mob = self.mob(id).expect("a living entity");
-                    (&mob.entity, &mob.living)
-                }
-            },
+        match self.living_parts(id) {
+            Some((entity, living, _)) => (entity, living),
+            None => {
+                let (entity, living) = self.removed_placeholder();
+                (entity, living)
+            }
         }
     }
 
@@ -497,29 +512,18 @@ impl ServerLevel {
             let p = self.player_mut(id);
             return (&mut p.entity, &mut p.living);
         }
-        if self.is_armor_stand(id) {
-            let Some(LevelEntity::ArmorStand(stand)) = self.find_entity_mut(id) else { unreachable!("an armor stand") };
-            return (&mut stand.entity, &mut stand.living);
+        if self.find_entity(id).and_then(living_parts).is_some() {
+            return living_parts_mut(self.find_entity_mut(id).expect("a living entity")).expect("a living entity");
         }
-        if self.is_mannequin(id) {
-            let Some(LevelEntity::Mannequin(mannequin)) = self.find_entity_mut(id) else { unreachable!("a mannequin") };
-            return (&mut mannequin.entity, &mut mannequin.living);
+        if self.tombstone(id).and_then(living_parts).is_some() {
+            return living_parts_mut(self.tombstone_mut(id).expect("a tombstone")).expect("a living entity");
         }
-        let mob = self.mob_mut(id).expect("a living entity");
-        (&mut mob.entity, &mut mob.living)
+        let (entity, living) = self.removed_placeholder_mut();
+        (entity, living)
     }
 
     pub fn health(&self, id: EntityId) -> f32 {
-        match self.find_player(id) {
-            Some(p) => p.health,
-            None => match self.armor_stand(id) {
-                Some(stand) => stand.health,
-                None => match self.mannequin(id) {
-                    Some(mannequin) => mannequin.health,
-                    None => self.mob(id).expect("a living entity").health,
-                },
-            },
-        }
+        self.living_parts(id).map_or(0.0, |(_, _, health)| health)
     }
 
     pub fn item_by_slot(&self, id: EntityId, slot: EquipmentSlot) -> Option<ItemStack> {

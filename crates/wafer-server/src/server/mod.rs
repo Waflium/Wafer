@@ -2030,11 +2030,11 @@ fn backtrace_frames() -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn capture_panic_frames() {
+pub(crate) fn capture_panic_frames(location: Option<String>) {
     let frames = backtrace_frames();
     let end = frames.iter().position(|frame| frame.contains("catch_unwind")).unwrap_or(frames.len());
     let start = frames[..end].iter().rposition(|frame| frame.starts_with("std::panicking::") || frame.starts_with("core::panicking::") || frame.starts_with("core::option::")).map_or(0, |i| i + 1);
-    PANIC_FRAMES.set(Some(frames[start..].to_vec()));
+    PANIC_FRAMES.set(Some(location.into_iter().chain(frames[start..].iter().cloned()).collect()));
 }
 
 pub(crate) fn crash_frames() -> Vec<String> {

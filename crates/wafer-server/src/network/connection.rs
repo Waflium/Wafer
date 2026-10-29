@@ -317,12 +317,15 @@ pub fn spawn_io(
     Outbound { sender, codec, io_thread, marks_fallbacks: true }
 }
 
-#[cfg(test)]
 impl Outbound {
     pub fn detached() -> Outbound {
-        Outbound::capture().0
+        let (sender, _) = mpsc::unbounded_channel();
+        Outbound { sender, codec: Codec::default(), io_thread: Arc::from("Netty NIO IO #1"), marks_fallbacks: false }
     }
+}
 
+#[cfg(test)]
+impl Outbound {
     pub fn capture() -> (Outbound, mpsc::UnboundedReceiver<Vec<u8>>) {
         let (sender, rx) = mpsc::unbounded_channel();
         (Outbound { sender, codec: Codec::default(), io_thread: Arc::from("Netty NIO IO #1"), marks_fallbacks: false }, rx)

@@ -180,8 +180,18 @@ impl Entity {
     pub fn new(entity_type: i32, dimensions: EntityDimensions, data: Vec<DataValue>) -> Entity {
         let mut random = LegacyRandomSource::create();
         let uuid = create_insecure_uuid(&mut random);
+        Entity::with_identity(next_entity_id(), uuid, random, entity_type, dimensions, data)
+    }
+
+    pub fn removed_placeholder() -> Entity {
+        let mut entity = Entity::with_identity(-1, 0, LegacyRandomSource::new(0), wafer_data::registry_id(wafer_data::registry::ENTITY_TYPE, "minecraft:marker"), super::marker::DIMENSIONS, super::data::living_entity_defaults());
+        entity.removal = Some(RemovalReason::Discarded);
+        entity
+    }
+
+    fn with_identity(id: EntityId, uuid: u128, random: LegacyRandomSource, entity_type: i32, dimensions: EntityDimensions, data: Vec<DataValue>) -> Entity {
         Entity {
-            id: next_entity_id(),
+            id,
             uuid,
             entity_type,
             random,
@@ -844,7 +854,13 @@ pub fn compute_modified_friction(friction: f32, modifier: f32) -> f32 {
 
 impl ServerLevel {
     pub fn entity(&self, id: EntityId) -> &Entity {
-        self.entity_ref(id).expect("entity in this level")
+        match self.entity_ref(id) {
+            Some(entity) => entity,
+            None => match self.tombstone(id) {
+                Some(entity) => entity.entity(),
+                None => &self.removed_placeholder().0,
+            },
+        }
     }
 
     pub fn entity_mut(&mut self, id: EntityId) -> &mut Entity {
@@ -854,7 +870,13 @@ impl ServerLevel {
         if self.find_entity(id).is_some() {
             return self.find_entity_mut(id).expect("entity in this level").entity_mut();
         }
-        self.dragon_part_entity_mut(id).expect("entity in this level")
+        if self.dragon_part_entity(id).is_some() {
+            return self.dragon_part_entity_mut(id).expect("entity in this level");
+        }
+        if self.tombstone(id).is_some() {
+            return self.tombstone_mut(id).expect("a tombstone").entity_mut();
+        }
+        &mut self.removed_placeholder_mut().0
     }
 
     pub fn is_player(&self, id: EntityId) -> bool {

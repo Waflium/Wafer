@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::dedicated::dedicated_server_settings::DedicatedServerSettings;
@@ -128,7 +127,7 @@ pub fn main(args: Vec<String>) {
             return;
         }
         if std::thread::current().name() == Some("Server thread") {
-            crate::server::capture_panic_frames();
+            crate::server::capture_panic_frames(info.location().map(ToString::to_string));
             return;
         }
         let message = info.payload().downcast_ref::<String>().map(String::as_str).or_else(|| info.payload().downcast_ref::<&str>().copied()).unwrap_or("");

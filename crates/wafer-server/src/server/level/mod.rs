@@ -8,7 +8,10 @@ pub mod chunk_tracker;
 pub mod chunk_workers;
 pub mod distance_manager;
 pub mod events;
+pub mod entity_tombstones;
 pub mod lent_levels;
+#[cfg(test)]
+mod entity_tombstones_tests;
 pub mod game_mode;
 #[cfg(test)]
 mod chunk_entities_tests;
@@ -173,6 +176,7 @@ pub struct ServerLevel {
     pub entity_manager: PersistentEntitySectionManager,
     pub(crate) tick_list: EntityTickList,
     pub(crate) removed_entities: Vec<EntityId>,
+    pub(crate) tombstones: entity_tombstones::EntityTombstones,
     pub anger_suspects: wafer_core::hash_map::FastSet<EntityId>,
     pub dropped_suspect_reasons: wafer_core::hash_map::FastMap<EntityId, (crate::world::entity::RemovalReason, i64)>,
     waypoint_manager: RefCell<ServerWaypointManager>,
@@ -269,6 +273,7 @@ impl ServerLevel {
             entity_manager: PersistentEntitySectionManager::new(entity_storage),
             tick_list: EntityTickList::default(),
             removed_entities: Vec::new(),
+            tombstones: entity_tombstones::EntityTombstones::new(),
             anger_suspects: Default::default(),
             dropped_suspect_reasons: Default::default(),
             waypoint_manager: RefCell::default(),
@@ -564,11 +569,17 @@ impl ServerLevel {
     }
 
     pub fn player(&self, id: EntityId) -> &ServerPlayer {
-        self.find_player(id).expect("player in this level")
+        match self.find_player(id) {
+            Some(player) => player,
+            None => self.removed_player_placeholder(),
+        }
     }
 
     pub fn player_mut(&mut self, id: EntityId) -> &mut ServerPlayer {
-        self.find_player_mut(id).expect("player in this level")
+        if self.find_player(id).is_some() {
+            return self.find_player_mut(id).expect("player in this level");
+        }
+        self.removed_player_placeholder_mut()
     }
 
     pub fn entity_ref(&self, id: EntityId) -> Option<&Entity> {
@@ -1278,7 +1289,9 @@ impl ServerLevel {
         }
         self.entity_removed(id, reason);
         self.record_dropped_suspect(id, reason);
-        self.entities.swap_remove(&id);
+        if let Some(entity) = self.entities.swap_remove(&id) {
+            self.bury_entity(id, entity);
+        }
     }
 
     fn record_dropped_suspect(&mut self, id: EntityId, reason: Option<crate::world::entity::RemovalReason>) {
@@ -1291,11 +1304,14 @@ impl ServerLevel {
 
     fn remove_untracked_entities(&mut self) {
         for id in std::mem::take(&mut self.removed_entities) {
-            if let Some(reason) = self.find_entity(id).and_then(|e| e.entity().removal) {
+            if let Some(reason) = self.entities.get(&id).and_then(|e| e.entity().removal) {
                 self.record_dropped_suspect(id, Some(reason));
-                self.entities.swap_remove(&id);
+                if let Some(entity) = self.entities.swap_remove(&id) {
+                    self.bury_entity(id, entity);
+                }
             }
         }
+        self.purge_tombstones();
         if !self.dropped_suspect_reasons.is_empty() {
             let game_time = self.game_time;
             self.dropped_suspect_reasons.retain(|_, &mut (_, time)| game_time - time <= 40);
