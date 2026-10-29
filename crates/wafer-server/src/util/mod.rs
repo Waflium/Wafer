@@ -18,6 +18,7 @@ pub mod fraction;
 pub mod hash_ops;
 pub mod inclusive_range;
 pub mod java_collections;
+pub mod java_gzip;
 pub mod java_heap;
 pub mod java_inflater;
 pub mod java_integer;

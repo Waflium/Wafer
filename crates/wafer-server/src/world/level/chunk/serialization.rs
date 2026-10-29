@@ -1,5 +1,4 @@
-use std::io;
-
+use crate::util::java_throwable::JavaThrowable;
 use wafer_core::ChunkPos;
 use wafer_core::BlockPos;
 use wafer_data::{Block, BlockState, DimensionType, Fluid, WORLD_VERSION, registry};
@@ -32,7 +31,37 @@ fn layer_to_nbt(layer: &DataLayer) -> Nbt {
     Nbt::ByteArray(layer.to_bytes().iter().map(|&b| b as i8).collect())
 }
 
-fn layer_from_nbt(nbt: Option<&Nbt>) -> io::Result<Option<DataLayer>> {
+#[derive(Debug)]
+pub enum ReadError {
+    MissingLevelData,
+    Exception(JavaThrowable),
+}
+
+const PARSE_TAIL: [&str; 9] = [
+    "net.minecraft.server.level.ChunkMap.lambda$scheduleChunkLoad$1(ChunkMap.java:585)",
+    "java.base/java.util.Optional.map(Optional.java:260)",
+    "net.minecraft.server.level.ChunkMap.lambda$scheduleChunkLoad$0(ChunkMap.java:584)",
+    "java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:667)",
+    "java.base/java.util.concurrent.CompletableFuture$Completion.exec(CompletableFuture.java:504)",
+    "java.base/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:511)",
+    "java.base/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1450)",
+    "java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:2019)",
+    "java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:187)",
+];
+const OPTIONAL_MAP: &str = "java.base/java.util.Optional.map(Optional.java:260)";
+const PARSE_BLOCK_LIGHT: &str = "net.minecraft.world.level.chunk.storage.SerializableChunkData.parse(SerializableChunkData.java:196)";
+const PARSE_SKY_LIGHT: &str = "net.minecraft.world.level.chunk.storage.SerializableChunkData.parse(SerializableChunkData.java:197)";
+const DATA_LAYER_INIT: &str = "net.minecraft.world.level.chunk.DataLayer.<init>(DataLayer.java:32)";
+const GET_OR_THROW: &str = "com.mojang.serialization.DataResult$Error.getOrThrow(DataResult.java:287)";
+const CHUNK_READ_EXCEPTION: &str = "net.minecraft.world.level.chunk.storage.SerializableChunkData$ChunkReadException";
+
+fn parse_exception(description: String, frames: &[&'static str]) -> ReadError {
+    let mut frames = frames.to_vec();
+    frames.extend(PARSE_TAIL);
+    ReadError::Exception(JavaThrowable::new(description, frames))
+}
+
+fn layer_from_nbt(nbt: Option<&Nbt>, parse_line: &'static str) -> Result<Option<DataLayer>, ReadError> {
     match nbt {
         Some(Nbt::ByteArray(bytes)) => {
             let bytes: Box<[u8; data_layer::SIZE]> = bytes
@@ -41,7 +70,7 @@ fn layer_from_nbt(nbt: Option<&Nbt>) -> io::Result<Option<DataLayer>> {
                 .collect::<Vec<u8>>()
                 .into_boxed_slice()
                 .try_into()
-                .map_err(|_| invalid(&format!("DataLayer should be 2048 bytes not: {}", bytes.len())))?;
+                .map_err(|_| parse_exception(format!("java.lang.IllegalArgumentException: DataLayer should be 2048 bytes not: {}", bytes.len()), &[DATA_LAYER_INIT, OPTIONAL_MAP, parse_line]))?;
             Ok(Some(DataLayer::from_bytes(bytes)))
         }
         _ => Ok(None),
@@ -86,10 +115,6 @@ fn ticks_from_nbt<T: Copy + Eq + std::hash::Hash>(nbt: Option<&Nbt>, ty: impl Fn
             })
         })
         .collect()
-}
-
-fn invalid(what: &str) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, what.to_owned())
 }
 
 pub fn state_to_nbt(state: BlockState) -> Nbt {
@@ -159,6 +184,12 @@ pub fn decode_block_state(nbt: &Nbt) -> Result<BlockState, String> {
     Err(format!("Failed to parse either. First: {first}; Second: {second}"))
 }
 
+fn decode_biome(nbt: &Nbt) -> Result<Biome, String> {
+    let Nbt::String(name) = nbt else { return Err("Not a string".to_string()) };
+    let id = crate::resources::identifier::read(name)?;
+    Biome::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/biome]: {id}"))
+}
+
 fn mixed_list(items: Vec<Nbt>) -> Nbt {
     Nbt::List(items)
 }
@@ -175,15 +206,29 @@ fn container_to_nbt<T: super::palette::PaletteValue>(container: &PalettedContain
 fn container_from_nbt<T: super::palette::PaletteValue>(
     nbt: &Nbt,
     strategy: super::palette::Strategy,
-    entry: impl Fn(&Nbt) -> Option<T>,
-) -> io::Result<PalettedContainer<T>> {
-    let palette = nbt.get("palette").map(Nbt::as_list).unwrap_or(&[]).iter().map(&entry).collect::<Option<Vec<T>>>();
-    let palette = palette.ok_or_else(|| invalid("unknown palette entry"))?;
+    default: T,
+    entry: impl Fn(&Nbt) -> Result<T, String>,
+) -> Result<(PalettedContainer<T>, Option<String>), String> {
+    let mut recoverable = Vec::new();
+    let palette = match nbt.get("palette") {
+        None => return Err(format!("No key palette in MapLike[{}]", crate::nbt::to_string(nbt))),
+        Some(Nbt::List(items)) => items
+            .iter()
+            .map(|item| {
+                entry(item).unwrap_or_else(|message| {
+                    recoverable.push(format!("({message} -> using default)"));
+                    default
+                })
+            })
+            .collect::<Vec<T>>(),
+        Some(other) => return Err(format!("Not a list: {}", crate::nbt::to_string(other))),
+    };
     let storage = match nbt.get("data") {
         Some(Nbt::LongArray(longs)) => Some(longs.clone()),
         _ => None,
     };
-    PalettedContainer::unpack(strategy, PackedData { palette, storage }).map_err(|e| invalid(&e))
+    let recoverable = (!recoverable.is_empty()).then(|| recoverable.into_iter().rev().collect::<Vec<_>>().join("; "));
+    PalettedContainer::unpack(strategy, PackedData { palette, storage }).map(|container| (container, recoverable))
 }
 
 fn heightmaps_to_nbt(chunk: &LevelChunk, status: ChunkStatus) -> Nbt {
@@ -316,36 +361,94 @@ fn unpack_structure_data(pos: ChunkPos, tag: Option<&Nbt>, seed: i64) -> ChunkSt
     structures
 }
 
-pub fn read(nbt: &Nbt, dimension: &DimensionType, seed: i64) -> io::Result<ReadChunk> {
-    let version = nbt.get("DataVersion").and_then(Nbt::as_i64).unwrap_or(0);
-    if version != WORLD_VERSION as i64 {
-        return Err(invalid(&format!("chunk data version {version} is not {WORLD_VERSION}")));
+fn read_section_container<T: super::palette::PaletteValue>(
+    tag: Option<&Nbt>,
+    chunk_pos: (i32, i32),
+    section_y: i32,
+    strategy: super::palette::Strategy,
+    default: T,
+    entry: impl Fn(&Nbt) -> Result<T, String>,
+    frames: [&'static str; 4],
+) -> Result<Option<PalettedContainer<T>>, ReadError> {
+    let Some(tag @ Nbt::Compound(_)) = tag else { return Ok(None) };
+    match container_from_nbt(tag, strategy, default, entry) {
+        Ok((container, recoverable)) => {
+            if let Some(message) = recoverable {
+                error!("Recoverable errors when loading section [{}, {section_y}, {}]: {message}", chunk_pos.0, chunk_pos.1);
+            }
+            Ok(Some(container))
+        }
+        Err(message) => {
+            error!("Recoverable errors when loading section [{}, {section_y}, {}]: {message}", chunk_pos.0, chunk_pos.1);
+            Err(parse_exception(format!("{CHUNK_READ_EXCEPTION}: {message}"), &frames))
+        }
     }
-    let status = match nbt.get("Status").and_then(Nbt::as_str) {
-        Some(name) if !name.is_empty() => ChunkStatus::by_name(name).unwrap_or(ChunkStatus::Empty),
-        _ => return Err(invalid("missing level data")),
+}
+
+const EMPTY_PALETTE_FRAMES: [&str; 5] = [
+    "net.minecraft.world.level.chunk.SingleValuePalette.valueFor(SingleValuePalette.java:46)",
+    "net.minecraft.world.level.chunk.PalettedContainer.count(PalettedContainer.java:319)",
+    "net.minecraft.world.level.chunk.LevelChunkSection.recalcBlockCounts(LevelChunkSection.java:150)",
+    "net.minecraft.world.level.chunk.LevelChunkSection.<init>(LevelChunkSection.java:36)",
+    "net.minecraft.world.level.chunk.storage.SerializableChunkData.parse(SerializableChunkData.java:191)",
+];
+
+const STATES_FRAMES: [&str; 4] = [
+    GET_OR_THROW,
+    "net.minecraft.world.level.chunk.storage.SerializableChunkData.lambda$parse$3(SerializableChunkData.java:184)",
+    OPTIONAL_MAP,
+    "net.minecraft.world.level.chunk.storage.SerializableChunkData.parse(SerializableChunkData.java:184)",
+];
+const BIOMES_FRAMES: [&str; 4] = [
+    GET_OR_THROW,
+    "net.minecraft.world.level.chunk.storage.SerializableChunkData.lambda$parse$5(SerializableChunkData.java:188)",
+    OPTIONAL_MAP,
+    "net.minecraft.world.level.chunk.storage.SerializableChunkData.parse(SerializableChunkData.java:188)",
+];
+
+pub fn read(nbt: &Nbt, dimension: &DimensionType, seed: i64) -> Result<ReadChunk, ReadError> {
+    let Some(status_name) = nbt.get("Status").and_then(Nbt::as_str) else { return Err(ReadError::MissingLevelData) };
+    let status = match ChunkStatus::by_name(status_name) {
+        Some(status) => status,
+        None => {
+            let message = match crate::resources::identifier::read(status_name) {
+                Ok(id) => format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:chunk_status]: {id}"),
+                Err(error) => error,
+            };
+            error!("Failed to read field (Status={}): {message}", crate::nbt::to_string(&Nbt::String(status_name.to_string())));
+            ChunkStatus::Empty
+        }
     };
-    let x = nbt.get("xPos").and_then(Nbt::as_i64).ok_or_else(|| invalid("missing xPos"))? as i32;
-    let z = nbt.get("zPos").and_then(Nbt::as_i64).ok_or_else(|| invalid("missing zPos"))? as i32;
+    let x = nbt.get("xPos").and_then(Nbt::as_i64).unwrap_or(0) as i32;
+    let z = nbt.get("zPos").and_then(Nbt::as_i64).unwrap_or(0) as i32;
     let plains = Biome::by_name("minecraft:plains").unwrap_or(Biome(0));
     let mut sections: Vec<LevelChunkSection> = (0..dimension.height / 16).map(|_| LevelChunkSection::new(plains)).collect();
     let min_section = dimension.min_y >> 4;
+    let max_section = min_section + dimension.height as i32 / 16 - 1;
     let mut light = Vec::new();
     for section in nbt.get("sections").map(Nbt::as_list).unwrap_or(&[]) {
-        let y = section.get("Y").and_then(Nbt::as_i64).ok_or_else(|| invalid("section without Y"))? as i32;
-        let (block, sky) = (layer_from_nbt(section.get("BlockLight"))?, layer_from_nbt(section.get("SkyLight"))?);
+        if !matches!(section, Nbt::Compound(_)) {
+            continue;
+        }
+        let y = section.get("Y").and_then(Nbt::as_i64).unwrap_or(0) as i8 as i32;
+        let loaded = if (min_section..=max_section).contains(&y) {
+            let states = read_section_container(section.get("block_states"), (x, z), y, block_strategy(), wafer_data::blocks::AIR.default_state(), decode_block_state, STATES_FRAMES)?;
+            let biomes = read_section_container(section.get("biomes"), (x, z), y, biome_strategy(), plains, decode_biome, BIOMES_FRAMES)?;
+            if states.is_some() && section.get("block_states").and_then(|states| states.get("palette")).is_some_and(|palette| palette.as_list().is_empty()) {
+                return Err(parse_exception("java.lang.IllegalStateException: Missing Palette entry for id 0.".to_string(), &EMPTY_PALETTE_FRAMES));
+            }
+            Some((states, biomes))
+        } else {
+            None
+        };
+        let (block, sky) = (layer_from_nbt(section.get("BlockLight"), PARSE_BLOCK_LIGHT)?, layer_from_nbt(section.get("SkyLight"), PARSE_SKY_LIGHT)?);
         if block.is_some() || sky.is_some() {
             light.push(SectionLight { y, block, sky });
         }
-        let Some(target) = sections.get_mut((y - min_section) as usize) else { continue };
-        let states = match section.get("block_states") {
-            Some(s) => container_from_nbt(s, block_strategy(), state_from_nbt)?,
-            None => target.states.clone(),
-        };
-        let biomes = match section.get("biomes") {
-            Some(b) => container_from_nbt(b, biome_strategy(), |n| n.as_str().and_then(Biome::by_name))?,
-            None => target.biomes.clone(),
-        };
+        let Some((states, biomes)) = loaded else { continue };
+        let target = &mut sections[(y - min_section) as usize];
+        let states = states.unwrap_or_else(|| target.states.clone());
+        let biomes = biomes.unwrap_or_else(|| target.biomes.clone());
         *target = LevelChunkSection::from_containers(states, biomes);
     }
     let mut chunk = LevelChunk::with_sections(ChunkPos::new(x, z), dimension, sections);
@@ -409,6 +512,54 @@ mod tests {
 
     fn overworld() -> &'static DimensionType {
         &wafer_data::DIMENSION_TYPES[0]
+    }
+
+    fn saved_flat_chunk() -> Nbt {
+        let chunk = FlatLevelSource::default().generate(ChunkPos::new(3, -7), overworld());
+        write(&chunk, ChunkStatus::Full, Vec::new(), 0, &[], &[], &[])
+    }
+
+    fn set_field(nbt: &mut Nbt, name: &str, value: Option<Nbt>) {
+        let Nbt::Compound(fields) = nbt else { panic!("compound") };
+        fields.retain(|(key, _)| key != name);
+        fields.extend(value.map(|value| (name.to_string(), value)));
+    }
+
+    fn first_section(nbt: &mut Nbt) -> &mut Nbt {
+        let Nbt::Compound(fields) = nbt else { panic!("compound") };
+        let Some((_, Nbt::List(sections))) = fields.iter_mut().find(|(key, _)| key == "sections") else { panic!("sections") };
+        &mut sections[0]
+    }
+
+    #[test]
+    fn parse_failures_carry_the_serializable_chunk_data_frames() {
+        let mut nbt = saved_flat_chunk();
+        set_field(first_section(&mut nbt), "SkyLight", Some(Nbt::ByteArray(vec![0; 3])));
+        let Err(ReadError::Exception(failure)) = read(&nbt, overworld(), 0) else { panic!("expected an exception") };
+        assert_eq!(failure.description, "java.lang.IllegalArgumentException: DataLayer should be 2048 bytes not: 3");
+        assert_eq!(failure.stack_trace[..3], [DATA_LAYER_INIT, OPTIONAL_MAP, PARSE_SKY_LIGHT]);
+        assert_eq!(failure.stack_trace.last().copied(), Some("java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:187)"));
+
+        let mut nbt = saved_flat_chunk();
+        let Nbt::Compound(states) = first_section(&mut nbt).get("block_states").cloned().unwrap() else { panic!("compound") };
+        let mut states = Nbt::Compound(states);
+        set_field(&mut states, "palette", Some(Nbt::String("oops".to_string())));
+        set_field(first_section(&mut nbt), "block_states", Some(states));
+        let Err(ReadError::Exception(failure)) = read(&nbt, overworld(), 0) else { panic!("expected an exception") };
+        assert_eq!(failure.description, "net.minecraft.world.level.chunk.storage.SerializableChunkData$ChunkReadException: Not a list: \"oops\"");
+        assert_eq!(failure.stack_trace[0], GET_OR_THROW);
+    }
+
+    #[test]
+    fn parse_is_lenient_like_serializable_chunk_data() {
+        let mut nbt = saved_flat_chunk();
+        set_field(&mut nbt, "Status", None);
+        assert!(matches!(read(&nbt, overworld(), 0), Err(ReadError::MissingLevelData)));
+        let mut nbt = saved_flat_chunk();
+        set_field(&mut nbt, "DataVersion", Some(Nbt::Int(99999)));
+        set_field(&mut nbt, "xPos", None);
+        set_field(first_section(&mut nbt), "Y", None);
+        assert_eq!(read(&nbt, overworld(), 0).unwrap().chunk.pos, ChunkPos::new(0, -7));
     }
 
     #[test]

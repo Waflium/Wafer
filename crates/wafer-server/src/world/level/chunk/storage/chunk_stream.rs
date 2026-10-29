@@ -1,4 +1,6 @@
+use crate::util::java_gzip::GzipInputStream;
 use crate::util::java_inflater::{InflaterFailure, InflaterInputStream};
+use super::lz4_block_input_stream::Lz4BlockInputStream;
 use crate::util::java_throwable::{JavaThrowable, ThrowableReport};
 
 const BUFFER_SIZE: usize = 8192;
@@ -201,6 +203,8 @@ fn eof(frames: &[&'static str]) -> Failure {
 
 enum Source {
     Inflater(InflaterInputStream),
+    Gzip(GzipInputStream),
+    Lz4(Lz4BlockInputStream),
     Plain { data: Vec<u8>, delivered: usize },
 }
 
@@ -208,13 +212,17 @@ impl Source {
     fn output(&self) -> &[u8] {
         match self {
             Source::Inflater(stream) => stream.output(),
+            Source::Gzip(stream) => stream.output(),
+            Source::Lz4(stream) => stream.output(),
             Source::Plain { data, .. } => data,
         }
     }
 
-    fn read(&mut self, length: usize) -> Result<Option<(usize, usize)>, InflaterFailure> {
+    fn read(&mut self, length: usize) -> Result<Option<(usize, usize)>, Failure> {
         match self {
-            Source::Inflater(stream) => stream.read(length),
+            Source::Inflater(stream) => stream.read(length).map_err(|failure| source_failure(failure, false)),
+            Source::Gzip(stream) => stream.read(length, false),
+            Source::Lz4(stream) => stream.read(length),
             Source::Plain { data, delivered } => {
                 if *delivered >= data.len() {
                     return Ok(None);
@@ -226,9 +234,11 @@ impl Source {
         }
     }
 
-    fn skip(&mut self, count: usize) -> Result<usize, InflaterFailure> {
+    fn skip(&mut self, count: usize) -> Result<usize, Failure> {
         match self {
-            Source::Inflater(stream) => stream.skip(count),
+            Source::Inflater(stream) => stream.skip(count).map_err(|failure| source_failure(failure, true)),
+            Source::Gzip(stream) => stream.skip(count),
+            Source::Lz4(stream) => stream.skip(count),
             Source::Plain { data, delivered } => {
                 let skipped = count.min(data.len() - *delivered);
                 *delivered += skipped;
@@ -249,7 +259,7 @@ impl DataInputStream {
         match self.source.read(BUFFER_SIZE) {
             Ok(Some((_, end))) => self.limit = end,
             Ok(None) => self.limit = self.position,
-            Err(failure) => return Err(at(FBIS_FILL)(source_failure(failure, false))),
+            Err(failure) => return Err(at(FBIS_FILL)(failure)),
         }
         Ok(())
     }
@@ -275,7 +285,7 @@ impl DataInputStream {
                         Ok(Some(end - start))
                     }
                     Ok(None) => Ok(None),
-                    Err(failure) => Err(at(FBIS_READ_DIRECT)(source_failure(failure, false))),
+                    Err(failure) => Err(at(FBIS_READ_DIRECT)(failure)),
                 };
             }
             self.fill().map_err(at(FBIS_READ_BULK))?;
@@ -300,7 +310,7 @@ impl DataInputStream {
                     self.limit = self.position;
                     Ok(skipped as i32)
                 }
-                Err(failure) => Err(at(FBIS_SKIP)(source_failure(failure, true))),
+                Err(failure) => Err(at(FBIS_SKIP)(failure)),
             };
         }
         let count = (count as usize).min(available);
@@ -558,6 +568,9 @@ impl Parser {
         if type_id == 0 && count > 0 {
             return Err(throwable("net.minecraft.nbt.NbtFormatException: Missing type on ListTag", &[LIST_MISSING_TYPE]));
         }
+        if let Some(error) = crate::util::java_heap::array_allocation_failure(count as i64, 4) {
+            return Err(throwable(error, &[ARRAY_LIST_INIT, LIST_NEW_ARRAY_LIST]));
+        }
         let kind = tag_kind(type_id);
         for _ in 0..count {
             self.load(kind).map_err(at(LIST_READ_ELEMENT))?;
@@ -665,7 +678,9 @@ impl Parser {
 }
 
 const LIST_READ_COUNT_NEGATIVE: &str = "net.minecraft.nbt.ListTag$1.readListCount(ListTag.java:118)";
-const LIST_MISSING_TYPE: &str = "net.minecraft.nbt.ListTag$1.loadList(ListTag.java:46)";
+const ARRAY_LIST_INIT: &str = "java.base/java.util.ArrayList.<init>(ArrayList.java:157)";
+const LIST_NEW_ARRAY_LIST: &str = "net.minecraft.nbt.ListTag$1.loadList(ListTag.java:50)";
+const LIST_MISSING_TYPE: &str ="net.minecraft.nbt.ListTag$1.loadList(ListTag.java:46)";
 
 fn static_size(kind: TagKind) -> i32 {
     match kind {
@@ -712,14 +727,40 @@ pub enum Mode {
     Scan(ScanKind),
 }
 
-pub fn simulate(compressed: &[u8], inflate: bool, mode: Mode) -> Result<Vec<u8>, JavaThrowable> {
-    let source = if inflate { Source::Inflater(InflaterInputStream::new(compressed)) } else { Source::Plain { data: compressed.to_vec(), delivered: 0 } };
+#[derive(Clone, Copy)]
+pub enum StreamKind {
+    Gzip,
+    Deflate,
+    None,
+    Lz4,
+}
+
+const WRAP_FRAMES: [&str; 4] = [
+    "net.minecraft.world.level.chunk.storage.RegionFileVersion.lambda$static$0(RegionFileVersion.java:30)",
+    "net.minecraft.world.level.chunk.storage.RegionFileVersion.wrap(RegionFileVersion.java:115)",
+    "net.minecraft.world.level.chunk.storage.RegionFile.createChunkInputStream(RegionFile.java:262)",
+    "net.minecraft.world.level.chunk.storage.RegionFile.getChunkDataInputStream(RegionFile.java:228)",
+];
+
+pub fn simulate(compressed: &[u8], kind: StreamKind, mode: Mode) -> Result<Vec<u8>, (JavaThrowable, bool)> {
+    let source = match kind {
+        StreamKind::Deflate => Source::Inflater(InflaterInputStream::new(compressed)),
+        StreamKind::None => Source::Plain { data: compressed.to_vec(), delivered: 0 },
+        StreamKind::Lz4 => Source::Lz4(Lz4BlockInputStream::new(compressed)),
+        StreamKind::Gzip => match GzipInputStream::new(compressed) {
+            Ok(stream) => Source::Gzip(stream),
+            Err(mut failure) => {
+                failure.push_frames(&WRAP_FRAMES);
+                return Err((failure, true));
+            }
+        },
+    };
     let mut parser = Parser { input: DataInputStream { source, position: 0, limit: 0 }, depth: 0 };
     let result = match mode {
         Mode::Read => read_root(&mut parser),
         Mode::Scan(kind) => scan_root(&mut parser, kind),
     };
-    result.map(|()| parser.input.source.output()[..parser.input.position].to_vec())
+    result.map(|()| parser.input.source.output()[..parser.input.position].to_vec()).map_err(|failure| (failure, false))
 }
 
 fn read_root(parser: &mut Parser) -> Result<(), Failure> {
@@ -1027,6 +1068,111 @@ mod tests {
         out
     }
 
+    fn check_stream_fixture(fixture: &str, kind: StreamKind) {
+        let mut samples = HashMap::new();
+        let mut frames = HashMap::new();
+        let mut traces: HashMap<String, String> = HashMap::new();
+        let mut cases = Vec::new();
+        let mut lines = fixture.lines();
+        while let Some(line) = lines.next() {
+            let mut parts = line.split(' ');
+            match parts.next().unwrap() {
+                "sample" => {
+                    let name = parts.next().unwrap().to_string();
+                    samples.insert(name, unhex(parts.next().unwrap()));
+                }
+                "frame" => {
+                    let id = parts.next().unwrap().to_string();
+                    frames.insert(id, line.splitn(3, ' ').nth(2).unwrap().to_string());
+                }
+                "trace" => {
+                    let id = parts.next().unwrap().to_string();
+                    let mut text = String::new();
+                    for body in lines.by_ref() {
+                        if body == "." {
+                            break;
+                        }
+                        match body.strip_prefix("F ") {
+                            Some(frame_id) => text.push_str(&format!("F {}\n", frames[frame_id])),
+                            None => text.push_str(&format!("{body}\n")),
+                        }
+                    }
+                    traces.insert(format!("#{id}"), text);
+                }
+                "case" => cases.push(line.to_string()),
+                _ => {}
+            }
+        }
+        let render_stream = |failure: &JavaThrowable| {
+            let mut out = String::new();
+            let mut current = Some(failure);
+            while let Some(throwable) = current {
+                out.push_str(&format!("T {}\n", throwable.description.replace('\n', "\\n")));
+                for frame in &throwable.stack_trace {
+                    out.push_str(&format!("F {frame}\n"));
+                    if frame.contains("NbtIo.read(NbtIo.java:105)") || frame.contains("RegionFileVersion.wrap(") {
+                        break;
+                    }
+                }
+                current = throwable.cause.as_deref();
+            }
+            out
+        };
+        let mut mismatches = Vec::new();
+        for case in &cases {
+            let parts: Vec<&str> = case.split(' ').collect();
+            let mut data = samples[parts[1]].clone();
+            let label = match parts[2] {
+                "full" => "full".to_string(),
+                "trunc" => {
+                    data.truncate(parts[3].parse().unwrap());
+                    format!("trunc {}", parts[3])
+                }
+                _ => {
+                    data[parts[3].parse::<usize>().unwrap()] ^= parts[4].parse::<u8>().unwrap();
+                    format!("flip {} {}", parts[3], parts[4])
+                }
+            };
+            let expected = traces.get(parts[parts.len() - 1]).cloned().unwrap_or_else(|| "OK".to_string());
+            let actual = match simulate(&data, kind, Mode::Read) {
+                Ok(_) => "OK".to_string(),
+                Err((failure, _)) => render_stream(&failure),
+            };
+            if actual != expected {
+                let first = expected.lines().zip(actual.lines()).position(|(e, a)| e != a).unwrap_or_else(|| expected.lines().count().min(actual.lines().count()));
+                mismatches.push(format!("{} {label}: expected {:?} but was {:?}", parts[1], expected.lines().nth(first), actual.lines().nth(first)));
+            }
+        }
+        mismatches.sort();
+        mismatches.dedup();
+        assert!(mismatches.is_empty(), "{} mismatches of {} cases\n{}", mismatches.len(), cases.len(), mismatches.iter().take(25).cloned().collect::<Vec<_>>().join("\n"));
+    }
+
+    #[test]
+    fn huge_arrays_and_lists_fail_with_out_of_memory_errors() {
+        let failure = |bytes: &[u8]| simulate(bytes, StreamKind::None, Mode::Read).map(|_| ()).unwrap_err().0;
+        let byte_array = failure(&[10, 0, 0, 7, 0, 1, b'a', 0x7f, 0xff, 0xff, 0xff]);
+        assert_eq!(byte_array.description, "java.lang.OutOfMemoryError: Requested array size exceeds VM limit");
+        assert_eq!(byte_array.stack_trace[0], "net.minecraft.nbt.ByteArrayTag$1.readAccounted(ByteArrayTag.java:35)");
+        let long_array = failure(&[10, 0, 0, 12, 0, 1, b'a', 0x7f, 0xff, 0xff, 0xfe]);
+        assert_eq!(long_array.stack_trace[0], "net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:35)");
+        assert_eq!(long_array.description, "java.lang.OutOfMemoryError: Requested array size exceeds VM limit");
+        let list = failure(&[10, 0, 0, 9, 0, 1, b'a', 1, 0x7f, 0xff, 0xff, 0xff]);
+        assert_eq!(list.stack_trace[..2], ["java.base/java.util.ArrayList.<init>(ArrayList.java:157)", "net.minecraft.nbt.ListTag$1.loadList(ListTag.java:50)"]);
+        let truncated = failure(&[10, 0, 0, 7, 0, 1, b'a', 0, 0, 0, 5, 1]);
+        assert_eq!(truncated.cause.as_ref().unwrap().description, "java.io.EOFException");
+    }
+
+    #[test]
+    fn matches_the_java_gzip_stream() {
+        check_stream_fixture(include_str!("chunk_stream_gzip_cases.txt"), StreamKind::Gzip);
+    }
+
+    #[test]
+    fn matches_the_lz4_block_stream() {
+        check_stream_fixture(include_str!("chunk_stream_lz4_cases.txt"), StreamKind::Lz4);
+    }
+
     #[test]
     fn matches_the_java_streams_for_truncated_and_corrupted_chunks() {
         let mut samples = HashMap::new();
@@ -1077,9 +1223,9 @@ mod tests {
                     }
                 };
                 for (kind, mode, outcome) in [("old", Mode::Scan(ScanKind::OldData), parts[3]), ("structures", Mode::Scan(ScanKind::Structures), parts[4])] {
-                    let actual = match simulate(&data, true, mode) {
+                    let actual = match simulate(&data, StreamKind::Deflate, mode) {
                         Ok(_) => "OK".to_string(),
-                        Err(failure) => render(&failure, "NbtIo.parse("),
+                        Err((failure, _)) => render(&failure, "NbtIo.parse("),
                     };
                     let expected = expected(outcome);
                     if actual != expected {
@@ -1104,13 +1250,13 @@ mod tests {
                 }
                 (format!("{} {} {}", parts[1], parts[2], parts[3]), data, parts[parts.len() - 2], parts[parts.len() - 1])
             };
-            let actual_read = match simulate(&data, true, Mode::Read) {
+            let actual_read = match simulate(&data, StreamKind::Deflate, Mode::Read) {
                 Ok(_) => "OK".to_string(),
-                Err(failure) => render(&failure, "NbtIo.read(NbtIo.java:105)"),
+                Err((failure, _)) => render(&failure, "NbtIo.read(NbtIo.java:105)"),
             };
-            let actual_scan = match simulate(&data, true, Mode::Scan(ScanKind::OldData)) {
+            let actual_scan = match simulate(&data, StreamKind::Deflate, Mode::Scan(ScanKind::OldData)) {
                 Ok(_) => "OK".to_string(),
-                Err(failure) => render(&failure, "NbtIo.parse("),
+                Err((failure, _)) => render(&failure, "NbtIo.parse("),
             };
             for (kind, expected, actual) in [("read", expected(read), actual_read), ("scan", expected(scan), actual_scan)] {
                 if actual != expected {

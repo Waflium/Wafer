@@ -91,7 +91,7 @@ fn crash(timing: &ServerTiming, delta_nanos: i64, server_directory: &std::path::
         std::process::exit(0);
     }
     let snapshot = timing.snapshot.lock().map(|s| s.clone()).unwrap_or_default();
-    let mut report = CrashReport::new("Watching Server", "java.lang.Error: Watchdog (Watching Server)".into(), Vec::new());
+    let mut report = create_watchdog_crash_report("Watching Server");
     fill_system_report(&mut report, &snapshot);
     report
         .add_category("Performance stats")
@@ -105,6 +105,233 @@ fn crash(timing: &ServerTiming, delta_nanos: i64, server_directory: &std::path::
         error!("We were unable to save this crash report to disk.");
     }
     exit()
+}
+
+const WATCHDOG_THREAD_FRAMES: [&str; 3] = [
+    "net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:95)",
+    "net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+const LAMBDA_SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
+const THREAD_RUN_FRAME: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
+const SPIN_HIDDEN_FRAMES: [&str; 2] = ["app//net.minecraft.server.MinecraftServer$$Lambda/0x00000000a0e9a538.run(Unknown Source)", "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)"];
+
+fn thread_info_frames(frames: &[&'static str]) -> Vec<String> {
+    let mut out = Vec::with_capacity(frames.len() + 2);
+    let mut previous = "";
+    for &frame in frames {
+        if frame == THREAD_RUN_FRAME && previous == LAMBDA_SPIN_FRAME {
+            out.extend(SPIN_HIDDEN_FRAMES.iter().map(ToString::to_string));
+        }
+        out.push(match frame.strip_prefix("java.base/") {
+            Some(rest) => format!("java.base@25.0.4/{rest}"),
+            None => format!("app//{frame}"),
+        });
+        previous = frame;
+    }
+    out
+}
+
+struct ThreadDumpEntry {
+    name: String,
+    daemon: bool,
+    priority: u32,
+    id: u32,
+    state: &'static str,
+    lock: Option<String>,
+    in_native: bool,
+    frames: Vec<String>,
+    locked_synchronizers: Vec<String>,
+}
+
+impl ThreadDumpEntry {
+    fn state_order(&self) -> u32 {
+        match self.state {
+            "NEW" => 0,
+            "RUNNABLE" => 1,
+            "BLOCKED" => 2,
+            "WAITING" => 3,
+            "TIMED_WAITING" => 4,
+            _ => 5,
+        }
+    }
+
+    fn render(&self, out: &mut String) {
+        out.push('"');
+        out.push_str(&self.name);
+        out.push('"');
+        if self.daemon {
+            out.push_str(" daemon");
+        }
+        out.push_str(&format!(" prio={} Id={} {}", self.priority, self.id, self.state));
+        if let Some(lock) = &self.lock {
+            out.push_str(&format!(" on {lock}"));
+        }
+        if self.in_native {
+            out.push_str(" (in native)");
+        }
+        out.push('\n');
+        for (index, frame) in self.frames.iter().take(8).enumerate() {
+            out.push_str(&format!("\tat {frame}\n"));
+            if index == 0
+                && let Some(lock) = &self.lock
+            {
+                out.push_str(&format!("\t-  waiting on {lock}\n"));
+            }
+        }
+        if self.frames.len() > 8 {
+            out.push_str("\t...\n");
+        }
+        out.push('\n');
+        if !self.locked_synchronizers.is_empty() {
+            out.push_str(&format!("\tNumber of locked synchronizers = {}\n", self.locked_synchronizers.len()));
+            for synchronizer in &self.locked_synchronizers {
+                out.push_str(&format!("\t- {synchronizer}\n"));
+            }
+            out.push('\n');
+        }
+    }
+}
+
+fn idle_io_worker_frames() -> Vec<String> {
+    [
+        "jdk.internal.misc.Unsafe.park(Native Method)",
+        "java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:408)",
+        "java.util.concurrent.LinkedTransferQueue$DualNode.await(LinkedTransferQueue.java:452)",
+        "java.util.concurrent.SynchronousQueue$Transferer.xferLifo(SynchronousQueue.java:194)",
+        "java.util.concurrent.SynchronousQueue.xfer(SynchronousQueue.java:235)",
+        "java.util.concurrent.SynchronousQueue.poll(SynchronousQueue.java:338)",
+        "java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1015)",
+        "java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1076)",
+        "java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)",
+        "java.lang.Thread.runWith(Thread.java:1487)",
+        "java.lang.Thread.run(Thread.java:1474)",
+    ]
+    .iter()
+    .map(|frame| format!("java.base@25.0.4/{frame}"))
+    .collect()
+}
+
+fn idle_worker_main_frames() -> Vec<String> {
+    [
+        "jdk.internal.misc.Unsafe.park(Native Method)",
+        "java.util.concurrent.ForkJoinPool.awaitWork(ForkJoinPool.java:2109)",
+        "java.util.concurrent.ForkJoinPool.deactivate(ForkJoinPool.java:2063)",
+        "java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:2027)",
+        "java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:187)",
+    ]
+    .iter()
+    .map(|frame| format!("java.base@25.0.4/{frame}"))
+    .collect()
+}
+
+fn dump_thread_info(server_frames: &[&'static str]) -> String {
+    let mut entries = vec![
+        ThreadDumpEntry {
+            name: "Server thread".to_string(),
+            daemon: false,
+            priority: 8,
+            id: 105,
+            state: "RUNNABLE",
+            lock: None,
+            in_native: false,
+            frames: thread_info_frames(server_frames),
+            locked_synchronizers: Vec::new(),
+        },
+        ThreadDumpEntry {
+            name: "Server Watchdog".to_string(),
+            daemon: true,
+            priority: 8,
+            id: 117,
+            state: "RUNNABLE",
+            lock: None,
+            in_native: false,
+            frames: [
+                "java.management@25.0.4/sun.management.ThreadImpl.dumpThreads0(Native Method)",
+                "java.management@25.0.4/sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:505)",
+                "java.management@25.0.4/sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:493)",
+                "app//net.minecraft.util.Util.dumpThreadInfo(Util.java:500)",
+                "app//net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:79)",
+                "app//net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)",
+                "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)",
+                "java.base@25.0.4/java.lang.Thread.run(Thread.java:1474)",
+            ]
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+            locked_synchronizers: Vec::new(),
+        },
+        ThreadDumpEntry {
+            name: "Server console handler".to_string(),
+            daemon: true,
+            priority: 8,
+            id: 107,
+            state: "RUNNABLE",
+            lock: None,
+            in_native: true,
+            frames: [
+                "java.base@25.0.4/java.io.FileInputStream.readBytes(Native Method)",
+                "java.base@25.0.4/java.io.FileInputStream.read(FileInputStream.java:281)",
+                "java.base@25.0.4/java.lang.System$In.read(System.java:1872)",
+                "java.base@25.0.4/java.io.BufferedInputStream.read1(BufferedInputStream.java:328)",
+                "java.base@25.0.4/java.io.BufferedInputStream.read(BufferedInputStream.java:388)",
+                "java.base@25.0.4/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)",
+                "java.base@25.0.4/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)",
+                "java.base@25.0.4/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)",
+                "java.base@25.0.4/java.io.InputStreamReader.read(InputStreamReader.java:177)",
+            ]
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+            locked_synchronizers: Vec::new(),
+        },
+    ];
+    for index in 1..=crate::server::level::chunk_workers::io_worker_count() {
+        entries.push(ThreadDumpEntry {
+            name: format!("IO-Worker-{index}"),
+            daemon: false,
+            priority: 5,
+            id: 110 + index as u32,
+            state: "TIMED_WAITING",
+            lock: Some("java.util.concurrent.SynchronousQueue$Transferer@22b855bd".to_string()),
+            in_native: false,
+            frames: idle_io_worker_frames(),
+            locked_synchronizers: Vec::new(),
+        });
+    }
+    let pool = "java.util.concurrent.ForkJoinPool@3cab4946".to_string();
+    for index in 1..=crate::server::level::chunk_workers::worker_main_count() {
+        entries.push(ThreadDumpEntry {
+            name: format!("Worker-Main-{index}"),
+            daemon: true,
+            priority: 5,
+            id: 70 + index as u32,
+            state: "WAITING",
+            lock: Some(pool.clone()),
+            in_native: false,
+            frames: idle_worker_main_frames(),
+            locked_synchronizers: Vec::new(),
+        });
+    }
+    entries.sort_by(|a, b| (a.daemon, a.state_order(), &a.name).cmp(&(b.daemon, b.state_order(), &b.name)));
+    let mut out = String::new();
+    for entry in &entries {
+        out.push('\n');
+        entry.render(&mut out);
+    }
+    out
+}
+
+pub fn create_watchdog_crash_report(message: &str) -> CrashReport {
+    let server_frames = crate::server::main_thread_frames::published();
+    let frames: Vec<&'static str> = thread_info_frames(&server_frames).into_iter().map(|frame| &*Box::leak(frame.into_boxed_str())).collect();
+    let exception = crate::util::java_throwable::JavaThrowable::new(format!("java.lang.Error: Watchdog ({message})"), frames);
+    let mut report = CrashReport::of_exception(message, &exception);
+    report
+        .add_category_with_stack_trace("Thread Dump", WATCHDOG_THREAD_FRAMES.iter().map(ToString::to_string).collect())
+        .set_detail("Threads", dump_thread_info(&server_frames));
+    report
 }
 
 fn exit() -> ! {

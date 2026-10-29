@@ -355,7 +355,11 @@ impl ServerLevel {
         if no_save {
             return;
         }
-        self.save_level_data(dir);
+        {
+            let _scope = crate::server::main_thread_frames::enter(["net.minecraft.server.level.ServerLevel.save(ServerLevel.java:917)"]);
+            self.save_level_data(dir);
+        }
+        let _scope = crate::server::main_thread_frames::enter(["net.minecraft.server.level.ServerLevel.save(ServerLevel.java:922)"]);
         if flush {
             self.defer_full_status_changes = false;
             self.process_chunk_events();
@@ -363,6 +367,7 @@ impl ServerLevel {
         if self.chunks.save(self.game_time, flush).is_err() {
             warn!("Failed to synchronize chunks");
         }
+        drop(_scope);
         if flush {
             let _scope = crate::server::main_thread_frames::enter(["net.minecraft.server.level.ServerLevel.save(ServerLevel.java:925)"]);
             self.save_all_entities();

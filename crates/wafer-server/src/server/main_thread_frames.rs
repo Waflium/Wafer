@@ -1,4 +1,5 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::sync::Mutex;
 
 use super::command_frames::{PREPARE_LEVELS, SPIN, TICK_LOOP};
 
@@ -9,14 +10,33 @@ struct Scope {
 
 thread_local! {
     static SCOPES: RefCell<Vec<Scope>> = const { RefCell::new(Vec::new()) };
+    static PUBLISHING: Cell<bool> = const { Cell::new(false) };
 }
+
+static PUBLISHED: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 
 pub struct FrameScope(());
 
 impl Drop for FrameScope {
     fn drop(&mut self) {
         SCOPES.with(|scopes| scopes.borrow_mut().pop());
+        publish();
     }
+}
+
+pub fn publish_current_thread() {
+    PUBLISHING.set(true);
+    publish();
+}
+
+fn publish() {
+    if PUBLISHING.get() {
+        *PUBLISHED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = current();
+    }
+}
+
+pub fn published() -> Vec<&'static str> {
+    PUBLISHED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
 }
 
 pub const MANAGED_BLOCK: &str = "net.minecraft.util.thread.BlockableEventLoop.managedBlock(BlockableEventLoop.java:156)";
@@ -54,6 +74,7 @@ pub const SERVER_CHUNK_POLL: [&str; 3] = [
 
 fn push(frames: Vec<&'static str>, absolute: bool) -> FrameScope {
     SCOPES.with(|scopes| scopes.borrow_mut().push(Scope { frames, absolute }));
+    publish();
     FrameScope(())
 }
 

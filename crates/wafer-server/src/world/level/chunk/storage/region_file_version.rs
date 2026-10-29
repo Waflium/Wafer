@@ -82,7 +82,7 @@ impl RegionFileVersion {
     }
 }
 
-mod lz4_block {
+pub(crate) mod lz4_block {
     use std::io;
 
     const MAGIC: &[u8; 8] = b"LZ4Block";
@@ -93,7 +93,7 @@ mod lz4_block {
     const COMPRESSION_LEVEL: u8 = 16 - 10;
     const DEFAULT_SEED: u32 = 0x9747_b28c;
 
-    fn checksum(data: &[u8]) -> u32 {
+    pub(crate) fn checksum(data: &[u8]) -> u32 {
         xxh32(data, DEFAULT_SEED) & 0x0fff_ffff
     }
 

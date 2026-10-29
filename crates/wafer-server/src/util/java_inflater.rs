@@ -158,7 +158,11 @@ fn fixed_tables() -> (Huffman, Huffman) {
 }
 
 pub fn decode_zlib(data: &[u8]) -> Decoded {
-    let mut state = Decoder { reader: BitReader { data, bit: 0 }, output: Vec::new(), units: Vec::new() };
+    decode(data, false)
+}
+
+pub fn decode(data: &[u8], raw: bool) -> Decoded {
+    let mut state = Decoder { reader: BitReader { data, bit: 0 }, output: Vec::new(), units: Vec::new(), raw };
     let terminal = state.run();
     Decoded { output: state.output, units: state.units, terminal }
 }
@@ -167,6 +171,7 @@ struct Decoder<'a> {
     reader: BitReader<'a>,
     output: Vec<u8>,
     units: Vec<Unit>,
+    raw: bool,
 }
 
 impl Decoder<'_> {
@@ -175,22 +180,24 @@ impl Decoder<'_> {
     }
 
     fn run(&mut self) -> Terminal {
-        let Some(header) = self.reader.bits(16) else { return Terminal::Truncated };
-        let (cmf, flg) = (header & 0xff, header >> 8);
-        if ((cmf << 8) + flg) % 31 != 0 {
-            return self.error("incorrect header check");
-        }
-        if cmf & 0xf != 8 {
-            return self.error("unknown compression method");
-        }
-        if (cmf >> 4) + 8 > 15 {
-            return self.error("invalid window size");
-        }
-        if flg & 0x20 != 0 {
-            return match self.reader.bits(32) {
-                Some(_) => Terminal::NeedDictionary { bit: self.reader.bit },
-                None => Terminal::Truncated,
-            };
+        if !self.raw {
+            let Some(header) = self.reader.bits(16) else { return Terminal::Truncated };
+            let (cmf, flg) = (header & 0xff, header >> 8);
+            if ((cmf << 8) + flg) % 31 != 0 {
+                return self.error("incorrect header check");
+            }
+            if cmf & 0xf != 8 {
+                return self.error("unknown compression method");
+            }
+            if (cmf >> 4) + 8 > 15 {
+                return self.error("invalid window size");
+            }
+            if flg & 0x20 != 0 {
+                return match self.reader.bits(32) {
+                    Some(_) => Terminal::NeedDictionary { bit: self.reader.bit },
+                    None => Terminal::Truncated,
+                };
+            }
         }
         loop {
             let Some(last) = self.reader.bits(1) else { return Terminal::Truncated };
@@ -210,6 +217,9 @@ impl Decoder<'_> {
             if last == 1 {
                 break;
             }
+        }
+        if self.raw {
+            return Terminal::Finished { bit: self.reader.bit, check_ok: true };
         }
         self.reader.align();
         let Some(check) = self.reader.bits(32) else { return Terminal::Truncated };
@@ -340,6 +350,29 @@ pub struct InflaterInputStream {
 impl InflaterInputStream {
     pub fn new(compressed: &[u8]) -> InflaterInputStream {
         InflaterInputStream { decoded: decode_zlib(compressed), stream_length: compressed.len(), fed: 0, delivered: 0, finished: false, needs_dictionary: false, reached_eof: false }
+    }
+
+    pub fn new_raw(compressed: &[u8], initial_fed: usize) -> InflaterInputStream {
+        InflaterInputStream {
+            decoded: decode(compressed, true),
+            stream_length: compressed.len(),
+            fed: initial_fed.min(compressed.len()),
+            delivered: 0,
+            finished: false,
+            needs_dictionary: false,
+            reached_eof: false,
+        }
+    }
+
+    pub fn consumed_bytes(&self) -> Option<usize> {
+        match self.decoded.terminal {
+            Terminal::Finished { bit, .. } if self.finished => Some(bit.div_ceil(8) as usize),
+            _ => None,
+        }
+    }
+
+    pub fn fed(&self) -> usize {
+        self.fed
     }
 
     pub fn output(&self) -> &[u8] {

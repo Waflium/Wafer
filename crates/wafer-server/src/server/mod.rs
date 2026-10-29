@@ -2067,6 +2067,7 @@ pub fn run(
     console: bool,
     management_server: Option<Arc<ManagementServer>>,
 ) -> anyhow::Result<()> {
+    main_thread_frames::publish_current_thread();
     let (task_sender, tasks) = std::sync::mpsc::channel::<ServerTask>();
     if let Some(management_server) = &management_server {
         management_server.set_server(task_sender.clone());
@@ -2538,6 +2539,29 @@ mod tests {
         server.weather.set(server.weather.get());
         assert_eq!(written(&mut server), ["weather"]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn packet_handler_exceptions_are_suppressed_and_counted() {
+        let server = crate::server::level::testing::server_with(crate::server::level::testing::flat_config());
+        server.on_packet_error(Box::new("boom".to_string()), serverbound::CHAT);
+        server.on_packet_error(Box::new(crate::crash_report::JavaException(JavaThrowable::new("java.lang.IllegalStateException: no", Vec::new()))), serverbound::CHAT);
+        let dump = server.chunk_io_error_reporter.suppressed_exceptions().dump();
+        assert!(dump.contains("packet/serverbound/minecraft:chat:class java.lang.IllegalStateException: no"), "{dump}");
+        assert!(dump.contains("packet/serverbound/minecraft:chat:class java.lang.RuntimeException x 1"), "{dump}");
+    }
+
+    #[test]
+    fn watchdog_reports_have_head_thread_dump_and_performance_sections() {
+        main_thread_frames::publish_current_thread();
+        let _scope = main_thread_frames::tick();
+        let report = dedicated::server_watchdog::create_watchdog_crash_report("Watching Server");
+        let text = report.get_friendly_report(&crate::crash_report::ReportType::CRASH).replace("\r\n", "\n");
+        assert!(text.contains("java.lang.Error: Watchdog (Watching Server)\n\tat app//net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:980)"), "{text}");
+        assert!(text.contains("-- Head --\nThread: "), "{text}");
+        assert!(text.contains("-- Thread Dump --\nDetails:\n\tThreads: \n"), "{text}");
+        assert!(text.contains("\"Server thread\" prio=8 Id=105 RUNNABLE\n\tat app//net.minecraft.server.MinecraftServer.tickServer"), "{text}");
+        assert!(text.contains("Stacktrace:\n\tat net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:95)\n\tat net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)"), "{text}");
     }
 
     #[test]

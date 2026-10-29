@@ -1,0 +1,3649 @@
+sample gzip 1f8b08000000000000ffa5d13f700c611cc6f1e7f63db9bb5ce46214492a34a44295641428fca944617219056627d99bb999bb4d26fb5e2a341805aa24151a54a892546850a14a52a141850a1506635fbfef30a332e3667ef3bb9ddd7b9f673fd72d95d575ccc7be93a9b7dd4c93c9d9b8e1f7343aad5655c566ea338547a4423e513e2e9f623e1bf2e9caa714ee3b550fc43eae27b359733a95365faca89c25933ebfcabac3af7a549cca9fc8bf0ee9f7279ca92d76aef6dad93a61e7ebb465e8aae5e89e65e9b9f5d167a912cee89742426158aa863d2ef584eda58d61cf4bbd612f49b5b057a5beb03f5887a8c6bbedb41ed111eb11b5ac4774c97a44b7ad47f4c47a446fad872b590fb7dd7ab883d6c34d590f77ce7ab81bd6c33db41eee95f5503f18c3788ce3e1f198c763098fd5820ac7bf55549a895b89f7c9af972fab3816b713d5fefc85999f4e93d0e16ff802415b09da47d04982ce10740df8fbc0bf00fe0bf003c08f005f07be03fc02f0cbc0af01ff11f83ee077013f067c1bf8cbc0df01fe29f0ef802f03bf03f843c027c09f07fe26f08f807f0dfc001e2378d4f1e8e0b180c7321e6b01fefb7fc047046d23683f41a7083a4bd075e01f00ff12f8afc00f023f0afc04f073c02f02bf02fc3af09fa8b109f8ddc01f053e05fe0af077817f06fc7be02bc00f017f18f806f01780bf05fc63e0df003f88c7281e1378cce1b188c70a1eeb01fec73fc3eb27595b113bd5040000
+sample gziprawtrunc 1f8b08000000000000ff5d91214cc3501086ffbe57b6761d2b0962385004851c09020c4830644b109034db5bd2a4ebc8faea402110c8e1402191c381422227412191484810bcdb5d20a1c9e5daf4f5feefbed6800095039bd8b2406390e6a63b4afa76b35f6659043fcd6d013a0278ae942bedca7735e7aae2aa4aef35a29dc4261d332ad2610e2c5e84080ad3b5eea9a8d15775f83d77c2ddaee1f7a29958e6b9d8e2d938e2f938e50c5c730e1e380b2fcc834f20a4194d8012bc1610516f0375ea1698a73e061ad427404c7d0a2c50ff600615cb6eebcca1f6984365cca12e9943dd31877a660ef5ce1cbaca1c7a9539f42e73e81e73e873e6d0b7cca19f9843bf31079a22a3253edae2c38a8fb1f898888fa907eff03b44f524c98cb566b67c007f3f1918c47fbfb0b0c3dc10c37ff19e04ad48d0b6041d4bd09904dd88f84711ff2ae2bf44fc9288df10f11d115f8af82b117f3f5bf807f9db8b0f6a020000
+sample gzipempty 1f8b08000000000000ff03000000000000000000
+case gziprawtrunc full #88
+case gzipempty full #89
+sample gzipextra 1f8b08000000000000ffa5d13f700c611cc6f1e7f63db9bb5ce46214492a34a44295641428fca944617219056627d99bb999bb4d26fb5e2a341805aa24151a54a892546850a14a52a141850a1506635fbfef30a332e3667ef3bb9ddd7b9f673fd72d95d575ccc7be93a9b7dd4c93c9d9b8e1f7343aad5655c566ea338547a4423e513e2e9f623e1bf2e9caa714ee3b550fc43eae27b359733a95365faca89c25933ebfcabac3af7a549cca9fc8bf0ee9f7279ca92d76aef6dad93a61e7ebb465e8aae5e89e65e9b9f5d167a912cee89742426158aa863d2ef584eda58d61cf4bbd612f49b5b057a5beb03f5887a8c6bbedb41ed111eb11b5ac4774c97a44b7ad47f4c47a446fad872b590fb7dd7ab883d6c34d590f77ce7ab81bd6c33db41eee95f5503f18c3788ce3e1f198c763098fd5820ac7bf55549a895b89f7c9af972fab3816b713d5fefc85999f4e93d0e16ff802415b09da47d04982ce10740df8fbc0bf00fe0bf003c08f005f07be03fc02f0cbc0af01ff11f83ee077013f067c1bf8cbc0df01fe29f0ef802f03bf03f843c027c09f07fe26f08f807f0dfc001e2378d4f1e8e0b180c7321e6b01fefb7fc047046d23683f41a7083a4bd075e01f00ff12f8afc00f023f0afc04f073c02f02bf02fc3af09fa8b109f8ddc01f053e05fe0af077817f06fc7be02bc00f017f18f806f01780bf05fc63e0df003f88c7281e1378cce1b188c70a1eeb01fec73fc3eb27595b113bd50400000000000000000000000000000000000000000000
+case gzipextra full OK
+case gzip full OK
+case gzip trunc 0 #0
+case gzip trunc 1 #1
+case gzip trunc 2 #2
+case gzip trunc 3 #3
+case gzip trunc 4 #4
+case gzip trunc 5 #4
+case gzip trunc 6 #4
+case gzip trunc 7 #4
+case gzip trunc 8 #4
+case gzip trunc 9 #4
+case gzip trunc 10 #5
+case gzip trunc 11 #5
+case gzip trunc 12 #5
+case gzip trunc 13 #5
+case gzip trunc 14 #5
+case gzip trunc 15 #5
+case gzip trunc 16 #5
+case gzip trunc 17 #5
+case gzip trunc 18 #5
+case gzip trunc 19 #5
+case gzip trunc 20 #5
+case gzip trunc 21 #5
+case gzip trunc 22 #5
+case gzip trunc 23 #5
+case gzip trunc 24 #5
+case gzip trunc 25 #5
+case gzip trunc 26 #5
+case gzip trunc 27 #5
+case gzip trunc 28 #5
+case gzip trunc 29 #5
+case gzip trunc 30 #5
+case gzip trunc 31 #5
+case gzip trunc 32 #5
+case gzip trunc 33 #5
+case gzip trunc 34 #5
+case gzip trunc 35 #5
+case gzip trunc 36 #5
+case gzip trunc 37 #5
+case gzip trunc 38 #5
+case gzip trunc 39 #5
+case gzip trunc 40 #5
+case gzip trunc 41 #5
+case gzip trunc 42 #5
+case gzip trunc 43 #5
+case gzip trunc 44 #5
+case gzip trunc 45 #5
+case gzip trunc 46 #5
+case gzip trunc 47 #5
+case gzip trunc 48 #5
+case gzip trunc 50 #5
+case gzip trunc 55 #5
+case gzip trunc 60 #5
+case gzip trunc 65 #5
+case gzip trunc 70 #5
+case gzip trunc 75 #5
+case gzip trunc 80 #5
+case gzip trunc 85 #5
+case gzip trunc 90 #5
+case gzip trunc 95 #5
+case gzip trunc 100 #6
+case gzip trunc 105 #7
+case gzip trunc 110 #8
+case gzip trunc 115 #8
+case gzip trunc 120 #6
+case gzip trunc 125 #9
+case gzip trunc 130 #10
+case gzip trunc 135 #10
+case gzip trunc 140 #10
+case gzip trunc 145 #7
+case gzip trunc 150 #7
+case gzip trunc 155 #11
+case gzip trunc 160 #7
+case gzip trunc 165 #12
+case gzip trunc 170 #13
+case gzip trunc 175 #14
+case gzip trunc 180 #15
+case gzip trunc 185 #15
+case gzip trunc 190 #15
+case gzip trunc 195 #15
+case gzip trunc 200 #15
+case gzip trunc 205 #15
+case gzip trunc 210 #15
+case gzip trunc 215 #15
+case gzip trunc 220 #15
+case gzip trunc 225 #15
+case gzip trunc 230 #15
+case gzip trunc 235 #15
+case gzip trunc 240 #15
+case gzip trunc 245 #15
+case gzip trunc 250 #15
+case gzip trunc 255 #15
+case gzip trunc 260 #15
+case gzip trunc 265 #15
+case gzip trunc 270 #15
+case gzip trunc 275 #15
+case gzip trunc 280 #15
+case gzip trunc 285 #15
+case gzip trunc 290 #15
+case gzip trunc 295 #15
+case gzip trunc 300 #15
+case gzip trunc 305 #16
+case gzip trunc 310 #16
+case gzip trunc 315 #13
+case gzip trunc 320 #17
+case gzip trunc 325 #18
+case gzip trunc 330 #19
+case gzip trunc 335 #20
+case gzip trunc 340 #15
+case gzip trunc 345 #15
+case gzip trunc 350 #15
+case gzip trunc 355 #15
+case gzip trunc 360 #15
+case gzip trunc 365 #15
+case gzip trunc 370 #15
+case gzip trunc 375 #15
+case gzip trunc 380 #15
+case gzip trunc 385 #15
+case gzip trunc 390 #15
+case gzip trunc 395 #15
+case gzip trunc 400 #15
+case gzip trunc 405 #15
+case gzip trunc 410 #15
+case gzip trunc 415 #15
+case gzip trunc 420 #15
+case gzip trunc 425 #15
+case gzip trunc 430 #16
+case gzip trunc 435 #15
+case gzip trunc 440 #15
+case gzip trunc 445 #15
+case gzip trunc 450 #15
+case gzip trunc 455 #15
+case gzip trunc 460 #15
+case gzip trunc 465 #15
+case gzip trunc 470 #15
+case gzip trunc 475 #15
+case gzip trunc 480 #15
+case gzip trunc 485 #15
+case gzip trunc 490 #15
+case gzip trunc 495 #15
+case gzip trunc 500 #15
+case gzip trunc 505 #15
+case gzip trunc 510 #15
+case gzip trunc 514 #15
+case gzip trunc 515 #15
+case gzip trunc 516 #15
+case gzip trunc 517 #15
+case gzip trunc 518 #15
+case gzip trunc 519 #15
+case gzip trunc 520 #15
+case gzip trunc 521 #15
+case gzip trunc 522 #15
+case gzip trunc 523 #16
+case gzip trunc 524 #16
+case gzip trunc 525 #21
+case gzip trunc 526 #16
+case gzip trunc 527 #16
+case gzip trunc 528 #16
+case gzip trunc 529 OK
+case gzip trunc 530 OK
+case gzip trunc 531 OK
+case gzip trunc 532 OK
+case gzip trunc 533 OK
+case gzip trunc 534 OK
+case gzip trunc 535 OK
+case gzip trunc 536 OK
+case gzip trunc 537 OK
+case gzip trunc 538 OK
+case gzip flip 0 1 #22
+case gzip flip 0 128 #22
+case gzip flip 0 255 #22
+case gzip flip 0 16 #22
+case gzip flip 1 1 #22
+case gzip flip 1 128 #22
+case gzip flip 1 255 #22
+case gzip flip 1 16 #22
+case gzip flip 2 1 #23
+case gzip flip 2 128 #23
+case gzip flip 2 255 #23
+case gzip flip 2 16 #23
+case gzip flip 3 1 OK
+case gzip flip 3 128 OK
+case gzip flip 3 255 #24
+case gzip flip 3 16 #25
+case gzip flip 4 1 OK
+case gzip flip 4 128 OK
+case gzip flip 4 255 OK
+case gzip flip 4 16 OK
+case gzip flip 5 1 OK
+case gzip flip 5 128 OK
+case gzip flip 5 255 OK
+case gzip flip 5 16 OK
+case gzip flip 6 1 OK
+case gzip flip 6 128 OK
+case gzip flip 6 255 OK
+case gzip flip 6 16 OK
+case gzip flip 7 1 OK
+case gzip flip 7 128 OK
+case gzip flip 7 255 OK
+case gzip flip 7 16 OK
+case gzip flip 8 1 OK
+case gzip flip 8 128 OK
+case gzip flip 8 255 OK
+case gzip flip 8 16 OK
+case gzip flip 9 1 OK
+case gzip flip 9 128 OK
+case gzip flip 9 255 OK
+case gzip flip 9 16 OK
+case gzip flip 10 1 #26
+case gzip flip 10 128 #27
+case gzip flip 10 255 #28
+case gzip flip 10 16 #29
+case gzip flip 11 1 #30
+case gzip flip 11 128 #31
+case gzip flip 11 255 #31
+case gzip flip 11 16 #30
+case gzip flip 12 1 #31
+case gzip flip 12 128 #31
+case gzip flip 12 255 #31
+case gzip flip 12 16 #31
+case gzip flip 13 1 #31
+case gzip flip 13 128 #31
+case gzip flip 13 255 #31
+case gzip flip 13 16 #31
+case gzip flip 14 1 #31
+case gzip flip 14 128 #31
+case gzip flip 14 255 #31
+case gzip flip 14 16 #31
+case gzip flip 15 1 #31
+case gzip flip 15 128 #31
+case gzip flip 15 255 #31
+case gzip flip 15 16 #31
+case gzip flip 16 1 #31
+case gzip flip 16 128 #31
+case gzip flip 16 255 #31
+case gzip flip 16 16 #31
+case gzip flip 17 1 #31
+case gzip flip 17 128 #31
+case gzip flip 17 255 #31
+case gzip flip 17 16 #31
+case gzip flip 18 1 #31
+case gzip flip 18 128 #27
+case gzip flip 18 255 #31
+case gzip flip 18 16 #31
+case gzip flip 19 1 #27
+case gzip flip 19 128 #27
+case gzip flip 19 255 #27
+case gzip flip 19 16 #27
+case gzip flip 20 1 #29
+case gzip flip 20 128 #27
+case gzip flip 20 255 #32
+case gzip flip 20 16 #27
+case gzip flip 21 1 #27
+case gzip flip 21 128 #29
+case gzip flip 21 255 #27
+case gzip flip 21 16 #27
+case gzip flip 22 1 #30
+case gzip flip 22 128 #27
+case gzip flip 22 255 #32
+case gzip flip 22 16 #32
+case gzip flip 23 1 #27
+case gzip flip 23 128 #30
+case gzip flip 23 255 #27
+case gzip flip 23 16 #27
+case gzip flip 24 1 #32
+case gzip flip 24 128 #29
+case gzip flip 24 255 #27
+case gzip flip 24 16 #27
+case gzip flip 25 1 #27
+case gzip flip 25 128 #27
+case gzip flip 25 255 #27
+case gzip flip 25 16 #32
+case gzip flip 26 1 #29
+case gzip flip 26 128 #27
+case gzip flip 26 255 #29
+case gzip flip 26 16 #27
+case gzip flip 27 1 #27
+case gzip flip 27 128 #27
+case gzip flip 27 255 #32
+case gzip flip 27 16 #32
+case gzip flip 28 1 #30
+case gzip flip 28 128 #29
+case gzip flip 28 255 #27
+case gzip flip 28 16 #32
+case gzip flip 29 1 #27
+case gzip flip 29 128 #29
+case gzip flip 29 255 #27
+case gzip flip 29 16 #32
+case gzip flip 30 1 #32
+case gzip flip 30 128 #27
+case gzip flip 30 255 #29
+case gzip flip 30 16 #29
+case gzip flip 31 1 #32
+case gzip flip 31 128 #29
+case gzip flip 31 255 #32
+case gzip flip 31 16 #27
+case gzip flip 32 1 #32
+case gzip flip 32 128 #27
+case gzip flip 32 255 #29
+case gzip flip 32 16 #32
+case gzip flip 33 1 #27
+case gzip flip 33 128 #30
+case gzip flip 33 255 #27
+case gzip flip 33 16 #30
+case gzip flip 34 1 #32
+case gzip flip 34 128 #27
+case gzip flip 34 255 #29
+case gzip flip 34 16 #32
+case gzip flip 35 1 #27
+case gzip flip 35 128 #27
+case gzip flip 35 255 #27
+case gzip flip 35 16 #32
+case gzip flip 36 1 #29
+case gzip flip 36 128 #27
+case gzip flip 36 255 #29
+case gzip flip 36 16 #27
+case gzip flip 37 1 #27
+case gzip flip 37 128 #27
+case gzip flip 37 255 #27
+case gzip flip 37 16 #27
+case gzip flip 38 1 #27
+case gzip flip 38 128 #29
+case gzip flip 38 255 #29
+case gzip flip 38 16 #29
+case gzip flip 39 1 #27
+case gzip flip 39 128 #27
+case gzip flip 39 255 #27
+case gzip flip 39 16 #27
+case gzip flip 40 1 #32
+case gzip flip 40 128 #27
+case gzip flip 40 255 #27
+case gzip flip 40 16 #27
+case gzip flip 41 1 #27
+case gzip flip 41 128 #29
+case gzip flip 41 255 #32
+case gzip flip 41 16 #27
+case gzip flip 42 1 #30
+case gzip flip 42 128 #27
+case gzip flip 42 255 #27
+case gzip flip 42 16 #32
+case gzip flip 43 1 #32
+case gzip flip 43 128 #32
+case gzip flip 43 255 #27
+case gzip flip 43 16 #27
+case gzip flip 44 1 #27
+case gzip flip 44 128 #27
+case gzip flip 44 255 #29
+case gzip flip 44 16 #27
+case gzip flip 45 1 #27
+case gzip flip 45 128 #27
+case gzip flip 45 255 #32
+case gzip flip 45 16 #27
+case gzip flip 46 1 #30
+case gzip flip 46 128 #32
+case gzip flip 46 255 #32
+case gzip flip 46 16 #27
+case gzip flip 47 1 #32
+case gzip flip 47 128 #32
+case gzip flip 47 255 #27
+case gzip flip 47 16 #32
+case gzip flip 48 1 #32
+case gzip flip 48 128 #32
+case gzip flip 48 255 #32
+case gzip flip 48 16 #32
+case gzip flip 52 1 #32
+case gzip flip 52 128 #27
+case gzip flip 52 255 #27
+case gzip flip 52 16 #27
+case gzip flip 56 1 #32
+case gzip flip 56 128 #27
+case gzip flip 56 255 #29
+case gzip flip 56 16 #29
+case gzip flip 60 1 #32
+case gzip flip 60 128 #27
+case gzip flip 60 255 #29
+case gzip flip 60 16 #27
+case gzip flip 64 1 #29
+case gzip flip 64 128 #29
+case gzip flip 64 255 #32
+case gzip flip 64 16 #27
+case gzip flip 68 1 #27
+case gzip flip 68 128 #32
+case gzip flip 68 255 #28
+case gzip flip 68 16 #29
+case gzip flip 72 1 #29
+case gzip flip 72 128 #29
+case gzip flip 72 255 #29
+case gzip flip 72 16 #29
+case gzip flip 76 1 #29
+case gzip flip 76 128 #32
+case gzip flip 76 255 #32
+case gzip flip 76 16 #29
+case gzip flip 80 1 #27
+case gzip flip 80 128 #27
+case gzip flip 80 255 #27
+case gzip flip 80 16 #27
+case gzip flip 84 1 #27
+case gzip flip 84 128 #27
+case gzip flip 84 255 #30
+case gzip flip 84 16 #27
+case gzip flip 88 1 #30
+case gzip flip 88 128 #30
+case gzip flip 88 255 #30
+case gzip flip 88 16 #30
+case gzip flip 92 1 #29
+case gzip flip 92 128 #30
+case gzip flip 92 255 #30
+case gzip flip 92 16 #29
+case gzip flip 96 1 #30
+case gzip flip 96 128 #33
+case gzip flip 96 255 #30
+case gzip flip 96 16 #28
+case gzip flip 100 1 #34
+case gzip flip 100 128 #35
+case gzip flip 100 255 #28
+case gzip flip 100 16 #28
+case gzip flip 104 1 OK
+case gzip flip 104 128 OK
+case gzip flip 104 255 #28
+case gzip flip 104 16 #28
+case gzip flip 108 1 #28
+case gzip flip 108 128 #28
+case gzip flip 108 255 #28
+case gzip flip 108 16 #28
+case gzip flip 112 1 #28
+case gzip flip 112 128 #28
+case gzip flip 112 255 #28
+case gzip flip 112 16 OK
+case gzip flip 116 1 OK
+case gzip flip 116 128 #28
+case gzip flip 116 255 #28
+case gzip flip 116 16 OK
+case gzip flip 120 1 #28
+case gzip flip 120 128 #28
+case gzip flip 120 255 #28
+case gzip flip 120 16 #36
+case gzip flip 124 1 #28
+case gzip flip 124 128 #28
+case gzip flip 124 255 #28
+case gzip flip 124 16 #36
+case gzip flip 128 1 #28
+case gzip flip 128 128 #28
+case gzip flip 128 255 #28
+case gzip flip 128 16 #28
+case gzip flip 132 1 #28
+case gzip flip 132 128 #28
+case gzip flip 132 255 #28
+case gzip flip 132 16 #28
+case gzip flip 136 1 OK
+case gzip flip 136 128 #28
+case gzip flip 136 255 #28
+case gzip flip 136 16 #28
+case gzip flip 140 1 OK
+case gzip flip 140 128 #28
+case gzip flip 140 255 #37
+case gzip flip 140 16 #28
+case gzip flip 144 1 #37
+case gzip flip 144 128 OK
+case gzip flip 144 255 #28
+case gzip flip 144 16 #38
+case gzip flip 148 1 OK
+case gzip flip 148 128 OK
+case gzip flip 148 255 OK
+case gzip flip 148 16 #28
+case gzip flip 152 1 #28
+case gzip flip 152 128 OK
+case gzip flip 152 255 #39
+case gzip flip 152 16 OK
+case gzip flip 156 1 OK
+case gzip flip 156 128 OK
+case gzip flip 156 255 #28
+case gzip flip 156 16 #28
+case gzip flip 160 1 #40
+case gzip flip 160 128 OK
+case gzip flip 160 255 #28
+case gzip flip 160 16 OK
+case gzip flip 164 1 #28
+case gzip flip 164 128 #41
+case gzip flip 164 255 #28
+case gzip flip 164 16 #42
+case gzip flip 168 1 #43
+case gzip flip 168 128 #44
+case gzip flip 168 255 #28
+case gzip flip 168 16 #28
+case gzip flip 172 1 OK
+case gzip flip 172 128 #45
+case gzip flip 172 255 #28
+case gzip flip 172 16 #28
+case gzip flip 176 1 #28
+case gzip flip 176 128 #28
+case gzip flip 176 255 #46
+case gzip flip 176 16 #47
+case gzip flip 180 1 #46
+case gzip flip 180 128 OK
+case gzip flip 180 255 #48
+case gzip flip 180 16 OK
+case gzip flip 184 1 OK
+case gzip flip 184 128 #28
+case gzip flip 184 255 #28
+case gzip flip 184 16 #48
+case gzip flip 188 1 #28
+case gzip flip 188 128 OK
+case gzip flip 188 255 #28
+case gzip flip 188 16 #28
+case gzip flip 192 1 OK
+case gzip flip 192 128 #28
+case gzip flip 192 255 #49
+case gzip flip 192 16 OK
+case gzip flip 196 1 #28
+case gzip flip 196 128 #28
+case gzip flip 196 255 #49
+case gzip flip 196 16 OK
+case gzip flip 200 1 OK
+case gzip flip 200 128 OK
+case gzip flip 200 255 #50
+case gzip flip 200 16 #46
+case gzip flip 204 1 OK
+case gzip flip 204 128 #28
+case gzip flip 204 255 #28
+case gzip flip 204 16 #28
+case gzip flip 208 1 #28
+case gzip flip 208 128 #28
+case gzip flip 208 255 #48
+case gzip flip 208 16 #28
+case gzip flip 212 1 #28
+case gzip flip 212 128 OK
+case gzip flip 212 255 #51
+case gzip flip 212 16 #28
+case gzip flip 216 1 #28
+case gzip flip 216 128 #28
+case gzip flip 216 255 #51
+case gzip flip 216 16 #28
+case gzip flip 220 1 #50
+case gzip flip 220 128 OK
+case gzip flip 220 255 OK
+case gzip flip 220 16 OK
+case gzip flip 224 1 #37
+case gzip flip 224 128 OK
+case gzip flip 224 255 #28
+case gzip flip 224 16 #46
+case gzip flip 228 1 #28
+case gzip flip 228 128 #28
+case gzip flip 228 255 #28
+case gzip flip 228 16 OK
+case gzip flip 232 1 #28
+case gzip flip 232 128 #28
+case gzip flip 232 255 #28
+case gzip flip 232 16 OK
+case gzip flip 236 1 #46
+case gzip flip 236 128 #28
+case gzip flip 236 255 #48
+case gzip flip 236 16 OK
+case gzip flip 240 1 OK
+case gzip flip 240 128 OK
+case gzip flip 240 255 #28
+case gzip flip 240 16 #47
+case gzip flip 244 1 #37
+case gzip flip 244 128 #48
+case gzip flip 244 255 #48
+case gzip flip 244 16 OK
+case gzip flip 248 1 OK
+case gzip flip 248 128 #46
+case gzip flip 248 255 #48
+case gzip flip 248 16 #28
+case gzip flip 252 1 #28
+case gzip flip 252 128 OK
+case gzip flip 252 255 #28
+case gzip flip 252 16 OK
+case gzip flip 256 1 OK
+case gzip flip 256 128 OK
+case gzip flip 256 255 #48
+case gzip flip 256 16 OK
+case gzip flip 260 1 OK
+case gzip flip 260 128 OK
+case gzip flip 260 255 #28
+case gzip flip 260 16 #46
+case gzip flip 264 1 #28
+case gzip flip 264 128 OK
+case gzip flip 264 255 #28
+case gzip flip 264 16 #28
+case gzip flip 268 1 #46
+case gzip flip 268 128 #46
+case gzip flip 268 255 #48
+case gzip flip 268 16 OK
+case gzip flip 272 1 #46
+case gzip flip 272 128 OK
+case gzip flip 272 255 #52
+case gzip flip 272 16 #46
+case gzip flip 276 1 #28
+case gzip flip 276 128 OK
+case gzip flip 276 255 #48
+case gzip flip 276 16 OK
+case gzip flip 280 1 OK
+case gzip flip 280 128 #52
+case gzip flip 280 255 #46
+case gzip flip 280 16 #48
+case gzip flip 284 1 #46
+case gzip flip 284 128 OK
+case gzip flip 284 255 #46
+case gzip flip 284 16 #50
+case gzip flip 288 1 OK
+case gzip flip 288 128 #53
+case gzip flip 288 255 #54
+case gzip flip 288 16 OK
+case gzip flip 292 1 OK
+case gzip flip 292 128 OK
+case gzip flip 292 255 #55
+case gzip flip 292 16 OK
+case gzip flip 296 1 OK
+case gzip flip 296 128 OK
+case gzip flip 296 255 #54
+case gzip flip 296 16 #48
+case gzip flip 300 1 OK
+case gzip flip 300 128 OK
+case gzip flip 300 255 #46
+case gzip flip 300 16 #50
+case gzip flip 304 1 #56
+case gzip flip 304 128 #56
+case gzip flip 304 255 #57
+case gzip flip 304 16 OK
+case gzip flip 308 1 OK
+case gzip flip 308 128 OK
+case gzip flip 308 255 #50
+case gzip flip 308 16 OK
+case gzip flip 312 1 OK
+case gzip flip 312 128 #51
+case gzip flip 312 255 #54
+case gzip flip 312 16 #48
+case gzip flip 316 1 #58
+case gzip flip 316 128 #59
+case gzip flip 316 255 #60
+case gzip flip 316 16 OK
+case gzip flip 320 1 #61
+case gzip flip 320 128 #62
+case gzip flip 320 255 #63
+case gzip flip 320 16 #63
+case gzip flip 324 1 OK
+case gzip flip 324 128 #64
+case gzip flip 324 255 #65
+case gzip flip 324 16 #66
+case gzip flip 328 1 #67
+case gzip flip 328 128 OK
+case gzip flip 328 255 #68
+case gzip flip 328 16 OK
+case gzip flip 332 1 OK
+case gzip flip 332 128 #61
+case gzip flip 332 255 #61
+case gzip flip 332 16 #69
+case gzip flip 336 1 #47
+case gzip flip 336 128 #62
+case gzip flip 336 255 #47
+case gzip flip 336 16 #47
+case gzip flip 340 1 OK
+case gzip flip 340 128 OK
+case gzip flip 340 255 #70
+case gzip flip 340 16 #37
+case gzip flip 344 1 #62
+case gzip flip 344 128 #62
+case gzip flip 344 255 #62
+case gzip flip 344 16 OK
+case gzip flip 348 1 OK
+case gzip flip 348 128 OK
+case gzip flip 348 255 #71
+case gzip flip 348 16 #46
+case gzip flip 352 1 #47
+case gzip flip 352 128 OK
+case gzip flip 352 255 #47
+case gzip flip 352 16 OK
+case gzip flip 356 1 OK
+case gzip flip 356 128 #70
+case gzip flip 356 255 #62
+case gzip flip 356 16 OK
+case gzip flip 360 1 OK
+case gzip flip 360 128 OK
+case gzip flip 360 255 #71
+case gzip flip 360 16 #62
+case gzip flip 364 1 OK
+case gzip flip 364 128 OK
+case gzip flip 364 255 OK
+case gzip flip 364 16 OK
+case gzip flip 368 1 OK
+case gzip flip 368 128 OK
+case gzip flip 368 255 #71
+case gzip flip 368 16 OK
+case gzip flip 372 1 OK
+case gzip flip 372 128 OK
+case gzip flip 372 255 #72
+case gzip flip 372 16 OK
+case gzip flip 376 1 #71
+case gzip flip 376 128 #37
+case gzip flip 376 255 #37
+case gzip flip 376 16 OK
+case gzip flip 380 1 OK
+case gzip flip 380 128 OK
+case gzip flip 380 255 #37
+case gzip flip 380 16 #37
+case gzip flip 384 1 OK
+case gzip flip 384 128 #71
+case gzip flip 384 255 #71
+case gzip flip 384 16 OK
+case gzip flip 388 1 OK
+case gzip flip 388 128 OK
+case gzip flip 388 255 #47
+case gzip flip 388 16 #70
+case gzip flip 392 1 #62
+case gzip flip 392 128 OK
+case gzip flip 392 255 #73
+case gzip flip 392 16 #50
+case gzip flip 396 1 OK
+case gzip flip 396 128 OK
+case gzip flip 396 255 #71
+case gzip flip 396 16 #37
+case gzip flip 400 1 #62
+case gzip flip 400 128 OK
+case gzip flip 400 255 #47
+case gzip flip 400 16 OK
+case gzip flip 404 1 OK
+case gzip flip 404 128 OK
+case gzip flip 404 255 OK
+case gzip flip 404 16 #74
+case gzip flip 408 1 #75
+case gzip flip 408 128 OK
+case gzip flip 408 255 #46
+case gzip flip 408 16 OK
+case gzip flip 412 1 OK
+case gzip flip 412 128 OK
+case gzip flip 412 255 #37
+case gzip flip 412 16 OK
+case gzip flip 416 1 OK
+case gzip flip 416 128 OK
+case gzip flip 416 255 #62
+case gzip flip 416 16 OK
+case gzip flip 420 1 #46
+case gzip flip 420 128 OK
+case gzip flip 420 255 OK
+case gzip flip 420 16 #46
+case gzip flip 424 1 #46
+case gzip flip 424 128 #50
+case gzip flip 424 255 OK
+case gzip flip 424 16 OK
+case gzip flip 428 1 OK
+case gzip flip 428 128 OK
+case gzip flip 428 255 OK
+case gzip flip 428 16 #50
+case gzip flip 432 1 #46
+case gzip flip 432 128 OK
+case gzip flip 432 255 OK
+case gzip flip 432 16 #76
+case gzip flip 436 1 OK
+case gzip flip 436 128 #50
+case gzip flip 436 255 OK
+case gzip flip 436 16 OK
+case gzip flip 440 1 OK
+case gzip flip 440 128 OK
+case gzip flip 440 255 #62
+case gzip flip 440 16 #46
+case gzip flip 444 1 #62
+case gzip flip 444 128 #71
+case gzip flip 444 255 #46
+case gzip flip 444 16 OK
+case gzip flip 448 1 OK
+case gzip flip 448 128 OK
+case gzip flip 448 255 #77
+case gzip flip 448 16 OK
+case gzip flip 452 1 #46
+case gzip flip 452 128 OK
+case gzip flip 452 255 #47
+case gzip flip 452 16 OK
+case gzip flip 456 1 OK
+case gzip flip 456 128 OK
+case gzip flip 456 255 #62
+case gzip flip 456 16 #46
+case gzip flip 460 1 #76
+case gzip flip 460 128 OK
+case gzip flip 460 255 OK
+case gzip flip 460 16 OK
+case gzip flip 464 1 OK
+case gzip flip 464 128 OK
+case gzip flip 464 255 #50
+case gzip flip 464 16 #50
+case gzip flip 468 1 OK
+case gzip flip 468 128 OK
+case gzip flip 468 255 #77
+case gzip flip 468 16 OK
+case gzip flip 472 1 #62
+case gzip flip 472 128 OK
+case gzip flip 472 255 #62
+case gzip flip 472 16 OK
+case gzip flip 476 1 OK
+case gzip flip 476 128 OK
+case gzip flip 476 255 OK
+case gzip flip 476 16 #62
+case gzip flip 480 1 OK
+case gzip flip 480 128 #62
+case gzip flip 480 255 OK
+case gzip flip 480 16 OK
+case gzip flip 484 1 OK
+case gzip flip 484 128 OK
+case gzip flip 484 255 #78
+case gzip flip 484 16 OK
+case gzip flip 488 1 OK
+case gzip flip 488 128 #46
+case gzip flip 488 255 OK
+case gzip flip 488 16 OK
+case gzip flip 492 1 OK
+case gzip flip 492 128 OK
+case gzip flip 492 255 OK
+case gzip flip 492 16 OK
+case gzip flip 496 1 OK
+case gzip flip 496 128 OK
+case gzip flip 496 255 OK
+case gzip flip 496 16 OK
+case gzip flip 500 1 OK
+case gzip flip 500 128 OK
+case gzip flip 500 255 #79
+case gzip flip 500 16 OK
+case gzip flip 504 1 #46
+case gzip flip 504 128 #79
+case gzip flip 504 255 #76
+case gzip flip 504 16 OK
+case gzip flip 508 1 OK
+case gzip flip 508 128 OK
+case gzip flip 508 255 OK
+case gzip flip 508 16 #76
+case gzip flip 512 1 #80
+case gzip flip 512 128 OK
+case gzip flip 512 255 OK
+case gzip flip 512 16 OK
+case gzip flip 514 1 OK
+case gzip flip 514 128 OK
+case gzip flip 514 255 OK
+case gzip flip 514 16 OK
+case gzip flip 515 1 OK
+case gzip flip 515 128 OK
+case gzip flip 515 255 #81
+case gzip flip 515 16 #13
+case gzip flip 516 1 OK
+case gzip flip 516 128 OK
+case gzip flip 516 255 #62
+case gzip flip 516 16 #78
+case gzip flip 517 1 OK
+case gzip flip 517 128 OK
+case gzip flip 517 255 #80
+case gzip flip 517 16 #13
+case gzip flip 518 1 #13
+case gzip flip 518 128 OK
+case gzip flip 518 255 #62
+case gzip flip 518 16 OK
+case gzip flip 519 1 OK
+case gzip flip 519 128 OK
+case gzip flip 519 255 #81
+case gzip flip 519 16 OK
+case gzip flip 520 1 #50
+case gzip flip 520 128 #7
+case gzip flip 520 255 OK
+case gzip flip 520 16 OK
+case gzip flip 521 1 OK
+case gzip flip 521 128 OK
+case gzip flip 521 255 OK
+case gzip flip 521 16 OK
+case gzip flip 522 1 #82
+case gzip flip 522 128 OK
+case gzip flip 522 255 #83
+case gzip flip 522 16 #46
+case gzip flip 523 1 #57
+case gzip flip 523 128 #77
+case gzip flip 523 255 #81
+case gzip flip 523 16 #13
+case gzip flip 524 1 OK
+case gzip flip 524 128 OK
+case gzip flip 524 255 OK
+case gzip flip 524 16 OK
+case gzip flip 525 1 OK
+case gzip flip 525 128 #13
+case gzip flip 525 255 #84
+case gzip flip 525 16 OK
+case gzip flip 526 1 #85
+case gzip flip 526 128 #86
+case gzip flip 526 255 #81
+case gzip flip 526 16 OK
+case gzip flip 527 1 #87
+case gzip flip 527 128 #37
+case gzip flip 527 255 OK
+case gzip flip 527 16 #46
+case gzip flip 528 1 #46
+case gzip flip 528 128 OK
+case gzip flip 528 255 OK
+case gzip flip 528 16 #80
+case gzip flip 529 1 OK
+case gzip flip 529 128 OK
+case gzip flip 529 255 OK
+case gzip flip 529 16 OK
+case gzip flip 530 1 OK
+case gzip flip 530 128 OK
+case gzip flip 530 255 OK
+case gzip flip 530 16 OK
+case gzip flip 531 1 OK
+case gzip flip 531 128 OK
+case gzip flip 531 255 OK
+case gzip flip 531 16 OK
+case gzip flip 532 1 OK
+case gzip flip 532 128 OK
+case gzip flip 532 255 OK
+case gzip flip 532 16 OK
+case gzip flip 533 1 OK
+case gzip flip 533 128 OK
+case gzip flip 533 255 OK
+case gzip flip 533 16 OK
+case gzip flip 534 1 OK
+case gzip flip 534 128 OK
+case gzip flip 534 255 OK
+case gzip flip 534 16 OK
+case gzip flip 535 1 OK
+case gzip flip 535 128 OK
+case gzip flip 535 255 OK
+case gzip flip 535 16 OK
+case gzip flip 536 1 OK
+case gzip flip 536 128 OK
+case gzip flip 536 255 OK
+case gzip flip 536 16 OK
+case gzip flip 537 1 OK
+case gzip flip 537 128 OK
+case gzip flip 537 255 OK
+case gzip flip 537 16 OK
+frame 0 java.base/java.util.zip.GZIPInputStream.readUByte(GZIPInputStream.java:332)
+frame 1 java.base/java.util.zip.GZIPInputStream.readUShort(GZIPInputStream.java:322)
+frame 2 java.base/java.util.zip.GZIPInputStream.readHeader(GZIPInputStream.java:227)
+frame 3 java.base/java.util.zip.GZIPInputStream.<init>(GZIPInputStream.java:86)
+frame 4 java.base/java.util.zip.GZIPInputStream.<init>(GZIPInputStream.java:118)
+frame 5 net.minecraft.world.level.chunk.storage.RegionFileVersion.lambda$static$0(RegionFileVersion.java:30)
+frame 6 net.minecraft.world.level.chunk.storage.RegionFileVersion.wrap(RegionFileVersion.java:115)
+frame 7 java.base/java.util.zip.GZIPInputStream.readUShort(GZIPInputStream.java:323)
+frame 8 java.base/java.util.zip.GZIPInputStream.readHeader(GZIPInputStream.java:234)
+frame 9 java.base/java.util.zip.GZIPInputStream.readHeader(GZIPInputStream.java:238)
+frame 10 java.base/java.util.zip.GZIPInputStream.skipBytes(GZIPInputStream.java:356)
+frame 11 java.base/java.util.zip.GZIPInputStream.readHeader(GZIPInputStream.java:240)
+frame 12 java.base/java.util.zip.InflaterInputStream.fill(InflaterInputStream.java:310)
+frame 13 java.base/java.util.zip.InflaterInputStream.read(InflaterInputStream.java:208)
+frame 14 java.base/java.util.zip.GZIPInputStream.read(GZIPInputStream.java:155)
+frame 15 net.minecraft.util.FastBufferedInputStream.fill(FastBufferedInputStream.java:92)
+frame 16 net.minecraft.util.FastBufferedInputStream.read(FastBufferedInputStream.java:30)
+frame 17 java.base/java.io.DataInputStream.readUnsignedByte(DataInputStream.java:300)
+frame 18 java.base/java.io.DataInputStream.readByte(DataInputStream.java:280)
+frame 19 net.minecraft.nbt.NbtIo.readUnnamedTag(NbtIo.java:177)
+frame 20 net.minecraft.nbt.NbtIo.read(NbtIo.java:109)
+frame 21 net.minecraft.nbt.NbtIo.read(NbtIo.java:105)
+frame 22 net.minecraft.nbt.NbtIo.readTagSafe(NbtIo.java:195)
+frame 23 net.minecraft.nbt.NbtIo.readUnnamedTag(NbtIo.java:185)
+frame 24 net.minecraft.util.FastBufferedInputStream.read(FastBufferedInputStream.java:45)
+frame 25 java.base/java.io.DataInputStream.readFully(DataInputStream.java:213)
+frame 26 java.base/java.io.DataInputStream.readUnsignedShort(DataInputStream.java:346)
+frame 27 java.base/java.io.DataInputStream.readUTF(DataInputStream.java:580)
+frame 28 java.base/java.io.DataInputStream.readUTF(DataInputStream.java:555)
+frame 29 net.minecraft.nbt.CompoundTag$1.readString(CompoundTag.java:162)
+frame 30 net.minecraft.nbt.CompoundTag$1.loadCompound(CompoundTag.java:82)
+frame 31 net.minecraft.nbt.CompoundTag$1.load(CompoundTag.java:70)
+frame 32 net.minecraft.nbt.CompoundTag$1.load(CompoundTag.java:65)
+frame 33 net.minecraft.nbt.NbtIo.readTagSafe(NbtIo.java:190)
+frame 34 java.base/java.io.DataInputStream.readUTF(DataInputStream.java:597)
+frame 35 net.minecraft.nbt.CompoundTag.readNamedTagData(CompoundTag.java:517)
+frame 36 net.minecraft.nbt.CompoundTag$1.loadCompound(CompoundTag.java:83)
+frame 37 net.minecraft.nbt.StringTag$1.readAccounted(StringTag.java:31)
+frame 38 net.minecraft.nbt.StringTag$1.load(StringTag.java:19)
+frame 39 net.minecraft.nbt.StringTag$1.load(StringTag.java:16)
+frame 40 net.minecraft.nbt.CompoundTag.readNamedTagData(CompoundTag.java:511)
+frame 41 java.base/java.io.DataInputStream.readInt(DataInputStream.java:390)
+frame 42 net.minecraft.nbt.IntArrayTag$1.readAccounted(IntArrayTag.java:34)
+frame 43 net.minecraft.nbt.IntArrayTag$1.load(IntArrayTag.java:23)
+frame 44 net.minecraft.nbt.IntArrayTag$1.load(IntArrayTag.java:20)
+frame 45 net.minecraft.nbt.IntArrayTag$1.readAccounted(IntArrayTag.java:38)
+frame 46 net.minecraft.nbt.IntTag$1.readAccounted(IntTag.java:40)
+frame 47 net.minecraft.nbt.IntTag$1.load(IntTag.java:30)
+frame 48 net.minecraft.nbt.IntTag$1.load(IntTag.java:27)
+frame 49 net.minecraft.nbt.ListTag$1.loadList(ListTag.java:43)
+frame 50 net.minecraft.nbt.ListTag$1.load(ListTag.java:35)
+frame 51 net.minecraft.nbt.ListTag$1.load(ListTag.java:30)
+frame 52 net.minecraft.nbt.ListTag$1.loadList(ListTag.java:52)
+frame 53 net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:33)
+frame 54 net.minecraft.nbt.LongArrayTag$1.load(LongArrayTag.java:23)
+frame 55 net.minecraft.nbt.LongArrayTag$1.load(LongArrayTag.java:20)
+frame 56 java.base/java.io.DataInputStream.readLong(DataInputStream.java:412)
+frame 57 net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:37)
+frame 58 net.minecraft.nbt.CompoundTag$1.loadCompound(CompoundTag.java:81)
+frame 59 net.minecraft.nbt.ByteTag$1.readAccounted(ByteTag.java:38)
+frame 60 net.minecraft.nbt.ByteTag$1.load(ByteTag.java:28)
+frame 61 net.minecraft.nbt.ByteTag$1.load(ByteTag.java:25)
+frame 62 java.base/java.util.zip.GZIPInputStream.readHeader(GZIPInputStream.java:231)
+frame 63 java.base/java.util.zip.GZIPInputStream.readHeader(GZIPInputStream.java:235)
+frame 64 java.base/java.util.zip.GZIPInputStream.readHeader(GZIPInputStream.java:245)
+frame 65 java.base/java.util.zip.InflaterInputStream.read(InflaterInputStream.java:214)
+frame 66 java.base/java.util.zip.GZIPInputStream.readTrailer(GZIPInputStream.java:291)
+frame 67 java.base/java.util.zip.GZIPInputStream.read(GZIPInputStream.java:157)
+frame 68 java.base/java.util.zip.InflaterInputStream.skip(InflaterInputStream.java:270)
+frame 69 net.minecraft.util.FastBufferedInputStream.skip(FastBufferedInputStream.java:66)
+frame 70 java.base/java.io.DataInputStream.skipBytes(DataInputStream.java:238)
+frame 71 net.minecraft.nbt.StringTag.skipString(StringTag.java:53)
+frame 72 net.minecraft.nbt.NbtIo.readUnnamedTag(NbtIo.java:183)
+frame 73 java.base/java.io.DataInputStream.readUTF(DataInputStream.java:667)
+frame 74 java.base/java.io.DataInputStream.readUTF(DataInputStream.java:645)
+frame 75 net.minecraft.util.FastBufferedInputStream.read(FastBufferedInputStream.java:43)
+frame 76 net.minecraft.nbt.TagType$1.createException(TagType.java:54)
+frame 77 net.minecraft.nbt.TagType$1.load(TagType.java:59)
+frame 78 net.minecraft.nbt.TagType$1.load(TagType.java:52)
+frame 79 net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:35)
+frame 80 net.minecraft.nbt.ListTag$1.loadList(ListTag.java:46)
+frame 81 net.minecraft.nbt.IntArrayTag$1.readAccounted(IntArrayTag.java:36)
+frame 82 java.base/java.io.DataInputStream.readUTF(DataInputStream.java:641)
+frame 83 net.minecraft.nbt.ListTag$1.readListCount(ListTag.java:118)
+frame 84 net.minecraft.nbt.ListTag$1.loadList(ListTag.java:44)
+frame 85 java.base/java.io.DataInputStream.readUTF(DataInputStream.java:659)
+frame 86 net.minecraft.nbt.NbtAccounter.accountBytes(NbtAccounter.java:44)
+frame 87 net.minecraft.nbt.NbtAccounter.accountBytes(NbtAccounter.java:38)
+frame 88 net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:34)
+frame 89 java.base/java.io.DataInputStream.readFully(DataInputStream.java:215)
+frame 90 java.base/java.io.DataInputStream.readUnsignedByte(DataInputStream.java:302)
+trace 0
+T java.io.EOFException
+F 0
+F 1
+F 2
+F 3
+F 4
+F 5
+F 6
+.
+trace 1
+T java.io.EOFException
+F 0
+F 7
+F 2
+F 3
+F 4
+F 5
+F 6
+.
+trace 2
+T java.io.EOFException
+F 0
+F 8
+F 3
+F 4
+F 5
+F 6
+.
+trace 3
+T java.io.EOFException
+F 0
+F 9
+F 3
+F 4
+F 5
+F 6
+.
+trace 4
+T java.io.EOFException
+F 10
+F 11
+F 3
+F 4
+F 5
+F 6
+.
+trace 5
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 16
+F 17
+F 18
+F 19
+F 20
+F 21
+.
+trace 6
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 26
+F 27
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 7
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 8
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 34
+F 28
+F 37
+F 38
+F 39
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 9
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 41
+F 42
+F 43
+F 44
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 10
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 41
+F 45
+F 43
+F 44
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 11
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 41
+F 46
+F 47
+F 48
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 12
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 16
+F 17
+F 18
+F 49
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 13
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 14
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 41
+F 53
+F 54
+F 55
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 15
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 56
+F 57
+F 54
+F 55
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 16
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 16
+F 17
+F 18
+F 58
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 17
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 16
+F 17
+F 18
+F 58
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 18
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 26
+F 27
+F 28
+F 37
+F 38
+F 39
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 19
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 34
+F 28
+F 37
+F 38
+F 39
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 20
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 24
+F 25
+F 26
+F 27
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 21
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 15
+F 16
+F 17
+F 18
+F 59
+F 60
+F 61
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 22
+T java.util.zip.ZipException: Not in GZIP format
+F 62
+F 3
+F 4
+F 5
+F 6
+.
+trace 23
+T java.util.zip.ZipException: Unsupported compression method
+F 63
+F 3
+F 4
+F 5
+F 6
+.
+trace 24
+T java.io.EOFException
+F 10
+F 64
+F 3
+F 4
+F 5
+F 6
+.
+trace 25
+T java.util.zip.ZipException: invalid block type
+F 65
+F 14
+F 15
+F 16
+F 17
+F 18
+F 19
+F 20
+F 21
+.
+trace 26
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: invalid code lengths set
+F 65
+F 14
+F 15
+F 24
+F 25
+F 56
+F 57
+F 54
+F 55
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 27
+T java.util.zip.ZipException: invalid literal/lengths set
+F 65
+F 14
+F 15
+F 16
+F 17
+F 18
+F 19
+F 20
+F 21
+.
+trace 28
+T java.util.zip.ZipException: invalid distance too far back
+F 65
+F 14
+F 15
+F 16
+F 17
+F 18
+F 19
+F 20
+F 21
+.
+trace 29
+T java.util.zip.ZipException: invalid bit length repeat
+F 65
+F 14
+F 15
+F 16
+F 17
+F 18
+F 19
+F 20
+F 21
+.
+trace 30
+T java.util.zip.ZipException: invalid distances set
+F 65
+F 14
+F 15
+F 16
+F 17
+F 18
+F 19
+F 20
+F 21
+.
+trace 31
+T java.util.zip.ZipException: invalid code lengths set
+F 65
+F 14
+F 15
+F 16
+F 17
+F 18
+F 19
+F 20
+F 21
+.
+trace 32
+T java.util.zip.ZipException: invalid code -- missing end-of-block
+F 65
+F 14
+F 15
+F 16
+F 17
+F 18
+F 19
+F 20
+F 21
+.
+trace 33
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 68
+F 69
+F 70
+F 71
+F 72
+F 20
+F 21
+.
+trace 34
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 8
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 35
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 2
+F 74
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 36
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 41
+F 45
+F 43
+F 44
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 37
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 75
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 38
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 0
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 39
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 9
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 40
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 5
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 41
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 117
+F 76
+F 77
+F 78
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 42
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 41
+F 45
+F 43
+F 44
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 43
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 14
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 44
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 55
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 45
+T java.lang.OutOfMemoryError: Java heap space
+F 79
+F 54
+F 55
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 46
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 75
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 47
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 56
+F 57
+F 54
+F 55
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 48
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 2
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 49
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 116
+F 76
+F 77
+F 78
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 50
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 51
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 4
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 52
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 41
+F 45
+F 43
+F 44
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 53
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 15
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 54
+T net.minecraft.nbt.NbtFormatException: Missing type on ListTag
+F 80
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 55
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 39
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 56
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 38
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 57
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 40
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 58
+T java.lang.OutOfMemoryError: Java heap space
+F 81
+F 43
+F 44
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 59
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 14
+F 76
+F 77
+F 78
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 60
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 101
+F 76
+F 77
+F 78
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 61
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 75
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 62
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 34
+F 28
+F 37
+F 38
+F 39
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 63
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 64
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 75
+F 25
+F 34
+F 28
+F 37
+F 38
+F 39
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 65
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input: partial character at end
+F 82
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 66
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 3
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 67
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 5
+F 73
+F 28
+F 37
+F 38
+F 39
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 68
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 10
+F 73
+F 28
+F 37
+F 38
+F 39
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 69
+T net.minecraft.nbt.NbtFormatException: ListTag length cannot be negative: -67108352
+F 83
+F 84
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 70
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: -46
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 71
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 0
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 72
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 9
+F 74
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 73
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 4
+F 73
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 74
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.UTFDataFormatException: malformed input around byte 50
+F 85
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 75
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: -100
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 76
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: -45
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 77
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 78
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: -2
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 79
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 13
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 80
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 75
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 81
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException: Unexpected end of ZLIB input stream
+F 12
+F 13
+F 14
+F 75
+F 25
+F 34
+F 28
+F 29
+F 30
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 82
+T java.lang.IllegalArgumentException: Tried to account NBT tag with negative size: -397934536
+F 86
+F 87
+F 88
+F 54
+F 55
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 83
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: -84
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 84
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 25
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 85
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.IOException: Invalid tag id: 63
+F 76
+F 77
+F 78
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 86
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 22
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 24
+F 25
+F 26
+F 27
+F 28
+F 29
+F 30
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 87
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.util.zip.ZipException: Corrupt GZIP trailer
+F 66
+F 67
+F 15
+F 16
+F 17
+F 18
+F 58
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 88
+T net.minecraft.nbt.ReportedNbtException: Loading NBT data
+F 35
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+T java.io.EOFException
+F 89
+F 56
+F 57
+F 54
+F 55
+F 40
+F 36
+F 31
+F 32
+F 52
+F 50
+F 51
+F 40
+F 36
+F 31
+F 32
+F 33
+F 23
+F 20
+F 21
+.
+trace 89
+T java.io.EOFException
+F 90
+F 18
+F 19
+F 20
+F 21
+.

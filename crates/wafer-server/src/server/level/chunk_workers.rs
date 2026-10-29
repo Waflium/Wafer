@@ -27,6 +27,14 @@ pub fn next_io_worker_name() -> String {
     format!("IO-Worker-{}", IO_WORKER_COUNT.fetch_add(1, Ordering::Relaxed))
 }
 
+pub fn io_worker_count() -> usize {
+    IO_WORKER_COUNT.load(Ordering::Relaxed) - 1
+}
+
+pub fn worker_main_count() -> usize {
+    WORKER_NAMES.len()
+}
+
 struct WorkerPool {
     jobs: Mutex<VecDeque<Job>>,
     available: Condvar,

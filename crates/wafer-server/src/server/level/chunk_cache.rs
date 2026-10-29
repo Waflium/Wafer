@@ -1559,12 +1559,19 @@ impl ChunkCache {
         self.io.as_ref().unwrap().read(pos, move |read| {
             chunk_workers::execute(move || {
                 let result = crate::util::catch_exception(|| {
-                    read.and_then(|nbt| {
-                        nbt.map(|nbt| {
+                    read.and_then(|nbt| match nbt {
+                        None => Ok(None),
+                        Some(nbt) => {
                             let nbt = simple_region_storage::upgrade_chunk_tag(nbt, -1, context.as_ref(), current_version(), DataFixTypes::Chunk);
-                            serialization::read(&nbt, dimension, seed)
-                        })
-                        .transpose()
+                            match serialization::read(&nbt, dimension, seed) {
+                                Ok(chunk) => Ok(Some(chunk)),
+                                Err(serialization::ReadError::MissingLevelData) => {
+                                    error!("Chunk file at {pos} is missing level data, skipping");
+                                    Ok(None)
+                                }
+                                Err(serialization::ReadError::Exception(throwable)) => Err(io::Error::other(throwable)),
+                            }
+                        }
                     })
                 })
                 .unwrap_or_else(|message| Err(io::Error::other(JavaThrowable::new(message, Vec::new()))));

@@ -330,12 +330,13 @@ impl<T: PaletteValue> PalettedContainer<T> {
             (BitStorage::Zero { size: count }, configuration.create_palette(&entries))
         } else {
             let data = packed.storage.ok_or("Missing values for non-zero storage")?;
+            let got = data.len();
             if !configuration.always_repack() && configuration.bits_in_memory == bits_on_disc {
-                let storage = SimpleBitStorage::with_data(bits_on_disc, count, data).ok_or("Invalid length given for storage")?;
+                let storage = SimpleBitStorage::with_data(bits_on_disc, count, data).ok_or_else(|| bit_storage_failure(bits_on_disc, count, got))?;
                 (BitStorage::Simple(storage), configuration.create_palette(&entries))
             } else {
                 let old_palette = Palette::hash_map(bits_on_disc, &entries);
-                let old_storage = BitStorage::Simple(SimpleBitStorage::with_data(bits_on_disc, count, data).ok_or("Invalid length given for storage")?);
+                let old_storage = BitStorage::Simple(SimpleBitStorage::with_data(bits_on_disc, count, data).ok_or_else(|| bit_storage_failure(bits_on_disc, count, got))?);
                 let mut new_palette = configuration.create_palette(&entries);
                 let contents = reencode(&old_storage, &old_palette, &mut new_palette);
                 (BitStorage::Simple(SimpleBitStorage::from_values(configuration.bits_in_memory, &contents)), new_palette)
@@ -343,6 +344,11 @@ impl<T: PaletteValue> PalettedContainer<T> {
         };
         Ok(PalettedContainer { strategy, data: Data { configuration, storage, palette } })
     }
+}
+
+fn bit_storage_failure(bits: u32, count: usize, got: usize) -> String {
+    let values_per_long = 64 / bits as usize;
+    format!("Failed to read PalettedContainer: Invalid length given for storage, got: {got} but expected: {}", count.div_ceil(values_per_long))
 }
 
 fn reencode<T: PaletteValue>(storage: &BitStorage, old: &Palette<T>, new: &mut Palette<T>) -> Vec<u32> {

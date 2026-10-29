@@ -134,11 +134,8 @@ pub const READ_CHUNK_STREAM: &str = "net.minecraft.world.level.chunk.storage.Reg
 pub const SCAN_CHUNK_STREAM: &str = "net.minecraft.world.level.chunk.storage.RegionFileStorage.scanChunk(RegionFileStorage.java:102)";
 
 
-pub fn unsimulated_stream_failure(version: super::region_file_version::RegionFileVersion) -> JavaThrowable {
-    match version {
-        super::region_file_version::RegionFileVersion::Gzip => JavaThrowable::new("java.util.zip.ZipException: Not in GZIP format", Vec::new()),
-        _ => JavaThrowable::new("java.io.IOException: Stream is corrupted", Vec::new()),
-    }
+pub fn construct_stream_caller(caller: &'static str) -> &'static str {
+    if caller == SCAN_CHUNK_STREAM { "net.minecraft.world.level.chunk.storage.RegionFileStorage.scanChunk(RegionFileStorage.java:100)" } else { "net.minecraft.world.level.chunk.storage.RegionFileStorage.read(RegionFileStorage.java:85)" }
 }
 
 pub fn java_path(path: &Path) -> String {

@@ -1,6 +1,7 @@
 pub mod chunk_io_error_reporter;
 pub mod chunk_stream;
 pub mod entity_storage;
+pub mod lz4_block_input_stream;
 pub mod region_file_version;
 pub mod region_storage_info;
 pub mod section_storage;
@@ -46,13 +47,14 @@ fn is_old_chunk(nbt: &Nbt) -> bool {
 }
 
 fn chunk_stream_failure(version: RegionFileVersion, data: &[u8], mode: chunk_stream::Mode, caller: &'static str) -> io::Result<Vec<u8>> {
-    let failure = match version {
-        RegionFileVersion::Deflate => chunk_stream::simulate(data, true, mode),
-        RegionFileVersion::None => chunk_stream::simulate(data, false, mode),
-        RegionFileVersion::Gzip | RegionFileVersion::Lz4 => Err(storage_exception::unsimulated_stream_failure(version)),
+    let kind = match version {
+        RegionFileVersion::Gzip => chunk_stream::StreamKind::Gzip,
+        RegionFileVersion::Deflate => chunk_stream::StreamKind::Deflate,
+        RegionFileVersion::None => chunk_stream::StreamKind::None,
+        RegionFileVersion::Lz4 => chunk_stream::StreamKind::Lz4,
     };
-    failure.map_err(|mut throwable| {
-        throwable.push_frame(caller);
+    chunk_stream::simulate(data, kind, mode).map_err(|(mut throwable, constructing)| {
+        throwable.push_frame(if constructing { storage_exception::construct_stream_caller(caller) } else { caller });
         io::Error::new(io::ErrorKind::InvalidData, throwable)
     })
 }
