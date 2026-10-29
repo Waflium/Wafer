@@ -283,7 +283,7 @@ impl ServerLevel {
 
     pub fn happy_ghast_add_passenger(&mut self, id: EntityId, passenger: EntityId) {
         if !self.is_vehicle(id) {
-            self.entity_play_sound(id, sound_event("minecraft:entity.ghast.harness_goggles_down"), 1.0, 1.0);
+            self.entity_play_sound(id, sound_event("minecraft:entity.happy_ghast.harness_goggles_down"), 1.0, 1.0);
         }
         self.entity_add_passenger(id, passenger);
         if !self.happy_ghast_scan_player_above_ghast(id) {
@@ -297,7 +297,7 @@ impl ServerLevel {
         self.happy_ghast_set_server_still_timeout(id, MAX_STILL_TIMEOUT);
         if !self.is_vehicle(id) {
             self.mob_mut(id).expect("a happy ghast").clear_home();
-            self.entity_play_sound(id, sound_event("minecraft:entity.ghast.harness_goggles_up"), 1.0, 1.0);
+            self.entity_play_sound(id, sound_event("minecraft:entity.happy_ghast.harness_goggles_up"), 1.0, 1.0);
         }
     }
 

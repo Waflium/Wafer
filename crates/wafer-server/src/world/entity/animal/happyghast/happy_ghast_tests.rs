@@ -42,3 +42,15 @@ fn adult_happy_ghasts_float_and_save_their_still_timeout() {
     level.save_without_id(id, &mut out);
     assert!(out.iter().any(|(k, v)| k == "still_timeout" && *v == wafer_protocol::nbt::Nbt::Int(0)));
 }
+
+#[test]
+fn riding_a_happy_ghast_plays_the_goggle_sounds() {
+    let mut level = testing::level();
+    let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 8.5), 180.0, 0.0);
+    let id = add(&mut level, Vec3::new(0.5, -55.0, 0.5), wafer_protocol::nbt::Nbt::Compound(Vec::new()));
+    assert!(level.start_riding(player, id, true, true));
+    assert!(level.is_vehicle(id));
+    level.tick();
+    level.stop_riding(player);
+    assert!(!level.is_vehicle(id));
+}

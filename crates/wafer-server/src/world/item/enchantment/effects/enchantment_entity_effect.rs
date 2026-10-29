@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Vec3, mth};
-use wafer_data::{DamageType, MobEffect, registry, registry_id};
+use wafer_data::{DamageType, MobEffect, registry};
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::particles::particle_types;
@@ -332,7 +332,14 @@ fn explosion_particle_info(tag: &Nbt) -> DataResult<(ExplosionParticleInfo, i32)
 
 fn sound_event(tag: &Nbt) -> DataResult<SoundEvent> {
     Ok(match tag {
-        Nbt::String(_) => SoundEvent::Reference(registry_id(registry::SOUND_EVENT, &codec::identifier(tag)?)),
+        Nbt::String(_) => {
+            let key = codec::identifier(tag)?;
+            match registry::SOUND_EVENT.iter().position(|&name| name == key) {
+                Some(id) => SoundEvent::Reference(id as i32),
+                None if crate::core::data_registries::is_loading() => return Err(crate::core::data_registries::unknown_reference("minecraft:sound_event", &key)),
+                None => return Err(format!("Failed to get element {key} from registry minecraft:sound_event")),
+            }
+        }
         _ => SoundEvent::Direct {
             location: codec::decode_field(tag, "sound_id", codec::identifier)?,
             fixed_range: tag.get("range").and_then(Nbt::as_f64).map(|range| range as f32),
