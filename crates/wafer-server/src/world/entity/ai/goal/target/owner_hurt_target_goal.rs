@@ -18,7 +18,7 @@ impl OwnerHurtTargetGoal {
         if !level.is_tame(mob) || level.is_ordered_to_sit(mob) {
             return false;
         }
-        let Some(owner) = level.get_owner(mob) else { return false };
+        let Some((_, owner)) = level.get_owner_in_any_dimension(mob) else { return false };
         let living = level.living(owner);
         self.owner_last_hurt = living.last_hurt_mob.filter(|&last_hurt_mob| level.entity_ref(last_hurt_mob).is_some());
         let ts = living.last_hurt_mob_timestamp;
@@ -29,7 +29,7 @@ impl OwnerHurtTargetGoal {
 
     pub fn start(&mut self, level: &mut ServerLevel, mob: EntityId) {
         level.set_target(mob, self.owner_last_hurt);
-        if let Some(owner) = level.get_owner(mob) {
+        if let Some((_, owner)) = level.get_owner_in_any_dimension(mob) {
             self.timestamp = level.living(owner).last_hurt_mob_timestamp;
         }
         self.target_goal.start();

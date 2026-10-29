@@ -8,7 +8,7 @@ pub struct LandOnOwnersShoulderGoal {
 
 impl LandOnOwnersShoulderGoal {
     pub fn can_use(&self, level: &ServerLevel, entity: EntityId) -> bool {
-        let Some(owner) = level.get_owner(entity).filter(|&owner| level.is_player(owner)) else { return false };
+        let Some((_, owner)) = level.get_owner_in_any_dimension(entity).filter(|&(_, owner)| level.is_player(owner)) else { return false };
         let p = level.player(owner);
         let owner_that_can_be_sat_on = !level.is_spectator(owner) && !p.abilities_flying() && !p.entity.is_in_water() && !p.entity.is_in_powder_snow;
         !level.is_ordered_to_sit(entity) && owner_that_can_be_sat_on && level.can_sit_on_shoulder(entity)
@@ -26,7 +26,7 @@ impl LandOnOwnersShoulderGoal {
         if self.is_sitting_on_shoulder || level.is_in_sitting_pose(entity) || level.is_leashed(entity) {
             return;
         }
-        if let Some(owner) = level.get_owner(entity).filter(|&owner| level.is_player(owner))
+        if let Some((_, owner)) = level.get_owner_in_any_dimension(entity).filter(|&(_, owner)| level.is_player(owner))
             && level.entity(entity).bounding_box().intersects(&level.entity(owner).bounding_box())
         {
             self.is_sitting_on_shoulder = level.set_entity_on_shoulder(entity, owner);

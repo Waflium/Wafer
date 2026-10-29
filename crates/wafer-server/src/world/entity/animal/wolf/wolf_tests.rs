@@ -314,3 +314,30 @@ fn wolves_follow_and_report_to_owners_in_another_dimension() {
     let ids: Vec<i32> = std::iter::from_fn(|| packets.try_recv().ok()).map(|p| Reader::new(&p).varint().unwrap()).collect();
     assert!(ids.contains(&clientbound::SYSTEM_CHAT), "{ids:?}");
 }
+
+#[test]
+fn killing_a_wolf_by_command_reports_to_its_owner_in_another_dimension() {
+    use crate::commands::perform_prefixed_command;
+    use crate::commands::source::CommandSourceStack;
+    use crate::network::connection::Outbound;
+    use crate::network::login::Profile;
+    use wafer_data::packets::play::clientbound;
+    use wafer_protocol::Reader;
+    let mut server = testing::server();
+    let player = testing::server_player_with_profile(&mut server, Profile { uuid: 1, name: "Owner".into(), properties: Vec::new() }, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+    server.overworld_mut().handle_player_loaded(player);
+    let mut mob = Wolf::create();
+    mob.entity.set_pos(Vec3::new(0.5, -60.0, 2.0));
+    let wolf = mob.entity.id;
+    server.overworld_mut().add_fresh_entity(LevelEntity::Mob(Box::new(mob)));
+    server.overworld_mut().tame(wolf, player);
+    let console = CommandSourceStack::server(&server);
+    perform_prefixed_command(&mut server, &console, "execute in minecraft:the_nether run tp Owner 20.5 64 0.5");
+    let nether = server.level_of(player).unwrap();
+    assert_ne!(nether, 0);
+    let (out, mut packets) = Outbound::capture();
+    server.levels[nether].player_mut(player).connection = out;
+    perform_prefixed_command(&mut server, &console, "kill @e[type=minecraft:wolf]");
+    let ids: Vec<i32> = std::iter::from_fn(|| packets.try_recv().ok()).map(|p| Reader::new(&p).varint().unwrap()).collect();
+    assert!(ids.contains(&clientbound::SYSTEM_CHAT), "{ids:?}");
+}

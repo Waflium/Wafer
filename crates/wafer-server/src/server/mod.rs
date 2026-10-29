@@ -640,6 +640,15 @@ impl Server {
         &mut self.levels[index]
     }
 
+    pub fn lend_level(&mut self, index: usize) -> level::lent_levels::LentLevels<'_> {
+        level::lent_levels::LentLevels::lend(&mut self.levels, index)
+    }
+
+    pub fn lend_entity_level(&mut self, entity: EntityId) -> level::lent_levels::LentLevels<'_> {
+        let index = self.level_of(entity).expect("entity on this server");
+        self.lend_level(index)
+    }
+
     pub fn set_difficulty(&mut self, difficulty: Difficulty, ignore_lock: bool) {
         if ignore_lock || !self.difficulty_locked {
             self.difficulty = if self.hardcore { Difficulty::Hard } else { difficulty };
@@ -1619,8 +1628,8 @@ impl Server {
             level.game_time = game_time;
             level.chunks.game_time = game_time;
         }
+        let runs = level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_until_sleep();
         let level = &mut self.levels[index];
-        let runs = level.tick_until_sleep();
         if level.should_wake_up_all_players() {
             let default_clock = level.dimension_type().default_clock.and_then(ServerClockManager::id_of);
             if self.game_rules.get_bool(game_rule::ADVANCE_TIME)
@@ -1637,11 +1646,11 @@ impl Server {
             let time = level.tick_time();
             TimerQueue::tick(self, time);
         }
-        self.levels[index].begin_block_ticks(runs);
+        level::lent_levels::LentLevels::lend(&mut self.levels, index).level().begin_block_ticks(runs);
         while let Some(pos) = self.levels[index].run_block_ticks() {
             self.command_block_tick(index, pos);
         }
-        self.levels[index].tick_after_block_ticks(runs);
+        level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_block_ticks(runs);
         while level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_entities() {
             self.run_pending_minecart_commands(index);
             self.handle_pending_portal_teleport(index);

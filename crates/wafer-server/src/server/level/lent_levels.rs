@@ -19,6 +19,20 @@ impl<'a> LentLevels<'a> {
     }
 }
 
+impl std::ops::Deref for LentLevels<'_> {
+    type Target = ServerLevel;
+
+    fn deref(&self) -> &ServerLevel {
+        self.level.as_ref().expect("a lent level")
+    }
+}
+
+impl std::ops::DerefMut for LentLevels<'_> {
+    fn deref_mut(&mut self) -> &mut ServerLevel {
+        self.level()
+    }
+}
+
 impl Drop for LentLevels<'_> {
     fn drop(&mut self) {
         if let Some(mut level) = self.level.take() {

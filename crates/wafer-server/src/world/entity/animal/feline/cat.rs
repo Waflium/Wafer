@@ -272,7 +272,7 @@ impl CatRelaxOnOwnerGoal {
         if level.is_ordered_to_sit(mob) {
             return false;
         }
-        let Some(owner) = level.get_owner(mob).filter(|&owner| level.is_player(owner)) else { return false };
+        let Some((_, owner)) = level.get_owner_in_any_dimension(mob).filter(|&(_, owner)| level.is_player(owner)) else { return false };
         self.owner_player = Some(owner);
         if !level.is_sleeping(owner) {
             return false;
@@ -297,7 +297,7 @@ impl CatRelaxOnOwnerGoal {
     pub fn can_continue_to_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
         level.is_tame(mob)
             && !level.is_ordered_to_sit(mob)
-            && self.owner_player.is_some_and(|owner| level.players.contains_key(&owner) && level.is_sleeping(owner))
+            && self.owner_player.is_some_and(|owner| level.is_player(owner) && level.is_sleeping(owner))
             && self.goal_pos.is_some()
             && !self.space_is_occupied(level, mob)
     }
