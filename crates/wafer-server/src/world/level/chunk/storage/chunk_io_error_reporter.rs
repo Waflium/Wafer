@@ -203,8 +203,39 @@ fn store_report(report: &mut CrashReport, debug_directory: &Path, pos: ChunkPos,
     Ok(())
 }
 
-fn file_store_name(_directory: &Path) -> String {
-    String::new()
+#[cfg(windows)]
+fn file_store_name(directory: &Path) -> String {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::{GetVolumeInformationW, GetVolumePathNameW};
+    let path: Vec<u16> = std::path::absolute(directory).unwrap_or_else(|_| directory.to_path_buf()).as_os_str().encode_wide().chain([0]).collect();
+    let mut root = [0u16; 261];
+    let mut label = [0u16; 261];
+    let found = unsafe {
+        GetVolumePathNameW(path.as_ptr(), root.as_mut_ptr(), root.len() as u32) != 0
+            && GetVolumeInformationW(root.as_ptr(), label.as_mut_ptr(), label.len() as u32, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut(), 0) != 0
+    };
+    if !found {
+        return String::new();
+    }
+    let length = label.iter().position(|&unit| unit == 0).unwrap_or(label.len());
+    std::ffi::OsString::from_wide(&label[..length]).to_string_lossy().into_owned()
+}
+
+#[cfg(unix)]
+fn file_store_name(directory: &Path) -> String {
+    let path = std::fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
+    let mounts = std::fs::read_to_string("/proc/self/mounts").unwrap_or_default();
+    mounts
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split(' ');
+            let device = fields.next()?;
+            let mount_point = fields.next()?.replace("\\040", " ");
+            path.starts_with(&mount_point).then(|| (mount_point.len(), device.to_string()))
+        })
+        .max_by_key(|(length, _)| *length)
+        .map(|(_, device)| device)
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

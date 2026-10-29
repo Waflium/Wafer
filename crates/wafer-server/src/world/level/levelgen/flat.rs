@@ -83,7 +83,6 @@ pub fn decode_settings(tag: &Nbt) -> DecodeResult<FlatLevelSource> {
         return DecodeResult::error(error);
     }
     let mut record = Record::default();
-    let structure_overrides = tag.get("structure_overrides").and_then(StructureOverrides::from_nbt);
     let layers = record.required(tag, "layers", |layers| codec::list_partial(layers, decode_layer));
     let lakes = record.with_default(tag, "lakes", false, codec::bool_value);
     let features = record.with_default(tag, "features", false, codec::bool_value);
@@ -95,6 +94,7 @@ pub fn decode_settings(tag: &Nbt) -> DecodeResult<FlatLevelSource> {
             })
         })
     });
+    let structure_overrides = tag.get("structure_overrides").and_then(StructureOverrides::from_nbt);
     let mut settings = record.build(|| {
         let layers = layers?;
         let biome = biome.unwrap_or_else(|| {
