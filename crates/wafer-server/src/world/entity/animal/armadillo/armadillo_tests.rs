@@ -340,3 +340,21 @@ fn rolled_up_armadillos_take_reduced_damage() {
     assert!(level.hurt_server(i, DamageSource::entity(damage_types::PLAYER_ATTACK, player), 5.0));
     assert_eq!(level.mob(i).unwrap().health, 7.0);
 }
+
+#[test]
+fn removed_entities_still_count_by_their_last_bounding_box() {
+    let (mut level, _) = duel_level();
+    let armadillo = summon(&mut level, "minecraft:armadillo", Vec3::new(4.5, -60.0, 4.5), "");
+    let zombie = summon(&mut level, "minecraft:zombie", Vec3::new(6.5, -60.0, 4.5), "");
+    let golem = summon(&mut level, "minecraft:iron_golem", Vec3::new(2.5, -60.0, 4.5), "");
+    level.get_brain_mut(armadillo).set_memory(memory_module_type::NEAREST_LIVING_ENTITIES, vec![zombie, golem]);
+    level.discard(zombie);
+    level.discard(golem);
+    level.tick();
+    assert!(level.find_entity(zombie).is_none() && level.find_entity(golem).is_none());
+    assert!(armadillo::is_scared_by(&level, armadillo, zombie));
+    let villager = summon(&mut level, "minecraft:villager", Vec3::new(3.5, -60.0, 6.5), "");
+    level.get_brain_mut(villager).set_memory(memory_module_type::NEAREST_LIVING_ENTITIES, vec![golem]);
+    crate::world::entity::ai::sensing::golem_sensor::check_for_nearby_golem(&mut level, villager);
+    assert_eq!(level.get_brain(villager).get_memory(memory_module_type::GOLEM_DETECTED_RECENTLY), Some(&true));
+}

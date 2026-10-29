@@ -35,6 +35,7 @@ use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::sensing::sensor;
 use crate::world::entity::ai::util::land_random_pos;
 use crate::world::entity::schedule::Activity;
+use crate::world::entity::mob::MobKind;
 use crate::world::entity::{EntityId, LevelEntity, entity_types, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::item::component::swing_animation::SwingAnimation;
@@ -823,5 +824,8 @@ pub fn is_zombified(level: &ServerLevel, entity: EntityId) -> bool {
 
 pub fn find_nearby_adult_piglins(level: &ServerLevel, body: EntityId) -> Vec<EntityId> {
     let living_entities = level.get_brain(body).get_memory(memory_module_type::NEAREST_LIVING_ENTITIES).cloned().unwrap_or_default();
-    living_entities.into_iter().filter(|&entity| level.is_abstract_piglin(entity) && !level.is_baby(entity)).collect()
+    living_entities
+        .into_iter()
+        .filter(|&entity| level.mob_or_tombstone(entity).is_some_and(|mob| matches!(mob.kind, MobKind::Piglin(_) | MobKind::PiglinBrute(_)) && !mob.is_baby()))
+        .collect()
 }

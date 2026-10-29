@@ -196,7 +196,7 @@ impl Armadillo {
 }
 
 pub fn is_scared_by(level: &ServerLevel, id: EntityId, living_entity: EntityId) -> bool {
-    let Some(other) = level.entity_ref(living_entity) else { return false };
+    let Some(other) = level.entity_ref_or_tombstone(living_entity) else { return false };
     if !level.entity(id).bounding_box().inflate(7.0, 2.0, 7.0).intersects(&other.bounding_box()) {
         return false;
     }

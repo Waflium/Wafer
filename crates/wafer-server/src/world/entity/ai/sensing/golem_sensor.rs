@@ -15,7 +15,7 @@ pub fn requires() -> Vec<MemoryModuleType<Erased>> {
 
 pub fn check_for_nearby_golem(level: &mut ServerLevel, body: EntityId) {
     if let Some(living_entities) = level.get_brain(body).get_memory(memory_module_type::NEAREST_LIVING_ENTITIES) {
-        let golem_present = living_entities.iter().any(|&entity| level.entity_ref(entity).is_some_and(|e| e.entity_type as i32 == entity_types::IRON_GOLEM.id));
+        let golem_present = living_entities.iter().any(|&entity| level.entity_ref_or_tombstone(entity).is_some_and(|e| e.entity_type as i32 == entity_types::IRON_GOLEM.id));
         if golem_present {
             golem_detected(level, body);
         }

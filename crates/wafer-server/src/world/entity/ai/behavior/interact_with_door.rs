@@ -98,9 +98,12 @@ fn are_other_mobs_coming_through_door(level: &ServerLevel, body: EntityId, door_
     let body_type = level.entity(body).entity_type;
     nearest_entities
         .iter()
-        .filter(|&&other_mob| level.entity_ref(other_mob).is_some_and(|e| e.entity_type == body_type))
+        .filter(|&&other_mob| level.entity_ref_or_tombstone(other_mob).is_some_and(|e| e.entity_type == body_type))
         .filter(|&&other_mob| door_pos.closer_to_center_than(level.entity(other_mob).position(), MAX_DISTANCE_TO_HOLD_DOOR_OPEN_FOR_OTHER_MOBS))
-        .any(|&other_mob| level.get_brain_if_present(other_mob).is_some_and(|brain| is_mob_coming_through_door(brain, door_pos)))
+        .any(|&other_mob| {
+            let brain = level.get_brain_if_present(other_mob).or_else(|| level.mob_or_tombstone(other_mob).map(|mob| &mob.living.brain));
+            brain.is_some_and(|brain| is_mob_coming_through_door(brain, door_pos))
+        })
 }
 
 fn is_mob_coming_through_door(other_brain: &crate::world::entity::ai::brain::Brain, door_pos: BlockPos) -> bool {

@@ -71,6 +71,10 @@ impl ServerLevel {
         self.tombstone_mut(id)
     }
 
+    pub(crate) fn entity_ref_or_tombstone(&self, id: EntityId) -> Option<&Entity> {
+        self.entity_ref(id).or_else(|| self.tombstone(id).map(LevelEntity::entity))
+    }
+
     pub(crate) fn mob_or_tombstone(&self, id: EntityId) -> Option<&Mob> {
         match self.find_entity_or_tombstone(id) {
             Some(LevelEntity::Mob(mob)) => Some(mob),
