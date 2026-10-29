@@ -84,6 +84,23 @@ pub fn from_network_id(registry: &str, network_id: i32) -> i32 {
     get(registry).map_or(network_id, |registry| registry.from_network_id(network_id))
 }
 
+pub fn ids_in_registry_order(registry: &str) -> Vec<i32> {
+    match get(registry) {
+        Some(data) => data.network_order().collect(),
+        None => (0..crate::world::item::component::codec::registry(registry).len() as i32).collect(),
+    }
+}
+
+pub fn names_in_registry_order(registry: &str) -> Vec<&'static str> {
+    let names = crate::world::item::component::codec::registry(registry);
+    ids_in_registry_order(registry).into_iter().map(|id| names[id as usize]).collect()
+}
+
+pub fn random_id(registry: &str, random: &mut (impl wafer_core::random::RandomSource + ?Sized)) -> i32 {
+    let size = crate::world::item::component::codec::registry(registry).len() as i32;
+    from_network_id(registry, random.next_int_bounded(size))
+}
+
 pub fn json_entries(registry: &str) -> &'static [(&'static str, &'static str)] {
     static VANILLA: std::sync::Once = std::sync::Once::new();
     if active().is_none() {
@@ -651,6 +668,37 @@ mod tests {
                 assert!(registry.network_contents(id).is_none(), "{} {}", builtin.name, builtin.entries[id as usize]);
                 assert!(registry.json_entries()[id as usize].1 != "null", "{} {}", builtin.name, builtin.entries[id as usize]);
             }
+        }
+    }
+
+    #[test]
+    fn registry_order_is_a_permutation_sorted_by_path_then_namespace() {
+        for registry in ["minecraft:enchantment", "minecraft:wolf_variant", "minecraft:cat_sound_variant"] {
+            super::json_entries(registry);
+            let ids = super::ids_in_registry_order(registry);
+            let mut sorted_ids = ids.clone();
+            sorted_ids.sort_unstable();
+            assert_eq!(sorted_ids, (0..ids.len() as i32).collect::<Vec<_>>(), "{registry}");
+            let names = super::names_in_registry_order(registry);
+            let mut expected = names.clone();
+            expected.sort_by(|a, b| {
+                let (a_namespace, a_path) = a.split_once(':').unwrap();
+                let (b_namespace, b_path) = b.split_once(':').unwrap();
+                a_path.cmp(b_path).then(a_namespace.cmp(b_namespace))
+            });
+            assert_eq!(names, expected, "{registry}");
+        }
+    }
+
+    #[test]
+    fn a_random_id_follows_the_registry_order() {
+        super::json_entries("minecraft:enchantment");
+        let order = super::ids_in_registry_order("minecraft:enchantment");
+        let mut random = wafer_core::random::LegacyRandomSource::new(7);
+        let mut mirror = wafer_core::random::LegacyRandomSource::new(7);
+        for _ in 0..64 {
+            let index = wafer_core::random::RandomSource::next_int_bounded(&mut mirror, order.len() as i32);
+            assert_eq!(super::random_id("minecraft:enchantment", &mut random), order[index as usize]);
         }
     }
 

@@ -33,7 +33,7 @@ impl EnchantWithLevelsFunction {
         let names = registry("minecraft:enchantment");
         let source: Vec<&str> = match &self.options {
             Some(options) => options.contents().iter().map(|&id| names[id as usize]).collect(),
-            None => names.to_vec(),
+            None => crate::core::data_registries::names_in_registry_order("minecraft:enchantment"),
         };
         let mut result = enchant_item(&mut context.random(),item_stack, enchantment_cost, &source);
         if self.include_additional_cost_component && context.has_parameter(LootContextParam::AdditionalCostComponentAllowed) && !result.is_empty() && enchantment_cost > 0 {

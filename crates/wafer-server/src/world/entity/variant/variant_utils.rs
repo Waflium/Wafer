@@ -20,10 +20,11 @@ impl SpawnPrioritySelectors {
     pub fn load(registry: &str, variants: &[(&str, &str)]) -> SpawnPrioritySelectors {
         let json: HashMap<&str, Value> = variants.iter().map(|&(id, json)| (id, serde_json::from_str(json).expect("vanilla JSON"))).collect();
         let mut selectors = Vec::new();
-        for (id, name) in SyncedRegistry::get(registry).entries.iter().enumerate() {
-            for selector in json[name]["spawn_conditions"].as_array().into_iter().flatten() {
+        let entries = SyncedRegistry::get(registry).entries;
+        for id in crate::core::data_registries::ids_in_registry_order(registry) {
+            for selector in json[entries[id as usize]]["spawn_conditions"].as_array().into_iter().flatten() {
                 let condition = selector.get("condition").map(SpawnCondition::from_json);
-                selectors.push((id as i32, Selector { condition, priority: selector["priority"].as_i64().unwrap_or(0) as i32 }));
+                selectors.push((id, Selector { condition, priority: selector["priority"].as_i64().unwrap_or(0) as i32 }));
             }
         }
         SpawnPrioritySelectors { selectors }
@@ -37,7 +38,7 @@ pub fn select_variant_to_spawn(level: &mut (impl ServerLevelAccessor + ?Sized), 
 }
 
 pub fn pick_random_sound_variant(registry: &str, random: &mut (impl RandomSource + ?Sized)) -> i32 {
-    random.next_int_bounded(SyncedRegistry::get(registry).entries.len() as i32)
+    crate::core::data_registries::random_id(registry, random)
 }
 
 pub fn read_variant(registry: &str, name: &str) -> Option<i32> {
