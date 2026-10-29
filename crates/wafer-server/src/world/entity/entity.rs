@@ -51,6 +51,18 @@ pub enum RemovalReason {
     ChangedDimension,
 }
 
+impl RemovalReason {
+    pub fn java_name(self) -> &'static str {
+        match self {
+            RemovalReason::Killed => "KILLED",
+            RemovalReason::Discarded => "DISCARDED",
+            RemovalReason::UnloadedToChunk => "UNLOADED_TO_CHUNK",
+            RemovalReason::UnloadedWithPlayer => "UNLOADED_WITH_PLAYER",
+            RemovalReason::ChangedDimension => "CHANGED_DIMENSION",
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MoverType {
     SelfMove,
@@ -3113,155 +3125,31 @@ impl ServerLevel {
     }
 
     pub fn entity_to_string(&self, id: EntityId) -> String {
-        let e = self.entity(id);
-        let (class, name) = if let Some(player) = self.find_player(id) {
-            ("ServerPlayer", player.profile.name.clone())
-        } else {
-            let name = self.find_entity(id).map(|e| e.name().get_string()).unwrap_or_default();
-            (entity_class_name(self.find_entity(id)), name)
-        };
-        format!("{class}['{name}'/{id}, l='ServerLevel[{}]', x={:.2}, y={:.2}, z={:.2}]", self.level_name, e.x(), e.y(), e.z())
+        let class = if self.dragon_parts.contains_key(id) { "EnderDragonPart" } else { super::entity_class_names::simple_name(registry::ENTITY_TYPE[self.entity(id).entity_type as usize]) };
+        java_entity_to_string(class, self.entity(id), &self.plain_text_name(id), &self.level_name)
     }
 
     pub fn detached_entity_to_string(&self, entity: &LevelEntity) -> String {
-        let e = entity.entity();
-        format!("{}['{}'/{}, l='ServerLevel[{}]', x={:.2}, y={:.2}, z={:.2}]", entity_class_name(Some(entity)), entity.name().get_string(), e.id, self.level_name, e.x(), e.y(), e.z())
+        let class = super::entity_class_names::simple_name(registry::ENTITY_TYPE[entity.entity().entity_type as usize]);
+        java_entity_to_string(class, entity.entity(), &entity.name().get_string(), &self.level_name)
+    }
+
+    pub fn plain_text_name(&self, id: EntityId) -> String {
+        if let Some(player) = self.find_player(id) {
+            return player.profile.name.clone();
+        }
+        if let Some(entity) = self.find_entity_or_tombstone(id) {
+            return entity.name().get_string();
+        }
+        self.dragon_part_entity(id).map_or_else(String::new, |part| super::entity_name(part).get_string())
     }
 }
 
-fn entity_class_name(entity: Option<&LevelEntity>) -> &'static str {
-    use super::projectile::projectile::ProjectileKind;
-    match entity {
-        Some(LevelEntity::Mob(mob)) => match mob.kind {
-            super::mob::MobKind::Chicken(_) => "Chicken",
-            super::mob::MobKind::Cow(_) => "Cow",
-            super::mob::MobKind::MushroomCow(_) => "MushroomCow",
-            super::mob::MobKind::Pig(_) => "Pig",
-            super::mob::MobKind::Sheep(_) => "Sheep",
-            super::mob::MobKind::Goat(_) => "Goat",
-            super::mob::MobKind::PolarBear(_) => "PolarBear",
-            super::mob::MobKind::Armadillo(_) => "Armadillo",
-            super::mob::MobKind::Sniffer(_) => "Sniffer",
-            super::mob::MobKind::Zombie(_) => "Zombie",
-            super::mob::MobKind::Husk(_) => "Husk",
-            super::mob::MobKind::ZombieVillager(_) => "ZombieVillager",
-            super::mob::MobKind::Creeper(_) => "Creeper",
-            super::mob::MobKind::Spider(_) => "Spider",
-            super::mob::MobKind::CaveSpider(_) => "CaveSpider",
-            super::mob::MobKind::Skeleton(_) => "Skeleton",
-            super::mob::MobKind::Stray(_) => "Stray",
-            super::mob::MobKind::Parched(_) => "Parched",
-            super::mob::MobKind::Hoglin(_) => "Hoglin",
-            super::mob::MobKind::Panda(_) => "Panda",
-            super::mob::MobKind::Strider(_) => "Strider",
-            super::mob::MobKind::Dolphin(_) => "Dolphin",
-            super::mob::MobKind::Zoglin(_) => "Zoglin",
-            super::mob::MobKind::Piglin(_) => "Piglin",
-            super::mob::MobKind::PiglinBrute(_) => "PiglinBrute",
-            super::mob::MobKind::Breeze(_) => "Breeze",
-            super::mob::MobKind::Creaking(_) => "Creaking",
-            super::mob::MobKind::Warden(_) => "Warden",
-            super::mob::MobKind::WitherSkeleton(_) => "WitherSkeleton",
-            super::mob::MobKind::Bogged(_) => "Bogged",
-            super::mob::MobKind::Drowned(_) => "Drowned",
-            super::mob::MobKind::Silverfish(_) => "Silverfish",
-            super::mob::MobKind::Endermite(_) => "Endermite",
-            super::mob::MobKind::Giant(_) => "Giant",
-            super::mob::MobKind::Enderman(_) => "Enderman",
-            super::mob::MobKind::Blaze(_) => "Blaze",
-            super::mob::MobKind::Ghast(_) => "Ghast",
-            super::mob::MobKind::ZombifiedPiglin(_) => "ZombifiedPiglin",
-            super::mob::MobKind::Witch(_) => "Witch",
-            super::mob::MobKind::Ravager(_) => "Ravager",
-            super::mob::MobKind::Vindicator(_) => "Vindicator",
-            super::mob::MobKind::Pillager(_) => "Pillager",
-            super::mob::MobKind::Evoker(_) => "Evoker",
-            super::mob::MobKind::Illusioner(_) => "Illusioner",
-            super::mob::MobKind::Vex(_) => "Vex",
-            super::mob::MobKind::Phantom(_) => "Phantom",
-            super::mob::MobKind::Guardian(_) => "Guardian",
-            super::mob::MobKind::ElderGuardian(_) => "ElderGuardian",
-            super::mob::MobKind::Slime(_) => "Slime",
-            super::mob::MobKind::SulfurCube(_) => "SulfurCube",
-            super::mob::MobKind::MagmaCube(_) => "MagmaCube",
-            super::mob::MobKind::Wolf(_) => "Wolf",
-            super::mob::MobKind::Bat(_) => "Bat",
-            super::mob::MobKind::Squid(_) => "Squid",
-            super::mob::MobKind::GlowSquid(_) => "GlowSquid",
-            super::mob::MobKind::IronGolem(_) => "IronGolem",
-            super::mob::MobKind::CopperGolem(_) => "CopperGolem",
-            super::mob::MobKind::Allay(_) => "Allay",
-            super::mob::MobKind::SnowGolem(_) => "SnowGolem",
-            super::mob::MobKind::Cod(_) => "Cod",
-            super::mob::MobKind::Salmon(_) => "Salmon",
-            super::mob::MobKind::Pufferfish(_) => "Pufferfish",
-            super::mob::MobKind::TropicalFish(_) => "TropicalFish",
-            super::mob::MobKind::Cat(_) => "Cat",
-            super::mob::MobKind::Parrot(_) => "Parrot",
-            super::mob::MobKind::Bee(_) => "Bee",
-            super::mob::MobKind::Shulker(_) => "Shulker",
-            super::mob::MobKind::Wither(_) => "WitherBoss",
-            super::mob::MobKind::EnderDragon(_) => "EnderDragon",
-            super::mob::MobKind::Ocelot(_) => "Ocelot",
-            super::mob::MobKind::Horse(_) => "Horse",
-            super::mob::MobKind::Donkey(_) => "Donkey",
-            super::mob::MobKind::Mule(_) => "Mule",
-            super::mob::MobKind::SkeletonHorse(_) => "SkeletonHorse",
-            super::mob::MobKind::ZombieHorse(_) => "ZombieHorse",
-            super::mob::MobKind::Llama(_) => "Llama",
-            super::mob::MobKind::TraderLlama(_) => "TraderLlama",
-            super::mob::MobKind::Camel(_) => "Camel",
-            super::mob::MobKind::CamelHusk(_) => "CamelHusk",
-            super::mob::MobKind::Nautilus(_) => "Nautilus",
-            super::mob::MobKind::ZombieNautilus(_) => "ZombieNautilus",
-            super::mob::MobKind::HappyGhast(_) => "HappyGhast",
-            super::mob::MobKind::WanderingTrader(_) => "WanderingTrader",
-            super::mob::MobKind::Axolotl(_) => "Axolotl",
-            super::mob::MobKind::Frog(_) => "Frog",
-            super::mob::MobKind::Tadpole(_) => "Tadpole",
-            super::mob::MobKind::Villager(_) => "Villager",
-            super::mob::MobKind::Fox(_) => "Fox",
-            super::mob::MobKind::Rabbit(_) => "Rabbit",
-            super::mob::MobKind::Turtle(_) => "Turtle",
-        },
-        Some(LevelEntity::Projectile(projectile)) => match projectile.kind {
-            ProjectileKind::Snowball(_) => "Snowball",
-            ProjectileKind::ThrownEgg(_) => "ThrownEgg",
-            ProjectileKind::ThrownEnderpearl(_) => "ThrownEnderpearl",
-            ProjectileKind::ThrownExperienceBottle(_) => "ThrownExperienceBottle",
-            ProjectileKind::ThrownSplashPotion(_) => "ThrownSplashPotion",
-            ProjectileKind::ThrownLingeringPotion(_) => "ThrownLingeringPotion",
-            ProjectileKind::Arrow(_) => "Arrow",
-            ProjectileKind::SpectralArrow(_) => "SpectralArrow",
-            ProjectileKind::ThrownTrident(_) => "ThrownTrident",
-            ProjectileKind::FireworkRocket(_) => "FireworkRocketEntity",
-            ProjectileKind::SmallFireball(_) => "SmallFireball",
-            ProjectileKind::LlamaSpit(_) => "LlamaSpit",
-            ProjectileKind::LargeFireball(_) => "LargeFireball",
-            ProjectileKind::WindCharge(_) => "WindCharge",
-            ProjectileKind::FishingHook(_) => "FishingHook",
-            ProjectileKind::ShulkerBullet(_) => "ShulkerBullet",
-            ProjectileKind::WitherSkull(_) => "WitherSkull",
-            ProjectileKind::DragonFireball(_) => "DragonFireball",
-            ProjectileKind::BreezeWindCharge(_) => "BreezeWindCharge",
-        },
-        Some(LevelEntity::AreaEffectCloud(_)) => "AreaEffectCloud",
-        Some(LevelEntity::Minecart(minecart)) => match minecart.kind {
-            super::vehicle::minecart::abstract_minecart::MinecartKind::Minecart(_) => "Minecart",
-            super::vehicle::minecart::abstract_minecart::MinecartKind::Chest(_) => "MinecartChest",
-            super::vehicle::minecart::abstract_minecart::MinecartKind::Furnace(_) => "MinecartFurnace",
-            super::vehicle::minecart::abstract_minecart::MinecartKind::Hopper(_) => "MinecartHopper",
-            super::vehicle::minecart::abstract_minecart::MinecartKind::Tnt(_) => "MinecartTNT",
-            super::vehicle::minecart::abstract_minecart::MinecartKind::Spawner(_) => "MinecartSpawner",
-            super::vehicle::minecart::abstract_minecart::MinecartKind::CommandBlock(_) => "MinecartCommandBlock",
-        },
-        Some(LevelEntity::Boat(boat)) => match boat.kind {
-            super::vehicle::boat::abstract_boat::BoatKind::Boat => "Boat",
-            super::vehicle::boat::abstract_boat::BoatKind::Raft => "Raft",
-            super::vehicle::boat::abstract_boat::BoatKind::ChestBoat => "ChestBoat",
-            super::vehicle::boat::abstract_boat::BoatKind::ChestRaft => "ChestRaft",
-        },
-        _ => "Entity",
+pub fn java_entity_to_string(class: &str, entity: &Entity, name: &str, level_name: &str) -> String {
+    let (x, y, z) = (crate::util::java_format_fixed(entity.x(), 2), crate::util::java_format_fixed(entity.y(), 2), crate::util::java_format_fixed(entity.z(), 2));
+    match entity.removal {
+        Some(reason) => format!("{class}['{name}'/{}, l='ServerLevel[{level_name}]', x={x}, y={y}, z={z}, removed={}]", entity.id, reason.java_name()),
+        None => format!("{class}['{name}'/{}, l='ServerLevel[{level_name}]', x={x}, y={y}, z={z}]", entity.id),
     }
 }
 
@@ -3700,38 +3588,25 @@ pub fn get_collision_horizontal_escape_vector(collider_width: f64, colliding_wid
 }
 
 impl ServerLevel {
-    pub fn ticking_entity_exception(&self, id: EntityId, class_name: &str, exception: String) -> crate::crash_report::ReportedException {
-        use crate::crash_report::{CrashReport, CrashReportCategory, ReportedException};
-        let mut report = CrashReport::new("Ticking entity", exception, crate::server::crash_frames());
+    pub fn fill_crash_report_category(&self, id: EntityId, category: &mut crate::crash_report::CrashReportCategory) {
+        use crate::crash_report::CrashReportCategory;
         let entity = self.entity(id);
         let (x, y, z) = (entity.x(), entity.y(), entity.z());
         let movement = entity.delta_movement;
-        let name = self.find_entity(id).map(|found| found.name().get_string()).unwrap_or_default();
+        let fixed = |value: f64| crate::util::java_format_fixed(value, 2);
         let location = CrashReportCategory::format_location(self.chunks.min_y(), self.chunks.max_y(), mth::floor(x), mth::floor(y), mth::floor(z));
-        let describe = |other: EntityId| {
-            let other_entity = self.entity(other);
-            let other_name = self.find_entity(other).map(|found| found.name().get_string()).unwrap_or_default();
-            format!(
-                "{}['{other_name}'/{other}, l='ServerLevel[{}]', x={:.2}, y={:.2}, z={:.2}]",
-                registry::ENTITY_TYPE[other_entity.entity_type as usize],
-                self.level_name,
-                other_entity.x(),
-                other_entity.y(),
-                other_entity.z()
-            )
-        };
-        let vehicle = self.vehicle(id).map_or("null".to_string(), describe);
-        let passengers = format!("[{}]", self.passengers(id).iter().map(|&passenger| describe(passenger)).collect::<Vec<_>>().join(", "));
-        let category = report.add_category("Entity being ticked");
-        category.set_detail("Entity Type", format!("{} ({class_name})", registry::ENTITY_TYPE[entity.entity_type as usize]));
+        let type_name = registry::ENTITY_TYPE[entity.entity_type as usize];
+        let class = if self.dragon_parts.contains_key(id) { "net.minecraft.world.entity.boss.enderdragon.EnderDragonPart" } else { super::entity_class_names::canonical_name(type_name) };
+        let vehicle = self.vehicle(id).map_or("null".to_string(), |vehicle| self.entity_to_string(vehicle));
+        let passengers = format!("[{}]", self.passengers(id).iter().map(|&passenger| self.entity_to_string(passenger)).collect::<Vec<_>>().join(", "));
+        category.set_detail("Entity Type", format!("{type_name} ({class})"));
         category.set_detail("Entity ID", id.to_string());
-        category.set_detail("Entity Name", name);
-        category.set_detail("Entity's Exact location", format!("{x:.2}, {y:.2}, {z:.2}"));
+        category.set_detail("Entity Name", self.plain_text_name(id));
+        category.set_detail("Entity's Exact location", format!("{}, {}, {}", fixed(x), fixed(y), fixed(z)));
         category.set_detail("Entity's Block location", location);
-        category.set_detail("Entity's Momentum", format!("{:.2}, {:.2}, {:.2}", movement.x, movement.y, movement.z));
+        category.set_detail("Entity's Momentum", format!("{}, {}, {}", fixed(movement.x), fixed(movement.y), fixed(movement.z)));
         category.set_detail("Entity's Passengers", passengers);
         category.set_detail("Entity's Vehicle", vehicle);
-        ReportedException(report)
     }
 
     pub fn vehicle(&self, id: EntityId) -> Option<EntityId> {

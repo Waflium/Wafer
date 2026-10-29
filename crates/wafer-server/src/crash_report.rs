@@ -64,6 +64,13 @@ pub struct CrashReport {
 
 pub struct ReportedException(pub CrashReport);
 
+pub fn exception_of(panic: &Box<dyn std::any::Any + Send>) -> String {
+    if panic.is::<crate::world::level::biome::biome_source::ArithmeticException>() {
+        return "java.lang.ArithmeticException: / by zero".to_string();
+    }
+    panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
+}
+
 impl CrashReport {
     pub fn title(&self) -> &str {
         &self.title

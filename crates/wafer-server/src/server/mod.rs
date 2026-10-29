@@ -531,13 +531,7 @@ impl Server {
     pub fn watchdog_snapshot(&self) -> dedicated::server_watchdog::ServerSnapshot {
         let players: Vec<String> = self
             .players()
-            .map(|p| {
-                let pos = p.entity.position();
-                format!(
-                    "ServerPlayer['{}'/{}, l='ServerLevel[{}]', x={:.2}, y={:.2}, z={:.2}]",
-                    p.profile.name, p.entity.id, self.level_name, pos.x, pos.y, pos.z
-                )
-            })
+            .map(|p| crate::world::entity::java_entity_to_string("ServerPlayer", &p.entity, &p.profile.name, &self.level_name))
             .collect();
         let level_stats = self.levels.iter().map(|level| format!("{}: {}", level.dimension, level.get_watchdog_stats())).collect::<Vec<_>>().join(",\n");
         dedicated::server_watchdog::ServerSnapshot {
@@ -1988,7 +1982,7 @@ pub fn run(
         management_server.set_waker(server.overworld().chunks.waker());
     }
     server.settings = settings;
-    info!("Done ({:.3}s)! For help, type \"help\"", started.elapsed().as_secs_f64());
+    info!("Done ({}s)! For help, type \"help\"", crate::util::java_format_fixed(started.elapsed().as_nanos() as f64 / 1.0e9, 3));
     server.services = services;
     server.attach_user_lookup();
     server.task_sender = Some(task_sender);
@@ -2034,8 +2028,7 @@ pub fn run(
                 let message = format!("net.minecraft.ReportedException: {}\nCaused by: {}", reported.0.title(), reported.0.exception());
                 (Some(reported.0), message)
             }
-            Err(panic) if panic.is::<crate::world::level::biome::biome_source::ArithmeticException>() => (None, "java.lang.ArithmeticException: / by zero".to_string()),
-            Err(panic) => (None, panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()),
+            Err(panic) => (None, crate::crash_report::exception_of(&panic)),
         };
         error!("Encountered an unexpected exception\n{message}");
         let mut report = reported.unwrap_or_else(|| crate::crash_report::CrashReport::new("Exception in server tick loop", message, crash_frames()));

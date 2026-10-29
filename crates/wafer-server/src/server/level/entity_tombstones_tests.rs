@@ -120,3 +120,31 @@ fn level_selectors_list_players_in_player_list_order_across_dimensions() {
     let listed: Vec<EntityId> = LevelWorld(level).players().map(|player| player.entity.id).collect();
     assert_eq!(listed, expected);
 }
+
+#[test]
+fn a_panic_while_ticking_an_entity_becomes_a_ticking_entity_crash_report() {
+    let mut level = testing::level();
+    let zombie = add(&mut level, Zombie::create(), 0.5, 0.5);
+    let rider = add(&mut level, Zombie::create(), 0.5, 0.5);
+    assert!(level.start_riding(rider, zombie, true, false));
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| level.guard_entity_tick(zombie, |_| panic!("boom")))).unwrap_err();
+    let reported = panic.downcast::<crate::crash_report::ReportedException>().unwrap();
+    assert_eq!(reported.0.title(), "Ticking entity");
+    assert_eq!(reported.0.exception(), "boom");
+    let report = reported.0.get_friendly_report();
+    assert!(report.contains("-- Entity being ticked --"));
+    assert!(report.contains("Entity Type: minecraft:zombie (net.minecraft.world.entity.monster.zombie.Zombie)"));
+    assert!(report.contains("Entity Name: Zombie"));
+    let name = level.level_name.clone();
+    assert!(report.contains(&format!("Entity's Passengers: [Zombie['Zombie'/{rider}, l='ServerLevel[{name}]', x=0.50, y=-60.00, z=0.50]]")), "{report}");
+    assert!(report.contains("Entity's Vehicle: null"));
+}
+
+#[test]
+fn entity_strings_round_half_up_and_show_the_removal_reason() {
+    let mut level = testing::level();
+    let zombie = add(&mut level, Zombie::create(), 0.125, 0.375);
+    level.entity_mut(zombie).removal = Some(crate::world::entity::RemovalReason::Killed);
+    let name = level.level_name.clone();
+    assert_eq!(level.entity_to_string(zombie), format!("Zombie['Zombie'/{zombie}, l='ServerLevel[{name}]', x=0.13, y=-60.00, z=0.38, removed=KILLED]"));
+}

@@ -3,6 +3,7 @@ pub mod ai;
 pub mod ambient;
 pub mod animal;
 pub mod area_effect_cloud;
+pub mod entity_class_names;
 pub mod attributes;
 pub mod avatar;
 pub mod boss;

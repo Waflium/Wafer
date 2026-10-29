@@ -1585,7 +1585,7 @@ impl ServerLevel {
             let Some(id) = self.tick_list.at(i) else { continue };
             if self.players.contains_key(&id) {
                 if !self.ticks_with_vehicle(id) {
-                    self.tick_non_passenger(id);
+                    self.guard_entity_tick(id, |level| level.tick_non_passenger(id));
                 }
             } else if let Some(entity) = self.find_entity(id) {
                 if entity.entity().is_removed() {
@@ -1602,7 +1602,7 @@ impl ServerLevel {
                     let in_range = self.find_entity(id).is_some_and(|e| self.in_entity_ticking_range(e.entity().chunk_position()));
                     if in_range {
                         if !self.ticks_with_vehicle(id) {
-                            self.tick_non_passenger(id);
+                            self.guard_entity_tick(id, |level| level.tick_non_passenger(id));
                         }
                     } else if self.find_entity(id).is_some_and(|e| e.entity().is_removed()) {
                         self.remove_entity(id);
@@ -1620,6 +1620,17 @@ impl ServerLevel {
         }
         self.entity_tick_range = Some((end, end));
         false
+    }
+
+    pub(crate) fn guard_entity_tick(&mut self, id: EntityId, tick: impl FnOnce(&mut ServerLevel)) {
+        if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(self))) {
+            let mut report = match panic.downcast::<crate::crash_report::ReportedException>() {
+                Ok(reported) => reported.0,
+                Err(panic) => crate::crash_report::CrashReport::new("Ticking entity", crate::crash_report::exception_of(&panic), crate::server::crash_frames()),
+            };
+            self.fill_crash_report_category(id, report.add_category("Entity being ticked"));
+            std::panic::resume_unwind(Box::new(crate::crash_report::ReportedException(report)));
+        }
     }
 
     pub fn tick_after_entities(&mut self) {

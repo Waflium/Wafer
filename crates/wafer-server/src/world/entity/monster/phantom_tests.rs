@@ -100,7 +100,7 @@ fn setting_the_anchor_without_a_target_crashes_like_vanilla() {
     let difficulty = level.current_difficulty_at(BlockPos::new(3, -40, 7));
     let (mob, _) = level.finalize_spawn_detached(LevelEntity::Mob(Box::new(mob)), &difficulty, EntitySpawnReason::Natural, None);
     level.add_fresh_entity(mob);
-    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| level.phantom_set_anchor_above_target(id))).unwrap_err();
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| level.guard_entity_tick(id, |level| level.phantom_set_anchor_above_target(id)))).unwrap_err();
     let reported = panic.downcast::<crate::crash_report::ReportedException>().unwrap();
     assert_eq!(reported.0.title(), "Ticking entity");
     assert_eq!(

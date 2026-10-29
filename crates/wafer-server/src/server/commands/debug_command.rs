@@ -65,7 +65,7 @@ fn stop(server: &mut Server, _context: &CommandContext, source: &CommandSourceSt
     let tps = tick_duration as f64 / seconds;
     source.send_success(
         server,
-        || tr("commands.debug.stopped", vec![Arg::String(format!("{seconds:.2}")), Arg::Int(tick_duration), Arg::String(format!("{tps:.2}"))]),
+        || tr("commands.debug.stopped", vec![Arg::String(crate::util::java_format_fixed(seconds, 2)), Arg::Int(tick_duration), Arg::String(crate::util::java_format_fixed(tps, 2))]),
         true,
     );
     Ok(tps as i32)

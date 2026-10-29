@@ -65,9 +65,9 @@ pub fn start(timing: Arc<ServerTiming>, max_tick_time_millis: i64, server_direct
 fn crash(timing: &ServerTiming, delta_nanos: i64, server_directory: &std::path::Path) -> ! {
     let milliseconds_per_tick = f32::from_bits(timing.milliseconds_per_tick.load(Ordering::Relaxed));
     error!(
-        "A single server tick took {:.2} seconds (should be max {:.2})",
-        delta_nanos as f32 / 1.0e9,
-        milliseconds_per_tick / 1000.0
+        "A single server tick took {} seconds (should be max {})",
+        crate::util::java_format_fixed((delta_nanos as f32 / 1.0e9) as f64, 2),
+        crate::util::java_format_fixed((milliseconds_per_tick / 1000.0) as f64, 2)
     );
     error!("Considering it to be crashed, server will forcibly shutdown.");
     let snapshot = timing.snapshot.lock().map(|s| s.clone()).unwrap_or_default();
