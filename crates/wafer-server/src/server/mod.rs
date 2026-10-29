@@ -200,6 +200,7 @@ pub struct Server {
     pub settings: Option<dedicated::dedicated_server_settings::DedicatedServerSettings>,
     pub levels: Vec<ServerLevel>,
     pub player_list: Vec<EntityId>,
+    next_player_list_order: u64,
     player_names_array: Arc<RwLock<Arc<[String]>>>,
     connections: HashMap<ConnId, EntityId>,
     lost_connections: HashMap<ConnId, Component>,
@@ -439,6 +440,7 @@ impl Server {
             settings: None,
             levels,
             player_list: Vec::new(),
+            next_player_list_order: 0,
             player_names_array: Arc::default(),
             connections: HashMap::new(),
             lost_connections: HashMap::new(),
@@ -597,6 +599,12 @@ impl Server {
 
     pub fn players(&self) -> impl Iterator<Item = &ServerPlayer> {
         self.player_list.iter().map(|&id| self.player(id))
+    }
+
+    pub fn take_player_list_order(&mut self) -> u64 {
+        let order = self.next_player_list_order;
+        self.next_player_list_order += 1;
+        order
     }
 
     pub fn player_ids(&self) -> Vec<EntityId> {
@@ -1156,6 +1164,7 @@ impl Server {
             });
         }
         self.connections.insert(conn, id);
+        player.player_list_order = self.take_player_list_order();
         self.player_list.push(id);
         self.scoreboard.borrow_mut().server.add_connection(id, out.clone());
         self.levels[level_index].add_player(player);

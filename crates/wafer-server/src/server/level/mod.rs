@@ -2619,6 +2619,8 @@ pub mod testing {
     pub fn server_player_with_profile(server: &mut crate::server::Server, profile: Profile, pos: Vec3, y_rot: f32, x_rot: f32) -> EntityId {
         let id = player_with_profile(server.overworld_mut(), profile, pos, y_rot, x_rot);
         server.player_list.push(id);
+        let order = server.take_player_list_order();
+        server.player_mut(id).player_list_order = order;
         id
     }
 }

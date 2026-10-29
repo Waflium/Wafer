@@ -99,3 +99,24 @@ fn players_that_left_are_read_as_removed() {
         level.tick();
     }
 }
+
+#[test]
+fn level_selectors_list_players_in_player_list_order_across_dimensions() {
+    use crate::commands::arguments::selector::entity_world::{EntityWorld, LevelWorld};
+    use crate::commands::perform_prefixed_command;
+    use crate::commands::source::CommandSourceStack;
+    use crate::network::login::Profile;
+    use crate::server::level::lent_levels::LentLevels;
+    let mut server = testing::server();
+    let first = testing::server_player_with_profile(&mut server, Profile { uuid: 1, name: "First".into(), properties: Vec::new() }, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+    let second = testing::server_player_with_profile(&mut server, Profile { uuid: 2, name: "Second".into(), properties: Vec::new() }, Vec3::new(2.5, -60.0, 0.5), 0.0, 0.0);
+    let third = testing::server_player_with_profile(&mut server, Profile { uuid: 3, name: "Third".into(), properties: Vec::new() }, Vec3::new(4.5, -60.0, 0.5), 0.0, 0.0);
+    let console = CommandSourceStack::server(&server);
+    perform_prefixed_command(&mut server, &console, "execute in minecraft:the_nether run tp First 0.5 64 0.5");
+    let expected: Vec<EntityId> = EntityWorld::players(&server).map(|player| player.entity.id).collect();
+    assert_eq!(expected, vec![first, second, third]);
+    let mut lent = LentLevels::lend(&mut server.levels, 0);
+    let level = lent.level();
+    let listed: Vec<EntityId> = LevelWorld(level).players().map(|player| player.entity.id).collect();
+    assert_eq!(listed, expected);
+}

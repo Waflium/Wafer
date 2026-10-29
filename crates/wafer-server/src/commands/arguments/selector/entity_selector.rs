@@ -92,7 +92,7 @@ impl EntityPredicate {
             EntityPredicate::Tag { tag, inverted } => {
                 if tag.is_empty() { e.tags.is_empty() != *inverted } else { e.tags.contains(tag) != *inverted }
             }
-            EntityPredicate::Nbt { tag, inverted } => compare_nbt(tag, Some(&level.entity_tag_to_compare(id))) != *inverted,
+            EntityPredicate::Nbt { tag, inverted } => compare_nbt(tag, Some(&world.entity_tag_to_compare(id))) != *inverted,
             EntityPredicate::Scores(expected) => {
                 let scoreboard = world.scoreboard().borrow();
                 let holder = level.scoreboard_name(id);

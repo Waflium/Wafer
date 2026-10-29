@@ -33,7 +33,7 @@ impl DataSource {
                     .compiled()
                     .find_entities(world, context.source)?
                     .into_iter()
-                    .map(|entity| world.level_of_entity(entity).expect("entity in a loaded level").entity_tag_to_compare(entity))
+                    .map(|entity| world.entity_tag_to_compare(entity))
                     .collect()
             }
             DataSource::Block(coordinates) => {

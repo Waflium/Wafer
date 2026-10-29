@@ -244,3 +244,17 @@ fn extra_fall_particles_are_spawned_once() {
     let block_particle = wafer_data::registry_id(wafer_data::registry::PARTICLE_TYPE, "minecraft:block");
     assert_eq!(particles, [(block_particle, state.id() as i32, (0.5, -60.0, 0.5), (0.3, 0.3, 0.3), (0.15, 0.15, 0.15), 75)]);
 }
+
+#[test]
+fn data_get_lists_ender_pearls_in_other_dimensions() {
+    use crate::commands::arguments::selector::entity_world::EntityWorld;
+    let mut server = testing::server();
+    let alice = join(&mut server, "Alice");
+    let nether = server.levels.iter().position(|level| level.dimension == crate::server::THE_NETHER).expect("a nether");
+    summon_pearl(&mut server, nether, offline_uuid("Alice"), [0.5, 70.0, 0.5], [0.0, 0.0, 0.0]);
+    server.flush_other_level_ender_pearls();
+    assert_eq!(server.player(alice).ender_pearls.len(), 1);
+    let Some(Nbt::List(pearls)) = server.entity_tag_to_compare(alice).get("ender_pearls").cloned() else { panic!("no ender pearls") };
+    assert_eq!(pearls.len(), 1);
+    assert_eq!(pearls[0].get("ender_pearl_dimension"), Some(&Nbt::String(crate::server::THE_NETHER.into())));
+}

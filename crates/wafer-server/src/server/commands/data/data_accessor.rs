@@ -49,7 +49,7 @@ impl DataAccessor {
 
     pub fn get_data(&self, server: &mut Server) -> Result<Nbt, CommandSyntaxException> {
         Ok(match self {
-            DataAccessor::Entity(entity) => server.entity_level(*entity).entity_tag_to_compare(*entity),
+            DataAccessor::Entity(entity) => crate::commands::arguments::selector::entity_world::EntityWorld::entity_tag_to_compare(server, *entity),
             DataAccessor::Storage(id) => Nbt::Compound(server.command_storage.borrow_mut().get(id)),
             DataAccessor::Block(level, pos) => server.levels[*level].block_entity_data(*pos).ok_or_else(|| ERROR_NOT_A_BLOCK_ENTITY.create())?,
         })

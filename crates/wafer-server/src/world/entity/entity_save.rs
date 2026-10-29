@@ -827,8 +827,12 @@ impl ServerLevel {
     }
 
     pub fn entity_tag_to_compare(&self, id: EntityId) -> Nbt {
+        self.entity_tag_to_compare_with(id, &|pearl| self.other_levels.iter().find(|level| level.entities.contains_key(&pearl)))
+    }
+
+    pub fn entity_tag_to_compare_with<'a>(&'a self, id: EntityId, other_level_pearl: &dyn Fn(EntityId) -> Option<&'a ServerLevel>) -> Nbt {
         if let Some(player) = self.find_player(id) {
-            let Nbt::Compound(mut fields) = self.save_player(id) else { unreachable!() };
+            let Nbt::Compound(mut fields) = self.save_player_with_ender_pearls(id, other_level_pearl) else { unreachable!() };
             if let Some(selected) = player.inventory.slots[player.inventory.selected_slot()].as_ref().filter(|s| !s.is_empty()) {
                 fields.push(("SelectedItem".into(), selected.to_nbt()));
             }

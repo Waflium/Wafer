@@ -205,7 +205,7 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
     };
     tag.retain(|(k, _)| k != "id");
     tag.push(("id".into(), Nbt::String(entity_type.into())));
-    let level = &mut server.levels[source.level];
+    let mut level = server.lend_level(source.level);
     let mut loaded = level.load_entity_recursive(&Nbt::Compound(tag), &mut |entity| {
         let e = entity.entity_mut();
         let (y_rot, x_rot) = (e.y_rot, e.x_rot);
@@ -227,7 +227,7 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
     let (entity, name) = level.display_name_detached(loaded.remove(0));
     loaded.insert(0, entity);
     for entity in loaded {
-        server.levels[source.level].add_fresh_entity_with_passengers(entity);
+        level.add_fresh_entity_with_passengers(entity);
     }
     Ok((id, name))
 }

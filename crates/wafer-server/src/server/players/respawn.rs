@@ -274,6 +274,8 @@ impl Server {
         self.levels[level_index].add_player(player);
         self.player_list.retain(|&p| p != id);
         self.player_list.push(id);
+        let order = self.take_player_list_order();
+        self.player_mut(id).player_list_order = order;
         self.levels[level_index].init_inventory_menu(id);
         if !keep_all_player_data
             && let Some(respawn_config) = self.player(id).respawn_config.clone()

@@ -156,6 +156,7 @@ pub struct ServerPlayer {
     pub post_effects_dirty: bool,
     pub camera: Option<EntityId>,
     pub ender_pearls: Vec<EntityId>,
+    pub player_list_order: u64,
     pub fishing: Option<EntityId>,
     pub shoulder_entity_left: Nbt,
     pub shoulder_entity_right: Nbt,
@@ -306,6 +307,7 @@ impl ServerPlayer {
             post_effects_dirty: true,
             camera: None,
             ender_pearls: Vec::new(),
+            player_list_order: 0,
             fishing: None,
             shoulder_entity_left: Nbt::Compound(Vec::new()),
             shoulder_entity_right: Nbt::Compound(Vec::new()),
@@ -694,7 +696,7 @@ impl ServerLevel {
     }
 
     pub fn save_player(&self, id: EntityId) -> Nbt {
-        self.save_player_with_ender_pearls(id, &|_| None)
+        self.save_player_with_ender_pearls(id, &|pearl| self.other_levels.iter().find(|level| level.entities.contains_key(&pearl)))
     }
 
     pub fn save_player_with_ender_pearls<'a>(&'a self, id: EntityId, other_level_pearl: &dyn Fn(EntityId) -> Option<&'a ServerLevel>) -> Nbt {

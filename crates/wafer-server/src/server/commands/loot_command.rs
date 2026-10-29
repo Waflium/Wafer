@@ -252,19 +252,21 @@ fn drop_in_world(level: &mut ServerLevel, pos: Vec3, drops: &[ItemStack], used_i
 fn drop_block_loot(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     let tool = tool(server, context, source)?;
-    let level = &mut server.levels[source.level];
-    let block_state = level.block_state(pos);
-    let block_entity = level.get_block_entity(pos).cloned();
-    let Some(loot_table) = block_state.block().info().loot_table else {
-        return Err(ERROR_NO_BLOCK_LOOT_TABLE.create(Component::translatable(block_state.block().info().description_id)));
+    let (drops, loot_table) = {
+        let mut level = server.lend_level(source.level);
+        let block_state = level.block_state(pos);
+        let block_entity = level.get_block_entity(pos).cloned();
+        let Some(loot_table) = block_state.block().info().loot_table else {
+            return Err(ERROR_NO_BLOCK_LOOT_TABLE.create(Component::translatable(block_state.block().info().description_id)));
+        };
+        let mut params = LootParams::new(&mut level);
+        params.origin = Some(Vec3::at_center_of(pos));
+        params.block_state = Some(block_state);
+        params.block_entity = block_entity.as_ref();
+        params.this_entity = source.entity;
+        params.tool = Some(&tool);
+        (block::of(block_state).get_drops(block_state, params), loot_table)
     };
-    let mut params = LootParams::new(level);
-    params.origin = Some(Vec3::at_center_of(pos));
-    params.block_state = Some(block_state);
-    params.block_entity = block_entity.as_ref();
-    params.this_entity = source.entity;
-    params.tool = Some(&tool);
-    let drops = block::of(block_state).get_drops(block_state, params);
     drop_with_table(server, context, source, drops, loot_table)
 }
 
@@ -274,26 +276,29 @@ fn drop_kill_loot(server: &mut Server, context: &CommandContext, source: &Comman
     let Some(loot_table_id) = server.levels[level_index].get_loot_table(target) else {
         return Err(ERROR_NO_ENTITY_LOOT_TABLE.create(server.entity_display_name(target)));
     };
-    let level = &mut server.levels[level_index];
-    let killer = source.entity;
-    let mut params = LootParams::new(level);
-    if let Some(killer) = killer
-        && params.level.is_player(killer)
-    {
-        params.last_damage_player = Some(killer);
-    }
-    params.damage_source = Some(DamageSource::new(damage_types::MAGIC));
-    params.direct_attacking_entity = killer;
-    params.attacking_entity = killer;
-    params.this_entity = Some(target);
-    params.origin = Some(source.position);
-    let drops = LootTable::get(&loot_table_id).get_random_items(params);
+    let drops = {
+        let mut level = server.lend_level(level_index);
+        let killer = source.entity;
+        let mut params = LootParams::new(&mut level);
+        if let Some(killer) = killer
+            && params.level.is_player(killer)
+        {
+            params.last_damage_player = Some(killer);
+        }
+        params.damage_source = Some(DamageSource::new(damage_types::MAGIC));
+        params.direct_attacking_entity = killer;
+        params.attacking_entity = killer;
+        params.this_entity = Some(target);
+        params.origin = Some(source.position);
+        LootTable::get(&loot_table_id).get_random_items(params)
+    };
     drop_with_table(server, context, source, drops, &loot_table_id)
 }
 
 fn drop_chest_loot(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Vec<ItemStack> {
     let loot_table = context.get_loot_table("loot_table");
-    let mut params = LootParams::new(&mut server.levels[source.level]);
+    let mut level = server.lend_level(source.level);
+    let mut params = LootParams::new(&mut level);
     params.this_entity = source.entity;
     params.origin = Some(source.position);
     loot_table.value().get_random_items(params)
@@ -303,7 +308,8 @@ fn drop_fishing_loot(server: &mut Server, context: &CommandContext, source: &Com
     let loot_table = context.get_loot_table("loot_table");
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     let tool = tool(server, context, source)?;
-    let mut params = LootParams::new(&mut server.levels[source.level]);
+    let mut level = server.lend_level(source.level);
+    let mut params = LootParams::new(&mut level);
     params.origin = Some(Vec3::at_center_of(pos));
     params.tool = Some(&tool);
     params.this_entity = source.entity;
