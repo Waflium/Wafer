@@ -15,6 +15,7 @@ pub mod reloadable_server_resources;
 pub mod eula;
 pub mod jsonrpc;
 pub mod main;
+pub mod main_thread_frames;
 pub mod notifications;
 pub mod player_advancements;
 pub mod server_advancement_manager;
@@ -308,6 +309,7 @@ pub struct Server {
     pub chunk_io_error_reporter: ChunkIoErrorReporter,
     stopping: bool,
     ready: bool,
+    defers_full_status_changes: bool,
 }
 
 impl Server {
@@ -359,6 +361,7 @@ impl Server {
 
     pub(crate) fn with_world_stem(config: ServerConfig, pack_repository: PackRepository, world_stem: WorldStem) -> std::io::Result<Server> {
         let WorldStem { data_packs, world_data: data, gen_settings, dimensions, saved_data, player_lists } = world_stem;
+        let defers_full_status_changes = player_lists.is_some();
         let data_configuration = data.data_configuration.clone();
         let new_world = !data.initialized;
         let world_dir = config.world.clone().map(|root| WorldDir { root });
@@ -557,6 +560,7 @@ impl Server {
             chunk_io_error_reporter,
             stopping: false,
             ready: false,
+            defers_full_status_changes,
         };
         server.name_to_id_cache.set_resolve_offline_users(!server.config.online_mode);
         server.attach_user_lookup();
@@ -589,15 +593,86 @@ impl Server {
         }
     }
 
+    fn fill_level_report_details(&self, index: usize, report: &mut crate::crash_report::CrashReport, frames: Vec<&'static str>) {
+        let level = &self.levels[index];
+        let players: Vec<String> = level
+            .players
+            .values()
+            .map(|player| {
+                let permission = match level.profile_permission_level(player.profile.uuid) {
+                    4.. => "owner",
+                    3 => "admin",
+                    2 => "gamemaster",
+                    1 => "moderator",
+                    _ => "none",
+                };
+                format!(
+                    "ServerPlayer{{name={}, id={}, pos=({}, {}, {}), mode={}, permission={permission}}}",
+                    player.profile.name,
+                    player.entity.id,
+                    crate::nbt::java_double_to_string(player.entity.x()),
+                    crate::nbt::java_double_to_string(player.entity.y()),
+                    crate::nbt::java_double_to_string(player.entity.z()),
+                    player.game_mode.game_type.name().to_uppercase()
+                )
+            })
+            .collect();
+        let category = report.add_category_with_stack_trace("Affected level", frames.into_iter().map(str::to_string).collect());
+        category.set_detail("All players", format!("{} total; {}", players.len(), players.join(", ")));
+        category.set_detail("Chunk stats", level.chunks.loaded_chunks_count().to_string());
+        category.set_detail("Level dimension", level.dimension.to_string());
+        category.set_detail("Level time", format!("{} game time, {} day time", level.game_time, level.overworld_clock_time));
+        if index != 0 {
+            category.set_detail("Derived", "true");
+        }
+        let spawn = self.spawn.pos;
+        let (min_y, max_y) = (level.chunks.min_y(), level.chunks.max_y());
+        category.set_detail("Level spawn location", crate::crash_report::CrashReportCategory::format_location(min_y, max_y, spawn.x, spawn.y, spawn.z));
+        category.set_detail("Level name", self.level_name.clone());
+        category.set_detail(
+            "Level game mode",
+            format!("Game mode: {} (ID {}). Hardcore: {}. Commands: {}", self.default_game_type.get().name(), self.default_game_type.get().id(), self.hardcore, self.allow_commands),
+        );
+        category.set_detail("Known server brands", self.server_brands.join(", "));
+        category.set_detail("Removed feature flags", "");
+        category.set_detail("Level was modded", self.was_modded.to_string());
+        category.set_detail("Level storage version", "0x04ABD - Anvil");
+        category.set_detail("Loaded entity count", level.entity_manager.count().to_string());
+        let weather = level.weather.get();
+        category.set_detail(
+            "Server weather",
+            format!("Rain time: {} (now: {}), thunder time: {} (now: {})", weather.rain_time, level.is_raining(), weather.thunder_time, level.is_thundering()),
+        );
+    }
+
+    fn throw_exception_ticking_world(&self, index: usize, payload: Box<dyn std::any::Any + Send>) -> ! {
+        use crate::crash_report::{CrashReport, JavaException, ReportedException};
+        let mut report = match payload.downcast::<ReportedException>() {
+            Ok(reported) => reported.0,
+            Err(payload) => match payload.downcast::<JavaException>() {
+                Ok(exception) => CrashReport::for_throwable(&exception.0, "Exception ticking world"),
+                Err(payload) => CrashReport::new("Exception ticking world", crate::crash_report::exception_of(&payload), crash_frames()),
+            },
+        };
+        let mut fill_frames = vec![FILL_REPORT_DETAILS_FRAME, TICK_CHILDREN_FILL_FRAME];
+        fill_frames.extend(main_thread_frames::current());
+        self.fill_level_report_details(index, &mut report, fill_frames);
+        let mut thrown_frames = vec![TICK_CHILDREN_THROW_FRAME];
+        thrown_frames.extend(main_thread_frames::current());
+        report.throw_reported(thrown_frames)
+    }
+
     fn prepare_levels(&mut self, listener: &mut level::progress::LoggingLevelLoadListener) {
         const PREPARE_LEVELS_DEFAULT_DELAY: Duration = Duration::from_millis(10);
+        let _scope = main_thread_frames::init_server_prepare_levels();
         let mut counter = level::progress::ChunkLoadCounter::default();
         for (index, level) in self.levels.iter_mut().enumerate() {
             counter.track(index, &mut level.chunks, ChunkCache::activate_all_deactivated_tickets);
         }
         listener.start(level::progress::Stage::LoadInitialChunks, counter.total_chunks());
+        let defer = self.defers_full_status_changes;
         for level in &mut self.levels {
-            level.preparing_levels = true;
+            level.defer_full_status_changes = defer;
         }
         loop {
             let ready = counter.ready_chunks(&self.levels);
@@ -607,14 +682,12 @@ impl Server {
                 break;
             }
         }
-        for level in &mut self.levels {
-            level.preparing_levels = false;
-        }
         listener.finish(level::progress::Stage::LoadInitialChunks);
         self.update_mob_spawning_flags();
     }
 
     fn wait_until_next_tick(&mut self, deadline: Instant) {
+        let _scope = main_thread_frames::wait_until_next_tick();
         let wakeup = self.overworld().chunks.main_thread_wakeup();
         while let Some(wait) = deadline.checked_duration_since(Instant::now()).filter(|w| !w.is_zero()) {
             let seen = wakeup.generation();
@@ -799,14 +872,20 @@ impl Server {
         for player in self.players() {
             self.save_player(player);
         }
-        let result = self.save_all_chunks(silent, flush, force);
+        let result = {
+            let _scope = main_thread_frames::enter(["net.minecraft.server.MinecraftServer.saveEverything(MinecraftServer.java:631)"]);
+            self.save_all_chunks(silent, flush, force)
+        };
         self.chunk_io_error_reporter.warn_on_low_disk_space();
         result
     }
 
     pub fn save_all_chunks(&mut self, silent: bool, flush: bool, force: bool) -> bool {
         self.notification_manager.server_save_started();
-        let saved_chunks = self.save_all_level_chunks(silent, flush, force);
+        let saved_chunks = {
+            let _scope = main_thread_frames::enter(["net.minecraft.server.dedicated.DedicatedServer.saveAllChunks(DedicatedServer.java:287)"]);
+            self.save_all_level_chunks(silent, flush, force)
+        };
         self.notification_manager.server_save_completed();
         saved_chunks
     }
@@ -819,6 +898,7 @@ impl Server {
                 info!("Saving chunks for level 'ServerLevel[{}]'/{}", self.level_name, level.dimension);
             }
             let no_save = level.no_save && !force;
+            let _scope = main_thread_frames::enter(["net.minecraft.server.MinecraftServer.saveAllChunks(MinecraftServer.java:613)"]);
             level.save(dir, flush, no_save);
         }
         let data = WorldData {
@@ -1027,7 +1107,7 @@ impl Server {
             Event::Packet { conn, packet } => {
                 let Some(&id) = self.connections.get(&conn) else { return };
                 self.player_mut(id).received_packets += 1;
-                let result = match packet.id {
+                let dispatched = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match packet.id {
                     serverbound::CHAT => self.handle_chat(id, &packet),
                     serverbound::CHAT_COMMAND => self.handle_chat_command(id, &packet),
                     serverbound::CHAT_COMMAND_SIGNED => self.handle_signed_chat_command(id, &packet),
@@ -1048,6 +1128,13 @@ impl Server {
                     serverbound::PICK_ITEM_FROM_ENTITY => self.handle_pick_item_from_entity(id, &packet),
                     serverbound::RESOURCE_PACK => self.handle_resource_pack_response(id, &packet),
                     _ => self.entity_level_mut(id).handle_game_packet(id, &packet),
+                }));
+                let result = match dispatched {
+                    Ok(result) => result,
+                    Err(payload) => {
+                        self.on_packet_error(payload, packet.id);
+                        Ok(())
+                    }
                 };
                 if result.is_err() {
                     self.player_mut(id).disconnect("multiplayer.disconnect.invalid_packet");
@@ -1073,6 +1160,33 @@ impl Server {
             Event::Halt => self.halt(),
             Event::Rcon { command, reply } => self.tasks.push_back(Task::Rcon { command, reply }),
         }
+    }
+
+    fn on_packet_error(&self, payload: Box<dyn std::any::Any + Send>, packet_id: i32) {
+        use crate::crash_report::{JavaException, ReportedException};
+        let throwable = match payload.downcast::<JavaException>() {
+            Ok(exception) => exception.0,
+            Err(payload) => match payload.downcast::<ReportedException>() {
+                Ok(reported) => {
+                    if reported.0.reported_exception().cause.as_deref().is_some_and(|cause| cause.class_name() == "java.lang.OutOfMemoryError") {
+                        std::panic::resume_unwind(reported);
+                    }
+                    reported.0.reported_exception()
+                }
+                Err(payload) => {
+                    let description = crate::crash_report::exception_of(&payload);
+                    let has_class = description.split_once(": ").map_or(&*description, |(class, _)| class).contains('.');
+                    JavaThrowable::new(if has_class { description } else { format!("java.lang.RuntimeException: {description}") }, crash_frames().into_iter().map(|frame| &*Box::leak(frame.into_boxed_str())).collect())
+                }
+            },
+        };
+        let packet_type = wafer_data::PACKET_NAMES.iter().find(|(state, direction, id, _)| *state == "play" && *direction == "serverbound" && *id == packet_id).map_or_else(|| packet_id.to_string(), |(_, _, _, name)| format!("serverbound/{name}"));
+        error!("Failed to handle packet {packet_type}, suppressing error\n{}", throwable.print_stack_trace().trim_end());
+        self.report_packet_handling_exception(&throwable, &packet_type);
+    }
+
+    pub fn report_packet_handling_exception(&self, throwable: &JavaThrowable, packet_type: &str) {
+        self.chunk_io_error_reporter.suppressed_exceptions().add_entry(&format!("packet/{packet_type}"), throwable);
     }
 
     fn full_time_sync(&self, p: &mut wafer_protocol::Writer) {
@@ -1624,7 +1738,9 @@ impl Server {
         }
         self.update_effective_respawn_data();
         for index in 0..self.levels.len() {
-            self.tick_level(index);
+            if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.tick_level(index))) {
+                self.throw_exception_ticking_world(index, payload);
+            }
         }
         for id in self.player_ids() {
             if !self.lost_connections.is_empty()
@@ -2049,12 +2165,23 @@ pub fn run(
         }
     };
     info!("Preparing level \"{}\"", config.level_name);
-    let created = match world {
+    let startup_snapshot = world_snapshot(&world).map(|snapshot| dedicated::server_watchdog::ServerSnapshot { player_count: Some(format!("0 / {}; []", config.max_players)), ..snapshot });
+    let created = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match world {
         Some((pack_repository, mut world_stem)) => {
             world_stem.player_lists = Some(player_lists);
             Server::with_world_stem(config, pack_repository, world_stem)
         }
         None => Server::new_with_player_lists(config, Some(player_lists)),
+    }));
+    let created = match created {
+        Ok(created) => created,
+        Err(panic) => match panic.downcast::<crate::crash_report::ReportedException>() {
+            Ok(reported) => {
+                report_startup_crash(reported.0, startup_snapshot.as_ref());
+                dedicated::server_watchdog::linger()
+            }
+            Err(panic) => std::panic::resume_unwind(panic),
+        },
     };
     let mut server = match created {
         Ok(server) => server,
@@ -2106,19 +2233,28 @@ pub fn run(
     if max_tick_time > 0 {
         dedicated::server_watchdog::start(timing.clone(), max_tick_time, PathBuf::from("."));
     }
-    server.save_everything(false, true, true);
-    server.chunk_io_error_reporter.set_running();
+    {
+        let _scope = main_thread_frames::init_server_save();
+        server.save_everything(false, true, true);
+    }
     server.notification_manager.server_started();
     server.status_icon = server.load_status_icon();
     server.build_server_status();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_server_loop(&mut server, &mut events, &tasks, &timing)));
+    let crashed = result.is_err();
     if let Err(panic) = result {
         let (reported, message) = match panic.downcast::<crate::crash_report::ReportedException>() {
             Ok(reported) => {
-                let message = format!("net.minecraft.ReportedException: {}\nCaused by: {}", reported.0.title(), reported.0.exception());
-                (Some(reported.0), message)
+                let message = reported.0.reported_exception().print_stack_trace();
+                (Some(reported.0), message.trim_end().to_string())
             }
-            Err(panic) => (None, crate::crash_report::exception_of(&panic)),
+            Err(panic) => match panic.downcast::<crate::crash_report::JavaException>() {
+                Ok(exception) => {
+                    let report = crate::crash_report::CrashReport::of_exception("Exception in server tick loop", &exception.0);
+                    (Some(report), exception.0.print_stack_trace().trim_end().to_string())
+                }
+                Err(panic) => (None, crate::crash_report::exception_of(&panic)),
+            },
         };
         error!("Encountered an unexpected exception\n{message}");
         let mut report = reported.unwrap_or_else(|| crate::crash_report::CrashReport::new("Exception in server tick loop", message, crash_frames()));
@@ -2130,9 +2266,22 @@ pub fn run(
             error!("We were unable to save this crash report to disk.");
         }
     }
-    timing.stop();
-    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| server.stop_server())).is_err() {
-        error!("Exception stopping the server");
+    if crashed {
+        timing.set_next_tick_time(Instant::now() + Duration::from_millis(1), server.tick_rate_manager.milliseconds_per_tick());
+    } else {
+        timing.stop();
+    }
+    let stop_failed = if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| server.stop_server())) {
+        match panic.downcast::<crate::crash_report::JavaException>() {
+            Ok(exception) => error!("Exception stopping the server\n{}", exception.0.print_stack_trace().trim_end()),
+            Err(_) => error!("Exception stopping the server"),
+        }
+        true
+    } else {
+        false
+    };
+    if !(crashed && stop_failed) {
+        timing.stop();
     }
     if let Some(rcon_thread) = rcon_thread {
         rcon_thread.stop();
@@ -2144,6 +2293,9 @@ pub fn run(
         management_server.stop();
     }
     std::thread::sleep(Duration::from_millis(100));
+    if stop_failed {
+        dedicated::server_watchdog::linger();
+    }
     Ok(())
 }
 
@@ -2174,6 +2326,9 @@ pub(crate) const RUN_SERVER_INITIALIZE_FRAME: &str = "net.minecraft.server.Minec
 pub(crate) const RUN_SERVER_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)";
 pub(crate) const SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
 pub(crate) const THREAD_RUN_FRAME: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
+const FILL_REPORT_DETAILS_FRAME: &str = "net.minecraft.server.level.ServerLevel.fillReportDetails(ServerLevel.java:1892)";
+const TICK_CHILDREN_FILL_FRAME: &str = "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1119)";
+const TICK_CHILDREN_THROW_FRAME: &str = "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1120)";
 pub(crate) const INIT_SERVER_FRAME: &str = "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:206)";
 
 #[derive(Debug)]
@@ -2198,6 +2353,41 @@ impl std::fmt::Display for StartupFailure {
 }
 
 impl std::error::Error for StartupFailure {}
+
+const STOP_SERVER_FRAMES: [&str; 6] = [
+    "net.minecraft.util.thread.BlockableEventLoop.runAllTasks(BlockableEventLoop.java:127)",
+    "net.minecraft.server.MinecraftServer.waitUntilNextTick(MinecraftServer.java:856)",
+    "net.minecraft.server.MinecraftServer.stopServer(MinecraftServer.java:672)",
+    "net.minecraft.server.dedicated.DedicatedServer.stopServer(DedicatedServer.java:705)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:793)",
+    SPIN_FRAME,
+];
+
+fn report_startup_crash(mut report: crate::crash_report::CrashReport, snapshot: Option<&dedicated::server_watchdog::ServerSnapshot>) {
+    error!("Encountered an unexpected exception\n{}", report.reported_exception().print_stack_trace().trim_end());
+    if let Some(snapshot) = snapshot {
+        dedicated::server_watchdog::fill_system_report(&mut report, snapshot);
+    }
+    let file = crate::crash_report::crash_report_file(Path::new("."));
+    if report.save_to_file(&file, &crate::crash_report::ReportType::CRASH) {
+        error!("This crash report has been saved to: {}", std::path::absolute(&file).unwrap_or(file).display());
+    } else {
+        error!("We were unable to save this crash report to disk.");
+    }
+    info!("Stopping server");
+    info!("Saving players");
+    info!("Saving worlds");
+    let mut frames = vec![
+        "net.minecraft.util.thread.BlockableEventLoop.throwDelayedException(BlockableEventLoop.java:203)",
+        "net.minecraft.util.thread.BlockableEventLoop.pollTask(BlockableEventLoop.java:137)",
+        "net.minecraft.server.MinecraftServer.pollTaskInternal(MinecraftServer.java:894)",
+        "net.minecraft.server.MinecraftServer.pollTask(MinecraftServer.java:888)",
+    ];
+    frames.extend(STOP_SERVER_FRAMES);
+    frames.push(THREAD_RUN_FRAME);
+    let throwable = JavaThrowable::new(format!("net.minecraft.ReportedException: {}", report.title()), frames).with_cause(report.reported_exception().cause.map_or_else(|| JavaThrowable::new(report.exception().to_string(), Vec::new()), |cause| *cause));
+    error!("Exception stopping the server\n{}", throwable.print_stack_trace().trim_end());
+}
 
 pub(crate) fn report_startup_failure(failure: &StartupFailure) {
     error!("Encountered an unexpected exception\n{}", failure.throwable.print_stack_trace().trim_end());
@@ -2228,6 +2418,9 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
     let mut next_tick = Instant::now();
     let mut last_overload_warning = next_tick;
     let mut ticks: u64 = 0;
+    for level in &mut server.levels {
+        level.defer_full_status_changes = false;
+    }
     while !server.stopping {
         let this_tick = if server.tick_rate_manager.is_sprinting() && server.check_should_sprint_this_tick() {
             next_tick = Instant::now();
@@ -2270,10 +2463,17 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             level.chunks.run_light_updates();
             level.process_chunk_events();
         }
-        server.tick();
-        server.run_all_tasks();
+        {
+            let _scope = main_thread_frames::tick();
+            server.tick();
+        }
+        {
+            let _scope = main_thread_frames::run_all_tasks();
+            server.run_all_tasks();
+        }
         server.mark_ready();
         let wakeup = server.overworld().chunks.main_thread_wakeup();
+        let _scope = main_thread_frames::running_wait();
         loop {
             let seen = wakeup.generation();
             while let Ok(task) = tasks.try_recv() {

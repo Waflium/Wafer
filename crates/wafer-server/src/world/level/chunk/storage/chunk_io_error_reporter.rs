@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, channel};
 
 use wafer_core::ChunkPos;
@@ -27,34 +26,6 @@ const UNI_APPLY_FRAMES: [&str; 2] = [
     "java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:503)",
 ];
 const MISPLACED_CHUNK_REPORTED_FRAME: &str = "net.minecraft.world.level.chunk.storage.ChunkIOErrorReporter.createMisplacedChunkReport(ChunkIOErrorReporter.java:19)";
-const MAIN_THREAD_TASK_FRAMES: [&str; 4] = [
-    "net.minecraft.util.thread.BlockableEventLoop.doRunTask(BlockableEventLoop.java:173)",
-    "net.minecraft.server.level.ServerChunkCache$MainThreadExecutor.doRunTask(ServerChunkCache.java:621)",
-    "net.minecraft.util.thread.BlockableEventLoop.pollTask(BlockableEventLoop.java:147)",
-    "net.minecraft.server.level.ServerChunkCache$MainThreadExecutor.pollTask(ServerChunkCache.java:630)",
-];
-const MAIN_THREAD_POLL_FRAMES: [&str; 3] = [
-    "net.minecraft.server.level.ServerChunkCache.pollTask(ServerChunkCache.java:268)",
-    "net.minecraft.server.MinecraftServer.pollTaskInternal(MinecraftServer.java:900)",
-    "net.minecraft.server.MinecraftServer.pollTask(MinecraftServer.java:888)",
-];
-const PREPARE_LEVELS_FRAMES: [&str; 8] = [
-    "net.minecraft.util.thread.BlockableEventLoop.managedBlock(BlockableEventLoop.java:156)",
-    "net.minecraft.server.MinecraftServer.waitUntilNextTick(MinecraftServer.java:859)",
-    "net.minecraft.server.MinecraftServer.prepareLevels(MinecraftServer.java:578)",
-    "net.minecraft.server.MinecraftServer.loadLevel(MinecraftServer.java:411)",
-    "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:221)",
-    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)",
-    "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)",
-    "java.base/java.lang.Thread.run(Thread.java:1474)",
-];
-const RUNNING_FRAMES: [&str; 5] = [
-    "net.minecraft.util.thread.BlockableEventLoop.runAllTasks(BlockableEventLoop.java:127)",
-    "net.minecraft.server.MinecraftServer.waitUntilNextTick(MinecraftServer.java:856)",
-    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:758)",
-    "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)",
-    "java.base/java.lang.Thread.run(Thread.java:1474)",
-];
 const LOW_DISK_SPACE_REPORT_BYTES: u64 = 8192;
 const LOW_DISK_SPACE_WARNING_BYTES: u64 = 67_108_864;
 
@@ -65,7 +36,6 @@ struct Shared {
     server_directory: PathBuf,
     level_directory: Option<PathBuf>,
     store_jobs: Sender<StoreJob>,
-    running: AtomicBool,
 }
 
 #[derive(Clone)]
@@ -96,16 +66,12 @@ impl ChunkIoErrorReporter {
             }
         });
         ChunkIoErrorReporter {
-            shared: Arc::new(Shared { suppressed_exceptions: SuppressedExceptionCollector::default(), server_directory, level_directory, store_jobs, running: AtomicBool::new(false) }),
+            shared: Arc::new(Shared { suppressed_exceptions: SuppressedExceptionCollector::default(), server_directory, level_directory, store_jobs }),
         }
     }
 
     pub fn suppressed_exceptions(&self) -> &SuppressedExceptionCollector {
         &self.shared.suppressed_exceptions
-    }
-
-    pub fn set_running(&self) {
-        self.shared.running.store(true, Ordering::Relaxed);
     }
 
     fn store_chunk_io_error(&self, mut report: CrashReport, pos: ChunkPos, storage_info: &RegionStorageInfo) {
@@ -135,13 +101,8 @@ impl ChunkIoErrorReporter {
     pub fn chunk_map_load_frames(&self) -> Vec<&'static str> {
         let mut frames = CHUNK_MAP_LOAD_FRAMES.to_vec();
         frames.extend(UNI_APPLY_FRAMES);
-        frames.extend(MAIN_THREAD_TASK_FRAMES);
-        frames.extend(MAIN_THREAD_POLL_FRAMES);
-        if self.shared.running.load(Ordering::Relaxed) {
-            frames.extend(RUNNING_FRAMES);
-        } else {
-            frames.extend(PREPARE_LEVELS_FRAMES);
-        }
+        frames.extend(crate::server::main_thread_frames::CHUNK_SOURCE_TASK);
+        frames.extend(crate::server::main_thread_frames::current());
         frames
     }
 

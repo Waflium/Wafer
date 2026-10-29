@@ -132,6 +132,7 @@ struct Array {
     load: &'static str,
     count_line: &'static str,
     account_line: &'static str,
+    new_array_line: &'static str,
     element_line: &'static str,
     skip: &'static str,
     element_size: i32,
@@ -142,6 +143,7 @@ const BYTE_ARRAY: Array = Array {
     load: "net.minecraft.nbt.ByteArrayTag$1.load(ByteArrayTag.java:23)",
     count_line: "net.minecraft.nbt.ByteArrayTag$1.readAccounted(ByteArrayTag.java:33)",
     account_line: "net.minecraft.nbt.ByteArrayTag$1.readAccounted(ByteArrayTag.java:34)",
+    new_array_line: "net.minecraft.nbt.ByteArrayTag$1.readAccounted(ByteArrayTag.java:35)",
     element_line: "net.minecraft.nbt.ByteArrayTag$1.readAccounted(ByteArrayTag.java:36)",
     skip: "net.minecraft.nbt.ByteArrayTag$1.skip(ByteArrayTag.java:42)",
     element_size: 1,
@@ -151,6 +153,7 @@ const INT_ARRAY: Array = Array {
     load: "net.minecraft.nbt.IntArrayTag$1.load(IntArrayTag.java:23)",
     count_line: "net.minecraft.nbt.IntArrayTag$1.readAccounted(IntArrayTag.java:34)",
     account_line: "net.minecraft.nbt.IntArrayTag$1.readAccounted(IntArrayTag.java:35)",
+    new_array_line: "net.minecraft.nbt.IntArrayTag$1.readAccounted(IntArrayTag.java:36)",
     element_line: "net.minecraft.nbt.IntArrayTag$1.readAccounted(IntArrayTag.java:38)",
     skip: "net.minecraft.nbt.IntArrayTag$1.skip(IntArrayTag.java:45)",
     element_size: 4,
@@ -160,6 +163,7 @@ const LONG_ARRAY: Array = Array {
     load: "net.minecraft.nbt.LongArrayTag$1.load(LongArrayTag.java:23)",
     count_line: "net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:33)",
     account_line: "net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:34)",
+    new_array_line: "net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:35)",
     element_line: "net.minecraft.nbt.LongArrayTag$1.readAccounted(LongArrayTag.java:37)",
     skip: "net.minecraft.nbt.LongArrayTag$1.skip(LongArrayTag.java:44)",
     element_size: 8,
@@ -515,6 +519,9 @@ impl Parser {
         let length = self.input.read_int().map_err(at(array.count_line))?;
         if length < 0 {
             return Err(negative_size(array.element_size as i64, length, array.account_line));
+        }
+        if let Some(error) = crate::util::java_heap::array_allocation_failure(length as i64, array.element_size as i64) {
+            return Err(throwable(error, &[array.new_array_line]));
         }
         let length = length as usize;
         if array.element_size == 1 {

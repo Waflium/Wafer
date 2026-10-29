@@ -429,6 +429,7 @@ impl ChunkCache {
     }
 
     fn managed_block(&mut self, future: FutureId) {
+        let _scope = crate::server::main_thread_frames::chunk_source_block();
         while !self.holders.futures.is_done(future) {
             if !self.poll_task() {
                 assert!(self.in_flight > 0, "waiting for a chunk with nothing to wait for");

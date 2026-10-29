@@ -70,7 +70,7 @@ impl<R> PendingLoad<R> {
 }
 
 fn completion_exception(cause: &JavaThrowable) -> ! {
-    panic!("java.util.concurrent.CompletionException: {}", cause.description)
+    crate::crash_report::throw_java_exception(super::storage_exception::section_storage_completion_exception(cause))
 }
 
 pub fn section_key(x: i32, y: i32, z: i32) -> i64 {

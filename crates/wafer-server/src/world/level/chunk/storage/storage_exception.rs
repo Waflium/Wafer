@@ -85,16 +85,28 @@ mod nio {
         "java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106)",
         "java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111)",
     ];
-    pub const FILE_EXISTS: [&str; 3] = ACCESS_DENIED;
-    pub const NO_SUCH_FILE: [&str; 3] = ACCESS_DENIED;
-    pub const FILE_SYSTEM: [&str; 3] = ACCESS_DENIED;
+    pub const FILE_EXISTS: [&str; 3] = [
+        "java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:94)",
+        "java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106)",
+        "java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111)",
+    ];
+    pub const NO_SUCH_FILE: [&str; 3] = [
+        "java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:92)",
+        "java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106)",
+        "java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111)",
+    ];
+    pub const FILE_SYSTEM: [&str; 3] = [
+        "java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:100)",
+        "java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106)",
+        "java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111)",
+    ];
     pub const NEW_FILE_CHANNEL: [&str; 3] = [
-        "java.base/sun.nio.fs.UnixFileSystemProvider.newFileChannel(UnixFileSystemProvider.java:261)",
+        "java.base/sun.nio.fs.UnixFileSystemProvider.newFileChannel(UnixFileSystemProvider.java:213)",
         "java.base/java.nio.channels.FileChannel.open(FileChannel.java:301)",
         "java.base/java.nio.channels.FileChannel.open(FileChannel.java:353)",
     ];
     pub const CREATE_DIRECTORIES: [&str; 4] = [
-        "java.base/sun.nio.fs.UnixFileSystemProvider.createDirectory(UnixFileSystemProvider.java:398)",
+        "java.base/sun.nio.fs.UnixFileSystemProvider.createDirectory(UnixFileSystemProvider.java:418)",
         "java.base/java.nio.file.Files.createDirectory(Files.java:647)",
         "java.base/java.nio.file.Files.createAndCheckIsDirectory(Files.java:734)",
         "java.base/java.nio.file.Files.createDirectories(Files.java:689)",
@@ -178,6 +190,30 @@ pub fn on_load_worker(error: &io::Error) -> JavaThrowable {
     on_io_worker_thread(error, &[LOAD_ASYNC, submit, schedule, run])
 }
 
+pub fn is_java_error(error: &io::Error) -> bool {
+    matches!(JavaThrowable::from_io_error(error).class_name(), "java.lang.OutOfMemoryError" | "java.lang.StackOverflowError")
+}
+
+pub fn on_load_worker_uncaught(error: &io::Error) -> JavaThrowable {
+    let mut throwable = JavaThrowable::from_io_error(error);
+    let [submit, schedule, run] = SUBMIT_THROWING_TASK;
+    let mut tail = vec![
+        LOAD_ASYNC,
+        "net.minecraft.world.level.chunk.storage.IOWorker$$Lambda/0x0000000019019a78.get(Unknown Source)",
+        submit,
+        "net.minecraft.world.level.chunk.storage.IOWorker$$Lambda/0x0000000019019ca8.accept(Unknown Source)",
+        schedule,
+        "net.minecraft.util.thread.PriorityConsecutiveExecutor$$Lambda/0x0000000019019ee8.run(Unknown Source)",
+        run,
+    ];
+    tail.extend(CONSECUTIVE_EXECUTOR_TAIL);
+    tail.extend(&THREAD_TAIL[..2]);
+    tail.push("java.base/java.lang.Thread.runWith(Thread.java:1487)");
+    tail.push(THREAD_TAIL[2]);
+    throwable.push_frames(&tail);
+    throwable
+}
+
 pub fn on_scan_worker(error: &io::Error) -> JavaThrowable {
     let [submit, schedule, run] = SUBMIT_THROWING_TASK;
     on_io_worker_thread(error, &[SCAN_CHUNK, submit, schedule, run])
@@ -192,8 +228,24 @@ pub fn structure_check_join_failure(cause: &JavaThrowable) -> JavaThrowable {
         "java.base/java.util.concurrent.CompletableFuture.wrapInCompletionException(CompletableFuture.java:323)",
         "java.base/java.util.concurrent.CompletableFuture.reportJoin(CompletableFuture.java:457)",
         "java.base/java.util.concurrent.CompletableFuture.join(CompletableFuture.java:2139)",
-        "net.minecraft.world.level.levelgen.structure.StructureCheck.tryLoadFromStorage(StructureCheck.java:137)",
+        "net.minecraft.world.level.levelgen.structure.StructureCheck.tryLoadFromStorage(StructureCheck.java:143)",
     ];
+    JavaThrowable::new(format!("{COMPLETION_EXCEPTION}: {}", cause.description), frames).with_cause(cause.clone())
+}
+
+pub fn section_storage_completion_exception(cause: &JavaThrowable) -> JavaThrowable {
+    let mut frames = vec![
+        "net.minecraft.world.level.chunk.storage.SectionStorage.lambda$tryRead$2(SectionStorage.java:195)",
+        "java.base/java.util.concurrent.CompletableFuture.uniExceptionally(CompletableFuture.java:1011)",
+        "java.base/java.util.concurrent.CompletableFuture$UniExceptionally.tryFire(CompletableFuture.java:995)",
+        "java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:531)",
+        "java.base/java.util.concurrent.CompletableFuture.completeExceptionally(CompletableFuture.java:2221)",
+        "net.minecraft.world.level.chunk.storage.IOWorker.lambda$submitThrowingTask$0(IOWorker.java:249)",
+        "net.minecraft.util.thread.PriorityConsecutiveExecutor.lambda$scheduleWithResult$0(PriorityConsecutiveExecutor.java:22)",
+        STRICT_QUEUE_RUN,
+    ];
+    frames.extend(CONSECUTIVE_EXECUTOR_TAIL);
+    frames.extend(THREAD_TAIL);
     JavaThrowable::new(format!("{COMPLETION_EXCEPTION}: {}", cause.description), frames).with_cause(cause.clone())
 }
 

@@ -53,6 +53,15 @@ impl ServerTiming {
     }
 }
 
+static LINGERING: AtomicBool = AtomicBool::new(false);
+
+pub fn linger() -> ! {
+    LINGERING.store(true, Ordering::Relaxed);
+    std::thread::sleep(Duration::from_secs(61));
+    crate::logging::flush();
+    std::process::exit(0)
+}
+
 pub fn start(timing: Arc<ServerTiming>, max_tick_time_millis: i64, server_directory: PathBuf) {
     let max_tick_time_nanos = max_tick_time_millis * 1_000_000;
     let _ = std::thread::Builder::new().name("Server Watchdog".into()).spawn(move || {
@@ -77,6 +86,10 @@ fn crash(timing: &ServerTiming, delta_nanos: i64, server_directory: &std::path::
         crate::util::java_format_fixed((milliseconds_per_tick / 1000.0) as f64, 2)
     );
     error!("Considering it to be crashed, server will forcibly shutdown.");
+    if LINGERING.load(Ordering::Relaxed) {
+        crate::logging::flush();
+        std::process::exit(0);
+    }
     let snapshot = timing.snapshot.lock().map(|s| s.clone()).unwrap_or_default();
     let mut report = CrashReport::new("Watching Server", "java.lang.Error: Watchdog (Watching Server)".into(), Vec::new());
     fill_system_report(&mut report, &snapshot);

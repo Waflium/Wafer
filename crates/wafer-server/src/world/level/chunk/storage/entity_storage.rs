@@ -11,7 +11,6 @@ use wafer_protocol::nbt::Nbt;
 use super::RegionStorage;
 use super::storage_exception;
 use crate::server::level::ServerLevel;
-use crate::server::command_frames::main_thread_task_frames;
 use crate::server::level::chunk_workers::{IoReporting, IoWorker};
 use crate::util::java_throwable::JavaThrowable;
 use crate::util::problem_reporter::PathElement;
@@ -20,7 +19,7 @@ use crate::world::level::storage::tag_value_input;
 
 pub const ENTITY_STORAGE_LOGGER: &str = "net.minecraft.world.level.chunk.storage.EntityStorage";
 
-const LOAD_ENTITIES_RECURSIVE: [&str; 19] = [
+const LOAD_ENTITIES_RECURSIVE: [&str; 18] = [
     "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:358)",
     "net.minecraft.world.entity.EntityType.lambda$loadEntitiesRecursive$0(EntityType.java:388)",
     "java.base/java.util.stream.ReferencePipeline$11$1.accept(ReferencePipeline.java:489)",
@@ -39,21 +38,19 @@ const LOAD_ENTITIES_RECURSIVE: [&str; 19] = [
     "java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:503)",
     "net.minecraft.util.Util.runNamed(Util.java:351)",
     "net.minecraft.util.thread.AbstractConsecutiveExecutor.pollTask(AbstractConsecutiveExecutor.java:50)",
-    "net.minecraft.util.thread.AbstractConsecutiveExecutor.run(AbstractConsecutiveExecutor.java:60)",
 ];
 
-const ENTITY_DESERIALIZER_FRAMES: [&str; 5] = [
+const ENTITY_DESERIALIZER_FRAMES: [&str; 4] = [
     "java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:667)",
     "java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:503)",
     "net.minecraft.util.Util.runNamed(Util.java:351)",
     "net.minecraft.util.thread.AbstractConsecutiveExecutor.pollTask(AbstractConsecutiveExecutor.java:50)",
-    "net.minecraft.util.thread.AbstractConsecutiveExecutor.run(AbstractConsecutiveExecutor.java:60)",
 ];
 
-fn entity_storage_frames(first: &'static str, preparing_levels: bool) -> Vec<&'static str> {
+fn entity_storage_frames(first: &'static str) -> Vec<&'static str> {
     let mut frames = vec![first];
     frames.extend(ENTITY_DESERIALIZER_FRAMES);
-    frames.extend(main_thread_task_frames(preparing_levels));
+    frames.extend(crate::server::main_thread_frames::current());
     frames
 }
 
@@ -176,7 +173,7 @@ impl ServerLevel {
                 if stored != pos {
                     error!("Chunk file at {pos} is in the wrong location. (Expected {pos}, got {stored})");
                     if let Some(reporting) = &reporting {
-                        reporting.reporter.report_misplaced_chunk(stored, pos, &reporting.info, entity_storage_frames(storage_exception::ENTITY_STORAGE_MISPLACED_FRAME, self.preparing_levels));
+                        reporting.reporter.report_misplaced_chunk(stored, pos, &reporting.info, entity_storage_frames(storage_exception::ENTITY_STORAGE_MISPLACED_FRAME));
                     }
                 }
             }
@@ -185,7 +182,7 @@ impl ServerLevel {
                     error!("Failed to read field (Position={}): {field_error}", crate::nbt::to_string(position));
                 }
                 let mut frames = vec![storage_exception::OPTIONAL_OR_ELSE_THROW];
-                frames.extend(entity_storage_frames(storage_exception::ENTITY_STORAGE_POSITION_FRAME, self.preparing_levels));
+                frames.extend(entity_storage_frames(storage_exception::ENTITY_STORAGE_POSITION_FRAME));
                 let throwable = JavaThrowable::new("java.util.NoSuchElementException: No value present", frames);
                 warn!("Failed to parse chunk {pos} position info\n{}", throwable.print_stack_trace().trim_end());
                 if let Some(reporting) = &reporting {
@@ -197,7 +194,7 @@ impl ServerLevel {
         let tag = &*upgraded_chunk_tag;
         let _collector = tag_value_input::ScopedCollector::new(PathElement::Text(format!("chunk@[{}, {}]", pos.x, pos.z)), ENTITY_STORAGE_LOGGER);
         let mut site = LOAD_ENTITIES_RECURSIVE.to_vec();
-        site.extend(main_thread_task_frames(self.preparing_levels));
+        site.extend(crate::server::main_thread_frames::current());
         let mut loaded = Vec::new();
         tag_value_input::for_each_child(tag, "Entities", |entity| loaded.extend(self.load_entity_recursive_in_scope(entity, &site, &mut |_| {})));
         loaded

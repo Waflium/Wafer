@@ -338,7 +338,9 @@ impl ServerLevel {
             self.chunks.start_ticking_chunk(pos);
             self.on_chunk_ready_to_send(pos);
         }
-        while let Some((pos, status)) = self.chunks.pop_full_status_change() {
+        while !self.defer_full_status_changes
+            && let Some((pos, status)) = self.chunks.pop_full_status_change()
+        {
             self.update_chunk_status(pos, status);
         }
     }
@@ -356,9 +358,12 @@ impl ServerLevel {
     }
 
     pub fn poll_chunk_task(&mut self) -> bool {
-        let worked = self.chunks.poll_task();
+        let worked = {
+            let _poll = crate::server::main_thread_frames::server_chunk_poll();
+            self.chunks.poll_task()
+        };
         self.process_chunk_events();
-        self.run_entity_deserializer_queue();
+        self.run_entity_deserializer_queue_as_task();
         worked
     }
 

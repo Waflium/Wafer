@@ -7,6 +7,7 @@ use super::entity_section::EntitySection;
 use super::entity_section_storage::EntitySectionStorage;
 use super::visibility::Visibility;
 use crate::server::level::ServerLevel;
+use crate::server::main_thread_frames;
 use crate::server::level::chunk_level::FullChunkStatus;
 use crate::world::entity::{EntityId, LevelEntity, RemovalReason};
 use crate::server::level::chunk_workers::IoReporting;
@@ -15,6 +16,13 @@ use crate::world::level::gameevent::dynamic_game_event_listener::DynamicListener
 use crate::util::problem_reporter::PathElement;
 use crate::world::level::chunk::storage::entity_storage::{ENTITY_STORAGE_LOGGER, EntityStorage};
 use crate::world::level::storage::tag_value_input;
+
+const ENTITY_DESERIALIZER_TASK_RUN: &str = "net.minecraft.util.thread.AbstractConsecutiveExecutor.run(AbstractConsecutiveExecutor.java:60)";
+const ENTITY_DESERIALIZER_RUN_ALL: &str = "net.minecraft.util.thread.AbstractConsecutiveExecutor.runAll(AbstractConsecutiveExecutor.java:72)";
+const ENTITY_STORAGE_FLUSH: &str = "net.minecraft.world.level.chunk.storage.EntityStorage.flush(EntityStorage.java:141)";
+const SAVE_ALL_LOOP: &str = "net.minecraft.world.level.entity.PersistentEntitySectionManager.saveAll(PersistentEntitySectionManager.java:392)";
+const SAVE_ALL_END: &str = "net.minecraft.world.level.entity.PersistentEntitySectionManager.saveAll(PersistentEntitySectionManager.java:399)";
+const WAIT_FOR_ENTITIES: &str = "net.minecraft.server.level.ServerLevel.waitForEntities(ServerLevel.java:1732)";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 enum ChunkLoadStatus {
@@ -301,7 +309,18 @@ impl ServerLevel {
         self.entity_manager.chunks_to_unload = chunks_to_unload;
     }
 
-    pub fn run_entity_deserializer_queue(&mut self) {
+    pub fn run_entity_deserializer_queue_as_task(&mut self) {
+        let _scope = main_thread_frames::enter(std::iter::once(ENTITY_DESERIALIZER_TASK_RUN).chain(main_thread_frames::SERVER_TASK_POLL));
+        self.run_entity_deserializer_queue();
+    }
+
+    fn flush_entity_storage(&mut self, flush_storage: bool, save_all_frame: &'static str) {
+        self.entity_manager.permanent_storage.flush(flush_storage);
+        let _scope = main_thread_frames::enter([ENTITY_DESERIALIZER_RUN_ALL, ENTITY_STORAGE_FLUSH, save_all_frame]);
+        self.run_entity_deserializer_queue();
+    }
+
+    fn run_entity_deserializer_queue(&mut self) {
         while let Some((pos, read)) = self.entity_manager.permanent_storage.poll_read() {
             let entities = match read {
                 Ok(Some(tag)) => match crate::util::catch_exception(|| self.read_chunk_entities(pos, &tag)) {
@@ -322,7 +341,6 @@ impl ServerLevel {
     }
 
     pub fn process_pending_loads(&mut self) {
-        self.run_entity_deserializer_queue();
         for (pos, entities) in std::mem::take(&mut self.entity_manager.parsed_loads) {
             for entity in entities.unwrap_or_default() {
                 self.add_entity(entity);
@@ -332,6 +350,7 @@ impl ServerLevel {
     }
 
     pub fn wait_for_entities_around(&mut self, center: ChunkPos, radius: i32) {
+        let _scope = main_thread_frames::enter([main_thread_frames::MANAGED_BLOCK, WAIT_FOR_ENTITIES]);
         loop {
             self.process_pending_loads();
             let loaded = (-radius..=radius)
@@ -339,12 +358,14 @@ impl ServerLevel {
             if loaded {
                 return;
             }
+            self.run_entity_deserializer_queue_as_task();
             self.wait_for_chunk_work(std::time::Duration::from_millis(1));
         }
     }
 
     pub fn wait_for_entities(&mut self) {
         self.entity_manager.permanent_storage.flush(false);
+        self.run_entity_deserializer_queue_as_task();
         self.process_pending_loads();
     }
 
@@ -367,7 +388,7 @@ impl ServerLevel {
     pub fn save_all_entities(&mut self) {
         let mut chunks_to_save = self.entity_manager.all_chunks_to_save();
         while !chunks_to_save.is_empty() {
-            self.entity_manager.permanent_storage.flush(false);
+            self.flush_entity_storage(false, SAVE_ALL_LOOP);
             self.process_pending_loads();
             chunks_to_save.retain(|chunk_key| {
                 let done = if self.entity_manager.visibility(chunk_key) == Visibility::Hidden {
@@ -378,7 +399,7 @@ impl ServerLevel {
                 !done
             });
         }
-        self.entity_manager.permanent_storage.flush(true);
+        self.flush_entity_storage(true, SAVE_ALL_END);
     }
 
     pub fn add_player_to_section(&mut self, id: EntityId) {
@@ -493,6 +514,10 @@ impl ServerLevel {
 }
 
 impl PersistentEntitySectionManager {
+    pub fn count(&self) -> usize {
+        self.known_uuids.len()
+    }
+
     pub fn gather_stats(&self) -> String {
         format!(
             "{},{},{},{},{},{},{}",

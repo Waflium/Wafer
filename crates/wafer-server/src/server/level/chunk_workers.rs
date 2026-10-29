@@ -127,11 +127,20 @@ impl IoWorker {
                 let mut reporting: Option<IoReporting> = None;
                 for request in incoming {
                     match request {
-                        IoRequest::Read { pos, reply } => reply(storage.read(pos).map_err(|e| {
-                            let failure = storage_exception::on_load_worker(&e);
-                            warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
-                            io::Error::new(e.kind(), failure)
-                        })),
+                        IoRequest::Read { pos, reply } => match storage.read(pos) {
+                            Err(e) if storage_exception::is_java_error(&e) => {
+                                let thread = thread::current();
+                                let name = thread.name().unwrap_or_default();
+                                let id = name.rsplit('-').next().and_then(|n| n.parse::<u32>().ok()).map_or(0, |n| 111 + n);
+                                crate::crash_report::on_thread_exception(name, id, &storage_exception::on_load_worker_uncaught(&e));
+                                std::mem::forget(reply);
+                            }
+                            result => reply(result.map_err(|e| {
+                                let failure = storage_exception::on_load_worker(&e);
+                                warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+                                io::Error::new(e.kind(), failure)
+                            })),
+                        },
                         IoRequest::ScanStructures { pos, reply } => reply(storage.scan_structures(pos).map_err(|e| {
                             let failure = storage_exception::on_scan_worker(&e);
                             warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());

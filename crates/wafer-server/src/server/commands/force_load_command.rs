@@ -6,6 +6,8 @@ use crate::commands::brigadier::{CommandContext, CommandSyntaxException, Dynamic
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
+use crate::server::command_frames::command_frames;
+use crate::server::main_thread_frames;
 
 const MAX_CHUNK_LIMIT: i64 = 256;
 
@@ -90,6 +92,14 @@ fn change_force_load(server: &mut Server, context: &CommandContext, source: &Com
         return Err(ERROR_TOO_MANY_CHUNKS.create(MAX_CHUNK_LIMIT as i32, Arg::Long(chunk_count)));
     }
     let mut tracker = CommandResponseTracker::new();
+    let lambda = if context.has_argument("to") {
+        "net.minecraft.server.commands.ForceLoadCommand.lambda$register$1(ForceLoadCommand.java:55)"
+    } else {
+        "net.minecraft.server.commands.ForceLoadCommand.lambda$register$0(ForceLoadCommand.java:52)"
+    };
+    let mut frames = vec!["net.minecraft.server.commands.ForceLoadCommand.changeForceLoad(ForceLoadCommand.java:172)", lambda];
+    frames.extend(command_frames(server.command_origin));
+    let _scope = main_thread_frames::enter_complete(frames);
     for x in min_chunk_x..=max_chunk_x {
         for z in min_chunk_z..=max_chunk_z {
             let changed = server.levels[source.level].set_chunk_forced(x, z, add);

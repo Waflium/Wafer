@@ -93,18 +93,6 @@ pub const PREPARE_LEVELS: [&str; 4] = [
     "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)",
 ];
 
-pub fn main_thread_task_frames(preparing_levels: bool) -> Vec<&'static str> {
-    let mut frames = Vec::new();
-    if preparing_levels {
-        frames.extend(&TASK_QUEUE[..10]);
-        frames.extend(PREPARE_LEVELS);
-    } else {
-        frames.extend(TASK_QUEUE);
-    }
-    frames.extend(SPIN);
-    frames
-}
-
 pub fn command_frames(origin: CommandOrigin) -> Vec<&'static str> {
     let mut frames = COMMAND_EXECUTION.to_vec();
     frames.extend(origin_frames(origin));

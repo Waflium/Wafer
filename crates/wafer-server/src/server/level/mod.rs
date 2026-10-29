@@ -158,7 +158,7 @@ pub struct ServerLevel {
     pub global_level_events: Vec<(i32, BlockPos, i32)>,
     pub pending_system_broadcasts: Vec<crate::network::chat::Component>,
     pub pending_broadcasts: Vec<Vec<u8>>,
-    pub preparing_levels: bool,
+    pub defer_full_status_changes: bool,
     pub pending_function_executions: Vec<(String, EntityId, CriterionTrigger)>,
     pub pending_book_opens: Vec<crate::world::item::written_book_item::PendingBookOpen>,
     pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32), bool)>,
@@ -310,7 +310,7 @@ impl ServerLevel {
             global_level_events: Vec::new(),
             pending_system_broadcasts: Vec::new(),
             pending_broadcasts: Vec::new(),
-            preparing_levels: false,
+            defer_full_status_changes: false,
             pending_function_executions: Vec::new(),
             pending_book_opens: Vec::new(),
             pending_enchantment_functions: Vec::new(),
@@ -356,10 +356,15 @@ impl ServerLevel {
             return;
         }
         self.save_level_data(dir);
+        if flush {
+            self.defer_full_status_changes = false;
+            self.process_chunk_events();
+        }
         if self.chunks.save(self.game_time, flush).is_err() {
             warn!("Failed to synchronize chunks");
         }
         if flush {
+            let _scope = crate::server::main_thread_frames::enter(["net.minecraft.server.level.ServerLevel.save(ServerLevel.java:925)"]);
             self.save_all_entities();
         } else {
             self.auto_save_entities();
@@ -562,6 +567,12 @@ impl ServerLevel {
         let pos = ChunkPos::new(x, z);
         let updated = self.chunks.update_chunk_forced(pos, forced);
         if forced && updated {
+            let _scope = crate::server::main_thread_frames::enter([
+                "net.minecraft.world.level.Level.getChunk(Level.java:215)",
+                "net.minecraft.world.level.LevelReader.getChunk(LevelReader.java:150)",
+                "net.minecraft.world.level.Level.getChunk(Level.java:210)",
+                "net.minecraft.server.level.ServerLevel.setChunkForced(ServerLevel.java:1467)",
+            ]);
             self.chunks.chunk(pos);
         }
         updated

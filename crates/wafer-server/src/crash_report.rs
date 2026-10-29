@@ -57,6 +57,7 @@ impl ReportType {
     }
 }
 
+#[derive(Clone)]
 pub struct CrashReportCategory {
     title: String,
     entries: Vec<(String, String)>,
@@ -132,6 +133,7 @@ impl CrashReportCategory {
     }
 }
 
+#[derive(Clone)]
 pub struct CrashReport {
     title: String,
     exception: String,
@@ -143,9 +145,16 @@ pub struct CrashReport {
     tracking_stack_trace: bool,
     uncategorized_stack_trace: Vec<String>,
     save_file: Option<PathBuf>,
+    reported_frames: Vec<&'static str>,
 }
 
 pub struct ReportedException(pub CrashReport);
+
+pub struct JavaException(pub JavaThrowable);
+
+pub fn throw_java_exception(throwable: JavaThrowable) -> ! {
+    std::panic::panic_any(JavaException(throwable))
+}
 
 static DELAYED_CRASH: std::sync::Mutex<Option<CrashReport>> = std::sync::Mutex::new(None);
 
@@ -157,16 +166,40 @@ pub fn relay_delay_crash(crash_report: CrashReport) {
     }
 }
 
+const THROW_DELAYED_EXCEPTION_FRAMES: [&str; 4] = [
+    "net.minecraft.util.thread.BlockableEventLoop.throwDelayedException(BlockableEventLoop.java:203)",
+    "net.minecraft.util.thread.BlockableEventLoop.pollTask(BlockableEventLoop.java:137)",
+    "net.minecraft.server.MinecraftServer.pollTaskInternal(MinecraftServer.java:894)",
+    "net.minecraft.server.MinecraftServer.pollTask(MinecraftServer.java:888)",
+];
+
 pub fn throw_delayed_exception() {
-    let delayed_crash = DELAYED_CRASH.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+    let delayed_crash = DELAYED_CRASH.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
     if let Some(delayed_crash) = delayed_crash {
-        std::panic::panic_any(ReportedException(delayed_crash));
+        let mut frames = THROW_DELAYED_EXCEPTION_FRAMES.to_vec();
+        frames.extend(crate::server::main_thread_frames::current());
+        delayed_crash.throw_reported(frames);
     }
+}
+
+const ON_THREAD_EXCEPTION_FRAMES: [&str; 2] = [
+    "net.minecraft.util.Util.onThreadException(Util.java:313)",
+    "java.base/java.lang.Thread.dispatchUncaughtException(Thread.java:2556)",
+];
+
+pub fn on_thread_exception(thread_name: &str, thread_id: u32, throwable: &JavaThrowable) {
+    error!("Caught exception in thread Thread[#{thread_id},{thread_name},5,main]\n{}", throwable.print_stack_trace().trim_end());
+    let mut report = CrashReport::for_throwable(throwable, "Exception on worker thread");
+    report.add_category_with_stack_trace("ThreadInfo", ON_THREAD_EXCEPTION_FRAMES.iter().map(|frame| frame.to_string()).collect()).set_detail("Name", thread_name);
+    relay_delay_crash(report);
 }
 
 pub fn exception_of(panic: &Box<dyn std::any::Any + Send>) -> String {
     if panic.is::<crate::world::level::biome::biome_source::ArithmeticException>() {
         return "java.lang.ArithmeticException: / by zero".to_string();
+    }
+    if let Some(exception) = panic.downcast_ref::<JavaException>() {
+        return exception.0.description.clone();
     }
     panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()
 }
@@ -192,6 +225,7 @@ impl CrashReport {
             tracking_stack_trace: true,
             uncategorized_stack_trace: Vec::new(),
             save_file: None,
+            reported_frames: Vec::new(),
         }
     }
 
@@ -214,7 +248,7 @@ impl CrashReport {
         CrashReport::of_exception(title, throwable)
     }
 
-    fn of_exception(title: &str, exception: &JavaThrowable) -> CrashReport {
+    pub fn of_exception(title: &str, exception: &JavaThrowable) -> CrashReport {
         let mut report = CrashReport::new(title, exception.description.clone(), exception.stack_trace.iter().map(|frame| frame.to_string()).collect());
         report.throwable = Some(exception.clone());
         report
@@ -223,6 +257,20 @@ impl CrashReport {
     pub fn get_save_file(&self) -> Option<&Path> {
         self.save_file.as_deref()
     }
+
+    pub fn throw_reported(mut self, frames: Vec<&'static str>) -> ! {
+        self.reported_frames = frames;
+        std::panic::panic_any(ReportedException(self))
+    }
+
+    pub fn reported_exception(&self) -> JavaThrowable {
+        let cause = match &self.throwable {
+            Some(throwable) => throwable.clone(),
+            None => JavaThrowable::new(self.exception.clone(), self.stack_trace.iter().map(|frame| &*Box::leak(frame.clone().into_boxed_str())).collect()),
+        };
+        JavaThrowable::new(format!("net.minecraft.ReportedException: {}", self.title), self.reported_frames.clone()).with_cause(cause)
+    }
+
 
     pub fn add_category(&mut self, name: &str) -> &mut CrashReportCategory {
         self.details.push(CrashReportCategory { title: name.to_string(), entries: Vec::new(), stack_trace: Vec::new() });
@@ -402,10 +450,14 @@ mod tests {
         .unwrap_err();
         let reported = payload.downcast::<ReportedException>().ok().unwrap();
         assert_eq!(reported.0.title(), "Exception chunk generation/loading");
-        assert_eq!(reported.0.exception_message(), format!("java.util.concurrent.CompletionException: third{LINE_SEPARATOR}"));
+        assert_eq!(
+            reported.0.exception_message(),
+            format!("java.util.concurrent.CompletionException: first{LINE_SEPARATOR}\tSuppressed: java.util.concurrent.CompletionException: second{LINE_SEPARATOR}\tSuppressed: java.util.concurrent.CompletionException: third{LINE_SEPARATOR}")
+        );
+        assert!(reported.0.reported_exception().print_stack_trace().starts_with("net.minecraft.ReportedException: Exception chunk generation/loading\n\tat net.minecraft.util.thread.BlockableEventLoop.throwDelayedException(BlockableEventLoop.java:203)\n"));
+        *DELAYED_CRASH.lock().unwrap() = None;
         let mut report = CrashReport::new("t", "java.lang.IllegalStateException: a".to_string(), vec!["f".to_string()]);
         report.suppressed.push("java.lang.RuntimeException: b".to_string());
         assert_eq!(report.exception_message(), format!("java.lang.IllegalStateException: a{LINE_SEPARATOR}\tat f{LINE_SEPARATOR}\tSuppressed: java.lang.RuntimeException: b{LINE_SEPARATOR}"));
-        assert!(DELAYED_CRASH.lock().unwrap().is_none());
     }
 }
