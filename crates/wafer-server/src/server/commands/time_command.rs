@@ -159,7 +159,7 @@ pub fn suggest_timelines(
     mut builder: crate::commands::suggestion::SuggestionsBuilder,
 ) -> Result<crate::commands::suggestion::Suggestions, CommandSyntaxException> {
     let (clock, _) = clock(server, context, source)?;
-    let timelines = crate::world::clock::TIMELINE_DATA.iter().filter(|t| t.clock == clock).map(|t| t.id);
+    let timelines = crate::world::clock::timelines().iter().filter(|t| t.clock == clock).map(|t| t.id);
     crate::commands::shared_suggestion_provider::suggest_resource(timelines, &mut builder);
     Ok(builder.build())
 }

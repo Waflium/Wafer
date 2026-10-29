@@ -1,4 +1,5 @@
 use wafer_core::java_string::JavaStr;
+use std::any::Any;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicPtr, Ordering};
@@ -12,6 +13,7 @@ use crate::server::packs::repository::{VANILLA_ID, has_vanilla_known_pack_info};
 use crate::util::lifecycle::Lifecycle;
 use crate::world::item::component::json_to_nbt;
 use crate::world::level::dimension::level_stem::LevelStem;
+use crate::world::level::levelgen::density_function::resource_name;
 use crate::world::level::levelgen::presets::world_preset::WorldPreset;
 use crate::server::packs::resources::MultiPackResourceManager;
 use crate::resources::registry_load_task::{self, ElementFailure};
@@ -27,6 +29,7 @@ pub struct DataRegistry {
     network: Vec<OnceLock<Nbt>>,
     elements: Vec<Value>,
     json: &'static [(&'static str, &'static str)],
+    decoded: OnceLock<Box<dyn Any + Send + Sync>>,
 }
 
 impl DataRegistry {
@@ -171,13 +174,30 @@ pub fn json_entries(registry: &str) -> &'static [(&'static str, &'static str)] {
     get(registry).map_or(&[], DataRegistry::json_entries)
 }
 
+pub fn decoded<T: Any + Send + Sync>(registry: &str, decode: impl FnOnce(&'static [(&'static str, &'static str)]) -> T) -> &'static T {
+    let entries = json_entries(registry);
+    let data = get(registry).unwrap_or_else(|| panic!("{registry} is not a data registry"));
+    data.decoded.get_or_init(|| Box::new(decode(entries))).downcast_ref::<T>().expect("a registry is always decoded to the same type")
+}
+
 fn leak(value: String) -> &'static str {
     Box::leak(value.into_boxed_str())
 }
 
 fn dimension_type(name: &'static str, v: &Value) -> wafer_data::DimensionType {
     let int = |key: &str| v[key].as_i64().unwrap_or(0);
-    let infiniburn = v["infiniburn"].as_str().unwrap_or("").trim_start_matches('#');
+    let infiniburn_blocks = |names: Vec<&str>| {
+        let ids: Vec<i32> = names.into_iter().filter_map(|name| wafer_data::Block::by_name(&resource_name(name))).map(|block| block.0 as i32).collect();
+        wafer_data::direct_tag("minecraft:block", &ids)
+    };
+    let infiniburn = match &v["infiniburn"] {
+        Value::String(name) => match name.strip_prefix('#') {
+            Some(tag) => wafer_data::dynamic_tag("minecraft:block", &resource_name(tag)),
+            None => infiniburn_blocks(vec![name.as_str()]),
+        },
+        Value::Array(names) => infiniburn_blocks(names.iter().filter_map(Value::as_str).collect()),
+        _ => infiniburn_blocks(Vec::new()),
+    };
     wafer_data::DimensionType {
         name,
         min_y: int("min_y") as i32,
@@ -189,12 +209,39 @@ fn dimension_type(name: &'static str, v: &Value) -> wafer_data::DimensionType {
         has_ender_dragon_fight: v["has_ender_dragon_fight"].as_bool().unwrap_or(false),
         has_fixed_time: v["has_fixed_time"].as_bool().unwrap_or(false),
         ambient_light: v["ambient_light"].as_f64().unwrap_or(0.0) as f32,
-        infiniburn: wafer_data::dynamic_tag("minecraft:block", infiniburn),
+        infiniburn,
         default_clock: v["default_clock"].as_str().map(|clock| leak(clock.to_owned())),
         attributes: leak(v.get("attributes").map_or("{}".to_owned(), Value::to_string)),
         timelines: leak(v["timelines"].to_string()),
         monster_spawn_light_level: leak(v["monster_spawn_light_level"].to_string()),
         monster_spawn_block_light_limit: int("monster_spawn_block_light_limit") as i32,
+    }
+}
+
+fn damage_type_info(name: &'static str, v: &Value) -> wafer_data::DamageTypeInfo {
+    use wafer_data::{DamageEffects, DamageScaling, DeathMessageType};
+    wafer_data::DamageTypeInfo {
+        name,
+        msg_id: leak(v["message_id"].as_str().unwrap_or_default().to_owned()),
+        scaling: match v["scaling"].as_str() {
+            Some("never") => DamageScaling::Never,
+            Some("always") => DamageScaling::Always,
+            _ => DamageScaling::WhenCausedByLivingNonPlayer,
+        },
+        exhaustion: crate::world::level::levelgen::density_function::float(&v["exhaustion"]).unwrap_or(0.0),
+        effects: match v["effects"].as_str() {
+            Some("thorns") => DamageEffects::Thorns,
+            Some("drowning") => DamageEffects::Drowning,
+            Some("burning") => DamageEffects::Burning,
+            Some("poking") => DamageEffects::Poking,
+            Some("freezing") => DamageEffects::Freezing,
+            _ => DamageEffects::Hurt,
+        },
+        death_message_type: match v["death_message_type"].as_str() {
+            Some("fall_variants") => DeathMessageType::FallVariants,
+            Some("intentional_game_design") => DeathMessageType::IntentionalGameDesign,
+            _ => DeathMessageType::Default,
+        },
     }
 }
 
@@ -378,7 +425,7 @@ fn load_registry(
     }
     let json: Vec<(&'static str, &'static str)> = entries.iter().zip(&elements).map(|(&name, element)| (name, &*Box::leak(element.to_string().into_boxed_str()))).collect();
     let network = (0..entries.len()).map(|_| OnceLock::new()).collect();
-    (DataRegistry { name, to_network, from_network, contents, network, elements, json: Box::leak(json.into_boxed_slice()) }, Box::leak(entries.into_boxed_slice()))
+    (DataRegistry { name, to_network, from_network, contents, network, elements, json: Box::leak(json.into_boxed_slice()), decoded: OnceLock::new() }, Box::leak(entries.into_boxed_slice()))
 }
 
 pub fn load(resource_manager: &MultiPackResourceManager) {
@@ -418,6 +465,8 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     let dimension_registry = &registries["minecraft:dimension_type"];
     let dimension_entries = wafer_data::SyncedRegistry::get("minecraft:dimension_type").entries;
     wafer_data::set_dimension_types(dimension_entries.iter().zip(&dimension_registry.elements).map(|(&name, json)| dimension_type(name, json)).collect());
+    let damage_type_entries = wafer_data::SyncedRegistry::get("minecraft:damage_type").entries;
+    wafer_data::set_damage_types(damage_type_entries.iter().zip(&registries["minecraft:damage_type"].elements).map(|(&name, json)| damage_type_info(name, json)).collect());
     let registries: &'static HashMap<&'static str, DataRegistry> = Box::leak(Box::new(registries));
     BIOMES.store((&registries["minecraft:worldgen/biome"] as *const DataRegistry).cast_mut(), Ordering::Release);
     ACTIVE.store((registries as *const HashMap<&'static str, DataRegistry>).cast_mut(), Ordering::Release);
@@ -1183,6 +1232,41 @@ mod tests {
         assert!(tag.get("buoyant").is_none());
         assert_eq!(tag.get("contact_damage").unwrap().get("amount"), Some(&Nbt::Float(4.0)));
         assert_eq!(tag.get("knockback_modifiers").unwrap().get("vertical_power"), Some(&Nbt::Float(2.0)));
+    }
+
+    #[test]
+    fn damage_types_are_read_from_their_json() {
+        let info = super::damage_type_info(
+            "ta:custom",
+            &serde_json::json!({"exhaustion": 5.5, "message_id": "custom", "scaling": "always", "effects": "burning", "death_message_type": "fall_variants"}),
+        );
+        assert_eq!(info.name, "ta:custom");
+        assert_eq!(info.msg_id, "custom");
+        assert_eq!(info.exhaustion, 5.5);
+        assert_eq!(info.scaling, wafer_data::DamageScaling::Always);
+        assert_eq!(info.effects, wafer_data::DamageEffects::Burning);
+        assert_eq!(info.death_message_type, wafer_data::DeathMessageType::FallVariants);
+        let plain = super::damage_type_info("ta:plain", &serde_json::json!({"exhaustion": 0, "message_id": "plain", "scaling": "never"}));
+        assert_eq!(plain.scaling, wafer_data::DamageScaling::Never);
+        assert_eq!(plain.effects, wafer_data::DamageEffects::Hurt);
+        assert_eq!(plain.death_message_type, wafer_data::DeathMessageType::Default);
+    }
+
+    #[test]
+    fn infiniburn_accepts_a_tag_a_block_and_a_list() {
+        let dimension = |infiniburn: serde_json::Value| super::dimension_type("ta:dimension", &serde_json::json!({"infiniburn": infiniburn}));
+        let stone = wafer_data::blocks::STONE.0 as usize;
+        let bedrock = wafer_data::blocks::BEDROCK.0 as usize;
+        let netherrack = wafer_data::blocks::NETHERRACK.0 as usize;
+        let list = dimension(serde_json::json!(["minecraft:stone", "bedrock"]));
+        assert!(list.infiniburn.contains(stone));
+        assert!(list.infiniburn.contains(bedrock));
+        assert!(!list.infiniburn.contains(netherrack));
+        let single = dimension(serde_json::json!("stone"));
+        assert!(single.infiniburn.contains(stone));
+        assert!(!single.infiniburn.contains(bedrock));
+        let tag = dimension(serde_json::json!("#minecraft:infiniburn_overworld"));
+        assert!(tag.infiniburn.contains(netherrack));
     }
 
     #[test]

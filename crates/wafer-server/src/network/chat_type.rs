@@ -3,7 +3,8 @@ use wafer_protocol::Writer;
 
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::player_chat_message::PlayerChatMessage;
-use crate::network::chat::{ChatFormatting, Component};
+use crate::network::chat::Component;
+use crate::network::chat_type_decoration::ChatTypeDecoration;
 use crate::server::Server;
 use crate::world::entity::EntityId;
 use crate::world::entity::player::profile_public_key::now_millis;
@@ -22,6 +23,16 @@ pub enum ChatType {
 }
 
 impl ChatType {
+    const ALL: [ChatType; 7] = [
+        ChatType::Chat,
+        ChatType::SayCommand,
+        ChatType::MsgCommandIncoming,
+        ChatType::MsgCommandOutgoing,
+        ChatType::TeamMsgCommandIncoming,
+        ChatType::TeamMsgCommandOutgoing,
+        ChatType::EmoteCommand,
+    ];
+
     fn name(self) -> &'static str {
         match self {
             ChatType::Chat => "minecraft:chat",
@@ -32,6 +43,18 @@ impl ChatType {
             ChatType::TeamMsgCommandOutgoing => "minecraft:team_msg_command_outgoing",
             ChatType::EmoteCommand => "minecraft:emote_command",
         }
+    }
+
+    fn chat(self) -> &'static ChatTypeDecoration {
+        &crate::core::data_registries::decoded("minecraft:chat_type", |entries| -> Vec<ChatTypeDecoration> {
+            ChatType::ALL
+                .iter()
+                .map(|chat_type| {
+                    let (_, json) = entries.iter().find(|(name, _)| *name == chat_type.name()).expect("a chat type");
+                    ChatTypeDecoration::parse(&serde_json::from_str::<serde_json::Value>(json).expect("chat type JSON")["chat"])
+                })
+                .collect()
+        })[self as usize]
     }
 
     pub fn bind(self, name: Component) -> Bound {
@@ -52,20 +75,7 @@ impl Bound {
     }
 
     pub fn decorate(&self, content: Component) -> Component {
-        let target = || self.target_name.clone().unwrap_or_else(Component::empty);
-        let direct_message = |key: &str, first: Component| {
-            Component::translatable_with(key, vec![first.into(), content.clone().into()]).with_color(ChatFormatting::Gray).italic()
-        };
-        let team_message = |key: &str| Component::translatable_with(key, vec![target().into(), self.name.clone().into(), content.clone().into()]);
-        match self.chat_type {
-            ChatType::Chat => Component::translatable_with("chat.type.text", vec![self.name.clone().into(), content.into()]),
-            ChatType::SayCommand => Component::translatable_with("chat.type.announcement", vec![self.name.clone().into(), content.into()]),
-            ChatType::EmoteCommand => Component::translatable_with("chat.type.emote", vec![self.name.clone().into(), content.into()]),
-            ChatType::MsgCommandIncoming => direct_message("commands.message.display.incoming", self.name.clone()),
-            ChatType::MsgCommandOutgoing => direct_message("commands.message.display.outgoing", target()),
-            ChatType::TeamMsgCommandIncoming => team_message("chat.type.team.text"),
-            ChatType::TeamMsgCommandOutgoing => team_message("chat.type.team.sent"),
-        }
+        self.chat_type.chat().decorate(content, self)
     }
 
     pub fn write(&self, w: &mut Writer) {
@@ -112,4 +122,33 @@ fn decoration_codec() -> Pair {
 
 pub fn direct_codec() -> Pair {
     record(vec![req("chat", decoration_codec()), req("narration", decoration_codec())])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::network::chat::{ChatFormatting, Contents};
+
+    #[test]
+    fn the_vanilla_decorations_are_read_from_the_registry() {
+        let named = |chat_type: ChatType| chat_type.bind(Component::literal("n")).with_target_name(Component::literal("t")).decorate(Component::literal("c")).get_string();
+        assert_eq!(named(ChatType::Chat), "<n> c");
+        assert_eq!(named(ChatType::SayCommand), "[n] c");
+        assert_eq!(named(ChatType::EmoteCommand), "* n c");
+        assert_eq!(named(ChatType::MsgCommandIncoming), "n whispers to you: c");
+        assert_eq!(named(ChatType::MsgCommandOutgoing), "You whisper to t: c");
+        assert_eq!(named(ChatType::TeamMsgCommandIncoming), "t <n> c");
+    }
+
+    #[test]
+    fn a_decoration_orders_its_parameters_and_applies_its_style() {
+        let decoration = ChatTypeDecoration::parse(&serde_json::json!({"translation_key": "k", "parameters": ["content", "target", "sender"], "style": {"color": "red", "italic": true}}));
+        let bound = ChatType::Chat.bind(Component::literal("n")).with_target_name(Component::literal("t"));
+        let component = decoration.decorate(Component::literal("c"), &bound);
+        let Contents::Translatable { key, args, .. } = &component.contents else { panic!("a translation") };
+        assert_eq!(key, "k");
+        assert_eq!(args.len(), 3);
+        assert_eq!(component.style.italic, Some(true));
+        assert_eq!(component.style.color, Some(ChatFormatting::Red.color()));
+    }
 }

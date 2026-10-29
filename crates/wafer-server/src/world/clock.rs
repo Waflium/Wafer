@@ -1,7 +1,5 @@
-use std::sync::LazyLock;
-
 use wafer_core::mth;
-use wafer_data::{SyncedRegistry, TIMELINES};
+use wafer_data::SyncedRegistry;
 use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
@@ -85,7 +83,7 @@ impl Timeline {
     }
 
     pub fn get(id: &str) -> Option<&'static Timeline> {
-        TIMELINE_DATA.iter().find(|t| t.id == id)
+        timelines().iter().find(|t| t.id == id)
     }
 
     pub fn attributes(&self) -> impl Iterator<Item = usize> + '_ {
@@ -212,15 +210,17 @@ pub fn encode_network_timeline(json: &serde_json::Value) -> Result<Nbt, String> 
     Ok(Nbt::Compound(fields))
 }
 
-pub static TIMELINE_DATA: LazyLock<Vec<Timeline>> = LazyLock::new(|| {
-    TIMELINES
-        .iter()
-        .map(|&(id, json)| {
-            let v: serde_json::Value = serde_json::from_str(json).expect("timeline JSON");
-            Timeline::parse(id, &v).unwrap_or_else(|e| panic!("timeline {id}: {e}"))
-        })
-        .collect()
-});
+pub fn timelines() -> &'static [Timeline] {
+    crate::core::data_registries::decoded("minecraft:timeline", |entries| -> Vec<Timeline> {
+        entries
+            .iter()
+            .map(|&(id, json)| {
+                let v: serde_json::Value = serde_json::from_str(json).expect("timeline JSON");
+                Timeline::parse(id, &v).unwrap_or_else(|e| panic!("timeline {id}: {e}"))
+            })
+            .collect()
+    })
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ClockTimeMarker {
@@ -294,7 +294,7 @@ impl ServerClockManager {
 
     pub fn command_time_markers(clock: usize) -> Vec<&'static str> {
         let mut names: Vec<&'static str> = Vec::new();
-        for timeline in TIMELINE_DATA.iter().filter(|t| t.clock == clock) {
+        for timeline in timelines().iter().filter(|t| t.clock == clock) {
             for marker in &timeline.time_markers {
                 if !names.contains(&marker.0.as_str()) {
                     names.push(&marker.0);
@@ -306,7 +306,7 @@ impl ServerClockManager {
     }
 
     pub fn time_marker(clock: usize, id: &str) -> Option<ClockTimeMarker> {
-        TIMELINE_DATA
+        timelines()
             .iter()
             .filter(|t| t.clock == clock)
             .flat_map(|t| t.time_markers.iter().map(move |m| (t, m)))

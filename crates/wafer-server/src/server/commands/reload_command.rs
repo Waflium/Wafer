@@ -7,6 +7,8 @@ use crate::server::command_origin::CommandOrigin;
 
 pub const RELOAD_COMMAND_FRAME: &str = "net.minecraft.server.commands.ReloadCommand.lambda$register$0(ReloadCommand.java:53)";
 const RELOAD_PACKS: &str = "net.minecraft.server.commands.ReloadCommand.reloadPacks(ReloadCommand.java:22)";
+const DISCOVER_NEW_PACKS: &str = "net.minecraft.server.commands.ReloadCommand.discoverNewPacks(ReloadCommand.java:30)";
+const DISCOVER_COMMAND_FRAME: &str = "net.minecraft.server.commands.ReloadCommand.lambda$register$0(ReloadCommand.java:51)";
 
 fn reload_resources_frames(origin: CommandOrigin) -> Vec<&'static str> {
     if matches!(origin, CommandOrigin::PlayerChat | CommandOrigin::Rcon) {
@@ -29,11 +31,16 @@ fn reload_resources_frames(origin: CommandOrigin) -> Vec<&'static str> {
     }
 }
 
-pub fn invoker_frames(command: &[&'static str], server: &Server) -> Vec<&'static str> {
-    let mut frames = reload_resources_frames(server.command_origin);
-    frames.extend(command);
+pub fn command_frames(command: &[&'static str], server: &Server) -> Vec<&'static str> {
+    let mut frames = command.to_vec();
     frames.extend(COMMAND_EXECUTION);
     frames.extend(origin_frames(server.command_origin));
+    frames
+}
+
+pub fn invoker_frames(command: &[&'static str], server: &Server) -> Vec<&'static str> {
+    let mut frames = reload_resources_frames(server.command_origin);
+    frames.extend(command_frames(command, server));
     frames
 }
 
@@ -45,7 +52,7 @@ pub fn reload_packs(server: &mut Server, selected_packs: &[String], invoker: &[&
 }
 
 fn discover_new_packs(server: &mut Server, current_packs: Vec<String>) -> Vec<String> {
-    server.pack_repository.reload();
+    server.pack_repository.reload_from(&command_frames(&[DISCOVER_NEW_PACKS, DISCOVER_COMMAND_FRAME], server));
     let mut selected = current_packs;
     let disabled = &server.data_configuration.data_packs.disabled;
     for pack in server.pack_repository.available_ids() {

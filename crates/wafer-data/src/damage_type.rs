@@ -1,3 +1,5 @@
+use std::sync::RwLock;
+
 use crate::{DAMAGE_TYPES, SyncedRegistry, Tag};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -49,9 +51,16 @@ pub struct DamageTypeInfo {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct DamageType(pub u16);
 
+static ACTIVE_DAMAGE_TYPES: RwLock<Option<&'static [DamageTypeInfo]>> = RwLock::new(None);
+
+pub fn set_damage_types(damage_types: Vec<DamageTypeInfo>) {
+    *ACTIVE_DAMAGE_TYPES.write().expect("damage types") = Some(Box::leak(damage_types.into_boxed_slice()));
+}
+
 impl DamageType {
     pub fn info(self) -> &'static DamageTypeInfo {
-        &DAMAGE_TYPES[self.0 as usize]
+        let damage_types = ACTIVE_DAMAGE_TYPES.read().expect("damage types").unwrap_or(DAMAGE_TYPES);
+        &damage_types[self.0 as usize]
     }
 
     pub fn by_name(name: &str) -> Option<DamageType> {

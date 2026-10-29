@@ -11,8 +11,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use wafer_protocol::nbt::Nbt;
-
 use crate::network::chat::{Arg, ChatFormatting, Component, HoverEvent};
 
 pub const DATA_DIRECTORY: &str = "data";
@@ -221,10 +219,20 @@ impl PackResources {
         }
     }
 
-    pub fn load_metadata(&self) -> Result<Nbt, String> {
-        let Some(supplier) = self.root_resource("pack.mcmeta") else { return Ok(Nbt::Compound(Vec::new())) };
-        let bytes = supplier.read().map_err(|e| e.to_string())?;
-        crate::util::gson::parse_object(&String::from_utf8_lossy(&bytes)).map(|metadata| crate::world::item::component::element_to_nbt(&metadata))
+    pub fn read_metadata(&self) -> Result<Option<crate::util::gson::JsonElement>, crate::util::java_throwable::JavaThrowable> {
+        let Some(supplier) = self.root_resource("pack.mcmeta") else { return Ok(None) };
+        let bytes = supplier.read().map_err(|error| crate::util::java_throwable::JavaThrowable::from_io_error(&error))?;
+        match crate::util::gson::gson_helper_parse(&String::from_utf8_lossy(&bytes)) {
+            Ok(metadata) => Ok(Some(metadata)),
+            Err(mut throwable) => {
+                throwable.push_frames(&[
+                    "net.minecraft.server.packs.resources.ResourceMetadata.fromJsonStream(ResourceMetadata.java:32)",
+                    "net.minecraft.server.packs.AbstractPackMetadataResources.loadMetadata(AbstractPackMetadataResources.java:35)",
+                    "net.minecraft.server.packs.AbstractPackMetadataResources.getMetadataSection(AbstractPackMetadataResources.java:23)",
+                ]);
+                Err(throwable)
+            }
+        }
     }
 
     pub fn get_namespaces(&self) -> HashSet<String> {

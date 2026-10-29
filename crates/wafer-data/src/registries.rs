@@ -209,6 +209,14 @@ pub fn dynamic_tag(registry: &'static str, name: &str) -> &'static Tag {
     tag
 }
 
+pub fn direct_tag(registry: &'static str, values: &[i32]) -> &'static Tag {
+    let size = registry_entries(registry).map_or(0, <[&str]>::len);
+    let bits: &'static [AtomicU64] = Box::leak((0..size.div_ceil(64)).map(|_| AtomicU64::new(0)).collect());
+    let tag: &'static Tag = Box::leak(Box::new(Tag::new("", bits)));
+    tag.bind(values);
+    tag
+}
+
 pub fn bind_tags(bound: &'static [RegistryTags]) {
     if std::ptr::eq(bound, bound_tags()) {
         return;

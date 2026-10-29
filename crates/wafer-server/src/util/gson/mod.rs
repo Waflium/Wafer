@@ -201,6 +201,38 @@ pub fn parse_object(json: &str) -> Result<JsonElement, String> {
     Err(format!("com.google.gson.JsonSyntaxException: Expected a com.google.gson.JsonObject but was com.google.gson.{class}; at path {}", reader.get_previous_path()))
 }
 
+pub fn gson_helper_parse(json: &str) -> Result<JsonElement, JavaThrowable> {
+    let mut reader = JsonReader::new(json);
+    reader.strictness = Strictness::Strict;
+    let from_json = [adapter!("read", 35), GSON_ARRAY_ADAPTER_READ, GSON_HELPER_FROM_JSON_516];
+    let element = match read_element(&mut reader, false) {
+        Ok(element) => element,
+        Err(error) => {
+            let mut throwable = if error.kind == JsonReaderErrorKind::IllegalState {
+                to_throwable(error, &from_json)
+            } else {
+                wrap_in_exception("com.google.gson.JsonParseException", to_throwable(error, &from_json), vec![GSON_HELPER_FROM_JSON_522])
+            };
+            throwable.push_frame(GSON_HELPER_PARSE_557);
+            return Err(throwable);
+        }
+    };
+    let class = match element {
+        JsonElement::Object(_) => return Ok(element),
+        JsonElement::Null => "JsonNull",
+        JsonElement::Array(_) => "JsonArray",
+        _ => "JsonPrimitive",
+    };
+    Err(JavaThrowable::new(
+        format!("com.google.gson.JsonSyntaxException: Expected a com.google.gson.JsonObject but was com.google.gson.{class}; at path {}", reader.get_previous_path()),
+        vec![GSON_ARRAY_ADAPTER_TYPE_CHECK, GSON_HELPER_FROM_JSON_516, GSON_HELPER_PARSE_557],
+    ))
+}
+
+const GSON_HELPER_FROM_JSON_516: &str = "net.minecraft.util.GsonHelper.fromJson(GsonHelper.java:516)";
+const GSON_HELPER_FROM_JSON_522: &str = "net.minecraft.util.GsonHelper.fromJson(GsonHelper.java:522)";
+const GSON_HELPER_PARSE_557: &str = "net.minecraft.util.GsonHelper.parse(GsonHelper.java:557)";
+
 pub fn from_json_object(json: &str) -> Result<Option<JsonElement>, String> {
     let syntax_exception = |error: JsonReaderError| format!("com.google.gson.JsonSyntaxException: {}: {}", exception_class(error.kind), error.message);
     let mut reader = JsonReader::new(json);

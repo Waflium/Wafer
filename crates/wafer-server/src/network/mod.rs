@@ -1,5 +1,6 @@
 pub mod chat;
 pub mod chat_type;
+pub mod chat_type_decoration;
 pub mod configuration;
 pub mod connection;
 pub mod encryption;

@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
-use wafer_data::{Block, BlockState, Tag, block_tags};
+use wafer_data::{Block, BlockState, Tag};
 use serde_json::Value;
 
 use crate::util::valueproviders::float;
@@ -65,7 +65,7 @@ impl RuleTest {
             "blockstate_match" => RuleTest::BlockStateMatch(state()?),
             "tag_match" => {
                 let tag = json.get("tag").and_then(Value::as_str).ok_or("missing tag")?;
-                RuleTest::TagMatch(block_tags::by_name(&resource(tag)).ok_or_else(|| format!("unknown block tag {tag}"))?)
+                RuleTest::TagMatch(wafer_data::dynamic_tag("minecraft:block", &resource(tag)))
             }
             "random_block_match" => RuleTest::RandomBlockMatch { block: block("block")?, probability: probability()? },
             "random_blockstate_match" => RuleTest::RandomBlockStateMatch { block_state: state()?, probability: probability()? },

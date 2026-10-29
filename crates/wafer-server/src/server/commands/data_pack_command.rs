@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 
 use super::list_players_command::format_list;
-use super::reload_command::{invoker_frames, reload_packs};
+use super::reload_command::{command_frames, invoker_frames, reload_packs};
 use crate::commands::CommandFn;
 use crate::commands::brigadier::{CommandContext, CommandSyntaxException, Dynamic2CommandExceptionType, DynamicCommandExceptionType, tr};
 use crate::commands::shared_suggestion_provider;
@@ -102,6 +102,12 @@ const ENABLE_BEFORE_FRAME: &str = "net.minecraft.server.commands.DataPackCommand
 const ENABLE_LAST_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$6(DataPackCommand.java:112)";
 const ENABLE_FIRST_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$7(DataPackCommand.java:116)";
 const DISABLE_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$9(DataPackCommand.java:125)";
+const LIST_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$10(DataPackCommand.java:130)";
+const LIST_AVAILABLE_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$11(DataPackCommand.java:133)";
+const LIST_ENABLED_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$12(DataPackCommand.java:137)";
+const LIST_PACKS_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.listPacks(DataPackCommand.java:224)";
+const LIST_AVAILABLE_PACKS_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.listAvailablePacks(DataPackCommand.java:229)";
+const LIST_ENABLED_PACKS_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.listEnabledPacks(DataPackCommand.java:246)";
 
 fn enable_pack(
     server: &mut Server,
@@ -178,12 +184,20 @@ fn disable_pack(server: &mut Server, context: &CommandContext, source: &CommandS
     Ok(selected.len() as i32)
 }
 
-fn list_packs(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    Ok(list_enabled_packs(server, context, source)? + list_available_packs(server, context, source)?)
+fn list_packs(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    Ok(list_enabled(server, source, &[LIST_ENABLED_PACKS_FRAME, LIST_PACKS_FRAME, LIST_FRAME])? + list_available(server, source, &[LIST_AVAILABLE_PACKS_FRAME, LIST_PACKS_FRAME, LIST_FRAME])?)
 }
 
 fn list_available_packs(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    server.pack_repository.reload();
+    list_available(server, source, &[LIST_AVAILABLE_PACKS_FRAME, LIST_AVAILABLE_FRAME])
+}
+
+fn list_enabled_packs(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    list_enabled(server, source, &[LIST_ENABLED_PACKS_FRAME, LIST_ENABLED_FRAME])
+}
+
+fn list_available(server: &mut Server, source: &CommandSourceStack, frames: &[&'static str]) -> Result<i32, CommandSyntaxException> {
+    server.pack_repository.reload_from(&command_frames(frames, server));
     let enabled_features = server.data_configuration.enabled_features;
     let unselected_packs: Vec<Arc<Pack>> = server
         .pack_repository
@@ -206,8 +220,8 @@ fn list_available_packs(server: &mut Server, _context: &CommandContext, source: 
     Ok(unselected_packs.len() as i32)
 }
 
-fn list_enabled_packs(server: &mut Server, _context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    server.pack_repository.reload();
+fn list_enabled(server: &mut Server, source: &CommandSourceStack, frames: &[&'static str]) -> Result<i32, CommandSyntaxException> {
+    server.pack_repository.reload_from(&command_frames(frames, server));
     let selected_packs = server.pack_repository.selected_packs().to_vec();
     if selected_packs.is_empty() {
         source.send_success(server, || Component::translatable("commands.datapack.list.enabled.none"), false);

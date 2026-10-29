@@ -23,7 +23,7 @@ impl StructureCheck {
 
     fn contains(&self, structure: StructureHolder) -> bool {
         match self {
-            StructureCheck::Tag(tag) => wafer_data::tag("minecraft:worldgen/structure", tag).contains(&(structure.0 as i32)),
+            StructureCheck::Tag(tag) => wafer_data::tag("minecraft:worldgen/structure", &crate::world::level::levelgen::density_function::resource_name(tag)).contains(&(structure.0 as i32)),
             StructureCheck::Direct(structures) => structures.iter().any(|name| StructureHolder::by_name(name) == Some(structure)),
         }
     }

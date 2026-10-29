@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use wafer_core::{AABB, BlockPos, Direction};
-use wafer_data::{Block, BlockState, Fluid, Tag, block_tags, fluid_tags};
+use wafer_data::{Block, BlockState, Fluid, Tag};
 use serde_json::Value;
 use wafer_protocol::nbt::Nbt;
 
@@ -26,7 +26,7 @@ impl BlockSet {
     pub fn parse(json: &Value) -> Result<BlockSet, String> {
         match json {
             Value::String(s) => match s.strip_prefix('#') {
-                Some(tag) => block_tags::by_name(&resource(tag)).map(BlockSet::Tag).ok_or_else(|| format!("unknown block tag {tag}")),
+                Some(tag) => Ok(BlockSet::Tag(wafer_data::dynamic_tag("minecraft:block", &resource(tag)))),
                 None => Ok(BlockSet::Direct(vec![Block::by_name(&resource(s)).ok_or_else(|| format!("unknown block {s}"))?])),
             },
             Value::Array(list) => list
@@ -63,7 +63,7 @@ impl FluidSet {
         };
         match json {
             Value::String(s) => match s.strip_prefix('#') {
-                Some(tag) => fluid_tags::by_name(&resource(tag)).map(FluidSet::Tag).ok_or_else(|| format!("unknown fluid tag {tag}")),
+                Some(tag) => Ok(FluidSet::Tag(wafer_data::dynamic_tag("minecraft:fluid", &resource(tag)))),
                 None => Ok(FluidSet::Direct(vec![fluid(s)?])),
             },
             Value::Array(list) => list.iter().map(|v| fluid(v.as_str().unwrap_or_default())).collect::<Result<_, _>>().map(FluidSet::Direct),
@@ -168,8 +168,7 @@ impl BlockPredicate {
             "matching_blocks" => BlockPredicate::MatchingBlocks { offset: parse_offset(json)?, blocks: BlockSet::parse(json.get("blocks").ok_or("missing blocks")?)? },
             "matching_block_tag" => {
                 let tag = json.get("tag").and_then(Value::as_str).ok_or("missing tag")?;
-                let tag = block_tags::by_name(&resource(tag)).unwrap_or_else(|| Box::leak(Box::new(Tag::new(Box::leak(resource(tag).into_boxed_str()), &[]))));
-                BlockPredicate::MatchingBlockTag { offset: parse_offset(json)?, tag }
+                BlockPredicate::MatchingBlockTag { offset: parse_offset(json)?, tag: wafer_data::dynamic_tag("minecraft:block", &resource(tag)) }
             }
             "matching_fluids" => BlockPredicate::MatchingFluids { offset: parse_offset(json)?, fluids: FluidSet::parse(json.get("fluids").ok_or("missing fluids")?)? },
             "matching_biomes" => BlockPredicate::MatchingBiomes { biomes: parse_biome_holder_set(json.get("biomes").ok_or("missing biomes")?)? },
@@ -238,5 +237,27 @@ impl BlockPredicate {
             BlockPredicate::Unobstructed => level.is_unobstructed(&AABB::of_block(origin)),
             BlockPredicate::True => true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tags_that_no_registry_defines_parse_and_match_nothing() {
+        let blocks = BlockSet::parse(&serde_json::json!("#ta:undefined_block_tag")).expect("a block tag");
+        assert!(!blocks.contains(wafer_data::blocks::STONE));
+        let fluids = FluidSet::parse(&serde_json::json!("#ta:undefined_fluid_tag")).expect("a fluid tag");
+        assert!(!fluids.contains(Fluid::Water));
+        let predicate = BlockPredicate::parse(&serde_json::json!({"type": "minecraft:matching_block_tag", "tag": "ta:undefined_block_tag"})).expect("a predicate");
+        assert!(matches!(predicate, BlockPredicate::MatchingBlockTag { .. }));
+    }
+
+    #[test]
+    fn vanilla_tags_still_match_their_members() {
+        let blocks = BlockSet::parse(&serde_json::json!("#minecraft:logs")).expect("a block tag");
+        assert!(blocks.contains(wafer_data::blocks::OAK_LOG));
+        assert!(!blocks.contains(wafer_data::blocks::STONE));
     }
 }

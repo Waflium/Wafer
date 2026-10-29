@@ -1,6 +1,8 @@
 use wafer_data::SyncedRegistry;
 use serde_json::Value;
 
+use crate::world::level::levelgen::density_function::resource_name;
+
 pub enum BiomeCheck {
     Tag(String),
     Direct(Vec<String>),
@@ -20,10 +22,10 @@ impl BiomeCheck {
 
     pub fn test(&self, biome: i32) -> bool {
         match self {
-            BiomeCheck::Tag(tag) => wafer_data::tag("minecraft:worldgen/biome", tag).contains(&biome),
+            BiomeCheck::Tag(tag) => wafer_data::tag("minecraft:worldgen/biome", &resource_name(tag)).contains(&biome),
             BiomeCheck::Direct(biomes) => {
                 let registry = SyncedRegistry::get("minecraft:worldgen/biome");
-                biomes.iter().any(|name| registry.id_of(name) == Some(biome))
+                biomes.iter().any(|name| registry.id_of(&resource_name(name)) == Some(biome))
             }
         }
     }

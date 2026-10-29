@@ -155,14 +155,14 @@ impl MultiPackResourceManager {
 }
 
 fn pack_filter_section(pack: &PackResources) -> Option<ResourceFilterSection> {
-    let metadata = match pack.load_metadata() {
-        Ok(metadata) => metadata,
+    let metadata = match pack.read_metadata() {
+        Ok(metadata) => metadata?,
         Err(_) => {
             error!("Failed to get filter section from pack {}", pack.pack_id());
             return None;
         }
     };
-    match ResourceFilterSection::parse(metadata.get("filter")?) {
+    match ResourceFilterSection::parse(&crate::world::item::component::element_to_nbt(metadata.get("filter")?)) {
         Ok(filter) => Some(filter),
         Err(_) => {
             error!("Failed to get filter section from pack {}", pack.pack_id());

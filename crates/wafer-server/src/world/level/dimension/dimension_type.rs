@@ -111,8 +111,9 @@ fn network_codec() -> Pair {
 pub fn encode_network(json: &Value) -> Result<Nbt, String> {
     let Nbt::Compound(mut fields) = network_codec().0.decode(&json_to_nbt(json))? else { return Err("A dimension type is not a compound".into()) };
     if let Some(attributes) = json.get("attributes") {
-        let attributes = EnvironmentAttributeMap::parse(attributes).encode_network()?;
-        if !matches!(&attributes, Nbt::Compound(entries) if entries.is_empty()) {
+        let map = EnvironmentAttributeMap::parse(attributes);
+        let attributes = map.encode_network()?;
+        if !map.entries().is_empty() {
             fields.push(("attributes".into(), attributes));
         }
     }

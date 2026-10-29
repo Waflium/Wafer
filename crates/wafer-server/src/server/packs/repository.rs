@@ -3,11 +3,11 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 
-use wafer_protocol::nbt::Nbt;
-
 use super::metadata::{self, FormatRange, PackFormat};
 use super::{PackLocationInfo, PackResources, PackSource, SharedZip};
 use crate::network::chat::Component;
+use crate::util::gson::JsonElement;
+use crate::util::java_throwable::JavaThrowable;
 use crate::server::dedicated::settings::java_io_exception;
 use crate::util::basic_file_attributes::BasicFileAttributes;
 use crate::world::flag::FeatureFlagSet;
@@ -156,8 +156,8 @@ pub struct Pack {
 }
 
 impl Pack {
-    pub fn read_meta_and_create(location: PackLocationInfo, resources: ResourcesSupplier, selection_config: PackSelectionConfig) -> Option<Pack> {
-        let metadata = read_pack_metadata(&location, &resources)?;
+    pub fn read_meta_and_create(location: PackLocationInfo, resources: ResourcesSupplier, selection_config: PackSelectionConfig, invoker: &[&'static str]) -> Option<Pack> {
+        let metadata = read_pack_metadata(&location, &resources, invoker)?;
         Some(Pack { location, resources, metadata, selection_config })
     }
 
@@ -206,14 +206,14 @@ impl Pack {
     }
 }
 
-fn read_pack_metadata(location: &PackLocationInfo, resources: &ResourcesSupplier) -> Option<PackMetadata> {
+fn read_pack_metadata(location: &PackLocationInfo, resources: &ResourcesSupplier, invoker: &[&'static str]) -> Option<PackMetadata> {
     if let ResourcesSupplier::BuiltIn = resources {
         return Some(built_in_metadata(&location.id));
     }
-    match read_file_pack_metadata(location, resources) {
+    match read_file_pack_metadata(location, resources, invoker) {
         Ok(metadata) => metadata,
         Err(exception) => {
-            warn!("Failed to read pack {} metadata\n{exception}", location.id);
+            warn!("Failed to read pack {} metadata\n{}", location.id, exception.print_stack_trace().trim_end());
             None
         }
     }
@@ -230,30 +230,69 @@ fn built_in_metadata(id: &str) -> PackMetadata {
     }
 }
 
-fn json_parse_exception(message: String) -> String {
-    format!("com.google.gson.JsonParseException: {message}")
+const READ_PACK_METADATA_PACK: &str = "net.minecraft.server.packs.repository.Pack.readPackMetadata(Pack.java:58)";
+const READ_PACK_METADATA_FALLBACK: &str = "net.minecraft.server.packs.repository.Pack.readPackMetadata(Pack.java:62)";
+const READ_PACK_METADATA_FEATURES: &str = "net.minecraft.server.packs.repository.Pack.readPackMetadata(Pack.java:69)";
+const READ_PACK_METADATA_OVERLAYS: &str = "net.minecraft.server.packs.repository.Pack.readPackMetadata(Pack.java:74)";
+const READ_META_AND_CREATE: &str = "net.minecraft.server.packs.repository.Pack.readMetaAndCreate(Pack.java:43)";
+const DISCOVER_FRAMES: [&str; 5] = [
+    "net.minecraft.server.packs.repository.FolderRepositorySource.lambda$loadPacks$0(FolderRepositorySource.java:63)",
+    "net.minecraft.server.packs.repository.FolderRepositorySource.discoverPacks(FolderRepositorySource.java:94)",
+    "net.minecraft.server.packs.repository.FolderRepositorySource.loadPacks(FolderRepositorySource.java:59)",
+    "net.minecraft.server.packs.repository.PackRepository.discoverAvailable(PackRepository.java:43)",
+    "net.minecraft.server.packs.repository.PackRepository.reload(PackRepository.java:36)",
+];
+
+pub const CONFIGURE_PACK_REPOSITORY_FRAMES: [&str; 6] = [
+    "net.minecraft.server.MinecraftServer.configurePackRepository(MinecraftServer.java:1561)",
+    "net.minecraft.server.WorldLoader$PackConfig.createResourceManager(WorldLoader.java:87)",
+    "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
+    "net.minecraft.util.Util.blockUntilDone(Util.java:1118)",
+    "net.minecraft.util.Util.blockUntilDone(Util.java:1106)",
+    "net.minecraft.server.Main.main(Main.java:177)",
+];
+
+fn is_json_parse_exception(exception: &JavaThrowable) -> bool {
+    matches!(exception.class_name(), "com.google.gson.JsonParseException" | "com.google.gson.JsonSyntaxException" | "com.google.gson.JsonIOException")
 }
 
-fn read_file_pack_metadata(location: &PackLocationInfo, resources: &ResourcesSupplier) -> Result<Option<PackMetadata>, String> {
-    let pack = resources.open_metadata(location);
-    let section = |name: &str| -> Result<Option<Nbt>, String> {
-        let metadata = pack.load_metadata()?;
-        Ok(metadata.get(name).cloned())
+fn get_metadata_section<T>(
+    pack: &PackResources,
+    frame: &'static str,
+    tail: &[&'static str],
+    decode: fn(&JsonElement) -> Result<Option<T>, JavaThrowable>,
+) -> Result<Option<T>, JavaThrowable> {
+    let at = |mut exception: JavaThrowable| {
+        exception.push_frame(frame);
+        exception.push_frames(tail);
+        exception
     };
-    let meta = match section("pack").and_then(|raw| raw.map(|raw| metadata::pack_section(&raw).map_err(json_parse_exception)).transpose()) {
+    match pack.read_metadata().map_err(at)? {
+        Some(root) => decode(&root).map_err(at),
+        None => Ok(None),
+    }
+}
+
+fn read_file_pack_metadata(location: &PackLocationInfo, resources: &ResourcesSupplier, invoker: &[&'static str]) -> Result<Option<PackMetadata>, JavaThrowable> {
+    let pack = resources.open_metadata(location);
+    let mut tail = vec![READ_META_AND_CREATE];
+    tail.extend(DISCOVER_FRAMES);
+    tail.extend(invoker);
+    let meta = match get_metadata_section(&pack, READ_PACK_METADATA_PACK, &tail, metadata::pack_section) {
         Ok(meta) => meta,
-        Err(exception) => {
-            warn!("Error reading pack metadata, attempting fallback type\n{exception}");
-            section("pack")?.map(|raw| metadata::fallback_pack_section(&raw).map_err(json_parse_exception)).transpose()?
+        Err(exception) if is_json_parse_exception(&exception) => {
+            warn!("Error reading pack metadata, attempting fallback type\n{}", exception.print_stack_trace().trim_end());
+            get_metadata_section(&pack, READ_PACK_METADATA_FALLBACK, &tail, metadata::fallback_pack_section)?
         }
+        Err(exception) => return Err(exception),
     };
     let Some(meta) = meta else {
         warn!("Missing metadata in pack {}", location.id);
         return Ok(None);
     };
-    let requested_features = section("features")?.map(|raw| metadata::features_section(&raw).map_err(json_parse_exception)).transpose()?.unwrap_or_default();
+    let requested_features = get_metadata_section(&pack, READ_PACK_METADATA_FEATURES, &tail, metadata::features_section)?.unwrap_or_default();
     let compatibility = PackCompatibility::for_version(meta.supported_formats, PackFormat::CURRENT);
-    let overlays = section("overlays")?.map(|raw| metadata::overlays_section(&raw).map_err(json_parse_exception)).transpose()?.unwrap_or_default();
+    let overlays = get_metadata_section(&pack, READ_PACK_METADATA_OVERLAYS, &tail, metadata::overlays_section)?.unwrap_or_default();
     Ok(Some(PackMetadata { description: meta.description, compatibility, requested_features, overlays }))
 }
 
@@ -264,16 +303,16 @@ pub enum RepositorySource {
 }
 
 impl RepositorySource {
-    fn load_packs(&self, result: &mut dyn FnMut(Pack)) {
+    fn load_packs(&self, result: &mut dyn FnMut(Pack), invoker: &[&'static str]) {
         match self {
             RepositorySource::ServerPacks => {
                 let vanilla = PackLocationInfo { id: VANILLA_ID.to_string(), title: Component::translatable("dataPack.vanilla.name"), source: PackSource::BuiltIn };
-                if let Some(pack) = Pack::read_meta_and_create(vanilla, ResourcesSupplier::BuiltIn, VANILLA_SELECTION_CONFIG) {
+                if let Some(pack) = Pack::read_meta_and_create(vanilla, ResourcesSupplier::BuiltIn, VANILLA_SELECTION_CONFIG, invoker) {
                     result(pack);
                 }
                 for id in FEATURE_PACKS {
                     let location = PackLocationInfo { id: id.to_string(), title: Component::literal(id), source: PackSource::Feature };
-                    if let Some(pack) = Pack::read_meta_and_create(location, ResourcesSupplier::BuiltIn, FEATURE_SELECTION_CONFIG) {
+                    if let Some(pack) = Pack::read_meta_and_create(location, ResourcesSupplier::BuiltIn, FEATURE_SELECTION_CONFIG, invoker) {
                         result(pack);
                     }
                 }
@@ -283,7 +322,7 @@ impl RepositorySource {
                     discover_packs(folder, validator, &mut |content, resources| {
                         let name = content.file_name().unwrap_or_default().to_string_lossy().into_owned();
                         let location = PackLocationInfo { id: format!("file/{name}"), title: Component::literal(&name), source: *pack_source };
-                        if let Some(pack) = Pack::read_meta_and_create(location, resources, DISCOVERED_PACK_SELECTION_CONFIG) {
+                        if let Some(pack) = Pack::read_meta_and_create(location, resources, DISCOVERED_PACK_SELECTION_CONFIG, invoker) {
                             result(pack);
                         }
                     })
@@ -365,17 +404,24 @@ impl PackRepository {
     }
 
     pub fn reload(&mut self) {
+        self.reload_from(&CONFIGURE_PACK_REPOSITORY_FRAMES);
+    }
+
+    pub fn reload_from(&mut self, invoker: &[&'static str]) {
         let currently_selected: Vec<String> = self.selected.iter().map(|pack| pack.id().to_string()).collect();
-        self.available = self.discover_available();
+        self.available = self.discover_available(invoker);
         self.selected = self.rebuild_selected(&currently_selected);
     }
 
-    fn discover_available(&self) -> BTreeMap<String, Arc<Pack>> {
+    fn discover_available(&self, invoker: &[&'static str]) -> BTreeMap<String, Arc<Pack>> {
         let mut discovered = BTreeMap::new();
         for source in &self.sources {
-            source.load_packs(&mut |pack| {
-                discovered.insert(pack.id().to_string(), Arc::new(pack));
-            });
+            source.load_packs(
+                &mut |pack| {
+                    discovered.insert(pack.id().to_string(), Arc::new(pack));
+                },
+                invoker,
+            );
         }
         discovered
     }

@@ -1,11 +1,36 @@
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::sync::LazyLock;
 
+use wafer_protocol::lazily_parsed_number;
 use wafer_protocol::nbt::Nbt;
 
 use crate::network::chat::Component;
 use crate::network::chat::component_serialization;
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::util::gson::JsonElement;
+use crate::util::java_throwable::JavaThrowable;
 use crate::world::flag::FeatureFlagSet;
+use crate::world::item::component::element_to_nbt;
 
 const LAST_PRE_MINOR_VERSION: i32 = 81;
+
+const GET_OR_THROW: &str = "com.mojang.serialization.DataResult$Error.getOrThrow(DataResult.java:287)";
+const GET_SECTION: &str = "net.minecraft.server.packs.resources.ResourceMetadata$2.getSection(ResourceMetadata.java:40)";
+const GET_METADATA_SECTION_DECODE: &str = "net.minecraft.server.packs.AbstractPackMetadataResources.getMetadataSection(AbstractPackMetadataResources.java:26)";
+const PARSE_BIG_DECIMAL: &str = "com.google.gson.internal.NumberLimits.parseBigDecimal(NumberLimits.java:27)";
+const AS_BIG_DECIMAL: &str = "com.google.gson.internal.LazilyParsedNumber.asBigDecimal(LazilyParsedNumber.java:41)";
+const INT_VALUE: &str = "com.google.gson.internal.LazilyParsedNumber.intValue(LazilyParsedNumber.java:52)";
+
+static NUMBER_FORMAT_TRACES: LazyLock<HashMap<&'static str, Vec<&'static str>>> = LazyLock::new(|| {
+    include_str!("number_format_traces.tsv")
+        .lines()
+        .map(|line| {
+            let mut columns = line.split('\t');
+            (columns.next().expect("a trace key"), columns.collect())
+        })
+        .collect()
+});
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct PackFormat {
@@ -49,53 +74,90 @@ pub struct PackMetadataSection {
     pub supported_formats: FormatRange,
 }
 
-fn int(value: &Nbt) -> Result<i32, String> {
-    crate::util::codec::int(value)
+struct Context {
+    section: &'static str,
+    thrown: RefCell<Option<JavaThrowable>>,
 }
 
-fn non_negative_int(value: &Nbt) -> Result<i32, String> {
-    let n = int(value)?;
-    if n < 0 { Err(format!("Value must be non-negative: {n}")) } else { Ok(n) }
-}
-
-fn pack_format(value: &Nbt, default_minor: i32) -> Result<PackFormat, String> {
-    match value {
-        Nbt::List(list) => {
-            if list.is_empty() || list.len() > 256 {
-                return Err(format!("List must have between 1 and 256 elements: {}", list.len()));
-            }
-            let major = non_negative_int(&list[0])?;
-            let minor = match list.get(1) {
-                Some(minor) => non_negative_int(minor)?,
-                None => default_minor,
-            };
-            Ok(PackFormat::of(major, minor))
-        }
-        other => Ok(PackFormat::of(non_negative_int(other)?, default_minor)),
+impl Context {
+    fn new(section: &'static str) -> Context {
+        Context { section, thrown: RefCell::new(None) }
     }
-}
 
-fn int_range(value: &Nbt) -> Result<(i32, i32), String> {
-    let (min, max) = match value {
-        Nbt::List(list) => {
-            if list.len() != 2 {
-                return Err(format!("Input is not a list of 2 elements: {}", crate::nbt::to_string(value)));
+    fn int(&self, tag: &Nbt, location: &str) -> DecodeResult<i32> {
+        if let Nbt::LazilyParsedNumber(text) = tag
+            && let Some(message) = lazily_parsed_number::number_limits_error(text)
+        {
+            let mut thrown = self.thrown.borrow_mut();
+            if thrown.is_none() {
+                let mut frames = vec![PARSE_BIG_DECIMAL, AS_BIG_DECIMAL, INT_VALUE];
+                frames.extend(NUMBER_FORMAT_TRACES.get(format!("{}.{location}", self.section).as_str()).map_or(&[][..], Vec::as_slice));
+                frames.extend([GET_SECTION, GET_METADATA_SECTION_DECODE]);
+                *thrown = Some(JavaThrowable::new(format!("java.lang.NumberFormatException: {message}"), frames));
             }
-            (int(&list[0])?, int(&list[1])?)
+            return DecodeResult::error(message);
         }
-        Nbt::Compound(_) => {
-            let field = |name: &str| value.get(name).ok_or_else(|| format!("No key {name} in MapLike[{}]", crate::nbt::to_string(value))).and_then(int);
-            (field("min_inclusive")?, field("max_inclusive")?)
-        }
-        other => {
-            let v = int(other)?;
-            (v, v)
-        }
-    };
-    if min > max {
-        return Err("min_inclusive must be less than or equal to max_inclusive".into());
+        codec::int(tag).into()
     }
-    Ok((min, max))
+
+    fn non_negative_int(&self, tag: &Nbt, location: &str) -> DecodeResult<i32> {
+        let value = self.int(tag, location);
+        match value.value {
+            Some(number) if value.error.is_none() && number < 0 => DecodeResult::error(format!("Value must be non-negative: {number}")),
+            _ => value,
+        }
+    }
+
+    fn pack_format(&self, tag: &Nbt, default_minor: i32, location: &str) -> DecodeResult<PackFormat> {
+        let index = Cell::new(0);
+        let list = codec::list_between_partial(tag, 1, 256, |element| {
+            let position = if index.replace(1) == 0 { format!("{location}[0]") } else { format!("{location}[1]") };
+            self.non_negative_int(element, &position)
+        });
+        codec::either_result(list, || self.non_negative_int(tag, location)).map(|format| match format {
+            Ok(list) => PackFormat::of(list[0], list.get(1).copied().unwrap_or(default_minor)),
+            Err(major) => PackFormat::of(major, default_minor),
+        })
+    }
+
+    fn int_range(&self, tag: &Nbt, location: &str) -> DecodeResult<(i32, i32)> {
+        let create = |min: i32, max: i32| {
+            if min > max { DecodeResult::error("min_inclusive must be less than or equal to max_inclusive") } else { DecodeResult::success((min, max)) }
+        };
+        let array = || {
+            let index = Cell::new(0);
+            let list = codec::list_partial(tag, |element| {
+                let position = if index.replace(1) == 0 { format!("{location}[0]") } else { format!("{location}[1]") };
+                self.int(element, &position)
+            });
+            list.flat_map(|mut elements| {
+                if elements.len() != 2 {
+                    let value = (elements.len() >= 2).then(|| {
+                        elements.truncate(2);
+                        (elements[0], elements[1])
+                    });
+                    return DecodeResult { value, error: Some("Input is not a list of 2 elements".to_string()) };
+                }
+                create(elements[0], elements[1])
+            })
+        };
+        let object = || {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = Record::default();
+            let min = record.required(tag, "min_inclusive", |value| self.int(value, &format!("{location}.min_inclusive")));
+            let max = record.required(tag, "max_inclusive", |value| self.int(value, &format!("{location}.max_inclusive")));
+            record.build(|| Some((min?, max?))).flat_map(|(min, max)| create(min, max))
+        };
+        let array_or_object = || codec::either_result(array(), object).map(|range| match range {
+            Ok(range) | Err(range) => range,
+        });
+        codec::either_result(self.int(tag, location), array_or_object).flat_map(|range| match range {
+            Ok(min) => DecodeResult::success((min, min)),
+            Err(range) => DecodeResult::success(range),
+        })
+    }
 }
 
 #[derive(Debug, Default)]
@@ -107,23 +169,21 @@ struct IntermediaryFormat {
 }
 
 impl IntermediaryFormat {
-    fn pack(object: &Nbt) -> Result<IntermediaryFormat, String> {
-        Ok(IntermediaryFormat {
-            min: object.get("min_format").map(|v| pack_format(v, 0)).transpose()?,
-            max: object.get("max_format").map(|v| pack_format(v, i32::MAX)).transpose()?,
-            format: object.get("pack_format").map(int).transpose()?,
-            supported: object.get("supported_formats").map(int_range).transpose()?,
-        })
+    fn pack(tag: &Nbt, context: &Context) -> DecodeResult<IntermediaryFormat> {
+        let mut record = Record::default();
+        let min = record.optional(tag, "min_format", |value| context.pack_format(value, 0, "min_format"));
+        let max = record.optional(tag, "max_format", |value| context.pack_format(value, i32::MAX, "max_format"));
+        let format = record.optional(tag, "pack_format", |value| context.int(value, "pack_format"));
+        let supported = record.optional(tag, "supported_formats", |value| context.int_range(value, "supported_formats"));
+        record.build(|| Some(IntermediaryFormat { min, max, format, supported }))
     }
 
-    fn overlay(object: &Nbt) -> Result<IntermediaryFormat, String> {
-        let min = object.get("min_format").map(|v| pack_format(v, 0)).transpose()?;
-        Ok(IntermediaryFormat {
-            min,
-            max: object.get("max_format").map(|v| pack_format(v, i32::MAX)).transpose()?,
-            format: min.map(|m| m.major),
-            supported: object.get("formats").map(int_range).transpose()?,
-        })
+    fn overlay(tag: &Nbt, context: &Context) -> DecodeResult<IntermediaryFormat> {
+        let mut record = Record::default();
+        let min = record.optional(tag, "min_format", |value| context.pack_format(value, 0, "min_format"));
+        let max = record.optional(tag, "max_format", |value| context.pack_format(value, i32::MAX, "max_format"));
+        let supported = record.optional(tag, "formats", |value| context.int_range(value, "formats"));
+        record.build(|| Some(IntermediaryFormat { min, max, format: min.map(|min| min.major), supported }))
     }
 
     fn effective_min_major_version(&self) -> i32 {
@@ -233,72 +293,193 @@ fn validate_pack_format_for_range(format: i32, min: i32, max: i32) -> Result<(),
     Ok(())
 }
 
-fn object<'a>(value: &'a Nbt, what: &str) -> Result<&'a Nbt, String> {
-    match value {
-        Nbt::Compound(_) => Ok(value),
-        _ => Err(format!("Not a JSON object: {what}")),
+fn flat_validate<T>(result: DecodeResult<T>, validate: impl FnOnce(&T) -> Result<FormatRange, String>) -> DecodeResult<FormatRange> {
+    result.flat_map(|value| match validate(&value) {
+        Ok(range) => DecodeResult::success(range),
+        Err(error) => DecodeResult::error(error),
+    })
+}
+
+fn describe(tag: &Nbt) -> DecodeResult<Component> {
+    component_serialization::decode_partial(tag)
+}
+
+fn decode_pack(tag: &Nbt, context: &Context) -> DecodeResult<PackMetadataSection> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
     }
+    let mut record = Record::default();
+    let description = record.required(tag, "description", describe);
+    let formats = flat_validate(IntermediaryFormat::pack(tag, context), |format| format.validate(true, false, "Pack", "supported_formats"));
+    let supported_formats = record.absorb(formats);
+    record.build(|| Some(PackMetadataSection { description: description?, supported_formats: supported_formats? }))
 }
 
-fn description(value: Option<&Nbt>) -> Result<Component, String> {
-    let value = value.ok_or("No key description in MapLike")?;
-    component_serialization::decode(value)
-}
-
-pub fn pack_section(value: &Nbt) -> Result<PackMetadataSection, String> {
-    crate::nbt::with_json_source(|| {
-        let object = object(value, "pack")?;
-        let description = description(object.get("description"))?;
-        let supported_formats = IntermediaryFormat::pack(object)?.validate(true, false, "Pack", "supported_formats")?;
-        Ok(PackMetadataSection { description, supported_formats })
-    })
-}
-
-pub fn fallback_pack_section(value: &Nbt) -> Result<PackMetadataSection, String> {
-    crate::nbt::with_json_source(|| {
-        let description = description(object(value, "pack")?.get("description"))?;
-        let unknown = PackFormat::of(i32::MAX, 0);
-        Ok(PackMetadataSection { description, supported_formats: FormatRange { min: unknown, max: unknown } })
-    })
-}
-
-pub fn features_section(value: &Nbt) -> Result<FeatureFlagSet, String> {
-    crate::nbt::with_json_source(|| {
-        let enabled = object(value, "features")?.get("enabled").ok_or("No key enabled in MapLike")?;
-        let Nbt::List(names) = enabled else { return Err(format!("Not a list: {}", crate::nbt::to_string(enabled))) };
-        let names: Vec<&str> = names.iter().map(|n| n.as_str().ok_or_else(|| format!("Not a string: {}", crate::nbt::to_string(n)))).collect::<Result<_, _>>()?;
-        FeatureFlagSet::from_names(names)
-    })
-}
-
-pub fn overlays_section(value: &Nbt) -> Result<Vec<String>, String> {
-    crate::nbt::with_json_source(|| overlays(value))
-}
-
-fn overlays(value: &Nbt) -> Result<Vec<String>, String> {
-    let entries = object(value, "overlays")?.get("entries").ok_or("No key entries in MapLike")?;
-    let Nbt::List(entries) = entries else { return Err(format!("Not a list: {}", crate::nbt::to_string(entries))) };
-    let mut parsed = Vec::with_capacity(entries.len());
-    for entry in entries {
-        let entry = object(entry, "overlay")?;
-        let format = IntermediaryFormat::overlay(entry)?;
-        let directory = entry.get("directory").and_then(Nbt::as_str).ok_or("No key directory in MapLike")?;
-        if directory.is_empty() || !directory.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_' | b'.')) {
-            return Err(format!("{directory} is not accepted directory name"));
-        }
-        parsed.push((format, directory.to_string()));
+fn decode_fallback_pack(tag: &Nbt) -> DecodeResult<PackMetadataSection> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
     }
-    let min_version = parsed.iter().map(|(format, _)| format.effective_min_major_version()).min().unwrap_or(i32::MAX);
+    let mut record = Record::default();
+    let description = record.required(tag, "description", describe);
+    let unknown = PackFormat::of(i32::MAX, 0);
+    record.build(|| Some(PackMetadataSection { description: description?, supported_formats: FormatRange { min: unknown, max: unknown } }))
+}
+
+fn decode_features(tag: &Nbt) -> DecodeResult<FeatureFlagSet> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let mut record = Record::default();
+    let flags = record.required(tag, "enabled", |enabled| {
+        codec::list_partial(enabled, |name| DecodeResult::from(codec::identifier(name))).flat_map(|names| match FeatureFlagSet::from_names(names.iter().map(String::as_str)) {
+            Ok(flags) => DecodeResult::success(flags),
+            Err(error) => DecodeResult::error(error),
+        })
+    });
+    record.build(|| flags)
+}
+
+fn decode_overlays(tag: &Nbt, context: &Context) -> DecodeResult<Vec<String>> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let mut record = Record::default();
+    let overlays = record.required(tag, "entries", |entries| {
+        let list = codec::list_partial(entries, |entry| decode_overlay_entry(entry, context));
+        list.flat_map(|entries| validate_overlays(entries, context))
+    });
+    record.build(|| overlays)
+}
+
+fn decode_overlay_entry(tag: &Nbt, context: &Context) -> DecodeResult<(IntermediaryFormat, String)> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let mut record = Record::default();
+    let format = record.absorb(IntermediaryFormat::overlay(tag, context));
+    let directory = record.required(tag, "directory", |directory| {
+        DecodeResult::from(codec::string(directory).map(str::to_string)).flat_map(|directory| {
+            if !directory.is_empty() && directory.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_' | b'.')) {
+                DecodeResult::success(directory)
+            } else {
+                DecodeResult::error(format!("{directory} is not accepted directory name"))
+            }
+        })
+    });
+    record.build(|| Some((format?, directory?)))
+}
+
+fn validate_overlays(entries: Vec<(IntermediaryFormat, String)>, context: &Context) -> DecodeResult<Vec<String>> {
+    let min_version = entries.iter().map(|(format, _)| format.effective_min_major_version()).min().unwrap_or(i32::MAX);
     let mut overlays = Vec::new();
-    for (format, directory) in parsed {
+    for (format, directory) in entries {
         if format.min.is_none() && format.max.is_none() && format.supported.is_none() {
-            warn!("Unknown or broken overlay entry {directory}");
+            if context.thrown.borrow().is_none() {
+                warn!("Unknown or broken overlay entry {directory}");
+            }
             continue;
         }
-        let range = format.validate(false, min_version <= LAST_PRE_MINOR_VERSION, &format!("Overlay \"{directory}\""), "formats")?;
-        if range.contains(PackFormat::CURRENT) {
-            overlays.push(directory);
+        match format.validate(false, min_version <= LAST_PRE_MINOR_VERSION, &format!("Overlay \"{directory}\""), "formats") {
+            Ok(range) => {
+                if range.contains(PackFormat::CURRENT) {
+                    overlays.push(directory);
+                }
+            }
+            Err(error) => return DecodeResult::error(error),
         }
     }
-    Ok(overlays)
+    DecodeResult::success(overlays)
+}
+
+fn read_section<T>(root: &JsonElement, name: &'static str, context: &Context, decode: impl FnOnce(&Nbt, &Context) -> DecodeResult<T>) -> Result<Option<T>, JavaThrowable> {
+    let Some(raw) = root.get(name) else { return Ok(None) };
+    let result = crate::nbt::with_json_source(|| decode(&element_to_nbt(raw), context));
+    if let Some(thrown) = context.thrown.borrow_mut().take() {
+        return Err(thrown);
+    }
+    match result.error {
+        None => Ok(Some(result.value.expect("a successful value"))),
+        Some(message) => Err(JavaThrowable::new(format!("com.google.gson.JsonParseException: {message}"), vec![GET_OR_THROW, GET_SECTION, GET_METADATA_SECTION_DECODE])),
+    }
+}
+
+pub fn pack_section(root: &JsonElement) -> Result<Option<PackMetadataSection>, JavaThrowable> {
+    read_section(root, "pack", &Context::new("pack"), decode_pack)
+}
+
+pub fn fallback_pack_section(root: &JsonElement) -> Result<Option<PackMetadataSection>, JavaThrowable> {
+    read_section(root, "pack", &Context::new("pack"), |tag, _| decode_fallback_pack(tag))
+}
+
+pub fn features_section(root: &JsonElement) -> Result<Option<FeatureFlagSet>, JavaThrowable> {
+    read_section(root, "features", &Context::new("features"), |tag, _| decode_features(tag))
+}
+
+pub fn overlays_section(root: &JsonElement) -> Result<Option<Vec<String>>, JavaThrowable> {
+    read_section(root, "overlays", &Context::new("overlay"), decode_overlays)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::util::gson::gson_helper_parse;
+
+    fn root(json: &str) -> JsonElement {
+        gson_helper_parse(json).expect("a JSON object")
+    }
+
+    fn pack_error(json: &str) -> JavaThrowable {
+        pack_section(&root(json)).expect_err("a pack metadata error")
+    }
+
+    #[test]
+    fn a_boolean_format_reports_the_either_chain_and_the_missing_field() {
+        let error = pack_error(r#"{"pack":{"description":"x","min_format":true,"max_format":121}}"#);
+        assert_eq!(
+            error.description,
+            "com.google.gson.JsonParseException: Failed to parse either. First: Not a json array: true; Second: Not a number: true; Pack missing field, must declare both min_format and max_format"
+        );
+        assert_eq!(error.stack_trace[0], GET_OR_THROW);
+    }
+
+    #[test]
+    fn a_broken_overlay_format_reports_the_either_chain_of_the_range() {
+        let error = overlays_section(&root(r#"{"overlays":{"entries":[{"formats":[1,"x"],"directory":"o"}]}}"#)).expect_err("an overlay error");
+        assert_eq!(
+            error.description,
+            r#"com.google.gson.JsonParseException: Failed to parse either. First: Not a number: [1,"x"]; Second: Failed to parse either. First: Not a number: "x"; Input is not a list of 2 elements; Second: Not a JSON object: [1,"x"]"#
+        );
+    }
+
+    #[test]
+    fn a_huge_exponent_throws_a_number_format_exception_with_the_codec_frames() {
+        let error = pack_error(r#"{"pack":{"description":"x","min_format":1E+10000,"max_format":121}}"#);
+        assert_eq!(error.description, "java.lang.NumberFormatException: Number has unsupported scale: 1E+10000");
+        assert_eq!(error.stack_trace[..3], [PARSE_BIG_DECIMAL, AS_BIG_DECIMAL, INT_VALUE]);
+        assert!(error.stack_trace.iter().any(|frame| frame.contains("EitherCodec.decode")));
+        assert_eq!(error.stack_trace.last(), Some(&GET_METADATA_SECTION_DECODE));
+    }
+
+    #[test]
+    fn an_empty_document_ends_the_input() {
+        let error = gson_helper_parse("").expect_err("an empty document");
+        assert_eq!(error.description, "com.google.gson.JsonParseException: java.io.EOFException: End of input at line 1 column 1 path $");
+        assert_eq!(error.cause.as_deref().map(|cause| cause.description.as_str()), Some("java.io.EOFException: End of input at line 1 column 1 path $"));
+    }
+
+    #[test]
+    fn a_document_that_is_not_an_object_is_rejected() {
+        let error = gson_helper_parse("[]").expect_err("an array document");
+        assert_eq!(error.description, "com.google.gson.JsonSyntaxException: Expected a com.google.gson.JsonObject but was com.google.gson.JsonArray; at path $");
+    }
+
+    #[test]
+    fn valid_sections_decode() {
+        let section = pack_section(&root(r#"{"pack":{"description":"x","min_format":121,"max_format":[121,5]}}"#)).expect("a pack section").expect("present");
+        assert_eq!(section.supported_formats, FormatRange { min: PackFormat::of(121, 0), max: PackFormat::of(121, 5) });
+        let overlays = overlays_section(&root(r#"{"overlays":{"entries":[{"directory":"o","min_format":121,"max_format":121},{"directory":"p","min_format":122,"max_format":122}]}}"#))
+            .expect("an overlays section")
+            .expect("present");
+        assert_eq!(overlays, vec!["o".to_string()]);
+    }
 }
