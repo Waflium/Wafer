@@ -23,7 +23,7 @@ pub fn from_utf16(units: &[u16]) -> String {
     out
 }
 
-pub fn utf16_units(s: &str) -> impl Iterator<Item = u16> + '_ {
+pub fn utf16_units(s: &str) -> impl Iterator<Item = u16> + Clone + '_ {
     s.chars().flat_map(|c| {
         let mut buffer = [0u16; 2];
         let length = match lone_surrogate_unit(c) {
@@ -35,6 +35,16 @@ pub fn utf16_units(s: &str) -> impl Iterator<Item = u16> + '_ {
         };
         buffer.into_iter().take(length)
     })
+}
+
+pub trait JavaStr {
+    fn java_utf16(&self) -> impl Iterator<Item = u16> + Clone + '_;
+}
+
+impl JavaStr for str {
+    fn java_utf16(&self) -> impl Iterator<Item = u16> + Clone + '_ {
+        utf16_units(self)
+    }
 }
 
 pub fn contains_lone_surrogate(s: &str) -> bool {
@@ -59,6 +69,13 @@ mod tests {
         assert_eq!(utf16_units(&text).collect::<Vec<_>>(), units);
         assert!(contains_lone_surrogate(&text));
         assert_eq!(to_utf8_lossy(&text), "a?b?\u{1F600}??");
+    }
+
+    #[test]
+    fn carried_surrogates_count_and_hash_as_one_unit() {
+        let text = from_utf16(&[0x61, 0xD800, 0x62]);
+        assert_eq!(text.java_utf16().count(), 3);
+        assert_eq!(crate::random::java_string_hash(&text), (0x61 * 31 + 0xD800) * 31 + 0x62);
     }
 
     #[test]

@@ -33,7 +33,7 @@ fn visit_node_arguments(context: &CommandContextBuilder, command: &[u16], out: &
         }
         if let Some((_, value)) = context.arguments.iter().find(|(name, _)| *name == node.name) {
             let range = value.range;
-            out.push(Argument { name: node.name, value: String::from_utf16_lossy(&command[range.start..range.end]) });
+            out.push(Argument { name: node.name, value: wafer_core::java_string::from_utf16(&command[range.start..range.end]) });
         }
     }
 }

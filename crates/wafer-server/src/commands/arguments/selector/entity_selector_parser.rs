@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_core::AABB;
 use wafer_core::mth;
 
@@ -228,7 +229,7 @@ impl<'r, 'a> EntitySelectorParser<'r, 'a> {
                 self.includes_entities = true;
             }
             None => {
-                if name.is_empty() || name.encode_utf16().count() > 16 {
+                if name.is_empty() || name.java_utf16().count() > 16 {
                     self.reader.cursor = start;
                     return Err(ERROR_INVALID_NAME_OR_UUID.create_with_context(self.reader));
                 }
@@ -390,7 +391,7 @@ mod tests {
     use super::*;
 
     fn parse(input: &str, allow_selectors: bool) -> Result<(EntitySelector, usize), String> {
-        let units: Vec<u16> = input.encode_utf16().collect();
+        let units: Vec<u16> = input.java_utf16().collect();
         let mut reader = StringReader::new(&units);
         let result = EntitySelectorParser::new(&mut reader, allow_selectors).parse();
         result.map(|s| (s, reader.cursor)).map_err(|e| e.get_message())

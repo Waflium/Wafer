@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicPtr, Ordering};
@@ -144,7 +145,7 @@ fn dimension_type(name: &'static str, v: &Value) -> wafer_data::DimensionType {
 
 fn file_key(id: &str) -> (Vec<u16>, Vec<u16>) {
     let (namespace, path) = id.split_once(':').unwrap_or(("minecraft", id));
-    (format!("{path}.json").encode_utf16().collect(), namespace.encode_utf16().collect())
+    (format!("{path}.json").java_utf16().collect(), namespace.java_utf16().collect())
 }
 
 const UNSYNCHRONIZED: &[(&str, &[(&str, &str)])] = &[
@@ -493,7 +494,7 @@ pub fn singleton_value(registry: &str, tag: &Nbt) -> Option<(&'static str, Strin
         name.strip_prefix("minecraft:").or_else(|| (!name.contains(':')).then_some(name))
     };
     let object_hash = |class: &str| {
-        let hash = class.encode_utf16().fold(0i32, |hash, unit| hash.wrapping_mul(31).wrapping_add(unit as i32));
+        let hash = class.java_utf16().fold(0i32, |hash, unit| hash.wrapping_mul(31).wrapping_add(unit as i32));
         format!("{class}@{hash:x}")
     };
     match registry {

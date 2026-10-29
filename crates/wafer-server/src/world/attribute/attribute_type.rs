@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::Arc;
 
 use serde_json::Value as Json;
@@ -28,7 +29,7 @@ const MOB_CATEGORIES: [&str; 8] = ["monster", "creature", "ambient", "axolotls",
 fn check_hex_color<const DIGITS: usize>(value: Nbt) -> Result<Nbt, String> {
     let string = value.as_str().unwrap_or_default();
     let Some(hex) = string.strip_prefix('#') else { return Err("Hex color must begin with #".to_string()) };
-    let digits = hex.encode_utf16().count();
+    let digits = hex.java_utf16().count();
     if digits != DIGITS {
         return Err(format!("Hex color is wrong size, expected {DIGITS} digits but got {digits}"));
     }

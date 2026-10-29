@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::Nbt;
 
 pub type HashCode = u32;
@@ -116,7 +117,7 @@ pub fn create_double(v: f64) -> HashCode {
 }
 
 pub fn create_string(s: &str) -> HashCode {
-    let units: Vec<u16> = s.encode_utf16().collect();
+    let units: Vec<u16> = s.java_utf16().collect();
     let mut h = Hasher::new();
     h.put_byte(TAG_STRING).put_int(units.len() as i32);
     for u in units {

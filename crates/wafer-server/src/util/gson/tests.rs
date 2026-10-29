@@ -1,8 +1,9 @@
+use wafer_core::java_string::JavaStr;
 use super::{parse_lenient, parse_strict, to_stable_string};
 use crate::util::datafix::legacy_component_data_fix_utils::{extract_translation_string, rewrite_from_lenient};
 
 fn hex(value: &str) -> String {
-    value.encode_utf16().map(|unit| format!("{unit:04x}")).collect()
+    value.java_utf16().map(|unit| format!("{unit:04x}")).collect()
 }
 
 fn unhex(value: &str) -> Vec<u16> {
@@ -71,7 +72,7 @@ fn check_errors(expected: &str) -> usize {
         if actual != line {
             failures += 1;
             if failures <= 10 {
-                let decode = |field: &str| String::from_utf16_lossy(&unhex(&field[1..]));
+                let decode = |field: &str| wafer_core::java_string::from_utf16(&unhex(&field[1..]));
                 let actual_fields: Vec<String> = actual.split('\t').map(str::to_string).collect();
                 for i in 1..4 {
                     if actual_fields[i] != fields[i] {
@@ -117,8 +118,8 @@ fn check_traces(expected: &str) -> usize {
     let mut failures = 0;
     for line in expected.lines() {
         let fields: Vec<&str> = line.split('\t').collect();
-        let input = String::from_utf16_lossy(&unhex(fields[0]));
-        let expected_trace = String::from_utf16_lossy(&unhex(fields[1]));
+        let input = wafer_core::java_string::from_utf16(&unhex(fields[0]));
+        let expected_trace = wafer_core::java_string::from_utf16(&unhex(fields[1]));
         let actual = match super::parse_strict_throwable(&input) {
             Ok(_) => "OK".to_string(),
             Err(throwable) => render_trace(&throwable),

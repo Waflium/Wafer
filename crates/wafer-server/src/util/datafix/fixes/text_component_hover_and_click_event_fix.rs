@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::Arc;
 
 use crate::datafixers::data_fix::{DataFix, DataFixBase, TypeRewriteRule};
@@ -144,7 +145,7 @@ fn validate_uri(uri: &str) -> bool {
 }
 
 fn validate_chat(string: &str) -> bool {
-    for c in string.encode_utf16() {
+    for c in string.java_utf16() {
         if c == 167 || c < ' ' as u16 || c == 127 {
             return false;
         }

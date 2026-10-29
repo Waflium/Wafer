@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::cmp::Ordering;
 
 use super::brigadier::StringRange;
@@ -18,11 +19,11 @@ impl Suggestion {
         }
         let mut text = String::new();
         if range.start < self.range.start {
-            text.push_str(&String::from_utf16_lossy(&command[range.start..self.range.start]));
+            text.push_str(&wafer_core::java_string::from_utf16(&command[range.start..self.range.start]));
         }
         text.push_str(&self.text);
         if range.end > self.range.end {
-            text.push_str(&String::from_utf16_lossy(&command[self.range.end..range.end]));
+            text.push_str(&wafer_core::java_string::from_utf16(&command[self.range.end..range.end]));
         }
         Suggestion { range, text, tooltip: self.tooltip.clone(), integer: None }
     }
@@ -71,7 +72,7 @@ impl Suggestions {
         }
         texts.sort_by(|a, b| match (a.integer, b.integer) {
             (Some(a), Some(b)) => a.cmp(&b),
-            (Some(_), None) => a.text.encode_utf16().cmp(b.text.encode_utf16()),
+            (Some(_), None) => a.text.java_utf16().cmp(b.text.java_utf16()),
             _ => compare_to_ignore_case(&a.text, &b.text),
         });
         Suggestions { range, list: texts }
@@ -99,11 +100,11 @@ impl SuggestionsBuilder {
     }
 
     pub fn remaining(&self) -> String {
-        String::from_utf16_lossy(&self.input[self.start..])
+        wafer_core::java_string::from_utf16(&self.input[self.start..])
     }
 
     pub fn remaining_lower_case(&self) -> String {
-        String::from_utf16_lossy(&self.input_lower_case[self.start..])
+        wafer_core::java_string::from_utf16(&self.input_lower_case[self.start..])
     }
 
     pub fn build(self) -> Suggestions {
@@ -116,7 +117,7 @@ impl SuggestionsBuilder {
 
     pub fn suggest_with_tooltip(&mut self, text: impl Into<String>, tooltip: Option<Component>) {
         let text = text.into();
-        if text.encode_utf16().eq(self.input[self.start..].iter().copied()) {
+        if text.java_utf16().eq(self.input[self.start..].iter().copied()) {
             return;
         }
         self.result.push(Suggestion { range: StringRange { start: self.start, end: self.input.len() }, text, tooltip, integer: None });
@@ -140,7 +141,7 @@ impl SuggestionsBuilder {
 }
 
 pub fn java_lower_case(units: &[u16]) -> Vec<u16> {
-    String::from_utf16_lossy(units).to_lowercase().encode_utf16().collect()
+    wafer_core::java_string::from_utf16(units).to_lowercase().java_utf16().collect()
 }
 
 fn compare_to_ignore_case(a: &str, b: &str) -> Ordering {
@@ -153,7 +154,7 @@ fn compare_to_ignore_case(a: &str, b: &str) -> Ordering {
             None => unit as u32,
         }
     };
-    let (a, b): (Vec<u16>, Vec<u16>) = (a.encode_utf16().collect(), b.encode_utf16().collect());
+    let (a, b): (Vec<u16>, Vec<u16>) = (a.java_utf16().collect(), b.java_utf16().collect());
     for (&x, &y) in a.iter().zip(&b) {
         if x != y {
             let (x, y) = (fold(x), fold(y));

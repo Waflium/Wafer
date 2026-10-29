@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::brigadier::{CommandContext, CommandSyntaxException, DynamicCommandExceptionType, tr};
@@ -14,7 +15,7 @@ static NO_PROFILE: DynamicCommandExceptionType = DynamicCommandExceptionType(|id
 type Result<T> = std::result::Result<T, CommandSyntaxException>;
 
 fn encode_stored_game_profile(profile: &Profile) -> std::result::Result<Nbt, String> {
-    let name_length = profile.name.encode_utf16().count();
+    let name_length = profile.name.java_utf16().count();
     if name_length > 16 {
         return Err(format!("String \"{}\" is too long: {name_length} > 16", profile.name));
     }

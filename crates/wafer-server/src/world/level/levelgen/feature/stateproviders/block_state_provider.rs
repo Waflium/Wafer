@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::LazyLock;
 
 use wafer_core::random::{LegacyRandomSource, RandomSource};
@@ -85,7 +86,7 @@ pub fn direct_codec() -> Pair {
 }
 
 fn object_to_string(class: &str) -> String {
-    let hash = class.encode_utf16().fold(0i32, |hash, unit| hash.wrapping_mul(31).wrapping_add(unit as i32));
+    let hash = class.java_utf16().fold(0i32, |hash, unit| hash.wrapping_mul(31).wrapping_add(unit as i32));
     format!("{class}@{hash:x}")
 }
 

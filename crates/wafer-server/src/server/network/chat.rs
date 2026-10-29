@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -160,7 +161,7 @@ impl Server {
 
     pub(in crate::server) fn run_unsigned_command(&mut self, id: EntityId, command: &str) {
         let source = CommandSourceStack::player(self, id);
-        let units: Vec<u16> = command.encode_utf16().collect();
+        let units: Vec<u16> = command.java_utf16().collect();
         let parse = brigadier::parse(StringReader::new(&units), &source);
         if self.enforce_secure_profile() && signable_command::has_signable_arguments(&parse) {
             error!("Received unsigned command packet from {}, but the command requires signable arguments: {command}", self.player(id).profile.name);
@@ -203,7 +204,7 @@ impl Server {
         last_seen: LastSeenMessages,
     ) {
         let source = CommandSourceStack::player(self, id);
-        let units: Vec<u16> = command.encode_utf16().collect();
+        let units: Vec<u16> = command.java_utf16().collect();
         let parse = brigadier::parse(StringReader::new(&units), &source);
         let signable = signable_command::of(&parse, &units);
         match self.collect_signed_arguments(id, command, time_stamp, salt, &argument_signatures, &signable, last_seen) {

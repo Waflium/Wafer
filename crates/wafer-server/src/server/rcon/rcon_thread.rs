@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::{Arc, Mutex};
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -153,6 +154,7 @@ fn string_from_byte_array(b: &[u8], offset: usize, length: usize) -> String {
 }
 
 async fn send(stream: &mut TcpStream, request_id: i32, cmd: i32, text: &str) -> std::io::Result<()> {
+    let text = wafer_core::java_string::to_utf8_lossy(text);
     let bytes = text.as_bytes();
     let mut packet = Vec::with_capacity(bytes.len() + 14);
     packet.extend((bytes.len() as i32 + 10).to_le_bytes());
@@ -164,11 +166,11 @@ async fn send(stream: &mut TcpStream, request_id: i32, cmd: i32, text: &str) -> 
 }
 
 async fn send_cmd_response(stream: &mut TcpStream, request_id: i32, response: &str) -> std::io::Result<()> {
-    let units: Vec<u16> = response.encode_utf16().collect();
+    let units: Vec<u16> = response.java_utf16().collect();
     let mut start = 0;
     loop {
         let end = (start + 4096).min(units.len());
-        send(stream, request_id, SERVERDATA_RESPONSE_VALUE, &String::from_utf16_lossy(&units[start..end])).await?;
+        send(stream, request_id, SERVERDATA_RESPONSE_VALUE, &wafer_core::java_string::from_utf16(&units[start..end])).await?;
         start = end;
         if start >= units.len() {
             return Ok(());

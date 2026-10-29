@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::LazyLock;
 
 use wafer_protocol::nbt::Nbt;
@@ -29,7 +30,7 @@ fn chat_string() -> Pair {
 
 fn validate_chat_string(value: Nbt) -> Result<Nbt, String> {
     let text = value.as_str().unwrap_or_default();
-    if let Some(c) = text.encode_utf16().find(|&c| c == 0xA7 || c < 0x20 || c == 0x7F) {
+    if let Some(c) = text.java_utf16().find(|&c| c == 0xA7 || c < 0x20 || c == 0x7F) {
         return Err(format!("Disallowed chat character: '{}'", char::from_u32(c as u32).unwrap_or('\u{FFFD}')));
     }
     Ok(value)
@@ -197,7 +198,7 @@ fn validate_input(value: Nbt) -> Result<Nbt, String> {
             }
         }
         Some("minecraft:text") => {
-            let initial = value.get("initial").and_then(Nbt::as_str).unwrap_or_default().encode_utf16().count() as i64;
+            let initial = value.get("initial").and_then(Nbt::as_str).unwrap_or_default().java_utf16().count() as i64;
             let max_length = value.get("max_length").map_or(32, codec::as_i64);
             if initial > max_length {
                 return Err("Default text length exceeds allowed size".into());

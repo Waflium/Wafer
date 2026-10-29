@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::brigadier::{CommandSyntaxException, DISPATCHER_PARSE_EXCEPTION, DynamicCommandExceptionType, SimpleCommandExceptionType, StringReader, tr};
@@ -484,13 +485,13 @@ pub fn is_too_deep(tag: &Nbt, depth: usize) -> bool {
 impl NbtPath {
     pub fn decode(tag: &Nbt) -> Result<NbtPath, String> {
         let string = crate::util::codec::string(tag)?;
-        let units: Vec<u16> = string.encode_utf16().collect();
+        let units: Vec<u16> = string.java_utf16().collect();
         parse(&mut StringReader::new(&units)).map_err(|e| format!("Failed to parse path {string}: {}", e.get_message()))
     }
 
     fn not_found(&self, node: usize) -> CommandSyntaxException {
-        let text: Vec<u16> = self.original.encode_utf16().take(self.nodes[node].1).collect();
-        ERROR_NOTHING_FOUND.create(String::from_utf16_lossy(&text))
+        let text: Vec<u16> = self.original.java_utf16().take(self.nodes[node].1).collect();
+        ERROR_NOTHING_FOUND.create(wafer_core::java_string::from_utf16(&text))
     }
 
     pub fn get(&self, tag: &Nbt) -> Result<Vec<Nbt>, CommandSyntaxException> {
@@ -629,7 +630,7 @@ mod tests {
     fn run(case: &str) -> String {
         let f: Vec<&str> = case.split('\t').collect();
         let mut root = nbt::parse_fully(f[1]).unwrap();
-        let units: Vec<u16> = f[2].encode_utf16().collect();
+        let units: Vec<u16> = f[2].java_utf16().collect();
         let path = parse(&mut StringReader::new(&units)).unwrap();
         let list = |tags: Vec<Nbt>| format!("[{}]", tags.iter().map(nbt::to_string).collect::<Vec<_>>().join(", "));
         let result = match f[0] {
@@ -666,7 +667,7 @@ mod tests {
             deep = Nbt::List(vec![deep]);
         }
         let mut root = Nbt::Compound(Vec::new());
-        let units: Vec<u16> = "a".encode_utf16().collect();
+        let units: Vec<u16> = "a".java_utf16().collect();
         let path = parse(&mut StringReader::new(&units)).unwrap();
         assert_eq!(path.set(&mut root, &deep).map_err(|e| error(&e)), Err("ERR Resulting NBT too deeply nested".to_string()));
     }

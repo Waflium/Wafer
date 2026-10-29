@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::Nbt;
 
 use crate::commands::brigadier::{DynamicCommandExceptionType, SimpleCommandExceptionType, tr, utf16};
@@ -561,7 +562,7 @@ fn string_escape_sequence(s: &mut State) -> Option<Vec<u16>> {
         None
     };
     match escape? {
-        Escape::Plain(value) => Some(value.encode_utf16().collect()),
+        Escape::Plain(value) => Some(value.java_utf16().collect()),
         Escape::Hex(hex) => {
             let code_point = hex.iter().fold(0u32, |v, &c| v << 4 | char::from_u32(c as u32).and_then(|c| c.to_digit(16)).unwrap_or(0)) as i32;
             if !(0..=0x10FFFF).contains(&code_point) {
@@ -661,7 +662,7 @@ fn unquoted_string_or_builtin(s: &mut State) -> Option<Nbt> {
     } else {
         s.restore(optional);
     }
-    let first = contents.encode_utf16().next().unwrap();
+    let first = contents.java_utf16().next().unwrap();
     if !is_allowed_to_start_unquoted_string(first) {
         s.store_suggesting(s.mark(), SuggestionSupplier::BuiltinIds, Reason::Delayed(simple(&ERROR_INVALID_UNQUOTED_START)));
         return None;
@@ -711,7 +712,7 @@ fn map_key(s: &mut State) -> Option<Vec<u16>> {
         return Some(key);
     }
     s.restore(mark);
-    let key = unquoted_string(s).map(|k| k.encode_utf16().collect());
+    let key = unquoted_string(s).map(|k| k.java_utf16().collect());
     if key.is_none() {
         s.restore(mark);
     }

@@ -3,6 +3,7 @@ mod function_builder;
 pub mod macro_function;
 pub mod string_template;
 
+use wafer_core::java_string::JavaStr;
 use std::sync::Arc;
 
 use wafer_protocol::nbt::Nbt;
@@ -59,14 +60,14 @@ impl CommandFunction {
             let line_number = i + 1;
             let input_line = java_trim(&lines[i]);
             let line = if should_concatenate_next_line(input_line) {
-                let mut builder: Vec<u16> = input_line.encode_utf16().collect();
+                let mut builder: Vec<u16> = input_line.java_utf16().collect();
                 loop {
                     i += 1;
                     if i == lines.len() {
                         return Err("Line continuation at end of file".into());
                     }
                     builder.pop();
-                    builder.extend(java_trim(&lines[i]).encode_utf16());
+                    builder.extend(java_trim(&lines[i]).java_utf16());
                     check_command_line_length(&builder)?;
                     if builder.last() != Some(&(b'\\' as u16)) {
                         break;
@@ -76,7 +77,7 @@ impl CommandFunction {
             } else {
                 input_line.to_string()
             };
-            let units: Vec<u16> = line.encode_utf16().collect();
+            let units: Vec<u16> = line.java_utf16().collect();
             check_command_line_length(&units)?;
             let mut input = StringReader::new(&units);
             if input.can_read() && !input.at('#') {

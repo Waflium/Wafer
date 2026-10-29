@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::Arc;
 
 use crate::datafixers::data_fix::{DataFix, DataFixBase, TypeRewriteRule};
@@ -15,11 +16,11 @@ impl OptionsKeyTranslationFix {
 }
 
 fn substring(input: &str, begin_index: usize) -> String {
-    let units: Vec<u16> = input.encode_utf16().collect();
+    let units: Vec<u16> = input.java_utf16().collect();
     if begin_index > units.len() {
         panic!("Range [{}, {}) out of bounds for length {}", begin_index, units.len(), units.len());
     }
-    String::from_utf16_lossy(&units[begin_index..])
+    wafer_core::java_string::from_utf16(&units[begin_index..])
 }
 
 impl DataFix for OptionsKeyTranslationFix {

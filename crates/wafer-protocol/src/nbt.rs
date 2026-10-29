@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use crate::java_string::{from_utf16, utf16_units};
 use crate::lazily_parsed_number::{double_value, exact_nbt, parse_long};
 use crate::{DecodeError, Reader, Writer};
@@ -314,7 +315,7 @@ pub fn text(s: impl Into<String>) -> Nbt {
 }
 
 fn java_string_hash(s: &str) -> i32 {
-    s.encode_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
+    s.java_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
 }
 
 pub fn java_hash_map_order<S: AsRef<str>>(keys: &[S]) -> Vec<usize> {

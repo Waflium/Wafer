@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::path::{Path, PathBuf};
 
 use sha1::{Digest, Sha1};
@@ -29,7 +30,7 @@ fn canonical(tag: &Nbt, out: &mut String) {
         Nbt::End => out.push_str("END"),
         Nbt::Compound(entries) => {
             let mut sorted: Vec<&(String, Nbt)> = entries.iter().collect();
-            sorted.sort_by(|a, b| a.0.encode_utf16().cmp(b.0.encode_utf16()));
+            sorted.sort_by(|a, b| a.0.java_utf16().cmp(b.0.java_utf16()));
             out.push('{');
             for (index, (key, value)) in sorted.into_iter().enumerate() {
                 if index > 0 {
@@ -100,7 +101,7 @@ fn collect(root: &Path, directory: &Path, entries: &mut Vec<(String, PathBuf, bo
 pub fn dump(root: &Path) -> String {
     let mut entries = Vec::new();
     collect(root, root, &mut entries);
-    entries.sort_by(|a, b| a.0.encode_utf16().cmp(b.0.encode_utf16()));
+    entries.sort_by(|a, b| a.0.java_utf16().cmp(b.0.java_utf16()));
     let mut out = String::new();
     for (relative, path, is_directory) in entries {
         if is_directory {

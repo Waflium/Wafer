@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use wafer_core::{BlockPos, Direction, Vec3, mth};
@@ -1455,7 +1456,7 @@ impl crate::server::Server {
     }
 
     fn set_game_rule_value(&mut self, rule: wafer_data::GameRule, value: &str) {
-        let units: Vec<u16> = value.encode_utf16().collect();
+        let units: Vec<u16> = value.java_utf16().collect();
         let mut reader = crate::commands::brigadier::StringReader::new(&units);
         let parsed = match rule.info().kind {
             wafer_data::GameRuleType::Bool => reader.read_boolean().ok().map(i32::from),

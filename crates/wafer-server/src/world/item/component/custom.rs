@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_data::Item;
 use wafer_protocol::nbt::{Nbt, java_hash_map_order};
 use wafer_protocol::{Reader, Writer};
@@ -19,7 +20,7 @@ macro_rules! rd {
 }
 
 pub fn parse_snbt(s: &str) -> Result<Nbt, String> {
-    let units: Vec<u16> = s.encode_utf16().collect();
+    let units: Vec<u16> = s.java_utf16().collect();
     let mut reader = StringReader::new(&units);
     let tag = nbt::parse_as_argument(&mut reader).map_err(|e| e.get_message())?;
     reader.skip_whitespace();
@@ -384,7 +385,7 @@ struct Profile;
 
 fn player_name(tag: &Nbt) -> Result<Nbt, String> {
     let name = codec::string(tag)?;
-    let length = name.encode_utf16().count();
+    let length = name.java_utf16().count();
     if length > 16 {
         return Err(format!("String \"{name}\" is too long: {length}, expected range [0-16]"));
     }

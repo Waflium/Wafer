@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_data::VERSION_NAME;
 
 use super::connection::{PacketReader, PacketWriter};
@@ -71,7 +72,7 @@ fn create_version_1_response(context: &ListenerContext) -> String {
 }
 
 fn create_legacy_disconnect_packet(reason: &str) -> Vec<u8> {
-    let units: Vec<u16> = reason.encode_utf16().collect();
+    let units: Vec<u16> = reason.java_utf16().collect();
     let mut out = Vec::with_capacity(3 + units.len() * 2);
     out.push(DISCONNECT_PACKET_ID);
     out.extend((units.len() as u16).to_be_bytes());
@@ -85,7 +86,7 @@ fn read_legacy_string(buf: &mut ByteBuf) -> Option<String> {
     let bytes = buf.data.get(buf.pos..buf.pos.checked_add(byte_count)?)?;
     let units: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
     buf.pos += byte_count;
-    Some(String::from_utf16_lossy(&units))
+    Some(wafer_core::java_string::from_utf16(&units))
 }
 
 struct ByteBuf<'a> {

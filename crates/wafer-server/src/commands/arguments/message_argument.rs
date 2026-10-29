@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use super::ArgumentValue;
 use super::selector::entity_selector::{EntitySelector, join_names};
 use super::selector::entity_selector_parser::{ERROR_MISSING_SELECTOR_TYPE, EntitySelectorParser, UNKNOWN_SELECTOR_TYPE_KEY, allow_selectors};
@@ -65,7 +66,7 @@ impl Message {
         if self.parts.is_empty() || !allow_selectors {
             return Ok(Component::literal(self.text.as_str()));
         }
-        let text: Vec<u16> = self.text.encode_utf16().collect();
+        let text: Vec<u16> = self.text.java_utf16().collect();
         let mut result = Component::literal(utf16(&text[..self.parts[0].start]));
         let mut read_to = self.parts[0].start;
         for part in &self.parts {

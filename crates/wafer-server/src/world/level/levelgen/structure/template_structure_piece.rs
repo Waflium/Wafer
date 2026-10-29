@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction};
 use wafer_data::blocks;
@@ -122,7 +123,7 @@ impl TemplateStructurePiece {
         for jigsaw_block in self.template.filter_blocks(self.template_position, &settings, blocks::JIGSAW, random) {
             if let Some(nbt) = &jigsaw_block.nbt {
                 let state_string = nbt.get("final_state").and_then(Nbt::as_str).unwrap_or("minecraft:air");
-                let utf16: Vec<u16> = state_string.encode_utf16().collect();
+                let utf16: Vec<u16> = state_string.java_utf16().collect();
                 let mut reader = crate::commands::brigadier::StringReader::new(&utf16);
                 let target_state = match crate::commands::arguments::blocks::block_state_parser::parse_for_block(&mut reader, true) {
                     Ok(result) => result.state,

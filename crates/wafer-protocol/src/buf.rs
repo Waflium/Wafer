@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -111,7 +112,7 @@ impl<'a> Reader<'a> {
             return Err(DecodeError::StringTooLong);
         }
         let s = std::str::from_utf8(self.take(byte_len)?).map_err(|_| DecodeError::InvalidUtf8)?;
-        if s.encode_utf16().count() > max_len {
+        if s.java_utf16().count() > max_len {
             return Err(DecodeError::StringTooLong);
         }
         Ok(s)
@@ -258,7 +259,7 @@ impl Writer {
     pub fn string_max(&mut self, s: &str, max_len: usize) {
         let s = &*crate::java_string::to_utf8_lossy(s);
         if s.len() > max_len {
-            let length = s.encode_utf16().count();
+            let length = s.java_utf16().count();
             if length > max_len {
                 self.fail(format!("io.netty.handler.codec.EncoderException: String too big (was {length} characters, max {max_len})"));
             }

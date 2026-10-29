@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use crate::commands::brigadier::{CommandSyntaxException, StringReader, tr};
 
 #[derive(Clone, Debug)]
@@ -31,7 +32,7 @@ pub fn command_parser_helper<T>(
     parse: impl FnOnce(&mut StringReader) -> Result<T, CommandSyntaxException>,
     error_message: impl FnOnce(&str, &CommandSyntaxException) -> String,
 ) -> Result<CompilableString<T>, String> {
-    let units: Vec<u16> = contents.encode_utf16().collect();
+    let units: Vec<u16> = contents.java_utf16().collect();
     let mut reader = StringReader::new(&units);
     let result = parse(&mut reader).and_then(|result| {
         if reader.can_read() {

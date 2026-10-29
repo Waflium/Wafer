@@ -1,3 +1,5 @@
+use wafer_core::java_string::JavaStr;
+
 const DIGIT_RUNS: [u16; 37] = [
     0x0030, 0x0660, 0x06F0, 0x07C0, 0x0966, 0x09E6, 0x0A66, 0x0AE6, 0x0B66, 0x0BE6, 0x0C66, 0x0CE6, 0x0D66, 0x0DE6, 0x0E50, 0x0ED0, 0x0F20, 0x1040, 0x1090, 0x17E0, 0x1810, 0x1946, 0x19D0, 0x1A80,
     0x1A90, 0x1B50, 0x1BB0, 0x1C40, 0x1C50, 0xA620, 0xA8D0, 0xA900, 0xA9D0, 0xA9F0, 0xAA50, 0xABF0, 0xFF10,
@@ -18,7 +20,7 @@ fn character_digit(unit: u16, radix: i64) -> i64 {
 }
 
 fn number_format_for_char_sequence(units: &[u16], begin: usize, end: usize, error_index: usize) -> String {
-    format!("Error at index {} in: \"{}\"", error_index - begin, String::from_utf16_lossy(&units[begin..end]))
+    format!("Error at index {} in: \"{}\"", error_index - begin, wafer_core::java_string::from_utf16(&units[begin..end]))
 }
 
 fn parse_long(units: &[u16], begin: usize, end: usize, radix: i64) -> Result<i64, String> {
@@ -63,7 +65,7 @@ fn index_of_dash(units: &[u16], from: usize) -> Option<usize> {
 }
 
 pub fn from_string(name: &str) -> Result<u128, String> {
-    let units: Vec<u16> = name.encode_utf16().collect();
+    let units: Vec<u16> = name.java_utf16().collect();
     let len = units.len();
     if len > 36 {
         return Err("UUID string too large".to_string());

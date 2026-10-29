@@ -1,4 +1,5 @@
 
+use wafer_core::java_string::JavaStr;
 use std::sync::{Arc, Mutex};
 
 use wafer_protocol::nbt::Nbt;
@@ -78,7 +79,7 @@ impl MacroFunction {
                 Entry::Macro(entry) => {
                     let substitutions: Vec<&str> = entry.parameters.iter().map(|&i| values[i].as_str()).collect();
                     let command = entry.template.substitute(&substitutions).map_err(|e| crate::commands::unexpected_error(&e).message)?;
-                    let units: Vec<u16> = command.encode_utf16().collect();
+                    let units: Vec<u16> = command.java_utf16().collect();
                     parse_command(&entry.compilation_context, StringReader::new(&units)).map_err(|e| {
                         Component::translatable_with(
                             "commands.function.error.parse",

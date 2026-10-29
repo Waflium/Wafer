@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::Arc;
 
 use crate::commands::brigadier::{CommandSyntaxException, StringReader};
@@ -88,7 +89,7 @@ fn parse_block_properties(contents: &str) -> Vec<(String, String)> {
 }
 
 fn read_block_properties(contents: &str) -> Result<Vec<(String, String)>, CommandSyntaxException> {
-    let units: Vec<u16> = contents.encode_utf16().collect();
+    let units: Vec<u16> = contents.java_utf16().collect();
     let mut reader = StringReader::new(&units);
     let mut result: Vec<(String, String)> = Vec::new();
     reader.expect('[')?;
@@ -126,7 +127,7 @@ fn read_vector(result: &Dynamic, reader: &mut StringReader) -> Result<Dynamic, C
 }
 
 fn update_options(result: Dynamic, contents: &str, update: impl FnOnce(&Dynamic, &mut StringReader) -> Result<Dynamic, CommandSyntaxException>) -> Dynamic {
-    let units: Vec<u16> = contents.encode_utf16().collect();
+    let units: Vec<u16> = contents.java_utf16().collect();
     let mut reader = StringReader::new(&units);
     match update(&result, &mut reader) {
         Ok(updated) => updated,

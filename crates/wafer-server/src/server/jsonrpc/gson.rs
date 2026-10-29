@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use serde_json::Value;
 
 pub fn parse_string(json: &str) -> Result<Value, String> {
@@ -7,8 +8,8 @@ pub fn parse_string(json: &str) -> Result<Value, String> {
 pub fn type_name(element: Option<&Value>) -> String {
     let Some(element) = element else { return "null (missing)".into() };
     let text = element.to_string();
-    let units: Vec<u16> = text.encode_utf16().collect();
-    let value = if units.len() <= 10 { text.clone() } else { format!("{}...{}", String::from_utf16_lossy(&units[..4]), String::from_utf16_lossy(&units[units.len() - 3..])) };
+    let units: Vec<u16> = text.java_utf16().collect();
+    let value = if units.len() <= 10 { text.clone() } else { format!("{}...{}", wafer_core::java_string::from_utf16(&units[..4]), wafer_core::java_string::from_utf16(&units[units.len() - 3..])) };
     match element {
         Value::Null => "null (json)".into(),
         Value::Array(_) => format!("an array ({value})"),

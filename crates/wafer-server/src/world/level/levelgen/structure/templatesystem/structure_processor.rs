@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::{LazyLock, OnceLock};
 
 use wafer_core::random::{LegacyRandomSource, RandomSource};
@@ -306,7 +307,7 @@ impl StructureProcessor {
 }
 
 fn try_parse_block_state_string(state_string: &str) -> Result<BlockState, crate::commands::brigadier::CommandSyntaxException> {
-    let utf16: Vec<u16> = state_string.encode_utf16().collect();
+    let utf16: Vec<u16> = state_string.java_utf16().collect();
     let mut reader = crate::commands::brigadier::StringReader::new(&utf16);
     crate::commands::arguments::blocks::block_state_parser::parse_for_block(&mut reader, true).map(|result| result.state)
 }

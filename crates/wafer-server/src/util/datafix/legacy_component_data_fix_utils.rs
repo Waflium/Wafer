@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::Nbt;
 
 use crate::datafixers::dynamic::Dynamic;
@@ -29,8 +30,8 @@ pub fn rewrite_from_lenient(string: &str) -> String {
     if string.is_empty() || string == "null" {
         return EMPTY_CONTENTS.to_string();
     }
-    let first_char = string.encode_utf16().next();
-    let last_char = string.encode_utf16().last();
+    let first_char = string.java_utf16().next();
+    let last_char = string.java_utf16().last();
     let quoted = |first: u8, last: u8| first_char == Some(first as u16) && last_char == Some(last as u16);
     if quoted(b'"', b'"') || quoted(b'{', b'}') || quoted(b'[', b']') {
         if let Ok(json) = gson::parse_lenient(string) {

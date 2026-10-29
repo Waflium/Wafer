@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_data::commands::{CommandNode, CommandNodeKind};
 
 use crate::commands::brigadier::{self, CommandContext, CommandSyntaxException, SimpleCommandExceptionType, StringReader};
@@ -73,7 +74,7 @@ pub fn help(server: &mut Server, _context: &CommandContext, source: &CommandSour
 
 pub fn help_command(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let input = context.get_string("command").to_string();
-    let units: Vec<u16> = input.encode_utf16().collect();
+    let units: Vec<u16> = input.java_utf16().collect();
     let parse = brigadier::parse(StringReader::new(&units), source);
     let Some(last) = parse.context.nodes.last() else { return Err(ERROR_FAILED.create()) };
     let usage = smart_usage(CommandNode::get(last.node), source);

@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 flate2 = "1.1.10"
 tokio.workspace = true
+wafer-core.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros"] }

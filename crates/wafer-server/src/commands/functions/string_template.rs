@@ -1,4 +1,5 @@
 
+use wafer_core::java_string::JavaStr;
 use super::MAX_COMMAND_LINE_LENGTH;
 
 #[derive(Debug)]
@@ -45,21 +46,21 @@ impl StringTemplate {
         let mut units = 0;
         let check = |units: usize, builder: &String| {
             if units > MAX_COMMAND_LINE_LENGTH {
-                let truncated: Vec<u16> = builder.encode_utf16().take(512).collect();
-                return Err(format!("Command too long: {units} characters, contents: {}...", String::from_utf16_lossy(&truncated)));
+                let truncated: Vec<u16> = builder.java_utf16().take(512).collect();
+                return Err(format!("Command too long: {units} characters, contents: {}...", wafer_core::java_string::from_utf16(&truncated)));
             }
             Ok(())
         };
         for (segment, argument) in self.segments.iter().zip(arguments) {
             builder.push_str(segment);
             builder.push_str(argument);
-            units += segment.encode_utf16().count() + argument.encode_utf16().count();
+            units += segment.java_utf16().count() + argument.java_utf16().count();
             check(units, &builder)?;
         }
         if self.segments.len() > self.variables.len() {
             let last = self.segments.last().unwrap();
             builder.push_str(last);
-            units += last.encode_utf16().count();
+            units += last.java_utf16().count();
         }
         check(units, &builder)?;
         Ok(builder)

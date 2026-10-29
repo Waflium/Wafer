@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -616,7 +617,7 @@ fn ensure_directory_exists(directory: &Path) -> Result<(), ConversionError> {
 }
 
 pub fn convert_mob_owner_if_necessary(lookup: &UserLookup, owner: &str) -> Option<u128> {
-    if !owner.is_empty() && owner.encode_utf16().count() <= 16 {
+    if !owner.is_empty() && owner.java_utf16().count() <= 16 {
         if let Some(profile) = lookup.name_to_id_cache.get(&lookup.services, owner) {
             Some(profile.id)
         } else if lookup.uses_authentication {

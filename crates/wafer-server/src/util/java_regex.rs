@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::collections::HashMap;
 
 const CASE_INSENSITIVE: u32 = 0x02;
@@ -24,7 +25,7 @@ impl PatternSyntaxException {
         }
         message.push_str(line_separator);
         message.push_str(&self.pattern);
-        if self.index >= 0 && (self.index as usize) < self.pattern.encode_utf16().count() {
+        if self.index >= 0 && (self.index as usize) < self.pattern.java_utf16().count() {
             message.push_str(line_separator);
             message.push_str(&" ".repeat(self.index as usize));
             message.push('^');

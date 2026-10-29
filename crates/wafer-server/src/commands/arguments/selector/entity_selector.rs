@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::{LazyLock, Mutex};
 
 use wafer_core::random::{LegacyRandomSource, RandomSource};
@@ -316,7 +317,7 @@ pub fn player_by_name(world: &dyn EntityWorld, name: &str) -> Option<EntityId> {
 }
 
 pub fn java_equals_ignore_case(a: &str, b: &str) -> bool {
-    let (a, b): (Vec<u16>, Vec<u16>) = (a.encode_utf16().collect(), b.encode_utf16().collect());
+    let (a, b): (Vec<u16>, Vec<u16>) = (a.java_utf16().collect(), b.java_utf16().collect());
     let single = |c: u16, upper: bool| {
         let Some(ch) = char::from_u32(c as u32) else { return c as u32 };
         let mut mapped = if upper { ch.to_uppercase().collect::<Vec<_>>() } else { ch.to_lowercase().collect::<Vec<_>>() };

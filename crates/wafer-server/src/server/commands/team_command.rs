@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_data::commands::CommandNode;
 
 use super::command_response_tracker::CommandResponseTracker;
@@ -261,7 +262,7 @@ pub fn list_members(server: &mut Server, context: &CommandContext, source: &Comm
             server,
             || {
                 if members.len() > 1 {
-                    members.sort_by(|a, b| a.encode_utf16().cmp(b.encode_utf16()));
+                    members.sort_by(|a, b| a.java_utf16().cmp(b.java_utf16()));
                 }
                 let names = format_list(members.into_iter().map(|m| Component::literal(m).with_color(ChatFormatting::Green)).collect());
                 Component::translatable_with("commands.team.list.members.success", vec![formatted(server, &team).into(), Arg::Int(count), names.into()])

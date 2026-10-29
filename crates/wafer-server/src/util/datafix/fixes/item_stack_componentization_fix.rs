@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::sync::Arc;
 
 use wafer_protocol::nbt::Nbt;
@@ -620,7 +621,7 @@ pub fn fix_profile(dynamic: Dynamic) -> Dynamic {
 }
 
 fn is_valid_player_name(name: &str) -> bool {
-    let units: Vec<u16> = name.encode_utf16().collect();
+    let units: Vec<u16> = name.java_utf16().collect();
     if units.len() > 16 {
         return false;
     }

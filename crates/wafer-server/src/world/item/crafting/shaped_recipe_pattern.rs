@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::Nbt;
 
 use super::crafting_input::CraftingInput;
@@ -52,7 +53,7 @@ fn decode_pattern(tag: &Nbt) -> DataResult<Vec<String>> {
 
 fn decode_symbol(symbol: &str) -> DataResult<char> {
     match symbol.chars().next() {
-        Some(c) if symbol.encode_utf16().count() == 1 => {
+        Some(c) if symbol.java_utf16().count() == 1 => {
             if c == ' ' {
                 Err("Invalid key entry: ' ' is a reserved symbol.".into())
             } else {

@@ -1,5 +1,6 @@
 pub mod tag_entry;
 
+use wafer_core::java_string::JavaStr;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -147,7 +148,7 @@ pub fn identifier_order<T>(entries: &mut [(String, T)]) {
             (path.to_string(), namespace.to_string())
         };
         let (a, b) = (split(a), split(b));
-        a.0.encode_utf16().cmp(b.0.encode_utf16()).then_with(|| a.1.encode_utf16().cmp(b.1.encode_utf16()))
+        a.0.java_utf16().cmp(b.0.java_utf16()).then_with(|| a.1.java_utf16().cmp(b.1.java_utf16()))
     });
 }
 

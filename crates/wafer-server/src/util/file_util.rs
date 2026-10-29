@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::path::Path;
 
 fn contains_allowed_characters_only(segment: &str) -> bool {
@@ -39,15 +40,15 @@ pub fn find_available_name(base_dir: &Path, base_name: &str, suffix: &str) -> st
         base_name = format!("_{base_name}_");
     }
     let mut count = 0;
-    if base_name.encode_utf16().count() > MAX_FILE_NAME - suffix.encode_utf16().count() {
-        base_name = base_name.chars().take(MAX_FILE_NAME - suffix.encode_utf16().count()).collect();
+    if base_name.java_utf16().count() > MAX_FILE_NAME - suffix.java_utf16().count() {
+        base_name = base_name.chars().take(MAX_FILE_NAME - suffix.java_utf16().count()).collect();
     }
     loop {
         let mut name_to_test = base_name.clone();
         if count != 0 {
             let count_suffix = format!(" ({count})");
             let length = MAX_FILE_NAME - count_suffix.len();
-            if name_to_test.encode_utf16().count() > length {
+            if name_to_test.java_utf16().count() > length {
                 name_to_test = name_to_test.chars().take(length).collect();
             }
             name_to_test.push_str(&count_suffix);

@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_core::{BlockPos, ChunkPos, Vec3};
 use wafer_data::properties::{HORIZONTAL_FACING, WATERLOGGED};
 use wafer_data::{blocks, items};
@@ -32,7 +33,7 @@ fn run(server: &mut Server, command: &str) -> Vec<String> {
 }
 
 fn parse(server: &Server, command: &str) -> String {
-    let units: Vec<u16> = command.encode_utf16().collect();
+    let units: Vec<u16> = command.java_utf16().collect();
     let source = CommandSourceStack::server(server);
     let parse = brigadier::parse(StringReader::new(&units), &source);
     let e = if !parse.reader.can_read() {

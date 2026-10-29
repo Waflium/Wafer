@@ -1,5 +1,6 @@
 pub mod data_accessor;
 
+use wafer_core::java_string::JavaStr;
 use wafer_data::commands::CommandNode;
 use wafer_protocol::nbt::Nbt;
 
@@ -63,12 +64,12 @@ fn get_as_text(tag: &Nbt) -> Result<String, CommandSyntaxException> {
 }
 
 fn substring(input: &str, start: i32, end: Option<i32>) -> Result<String, CommandSyntaxException> {
-    let units: Vec<u16> = input.encode_utf16().collect();
+    let units: Vec<u16> = input.java_utf16().collect();
     let length = units.len() as i32;
     let offset = |index: i32| if index >= 0 { index } else { length + index };
     let (start, end) = (offset(start), end.map_or(length, offset));
     if start >= 0 && end <= length && start <= end {
-        Ok(String::from_utf16_lossy(&units[start as usize..end as usize]))
+        Ok(wafer_core::java_string::from_utf16(&units[start as usize..end as usize]))
     } else {
         Err(ERROR_INVALID_SUBSTRING.create(start, end))
     }
@@ -179,7 +180,7 @@ fn get_data(server: &mut Server, context: &CommandContext, source: &CommandSourc
     let accessor = DataAccessor::access(server, context, source, TARGET, "target")?;
     let tag = get_single_tag(server, context.get_nbt_path("path"), &accessor)?;
     let result = match &tag {
-        Nbt::String(value) => value.encode_utf16().count() as i32,
+        Nbt::String(value) => value.java_utf16().count() as i32,
         Nbt::List(items) => items.len() as i32,
         Nbt::Compound(fields) => fields.len() as i32,
         Nbt::ByteArray(v) => v.len() as i32,

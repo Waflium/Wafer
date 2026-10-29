@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use super::settings::{Properties, Settings};
 use crate::server::level::game_mode::GameType;
 use crate::util::java_integer::{number_format_exception, parse_int, parse_long};
@@ -279,7 +280,7 @@ pub fn parse_seed(seed: &str) -> Option<i64> {
 }
 
 fn java_string_hash(s: &str) -> i32 {
-    s.encode_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
+    s.java_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
 }
 
 fn compact_json(raw: &str) -> Result<String, String> {

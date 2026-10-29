@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_core::Vec3;
 use wafer_data::mob_effects;
 
@@ -25,7 +26,7 @@ fn run(server: &mut Server, command: &str) -> Vec<String> {
 
 fn exec(server: &mut Server, command: &str) -> Result<i32, String> {
     let source = CommandSourceStack::server(server);
-    let units: Vec<u16> = command.encode_utf16().collect();
+    let units: Vec<u16> = command.java_utf16().collect();
     let parse = brigadier::parse(StringReader::new(&units), &source);
     assert!(!parse.reader.can_read(), "{command} does not parse: {:?}", parse.exceptions);
     let chain = ContextChain::try_flatten(parse.context.build(command)).expect("an executable command");

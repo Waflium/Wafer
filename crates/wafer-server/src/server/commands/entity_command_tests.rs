@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_core::{ChunkPos, Vec3};
 use wafer_data::packets::play::clientbound;
 use wafer_protocol::{Reader, Writer};
@@ -34,7 +35,7 @@ fn run(server: &mut Server, command: &str) -> Vec<String> {
 }
 
 fn exec(server: &mut Server, source: &CommandSourceStack, command: &str) -> Result<i32, String> {
-    let units: Vec<u16> = command.encode_utf16().collect();
+    let units: Vec<u16> = command.java_utf16().collect();
     let parse = brigadier::parse(StringReader::new(&units), source);
     assert!(!parse.reader.can_read(), "{command} does not parse: {:?}", parse.exceptions);
     let chain = ContextChain::try_flatten(parse.context.build(command)).expect("an executable command");
@@ -366,7 +367,7 @@ fn setworldspawn() {
 }
 
 fn find(server: &Server, pos: Vec3, selector: &str) -> Result<Vec<EntityId>, String> {
-    let units: Vec<u16> = selector.encode_utf16().collect();
+    let units: Vec<u16> = selector.java_utf16().collect();
     let parsed = EntitySelectorParser::new(&mut StringReader::new(&units), true).parse().unwrap();
     let source = CommandSourceStack::server(server).with_position(pos);
     parsed.find_entities(server, &source).map_err(|e| e.message.get_string())
@@ -414,7 +415,7 @@ fn selectors_find_entities() {
     let mut shuffled = find("@r[limit=5]").unwrap();
     shuffled.sort();
     assert_eq!(shuffled, [alice, bob, carol]);
-    let units: Vec<u16> = "@a".encode_utf16().collect();
+    let units: Vec<u16> = "@a".java_utf16().collect();
     let selector = EntitySelectorParser::new(&mut StringReader::new(&units), true).parse().unwrap();
     let mut player = CommandSourceStack::player(&server, alice);
     player.permission = 0;

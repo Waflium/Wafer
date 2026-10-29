@@ -3,6 +3,7 @@ pub mod snbt_grammar;
 pub mod tests;
 pub mod text_component_tag_visitor;
 
+use wafer_core::java_string::JavaStr;
 use std::cell::Cell;
 
 use wafer_protocol::nbt::{Nbt, double_tag_value, float_tag_value, java_hash_map_order};
@@ -50,7 +51,7 @@ pub fn parse_compound_as_argument(reader: &mut StringReader) -> Result<Nbt, Comm
 }
 
 pub fn parse_fully(input: &str) -> Result<Nbt, CommandSyntaxException> {
-    let units: Vec<u16> = input.encode_utf16().collect();
+    let units: Vec<u16> = input.java_utf16().collect();
     let mut reader = StringReader::new(&units);
     let result = parse_as_argument(&mut reader)?;
     reader.skip_whitespace();
@@ -174,7 +175,7 @@ fn write(tag: &Nbt, out: &mut String) {
         Nbt::Compound(fields) => {
             out.push('{');
             let mut sorted: Vec<&(String, Nbt)> = fields.iter().collect();
-            sorted.sort_by(|a, b| a.0.encode_utf16().cmp(b.0.encode_utf16()));
+            sorted.sort_by(|a, b| a.0.java_utf16().cmp(b.0.java_utf16()));
             for (i, (key, value)) in sorted.into_iter().enumerate() {
                 if i != 0 {
                     out.push(',');

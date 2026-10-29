@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -160,7 +161,7 @@ fn read_game_profile(json: &Value) -> Option<GameProfileInfo> {
 }
 
 pub fn is_valid_player_name(name: &str) -> bool {
-    name.encode_utf16().count() <= 16 && !name.encode_utf16().any(|c| c <= 32 || c >= 127)
+    name.java_utf16().count() <= 16 && !name.java_utf16().any(|c| c <= 32 || c >= 127)
 }
 
 #[cfg(test)]

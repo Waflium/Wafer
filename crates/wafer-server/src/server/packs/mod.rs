@@ -3,6 +3,7 @@ pub mod metadata;
 pub mod repository;
 pub mod resources;
 
+use wafer_core::java_string::JavaStr;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, Read};
@@ -57,7 +58,7 @@ impl PackLocationInfo {
 }
 
 pub fn escape_if_required(input: &str) -> String {
-    if input.encode_utf16().all(crate::commands::brigadier::StringReader::is_allowed_in_unquoted_string) {
+    if input.java_utf16().all(crate::commands::brigadier::StringReader::is_allowed_in_unquoted_string) {
         return input.to_string();
     }
     let mut result = String::from("\"");

@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_data::commands::{CommandNode, CommandNodeKind};
 
 use super::arguments::{self, ArgumentValue};
@@ -269,7 +270,7 @@ impl CommandSyntaxException {
     }
 
     fn context(&self) -> Option<String> {
-        let input: Vec<u16> = self.input.as_ref()?.encode_utf16().collect();
+        let input: Vec<u16> = self.input.as_ref()?.java_utf16().collect();
         if self.cursor < 0 {
             return None;
         }
@@ -532,7 +533,7 @@ fn relevant_nodes(node: &'static CommandNode, input: &StringReader) -> Vec<&'sta
         end += 1;
     }
     let text = &input.string()[input.cursor..end];
-    match node.children().find(|c| c.kind == CommandNodeKind::Literal && c.name.encode_utf16().eq(text.iter().copied())) {
+    match node.children().find(|c| c.kind == CommandNodeKind::Literal && c.name.java_utf16().eq(text.iter().copied())) {
         Some(literal) => vec![literal],
         None => arguments(),
     }
@@ -594,7 +595,7 @@ fn parse_node(node: &'static CommandNode, reader: &mut StringReader, context: &m
     let start = reader.cursor;
     match node.kind {
         CommandNodeKind::Literal => {
-            let literal: Vec<u16> = node.name.encode_utf16().collect();
+            let literal: Vec<u16> = node.name.java_utf16().collect();
             if reader.can_read_n(literal.len()) {
                 let end = start + literal.len();
                 if reader.string()[start..end] == literal[..] {
@@ -642,7 +643,7 @@ impl ContextChain {
 
 pub fn error_context(e: &CommandSyntaxException, command: &str) -> Option<Component> {
     use crate::network::chat::ClickEvent;
-    let input: Vec<u16> = e.input.as_ref()?.encode_utf16().collect();
+    let input: Vec<u16> = e.input.as_ref()?.java_utf16().collect();
     if e.cursor < 0 {
         return None;
     }

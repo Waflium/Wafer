@@ -1,3 +1,4 @@
+use crate::java_string::JavaStr;
 use md5::{Digest, Md5};
 
 use crate::mth;
@@ -316,7 +317,7 @@ impl XoroshiroPositionalRandomFactory {
 }
 
 pub fn java_string_hash(s: &str) -> i32 {
-    s.encode_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
+    s.java_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
 }
 
 pub fn generate_unique_seed() -> i64 {

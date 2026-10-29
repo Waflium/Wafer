@@ -2253,6 +2253,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "tokio",
+ "wafer-core",
 ]
 
 [[package]]

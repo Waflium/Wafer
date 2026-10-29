@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::fmt;
 
 const L_DIGIT: u64 = 0x3FF000000000000;
@@ -74,7 +75,7 @@ pub struct URI {
 
 impl URI {
     pub fn new(s: &str) -> Result<URI, URISyntaxException> {
-        let mut parser = Parser { input: s, chars: s.encode_utf16().collect(), scheme: None, ipv6_byte_count: 0 };
+        let mut parser = Parser { input: s, chars: s.java_utf16().collect(), scheme: None, ipv6_byte_count: 0 };
         parser.parse()?;
         Ok(URI { string: s.to_string(), scheme: parser.scheme })
     }
@@ -153,10 +154,10 @@ impl Parser<'_> {
         let mut p = start;
         while p < end {
             let c = self.char_at(p);
-            if err.encode_utf16().any(|e| e == c) {
+            if err.java_utf16().any(|e| e == c) {
                 return None;
             }
-            if stop.encode_utf16().any(|s| s == c) {
+            if stop.java_utf16().any(|s| s == c) {
                 break;
             }
             p += 1;
@@ -166,7 +167,7 @@ impl Parser<'_> {
 
     fn scan_stop(&self, start: usize, end: usize, stop: &str) -> usize {
         let mut p = start;
-        while p < end && !stop.encode_utf16().any(|s| s == self.char_at(p)) {
+        while p < end && !stop.java_utf16().any(|s| s == self.char_at(p)) {
             p += 1;
         }
         p
@@ -229,7 +230,7 @@ impl Parser<'_> {
             }
             self.check_char(0, L_ALPHA, H_ALPHA, "scheme name")?;
             self.check_chars(1, colon, L_SCHEME, H_SCHEME, "scheme name")?;
-            self.scheme = Some(String::from_utf16_lossy(&self.chars[..colon]));
+            self.scheme = Some(wafer_core::java_string::from_utf16(&self.chars[..colon]));
             p = colon + 1;
             if self.at(p, n, b'/') {
                 p = self.parse_hierarchical(p, n)?;
@@ -359,7 +360,7 @@ impl Parser<'_> {
             let q = self.scan_stop(p, n, "/");
             if q > p {
                 self.check_chars(p, q, L_DIGIT, H_DIGIT, "port number")?;
-                if String::from_utf16_lossy(&self.chars[p..q]).parse::<i32>().is_err() {
+                if wafer_core::java_string::from_utf16(&self.chars[p..q]).parse::<i32>().is_err() {
                     return self.fail("Malformed port number", p);
                 }
                 p = q;
@@ -394,7 +395,7 @@ impl Parser<'_> {
         if significant > 3 {
             return Ok(p);
         }
-        let value: i32 = String::from_utf16_lossy(&self.chars[p..q]).parse().unwrap_or(i32::MAX);
+        let value: i32 = wafer_core::java_string::from_utf16(&self.chars[p..q]).parse().unwrap_or(i32::MAX);
         Ok(if value > 255 { p } else { q })
     }
 

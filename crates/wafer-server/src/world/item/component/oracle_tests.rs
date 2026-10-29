@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::Nbt;
 use wafer_protocol::{Reader, Writer};
 
@@ -18,7 +19,7 @@ fn unhex(s: &str) -> Vec<u8> {
 
 fn stack(case: &str) -> ItemStack {
     let (count, input) = case.split_once(' ').unwrap();
-    let units: Vec<u16> = input.encode_utf16().collect();
+    let units: Vec<u16> = input.java_utf16().collect();
     let mut reader = StringReader::new(&units);
     let input = item_parser::parse(&mut reader).unwrap_or_else(|e| panic!("{case}: {}", e.get_message()));
     ItemStack::with_patch(input.item, count.parse().unwrap(), &input.components)

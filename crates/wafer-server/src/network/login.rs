@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::net::SocketAddr;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -60,7 +61,7 @@ pub fn offline_uuid(name: &str) -> u128 {
 }
 
 fn is_valid_player_name(name: &str) -> bool {
-    name.encode_utf16().count() <= 16 && !name.encode_utf16().any(|c| c <= 32 || c >= 127)
+    name.java_utf16().count() <= 16 && !name.java_utf16().any(|c| c <= 32 || c >= 127)
 }
 
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(30);

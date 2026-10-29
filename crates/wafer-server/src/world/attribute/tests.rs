@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -80,7 +81,7 @@ fn fmt(value: &Value) -> String {
 }
 
 fn java_hash(s: &str) -> String {
-    format!("{:x}", s.encode_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32)) as u32)
+    format!("{:x}", s.java_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32)) as u32)
 }
 
 fn oracle(kind: &str) -> HashMap<String, String> {

@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_protocol::lazily_parsed_number;
 use wafer_protocol::nbt::Nbt;
 use wafer_protocol::{Reader, Writer};
@@ -323,7 +324,7 @@ impl Codec {
             }
             Codec::String(min, max) => {
                 let s = string(tag)?;
-                let len = s.encode_utf16().count();
+                let len = s.java_utf16().count();
                 if len < *min {
                     Err(format!("String \"{s}\" is too short: {len} < {min}"))
                 } else if len > *max {
@@ -881,7 +882,7 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
         Stream::Double => w.f64(as_f64(value)),
         Stream::Utf8(max) => {
             let s = value.as_str().unwrap_or("");
-            let length = s.encode_utf16().count();
+            let length = s.java_utf16().count();
             if length > *max {
                 return Err(format!("String too big (was {length} characters, max {max})"));
             }

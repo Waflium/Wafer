@@ -1,6 +1,6 @@
 mod buf;
 mod frame;
-pub mod java_string;
+pub use wafer_core::java_string;
 pub mod lazily_parsed_number;
 pub mod nbt;
 

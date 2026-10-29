@@ -22,6 +22,7 @@ pub mod slot_argument;
 pub mod slot_source_argument;
 pub mod waypoint_argument;
 
+use wafer_core::java_string::JavaStr;
 use crate::world::level::chunk::HeightmapType;
 use std::sync::LazyLock;
 
@@ -843,7 +844,7 @@ pub fn list_suggestions(
 ) -> Suggestions {
     let player_names = || server.players().map(|p| p.profile.name.clone()).collect::<Vec<String>>();
     let validator = |input: &str| {
-        let units: Vec<u16> = input.encode_utf16().collect();
+        let units: Vec<u16> = input.java_utf16().collect();
         type_of(node).parse(&mut StringReader::new(&units), source).is_ok()
     };
     let coordinates = |remaining: &str| {
@@ -870,7 +871,7 @@ pub fn list_suggestions(
         ArgumentType::GameMode => shared_suggestion_provider::suggest(GameType::VALUES.map(GameType::name), &mut builder),
         ArgumentType::SwingAnimation => shared_suggestion_provider::suggest(["none", "whack", "stab"], &mut builder),
         ArgumentType::Time { .. } => {
-            let remaining: Vec<u16> = builder.remaining().encode_utf16().collect();
+            let remaining: Vec<u16> = builder.remaining().java_utf16().collect();
             let mut reader = StringReader::new(&remaining);
             if reader.read_float().is_err() {
                 return builder.build();

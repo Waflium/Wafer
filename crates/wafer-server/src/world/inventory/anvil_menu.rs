@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
 use wafer_data::{block_tags, items};
@@ -42,7 +43,7 @@ pub fn calculate_increased_repair_cost(base_cost: i32) -> i32 {
 
 fn validate_name(name: &str) -> Option<String> {
     let filtered_name = filter_text(name);
-    (filtered_name.encode_utf16().count() <= MAX_NAME_LENGTH).then_some(filtered_name)
+    (filtered_name.java_utf16().count() <= MAX_NAME_LENGTH).then_some(filtered_name)
 }
 
 fn repair_cost(item_stack: &ItemStack) -> i32 {

@@ -1,7 +1,8 @@
+use wafer_core::java_string::JavaStr;
 use super::*;
 
 pub fn snbt(input: &str) -> String {
-    let units: Vec<u16> = input.encode_utf16().collect();
+    let units: Vec<u16> = input.java_utf16().collect();
     let mut reader = StringReader::new(&units);
     match parse_as_argument(&mut reader) {
         Ok(tag) => format!("TAG {} @{}", to_string(&tag), reader.cursor),
@@ -14,13 +15,13 @@ pub fn error(e: &CommandSyntaxException) -> String {
     if let Some(input) = &e.input
         && e.cursor >= 0
     {
-        let input: Vec<u16> = input.encode_utf16().collect();
+        let input: Vec<u16> = input.java_utf16().collect();
         let cursor = input.len().min(e.cursor as usize);
         out.push_str(" | CTX ");
         if cursor > 10 {
             out.push_str("...");
         }
-        out.push_str(&String::from_utf16_lossy(&input[cursor.saturating_sub(10)..]));
+        out.push_str(&wafer_core::java_string::from_utf16(&input[cursor.saturating_sub(10)..]));
         out.push_str("<--[HERE]");
     }
     out

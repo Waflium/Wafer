@@ -6,6 +6,7 @@ pub mod functions;
 pub mod source;
 pub mod suggestion;
 
+use wafer_core::java_string::JavaStr;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::LazyLock;
 
@@ -84,7 +85,7 @@ pub(crate) static CUSTOM_EXECUTORS: LazyLock<Vec<Option<CustomCommandFn>>> = Laz
 });
 
 pub fn completion_suggestions(server: &Server, source: &CommandSourceStack, command: &str) -> Option<Suggestions> {
-    let units: Vec<u16> = command.encode_utf16().collect();
+    let units: Vec<u16> = command.java_utf16().collect();
     let mut reader = StringReader::new(&units);
     if reader.at('/') {
         reader.skip();
@@ -151,14 +152,14 @@ pub(crate) static CUSTOM_MODIFIERS: LazyLock<Vec<Option<CustomModifierFn>>> = La
 
 pub fn perform_prefixed_command(server: &mut Server, source: &CommandSourceStack, command: &str) {
     let command = command.strip_prefix('/').unwrap_or(command);
-    let units: Vec<u16> = command.encode_utf16().collect();
+    let units: Vec<u16> = command.java_utf16().collect();
     let parse = brigadier::parse(StringReader::new(&units), source);
     perform_command(server, parse, command, source);
 }
 
 pub fn perform_prefixed_command_without_level(server: &mut Server, source: &CommandSourceStack, command: &str) {
     let command = command.strip_prefix('/').unwrap_or(command);
-    let units: Vec<u16> = command.encode_utf16().collect();
+    let units: Vec<u16> = command.java_utf16().collect();
     let parse = brigadier::parse(StringReader::new(&units), source);
     if finish_parsing(server, parse, command, source).is_some() {
         source.send_failure(

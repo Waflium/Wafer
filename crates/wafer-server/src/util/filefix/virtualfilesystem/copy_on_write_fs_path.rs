@@ -1,3 +1,4 @@
+use wafer_core::java_string::JavaStr;
 use std::cmp::Ordering;
 use std::fmt;
 use std::io;
@@ -153,7 +154,7 @@ impl CopyOnWriteFSPath {
     }
 
     pub fn compare_to(&self, other: &CopyOnWriteFSPath) -> Ordering {
-        self.to_string().encode_utf16().cmp(other.to_string().encode_utf16())
+        self.to_string().java_utf16().cmp(other.to_string().java_utf16())
     }
 
     pub(crate) fn names(&self) -> &[String] {
