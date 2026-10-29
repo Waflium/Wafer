@@ -11,7 +11,6 @@ use wafer_protocol::nbt::Nbt;
 use wafer_data::{Block, Fluid};
 
 use super::chunk_level::ChunkStatus;
-use crate::world::level::biome::biome_source::ArithmeticException;
 use crate::world::level::chunk::{ChunkStructures, LevelChunk};
 use crate::world::level::chunk::serialization::{self, ReadChunk, SectionLight};
 use crate::world::level::chunk::storage::RegionStorage;
@@ -41,10 +40,9 @@ static POOL: LazyLock<&'static WorkerPool> = LazyLock::new(|| {
                             jobs = pool.available.wait(jobs).unwrap();
                         }
                     };
-                    if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(job))
-                        && !payload.is::<ArithmeticException>()
-                    {
-                        std::panic::resume_unwind(payload);
+                    if let Err(exception) = crate::util::catch_exception(job) {
+                        let exception = format!("java.util.concurrent.CompletionException: {exception}");
+                        crate::crash_report::relay_delay_crash(crate::crash_report::CrashReport::new("Exception chunk generation/loading", exception, Vec::new()));
                     }
                 }
             })

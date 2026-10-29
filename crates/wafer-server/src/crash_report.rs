@@ -58,11 +58,29 @@ pub struct CrashReport {
     title: String,
     exception: String,
     stack_trace: Vec<String>,
+    suppressed: Vec<String>,
     details: Vec<CrashReportCategory>,
     system_report: Vec<(String, String)>,
 }
 
 pub struct ReportedException(pub CrashReport);
+
+static DELAYED_CRASH: std::sync::Mutex<Option<CrashReport>> = std::sync::Mutex::new(None);
+
+pub fn relay_delay_crash(crash_report: CrashReport) {
+    let mut delayed_crash = DELAYED_CRASH.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    match delayed_crash.as_mut() {
+        None => *delayed_crash = Some(crash_report),
+        Some(delayed_crash) => delayed_crash.suppressed.push(crash_report.exception),
+    }
+}
+
+pub fn throw_delayed_exception() {
+    let delayed_crash = DELAYED_CRASH.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+    if let Some(delayed_crash) = delayed_crash {
+        std::panic::panic_any(ReportedException(delayed_crash));
+    }
+}
 
 pub fn exception_of(panic: &Box<dyn std::any::Any + Send>) -> String {
     if panic.is::<crate::world::level::biome::biome_source::ArithmeticException>() {
@@ -81,7 +99,7 @@ impl CrashReport {
     }
 
     pub fn new(title: &str, exception: String, stack_trace: Vec<String>) -> CrashReport {
-        CrashReport { title: title.to_string(), exception, stack_trace, details: Vec::new(), system_report: system_report() }
+        CrashReport { title: title.to_string(), exception, stack_trace, suppressed: Vec::new(), details: Vec::new(), system_report: system_report() }
     }
 
     pub fn add_category(&mut self, name: &str) -> &mut CrashReportCategory {
@@ -100,6 +118,11 @@ impl CrashReport {
         for frame in &self.stack_trace {
             out.push_str("\tat ");
             out.push_str(frame);
+            out.push_str(LINE_SEPARATOR);
+        }
+        for suppressed in &self.suppressed {
+            out.push_str("\tSuppressed: ");
+            out.push_str(suppressed);
             out.push_str(LINE_SEPARATOR);
         }
         out
@@ -183,4 +206,29 @@ fn operating_system() -> String {
         other => other,
     };
     format!("{name} ({arch})")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delayed_crashes_keep_the_first_report_and_suppress_later_ones() {
+        relay_delay_crash(CrashReport::new("Exception chunk generation/loading", "java.util.concurrent.CompletionException: first".to_string(), Vec::new()));
+        relay_delay_crash(CrashReport::new("Exception chunk generation/loading", "java.util.concurrent.CompletionException: second".to_string(), Vec::new()));
+        let payload = crate::util::catch_exception(throw_delayed_exception).map(|_| ()).err();
+        assert!(payload.is_some());
+        let payload = std::panic::catch_unwind(|| {
+            relay_delay_crash(CrashReport::new("Exception chunk generation/loading", "java.util.concurrent.CompletionException: third".to_string(), Vec::new()));
+            throw_delayed_exception();
+        })
+        .unwrap_err();
+        let reported = payload.downcast::<ReportedException>().ok().unwrap();
+        assert_eq!(reported.0.title(), "Exception chunk generation/loading");
+        assert_eq!(reported.0.exception_message(), format!("java.util.concurrent.CompletionException: third{LINE_SEPARATOR}"));
+        let mut report = CrashReport::new("t", "java.lang.IllegalStateException: a".to_string(), vec!["f".to_string()]);
+        report.suppressed.push("java.lang.RuntimeException: b".to_string());
+        assert_eq!(report.exception_message(), format!("java.lang.IllegalStateException: a{LINE_SEPARATOR}\tat f{LINE_SEPARATOR}\tSuppressed: java.lang.RuntimeException: b{LINE_SEPARATOR}"));
+        assert!(DELAYED_CRASH.lock().unwrap().is_none());
+    }
 }

@@ -572,6 +572,7 @@ impl Server {
     }
 
     fn poll_task(&mut self) -> bool {
+        crate::crash_report::throw_delayed_exception();
         let mut did_something = false;
         for level in &mut self.levels {
             did_something |= level.poll_chunk_task();
