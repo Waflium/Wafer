@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::abstract_minecart::{AbstractMinecart, MinecartKind};
 use crate::server::Server;
+use crate::server::command_origin::CommandOrigin;
 use crate::server::level::ServerLevel;
 use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
@@ -82,7 +83,7 @@ impl Server {
     pub fn run_pending_minecart_commands(&mut self, level: usize) {
         for entity in std::mem::take(&mut self.levels[level].pending_minecart_commands) {
             if self.levels[level].minecart_command_block(entity).is_some() {
-                self.base_command_block_perform_command(CommandBlockOwner::Minecart(level, entity));
+                self.base_command_block_perform_command(CommandBlockOwner::Minecart(level, entity), CommandOrigin::MinecartCommandBlock);
             }
         }
     }

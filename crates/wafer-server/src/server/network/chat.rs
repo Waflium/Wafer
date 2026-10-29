@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use wafer_data::packets::play::clientbound;
 
+use super::super::command_origin::CommandOrigin;
 use super::super::{Server, Task};
 use crate::ServerConfig;
 use crate::commands::brigadier::{self, StringReader};
@@ -165,7 +166,7 @@ impl Server {
             error!("Received unsigned command packet from {}, but the command requires signable arguments: {command}", self.player(id).profile.name);
             self.send_player_system_message(id, &invalid_command_signature(), false);
         } else {
-            crate::commands::perform_command(self, parse, command, &source);
+            self.run_from(CommandOrigin::PlayerChat, |server| crate::commands::perform_command(server, parse, command, &source));
         }
         self.detect_rate_spam(id, true);
     }
@@ -208,7 +209,7 @@ impl Server {
         match self.collect_signed_arguments(id, command, time_stamp, salt, &argument_signatures, &signable, last_seen) {
             Ok(arguments) => {
                 let source = source.with_signing_context(Arc::new(SignedArguments { chain: id, arguments }));
-                crate::commands::perform_command(self, parse, command, &source);
+                self.run_from(CommandOrigin::PlayerChat, |server| crate::commands::perform_command(server, parse, command, &source));
             }
             Err(e) => self.handle_message_decode_failure(id, e),
         }

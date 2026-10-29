@@ -8,6 +8,7 @@ use super::mirror::Mirror;
 use super::rotation::Rotation;
 use super::{BlockBehaviour, BlockHitResult};
 use crate::server::Server;
+use crate::server::command_origin::CommandOrigin;
 use crate::server::level::ServerLevel;
 use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
@@ -136,7 +137,7 @@ impl Server {
 
     fn command_block_execute(&mut self, level: usize, pos: BlockPos, state: BlockState, command_set: bool) {
         if command_set {
-            self.base_command_block_perform_command(CommandBlockOwner::Block(level, pos));
+            self.base_command_block_perform_command(CommandBlockOwner::Block(level, pos), CommandOrigin::CommandBlock);
         } else if let Some(command_block) = self.levels[level].command_block_entity(pos) {
             command_block.command_block.set_success_count(0);
         }
@@ -164,7 +165,7 @@ impl Server {
             let command_block = self.levels[level].command_block_entity(pos).expect("a chain command block");
             if command_block.is_powered() || command_block.is_automatic() {
                 if self.levels[level].command_block_entity_mark_condition_met(pos) {
-                    if !self.base_command_block_perform_command(CommandBlockOwner::Block(level, pos)) {
+                    if !self.base_command_block_perform_command(CommandBlockOwner::Block(level, pos), CommandOrigin::ChainCommandBlock) {
                         break;
                     }
                     self.levels[level].update_neighbour_for_output_signal(pos, block);

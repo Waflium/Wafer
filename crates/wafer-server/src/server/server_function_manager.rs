@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::Server;
+use super::command_origin::CommandOrigin;
 use super::server_function_library::ServerFunctionLibrary;
 use crate::commands::execute_command_in_context;
 use crate::commands::functions::CommandFunction;
@@ -29,10 +30,10 @@ impl ServerFunctionManager {
         if server.functions.post_reload {
             server.functions.post_reload = false;
             let functions = server.functions.library.get_tag(LOAD_FUNCTION_TAG).to_vec();
-            ServerFunctionManager::execute_tag_functions(server, &functions);
+            server.run_from(CommandOrigin::LoadFunctions, |server| ServerFunctionManager::execute_tag_functions(server, &functions));
         }
         let ticking = server.functions.ticking.clone();
-        ServerFunctionManager::execute_tag_functions(server, &ticking);
+        server.run_from(CommandOrigin::TickFunctions, |server| ServerFunctionManager::execute_tag_functions(server, &ticking));
     }
 
     fn execute_tag_functions(server: &mut Server, functions: &[Arc<CommandFunction>]) {

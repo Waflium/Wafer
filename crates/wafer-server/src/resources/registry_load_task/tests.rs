@@ -67,7 +67,14 @@ fn a_tag_failure_names_where_the_tags_are_loaded() {
 
 #[test]
 fn a_reload_tag_failure_ends_in_the_command_that_reloaded() {
-    let trace = tag_decode_failed(TagLoadContext::ReloadedRegistries(&["ta.Command.run(Command.java:1)"]), "Not a json array: 5").print_stack_trace();
+    let invoker = &[
+        "java.base/java.util.concurrent.CompletableFuture.uniComposeStage(CompletableFuture.java:1208)",
+        "java.base/java.util.concurrent.CompletableFuture.thenCompose(CompletableFuture.java:2368)",
+        "net.minecraft.server.MinecraftServer.reloadResources(MinecraftServer.java:1518)",
+        "net.minecraft.server.commands.ReloadCommand.reloadPacks(ReloadCommand.java:22)",
+        "ta.Command.run(Command.java:1)",
+    ];
+    let trace = tag_decode_failed(TagLoadContext::ReloadedRegistries(invoker), "Not a json array: 5").print_stack_trace();
     assert!(trace.contains("TagLoader.load(TagLoader.java:61)\n\tat net.minecraft.tags.TagLoader.loadPendingTags(TagLoader.java:163)"));
     assert!(trace.contains("Streams$RangeIntSpliterator.forEachRemaining(Streams.java:104)"));
     assert!(trace.ends_with("MinecraftServer.reloadResources(MinecraftServer.java:1518)\n\tat net.minecraft.server.commands.ReloadCommand.reloadPacks(ReloadCommand.java:22)\n\tat ta.Command.run(Command.java:1)\n"));

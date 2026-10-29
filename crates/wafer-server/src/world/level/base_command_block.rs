@@ -7,6 +7,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::commands::source::{CommandSource, CommandSourceStack};
 use crate::network::chat::Component;
 use crate::server::Server;
+use crate::server::command_origin::CommandOrigin;
 use crate::world::entity::EntityId;
 use crate::network::chat::component_serialization::parse_custom_name_safe;
 use crate::world::level::storage::tag_value_input;
@@ -178,7 +179,7 @@ impl Server {
         Some(stack)
     }
 
-    pub fn base_command_block_perform_command(&mut self, owner: CommandBlockOwner) -> bool {
+    pub fn base_command_block_perform_command(&mut self, owner: CommandBlockOwner, origin: CommandOrigin) -> bool {
         let game_time = self.levels[owner.level()].game_time;
         let command_blocks_work = self.levels[owner.level()].game_rules.get_bool(game_rule::COMMAND_BLOCKS_WORK);
         let Some(command_block) = self.base_command_block(owner) else { return false };
@@ -202,7 +203,7 @@ impl Server {
                         command_block.success_count += 1;
                     }
                 }));
-                crate::commands::perform_prefixed_command(self, &stack, &command);
+                self.run_from(origin, |server| crate::commands::perform_prefixed_command(server, &stack, &command));
             }
             if let Some(session) = session {
                 let messages: Vec<Component> = self.take_command_block_messages(session);

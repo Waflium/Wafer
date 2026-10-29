@@ -1,5 +1,6 @@
 pub mod advancements;
 pub mod bossevents;
+pub mod command_origin;
 pub mod commands;
 pub mod dedicated;
 pub mod dialog;
@@ -60,6 +61,7 @@ use crate::world::clock::ServerClockManager;
 use crate::world::entity::EntityId;
 use crate::world::level::chunk::{ChunkGenerator, FlatLevelSource};
 use crate::world::level::levelgen::world_dimensions::WorldDimensions;
+use command_origin::CommandOrigin;
 use crate::world::level::chunk::storage::RegionStorage;
 use crate::world::level::gamerules::GameRules;
 use crate::world::level::border::border_change_listener::write_initialize_border;
@@ -233,6 +235,7 @@ pub struct Server {
     tasks: VecDeque<Task>,
     console_inputs: Vec<(String, CommandSourceStack, bool)>,
     pub rcon_buffer: std::cell::RefCell<String>,
+    pub command_origin: command_origin::CommandOrigin,
     pub command_block_messages: std::cell::RefCell<Vec<(u64, crate::network::chat::Component)>>,
     random: LegacyRandomSource,
     status: Arc<RwLock<Option<Arc<str>>>>,
@@ -473,6 +476,7 @@ impl Server {
             tasks: VecDeque::new(),
             console_inputs: Vec::new(),
             rcon_buffer: std::cell::RefCell::new(String::new()),
+            command_origin: command_origin::CommandOrigin::default(),
             command_block_messages: std::cell::RefCell::new(Vec::new()),
             random: LegacyRandomSource::create(),
             status: Arc::default(),
@@ -1213,7 +1217,7 @@ impl Server {
                 Task::Rcon { command, reply } => {
                     self.rcon_buffer.borrow_mut().clear();
                     let source = CommandSourceStack::rcon(self);
-                    crate::commands::perform_prefixed_command(self, &source, &command);
+                    self.run_from(CommandOrigin::Rcon, |server| crate::commands::perform_prefixed_command(server, &source, &command));
                     let _ = reply.send(self.rcon_buffer.take());
                 }
                 _ => {}
@@ -1677,7 +1681,7 @@ impl Server {
                 }
                 if let Some(function) = self.functions.get(&function) {
                     let source = CommandSourceStack::player(self, player).with_suppressed_output().with_permission(2);
-                    ServerFunctionManager::execute(self, &function, &source);
+                    self.run_from(CommandOrigin::AdvancementReward, |server| ServerFunctionManager::execute(server, &function, &source));
                 }
             }
             for (name, entity, position, rotation) in std::mem::take(&mut self.levels[index].pending_enchantment_functions) {

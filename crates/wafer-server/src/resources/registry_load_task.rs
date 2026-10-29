@@ -225,13 +225,7 @@ const TAG_LOAD_RELOAD_PIPELINE: [&str; 11] = [
     "java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:723)",
     "net.minecraft.tags.TagLoader.loadTagsForExistingRegistries(TagLoader.java:141)",
 ];
-const TAG_LOAD_RELOAD_RESOURCES: [&str; 5] = [
-    "net.minecraft.server.MinecraftServer.lambda$reloadResources$1(MinecraftServer.java:1522)",
-    "java.base/java.util.concurrent.CompletableFuture.uniComposeStage(CompletableFuture.java:1208)",
-    "java.base/java.util.concurrent.CompletableFuture.thenCompose(CompletableFuture.java:2368)",
-    "net.minecraft.server.MinecraftServer.reloadResources(MinecraftServer.java:1518)",
-    "net.minecraft.server.commands.ReloadCommand.reloadPacks(ReloadCommand.java:22)",
-];
+const TAG_LOAD_RELOAD_RESOURCES: [&str; 1] = ["net.minecraft.server.MinecraftServer.lambda$reloadResources$1(MinecraftServer.java:1522)"];
 const TAG_LOAD_WORLD_LOADER: [&str; 4] = [
     "net.minecraft.server.WorldLoader.lambda$load$0(WorldLoader.java:33)",
     "java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1171)",

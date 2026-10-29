@@ -3,6 +3,7 @@ pub mod timer_queue;
 use wafer_protocol::nbt::Nbt;
 
 use crate::server::Server;
+use crate::server::command_origin::CommandOrigin;
 use crate::server::server_function_manager::ServerFunctionManager;
 use crate::util::codec::{self, DataResult};
 
@@ -18,13 +19,13 @@ impl TimerCallback {
             TimerCallback::Function(function_id) => {
                 if let Some(function) = server.functions.get(function_id) {
                     let sender = ServerFunctionManager::game_loop_sender(server);
-                    ServerFunctionManager::execute(server, &function, &sender);
+                    server.run_from(CommandOrigin::ScheduledFunction, |server| ServerFunctionManager::execute(server, &function, &sender));
                 }
             }
             TimerCallback::FunctionTag(tag_id) => {
                 for function in server.functions.get_tag(tag_id).to_vec() {
                     let sender = ServerFunctionManager::game_loop_sender(server);
-                    ServerFunctionManager::execute(server, &function, &sender);
+                    server.run_from(CommandOrigin::ScheduledFunctionTag, |server| ServerFunctionManager::execute(server, &function, &sender));
                 }
             }
         }
