@@ -3,6 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use tokio::sync::oneshot;
 
 use crate::server::Server;
+use crate::server::level::chunk_holder::FutureId;
 use crate::server::level::game_mode::GameType;
 use crate::server::level::ticket::TicketType;
 use crate::util::codec::{self, DecodeResult, Record};
@@ -32,7 +33,7 @@ pub(crate) struct PrepareSpawnTask {
     pub position: Vec3,
     pub angle: (f32, f32),
     pub reply: Option<oneshot::Sender<Result<(), ()>>>,
-    chunk_load_requested: bool,
+    chunk_load_future: Option<FutureId>,
 }
 
 impl PrepareSpawnTask {
@@ -66,7 +67,7 @@ impl Server {
         });
         match started {
             Ok((level, position, y_rot, x_rot)) => {
-                self.prepare_spawn_tasks.push(PrepareSpawnTask { uuid, level, position, angle: (y_rot, x_rot), reply: Some(reply), chunk_load_requested: false })
+                self.prepare_spawn_tasks.push(PrepareSpawnTask { uuid, level, position, angle: (y_rot, x_rot), reply: Some(reply), chunk_load_future: None })
             }
             Err(exception) => {
                 error!("Failed to start configuration task {}\n{exception}", PrepareSpawnTask::TYPE);
@@ -86,12 +87,15 @@ impl Server {
                 index += 1;
                 continue;
             }
-            if !task.chunk_load_requested {
-                task.chunk_load_requested = true;
-                chunks.add_ticket_with_radius(TicketType::PlayerSpawn, spawn_chunk, SPAWN_RADIUS);
-            }
-            let loaded = (-SPAWN_RADIUS..=SPAWN_RADIUS)
-                .all(|dx| (-SPAWN_RADIUS..=SPAWN_RADIUS).all(|dz| chunks.has_chunk(ChunkPos::new(spawn_chunk.x + dx, spawn_chunk.z + dz))));
+            let chunk_load_future = match task.chunk_load_future {
+                Some(future) => future,
+                None => {
+                    let future = chunks.add_ticket_and_load_with_radius(TicketType::PlayerSpawn, spawn_chunk, SPAWN_RADIUS);
+                    task.chunk_load_future = Some(future);
+                    future
+                }
+            };
+            let loaded = chunks.is_future_done(chunk_load_future);
             let task = &mut self.prepare_spawn_tasks[index];
             if loaded && let Some(reply) = task.reply.take() {
                 if reply.send(Ok(())).is_err() {

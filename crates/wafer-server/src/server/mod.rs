@@ -455,6 +455,7 @@ impl Server {
         let main_thread_wakeup = levels[0].chunks.main_thread_wakeup();
         for level in &mut levels {
             level.chunks.set_main_thread_wakeup(main_thread_wakeup.clone());
+            level.entity_manager.set_main_thread_wakeup(main_thread_wakeup.clone());
             level.game_rules = game_rules.clone();
             level.enabled_features = data_configuration.enabled_features;
             level.chunks.game_rules = game_rules.clone();
@@ -1372,8 +1373,10 @@ impl Server {
         }
     }
 
-    fn run_all_tasks(&mut self) {
+    fn run_all_tasks(&mut self) -> bool {
+        let mut ran_task = false;
         while let Some(task) = self.tasks.pop_front() {
+            ran_task = true;
             match task {
                 Task::Chat { player, body, signature } if self.has_player(player) => self.run_chat(player, body, signature),
                 Task::Command { player, command } if self.has_player(player) => self.run_unsigned_command(player, &command),
@@ -1391,6 +1394,10 @@ impl Server {
                 _ => {}
             }
         }
+        for level in &mut self.levels {
+            ran_task |= level.run_entity_deserializer_queue_as_task();
+        }
+        ran_task
     }
 
     fn handle_console_inputs(&mut self) {
@@ -2476,11 +2483,25 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             let _scope = main_thread_frames::tick();
             server.tick();
         }
+        server.mark_ready();
+        let delayed_tasks_max_next_tick = (Instant::now() + this_tick).max(next_tick);
+        let mut may_have_delayed_tasks = true;
+        let have_time = |may_have_delayed_tasks: bool| Instant::now() < if may_have_delayed_tasks { delayed_tasks_max_next_tick } else { next_tick };
         {
             let _scope = main_thread_frames::run_all_tasks();
-            server.run_all_tasks();
+            loop {
+                let mut ran_server_task = false;
+                while let Ok(task) = tasks.try_recv() {
+                    task(server);
+                    ran_server_task = true;
+                }
+                ran_server_task |= server.run_all_tasks();
+                may_have_delayed_tasks = ran_server_task || ((sprinting || have_time(may_have_delayed_tasks)) && server.poll_task());
+                if !may_have_delayed_tasks {
+                    break;
+                }
+            }
         }
-        server.mark_ready();
         let wakeup = server.overworld().chunks.main_thread_wakeup();
         let _scope = main_thread_frames::running_wait();
         loop {
@@ -2488,9 +2509,12 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             while let Ok(task) = tasks.try_recv() {
                 task(server);
             }
-            let Some(wait) = next_tick.checked_duration_since(Instant::now()).filter(|w| !w.is_zero()) else { break };
-            if !server.poll_task() {
-                wakeup.wait(seen, wait);
+            if !have_time(may_have_delayed_tasks) {
+                break;
+            }
+            may_have_delayed_tasks = server.poll_task();
+            if !may_have_delayed_tasks {
+                wakeup.wait(seen, next_tick.saturating_duration_since(Instant::now()));
             }
         }
         if sprinting {

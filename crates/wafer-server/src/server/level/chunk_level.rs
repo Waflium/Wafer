@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum ChunkStatus {
     Empty,
@@ -58,37 +60,174 @@ impl ChunkStatus {
         ChunkStatus::ALL[(self.index() + 1).min(ChunkStatus::ALL.len() - 1)]
     }
 
-    fn accumulated_dependencies(self) -> &'static [ChunkStatus] {
-        use ChunkStatus::*;
-        const S: ChunkStatus = StructureStarts;
-        match self {
-            Empty => &[],
-            StructureStarts => &[Empty],
-            StructureReferences => &[S, S, S, S, S, S, S, S, S],
-            Biomes => &[StructureReferences, S, S, S, S, S, S, S, S],
-            Terrain => &[Biomes, Biomes, S, S, S, S, S, S, S, S],
-            Features => &[Terrain, Terrain, Biomes, S, S, S, S, S, S, S, S],
-            InitializeLight => &[Features, Terrain, Biomes, S, S, S, S, S, S, S, S],
-            Light => &[InitializeLight, InitializeLight, Terrain, Biomes, S, S, S, S, S, S, S, S],
-            Spawn => &[Light, InitializeLight, Terrain, Biomes, S, S, S, S, S, S, S, S],
-            Full => &[Spawn, InitializeLight, Terrain, Biomes, S, S, S, S, S, S, S, S],
-        }
-    }
-
     pub fn accumulated_radius_of(self, status: ChunkStatus) -> i32 {
-        if status == self {
-            return 0;
-        }
-        let dependencies = self.accumulated_dependencies();
-        dependencies.iter().rposition(|&d| status <= d).expect("status within the step's dependencies") as i32
+        ChunkPyramid::Generation.accumulated_radius_of(self, status)
     }
 
     pub fn dependency_at(self, distance: i32) -> ChunkStatus {
-        self.accumulated_dependencies()[distance as usize]
+        ChunkPyramid::Generation.step_to(self).accumulated_dependencies.get(distance)
+    }
+}
+
+pub struct ChunkDependencies {
+    dependency_by_radius: Vec<ChunkStatus>,
+    radius_by_dependency: Vec<i32>,
+}
+
+impl ChunkDependencies {
+    fn new(dependency_by_radius: Vec<ChunkStatus>) -> ChunkDependencies {
+        let size = dependency_by_radius.first().map_or(0, |first| first.index() + 1);
+        let mut radius_by_dependency = vec![0; size];
+        for (radius, dependency) in dependency_by_radius.iter().enumerate() {
+            for status_index in 0..=dependency.index() {
+                radius_by_dependency[status_index] = radius as i32;
+            }
+        }
+        ChunkDependencies { dependency_by_radius, radius_by_dependency }
     }
 
-    pub fn dependency_radius(self) -> i32 {
-        (self.accumulated_dependencies().len() as i32 - 1).max(0)
+    pub fn size(&self) -> usize {
+        self.dependency_by_radius.len()
+    }
+
+    pub fn get_radius_of(&self, status: ChunkStatus) -> i32 {
+        match self.radius_by_dependency.get(status.index()) {
+            Some(&radius) => radius,
+            None => panic!("Requesting a ChunkStatus({}) outside of dependency range({:?})", status.get_name(), self.dependency_by_radius),
+        }
+    }
+
+    pub fn get_radius(&self) -> i32 {
+        (self.dependency_by_radius.len() as i32 - 1).max(0)
+    }
+
+    pub fn get(&self, distance: i32) -> ChunkStatus {
+        self.dependency_by_radius[distance as usize]
+    }
+}
+
+pub struct ChunkStep {
+    pub target_status: ChunkStatus,
+    pub accumulated_dependencies: ChunkDependencies,
+}
+
+impl ChunkStep {
+    pub fn get_accumulated_radius_of(&self, status: ChunkStatus) -> i32 {
+        if status == self.target_status { 0 } else { self.accumulated_dependencies.get_radius_of(status) }
+    }
+}
+
+struct ChunkStepBuilder<'a> {
+    status: ChunkStatus,
+    parent: Option<&'a ChunkStep>,
+    direct_dependencies_by_radius: Vec<ChunkStatus>,
+}
+
+impl<'a> ChunkStepBuilder<'a> {
+    fn new(status: ChunkStatus, parent: Option<&'a ChunkStep>) -> ChunkStepBuilder<'a> {
+        let direct_dependencies_by_radius = match parent {
+            Some(parent) => vec![parent.target_status],
+            None => Vec::new(),
+        };
+        ChunkStepBuilder { status, parent, direct_dependencies_by_radius }
+    }
+
+    fn add_requirement(mut self, status: ChunkStatus, radius: i32) -> ChunkStepBuilder<'a> {
+        assert!(status < self.status, "Status {} can not be required by {}", status.get_name(), self.status.get_name());
+        let previous = std::mem::take(&mut self.direct_dependencies_by_radius);
+        let new_length = radius as usize + 1;
+        self.direct_dependencies_by_radius = if new_length > previous.len() { vec![status; new_length] } else { previous.clone() };
+        for i in 0..new_length.min(previous.len()) {
+            self.direct_dependencies_by_radius[i] = previous[i].max(status);
+        }
+        self
+    }
+
+    fn build(self) -> ChunkStep {
+        let accumulated = self.build_accumulated_dependencies();
+        ChunkStep { target_status: self.status, accumulated_dependencies: ChunkDependencies::new(accumulated) }
+    }
+
+    fn build_accumulated_dependencies(&self) -> Vec<ChunkStatus> {
+        let Some(parent) = self.parent else { return self.direct_dependencies_by_radius.clone() };
+        let direct = &self.direct_dependencies_by_radius;
+        let radius_of_parent = self.get_radius_of_parent(parent.target_status);
+        let parent_dependencies = &parent.accumulated_dependencies;
+        let length = (radius_of_parent + parent_dependencies.size()).max(direct.len());
+        (0..length)
+            .map(|distance| {
+                let distance_in_parent = distance as i64 - radius_of_parent as i64;
+                if distance_in_parent < 0 || distance_in_parent >= parent_dependencies.size() as i64 {
+                    direct[distance]
+                } else if distance >= direct.len() {
+                    parent_dependencies.get(distance_in_parent as i32)
+                } else {
+                    direct[distance].max(parent_dependencies.get(distance_in_parent as i32))
+                }
+            })
+            .collect()
+    }
+
+    fn get_radius_of_parent(&self, status: ChunkStatus) -> usize {
+        self.direct_dependencies_by_radius.iter().rposition(|&dependency| dependency >= status).unwrap_or(0)
+    }
+}
+
+struct ChunkPyramidSteps {
+    steps: Vec<ChunkStep>,
+}
+
+fn build_pyramid(requirements: impl Fn(ChunkStatus) -> &'static [(ChunkStatus, i32)]) -> ChunkPyramidSteps {
+    let mut steps: Vec<ChunkStep> = Vec::with_capacity(ChunkStatus::ALL.len());
+    for status in ChunkStatus::ALL {
+        let mut builder = ChunkStepBuilder::new(status, steps.last());
+        for &(required, radius) in requirements(status) {
+            builder = builder.add_requirement(required, radius);
+        }
+        let step = builder.build();
+        steps.push(step);
+    }
+    ChunkPyramidSteps { steps }
+}
+
+static GENERATION_PYRAMID: LazyLock<ChunkPyramidSteps> = LazyLock::new(|| {
+    use ChunkStatus::*;
+    build_pyramid(|status| match status {
+        StructureReferences => &[(StructureStarts, 8)],
+        Biomes => &[(StructureStarts, 8)],
+        Terrain => &[(StructureStarts, 8), (Biomes, 1)],
+        Features => &[(StructureStarts, 8), (Terrain, 1)],
+        Light => &[(InitializeLight, 1)],
+        Spawn => &[(Biomes, 1)],
+        _ => &[],
+    })
+});
+
+static LOADING_PYRAMID: LazyLock<ChunkPyramidSteps> = LazyLock::new(|| {
+    use ChunkStatus::*;
+    build_pyramid(|status| match status {
+        Light => &[(InitializeLight, 1)],
+        _ => &[],
+    })
+});
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ChunkPyramid {
+    Generation,
+    Loading,
+}
+
+impl ChunkPyramid {
+    pub fn step_to(self, status: ChunkStatus) -> &'static ChunkStep {
+        let pyramid: &'static ChunkPyramidSteps = match self {
+            ChunkPyramid::Generation => &GENERATION_PYRAMID,
+            ChunkPyramid::Loading => &LOADING_PYRAMID,
+        };
+        &pyramid.steps[status.index()]
+    }
+
+    pub fn accumulated_radius_of(self, target: ChunkStatus, status: ChunkStatus) -> i32 {
+        self.step_to(target).get_accumulated_radius_of(status)
     }
 }
 
@@ -183,6 +322,45 @@ mod tests {
         assert_eq!(by_status(ChunkStatus::Empty), 44);
     }
 
+    fn dependency_list(pyramid: ChunkPyramid, target: ChunkStatus) -> Vec<ChunkStatus> {
+        let dependencies = &pyramid.step_to(target).accumulated_dependencies;
+        (0..dependencies.size() as i32).map(|distance| dependencies.get(distance)).collect()
+    }
+
+    #[test]
+    fn pyramids_match_vanilla() {
+        use ChunkStatus::*;
+        const S: ChunkStatus = StructureStarts;
+        let generation: [&[ChunkStatus]; 10] = [
+            &[],
+            &[Empty],
+            &[S, S, S, S, S, S, S, S, S],
+            &[StructureReferences, S, S, S, S, S, S, S, S],
+            &[Biomes, Biomes, S, S, S, S, S, S, S, S],
+            &[Terrain, Terrain, Biomes, S, S, S, S, S, S, S, S],
+            &[Features, Terrain, Biomes, S, S, S, S, S, S, S, S],
+            &[InitializeLight, InitializeLight, Terrain, Biomes, S, S, S, S, S, S, S, S],
+            &[Light, InitializeLight, Terrain, Biomes, S, S, S, S, S, S, S, S],
+            &[Spawn, InitializeLight, Terrain, Biomes, S, S, S, S, S, S, S, S],
+        ];
+        let loading: [&[ChunkStatus]; 10] = [
+            &[],
+            &[Empty],
+            &[StructureStarts],
+            &[StructureReferences],
+            &[Biomes],
+            &[Terrain],
+            &[Features],
+            &[InitializeLight, InitializeLight],
+            &[Light, InitializeLight],
+            &[Spawn, InitializeLight],
+        ];
+        for (index, target) in ChunkStatus::ALL.into_iter().enumerate() {
+            assert_eq!(dependency_list(ChunkPyramid::Generation, target), generation[index], "generation {target:?}");
+            assert_eq!(dependency_list(ChunkPyramid::Loading, target), loading[index], "loading {target:?}");
+        }
+    }
+
     #[test]
     fn pyramid_radii() {
         use ChunkStatus::*;
@@ -198,5 +376,12 @@ mod tests {
         assert_eq!(InitializeLight.accumulated_radius_of(Empty), 10);
         assert_eq!(Full.dependency_at(1), InitializeLight);
         assert_eq!(Full.dependency_at(2), Terrain);
+        assert_eq!(ChunkPyramid::Loading.accumulated_radius_of(Full, Empty), 1);
+        assert_eq!(ChunkPyramid::Loading.accumulated_radius_of(Full, InitializeLight), 1);
+        assert_eq!(ChunkPyramid::Loading.accumulated_radius_of(Full, Light), 0);
+        assert_eq!(ChunkPyramid::Loading.accumulated_radius_of(Light, Empty), 1);
+        assert_eq!(ChunkPyramid::Loading.accumulated_radius_of(Features, Empty), 0);
+        assert_eq!(ChunkPyramid::Loading.step_to(Full).accumulated_dependencies.get_radius(), 1);
+        assert_eq!(ChunkPyramid::Loading.step_to(Empty).accumulated_dependencies.get_radius(), 0);
     }
 }

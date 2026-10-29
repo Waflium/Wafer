@@ -394,7 +394,7 @@ impl ServerLevel {
     }
 
     fn dragon_fight_block_entities_in(&mut self, chunk_x: i32, chunk_z: i32) -> Vec<BlockPos> {
-        let chunk = self.chunks.chunk(ChunkPos::new(chunk_x, chunk_z));
+        let chunk = self.get_chunk(ChunkPos::new(chunk_x, chunk_z));
         chunk
             .block_entities
             .map
@@ -565,7 +565,7 @@ impl ServerLevel {
 
     fn dragon_fight_create_new_dragon(&mut self) -> Option<EntityId> {
         let origin = self.fight().origin;
-        self.chunks.chunk(BlockPos::new(origin.x, DRAGON_SPAWN_Y + origin.y, origin.z).chunk());
+        self.load_chunk(BlockPos::new(origin.x, DRAGON_SPAWN_Y + origin.y, origin.z).chunk());
         let mut dragon = EnderDragon::create();
         let state = ender_dragon_mut(&mut dragon);
         state.dragon_fight = true;

@@ -63,7 +63,7 @@ impl ExplorationMapFunction {
 
 fn claim_structure_at(level: &mut ServerLevel, destination: &[StructureHolder], pos: BlockPos) {
     let chunk_pos = ChunkPos::new(SectionPos::block_to_section_coord(pos.x), SectionPos::block_to_section_coord(pos.z));
-    level.chunks.get_chunk_structures(chunk_pos, ChunkStatus::StructureReferences);
+    level.get_chunk_structures_at(chunk_pos, ChunkStatus::StructureReferences);
     let starts = level.chunks.starts_for_structure_matching(chunk_pos, |structure| destination.contains(&structure));
     if let Some(start) = starts.into_iter().find(|start| start.get_bounding_box().is_inside(pos))
         && start.is_valid()

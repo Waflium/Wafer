@@ -66,7 +66,7 @@ pub fn initial_spawn(level: &mut ServerLevel) -> BlockPos {
     let mut height = level.chunks.generator.spawn_height(level.chunks.min_y(), level.chunks.height());
     if height < level.chunks.min_y() {
         let (x, z) = (spawn_chunk.min_block_x() + 8, spawn_chunk.min_block_z() + 8);
-        height = level.chunks.chunk(spawn_chunk).height_at(HeightmapType::WorldSurface, x, z);
+        height = level.get_chunk(spawn_chunk).height_at(HeightmapType::WorldSurface, x, z);
     }
     let mut spawn = BlockPos::new(spawn_chunk.min_block_x() + 8, height, spawn_chunk.min_block_z() + 8);
     let (mut x_chunk_offset, mut z_chunk_offset, mut dx_chunk, mut dz_chunk) = (0, 0, 0, -1);
@@ -100,7 +100,7 @@ fn spawn_pos_in_chunk(level: &mut ServerLevel, pos: ChunkPos) -> Option<BlockPos
 
 fn level_respawn_pos(level: &mut ServerLevel, x: i32, z: i32) -> Option<BlockPos> {
     let min_y = level.chunks.min_y();
-    let chunk = level.chunks.chunk(ChunkPos::new(x >> 4, z >> 4));
+    let chunk = level.get_chunk(ChunkPos::new(x >> 4, z >> 4));
     let top = chunk.height_at(HeightmapType::MotionBlocking, x, z);
     if top < min_y {
         return None;

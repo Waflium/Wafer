@@ -71,6 +71,6 @@ pub fn get_portal_destination(server: &mut Server, current_level: usize, entity:
 
 fn adjust_spawn_location(level: &mut ServerLevel, spawn_block_pos: BlockPos) -> BlockPos {
     let spawn_pos = Vec3::at_center_of(spawn_block_pos);
-    let spawn_height = level.chunks.chunk(spawn_block_pos.chunk()).height_at(HeightmapType::MotionBlockingNoLeaves, spawn_block_pos.x, spawn_block_pos.z) + 1;
+    let spawn_height = level.get_chunk(spawn_block_pos.chunk()).height_at(HeightmapType::MotionBlockingNoLeaves, spawn_block_pos.x, spawn_block_pos.z) + 1;
     BlockPos::containing(spawn_pos.x, spawn_height as f64, spawn_pos.z)
 }

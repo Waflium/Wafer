@@ -160,7 +160,7 @@ fn chunk_pos(pos: Vec3) -> ChunkPos {
 }
 
 fn is_chunk_empty(level: &mut ServerLevel, xz_pos: Vec3) -> bool {
-    level.chunks.chunk(chunk_pos(xz_pos)).sections.iter().all(|section| section.has_only_air())
+    level.get_chunk(chunk_pos(xz_pos)).sections.iter().all(|section| section.has_only_air())
 }
 
 fn find_tallest_block(level: &mut ServerLevel, around: BlockPos, dist: i32, allow_bedrock: bool) -> BlockPos {
@@ -187,7 +187,7 @@ fn find_tallest_block(level: &mut ServerLevel, around: BlockPos, dist: i32, allo
 }
 
 fn find_valid_spawn_in_chunk(level: &mut ServerLevel, chunk_pos: ChunkPos) -> Option<BlockPos> {
-    let chunk = level.chunks.chunk(chunk_pos);
+    let chunk = level.get_chunk(chunk_pos);
     let start = BlockPos::new(chunk_pos.min_block_x(), 30, chunk_pos.min_block_z());
     let max_y = chunk.highest_section_position() + 16 - 1;
     let end = BlockPos::new(chunk_pos.min_block_x() + 15, max_y, chunk_pos.min_block_z() + 15);

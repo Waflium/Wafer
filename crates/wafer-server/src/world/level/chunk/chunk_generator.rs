@@ -450,7 +450,7 @@ fn get_structure_generating_at(
             if !create_reference && fast_check_result == StructureCheckResult::StartPresent {
                 return Some((config.get_locate_pos(chunk_target), structure));
             }
-            let start = level.chunks.get_chunk_structures(chunk_target, ChunkStatus::StructureStarts).get_start_for_structure(structure).cloned();
+            let start = level.get_chunk_structures_at(chunk_target, ChunkStatus::StructureStarts).get_start_for_structure(structure).cloned();
             if let Some(start) = start
                 && start.is_valid()
                 && (!create_reference || try_add_reference(level, &start))

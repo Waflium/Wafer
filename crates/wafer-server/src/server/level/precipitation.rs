@@ -37,7 +37,7 @@ impl ServerLevel {
     }
 
     pub fn heightmap_pos(&mut self, kind: HeightmapType, pos: BlockPos) -> BlockPos {
-        let chunk = self.chunks.chunk(pos.chunk());
+        let chunk = self.get_chunk(pos.chunk());
         BlockPos::new(pos.x, chunk.height_at(kind, pos.x, pos.z) + 1, pos.z)
     }
 

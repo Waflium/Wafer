@@ -578,7 +578,7 @@ impl ServerLevel {
                 "net.minecraft.world.level.Level.getChunk(Level.java:210)",
                 "net.minecraft.server.level.ServerLevel.setChunkForced(ServerLevel.java:1467)",
             ]);
-            self.chunks.chunk(pos);
+            self.load_chunk(pos);
         }
         updated
     }
@@ -642,6 +642,7 @@ impl ServerLevel {
         if self.is_debug() {
             return false;
         }
+        self.load_chunk(pos.chunk());
         let Some(old) = self.chunks.set_block_state(pos, state) else { return false };
         let new_block = state.block();
         let block_changed = old.block() != new_block;
@@ -1880,7 +1881,7 @@ impl ServerLevel {
     }
 
     fn find_lightning_target_around(&mut self, pos: BlockPos) -> BlockPos {
-        let chunk = self.chunks.chunk(pos.chunk());
+        let chunk = self.get_chunk(pos.chunk());
         let height = chunk.height_at(crate::world::level::chunk::HeightmapType::MotionBlocking, pos.x, pos.z) + 1;
         let mut center = BlockPos::new(pos.x, height, pos.z);
         if let Some(lightning_rod_target) = self.find_lightning_rod(center) {
@@ -2258,6 +2259,9 @@ impl ServerLevel {
 
 impl BlockGetter for ServerLevel {
     fn block_state(&mut self, pos: BlockPos) -> BlockState {
+        if !self.chunks.is_outside_build_height(pos.y) {
+            self.load_chunk(pos.chunk());
+        }
         self.chunks.block_state(pos)
     }
 
@@ -2413,7 +2417,7 @@ impl crate::world::level::world_gen_level::WorldGenLevel for ServerLevel {
     }
 
     fn get_block_state(&mut self, pos: BlockPos) -> BlockState {
-        self.chunks.block_state(pos)
+        BlockGetter::block_state(self, pos)
     }
 
     fn get_height_of_level(&self) -> i32 {
@@ -2421,7 +2425,7 @@ impl crate::world::level::world_gen_level::WorldGenLevel for ServerLevel {
     }
 
     fn set_section_block_state(&mut self, pos: BlockPos, state: BlockState) {
-        let chunk = self.chunks.chunk(ChunkPos::new(pos.x >> 4, pos.z >> 4));
+        let chunk = self.get_chunk(ChunkPos::new(pos.x >> 4, pos.z >> 4));
         let index = ((pos.y - chunk.min_y()) >> 4) as usize;
         chunk.sections[index].set_block_state((pos.x & 15) as usize, (pos.y & 15) as usize, (pos.z & 15) as usize, state);
     }

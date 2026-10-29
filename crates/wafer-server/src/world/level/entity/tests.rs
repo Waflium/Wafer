@@ -215,3 +215,39 @@ fn a_data_fixer_exception_leaves_the_entity_chunk_pending() {
     assert!(!level.entity_manager.are_entities_loaded(ChunkPos::new(5, 0).pack()));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn entities_read_from_disk_are_created_by_the_server_tasks_not_by_the_entity_manager_tick() {
+    let dir = temp_dir("deserializer");
+    let mut level = level_in(&dir);
+    testing::player(&mut level, Vec3::new(8.5, -60.0, 8.5), 0.0, 0.0);
+    let item = add_item(&mut level, Vec3::new(20.5, -60.0, 4.5));
+    let uuid = level.entities[&item].entity().uuid;
+    level.save_all_entities();
+    drop(level);
+
+    let mut level = level_in(&dir);
+    let profile = crate::network::login::Profile { uuid: 7, name: "Joiner".into(), properties: Vec::new() };
+    let mut player = crate::server::level::server_player::ServerPlayer::new(
+        profile,
+        crate::network::configuration::ClientInfo::default(),
+        crate::network::connection::Outbound::detached(),
+        wafer_core::BlockPos::ZERO,
+    );
+    player.entity.set_pos(Vec3::new(8.5, -60.0, 8.5));
+    level.add_player(player);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while level.entity_manager.loading_inbox_size() == 0 {
+        assert!(std::time::Instant::now() < deadline, "no entity chunk was read");
+        level.chunks.run_until_idle();
+        level.process_chunk_events();
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    level.tick();
+    assert!(entity_with_uuid(&level, uuid).is_none());
+    level.run_entity_deserializer_queue_as_task();
+    level.tick();
+    assert!(entity_with_uuid(&level, uuid).is_some());
+    let _ = std::fs::remove_dir_all(dir);
+}

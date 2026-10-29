@@ -17,11 +17,13 @@ impl ServerLevel {
         if !self.is_in_valid_bounds(pos) {
             return None;
         }
+        self.load_chunk(pos.chunk());
         self.chunks.block_entity(pos, EntityCreationType::Immediate)
     }
 
     pub fn set_block_entity(&mut self, entity: BlockEntity) {
         if self.is_in_valid_bounds(entity.pos()) {
+            self.load_chunk(entity.pos().chunk());
             self.chunks.add_and_register_block_entity(entity);
         }
     }
@@ -30,6 +32,7 @@ impl ServerLevel {
         if !self.is_in_valid_bounds(pos) {
             return None;
         }
+        self.load_chunk(pos.chunk());
         let removed = self.chunks.remove_block_entity(pos);
         if let Some(entity) = &removed {
             self.block_entity_set_removed(pos, entity);
@@ -106,6 +109,7 @@ impl ServerLevel {
     }
 
     pub fn unpack_loot_table(&mut self, pos: BlockPos, player: Option<crate::world::entity::EntityId>) {
+        self.load_chunk(pos.chunk());
         let Some(entity) = self.chunks.block_entity(pos, EntityCreationType::Check) else { return };
         if !entity.is_randomizable() {
             return;

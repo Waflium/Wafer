@@ -11,7 +11,7 @@ use wafer_protocol::nbt::Nbt;
 use super::RegionStorage;
 use super::storage_exception;
 use crate::server::level::ServerLevel;
-use crate::server::level::chunk_workers::{IoReporting, IoWorker};
+use crate::server::level::chunk_workers::{IoReporting, IoWorker, MainThreadWakeup};
 use crate::util::java_throwable::JavaThrowable;
 use crate::util::problem_reporter::PathElement;
 use crate::world::entity::LevelEntity;
@@ -62,11 +62,23 @@ pub struct EntityStorage {
     reads: (Sender<EntityChunkRead>, Receiver<EntityChunkRead>),
     loading_inbox: Arc<AtomicUsize>,
     reporting: Option<IoReporting>,
+    main_thread_wakeup: Arc<MainThreadWakeup>,
 }
 
 impl EntityStorage {
     pub fn new(storage: Option<RegionStorage>) -> EntityStorage {
-        EntityStorage { worker: storage.map(IoWorker::new), empty_chunks: FastSet::default(), reads: channel(), loading_inbox: Arc::default(), reporting: None }
+        EntityStorage {
+            worker: storage.map(IoWorker::new),
+            empty_chunks: FastSet::default(),
+            reads: channel(),
+            loading_inbox: Arc::default(),
+            reporting: None,
+            main_thread_wakeup: Arc::default(),
+        }
+    }
+
+    pub fn set_main_thread_wakeup(&mut self, wakeup: Arc<MainThreadWakeup>) {
+        self.main_thread_wakeup = wakeup;
     }
 
     pub fn reporting(&self) -> Option<&IoReporting> {
@@ -89,6 +101,7 @@ impl EntityStorage {
         let reads = self.reads.0.clone();
         let loading_inbox = self.loading_inbox.clone();
         let reporting = self.reporting.clone();
+        let wakeup = self.main_thread_wakeup.clone();
         worker.read(pos, move |read| {
             if let Err(e) = &read {
                 let throwable = JavaThrowable::from_io_error(e);
@@ -100,6 +113,7 @@ impl EntityStorage {
             }
             loading_inbox.fetch_add(1, Ordering::Relaxed);
             drop(reads.send((pos, read)));
+            wakeup.wake();
         });
     }
 

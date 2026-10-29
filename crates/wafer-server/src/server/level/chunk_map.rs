@@ -363,8 +363,35 @@ impl ServerLevel {
             self.chunks.poll_task()
         };
         self.process_chunk_events();
-        self.run_entity_deserializer_queue_as_task();
-        worked
+        let deserialized = self.run_entity_deserializer_queue_as_task();
+        worked || deserialized
+    }
+
+    pub fn load_chunk(&mut self, pos: ChunkPos) {
+        let Some(future) = self.chunks.begin_chunk_load(pos) else { return };
+        let _scope = crate::server::main_thread_frames::chunk_source_block();
+        self.process_chunk_events();
+        while !self.chunks.is_future_done(future) {
+            self.chunks.managed_block_step();
+            self.process_chunk_events();
+        }
+        self.chunks.end_chunk_load(pos, future);
+    }
+
+    pub fn get_chunk(&mut self, pos: ChunkPos) -> &mut crate::world::level::chunk::LevelChunk {
+        self.load_chunk(pos);
+        self.chunks.chunk(pos)
+    }
+
+    pub fn get_chunk_structures_at(&mut self, pos: ChunkPos, status: super::chunk_level::ChunkStatus) -> &crate::world::level::chunk::ChunkStructures {
+        let future = self.chunks.begin_chunk_at_status(pos, status);
+        let _scope = crate::server::main_thread_frames::chunk_source_block();
+        self.process_chunk_events();
+        while !self.chunks.is_future_done(future) {
+            self.chunks.managed_block_step();
+            self.process_chunk_events();
+        }
+        self.chunks.end_chunk_at_status(pos, future)
     }
 
     pub fn wait_for_chunk_work(&mut self, timeout: Duration) {

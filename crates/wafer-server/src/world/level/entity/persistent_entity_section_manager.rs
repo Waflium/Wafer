@@ -71,6 +71,14 @@ impl PersistentEntitySectionManager {
         self.permanent_storage.reporting()
     }
 
+    pub fn set_main_thread_wakeup(&mut self, wakeup: std::sync::Arc<crate::server::level::chunk_workers::MainThreadWakeup>) {
+        self.permanent_storage.set_main_thread_wakeup(wakeup);
+    }
+
+    pub fn loading_inbox_size(&self) -> usize {
+        self.permanent_storage.loading_inbox_size()
+    }
+
     fn visibility(&self, chunk_key: i64) -> Visibility {
         self.chunk_visibility.get(&chunk_key).copied().unwrap_or_default()
     }
@@ -309,9 +317,9 @@ impl ServerLevel {
         self.entity_manager.chunks_to_unload = chunks_to_unload;
     }
 
-    pub fn run_entity_deserializer_queue_as_task(&mut self) {
+    pub fn run_entity_deserializer_queue_as_task(&mut self) -> bool {
         let _scope = main_thread_frames::enter(std::iter::once(ENTITY_DESERIALIZER_TASK_RUN).chain(main_thread_frames::SERVER_TASK_POLL));
-        self.run_entity_deserializer_queue();
+        self.run_entity_deserializer_queue()
     }
 
     fn flush_entity_storage(&mut self, flush_storage: bool, save_all_frame: &'static str) {
@@ -320,8 +328,10 @@ impl ServerLevel {
         self.run_entity_deserializer_queue();
     }
 
-    fn run_entity_deserializer_queue(&mut self) {
+    fn run_entity_deserializer_queue(&mut self) -> bool {
+        let mut ran_task = false;
         while let Some((pos, read)) = self.entity_manager.permanent_storage.poll_read() {
+            ran_task = true;
             let entities = match read {
                 Ok(Some(tag)) => match crate::util::catch_exception(|| self.read_chunk_entities(pos, &tag)) {
                     Ok(entities) => Some(entities),
@@ -338,6 +348,7 @@ impl ServerLevel {
             };
             self.entity_manager.parsed_loads.push((pos, entities));
         }
+        ran_task
     }
 
     pub fn process_pending_loads(&mut self) {

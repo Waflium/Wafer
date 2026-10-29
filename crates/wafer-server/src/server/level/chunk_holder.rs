@@ -59,7 +59,7 @@ impl Futures {
     }
 
     pub fn is_done(&self, id: FutureId) -> bool {
-        self.result(id).is_some()
+        id == UNLOADED || self.futures.get(&id).is_none_or(|f| f.result.is_some())
     }
 
     pub fn is_success(&self, id: FutureId) -> bool {

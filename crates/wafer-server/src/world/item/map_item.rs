@@ -109,7 +109,7 @@ pub fn update(level: &mut ServerLevel, player: EntityId, data: &mut MapItemSaved
             let averaging_area_min_z = (center_z / scale + img_y - 64) * scale;
             let mut color_count = ColorCount::default();
             let chunk_pos = ChunkPos::new(SectionPos::block_to_section_coord(averaging_area_min_x), SectionPos::block_to_section_coord(averaging_area_min_z));
-            level.chunks.chunk(chunk_pos);
+            level.load_chunk(chunk_pos);
             let mut water_depth = 0;
             let mut average_area_height = 0.0;
             if has_ceiling {
@@ -125,7 +125,7 @@ pub fn update(level: &mut ServerLevel, player: EntityId, data: &mut MapItemSaved
                 for averaging_area_delta_x in 0..scale {
                     for averaging_area_delta_z in 0..scale {
                         let (x, z) = (averaging_area_min_x + averaging_area_delta_x, averaging_area_min_z + averaging_area_delta_z);
-                        let chunk = level.chunks.chunk(chunk_pos);
+                        let chunk = level.get_chunk(chunk_pos);
                         let mut column_y = chunk.get_height(HeightmapType::WorldSurface, x, z) + 1;
                         let mut block_pos = BlockPos::new(x, 0, z);
                         let mut state;

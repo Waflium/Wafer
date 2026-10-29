@@ -13,7 +13,7 @@ use wafer_data::{Block, BlockState, DimensionType, Fluid, blocks};
 use wafer_protocol::Writer;
 
 use super::chunk_holder::{ChunkGenerationTask, ChunkHolders, FutureId, RangeThen, RangeWait, UNLOADED, Waiter};
-use super::chunk_level::{self, ChunkStatus, FullChunkStatus};
+use super::chunk_level::{self, ChunkPyramid, ChunkStatus, FullChunkStatus};
 use super::chunk_task_dispatcher::ChunkTaskPriorityQueue;
 use super::chunk_workers::{self, ChunkToSave, IoReporting, IoWorker, MainThreadWakeup, ResultSender, WorkResult};
 use super::distance_manager::DistanceManager;
@@ -94,7 +94,8 @@ pub struct ChunkCache {
     results: (ResultSender, Receiver<WorkResult>),
     jobs: HashMap<u64, Job>,
     next_token: u64,
-    in_flight: usize,
+    in_flight: VecDeque<u64>,
+    arrived: HashMap<u64, WorkResult>,
     light_done: Vec<u64>,
     unload_queue: VecDeque<i64>,
     waiting_unloads: IndexSet<i64>,
@@ -163,7 +164,8 @@ impl ChunkCache {
             results: chunk_workers::results(),
             jobs: HashMap::new(),
             next_token: 0,
-            in_flight: 0,
+            in_flight: VecDeque::new(),
+            arrived: HashMap::new(),
             light_done: Vec::new(),
             unload_queue: VecDeque::new(),
             waiting_unloads: IndexSet::new(),
@@ -268,6 +270,13 @@ impl ChunkCache {
         self.distance_manager.remove_ticket_with_radius(&mut self.holders, ty, pos, radius);
     }
 
+    pub fn add_ticket_and_load_with_radius(&mut self, ty: TicketType, pos: ChunkPos, radius: i32) -> FutureId {
+        self.add_ticket_with_radius(ty, pos, radius);
+        self.run_distance_manager_updates();
+        assert!(self.holders.map.contains_key(&pos.pack()), "No chunk was scheduled for loading");
+        self.chunk_range_future(pos.pack(), radius, |_| Some(ChunkStatus::Full), |c| RangeThen::Complete(c.holders.futures.new_pending()))
+    }
+
     pub fn update_chunk_forced(&mut self, pos: ChunkPos, forced: bool) -> bool {
         self.distance_manager.update_chunk_forced(&mut self.holders, pos, forced)
     }
@@ -334,15 +343,29 @@ impl ChunkCache {
     }
 
     pub fn chunk(&mut self, pos: ChunkPos) -> &mut LevelChunk {
-        if self.cached_chunk(pos, true).is_none() {
-            let future = self.chunk_future_main_thread(pos, ChunkStatus::Full, true);
+        if let Some(future) = self.begin_chunk_load(pos) {
             self.managed_block(future);
-            if !self.holders.futures.is_success(future) {
-                panic!("Chunk not there when requested: {pos:?}");
-            }
-            self.store_in_cache(pos, true);
+            self.end_chunk_load(pos, future);
         }
         self.chunks.get_mut(&pos).expect("full chunk")
+    }
+
+    pub fn begin_chunk_load(&mut self, pos: ChunkPos) -> Option<FutureId> {
+        if self.cached_chunk(pos, true).is_some() {
+            return None;
+        }
+        Some(self.chunk_future_main_thread(pos, ChunkStatus::Full, true))
+    }
+
+    pub fn is_future_done(&self, future: FutureId) -> bool {
+        self.holders.futures.is_done(future)
+    }
+
+    pub fn end_chunk_load(&mut self, pos: ChunkPos, future: FutureId) {
+        if !self.holders.futures.is_success(future) {
+            panic!("Chunk not there when requested: {pos:?}");
+        }
+        self.store_in_cache(pos, true);
     }
 
     pub fn chunk_without_loading(&self, pos: ChunkPos) -> Option<&LevelChunk> {
@@ -369,8 +392,16 @@ impl ChunkCache {
     }
 
     pub fn get_chunk_structures(&mut self, pos: ChunkPos, status: ChunkStatus) -> &ChunkStructures {
-        let future = self.chunk_future_main_thread(pos, status, true);
+        let future = self.begin_chunk_at_status(pos, status);
         self.managed_block(future);
+        self.end_chunk_at_status(pos, future)
+    }
+
+    pub fn begin_chunk_at_status(&mut self, pos: ChunkPos, status: ChunkStatus) -> FutureId {
+        self.chunk_future_main_thread(pos, status, true)
+    }
+
+    pub fn end_chunk_at_status(&self, pos: ChunkPos, future: FutureId) -> &ChunkStructures {
         if !self.holders.futures.is_success(future) {
             panic!("Chunk not there when requested: {pos:?}");
         }
@@ -441,11 +472,39 @@ impl ChunkCache {
     fn managed_block(&mut self, future: FutureId) {
         let _scope = crate::server::main_thread_frames::chunk_source_block();
         while !self.holders.futures.is_done(future) {
-            if !self.poll_task() {
-                assert!(self.in_flight > 0, "waiting for a chunk with nothing to wait for");
-                let result = self.next_work_result();
-                self.apply_work_result(result);
+            self.managed_block_step();
+        }
+    }
+
+    pub fn managed_block_step(&mut self) {
+        if !self.poll_task() {
+            assert!(!self.in_flight.is_empty(), "waiting for a chunk with nothing to wait for");
+            let result = self.wait_for_result();
+            self.apply_work_result(result);
+        }
+    }
+
+    fn store_arrived(&mut self, result: WorkResult) {
+        if let WorkResult::Loaded { token, .. } | WorkResult::Generated { token, .. } | WorkResult::StructureStarts { token, .. } = &result {
+            self.arrived.insert(*token, result);
+        }
+    }
+
+    fn next_ready_result(&mut self) -> Option<WorkResult> {
+        while let Ok(result) = self.results.1.try_recv() {
+            self.store_arrived(result);
+        }
+        let front = *self.in_flight.front()?;
+        self.arrived.remove(&front)
+    }
+
+    fn wait_for_result(&mut self) -> WorkResult {
+        loop {
+            if let Some(result) = self.next_ready_result() {
+                return result;
             }
+            let result = self.next_work_result();
+            self.store_arrived(result);
         }
     }
 
@@ -459,10 +518,10 @@ impl ChunkCache {
     pub fn run_until_idle(&mut self) {
         loop {
             while self.poll_task() {}
-            if self.in_flight == 0 {
+            if self.in_flight.is_empty() {
                 return;
             }
-            let result = self.next_work_result();
+            let result = self.wait_for_result();
             self.apply_work_result(result);
         }
     }
@@ -533,7 +592,7 @@ impl ChunkCache {
             || !self.holders.to_drop.is_empty()
             || !self.unload_queue.is_empty()
             || !self.waiting_unloads.is_empty()
-            || self.in_flight > 0
+            || !self.in_flight.is_empty()
             || !self.holders.tasks.is_empty()
             || self.distance_manager.has_tickets()
     }
@@ -563,14 +622,6 @@ impl ChunkCache {
         if self.run_distance_manager_updates() {
             return true;
         }
-        if self.light_engine.has_work() {
-            self.run_light_batch();
-            return true;
-        }
-        if let Ok(result) = self.results.1.try_recv() {
-            self.apply_work_result(result);
-            return true;
-        }
         if let Some(task) = self.distance_manager.main_thread_tasks.pop_front() {
             self.distance_manager.run_main_thread_task(&mut self.holders, task);
             return true;
@@ -579,7 +630,18 @@ impl ChunkCache {
             self.full_status_changes.push_back(change);
             return true;
         }
-        self.run_worldgen()
+        if self.run_worldgen() {
+            return true;
+        }
+        if self.light_engine.has_work() {
+            self.run_light_batch();
+            return true;
+        }
+        if let Some(result) = self.next_ready_result() {
+            self.apply_work_result(result);
+            return true;
+        }
+        false
     }
 
     pub fn waker(&self) -> ResultSender {
@@ -599,7 +661,12 @@ impl ChunkCache {
             return;
         }
         match self.results.1.recv_timeout(timeout) {
-            Ok(result) => self.apply_work_result(result),
+            Ok(result) => {
+                self.store_arrived(result);
+                if let Some(result) = self.next_ready_result() {
+                    self.apply_work_result(result);
+                }
+            }
             Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => {}
         }
     }
@@ -978,11 +1045,12 @@ impl ChunkCache {
         if !persisted(task.pos.x, task.pos.z).is_some_and(|s| s >= task.target_status) {
             return false;
         }
-        let range = task.target_status.dependency_radius();
+        let dependencies = &ChunkPyramid::Loading.step_to(task.target_status).accumulated_dependencies;
+        let range = dependencies.get_radius();
         for x in task.pos.x - range..=task.pos.x + range {
             for z in task.pos.z - range..=task.pos.z + range {
                 let distance = task.pos.chessboard_distance(ChunkPos::new(x, z));
-                let required = task.target_status.dependency_at(distance);
+                let required = dependencies.get(distance);
                 if persisted(x, z).is_none_or(|s| s < required) {
                     return false;
                 }
@@ -993,7 +1061,8 @@ impl ChunkCache {
 
     fn schedule_layer(&mut self, id: u64, status: ChunkStatus, needs_generation: bool) {
         let task = &self.holders.tasks[&id];
-        let (pos, radius) = (task.pos, task.target_status.accumulated_radius_of(status));
+        let pyramid = if needs_generation { ChunkPyramid::Generation } else { ChunkPyramid::Loading };
+        let (pos, radius) = (task.pos, pyramid.accumulated_radius_of(task.target_status, status));
         for x in pos.x - radius..=pos.x + radius {
             for z in pos.z - radius..=pos.z + radius {
                 if self.holders.tasks[&id].marked_for_cancellation || !self.schedule_chunk_in_layer(id, status, needs_generation, ChunkPos::new(x, z)) {
@@ -1045,6 +1114,12 @@ impl ChunkCache {
         self.next_token
     }
 
+    fn new_async_token(&mut self, job: Job) -> u64 {
+        let token = self.new_token(job);
+        self.in_flight.push_back(token);
+        token
+    }
+
     fn start_step(&mut self, job: Job, generate: bool) {
         let pos = job.pos;
         match job.status {
@@ -1054,8 +1129,7 @@ impl ChunkCache {
                     let (generator, state, dimension, results) = (generator.clone(), state.clone(), self.dimension, self.results.0.clone());
                     let upgrading = self.is_upgrading(pos);
                     let mut structures = if upgrading { self.structure_chunks.remove(&pos).unwrap_or_default() } else { ChunkStructures::default() };
-                    let token = self.new_token(job);
-                    self.in_flight += 1;
+                    let token = self.new_async_token(job);
                     chunk_workers::execute(move || {
                         generator.create_structures(&state, pos, dimension, &mut structures, upgrading);
                         let _ = results.send(WorkResult::StructureStarts { pos, token, structures });
@@ -1091,9 +1165,8 @@ impl ChunkCache {
                     std::array::from_fn(|i| self.stored_biomes(ChunkPos::new(pos.x + i as i32 % 3 - 1, pos.z + i as i32 / 3 - 1)));
                 let upgrading = self.is_upgrading(pos);
                 let old = self.holders.get_mut(pos.pack()).unwrap().loaded.take();
-                let token = self.new_token(job);
+                let token = self.new_async_token(job);
                 let (generator, dimension, results) = (self.generator.clone(), self.dimension, self.results.0.clone());
-                self.in_flight += 1;
                 chunk_workers::execute(move || {
                     let chunk = match old {
                         Some(mut chunk) if upgrading => {
@@ -1563,9 +1636,8 @@ impl ChunkCache {
             return;
         }
         self.poi_manager.storage.prefetch(pos);
-        let token = self.new_token(job);
+        let token = self.new_async_token(job);
         let (dimension, seed, results, context) = (self.dimension, self.seed, self.results.0.clone(), self.data_fix_context.clone());
-        self.in_flight += 1;
         self.io.as_ref().unwrap().read(pos, move |read| {
             chunk_workers::execute(move || {
                 let result = crate::util::catch_exception(|| {
@@ -1664,7 +1736,7 @@ impl ChunkCache {
             WorkResult::Loaded { token, pos, .. } | WorkResult::Generated { token, pos, .. } | WorkResult::StructureStarts { token, pos, .. } => (*token, *pos),
             WorkResult::Wake => return,
         };
-        self.in_flight -= 1;
+        self.in_flight.pop_front();
         let job = self.jobs.remove(&token).expect("job of a result");
         if self.holders.get(pos.pack()).is_none_or(|h| h.id != job.holder) {
             self.holders.futures.complete(job.work, false);
@@ -2081,7 +2153,7 @@ mod tests {
     use wafer_core::{BlockPos, ChunkPos, Vec3};
     use wafer_data::{DimensionType, blocks};
 
-    use super::ChunkCache;
+    use super::{ChunkCache, ChunkStatus, WorkResult};
     use crate::network::configuration::ClientInfo;
     use crate::network::connection::Outbound;
     use crate::network::login::Profile;
@@ -2175,6 +2247,50 @@ mod tests {
         crate::server::level::testing::player(&mut level, wafer_core::Vec3::new(100.5, 80.0, -39.5), 0.0, 0.0);
         for _ in 0..40 {
             level.tick();
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn work_results_are_applied_in_the_order_the_work_started() {
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), None);
+        let pos = ChunkPos::new(0, 0);
+        cache.in_flight.push_back(1);
+        cache.in_flight.push_back(2);
+        let sender = cache.waker();
+        sender.send(WorkResult::Loaded { pos, token: 2, result: Ok(None) }).unwrap();
+        assert!(cache.next_ready_result().is_none());
+        sender.send(WorkResult::Loaded { pos, token: 1, result: Ok(None) }).unwrap();
+        assert!(matches!(cache.next_ready_result(), Some(WorkResult::Loaded { token: 1, .. })));
+        assert!(cache.next_ready_result().is_none());
+        cache.in_flight.pop_front();
+        assert!(matches!(cache.next_ready_result(), Some(WorkResult::Loaded { token: 2, .. })));
+        cache.in_flight.pop_front();
+        assert!(cache.next_ready_result().is_none());
+    }
+
+    #[test]
+    fn a_full_chunk_read_from_disk_loads_only_the_chunks_around_it() {
+        let dir = std::env::temp_dir().join(format!("wafer-loading-pyramid-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), Some(RegionStorage::new(dir.clone(), false)));
+        for x in -4..=4 {
+            for z in -4..=4 {
+                cache.chunk(ChunkPos::new(x, z));
+            }
+        }
+        cache.save(0, true).unwrap();
+        drop(cache);
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), Some(RegionStorage::new(dir.clone(), false)));
+        cache.chunk(ChunkPos::new(0, 0));
+        let persisted = |cache: &ChunkCache, x: i32, z: i32| cache.holders.get(ChunkPos::new(x, z).pack()).and_then(|holder| holder.persisted_status);
+        for x in -1..=1 {
+            for z in -1..=1 {
+                assert_eq!(persisted(&cache, x, z), Some(ChunkStatus::Full), "{x} {z}");
+            }
+        }
+        for (x, z) in [(2, 0), (0, 2), (-2, -2), (3, 1), (0, -4)] {
+            assert_eq!(persisted(&cache, x, z), None, "{x} {z}");
         }
         let _ = std::fs::remove_dir_all(dir);
     }
