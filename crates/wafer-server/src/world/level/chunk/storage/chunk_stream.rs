@@ -481,6 +481,7 @@ fn negative_size(bytes_per_entry: i64, count: i32, caller: &'static str) -> Fail
 struct Parser {
     input: DataInputStream,
     depth: u32,
+    live_bytes: u64,
 }
 
 const MAX_DEPTH: u32 = 512;
@@ -530,9 +531,10 @@ impl Parser {
         if length < 0 {
             return Err(negative_size(array.element_size as i64, length, array.account_line));
         }
-        if let Some(error) = crate::util::java_heap::array_allocation_failure(length as i64, array.element_size as i64) {
+        if let Some(error) = crate::util::java_heap::array_allocation_failure(length as i64, array.element_size as i64, self.live_bytes) {
             return Err(throwable(error, &[array.new_array_line]));
         }
+        self.live_bytes += length as u64 * array.element_size as u64;
         let length = length as usize;
         if array.element_size == 1 {
             return self.input.read_fully(length).map_err(at(DIS_READ_FULLY_ARRAY)).map_err(at(array.element_line));
@@ -568,9 +570,10 @@ impl Parser {
         if type_id == 0 && count > 0 {
             return Err(throwable("net.minecraft.nbt.NbtFormatException: Missing type on ListTag", &[LIST_MISSING_TYPE]));
         }
-        if let Some(error) = crate::util::java_heap::array_allocation_failure(count as i64, 4) {
+        if let Some(error) = crate::util::java_heap::array_allocation_failure(count as i64, 4, self.live_bytes) {
             return Err(throwable(error, &[ARRAY_LIST_INIT, LIST_NEW_ARRAY_LIST]));
         }
+        self.live_bytes += count as u64 * 4;
         let kind = tag_kind(type_id);
         for _ in 0..count {
             self.load(kind).map_err(at(LIST_READ_ELEMENT))?;
@@ -755,7 +758,7 @@ pub fn simulate(compressed: &[u8], kind: StreamKind, mode: Mode) -> Result<Vec<u
             }
         },
     };
-    let mut parser = Parser { input: DataInputStream { source, position: 0, limit: 0 }, depth: 0 };
+    let mut parser = Parser { input: DataInputStream { source, position: 0, limit: 0 }, depth: 0, live_bytes: 0 };
     let result = match mode {
         Mode::Read => read_root(&mut parser),
         Mode::Scan(kind) => scan_root(&mut parser, kind),
