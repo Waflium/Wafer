@@ -24,6 +24,21 @@ fn decode_state(tag: &Nbt) -> Result<BlockState, String> {
     Ok(state)
 }
 
+pub fn java_to_string(full: &Nbt) -> String {
+    let id = full.get("id").and_then(Nbt::as_str).unwrap_or_default();
+    let mut text = format!("Block{{{id}}}");
+    if let Some(Nbt::Compound(properties)) = full.get("properties") {
+        let mut values: Vec<(&str, &str)> = properties.iter().filter_map(|(name, value)| Some((name.as_str(), value.as_str()?))).collect();
+        values.sort();
+        if !values.is_empty() {
+            text.push('[');
+            text.push_str(&values.iter().map(|(name, value)| format!("{name}={value}")).collect::<Vec<_>>().join(","));
+            text.push(']');
+        }
+    }
+    text
+}
+
 fn decode_block(tag: &Nbt) -> Result<BlockState, String> {
     Codec::Element("minecraft:block").decode(tag).map(|id| Block::by_name(id.as_str().unwrap_or("")).expect("registered block").default_state())
 }

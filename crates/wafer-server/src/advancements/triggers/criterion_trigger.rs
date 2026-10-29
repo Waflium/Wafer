@@ -2,7 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::*;
 use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance as Instance;
-use crate::util::codec::DataResult;
+use crate::util::codec::DecodeResult;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum CriterionTrigger {
@@ -201,69 +201,72 @@ impl CriterionTrigger {
         CriterionTrigger::VALUES.into_iter().find(|trigger| trigger.name() == name)
     }
 
-    pub fn decode_instance(self, tag: &Nbt) -> DataResult<Instance> {
-        Ok(match self {
-            CriterionTrigger::Impossible => Instance::Impossible,
+    pub fn decode_instance(self, tag: &Nbt) -> DecodeResult<Instance> {
+        match self {
+            CriterionTrigger::Impossible => match crate::util::codec::map(tag) {
+                Ok(_) => DecodeResult::success(Instance::Impossible),
+                Err(error) => DecodeResult::error(error),
+            },
             CriterionTrigger::PlayerKilledEntity | CriterionTrigger::EntityKilledPlayer | CriterionTrigger::KillMobNearSculkCatalyst => {
-                Instance::Killed(killed_trigger::TriggerInstance::decode(tag)?)
+                killed_trigger::TriggerInstance::decode(tag).map(Instance::Killed)
             }
-            CriterionTrigger::EnterBlock => Instance::EnterBlock(enter_block_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::InventoryChanged => Instance::InventoryChange(inventory_change_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::RecipeUnlocked => Instance::RecipeUnlocked(recipe_unlocked_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::PlayerHurtEntity => Instance::PlayerHurtEntity(player_hurt_entity_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::EntityHurtPlayer => Instance::EntityHurtPlayer(entity_hurt_player_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::EnchantedItem => Instance::EnchantedItem(enchanted_item_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::FilledBucket => Instance::FilledBucket(filled_bucket_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::BrewedPotion => Instance::BrewedPotion(brewed_potion_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::ConstructBeacon => Instance::ConstructBeacon(construct_beacon_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::UsedEnderEye => Instance::UsedEnderEye(used_ender_eye_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::SummonedEntity => Instance::SummonedEntity(summoned_entity_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::BredAnimals => Instance::BredAnimals(bred_animals_trigger::TriggerInstance::decode(tag)?),
+            CriterionTrigger::EnterBlock => enter_block_trigger::TriggerInstance::decode(tag).map(Instance::EnterBlock),
+            CriterionTrigger::InventoryChanged => inventory_change_trigger::TriggerInstance::decode(tag).map(Instance::InventoryChange),
+            CriterionTrigger::RecipeUnlocked => recipe_unlocked_trigger::TriggerInstance::decode(tag).map(Instance::RecipeUnlocked),
+            CriterionTrigger::PlayerHurtEntity => player_hurt_entity_trigger::TriggerInstance::decode(tag).map(Instance::PlayerHurtEntity),
+            CriterionTrigger::EntityHurtPlayer => entity_hurt_player_trigger::TriggerInstance::decode(tag).map(Instance::EntityHurtPlayer),
+            CriterionTrigger::EnchantedItem => enchanted_item_trigger::TriggerInstance::decode(tag).map(Instance::EnchantedItem),
+            CriterionTrigger::FilledBucket => filled_bucket_trigger::TriggerInstance::decode(tag).map(Instance::FilledBucket),
+            CriterionTrigger::BrewedPotion => brewed_potion_trigger::TriggerInstance::decode(tag).map(Instance::BrewedPotion),
+            CriterionTrigger::ConstructBeacon => construct_beacon_trigger::TriggerInstance::decode(tag).map(Instance::ConstructBeacon),
+            CriterionTrigger::UsedEnderEye => used_ender_eye_trigger::TriggerInstance::decode(tag).map(Instance::UsedEnderEye),
+            CriterionTrigger::SummonedEntity => summoned_entity_trigger::TriggerInstance::decode(tag).map(Instance::SummonedEntity),
+            CriterionTrigger::BredAnimals => bred_animals_trigger::TriggerInstance::decode(tag).map(Instance::BredAnimals),
             CriterionTrigger::Location
             | CriterionTrigger::SleptInBed
             | CriterionTrigger::Tick
             | CriterionTrigger::HeroOfTheVillage
             | CriterionTrigger::VoluntaryExile
-            | CriterionTrigger::AvoidVibration => Instance::Player(player_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::CuredZombieVillager => Instance::CuredZombieVillager(cured_zombie_villager_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::VillagerTrade => Instance::Trade(trade_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::ItemDurabilityChanged => Instance::ItemDurability(item_durability_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::Levitation => Instance::Levitation(levitation_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::ChangedDimension => Instance::ChangeDimension(change_dimension_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::TameAnimal => Instance::TameAnimal(tame_animal_trigger::TriggerInstance::decode(tag)?),
+            | CriterionTrigger::AvoidVibration => player_trigger::TriggerInstance::decode(tag).map(Instance::Player),
+            CriterionTrigger::CuredZombieVillager => cured_zombie_villager_trigger::TriggerInstance::decode(tag).map(Instance::CuredZombieVillager),
+            CriterionTrigger::VillagerTrade => trade_trigger::TriggerInstance::decode(tag).map(Instance::Trade),
+            CriterionTrigger::ItemDurabilityChanged => item_durability_trigger::TriggerInstance::decode(tag).map(Instance::ItemDurability),
+            CriterionTrigger::Levitation => levitation_trigger::TriggerInstance::decode(tag).map(Instance::Levitation),
+            CriterionTrigger::ChangedDimension => change_dimension_trigger::TriggerInstance::decode(tag).map(Instance::ChangeDimension),
+            CriterionTrigger::TameAnimal => tame_animal_trigger::TriggerInstance::decode(tag).map(Instance::TameAnimal),
             CriterionTrigger::PlacedBlock | CriterionTrigger::ItemUsedOnBlock | CriterionTrigger::AllayDropItemOnBlock => {
-                Instance::ItemUsedOnLocation(item_used_on_location_trigger::TriggerInstance::decode(tag)?)
+                item_used_on_location_trigger::TriggerInstance::decode(tag).map(Instance::ItemUsedOnLocation)
             }
-            CriterionTrigger::ConsumeItem => Instance::ConsumeItem(consume_item_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::EffectsChanged => Instance::EffectsChanged(effects_changed_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::UsedTotem => Instance::UsedTotem(used_totem_trigger::TriggerInstance::decode(tag)?),
+            CriterionTrigger::ConsumeItem => consume_item_trigger::TriggerInstance::decode(tag).map(Instance::ConsumeItem),
+            CriterionTrigger::EffectsChanged => effects_changed_trigger::TriggerInstance::decode(tag).map(Instance::EffectsChanged),
+            CriterionTrigger::UsedTotem => used_totem_trigger::TriggerInstance::decode(tag).map(Instance::UsedTotem),
             CriterionTrigger::NetherTravel | CriterionTrigger::FallFromHeight | CriterionTrigger::RideEntityInLava => {
-                Instance::Distance(distance_trigger::TriggerInstance::decode(tag)?)
+                distance_trigger::TriggerInstance::decode(tag).map(Instance::Distance)
             }
-            CriterionTrigger::FishingRodHooked => Instance::FishingRodHooked(fishing_rod_hooked_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::ChanneledLightning => Instance::ChanneledLightning(channeled_lightning_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::ShotCrossbow => Instance::ShotCrossbow(shot_crossbow_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::SpearMobs => Instance::SpearMobs(spear_mobs_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::KilledByArrow => Instance::KilledByArrow(killed_by_arrow_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::SlideDownBlock => Instance::SlideDownBlock(slide_down_block_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::BeeNestDestroyed => Instance::BeeNestDestroyed(bee_nest_destroyed_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::TargetHit => Instance::TargetBlock(target_block_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::DefaultBlockUse => Instance::DefaultBlockInteraction(default_block_interaction_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::AnyBlockUse => Instance::AnyBlockInteraction(any_block_interaction_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::PlayerGeneratesContainerLoot => Instance::LootTable(loot_table_trigger::TriggerInstance::decode(tag)?),
+            CriterionTrigger::FishingRodHooked => fishing_rod_hooked_trigger::TriggerInstance::decode(tag).map(Instance::FishingRodHooked),
+            CriterionTrigger::ChanneledLightning => channeled_lightning_trigger::TriggerInstance::decode(tag).map(Instance::ChanneledLightning),
+            CriterionTrigger::ShotCrossbow => shot_crossbow_trigger::TriggerInstance::decode(tag).map(Instance::ShotCrossbow),
+            CriterionTrigger::SpearMobs => spear_mobs_trigger::TriggerInstance::decode(tag).map(Instance::SpearMobs),
+            CriterionTrigger::KilledByArrow => killed_by_arrow_trigger::TriggerInstance::decode(tag).map(Instance::KilledByArrow),
+            CriterionTrigger::SlideDownBlock => slide_down_block_trigger::TriggerInstance::decode(tag).map(Instance::SlideDownBlock),
+            CriterionTrigger::BeeNestDestroyed => bee_nest_destroyed_trigger::TriggerInstance::decode(tag).map(Instance::BeeNestDestroyed),
+            CriterionTrigger::TargetHit => target_block_trigger::TriggerInstance::decode(tag).map(Instance::TargetBlock),
+            CriterionTrigger::DefaultBlockUse => default_block_interaction_trigger::TriggerInstance::decode(tag).map(Instance::DefaultBlockInteraction),
+            CriterionTrigger::AnyBlockUse => any_block_interaction_trigger::TriggerInstance::decode(tag).map(Instance::AnyBlockInteraction),
+            CriterionTrigger::PlayerGeneratesContainerLoot => loot_table_trigger::TriggerInstance::decode(tag).map(Instance::LootTable),
             CriterionTrigger::ThrownItemPickedUpByEntity | CriterionTrigger::ThrownItemPickedUpByPlayer => {
-                Instance::PickedUpItem(picked_up_item_trigger::TriggerInstance::decode(tag)?)
+                picked_up_item_trigger::TriggerInstance::decode(tag).map(Instance::PickedUpItem)
             }
             CriterionTrigger::PlayerInteractedWithEntity | CriterionTrigger::PlayerShearedEquipment => {
-                Instance::PlayerInteract(player_interact_trigger::TriggerInstance::decode(tag)?)
+                player_interact_trigger::TriggerInstance::decode(tag).map(Instance::PlayerInteract)
             }
-            CriterionTrigger::StartedRiding => Instance::StartRiding(start_riding_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::LightningStrike => Instance::LightningStrike(lightning_strike_trigger::TriggerInstance::decode(tag)?),
-            CriterionTrigger::UsingItem => Instance::UsingItem(using_item_trigger::TriggerInstance::decode(tag)?),
+            CriterionTrigger::StartedRiding => start_riding_trigger::TriggerInstance::decode(tag).map(Instance::StartRiding),
+            CriterionTrigger::LightningStrike => lightning_strike_trigger::TriggerInstance::decode(tag).map(Instance::LightningStrike),
+            CriterionTrigger::UsingItem => using_item_trigger::TriggerInstance::decode(tag).map(Instance::UsingItem),
             CriterionTrigger::RecipeCrafted | CriterionTrigger::CrafterRecipeCrafted => {
-                Instance::RecipeCrafted(recipe_crafted_trigger::TriggerInstance::decode(tag)?)
+                recipe_crafted_trigger::TriggerInstance::decode(tag).map(Instance::RecipeCrafted)
             }
-            CriterionTrigger::FallAfterExplosion => Instance::FallAfterExplosion(fall_after_explosion_trigger::TriggerInstance::decode(tag)?),
-        })
+            CriterionTrigger::FallAfterExplosion => fall_after_explosion_trigger::TriggerInstance::decode(tag).map(Instance::FallAfterExplosion),
+        }
     }
 }

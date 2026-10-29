@@ -6,7 +6,7 @@ use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::advancements::predicates::damage_predicate::DamagePredicate;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::DecodeResult;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -32,11 +32,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance {
-            player: simple_criterion_trigger::decode_player(tag)?,
-            damage: codec::decode_optional(tag, "damage", DamagePredicate::decode)?,
-            entity: simple_criterion_trigger::decode_condition(tag, "entity")?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let damage = fields.optional("damage", DamagePredicate::decode);
+            let entity = fields.condition("entity");
+            Some(TriggerInstance { player, damage, entity })
         })
     }
 

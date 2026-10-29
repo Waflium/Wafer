@@ -47,13 +47,22 @@ fn entity_type(json: &Value) -> Result<i32, String> {
     wafer_data::registry::ENTITY_TYPE.iter().position(|&e| e == name).map(|i| i as i32).ok_or_else(|| format!("unknown entity type {name}"))
 }
 
+fn parse_spawner(entry: &Value) -> Result<(SpawnerData, i32), String> {
+    let weight = entry.get("weight").and_then(Value::as_i64).filter(|w| *w >= 0).ok_or("spawn weight must be non-negative")? as i32;
+    let count = IntProvider::parse(entry.get("count").ok_or("missing spawn count")?)?;
+    Ok((SpawnerData::new(entity_type(&entry["type"])?, count), weight))
+}
+
 pub fn parse_spawner_list(json: &Value) -> Result<WeightedList<SpawnerData>, String> {
     let mut entries = Vec::new();
     for entry in json.as_array().ok_or("spawns must be a list")? {
-        let weight = entry.get("weight").and_then(Value::as_i64).filter(|w| *w >= 0).ok_or("spawn weight must be non-negative")? as i32;
-        let count = IntProvider::parse(entry.get("count").ok_or("missing spawn count")?)?;
-        entries.push((SpawnerData::new(entity_type(&entry["type"])?, count), weight));
+        entries.push(parse_spawner(entry)?);
     }
+    Ok(WeightedList::new(entries))
+}
+
+fn parse_spawner_list_leniently(json: &Value) -> Result<WeightedList<SpawnerData>, String> {
+    let entries = json.as_array().ok_or("spawns must be a list")?.iter().filter_map(|entry| parse_spawner(entry).ok()).collect();
     Ok(WeightedList::new(entries))
 }
 
@@ -87,7 +96,7 @@ impl MobSpawnSettings {
         let spawns = json.get("spawns_by_category").and_then(Value::as_object).ok_or("missing spawns_by_category")?;
         for (name, list) in spawns {
             let category = MobCategory::by_name(name).ok_or_else(|| format!("unknown mob category {name}"))?;
-            settings.spawns_by_category[category as usize] = Some(parse_spawner_list(list)?);
+            settings.spawns_by_category[category as usize] = Some(parse_spawner_list_leniently(list)?);
         }
         let costs = json.get("spawn_costs").and_then(Value::as_object).ok_or("missing spawn_costs")?;
         for (name, cost) in costs {

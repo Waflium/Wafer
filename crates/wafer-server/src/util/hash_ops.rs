@@ -190,6 +190,7 @@ pub fn hash_nbt(tag: &Nbt) -> HashCode {
         Nbt::Compound(fields) => create_map(fields.iter().map(|(k, v)| (create_string(k), hash_nbt(v))).collect()),
         Nbt::IntArray(v) => create_int_list(v),
         Nbt::LongArray(v) => create_long_list(v),
+        Nbt::LazilyParsedNumber(text) => hash_nbt(&wafer_protocol::lazily_parsed_number::exact_nbt(text)),
     }
 }
 

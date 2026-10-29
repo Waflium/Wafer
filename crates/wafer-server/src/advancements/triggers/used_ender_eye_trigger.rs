@@ -7,7 +7,7 @@ use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::advancements::predicates::min_max_bounds::Doubles;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 
@@ -33,8 +33,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance { player: simple_criterion_trigger::decode_player(tag)?, distance: codec::decode_or(tag, "distance", Doubles::ANY, Doubles::decode)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let distance = fields.with_default("distance", Doubles::ANY, Doubles::decode);
+            Some(TriggerInstance { player, distance })
+        })
     }
 
     pub fn matches(&self, sqr_distance: f64) -> bool {

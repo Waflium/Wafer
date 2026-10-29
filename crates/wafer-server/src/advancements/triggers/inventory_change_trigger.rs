@@ -7,7 +7,7 @@ use crate::advancements::predicates::item_predicate::ItemPredicate;
 use crate::advancements::predicates::min_max_bounds::Ints;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::EntityId;
 use crate::world::item::{Inventory, ItemStack, inventory_slot};
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -76,11 +76,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance {
-            player: simple_criterion_trigger::decode_player(tag)?,
-            slots: codec::decode_or(tag, "slots", Slots::ANY, Slots::decode)?,
-            items: codec::decode_or(tag, "items", Vec::new(), |t| codec::list_of(t, ItemPredicate::decode))?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let slots = fields.with_default("slots", Slots::ANY, Slots::decode);
+            let items = fields.list("items", ItemPredicate::decode);
+            Some(TriggerInstance { player, slots, items })
         })
     }
 

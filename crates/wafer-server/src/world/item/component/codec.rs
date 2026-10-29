@@ -1,3 +1,4 @@
+use wafer_protocol::lazily_parsed_number;
 use wafer_protocol::nbt::Nbt;
 use wafer_protocol::{Reader, Writer};
 
@@ -45,6 +46,7 @@ pub struct Field {
 pub enum Selector {
     Registry(&'static str),
     Enum,
+    Resolved(&'static [(&'static str, &'static str)]),
 }
 
 pub struct Dispatch {
@@ -79,10 +81,11 @@ pub enum Codec {
     Compact(Box<Codec>),
     NonEmptyCompact(Box<Codec>),
     Map(Box<Codec>, Box<Codec>),
+    DispatchedMap(Box<Codec>, fn(&Nbt) -> Option<&'static Codec>),
     Record(Vec<Field>),
     Dispatch(Box<Dispatch>),
     Either(Box<Codec>, Box<Codec>),
-    Xor(Box<Codec>, Box<Codec>),
+    Xor(Box<Codec>, Box<Codec>, fn(&Nbt) -> String, fn(&Nbt) -> String),
     Alt(Box<Codec>, Box<Codec>, fn(&Nbt) -> Result<Nbt, String>),
     Compound,
     AnyTag,
@@ -141,7 +144,7 @@ fn range_error<T: std::fmt::Display>(kind: RangeError, value: String, min: T, ma
 fn number(tag: &Nbt) -> Result<&Nbt, String> {
     match tag {
         Nbt::Byte(_) if nbt::is_json_source() => Err(format!("Not a number: {}", nbt::to_string(tag))),
-        Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) => Ok(tag),
+        Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) | Nbt::LazilyParsedNumber(_) => Ok(tag),
         _ if nbt::is_json_source() => Err(format!("Not a number: {}", nbt::to_string(tag))),
         _ => Err("Not a number".into()),
     }
@@ -159,38 +162,42 @@ fn big_decimal_long_value(v: f64) -> i64 {
 }
 
 pub fn as_i64(tag: &Nbt) -> i64 {
-    match *tag {
-        Nbt::Byte(v) => v as i64,
-        Nbt::Short(v) => v as i64,
-        Nbt::Int(v) => v as i64,
-        Nbt::Long(v) => v,
-        Nbt::Float(v) => v as i64,
-        Nbt::Double(v) if nbt::is_json_source() => big_decimal_long_value(v),
-        Nbt::Double(v) => v as i64,
+    match tag {
+        Nbt::Byte(v) => *v as i64,
+        Nbt::Short(v) => *v as i64,
+        Nbt::Int(v) => *v as i64,
+        Nbt::Long(v) => *v,
+        Nbt::Float(v) => *v as i64,
+        Nbt::Double(v) if nbt::is_json_source() => big_decimal_long_value(*v),
+        Nbt::Double(v) => *v as i64,
+        Nbt::LazilyParsedNumber(text) => lazily_parsed_number::long_value(text),
         _ => 0,
     }
 }
 
 pub fn as_i32(tag: &Nbt) -> i32 {
-    match *tag {
-        Nbt::Float(v) => v as i32,
-        Nbt::Double(v) if nbt::is_json_source() => big_decimal_long_value(v) as i32,
-        Nbt::Double(v) => v as i32,
+    match tag {
+        Nbt::Float(v) => *v as i32,
+        Nbt::Double(v) if nbt::is_json_source() => big_decimal_long_value(*v) as i32,
+        Nbt::Double(v) => *v as i32,
+        Nbt::LazilyParsedNumber(text) => lazily_parsed_number::int_value(text),
         _ => as_i64(tag) as i32,
     }
 }
 
 pub fn as_f64(tag: &Nbt) -> f64 {
-    match *tag {
-        Nbt::Float(v) => v as f64,
-        Nbt::Double(v) => v,
+    match tag {
+        Nbt::Float(v) => *v as f64,
+        Nbt::Double(v) => *v,
+        Nbt::LazilyParsedNumber(text) => lazily_parsed_number::double_value(text),
         _ => as_i64(tag) as f64,
     }
 }
 
 pub fn as_f32(tag: &Nbt) -> f32 {
-    match *tag {
-        Nbt::Float(v) => v,
+    match tag {
+        Nbt::Float(v) => *v,
+        Nbt::LazilyParsedNumber(text) => lazily_parsed_number::float_value(text),
         _ => as_f64(tag) as f32,
     }
 }
@@ -368,6 +375,7 @@ impl Codec {
             | Codec::Compact(_)
             | Codec::NonEmptyCompact(_)
             | Codec::Map(..)
+            | Codec::DispatchedMap(..)
             | Codec::Record(_)
             | Codec::Dispatch(_)
             | Codec::Either(..)
@@ -474,6 +482,45 @@ impl Codec {
                 let error = (!errors.is_empty()).then(|| crate::util::codec::map_entry_failures(errors, failed));
                 DecodeResult { value: Some(Nbt::Compound(out)), error }
             }
+            Codec::DispatchedMap(key, value_codec) => {
+                let fields = match map(tag) {
+                    Ok(fields) => fields,
+                    Err(error) => return DecodeResult::error(error),
+                };
+                let mut out: Vec<(String, Nbt)> = Vec::with_capacity(fields.len());
+                let mut errors = Vec::new();
+                let mut failed = Vec::new();
+                for i in crate::util::codec::map_entry_order(fields) {
+                    let (k, v) = &fields[i];
+                    let key_result = key.decode_partial(&Nbt::String(k.clone()));
+                    let value_result = match (&key_result.value, &key_result.error) {
+                        (Some(decoded_key), None) => match value_codec(decoded_key) {
+                            Some(codec) => codec.decode_partial(v),
+                            None => DecodeResult::error(format!("No codec for key {}", nbt::to_string(decoded_key))),
+                        },
+                        _ => DecodeResult { value: None, error: key_result.error.clone() },
+                    };
+                    let entry_error = match (&value_result.error, &key_result.error) {
+                        (Some(value_error), Some(key_error)) => Some(format!("{value_error}; {key_error}")),
+                        (Some(error), None) | (None, Some(error)) => Some(error.clone()),
+                        (None, None) => None,
+                    };
+                    if let (Some(Nbt::String(decoded_key)), Some(value)) = (key_result.value, value_result.value) {
+                        if out.iter().any(|(existing, _)| *existing == decoded_key) {
+                            errors.push(format!("Duplicate entry for key: '{decoded_key}'"));
+                            failed.push((k.clone(), v.clone()));
+                            continue;
+                        }
+                        out.push((decoded_key, value));
+                    }
+                    if let Some(error) = entry_error {
+                        errors.push(error);
+                        failed.push((k.clone(), v.clone()));
+                    }
+                }
+                let error = (!errors.is_empty()).then(|| crate::util::codec::map_entry_failures(errors, failed));
+                DecodeResult { value: Some(Nbt::Compound(out)), error }
+            }
             Codec::Record(fields) => {
                 let input = match map(tag) {
                     Ok(input) => input,
@@ -486,16 +533,16 @@ impl Codec {
             }
             Codec::Dispatch(d) => decode_dispatch(d, tag),
             Codec::Either(a, b) => crate::util::codec::either_result(a.decode_partial(tag), || b.decode_partial(tag)).map(|either| either.unwrap_or_else(|value| value)),
-            Codec::Xor(a, b) => {
+            Codec::Xor(a, b, first_text, second_text) => {
                 let first = a.decode_partial(tag);
                 let second = b.decode_partial(tag);
                 match (first.is_success(), second.is_success()) {
                     (true, true) => {
                         let message = format!(
                             "Both alternatives read successfully, can not pick the correct one; first: (Left[{}], {}) second: (Right[{}], {})",
-                            nbt::to_string(first.value.as_ref().unwrap_or(&Nbt::End)),
+                            first_text(first.value.as_ref().unwrap_or(&Nbt::End)),
                             nbt::to_string(tag),
-                            nbt::to_string(second.value.as_ref().unwrap_or(&Nbt::End)),
+                            second_text(second.value.as_ref().unwrap_or(&Nbt::End)),
                             nbt::to_string(tag)
                         );
                         DecodeResult { value: first.value, error: Some(message) }
@@ -536,7 +583,7 @@ impl Codec {
                     None => hash_ops::hash_nbt(value),
                 }
             }
-            Codec::Either(a, b) | Codec::Xor(a, b) | Codec::Alt(a, b, _) => {
+            Codec::Either(a, b) | Codec::Xor(a, b, _, _) | Codec::Alt(a, b, _) => {
                 if matches!(self, Codec::Alt(..)) || a.accepts(value) {
                     a.hash(value)
                 } else {
@@ -732,6 +779,17 @@ fn decode_dispatch(d: &Dispatch, tag: &Nbt) -> DecodeResult<Nbt> {
             }
             s.to_string()
         }
+        Selector::Resolved(names) => {
+            let s = match string(ty) {
+                Ok(s) => s,
+                Err(error) => return DecodeResult::error(error),
+            };
+            let Some((_, java_name)) = names.iter().find(|(n, _)| *n == s) else { return DecodeResult::error(format!("Unknown element name:{s}")) };
+            if !d.cases.iter().any(|(n, _)| *n == s) {
+                return DecodeResult::error(format!("Unknown element id: {java_name}"));
+            }
+            s.to_string()
+        }
     };
     let (_, fields) = d.cases.iter().find(|(n, _)| *n == name).unwrap();
     let mut out = Vec::new();
@@ -899,7 +957,7 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
             let index = d.cases.iter().position(|(n, _)| *n == name).ok_or_else(|| format!("Unknown type {name}"))?;
             match d.selector {
                 Selector::Registry(reg) => w.varint(network_registry_id(reg, name)?),
-                Selector::Enum => w.varint(index as i32),
+                Selector::Enum | Selector::Resolved(_) => w.varint(index as i32),
             }
             write_fields(&d.cases[index].1, value, w)?;
         }
@@ -1073,7 +1131,7 @@ pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, Strin
                     let name = registry_entry(reg, id)?;
                     d.cases.iter().position(|(n, _)| *n == name).ok_or_else(|| format!("Unknown type {name}"))?
                 }
-                Selector::Enum => (id as usize).min(d.cases.len().saturating_sub(1)),
+                Selector::Enum | Selector::Resolved(_) => (id as usize).min(d.cases.len().saturating_sub(1)),
             };
             let (name, fields) = &d.cases[index];
             let mut out = vec![(d.key.to_string(), Nbt::String((*name).into()))];

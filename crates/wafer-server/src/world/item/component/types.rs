@@ -1,6 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use super::codec::{Codec, Dispatch, Field, Kind, RangeError, Selector, Stream};
+use crate::util::codec::DecodeResult;
 use super::{DataComponentType, TypeInfo, custom, text};
 
 pub type Pair = (Codec, Stream);
@@ -200,20 +201,28 @@ fn color_from_floats(v: &Nbt, alpha: bool) -> Result<Nbt, String> {
 }
 
 pub fn vector(size: usize) -> Codec {
-    Codec::Normalize(Box::new(Codec::list(Codec::float())), if size == 3 { fixed_size_3 } else { fixed_size_4 })
+    Codec::Func(if size == 3 { vector_3 } else { vector_4 })
 }
 
-fn fixed_size_3(v: Nbt) -> Result<Nbt, String> {
-    fixed_size(v, 3)
+fn vector_3(tag: &Nbt) -> DecodeResult<Nbt> {
+    Codec::list(Codec::float()).decode_partial(tag).flat_map(|v| fixed_size(v, 3))
 }
 
-fn fixed_size_4(v: Nbt) -> Result<Nbt, String> {
-    fixed_size(v, 4)
+fn vector_4(tag: &Nbt) -> DecodeResult<Nbt> {
+    Codec::list(Codec::float()).decode_partial(tag).flat_map(|v| fixed_size(v, 4))
 }
 
-fn fixed_size(v: Nbt, size: usize) -> Result<Nbt, String> {
-    let n = v.as_list().len();
-    if n == size { Ok(v) } else { Err(format!("Input is not a list of {size} elements")) }
+fn fixed_size(v: Nbt, size: usize) -> DecodeResult<Nbt> {
+    let items = v.as_list();
+    let n = items.len();
+    if n == size {
+        return DecodeResult::success(v);
+    }
+    let message = format!("Input is not a list of {size} elements");
+    if n > size {
+        return DecodeResult { value: Some(Nbt::List(items[..size].to_vec())), error: Some(message) };
+    }
+    DecodeResult::error(message)
 }
 
 pub fn rgb_color() -> Codec {

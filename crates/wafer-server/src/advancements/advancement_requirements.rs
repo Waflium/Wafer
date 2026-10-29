@@ -2,7 +2,7 @@ use wafer_core::fastutil::Object2ObjectOpenHashMap;
 use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AdvancementRequirements {
@@ -12,8 +12,8 @@ pub struct AdvancementRequirements {
 impl AdvancementRequirements {
     pub const EMPTY: AdvancementRequirements = AdvancementRequirements { requirements: Vec::new() };
 
-    pub fn decode(tag: &Nbt) -> DataResult<AdvancementRequirements> {
-        Ok(AdvancementRequirements { requirements: codec::list_of(tag, |set| codec::list_of(set, |name| codec::string(name).map(str::to_string)))? })
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<AdvancementRequirements> {
+        codec::list_partial(tag, |set| codec::list_partial(set, |name| DecodeResult::from(codec::string(name).map(str::to_string)))).map(|requirements| AdvancementRequirements { requirements })
     }
 
     pub fn write(&self, output: &mut Writer) {
@@ -62,7 +62,7 @@ impl AdvancementRequirements {
             }
         }
         let missing_criteria: Vec<&str> = expected_criteria.iter().copied().filter(|c| !referenced_criteria.contains(c)).collect();
-        let unknown_criteria: Vec<&str> = referenced_criteria.iter().copied().filter(|c| !expected_criteria.contains(c)).collect();
+        let unknown_criteria: Vec<&str> = self.names().into_iter().filter(|c| !expected_criteria.contains(c)).collect();
         if missing_criteria.is_empty() && unknown_criteria.is_empty() {
             return Ok(());
         }

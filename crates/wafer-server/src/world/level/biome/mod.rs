@@ -41,20 +41,17 @@ pub enum Precipitation {
     Snow,
 }
 
-pub fn validate(json: &Value) -> Result<(), String> {
+pub fn validate(tag: &Nbt) -> Result<(), String> {
     use crate::util::codec::{self, DecodeResult, Record};
-    let tag = crate::world::item::component::json_to_nbt(json);
-    codec::map(&tag)?;
+    codec::map(tag)?;
     let mut record = Record::default();
-    record.required(&tag, "has_precipitation", codec::bool_value);
-    record.required(&tag, "temperature", codec::float);
-    record.optional(&tag, "temperature_modifier", |modifier| codec::string_enum(modifier, &[("none", ()), ("frozen", ())]));
-    record.required(&tag, "downfall", codec::float);
-    record.optional(&tag, "attributes", |attributes| {
-        DecodeResult::from(EnvironmentAttributeMap::parse(&codec::to_json(attributes), true).and_then(|map| map.encode_network()))
-    });
-    record.required(&tag, "effects", |effects| biome_special_effects::codec().0.decode_partial(effects));
-    record.required(&tag, "carvers", |carvers| {
+    record.required(tag, "has_precipitation", codec::bool_value);
+    record.required(tag, "temperature", codec::float);
+    record.optional(tag, "temperature_modifier", |modifier| codec::string_enum(modifier, &[("none", ()), ("frozen", ())]));
+    record.required(tag, "downfall", codec::float);
+    record.optional(tag, "attributes", crate::world::attribute::environment_attribute_map::decode_only_positional);
+    record.required(tag, "effects", |effects| biome_special_effects::codec().0.decode_partial(effects));
+    record.required(tag, "carvers", |carvers| {
         let result = crate::world::level::levelgen::carver::list_codec().0.decode_partial(carvers);
         if let Some(error) = &result.error {
             crate::error!("Carver: {error}");
@@ -64,7 +61,7 @@ pub fn validate(json: &Value) -> Result<(), String> {
             None => result,
         }
     });
-    record.required(&tag, "features", |features| {
+    record.required(tag, "features", |features| {
         let result = crate::world::level::levelgen::placement::placed_feature::list_of_lists_codec().0.decode_partial(features);
         if let Some(error) = &result.error {
             crate::error!("Features: {error}");
@@ -90,7 +87,7 @@ fn network_codec() -> Pair {
 pub fn encode_network(json: &Value) -> Result<Nbt, String> {
     let Nbt::Compound(mut fields) = network_codec().0.decode(&json_to_nbt(json))? else { return Err("A biome is not a compound".into()) };
     if let Some(attributes) = json.get("attributes") {
-        let attributes = EnvironmentAttributeMap::parse(attributes, true)?.encode_network()?;
+        let attributes = EnvironmentAttributeMap::parse(attributes).encode_network()?;
         if !matches!(&attributes, Nbt::Compound(entries) if entries.is_empty()) {
             fields.push(("attributes".into(), attributes));
         }
@@ -124,7 +121,7 @@ pub static BIOME_ATTRIBUTES: LazyLock<Vec<EnvironmentAttributeMap>> = LazyLock::
             let source = crate::core::data_registries::json_entries("minecraft:worldgen/biome").iter().find(|(n, _)| n == name).map(|(_, s)| *s).expect("biome data");
             let json: Value = serde_json::from_str(source).expect("biome json");
             match json.get("attributes") {
-                Some(attributes) => EnvironmentAttributeMap::parse(attributes, true).unwrap_or_else(|e| panic!("attributes of {name}: {e}")),
+                Some(attributes) => EnvironmentAttributeMap::parse(attributes),
                 None => EnvironmentAttributeMap::default(),
             }
         })
@@ -339,8 +336,32 @@ mod tests {
     use super::*;
 
     fn validation_error(json: &str) -> String {
-        let value: Value = serde_json::from_str(json).unwrap();
-        crate::nbt::with_json_source(|| validate(&value).err().expect("a validation error"))
+        let value = crate::util::gson::parse_lenient(json).unwrap();
+        crate::nbt::with_json_source(|| validate(&crate::world::item::component::element_to_nbt(&value)).err().expect("a validation error"))
+    }
+
+    fn attribute_error(attributes: &str) -> String {
+        let json = format!(r#"{{"has_precipitation":true,"temperature":0.5,"downfall":0.5,"effects":{{"water_color":4159204}},"carvers":[],"features":[],"attributes":{attributes}}}"#);
+        validation_error(&json)
+    }
+
+    #[test]
+    fn biome_attributes_report_the_vanilla_messages() {
+        let unknown = "Unknown registry key in ResourceKey[minecraft:root / minecraft:environment_attribute]: minecraft:x";
+        assert_eq!(attribute_error(r#"{"x":1}"#), format!(r#"{unknown}; {unknown} missed input: {{"x":1}}"#));
+        assert_eq!(attribute_error("[]"), "Not a JSON object: []");
+        assert_eq!(
+            attribute_error(r##"{"minecraft:visual/fog_color":"#ff0000","visual/fog_color":"#00ff00"}"##),
+            r##"Duplicate entry for key: 'minecraft:visual/fog_color' missed input: {"visual/fog_color":"#00ff00"}"##
+        );
+        assert_eq!(
+            attribute_error(r#"{"minecraft:visual/fog_color":[0.5,0.5,0.5,0.5]}"#),
+            r#"Input is not a list of 3 elements missed input: {"minecraft:visual/fog_color":[0.5,0.5,0.5,0.5]}"#
+        );
+        assert_eq!(
+            attribute_error(r#"{"minecraft:gameplay/snow_golem_melts":1}"#),
+            r#"Failed to parse either. First: Not a boolean: 1; Second: Not a JSON object: 1 missed input: {"minecraft:gameplay/snow_golem_melts":1}"#
+        );
     }
 
     #[test]

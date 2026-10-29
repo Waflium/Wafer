@@ -287,6 +287,7 @@ fn java_ops_number(tag: &Nbt) -> Nbt {
         }
     };
     match *tag {
+        Nbt::LazilyParsedNumber(ref text) => wafer_protocol::lazily_parsed_number::exact_nbt(text),
         Nbt::Long(v) => integral(v),
         Nbt::Double(v) if v.fract() == 0.0 && (-9.223372036854775808E18..9.223372036854775808E18).contains(&v) => integral(v as i64),
         Nbt::Double(v) if v as f32 as f64 == v => Nbt::Float(v as f32),
@@ -294,10 +295,31 @@ fn java_ops_number(tag: &Nbt) -> Nbt {
     }
 }
 
+fn contains_json_null(tag: &Nbt) -> bool {
+    match tag {
+        Nbt::List(items) => items.iter().any(|item| matches!(item, Nbt::End) || contains_json_null(item)),
+        Nbt::Compound(fields) => fields.iter().any(|(_, value)| matches!(value, Nbt::End) || contains_json_null(value)),
+        _ => false,
+    }
+}
+
+const JSON_OPS_NULL_POINTER: &str = "Cannot invoke \"com.google.gson.JsonElement.getAsJsonPrimitive()\" because \"input\" is null";
+
+pub fn json_ops_null_pointer(tag: &Nbt) -> Option<String> {
+    if !matches!(tag, Nbt::List(_) | Nbt::Compound(_)) || !nbt::is_json_source() || !contains_json_null(tag) {
+        return None;
+    }
+    crate::core::data_registries::throw("java.lang.NullPointerException", JSON_OPS_NULL_POINTER.into(), &[]);
+    Some(format!("java.lang.NullPointerException: {JSON_OPS_NULL_POINTER}"))
+}
+
 impl Custom for ArgCodec {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
+        if let Some(message) = json_ops_null_pointer(tag) {
+            return Err(message);
+        }
         match tag {
-            Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) if nbt::is_json_source() => Ok(java_ops_number(tag)),
+            Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) | Nbt::LazilyParsedNumber(_) if nbt::is_json_source() => Ok(java_ops_number(tag)),
             Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) | Nbt::String(_) => Ok(tag.clone()),
             other => decode(other).map_err(|e| format!("Failed to parse either. First: This value needs to be parsed as component; Second: {e}")),
         }

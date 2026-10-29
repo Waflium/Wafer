@@ -2,9 +2,7 @@ use std::sync::LazyLock;
 
 use serde_json::Value;
 use wafer_data::SyncedRegistry;
-use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
 use crate::world::item::component::codec::{Codec, RangeError};
 use crate::world::item::component::text;
 use crate::world::item::component::types::{self, Pair, opt, record, req};
@@ -23,14 +21,6 @@ pub struct PaintingVariant {
 }
 
 impl PaintingVariant {
-    pub fn decode(tag: &Nbt) -> DataResult<PaintingVariant> {
-        let width = codec::decode_field(tag, "width", |tag| codec::int_range(tag, 1, 16));
-        let height = codec::decode_field(tag, "height", |tag| codec::int_range(tag, 1, 16));
-        let asset_id = codec::decode_field(tag, "asset_id", codec::identifier);
-        codec::record_errors(&[width.as_ref().err(), height.as_ref().err(), asset_id.as_ref().err()])?;
-        Ok(PaintingVariant { width: width?, height: height? })
-    }
-
     pub fn area(&self) -> i32 {
         self.width * self.height
     }

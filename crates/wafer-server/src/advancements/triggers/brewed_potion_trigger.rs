@@ -6,7 +6,7 @@ use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::core::component::predicates::potions_predicate::PotionsPredicate;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 
@@ -28,8 +28,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance { player: simple_criterion_trigger::decode_player(tag)?, potion: codec::decode_optional(tag, "potion", PotionsPredicate::decode)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let potion = fields.optional("potion", PotionsPredicate::decode);
+            Some(TriggerInstance { player, potion })
+        })
     }
 
     pub fn matches(&self, potion: &Nbt) -> bool {

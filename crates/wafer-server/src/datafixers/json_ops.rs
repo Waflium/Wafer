@@ -1,4 +1,5 @@
 use serde_json::{Map, Number, Value};
+use wafer_protocol::lazily_parsed_number::long_value_exact;
 use wafer_protocol::nbt::Nbt;
 
 use super::dynamic::java_map_order;
@@ -47,6 +48,7 @@ pub fn convert_from_nbt(input: Option<&Nbt>) -> Value {
         Nbt::ByteArray(values) => Value::Array(values.iter().map(|&value| Value::from(value)).collect()),
         Nbt::IntArray(values) => Value::Array(values.iter().map(|&value| Value::from(value)).collect()),
         Nbt::LongArray(values) => Value::Array(values.iter().map(|&value| Value::from(value)).collect()),
+        Nbt::LazilyParsedNumber(text) => crate::util::gson::number_value(text),
         Nbt::List(values) => Value::Array(values.iter().map(|value| convert_from_nbt(Some(value))).collect()),
         Nbt::Compound(entries) => {
             let mut fields = Map::new();
@@ -103,70 +105,10 @@ pub fn convert_element_to_nbt(input: &JsonElement) -> Result<Option<Nbt>, String
     })
 }
 
-fn long_value_exact(text: &str) -> Result<Option<i64>, String> {
-    let bytes = text.as_bytes();
-    let mut index = 0;
-    let negative = bytes.first() == Some(&b'-');
-    if negative || bytes.first() == Some(&b'+') {
-        index += 1;
-    }
-    let mut digits: Vec<u8> = Vec::new();
-    let mut fraction_length: i64 = 0;
-    let mut seen_point = false;
-    while index < bytes.len() {
-        match bytes[index] {
-            b'.' => seen_point = true,
-            b'e' | b'E' => break,
-            digit => {
-                digits.push(digit - b'0');
-                if seen_point {
-                    fraction_length += 1;
-                }
-            }
-        }
-        index += 1;
-    }
-    let mut exponent: i64 = 0;
-    if index < bytes.len() {
-        exponent = text[index + 1..].trim_start_matches('+').parse::<i32>().map_err(|_| "NumberFormatException: Exponent overflow.".to_string())? as i64;
-    }
-    let scale = fraction_length - exponent;
-    if scale > i32::MAX as i64 || scale < i32::MIN as i64 {
-        return Err("NumberFormatException: Scale out of range.".to_string());
-    }
-    let Some(first_nonzero) = digits.iter().position(|&digit| digit != 0) else { return Ok(Some(0)) };
-    let digits = &digits[first_nonzero..];
-    let integer_digits: &[u8] = if scale <= 0 {
-        digits
-    } else if scale as usize >= digits.len() {
-        return Ok(None);
-    } else {
-        let split = digits.len() - scale as usize;
-        if digits[split..].iter().any(|&digit| digit != 0) {
-            return Ok(None);
-        }
-        &digits[..split]
-    };
-    let trailing_zeros = if scale < 0 { -scale } else { 0 };
-    if integer_digits.len() as i64 + trailing_zeros > 19 {
-        return Ok(None);
-    }
-    let mut value: i128 = 0;
-    for &digit in integer_digits {
-        value = value * 10 + digit as i128;
-    }
-    for _ in 0..trailing_zeros {
-        value *= 10;
-    }
-    if negative {
-        value = -value;
-    }
-    Ok(i64::try_from(value).ok())
-}
-
 pub fn convert_nbt_to_element(input: &Nbt) -> JsonElement {
     match input {
         Nbt::End => JsonElement::Null,
+        Nbt::LazilyParsedNumber(text) => JsonElement::Number(text.clone()),
         Nbt::Byte(value) => JsonElement::Number(value.to_string()),
         Nbt::Short(value) => JsonElement::Number(value.to_string()),
         Nbt::Int(value) => JsonElement::Number(value.to_string()),

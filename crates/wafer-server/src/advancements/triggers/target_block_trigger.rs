@@ -7,7 +7,7 @@ use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::advancements::predicates::min_max_bounds::Ints;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
@@ -32,11 +32,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance {
-            player: simple_criterion_trigger::decode_player(tag)?,
-            signal_strength: codec::decode_or(tag, "signal_strength", Ints::ANY, Ints::decode)?,
-            projectile: simple_criterion_trigger::decode_condition(tag, "projectile")?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let signal_strength = fields.with_default("signal_strength", Ints::ANY, Ints::decode);
+            let projectile = fields.condition("projectile");
+            Some(TriggerInstance { player, signal_strength, projectile })
         })
     }
 

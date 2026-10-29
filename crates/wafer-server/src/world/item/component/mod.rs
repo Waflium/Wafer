@@ -142,6 +142,18 @@ pub fn json_to_nbt(v: &serde_json::Value) -> Nbt {
     }
 }
 
+pub fn element_to_nbt(element: &crate::util::gson::JsonElement) -> Nbt {
+    use crate::util::gson::JsonElement;
+    match element {
+        JsonElement::Null => Nbt::End,
+        JsonElement::Boolean(value) => Nbt::Byte(*value as i8),
+        JsonElement::Number(text) => Nbt::LazilyParsedNumber(text.clone()),
+        JsonElement::String(value) => Nbt::String(value.clone()),
+        JsonElement::Array(items) => Nbt::List(items.iter().map(element_to_nbt).collect()),
+        JsonElement::Object(members) => Nbt::Compound(members.iter().map(|(name, value)| (name.clone(), element_to_nbt(value))).collect()),
+    }
+}
+
 static ITEM_COMPONENTS: LazyLock<Vec<DataComponentMap>> = LazyLock::new(|| {
     wafer_data::ITEM_COMPONENTS
         .iter()

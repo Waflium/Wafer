@@ -8,7 +8,7 @@ use crate::advancements::predicates::state_properties_predicate::StateProperties
 use crate::core::holder::Holder;
 use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 
@@ -31,11 +31,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance {
-            player: simple_criterion_trigger::decode_player(tag)?,
-            block: codec::decode_optional(tag, "blocks", |t| HolderSet::decode("minecraft:block", t))?,
-            state: codec::decode_optional(tag, "state", StatePropertiesPredicate::decode)?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let block = fields.optional("blocks", |t| HolderSet::decode("minecraft:block", t));
+            let state = fields.optional("state", StatePropertiesPredicate::decode);
+            Some(TriggerInstance { player, block, state })
         })
     }
 

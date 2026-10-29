@@ -71,6 +71,7 @@ impl Visitor {
             Nbt::LongArray(data) => self.array("L", data.iter().map(|v| v.to_string()).collect(), Some("L")),
             Nbt::List(items) => self.list(items),
             Nbt::Compound(fields) => self.compound(fields),
+            Nbt::LazilyParsedNumber(text) => self.visit(&wafer_protocol::lazily_parsed_number::exact_nbt(text)),
         }
     }
 

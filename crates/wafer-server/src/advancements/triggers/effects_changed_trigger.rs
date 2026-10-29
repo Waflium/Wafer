@@ -6,7 +6,7 @@ use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::advancements::predicates::mob_effects_predicate::MobEffectsPredicate;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
@@ -31,11 +31,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance {
-            player: simple_criterion_trigger::decode_player(tag)?,
-            effects: codec::decode_optional(tag, "effects", MobEffectsPredicate::decode)?,
-            source: simple_criterion_trigger::decode_condition(tag, "source")?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let effects = fields.optional("effects", MobEffectsPredicate::decode);
+            let source = fields.condition("source");
+            Some(TriggerInstance { player, effects, source })
         })
     }
 

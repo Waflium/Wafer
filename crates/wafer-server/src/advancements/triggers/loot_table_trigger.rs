@@ -5,7 +5,7 @@ use super::simple_criterion_trigger;
 use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::loot_table::LootTable;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -28,8 +28,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance { player: simple_criterion_trigger::decode_player(tag)?, loot_table: codec::decode_field(tag, "loot_tables", LootTable::decode_list)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let loot_table = fields.required("loot_tables", LootTable::decode_holder_set);
+            Some(TriggerInstance { player, loot_table: loot_table? })
+        })
     }
 
     pub fn matches(&self, loot_table: &str) -> bool {

@@ -334,6 +334,32 @@ pub fn loot_table_validation_failed() -> JavaThrowable {
     JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: Found loot table validation problems"), frames)
 }
 
+const REGISTER_ELEMENTS: [&str; 17] = [
+    "net.minecraft.core.MappedRegistry.register(MappedRegistry.java:105)",
+    "net.minecraft.resources.RegistryLoadTask.lambda$registerElements$1(RegistryLoadTask.java:68)",
+    "com.mojang.datafixers.util.Either$Left.ifLeft(Either.java:43)",
+    "net.minecraft.resources.RegistryLoadTask.lambda$registerElements$0(RegistryLoadTask.java:68)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:186)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.stream.SortedOps$SizedRefSortingSink.end(SortedOps.java:357)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:571)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:153)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:176)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:632)",
+    "net.minecraft.resources.RegistryLoadTask.registerElements(RegistryLoadTask.java:66)",
+    "net.minecraft.resources.ResourceManagerRegistryLoadTask.lambda$load$3(ResourceManagerRegistryLoadTask.java:51)",
+    "java.base/java.util.concurrent.CompletableFuture$UniAccept.tryFire(CompletableFuture.java:739)",
+    "java.base/java.util.concurrent.CompletableFuture$Completion.exec(CompletableFuture.java:504)",
+];
+
+pub fn duplicate_value(value: &str) -> JavaThrowable {
+    let mut frames = REGISTER_ELEMENTS.to_vec();
+    frames.extend(FORK_JOIN_TAIL);
+    JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: Adding duplicate value '{value}' to registry"), frames)
+}
+
 pub fn execution_exception(cause: JavaThrowable) -> JavaThrowable {
     JavaThrowable::new(format!("java.util.concurrent.ExecutionException: {}", cause.description), EXECUTION_EXCEPTION_FRAMES.to_vec()).with_cause(cause)
 }

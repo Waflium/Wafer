@@ -128,10 +128,12 @@ pub struct BlockTransformer {
 static BLOCK_TRANSFORMERS: LazyLock<Vec<(&'static str, BlockTransformer)>> = LazyLock::new(|| {
     crate::core::data_registries::json_entries("minecraft:block_transformer")
         .iter()
-        .filter_map(|&(name, json)| {
-            let value: Value = serde_json::from_str(json).ok()?;
-            let transforms = value.as_array()?.iter().map(BlockTransformData::parse).collect::<Option<Vec<_>>>()?;
-            Some((name, BlockTransformer { transforms }))
+        .map(|&(name, json)| {
+            let transforms = serde_json::from_str::<Value>(json)
+                .ok()
+                .and_then(|value| value.as_array().map(|transforms| transforms.iter().filter_map(BlockTransformData::parse).collect()))
+                .unwrap_or_default();
+            (name, BlockTransformer { transforms })
         })
         .collect()
 });

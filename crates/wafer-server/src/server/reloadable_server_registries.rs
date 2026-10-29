@@ -9,10 +9,11 @@ use super::packs::repository::{PackRepository, VANILLA_ID};
 use super::packs::resources::MultiPackResourceManager;
 use crate::advancements::advancement::Advancement;
 use crate::advancements::advancement_holder::AdvancementHolder;
+use crate::core::data_registries::DuplicateValues;
 use crate::resources::registry_load_task::{self, ElementFailure};
 use crate::tags::identifier_order;
 use crate::util::java_throwable::JavaThrowable;
-use crate::world::item::component::json_to_nbt;
+use crate::world::item::component::element_to_nbt;
 use crate::world::item::crafting::recipe::Recipe;
 use crate::world::item::crafting::recipe_holder::RecipeHolder;
 use crate::world::item::crafting::recipe_manager::RecipeManager;
@@ -214,11 +215,28 @@ impl LoadingErrors {
     }
 }
 
-fn decode_registry<T>(registry: &str, sources: &[Source], decode: fn(&Nbt) -> Result<T, String>, errors: &mut LoadingErrors) -> HashMap<String, T> {
+fn decode_registry<T>(
+    registry: &'static str,
+    sources: &[Source],
+    decode: fn(&Nbt) -> Result<T, String>,
+    errors: &mut LoadingErrors,
+    duplicate_values: &mut DuplicateValues,
+) -> HashMap<String, T> {
     let mut elements = HashMap::with_capacity(sources.len());
     for source in sources {
-        let parsed = match crate::util::gson::parse_strict_bytes_throwable(&source.bytes) {
-            Ok(json) => crate::nbt::with_json_source(|| decode(&json_to_nbt(&json))).map_err(ElementFailure::Decode),
+        let parsed = match crate::util::gson::parse_strict_bytes_element_throwable(&source.bytes) {
+            Ok(json) => {
+                crate::core::data_registries::take_thrown();
+                let decoded = crate::nbt::with_json_source(|| decode(&element_to_nbt(&json))).map_err(ElementFailure::Decode);
+                let decoded = match crate::core::data_registries::take_thrown() {
+                    Some(thrown) => Err(ElementFailure::Throw(thrown)),
+                    None => decoded,
+                };
+                if decoded.is_ok() {
+                    duplicate_values.register(registry, &json);
+                }
+                decoded
+            }
             Err(throwable) => Err(ElementFailure::Parse(throwable)),
         };
         match parsed {
@@ -244,19 +262,20 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
     let keys = RELOADABLE_REGISTRIES.iter().zip(&sources).map(|(&registry, sources)| (registry, sources.iter().map(|source| source.id.clone()).collect())).collect();
     let previous = PENDING_KEYS.with(|pending| pending.replace(Some(keys)));
     let mut errors = LoadingErrors(BTreeMap::new());
+    let mut duplicate_values = DuplicateValues::default();
     let (registries, recipes) = wafer_data::with_pending_tags(tags, || {
-        let loot_tables = decode_registry(LOOT_TABLE, &sources[0], LootTable::decode, &mut errors);
-        let predicates = decode_registry(PREDICATE, &sources[1], LootItemCondition::decode, &mut errors);
-        let context_float_providers = decode_registry(CONTEXT_FLOAT_PROVIDER, &sources[2], ContextFloatProvider::decode, &mut errors);
-        let context_int_providers = decode_registry(CONTEXT_INT_PROVIDER, &sources[3], ContextIntProvider::decode, &mut errors);
-        let item_modifiers = decode_registry(ITEM_MODIFIER, &sources[4], |tag| LootItemFunction::decode_typed(tag).into_result(), &mut errors);
-        let slot_sources = decode_registry(SLOT_SOURCE, &sources[5], SlotSource::decode_typed, &mut errors);
-        let mut decoded_advancements = decode_registry(ADVANCEMENT, &sources[6], Advancement::decode, &mut errors);
+        let loot_tables = decode_registry(LOOT_TABLE, &sources[0], LootTable::decode, &mut errors, &mut duplicate_values);
+        let predicates = decode_registry(PREDICATE, &sources[1], LootItemCondition::decode, &mut errors, &mut duplicate_values);
+        let context_float_providers = decode_registry(CONTEXT_FLOAT_PROVIDER, &sources[2], ContextFloatProvider::decode, &mut errors, &mut duplicate_values);
+        let context_int_providers = decode_registry(CONTEXT_INT_PROVIDER, &sources[3], ContextIntProvider::decode, &mut errors, &mut duplicate_values);
+        let item_modifiers = decode_registry(ITEM_MODIFIER, &sources[4], |tag| LootItemFunction::decode_typed(tag).into_result(), &mut errors, &mut duplicate_values);
+        let slot_sources = decode_registry(SLOT_SOURCE, &sources[5], SlotSource::decode_typed, &mut errors, &mut duplicate_values);
+        let mut decoded_advancements = decode_registry(ADVANCEMENT, &sources[6], Advancement::decode, &mut errors, &mut duplicate_values);
         let advancements: Vec<&'static AdvancementHolder> = sources[6]
             .iter()
             .filter_map(|source| decoded_advancements.remove(&source.id).map(|value| &*Box::leak(Box::new(AdvancementHolder { id: source.id.clone(), value }))))
             .collect();
-        let mut decoded_recipes = decode_registry(RECIPE, &sources[7], Recipe::decode, &mut errors);
+        let mut decoded_recipes = decode_registry(RECIPE, &sources[7], Recipe::decode, &mut errors, &mut duplicate_values);
         let recipes: Vec<RecipeHolder> =
             sources[7].iter().filter_map(|source| decoded_recipes.remove(&source.id).map(|value| RecipeHolder { id: source.id.clone().leak(), value })).collect();
         (
@@ -275,6 +294,9 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
         )
     });
     PENDING_KEYS.with(|pending| pending.replace(previous));
+    if let Some(duplicate) = duplicate_values.duplicate {
+        return Err(duplicate);
+    }
     for (registry, keys) in crate::core::data_registries::group_unbound(UNBOUND.with(|unbound| std::mem::take(&mut *unbound.borrow_mut()))) {
         errors.0.insert(("minecraft:root".to_string(), registry.clone()), registry_load_task::unbound_values(&format!("ResourceKey[minecraft:root / {registry}]"), &keys));
     }

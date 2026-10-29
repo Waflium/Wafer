@@ -5,7 +5,7 @@ use super::simple_criterion_trigger;
 use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 
@@ -27,14 +27,15 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        let count = codec::decode_optional(tag, "count", codec::int)?;
-        if let Some(count) = count
-            && count <= 0
-        {
-            return Err(format!("Value must be positive: {count}"));
-        }
-        Ok(TriggerInstance { player: simple_criterion_trigger::decode_player(tag)?, count })
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let count = fields.optional("count", |count| {
+                let count = codec::int(count)?;
+                if count <= 0 { Err(format!("Value must be positive: {count}")) } else { Ok(count) }
+            });
+            Some(TriggerInstance { player, count })
+        })
     }
 
     pub fn matches(&self, required_count: i32) -> bool {

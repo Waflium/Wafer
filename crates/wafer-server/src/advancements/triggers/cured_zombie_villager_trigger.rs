@@ -5,7 +5,7 @@ use super::simple_criterion_trigger;
 use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
@@ -30,11 +30,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance {
-            player: simple_criterion_trigger::decode_player(tag)?,
-            zombie: simple_criterion_trigger::decode_condition(tag, "zombie")?,
-            villager: simple_criterion_trigger::decode_condition(tag, "villager")?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let zombie = fields.condition("zombie");
+            let villager = fields.condition("villager");
+            Some(TriggerInstance { player, zombie, villager })
         })
     }
 

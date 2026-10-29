@@ -6,7 +6,7 @@ use super::simple_criterion_trigger;
 use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::BlockGetter;
 use crate::world::level::storage::loot::loot_context::{LootContext, LootContextBuilder};
@@ -39,8 +39,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance { player: simple_criterion_trigger::decode_player(tag)?, location: simple_criterion_trigger::decode_condition(tag, "location")? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let location = fields.condition("location");
+            Some(TriggerInstance { player, location })
+        })
     }
 
     pub fn matches(&self, location_context: &mut LootContext) -> bool {

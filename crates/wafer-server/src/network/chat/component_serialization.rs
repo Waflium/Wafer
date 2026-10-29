@@ -192,6 +192,7 @@ fn int(tag: &Nbt) -> DataResult<i32> {
         Nbt::Long(v) => DataResult::success(*v as i32),
         Nbt::Float(v) => DataResult::success(*v as i32),
         Nbt::Double(v) => DataResult::success(*v as i32),
+        Nbt::LazilyParsedNumber(text) => DataResult::success(wafer_protocol::lazily_parsed_number::int_value(text)),
         _ => DataResult::error(not_a_number(tag)),
     }
 }
@@ -411,6 +412,9 @@ fn decode_arg(tag: &Nbt) -> DataResult<Arg> {
         Nbt::Float(v) => Arg::Float(*v),
         Nbt::Double(v) => Arg::Double(*v),
         other => {
+            if let Some(message) = crate::world::item::component::text::json_ops_null_pointer(other) {
+                return DataResult::error(message);
+            }
             return either(DataResult::error("This value needs to be parsed as component"), || decode_component(other)).map(|component| match component.contents {
                 Contents::Literal(text) if component.style.is_empty() && component.siblings.is_empty() => Arg::String(text),
                 _ => Arg::Component(component),
@@ -522,10 +526,10 @@ fn json_uuid(tag: &Nbt) -> DataResult<u128> {
     let either = |first: String, second: String| DataResult::error(format!("Failed to parse either. First: {first}; Second: {second}"));
     match tag {
         Nbt::List(items) => {
-            if items.len() > 4 && items.iter().all(|item| matches!(item, Nbt::Long(_) | Nbt::Double(_))) {
+            if items.len() > 4 && items.iter().all(|item| matches!(item, Nbt::Long(_) | Nbt::Double(_) | Nbt::LazilyParsedNumber(_))) {
                 return DataResult::error("Input is not a list of 4 ints");
             }
-            if !items.iter().all(|item| matches!(item, Nbt::Long(_) | Nbt::Double(_))) {
+            if !items.iter().all(|item| matches!(item, Nbt::Long(_) | Nbt::Double(_) | Nbt::LazilyParsedNumber(_))) {
                 return either(format!("Some elements are not ints: {}", snbt(tag)), format!("Not a string: {}", snbt(tag)));
             }
             if items.len() != 4 {

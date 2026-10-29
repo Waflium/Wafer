@@ -43,10 +43,10 @@ impl Advancement {
         let display = record.optional(tag, "display", DisplayInfo::decode_partial);
         let rewards = record.with_default(tag, "rewards", AdvancementRewards::default(), AdvancementRewards::decode_partial);
         let criteria = record.required(tag, "criteria", |criteria| {
-            codec::base_map_partial(criteria, |name| Ok(name.to_string()), |criterion| DecodeResult::from(Criterion::decode(criterion)))
+            codec::base_map_partial(criteria, |name| Ok(name.to_string()), Criterion::decode)
                 .validate(|criteria| if criteria.is_empty() { Err("Advancement criteria cannot be empty".into()) } else { Ok(()) })
         });
-        let requirements = record.optional(tag, "requirements", |requirements| DecodeResult::from(AdvancementRequirements::decode(requirements)));
+        let requirements = record.optional(tag, "requirements", AdvancementRequirements::decode_partial);
         let sends_telemetry_event = record.with_default(tag, "sends_telemetry_event", false, |sends| DecodeResult::from(codec::bool_value(sends)));
         record
             .build(|| {
@@ -123,6 +123,41 @@ mod tests {
         assert_eq!(
             decode_error(r#"{"criteria":{"a":null}}"#),
             r#"Not a JSON object: null missed input: {"a":null}; Advancement criteria cannot be empty"#
+        );
+    }
+
+    #[test]
+    fn a_criterion_with_failing_conditions_is_kept_like_vanilla_does() {
+        assert_eq!(
+            decode_error(r#"{"criteria":{"a":{"conditions":{"effects":"x"},"trigger":"minecraft:effects_changed"}}}"#),
+            r#"Not a JSON object: "x" missed input: {"a":{"conditions":{"effects":"x"},"trigger":"minecraft:effects_changed"}}"#
+        );
+        assert_eq!(
+            decode_error(r#"{"criteria":{"a":{"conditions":{"location":-1},"trigger":"minecraft:placed_block"}}}"#),
+            r#"Not a JSON object: -1 missed input: {"a":{"conditions":{"location":-1},"trigger":"minecraft:placed_block"}}"#
+        );
+    }
+
+    #[test]
+    fn every_failing_trigger_field_is_reported_and_the_criterion_is_kept() {
+        let cases = [
+            (
+                r#"{"conditions":{"player":5,"entity":6},"trigger":"minecraft:player_killed_entity"}"#,
+                r#"Not a JSON object: 6; Not a JSON object: 5"#,
+            ),
+            (r#"{"conditions":{"count":0,"player":5},"trigger":"minecraft:spear_mobs"}"#, r#"Value must be positive: 0; Not a JSON object: 5"#),
+            (r#"{"conditions":{"items":[5,"x"],"slots":5},"trigger":"minecraft:inventory_changed"}"#, r#"Not a JSON object: "x"; Not a JSON object: 5; Not a JSON object: 5"#),
+        ];
+        for (criterion, message) in cases {
+            assert_eq!(decode_error(&format!(r#"{{"criteria":{{"a":{criterion}}}}}"#)), format!(r#"{message} missed input: {{"a":{criterion}}}"#));
+        }
+    }
+
+    #[test]
+    fn an_impossible_trigger_still_needs_an_object_for_its_conditions() {
+        assert_eq!(
+            decode_error(r#"{"criteria":{"a":{"conditions":5,"trigger":"minecraft:impossible"}}}"#),
+            r#"Not a JSON object: 5 missed input: {"a":{"conditions":5,"trigger":"minecraft:impossible"}}; Advancement criteria cannot be empty"#
         );
     }
 

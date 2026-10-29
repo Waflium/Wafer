@@ -310,14 +310,14 @@ pub fn to_value(element: JsonElement) -> serde_json::Value {
     match element {
         JsonElement::Null => serde_json::Value::Null,
         JsonElement::Boolean(value) => serde_json::Value::Bool(value),
-        JsonElement::Number(text) => number(&text),
+        JsonElement::Number(text) => number_value(&text),
         JsonElement::String(value) => serde_json::Value::String(value),
         JsonElement::Array(elements) => serde_json::Value::Array(elements.into_iter().map(to_value).collect()),
         JsonElement::Object(members) => serde_json::Value::Object(members.into_iter().map(|(name, value)| (name, to_value(value))).collect()),
     }
 }
 
-fn number(text: &str) -> serde_json::Value {
+pub fn number_value(text: &str) -> serde_json::Value {
     if let Ok(value) = text.parse::<i64>() {
         return serde_json::Value::Number(value.into());
     }
@@ -339,8 +339,8 @@ pub fn parse_strict_bytes(bytes: &[u8]) -> Result<serde_json::Value, String> {
     parse_strict_value(&String::from_utf8_lossy(bytes))
 }
 
-pub fn parse_strict_bytes_throwable(bytes: &[u8]) -> Result<serde_json::Value, JavaThrowable> {
-    parse_strict_throwable(&String::from_utf8_lossy(bytes)).map(to_value)
+pub fn parse_strict_bytes_element_throwable(bytes: &[u8]) -> Result<JsonElement, JavaThrowable> {
+    parse_strict_throwable(&String::from_utf8_lossy(bytes))
 }
 
 pub fn to_stable_string(element: &JsonElement) -> String {

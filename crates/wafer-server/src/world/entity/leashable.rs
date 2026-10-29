@@ -34,7 +34,14 @@ impl LeashInfo {
         let pos = extra_codecs::block_pos(tag).into_result().map(LeashInfo::Pos);
         match (uuid, pos) {
             (Ok(info), Err(_)) | (Err(_), Ok(info)) => Ok(info),
-            (Ok(first), Ok(second)) => Err(format!("Both alternatives read successfully, can not pick the correct one; first: {first:?} second: {second:?}")),
+            (Ok(first), Ok(second)) => {
+                let text = |info: LeashInfo| match info {
+                    LeashInfo::Uuid(uuid) => format!("Left[{}]", crate::world::level::storage::format_uuid(uuid)),
+                    LeashInfo::Pos(pos) => format!("Right[BlockPos{{x={}, y={}, z={}}}]", pos.x, pos.y, pos.z),
+                };
+                let input = crate::nbt::to_string(tag);
+                Err(format!("Both alternatives read successfully, can not pick the correct one; first: ({}, {input}) second: ({}, {input})", text(first), text(second)))
+            }
             (Err(first), Err(second)) => Err(format!("{second}; {first}")),
         }
     }

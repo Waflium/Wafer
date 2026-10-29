@@ -33,9 +33,10 @@ pub fn fixed_size_ints(tag: &Nbt, size: usize) -> DecodeResult<Vec<i32>> {
     };
     let mut ints: Vec<i32> = match tag {
         Nbt::List(values) if crate::nbt::is_json_source() => {
-            let json_numeric = |value: &Nbt| match *value {
-                Nbt::Long(v) => Some(v as i32),
-                Nbt::Double(v) => Some(if v.abs() >= 2f64.powi(84) { 0 } else { v as i128 as i32 }),
+            let json_numeric = |value: &Nbt| match value {
+                Nbt::LazilyParsedNumber(text) => Some(wafer_protocol::lazily_parsed_number::int_value(text)),
+                Nbt::Long(v) => Some(*v as i32),
+                Nbt::Double(v) => Some(if v.abs() >= 2f64.powi(84) { 0 } else { *v as i128 as i32 }),
                 _ => None,
             };
             match values.iter().map(json_numeric).collect::<Option<Vec<i32>>>() {

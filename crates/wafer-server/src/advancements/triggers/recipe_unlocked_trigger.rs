@@ -6,7 +6,7 @@ use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
 use crate::server::reloadable_server_registries;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::entity::EntityId;
 use crate::world::item::crafting::recipe::Recipe;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -23,21 +23,18 @@ impl RecipeUnlockedTrigger {
     }
 }
 
-pub fn decode_recipe_list(tag: &Nbt) -> DataResult<Vec<Option<String>>> {
-    if let Nbt::String(name) = tag
-        && let Some(location) = name.strip_prefix('#')
-    {
-        return Err(format!("Missing tag: '{}' in '{}'", crate::resources::identifier::read(location)?, reloadable_server_registries::RECIPE));
-    }
-    codec::compact_list_of(tag, |element| {
+pub fn decode_recipe_list(tag: &Nbt) -> DecodeResult<Vec<Option<String>>> {
+    codec::holder_set_partial(tag, reloadable_server_registries::RECIPE, |element| {
         let Ok(key) = codec::identifier(element) else {
-            Recipe::decode(element)?;
-            return Ok(None);
+            return DecodeResult::from(Recipe::decode(element).map(|_| None));
         };
         if reloadable_server_registries::contains_key(reloadable_server_registries::RECIPE, &key) {
-            Ok(Some(key))
+            DecodeResult::success(Some(key))
+        } else if reloadable_server_registries::is_loading() {
+            reloadable_server_registries::record_unbound(reloadable_server_registries::RECIPE, &key);
+            DecodeResult::success(Some(key))
         } else {
-            Err(format!("Missing element ResourceKey[{} / {key}]", reloadable_server_registries::RECIPE))
+            DecodeResult::error(format!("Missing element ResourceKey[{} / {key}]", reloadable_server_registries::RECIPE))
         }
     })
 }
@@ -48,8 +45,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance { player: simple_criterion_trigger::decode_player(tag)?, recipes: codec::decode_field(tag, "recipes", decode_recipe_list)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let recipes = fields.required("recipes", decode_recipe_list);
+            Some(TriggerInstance { player, recipes: recipes? })
+        })
     }
 
     pub fn matches(&self, recipe: &str) -> bool {

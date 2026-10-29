@@ -65,8 +65,7 @@ impl Builder {
     }
 
     pub fn add_static_layers(self, dimension: &DimensionType) -> Self {
-        let attributes = EnvironmentAttributeMap::parse(&serde_json::from_str(dimension.attributes).expect("dimension attributes JSON"), false)
-            .unwrap_or_else(|e| panic!("attributes of {}: {e}", dimension.name));
+        let attributes = EnvironmentAttributeMap::parse(&serde_json::from_str(dimension.attributes).expect("dimension attributes JSON"));
         self.add_constant_layer(&attributes).add_biome_layer(&BIOME_ATTRIBUTES)
     }
 

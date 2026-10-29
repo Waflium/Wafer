@@ -100,6 +100,7 @@ pub fn type_name(tag: &Nbt) -> &'static str {
         Nbt::Compound(_) => "COMPOUND",
         Nbt::IntArray(_) => "INT[]",
         Nbt::LongArray(_) => "LONG[]",
+        Nbt::LazilyParsedNumber(text) => type_name(&wafer_protocol::lazily_parsed_number::exact_nbt(text)),
     }
 }
 

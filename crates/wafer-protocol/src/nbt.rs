@@ -1,4 +1,5 @@
 use crate::java_string::{from_utf16, utf16_units};
+use crate::lazily_parsed_number::{double_value, exact_nbt, parse_long};
 use crate::{DecodeError, Reader, Writer};
 
 #[derive(Clone, Debug)]
@@ -16,6 +17,7 @@ pub enum Nbt {
     Compound(Vec<(String, Nbt)>),
     IntArray(Vec<i32>),
     LongArray(Vec<i64>),
+    LazilyParsedNumber(String),
 }
 
 pub fn float_tag_value(v: f32) -> f32 {
@@ -42,6 +44,7 @@ impl PartialEq for Nbt {
             (Nbt::Compound(a), Nbt::Compound(b)) => a.len() == b.len() && a.iter().all(|(k, v)| b.iter().any(|(k2, v2)| k == k2 && v == v2)),
             (Nbt::IntArray(a), Nbt::IntArray(b)) => a == b,
             (Nbt::LongArray(a), Nbt::LongArray(b)) => a == b,
+            (Nbt::LazilyParsedNumber(a), Nbt::LazilyParsedNumber(b)) => a == b,
             _ => false,
         }
     }
@@ -63,6 +66,7 @@ impl Nbt {
             Nbt::Compound(_) => 10,
             Nbt::IntArray(_) => 11,
             Nbt::LongArray(_) => 12,
+            Nbt::LazilyParsedNumber(text) => exact_nbt(text).tag_id(),
         }
     }
 
@@ -91,19 +95,21 @@ impl Nbt {
     }
 
     pub fn as_i64(&self) -> Option<i64> {
-        match *self {
-            Nbt::Byte(v) => Some(v as i64),
-            Nbt::Short(v) => Some(v as i64),
-            Nbt::Int(v) => Some(v as i64),
-            Nbt::Long(v) => Some(v),
+        match self {
+            Nbt::Byte(v) => Some(*v as i64),
+            Nbt::Short(v) => Some(*v as i64),
+            Nbt::Int(v) => Some(*v as i64),
+            Nbt::Long(v) => Some(*v),
+            Nbt::LazilyParsedNumber(text) => parse_long(text),
             _ => None,
         }
     }
 
     pub fn as_f64(&self) -> Option<f64> {
-        match *self {
-            Nbt::Float(v) => Some(v as f64),
-            Nbt::Double(v) => Some(v),
+        match self {
+            Nbt::Float(v) => Some(*v as f64),
+            Nbt::Double(v) => Some(*v),
+            Nbt::LazilyParsedNumber(text) => Some(double_value(text)),
             _ => self.as_i64().map(|v| v as f64),
         }
     }
@@ -176,6 +182,7 @@ impl Nbt {
                 w.bytes(&(v.len() as i32).to_be_bytes());
                 v.iter().for_each(|l| w.i64(*l));
             }
+            Nbt::LazilyParsedNumber(text) => exact_nbt(text).write_payload(w),
         }
     }
 }

@@ -150,6 +150,7 @@ fn nbt_to_json(nbt: &wafer_protocol::nbt::Nbt) -> Value {
         Nbt::ByteArray(a) => Value::Array(a.iter().map(|&v| Value::from(v)).collect()),
         Nbt::IntArray(a) => Value::Array(a.iter().map(|&v| Value::from(v)).collect()),
         Nbt::LongArray(a) => Value::Array(a.iter().map(|&v| Value::from(v)).collect()),
+        Nbt::LazilyParsedNumber(text) => crate::util::gson::number_value(text),
         Nbt::List(items) => Value::Array(items.iter().map(nbt_to_json).collect()),
         Nbt::Compound(fields) => Value::Object(fields.iter().map(|(k, v)| (k.clone(), nbt_to_json(v))).collect()),
     }

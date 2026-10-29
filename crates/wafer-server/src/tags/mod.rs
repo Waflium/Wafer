@@ -187,12 +187,12 @@ impl TagLoader {
                     .supplier
                     .read()
                     .map_err(|e| JavaThrowable::new(format!("java.io.IOException: {e}"), Vec::new()))
-                    .and_then(|bytes| crate::util::gson::parse_strict_bytes_throwable(&bytes).map_err(|error| self.parse_failed(error)))
+                    .and_then(|bytes| crate::util::gson::parse_strict_bytes_element_throwable(&bytes).map_err(|error| self.parse_failed(error)))
                     .and_then(|element| {
                         if builders.get(&id).is_none() {
                             builders.insert(id.clone(), Vec::new());
                         }
-                        crate::nbt::with_json_source(|| TagFile::decode(&crate::world::item::component::json_to_nbt(&element))).map_err(|message| self.decode_failed(&message))
+                        crate::nbt::with_json_source(|| TagFile::decode(&crate::world::item::component::element_to_nbt(&element))).map_err(|message| self.decode_failed(&message))
                     });
                 match parsed {
                     Ok(parsed) => {

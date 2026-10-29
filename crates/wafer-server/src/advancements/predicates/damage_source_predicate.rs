@@ -4,7 +4,7 @@ use wafer_protocol::nbt::Nbt;
 use super::entity::entity_predicate::{self, EntityPredicate};
 use super::tag_predicate::{self, TagPredicate};
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::damagesource::DamageSource;
 use crate::world::item::component::types::{self, Pair, def, opt, record};
 
@@ -28,12 +28,12 @@ pub struct DamageSourcePredicate {
 impl DamageSourcePredicate {
     pub fn decode(tag: &Nbt) -> DataResult<DamageSourcePredicate> {
         codec::map(tag)?;
-        Ok(DamageSourcePredicate {
-            tags: codec::decode_or(tag, "tags", Vec::new(), |t| codec::list_of(t, |e| TagPredicate::decode("minecraft:damage_type", e)))?,
-            direct_entity: codec::decode_optional(tag, "direct_entity", EntityPredicate::decode)?,
-            source_entity: codec::decode_optional(tag, "source_entity", EntityPredicate::decode)?,
-            is_direct: codec::decode_optional(tag, "is_direct", codec::bool_value)?,
-        })
+        let mut record = codec::Record::default();
+        let tags = record.with_default(tag, "tags", Vec::new(), |t| codec::list_partial(t, |e| DecodeResult::from(TagPredicate::decode("minecraft:damage_type", e))));
+        let direct_entity = record.optional(tag, "direct_entity", |t| DecodeResult::from(EntityPredicate::decode(t)));
+        let source_entity = record.optional(tag, "source_entity", |t| DecodeResult::from(EntityPredicate::decode(t)));
+        let is_direct = record.optional(tag, "is_direct", |t| DecodeResult::from(codec::bool_value(t)));
+        record.build(|| Some(DamageSourcePredicate { tags, direct_entity, source_entity, is_direct })).into_result()
     }
 
     pub fn matches(&self, level: &mut ServerLevel, position: Option<Vec3>, source: &DamageSource) -> bool {

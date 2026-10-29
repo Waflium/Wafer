@@ -60,11 +60,6 @@ fn coordinate_scale(tag: &Nbt) -> Result<(), String> {
     Ok(())
 }
 
-fn attributes(tag: &Nbt) -> Result<(), String> {
-    let json = serde_json::from_str(&crate::nbt::to_string(tag)).map_err(|e| e.to_string())?;
-    EnvironmentAttributeMap::parse(&json, false).map(drop)
-}
-
 fn custom(decode: fn(&Nbt) -> Result<(), String>) -> Pair {
     (Codec::Custom(Box::new(DecodeOnly(decode))), Stream::Custom)
 }
@@ -85,7 +80,7 @@ pub fn direct_codec() -> Pair {
         req("monster_spawn_block_light_limit", (Codec::Int(0, 15, RangeError::Outside), Stream::Int)),
         def("skybox", types::enumeration(&["none", "overworld", "end"]), types::s("overworld")),
         def("cardinal_light", types::enumeration(&["default", "nether"]), types::s("default")),
-        opt("attributes", custom(attributes)),
+        opt("attributes", crate::world::attribute::environment_attribute_map::codec()),
         def("timelines", types::holder_set("minecraft:timeline"), types::empty_list()),
         opt("default_clock", (Codec::Holder("minecraft:world_clock", None), Stream::Holder("minecraft:world_clock", None))),
     ])
@@ -115,7 +110,7 @@ fn network_codec() -> Pair {
 pub fn encode_network(json: &Value) -> Result<Nbt, String> {
     let Nbt::Compound(mut fields) = network_codec().0.decode(&json_to_nbt(json))? else { return Err("A dimension type is not a compound".into()) };
     if let Some(attributes) = json.get("attributes") {
-        let attributes = EnvironmentAttributeMap::parse(attributes, false)?.encode_network()?;
+        let attributes = EnvironmentAttributeMap::parse(attributes).encode_network()?;
         if !matches!(&attributes, Nbt::Compound(entries) if entries.is_empty()) {
             fields.push(("attributes".into(), attributes));
         }

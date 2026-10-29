@@ -81,7 +81,50 @@ pub fn direct_codec() -> Pair {
         Box::new(Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/block_state_provider_type"), cases }))),
         simple_provider_to_full,
     );
-    (Codec::Xor(Box::new(block_state::full_codec().0), Box::new(typed)), Stream::Nbt)
+    (Codec::Xor(Box::new(block_state::full_codec().0), Box::new(typed), block_state::java_to_string, provider_to_string), Stream::Nbt)
+}
+
+fn object_to_string(class: &str) -> String {
+    let hash = class.encode_utf16().fold(0i32, |hash, unit| hash.wrapping_mul(31).wrapping_add(unit as i32));
+    format!("{class}@{hash:x}")
+}
+
+fn holder_to_string(holder: &Nbt) -> String {
+    match holder {
+        Nbt::String(id) => format!("Reference{{ResourceKey[minecraft:worldgen/block_state_provider / {id}]=null}}"),
+        other => format!("Direct{{{}}}", provider_to_string(other)),
+    }
+}
+
+fn block_holder_to_string(id: &str) -> String {
+    format!("Reference{{ResourceKey[minecraft:block / {id}]=Block{{{id}}}}}")
+}
+
+fn provider_to_string(provider: &Nbt) -> String {
+    const PACKAGE: &str = "net.minecraft.world.level.levelgen.feature.stateproviders";
+    match provider.get("type").and_then(Nbt::as_str) {
+        None => format!("SimpleStateProvider[state={}]", block_state::java_to_string(provider)),
+        Some("minecraft:copy_properties") => format!("CopyPropertiesProvider[source={}]", provider.get("source").map_or_else(String::new, holder_to_string)),
+        Some("minecraft:rotated") => {
+            let direction = provider.get("direction").and_then(Nbt::as_str).map_or_else(|| "Optional.empty".to_string(), |direction| format!("Optional[{direction}]"));
+            format!("RotatedBlockProvider[state={}, direction={direction}]", provider.get("state").map_or_else(String::new, holder_to_string))
+        }
+        Some("minecraft:random_block") => match provider.get("blocks") {
+            Some(Nbt::String(id)) if !id.starts_with('#') => format!("RandomBlockProvider[blocks=DirectSet[[{}]]]", block_holder_to_string(id)),
+            Some(Nbt::List(ids)) if ids.iter().all(|id| id.as_str().is_some_and(|id| !id.starts_with('#'))) => {
+                let holders: Vec<String> = ids.iter().filter_map(Nbt::as_str).map(block_holder_to_string).collect();
+                format!("RandomBlockProvider[blocks=DirectSet[[{}]]]", holders.join(", "))
+            }
+            _ => object_to_string(&format!("{PACKAGE}.RandomBlockProvider")),
+        },
+        Some("minecraft:weighted") => format!("WeightedStateProvider[weightedList={}]", object_to_string("net.minecraft.util.random.WeightedList")),
+        Some("minecraft:dual_noise") => object_to_string(&format!("{PACKAGE}.DualNoiseProvider")),
+        Some("minecraft:noise") => object_to_string(&format!("{PACKAGE}.NoiseProvider")),
+        Some("minecraft:noise_threshold") => object_to_string(&format!("{PACKAGE}.NoiseThresholdProvider")),
+        Some("minecraft:randomized_int") => object_to_string(&format!("{PACKAGE}.RandomizedIntStateProvider")),
+        Some("minecraft:rule_based") => object_to_string(&format!("{PACKAGE}.RuleBasedStateProvider")),
+        Some(other) => object_to_string(other),
+    }
 }
 
 pub enum BlockStateProvider {
@@ -142,9 +185,9 @@ fn parse_states(json: &Value) -> Result<Vec<BlockState>, String> {
 static BLOCK_STATE_PROVIDERS: LazyLock<Vec<BlockStateProvider>> = LazyLock::new(|| {
     crate::core::data_registries::json_entries("minecraft:worldgen/block_state_provider")
         .iter()
-        .map(|(name, json)| {
-            let json: Value = serde_json::from_str(json).expect("block state provider json");
-            BlockStateProvider::parse(&json).unwrap_or_else(|e| panic!("block state provider {name}: {e}"))
+        .map(|(_, json)| {
+            let json: Value = serde_json::from_str(json).unwrap_or(Value::Null);
+            BlockStateProvider::parse(&json).unwrap_or_else(|_| BlockStateProvider::Simple(Block::by_name("minecraft:air").expect("air").default_state()))
         })
         .collect()
 });

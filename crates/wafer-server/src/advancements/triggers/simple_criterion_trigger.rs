@@ -6,7 +6,7 @@ use crate::advancements::predicates::entity::entity_predicate::EntityPredicate;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
 use crate::server::player_advancements::{PlayerAdvancements, TriggerInstanceKey};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -36,17 +36,57 @@ pub fn trigger(level: &mut ServerLevel, player: EntityId, trigger: CriterionTrig
     }
 }
 
-pub fn decode_player(tag: &Nbt) -> DataResult<Option<Holder<LootItemCondition>>> {
-    codec::map(tag)?;
-    codec::decode_optional(tag, "player", LootItemCondition::decode_holder)
+pub fn decode<T>(tag: &Nbt, read: impl FnOnce(&mut Fields) -> Option<T>) -> DecodeResult<T> {
+    let mut fields = match Fields::new(tag) {
+        Ok(fields) => fields,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let value = read(&mut fields);
+    fields.build(|| value)
 }
 
-pub fn decode_condition(tag: &Nbt, name: &str) -> DataResult<Option<Holder<LootItemCondition>>> {
-    codec::decode_optional(tag, name, LootItemCondition::decode_holder)
+pub struct Fields<'a> {
+    tag: &'a Nbt,
+    record: Record,
 }
 
-pub fn decode_conditions(tag: &Nbt, name: &str) -> DataResult<Vec<Holder<LootItemCondition>>> {
-    codec::decode_or(tag, name, Vec::new(), |t| codec::list_of(t, LootItemCondition::decode_holder))
+impl<'a> Fields<'a> {
+    pub fn new(tag: &'a Nbt) -> Result<Fields<'a>, String> {
+        codec::map(tag)?;
+        Ok(Fields { tag, record: Record::default() })
+    }
+
+    pub fn player(&mut self) -> Option<Holder<LootItemCondition>> {
+        self.condition("player")
+    }
+
+    pub fn condition(&mut self, name: &str) -> Option<Holder<LootItemCondition>> {
+        self.record.optional(self.tag, name, LootItemCondition::decode_holder_partial)
+    }
+
+    pub fn conditions(&mut self, name: &str) -> Vec<Holder<LootItemCondition>> {
+        self.record.with_default(self.tag, name, Vec::new(), |list| codec::list_partial(list, LootItemCondition::decode_holder_partial))
+    }
+
+    pub fn optional<T>(&mut self, name: &str, decode: impl FnOnce(&Nbt) -> DataResult<T>) -> Option<T> {
+        self.record.optional(self.tag, name, decode)
+    }
+
+    pub fn with_default<T>(&mut self, name: &str, default: T, decode: impl FnOnce(&Nbt) -> DataResult<T>) -> T {
+        self.record.with_default(self.tag, name, default, decode)
+    }
+
+    pub fn list<T>(&mut self, name: &str, decode: impl Fn(&Nbt) -> DataResult<T>) -> Vec<T> {
+        self.record.with_default(self.tag, name, Vec::new(), |list| codec::list_partial(list, |element| DecodeResult::from(decode(element))))
+    }
+
+    pub fn required<T, R: Into<DecodeResult<T>>>(&mut self, name: &str, decode: impl FnOnce(&Nbt) -> R) -> Option<T> {
+        self.record.required(self.tag, name, decode)
+    }
+
+    pub fn build<T>(self, build: impl FnOnce() -> Option<T>) -> DecodeResult<T> {
+        self.record.build(build)
+    }
 }
 
 pub fn matches(predicate: Option<&Holder<LootItemCondition>>, context: &mut LootContext) -> bool {

@@ -11,6 +11,7 @@ use crate::server::packs::repository::VANILLA_ID;
 use crate::server::packs::resources::MultiPackResourceManager;
 use crate::resources::registry_load_task::{self, ElementFailure};
 use crate::server::reloadable_server_registries::LoadingErrors;
+use crate::util::gson::JsonElement;
 use crate::util::java_throwable::JavaThrowable;
 
 pub struct DataRegistry {
@@ -199,7 +200,7 @@ struct PackElement {
     id: String,
     pack: String,
     resource_count: usize,
-    json: Result<Value, JavaThrowable>,
+    json: Result<JsonElement, JavaThrowable>,
 }
 
 static PACK_ELEMENTS: Mutex<Vec<PackElement>> = Mutex::new(Vec::new());
@@ -269,10 +270,10 @@ fn unknown_reference_message(registry: &str, key: &str) -> String {
 
 fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, resource_count: usize, pack_elements: &mut Vec<PackElement>) -> Option<Value> {
     let json = match resource.supplier.read() {
-        Ok(bytes) => crate::util::gson::parse_strict_bytes_throwable(&bytes),
+        Ok(bytes) => crate::util::gson::parse_strict_bytes_element_throwable(&bytes),
         Err(error) => Err(JavaThrowable::new(format!("java.io.IOException: {error}"), Vec::new())),
     };
-    let parsed = json.as_ref().ok().cloned();
+    let parsed = json.as_ref().ok().cloned().map(crate::util::gson::to_value);
     if resource.source_pack_id != VANILLA_ID {
         pack_elements.push(PackElement { registry, id: id.to_string(), pack: resource.source_pack_id.clone(), resource_count, json });
     }
@@ -431,6 +432,7 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool, tag
     UNBOUND_TAGS.with(|unbound| unbound.replace(worldgen_stage.then(Vec::new)));
     REFERENCED.with(|referenced| referenced.replace(worldgen_stage.then(Vec::new)));
     let mut failed: Vec<(&str, &str)> = Vec::new();
+    let mut duplicate_values = DuplicateValues::default();
     for element in pack_elements {
         take_thrown();
         let decoded = match &element.json {
@@ -447,9 +449,16 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool, tag
             Err(failure) => {
                 failed.push((element.registry, element.id.as_str()));
                 errors.parse_error(element.registry, &element.id, &element.pack, element.resource_count, failure);
+                continue;
             }
             Ok(()) => {}
         }
+        if let Ok(json) = &element.json {
+            duplicate_values.register(element.registry, json);
+        }
+    }
+    if let Some(duplicate) = duplicate_values.duplicate {
+        return Err(duplicate);
     }
     let unbound_references = UNBOUND.with(|unbound| unbound.take()).unwrap_or_default();
     let referenced = REFERENCED.with(|referenced| referenced.take()).unwrap_or_default();
@@ -478,74 +487,140 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool, tag
     Err(registry_load_task::registry_loading_failed(validation_stage))
 }
 
-fn decode(registry: &str, json: &Value) -> Result<(), String> {
-    use crate::world::item::component::json_to_nbt;
-    use crate::world::level::levelgen;
+pub fn singleton_value(registry: &str, tag: &Nbt) -> Option<(&'static str, String)> {
+    let name = |key: &str| {
+        let name = tag.get(key)?.as_str()?;
+        name.strip_prefix("minecraft:").or_else(|| (!name.contains(':')).then_some(name))
+    };
+    let object_hash = |class: &str| {
+        let hash = class.encode_utf16().fold(0i32, |hash, unit| hash.wrapping_mul(31).wrapping_add(unit as i32));
+        format!("{class}@{hash:x}")
+    };
     match registry {
-        "minecraft:worldgen/material_rule" => decode_with(levelgen::material::rule::material_rule::direct_codec(), json),
-        "minecraft:worldgen/material_condition" => decode_with(levelgen::material::condition::material_condition::direct_codec(), json),
-        "minecraft:worldgen/noise" => decode_with(crate::world::level::levelgen::synth::parameters_codec(), json),
-        "minecraft:worldgen/density_function" => decode_with(levelgen::density_function::direct_codec(), json),
-        "minecraft:worldgen/noise_settings" => decode_with(levelgen::noise_settings_direct_codec(), json),
-        "minecraft:worldgen/feature" => decode_with(levelgen::feature::feature::direct_codec(), json),
-        "minecraft:worldgen/placed_feature" => decode_with(levelgen::placement::placed_feature::direct_codec(), json),
-        "minecraft:worldgen/structure" => decode_with(levelgen::structure::structure::direct_codec(), json),
-        "minecraft:worldgen/structure_set" => decode_with(levelgen::structure::structure_set::direct_codec(), json),
-        "minecraft:worldgen/template_pool" => decode_with(levelgen::structure::pools::structure_template_pool::direct_codec(), json),
-        "minecraft:worldgen/processor_list" => decode_with(levelgen::structure::templatesystem::structure_processor::list_direct_codec(), json),
-        "minecraft:worldgen/configured_carver" | "minecraft:worldgen/carver" => decode_with(levelgen::carver::direct_codec(), json),
-        "minecraft:worldgen/world_preset" => levelgen::world_dimensions::decode_world_preset(&json_to_nbt(json)).into_result().map(drop),
-        "minecraft:worldgen/flat_level_generator_preset" => levelgen::flat::decode_preset(&json_to_nbt(json)).into_result().map(drop),
-        "minecraft:worldgen/multi_noise_biome_source_parameter_list" => crate::world::level::biome::decode_parameter_list(&json_to_nbt(json)),
-        "minecraft:worldgen/biome" => crate::world::level::biome::validate(json),
-        "minecraft:dimension" => levelgen::world_dimensions::decode_level_stem(&json_to_nbt(json)).into_result().map(drop),
+        "minecraft:worldgen/density_function" => match name("type")? {
+            "blend_alpha" => Some(("blend_alpha", "BLEND_ALPHA".to_string())),
+            "blend_offset" => Some(("blend_offset", "BLEND_OFFSET".to_string())),
+            "beardifier" => Some(("beardifier", "BEARDIFIER".to_string())),
+            "end_outer_islands" => Some(("end_outer_islands", "EndIslandFunction[]".to_string())),
+            _ => None,
+        },
+        "minecraft:worldgen/material_rule" => (name("type")? == "bandlands").then(|| ("bandlands", "INSTANCE".to_string())),
+        "minecraft:worldgen/material_condition" => match name("type")? {
+            "hole" => Some(("hole", "INSTANCE".to_string())),
+            "steep" => Some(("steep", "INSTANCE".to_string())),
+            "temperature" => Some(("temperature", "INSTANCE".to_string())),
+            "above_preliminary_surface" => Some(("above_preliminary_surface", "INSTANCE".to_string())),
+            _ => None,
+        },
+        "minecraft:predicate" => match name("type")? {
+            "killed_by_player" => Some(("killed_by_player", object_hash("net.minecraft.world.level.storage.loot.predicates.LootItemKilledByPlayerCondition"))),
+            "survives_explosion" => Some(("survives_explosion", object_hash("net.minecraft.world.level.storage.loot.predicates.ExplosionCondition"))),
+            _ => None,
+        },
+        "minecraft:slot_source" => (name("type")? == "empty").then(|| ("empty", "EmptySlotSource[]".to_string())),
+        "minecraft:recipe" => (name("type")? == "crafting_special_repairitem").then(|| ("crafting_special_repairitem", object_hash("net.minecraft.world.item.crafting.RepairItemRecipe"))),
+        _ => None,
+    }
+}
+
+#[derive(Default)]
+pub struct DuplicateValues {
+    registered: Vec<(&'static str, &'static str)>,
+    pub duplicate: Option<JavaThrowable>,
+}
+
+impl DuplicateValues {
+    pub fn register(&mut self, registry: &'static str, element: &JsonElement) {
+        if self.duplicate.is_some()
+            || !matches!(
+                registry,
+                "minecraft:worldgen/density_function"
+                    | "minecraft:worldgen/material_rule"
+                    | "minecraft:worldgen/material_condition"
+                    | "minecraft:predicate"
+                    | "minecraft:slot_source"
+                    | "minecraft:recipe"
+            )
+        {
+            return;
+        }
+        let Some((key, text)) = singleton_value(registry, &crate::world::item::component::element_to_nbt(element)) else { return };
+        if self.registered.contains(&(registry, key)) {
+            self.duplicate = Some(registry_load_task::duplicate_value(&text));
+        } else {
+            self.registered.push((registry, key));
+        }
+    }
+}
+
+fn decode(registry: &str, element: &JsonElement) -> Result<(), String> {
+    use crate::world::level::levelgen;
+    let tag = crate::world::item::component::element_to_nbt(element);
+    let json = || crate::util::gson::to_value(element.clone());
+    match registry {
+        "minecraft:worldgen/material_rule" => decode_with(levelgen::material::rule::material_rule::direct_codec(), &tag),
+        "minecraft:worldgen/material_condition" => decode_with(levelgen::material::condition::material_condition::direct_codec(), &tag),
+        "minecraft:worldgen/noise" => decode_with(crate::world::level::levelgen::synth::parameters_codec(), &tag),
+        "minecraft:worldgen/density_function" => decode_with(levelgen::density_function::direct_codec(), &tag),
+        "minecraft:worldgen/noise_settings" => decode_with(levelgen::noise_settings_direct_codec(), &tag),
+        "minecraft:worldgen/feature" => decode_with(levelgen::feature::feature::direct_codec(), &tag),
+        "minecraft:worldgen/placed_feature" => decode_with(levelgen::placement::placed_feature::direct_codec(), &tag),
+        "minecraft:worldgen/structure" => decode_with(levelgen::structure::structure::direct_codec(), &tag),
+        "minecraft:worldgen/structure_set" => decode_with(levelgen::structure::structure_set::direct_codec(), &tag),
+        "minecraft:worldgen/template_pool" => decode_with(levelgen::structure::pools::structure_template_pool::direct_codec(), &tag),
+        "minecraft:worldgen/processor_list" => decode_with(levelgen::structure::templatesystem::structure_processor::list_direct_codec(), &tag),
+        "minecraft:worldgen/configured_carver" | "minecraft:worldgen/carver" => decode_with(levelgen::carver::direct_codec(), &tag),
+        "minecraft:worldgen/world_preset" => levelgen::world_dimensions::decode_world_preset(&tag).into_result().map(drop),
+        "minecraft:worldgen/flat_level_generator_preset" => levelgen::flat::decode_preset(&tag).into_result().map(drop),
+        "minecraft:worldgen/multi_noise_biome_source_parameter_list" => crate::world::level::biome::decode_parameter_list(&tag),
+        "minecraft:worldgen/biome" => crate::world::level::biome::validate(&tag),
+        "minecraft:dimension" => levelgen::world_dimensions::decode_level_stem(&tag).into_result().map(drop),
         "minecraft:enchantment" => {
-            let tag = json_to_nbt(json);
             crate::world::item::enchantment::enchantment::direct_codec().0.decode(&tag)?;
             crate::world::item::enchantment::enchantment::Enchantment::decode(&tag).map(drop)
         }
         "minecraft:enchantment_provider" => {
             use crate::world::item::enchantment::providers::enchantment_provider;
-            enchantment_provider::direct_codec().0.decode(&json_to_nbt(json))?;
-            enchantment_provider::EnchantmentProvider::parse(json).map(drop)
+            enchantment_provider::direct_codec().0.decode(&tag)?;
+            enchantment_provider::EnchantmentProvider::parse(&json()).map(drop)
         }
-        "minecraft:villager_trade" => crate::world::item::trading::villager_trade::VillagerTrade::decode(&json_to_nbt(json)).map(drop),
-        "minecraft:trade_set" => crate::world::item::trading::trade_set::TradeSet::decode(&json_to_nbt(json)).map(drop),
-        "minecraft:trial_spawner" => crate::world::level::block::entity::trialspawner::trial_spawner_config::TrialSpawnerConfig::decode_direct(&json_to_nbt(json)).map(drop),
-        "minecraft:painting_variant" => crate::world::entity::decoration::painting::painting_variant::PaintingVariant::decode(&json_to_nbt(json)).map(drop),
-        "minecraft:damage_type" => decode_with(crate::world::damagesource::damage_type::direct_codec(), json),
-        "minecraft:banner_pattern" => decode_with(crate::world::level::block::entity::banner_pattern::direct_codec(), json),
-        "minecraft:decorated_pot_pattern" => decode_with(crate::world::level::block::entity::decorated_pot_pattern::codec(), json),
-        "minecraft:trim_pattern" => decode_with(crate::world::item::equipment::trim::trim_pattern::direct_codec(), json),
-        "minecraft:trim_material" => decode_with(crate::world::item::equipment::trim::trim_material::direct_codec(), json),
-        "minecraft:jukebox_song" => decode_with(crate::world::item::jukebox_song::direct_codec(), json),
-        "minecraft:instrument" => decode_with(crate::world::item::instrument::direct_codec(), json),
-        "minecraft:chat_type" => decode_with(crate::network::chat_type::direct_codec(), json),
-        "minecraft:wolf_variant" => decode_with(crate::world::entity::animal::wolf::wolf_variant::direct_codec(), json),
-        "minecraft:wolf_sound_variant" => decode_with(crate::world::entity::animal::wolf::wolf_sound_variant::direct_codec(), json),
-        "minecraft:pig_variant" => decode_with(crate::world::entity::animal::pig::pig_variant::direct_codec(), json),
-        "minecraft:pig_sound_variant" => decode_with(crate::world::entity::animal::pig::pig_sound_variant::direct_codec(), json),
-        "minecraft:cow_variant" => decode_with(crate::world::entity::animal::cow::cow_variant::direct_codec(), json),
-        "minecraft:cow_sound_variant" => decode_with(crate::world::entity::animal::cow::cow_sound_variant::direct_codec(), json),
-        "minecraft:chicken_variant" => decode_with(crate::world::entity::animal::chicken_variant::direct_codec(), json),
-        "minecraft:chicken_sound_variant" => decode_with(crate::world::entity::animal::chicken_sound_variant::direct_codec(), json),
-        "minecraft:frog_variant" => decode_with(crate::world::entity::animal::frog::frog_variant::direct_codec(), json),
-        "minecraft:cat_variant" => decode_with(crate::world::entity::animal::feline::cat_variant::direct_codec(), json),
-        "minecraft:cat_sound_variant" => decode_with(crate::world::entity::animal::feline::cat_sound_variant::direct_codec(), json),
-        "minecraft:zombie_nautilus_variant" => decode_with(crate::world::entity::animal::nautilus::zombie_nautilus_variant::direct_codec(), json),
-        "minecraft:world_clock" => decode_with(crate::world::item::component::types::record(Vec::new()), json),
-        "minecraft:sulfur_cube_archetype" => decode_with(crate::world::entity::sulfur_cube_archetype::direct_codec(), json),
-        "minecraft:timeline" => crate::world::clock::Timeline::parse("", json).and_then(|_| crate::world::clock::encode_network_timeline(json)).map(drop),
-        "minecraft:test_environment" => decode_with(crate::gametest::framework::test_environment_definition::direct_codec(), json),
-        "minecraft:test_instance" => decode_with(crate::gametest::framework::game_test_instance::direct_codec(), json),
-        "minecraft:block_transformer" => decode_with(crate::core::component::block_transformer::direct_codec(), json),
-        "minecraft:worldgen/block_state_provider" => decode_with(crate::world::level::levelgen::feature::stateproviders::block_state_provider::direct_codec(), json),
-        "minecraft:dialog" => crate::server::dialog::validate(&json_to_nbt(json)),
+        "minecraft:villager_trade" => crate::world::item::trading::villager_trade::VillagerTrade::decode(&tag).map(drop),
+        "minecraft:trade_set" => crate::world::item::trading::trade_set::TradeSet::decode(&tag).map(drop),
+        "minecraft:trial_spawner" => crate::world::level::block::entity::trialspawner::trial_spawner_config::TrialSpawnerConfig::decode_direct(&tag).map(drop),
+        "minecraft:painting_variant" => decode_with(crate::world::entity::decoration::painting::painting_variant::direct_codec(), &tag),
+        "minecraft:damage_type" => decode_with(crate::world::damagesource::damage_type::direct_codec(), &tag),
+        "minecraft:banner_pattern" => decode_with(crate::world::level::block::entity::banner_pattern::direct_codec(), &tag),
+        "minecraft:decorated_pot_pattern" => decode_with(crate::world::level::block::entity::decorated_pot_pattern::codec(), &tag),
+        "minecraft:trim_pattern" => decode_with(crate::world::item::equipment::trim::trim_pattern::direct_codec(), &tag),
+        "minecraft:trim_material" => decode_with(crate::world::item::equipment::trim::trim_material::direct_codec(), &tag),
+        "minecraft:jukebox_song" => decode_with(crate::world::item::jukebox_song::direct_codec(), &tag),
+        "minecraft:instrument" => decode_with(crate::world::item::instrument::direct_codec(), &tag),
+        "minecraft:chat_type" => decode_with(crate::network::chat_type::direct_codec(), &tag),
+        "minecraft:wolf_variant" => decode_with(crate::world::entity::animal::wolf::wolf_variant::direct_codec(), &tag),
+        "minecraft:wolf_sound_variant" => decode_with(crate::world::entity::animal::wolf::wolf_sound_variant::direct_codec(), &tag),
+        "minecraft:pig_variant" => decode_with(crate::world::entity::animal::pig::pig_variant::direct_codec(), &tag),
+        "minecraft:pig_sound_variant" => decode_with(crate::world::entity::animal::pig::pig_sound_variant::direct_codec(), &tag),
+        "minecraft:cow_variant" => decode_with(crate::world::entity::animal::cow::cow_variant::direct_codec(), &tag),
+        "minecraft:cow_sound_variant" => decode_with(crate::world::entity::animal::cow::cow_sound_variant::direct_codec(), &tag),
+        "minecraft:chicken_variant" => decode_with(crate::world::entity::animal::chicken_variant::direct_codec(), &tag),
+        "minecraft:chicken_sound_variant" => decode_with(crate::world::entity::animal::chicken_sound_variant::direct_codec(), &tag),
+        "minecraft:frog_variant" => decode_with(crate::world::entity::animal::frog::frog_variant::direct_codec(), &tag),
+        "minecraft:cat_variant" => decode_with(crate::world::entity::animal::feline::cat_variant::direct_codec(), &tag),
+        "minecraft:cat_sound_variant" => decode_with(crate::world::entity::animal::feline::cat_sound_variant::direct_codec(), &tag),
+        "minecraft:zombie_nautilus_variant" => decode_with(crate::world::entity::animal::nautilus::zombie_nautilus_variant::direct_codec(), &tag),
+        "minecraft:world_clock" => decode_with(crate::world::item::component::types::record(Vec::new()), &tag),
+        "minecraft:sulfur_cube_archetype" => decode_with(crate::world::entity::sulfur_cube_archetype::direct_codec(), &tag),
+        "minecraft:timeline" => crate::world::clock::Timeline::parse("", &json()).and_then(|_| crate::world::clock::encode_network_timeline(&json())).map(drop),
+        "minecraft:test_environment" => decode_with(crate::gametest::framework::test_environment_definition::direct_codec(), &tag),
+        "minecraft:test_instance" => decode_with(crate::gametest::framework::game_test_instance::direct_codec(), &tag),
+        "minecraft:block_transformer" => decode_with(crate::core::component::block_transformer::direct_codec(), &tag),
+        "minecraft:worldgen/block_state_provider" => decode_with(crate::world::level::levelgen::feature::stateproviders::block_state_provider::direct_codec(), &tag),
+        "minecraft:dialog" => crate::server::dialog::validate(&tag),
         "minecraft:dimension_type" => {
             use crate::world::level::dimension::dimension_type;
-            let tag = dimension_type::direct_codec().0.decode(&crate::world::item::component::json_to_nbt(json))?;
-            dimension_type::check(&tag).map_err(|e| format!("Caught exception decoding {json}: {e}"))?;
-            dimension_type::encode_network(json).map(drop)
+            let decoded = dimension_type::direct_codec().0.decode(&tag)?;
+            dimension_type::check(&decoded).map_err(|e| format!("Caught exception decoding {}: {e}", crate::util::gson::to_json_string(element)))?;
+            dimension_type::encode_network(&json()).map(drop)
         }
         _ => Ok(()),
     }
@@ -603,8 +678,8 @@ fn encode_network(registry: &str, json: &Value) -> Nbt {
     try_encode_network(registry, json).unwrap_or_else(|_| crate::world::item::component::json_to_nbt(json))
 }
 
-fn decode_with(codec: crate::world::item::component::types::Pair, json: &Value) -> Result<(), String> {
-    let result = codec.0.decode(&crate::world::item::component::json_to_nbt(json)).map(drop);
+fn decode_with(codec: crate::world::item::component::types::Pair, tag: &Nbt) -> Result<(), String> {
+    let result = codec.0.decode(tag).map(drop);
     match THROWN.with(|thrown| thrown.borrow().as_ref().map(|thrown| thrown.description.clone())) {
         Some(description) => Err(description),
         None => result,
@@ -615,6 +690,11 @@ fn decode_with(codec: crate::world::item::component::types::Pair, json: &Value) 
 mod tests {
     use crate::server::packs::repository::{PackRepository, VANILLA_ID};
     use crate::server::packs::resources::MultiPackResourceManager;
+    use crate::util::gson::JsonElement;
+
+    fn element(json: &serde_json::Value) -> JsonElement {
+        crate::util::gson::parse_lenient(&json.to_string()).expect("valid JSON")
+    }
 
     #[test]
     fn references_to_entries_that_failed_to_decode_stay_unbound() {
@@ -646,7 +726,7 @@ mod tests {
         ] {
             for (name, source) in super::json_entries(registry) {
                 let json: serde_json::Value = serde_json::from_str(source).unwrap();
-                if let Err(error) = crate::nbt::with_json_source(|| super::decode(registry, &json)) {
+                if let Err(error) = crate::nbt::with_json_source(|| super::decode(registry, &element(&json))) {
                     failures.push(format!("{registry} {name}: {error}"));
                 }
             }
@@ -898,7 +978,74 @@ mod tests {
     }
 
     fn decode_error(registry: &str, json: serde_json::Value) -> String {
-        crate::nbt::with_json_source(|| super::decode(registry, &json)).expect_err("a decode error")
+        crate::nbt::with_json_source(|| super::decode(registry, &element(&json))).expect_err("a decode error")
+    }
+
+    #[test]
+    fn decode_errors_quote_number_literals_as_written() {
+        for literal in ["1e-9", "0.50", "2.9802322e-8", "100000000000000000000", "18446744073709551615", "-0", "1E5"] {
+            let json = format!(r#"{{"type":"minecraft:constant","argument":{literal}}}"#);
+            let element = crate::util::gson::parse_strict(&json).unwrap();
+            let error = crate::nbt::with_json_source(|| super::decode("minecraft:worldgen/density_function", &element)).expect_err("a decode error");
+            assert_eq!(error, format!("Failed to parse either. First: Not a number: {json}; Second: No key value in MapLike[{json}]"));
+        }
+    }
+
+    #[test]
+    fn a_second_value_decoding_to_the_same_instance_is_a_duplicate() {
+        let element = |json: &str| crate::util::gson::parse_strict(json).unwrap();
+        let mut values = super::DuplicateValues::default();
+        values.register("minecraft:worldgen/density_function", &element(r#"{"type":"minecraft:blend_alpha"}"#));
+        values.register("minecraft:worldgen/density_function", &element(r#"{"type":"minecraft:blend_offset"}"#));
+        values.register("minecraft:worldgen/material_rule", &element(r#"{"type":"minecraft:bandlands"}"#));
+        values.register("minecraft:worldgen/noise", &element(r#"{"type":"minecraft:bandlands"}"#));
+        values.register("minecraft:worldgen/noise", &element(r#"{"type":"minecraft:bandlands"}"#));
+        assert!(values.duplicate.is_none());
+        values.register("minecraft:worldgen/density_function", &element(r#"{"type":"blend_alpha","ignored":1}"#));
+        assert_eq!(values.duplicate.unwrap().description, "java.lang.IllegalStateException: Adding duplicate value 'BLEND_ALPHA' to registry");
+        let mut values = super::DuplicateValues::default();
+        values.register("minecraft:worldgen/material_condition", &element(r#"{"type":"minecraft:hole"}"#));
+        values.register("minecraft:worldgen/material_condition", &element(r#"{"type":"minecraft:hole"}"#));
+        assert_eq!(values.duplicate.unwrap().description, "java.lang.IllegalStateException: Adding duplicate value 'INSTANCE' to registry");
+    }
+
+    #[test]
+    fn a_null_inside_a_translation_argument_throws_like_json_ops() {
+        let message = "java.lang.NullPointerException: Cannot invoke \"com.google.gson.JsonElement.getAsJsonPrimitive()\" because \"input\" is null";
+        for arguments in [r#"[[null]]"#, r#"[{"text":null}]"#, r#"[{"a":{"b":[null]}}]"#] {
+            let json = format!(r#"{{"sound_event":"minecraft:music_disc.13","description":{{"translate":"a","with":{arguments}}},"length_in_seconds":10,"comparator_output":1}}"#);
+            let element = crate::util::gson::parse_strict(&json).unwrap();
+            super::take_thrown();
+            let result = crate::nbt::with_json_source(|| super::decode("minecraft:jukebox_song", &element));
+            assert!(result.is_err());
+            assert_eq!(super::take_thrown().unwrap().description, message);
+        }
+        let json = r#"{"sound_event":"minecraft:music_disc.13","description":{"translate":"a","with":[null]},"length_in_seconds":10,"comparator_output":1}"#;
+        let element = crate::util::gson::parse_strict(json).unwrap();
+        super::take_thrown();
+        crate::nbt::with_json_source(|| super::decode("minecraft:jukebox_song", &element)).ok();
+        assert!(super::take_thrown().is_none());
+    }
+
+    #[test]
+    fn both_alternatives_message_prints_the_java_strings_of_the_values() {
+        let json = r#"{"id":"minecraft:oak_log","properties":{"axis":"x"},"type":"minecraft:simple","state":{"id":"minecraft:oak_log","properties":{"axis":"z"}}}"#;
+        let element = crate::util::gson::parse_strict(json).unwrap();
+        let error = crate::nbt::with_json_source(|| super::decode("minecraft:worldgen/block_state_provider", &element)).unwrap_err();
+        assert_eq!(
+            error,
+            format!("Both alternatives read successfully, can not pick the correct one; first: (Left[Block{{minecraft:oak_log}}[axis=x]], {json}) second: (Right[SimpleStateProvider[state=Block{{minecraft:oak_log}}[axis=z]]], {json})")
+        );
+    }
+
+    #[test]
+    fn large_integer_literals_keep_their_low_bits() {
+        for (literal, int) in [("18446744073709551615", -1), ("123456789012345678901234567890", 1312754386), ("1.2345678901234567E19", -350288040), ("-1e19", 1981284352)] {
+            let json = format!(r#"{{"sound_event":"minecraft:music_disc.13","description":"x","length_in_seconds":10,"comparator_output":{literal}}}"#);
+            let element = crate::util::gson::parse_strict(&json).unwrap();
+            let result = crate::nbt::with_json_source(|| super::decode("minecraft:jukebox_song", &element));
+            assert_eq!(result, Err(format!("Value must be within range [0;15]: {int}")));
+        }
     }
 
     #[test]
@@ -946,7 +1093,7 @@ mod tests {
             "settings": {"biome": "test:nobiome", "layers": [{"block": "minecraft:stone", "height": 1}], "structure_overrides": ["test:nostructset"]}
         });
         super::with_loading(|| {
-            assert!(crate::nbt::with_json_source(|| super::decode("minecraft:worldgen/flat_level_generator_preset", &preset)).is_ok());
+            assert!(crate::nbt::with_json_source(|| super::decode("minecraft:worldgen/flat_level_generator_preset", &element(&preset))).is_ok());
             let unbound = super::UNBOUND.with(|unbound| unbound.borrow().clone().unwrap());
             assert_eq!(unbound, vec![("minecraft:worldgen/biome".to_string(), "test:nobiome".to_string()), ("minecraft:worldgen/structure_set".to_string(), "test:nostructset".to_string())]);
         });
@@ -978,7 +1125,7 @@ mod tests {
         for name in names {
             for &(id, json) in super::json_entries(name) {
                 let json: serde_json::Value = serde_json::from_str(json).unwrap();
-                if let Err(e) = crate::nbt::with_json_source(|| super::decode(name, &json)) {
+                if let Err(e) = crate::nbt::with_json_source(|| super::decode(name, &element(&json))) {
                     failures.push(format!("{name} {id}: {e}"));
                 }
             }

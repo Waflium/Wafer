@@ -5,7 +5,7 @@ use super::simple_criterion_trigger;
 use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
@@ -30,11 +30,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance {
-            player: simple_criterion_trigger::decode_player(tag)?,
-            lightning: simple_criterion_trigger::decode_condition(tag, "lightning")?,
-            bystander: simple_criterion_trigger::decode_condition(tag, "bystander")?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let lightning = fields.condition("lightning");
+            let bystander = fields.condition("bystander");
+            Some(TriggerInstance { player, lightning, bystander })
         })
     }
 

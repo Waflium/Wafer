@@ -44,6 +44,14 @@ fn string_color_codec<const DIGITS: usize>(components: usize) -> Pair {
     (Codec::Either(Box::new(hex), Box::new(numeric)), Stream::Nbt)
 }
 
+pub fn rgb_color_codec() -> Codec {
+    string_color_codec::<6>(3).0
+}
+
+pub fn argb_color_codec() -> Codec {
+    string_color_codec::<8>(4).0
+}
+
 struct SpawnDataList(Codec);
 
 impl Custom for SpawnDataList {
@@ -297,16 +305,15 @@ impl AttributeType {
                 types::opt("error_message", text::text()),
             ]),
             AttributeType::MobSpawnSettings => {
-                let spawner = types::record(vec![
+                let spawner = crate::util::random::weighted_list_codec(crate::util::random::weighted_codec(vec![
                     types::req("type", types::by_name("minecraft:entity_type")),
                     types::req("count", int_provider_codec()),
-                    types::req("weight", types::var_int(types::non_negative_int())),
-                ]);
+                ]));
                 let cost = types::record(vec![types::req("energy_budget", (Codec::Double, Stream::Double)), types::req("charge", (Codec::Double, Stream::Double))]);
                 types::record(vec![
                     types::req(
                         "spawns_by_category",
-                        (Codec::Map(Box::new(Codec::Enum(&MOB_CATEGORIES)), Box::new(Codec::Custom(Box::new(SpawnDataList(Codec::list(spawner.0)))))), Stream::Nbt),
+                        (Codec::Map(Box::new(Codec::Enum(&MOB_CATEGORIES)), Box::new(Codec::Custom(Box::new(SpawnDataList(spawner.0))))), Stream::Nbt),
                     ),
                     types::req("spawn_costs", (Codec::Map(Box::new(types::by_name("minecraft:entity_type").0), Box::new(cost.0)), Stream::Nbt)),
                 ])

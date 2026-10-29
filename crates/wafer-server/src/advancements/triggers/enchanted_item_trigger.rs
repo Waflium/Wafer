@@ -7,7 +7,7 @@ use crate::advancements::predicates::item_predicate::ItemPredicate;
 use crate::advancements::predicates::min_max_bounds::Ints;
 use crate::core::holder::Holder;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::DecodeResult;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -31,11 +31,12 @@ pub struct TriggerInstance {
 }
 
 impl TriggerInstance {
-    pub fn decode(tag: &Nbt) -> DataResult<TriggerInstance> {
-        Ok(TriggerInstance {
-            player: simple_criterion_trigger::decode_player(tag)?,
-            item: codec::decode_optional(tag, "item", ItemPredicate::decode)?,
-            levels: codec::decode_or(tag, "levels", Ints::ANY, Ints::decode)?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
+        simple_criterion_trigger::decode(tag, |fields| {
+            let player = fields.player();
+            let item = fields.optional("item", ItemPredicate::decode);
+            let levels = fields.with_default("levels", Ints::ANY, Ints::decode);
+            Some(TriggerInstance { player, item, levels })
         })
     }
 

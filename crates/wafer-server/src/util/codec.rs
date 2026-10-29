@@ -175,7 +175,7 @@ pub fn is_json_value() -> bool {
 pub fn number(tag: &Nbt) -> DataResult<&Nbt> {
     match tag {
         Nbt::Byte(_) if is_json_value() => Err(format!("Not a number: {}", crate::nbt::to_string(tag))),
-        Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) => Ok(tag),
+        Nbt::Byte(_) | Nbt::Short(_) | Nbt::Int(_) | Nbt::Long(_) | Nbt::Float(_) | Nbt::Double(_) | Nbt::LazilyParsedNumber(_) => Ok(tag),
         _ if is_nbt_ops() => Err("Not a number".to_string()),
         _ => Err(format!("Not a number: {}", crate::nbt::to_string(tag))),
     }
@@ -193,14 +193,6 @@ pub fn bool_value(tag: &Nbt) -> DataResult<bool> {
 
 pub fn int(tag: &Nbt) -> DataResult<i32> {
     Ok(component_codec::as_i32(number(tag)?))
-}
-
-pub fn int_range(tag: &Nbt, min: i32, max: i32) -> DataResult<i32> {
-    let value = int(tag)?;
-    if value < min || value > max {
-        return Err(format!("Value must be within range [{min};{max}]: {value}"));
-    }
-    Ok(value)
 }
 
 pub fn long(tag: &Nbt) -> DataResult<i64> {
@@ -228,7 +220,20 @@ pub fn list(tag: &Nbt) -> DataResult<Vec<Nbt>> {
 }
 
 pub fn list_of<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T>> {
-    list(tag)?.iter().map(decode).collect()
+    let items = list(tag)?;
+    let mut values = Vec::with_capacity(items.len());
+    let mut errors = Vec::new();
+    for item in &items {
+        match decode(item) {
+            Ok(value) => values.push(value),
+            Err(error) => errors.push(error),
+        }
+    }
+    if errors.is_empty() {
+        return Ok(values);
+    }
+    errors.reverse();
+    Err(errors.join("; "))
 }
 
 pub fn compact_list_of<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T>> {
@@ -442,6 +447,7 @@ pub fn to_json(tag: &Nbt) -> serde_json::Value {
         Nbt::ByteArray(a) => Value::Array(a.iter().map(|&v| Value::from(v)).collect()),
         Nbt::IntArray(a) => Value::Array(a.iter().map(|&v| Value::from(v)).collect()),
         Nbt::LongArray(a) => Value::Array(a.iter().map(|&v| Value::from(v)).collect()),
+        Nbt::LazilyParsedNumber(text) => crate::util::gson::number_value(text),
         Nbt::List(items) => Value::Array(items.iter().map(to_json).collect()),
         Nbt::Compound(fields) => Value::Object(fields.iter().map(|(k, v)| (k.clone(), to_json(v))).collect()),
     }

@@ -59,6 +59,7 @@ fn canonical(tag: &Nbt, out: &mut String) {
         Nbt::Long(value) => out.push_str(&format!("{value}L")),
         Nbt::Float(value) => out.push_str(&format!("{}f", crate::nbt::java_float_to_string(*value))),
         Nbt::Double(value) => out.push_str(&format!("{}d", crate::nbt::java_double_to_string(*value))),
+        Nbt::LazilyParsedNumber(text) => out.push_str(text),
         Nbt::ByteArray(values) => {
             out.push_str("[B;");
             out.push_str(&values.iter().map(|value| format!("{value}b")).collect::<Vec<_>>().join(","));
