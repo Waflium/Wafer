@@ -3,7 +3,10 @@ use wafer_protocol::nbt::Nbt;
 
 use super::map_decoration_type::MapDecorationTypeHolder;
 use super::map_decoration_types::WHITE_BANNER;
+use crate::network::chat::component_serialization;
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::util::extra_codecs;
 use crate::world::item::dye_color::DyeColor;
 use crate::world::level::block::abstract_banner_block;
 use crate::world::level::block::entity::BlockEntityKind;
@@ -16,11 +19,15 @@ pub struct MapBanner {
 }
 
 impl MapBanner {
-    pub fn decode(tag: &Nbt) -> Option<MapBanner> {
-        let Some(Nbt::IntArray(pos)) = tag.get("pos") else { return None };
-        let [x, y, z] = pos[..] else { return None };
-        let color = tag.get("color").and_then(Nbt::as_str).and_then(DyeColor::by_name).unwrap_or(DyeColor::VALUES[0]);
-        Some(MapBanner { pos: BlockPos::new(x, y, z), color, name: tag.get("name").cloned() })
+    pub fn decode(tag: &Nbt) -> DecodeResult<MapBanner> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let pos = record.required(tag, "pos", extra_codecs::block_pos);
+        let color = tag.get("color").and_then(|color| codec::string(color).ok()).and_then(DyeColor::by_name).unwrap_or(DyeColor::VALUES[0]);
+        let name = tag.get("name").and_then(|name| component_serialization::decode(name).ok()).map(|name| name.to_nbt());
+        record.build(|| Some(MapBanner { pos: pos?, color, name }))
     }
 
     pub fn encode(&self) -> Nbt {

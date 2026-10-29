@@ -223,6 +223,21 @@ pub fn identifier(tag: &Nbt) -> DataResult<String> {
     component_codec::identifier(tag)
 }
 
+pub fn byte_buffer(tag: &Nbt) -> DataResult<Vec<i8>> {
+    let numbers: Vec<&Nbt> = match tag {
+        Nbt::ByteArray(bytes) => return Ok(bytes.clone()),
+        Nbt::List(items) => items.iter().collect(),
+        Nbt::IntArray(ints) => return Ok(ints.iter().map(|&value| value as i8).collect()),
+        Nbt::LongArray(longs) => return Ok(longs.iter().map(|&value| value as i8).collect()),
+        _ => return Err("Not a list".to_string()),
+    };
+    if numbers.iter().all(|item| number(item).is_ok()) {
+        Ok(numbers.iter().map(|item| component_codec::as_i32(item) as i8).collect())
+    } else {
+        Err(format!("Some elements are not bytes: {}", crate::nbt::to_string(tag)))
+    }
+}
+
 pub fn list(tag: &Nbt) -> DataResult<Vec<Nbt>> {
     component_codec::list(tag)
 }

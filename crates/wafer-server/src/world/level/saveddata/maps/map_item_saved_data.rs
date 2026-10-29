@@ -16,6 +16,7 @@ use super::map_id::MapId;
 use crate::network::protocol::game::clientbound_map_item_data_packet::ClientboundMapItemDataPacket;
 use crate::server::THE_NETHER;
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::util::java_collections::JavaHashMap;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
@@ -189,28 +190,54 @@ impl MapItemSavedData {
         }
     }
 
-    pub fn decode(tag: &Nbt) -> Result<MapItemSavedData, String> {
-        let int = |name: &str| tag.get(name).and_then(Nbt::as_i64).map(|v| v as i32).ok_or_else(|| format!("No key {name} in MapLike"));
-        let flag = |name: &str, default: bool| tag.get(name).and_then(Nbt::as_i64).map_or(default, |v| v != 0);
-        let dimension = tag.get("dimension").and_then(Nbt::as_str).ok_or("No key dimension in MapLike")?.to_string();
-        let (center_x, center_z) = (int("xCenter")?, int("zCenter")?);
-        let scale = tag.get("scale").and_then(Nbt::as_i64).map_or(0, |v| v as i8);
-        let Some(Nbt::ByteArray(colors)) = tag.get("colors") else { return Err("No key colors in MapLike".into()) };
-        let mut data =
-            MapItemSavedData::new(center_x, center_z, scale.clamp(0, MAX_SCALE), flag("trackingPosition", true), flag("unlimitedTracking", false), flag("locked", false), dimension);
+    pub fn decode(tag: &Nbt) -> DecodeResult<MapItemSavedData> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let dimension = record.required(tag, "dimension", codec::identifier);
+        let center_x = record.required(tag, "xCenter", codec::int);
+        let center_z = record.required(tag, "zCenter", codec::int);
+        let scale = record.with_default(tag, "scale", 0, |scale| codec::number(scale).map(|scale| crate::world::item::component::codec::as_i32(scale) as i8));
+        let colors = record.required(tag, "colors", codec::byte_buffer);
+        let tracking_position = record.with_default(tag, "trackingPosition", true, codec::bool_value);
+        let unlimited_tracking = record.with_default(tag, "unlimitedTracking", false, codec::bool_value);
+        let locked = record.with_default(tag, "locked", false, codec::bool_value);
+        let banners = record.with_default(tag, "banners", Vec::new(), |banners| codec::list_partial(banners, MapBanner::decode));
+        let frames = record.with_default(tag, "frames", Vec::new(), |frames| codec::list_partial(frames, MapFrame::decode));
+        record.build(|| {
+            let (dimension, center_x, center_z, colors) = (dimension?, center_x?, center_z?, colors?);
+            Some(MapItemSavedData::from_fields(dimension, center_x, center_z, scale, colors, tracking_position, unlimited_tracking, locked, banners, frames))
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn from_fields(
+        dimension: String,
+        center_x: i32,
+        center_z: i32,
+        scale: i8,
+        colors: Vec<i8>,
+        tracking_position: bool,
+        unlimited_tracking: bool,
+        locked: bool,
+        banners: Vec<MapBanner>,
+        frames: Vec<MapFrame>,
+    ) -> MapItemSavedData {
+        let mut data = MapItemSavedData::new(center_x, center_z, scale.clamp(0, MAX_SCALE), tracking_position, unlimited_tracking, locked, dimension);
         if colors.len() == MAP_SIZE * MAP_SIZE {
             data.colors = colors.iter().map(|&c| c as u8).collect();
         }
-        for banner in tag.get("banners").map_or(&[][..], Nbt::as_list).iter().filter_map(MapBanner::decode) {
+        for banner in banners {
             let id = banner.get_id();
             data.banner_markers.insert(id.clone(), banner.clone());
             data.add_decoration(banner.get_decoration(), None, &id, banner.pos.x as f64, banner.pos.z as f64, 180.0, banner.name.clone());
         }
-        for frame in tag.get("frames").map_or(&[][..], Nbt::as_list).iter().filter_map(MapFrame::decode) {
+        for frame in frames {
             data.frame_markers.insert(frame.get_id(), frame.clone());
             data.add_decoration(FRAME, None, &get_frame_key(frame.entity_id), frame.pos.x as f64, frame.pos.z as f64, frame.rotation as f64, None);
         }
-        Ok(data)
+        data
     }
 
     pub fn encode(&self) -> Nbt {

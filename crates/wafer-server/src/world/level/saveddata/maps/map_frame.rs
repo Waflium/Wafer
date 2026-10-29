@@ -1,6 +1,9 @@
 use wafer_core::BlockPos;
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::util::extra_codecs;
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct MapFrame {
     pub pos: BlockPos,
@@ -9,12 +12,15 @@ pub struct MapFrame {
 }
 
 impl MapFrame {
-    pub fn decode(tag: &Nbt) -> Option<MapFrame> {
-        let Some(Nbt::IntArray(pos)) = tag.get("pos") else { return None };
-        let [x, y, z] = pos[..] else { return None };
-        let rotation = tag.get("rotation")?.as_i64()? as i32;
-        let entity_id = tag.get("entity_id")?.as_i64()? as i32;
-        Some(MapFrame { pos: BlockPos::new(x, y, z), rotation, entity_id })
+    pub fn decode(tag: &Nbt) -> DecodeResult<MapFrame> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let pos = record.required(tag, "pos", extra_codecs::block_pos);
+        let rotation = record.required(tag, "rotation", codec::int);
+        let entity_id = record.required(tag, "entity_id", codec::int);
+        record.build(|| Some(MapFrame { pos: pos?, rotation: rotation?, entity_id: entity_id? }))
     }
 
     pub fn encode(&self) -> Nbt {

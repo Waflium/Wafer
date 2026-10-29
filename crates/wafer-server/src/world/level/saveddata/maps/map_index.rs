@@ -28,12 +28,13 @@ impl MapIndex {
         id
     }
 
-    pub fn decode(tag: &Nbt) -> Option<MapIndex> {
-        let last_map_id = match tag.get("map") {
-            Some(map) => map.as_i64()? as i32,
-            None => NO_MAP_ID,
-        };
-        Some(MapIndex::new(last_map_id))
+    pub fn decode(tag: &Nbt) -> crate::util::codec::DecodeResult<MapIndex> {
+        if let Err(error) = crate::util::codec::map(tag) {
+            return crate::util::codec::DecodeResult::error(error);
+        }
+        let mut record = crate::util::codec::Record::default();
+        let last_map_id = record.with_default(tag, "map", NO_MAP_ID, crate::util::codec::int);
+        record.build(|| Some(MapIndex::new(last_map_id)))
     }
 
     pub fn encode(&self) -> Nbt {

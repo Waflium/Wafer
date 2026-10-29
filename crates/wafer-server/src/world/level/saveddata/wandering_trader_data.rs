@@ -20,9 +20,14 @@ impl WanderingTraderData {
         WanderingTraderData { dirty: true, ..WanderingTraderData::default() }
     }
 
-    pub fn decode(nbt: &Nbt) -> WanderingTraderData {
-        let int = |key: &str, default: i32| nbt.get(key).and_then(Nbt::as_i64).map_or(default, |v| v as i32);
-        WanderingTraderData { spawn_delay: int("spawn_delay", 24000), spawn_chance: int("spawn_chance", 25), dirty: false }
+    pub fn decode(nbt: &Nbt) -> crate::util::codec::DecodeResult<WanderingTraderData> {
+        if let Err(error) = crate::util::codec::map(nbt) {
+            return crate::util::codec::DecodeResult::error(error);
+        }
+        let mut record = crate::util::codec::Record::default();
+        let spawn_delay = record.with_default(nbt, "spawn_delay", 24000, crate::util::codec::int);
+        let spawn_chance = record.with_default(nbt, "spawn_chance", 25, crate::util::codec::int);
+        record.build(|| Some(WanderingTraderData { spawn_delay, spawn_chance, dirty: false }))
     }
 
     pub fn encode(&self) -> Nbt {
