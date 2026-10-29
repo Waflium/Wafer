@@ -275,8 +275,10 @@ impl DedicatedServerProperties {
         let world_preset = world_presets::get(&key).expect("a world preset");
         let world_dimensions = world_preset.create_world_dimensions();
         if key == FLAT {
-            let settings: serde_json::Value = serde_json::from_str(if self.generator_settings.is_empty() { "{}" } else { &self.generator_settings }).unwrap_or_else(|_| serde_json::json!({}));
-            let parsed = flat::parse_settings(&settings);
+            let settings = crate::util::gson::parse_lenient(if self.generator_settings.is_empty() { "{}" } else { &self.generator_settings })
+                .map(|settings| crate::world::item::component::element_to_nbt(&settings))
+                .unwrap_or_else(|_| wafer_protocol::nbt::Nbt::Compound(Vec::new()));
+            let parsed = crate::nbt::with_json_source(|| flat::decode_settings(&settings));
             if let Some(error) = parsed.error {
                 error!("{error}");
             }

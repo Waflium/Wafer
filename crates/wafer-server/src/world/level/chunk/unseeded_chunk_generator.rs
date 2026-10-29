@@ -109,13 +109,7 @@ impl UnseededChunkGenerator {
                 record.build(|| Some(UnseededChunkGenerator::Noise(NoiseGeneratorDefinition { settings: settings?, biome_source: biome_source? })))
             }
             "minecraft:flat" => {
-                let settings = record.required(tag, "settings", |settings| {
-                    if let Err(error) = codec::map(settings) {
-                        return DecodeResult::error(error);
-                    }
-                    let parsed = flat::parse_settings(&codec::to_json(settings));
-                    DecodeResult { value: parsed.value, error: parsed.error }
-                });
+                let settings = record.required(tag, "settings", flat::decode_settings);
                 record.build(|| settings.map(UnseededChunkGenerator::Flat))
             }
             _ => record.build(|| Some(UnseededChunkGenerator::Debug)),
