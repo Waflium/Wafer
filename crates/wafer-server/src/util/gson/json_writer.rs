@@ -35,6 +35,23 @@ pub fn write_value(out: &mut String, value: &JsonElement, sort_keys: bool) {
     }
 }
 
+pub fn escape_html_safe(json: &str) -> String {
+    let mut out = String::with_capacity(json.len());
+    for c in json.chars() {
+        match c {
+            '<' => out.push_str("\\u003c"),
+            '>' => out.push_str("\\u003e"),
+            '&' => out.push_str("\\u0026"),
+            '=' => out.push_str("\\u003d"),
+            '\'' => out.push_str("\\u0027"),
+            '\u{2028}' => out.push_str("\\u2028"),
+            '\u{2029}' => out.push_str("\\u2029"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 fn string(out: &mut String, value: &str) {
     out.push('"');
     for c in value.chars() {

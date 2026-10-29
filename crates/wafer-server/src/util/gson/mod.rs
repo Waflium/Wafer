@@ -201,6 +201,34 @@ pub fn parse_object(json: &str) -> Result<JsonElement, String> {
     Err(format!("com.google.gson.JsonSyntaxException: Expected a com.google.gson.JsonObject but was com.google.gson.{class}; at path {}", reader.get_previous_path()))
 }
 
+pub fn from_json_object(json: &str) -> Result<Option<JsonElement>, String> {
+    let syntax_exception = |error: JsonReaderError| format!("com.google.gson.JsonSyntaxException: {}: {}", exception_class(error.kind), error.message);
+    let mut reader = JsonReader::new(json);
+    reader.strictness = Strictness::Lenient;
+    match reader.peek().at("") {
+        Ok(_) => {}
+        Err(error) if error.kind == JsonReaderErrorKind::EndOfInput => return Ok(None),
+        Err(error) => return Err(syntax_exception(error)),
+    }
+    let element = read_element(&mut reader, false).map_err(syntax_exception)?;
+    let class = match element {
+        JsonElement::Object(_) => "",
+        JsonElement::Null => "JsonNull",
+        JsonElement::Array(_) => "JsonArray",
+        _ => "JsonPrimitive",
+    };
+    if !class.is_empty() {
+        return Err(format!("com.google.gson.JsonSyntaxException: Expected a com.google.gson.JsonObject but was com.google.gson.{class}; at path {}", reader.get_previous_path()));
+    }
+    reader.strictness = Strictness::LegacyStrict;
+    match reader.peek().at("") {
+        Ok(JsonToken::EndDocument) => Ok(Some(element)),
+        Ok(_) => Err("com.google.gson.JsonSyntaxException: JSON document was not fully consumed.".to_string()),
+        Err(error) if error.kind == JsonReaderErrorKind::Malformed => Err(syntax_exception(error)),
+        Err(error) => Err(format!("com.google.gson.JsonIOException: {}: {}", exception_class(error.kind), error.message)),
+    }
+}
+
 pub fn to_json_string(element: &JsonElement) -> String {
     let mut out = String::new();
     json_writer::write_value(&mut out, element, false);

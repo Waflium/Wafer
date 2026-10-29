@@ -42,7 +42,7 @@ pub fn for_path(error: io::Error, path: &Path) -> io::Error {
     }
 }
 
-fn os_message(error: &io::Error) -> String {
+pub fn os_message(error: &io::Error) -> String {
     let message = error.to_string();
     message.split(" (os error").next().unwrap_or(&message).to_string()
 }
@@ -75,10 +75,13 @@ pub fn move_file(from: &Path, to: &Path, options: &[CopyOption]) -> io::Result<(
         return Err(for_path(io::Error::from(io::ErrorKind::AlreadyExists), to));
     }
     std::fs::rename(from, to).map_err(|e| {
-        if matches!(e.kind(), io::ErrorKind::NotFound | io::ErrorKind::AlreadyExists | io::ErrorKind::PermissionDenied | io::ErrorKind::DirectoryNotEmpty) {
-            for_path(e, to)
-        } else {
-            java_io_error(e.kind(), "java.nio.file.FileSystemException", format!("{} -> {}: {}", from.display(), to.display(), os_message(&e)))
+        let paths = format!("{} -> {}", from.display(), to.display());
+        match e.kind() {
+            io::ErrorKind::NotFound => java_io_error(e.kind(), "java.nio.file.NoSuchFileException", paths),
+            io::ErrorKind::AlreadyExists => java_io_error(e.kind(), "java.nio.file.FileAlreadyExistsException", paths),
+            io::ErrorKind::PermissionDenied => java_io_error(e.kind(), "java.nio.file.AccessDeniedException", paths),
+            io::ErrorKind::DirectoryNotEmpty => java_io_error(e.kind(), "java.nio.file.DirectoryNotEmptyException", from.display().to_string()),
+            _ => java_io_error(e.kind(), "java.nio.file.FileSystemException", format!("{paths}: {}", os_message(&e))),
         }
     })
 }

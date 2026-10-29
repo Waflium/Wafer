@@ -140,7 +140,11 @@ impl<E: StoredUserEntry> StoredUserList<E> {
 
     fn save_logged(&self, action: &str) {
         if let Err(e) = self.save() {
-            warn!("Could not save the list after {action} a user: {e}");
+            let exception = match &self.file {
+                Some(file) if e.raw_os_error().is_some() => old_users_converter::file_not_found(&e, file).to_string(),
+                _ => e.to_string(),
+            };
+            warn!("Could not save the list after {action} a user.\n{exception}");
         }
     }
 
@@ -155,7 +159,7 @@ impl<E: StoredUserEntry> StoredUserList<E> {
                 Value::Object(object)
             })
             .collect();
-        std::fs::write(file, serde_json::to_string_pretty(&Value::Array(array))?)
+        std::fs::write(file, crate::util::gson::json_writer::escape_html_safe(&serde_json::to_string_pretty(&Value::Array(array))?))
     }
 
     pub fn load(&mut self) -> std::io::Result<()> {
@@ -301,7 +305,11 @@ impl PartialEq for Ban {
 
 impl Ban {
     pub fn new(source: Option<String>, expires: Option<DateTime<FixedOffset>>, reason: Option<String>) -> Ban {
-        Ban { created: Local::now().fixed_offset(), source: source.unwrap_or_else(|| "(Unknown)".into()), expires, reason }
+        Ban::with_created(None, source, expires, reason)
+    }
+
+    pub fn with_created(created: Option<DateTime<FixedOffset>>, source: Option<String>, expires: Option<DateTime<FixedOffset>>, reason: Option<String>) -> Ban {
+        Ban { created: created.unwrap_or_else(|| Local::now().fixed_offset()), source: source.unwrap_or_else(|| "(Unknown)".into()), expires, reason }
     }
 
     fn from_json(object: &Value) -> Ban {

@@ -80,14 +80,50 @@ impl fmt::Display for FileFixException {
 impl std::error::Error for FileFixException {}
 
 #[derive(Debug)]
+pub struct UncheckedException {
+    pub description: String,
+    pub cause: Option<String>,
+}
+
+impl UncheckedException {
+    pub fn new(description: impl Into<String>) -> UncheckedException {
+        UncheckedException { description: description.into(), cause: None }
+    }
+
+    pub fn completion(cause: impl Into<String>) -> UncheckedException {
+        let cause = cause.into();
+        let message = cause.lines().next().unwrap_or_default();
+        UncheckedException { description: format!("java.util.concurrent.CompletionException: {message}"), cause: Some(cause) }
+    }
+}
+
+impl fmt::Display for UncheckedException {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.description)?;
+        match &self.cause {
+            Some(cause) => write!(f, "\nCaused by: {cause}"),
+            None => Ok(()),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum FileFixFailure {
     Io(io::Error),
     Exception(FileFixException),
+    Unchecked(UncheckedException),
+}
+
+impl From<UncheckedException> for FileFixFailure {
+    fn from(exception: UncheckedException) -> FileFixFailure {
+        FileFixFailure::Unchecked(exception)
+    }
 }
 
 impl fmt::Display for FileFixFailure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            FileFixFailure::Unchecked(e) => write!(f, "{e}"),
             FileFixFailure::Io(e) => write!(f, "java.io.UncheckedIOException: {e}\nCaused by: {e}"),
             FileFixFailure::Exception(e) => match e.cause() {
                 Some(cause) => write!(f, "{e}\nCaused by: {cause}"),

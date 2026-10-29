@@ -85,10 +85,16 @@ impl GameRules {
         )
     }
 
-    pub fn load(&self, data: &Nbt) {
-        let Nbt::Compound(entries) = data else { return };
+    pub fn load(&self, data: &Nbt) -> bool {
+        let Nbt::Compound(entries) = data else { return true };
+        let mut present = vec![false; self.values.len()];
+        let mut removed = false;
         for (name, tag) in entries {
-            let Some(rule) = GameRule::by_name(name).filter(|&r| self.has(r)) else { continue };
+            let Some(rule) = GameRule::by_name(name) else { continue };
+            if !self.has(rule) {
+                removed = true;
+                continue;
+            }
             let info = rule.info();
             let value = match (info.kind, tag) {
                 (GameRuleType::Bool, Nbt::Byte(b)) => (*b != 0) as i32,
@@ -96,6 +102,22 @@ impl GameRules {
                 _ => continue,
             };
             self.values[rule.0 as usize].store(value, Ordering::Relaxed);
+            present[rule.0 as usize] = true;
         }
+        removed || self.available().any(|rule| !present[rule.0 as usize])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loading_reports_missing_rules_like_the_vanilla_constructor() {
+        let rules = GameRules::default();
+        assert!(rules.load(&Nbt::Compound(vec![("minecraft:keep_inventory".into(), Nbt::Byte(1))])));
+        assert!(rules.get_bool(wafer_data::game_rule::KEEP_INVENTORY));
+        assert!(rules.load(&Nbt::Compound(Vec::new())));
+        assert!(!rules.load(&rules.to_nbt()));
     }
 }

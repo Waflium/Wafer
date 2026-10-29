@@ -323,9 +323,9 @@ impl Server {
         crate::commands::set_enabled_features(data_configuration.enabled_features);
         let saved_data_exists = |id: &str| world_dir.as_ref().is_some_and(|dir| dir.data(id).exists());
         if !new_world {
-            game_rules.load(&data.game_rules);
+            let game_rules_changed = game_rules.load(&data.game_rules);
             clocks.load(&data.clocks);
-            game_rules.set_dirty(!saved_data_exists("game_rules"));
+            game_rules.set_dirty(game_rules_changed);
             clocks.dirty = !saved_data_exists("world_clocks");
         }
         let weather_dirty = new_world || !saved_data_exists("weather");
@@ -1935,6 +1935,33 @@ pub fn run(
         warn!("The server will make no attempt to authenticate usernames. Beware.");
         warn!("While this makes the game possible to play without internet access, it also opens up the ability for hackers to connect with any username they choose.");
         warn!("To change this, set \"online-mode\" to \"true\" in the server.properties file.");
+    }
+    if let Some(server_directory) = &config.server_dir {
+        let name_to_id_cache = CachedUserNameToIdResolver::load(Some(server_directory.clone()));
+        let old_users_converter = players::old_users_converter::OldUsersConverter {
+            server_directory,
+            world_directory: config.world.as_deref(),
+            services: &services,
+            name_to_id_cache: &name_to_id_cache,
+            uses_authentication: config.online_mode,
+            operator_permission_level: config.op_permission_level,
+        };
+        if old_users_converter.convert_old_users() {
+            name_to_id_cache.save();
+        }
+        if !old_users_converter.are_old_userlists_removed() {
+            error!("Encountered an unexpected exception\njava.lang.IllegalStateException: Failed to initialize server");
+            let report = crate::crash_report::CrashReport::new("Exception in server tick loop", "java.lang.IllegalStateException: Failed to initialize server".to_string(), crash_frames());
+            let file = crate::crash_report::crash_report_file(Path::new("."));
+            if report.save_to_file(&file) {
+                error!("This crash report has been saved to: {}", std::path::absolute(&file).unwrap_or(file).display());
+            } else {
+                error!("We were unable to save this crash report to disk.");
+            }
+            info!("Stopping server");
+            info!("Saving worlds");
+            return Ok(());
+        }
     }
     let port = listener.local_addr()?.port();
     let status = Arc::new(RwLock::new(None));

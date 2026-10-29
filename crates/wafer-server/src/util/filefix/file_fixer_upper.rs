@@ -10,6 +10,7 @@ use crate::datafixers::schemas::schema::{Schema, SchemaClass};
 use crate::util::basic_file_attributes::BasicFileAttributes;
 use crate::util::datafix::data_fix_types::{DataFixTypes, current_version};
 use crate::util::file_util;
+use crate::util::gson;
 use crate::util::java_nio::{self, java_io_error};
 use crate::util::worldupdate::upgrade_progress::{Status, Type, UpgradeProgress};
 use crate::world::level::storage::WorldData;
@@ -20,7 +21,7 @@ use super::access::compressed_nbt::{read_compressed, write_compressed};
 use super::atomic_move_not_supported_file_fix_exception::AtomicMoveNotSupportedFileFixException;
 use super::failed_cleanup_file_fix_exception::FailedCleanupFileFixException;
 use super::file_fix::FileFix;
-use super::file_fix_exception::{FileFixException, FileFixFailure};
+use super::file_fix_exception::{FileFixException, FileFixFailure, UncheckedException};
 use super::file_system_capabilities::FileSystemCapabilities;
 use super::virtualfilesystem::copy_on_write_file_system::CopyOnWriteFileSystem;
 use super::virtualfilesystem::copy_on_write_fs_path::CopyOnWriteFSPath;
@@ -75,6 +76,7 @@ impl FileFixerUpper {
                     return Err(AbortedFileFixException::of(e).into());
                 }
                 Err(FileFixFailure::Exception(e)) => return Err(e.into()),
+                Err(unchecked @ FileFixFailure::Unchecked(_)) => return Err(unchecked),
             };
             if let Err(e) = swap_in_fixed_world(world_access, &moves, &file_fix_directory, &temp_world, upgrade_progress) {
                 if let FileFixException::Aborted(aborted) = &e {
@@ -114,7 +116,7 @@ impl FileFixerUpper {
         let upgrade_in_progress_file = file_fix_directory.join(UPGRADE_IN_PROGRESS_NAME);
         if upgrade_in_progress_file.exists() {
             warn!("Found previously interrupted world upgrade, attempting to continue it");
-            return Ok(read_moves(world_folder, temp_world, &upgrade_in_progress_file)?);
+            return read_moves(world_folder, temp_world, &upgrade_in_progress_file);
         }
         if file_fix_directory.exists() {
             delete_directory(file_fix_directory)?;
@@ -364,27 +366,35 @@ fn write_moves(moves: &[FileMove], from_directory: &Path, to_directory: &Path, f
     }
     let mut object = Map::new();
     object.insert("moves".into(), Value::Array(encoded));
-    let json = serde_json::to_string_pretty(&Value::Object(object)).expect("json").replace('<', "\\u003c").replace('>', "\\u003e").replace('&', "\\u0026").replace('=', "\\u003d").replace('\'', "\\u0027");
+    let json = gson::json_writer::escape_html_safe(&serde_json::to_string_pretty(&Value::Object(object)).expect("json"));
     use std::io::Write;
     let mut file = std::fs::OpenOptions::new().create(true).write(true).open(file_path).map_err(|e| java_nio::for_path(e, file_path))?;
     file.write_all(json.as_bytes())?;
     file.sync_data()
 }
 
-fn read_moves(from_directory: &Path, to_directory: &Path, file_path: &Path) -> io::Result<Vec<FileMove>> {
-    let text = std::fs::read_to_string(file_path).map_err(|e| java_nio::for_path(e, file_path))?;
-    let json: Value = serde_json::from_str(&text).map_err(|e| io::Error::other(format!("com.google.gson.JsonSyntaxException: {e}")))?;
-    let moves = match json.get("moves") {
-        Some(Value::Array(moves)) => moves,
-        _ => return Err(io::Error::other("java.lang.IllegalStateException: No key moves in MapLike")),
-    };
-    moves
-        .iter()
-        .map(|file_move| FileMove::decode(file_move, from_directory, to_directory).map_err(|e| io::Error::other(format!("java.lang.IllegalStateException: {e}"))))
-        .collect()
+fn read_moves(from_directory: &Path, to_directory: &Path, file_path: &Path) -> Result<Vec<FileMove>, FileFixFailure> {
+    let bytes = std::fs::read(file_path).map_err(|e| java_nio::for_path(e, file_path))?;
+    let text = String::from_utf8(bytes).map_err(|_| java_io_error(io::ErrorKind::InvalidData, "java.nio.charset.MalformedInputException", "Input length = 1".to_string()))?;
+    let json = gson::from_json_object(&text).map_err(UncheckedException::new)?;
+    FileMove::decode_moves(json.as_ref(), from_directory, to_directory).map_err(|message| UncheckedException::new(format!("java.lang.IllegalStateException: {message}")).into())
+}
+
+#[cfg(test)]
+thread_local! {
+    static FORCED_CAPABILITIES: std::cell::Cell<Option<FileSystemCapabilities>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+pub fn force_file_system_capabilities(capabilities: Option<FileSystemCapabilities>) {
+    FORCED_CAPABILITIES.with(|forced| forced.set(capabilities));
 }
 
 pub fn detect_file_system_capabilities(dir: &Path) -> io::Result<FileSystemCapabilities> {
+    #[cfg(test)]
+    if let Some(forced) = FORCED_CAPABILITIES.with(std::cell::Cell::get) {
+        return Ok(forced);
+    }
     Ok(FileSystemCapabilities::new(supports_atomic_move(dir)?, supports_hard_links(dir)?))
 }
 

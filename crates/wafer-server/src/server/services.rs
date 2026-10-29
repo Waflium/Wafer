@@ -6,6 +6,8 @@ use rsa::RsaPublicKey;
 use rsa::pkcs8::DecodePublicKey;
 
 use crate::server::players::NameAndId;
+use crate::server::players::old_users_converter::{ConversionError, LookupException, ProfileLookupCallback};
+use crate::util::java_collections::JavaHashSet;
 use crate::util::signature_validator::SignatureValidator;
 
 const DISCOVERY_URL: &str = "https://discovery.minecraftservices.com/minecraft/client";
@@ -73,6 +75,22 @@ where
             tokio::time::sleep(delay).await;
         }
     });
+}
+
+enum MinecraftClientException {
+    ServiceUnavailable,
+    Http(String),
+    Json(String),
+}
+
+impl MinecraftClientException {
+    fn to_authentication_exception(&self) -> LookupException {
+        match self {
+            MinecraftClientException::ServiceUnavailable => LookupException::AuthenticationUnavailable,
+            MinecraftClientException::Http(message) => LookupException::Authentication(format!("com.mojang.authlib.exceptions.MinecraftClientHttpException: {message}")),
+            MinecraftClientException::Json(message) => LookupException::Authentication(format!("com.mojang.authlib.exceptions.MinecraftClientException: {message}")),
+        }
+    }
 }
 
 struct ServicesKeySet {
@@ -153,6 +171,76 @@ impl Services {
             let id = u128::from_str_radix(found["id"].as_str()?, 16).ok()?;
             Some(NameAndId { id, name: found["name"].as_str()?.to_string() })
         })
+    }
+
+    pub fn find_profiles_by_names(&self, names: &[&str], callback: &mut dyn ProfileLookupCallback) -> Result<(), ConversionError> {
+        let mut criteria = JavaHashSet::default();
+        for name in names.iter().filter(|name| !name.is_empty()) {
+            criteria.insert(name.to_string());
+        }
+        let criteria: Vec<&str> = criteria.iter().collect();
+        for request in criteria.chunks(10) {
+            let normalized_request: Vec<String> = request.iter().map(|name| name.to_lowercase()).collect();
+            let mut fail_count = 0;
+            loop {
+                match self.post_many_by_name(&normalized_request) {
+                    Ok(results) => {
+                        let mut received: Vec<String> = Vec::with_capacity(results.len());
+                        for profile in &results {
+                            received.push(profile.name.to_lowercase());
+                            callback.on_profile_lookup_succeeded(&profile.name, profile.id)?;
+                        }
+                        for name in request {
+                            if !received.contains(&name.to_lowercase()) {
+                                callback.on_profile_lookup_failed(name, &LookupException::ProfileNotFound("Server did not find the requested profile".into()))?;
+                            }
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
+                        break;
+                    }
+                    Err(e) => {
+                        fail_count += 1;
+                        if fail_count == 3 {
+                            for name in request {
+                                callback.on_profile_lookup_failed(name, &e.to_authentication_exception())?;
+                            }
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(750));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn post_many_by_name(&self, names: &[String]) -> Result<Vec<NameAndId>, MinecraftClientException> {
+        let Some(discovery) = self.discovery.get() else {
+            warn!("Services are unavailable, unable to fetch uri for PROFILES/getManyByName");
+            return Err(MinecraftClientException::ServiceUnavailable);
+        };
+        let Some(url) = discovery["discovery"]["profiles"]["endpoints"]["getManyByName"]["uri"].as_str() else {
+            warn!("Services are available, but unable to find uri for PROFILES/getManyByName");
+            return Err(MinecraftClientException::ServiceUnavailable);
+        };
+        let Some((http, runtime)) = self.http.as_ref() else { return Err(MinecraftClientException::ServiceUnavailable) };
+        let response = runtime
+            .block_on(async { http.post(url).json(names).send().await })
+            .map_err(|_| MinecraftClientException::ServiceUnavailable)?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(MinecraftClientException::Http(format!("Status: {}", status.as_u16())));
+        }
+        let body: serde_json::Value = runtime.block_on(response.json()).map_err(|e| MinecraftClientException::Json(e.to_string()))?;
+        let profiles = body.as_array().ok_or_else(|| MinecraftClientException::Json("Expected BEGIN_ARRAY".into()))?;
+        profiles
+            .iter()
+            .map(|profile| {
+                let id = u128::from_str_radix(&profile["id"].as_str()?.replace('-', ""), 16).ok()?;
+                Some(NameAndId { id, name: profile["name"].as_str()?.to_string() })
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| MinecraftClientException::Json("Invalid profile".into()))
     }
 
     pub fn fetch_profile(&self, id: u128) -> Option<NameAndId> {

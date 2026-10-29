@@ -7,6 +7,7 @@ use wafer_core::ChunkPos;
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::datafix::data_fix_types::DataFixTypes;
+use crate::util::filefix::file_fix_exception::UncheckedException;
 use crate::util::filefix::virtualfilesystem::copy_on_write_fs_path::CopyOnWriteFSPath;
 use crate::util::filefix::virtualfilesystem::copy_on_write_fs_provider::OpenOptions;
 use crate::util::filefix::virtualfilesystem::files;
@@ -125,13 +126,21 @@ impl ChunkNbt {
         &self.info
     }
 
-    pub fn update_chunk(&self, pos: ChunkPos, data_fix_context: &Nbt, fixer: impl FnOnce(Nbt) -> Nbt) -> io::Result<()> {
+    pub fn update_chunk(&self, pos: ChunkPos, data_fix_context: &Nbt, fixer: impl FnOnce(Nbt) -> Nbt) -> Result<(), UncheckedException> {
         let mut storage = self.storage.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        let maybe_tag = storage.read(pos).inspect_err(|e| warn!("Failed to read chunk [{}, {}]\n{e}", pos.x, pos.z))?;
+        let maybe_tag = match storage.read(pos) {
+            Ok(maybe_tag) => maybe_tag,
+            Err(e) => {
+                warn!("Failed to read chunk [{}, {}]\n{e}", pos.x, pos.z);
+                return Err(UncheckedException::completion(e.to_string()));
+            }
+        };
         let Some(tag) = maybe_tag else { return Ok(()) };
-        let tag = upgrade_chunk_tag(tag, -1, Some(data_fix_context), self.target_version, self.data_fix_type);
-        let tag = fixer(tag);
-        storage.write(pos, &tag).inspect_err(|e| error!("Failed to store chunk [{}, {}]\n{e}", pos.x, pos.z))
+        let tag = crate::util::catch_exception(|| fixer(upgrade_chunk_tag(tag, -1, Some(data_fix_context), self.target_version, self.data_fix_type))).map_err(UncheckedException::completion)?;
+        storage.write(pos, &tag).map_err(|e| {
+            error!("Failed to store chunk [{}, {}]\n{e}", pos.x, pos.z);
+            UncheckedException::completion(e.to_string())
+        })
     }
 }
 

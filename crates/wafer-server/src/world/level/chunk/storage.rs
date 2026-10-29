@@ -36,6 +36,11 @@ fn invalid(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, msg.to_owned())
 }
 
+fn reported_nbt_exception(error: io::Error) -> io::Error {
+    let cause = if error.to_string() == "unexpected end of packet" { "java.io.EOFException".to_string() } else { format!("java.io.IOException: {error}") };
+    crate::util::java_nio::java_io_error(error.kind(), "net.minecraft.nbt.ReportedNbtException", format!("Loading NBT data\nCaused by: {cause}"))
+}
+
 pub fn decode_nbt(bytes: &[u8]) -> io::Result<Nbt> {
     let (_, nbt) = Nbt::read_named(&mut Reader::new(bytes)).map_err(|e| invalid(&e.to_string()))?;
     Ok(nbt)
@@ -240,7 +245,7 @@ impl RegionFile {
             error!("Chunk {pos} has invalid chunk stream version {compression}");
             return Ok(None);
         };
-        decode_nbt(&compression.decompress(&data)?).map(Some)
+        decode_nbt(&compression.decompress(&data)?).map(Some).map_err(reported_nbt_exception)
     }
 
     pub fn write(&mut self, pos: ChunkPos, nbt: &Nbt) -> io::Result<()> {

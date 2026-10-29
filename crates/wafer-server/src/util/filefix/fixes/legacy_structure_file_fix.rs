@@ -19,7 +19,7 @@ use crate::util::filefix::access::file_resource_types::FileResourceTypes;
 use crate::util::filefix::access::saved_data_nbt::SavedDataNbt;
 use crate::util::filefix::canceled_file_fix_exception::CanceledFileFixException;
 use crate::util::filefix::file_fix::FileFix;
-use crate::util::filefix::file_fix_exception::FileFixFailure;
+use crate::util::filefix::file_fix_exception::{FileFixFailure, UncheckedException};
 use crate::util::java_collections::JavaHashMap;
 use crate::util::worldupdate::upgrade_progress::{Status, Type, UpgradeProgress};
 use crate::world::level::chunk::storage::region_storage_info::RegionStorageInfo;
@@ -179,7 +179,7 @@ fn store_legacy_structure_data_to_chunks(
             return Err(CanceledFileFixException::new().into());
         }
         let legacy_data = structures.get(key).expect("entry");
-        chunks_access.update_chunk(ChunkPos::unpack(key), data_fix_context, |mut tag| {
+        let future = chunks_access.update_chunk(ChunkPos::unpack(key), data_fix_context, |mut tag| {
             if !matches!(tag, Nbt::Compound(_)) {
                 return tag;
             }
@@ -199,11 +199,11 @@ fn store_legacy_structure_data_to_chunks(
             put(&mut level_tag, "Structures", Nbt::Compound(structure_tag));
             put(tag_entries, "Level", Nbt::Compound(level_tag));
             tag
-        })?;
-        let finished = futures.push();
+        });
+        let finished = futures.push(future)?;
         upgrade_progress.increment_finished_operations_by(finished);
     }
-    upgrade_progress.increment_finished_operations_by(futures.wait_for_all());
+    upgrade_progress.increment_finished_operations_by(futures.wait_for_all()?);
     Ok(())
 }
 
@@ -226,33 +226,37 @@ impl DimensionFixEntry {
 
 struct IncrementalFutureSequence {
     max_concurrency: usize,
-    futures: usize,
+    futures: Vec<Result<(), UncheckedException>>,
 }
 
 impl IncrementalFutureSequence {
     fn new(max_concurrency: usize) -> IncrementalFutureSequence {
-        IncrementalFutureSequence { max_concurrency, futures: 0 }
+        IncrementalFutureSequence { max_concurrency, futures: Vec::with_capacity(max_concurrency) }
     }
 
-    fn push(&mut self) -> i32 {
+    fn push(&mut self, future: Result<(), UncheckedException>) -> Result<i32, UncheckedException> {
         let mut finished = 0;
-        if self.futures >= self.max_concurrency {
-            finished += self.wait_on_any();
+        if self.futures.len() >= self.max_concurrency {
+            finished += self.wait_on_any()?;
         }
-        self.futures += 1;
-        finished
+        self.futures.push(future);
+        Ok(finished)
     }
 
-    fn wait_on_any(&mut self) -> i32 {
-        let old_size = self.futures;
-        self.futures = 0;
-        old_size as i32
+    fn wait_on_any(&mut self) -> Result<i32, UncheckedException> {
+        let old_size = self.futures.len();
+        for future in std::mem::take(&mut self.futures) {
+            future?;
+        }
+        Ok(old_size as i32)
     }
 
-    fn wait_for_all(&mut self) -> i32 {
-        let old_size = self.futures;
-        self.futures = 0;
-        old_size as i32
+    fn wait_for_all(&mut self) -> Result<i32, UncheckedException> {
+        let old_size = self.futures.len();
+        for future in std::mem::take(&mut self.futures) {
+            future?;
+        }
+        Ok(old_size as i32)
     }
 }
 
