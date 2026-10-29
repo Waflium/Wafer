@@ -1021,7 +1021,10 @@ impl ServerLevel {
             Some(p) => !p.entity.is_removed() && p.health > 0.0,
             None => match self.mob(id) {
                 Some(mob) => !mob.entity.is_removed() && mob.health > 0.0,
-                None => self.entity_ref(id).is_some_and(|e| !e.is_removed()),
+                None => match self.mannequin(id) {
+                    Some(mannequin) => !mannequin.entity.is_removed() && mannequin.health > 0.0,
+                    None => self.entity_ref(id).is_some_and(|e| !e.is_removed()),
+                },
             },
         }
     }
@@ -3459,7 +3462,7 @@ impl crate::server::Server {
         let mut new_entity = ServerLevel::create_entity(registry::ENTITY_TYPE[old_entity.entity_type as usize])?;
         let saved = Nbt::Compound(old_entity.data.clone().unwrap_or_default());
         if let Err(e) = new_entity.load_in_level(&saved, &self.levels[transition.new_level].scoreboard) {
-            panic!("{}", super::entity_save::loading_entity_exception(&e));
+            panic!("{}", super::entity_save::loading_entity_report(&e));
         }
         let new_entity = self.levels[transition.new_level].reassess_weapon_goal_detached(new_entity);
         let mut new_entity = self.levels[transition.new_level].read_level_dependent_save_data_detached(new_entity, &saved);

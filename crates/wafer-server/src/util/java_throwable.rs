@@ -12,6 +12,11 @@ impl JavaThrowable {
         JavaThrowable { description: description.into(), stack_trace, cause: None }
     }
 
+    pub fn with_frame(mut self, frame: &'static str) -> JavaThrowable {
+        self.stack_trace.push(frame);
+        self
+    }
+
     pub fn with_cause(mut self, cause: JavaThrowable) -> JavaThrowable {
         self.cause = Some(Box::new(cause));
         self

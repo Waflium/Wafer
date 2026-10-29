@@ -2,6 +2,7 @@ use wafer_core::random::RandomSource;
 use wafer_data::registry;
 use wafer_protocol::nbt::Nbt;
 
+use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::core::holder::Holder;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::util::codec::{self, DataResult, DecodeResult, Record};
@@ -36,7 +37,7 @@ impl AdvancementRewards {
         record.build(|| Some(AdvancementRewards { experience, loot, recipes, function }))
     }
 
-    pub fn grant(&self, level: &mut ServerLevel, player: EntityId) {
+    pub fn grant(&self, level: &mut ServerLevel, player: EntityId, trigger: CriterionTrigger) {
         level.give_experience_points(player, self.experience);
         let mut changes = false;
         for loot_table in &self.loot {
@@ -72,7 +73,7 @@ impl AdvancementRewards {
             level.award_recipes(player, &recipes);
         }
         if let Some(function) = &self.function {
-            level.pending_function_executions.push((function.clone(), player));
+            level.pending_function_executions.push((function.clone(), player, trigger));
         }
     }
 }

@@ -175,7 +175,7 @@ impl TrialSpawner {
         {
             return None;
         }
-        let mut loaded = level.load_entity_recursive_for_spawn(input, &mut |_| {});
+        let mut loaded = level.load_entity_recursive_for_spawn(input, &[], &mut |_| {});
         for entity in &mut loaded {
             let y_rot = level.random.next_float() * 360.0;
             entity.entity_mut().snap_to(spawn_pos.x, spawn_pos.y, spawn_pos.z, y_rot, 0.0);

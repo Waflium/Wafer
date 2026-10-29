@@ -223,7 +223,7 @@ impl TrialSpawnerStateData {
             let entity_to_spawn = self.get_or_create_next_spawn_data(trial_spawner, level, pos).get_entity_to_spawn();
             if entity_to_spawn.get("id").and_then(Nbt::as_str).is_some() {
                 let entity_to_spawn = entity_to_spawn.clone();
-                self.display_entity = !level.load_entity_recursive(&entity_to_spawn, &mut |_| {}).is_empty();
+                self.display_entity = !level.load_entity_recursive(&entity_to_spawn, &[], &mut |_| {}).is_empty();
             }
         }
         self.display_entity

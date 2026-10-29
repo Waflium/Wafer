@@ -14,6 +14,7 @@ use crate::network::chat::{Component, HoverEvent};
 use super::entity_world::EntityWorld;
 use crate::server::level::ServerLevel;
 use crate::server::level::game_mode::GameType;
+use crate::world::entity::entity_save::ENTITY_SELECTOR_OPTIONS_LOGGER;
 use crate::world::entity::{Entity, EntityId};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -93,7 +94,7 @@ impl EntityPredicate {
             EntityPredicate::Tag { tag, inverted } => {
                 if tag.is_empty() { e.tags.is_empty() != *inverted } else { e.tags.contains(tag) != *inverted }
             }
-            EntityPredicate::Nbt { tag, inverted } => compare_nbt(tag, Some(&world.entity_tag_to_compare(id))) != *inverted,
+            EntityPredicate::Nbt { tag, inverted } => compare_nbt(tag, Some(&world.entity_tag_to_compare_logged(id, ENTITY_SELECTOR_OPTIONS_LOGGER))) != *inverted,
             EntityPredicate::Scores(expected) => {
                 let scoreboard = world.scoreboard().borrow();
                 let holder = level.scoreboard_name(id);

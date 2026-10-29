@@ -601,7 +601,8 @@ impl EnchantmentEntityEffect {
             EnchantmentEntityEffect::RunFunction(function) => {
                 let e = level.entity(entity);
                 let rotation = (e.x_rot, e.y_rot);
-                level.pending_enchantment_functions.push((function.clone(), entity, position, rotation));
+                let from_player_tick = level.enchantment_tick_player;
+                level.pending_enchantment_functions.push((function.clone(), entity, position, rotation, from_player_tick));
             }
             EnchantmentEntityEffect::SetBlockProperties { properties, offset, trigger_game_event } => {
                 let block_pos = BlockPos::containing(position.x, position.y, position.z).offset(offset.0, offset.1, offset.2);

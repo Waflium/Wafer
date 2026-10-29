@@ -4,7 +4,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
-use crate::world::level::block::entity::int_value;
+use crate::util::codec::{self, DecodeResult, Record};
 
 pub const MAX_WARNING_LEVEL: i32 = 4;
 const PLAYER_SEARCH_RADIUS: f64 = 16.0;
@@ -118,12 +118,18 @@ impl WardenSpawnTracker {
         ])
     }
 
-    pub fn from_nbt(input: &Nbt) -> Option<WardenSpawnTracker> {
-        let Nbt::Compound(_) = input else { return None };
-        let field = |key: &str| match input.get(key) {
-            Some(tag) => int_value(tag).filter(|&value| value >= 0),
+    pub fn decode(input: &Nbt) -> DecodeResult<WardenSpawnTracker> {
+        if let Err(error) = codec::map(input) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let mut field = |key: &str| match input.get(key) {
+            Some(tag) => record.field(codec::int(tag).and_then(|value| if value < 0 { Err(format!("Value must be non-negative: {value}")) } else { Ok(value) })),
             None => Some(0),
         };
-        Some(WardenSpawnTracker::new(field("ticks_since_last_warning")?, field("warning_level")?, field("cooldown_ticks")?))
+        let ticks_since_last_warning = field("ticks_since_last_warning");
+        let warning_level = field("warning_level");
+        let cooldown_ticks = field("cooldown_ticks");
+        record.build(|| Some(WardenSpawnTracker::new(ticks_since_last_warning?, warning_level?, cooldown_ticks?)))
     }
 }

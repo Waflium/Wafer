@@ -211,7 +211,11 @@ fn players_with_a_non_finite_position_fail_to_load() {
     fields.retain(|(key, _)| key != "Pos");
     fields.push(("Pos".into(), Nbt::List(vec![Nbt::Double(f64::NAN), Nbt::Double(0.0), Nbt::Double(0.0)])));
     let mut loaded = ServerPlayer::new(Profile { uuid: 2, name: "Bob".into(), properties: Vec::new() }, ClientInfo::default(), Outbound::detached(), BlockPos::ZERO);
-    assert_eq!(loaded.load_nbt(&Nbt::Compound(fields)), Err("Entity has invalid position".to_string()));
+    let cause = loaded.load_nbt(&Nbt::Compound(fields)).unwrap_err();
+    assert_eq!(cause.description, "java.lang.IllegalStateException: Entity has invalid position");
+    let trace = crate::world::entity::entity_save::player_loading_exception(cause).print_stack_trace();
+    assert!(trace.starts_with("net.minecraft.ReportedException: Loading entity NBT\n\tat net.minecraft.world.entity.Entity.load(Entity.java:2481)\n\tat java.base/java.util.Optional.ifPresent(Optional.java:178)\n"));
+    assert!(trace.ends_with("Caused by: java.lang.IllegalStateException: Entity has invalid position\n\tat net.minecraft.world.entity.Entity.load(Entity.java:2440)\n\t... 12 more\n"));
 }
 
 #[test]

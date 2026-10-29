@@ -1,5 +1,6 @@
 pub mod advancements;
 pub mod bossevents;
+pub mod command_frames;
 pub mod command_origin;
 pub mod commands;
 pub mod dedicated;
@@ -573,6 +574,9 @@ impl Server {
             counter.track(index, &mut level.chunks, ChunkCache::activate_all_deactivated_tickets);
         }
         listener.start(level::progress::Stage::LoadInitialChunks, counter.total_chunks());
+        for level in &mut self.levels {
+            level.preparing_levels = true;
+        }
         loop {
             let ready = counter.ready_chunks(&self.levels);
             listener.update(level::progress::Stage::LoadInitialChunks, ready, counter.total_chunks());
@@ -580,6 +584,9 @@ impl Server {
             if counter.pending_chunks(&self.levels) == 0 {
                 break;
             }
+        }
+        for level in &mut self.levels {
+            level.preparing_levels = false;
         }
         listener.finish(level::progress::Stage::LoadInitialChunks);
         self.update_mob_spawning_flags();
@@ -864,7 +871,7 @@ impl Server {
         self.stopping = true;
     }
 
-    pub fn reload_resources<S: AsRef<str>>(&mut self, packs_to_enable: &[S], invoker: &'static [&'static str]) -> Result<(), crate::util::java_throwable::JavaThrowable> {
+    pub fn reload_resources<S: AsRef<str>>(&mut self, packs_to_enable: &[S], invoker: &[&'static str]) -> Result<(), crate::util::java_throwable::JavaThrowable> {
         let packs_to_load = packs_to_enable.iter().filter_map(|id| self.pack_repository.pack(id.as_ref())).map(|pack| pack.open()).collect();
         let resource_manager = MultiPackResourceManager::new(packs_to_load);
         let postponed_tags = wafer_data::prepare_tags(crate::tags::load_tags_for_existing_registries(&resource_manager, crate::tags::ExistingTagLoading::Reload(invoker)));
@@ -1069,7 +1076,7 @@ impl Server {
         };
         if let Some(nbt) = &saved {
             if let Err(cause) = player.load_nbt(nbt) {
-                error!("Couldn't place player in world\n{}", crate::world::entity::entity_save::loading_entity_exception(&cause));
+                error!("Couldn't place player in world\n{}", crate::world::entity::entity_save::player_loading_exception(cause).print_stack_trace().trim_end());
                 disconnect_invalid_player_data(&player.profile, &player.connection);
                 return;
             }
@@ -1082,7 +1089,7 @@ impl Server {
                     crate::world::level::block::abstract_bed_block::on_stop_sleeping(kind, level, bed_position);
                 }
             }
-            let (game_type, previous) = ServerPlayer::saved_game_types(nbt);
+            let (game_type, previous) = player.loaded_game_types;
             player.set_game_mode_for_player(self.calculate_game_mode_for_new_player(game_type), previous);
         }
         self.name_to_id_cache.add(NameAndId { id: player.profile.uuid, name: player.profile.name.clone() });
@@ -1693,20 +1700,21 @@ impl Server {
     pub fn run_level_tasks(&mut self) {
         self.deliver_level_broadcasts();
         for index in 0..self.levels.len() {
-            for (function, player) in std::mem::take(&mut self.levels[index].pending_function_executions) {
+            for (function, player, trigger) in std::mem::take(&mut self.levels[index].pending_function_executions) {
                 if self.level_of(player).is_none() {
                     continue;
                 }
                 if let Some(function) = self.functions.get(&function) {
                     let source = CommandSourceStack::player(self, player).with_suppressed_output().with_permission(2);
-                    self.run_from(CommandOrigin::AdvancementReward, |server| ServerFunctionManager::execute(server, &function, &source));
+                    self.run_from(CommandOrigin::AdvancementReward(trigger), |server| ServerFunctionManager::execute(server, &function, &source));
                 }
             }
-            for (name, entity, position, rotation) in std::mem::take(&mut self.levels[index].pending_enchantment_functions) {
+            for (name, entity, position, rotation, from_player_tick) in std::mem::take(&mut self.levels[index].pending_enchantment_functions) {
                 match self.functions.get(&name) {
                     Some(function) => {
                         let source = CommandSourceStack::server(self).with_permission(2).with_suppressed_output().with_entity(entity).with_level(self, index).with_position(position).with_rotation(rotation);
-                        ServerFunctionManager::execute(self, &function, &source);
+                        let origin = if from_player_tick { CommandOrigin::EnchantmentTickPlayer } else { self.command_origin };
+                        self.run_from(origin, |server| ServerFunctionManager::execute(server, &function, &source));
                     }
                     None => error!("Enchantment run_function effect failed for non-existent function {name}"),
                 }

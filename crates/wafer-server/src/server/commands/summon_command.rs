@@ -6,9 +6,17 @@ use crate::commands::brigadier::{CommandContext, CommandSyntaxException, Dynamic
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component, HoverEvent};
 use crate::server::Server;
+use crate::server::command_frames::command_frames;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::entity::{EntityId, LevelEntity};
+
+const SUMMON_LOAD_ENTITY: [&str; 4] = [
+    "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:347)",
+    "net.minecraft.server.commands.SummonCommand.createEntity(SummonCommand.java:75)",
+    "net.minecraft.server.commands.SummonCommand.spawnEntity(SummonCommand.java:94)",
+    "net.minecraft.server.commands.SummonCommand.lambda$register$2(SummonCommand.java:54)",
+];
 
 static ERROR_FAILED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.failed");
 static ERROR_FAILED_PEACEFUL: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.summon.failed.peaceful");
@@ -205,8 +213,10 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
     };
     tag.retain(|(k, _)| k != "id");
     tag.push(("id".into(), Nbt::String(entity_type.into())));
+    let mut site = SUMMON_LOAD_ENTITY.to_vec();
+    site.extend(command_frames(server.command_origin));
     let mut level = server.lend_level(source.level);
-    let mut loaded = level.load_entity_recursive(&Nbt::Compound(tag), &mut |entity| {
+    let mut loaded = level.load_entity_recursive(&Nbt::Compound(tag), &site, &mut |entity| {
         let e = entity.entity_mut();
         let (y_rot, x_rot) = (e.y_rot, e.x_rot);
         e.snap_to(pos.x, pos.y, pos.z, y_rot, x_rot);

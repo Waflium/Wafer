@@ -16,6 +16,7 @@ use crate::network::chat::component_serialization;
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DecodeResult};
 use crate::util::extra_codecs;
+use crate::util::java_throwable::JavaThrowable;
 use crate::util::problem_reporter::PathElement;
 use crate::world::item::ItemStack;
 use crate::world::level::block::entity::int_value;
@@ -27,6 +28,8 @@ use crate::world::scores::scoreboard::Scoreboard;
 
 const ENTITY_TYPE_LOGGER: &str = "net.minecraft.world.entity.EntityType";
 const TYPED_ENTITY_DATA_LOGGER: &str = "net.minecraft.world.item.component.TypedEntityData";
+pub const NBT_PREDICATE_LOGGER: &str = "net.minecraft.advancements.predicates.NbtPredicate";
+pub const ENTITY_SELECTOR_OPTIONS_LOGGER: &str = "net.minecraft.commands.arguments.selector.options.EntitySelectorOptions";
 
 pub fn uuid_from_nbt(nbt: &Nbt) -> Option<u128> {
     let ints: [i32; 4] = match nbt {
@@ -132,7 +135,7 @@ impl Entity {
         }
     }
 
-    pub fn load(&mut self, nbt: &Nbt) -> Result<(), String> {
+    pub fn load(&mut self, nbt: &Nbt) -> Result<(), JavaThrowable> {
         let pos = tag_value_input::read(nbt, "Pos", extra_codecs::vec3).unwrap_or(Vec3::ZERO);
         let motion = tag_value_input::read(nbt, "Motion", extra_codecs::vec3).unwrap_or(Vec3::ZERO);
         let (y_rot, x_rot) = tag_value_input::read(nbt, "Rotation", extra_codecs::vec2).unwrap_or((0.0, 0.0));
@@ -141,7 +144,7 @@ impl Entity {
         self.needs_sync = true;
         let pos = Vec3::new(pos.x.clamp(-3.0000512e7, 3.0000512e7), pos.y.clamp(-2.0e7, 2.0e7), pos.z.clamp(-3.0000512e7, 3.0000512e7));
         if !pos.x.is_finite() || !pos.y.is_finite() || !pos.z.is_finite() {
-            return Err("Entity has invalid position".into());
+            return Err(JavaThrowable::new(ILLEGAL_STATE_EXCEPTION_INVALID_POSITION, vec![ENTITY_LOAD_INVALID_POSITION]));
         }
         self.set_pos(pos);
         self.set_y_rot(y_rot % 360.0);
@@ -186,9 +189,67 @@ impl Entity {
 }
 
 pub const LOADING_ENTITY_NBT: &str = "Loading entity NBT";
+const REPORTED_EXCEPTION_LOADING_ENTITY_NBT: &str = "net.minecraft.ReportedException: Loading entity NBT";
+const ILLEGAL_STATE_EXCEPTION_INVALID_POSITION: &str = "java.lang.IllegalStateException: Entity has invalid position";
+pub const ENTITY_LOAD_INVALID_POSITION: &str = "net.minecraft.world.entity.Entity.load(Entity.java:2440)";
+pub const ENTITY_LOAD_READ_ADDITIONAL_SAVE_DATA: &str = "net.minecraft.world.entity.Entity.load(Entity.java:2472)";
+const ENTITY_LOAD_REPORT: &str = "net.minecraft.world.entity.Entity.load(Entity.java:2481)";
+const SPECTRAL_ARROW_READ_ADDITIONAL_SAVE_DATA: &str = "net.minecraft.world.entity.projectile.arrow.SpectralArrow.readAdditionalSaveData(SpectralArrow.java:55)";
+const THROWN_TRIDENT_READ_ADDITIONAL_SAVE_DATA: &str = "net.minecraft.world.entity.projectile.arrow.ThrownTrident.readAdditionalSaveData(ThrownTrident.java:200)";
 
-pub fn loading_entity_exception(cause: &str) -> String {
-    format!("net.minecraft.ReportedException: {LOADING_ENTITY_NBT}\nCaused by: java.lang.IllegalStateException: {cause}")
+const ENTITY_TYPE_CREATE: [&str; 5] = [
+    "net.minecraft.world.entity.EntityType.lambda$create$1(EntityType.java:299)",
+    "net.minecraft.util.Util.ifElse(Util.java:690)",
+    "net.minecraft.world.entity.EntityType.create(EntityType.java:298)",
+    "net.minecraft.world.entity.EntityType.loadStaticEntity(EntityType.java:397)",
+    "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:362)",
+];
+
+const ENTITY_TYPE_LOAD_PASSENGERS: [&str; 4] = [
+    "net.minecraft.world.entity.EntityType.loadPassengersRecursive(EntityType.java:377)",
+    "net.minecraft.world.entity.EntityType.lambda$loadEntityRecursive$0(EntityType.java:364)",
+    "java.base/java.util.Optional.map(Optional.java:260)",
+    "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:364)",
+];
+
+const PLAYER_LOAD: [&str; 12] = [
+    "java.base/java.util.Optional.ifPresent(Optional.java:178)",
+    "net.minecraft.server.network.config.PrepareSpawnTask$Ready.spawn(PrepareSpawnTask.java:194)",
+    "net.minecraft.server.network.config.PrepareSpawnTask.spawnPlayer(PrepareSpawnTask.java:91)",
+    "net.minecraft.server.network.ServerConfigurationPacketListenerImpl.handleConfigurationFinished(ServerConfigurationPacketListenerImpl.java:178)",
+    "net.minecraft.network.protocol.configuration.ServerboundFinishConfigurationPacket.handle(ServerboundFinishConfigurationPacket.java:22)",
+    "net.minecraft.network.protocol.configuration.ServerboundFinishConfigurationPacket.handle(ServerboundFinishConfigurationPacket.java:8)",
+    "net.minecraft.network.PacketProcessor$ListenerAndPacket.handle(PacketProcessor.java:55)",
+    "net.minecraft.network.PacketProcessor.processQueuedPackets(PacketProcessor.java:38)",
+    "net.minecraft.server.MinecraftServer.processPacketsAndTick(MinecraftServer.java:1011)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:752)",
+    "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+pub fn loading_entity_exception(cause: JavaThrowable, passenger_depth: usize, site: &[&'static str]) -> JavaThrowable {
+    let mut shared = ENTITY_TYPE_CREATE.to_vec();
+    for _ in 0..passenger_depth {
+        shared.extend(ENTITY_TYPE_LOAD_PASSENGERS);
+    }
+    shared.extend_from_slice(site);
+    reported_loading_entity_nbt(cause, &shared)
+}
+
+pub fn player_loading_exception(cause: JavaThrowable) -> JavaThrowable {
+    reported_loading_entity_nbt(cause, &PLAYER_LOAD)
+}
+
+fn reported_loading_entity_nbt(cause: JavaThrowable, shared: &[&'static str]) -> JavaThrowable {
+    let mut reported_frames = vec![ENTITY_LOAD_REPORT];
+    reported_frames.extend_from_slice(shared);
+    let mut cause_frames = cause.stack_trace;
+    cause_frames.extend_from_slice(shared);
+    JavaThrowable::new(REPORTED_EXCEPTION_LOADING_ENTITY_NBT, reported_frames).with_cause(JavaThrowable { description: cause.description, stack_trace: cause_frames, cause: None })
+}
+
+pub fn loading_entity_report(cause: &JavaThrowable) -> String {
+    format!("{REPORTED_EXCEPTION_LOADING_ENTITY_NBT}\nCaused by: {}", cause.description)
 }
 
 pub fn add_loaded_entity_to_team(scoreboard: &RefCell<Scoreboard>, uuid: u128, team_name: &str) {
@@ -329,15 +390,15 @@ impl LevelEntity {
     }
 
     #[cfg(test)]
-    pub fn load(&mut self, nbt: &Nbt) -> Result<(), String> {
+    pub fn load(&mut self, nbt: &Nbt) -> Result<(), JavaThrowable> {
         self.load_with(nbt, |_, _| {})
     }
 
-    pub fn load_in_level(&mut self, nbt: &Nbt, scoreboard: &RefCell<Scoreboard>) -> Result<(), String> {
+    pub fn load_in_level(&mut self, nbt: &Nbt, scoreboard: &RefCell<Scoreboard>) -> Result<(), JavaThrowable> {
         self.load_with(nbt, |entity, nbt| entity.load_team(nbt, scoreboard))
     }
 
-    pub fn load_with(&mut self, nbt: &Nbt, load_team: impl FnOnce(&Entity, &Nbt)) -> Result<(), String> {
+    pub fn load_with(&mut self, nbt: &Nbt, load_team: impl FnOnce(&Entity, &Nbt)) -> Result<(), JavaThrowable> {
         self.entity_mut().load(nbt)?;
         load_team(self.entity(), nbt);
         match self {
@@ -395,13 +456,19 @@ impl LevelEntity {
                 use super::projectile::projectile::ProjectileKind;
                 projectile.read_additional_save_data(nbt);
                 match projectile.kind {
-                    ProjectileKind::Arrow(_) => projectile.abstract_arrow_read_additional_save_data(nbt),
+                    ProjectileKind::Arrow(_) => {
+                        projectile.abstract_arrow_read_additional_save_data(nbt).map_err(|cause| cause.with_frame(ENTITY_LOAD_READ_ADDITIONAL_SAVE_DATA))?;
+                    }
                     ProjectileKind::SpectralArrow(_) => {
-                        projectile.abstract_arrow_read_additional_save_data(nbt);
+                        projectile
+                            .abstract_arrow_read_additional_save_data(nbt)
+                            .map_err(|cause| cause.with_frame(SPECTRAL_ARROW_READ_ADDITIONAL_SAVE_DATA).with_frame(ENTITY_LOAD_READ_ADDITIONAL_SAVE_DATA))?;
                         projectile.spectral_arrow_read_additional_save_data(nbt);
                     }
                     ProjectileKind::ThrownTrident(_) => {
-                        projectile.abstract_arrow_read_additional_save_data(nbt);
+                        projectile
+                            .abstract_arrow_read_additional_save_data(nbt)
+                            .map_err(|cause| cause.with_frame(THROWN_TRIDENT_READ_ADDITIONAL_SAVE_DATA).with_frame(ENTITY_LOAD_READ_ADDITIONAL_SAVE_DATA))?;
                         projectile.thrown_trident_read_additional_save_data(nbt);
                     }
                     ProjectileKind::FireworkRocket(_) => projectile.firework_read_additional_save_data(nbt),
@@ -471,7 +538,7 @@ fn update_custom_entity_tag(level: &ServerLevel, entity: &mut LevelEntity, entit
     let tag = Nbt::Compound(tag);
     let converted = level.with_old_owner_converted(entity, &tag);
     if let Err(e) = entity.load_in_level(&converted, &level.scoreboard) {
-        panic!("{}", loading_entity_exception(&e));
+        panic!("{}", loading_entity_report(&e));
     }
     entity.entity_mut().uuid = uuid;
     collector.set_root(PathElement::Text(level.detached_entity_to_string(entity)));
@@ -726,7 +793,11 @@ impl ServerLevel {
         }
         self.save_vehicle_position(id, &mut out[start..]);
         if self.is_vehicle(id) {
-            let passengers: Vec<Nbt> = self.passengers(id).iter().filter_map(|&passenger| self.save_as_passenger(passenger)).collect();
+            let mut passengers: Vec<Nbt> = Vec::new();
+            for &passenger in self.passengers(id) {
+                let _scope = tag_value_input::enter_indexed_field("Passengers", passengers.len());
+                passengers.extend(self.save_as_passenger(passenger));
+            }
             if !passengers.is_empty() {
                 out.push(("Passengers".into(), Nbt::List(passengers)));
             }
@@ -749,24 +820,32 @@ impl ServerLevel {
         if self.is_passenger(id) { false } else { !self.is_vehicle(id) || !self.has_exactly_one_player_passenger(id) }
     }
 
-    pub fn load_entity_recursive(&mut self, nbt: &Nbt, post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
+    pub fn load_entity_recursive(&mut self, nbt: &Nbt, site: &[&'static str], post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
         let _collector = tag_value_input::ScopedCollector::new_empty(ENTITY_TYPE_LOGGER);
-        self.load_entity_recursive_in_scope(nbt, post_load)
+        self.load_entity_recursive_in_scope(nbt, site, post_load)
     }
 
-    pub fn load_entity_recursive_in_scope(&mut self, nbt: &Nbt, post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
+    pub fn load_entity_recursive_in_scope(&mut self, nbt: &Nbt, site: &[&'static str], post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
         let mut loaded = Vec::new();
-        self.load_entity_recursive_into(nbt, true, post_load, &mut loaded);
+        self.load_entity_recursive_into(nbt, true, site, 0, post_load, &mut loaded);
         loaded
     }
 
-    pub fn load_entity_recursive_for_spawn(&mut self, nbt: &Nbt, post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
+    pub fn load_entity_recursive_for_spawn(&mut self, nbt: &Nbt, site: &[&'static str], post_load: &mut dyn FnMut(&mut LevelEntity)) -> Vec<LevelEntity> {
         let mut loaded = Vec::new();
-        self.load_entity_recursive_into(nbt, false, post_load, &mut loaded);
+        self.load_entity_recursive_into(nbt, false, site, 0, post_load, &mut loaded);
         loaded
     }
 
-    fn load_entity_recursive_into(&mut self, nbt: &Nbt, ignore_checks: bool, post_load: &mut dyn FnMut(&mut LevelEntity), loaded: &mut Vec<LevelEntity>) -> Option<usize> {
+    fn load_entity_recursive_into(
+        &mut self,
+        nbt: &Nbt,
+        ignore_checks: bool,
+        site: &[&'static str],
+        depth: usize,
+        post_load: &mut dyn FnMut(&mut LevelEntity),
+        loaded: &mut Vec<LevelEntity>,
+    ) -> Option<usize> {
         if !ignore_checks
             && let Some(entity_type) = nbt.get("id").and_then(Nbt::as_str)
             && super::entity_type::EntityType::by_name(entity_type).is_some_and(|ty| !ty.can_spawn(self.difficulty))
@@ -774,12 +853,12 @@ impl ServerLevel {
             warn!("Skipping Entity with id {entity_type}");
             return None;
         }
-        let mut entity = self.load_entity(nbt)?;
+        let mut entity = self.load_entity_at(nbt, depth, site)?;
         post_load(&mut entity);
         let index = loaded.len();
         loaded.push(entity);
         tag_value_input::for_each_child(nbt, "Passengers", |passenger_tag| {
-            if let Some(passenger) = self.load_entity_recursive_into(passenger_tag, ignore_checks, post_load, loaded) {
+            if let Some(passenger) = self.load_entity_recursive_into(passenger_tag, ignore_checks, site, depth + 1, post_load, loaded) {
                 start_riding_while_loading(loaded, passenger, index);
             }
         });
@@ -812,13 +891,17 @@ impl ServerLevel {
     }
 
     pub fn load_entity(&mut self, nbt: &Nbt) -> Option<LevelEntity> {
+        self.load_entity_at(nbt, 0, &[])
+    }
+
+    pub fn load_entity_at(&mut self, nbt: &Nbt, passenger_depth: usize, site: &[&'static str]) -> Option<LevelEntity> {
         let entity_type = nbt.get("id").and_then(Nbt::as_str)?;
         let Some(mut entity) = ServerLevel::create_entity(entity_type) else {
             warn!("Skipping Entity with id {entity_type}");
             return None;
         };
-        if let Err(e) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt), &self.scoreboard) {
-            warn!("Exception loading entity: \n{}", loading_entity_exception(&e));
+        if let Err(cause) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt), &self.scoreboard) {
+            warn!("Exception loading entity: \n{}", loading_entity_exception(cause, passenger_depth, site).print_stack_trace().trim_end());
             return None;
         }
         let entity = self.reassess_weapon_goal_detached(entity);
@@ -831,6 +914,19 @@ impl ServerLevel {
     }
 
     pub fn entity_tag_to_compare_with<'a>(&'a self, id: EntityId, other_level_pearl: &dyn Fn(EntityId) -> Option<&'a ServerLevel>) -> Nbt {
+        self.entity_tag_to_compare_logged(id, other_level_pearl, NBT_PREDICATE_LOGGER)
+    }
+
+    pub fn entity_tag_to_compare_logged<'a>(&'a self, id: EntityId, other_level_pearl: &dyn Fn(EntityId) -> Option<&'a ServerLevel>, logger: &'static str) -> Nbt {
+        let mut collector = tag_value_input::ScopedCollector::new_empty(logger);
+        let tag = self.entity_tag_to_compare_unreported(id, other_level_pearl);
+        if collector.has_problems() {
+            collector.set_root(PathElement::Text(self.entity_to_string(id)));
+        }
+        tag
+    }
+
+    fn entity_tag_to_compare_unreported<'a>(&'a self, id: EntityId, other_level_pearl: &dyn Fn(EntityId) -> Option<&'a ServerLevel>) -> Nbt {
         if let Some(player) = self.find_player(id) {
             let Nbt::Compound(mut fields) = self.save_player_with_ender_pearls(id, other_level_pearl) else { unreachable!() };
             if let Some(selected) = player.inventory.slots[player.inventory.selected_slot()].as_ref().filter(|s| !s.is_empty()) {
@@ -930,9 +1026,41 @@ mod tests {
         let mut level = testing::level();
         assert!(level.load_entity(&positioned_marker_tag([f64::NAN, 0.0, 0.0], [0.0, 0.0])).is_none());
         let mut entity = ServerLevel::create_entity("minecraft:marker").unwrap();
-        assert_eq!(entity.load(&positioned_marker_tag([0.0, 0.0, f64::NAN], [0.0, 0.0])), Err("Entity has invalid position".to_string()));
+        let cause = entity.load(&positioned_marker_tag([0.0, 0.0, f64::NAN], [0.0, 0.0])).unwrap_err();
+        assert_eq!(cause.description, "java.lang.IllegalStateException: Entity has invalid position");
         assert!(level.load_entity(&positioned_marker_tag([1.0, 2.0, 3.0], [0.0, 0.0])).is_some());
-        assert_eq!(loading_entity_exception("Entity has invalid position"), "net.minecraft.ReportedException: Loading entity NBT\nCaused by: java.lang.IllegalStateException: Entity has invalid position");
+        let trace = loading_entity_exception(cause, 1, &["Site.frame(Site.java:1)"]).print_stack_trace();
+        assert!(trace.starts_with("net.minecraft.ReportedException: Loading entity NBT\n\tat net.minecraft.world.entity.Entity.load(Entity.java:2481)\n\tat net.minecraft.world.entity.EntityType.lambda$create$1(EntityType.java:299)\n"));
+        assert!(trace.contains("\tat net.minecraft.world.entity.EntityType.loadPassengersRecursive(EntityType.java:377)\n"));
+        assert!(trace.ends_with("\tat Site.frame(Site.java:1)\nCaused by: java.lang.IllegalStateException: Entity has invalid position\n\tat net.minecraft.world.entity.Entity.load(Entity.java:2440)\n\t... 10 more\n"));
+    }
+
+    fn arrow_tag(pickup: Nbt) -> Nbt {
+        Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:arrow".into())), ("inBlockState".into(), Nbt::String("minecraft:not_a_block".into())), ("pickup".into(), pickup)])
+    }
+
+    #[test]
+    fn arrows_with_pickup_three_fail_to_load_like_an_out_of_bounds_ordinal() {
+        let mut level = testing::level();
+        for pickup in [Nbt::Byte(3), Nbt::Int(259), Nbt::Double(3.7), Nbt::Short(-253)] {
+            let mut entity = ServerLevel::create_entity("minecraft:arrow").unwrap();
+            let cause = entity.load(&arrow_tag(pickup.clone())).unwrap_err();
+            assert_eq!(cause.description, "java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3", "{pickup:?}");
+            assert_eq!(cause.stack_trace.first(), Some(&"net.minecraft.world.entity.projectile.arrow.AbstractArrow$Pickup.byOrdinal(AbstractArrow.java:81)"));
+            assert_eq!(cause.stack_trace.last(), Some(&ENTITY_LOAD_READ_ADDITIONAL_SAVE_DATA));
+            assert!(level.load_entity(&arrow_tag(pickup)).is_none());
+        }
+        for pickup in [Nbt::Byte(0), Nbt::Byte(2), Nbt::Byte(4), Nbt::Byte(-3), Nbt::Int(127)] {
+            assert!(level.load_entity(&arrow_tag(pickup)).is_some());
+        }
+    }
+
+    #[test]
+    fn passenger_arrows_with_pickup_three_are_skipped_but_their_vehicle_loads() {
+        let mut level = testing::level();
+        let cow = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:cow".into())), ("Passengers".into(), Nbt::List(vec![arrow_tag(Nbt::Byte(3))]))]);
+        let loaded = level.load_entity_recursive(&cow, &[], &mut |_| {});
+        assert_eq!(loaded.len(), 1);
     }
 
     #[test]

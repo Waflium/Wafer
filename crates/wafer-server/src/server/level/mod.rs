@@ -44,6 +44,7 @@ use wafer_data::packets::play::clientbound;
 use wafer_data::{Block, BlockState, DimensionType, Fluid, blocks};
 
 use crate::advancements::triggers::criteria_triggers;
+use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::network::connection::encode;
 use crate::world::attribute::environment_attribute_system::{EnvironmentAccess, EnvironmentAttributeReader};
 use crate::world::attribute::EnvironmentAttributeSystem;
@@ -155,9 +156,11 @@ pub struct ServerLevel {
     pub global_level_events: Vec<(i32, BlockPos, i32)>,
     pub pending_system_broadcasts: Vec<crate::network::chat::Component>,
     pub pending_broadcasts: Vec<Vec<u8>>,
-    pub pending_function_executions: Vec<(String, EntityId)>,
+    pub preparing_levels: bool,
+    pub pending_function_executions: Vec<(String, EntityId, CriterionTrigger)>,
     pub pending_book_opens: Vec<crate::world::item::written_book_item::PendingBookOpen>,
-    pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32))>,
+    pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32), bool)>,
+    pub enchantment_tick_player: bool,
     entity_tick_range: Option<(usize, usize)>,
     pub rain_level: f32,
     pub o_rain_level: f32,
@@ -305,9 +308,11 @@ impl ServerLevel {
             global_level_events: Vec::new(),
             pending_system_broadcasts: Vec::new(),
             pending_broadcasts: Vec::new(),
+            preparing_levels: false,
             pending_function_executions: Vec::new(),
             pending_book_opens: Vec::new(),
             pending_enchantment_functions: Vec::new(),
+            enchantment_tick_player: false,
             entity_tick_range: None,
             environment_attributes: EnvironmentAttributeSystem::default(),
             clock_ticks: ServerClockManager::new().clocks.iter().map(|c| c.total_ticks).collect(),
@@ -1199,7 +1204,7 @@ impl ServerLevel {
         );
         for (index, nbt) in entities.iter().enumerate() {
             let _scope = crate::world::level::storage::tag_value_input::enter_child(crate::util::problem_reporter::PathElement::Indexed(index));
-            for entity in self.load_entity_recursive_in_scope(nbt, &mut |_| {}) {
+            for entity in self.load_entity_recursive_in_scope(nbt, &[], &mut |_| {}) {
                 self.add_entity(entity);
             }
         }
@@ -1212,7 +1217,7 @@ impl ServerLevel {
         );
         for (index, nbt) in entities.iter().enumerate() {
             let _scope = crate::world::level::storage::tag_value_input::enter_child(crate::util::problem_reporter::PathElement::Indexed(index));
-            for entity in self.load_entity_recursive_in_scope(nbt, &mut |_| {}) {
+            for entity in self.load_entity_recursive_in_scope(nbt, &[], &mut |_| {}) {
                 self.add_entity(entity);
             }
         }

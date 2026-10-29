@@ -329,7 +329,7 @@ impl Server {
             return;
         };
         let level = &mut self.levels[pearl_level];
-        let mut loaded = level.load_entity_recursive_in_scope(pearl_input, &mut |_| {}).into_iter();
+        let mut loaded = level.load_entity_recursive_in_scope(pearl_input, &[], &mut |_| {}).into_iter();
         let pearl = loaded.next().and_then(|pearl| {
             let chunk_pos = pearl.entity().chunk_position();
             level.add_entity(pearl).then_some(chunk_pos)

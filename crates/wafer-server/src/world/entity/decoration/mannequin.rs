@@ -144,8 +144,12 @@ impl Mannequin {
         output.push(("hidden_layers".into(), Nbt::List(hidden_layers)));
         let main_hand = if avatar::get_main_arm(&self.entity) == HUMANOID_ARM_LEFT { "left" } else { "right" };
         output.push(("main_hand".into(), Nbt::String(main_hand.into())));
-        if let Some((_, name)) = VALID_POSES.iter().find(|(pose, _)| *pose == self.entity.pose()) {
-            output.push(("pose".into(), Nbt::String((*name).into())));
+        match VALID_POSES.iter().find(|(pose, _)| *pose == self.entity.pose()) {
+            Some((_, name)) => output.push(("pose".into(), Nbt::String((*name).into()))),
+            None => {
+                let name = POSE_NAMES[self.entity.pose() as usize];
+                tag_value_input::report_encode_to_field_failed("pose", &name.to_uppercase(), &format!("Invalid pose: {name}"));
+            }
         }
         output.push(("immovable".into(), Nbt::Byte(self.get_immovable() as i8)));
         match self.get_description() {

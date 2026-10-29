@@ -28,6 +28,7 @@ use crate::world::phys::entity_hit_result::EntityHitResult;
 use crate::world::phys::hit_result::HitResult;
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::level::storage::tag_value_input;
+use crate::util::java_throwable::JavaThrowable;
 
 const ARROW_BASE_DAMAGE: f64 = 2.0;
 const SHAKE_TIME: i32 = 7;
@@ -47,12 +48,26 @@ pub enum Pickup {
     CreativeOnly,
 }
 
+const PICKUP_BY_ORDINAL_FRAMES: [&str; 8] = [
+    "net.minecraft.world.entity.projectile.arrow.AbstractArrow$Pickup.byOrdinal(AbstractArrow.java:81)",
+    "com.mojang.datafixers.util.Pair.mapFirst(Pair.java:64)",
+    "com.mojang.serialization.Decoder$2.lambda$decode$0(Decoder.java:63)",
+    "com.mojang.serialization.DataResult$Success.map(DataResult.java:175)",
+    "com.mojang.serialization.Decoder$2.decode(Decoder.java:63)",
+    "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
+    "com.mojang.serialization.Decoder.parse(Decoder.java:18)",
+    "net.minecraft.world.level.storage.TagValueInput.read(TagValueInput.java:55)",
+];
+
+const ABSTRACT_ARROW_READ_ADDITIONAL_SAVE_DATA: &str = "net.minecraft.world.entity.projectile.arrow.AbstractArrow.readAdditionalSaveData(AbstractArrow.java:623)";
+
 impl Pickup {
-    pub fn by_ordinal(ordinal: i32) -> Pickup {
-        match ordinal {
-            1 => Pickup::Allowed,
-            2 => Pickup::CreativeOnly,
-            _ => Pickup::Disallowed,
+    pub fn by_ordinal(ordinal: i32) -> Result<Pickup, JavaThrowable> {
+        match if (0..=3).contains(&ordinal) { ordinal } else { 0 } {
+            0 => Ok(Pickup::Disallowed),
+            1 => Ok(Pickup::Allowed),
+            2 => Ok(Pickup::CreativeOnly),
+            _ => Err(JavaThrowable::new("java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3", PICKUP_BY_ORDINAL_FRAMES.to_vec())),
         }
     }
 }
@@ -252,14 +267,17 @@ impl Projectile {
         }
     }
 
-    pub fn abstract_arrow_read_additional_save_data(&mut self, input: &Nbt) {
+    pub fn abstract_arrow_read_additional_save_data(&mut self, input: &Nbt) -> Result<(), JavaThrowable> {
         let number = |key: &str| tag_value_input::get_numeric(input, key).and_then(int_value);
         let life = number("life").map_or(0, |v| v as i16 as i32);
         let last_state = tag_value_input::read_or_error(input, "inBlockState", crate::world::level::chunk::serialization::decode_block_state);
         let shake_time = number("shake").map_or(0, |v| v as i8 as i32 & 255);
         self.set_in_ground(number("inGround").is_some_and(|v| v as i8 != 0));
         let base_damage = tag_value_input::get_f64(input, "damage").unwrap_or(ARROW_BASE_DAMAGE);
-        let pickup = tag_value_input::read_byte(input, "pickup").map_or(Pickup::Disallowed, |v| Pickup::by_ordinal(v as i32));
+        let pickup = match tag_value_input::read_byte(input, "pickup") {
+            Some(ordinal) => Pickup::by_ordinal(ordinal as i32).map_err(|cause| cause.with_frame(ABSTRACT_ARROW_READ_ADDITIONAL_SAVE_DATA))?,
+            None => Pickup::Disallowed,
+        };
         self.set_crit_arrow(number("crit").is_some_and(|v| v as i8 != 0));
         self.set_pierce_level(number("PierceLevel").map_or(0, |v| v as i8));
         let sound_event = tag_value_input::read_or_error(input, "SoundEvent", |tag| Codec::Element("minecraft:sound_event").decode(tag))
@@ -276,6 +294,7 @@ impl Projectile {
         arrow.sound_event = sound_event;
         self.set_pickup_item_stack(item);
         self.abstract_arrow_mut().expect("an arrow").fired_from_weapon = weapon;
+        Ok(())
     }
 }
 

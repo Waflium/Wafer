@@ -36,6 +36,10 @@ impl ScopedCollector {
     pub fn set_root(&mut self, root: PathElement) {
         self.late_root = Some(root);
     }
+
+    pub fn has_problems(&self) -> bool {
+        !self.collector.is_empty()
+    }
 }
 
 impl Drop for ScopedCollector {
@@ -106,6 +110,10 @@ pub fn type_name(tag: &Nbt) -> &'static str {
 
 pub fn report_decode_from_field_failed(name: &str, tag: &Nbt, message: &str) {
     report(|| Problem::new(format!("Failed to decode value '{}' from field '{name}': {message}", crate::nbt::to_string(tag))));
+}
+
+pub fn report_encode_to_field_failed(name: &str, value: &str, message: &str) {
+    report(|| Problem::new(format!("Failed to encode value '{value}' to field '{name}': {message}")));
 }
 
 pub fn report_decode_from_list_failed(name: &str, index: usize, tag: &Nbt, message: &str) {
@@ -233,7 +241,7 @@ pub fn list_or_empty<T>(input: &Nbt, name: &str, mut decode: impl FnMut(&Nbt) ->
 }
 
 pub fn read_byte(input: &Nbt, name: &str) -> Option<i8> {
-    read_or_error(input, name, |tag| codec::number(tag).map(|number| crate::world::item::component::codec::as_i64(number) as i8))
+    read_or_error(input, name, |tag| codec::number(tag).map(|number| crate::world::item::component::codec::as_i32(number) as i8))
 }
 
 #[cfg(test)]

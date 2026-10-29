@@ -11,7 +11,9 @@ use crate::server::level::chunk_level::FullChunkStatus;
 use crate::world::entity::{EntityId, LevelEntity, RemovalReason};
 use crate::world::level::chunk::storage::RegionStorage;
 use crate::world::level::gameevent::dynamic_game_event_listener::DynamicListenerAction;
-use crate::world::level::chunk::storage::entity_storage::EntityStorage;
+use crate::util::problem_reporter::PathElement;
+use crate::world::level::chunk::storage::entity_storage::{ENTITY_STORAGE_LOGGER, EntityStorage};
+use crate::world::level::storage::tag_value_input;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 enum ChunkLoadStatus {
@@ -24,6 +26,7 @@ enum ChunkLoadStatus {
 pub struct PersistentEntitySectionManager {
     known_uuids: FastSet<u128>,
     permanent_storage: EntityStorage,
+    parsed_loads: Vec<(ChunkPos, Option<Vec<LevelEntity>>)>,
     pub visible_entity_storage: EntityLookup,
     pub section_storage: EntitySectionStorage,
     chunk_visibility: FastMap<i64, Visibility>,
@@ -41,6 +44,7 @@ impl PersistentEntitySectionManager {
         PersistentEntitySectionManager {
             known_uuids: FastSet::default(),
             permanent_storage: EntityStorage::new(storage),
+            parsed_loads: Vec::new(),
             visible_entity_storage: EntityLookup::default(),
             section_storage: EntitySectionStorage::default(),
             chunk_visibility: FastMap::default(),
@@ -241,8 +245,16 @@ impl ServerLevel {
             self.entity_manager.request_chunk_load(chunk_key);
             return false;
         }
-        let tags = root_entities_to_save.iter().filter_map(|&id| self.save_entity(id)).collect();
+        let collector = tag_value_input::ScopedCollector::new(PathElement::Text(format!("chunk@[{}, {}]", pos.x, pos.z)), ENTITY_STORAGE_LOGGER);
+        let tags = root_entities_to_save
+            .iter()
+            .filter_map(|&id| {
+                let _scope = tag_value_input::enter_child(PathElement::Text(self.entity_to_string(id)));
+                self.save_entity(id)
+            })
+            .collect();
         self.entity_manager.permanent_storage.store_entities(pos, Some(tags));
+        drop(collector);
         if unload {
             for id in root_entities_to_save {
                 if !self.entities.contains_key(&id) {
@@ -280,11 +292,11 @@ impl ServerLevel {
         self.entity_manager.chunks_to_unload = chunks_to_unload;
     }
 
-    pub fn process_pending_loads(&mut self) {
+    pub fn run_entity_deserializer_queue(&mut self) {
         while let Some((pos, read)) = self.entity_manager.permanent_storage.poll_read() {
             let entities = match read {
                 Ok(Some(tag)) => match crate::util::catch_exception(|| self.read_chunk_entities(pos, &tag)) {
-                    Ok(entities) => entities,
+                    Ok(entities) => Some(entities),
                     Err(exception) => {
                         error!("Failed to read chunk {pos}\njava.util.concurrent.CompletionException: {exception}");
                         continue;
@@ -292,7 +304,7 @@ impl ServerLevel {
                 },
                 Ok(None) => {
                     self.entity_manager.permanent_storage.mark_empty(pos);
-                    Vec::new()
+                    None
                 }
                 Err(e) => {
                     error!("Failed to load entity chunk {pos}\n{e}");
@@ -301,7 +313,14 @@ impl ServerLevel {
                     continue;
                 }
             };
-            for entity in entities {
+            self.entity_manager.parsed_loads.push((pos, entities));
+        }
+    }
+
+    pub fn process_pending_loads(&mut self) {
+        self.run_entity_deserializer_queue();
+        for (pos, entities) in std::mem::take(&mut self.entity_manager.parsed_loads) {
+            for entity in entities.unwrap_or_default() {
                 self.add_entity(entity);
             }
             self.entity_manager.chunk_load_statuses.insert(pos.pack(), ChunkLoadStatus::Loaded);
@@ -478,7 +497,7 @@ impl PersistentEntitySectionManager {
             self.section_storage.count(),
             self.chunk_load_statuses.len(),
             self.chunk_visibility.len(),
-            self.permanent_storage.loading_inbox_size(),
+            self.permanent_storage.loading_inbox_size() + self.parsed_loads.len(),
             self.chunks_to_unload.len()
         )
     }

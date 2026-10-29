@@ -6,6 +6,7 @@ use super::recipe_book::RecipeBook;
 use super::recipe_book_settings::RecipeBookSettings;
 use crate::network::connection::Outbound;
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::entity::EntityId;
 use crate::world::item::crafting::display::recipe_display_entry::RecipeDisplayEntry;
 use crate::world::item::crafting::recipe_holder::RecipeHolder;
@@ -27,8 +28,14 @@ fn write_entry(w: &mut Writer, contents: &RecipeDisplayEntry, notification: bool
     w.u8(if notification { FLAG_NOTIFICATION } else { 0 } | if highlight { FLAG_HIGHLIGHT } else { 0 });
 }
 
-fn recipe_keys(tag: Option<&Nbt>) -> Vec<String> {
-    tag.map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(Nbt::as_str).filter_map(crate::commands::arguments::parse_identifier).collect()
+pub struct Packed {
+    settings: RecipeBookSettings,
+    known: Vec<String>,
+    highlight: Vec<String>,
+}
+
+fn recipe_keys(tag: &Nbt) -> DecodeResult<Vec<String>> {
+    codec::list_partial(tag, |key| DecodeResult::from(codec::identifier(key)))
 }
 
 impl ServerRecipeBook {
@@ -84,13 +91,21 @@ impl ServerRecipeBook {
         Nbt::Compound(output)
     }
 
-    pub fn load_untrusted(&mut self, packed: &Nbt) {
-        if packed.get("recipes").is_none() || packed.get("toBeDisplayed").is_none() {
-            return;
+    pub fn decode_packed(tag: &Nbt) -> DecodeResult<Packed> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
         }
-        self.base.book_settings = RecipeBookSettings::decode(packed);
-        ServerRecipeBook::load_recipes(recipe_keys(packed.get("recipes")), &mut self.known);
-        ServerRecipeBook::load_recipes(recipe_keys(packed.get("toBeDisplayed")), &mut self.highlight);
+        let mut record = Record::default();
+        let settings = RecipeBookSettings::decode_map(tag, &mut record);
+        let known = record.required(tag, "recipes", recipe_keys);
+        let highlight = record.required(tag, "toBeDisplayed", recipe_keys);
+        record.build(|| Some(Packed { settings: settings?, known: known?, highlight: highlight? }))
+    }
+
+    pub fn load_untrusted(&mut self, packed: Packed) {
+        self.base.book_settings = packed.settings;
+        ServerRecipeBook::load_recipes(packed.known, &mut self.known);
+        ServerRecipeBook::load_recipes(packed.highlight, &mut self.highlight);
     }
 }
 

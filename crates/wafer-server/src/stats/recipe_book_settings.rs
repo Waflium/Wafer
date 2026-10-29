@@ -1,6 +1,7 @@
 use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::codec::{self, Record};
 use crate::world::inventory::recipe_book_type::RecipeBookType;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -49,13 +50,19 @@ impl RecipeBookSettings {
         }
     }
 
-    pub fn decode(tag: &Nbt) -> RecipeBookSettings {
-        let flag = |name: &str| tag.get(name).and_then(Nbt::as_i64).is_some_and(|value| value != 0);
+    pub fn decode_map(tag: &Nbt, record: &mut Record) -> Option<RecipeBookSettings> {
         let mut settings = RecipeBookSettings::default();
+        let mut complete = true;
         for (i, (open, filtering)) in FIELD_NAMES.iter().enumerate() {
-            settings.settings[i] = TypeSettings { open: flag(open), filtering: flag(filtering) };
+            let mut field = |name: &str| match tag.get(name) {
+                Some(value) => record.field(codec::bool_value(value)),
+                None => Some(false),
+            };
+            let (open, filtering) = (field(open), field(filtering));
+            complete &= open.is_some() && filtering.is_some();
+            settings.settings[i] = TypeSettings { open: open.unwrap_or(false), filtering: filtering.unwrap_or(false) };
         }
-        settings
+        complete.then_some(settings)
     }
 
     pub fn encode(&self, output: &mut Vec<(String, Nbt)>) {

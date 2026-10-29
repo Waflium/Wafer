@@ -356,6 +356,7 @@ pub fn read_additional_save_data(entity: &mut Entity, living: &mut LivingEntity,
     living.death_time = short("DeathTime");
     entity.set_shared_flag(flags::FALL_FLYING, boolean("FallFlying"));
     let sleeping = read_sleeping_pos(entity, nbt);
+    tag_value_input::read(nbt, "Brain", super::ai::brain::Packed::decode);
     living.last_hurt_by_player = tag_value_input::read(nbt, "last_hurt_by_player", super::entity_save::decode_uuid);
     living.last_hurt_by_player_memory_time = int("last_hurt_by_player_memory_time").unwrap_or(0);
     living.last_hurt_by_mob = tag_value_input::read(nbt, "last_hurt_by_mob", super::entity_save::decode_uuid);

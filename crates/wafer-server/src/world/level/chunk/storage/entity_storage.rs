@@ -10,12 +10,35 @@ use wafer_protocol::nbt::Nbt;
 
 use super::RegionStorage;
 use crate::server::level::ServerLevel;
+use crate::server::command_frames::main_thread_task_frames;
 use crate::server::level::chunk_workers::IoWorker;
 use crate::util::problem_reporter::PathElement;
 use crate::world::entity::LevelEntity;
 use crate::world::level::storage::tag_value_input;
 
-const ENTITY_STORAGE_LOGGER: &str = "net.minecraft.world.level.chunk.storage.EntityStorage";
+pub const ENTITY_STORAGE_LOGGER: &str = "net.minecraft.world.level.chunk.storage.EntityStorage";
+
+const LOAD_ENTITIES_RECURSIVE: [&str; 19] = [
+    "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:358)",
+    "net.minecraft.world.entity.EntityType.lambda$loadEntitiesRecursive$0(EntityType.java:388)",
+    "java.base/java.util.stream.ReferencePipeline$11$1.accept(ReferencePipeline.java:489)",
+    "java.base/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:197)",
+    "com.google.common.collect.Streams$1Splitr.tryAdvance(Streams.java:489)",
+    "java.base/java.util.Spliterator.forEachRemaining(Spliterator.java:332)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:635)",
+    "java.base/java.util.stream.AbstractPipeline.evaluateToArrayNode(AbstractPipeline.java:291)",
+    "java.base/java.util.stream.ReferencePipeline.toArray(ReferencePipeline.java:652)",
+    "java.base/java.util.stream.ReferencePipeline.toArray(ReferencePipeline.java:658)",
+    "java.base/java.util.stream.ReferencePipeline.toList(ReferencePipeline.java:663)",
+    "net.minecraft.world.level.chunk.storage.EntityStorage.lambda$loadEntities$0(EntityStorage.java:82)",
+    "java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:667)",
+    "java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:503)",
+    "net.minecraft.util.Util.runNamed(Util.java:351)",
+    "net.minecraft.util.thread.AbstractConsecutiveExecutor.pollTask(AbstractConsecutiveExecutor.java:50)",
+    "net.minecraft.util.thread.AbstractConsecutiveExecutor.run(AbstractConsecutiveExecutor.java:60)",
+];
 
 pub type EntityChunkRead = (ChunkPos, io::Result<Option<Nbt>>);
 
@@ -108,8 +131,10 @@ impl ServerLevel {
         let upgraded_chunk_tag = super::simple_region_storage::upgrade_chunk_tag_to_current_version(tag, -1, crate::util::datafix::data_fix_types::DataFixTypes::EntityChunk);
         let tag = &*upgraded_chunk_tag;
         let _collector = tag_value_input::ScopedCollector::new(PathElement::Text(format!("chunk@[{}, {}]", pos.x, pos.z)), ENTITY_STORAGE_LOGGER);
+        let mut site = LOAD_ENTITIES_RECURSIVE.to_vec();
+        site.extend(main_thread_task_frames(self.preparing_levels));
         let mut loaded = Vec::new();
-        tag_value_input::for_each_child(tag, "Entities", |entity| loaded.extend(self.load_entity_recursive_in_scope(entity, &mut |_| {})));
+        tag_value_input::for_each_child(tag, "Entities", |entity| loaded.extend(self.load_entity_recursive_in_scope(entity, &site, &mut |_| {})));
         loaded
     }
 }

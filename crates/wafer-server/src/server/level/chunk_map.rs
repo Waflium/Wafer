@@ -358,6 +358,7 @@ impl ServerLevel {
     pub fn poll_chunk_task(&mut self) -> bool {
         let worked = self.chunks.poll_task();
         self.process_chunk_events();
+        self.run_entity_deserializer_queue();
         worked
     }
 

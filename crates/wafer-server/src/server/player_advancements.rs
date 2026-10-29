@@ -12,9 +12,9 @@ use super::level::ServerLevel;
 use super::server_advancement_manager::ServerAdvancementManager;
 use crate::advancements::advancement_holder::AdvancementHolder;
 use crate::advancements::advancement_node::AdvancementNode;
+use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::advancements::advancement_progress::AdvancementProgress;
 use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
-use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::network::connection::Outbound;
 use crate::util::java_collections::{JavaHashCode, JavaObjectHashSet, identifier_hash};
 use crate::world::entity::EntityId;
@@ -161,7 +161,8 @@ impl PlayerAdvancements {
             advancements.progress_changed.insert(holder);
             result = true;
             if !was_done && is_done {
-                holder.value.rewards.grant(level, player);
+                let trigger = holder.value.criteria.iter().find(|(name, _)| name == criterion).map_or(CriterionTrigger::Impossible, |(_, criterion)| criterion.trigger);
+                holder.value.rewards.grant(level, player, trigger);
                 if let Some(display) = &holder.value.display
                     && display.announce_to_chat
                     && level.game_rules.get_bool(game_rule::SHOW_ADVANCEMENT_MESSAGES)

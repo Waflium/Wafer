@@ -164,7 +164,7 @@ impl BaseSpawner {
             } else if !spawn_placements::check_spawn_rules(entity_type, level, EntitySpawnReason::Spawner, spawn_block_pos) {
                 continue;
             }
-            let mut loaded = level.load_entity_recursive_for_spawn(entity_tag, &mut |entity| {
+            let mut loaded = level.load_entity_recursive_for_spawn(entity_tag, &[], &mut |entity| {
                 let e = entity.entity_mut();
                 let (y_rot, x_rot) = (e.y_rot, e.x_rot);
                 e.snap_to(spawn_pos.x, spawn_pos.y, spawn_pos.z, y_rot, x_rot);

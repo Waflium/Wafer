@@ -190,9 +190,9 @@ pub fn timeline_marker_defined_multiple_times(message: String) -> JavaThrowable 
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TagLoadContext {
+pub enum TagLoadContext<'a> {
     ExistingRegistries,
-    ReloadedRegistries(&'static [&'static str]),
+    ReloadedRegistries(&'a [&'static str]),
     DynamicRegistry,
     FunctionLibrary,
 }
@@ -247,7 +247,7 @@ const TAG_LOAD_FUNCTIONS: [&str; 6] = [
     "java.base/java.util.concurrent.ForkJoinTask$InterruptibleTask.exec(ForkJoinTask.java:1662)",
 ];
 
-fn tag_load_frames(context: TagLoadContext, line: &'static str) -> Vec<&'static str> {
+fn tag_load_frames(context: TagLoadContext<'_>, line: &'static str) -> Vec<&'static str> {
     let mut frames = vec![line];
     match context {
         TagLoadContext::ExistingRegistries => {
@@ -304,13 +304,13 @@ pub fn function_load_failed(cause_description: &str) -> JavaThrowable {
     JavaThrowable::new(format!("java.util.concurrent.CompletionException: {cause_description}"), frames).with_cause(cause)
 }
 
-pub fn tag_decode_failed(context: TagLoadContext, message: &str) -> JavaThrowable {
+pub fn tag_decode_failed(context: TagLoadContext<'_>, message: &str) -> JavaThrowable {
     let mut frames = DATA_RESULT_GET_OR_THROW.to_vec();
     frames.extend(tag_load_frames(context, "net.minecraft.tags.TagLoader.load(TagLoader.java:61)"));
     JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: {message}"), frames)
 }
 
-pub fn tag_parse_failed(context: TagLoadContext, mut parse_error: JavaThrowable) -> JavaThrowable {
+pub fn tag_parse_failed(context: TagLoadContext<'_>, mut parse_error: JavaThrowable) -> JavaThrowable {
     append_frames(&mut parse_error, &tag_load_frames(context, "net.minecraft.tags.TagLoader.load(TagLoader.java:59)"));
     parse_error
 }

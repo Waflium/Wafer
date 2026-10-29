@@ -24,6 +24,8 @@ use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 
 use crate::server::level::game_mode::GameType;
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::util::extra_codecs;
 use crate::server::log_save_failure;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::chunk::storage::{decode_compressed_nbt, decode_nbt, encode_nbt};
@@ -275,12 +277,38 @@ impl RespawnData {
         ]
     }
 
+    pub fn decode_map(tag: &Nbt) -> DecodeResult<RespawnData> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let dimension = record.required(tag, "dimension", |dimension| codec::identifier(dimension));
+        let pos = record.required(tag, "pos", extra_codecs::block_pos);
+        let yaw = record.required(tag, "yaw", |yaw| decode_float_range(yaw, -180.0, 180.0));
+        let pitch = record.required(tag, "pitch", |pitch| decode_float_range(pitch, -90.0, 90.0));
+        record.build(|| Some(RespawnData { dimension: dimension?, pos: pos?, yaw: yaw?, pitch: pitch? }))
+    }
+
     pub fn from_nbt(nbt: &Nbt) -> Option<RespawnData> {
         let Some(Nbt::IntArray(p)) = nbt.get("pos") else { return None };
         let [x, y, z] = p[..] else { return None };
         let dimension = nbt.get("dimension").and_then(Nbt::as_str)?.to_string();
         let angle = |key: &str| nbt.get(key).and_then(Nbt::as_f64).map(|v| v as f32);
         Some(RespawnData { dimension, pos: BlockPos::new(x, y, z), yaw: angle("yaw")?, pitch: angle("pitch")? })
+    }
+}
+
+fn decode_float_range(tag: &Nbt, min: f32, max: f32) -> DecodeResult<f32> {
+    let value = match codec::float(tag) {
+        Ok(value) => value,
+        Err(error) => return DecodeResult::error(error),
+    };
+    if value >= min && value <= max {
+        return DecodeResult::success(value);
+    }
+    DecodeResult {
+        value: Some(value),
+        error: Some(format!("Value {} outside of range [{}:{}]", crate::nbt::java_float_to_string(value), crate::nbt::java_float_to_string(min), crate::nbt::java_float_to_string(max))),
     }
 }
 

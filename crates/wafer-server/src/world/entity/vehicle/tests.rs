@@ -97,7 +97,7 @@ fn passengers_are_saved_inside_their_vehicle() {
     assert_eq!(passengers.len(), 1);
     assert_eq!(passengers[0].get("id").and_then(Nbt::as_str), Some("minecraft:chicken"));
     let level = &mut server.levels[0];
-    let loaded = level.load_entity_recursive(&saved, &mut |_| {});
+    let loaded = level.load_entity_recursive(&saved, &[], &mut |_| {});
     assert_eq!(loaded.len(), 2);
     assert_eq!(loaded[0].entity().passengers, [loaded[1].entity().id]);
     assert_eq!(loaded[1].entity().vehicle, Some(loaded[0].entity().id));

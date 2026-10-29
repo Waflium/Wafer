@@ -37,8 +37,8 @@ impl Entry for SortingEntry<'_> {
     }
 }
 
-pub struct TagLoader {
-    context: Option<TagLoadContext>,
+pub struct TagLoader<'a> {
+    context: Option<TagLoadContext<'a>>,
     directory: String,
 }
 
@@ -68,12 +68,12 @@ pub fn tags_dir_path(registry: &str) -> String {
 }
 
 #[derive(Clone, Copy)]
-pub enum ExistingTagLoading {
+pub enum ExistingTagLoading<'a> {
     Startup,
-    Reload(&'static [&'static str]),
+    Reload(&'a [&'static str]),
 }
 
-pub fn load_tags_for_existing_registries(resource_manager: &MultiPackResourceManager, loading: ExistingTagLoading) -> PendingTags {
+pub fn load_tags_for_existing_registries(resource_manager: &MultiPackResourceManager, loading: ExistingTagLoading<'_>) -> PendingTags {
     let mut registries: Vec<&str> = wafer_data::registry_names().chain(crate::core::data_registries::dynamic_registry_names()).collect();
     registries.sort_unstable();
     registries.dedup();
@@ -88,7 +88,7 @@ pub fn load_tags_for_dimension_registry(resource_manager: &MultiPackResourceMana
     load_tags_for_registry(resource_manager, crate::core::data_registries::DIMENSION_REGISTRY, ExistingTagLoading::Startup);
 }
 
-fn load_tags_for_registry(resource_manager: &MultiPackResourceManager, registry: &'static str, loading: ExistingTagLoading) -> Option<(String, Vec<(String, Vec<i32>)>)> {
+fn load_tags_for_registry(resource_manager: &MultiPackResourceManager, registry: &'static str, loading: ExistingTagLoading<'_>) -> Option<(String, Vec<(String, Vec<i32>)>)> {
     let entries = wafer_data::registry_entries(registry).unwrap_or_default();
     let ids: HashMap<&str, i32> = entries.iter().enumerate().map(|(id, &entry)| (entry, id as i32)).collect();
     let dynamic = crate::core::data_registries::is_dynamic_registry(registry);
@@ -152,8 +152,8 @@ pub fn identifier_order<T>(entries: &mut [(String, T)]) {
     });
 }
 
-impl TagLoader {
-    pub fn with_context(directory: &str, context: Option<TagLoadContext>) -> TagLoader {
+impl<'a> TagLoader<'a> {
+    pub fn with_context(directory: &str, context: Option<TagLoadContext<'a>>) -> TagLoader<'a> {
         TagLoader { context, directory: directory.to_string() }
     }
 

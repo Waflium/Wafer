@@ -365,12 +365,14 @@ impl ServerLevel {
     }
 
     pub fn tick_enchantment_effects(&mut self, entity: EntityId) {
+        self.enchantment_tick_player = self.is_player(entity);
         for slot in EquipmentSlot::VALUES {
             let Some(piece) = self.item_by_slot(entity, slot) else { continue };
             for (enchantment, level, item) in self.run_iteration_on_item_in_slot(&piece, slot, entity) {
                 enchantment.tick(self, level, &item, entity);
             }
         }
+        self.enchantment_tick_player = false;
     }
 
     pub fn process_durability_change(&mut self, item_stack: &ItemStack, amount: i32) -> i32 {

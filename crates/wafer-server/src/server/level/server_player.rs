@@ -17,6 +17,8 @@ use crate::network::configuration::ClientInfo;
 use crate::network::connection::Outbound;
 use crate::network::login::Profile;
 use crate::util::codec::{self, DecodeResult};
+use crate::core::global_pos::GlobalPos;
+use crate::stats::server_recipe_book::ServerRecipeBook;
 use crate::util::extra_codecs;
 use crate::util::problem_reporter::PathElement;
 use crate::util::tick_throttler::TickThrottler;
@@ -98,6 +100,7 @@ pub struct ServerPlayer {
     pub game_mode: ServerPlayerGameMode,
     pub abilities: Abilities,
     pub respawn_config: Option<RespawnConfig>,
+    pub loaded_game_types: (Option<GameType>, Option<GameType>),
     pub is_changing_dimension: bool,
     pub seen_credits: bool,
     pub won_game: bool,
@@ -162,6 +165,20 @@ pub struct ServerPlayer {
     pub shoulder_entity_right: Nbt,
     pub time_entity_sat_on_shoulder: i64,
     pub cooldowns: crate::world::item::item_cooldowns::ItemCooldowns,
+}
+
+fn decode_respawn_config(tag: &Nbt) -> DecodeResult<RespawnConfig> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
+    }
+    let mut record = codec::Record::default();
+    let respawn_data = record.absorb(RespawnData::decode_map(tag));
+    let forced = record.with_default(tag, "forced", false, codec::bool_value);
+    record.build(|| Some(RespawnConfig { respawn_data: respawn_data?, forced }))
+}
+
+fn read_player_mode(nbt: &Nbt, key: &str) -> Option<GameType> {
+    tag_value_input::read(nbt, key, |tag| DecodeResult::from(codec::int(tag))).map(GameType::by_id)
 }
 
 pub fn is_empty_compound(tag: &Nbt) -> bool {
@@ -255,6 +272,7 @@ impl ServerPlayer {
             spawn_extra_particles_on_fall: false,
             raid_omen_position: None,
             warden_spawn_tracker: WardenSpawnTracker::default(),
+            loaded_game_types: (None, None),
             entered_nether_position: None,
             current_explosion_impact_pos: None,
             current_explosion_cause: None,
@@ -345,11 +363,6 @@ impl ServerPlayer {
         self.game_mode.previous_game_type = previous;
         self.game_mode.game_type = game_type;
         game_type.update_player_abilities(&mut self.abilities);
-    }
-
-    pub fn saved_game_types(nbt: &Nbt) -> (Option<GameType>, Option<GameType>) {
-        let read = |key: &str| nbt.get(key).and_then(Nbt::as_i64).map(|id| GameType::by_id(id as i32));
-        (read("playerGameType"), read("previousPlayerGameType"))
     }
 
     pub fn item_in_hand(&self, hand: InteractionHand) -> Option<ItemStack> {
@@ -484,13 +497,10 @@ impl ServerPlayer {
     }
 
     pub fn saved_sleeping_pos(nbt: &Nbt) -> Option<BlockPos> {
-        match nbt.get("sleeping_pos")? {
-            Nbt::IntArray(p) if p.len() == 3 => Some(BlockPos::new(p[0], p[1], p[2])),
-            _ => None,
-        }
+        extra_codecs::block_pos(nbt.get("sleeping_pos")?).value
     }
 
-    pub fn load_nbt(&mut self, nbt: &Nbt) -> Result<(), String> {
+    pub fn load_nbt(&mut self, nbt: &Nbt) -> Result<(), crate::util::java_throwable::JavaThrowable> {
         self.entity.load(nbt)?;
         let mut health = 0.0;
         let mut absorption = 0.0;
@@ -519,29 +529,22 @@ impl ServerPlayer {
         let walking_speed = self.abilities.walking_speed as f64;
         self.living.attributes.instance(Attribute::MovementSpeed).expect("players have movement speed").set_base_value(walking_speed);
         self.ender_chest_inventory.from_decoded_slots(tag_value_input::list_or_empty(nbt, "EnderItems", decode_item_stack_with_slot));
-        self.last_death_location = nbt.get("LastDeathLocation").and_then(|l| {
-            let dimension = l.get("dimension").and_then(Nbt::as_str)?.to_owned();
-            match l.get("pos")? {
-                Nbt::IntArray(p) if p.len() == 3 => Some((dimension, BlockPos::new(p[0], p[1], p[2]))),
-                _ => None,
-            }
-        });
-        self.warden_spawn_tracker = nbt.get("warden_spawn_tracker").and_then(WardenSpawnTracker::from_nbt).unwrap_or_default();
+        self.last_death_location = tag_value_input::read(nbt, "LastDeathLocation", |tag| DecodeResult::from(GlobalPos::decode(tag))).map(|pos| (pos.dimension, pos.pos));
+        self.warden_spawn_tracker = tag_value_input::read(nbt, "warden_spawn_tracker", WardenSpawnTracker::decode).unwrap_or_default();
         self.entered_nether_position = tag_value_input::read(nbt, "entered_nether_pos", extra_codecs::vec3);
         self.current_explosion_impact_pos = tag_value_input::read(nbt, "last_explosion_impact_pos", extra_codecs::vec3);
         self.seen_credits = tag_value_input::get_boolean(nbt, "seenCredits").unwrap_or(false);
-        if let Some(recipe_book) = nbt.get(crate::stats::server_recipe_book::RECIPE_BOOK_TAG) {
-            self.recipe_book.load_untrusted(recipe_book);
+        if let Some(packed) = tag_value_input::read(nbt, crate::stats::server_recipe_book::RECIPE_BOOK_TAG, ServerRecipeBook::decode_packed) {
+            self.recipe_book.load_untrusted(packed);
         }
         if sleeping {
             self.entity.data.set(ids::SLEEPING_POS, DataValue::OptionalBlockPos(None));
+            self.sleep_counter = 0;
         }
-        self.respawn_config = nbt.get("respawn").and_then(|r| {
-            let forced = r.get("forced").and_then(Nbt::as_i64).is_some_and(|f| f != 0);
-            Some(RespawnConfig { respawn_data: RespawnData::from_nbt(r)?, forced })
-        });
+        self.respawn_config = tag_value_input::read(nbt, "respawn", decode_respawn_config);
         self.spawn_extra_particles_on_fall = tag_value_input::get_boolean(nbt, "spawn_extra_particles_on_fall").unwrap_or(false);
         self.raid_omen_position = tag_value_input::read(nbt, "raid_omen_position", extra_codecs::block_pos);
+        self.loaded_game_types = (read_player_mode(nbt, "playerGameType"), read_player_mode(nbt, "previousPlayerGameType"));
         if let Some(post_effects) = tag_value_input::read(nbt, "post_effects", |tag| codec::list_partial(tag, |effect| DecodeResult::from(codec::identifier(effect)))) {
             self.post_effects.extend(post_effects);
         }
@@ -729,7 +732,7 @@ impl ServerLevel {
     pub fn load_and_spawn_parent_vehicle(&mut self, id: EntityId, player_input: &Nbt) {
         let Some((root_tag, _root_scope)) = tag_value_input::child(player_input, "RootVehicle") else { return };
         let loaded = match tag_value_input::child(root_tag, "Entity") {
-            Some((entity_tag, _entity_scope)) => self.load_entity_recursive_in_scope(entity_tag, &mut |_| {}),
+            Some((entity_tag, _entity_scope)) => self.load_entity_recursive_in_scope(entity_tag, &[], &mut |_| {}),
             None => Vec::new(),
         };
         let mut added = Vec::new();

@@ -5,6 +5,7 @@ use crate::server::Server;
 use crate::server::level::ServerLevel;
 use crate::server::level::server_player::ServerPlayer;
 use crate::world::entity::EntityId;
+use crate::world::entity::entity_save::NBT_PREDICATE_LOGGER;
 use crate::world::level::storage::command_storage::CommandStorage;
 use crate::world::scores::scoreboard::Scoreboard;
 
@@ -65,8 +66,16 @@ pub trait EntityWorld {
     }
 
     fn entity_tag_to_compare(&self, id: EntityId) -> wafer_protocol::nbt::Nbt {
+        self.entity_tag_to_compare_logged(id, NBT_PREDICATE_LOGGER)
+    }
+
+    fn entity_tag_to_compare_logged(&self, id: EntityId, logger: &'static str) -> wafer_protocol::nbt::Nbt {
         let level = self.level_of_entity(id).expect("entity in a loaded level");
-        level.entity_tag_to_compare_with(id, &|pearl| self.level_of_entity(pearl).filter(|level| level.entities.contains_key(&pearl)).or_else(|| level.other_levels.iter().find(|level| level.entities.contains_key(&pearl))))
+        level.entity_tag_to_compare_logged(
+            id,
+            &|pearl| self.level_of_entity(pearl).filter(|level| level.entities.contains_key(&pearl)).or_else(|| level.other_levels.iter().find(|level| level.entities.contains_key(&pearl))),
+            logger,
+        )
     }
 
     fn entity_name(&self, id: EntityId) -> String {
