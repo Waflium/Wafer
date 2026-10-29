@@ -122,13 +122,7 @@ fn component_codec(component: &str) -> Pair {
 }
 
 fn decode_components(tag: Nbt) -> Result<Nbt, String> {
-    let entries = codec::map(&tag).map_err(|e| e.to_string())?;
-    let mut components = Vec::with_capacity(entries.len());
-    for (key, value) in entries {
-        let id = decode_component_type(key)?;
-        let decoded = component_codec(&id).0.decode(value)?;
-        components.push((id, decoded));
-    }
+    let components = codec::dispatched_map(&tag, decode_component_type, |id, value| component_codec(id).0.decode(value))?;
     Ok(Nbt::Compound(components))
 }
 

@@ -66,25 +66,78 @@ pub fn tags_dir_path(registry: &str) -> String {
     }
 }
 
-pub fn load_tags_for_existing_registries(resource_manager: &MultiPackResourceManager, startup: bool) -> PendingTags {
-    let mut registries: Vec<&str> = wafer_data::registry_names().collect();
+#[derive(Clone, Copy)]
+pub enum ExistingTagLoading {
+    Startup,
+    Reload(&'static [&'static str]),
+}
+
+pub fn load_tags_for_existing_registries(resource_manager: &MultiPackResourceManager, loading: ExistingTagLoading) -> PendingTags {
+    let mut registries: Vec<&str> = wafer_data::registry_names().chain(crate::core::data_registries::dynamic_registry_names()).collect();
     registries.sort_unstable();
     registries.dedup();
-    let mut pending_tags = Vec::new();
-    for registry in registries {
-        let entries = wafer_data::registry_entries(registry).unwrap_or_default();
-        let ids: HashMap<&str, i32> = entries.iter().enumerate().map(|(id, &entry)| (entry, id as i32)).collect();
-        let context = startup.then(|| if crate::core::data_registries::get(registry).is_some() { TagLoadContext::DynamicRegistry } else { TagLoadContext::ExistingRegistries });
-        let loader = TagLoader::with_context(&tags_dir_path(registry), context);
-        let tags = loader.build(&loader.load(resource_manager), &|id, _| ids.get(id).copied(), &|a, b| a == b);
-        if tags.len() == 0 {
-            continue;
+    registries
+        .into_iter()
+        .filter(|&registry| !(matches!(loading, ExistingTagLoading::Startup) && crate::core::data_registries::is_dimension_registry(registry)))
+        .filter_map(|registry| load_tags_for_registry(resource_manager, registry, loading))
+        .collect()
+}
+
+pub fn load_tags_for_dimension_registry(resource_manager: &MultiPackResourceManager) {
+    load_tags_for_registry(resource_manager, crate::core::data_registries::DIMENSION_REGISTRY, ExistingTagLoading::Startup);
+}
+
+fn load_tags_for_registry(resource_manager: &MultiPackResourceManager, registry: &'static str, loading: ExistingTagLoading) -> Option<(String, Vec<(String, Vec<i32>)>)> {
+    let entries = wafer_data::registry_entries(registry).unwrap_or_default();
+    let ids: HashMap<&str, i32> = entries.iter().enumerate().map(|(id, &entry)| (entry, id as i32)).collect();
+    let dynamic = crate::core::data_registries::is_dynamic_registry(registry);
+    let context = match loading {
+        ExistingTagLoading::Startup if dynamic => TagLoadContext::DynamicRegistry,
+        ExistingTagLoading::Startup => TagLoadContext::ExistingRegistries,
+        ExistingTagLoading::Reload(invoker) => TagLoadContext::ReloadedRegistries(invoker),
+    };
+    let startup_dynamic = dynamic && matches!(loading, ExistingTagLoading::Startup);
+    let loader = TagLoader::with_context(&tags_dir_path(registry), Some(context));
+    let lookup = |name: &str, required: bool| match ids.get(name) {
+        Some(&id) => {
+            if startup_dynamic && required {
+                crate::core::data_registries::record_tag_reference(registry, name);
+            }
+            Some(id)
         }
-        let mut tags: Vec<(String, Vec<i32>)> = tags.iter().map(|(id, values)| (id.to_string(), values.clone())).collect();
-        tags.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-        pending_tags.push((registry.to_string(), tags));
+        None if startup_dynamic && required => {
+            crate::core::data_registries::record_unbound_tag_value(registry, name);
+            Some(-1)
+        }
+        None => None,
+    };
+    let tags = loader.build(&loader.load(resource_manager), &lookup, &|a, b| a == b);
+    if tags.len() == 0 {
+        return None;
     }
-    pending_tags
+    let mut tags: Vec<(String, Vec<i32>)> = tags.iter().map(|(id, values)| (id.to_string(), values.clone())).collect();
+    tags.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    Some((registry.to_string(), tags))
+}
+
+pub fn load_tags_for_loaded_registry(resource_manager: &MultiPackResourceManager, registry: &str, is_element: &dyn Fn(&str) -> bool, mut record_unbound: impl FnMut(&str)) {
+    let loader = TagLoader::with_context(&tags_dir_path(registry), Some(TagLoadContext::DynamicRegistry));
+    let unbound = std::cell::RefCell::new(Vec::new());
+    loader.build(
+        &loader.load(resource_manager),
+        &|id, required| {
+            if is_element(id) {
+                Some(())
+            } else if required {
+                unbound.borrow_mut().push(id.to_string());
+                Some(())
+            } else {
+                None
+            }
+        },
+        &|_, _| true,
+    );
+    unbound.into_inner().iter().for_each(|id| record_unbound(id));
 }
 
 pub fn identifier_order<T>(entries: &mut [(String, T)]) {
@@ -211,7 +264,7 @@ impl<V: Clone> Lookup<V> for TagLookup<'_, V> {
 
 #[cfg(test)]
 mod tests {
-    use super::{TagFile, load_tags_for_existing_registries};
+    use super::{ExistingTagLoading, TagFile, load_tags_for_existing_registries};
 
     fn decode_error(json: &str) -> String {
         let value: serde_json::Value = serde_json::from_str(json).unwrap();
@@ -235,11 +288,12 @@ mod tests {
         let mut repository = PackRepository::create_vanilla_trusted_repository();
         repository.reload();
         repository.set_selected(&["vanilla"]);
-        let loaded = load_tags_for_existing_registries(&MultiPackResourceManager::new(repository.open_all_selected()), false);
+        let loaded = load_tags_for_existing_registries(&MultiPackResourceManager::new(repository.open_all_selected()), ExistingTagLoading::Reload(&[]));
         let built_in: Vec<(String, Vec<(String, Vec<i32>)>)> = wafer_data::TAGS
             .iter()
             .map(|registry| (registry.registry.to_string(), registry.tags.iter().map(|(name, values)| (name.to_string(), values.to_vec())).collect()))
             .collect();
+        let loaded: Vec<_> = loaded.into_iter().filter(|(registry, _)| built_in.iter().any(|(name, _)| name == registry)).collect();
         assert_eq!(loaded, built_in);
     }
 }

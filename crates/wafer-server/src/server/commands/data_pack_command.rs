@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 
 use super::list_players_command::format_list;
-use super::reload_command::reload_packs;
+use super::reload_command::{invoker_frames, reload_packs};
 use crate::commands::CommandFn;
 use crate::commands::brigadier::{CommandContext, CommandSyntaxException, Dynamic2CommandExceptionType, DynamicCommandExceptionType, tr};
 use crate::commands::shared_suggestion_provider;
@@ -94,17 +94,27 @@ fn create_pack(server: &mut Server, context: &CommandContext, source: &CommandSo
     Ok(1)
 }
 
+const ENABLE_PACK_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.enablePack(DataPackCommand.java:208)";
+const DISABLE_PACK_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.disablePack(DataPackCommand.java:219)";
+const ENABLE_DEFAULT_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$0(DataPackCommand.java:93)";
+const ENABLE_AFTER_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$2(DataPackCommand.java:99)";
+const ENABLE_BEFORE_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$4(DataPackCommand.java:107)";
+const ENABLE_LAST_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$6(DataPackCommand.java:112)";
+const ENABLE_FIRST_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$7(DataPackCommand.java:116)";
+const DISABLE_FRAME: &str = "net.minecraft.server.commands.DataPackCommand.lambda$register$9(DataPackCommand.java:125)";
+
 fn enable_pack(
     server: &mut Server,
     source: &CommandSourceStack,
     unopened: Arc<Pack>,
+    register_frame: &'static str,
     inserter: impl FnOnce(&mut Server, &mut Vec<Arc<Pack>>, Arc<Pack>) -> Result<(), CommandSyntaxException>,
 ) -> Result<i32, CommandSyntaxException> {
     let mut selected = server.pack_repository.selected_packs().to_vec();
     inserter(server, &mut selected, unopened.clone())?;
     source.send_success(server, || tr("commands.datapack.modify.enable", vec![Arg::Component(unopened.chat_link(true))]), true);
     let ids: Vec<String> = selected.iter().map(|pack| pack.id().to_string()).collect();
-    reload_packs(server, &ids, source);
+    reload_packs(server, &ids, invoker_frames(&[ENABLE_PACK_FRAME, register_frame], source), source);
     Ok(selected.len() as i32)
 }
 
@@ -114,7 +124,7 @@ fn index_of(list: &[Arc<Pack>], pack: &Pack) -> usize {
 
 fn enable_default(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let pack = get_pack(server, context, "name", true)?;
-    enable_pack(server, source, pack, |_, list, pack| {
+    enable_pack(server, source, pack, ENABLE_DEFAULT_FRAME, |_, list, pack| {
         pack.default_position().insert(list, pack, |p| p.selection_config, false);
         Ok(())
     })
@@ -122,7 +132,7 @@ fn enable_default(server: &mut Server, context: &CommandContext, source: &Comman
 
 fn enable_after(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let pack = get_pack(server, context, "name", true)?;
-    enable_pack(server, source, pack, |server, list, pack| {
+    enable_pack(server, source, pack, ENABLE_AFTER_FRAME, |server, list, pack| {
         let existing = get_pack(server, context, "existing", false)?;
         list.insert(index_of(list, &existing) + 1, pack);
         Ok(())
@@ -131,7 +141,7 @@ fn enable_after(server: &mut Server, context: &CommandContext, source: &CommandS
 
 fn enable_before(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let pack = get_pack(server, context, "name", true)?;
-    enable_pack(server, source, pack, |server, list, pack| {
+    enable_pack(server, source, pack, ENABLE_BEFORE_FRAME, |server, list, pack| {
         let existing = get_pack(server, context, "existing", false)?;
         list.insert(index_of(list, &existing), pack);
         Ok(())
@@ -140,7 +150,7 @@ fn enable_before(server: &mut Server, context: &CommandContext, source: &Command
 
 fn enable_last(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let pack = get_pack(server, context, "name", true)?;
-    enable_pack(server, source, pack, |_, list, pack| {
+    enable_pack(server, source, pack, ENABLE_LAST_FRAME, |_, list, pack| {
         list.push(pack);
         Ok(())
     })
@@ -148,7 +158,7 @@ fn enable_last(server: &mut Server, context: &CommandContext, source: &CommandSo
 
 fn enable_first(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let pack = get_pack(server, context, "name", true)?;
-    enable_pack(server, source, pack, |_, list, pack| {
+    enable_pack(server, source, pack, ENABLE_FIRST_FRAME, |_, list, pack| {
         list.insert(0, pack);
         Ok(())
     })
@@ -162,7 +172,7 @@ fn disable_pack(server: &mut Server, context: &CommandContext, source: &CommandS
     }
     source.send_success(server, || tr("commands.datapack.modify.disable", vec![Arg::Component(unopened.chat_link(true))]), true);
     let ids: Vec<String> = selected.iter().map(|pack| pack.id().to_string()).collect();
-    reload_packs(server, &ids, source);
+    reload_packs(server, &ids, invoker_frames(&[DISABLE_PACK_FRAME, DISABLE_FRAME], source), source);
     Ok(selected.len() as i32)
 }
 

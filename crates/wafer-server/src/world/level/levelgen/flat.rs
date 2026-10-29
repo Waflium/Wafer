@@ -8,6 +8,12 @@ use crate::world::item::component::values::decode_item;
 use crate::world::level::chunk::FlatLevelSource;
 
 const Y_SIZE: i64 = 4064;
+const STRUCTURE_SET: &str = "minecraft:worldgen/structure_set";
+const BIOME: &str = "minecraft:worldgen/biome";
+
+fn allows_unbound_references() -> bool {
+    !codec::is_nbt_ops() && crate::core::data_registries::is_loading()
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum StructureOverrides {
@@ -25,9 +31,26 @@ impl StructureOverrides {
     }
 
     fn from_strings<'a>(single: Option<&'a str>, list: Option<Vec<&'a str>>) -> Option<StructureOverrides> {
-        let structure_set = |id: &str| crate::resources::identifier::parse(id).ok().filter(|id| crate::core::data_registries::json_entries("minecraft:worldgen/structure_set").iter().any(|(name, _)| name == id));
+        let structure_set = |id: &str| {
+            let id = crate::resources::identifier::parse(id).ok()?;
+            if crate::core::data_registries::json_entries(STRUCTURE_SET).iter().any(|(name, _)| *name == id) {
+                return Some(id);
+            }
+            if allows_unbound_references() {
+                crate::core::data_registries::unknown_reference(STRUCTURE_SET, &id);
+                return Some(id);
+            }
+            None
+        };
+        let tag = |tag: &str| {
+            let key = crate::resources::identifier::read(tag).ok()?;
+            if !crate::world::item::component::codec::tag_exists(STRUCTURE_SET, &key) && crate::core::data_registries::missing_tag(STRUCTURE_SET, &key).is_some() {
+                return None;
+            }
+            Some(StructureOverrides::Tag(key))
+        };
         match (single, list) {
-            (Some(tag), _) if tag.starts_with('#') => crate::resources::identifier::parse(&tag[1..]).ok().map(StructureOverrides::Tag),
+            (Some(name), _) if name.starts_with('#') => tag(&name[1..]),
             (Some(id), _) => structure_set(id).map(|id| StructureOverrides::Direct(vec![id])),
             (None, Some(ids)) => ids.into_iter().map(structure_set).collect::<Option<Vec<_>>>().map(StructureOverrides::Direct),
             (None, None) => None,
@@ -85,7 +108,14 @@ pub fn parse_settings(json: &Value) -> Parsed {
     };
     let lakes = optional_boolean(object.get("lakes"), &mut errors);
     let features = optional_boolean(object.get("features"), &mut errors);
-    let biome = object.get("biome").and_then(Value::as_str).and_then(|id| crate::resources::identifier::parse(id).ok()).and_then(|id| Biome::by_name(&id));
+    let biome = object.get("biome").and_then(Value::as_str).and_then(|id| crate::resources::identifier::parse(id).ok()).and_then(|id| {
+        Biome::by_name(&id).or_else(|| {
+            allows_unbound_references().then(|| {
+                crate::core::data_registries::unknown_reference(BIOME, &id);
+                Biome::by_name("minecraft:plains").expect("plains biome")
+            })
+        })
+    });
     let biome = biome.unwrap_or_else(|| {
         error!("Unknown biome, defaulting to plains");
         Biome::by_name("minecraft:plains").expect("plains biome")

@@ -9,7 +9,7 @@ use super::packs::resources::MultiPackResourceManager;
 use super::reloadable_server_resources::ReloadableServerResources;
 use super::world_stem::WorldStem;
 use super::configure_pack_repository;
-use crate::tags::load_tags_for_existing_registries;
+use crate::tags::{ExistingTagLoading, load_tags_for_existing_registries};
 use crate::world::flag::FeatureFlagSet;
 use crate::world::level::data_pack_config::DataPackConfig;
 use crate::world::level::world_data_configuration::WorldDataConfiguration;
@@ -238,8 +238,8 @@ pub fn main(args: Vec<String>) {
         std::thread::Builder::new()
             .name("Worker-Main-1".into())
             .spawn_scoped(scope, || {
-                let postponed_tags = wafer_data::prepare_tags(load_tags_for_existing_registries(&resource_manager, true));
-                wafer_data::with_pending_tags(postponed_tags, crate::core::data_registries::validate)?;
+                let postponed_tags = wafer_data::prepare_tags(load_tags_for_existing_registries(&resource_manager, ExistingTagLoading::Startup));
+                wafer_data::with_pending_tags(postponed_tags, || crate::core::data_registries::validate(&resource_manager))?;
                 let world_data = level_data.unwrap_or_else(|| {
                     info!("No existing world data, creating new world");
                     create_new_world_data(&worker_properties, worker_data_configuration, bonus_chest)

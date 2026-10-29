@@ -19,16 +19,16 @@ use crate::world::level::dimension::dimension_type;
 #[derive(Clone)]
 pub struct WorldDimensions {
     pub overworld: ChunkGenerator,
-    pub nether: ChunkGenerator,
-    pub end: ChunkGenerator,
+    pub nether: Option<ChunkGenerator>,
+    pub end: Option<ChunkGenerator>,
 }
 
 impl WorldDimensions {
     pub fn normal(seed: i64) -> WorldDimensions {
         WorldDimensions {
             overworld: ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::overworld(seed))),
-            nether: ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::nether(seed))),
-            end: ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::end(seed))),
+            nether: Some(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::nether(seed)))),
+            end: Some(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::end(seed)))),
         }
     }
 
@@ -48,7 +48,11 @@ impl WorldDimensions {
 
     pub fn from_json(dimensions: &Value, seed: i64) -> Result<WorldDimensions, String> {
         let generator = |name: &str| generator_from_json(&dimensions[name]["generator"], seed);
-        Ok(WorldDimensions { overworld: generator("minecraft:overworld")?, nether: generator("minecraft:the_nether")?, end: generator("minecraft:the_end")? })
+        let optional = |name: &str| dimensions.get(name).map(|_| generator(name)).transpose();
+        if dimensions.get("minecraft:overworld").is_none() {
+            return Err("Overworld settings missing".into());
+        }
+        Ok(WorldDimensions { overworld: generator("minecraft:overworld")?, nether: optional("minecraft:the_nether")?, end: optional("minecraft:the_end")? })
     }
 
     pub fn from_nbt(dimensions: &Nbt, seed: i64) -> Result<WorldDimensions, String> {
@@ -56,7 +60,8 @@ impl WorldDimensions {
             let generator = dimensions.get(name).and_then(|d| d.get("generator")).ok_or_else(|| format!("No key {name}"))?;
             generator_from_nbt(generator, seed)
         };
-        Ok(WorldDimensions { overworld: generator("minecraft:overworld")?, nether: generator("minecraft:the_nether")?, end: generator("minecraft:the_end")? })
+        let optional = |name: &str| dimensions.get(name).map(|_| generator(name)).transpose();
+        Ok(WorldDimensions { overworld: generator("minecraft:overworld")?, nether: optional("minecraft:the_nether")?, end: optional("minecraft:the_end")? })
     }
 
     pub fn is_debug(&self) -> bool {
@@ -65,11 +70,14 @@ impl WorldDimensions {
 
     pub fn to_nbt(&self) -> Nbt {
         let stem = |generator: &ChunkGenerator, ty: &str| Nbt::Compound(vec![("generator".into(), generator_to_nbt(generator)), ("type".into(), Nbt::String(ty.into()))]);
-        Nbt::Compound(vec![
-            ("minecraft:overworld".into(), stem(&self.overworld, "minecraft:overworld")),
-            ("minecraft:the_nether".into(), stem(&self.nether, "minecraft:the_nether")),
-            ("minecraft:the_end".into(), stem(&self.end, "minecraft:the_end")),
-        ])
+        let mut stems = vec![("minecraft:overworld".to_string(), stem(&self.overworld, "minecraft:overworld"))];
+        if let Some(nether) = &self.nether {
+            stems.push(("minecraft:the_nether".into(), stem(nether, "minecraft:the_nether")));
+        }
+        if let Some(end) = &self.end {
+            stems.push(("minecraft:the_end".into(), stem(end, "minecraft:the_end")));
+        }
+        Nbt::Compound(stems)
     }
 }
 
@@ -186,9 +194,6 @@ fn biome_source_from_json(json: &Value) -> Result<BiomeSource, String> {
         Some("minecraft:checkerboard") => {
             let biomes = crate::core::holder_set::HolderSet::decode("minecraft:worldgen/biome", &crate::world::item::component::json_to_nbt(&json["biomes"]))?;
             let allowed: Vec<Biome> = biomes.contents().iter().map(|&id| Biome(id as u16)).collect();
-            if allowed.is_empty() {
-                return Err("Empty biome list".into());
-            }
             Ok(BiomeSource::Checkerboard(crate::world::level::biome::biome_source::CheckerboardColumnBiomeSource::new(allowed, json["scale"].as_i64().unwrap_or(2) as i32)))
         }
         Some("minecraft:the_end") => Ok(BiomeSource::TheEnd(TheEndBiomeSource::create())),
@@ -313,6 +318,21 @@ mod tests {
         assert!(stem_error(&noise(r#"{"type":"minecraft:checkerboard","biomes":"minecraft:plains","scale":99}"#)).ends_with("Value 99 outside of range [0:62]"));
         assert!(stem_error(&noise(r#"{"type":"minecraft:multi_noise"}"#))
             .ends_with(r#"No key preset in MapLike[{"type":"minecraft:multi_noise"}]; No key biomes in MapLike[{"type":"minecraft:multi_noise"}]"#));
+    }
+
+    #[test]
+    fn a_preset_with_only_an_overworld_has_no_nether_or_end() {
+        let flat = r#"{"type":"minecraft:flat","settings":{"biome":"minecraft:plains","layers":[{"block":"minecraft:stone","height":1}]}}"#;
+        let only_overworld: Value = serde_json::from_str(&format!(r#"{{"minecraft:overworld":{{"type":"minecraft:overworld","generator":{flat}}}}}"#)).unwrap();
+        let dimensions = WorldDimensions::from_json(&only_overworld, 1).unwrap();
+        assert!(matches!(dimensions.overworld, ChunkGenerator::Flat(_)));
+        assert!(dimensions.nether.is_none() && dimensions.end.is_none());
+        let Nbt::Compound(stems) = dimensions.to_nbt() else { panic!("dimensions are a compound") };
+        assert_eq!(stems.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), ["minecraft:overworld"]);
+        let with_nether: Value = serde_json::from_str(&format!(r#"{{"minecraft:overworld":{{"generator":{flat}}},"minecraft:the_nether":{{"generator":{flat}}}}}"#)).unwrap();
+        let dimensions = WorldDimensions::from_json(&with_nether, 1).unwrap();
+        assert!(dimensions.nether.is_some() && dimensions.end.is_none());
+        assert_eq!(WorldDimensions::from_json(&serde_json::json!({}), 1).err().as_deref(), Some("Overworld settings missing"));
     }
 
     #[test]

@@ -148,7 +148,34 @@ const UNSYNCHRONIZED: &[(&str, &[(&str, &str)])] = &[
     ("minecraft:villager_trade", wafer_data::VILLAGER_TRADES),
     ("minecraft:trade_set", wafer_data::TRADE_SETS),
     ("minecraft:enchantment_provider", &[]),
+    ("minecraft:worldgen/flat_level_generator_preset", &[]),
 ];
+
+pub const DIMENSION_REGISTRY: &str = "minecraft:dimension";
+
+pub fn is_dimension_registry(registry: &str) -> bool {
+    registry == DIMENSION_REGISTRY
+}
+
+pub fn dynamic_registry_names() -> impl Iterator<Item = &'static str> {
+    UNSYNCHRONIZED.iter().map(|&(name, _)| name).chain(std::iter::once(DIMENSION_REGISTRY))
+}
+
+pub fn is_dynamic_registry(registry: &str) -> bool {
+    registry == DIMENSION_REGISTRY || get(registry).is_some()
+}
+
+static TAG_UNBOUND: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+
+pub fn record_unbound_tag_value(registry: &str, key: &str) {
+    TAG_UNBOUND.lock().unwrap().push((registry.to_string(), key.to_string()));
+}
+
+static TAG_REFERENCES: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+
+pub fn record_tag_reference(registry: &str, key: &str) {
+    TAG_REFERENCES.lock().unwrap().push((registry.to_string(), key.to_string()));
+}
 
 struct PackElement {
     registry: &'static str,
@@ -292,7 +319,6 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
         unsynchronized.push((name, entries));
         registries.insert(name, registry);
     }
-    wafer_data::set_data_registry_entries(unsynchronized);
     let mut stems: Vec<(&'static str, Value)> = Vec::new();
     let dimension_resources = resource_manager.list_resources("dimension", ".json");
     for (location, resource) in &dimension_resources {
@@ -303,6 +329,8 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
         }
     }
     stems.sort_by_key(|(id, _)| file_key(id));
+    unsynchronized.push((DIMENSION_REGISTRY, &*Box::leak(stems.iter().map(|&(id, _)| id).collect::<Vec<_>>().into_boxed_slice())));
+    wafer_data::set_data_registry_entries(unsynchronized);
     LEVEL_STEMS.store(Box::into_raw(Box::new(stems)), Ordering::Release);
     let dimension_registry = &registries["minecraft:dimension_type"];
     let dimension_entries = wafer_data::SyncedRegistry::get("minecraft:dimension_type").entries;
@@ -372,14 +400,15 @@ fn validate_timelines(errors: &mut LoadingErrors) {
     }
 }
 
-pub fn validate() -> Result<(), JavaThrowable> {
+pub fn validate(resource_manager: &MultiPackResourceManager) -> Result<(), JavaThrowable> {
     let pack_elements = std::mem::take(&mut *PACK_ELEMENTS.lock().unwrap());
-    let (dimensions, worldgen): (Vec<&PackElement>, Vec<&PackElement>) = pack_elements.iter().partition(|element| element.registry == "minecraft:dimension");
-    validate_registries(&worldgen, true)?;
-    validate_registries(&dimensions, false)
+    let (dimensions, worldgen): (Vec<&PackElement>, Vec<&PackElement>) = pack_elements.iter().partition(|element| element.registry == DIMENSION_REGISTRY);
+    validate_registries(&worldgen, true, std::mem::take(&mut *TAG_UNBOUND.lock().unwrap()), std::mem::take(&mut *TAG_REFERENCES.lock().unwrap()))?;
+    crate::tags::load_tags_for_dimension_registry(resource_manager);
+    validate_registries(&dimensions, false, std::mem::take(&mut *TAG_UNBOUND.lock().unwrap()), std::mem::take(&mut *TAG_REFERENCES.lock().unwrap()))
 }
 
-fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool) -> Result<(), JavaThrowable> {
+fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool, tag_unbound: Vec<(String, String)>, tag_references: Vec<(String, String)>) -> Result<(), JavaThrowable> {
     let mut errors = LoadingErrors(Default::default());
     UNBOUND.with(|unbound| unbound.replace(worldgen_stage.then(Vec::new)));
     UNBOUND_TAGS.with(|unbound| unbound.replace(worldgen_stage.then(Vec::new)));
@@ -407,7 +436,10 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool) -> 
     }
     let unbound_references = UNBOUND.with(|unbound| unbound.take()).unwrap_or_default();
     let referenced = REFERENCED.with(|referenced| referenced.take()).unwrap_or_default();
-    let unbound_values = group_unbound(with_failed_references(unbound_references, referenced, &failed));
+    let mut unbound_values = with_failed_references(unbound_references, referenced, &failed);
+    unbound_values.extend(tag_unbound);
+    unbound_values.extend(tag_references.into_iter().filter(|reference| errors.0.contains_key(reference)));
+    let unbound_values = group_unbound(unbound_values);
     let unbound_tags = group_unbound(UNBOUND_TAGS.with(|unbound| unbound.take()).unwrap_or_default());
     for (registry, keys) in &unbound_tags {
         if !unbound_values.contains_key(registry) {
@@ -450,8 +482,16 @@ fn decode(registry: &str, json: &Value) -> Result<(), String> {
         "minecraft:worldgen/multi_noise_biome_source_parameter_list" => crate::world::level::biome::decode_parameter_list(&json_to_nbt(json)),
         "minecraft:worldgen/biome" => crate::world::level::biome::validate(json),
         "minecraft:dimension" => levelgen::world_dimensions::decode_level_stem(&json_to_nbt(json)).into_result().map(drop),
-        "minecraft:enchantment" => crate::world::item::enchantment::enchantment::Enchantment::decode(&json_to_nbt(json)).map(drop),
-        "minecraft:enchantment_provider" => crate::world::item::enchantment::providers::enchantment_provider::EnchantmentProvider::parse(json).map(drop),
+        "minecraft:enchantment" => {
+            let tag = json_to_nbt(json);
+            crate::world::item::enchantment::enchantment::direct_codec().0.decode(&tag)?;
+            crate::world::item::enchantment::enchantment::Enchantment::decode(&tag).map(drop)
+        }
+        "minecraft:enchantment_provider" => {
+            use crate::world::item::enchantment::providers::enchantment_provider;
+            enchantment_provider::direct_codec().0.decode(&json_to_nbt(json))?;
+            enchantment_provider::EnchantmentProvider::parse(json).map(drop)
+        }
         "minecraft:villager_trade" => crate::world::item::trading::villager_trade::VillagerTrade::decode(&json_to_nbt(json)).map(drop),
         "minecraft:trade_set" => crate::world::item::trading::trade_set::TradeSet::decode(&json_to_nbt(json)).map(drop),
         "minecraft:trial_spawner" => crate::world::level::block::entity::trialspawner::trial_spawner_config::TrialSpawnerConfig::decode_direct(&json_to_nbt(json)).map(drop),
@@ -807,6 +847,61 @@ mod tests {
         assert_eq!(distance.get("horizontal"), Some(&Nbt::Double(3.0)));
         assert_eq!(distance.get("x").unwrap().get("min"), Some(&Nbt::Double(1.0)));
         assert_eq!(tag.get("effects").unwrap().get("minecraft:prevent_equipment_drop"), Some(&Nbt::Compound(Vec::new())));
+    }
+
+    fn decode_error(registry: &str, json: serde_json::Value) -> String {
+        crate::nbt::with_json_source(|| super::decode(registry, &json)).expect_err("a decode error")
+    }
+
+    #[test]
+    fn enchantments_report_the_vanilla_messages_of_their_codecs() {
+        let enchantment = |effects: serde_json::Value| {
+            serde_json::json!({
+                "anvil_cost": 1,
+                "description": "Plain",
+                "effects": effects,
+                "max_cost": {"base": 3, "per_level_above_first": 4},
+                "max_level": 3,
+                "min_cost": {"base": 1, "per_level_above_first": 2},
+                "slots": ["mainhand"],
+                "supported_items": ["stick"],
+                "weight": 5000
+            })
+        };
+        assert_eq!(decode_error("minecraft:enchantment", enchantment(serde_json::json!({}))), "Value must be within range [1;1024]: 5000");
+        let mut json = enchantment(serde_json::json!({"minecraft:tick": [{"effect": {"type": "minecraft:replace_block", "block_state": {"id": "minecraft:stone"}, "offset": [1, 2]}}]}));
+        json["weight"] = serde_json::json!(5);
+        let error = decode_error("minecraft:enchantment", json);
+        assert!(error.starts_with("Input is not a list of 3 ints missed input: {\"minecraft:tick\":"), "{error}");
+    }
+
+    #[test]
+    fn enchantment_providers_report_the_vanilla_messages_of_their_codecs() {
+        assert_eq!(
+            decode_error("minecraft:enchantment_provider", serde_json::json!({"type": "minecraft:by_cost"})),
+            r#"No key cost in MapLike[{"type":"minecraft:by_cost"}]; No key enchantments in MapLike[{"type":"minecraft:by_cost"}]"#
+        );
+        assert_eq!(
+            decode_error("minecraft:enchantment_provider", serde_json::json!({"type": "minecraft:by_cost_with_difficulty", "enchantments": [], "min_cost": 0, "max_cost_span": 20000})),
+            "Value must be within range [0;10000]: 20000; Value must be within range [1;10000]: 0"
+        );
+        assert_eq!(decode_error("minecraft:enchantment_provider", serde_json::json!({"type": "minecraft:single", "enchantment": 5, "level": 1})), "Not a string: 5");
+    }
+
+    #[test]
+    fn flat_level_generator_presets_are_loaded_and_leave_unknown_references_unbound() {
+        let entries = super::json_entries("minecraft:worldgen/flat_level_generator_preset");
+        assert!(super::get("minecraft:worldgen/flat_level_generator_preset").is_some());
+        assert!(entries.iter().any(|(name, _)| *name == "minecraft:classic_flat"));
+        let preset = serde_json::json!({
+            "display": "minecraft:grass_block",
+            "settings": {"biome": "test:nobiome", "layers": [{"block": "minecraft:stone", "height": 1}], "structure_overrides": ["test:nostructset"]}
+        });
+        super::with_loading(|| {
+            assert!(crate::nbt::with_json_source(|| super::decode("minecraft:worldgen/flat_level_generator_preset", &preset)).is_ok());
+            let unbound = super::UNBOUND.with(|unbound| unbound.borrow().clone().unwrap());
+            assert_eq!(unbound, vec![("minecraft:worldgen/biome".to_string(), "test:nobiome".to_string()), ("minecraft:worldgen/structure_set".to_string(), "test:nostructset".to_string())]);
+        });
     }
 
     #[test]

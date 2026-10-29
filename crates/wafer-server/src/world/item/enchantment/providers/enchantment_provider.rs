@@ -9,13 +9,28 @@ use super::single_enchantment::SingleEnchantment;
 use crate::core::holder_set::HolderSet;
 use crate::world::difficulty_instance::DifficultyInstance;
 use crate::world::item::ItemStack;
-use crate::world::item::component::codec;
+use crate::util::valueproviders::int_provider_codec;
+use crate::world::item::component::codec::{self, Codec, Dispatch, RangeError, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, req};
 use crate::world::item::component::values::ItemEnchantments;
 
 pub enum EnchantmentProvider {
     ByCost(EnchantmentsByCost),
     ByCostWithDifficulty(EnchantmentsByCostWithDifficulty),
     Single(SingleEnchantment),
+}
+
+pub fn direct_codec() -> Pair {
+    let provider_cost = |name: &'static str, min: i32| req(name, (Codec::Int(min, 10000, RangeError::Within), Stream::Int));
+    let cases = vec![
+        ("minecraft:by_cost", vec![req("enchantments", types::holder_set("minecraft:enchantment")), req("cost", int_provider_codec())]),
+        (
+            "minecraft:by_cost_with_difficulty",
+            vec![req("enchantments", types::holder_set("minecraft:enchantment")), provider_cost("min_cost", 1), provider_cost("max_cost_span", 0)],
+        ),
+        ("minecraft:single", vec![req("enchantment", types::fixed("minecraft:enchantment")), req("level", int_provider_codec())]),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:enchantment_provider_type"), cases })), Stream::Dispatch)
 }
 
 impl EnchantmentProvider {

@@ -192,6 +192,7 @@ pub fn timeline_marker_defined_multiple_times(message: String) -> JavaThrowable 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TagLoadContext {
     ExistingRegistries,
+    ReloadedRegistries(&'static [&'static str]),
     DynamicRegistry,
     FunctionLibrary,
 }
@@ -210,6 +211,26 @@ const TAG_LOAD_EXISTING_PIPELINE: [&str; 11] = [
     "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
     "java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:723)",
     "net.minecraft.tags.TagLoader.loadTagsForExistingRegistries(TagLoader.java:141)",
+];
+const TAG_LOAD_RELOAD_PIPELINE: [&str; 11] = [
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "com.google.common.collect.CollectSpliterators$1WithCharacteristics.lambda$forEachRemaining$0(CollectSpliterators.java:70)",
+    "java.base/java.util.stream.Streams$RangeIntSpliterator.forEachRemaining(Streams.java:104)",
+    "com.google.common.collect.CollectSpliterators$1WithCharacteristics.forEachRemaining(CollectSpliterators.java:70)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:723)",
+    "net.minecraft.tags.TagLoader.loadTagsForExistingRegistries(TagLoader.java:141)",
+];
+const TAG_LOAD_RELOAD_RESOURCES: [&str; 5] = [
+    "net.minecraft.server.MinecraftServer.lambda$reloadResources$1(MinecraftServer.java:1522)",
+    "java.base/java.util.concurrent.CompletableFuture.uniComposeStage(CompletableFuture.java:1208)",
+    "java.base/java.util.concurrent.CompletableFuture.thenCompose(CompletableFuture.java:2368)",
+    "net.minecraft.server.MinecraftServer.reloadResources(MinecraftServer.java:1518)",
+    "net.minecraft.server.commands.ReloadCommand.reloadPacks(ReloadCommand.java:22)",
 ];
 const TAG_LOAD_WORLD_LOADER: [&str; 4] = [
     "net.minecraft.server.WorldLoader.lambda$load$0(WorldLoader.java:33)",
@@ -241,6 +262,13 @@ fn tag_load_frames(context: TagLoadContext, line: &'static str) -> Vec<&'static 
             frames.extend(TAG_LOAD_EXISTING_PIPELINE);
             frames.extend(TAG_LOAD_WORLD_LOADER);
             frames.extend(&FORK_JOIN_TAIL[1..]);
+        }
+        TagLoadContext::ReloadedRegistries(invoker) => {
+            frames.push(TAG_LOAD_PENDING_TAGS);
+            frames.push(TAG_LOAD_EXISTING_LAMBDA);
+            frames.extend(TAG_LOAD_RELOAD_PIPELINE);
+            frames.extend(TAG_LOAD_RELOAD_RESOURCES);
+            frames.extend_from_slice(invoker);
         }
         TagLoadContext::DynamicRegistry => {
             frames.extend(TAG_LOAD_REGISTRY);

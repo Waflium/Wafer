@@ -291,8 +291,8 @@ impl Server {
         let data_configuration = configure_pack_repository(&mut pack_repository, &initial_data_config, saved.is_none(), false);
         let resource_manager = MultiPackResourceManager::new(pack_repository.open_all_selected());
         crate::core::data_registries::load(&resource_manager);
-        let postponed_tags = wafer_data::prepare_tags(crate::tags::load_tags_for_existing_registries(&resource_manager, true));
-        wafer_data::with_pending_tags(postponed_tags, crate::core::data_registries::validate).map_err(std::io::Error::other)?;
+        let postponed_tags = wafer_data::prepare_tags(crate::tags::load_tags_for_existing_registries(&resource_manager, crate::tags::ExistingTagLoading::Startup));
+        wafer_data::with_pending_tags(postponed_tags, || crate::core::data_registries::validate(&resource_manager)).map_err(std::io::Error::other)?;
         let mut data_packs = ReloadableServerResources::load_resources(&resource_manager, postponed_tags, config.function_permission_level).map_err(std::io::Error::other)?;
         data_packs.update_components_and_static_registry_tags();
         data_packs.finalize_recipe_loading();
@@ -344,19 +344,19 @@ impl Server {
             (data.seed, data.game_time, data.dimensions, config.game_mode, data.difficulty, data.difficulty_locked, data.hardcore);
         let world_dimensions = dimensions.clone();
         let level_stems = crate::core::data_registries::level_stems();
-        let stem = |name: &str, generator: ChunkGenerator| -> (String, ChunkGenerator) {
+        let stem = |name: &str, generator: Option<ChunkGenerator>| -> Option<(String, ChunkGenerator)> {
             match level_stems.iter().find(|(id, _)| *id == name) {
                 Some((_, json)) => match WorldDimensions::stem_from_json(json, seed) {
-                    Ok(stem) => stem,
+                    Ok(stem) => Some(stem),
                     Err(e) => {
                         error!("Failed to load dimension {name}: {e}");
-                        (name.to_owned(), generator)
+                        generator.map(|generator| (name.to_owned(), generator))
                     }
                 },
-                None => (name.to_owned(), generator),
+                None => generator.map(|generator| (name.to_owned(), generator)),
             }
         };
-        let (overworld_type, overworld_generator) = stem(OVERWORLD, dimensions.overworld);
+        let (overworld_type, overworld_generator) = stem(OVERWORLD, Some(dimensions.overworld)).expect("overworld generator");
         let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, &overworld_type, overworld_generator, is_debug, generate_structures, seed);
         overworld.chunks.game_rules = game_rules.clone();
         dedicated::set_overworld_created();
@@ -388,7 +388,7 @@ impl Server {
         }
         let mut levels = vec![overworld];
         for (dimension, generator) in [(THE_END, dimensions.end), (THE_NETHER, dimensions.nether)] {
-            let (dimension_type, generator) = stem(dimension, generator);
+            let Some((dimension_type, generator)) = stem(dimension, generator) else { continue };
             levels.push(create_level(&config, world_dir.as_ref(), dimension, &dimension_type, generator, is_debug, generate_structures, seed));
         }
         for (dimension, json) in level_stems.iter().filter(|(id, _)| ![OVERWORLD, THE_NETHER, THE_END].contains(id)) {
@@ -847,10 +847,10 @@ impl Server {
         self.stopping = true;
     }
 
-    pub fn reload_resources<S: AsRef<str>>(&mut self, packs_to_enable: &[S]) -> Result<(), crate::util::java_throwable::JavaThrowable> {
+    pub fn reload_resources<S: AsRef<str>>(&mut self, packs_to_enable: &[S], invoker: &'static [&'static str]) -> Result<(), crate::util::java_throwable::JavaThrowable> {
         let packs_to_load = packs_to_enable.iter().filter_map(|id| self.pack_repository.pack(id.as_ref())).map(|pack| pack.open()).collect();
         let resource_manager = MultiPackResourceManager::new(packs_to_load);
-        let postponed_tags = wafer_data::prepare_tags(crate::tags::load_tags_for_existing_registries(&resource_manager, false));
+        let postponed_tags = wafer_data::prepare_tags(crate::tags::load_tags_for_existing_registries(&resource_manager, crate::tags::ExistingTagLoading::Reload(invoker)));
         let mut resources = ReloadableServerResources::load_resources(&resource_manager, postponed_tags, self.config.function_permission_level)?;
         self.pack_repository.set_selected(packs_to_enable);
         self.data_configuration = WorldDataConfiguration::new(get_selected_packs(&self.pack_repository, true), self.data_configuration.enabled_features);
@@ -2007,6 +2007,7 @@ pub fn run(
                 let message = format!("net.minecraft.ReportedException: {}\nCaused by: {}", reported.0.title(), reported.0.exception());
                 (Some(reported.0), message)
             }
+            Err(panic) if panic.is::<crate::world::level::biome::biome_source::ArithmeticException>() => (None, "java.lang.ArithmeticException: / by zero".to_string()),
             Err(panic) => (None, panic.downcast_ref::<String>().cloned().or_else(|| panic.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default()),
         };
         error!("Encountered an unexpected exception\n{message}");

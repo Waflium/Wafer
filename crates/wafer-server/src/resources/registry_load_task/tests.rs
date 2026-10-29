@@ -66,6 +66,14 @@ fn a_tag_failure_names_where_the_tags_are_loaded() {
 }
 
 #[test]
+fn a_reload_tag_failure_ends_in_the_command_that_reloaded() {
+    let trace = tag_decode_failed(TagLoadContext::ReloadedRegistries(&["ta.Command.run(Command.java:1)"]), "Not a json array: 5").print_stack_trace();
+    assert!(trace.contains("TagLoader.load(TagLoader.java:61)\n\tat net.minecraft.tags.TagLoader.loadPendingTags(TagLoader.java:163)"));
+    assert!(trace.contains("Streams$RangeIntSpliterator.forEachRemaining(Streams.java:104)"));
+    assert!(trace.ends_with("MinecraftServer.reloadResources(MinecraftServer.java:1518)\n\tat net.minecraft.server.commands.ReloadCommand.reloadPacks(ReloadCommand.java:22)\n\tat ta.Command.run(Command.java:1)\n"));
+}
+
+#[test]
 fn unbound_registry_errors_come_from_the_freeze() {
     let values = unbound_values("ResourceKey[minecraft:root / minecraft:worldgen/biome]", &["ta:foo".to_string(), "minecraft:nope".to_string()]).print_stack_trace();
     assert!(values.starts_with("java.lang.IllegalStateException: Unbound values in registry ResourceKey[minecraft:root / minecraft:worldgen/biome]: [ta:foo, minecraft:nope]\n\tat net.minecraft.core.MappedRegistry.freeze(MappedRegistry.java:300)\n"));

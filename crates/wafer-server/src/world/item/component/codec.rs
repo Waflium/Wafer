@@ -345,7 +345,7 @@ impl Codec {
                     }
                 }
                 (_, Some(direct)) => direct.decode(tag),
-                (_, None) => Err("Not a string".into()),
+                (_, None) => Err(string(tag).expect_err("not a string")),
             },
             Codec::HolderSet(reg) => decode_holder_set(reg, tag),
             Codec::Enum(names) => {

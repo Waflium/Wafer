@@ -1609,7 +1609,11 @@ impl ServerLevel {
                     }
                 }
             }
-            if self.pending_portal_teleport.is_some() || self.pending_ender_pearl_teleport.is_some() || !self.pending_minecart_commands.is_empty() {
+            if self.pending_portal_teleport.is_some()
+                || self.pending_ender_pearl_teleport.is_some()
+                || !self.pending_minecart_commands.is_empty()
+                || !self.pending_enchantment_functions.is_empty()
+            {
                 self.entity_tick_range = Some((i + 1, end));
                 return true;
             }

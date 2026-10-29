@@ -233,7 +233,12 @@ fn decode_registry<T>(registry: &str, sources: &[Source], decode: fn(&Nbt) -> Re
 
 pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [RegistryTags], current: Option<&ReloadableRegistries>) -> Result<LoadResult, JavaThrowable> {
     let sources: Vec<Vec<Source>> = RELOADABLE_REGISTRIES.iter().map(|registry| list_sources(resource_manager, registry)).collect();
-    if current.is_some_and(|current| std::ptr::eq(current.tags, tags) && current.sources == sources) {
+    UNBOUND.with(|unbound| unbound.borrow_mut().clear());
+    for (&registry, sources) in RELOADABLE_REGISTRIES.iter().zip(&sources) {
+        let ids: HashSet<&str> = sources.iter().map(|source| source.id.as_str()).collect();
+        crate::tags::load_tags_for_loaded_registry(resource_manager, registry, &|id| ids.contains(id), |id| record_unbound(registry, id));
+    }
+    if UNBOUND.with(|unbound| unbound.borrow().is_empty()) && current.is_some_and(|current| std::ptr::eq(current.tags, tags) && current.sources == sources) {
         return Ok(LoadResult::Unchanged);
     }
     let keys = RELOADABLE_REGISTRIES.iter().zip(&sources).map(|(&registry, sources)| (registry, sources.iter().map(|source| source.id.clone()).collect())).collect();

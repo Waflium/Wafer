@@ -34,7 +34,10 @@ impl EnchantRandomlyFunction {
         let names = registry("minecraft:enchantment");
         let candidates: Vec<&'static str> = match &self.options {
             Some(options) => options.contents().iter().map(|&id| names[id as usize]).collect(),
-            None => names.to_vec(),
+            None => match crate::core::data_registries::get("minecraft:enchantment") {
+                Some(enchantments) => enchantments.network_order().map(|id| names[id as usize]).collect(),
+                None => names.to_vec(),
+            },
         };
         let compatible_enchantments: Vec<&'static str> = candidates
             .into_iter()
