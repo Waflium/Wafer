@@ -202,44 +202,66 @@ fn furthest_corner(direction: Vec3) -> (i32, i32, i32) {
 }
 
 pub fn for_each_block_intersected_between(from: Vec3, to: Vec3, aabb_at_target: &AABB, mut visit: impl FnMut(BlockPos, i32) -> bool) -> bool {
+    for_each_block_intersected_between_grouped(from, to, aabb_at_target, |pos, iteration, _| visit(pos, iteration)).0
+}
+
+pub fn for_each_block_intersected_between_grouped(
+    from: Vec3,
+    to: Vec3,
+    aabb_at_target: &AABB,
+    mut visit: impl FnMut(BlockPos, i32, usize) -> bool,
+) -> (bool, Vec<BlockPos>) {
+    let mut cursors: Vec<BlockPos> = Vec::new();
     let travel = to.subtract(from);
     if travel.length_sqr() < mth::square(1.0e-5f32 as f64) {
         let start = BlockPos::containing(aabb_at_target.min_x, aabb_at_target.min_y, aabb_at_target.min_z);
         let end = BlockPos::containing(aabb_at_target.max_x, aabb_at_target.max_y, aabb_at_target.max_z);
+        cursors.push(BlockPos::new(start.x.max(end.x), start.y.max(end.y), start.z.max(end.z)));
         for z in start.z.min(end.z)..=start.z.max(end.z) {
             for y in start.y.min(end.y)..=start.y.max(end.y) {
                 for x in start.x.min(end.x)..=start.x.max(end.x) {
-                    if !visit(BlockPos::new(x, y, z), 0) {
-                        return false;
+                    let pos = BlockPos::new(x, y, z);
+                    if !visit(pos, 0, 0) {
+                        cursors[0] = pos;
+                        return (false, cursors);
                     }
                 }
             }
         }
-        return true;
+        return (true, cursors);
     }
     let mut visited: FastSet<BlockPos> = FastSet::default();
     let (first, second) = corners_of(&aabb_at_target.move_vec(travel.scale(-1.0)));
-    for pos in between_corners_in_direction(first, second, travel) {
-        if !visit(pos, 0) {
-            return false;
+    let positions = between_corners_in_direction(first, second, travel);
+    let group = cursors.len();
+    cursors.push(positions[positions.len() - 1]);
+    for pos in positions {
+        if !visit(pos, 0, group) {
+            cursors[group] = pos;
+            return (false, cursors);
         }
         visited.insert(pos);
     }
-    let Some(iterations) = add_collisions_along_travel(&mut visited, travel, aabb_at_target, &mut visit) else { return false };
+    let Some(iterations) = add_collisions_along_travel(&mut visited, travel, aabb_at_target, &mut cursors, &mut visit) else { return (false, cursors) };
     let (first, second) = corners_of(aabb_at_target);
-    for pos in between_corners_in_direction(first, second, travel) {
-        if visited.insert(pos) && !visit(pos, iterations + 1) {
-            return false;
+    let positions = between_corners_in_direction(first, second, travel);
+    let group = cursors.len();
+    cursors.push(positions[positions.len() - 1]);
+    for pos in positions {
+        if visited.insert(pos) && !visit(pos, iterations + 1, group) {
+            cursors[group] = pos;
+            return (false, cursors);
         }
     }
-    true
+    (true, cursors)
 }
 
 fn add_collisions_along_travel(
     visited: &mut FastSet<BlockPos>,
     delta_move: Vec3,
     aabb_at_target: &AABB,
-    visit: &mut impl FnMut(BlockPos, i32) -> bool,
+    cursors: &mut Vec<BlockPos>,
+    visit: &mut impl FnMut(BlockPos, i32, usize) -> bool,
 ) -> Option<i32> {
     let (size_x, size_y, size_z) = (aabb_at_target.x_size(), aabb_at_target.y_size(), aabb_at_target.z_size());
     let corner = furthest_corner(delta_move);
@@ -287,8 +309,12 @@ fn add_collisions_along_travel(
             mth::floor(hit_y - size_y * corner.1 as f64),
             mth::floor(hit_z - size_z * corner.2 as f64),
         );
-        for pos in between_corners_in_direction(BlockPos::new(x, y, z), opposite, delta_move) {
-            if visited.insert(pos) && !visit(pos, iterations) {
+        let positions = between_corners_in_direction(BlockPos::new(x, y, z), opposite, delta_move);
+        let group = cursors.len();
+        cursors.push(positions[positions.len() - 1]);
+        for pos in positions {
+            if visited.insert(pos) && !visit(pos, iterations, group) {
+                cursors[group] = pos;
                 return None;
             }
         }

@@ -33,7 +33,7 @@ use crate::world::level::block::portal::{PendingPortalTeleport, PendingSpectator
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use super::portal_processor::PortalProcessor;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
-use crate::world::level::clip::for_each_block_intersected_between;
+use crate::world::level::clip::for_each_block_intersected_between_grouped;
 use crate::world::level::collision::{Collider, collide_with_shapes};
 
 pub type EntityId = i32;
@@ -2338,7 +2338,8 @@ impl ServerLevel {
         let mut iterations = 0;
         let box_from = self.entity(id).make_bounding_box(from);
         let travel = to.subtract(from);
-        for_each_block_intersected_between(from, to, &deflated, |pos, iteration| {
+        let mut cursor_events: Vec<(usize, usize)> = Vec::new();
+        let (_, cursors) = for_each_block_intersected_between_grouped(from, to, &deflated, |pos, iteration, group| {
             if !self.is_alive(id) {
                 return false;
             }
@@ -2367,7 +2368,13 @@ impl ServerLevel {
                 if inside_block {
                     let is_precise = moved_far || deflated.intersects_block(pos);
                     effects.advance_step(iteration);
+                    let block_events_before = self.block_event_count();
                     behaviour.entity_inside(state, self, pos, id, &mut effects, is_precise);
+                    for index in block_events_before..self.block_event_count() {
+                        if self.block_event_pos(index) == pos {
+                            cursor_events.push((index, group));
+                        }
+                    }
                     self.on_inside_block(id, state);
                 }
                 if inside_fluid {
@@ -2377,6 +2384,9 @@ impl ServerLevel {
             }
             true
         });
+        for (index, group) in cursor_events {
+            self.set_block_event_pos(index, cursors[group]);
+        }
         if self.entity_ref(id).is_some() {
             self.entity_mut(id).inside_effects = effects;
         }

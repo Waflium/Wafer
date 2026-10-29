@@ -1001,6 +1001,18 @@ impl ServerLevel {
         }
     }
 
+    pub fn block_event_count(&self) -> usize {
+        self.block_events.len()
+    }
+
+    pub fn block_event_pos(&self, index: usize) -> BlockPos {
+        self.block_events[index].0
+    }
+
+    pub fn set_block_event_pos(&mut self, index: usize, pos: BlockPos) {
+        self.block_events[index].0 = pos;
+    }
+
     pub fn clear_block_events(&mut self, bounding_box: &crate::world::level::levelgen::structure::BoundingBox) {
         self.block_events.retain(|(pos, ..)| !bounding_box.is_inside(*pos));
     }
@@ -1010,8 +1022,13 @@ impl ServerLevel {
     }
 
     fn run_block_events(&mut self) {
+        let mut block_events_to_reschedule = Vec::new();
         while !self.block_events.is_empty() {
             let (pos, block, b0, b1) = self.block_events.remove(0);
+            if !self.in_block_ticking_range(pos.chunk()) {
+                block_events_to_reschedule.push((pos, block, b0, b1));
+                continue;
+            }
             let state = self.block_state(pos);
             if state.is_block(block) && block::of(state).trigger_event(state, self, pos, b0, b1) {
                 let packet = encode(clientbound::BLOCK_EVENT, |p| {
@@ -1021,6 +1038,11 @@ impl ServerLevel {
                     p.varint(block.0 as i32);
                 });
                 self.broadcast_near(None, pos.x as f64, pos.y as f64, pos.z as f64, 64.0, &packet);
+            }
+        }
+        for event in block_events_to_reschedule {
+            if !self.block_events.contains(&event) {
+                self.block_events.push(event);
             }
         }
     }
