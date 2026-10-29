@@ -12,6 +12,7 @@ pub mod entity_tombstones;
 pub mod lent_levels;
 #[cfg(test)]
 mod entity_tombstones_tests;
+pub mod demo_mode;
 pub mod game_mode;
 #[cfg(test)]
 mod chunk_entities_tests;

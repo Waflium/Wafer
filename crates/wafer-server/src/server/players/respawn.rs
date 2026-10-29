@@ -189,6 +189,7 @@ impl Server {
         let level_index = transition.level;
         let old_score = old.score();
         let mut player = ServerPlayer::new(old.profile.clone(), old.client, old.connection.clone(), BlockPos::ZERO);
+        player.game_mode.demo = self.config.demo.then(crate::server::level::demo_mode::DemoMode::default);
         player.warden_spawn_tracker = old.warden_spawn_tracker;
         player.stats = std::mem::take(&mut old.stats);
         player.advancements = old.advancements;

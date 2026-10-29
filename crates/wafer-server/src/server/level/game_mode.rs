@@ -110,6 +110,7 @@ pub struct ServerPlayerGameMode {
     delayed_destroy_pos: BlockPos,
     delayed_tick_start: i32,
     last_sent_state: i32,
+    pub demo: Option<super::demo_mode::DemoMode>,
 }
 
 pub const BLOCK_INTERACTION_RANGE: f64 = 4.5;
@@ -278,6 +279,9 @@ impl ServerLevel {
                 self.level_event(None, event, pos, direction.ordinal() as i32);
             }
         }
+        if self.player(player).game_mode.demo.is_some() {
+            self.demo_mode_tick(player);
+        }
     }
 
     fn increment_destroy_progress(&mut self, player: EntityId, state: BlockState, pos: BlockPos, ticks: i32) -> f32 {
@@ -291,6 +295,10 @@ impl ServerLevel {
     }
 
     pub fn handle_block_break_action(&mut self, player: EntityId, pos: BlockPos, action: BlockBreakAction, direction: Direction, max_y: i32) {
+        if self.demo_has_ended(player) {
+            self.output_demo_reminder(player);
+            return;
+        }
         if !self.is_within_block_interaction_range(player, pos, 1.0) {
             if self.player(player).game_mode.is_destroying_block && action == BlockBreakAction::AbortDestroyBlock {
                 self.abort_destroy_block(player, pos);
@@ -447,6 +455,10 @@ impl ServerLevel {
     }
 
     pub fn use_item_on(&mut self, player: EntityId, hand: InteractionHand, hit: BlockHitResult) -> InteractionResult {
+        if self.demo_has_ended(player) {
+            self.output_demo_reminder(player);
+            return InteractionResult::Pass;
+        }
         let pos = hit.block_pos;
         let state = self.block_state(pos);
         if self.player(player).game_mode.game_type == GameType::Spectator {
@@ -516,6 +528,10 @@ impl ServerLevel {
     }
 
     pub fn use_item(&mut self, player: EntityId, hand: InteractionHand) -> InteractionResult {
+        if self.demo_has_ended(player) {
+            self.output_demo_reminder(player);
+            return InteractionResult::Pass;
+        }
         if self.player(player).game_mode.game_type == GameType::Spectator {
             return InteractionResult::Pass;
         }

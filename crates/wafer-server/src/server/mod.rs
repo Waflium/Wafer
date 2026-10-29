@@ -1082,6 +1082,7 @@ impl Server {
     fn place_new_player(&mut self, conn: ConnId, profile: Profile, cookie: CommonListenerCookie, out: Outbound, address: std::net::SocketAddr) {
         let old_name = self.name_to_id_cache.get_by_id(profile.uuid).map_or_else(|| profile.name.clone(), |p| p.name);
         let mut player = ServerPlayer::new(profile, cookie.client_information, out, self.effective_respawn_data.pos);
+        player.game_mode.demo = self.config.demo.then(level::demo_mode::DemoMode::default);
         player.stats = self.get_player_stats(&player.profile);
         player.advancements = self.get_player_advancements(player.profile.uuid);
         player.latency = cookie.latency;

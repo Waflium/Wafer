@@ -294,6 +294,7 @@ pub fn main(args: Vec<String>) {
     let listen = Listen::Bind { ip: properties.server_ip.clone(), port: port as u16 };
     let saved_data = ConstructorSavedData::load(Some(&world_dir));
     let mut config = ServerConfig::from_properties(properties, &universe, level_name);
+    config.demo = demo;
     if properties.code_of_conduct {
         match super::dedicated::read_code_of_conducts() {
             Ok(code_of_conducts) => config.code_of_conducts = code_of_conducts.into(),
