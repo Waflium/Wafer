@@ -8,7 +8,11 @@ use serde_json::Value;
 use wafer_data::SyncedRegistry;
 use wafer_protocol::nbt::Nbt;
 
-use crate::server::packs::repository::VANILLA_ID;
+use crate::server::packs::repository::{VANILLA_ID, has_vanilla_known_pack_info};
+use crate::util::lifecycle::Lifecycle;
+use crate::world::item::component::json_to_nbt;
+use crate::world::level::dimension::level_stem::LevelStem;
+use crate::world::level::levelgen::presets::world_preset::WorldPreset;
 use crate::server::packs::resources::MultiPackResourceManager;
 use crate::resources::registry_load_task::{self, ElementFailure};
 use crate::server::reloadable_server_registries::LoadingErrors;
@@ -60,6 +64,57 @@ static LEVEL_STEMS: AtomicPtr<Vec<(&'static str, Value)>> = AtomicPtr::new(std::
 pub fn level_stems() -> &'static [(&'static str, Value)] {
     let stems = LEVEL_STEMS.load(Ordering::Acquire);
     if stems.is_null() { &[] } else { unsafe { &*stems } }
+}
+
+static REGISTRIES_LIFECYCLE: Mutex<Lifecycle> = Mutex::new(Lifecycle::Stable);
+
+pub fn registries_lifecycle() -> Lifecycle {
+    *REGISTRIES_LIFECYCLE.lock().unwrap()
+}
+
+static DECODED_DIMENSIONS: Mutex<Vec<(String, LevelStem)>> = Mutex::new(Vec::new());
+
+fn decode_dimension(id: &str, element: &JsonElement) -> Result<(), String> {
+    let decoded = LevelStem::decode(&crate::world::item::component::element_to_nbt(element));
+    if let Some(error) = decoded.error {
+        return Err(error);
+    }
+    if let Some(stem) = decoded.value {
+        let mut dimensions = DECODED_DIMENSIONS.lock().unwrap();
+        dimensions.retain(|(decoded_id, _)| decoded_id != id);
+        dimensions.push((id.to_string(), stem));
+    }
+    Ok(())
+}
+
+static DECODED_WORLD_PRESETS: Mutex<Vec<(String, WorldPreset)>> = Mutex::new(Vec::new());
+
+fn decode_world_preset(id: &str, element: &JsonElement) -> Result<(), String> {
+    let decoded = WorldPreset::decode(&crate::world::item::component::element_to_nbt(element));
+    if let Some(error) = decoded.error {
+        return Err(error);
+    }
+    if let Some(preset) = decoded.value {
+        let mut presets = DECODED_WORLD_PRESETS.lock().unwrap();
+        presets.retain(|(decoded_id, _)| decoded_id != id);
+        presets.push((id.to_string(), preset));
+    }
+    Ok(())
+}
+
+pub fn decoded_world_preset(id: &str) -> Option<WorldPreset> {
+    DECODED_WORLD_PRESETS.lock().unwrap().iter().find(|(decoded_id, _)| decoded_id == id).map(|(_, preset)| preset.clone())
+}
+
+pub fn datapack_dimensions() -> Vec<(String, LevelStem)> {
+    let decoded = DECODED_DIMENSIONS.lock().unwrap();
+    level_stems()
+        .iter()
+        .filter_map(|(id, json)| match decoded.iter().find(|(decoded_id, _)| decoded_id == id) {
+            Some((_, stem)) => Some((id.to_string(), stem.clone())),
+            None => crate::nbt::with_json_source(|| LevelStem::decode(&json_to_nbt(json))).value.map(|stem| (id.to_string(), stem)),
+        })
+        .collect()
 }
 
 static BIOMES: AtomicPtr<DataRegistry> = AtomicPtr::new(std::ptr::null_mut());
@@ -141,6 +196,11 @@ fn dimension_type(name: &'static str, v: &Value) -> wafer_data::DimensionType {
         monster_spawn_light_level: leak(v["monster_spawn_light_level"].to_string()),
         monster_spawn_block_light_limit: int("monster_spawn_block_light_limit") as i32,
     }
+}
+
+pub fn inline_dimension_type(name: &'static str, tag: &Nbt) -> &'static wafer_data::DimensionType {
+    let json = crate::nbt::with_json_source(|| crate::util::codec::to_json(tag));
+    Box::leak(Box::new(dimension_type(name, &json)))
 }
 
 fn file_key(id: &str) -> (Vec<u16>, Vec<u16>) {
@@ -322,6 +382,8 @@ fn load_registry(
 }
 
 pub fn load(resource_manager: &MultiPackResourceManager) {
+    DECODED_DIMENSIONS.lock().unwrap().clear();
+    DECODED_WORLD_PRESETS.lock().unwrap().clear();
     let mut pack_elements = Vec::new();
     let mut synced = Vec::new();
     let mut registries = HashMap::new();
@@ -338,6 +400,8 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
         unsynchronized.push((name, entries));
         registries.insert(name, registry);
     }
+    let lifecycle = if pack_elements.iter().any(|element| !has_vanilla_known_pack_info(&element.pack)) { Lifecycle::Experimental } else { Lifecycle::Stable };
+    *REGISTRIES_LIFECYCLE.lock().unwrap() = lifecycle;
     let mut stems: Vec<(&'static str, Value)> = Vec::new();
     let dimension_resources = resource_manager.list_resources("dimension", ".json");
     for (location, resource) in &dimension_resources {
@@ -437,6 +501,8 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool, tag
     for element in pack_elements {
         take_thrown();
         let decoded = match &element.json {
+            Ok(json) if element.registry == DIMENSION_REGISTRY => crate::nbt::with_json_source(|| decode_dimension(&element.id, json)).map_err(ElementFailure::Decode),
+            Ok(json) if element.registry == "minecraft:worldgen/world_preset" => crate::nbt::with_json_source(|| decode_world_preset(&element.id, json)).map_err(ElementFailure::Decode),
             Ok(json) => crate::nbt::with_json_source(|| decode(element.registry, json)).map_err(ElementFailure::Decode),
             Err(throwable) => Err(ElementFailure::Parse(throwable.clone())),
         };
@@ -571,11 +637,11 @@ fn decode(registry: &str, element: &JsonElement) -> Result<(), String> {
         "minecraft:worldgen/template_pool" => decode_with(levelgen::structure::pools::structure_template_pool::direct_codec(), &tag),
         "minecraft:worldgen/processor_list" => decode_with(levelgen::structure::templatesystem::structure_processor::list_direct_codec(), &tag),
         "minecraft:worldgen/configured_carver" | "minecraft:worldgen/carver" => decode_with(levelgen::carver::direct_codec(), &tag),
-        "minecraft:worldgen/world_preset" => levelgen::world_dimensions::decode_world_preset(&tag).into_result().map(drop),
+        "minecraft:worldgen/world_preset" => levelgen::presets::world_preset::WorldPreset::validate(&tag),
         "minecraft:worldgen/flat_level_generator_preset" => levelgen::flat::decode_preset(&tag).into_result().map(drop),
         "minecraft:worldgen/multi_noise_biome_source_parameter_list" => crate::world::level::biome::decode_parameter_list(&tag),
         "minecraft:worldgen/biome" => crate::world::level::biome::validate(&tag),
-        "minecraft:dimension" => levelgen::world_dimensions::decode_level_stem(&tag).into_result().map(drop),
+        "minecraft:dimension" => LevelStem::validate(&tag),
         "minecraft:enchantment" => {
             crate::world::item::enchantment::enchantment::direct_codec().0.decode(&tag)?;
             crate::world::item::enchantment::enchantment::Enchantment::decode(&tag).map(drop)

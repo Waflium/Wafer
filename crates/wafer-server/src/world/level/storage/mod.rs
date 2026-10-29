@@ -27,7 +27,9 @@ use crate::server::level::game_mode::GameType;
 use crate::server::log_save_failure;
 use crate::world::difficulty::Difficulty;
 use crate::world::level::chunk::storage::{decode_compressed_nbt, decode_nbt, encode_nbt};
-use crate::world::level::levelgen::world_dimensions::WorldDimensions;
+use crate::util::lifecycle::Lifecycle;
+use crate::world::level::levelgen::world_dimensions::SpecialWorldProperty;
+use crate::world::level::levelgen::world_gen_settings::WorldGenSettings;
 use crate::world::level::saveddata::weather_data::WeatherData;
 use crate::world::level::validation::directory_validator::{DirectoryValidator, SymlinkTargetAllowList};
 use crate::world::level::validation::path_allow_list::PathAllowList;
@@ -191,7 +193,7 @@ impl WorldDir {
         self.root.join("icon.png")
     }
     pub fn data(&self, name: &str) -> PathBuf {
-        self.root.join("data/minecraft").join(format!("{name}.dat"))
+        self.root.join("data").join("minecraft").join(format!("{name}.dat"))
     }
     pub fn generated(&self) -> PathBuf {
         self.root.join("generated")
@@ -283,7 +285,6 @@ impl RespawnData {
 }
 
 pub struct WorldData {
-    pub seed: i64,
     pub game_time: i64,
     pub spawn: RespawnData,
     pub game_type: GameType,
@@ -292,9 +293,8 @@ pub struct WorldData {
     pub hardcore: bool,
     pub clocks: Nbt,
     pub weather: WeatherData,
-    pub dimensions: WorldDimensions,
-    pub generate_structures: bool,
-    pub bonus_chest: bool,
+    pub special_world_property: SpecialWorldProperty,
+    pub world_gen_settings_lifecycle: Lifecycle,
     pub initialized: bool,
     pub server_brands: Vec<String>,
     pub was_modded: bool,
@@ -307,17 +307,15 @@ pub struct WorldData {
 
 impl WorldData {
     pub fn new_world(
-        seed: i64,
-        dimensions: WorldDimensions,
-        generate_structures: bool,
         game_type: GameType,
         difficulty: Difficulty,
         hardcore: bool,
         data_configuration: WorldDataConfiguration,
         level_name: String,
+        special_world_property: SpecialWorldProperty,
+        world_gen_settings_lifecycle: Lifecycle,
     ) -> WorldData {
         WorldData {
-            seed,
             game_time: 0,
             spawn: RespawnData::of("minecraft:overworld", BlockPos::ZERO, 0.0, 0.0),
             game_type,
@@ -326,9 +324,8 @@ impl WorldData {
             hardcore,
             clocks: Nbt::Compound(Vec::new()),
             weather: WeatherData::default(),
-            dimensions,
-            generate_structures,
-            bonus_chest: false,
+            special_world_property,
+            world_gen_settings_lifecycle,
             initialized: false,
             server_brands: Vec::new(),
             was_modded: false,
@@ -355,7 +352,7 @@ impl WorldData {
         tag.set("Version", world_version)
     }
 
-    pub fn load(dir: &WorldDir) -> io::Result<Option<WorldData>> {
+    pub fn load_level_tag(dir: &WorldDir) -> io::Result<Option<Nbt>> {
         if !dir.has_world_data() {
             return Ok(None);
         }
@@ -365,23 +362,16 @@ impl WorldData {
         if get_file_fixer().requires_file_fixing(data_version) {
             return Err(invalid("Cannot get level data without file fixing first"));
         }
-        let level = DataFixTypes::Level.update_to_current_version(Dynamic::new(level.clone()), data_version).into_value().ok_or_else(|| invalid("level.dat has no Data"))?;
-        WorldData::from_tag(dir, &level).map(Some)
+        DataFixTypes::Level.update_to_current_version(Dynamic::new(level.clone()), data_version).into_value().map(Some).ok_or_else(|| invalid("level.dat has no Data"))
     }
 
-    pub fn from_tag(dir: &WorldDir, level: &Nbt) -> io::Result<WorldData> {
+    pub fn from_tag(level: &Nbt, data_configuration: WorldDataConfiguration, special_world_property: SpecialWorldProperty, world_gen_settings_lifecycle: Lifecycle) -> WorldData {
         let spawn = level.get("spawn").and_then(RespawnData::from_nbt).unwrap_or_else(|| RespawnData::of("minecraft:overworld", BlockPos::ZERO, 0.0, 0.0));
         let difficulty_settings = level.get("difficulty_settings");
         let setting = |key: &str| difficulty_settings.and_then(|d| d.get(key));
         let flag = |key: &str| setting(key).and_then(Nbt::as_i64).is_some_and(|v| v != 0);
-        let settings_file = read_saved_data_dat(&dir.data("world_gen_settings"), DataFixTypes::SavedDataWorldGenSettings)?.ok_or_else(|| invalid("world_gen_settings.dat is missing"))?;
-        let worldgen = settings_file.get("data").ok_or_else(|| invalid("world_gen_settings.dat has no data"))?;
-        let seed = worldgen.get("seed").and_then(Nbt::as_i64).unwrap_or(0);
-        let dimensions = worldgen.get("dimensions").ok_or_else(|| invalid("world_gen_settings.dat has no dimensions"))?;
-        let dimensions = WorldDimensions::from_nbt(dimensions, seed).map_err(|e| invalid(&e))?;
         let game_type = GameType::by_id(level.get("GameType").and_then(Nbt::as_i64).unwrap_or(0) as i32);
-        Ok(WorldData {
-            seed,
+        WorldData {
             game_time: level.get("Time").and_then(Nbt::as_i64).unwrap_or(0),
             spawn,
             game_type,
@@ -390,9 +380,8 @@ impl WorldData {
             hardcore: flag("hardcore"),
             clocks: Nbt::Compound(Vec::new()),
             weather: WeatherData::default(),
-            dimensions,
-            generate_structures: worldgen.get("generate_structures").and_then(Nbt::as_i64).is_none_or(|v| v != 0),
-            bonus_chest: worldgen.get("bonus_chest").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
+            special_world_property,
+            world_gen_settings_lifecycle,
             initialized: level.get("initialized").and_then(Nbt::as_i64).is_none_or(|v| v != 0),
             server_brands: level.get("ServerBrands").map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(Nbt::as_str).fold(Vec::new(), |mut brands, brand| {
                 if !brands.iter().any(|b| b == brand) {
@@ -402,16 +391,16 @@ impl WorldData {
             }),
             was_modded: level.get("WasModded").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
             game_rules: Nbt::Compound(Vec::new()),
-            data_configuration: WorldDataConfiguration::parse(level),
+            data_configuration,
             level_name: level.get("LevelName").and_then(Nbt::as_str).unwrap_or("").to_string(),
             allow_commands: level.get("allowCommands").and_then(Nbt::as_i64).map_or(game_type == GameType::Creative, |v| v != 0),
             singleplayer_uuid: level.get("singleplayer_uuid").filter(|uuid| crate::world::entity::entity_save::decode_uuid(uuid).into_result().is_ok()).cloned(),
-        })
+        }
     }
 
-    pub fn save(&self, dir: &WorldDir, dirty: DirtySavedData) -> io::Result<()> {
+    pub fn save(&self, dir: &WorldDir, gen_settings: &WorldGenSettings, dirty: DirtySavedData) -> io::Result<()> {
         let level_data = self.save_level_data(dir);
-        self.save_saved_data(dir, dirty);
+        self.save_saved_data(dir, gen_settings, dirty);
         level_data
     }
 
@@ -460,15 +449,9 @@ impl WorldData {
         save_level_dat(dir, &level)
     }
 
-    pub fn save_saved_data(&self, dir: &WorldDir, dirty: DirtySavedData) {
+    pub fn save_saved_data(&self, dir: &WorldDir, gen_settings: &WorldGenSettings, dirty: DirtySavedData) {
         if dirty.world_gen_settings {
-            let generation = compound(vec![
-                ("bonus_chest", Nbt::Byte(self.bonus_chest as i8)),
-                ("seed", Nbt::Long(self.seed)),
-                ("generate_structures", Nbt::Byte(self.generate_structures as i8)),
-                ("dimensions", self.dimensions.to_nbt()),
-            ]);
-            log_save_failure("world_gen_settings.dat", write_dat(&dir.data("world_gen_settings"), &data_file(generation)));
+            log_save_failure("world_gen_settings.dat", write_dat(&dir.data("world_gen_settings"), &data_file(gen_settings.encode())));
         }
         if dirty.world_clocks {
             log_save_failure("world_clocks.dat", write_dat(&dir.data("world_clocks"), &data_file(self.clocks.clone())));

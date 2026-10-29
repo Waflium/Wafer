@@ -8,6 +8,7 @@ pub mod palette;
 pub mod proto_chunk;
 pub mod serialization;
 pub mod storage;
+pub mod unseeded_chunk_generator;
 
 use wafer_core::hash_map::FastMap;
 use wafer_core::{BlockPos, ChunkPos};

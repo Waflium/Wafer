@@ -5,15 +5,25 @@ use std::sync::Arc;
 use wafer_protocol::nbt::Nbt;
 
 use crate::datafixers::dynamic::Dynamic;
+use crate::server::dedicated::settings::java_io_exception;
+use crate::util::codec::DecodeResult;
 use crate::util::datafix::data_fix_types::DataFixTypes;
 use crate::util::datafix::data_fixers::get_file_fixer;
 use crate::util::directory_lock::DirectoryLock;
+use crate::util::java_throwable::JavaThrowable;
+use crate::util::lifecycle::Lifecycle;
+use crate::world::level::chunk::storage::decode_compressed_nbt;
+use crate::world::level::dimension::level_stem::LevelStem;
+use crate::world::level::levelgen::world_dimensions::{Complete, WorldDimensions};
+use crate::world::level::levelgen::world_gen_settings::WorldGenSettings;
+use crate::world::level::levelgen::world_options::WorldOptions;
+use crate::world::level::world_data_configuration::WorldDataConfiguration;
 use crate::world::level::validation::content_validation_message;
 use crate::world::level::validation::directory_validator::DirectoryValidator;
 
 use super::level_summary::LevelSummary;
 use super::level_version::LevelVersion;
-use super::{ALLOWED_SYMLINKS_CONFIG_NAME, WorldDir, parse_validator};
+use super::{ALLOWED_SYMLINKS_CONFIG_NAME, WorldData, WorldDir, parse_validator};
 
 #[derive(Clone)]
 pub struct LevelDirectory {
@@ -177,4 +187,67 @@ fn data_compound_or_empty(root: Nbt) -> Nbt {
         },
         _ => Nbt::Compound(Vec::new()),
     }
+}
+
+const READ_EXISTING_SAVED_DATA_FRAME: &str = "net.minecraft.world.level.storage.LevelStorageSource.readExistingSavedData(LevelStorageSource.java:169)";
+const GET_LEVEL_DATA_AND_DIMENSIONS_FRAME: &str = "net.minecraft.world.level.storage.LevelStorageSource.getLevelDataAndDimensions(LevelStorageSource.java:149)";
+const DIMENSIONS_FALLBACK_FRAME: &str = "net.minecraft.world.level.storage.LevelStorageSource.lambda$getLevelDataAndDimensions$0(LevelStorageSource.java:151)";
+const MAP_OR_ELSE_FRAME: &str = "com.mojang.serialization.DataResult$Error.mapOrElse(DataResult.java:309)";
+
+pub struct LevelDataAndDimensions {
+    pub world_data: WorldData,
+    pub gen_settings: WorldGenSettings,
+    pub dimensions: Complete,
+}
+
+fn message_of(description: &str) -> String {
+    match description.split_once(": ") {
+        Some((_, message)) => message.to_string(),
+        None => "null".to_string(),
+    }
+}
+
+pub fn read_existing_saved_data(world_dir: &WorldDir, caller_frames: &[&'static str]) -> Result<Result<WorldGenSettings, String>, JavaThrowable> {
+    let data_location = world_dir.data("world_gen_settings");
+    let bytes = match std::fs::read(&data_location) {
+        Ok(bytes) => bytes,
+        Err(e) => return Ok(Err(message_of(&java_io_exception(&e, &data_location)))),
+    };
+    let file_contents = match decode_compressed_nbt(&bytes) {
+        Ok(file_contents) => file_contents,
+        Err(description) => return Ok(Err(message_of(&description))),
+    };
+    let data = match file_contents.get("data") {
+        Some(data @ Nbt::Compound(_)) => data.clone(),
+        _ => Nbt::Compound(Vec::new()),
+    };
+    let mut frames = vec![READ_EXISTING_SAVED_DATA_FRAME, GET_LEVEL_DATA_AND_DIMENSIONS_FRAME];
+    frames.extend_from_slice(caller_frames);
+    match crate::util::codec::with_nbt_ops(|| WorldGenSettings::decode(&data, &frames))? {
+        DecodeResult { value: Some(settings), error: None } => Ok(Ok(settings)),
+        DecodeResult { error, .. } => Ok(Err(error.unwrap_or_default())),
+    }
+}
+
+pub fn get_level_data_and_dimensions(
+    world_dir: &WorldDir,
+    level_data_tag: &Nbt,
+    data_configuration: WorldDataConfiguration,
+    datapack_dimensions: &[(String, LevelStem)],
+    registries_lifecycle: Lifecycle,
+    caller_frames: &[&'static str],
+) -> Result<LevelDataAndDimensions, JavaThrowable> {
+    let world_gen_settings = match read_existing_saved_data(world_dir, caller_frames)? {
+        Ok(world_gen_settings) => world_gen_settings,
+        Err(message) => {
+            error!("Unable to read or access the world gen settings file! Falling back to the default settings with a random world seed. {message}");
+            let mut frames = vec![DIMENSIONS_FALLBACK_FRAME, MAP_OR_ELSE_FRAME, GET_LEVEL_DATA_AND_DIMENSIONS_FRAME];
+            frames.extend_from_slice(caller_frames);
+            WorldGenSettings::new(WorldOptions::default_with_random_seed(), WorldDimensions::from_registry(datapack_dimensions, &frames)?)
+        }
+    };
+    let dimensions = world_gen_settings.dimensions().bake(datapack_dimensions);
+    let lifecycle = dimensions.lifecycle().add(registries_lifecycle);
+    let world_data = WorldData::from_tag(level_data_tag, data_configuration, dimensions.special_world_property, lifecycle);
+    Ok(LevelDataAndDimensions { world_data, gen_settings: world_gen_settings, dimensions })
 }

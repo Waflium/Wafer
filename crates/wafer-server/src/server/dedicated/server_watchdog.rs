@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::crash_report::{CrashReport, crash_report_file};
+use crate::util::lifecycle::Lifecycle;
 
 #[derive(Default, Clone)]
 pub struct ServerSnapshot {
@@ -11,6 +12,7 @@ pub struct ServerSnapshot {
     pub random_tick_rate: String,
     pub level_stats: String,
     pub world_seed: i64,
+    pub world_gen_settings_lifecycle: Lifecycle,
 }
 
 pub struct ServerTiming {
@@ -94,7 +96,7 @@ pub fn fill_system_report(report: &mut CrashReport, snapshot: &ServerSnapshot) {
     report.set_system_detail("Active Data Packs", "vanilla");
     report.set_system_detail("Available Data Packs", "minecart_improvements, redstone_experiments, trade_rebalance, vanilla");
     report.set_system_detail("Enabled Feature Flags", "minecraft:vanilla");
-    report.set_system_detail("World Generation", "Stable");
+    report.set_system_detail("World Generation", snapshot.world_gen_settings_lifecycle.to_string());
     report.set_system_detail("World Seed", snapshot.world_seed.to_string());
     report.set_system_detail("Suppressed Exceptions", "~~NONE~~");
     report.set_system_detail("Is Modded", "Probably not. Server jar signature and brand is untouched");

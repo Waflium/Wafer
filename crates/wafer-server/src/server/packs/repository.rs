@@ -15,6 +15,10 @@ use crate::world::level::validation::{ForbiddenSymlinkInfo, content_validation_m
 pub const VANILLA_ID: &str = "vanilla";
 const FEATURE_PACKS: [&str; 3] = ["minecart_improvements", "redstone_experiments", "trade_rebalance"];
 
+pub fn has_vanilla_known_pack_info(pack_id: &str) -> bool {
+    pack_id == VANILLA_ID || FEATURE_PACKS.contains(&pack_id)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Position {
     Top,

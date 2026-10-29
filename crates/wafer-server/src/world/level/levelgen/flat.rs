@@ -170,6 +170,7 @@ fn optional_boolean(value: Option<&Value>, errors: &mut Vec<String>) -> bool {
     match value.filter(|v| !v.is_null()) {
         None => false,
         Some(Value::Bool(b)) => *b,
+        Some(Value::Number(number)) if codec::is_nbt_ops() => number.as_f64().is_some_and(|number| number != 0.0),
         Some(other) => {
             errors.push(format!("Not a boolean: {}", gson(other)));
             false

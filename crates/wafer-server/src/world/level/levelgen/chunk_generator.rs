@@ -68,9 +68,8 @@ struct Samplers {
 }
 
 pub struct NoiseBasedChunkGenerator {
-    pub settings_key: String,
     pub settings: Arc<NoiseGeneratorSettings>,
-    pub biome_source: BiomeSource,
+    pub biome_source: Arc<BiomeSource>,
     pub state: RandomState,
     picker: FluidPicker,
     samplers: Samplers,
@@ -82,24 +81,22 @@ pub struct NoiseBasedChunkGenerator {
 
 impl NoiseBasedChunkGenerator {
     pub fn overworld(seed: i64) -> NoiseBasedChunkGenerator {
-        NoiseBasedChunkGenerator::with_settings("minecraft:overworld", BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:overworld").expect("overworld biome source")), seed)
+        NoiseBasedChunkGenerator::with_settings("minecraft:overworld", Arc::new(BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:overworld").expect("overworld biome source"))), seed)
     }
 
     pub fn nether(seed: i64) -> NoiseBasedChunkGenerator {
-        NoiseBasedChunkGenerator::with_settings("minecraft:nether", BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:nether").expect("nether biome source")), seed)
+        NoiseBasedChunkGenerator::with_settings("minecraft:nether", Arc::new(BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:nether").expect("nether biome source"))), seed)
     }
 
     pub fn end(seed: i64) -> NoiseBasedChunkGenerator {
-        NoiseBasedChunkGenerator::with_settings("minecraft:end", BiomeSource::TheEnd(TheEndBiomeSource::create()), seed)
+        NoiseBasedChunkGenerator::with_settings("minecraft:end", Arc::new(BiomeSource::TheEnd(TheEndBiomeSource::create())), seed)
     }
 
-    pub fn with_settings(settings_key: &str, biome_source: BiomeSource, seed: i64) -> NoiseBasedChunkGenerator {
-        let mut generator = NoiseBasedChunkGenerator::new(WORLDGEN.noise_settings[settings_key].clone(), biome_source, seed);
-        generator.settings_key = settings_key.to_string();
-        generator
+    pub fn with_settings(settings_key: &str, biome_source: Arc<BiomeSource>, seed: i64) -> NoiseBasedChunkGenerator {
+        NoiseBasedChunkGenerator::new(WORLDGEN.noise_settings[settings_key].clone(), biome_source, seed)
     }
 
-    pub fn new(settings: Arc<NoiseGeneratorSettings>, biome_source: BiomeSource, seed: i64) -> NoiseBasedChunkGenerator {
+    pub fn new(settings: Arc<NoiseGeneratorSettings>, biome_source: Arc<BiomeSource>, seed: i64) -> NoiseBasedChunkGenerator {
         let state = RandomState::new(&settings, seed);
         let router = &settings.noise_router;
         let samplers = Samplers {
@@ -108,7 +105,6 @@ impl NoiseBasedChunkGenerator {
             aquifer: settings.aquifers.as_ref().map(|config| AquiferSamplers::new(&state, config)),
         };
         NoiseBasedChunkGenerator {
-            settings_key: String::new(),
             picker: FluidPicker::new(settings.sea_level, settings.default_fluid),
             zoom_seed: biome::obfuscate_seed(seed),
             biome_cache: Mutex::new(HashMap::new()),
@@ -155,7 +151,7 @@ impl NoiseBasedChunkGenerator {
         let min_quart_z = quart_pos::from_block(pos.min_block_z());
         let size_y = quart_pos::from_block(dimension.height as i32);
         let sections = dimension.height as usize / 16;
-        let source = match &self.biome_source {
+        let source = match &*self.biome_source {
             BiomeSource::MultiNoise(source) => source,
             BiomeSource::Fixed(biome) => return ChunkBiomes { min_quart_y, quarts: vec![*biome; sections * 64] },
             BiomeSource::Checkerboard(source) => {
@@ -538,7 +534,7 @@ impl NoiseBasedChunkGenerator {
     }
 
     pub fn get_noise_biome(&self, ctx: &mut SamplerContext, quart_x: i32, quart_y: i32, quart_z: i32) -> Biome {
-        match &self.biome_source {
+        match &*self.biome_source {
             BiomeSource::MultiNoise(source) => {
                 let (block_x, block_y, block_z) = (quart_pos::to_block(quart_x), quart_pos::to_block(quart_y), quart_pos::to_block(quart_z));
                 let [temperature, humidity, continentalness, erosion, depth, weirdness] =

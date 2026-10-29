@@ -4,6 +4,11 @@ use crate::server::level::game_mode::GameType;
 use crate::util::java_integer::{number_format_exception, parse_int, parse_long};
 use crate::util::string_util::java_trim;
 use crate::world::difficulty::Difficulty;
+use crate::world::level::chunk::unseeded_chunk_generator::UnseededChunkGenerator;
+use crate::world::level::levelgen::flat;
+use crate::world::level::levelgen::presets::world_presets::{self, FLAT, NORMAL};
+use crate::world::level::levelgen::world_dimensions::WorldDimensions;
+use crate::world::level::levelgen::world_options::WorldOptions;
 
 const SECRET_ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -254,6 +259,32 @@ impl DedicatedServerProperties {
             level_type,
             accepts_transfers,
         })
+    }
+
+    pub fn world_options(&self) -> WorldOptions {
+        WorldOptions::new(self.seed.unwrap_or_else(WorldOptions::random_seed), self.generate_structures, false)
+    }
+
+    pub fn create_dimensions(&self) -> WorldDimensions {
+        let default_key = if world_presets::contains(NORMAL) { NORMAL } else { world_presets::first().expect("Invalid datapack contents: can't find default preset") };
+        let key = crate::resources::identifier::parse(&self.level_type).ok().filter(|key| world_presets::contains(key));
+        let key = key.unwrap_or_else(|| {
+            warn!("Failed to parse level-type {}, defaulting to {default_key}", self.level_type);
+            default_key.to_string()
+        });
+        let world_preset = world_presets::get(&key).expect("a world preset");
+        let world_dimensions = world_preset.create_world_dimensions();
+        if key == FLAT {
+            let settings: serde_json::Value = serde_json::from_str(if self.generator_settings.is_empty() { "{}" } else { &self.generator_settings }).unwrap_or_else(|_| serde_json::json!({}));
+            let parsed = flat::parse_settings(&settings);
+            if let Some(error) = parsed.error {
+                error!("{error}");
+            }
+            if let Some(flat) = parsed.value {
+                return world_dimensions.replace_overworld_generator(UnseededChunkGenerator::Flat(flat));
+            }
+        }
+        world_dimensions
     }
 
     pub fn with(&self, key: &str, value: String) -> Result<DedicatedServerProperties, InvalidProperty> {

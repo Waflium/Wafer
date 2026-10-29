@@ -13,12 +13,16 @@ use crate::tags::{ExistingTagLoading, load_tags_for_existing_registries};
 use crate::world::flag::FeatureFlagSet;
 use crate::world::level::data_pack_config::DataPackConfig;
 use crate::world::level::world_data_configuration::WorldDataConfiguration;
-use crate::world::level::chunk::ChunkGenerator;
-use crate::world::level::levelgen::flat;
-use crate::world::level::levelgen::world_dimensions::WorldDimensions;
+use crate::util::lifecycle::Lifecycle;
+use crate::server::level::game_mode::GameType;
+use crate::world::difficulty::Difficulty;
+use crate::world::level::dimension::level_stem::LevelStem;
+use crate::world::level::levelgen::presets::world_presets::{self, NORMAL};
+use crate::world::level::levelgen::world_gen_settings::WorldGenSettings;
+use crate::world::level::levelgen::world_options::WorldOptions;
 use wafer_protocol::nbt::Nbt;
 
-use crate::world::level::storage::level_storage_source::{LevelStorageAccess, LevelStorageSource};
+use crate::world::level::storage::level_storage_source::{LevelDataAndDimensions, LevelStorageAccess, LevelStorageSource, get_level_data_and_dimensions};
 use crate::world::level::storage::{WorldData, WorldDir};
 use crate::util::datafix::data_fixers::get_file_fixer;
 use crate::util::java_integer::parse_int;
@@ -215,43 +219,49 @@ pub fn main(args: Vec<String>) {
             return;
         }
     };
-    let level_data = match level_data_tag.map(|level_data_tag| WorldData::from_tag(&world_dir, &level_data_tag)).transpose() {
-        Ok(level_data) => level_data,
-        Err(e) => {
-            error!("Failed to load world data. World files may be corrupted. Shutting down.\n{e}");
-            runtime.shutdown_background();
-            return;
-        }
-    };
     let safe_mode = options.has("safeMode");
     if safe_mode {
         warn!("Safe mode active, only vanilla datapack will be loaded");
     }
     let mut pack_repository = PackRepository::create_pack_repository(world_dir.root.join("datapacks"), world_dir_validator);
-    let (init_mode, initial_data_config) = load_or_create_config(properties, level_data.as_ref());
+    let (init_mode, initial_data_config) = load_or_create_config(properties, level_data_tag.as_ref());
     let data_configuration = configure_pack_repository(&mut pack_repository, &initial_data_config, init_mode, safe_mode);
     let resource_manager = MultiPackResourceManager::new(pack_repository.open_all_selected());
     crate::core::data_registries::load(&resource_manager);
     let worker_properties = properties.clone();
     let worker_data_configuration = data_configuration.clone();
+    let worker_world_dir = WorldDir { root: world_dir.root.clone() };
     let bonus_chest = options.has("bonusChest");
+    let demo = options.has("demo");
     let loaded = std::thread::scope(|scope| {
         std::thread::Builder::new()
             .name("Worker-Main-1".into())
             .spawn_scoped(scope, || {
                 let postponed_tags = wafer_data::prepare_tags(load_tags_for_existing_registries(&resource_manager, ExistingTagLoading::Startup));
                 wafer_data::with_pending_tags(postponed_tags, || crate::core::data_registries::validate(&resource_manager))?;
-                let world_data = level_data.unwrap_or_else(|| {
-                    info!("No existing world data, creating new world");
-                    create_new_world_data(&worker_properties, worker_data_configuration, bonus_chest)
-                });
-                Ok::<_, crate::util::java_throwable::JavaThrowable>((postponed_tags, world_data))
+                let datapack_dimensions = crate::core::data_registries::datapack_dimensions();
+                let registries_lifecycle = crate::core::data_registries::registries_lifecycle();
+                let level_data_and_dimensions = match &level_data_tag {
+                    Some(level_data_tag) => get_level_data_and_dimensions(
+                        &worker_world_dir,
+                        level_data_tag,
+                        worker_data_configuration,
+                        &datapack_dimensions,
+                        registries_lifecycle,
+                        &crate::resources::registry_load_task::world_data_supplier_frames(),
+                    )?,
+                    None => {
+                        info!("No existing world data, creating new world");
+                        create_new_world_data(&worker_properties, worker_data_configuration, &datapack_dimensions, registries_lifecycle, demo, bonus_chest)
+                    }
+                };
+                Ok::<_, crate::util::java_throwable::JavaThrowable>((postponed_tags, level_data_and_dimensions))
             })
             .expect("worker thread")
             .join()
             .expect("world data")
     });
-    let (postponed_tags, mut world_data) = match loaded {
+    let (postponed_tags, LevelDataAndDimensions { world_data, gen_settings, dimensions }) = match loaded {
         Ok(loaded) => loaded,
         Err(exception) => {
             warn!(
@@ -276,7 +286,6 @@ pub fn main(args: Vec<String>) {
     data_packs.update_components_and_static_registry_tags();
     data_packs.finalize_recipe_loading();
     crate::world::level::levelgen::structure::templatesystem::structure_template_manager::on_resource_manager_reload(&resource_manager);
-    world_data.data_configuration = data_configuration;
     if let Err(e) = world_data.save_level_data(&world_dir) {
         error!("Failed to save level {}\n{e}", world_dir.root.display());
     }
@@ -295,7 +304,7 @@ pub fn main(args: Vec<String>) {
             }
         }
     }
-    let world_stem = WorldStem { data_packs, world_data, saved_data: Some(saved_data), player_lists: None };
+    let world_stem = WorldStem { data_packs, world_data, gen_settings, dimensions, saved_data: Some(saved_data), player_lists: None };
     if let Err(e) = runtime.block_on(serve_world(listen, config, services, Some(settings), true, Some((pack_repository, world_stem)), management_server)) {
         error!("Encountered an unexpected exception\n{e:#}");
     }
@@ -342,9 +351,9 @@ pub(crate) fn fix_world_data(access: &mut LevelStorageAccess, notification_manag
     }
 }
 
-fn load_or_create_config(properties: &DedicatedServerProperties, level_data: Option<&WorldData>) -> (bool, WorldDataConfiguration) {
-    match level_data {
-        Some(level_data) => (false, level_data.data_configuration.clone()),
+fn load_or_create_config(properties: &DedicatedServerProperties, level_data_tag: Option<&Nbt>) -> (bool, WorldDataConfiguration) {
+    match level_data_tag {
+        Some(level_data_tag) => (false, WorldDataConfiguration::parse(level_data_tag)),
         None => {
             let initial_data_pack_configuration =
                 DataPackConfig { enabled: properties.initial_enabled_packs.clone(), disabled: properties.initial_disabled_packs.clone() };
@@ -353,51 +362,32 @@ fn load_or_create_config(properties: &DedicatedServerProperties, level_data: Opt
     }
 }
 
-fn create_new_world_data(properties: &DedicatedServerProperties, data_configuration: WorldDataConfiguration, bonus_chest: bool) -> WorldData {
-    let seed = properties.seed.unwrap_or_else(rand::random);
-    let dimensions = create_dimensions(properties, seed);
-    let mut world_data = WorldData::new_world(
-        seed,
-        dimensions,
-        properties.generate_structures,
-        properties.game_mode,
-        properties.difficulty,
-        properties.hardcore,
-        data_configuration,
-        properties.level_name.clone(),
-    );
-    world_data.bonus_chest = bonus_chest;
-    world_data
-}
-
-fn create_dimensions(properties: &DedicatedServerProperties, seed: i64) -> WorldDimensions {
-    let presets = crate::core::data_registries::json_entries("minecraft:worldgen/world_preset");
-    let level_type = properties.level_type.as_str();
-    let preset = crate::resources::identifier::parse(level_type)
-        .ok()
-        .or_else(|| match level_type {
-            "default" => Some("minecraft:normal".to_string()),
-            "largebiomes" => Some("minecraft:large_biomes".to_string()),
-            _ => None,
-        })
-        .filter(|preset| presets.iter().any(|(name, _)| name == preset));
-    let preset = preset.unwrap_or_else(|| {
-        warn!("Failed to parse level-type {level_type}, defaulting to minecraft:normal");
-        "minecraft:normal".to_string()
-    });
-    let mut dimensions = WorldDimensions::from_preset(&preset, seed).unwrap_or_else(|_| WorldDimensions::normal(seed));
-    if preset == "minecraft:flat" {
-        let settings: serde_json::Value = serde_json::from_str(if properties.generator_settings.is_empty() { "{}" } else { &properties.generator_settings })
-            .unwrap_or_else(|_| serde_json::json!({}));
-        let parsed = flat::parse_settings(&settings);
-        if let Some(error) = parsed.error {
-            error!("{error}");
-        }
-        if let Some(flat) = parsed.value {
-            dimensions.overworld = ChunkGenerator::Flat(flat);
-        }
-    }
-    dimensions
+fn create_new_world_data(
+    properties: &DedicatedServerProperties,
+    data_configuration: WorldDataConfiguration,
+    datapack_dimensions: &[(String, LevelStem)],
+    registries_lifecycle: Lifecycle,
+    demo_mode: bool,
+    bonus_chest: bool,
+) -> LevelDataAndDimensions {
+    let (game_type, difficulty, hardcore, level_name, data_configuration, world_options, dimensions) = if demo_mode {
+        (
+            GameType::Survival,
+            Difficulty::Normal,
+            false,
+            "Demo World".to_string(),
+            WorldDataConfiguration::default_configuration(),
+            WorldOptions::demo_options(),
+            world_presets::get(NORMAL).expect("a normal world preset").create_world_dimensions(),
+        )
+    } else {
+        let world_options = if bonus_chest { properties.world_options().with_bonus_chest(true) } else { properties.world_options() };
+        (properties.game_mode, properties.difficulty, properties.hardcore, properties.level_name.clone(), data_configuration, world_options, properties.create_dimensions())
+    };
+    let final_dimensions = dimensions.bake(datapack_dimensions);
+    let lifecycle = final_dimensions.lifecycle().add(registries_lifecycle);
+    let world_data = WorldData::new_world(game_type, difficulty, hardcore, data_configuration, level_name, final_dimensions.special_world_property, lifecycle);
+    LevelDataAndDimensions { world_data, gen_settings: WorldGenSettings::new(world_options, dimensions), dimensions: final_dimensions }
 }
 
 fn absolute(path: &Path) -> PathBuf {

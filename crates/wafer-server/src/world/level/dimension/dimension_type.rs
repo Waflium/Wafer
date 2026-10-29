@@ -21,9 +21,22 @@ static MONSTER_SPAWN_LIGHT_TESTS: LazyLock<Vec<IntProvider>> = LazyLock::new(|| 
         .collect()
 });
 
+static INLINE_MONSTER_SPAWN_LIGHT_TESTS: std::sync::Mutex<Vec<(&'static str, &'static IntProvider)>> = std::sync::Mutex::new(Vec::new());
+
 pub fn monster_spawn_light_test(dimension: &'static DimensionType) -> &'static IntProvider {
-    let index = wafer_data::dimension_types().iter().position(|d| d.name == dimension.name).expect("a registered dimension type");
-    &MONSTER_SPAWN_LIGHT_TESTS[index]
+    match wafer_data::dimension_types().iter().position(|d| d.name == dimension.name) {
+        Some(index) => &MONSTER_SPAWN_LIGHT_TESTS[index],
+        None => {
+            let mut inline = INLINE_MONSTER_SPAWN_LIGHT_TESTS.lock().unwrap();
+            if let Some((_, provider)) = inline.iter().find(|(name, _)| *name == dimension.name) {
+                return provider;
+            }
+            let json = serde_json::from_str(dimension.monster_spawn_light_level).expect("monster_spawn_light_level JSON");
+            let provider: &'static IntProvider = Box::leak(Box::new(IntProvider::parse(&json).expect("a monster spawn light level")));
+            inline.push((dimension.name, provider));
+            provider
+        }
+    }
 }
 
 pub fn monster_spawn_block_light_limit(dimension: &'static DimensionType) -> i32 {

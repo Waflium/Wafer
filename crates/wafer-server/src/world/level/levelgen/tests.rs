@@ -404,8 +404,8 @@ fn end_terrain_matches_vanilla() {
     );
 }
 
-fn multi_noise_overworld() -> BiomeSource {
-    BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:overworld").unwrap())
+fn multi_noise_overworld() -> std::sync::Arc<BiomeSource> {
+    std::sync::Arc::new(BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset("minecraft:overworld").unwrap()))
 }
 
 #[test]
@@ -449,7 +449,7 @@ fn large_biomes_terrain_matches_vanilla() {
 #[test]
 fn single_biome_terrain_matches_vanilla() {
     check_dimension(
-        |seed| NoiseBasedChunkGenerator::with_settings("minecraft:overworld", BiomeSource::Fixed(Biome::by_name("minecraft:plains").unwrap()), seed),
+        |seed| NoiseBasedChunkGenerator::with_settings("minecraft:overworld", std::sync::Arc::new(BiomeSource::Fixed(Biome::by_name("minecraft:plains").unwrap())), seed),
         "minecraft:overworld",
         "
         12345 0 0 c35ea558ff38ef0f cab0113ba0cf3b25 62c2237a1214cd67 # [plains] {lava=39, deepslate_iron_ore=12}

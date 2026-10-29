@@ -360,6 +360,17 @@ pub fn duplicate_value(value: &str) -> JavaThrowable {
     JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: Adding duplicate value '{value}' to registry"), frames)
 }
 
+pub fn world_data_supplier_frames() -> Vec<&'static str> {
+    let mut frames = vec![
+        "net.minecraft.server.Main.lambda$main$1(Main.java:184)",
+        "net.minecraft.server.WorldLoader.lambda$load$2(WorldLoader.java:46)",
+        "java.base/java.util.concurrent.CompletableFuture$UniCompose.tryFire(CompletableFuture.java:1171)",
+        "java.base/java.util.concurrent.CompletableFuture$Completion.exec(CompletableFuture.java:504)",
+    ];
+    frames.extend(FORK_JOIN_TAIL);
+    frames
+}
+
 pub fn execution_exception(cause: JavaThrowable) -> JavaThrowable {
     JavaThrowable::new(format!("java.util.concurrent.ExecutionException: {}", cause.description), EXECUTION_EXCEPTION_FRAMES.to_vec()).with_cause(cause)
 }

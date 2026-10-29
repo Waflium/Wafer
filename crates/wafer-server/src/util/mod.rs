@@ -25,6 +25,7 @@ pub mod java_nio;
 pub mod java_throwable;
 pub mod java_uuid;
 pub mod keyframe_track;
+pub mod lifecycle;
 pub mod parsing;
 pub mod png_info;
 pub mod random;

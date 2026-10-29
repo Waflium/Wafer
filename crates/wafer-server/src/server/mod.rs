@@ -60,8 +60,13 @@ use crate::network::login::{Profile, Verdict};
 use crate::util::java_throwable::JavaThrowable;
 use crate::world::clock::ServerClockManager;
 use crate::world::entity::EntityId;
-use crate::world::level::chunk::{ChunkGenerator, FlatLevelSource};
-use crate::world::level::levelgen::world_dimensions::WorldDimensions;
+use crate::util::lifecycle::Lifecycle;
+use crate::world::level::dimension::level_stem::{DimensionTypeHolder, LevelStem};
+use crate::world::level::levelgen::presets::world_presets::{self, FLAT, NORMAL};
+use crate::world::level::levelgen::world_dimensions::SpecialWorldProperty;
+use crate::world::level::levelgen::world_gen_settings::WorldGenSettings;
+use crate::world::level::levelgen::world_options::WorldOptions;
+use crate::world::level::storage::level_storage_source::{LevelDataAndDimensions, get_level_data_and_dimensions};
 use command_origin::CommandOrigin;
 use crate::world::level::chunk::storage::RegionStorage;
 use crate::world::level::gamerules::GameRules;
@@ -111,14 +116,19 @@ fn create_level(
     config: &ServerConfig,
     world_dir: Option<&WorldDir>,
     dimension: &'static str,
-    dimension_type: &str,
-    generator: ChunkGenerator,
+    level_stem: &LevelStem,
     is_debug: bool,
     generate_structures: bool,
     seed: i64,
 ) -> ServerLevel {
-    let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension_type).expect("a dimension type");
-    let dimension_type = &wafer_data::dimension_types()[dimension_type_id as usize];
+    let generator = level_stem.generator.create(seed);
+    let (dimension_type_id, dimension_type) = match &level_stem.dimension_type {
+        DimensionTypeHolder::Reference(dimension_type) => {
+            let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension_type).expect("a dimension type");
+            (dimension_type_id, &wafer_data::dimension_types()[dimension_type_id as usize])
+        }
+        DimensionTypeHolder::Direct(tag) => (-1, crate::core::data_registries::inline_dimension_type(dimension, tag)),
+    };
     let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes));
     let generator_identifier = generator.get_type_name_for_data_fixer();
     let mut chunks = ChunkCache::new(dimension_type, generator, storage);
@@ -252,7 +262,9 @@ pub struct Server {
     pub difficulty_locked: bool,
     pub hardcore: bool,
     generate_structures: bool,
-    world_dimensions: WorldDimensions,
+    world_gen_settings: WorldGenSettings,
+    world_gen_settings_lifecycle: Lifecycle,
+    special_world_property: SpecialWorldProperty,
     bonus_chest: bool,
     server_brands: Vec<String>,
     was_modded: bool,
@@ -285,7 +297,7 @@ impl Server {
 
     pub(crate) fn new_with_player_lists(config: ServerConfig, player_lists: Option<PlayerLists>) -> std::io::Result<Server> {
         let saved = match &config.world {
-            Some(root) => WorldData::load(&WorldDir { root: root.clone() })?,
+            Some(root) => WorldData::load_level_tag(&WorldDir { root: root.clone() })?,
             None => None,
         };
         let mut pack_repository = match &config.world {
@@ -295,7 +307,7 @@ impl Server {
             }
             None => PackRepository::create_vanilla_trusted_repository(),
         };
-        let initial_data_config = saved.as_ref().map_or_else(WorldDataConfiguration::default_configuration, |data| data.data_configuration.clone());
+        let initial_data_config = saved.as_ref().map_or_else(WorldDataConfiguration::default_configuration, WorldDataConfiguration::parse);
         let data_configuration = configure_pack_repository(&mut pack_repository, &initial_data_config, saved.is_none(), false);
         let resource_manager = MultiPackResourceManager::new(pack_repository.open_all_selected());
         crate::core::data_registries::load(&resource_manager);
@@ -305,23 +317,28 @@ impl Server {
         data_packs.update_components_and_static_registry_tags();
         data_packs.finalize_recipe_loading();
         crate::world::level::levelgen::structure::templatesystem::structure_template_manager::on_resource_manager_reload(&resource_manager);
-        let mut world_data = match saved {
-            Some(data) => data,
-            None => {
-                let seed = config.seed.unwrap_or_else(rand::random);
-                let mut dimensions = WorldDimensions::normal(seed);
-                if config.level_type == LevelType::Flat {
-                    dimensions.overworld = ChunkGenerator::Flat(FlatLevelSource::default());
-                }
-                WorldData::new_world(seed, dimensions, true, config.game_mode, config.difficulty, false, data_configuration.clone(), config.level_name.clone())
+        let datapack_dimensions = crate::core::data_registries::datapack_dimensions();
+        let registries_lifecycle = crate::core::data_registries::registries_lifecycle();
+        let level_data_and_dimensions = match (saved, &config.world) {
+            (Some(level_data_tag), Some(root)) => {
+                get_level_data_and_dimensions(&WorldDir { root: root.clone() }, &level_data_tag, data_configuration, &datapack_dimensions, registries_lifecycle, &[]).map_err(std::io::Error::other)?
+            }
+            _ => {
+                let key = if config.level_type == LevelType::Flat { FLAT } else { NORMAL };
+                let dimensions = world_presets::get(key).expect("a world preset").create_world_dimensions();
+                let options = WorldOptions::new(config.seed.unwrap_or_else(WorldOptions::random_seed), true, false);
+                let final_dimensions = dimensions.bake(&datapack_dimensions);
+                let lifecycle = final_dimensions.lifecycle().add(registries_lifecycle);
+                let world_data = WorldData::new_world(config.game_mode, config.difficulty, false, data_configuration, config.level_name.clone(), final_dimensions.special_world_property, lifecycle);
+                LevelDataAndDimensions { world_data, gen_settings: WorldGenSettings::new(options, dimensions), dimensions: final_dimensions }
             }
         };
-        world_data.data_configuration = data_configuration;
-        Server::with_world_stem(config, pack_repository, WorldStem { data_packs, world_data, saved_data: None, player_lists })
+        let LevelDataAndDimensions { world_data, gen_settings, dimensions } = level_data_and_dimensions;
+        Server::with_world_stem(config, pack_repository, WorldStem { data_packs, world_data, gen_settings, dimensions, saved_data: None, player_lists })
     }
 
     pub(crate) fn with_world_stem(config: ServerConfig, pack_repository: PackRepository, world_stem: WorldStem) -> std::io::Result<Server> {
-        let WorldStem { data_packs, world_data: data, saved_data, player_lists } = world_stem;
+        let WorldStem { data_packs, world_data: data, gen_settings, dimensions, saved_data, player_lists } = world_stem;
         let data_configuration = data.data_configuration.clone();
         let new_world = !data.initialized;
         let world_dir = config.world.clone().map(|root| WorldDir { root });
@@ -339,8 +356,8 @@ impl Server {
         clocks.dirty = saved_clocks.is_none();
         let weather_dirty = weather.is_none();
         let weather = weather.unwrap_or_default();
-        let generate_structures = data.generate_structures;
-        let bonus_chest = data.bonus_chest;
+        let generate_structures = gen_settings.options().generate_structures();
+        let bonus_chest = gen_settings.options().generate_bonus_chest();
         let (mut server_brands, was_modded) = (data.server_brands, data.was_modded);
         let (level_name, allow_commands, singleplayer_uuid) = (data.level_name, data.allow_commands, data.singleplayer_uuid);
         if !server_brands.iter().any(|b| b == "vanilla") {
@@ -348,25 +365,14 @@ impl Server {
         }
         let mut load_listener = level::progress::LoggingLevelLoadListener::for_dedicated_server();
         let spawn = (!new_world).then_some(data.spawn);
-        let is_debug = data.dimensions.is_debug();
-        let (seed, game_time, dimensions, mut game_type, mut difficulty, mut difficulty_locked, hardcore) =
-            (data.seed, data.game_time, data.dimensions, config.game_mode, data.difficulty, data.difficulty_locked, data.hardcore);
-        let world_dimensions = dimensions.clone();
-        let level_stems = crate::core::data_registries::level_stems();
-        let stem = |name: &str, generator: Option<ChunkGenerator>| -> Option<(String, ChunkGenerator)> {
-            match level_stems.iter().find(|(id, _)| *id == name) {
-                Some((_, json)) => match WorldDimensions::stem_from_json(json, seed) {
-                    Ok(stem) => Some(stem),
-                    Err(e) => {
-                        error!("Failed to load dimension {name}: {e}");
-                        generator.map(|generator| (name.to_owned(), generator))
-                    }
-                },
-                None => generator.map(|generator| (name.to_owned(), generator)),
-            }
-        };
-        let (overworld_type, overworld_generator) = stem(OVERWORLD, Some(dimensions.overworld)).expect("overworld generator");
-        let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, &overworld_type, overworld_generator, is_debug, generate_structures, seed);
+        let special_world_property = data.special_world_property;
+        let is_debug = special_world_property == SpecialWorldProperty::Debug;
+        let seed = gen_settings.options().seed();
+        let (game_time, mut game_type, mut difficulty, mut difficulty_locked, hardcore) = (data.game_time, config.game_mode, data.difficulty, data.difficulty_locked, data.hardcore);
+        let world_gen_settings_lifecycle = data.world_gen_settings_lifecycle;
+        let mut stems = dimensions.levels_in_creation_order().into_iter();
+        let (_, overworld_stem) = stems.next().expect("overworld settings");
+        let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, &overworld_stem, is_debug, generate_structures, seed);
         overworld.chunks.game_rules = game_rules.clone();
         dedicated::set_overworld_created();
         let mut scoreboard_save_data = ScoreboardSaveData::load(world_dir.as_ref().map(WorldDir::data_folder));
@@ -404,15 +410,13 @@ impl Server {
             game_type = GameType::Spectator;
         }
         let mut levels = vec![overworld];
-        for (dimension, generator) in [(THE_END, dimensions.end), (THE_NETHER, dimensions.nether)] {
-            let Some((dimension_type, generator)) = stem(dimension, generator) else { continue };
-            levels.push(create_level(&config, world_dir.as_ref(), dimension, &dimension_type, generator, is_debug, generate_structures, seed));
-        }
-        for (dimension, json) in level_stems.iter().filter(|(id, _)| ![OVERWORLD, THE_NETHER, THE_END].contains(id)) {
-            match WorldDimensions::stem_from_json(json, seed) {
-                Ok((dimension_type, generator)) => levels.push(create_level(&config, world_dir.as_ref(), dimension, &dimension_type, generator, is_debug, generate_structures, seed)),
-                Err(e) => error!("Failed to load dimension {dimension}: {e}"),
-            }
+        for (key, stem) in stems {
+            let dimension: &'static str = match key.as_str() {
+                THE_END => THE_END,
+                THE_NETHER => THE_NETHER,
+                _ => Box::leak(key.into_boxed_str()),
+            };
+            levels.push(create_level(&config, world_dir.as_ref(), dimension, &stem, is_debug, generate_structures, seed));
         }
         for (index, level) in levels.iter_mut().enumerate() {
             level.index = index;
@@ -505,7 +509,9 @@ impl Server {
             difficulty_locked,
             hardcore,
             generate_structures,
-            world_dimensions,
+            world_gen_settings: gen_settings,
+            world_gen_settings_lifecycle,
+            special_world_property,
             bonus_chest,
             server_brands,
             was_modded,
@@ -556,6 +562,7 @@ impl Server {
             random_tick_rate: self.game_rules.get_int(wafer_data::game_rule::RANDOM_TICK_SPEED).to_string(),
             level_stats,
             world_seed: self.seed,
+            world_gen_settings_lifecycle: self.world_gen_settings_lifecycle,
         }
     }
 
@@ -784,7 +791,6 @@ impl Server {
             level.save(dir, flush, no_save);
         }
         let data = WorldData {
-            seed: self.seed,
             game_time: self.overworld().game_time,
             spawn: self.spawn.clone(),
             game_type: self.default_game_type.get(),
@@ -793,9 +799,8 @@ impl Server {
             hardcore: self.hardcore,
             clocks: self.clocks.to_nbt(),
             weather: self.weather.get(),
-            dimensions: self.world_dimensions.clone(),
-            generate_structures: self.generate_structures,
-            bonus_chest: self.bonus_chest,
+            special_world_property: self.special_world_property,
+            world_gen_settings_lifecycle: self.world_gen_settings_lifecycle,
             initialized: true,
             server_brands: self.server_brands.clone(),
             was_modded: self.was_modded,
@@ -815,7 +820,7 @@ impl Server {
         self.clocks.dirty = false;
         self.weather.set_dirty(false);
         self.game_rules.set_dirty(false);
-        if data.save(dir, dirty).is_err() {
+        if data.save(dir, &self.world_gen_settings, dirty).is_err() {
             error!("Failed to save level {}", dir.root.display());
         }
         log_save_failure("command_storage.dat", self.command_storage.borrow_mut().save());
@@ -2246,6 +2251,7 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
 mod tests {
     use super::*;
     use crate::world::level::BlockGetter;
+    use crate::world::level::chunk::ChunkGenerator;
 
     #[test]
     fn normal_world_spawns_on_terrain_and_reloads() {

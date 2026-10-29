@@ -1,313 +1,256 @@
-use std::sync::Arc;
-
-use serde_json::Value;
-use wafer_data::{Block, BlockState};
 use wafer_protocol::nbt::Nbt;
 
-use super::debug_level_source::DebugLevelSource;
-use super::{NoiseBasedChunkGenerator, WORLDGEN, flat};
-use crate::world::level::biome::MultiNoiseBiomeSource;
-use crate::world::level::biome::biome_source::BiomeSource;
-use crate::world::level::biome::the_end_biome_source::TheEndBiomeSource;
-use crate::world::level::chunk::{Biome, ChunkGenerator, FlatLevelSource};
-use super::flat::StructureOverrides;
-use crate::util::codec::{self, DecodeResult, Record};
-use crate::world::item::component::codec::{Codec, RangeError};
-use crate::world::item::component::types;
-use crate::world::level::dimension::dimension_type;
+use crate::util::codec::{self, DecodeResult};
+use crate::util::java_throwable::JavaThrowable;
+use crate::util::lifecycle::Lifecycle;
+use crate::world::level::chunk::unseeded_chunk_generator::UnseededChunkGenerator;
+use crate::world::level::dimension::builtin_dimension_types;
+use crate::world::level::dimension::level_stem::{END, LevelStem, NETHER, OVERWORLD};
+
+const BUILTIN_ORDER: [&str; 3] = [OVERWORLD, NETHER, END];
+
+const OVERWORLD_SETTINGS_MISSING: &str = "java.lang.IllegalStateException: Overworld settings missing";
+const CONSTRUCTOR_FRAME: &str = "net.minecraft.world.level.levelgen.WorldDimensions.<init>(WorldDimensions.java:56)";
+const REGISTRY_CONSTRUCTOR_FRAME: &str = "net.minecraft.world.level.levelgen.WorldDimensions.<init>(WorldDimensions.java:61)";
+const CODEC_HEAD: [&str; 3] = [
+    "com.mojang.serialization.codecs.RecordCodecBuilder$Instance$1.lambda$decode$0(RecordCodecBuilder.java:185)",
+    "com.mojang.serialization.DataResult$Success.map(DataResult.java:175)",
+    "com.mojang.serialization.codecs.RecordCodecBuilder$Instance$1.lambda$decode$1(RecordCodecBuilder.java:184)",
+];
+const CODEC_SUCCESS_FLAT_MAP: [&str; 1] = ["com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)"];
+const CODEC_ERROR_FLAT_MAP: [&str; 2] = ["com.mojang.serialization.DataResult$Error.flatMap(DataResult.java:335)", "com.mojang.serialization.DataResult$Error.flatMap(DataResult.java:250)"];
+const CODEC_TAIL: [&str; 9] = [
+    "com.mojang.serialization.codecs.RecordCodecBuilder$Instance$1.decode(RecordCodecBuilder.java:183)",
+    "com.mojang.serialization.codecs.RecordCodecBuilder$2.decode(RecordCodecBuilder.java:107)",
+    "com.mojang.serialization.codecs.RecordCodecBuilder$Instance$3.decode(RecordCodecBuilder.java:249)",
+    "com.mojang.serialization.codecs.RecordCodecBuilder$2.decode(RecordCodecBuilder.java:107)",
+    "com.mojang.serialization.MapDecoder.lambda$compressedDecode$1(MapDecoder.java:52)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.MapDecoder.compressedDecode(MapDecoder.java:52)",
+    "com.mojang.serialization.MapCodec$MapCodecCodec.decode(MapCodec.java:159)",
+    "com.mojang.serialization.Decoder.parse(Decoder.java:18)",
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpecialWorldProperty {
+    None,
+    Flat,
+    Debug,
+}
 
 #[derive(Clone)]
 pub struct WorldDimensions {
-    pub overworld: ChunkGenerator,
-    pub nether: Option<ChunkGenerator>,
-    pub end: Option<ChunkGenerator>,
+    dimensions: Vec<(String, LevelStem)>,
+}
+
+pub struct Complete {
+    pub dimensions: Vec<(String, LevelStem)>,
+    pub special_world_property: SpecialWorldProperty,
+    lifecycle: Lifecycle,
+}
+
+impl Complete {
+    pub fn lifecycle(&self) -> Lifecycle {
+        self.lifecycle
+    }
+
+    pub fn levels_in_creation_order(self) -> Vec<(String, LevelStem)> {
+        let rank = |key: &str| match key {
+            OVERWORLD => 0,
+            END => 1,
+            NETHER => 2,
+            _ => 3,
+        };
+        let mut dimensions = self.dimensions;
+        dimensions.sort_by_key(|(key, _)| rank(key));
+        dimensions
+    }
+}
+
+fn overworld_settings_missing(frames: Vec<&'static str>) -> JavaThrowable {
+    JavaThrowable::new(OVERWORLD_SETTINGS_MISSING, frames)
 }
 
 impl WorldDimensions {
-    pub fn normal(seed: i64) -> WorldDimensions {
-        WorldDimensions {
-            overworld: ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::overworld(seed))),
-            nether: Some(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::nether(seed)))),
-            end: Some(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::end(seed)))),
+    pub fn new(dimensions: Vec<(String, LevelStem)>, caller_frames: &[&'static str]) -> Result<WorldDimensions, JavaThrowable> {
+        if !dimensions.iter().any(|(key, _)| key == OVERWORLD) {
+            let mut frames = vec![CONSTRUCTOR_FRAME];
+            frames.extend_from_slice(caller_frames);
+            return Err(overworld_settings_missing(frames));
         }
+        Ok(WorldDimensions { dimensions })
     }
 
-    pub fn from_preset(preset: &str, seed: i64) -> Result<WorldDimensions, String> {
-        let json = crate::core::data_registries::json_entries("minecraft:worldgen/world_preset").iter().find(|(name, _)| *name == preset).ok_or_else(|| format!("Unknown world preset {preset}"))?.1;
-        let json: Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
-        WorldDimensions::from_json(&json["dimensions"], seed)
+    pub fn from_registry(registry: &[(String, LevelStem)], caller_frames: &[&'static str]) -> Result<WorldDimensions, JavaThrowable> {
+        let mut frames = vec![REGISTRY_CONSTRUCTOR_FRAME];
+        frames.extend_from_slice(caller_frames);
+        WorldDimensions::new(registry.to_vec(), &frames)
     }
 
-    pub fn stem_from_json(stem: &Value, seed: i64) -> Result<(String, ChunkGenerator), String> {
-        let dimension_type = stem["type"].as_str().ok_or("No key type")?;
-        if wafer_data::SyncedRegistry::get("minecraft:dimension_type").id_of(dimension_type).is_none() {
-            return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:dimension_type]: {dimension_type}"));
-        }
-        Ok((dimension_type.to_owned(), generator_from_json(&stem["generator"], seed)?))
+    pub fn keys_in_order<'a>(known_keys: impl Iterator<Item = &'a str> + Clone) -> Vec<&'a str> {
+        let mut keys: Vec<&str> = BUILTIN_ORDER.iter().copied().filter(|builtin| known_keys.clone().any(|key| key == *builtin)).collect();
+        keys.extend(known_keys.filter(|key| !BUILTIN_ORDER.contains(key)));
+        keys
     }
 
-    pub fn from_json(dimensions: &Value, seed: i64) -> Result<WorldDimensions, String> {
-        let generator = |name: &str| generator_from_json(&dimensions[name]["generator"], seed);
-        let optional = |name: &str| dimensions.get(name).map(|_| generator(name)).transpose();
-        if dimensions.get("minecraft:overworld").is_none() {
-            return Err("Overworld settings missing".into());
-        }
-        Ok(WorldDimensions { overworld: generator("minecraft:overworld")?, nether: optional("minecraft:the_nether")?, end: optional("minecraft:the_end")? })
-    }
-
-    pub fn from_nbt(dimensions: &Nbt, seed: i64) -> Result<WorldDimensions, String> {
-        let generator = |name: &str| {
-            let generator = dimensions.get(name).and_then(|d| d.get("generator")).ok_or_else(|| format!("No key {name}"))?;
-            generator_from_nbt(generator, seed)
+    pub fn replace_overworld_generator(&self, generator: UnseededChunkGenerator) -> WorldDimensions {
+        let dimension_type = match self.get(OVERWORLD) {
+            Some(stem) => stem.dimension_type.clone(),
+            None => crate::world::level::dimension::level_stem::DimensionTypeHolder::Reference(builtin_dimension_types::OVERWORLD.to_string()),
         };
-        let optional = |name: &str| dimensions.get(name).map(|_| generator(name)).transpose();
-        Ok(WorldDimensions { overworld: generator("minecraft:overworld")?, nether: optional("minecraft:the_nether")?, end: optional("minecraft:the_end")? })
+        WorldDimensions { dimensions: WorldDimensions::with_overworld(&self.dimensions, LevelStem::new(dimension_type, generator)) }
+    }
+
+    pub fn with_overworld(dimensions: &[(String, LevelStem)], overworld: LevelStem) -> Vec<(String, LevelStem)> {
+        let mut result = dimensions.to_vec();
+        match result.iter_mut().find(|(key, _)| key == OVERWORLD) {
+            Some(entry) => entry.1 = overworld,
+            None => result.push((OVERWORLD.to_string(), overworld)),
+        }
+        result
+    }
+
+    pub fn dimensions(&self) -> &[(String, LevelStem)] {
+        &self.dimensions
+    }
+
+    pub fn overworld(&self) -> &UnseededChunkGenerator {
+        &self.get(OVERWORLD).expect("overworld settings").generator
+    }
+
+    pub fn get(&self, key: &str) -> Option<&LevelStem> {
+        self.dimensions.iter().find(|(stem_key, _)| stem_key == key).map(|(_, stem)| stem)
     }
 
     pub fn is_debug(&self) -> bool {
-        matches!(self.overworld, ChunkGenerator::Debug(_))
+        self.overworld().is_debug()
     }
 
-    pub fn to_nbt(&self) -> Nbt {
-        let stem = |generator: &ChunkGenerator, ty: &str| Nbt::Compound(vec![("generator".into(), generator_to_nbt(generator)), ("type".into(), Nbt::String(ty.into()))]);
-        let mut stems = vec![("minecraft:overworld".to_string(), stem(&self.overworld, "minecraft:overworld"))];
-        if let Some(nether) = &self.nether {
-            stems.push(("minecraft:the_nether".into(), stem(nether, "minecraft:the_nether")));
+    fn special_world_property(registry: &[(String, LevelStem)]) -> SpecialWorldProperty {
+        match registry.iter().find(|(key, _)| key == OVERWORLD) {
+            Some((_, overworld)) if overworld.generator.is_debug() => SpecialWorldProperty::Debug,
+            Some((_, overworld)) if overworld.generator.is_flat() => SpecialWorldProperty::Flat,
+            _ => SpecialWorldProperty::None,
         }
-        if let Some(end) = &self.end {
-            stems.push(("minecraft:the_end".into(), stem(end, "minecraft:the_end")));
+    }
+
+    fn check_stability(key: &str, dimension: &LevelStem) -> Lifecycle {
+        if WorldDimensions::is_vanilla_like(key, dimension) { Lifecycle::Stable } else { Lifecycle::Experimental }
+    }
+
+    fn is_vanilla_like(key: &str, dimension: &LevelStem) -> bool {
+        match key {
+            OVERWORLD => WorldDimensions::is_stable_overworld(dimension),
+            NETHER => WorldDimensions::is_stable_nether(dimension),
+            END => WorldDimensions::is_stable_end(dimension),
+            _ => false,
         }
-        Nbt::Compound(stems)
     }
-}
 
-const CHUNK_GENERATOR_TYPES: [&str; 3] = ["minecraft:noise", "minecraft:flat", "minecraft:debug"];
-const BIOME_SOURCE_TYPES: [&str; 4] = ["minecraft:fixed", "minecraft:multi_noise", "minecraft:checkerboard", "minecraft:the_end"];
-
-fn holder(registry: &'static str) -> Codec {
-    Codec::Holder(registry, None)
-}
-
-fn decode_dispatch_type(tag: &Nbt, registry: &str, types: &[&str]) -> Result<String, String> {
-    let ty = codec::identifier(codec::field(tag, "type")?)?;
-    if types.contains(&ty.as_str()) { Ok(ty) } else { Err(format!("Unknown registry key in ResourceKey[minecraft:root / {registry}]: {ty}")) }
-}
-
-pub fn decode_level_stem(tag: &Nbt) -> DecodeResult<()> {
-    if let Err(error) = codec::map(tag) {
-        return DecodeResult::error(error);
-    }
-    let mut record = Record::default();
-    let ty = record.required(tag, "type", |ty| DecodeResult::from(types::holder("minecraft:dimension_type", dimension_type::direct_codec()).0.decode(ty)));
-    let generator = record.required(tag, "generator", decode_chunk_generator);
-    record.build(|| ty.and(generator))
-}
-
-pub fn decode_world_preset(tag: &Nbt) -> DecodeResult<()> {
-    if let Err(error) = codec::map(tag) {
-        return DecodeResult::error(error);
-    }
-    let mut record = Record::default();
-    let dimensions = record.required(tag, "dimensions", |dimensions| {
-        codec::base_map_partial(dimensions, |key| codec::identifier(&Nbt::String(key.to_string())), decode_level_stem)
-    });
-    record.build(|| dimensions).validate(|dimensions| {
-        if dimensions.iter().any(|(key, _)| key == "minecraft:overworld") { Ok(()) } else { Err("Missing overworld dimension".to_string()) }
-    })
-    .map(drop)
-}
-
-fn decode_chunk_generator(tag: &Nbt) -> DecodeResult<()> {
-    if let Err(error) = codec::map(tag) {
-        return DecodeResult::error(error);
-    }
-    let ty = match decode_dispatch_type(tag, "minecraft:worldgen/chunk_generator", &CHUNK_GENERATOR_TYPES) {
-        Ok(ty) => ty,
-        Err(error) => return DecodeResult::error(error),
-    };
-    let mut record = Record::default();
-    let decoded = match ty.as_str() {
-        "minecraft:noise" => {
-            let biome_source = record.required(tag, "biome_source", decode_biome_source);
-            let settings = record.required(tag, "settings", decode_noise_settings);
-            biome_source.and(settings)
+    fn is_stable_overworld(dimension: &LevelStem) -> bool {
+        let dimension_type = &dimension.dimension_type;
+        if !dimension_type.is(builtin_dimension_types::OVERWORLD) && !dimension_type.is(builtin_dimension_types::OVERWORLD_CAVES) {
+            return false;
         }
-        "minecraft:flat" => record.required(tag, "settings", |settings| {
-            let parsed = flat::parse_settings(&codec::to_json(settings));
-            DecodeResult { value: parsed.value.map(drop), error: parsed.error }
-        }),
-        _ => Some(()),
-    };
-    record.build(|| decoded)
-}
-
-fn decode_noise_settings(tag: &Nbt) -> DecodeResult<()> {
-    super::noise_settings_holder_codec().0.decode_partial(tag).map(drop)
-}
-
-fn decode_biome_source(tag: &Nbt) -> DecodeResult<()> {
-    if let Err(error) = codec::map(tag) {
-        return DecodeResult::error(error);
-    }
-    let ty = match decode_dispatch_type(tag, "minecraft:worldgen/biome_source", &BIOME_SOURCE_TYPES) {
-        Ok(ty) => ty,
-        Err(error) => return DecodeResult::error(error),
-    };
-    let mut record = Record::default();
-    let decoded = match ty.as_str() {
-        "minecraft:fixed" => record.required(tag, "biome", |biome| DecodeResult::from(holder("minecraft:worldgen/biome").decode(biome).map(drop))),
-        "minecraft:checkerboard" => {
-            let biomes = record.required(tag, "biomes", |biomes| DecodeResult::from(Codec::HolderSet("minecraft:worldgen/biome").decode(biomes).map(drop)));
-            record.with_default(tag, "scale", 2, |scale| Codec::Int(0, 62, RangeError::Outside).decode(scale).map(|scale| scale.as_i64().unwrap_or(2) as i32));
-            biomes
+        match &dimension.generator {
+            UnseededChunkGenerator::Noise(noise) => noise.multi_noise_biome_source_stable("minecraft:overworld").unwrap_or(true),
+            _ => true,
         }
-        "minecraft:multi_noise" => return decode_multi_noise(tag),
-        _ => Some(()),
-    };
-    record.build(|| decoded)
-}
-
-fn decode_multi_noise(tag: &Nbt) -> DecodeResult<()> {
-    let biomes = match tag.get("biomes") {
-        Some(biomes) => DecodeResult::from(MultiNoiseBiomeSource::from_parameters(&codec::to_json(biomes)).map(drop)),
-        None => DecodeResult::error(codec::no_key("biomes", &codec::to_json(tag))),
-    };
-    if biomes.is_success() {
-        return biomes;
     }
-    let preset = match tag.get("preset") {
-        Some(preset) => DecodeResult::from(holder("minecraft:worldgen/multi_noise_biome_source_parameter_list").decode(preset).map(drop)),
-        None => DecodeResult::error(codec::no_key("preset", &codec::to_json(tag))),
-    };
-    if preset.is_success() {
-        return preset;
-    }
-    DecodeResult::error(format!("{}; {}", preset.error.unwrap_or_default(), biomes.error.unwrap_or_default()))
-}
 
-fn biome_source_from_json(json: &Value) -> Result<BiomeSource, String> {
-    match json["type"].as_str() {
-        Some("minecraft:multi_noise") => match json["preset"].as_str() {
-            Some(preset) => Ok(BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_preset(preset)?)),
-            None => Ok(BiomeSource::MultiNoise(MultiNoiseBiomeSource::from_parameters(&json["biomes"])?)),
-        },
-        Some("minecraft:checkerboard") => {
-            let biomes = crate::core::holder_set::HolderSet::decode("minecraft:worldgen/biome", &crate::world::item::component::json_to_nbt(&json["biomes"]))?;
-            let allowed: Vec<Biome> = biomes.contents().iter().map(|&id| Biome(id as u16)).collect();
-            Ok(BiomeSource::Checkerboard(crate::world::level::biome::biome_source::CheckerboardColumnBiomeSource::new(allowed, json["scale"].as_i64().unwrap_or(2) as i32)))
-        }
-        Some("minecraft:the_end") => Ok(BiomeSource::TheEnd(TheEndBiomeSource::create())),
-        Some("minecraft:fixed") => {
-            let biome = json["biome"].as_str().ok_or("No key biome")?;
-            Ok(BiomeSource::Fixed(Biome::by_name(biome).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/biome]: {biome}"))?))
-        }
-        other => Err(format!("Unknown biome source type {other:?}")),
+    fn is_stable_nether(dimension: &LevelStem) -> bool {
+        dimension.dimension_type.is(builtin_dimension_types::NETHER)
+            && matches!(&dimension.generator, UnseededChunkGenerator::Noise(noise) if noise.stable("minecraft:nether") && noise.multi_noise_biome_source_stable("minecraft:nether") == Some(true))
     }
-}
 
-pub fn generator_from_json(json: &Value, seed: i64) -> Result<ChunkGenerator, String> {
-    match json["type"].as_str() {
-        Some("minecraft:flat") => {
-            let parsed = flat::parse_settings(&json["settings"]);
-            parsed.value.ok_or_else(|| parsed.error.unwrap_or_default()).map(ChunkGenerator::Flat)
-        }
-        Some("minecraft:debug") => Ok(ChunkGenerator::Debug(DebugLevelSource)),
-        Some("minecraft:noise") => {
-            let biome_source = biome_source_from_json(&json["biome_source"])?;
-            match &json["settings"] {
-                Value::String(settings) => {
-                    if !WORLDGEN.noise_settings.contains_key(settings) {
-                        return Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/noise_settings]: {settings}"));
-                    }
-                    Ok(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::with_settings(settings, biome_source, seed))))
-                }
-                inline => Ok(ChunkGenerator::Noise(Arc::new(NoiseBasedChunkGenerator::new(WORLDGEN.parse_inline_settings(inline)?, biome_source, seed)))),
+    fn is_stable_end(dimension: &LevelStem) -> bool {
+        dimension.dimension_type.is(builtin_dimension_types::END)
+            && matches!(&dimension.generator, UnseededChunkGenerator::Noise(noise) if noise.stable("minecraft:end") && noise.is_the_end_biome_source())
+    }
+
+    pub fn bake(&self, base_dimensions: &[(String, LevelStem)]) -> Complete {
+        let mut known_dimensions: Vec<&str> = base_dimensions.iter().map(|(key, _)| key.as_str()).collect();
+        for (key, _) in &self.dimensions {
+            if !known_dimensions.contains(&key.as_str()) {
+                known_dimensions.push(key);
             }
         }
-        other => Err(format!("Unknown chunk generator type {other:?}")),
-    }
-}
-
-fn generator_from_nbt(generator: &Nbt, seed: i64) -> Result<ChunkGenerator, String> {
-    if generator.get("type").and_then(Nbt::as_str) != Some("minecraft:flat") {
-        return generator_from_json(&crate::util::codec::to_json(generator), seed);
-    }
-    let settings = generator.get("settings").ok_or("flat settings missing")?;
-    let mut layers = Vec::new();
-    for layer in settings.get("layers").map(Nbt::as_list).unwrap_or(&[]) {
-        let name = layer.get("block").and_then(Nbt::as_str).unwrap_or("minecraft:air");
-        let state = Block::by_name(name).map(Block::default_state).ok_or_else(|| format!("unknown block {name}"))?;
-        layers.push((state, layer.get("height").and_then(Nbt::as_i64).unwrap_or(1) as u32));
-    }
-    Ok(ChunkGenerator::Flat(FlatLevelSource {
-        layers,
-        biome: settings.get("biome").and_then(Nbt::as_str).and_then(Biome::by_name).unwrap_or(FlatLevelSource::default().biome),
-        structure_overrides: settings.get("structure_overrides").and_then(StructureOverrides::from_nbt),
-        lakes: settings.get("lakes").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
-        features: settings.get("features").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
-        generation: Default::default(),
-    }))
-}
-
-fn biome_source_to_nbt(source: &BiomeSource) -> Nbt {
-    match source {
-        BiomeSource::MultiNoise(source) => Nbt::Compound(vec![("preset".into(), Nbt::String(source.preset.clone())), ("type".into(), Nbt::String("minecraft:multi_noise".into()))]),
-        BiomeSource::TheEnd(_) => Nbt::Compound(vec![("type".into(), Nbt::String("minecraft:the_end".into()))]),
-        BiomeSource::Fixed(biome) => Nbt::Compound(vec![("biome".into(), Nbt::String(biome.name().into())), ("type".into(), Nbt::String("minecraft:fixed".into()))]),
-        BiomeSource::Checkerboard(source) => Nbt::Compound(vec![
-            ("biomes".into(), Nbt::List(source.allowed_biomes.iter().map(|biome| Nbt::String(biome.name().into())).collect())),
-            ("scale".into(), Nbt::Int(source.size)),
-            ("type".into(), Nbt::String("minecraft:checkerboard".into())),
-        ]),
-    }
-}
-
-pub fn generator_to_nbt(generator: &ChunkGenerator) -> Nbt {
-    match generator {
-        ChunkGenerator::Flat(flat) => {
-            let layers = flat
-                .layers
-                .iter()
-                .map(|&(state, height): &(BlockState, u32)| {
-                    Nbt::Compound(vec![("block".into(), Nbt::String(state.block().name().into())), ("height".into(), Nbt::Int(height as i32))])
-                })
-                .collect();
-            let mut settings = vec![("features".to_string(), Nbt::Byte(flat.features as i8)), ("biome".into(), Nbt::String(flat.biome.name().into())), ("layers".into(), Nbt::List(layers))];
-            if let Some(overrides) = &flat.structure_overrides {
-                settings.push(("structure_overrides".into(), overrides.to_nbt()));
+        let mut results: Vec<(String, LevelStem)> = Vec::new();
+        for key in WorldDimensions::keys_in_order(known_dimensions.iter().copied()) {
+            let stem = base_dimensions.iter().find(|(base_key, _)| base_key == key).or_else(|| self.dimensions.iter().find(|(stem_key, _)| stem_key == key));
+            if let Some((_, stem)) = stem {
+                results.push((key.to_string(), stem.clone()));
             }
-            settings.push(("lakes".into(), Nbt::Byte(flat.lakes as i8)));
-            Nbt::Compound(vec![("settings".into(), Nbt::Compound(settings)), ("type".into(), Nbt::String("minecraft:flat".into()))])
         }
-        ChunkGenerator::Noise(noise) => Nbt::Compound(vec![
-            ("settings".into(), Nbt::String(noise.settings_key.clone())),
-            ("biome_source".into(), biome_source_to_nbt(&noise.biome_source)),
-            ("type".into(), Nbt::String("minecraft:noise".into())),
-        ]),
-        ChunkGenerator::Debug(_) => Nbt::Compound(vec![("type".into(), Nbt::String("minecraft:debug".into()))]),
+        let mut lifecycle = if BUILTIN_ORDER.iter().all(|builtin| known_dimensions.contains(builtin)) { Lifecycle::Stable } else { Lifecycle::Experimental };
+        for (key, stem) in &results {
+            lifecycle = lifecycle.add(WorldDimensions::check_stability(key, stem));
+        }
+        let special_world_property = WorldDimensions::special_world_property(&results);
+        Complete { dimensions: results, special_world_property, lifecycle }
+    }
+
+    pub fn decode(tag: &Nbt, caller_frames: &[&'static str]) -> Result<DecodeResult<WorldDimensions>, JavaThrowable> {
+        let dimensions = match codec::field(tag, "dimensions") {
+            Ok(dimensions) => codec::base_map_partial(dimensions, |key| codec::identifier(&Nbt::String(key.to_string())), LevelStem::decode),
+            Err(error) => return Ok(DecodeResult::error(error)),
+        };
+        let DecodeResult { value, error } = dimensions;
+        let Some(entries) = value else { return Ok(DecodeResult { value: None, error }) };
+        let flat_map: &[&'static str] = if error.is_some() { &CODEC_ERROR_FLAT_MAP } else { &CODEC_SUCCESS_FLAT_MAP };
+        let mut frames: Vec<&'static str> = CODEC_HEAD.to_vec();
+        frames.extend_from_slice(flat_map);
+        frames.extend_from_slice(&CODEC_TAIL);
+        frames.extend_from_slice(caller_frames);
+        let world_dimensions = WorldDimensions::new(entries, &frames)?;
+        Ok(DecodeResult { value: Some(world_dimensions), error })
+    }
+
+    pub fn encode(&self) -> Nbt {
+        Nbt::Compound(self.dimensions.iter().map(|(key, stem)| (key.clone(), stem.encode())).collect())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
     use super::*;
     use crate::world::item::component::json_to_nbt;
+    use crate::world::level::levelgen::presets::world_preset::WorldPreset;
+    use crate::world::level::levelgen::world_gen_settings::WorldGenSettings;
+    use crate::world::level::levelgen::world_options::WorldOptions;
 
     fn stem_error(json: &str) -> String {
         let value: Value = serde_json::from_str(json).unwrap();
-        crate::nbt::with_json_source(|| decode_level_stem(&json_to_nbt(&value)).into_result().err().expect("a decode error"))
+        crate::nbt::with_json_source(|| LevelStem::decode(&json_to_nbt(&value)).error.expect("a decode error"))
     }
 
     fn preset_error(json: &str) -> String {
         let value: Value = serde_json::from_str(json).unwrap();
-        crate::nbt::with_json_source(|| decode_world_preset(&json_to_nbt(&value)).into_result().err().expect("a decode error"))
+        crate::nbt::with_json_source(|| WorldPreset::decode(&json_to_nbt(&value)).error.expect("a decode error"))
+    }
+
+    fn preset(name: &str) -> WorldDimensions {
+        crate::world::level::levelgen::presets::world_presets::get(name).expect("a world preset").create_world_dimensions()
+    }
+
+    fn decode_settings(snbt: &str) -> Result<DecodeResult<WorldGenSettings>, JavaThrowable> {
+        let tag = crate::nbt::parse_fully(snbt).expect("valid snbt");
+        codec::with_nbt_ops(|| WorldGenSettings::decode(&tag, &["caller"]))
     }
 
     #[test]
     fn a_stem_reports_its_fields_in_vanilla_order() {
         assert_eq!(stem_error("{}"), "No key generator in MapLike[{}]; No key type in MapLike[{}]");
-        assert_eq!(stem_error(r#"{"type":"ta:nope","generator":{"type":"minecraft:nope"}}"#), "Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/chunk_generator]: minecraft:nope; Failed to get element ta:nope from registry minecraft:dimension_type");
-        assert_eq!(stem_error(r#"{"type":"minecraft:overworld","generator":{"type":"minecraft:noise"}}"#), r#"No key settings in MapLike[{"type":"minecraft:noise"}]; No key biome_source in MapLike[{"type":"minecraft:noise"}]"#);
+        assert_eq!(
+            stem_error(r#"{"type":"ta:nope","generator":{"type":"minecraft:nope"}}"#),
+            "Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/chunk_generator]: minecraft:nope; Failed to get element ta:nope from registry minecraft:dimension_type"
+        );
+        assert_eq!(
+            stem_error(r#"{"type":"minecraft:overworld","generator":{"type":"minecraft:noise"}}"#),
+            r#"No key settings in MapLike[{"type":"minecraft:noise"}]; No key biome_source in MapLike[{"type":"minecraft:noise"}]"#
+        );
     }
 
     #[test]
@@ -321,21 +264,6 @@ mod tests {
     }
 
     #[test]
-    fn a_preset_with_only_an_overworld_has_no_nether_or_end() {
-        let flat = r#"{"type":"minecraft:flat","settings":{"biome":"minecraft:plains","layers":[{"block":"minecraft:stone","height":1}]}}"#;
-        let only_overworld: Value = serde_json::from_str(&format!(r#"{{"minecraft:overworld":{{"type":"minecraft:overworld","generator":{flat}}}}}"#)).unwrap();
-        let dimensions = WorldDimensions::from_json(&only_overworld, 1).unwrap();
-        assert!(matches!(dimensions.overworld, ChunkGenerator::Flat(_)));
-        assert!(dimensions.nether.is_none() && dimensions.end.is_none());
-        let Nbt::Compound(stems) = dimensions.to_nbt() else { panic!("dimensions are a compound") };
-        assert_eq!(stems.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), ["minecraft:overworld"]);
-        let with_nether: Value = serde_json::from_str(&format!(r#"{{"minecraft:overworld":{{"generator":{flat}}},"minecraft:the_nether":{{"generator":{flat}}}}}"#)).unwrap();
-        let dimensions = WorldDimensions::from_json(&with_nether, 1).unwrap();
-        assert!(dimensions.nether.is_some() && dimensions.end.is_none());
-        assert_eq!(WorldDimensions::from_json(&serde_json::json!({}), 1).err().as_deref(), Some("Overworld settings missing"));
-    }
-
-    #[test]
     fn a_world_preset_needs_an_overworld() {
         assert_eq!(preset_error(r#"{"dimensions":{}}"#), "Missing overworld dimension");
         assert_eq!(preset_error("{}"), "No key dimensions in MapLike[{}]");
@@ -343,5 +271,97 @@ mod tests {
             preset_error(r#"{"dimensions":{"ta:x":{"type":"minecraft:overworld"}}}"#),
             r#"No key generator in MapLike[{"type":"minecraft:overworld"}] missed input: {"ta:x":{"type":"minecraft:overworld"}}; Missing overworld dimension"#
         );
+    }
+
+    #[test]
+    fn dimensions_without_an_overworld_throw_the_vanilla_exception() {
+        let thrown = WorldDimensions::new(Vec::new(), &["caller"]).err().expect("an exception");
+        assert_eq!(thrown.description, OVERWORLD_SETTINGS_MISSING);
+        assert_eq!(thrown.stack_trace, [CONSTRUCTOR_FRAME, "caller"]);
+        let thrown = WorldDimensions::from_registry(&[], &["caller"]).err().expect("an exception");
+        assert_eq!(thrown.stack_trace, [CONSTRUCTOR_FRAME, REGISTRY_CONSTRUCTOR_FRAME, "caller"]);
+    }
+
+    #[test]
+    fn decoding_dimensions_throws_while_the_codec_applies_the_constructor() {
+        let thrown = decode_settings(r#"{seed:5L,dimensions:{}}"#).err().expect("an exception");
+        assert_eq!(thrown.description, OVERWORLD_SETTINGS_MISSING);
+        assert_eq!(thrown.stack_trace[0], CONSTRUCTOR_FRAME);
+        assert_eq!(thrown.stack_trace[4], "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)");
+        assert_eq!(thrown.stack_trace.last(), Some(&"caller"));
+        let thrown = decode_settings(r#"{seed:5L,dimensions:{"minecraft:overworld":{type:"minecraft:overworld",generator:{type:"minecraft:nope"}}}}"#).err().expect("an exception");
+        assert_eq!(thrown.stack_trace[4], "com.mojang.serialization.DataResult$Error.flatMap(DataResult.java:335)");
+        assert_eq!(thrown.stack_trace[5], "com.mojang.serialization.DataResult$Error.flatMap(DataResult.java:250)");
+    }
+
+    #[test]
+    fn a_broken_dimension_besides_the_overworld_is_an_error_without_an_exception() {
+        let dimensions = preset("minecraft:normal").encode();
+        let Nbt::Compound(entries) = dimensions else { panic!("a compound") };
+        let nether = entries.iter().find(|(key, _)| key == NETHER).unwrap().1.clone();
+        let broken_nether = Nbt::Compound(vec![("generator".into(), nether.get("generator").unwrap().clone()), ("type".into(), Nbt::String("minecraft:nope".into()))]);
+        let overworld = entries.iter().find(|(key, _)| key == OVERWORLD).unwrap().1.clone();
+        let tag = Nbt::Compound(vec![
+            ("seed".into(), Nbt::Long(5)),
+            ("dimensions".into(), Nbt::Compound(vec![(OVERWORLD.into(), overworld), (NETHER.into(), broken_nether)])),
+        ]);
+        let decoded = codec::with_nbt_ops(|| WorldGenSettings::decode(&tag, &[])).unwrap();
+        assert!(decoded.value.is_some());
+        assert!(decoded.error.expect("an error").starts_with("Failed to get element minecraft:nope from registry minecraft:dimension_type missed input: "));
+    }
+
+    #[test]
+    fn world_options_report_their_fields_in_vanilla_order() {
+        let decoded = decode_settings(r#"{generate_structures:"x",bonus_chest:"y",dimensions:{}}"#);
+        let thrown = decoded.err().expect("the constructor throws first");
+        assert_eq!(thrown.description, OVERWORLD_SETTINGS_MISSING);
+        let tag = crate::nbt::parse_fully(r#"{generate_structures:"x",bonus_chest:"y"}"#).unwrap();
+        let options = codec::with_nbt_ops(|| WorldOptions::decode(&tag));
+        assert_eq!(options.error.as_deref(), Some("Not a number; Not a number; No key seed in MapLike[{bonus_chest:\"y\",generate_structures:\"x\"}]"));
+        assert!(options.value.is_none());
+    }
+
+    #[test]
+    fn world_gen_settings_round_trip_through_their_codec() {
+        for name in ["minecraft:normal", "minecraft:large_biomes", "minecraft:amplified", "minecraft:single_biome_surface", "minecraft:flat", "minecraft:flat_all_dimensions", "minecraft:debug_all_block_states"] {
+            let settings = WorldGenSettings::new(WorldOptions::new(7, false, true), preset(name));
+            let encoded = settings.encode();
+            let decoded = codec::with_nbt_ops(|| WorldGenSettings::decode(&encoded, &[])).unwrap();
+            assert_eq!(decoded.error, None, "{name}");
+            assert_eq!(decoded.value.expect("settings").encode(), encoded, "{name}");
+        }
+    }
+
+    #[test]
+    fn baking_derives_the_lifecycle_and_the_special_world_property() {
+        let normal = preset("minecraft:normal").bake(&[]);
+        assert_eq!((normal.lifecycle(), normal.special_world_property), (Lifecycle::Stable, SpecialWorldProperty::None));
+        let flat = preset("minecraft:flat").bake(&[]);
+        assert_eq!((flat.lifecycle(), flat.special_world_property), (Lifecycle::Stable, SpecialWorldProperty::Flat));
+        let debug = preset("minecraft:debug_all_block_states").bake(&[]);
+        assert_eq!((debug.lifecycle(), debug.special_world_property), (Lifecycle::Stable, SpecialWorldProperty::Debug));
+        assert_eq!(preset("minecraft:flat_all_dimensions").bake(&[]).lifecycle(), Lifecycle::Experimental);
+        let overworld_only = WorldDimensions::new(vec![preset("minecraft:normal").get(OVERWORLD).cloned().map(|stem| (OVERWORLD.to_string(), stem)).unwrap()], &[]).unwrap();
+        assert_eq!(overworld_only.bake(&[]).lifecycle(), Lifecycle::Experimental);
+        let extra = preset("minecraft:normal").get(NETHER).cloned().unwrap();
+        assert_eq!(preset("minecraft:normal").bake(&[("ta:extra".to_string(), extra)]).lifecycle(), Lifecycle::Experimental);
+    }
+
+    #[test]
+    fn baked_dimensions_prefer_the_data_pack_and_follow_the_builtin_order() {
+        let flat = preset("minecraft:flat");
+        let replacement = flat.get(OVERWORLD).cloned().unwrap();
+        let baked = preset("minecraft:normal").bake(&[("ta:extra".to_string(), replacement.clone()), (OVERWORLD.to_string(), replacement)]);
+        assert_eq!(baked.dimensions.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), [OVERWORLD, NETHER, END, "ta:extra"]);
+        assert_eq!(baked.special_world_property, SpecialWorldProperty::Flat);
+        assert_eq!(baked.levels_in_creation_order().iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), [OVERWORLD, END, NETHER, "ta:extra"]);
+    }
+
+    #[test]
+    fn replacing_the_overworld_generator_keeps_its_position_and_type() {
+        let replaced = preset("minecraft:normal").replace_overworld_generator(UnseededChunkGenerator::Debug);
+        assert!(replaced.is_debug());
+        assert_eq!(replaced.dimensions().iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), [OVERWORLD, NETHER, END]);
+        assert!(replaced.get(OVERWORLD).unwrap().dimension_type.is("minecraft:overworld"));
     }
 }

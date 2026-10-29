@@ -4,6 +4,8 @@ use super::bossevents::custom_boss_events::CustomBossEvents;
 use super::reloadable_server_resources::ReloadableServerResources;
 use super::players::PlayerLists;
 use crate::util::datafix::data_fix_types::DataFixTypes;
+use crate::world::level::levelgen::world_dimensions::Complete;
+use crate::world::level::levelgen::world_gen_settings::WorldGenSettings;
 use crate::world::level::saveddata::weather_data::WeatherData;
 use crate::world::level::storage::{WorldData, WorldDir, read_saved_data};
 use crate::world::level::timers::timer_queue::TimerQueue;
@@ -12,6 +14,8 @@ use crate::world::random_sequences::RandomSequences;
 pub struct WorldStem {
     pub data_packs: ReloadableServerResources,
     pub world_data: WorldData,
+    pub gen_settings: WorldGenSettings,
+    pub dimensions: Complete,
     pub saved_data: Option<ConstructorSavedData>,
     pub player_lists: Option<PlayerLists>,
 }
