@@ -288,6 +288,7 @@ pub struct Server {
     bonus_chest: bool,
     server_brands: Vec<String>,
     was_modded: bool,
+    removed_features: crate::util::java_collections::JavaHashSet,
     level_name: String,
     allow_commands: bool,
     singleplayer_uuid: Option<Nbt>,
@@ -382,7 +383,7 @@ impl Server {
         let weather = weather.unwrap_or_default();
         let generate_structures = gen_settings.options().generate_structures();
         let bonus_chest = gen_settings.options().generate_bonus_chest();
-        let (mut server_brands, was_modded) = (data.server_brands, data.was_modded);
+        let (mut server_brands, was_modded, removed_features) = (data.server_brands, data.was_modded, data.removed_features);
         let (level_name, allow_commands, singleplayer_uuid) = (data.level_name, data.allow_commands, data.singleplayer_uuid);
         if !server_brands.iter().any(|b| b == "vanilla") {
             server_brands.push("vanilla".into());
@@ -539,6 +540,7 @@ impl Server {
             bonus_chest,
             server_brands,
             was_modded,
+            removed_features,
             level_name,
             allow_commands,
             singleplayer_uuid,
@@ -634,7 +636,7 @@ impl Server {
             format!("Game mode: {} (ID {}). Hardcore: {}. Commands: {}", self.default_game_type.get().name(), self.default_game_type.get().id(), self.hardcore, self.allow_commands),
         );
         category.set_detail("Known server brands", self.server_brands.join(", "));
-        category.set_detail("Removed feature flags", "");
+        category.set_detail("Removed feature flags", self.removed_features.iter().collect::<Vec<_>>().join(", "));
         category.set_detail("Level was modded", self.was_modded.to_string());
         category.set_detail("Level storage version", "0x04ABD - Anvil");
         category.set_detail("Loaded entity count", level.entity_manager.count().to_string());
@@ -915,6 +917,7 @@ impl Server {
             initialized: true,
             server_brands: self.server_brands.clone(),
             was_modded: self.was_modded,
+            removed_features: self.removed_features.clone(),
             game_rules: self.game_rules.to_nbt(),
             data_configuration: self.data_configuration.clone(),
             level_name: self.level_name.clone(),

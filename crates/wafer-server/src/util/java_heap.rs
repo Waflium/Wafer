@@ -11,7 +11,22 @@ fn physical_memory() -> Option<u64> {
     Some(kilobytes * 1024)
 }
 
-#[cfg(not(all(target_os = "linux", not(test))))]
+#[cfg(all(windows, not(test)))]
+fn physical_memory() -> Option<u64> {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    let mut status = MEMORYSTATUSEX { dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32, ..unsafe { std::mem::zeroed() } };
+    (unsafe { GlobalMemoryStatusEx(&mut status) } != 0).then_some(status.ullTotalPhys)
+}
+
+#[cfg(all(target_os = "macos", not(test)))]
+fn physical_memory() -> Option<u64> {
+    let mut memory: u64 = 0;
+    let mut size = std::mem::size_of::<u64>();
+    let found = unsafe { libc::sysctlbyname(c"hw.memsize".as_ptr(), (&mut memory as *mut u64).cast(), &mut size, std::ptr::null_mut(), 0) } == 0;
+    found.then_some(memory)
+}
+
+#[cfg(any(test, not(any(target_os = "linux", target_os = "macos", windows))))]
 fn physical_memory() -> Option<u64> {
     None
 }

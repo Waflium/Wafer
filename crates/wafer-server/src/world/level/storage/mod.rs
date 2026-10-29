@@ -326,6 +326,7 @@ pub struct WorldData {
     pub initialized: bool,
     pub server_brands: Vec<String>,
     pub was_modded: bool,
+    pub removed_features: crate::util::java_collections::JavaHashSet,
     pub game_rules: Nbt,
     pub data_configuration: WorldDataConfiguration,
     pub level_name: String,
@@ -357,6 +358,7 @@ impl WorldData {
             initialized: false,
             server_brands: Vec::new(),
             was_modded: false,
+            removed_features: Default::default(),
             game_rules: Nbt::Compound(Vec::new()),
             data_configuration,
             level_name,
@@ -418,6 +420,10 @@ impl WorldData {
                 brands
             }),
             was_modded: level.get("WasModded").and_then(Nbt::as_i64).is_some_and(|v| v != 0),
+            removed_features: level.get("removed_features").map(Nbt::as_list).unwrap_or(&[]).iter().filter_map(Nbt::as_str).fold(Default::default(), |mut features: crate::util::java_collections::JavaHashSet, feature| {
+                features.insert(feature.to_string());
+                features
+            }),
             game_rules: Nbt::Compound(Vec::new()),
             data_configuration,
             level_name: level.get("LevelName").and_then(Nbt::as_str).unwrap_or("").to_string(),
@@ -473,6 +479,14 @@ impl WorldData {
         if let Some(singleplayer_uuid) = &self.singleplayer_uuid {
             data.insert(1, ("singleplayer_uuid", singleplayer_uuid.clone()));
         }
+        if !self.removed_features.is_empty() {
+            let after_was_modded = data.iter().position(|(key, _)| *key == "WasModded").unwrap() + 1;
+            data.insert(after_was_modded, ("removed_features", Nbt::List(self.removed_features.iter().map(string).collect())));
+            let keys: Vec<&str> = data.iter().map(|(key, _)| *key).collect();
+            let order = wafer_protocol::nbt::java_hash_map_order(&keys);
+            let mut slots: Vec<Option<(&str, Nbt)>> = data.into_iter().map(Some).collect();
+            data = order.into_iter().map(|index| slots[index].take().unwrap()).collect();
+        }
         let level = compound(vec![("Data", compound(data))]);
         save_level_dat(dir, &level)
     }
@@ -504,6 +518,35 @@ pub struct DirtySavedData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removed_features_are_saved_in_hash_map_order() {
+        let root = std::env::temp_dir().join(format!("wafer-removed-features-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = WorldDir { root: root.clone() };
+        let mut data = WorldData::new_world(
+            GameType::Survival,
+            Difficulty::Normal,
+            false,
+            WorldDataConfiguration::default_configuration(),
+            "world".into(),
+            crate::world::level::levelgen::world_dimensions::SpecialWorldProperty::None,
+            crate::util::lifecycle::Lifecycle::Stable,
+        );
+        let keys = |dir: &WorldDir| match read_compressed(&dir.level_dat()).unwrap().get("Data") {
+            Some(Nbt::Compound(fields)) => fields.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>(),
+            _ => panic!("no Data"),
+        };
+        data.save_level_data(&dir).unwrap();
+        let plain = keys(&dir);
+        assert_eq!(wafer_protocol::nbt::java_hash_map_order(&plain), (0..plain.len()).collect::<Vec<_>>());
+        data.removed_features.insert("minecraft:trade_rebalance".into());
+        data.save_level_data(&dir).unwrap();
+        let with_removed = keys(&dir);
+        assert!(with_removed.iter().any(|key| key == "removed_features"));
+        assert_eq!(wafer_protocol::nbt::java_hash_map_order(&with_removed), (0..with_removed.len()).collect::<Vec<_>>());
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     #[test]
     fn uuid_format() {
