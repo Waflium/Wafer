@@ -107,7 +107,7 @@ fn setting_the_anchor_without_a_target_crashes_like_vanilla() {
         reported.0.exception(),
         "java.lang.NullPointerException: Cannot invoke \"net.minecraft.world.entity.LivingEntity.blockPosition()\" because the return value of \"net.minecraft.world.entity.monster.Phantom.getTarget()\" is null"
     );
-    let report = reported.0.get_friendly_report();
+    let report = reported.0.get_friendly_report(&crate::crash_report::ReportType::CRASH);
     assert!(report.contains("-- Entity being ticked --"));
     assert!(report.contains("Entity Type: minecraft:phantom (net.minecraft.world.entity.monster.Phantom)"));
     assert!(report.contains("Entity's Exact location: 3.50, -40.00, 7.50"));

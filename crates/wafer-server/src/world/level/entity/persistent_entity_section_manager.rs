@@ -9,6 +9,7 @@ use super::visibility::Visibility;
 use crate::server::level::ServerLevel;
 use crate::server::level::chunk_level::FullChunkStatus;
 use crate::world::entity::{EntityId, LevelEntity, RemovalReason};
+use crate::server::level::chunk_workers::IoReporting;
 use crate::world::level::chunk::storage::RegionStorage;
 use crate::world::level::gameevent::dynamic_game_event_listener::DynamicListenerAction;
 use crate::util::problem_reporter::PathElement;
@@ -52,6 +53,14 @@ impl PersistentEntitySectionManager {
             chunks_to_unload: LongOpenHashSet::new(),
             callbacks: FastMap::default(),
         }
+    }
+
+    pub fn set_reporting(&mut self, reporting: IoReporting) {
+        self.permanent_storage.set_reporting(reporting);
+    }
+
+    pub fn reporting(&self) -> Option<&IoReporting> {
+        self.permanent_storage.reporting()
     }
 
     fn visibility(&self, chunk_key: i64) -> Visibility {
@@ -306,12 +315,7 @@ impl ServerLevel {
                     self.entity_manager.permanent_storage.mark_empty(pos);
                     None
                 }
-                Err(e) => {
-                    error!("Failed to load entity chunk {pos}\n{e}");
-                    error!("Failed to load chunk {},{}\n{e}", pos.x, pos.z);
-                    error!("Failed to read chunk {pos}\njava.util.concurrent.CompletionException: {e}");
-                    continue;
-                }
+                Err(_) => continue,
             };
             self.entity_manager.parsed_loads.push((pos, entities));
         }

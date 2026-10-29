@@ -71,10 +71,11 @@ impl StructureCheck {
 
     fn try_load_from_storage(&mut self, pos: ChunkPos, structure: StructureHolder, require_unreferenced: bool) -> Option<StructureCheckResult> {
         let storage_access = self.storage_access.as_ref()?;
-        let chunk_tag = match storage_access.scan_chunk(pos) {
+        let chunk_tag = match storage_access.scan_structures(pos) {
             Ok(chunk_tag) => chunk_tag?,
             Err(e) => {
-                warn!("Failed to read chunk {pos}: {e}");
+                let failure = crate::world::level::chunk::storage::storage_exception::structure_check_join_failure(&crate::util::java_throwable::JavaThrowable::from_io_error(&e));
+                warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
                 return Some(StructureCheckResult::ChunkLoadNeeded);
             }
         };

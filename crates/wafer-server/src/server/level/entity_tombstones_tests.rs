@@ -131,7 +131,7 @@ fn a_panic_while_ticking_an_entity_becomes_a_ticking_entity_crash_report() {
     let reported = panic.downcast::<crate::crash_report::ReportedException>().unwrap();
     assert_eq!(reported.0.title(), "Ticking entity");
     assert_eq!(reported.0.exception(), "boom");
-    let report = reported.0.get_friendly_report();
+    let report = reported.0.get_friendly_report(&crate::crash_report::ReportType::CRASH);
     assert!(report.contains("-- Entity being ticked --"));
     assert!(report.contains("Entity Type: minecraft:zombie (net.minecraft.world.entity.monster.zombie.Zombie)"));
     assert!(report.contains("Entity Name: Zombie"));

@@ -20,6 +20,7 @@ pub mod player_advancements;
 pub mod server_advancement_manager;
 pub mod server_tick_rate_manager;
 pub mod services;
+pub mod suppressed_exception_collector;
 #[cfg(test)]
 mod scoreboard_tests;
 pub mod server_function_library;
@@ -70,6 +71,9 @@ use crate::world::level::levelgen::world_options::WorldOptions;
 use crate::world::level::storage::level_storage_source::{LevelDataAndDimensions, get_level_data_and_dimensions};
 use command_origin::CommandOrigin;
 use crate::world::level::chunk::storage::RegionStorage;
+use crate::world::level::chunk::storage::chunk_io_error_reporter::ChunkIoErrorReporter;
+use crate::world::level::chunk::storage::region_storage_info::RegionStorageInfo;
+use level::chunk_workers::IoReporting;
 use crate::world::level::gamerules::GameRules;
 use crate::world::level::border::border_change_listener::write_initialize_border;
 use crate::world::level::border::world_border::WorldBorder;
@@ -112,6 +116,17 @@ pub const OVERWORLD: &str = "minecraft:overworld";
 pub const THE_NETHER: &str = "minecraft:the_nether";
 pub const THE_END: &str = "minecraft:the_end";
 
+fn system_report_snapshot(pack_repository: &PackRepository, enabled_features: FeatureFlagSet, seed: i64, reporter: Option<ChunkIoErrorReporter>) -> dedicated::server_watchdog::ServerSnapshot {
+    dedicated::server_watchdog::ServerSnapshot {
+        world_seed: seed,
+        active_data_packs: PackRepository::display_pack_list(pack_repository.selected_packs()),
+        available_data_packs: PackRepository::display_pack_list(pack_repository.available_packs()),
+        enabled_feature_flags: enabled_features.to_names().join(", "),
+        chunk_io_error_reporter: reporter,
+        ..Default::default()
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn create_level(
     config: &ServerConfig,
@@ -121,6 +136,7 @@ fn create_level(
     is_debug: bool,
     generate_structures: bool,
     seed: i64,
+    chunk_io_error_reporter: &ChunkIoErrorReporter,
 ) -> ServerLevel {
     let generator = level_stem.generator.create(seed);
     let (dimension_type_id, dimension_type) = match &level_stem.dimension_type {
@@ -143,6 +159,8 @@ fn create_level(
     let entity_storage = world_dir.map(|d| RegionStorage::new(d.entities(dimension), config.sync_chunk_writes));
     let mut level = ServerLevel::new(dimension, dimension_type_id, chunks, entity_storage, config.view_distance, config.simulation_distance);
     if let Some(dir) = world_dir {
+        level.chunks.set_error_reporting(chunk_io_error_reporter.clone(), &config.level_name, dimension);
+        level.entity_manager.set_reporting(IoReporting { reporter: chunk_io_error_reporter.clone(), info: RegionStorageInfo::new(&config.level_name, dimension, "entities") });
         level.load_chunk_tickets(dir);
     }
     level.biome_zoom_seed = crate::world::level::biome::obfuscate_seed(seed);
@@ -287,6 +305,7 @@ pub struct Server {
     pub server_activity_monitor: Arc<ServerActivityMonitor>,
     pub listener_settings: Arc<ListenerSettings>,
     world_dir: Option<WorldDir>,
+    pub chunk_io_error_reporter: ChunkIoErrorReporter,
     stopping: bool,
     ready: bool,
 }
@@ -343,6 +362,7 @@ impl Server {
         let data_configuration = data.data_configuration.clone();
         let new_world = !data.initialized;
         let world_dir = config.world.clone().map(|root| WorldDir { root });
+        let chunk_io_error_reporter = ChunkIoErrorReporter::new(PathBuf::new(), world_dir.as_ref().map(|dir| dir.root.clone()));
         crate::world::level::levelgen::structure::templatesystem::structure_template_manager::set_generated_dir(world_dir.as_ref().map(WorldDir::generated));
         let saved_data = saved_data.unwrap_or_else(|| ConstructorSavedData::load(world_dir.as_ref()));
         let ConstructorSavedData { random_sequences, weather, game_rules: saved_game_rules, clocks: saved_clocks, custom_boss_events, scheduled_events } = saved_data;
@@ -373,14 +393,14 @@ impl Server {
         let world_gen_settings_lifecycle = data.world_gen_settings_lifecycle;
         let mut stems = dimensions.levels_in_creation_order().into_iter();
         let (_, overworld_stem) = stems.next().expect("overworld settings");
-        let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, &overworld_stem, is_debug, generate_structures, seed);
+        let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, &overworld_stem, is_debug, generate_structures, seed, &chunk_io_error_reporter);
         overworld.chunks.game_rules = game_rules.clone();
         dedicated::set_overworld_created();
         let mut scoreboard_save_data = ScoreboardSaveData::load(world_dir.as_ref().map(WorldDir::data_folder));
         let scoreboard = Rc::new(RefCell::new(Scoreboard::default()));
         if let Err(throwable) = scoreboard.borrow_mut().load(scoreboard_save_data.take_packed()) {
             let saved_levels = vec![format!("'ServerLevel[{level_name}]'/minecraft:overworld")];
-            return Err(std::io::Error::other(StartupFailure { throwable, saving_players: true, saved_levels }));
+            return Err(std::io::Error::other(StartupFailure { throwable, saving_players: true, saved_levels, snapshot: Some(dedicated::server_watchdog::ServerSnapshot { player_count: Some(format!("0 / {}; []", config.max_players)), world_gen_settings_lifecycle, ..system_report_snapshot(&pack_repository, data_configuration.enabled_features, seed, None) }) }));
         }
         let command_storage = Rc::new(RefCell::new(CommandStorage::new(world_dir.as_ref().map(WorldDir::data_folder))));
         let stopwatches = Stopwatches::load(world_dir.as_ref().map(WorldDir::data_folder));
@@ -417,7 +437,7 @@ impl Server {
                 THE_NETHER => THE_NETHER,
                 _ => Box::leak(key.into_boxed_str()),
             };
-            levels.push(create_level(&config, world_dir.as_ref(), dimension, &stem, is_debug, generate_structures, seed));
+            levels.push(create_level(&config, world_dir.as_ref(), dimension, &stem, is_debug, generate_structures, seed, &chunk_io_error_reporter));
         }
         for (index, level) in levels.iter_mut().enumerate() {
             level.index = index;
@@ -453,7 +473,7 @@ impl Server {
         name_to_id_cache.save();
         let lists = match player_lists {
             Some(lists) => lists,
-            None => PlayerLists::load(config.server_dir.clone()).map_err(|throwable| std::io::Error::other(StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() }))?,
+            None => PlayerLists::load(config.server_dir.clone()).map_err(|throwable| std::io::Error::other(StartupFailure { throwable, saving_players: false, saved_levels: Vec::new(), snapshot: None }))?,
         };
         let (config_replies_to_status, config_accepts_transfers) = (config.replies_to_status, config.accepts_transfers);
         let mut server = Server {
@@ -534,6 +554,7 @@ impl Server {
             server_activity_monitor: Arc::new(ServerActivityMonitor::new(NotificationManager::default(), 30)),
             listener_settings: Arc::new(ListenerSettings::new(config_replies_to_status, config_accepts_transfers)),
             world_dir,
+            chunk_io_error_reporter,
             stopping: false,
             ready: false,
         };
@@ -559,11 +580,12 @@ impl Server {
             .collect();
         let level_stats = self.levels.iter().map(|level| format!("{}: {}", level.dimension, level.get_watchdog_stats())).collect::<Vec<_>>().join(",\n");
         dedicated::server_watchdog::ServerSnapshot {
-            player_count: format!("{} / {}; [{}]", players.len(), self.config.max_players, players.join(", ")),
+            player_count: Some(format!("{} / {}; [{}]", players.len(), self.config.max_players, players.join(", "))),
             random_tick_rate: self.game_rules.get_int(wafer_data::game_rule::RANDOM_TICK_SPEED).to_string(),
             level_stats,
             world_seed: self.seed,
             world_gen_settings_lifecycle: self.world_gen_settings_lifecycle,
+            ..system_report_snapshot(&self.pack_repository, self.data_configuration.enabled_features, self.seed, Some(self.chunk_io_error_reporter.clone()))
         }
     }
 
@@ -777,7 +799,9 @@ impl Server {
         for player in self.players() {
             self.save_player(player);
         }
-        self.save_all_chunks(silent, flush, force)
+        let result = self.save_all_chunks(silent, flush, force);
+        self.chunk_io_error_reporter.warn_on_low_disk_space();
+        result
     }
 
     pub fn save_all_chunks(&mut self, silent: bool, flush: bool, force: bool) -> bool {
@@ -1945,7 +1969,7 @@ pub fn run(
         crate::Listen::Bind { ip, .. } if !ip.is_empty() => match dedicated::get_by_name(ip) {
             Ok(address) => Some(address),
             Err(throwable) => {
-                report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() });
+                report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new(), snapshot: world_snapshot(&world) });
                 return Ok(());
             }
         },
@@ -1993,13 +2017,13 @@ pub fn run(
             Ok(true) => name_to_id_cache.save(),
             Ok(false) => {}
             Err(throwable) => {
-                report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() });
+                report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new(), snapshot: world_snapshot(&world) });
                 return Ok(());
             }
         }
         if !old_users_converter.are_old_userlists_removed() {
             let throwable = JavaThrowable::new("java.lang.IllegalStateException: Failed to initialize server", vec![RUN_SERVER_INITIALIZE_FRAME, SPIN_FRAME, THREAD_RUN_FRAME]);
-            report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() });
+            report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new(), snapshot: world_snapshot(&world) });
             return Ok(());
         }
     }
@@ -2021,7 +2045,7 @@ pub fn run(
     let player_lists = match PlayerLists::load(config.server_dir.clone()) {
         Ok(player_lists) => player_lists,
         Err(throwable) => {
-            report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new() });
+            report_startup_failure(&StartupFailure { throwable, saving_players: false, saved_levels: Vec::new(), snapshot: world_snapshot(&world) });
             return Ok(());
         }
     };
@@ -2084,6 +2108,7 @@ pub fn run(
         dedicated::server_watchdog::start(timing.clone(), max_tick_time, PathBuf::from("."));
     }
     server.save_everything(false, true, true);
+    server.chunk_io_error_reporter.set_running();
     server.notification_manager.server_started();
     server.status_icon = server.load_status_icon();
     server.build_server_status();
@@ -2100,7 +2125,7 @@ pub fn run(
         let mut report = reported.unwrap_or_else(|| crate::crash_report::CrashReport::new("Exception in server tick loop", message, crash_frames()));
         dedicated::server_watchdog::fill_system_report(&mut report, &server.watchdog_snapshot());
         let file = crate::crash_report::crash_report_file(Path::new("."));
-        if report.save_to_file(&file) {
+        if report.save_to_file(&file, &crate::crash_report::ReportType::CRASH) {
             error!("This crash report has been saved to: {}", std::path::absolute(&file).unwrap_or(file).display());
         } else {
             error!("We were unable to save this crash report to disk.");
@@ -2157,6 +2182,14 @@ pub struct StartupFailure {
     pub throwable: JavaThrowable,
     pub saving_players: bool,
     pub saved_levels: Vec<String>,
+    pub snapshot: Option<dedicated::server_watchdog::ServerSnapshot>,
+}
+
+fn world_snapshot(world: &Option<(PackRepository, WorldStem)>) -> Option<dedicated::server_watchdog::ServerSnapshot> {
+    world.as_ref().map(|(pack_repository, world_stem)| dedicated::server_watchdog::ServerSnapshot {
+        world_gen_settings_lifecycle: world_stem.world_data.world_gen_settings_lifecycle,
+        ..system_report_snapshot(pack_repository, world_stem.world_data.data_configuration.enabled_features, world_stem.gen_settings.options().seed(), None)
+    })
 }
 
 impl std::fmt::Display for StartupFailure {
@@ -2169,9 +2202,12 @@ impl std::error::Error for StartupFailure {}
 
 pub(crate) fn report_startup_failure(failure: &StartupFailure) {
     error!("Encountered an unexpected exception\n{}", failure.throwable.print_stack_trace().trim_end());
-    let report = crate::crash_report::CrashReport::new("Exception in server tick loop", failure.throwable.description.clone(), failure.throwable.stack_trace.iter().map(ToString::to_string).collect());
+    let mut report = crate::crash_report::CrashReport::new("Exception in server tick loop", failure.throwable.description.clone(), failure.throwable.stack_trace.iter().map(ToString::to_string).collect());
+    if let Some(snapshot) = &failure.snapshot {
+        dedicated::server_watchdog::fill_system_report(&mut report, snapshot);
+    }
     let file = crate::crash_report::crash_report_file(Path::new("."));
-    if report.save_to_file(&file) {
+    if report.save_to_file(&file, &crate::crash_report::ReportType::CRASH) {
         error!("This crash report has been saved to: {}", std::path::absolute(&file).unwrap_or(file).display());
     } else {
         error!("We were unable to save this crash report to disk.");

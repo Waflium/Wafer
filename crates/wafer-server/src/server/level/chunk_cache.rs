@@ -15,7 +15,7 @@ use wafer_protocol::Writer;
 use super::chunk_holder::{ChunkGenerationTask, ChunkHolders, FutureId, RangeThen, RangeWait, UNLOADED, Waiter};
 use super::chunk_level::{self, ChunkStatus, FullChunkStatus};
 use super::chunk_task_dispatcher::ChunkTaskPriorityQueue;
-use super::chunk_workers::{self, ChunkToSave, IoWorker, MainThreadWakeup, ResultSender, WorkResult};
+use super::chunk_workers::{self, ChunkToSave, IoReporting, IoWorker, MainThreadWakeup, ResultSender, WorkResult};
 use super::distance_manager::DistanceManager;
 use super::threaded_level_light_engine::{LightTask, TaskType, ThreadedLevelLightEngine};
 use super::ticket::{Ticket, TicketType};
@@ -27,6 +27,9 @@ use crate::world::level::BlockGetter;
 use crate::world::level::levelgen::debug_level_source;
 use crate::world::level::chunk::serialization::{self, SectionLight};
 use crate::world::level::chunk::storage::RegionStorage;
+use crate::world::level::chunk::storage::chunk_io_error_reporter::{ChunkIoErrorReporter, chunk_load_failure_cause};
+use crate::world::level::chunk::storage::region_storage_info::RegionStorageInfo;
+use crate::util::java_throwable::JavaThrowable;
 use crate::world::level::block::entity::BlockEntity;
 use crate::world::level::chunk::block_entities::{BlockEntityTickers, EntityCreationType};
 use super::world_gen_region::{RegionLevelData, RegionLightTask, WorldGenRegion};
@@ -113,6 +116,7 @@ pub struct ChunkCache {
     pub block_entity_tickers: BlockEntityTickers,
     pub tick_deadline: Option<Instant>,
     pub poi_manager: PoiManager,
+    reporting: Option<IoReporting>,
 }
 
 impl ChunkCache {
@@ -181,6 +185,7 @@ impl ChunkCache {
             tick_deadline: None,
             block_entity_tickers: BlockEntityTickers::default(),
             poi_manager: PoiManager::new(None, dimension.min_y >> 4, (dimension.min_y + dimension.height as i32 - 1) >> 4),
+            reporting: None,
         };
         cache.set_seed(seed);
         cache.set_view_distance(10);
@@ -190,6 +195,15 @@ impl ChunkCache {
     pub fn set_poi_storage(&mut self, storage: RegionStorage) {
         let (min_section_y, max_section_y) = self.poi_manager.section_range();
         self.poi_manager = PoiManager::new(Some(IoWorker::new(storage)), min_section_y, max_section_y);
+    }
+
+    pub fn set_error_reporting(&mut self, reporter: ChunkIoErrorReporter, level_id: &str, dimension: &str) {
+        let reporting = IoReporting { reporter: reporter.clone(), info: RegionStorageInfo::new(level_id, dimension, "chunk") };
+        if let Some(io) = &self.io {
+            io.set_reporting(reporting.clone());
+        }
+        self.reporting = Some(reporting);
+        self.poi_manager.storage.set_reporting(IoReporting { reporter, info: RegionStorageInfo::new(level_id, dimension, "poi") });
     }
 
     pub fn get_chunk_at_status(&mut self, pos: ChunkPos, status: ChunkStatus) {
@@ -1277,16 +1291,12 @@ impl ChunkCache {
         for local_x in 0..32 {
             for local_z in 0..32 {
                 let pos = ChunkPos::new((region_x << 5) + local_x, (region_z << 5) + local_z);
-                match io.scan_chunk(pos) {
-                    Ok(Some(tag)) => {
-                        let data_version = tag.get("DataVersion").and_then(wafer_protocol::nbt::Nbt::as_i64).unwrap_or(0);
-                        let has_blending_data = matches!(tag.get("blending_data"), Some(wafer_protocol::nbt::Nbt::Compound(_)));
-                        if data_version < 4997 || has_blending_data {
-                            result[(local_z * 32 + local_x) as usize] = true;
-                        }
+                match io.scan_old_data(pos) {
+                    Ok(old) => result[(local_z * 32 + local_x) as usize] = old,
+                    Err(e) => {
+                        let failure = crate::world::level::chunk::storage::storage_exception::scan_join_failure(&JavaThrowable::from_io_error(&e));
+                        warn!(thread: chunk_workers::random_worker_name(), "Failed to scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
                     }
-                    Ok(None) => {}
-                    Err(e) => warn!("Failed to scan chunk {pos}: {e}"),
                 }
             }
         }
@@ -1556,7 +1566,7 @@ impl ChunkCache {
                         .transpose()
                     })
                 })
-                .unwrap_or_else(|message| Err(io::Error::other(message)));
+                .unwrap_or_else(|message| Err(io::Error::other(JavaThrowable::new(message, Vec::new()))));
                 let _ = results.send(WorkResult::Loaded { pos, token, result });
             });
         });
@@ -1571,12 +1581,22 @@ impl ChunkCache {
         let read = match result {
             Ok(read) => read,
             Err(e) => {
-                error!("Failed to load chunk {},{}\n{e}", pos.x, pos.z);
+                if let Some(reporting) = &self.reporting {
+                    let throwable = JavaThrowable::from_io_error(&e);
+                    reporting.reporter.report_chunk_load_failure(chunk_load_failure_cause(&throwable), &reporting.info, pos);
+                }
                 None
             }
         };
         let persisted = match read {
-            Some(serialization::ReadChunk { chunk, status, block_ticks, fluid_ticks, light }) => {
+            Some(serialization::ReadChunk { mut chunk, status, block_ticks, fluid_ticks, light }) => {
+                if chunk.pos != pos {
+                    error!("Chunk file at {pos} is in the wrong location; relocating. (Expected {pos}, got {})", chunk.pos);
+                    if let Some(reporting) = &self.reporting {
+                        reporting.reporter.report_misplaced_chunk(chunk.pos, pos, &reporting.info, reporting.reporter.chunk_map_load_frames());
+                    }
+                    chunk.pos = pos;
+                }
                 let min_section_y = self.dimension.min_y >> 4;
                 for (i, section) in chunk.sections.iter().enumerate() {
                     self.poi_manager.check_consistency_with_blocks(pos, min_section_y + i as i32, section);

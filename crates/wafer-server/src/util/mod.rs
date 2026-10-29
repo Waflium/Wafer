@@ -18,6 +18,7 @@ pub mod fraction;
 pub mod hash_ops;
 pub mod inclusive_range;
 pub mod java_collections;
+pub mod java_inflater;
 pub mod java_integer;
 pub mod java_regex;
 pub mod java_simple_date_format;
@@ -57,6 +58,10 @@ pub fn parse_and_validate_untrusted_uri(uri: &str) -> Result<uri::URI, uri::URIS
         }
         Some(_) => Ok(parsed),
     }
+}
+
+pub fn get_filename_formatted_date_time() -> String {
+    chrono::Local::now().format("%Y-%m-%d_%H.%M.%S").to_string()
 }
 
 thread_local! {

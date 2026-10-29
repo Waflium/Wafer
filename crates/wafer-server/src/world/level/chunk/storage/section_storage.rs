@@ -6,7 +6,8 @@ use wafer_core::fastutil::{Long2ObjectOpenHashMap, LongLinkedOpenHashSet, LongOp
 use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
-use crate::server::level::chunk_workers::IoWorker;
+use crate::server::level::chunk_workers::{IoReporting, IoWorker};
+use crate::util::java_throwable::JavaThrowable;
 
 pub trait SectionData: Default + Send + 'static {
     fn pack(&self) -> Nbt;
@@ -33,7 +34,7 @@ impl<R: SectionData> PackedChunk<R> {
     }
 }
 
-type LoadResult<R> = Result<Option<PackedChunk<R>>, String>;
+type LoadResult<R> = Result<Option<PackedChunk<R>>, JavaThrowable>;
 
 enum PendingLoad<R> {
     Reading(Receiver<LoadResult<R>>),
@@ -68,8 +69,8 @@ impl<R> PendingLoad<R> {
     }
 }
 
-fn completion_exception(cause: &str) -> ! {
-    panic!("java.util.concurrent.CompletionException: {cause}")
+fn completion_exception(cause: &JavaThrowable) -> ! {
+    panic!("java.util.concurrent.CompletionException: {}", cause.description)
 }
 
 pub fn section_key(x: i32, y: i32, z: i32) -> i64 {
@@ -97,6 +98,7 @@ pub struct SectionStorage<R> {
     loaded_chunks: LongOpenHashSet,
     pending_loads: Long2ObjectOpenHashMap<PendingLoad<R>>,
     pub loaded_sections: std::cell::RefCell<Vec<i64>>,
+    reporting: Option<IoReporting>,
 }
 
 impl<R: SectionData> SectionStorage<R> {
@@ -110,7 +112,15 @@ impl<R: SectionData> SectionStorage<R> {
             loaded_chunks: LongOpenHashSet::new(),
             pending_loads: Long2ObjectOpenHashMap::new(),
             loaded_sections: std::cell::RefCell::new(Vec::new()),
+            reporting: None,
         }
+    }
+
+    pub fn set_reporting(&mut self, reporting: IoReporting) {
+        if let Some(io) = &self.io {
+            io.set_reporting(reporting.clone());
+        }
+        self.reporting = Some(reporting);
     }
 
     pub fn section_range(&self) -> (i32, i32) {
@@ -203,7 +213,7 @@ impl<R: SectionData> SectionStorage<R> {
         self.pending_loads.insert(key, PendingLoad::Reading(receiver));
     }
 
-    pub fn prefetched_load_failure(&mut self, chunk_pos: ChunkPos) -> Option<String> {
+    pub fn prefetched_load_failure(&mut self, chunk_pos: ChunkPos) -> Option<JavaThrowable> {
         match self.pending_loads.get_mut(chunk_pos.pack())?.join() {
             Err(exception) => Some(exception.clone()),
             Ok(_) => None,
@@ -221,7 +231,7 @@ impl<R: SectionData> SectionStorage<R> {
         }
         let chunk = match self.pending_loads.get_mut(key).unwrap().join() {
             Ok(chunk) => chunk.take(),
-            Err(exception) => completion_exception(exception),
+            Err(exception) => completion_exception(&exception.clone()),
         };
         self.unpack_packed_chunk(chunk_pos, chunk);
         self.pending_loads.remove(key);
@@ -230,13 +240,22 @@ impl<R: SectionData> SectionStorage<R> {
     fn try_read(&self, chunk_pos: ChunkPos) -> Receiver<LoadResult<R>> {
         let (sender, receiver) = channel();
         let (min_section_y, max_section_y) = (self.min_section_y, self.max_section_y);
+        let reporting = self.reporting.clone();
         match &self.io {
             Some(io) => io.read(chunk_pos, move |read| {
                 let chunk = match read {
-                    Ok(tag) => crate::util::catch_exception(|| tag.map(|tag| PackedChunk::parse(&tag, min_section_y, max_section_y))),
-                    Err(_) => {
-                        error!("Error reading chunk [{}, {}] data from disk", chunk_pos.x, chunk_pos.z);
-                        Ok(None)
+                    Ok(tag) => crate::util::catch_exception(|| tag.map(|tag| PackedChunk::parse(&tag, min_section_y, max_section_y))).map_err(|message| JavaThrowable::new(message, Vec::new())),
+                    Err(e) => {
+                        let throwable = JavaThrowable::from_io_error(&e);
+                        if throwable.is_io_exception() {
+                            error!("Error reading chunk {chunk_pos} data from disk\n{}", throwable.print_stack_trace().trim_end());
+                            if let Some(reporting) = &reporting {
+                                reporting.reporter.report_chunk_load_failure(&throwable, &reporting.info, chunk_pos);
+                            }
+                            Ok(None)
+                        } else {
+                            Err(throwable)
+                        }
                     }
                 };
                 let _ = sender.send(chunk);

@@ -245,7 +245,7 @@ fn reported_loading_entity_nbt(cause: JavaThrowable, shared: &[&'static str]) ->
     reported_frames.extend_from_slice(shared);
     let mut cause_frames = cause.stack_trace;
     cause_frames.extend_from_slice(shared);
-    JavaThrowable::new(REPORTED_EXCEPTION_LOADING_ENTITY_NBT, reported_frames).with_cause(JavaThrowable { description: cause.description, stack_trace: cause_frames, cause: None })
+    JavaThrowable::new(REPORTED_EXCEPTION_LOADING_ENTITY_NBT, reported_frames).with_cause(JavaThrowable::new(cause.description, cause_frames))
 }
 
 pub fn loading_entity_report(cause: &JavaThrowable) -> String {

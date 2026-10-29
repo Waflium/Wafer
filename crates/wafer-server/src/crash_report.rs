@@ -1,19 +1,90 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::Local;
+
+use crate::util::java_throwable::JavaThrowable;
 
 #[cfg(windows)]
 const LINE_SEPARATOR: &str = "\r\n";
 #[cfg(not(windows))]
 const LINE_SEPARATOR: &str = "\n";
 
+pub struct ReportType {
+    header: &'static str,
+    nuggets: &'static [&'static str],
+}
+
+const CHUNK_IO_ERROR_NUGGETS: &[&str] = &[
+    "I have failed you!",
+    "Let's not do it again...",
+    "Worst magic trick ever!",
+    "Remember to backup your worlds regularly",
+    "Pirates stole your chunk!",
+    "Ker-chunk!",
+    "Ideally, this shouldn't be here",
+    "Let's hope it wasn't anything important",
+    "Computers were a mistake",
+    "Welp",
+    "Not my proudest moment",
+    "Who needs blocks in a block game, right?",
+    "This chunk is no more...it has ceased to be...this is an EX-chunk",
+    "loss.mca",
+];
+
+impl ReportType {
+    pub const CRASH: ReportType = ReportType { header: "Minecraft Crash Report", nuggets: wafer_data::CRASH_REPORT_NUGGETS };
+    pub const CHUNK_IO_ERROR: ReportType = ReportType { header: "Minecraft Chunk IO Error Report", nuggets: CHUNK_IO_ERROR_NUGGETS };
+
+    pub fn get_error_comment(&self) -> &'static str {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+        self.nuggets.get((nanos % self.nuggets.len().max(1) as u128) as usize).copied().unwrap_or("Witty comment unavailable :(")
+    }
+
+    pub fn append_header(&self, builder: &mut String, extra_comments: &[String]) {
+        builder.push_str("---- ");
+        builder.push_str(self.header);
+        builder.push_str(" ----\n");
+        builder.push_str("// ");
+        builder.push_str(self.get_error_comment());
+        builder.push('\n');
+        for extra_comment in extra_comments {
+            builder.push_str("// ");
+            builder.push_str(extra_comment);
+            builder.push('\n');
+        }
+        builder.push('\n');
+    }
+}
+
 pub struct CrashReportCategory {
     title: String,
     entries: Vec<(String, String)>,
+    stack_trace: Vec<String>,
+}
+
+fn frame_signature(frame: &str) -> (&str, &str) {
+    let method = frame.split_once('(').map_or(frame, |(method, _)| method);
+    let location = frame.split_once('(').and_then(|(_, rest)| rest.strip_suffix(')')).unwrap_or("");
+    (method, location.split_once(':').map_or(location, |(file, _)| file))
 }
 
 impl CrashReportCategory {
+    fn validate_stack_trace(&mut self, source: Option<&str>, next: Option<&str>) -> bool {
+        let Some(source) = source.filter(|_| !self.stack_trace.is_empty()) else { return false };
+        if frame_signature(&self.stack_trace[0]) != frame_signature(source) {
+            return false;
+        }
+        if next.is_some() != (self.stack_trace.len() > 1) {
+            return false;
+        }
+        if next.is_some_and(|next| self.stack_trace[1] != next) {
+            return false;
+        }
+        self.stack_trace[0] = source.to_string();
+        true
+    }
+
     pub fn format_location(min_y: i32, max_y: i32, x: i32, y: i32, z: i32) -> String {
         let (section_x, section_y, section_z) = (x >> 4, y >> 4, z >> 4);
         let (min_block_x, min_block_z) = (section_x << 4, section_z << 4);
@@ -51,6 +122,13 @@ impl CrashReportCategory {
             builder.push_str(": ");
             builder.push_str(value);
         }
+        if !self.stack_trace.is_empty() {
+            builder.push_str("\nStacktrace:");
+            for element in &self.stack_trace {
+                builder.push_str("\n\tat ");
+                builder.push_str(element);
+            }
+        }
     }
 }
 
@@ -58,9 +136,13 @@ pub struct CrashReport {
     title: String,
     exception: String,
     stack_trace: Vec<String>,
+    throwable: Option<JavaThrowable>,
     suppressed: Vec<String>,
     details: Vec<CrashReportCategory>,
     system_report: Vec<(String, String)>,
+    tracking_stack_trace: bool,
+    uncategorized_stack_trace: Vec<String>,
+    save_file: Option<PathBuf>,
 }
 
 pub struct ReportedException(pub CrashReport);
@@ -99,11 +181,78 @@ impl CrashReport {
     }
 
     pub fn new(title: &str, exception: String, stack_trace: Vec<String>) -> CrashReport {
-        CrashReport { title: title.to_string(), exception, stack_trace, suppressed: Vec::new(), details: Vec::new(), system_report: system_report() }
+        CrashReport {
+            title: title.to_string(),
+            exception,
+            stack_trace,
+            throwable: None,
+            suppressed: Vec::new(),
+            details: Vec::new(),
+            system_report: system_report(),
+            tracking_stack_trace: true,
+            uncategorized_stack_trace: Vec::new(),
+            save_file: None,
+        }
+    }
+
+    pub fn for_throwable(throwable: &JavaThrowable, title: &str) -> CrashReport {
+        let mut throwable = throwable;
+        while throwable.class_name() == "java.util.concurrent.CompletionException" {
+            match throwable.cause.as_deref() {
+                Some(cause) => throwable = cause,
+                None => break,
+            }
+        }
+        if let (Some(info), Some(cause)) = (&throwable.report, throwable.cause.as_deref()) {
+            let mut report = CrashReport::of_exception(&info.title, cause);
+            let category = report.add_category_with_stack_trace(&info.category, info.category_stack_trace.iter().map(|frame| frame.to_string()).collect());
+            for (key, value) in &info.details {
+                category.set_detail(key, value.clone());
+            }
+            return report;
+        }
+        CrashReport::of_exception(title, throwable)
+    }
+
+    fn of_exception(title: &str, exception: &JavaThrowable) -> CrashReport {
+        let mut report = CrashReport::new(title, exception.description.clone(), exception.stack_trace.iter().map(|frame| frame.to_string()).collect());
+        report.throwable = Some(exception.clone());
+        report
+    }
+
+    pub fn get_save_file(&self) -> Option<&Path> {
+        self.save_file.as_deref()
     }
 
     pub fn add_category(&mut self, name: &str) -> &mut CrashReportCategory {
-        self.details.push(CrashReportCategory { title: name.to_string(), entries: Vec::new() });
+        self.details.push(CrashReportCategory { title: name.to_string(), entries: Vec::new(), stack_trace: Vec::new() });
+        self.details.last_mut().unwrap()
+    }
+
+    pub fn add_category_with_stack_trace(&mut self, name: &str, stack_trace: Vec<String>) -> &mut CrashReportCategory {
+        let mut category = CrashReportCategory { title: name.to_string(), entries: Vec::new(), stack_trace };
+        if self.tracking_stack_trace {
+            let size = category.stack_trace.len();
+            let full_trace = &self.stack_trace;
+            let trace_index = full_trace.len() as isize - size as isize;
+            if trace_index < 0 {
+                error!("Negative index in crash report handler ({}/{})", full_trace.len(), size);
+            }
+            let (mut source, mut next) = (None, None);
+            if 0 <= trace_index && (trace_index as usize) < full_trace.len() {
+                source = Some(full_trace[trace_index as usize].as_str());
+                if full_trace.len() + 1 - size < full_trace.len() {
+                    next = Some(full_trace[full_trace.len() + 1 - size].as_str());
+                }
+            }
+            self.tracking_stack_trace = category.validate_stack_trace(source, next);
+            if full_trace.len() >= size && 0 <= trace_index && (trace_index as usize) < full_trace.len() {
+                self.uncategorized_stack_trace = full_trace[..trace_index as usize].to_vec();
+            } else {
+                self.tracking_stack_trace = false;
+            }
+        }
+        self.details.push(category);
         self.details.last_mut().unwrap()
     }
 
@@ -112,6 +261,9 @@ impl CrashReport {
     }
 
     fn exception_message(&self) -> String {
+        if let Some(throwable) = &self.throwable {
+            return throwable.print_stack_trace_with_separator(LINE_SEPARATOR);
+        }
         let mut out = String::new();
         out.push_str(&self.exception);
         out.push_str(LINE_SEPARATOR);
@@ -128,12 +280,13 @@ impl CrashReport {
         out
     }
 
-    pub fn get_friendly_report(&self) -> String {
+    pub fn get_friendly_report(&self, report_type: &ReportType) -> String {
+        self.get_friendly_report_with_comments(report_type, &[])
+    }
+
+    pub fn get_friendly_report_with_comments(&self, report_type: &ReportType, extra_comments: &[String]) -> String {
         let mut builder = String::new();
-        builder.push_str("---- Minecraft Crash Report ----\n");
-        builder.push_str("// ");
-        builder.push_str(error_comment());
-        builder.push_str("\n\n");
+        report_type.append_header(&mut builder, extra_comments);
         builder.push_str("Time: ");
         builder.push_str(&Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
         builder.push('\n');
@@ -144,6 +297,23 @@ impl CrashReport {
         builder.push_str("\n\nA detailed walkthrough of the error, its code path and all known details is as follows:\n");
         builder.push_str(&"-".repeat(87));
         builder.push_str("\n\n");
+        let uncategorized_stack_trace = match (self.uncategorized_stack_trace.is_empty(), self.details.first()) {
+            (true, Some(category)) => category.stack_trace.iter().take(1).cloned().collect(),
+            _ => self.uncategorized_stack_trace.clone(),
+        };
+        if !uncategorized_stack_trace.is_empty() {
+            builder.push_str("-- Head --\n");
+            builder.push_str("Thread: ");
+            builder.push_str(&self.thread_name());
+            builder.push('\n');
+            builder.push_str("Stacktrace:\n");
+            for element in &uncategorized_stack_trace {
+                builder.push_str("\tat ");
+                builder.push_str(element);
+                builder.push('\n');
+            }
+            builder.push('\n');
+        }
         for category in &self.details {
             category.get_details(&mut builder);
             builder.push_str("\n\n");
@@ -159,28 +329,35 @@ impl CrashReport {
         builder
     }
 
-    pub fn save_to_file(&self, file: &Path) -> bool {
-        if let Some(parent) = file.parent() {
-            let _ = std::fs::create_dir_all(parent);
+    fn thread_name(&self) -> String {
+        std::thread::current().name().unwrap_or_default().to_string()
+    }
+
+    pub fn save_to_file(&mut self, save_file: &Path, report_type: &ReportType) -> bool {
+        if self.save_file.is_some() {
+            return false;
         }
-        match std::fs::write(file, self.get_friendly_report()) {
-            Ok(()) => true,
+        let saved = (|| {
+            if let Some(parent) = save_file.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+                crate::util::file_util::create_directories_safe(parent)?;
+            }
+            std::fs::write(save_file, self.get_friendly_report(report_type))
+        })();
+        match saved {
+            Ok(()) => {
+                self.save_file = Some(save_file.to_path_buf());
+                true
+            }
             Err(_) => {
-                error!("Could not save crash report to {}", file.display());
+                error!("Could not save crash report to {}", save_file.display());
                 false
             }
         }
     }
 }
 
-fn error_comment() -> &'static str {
-    let nuggets = wafer_data::CRASH_REPORT_NUGGETS;
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
-    nuggets.get((nanos % nuggets.len().max(1) as u128) as usize).copied().unwrap_or("Witty comment unavailable :(")
-}
-
 pub fn crash_report_file(server_directory: &Path) -> std::path::PathBuf {
-    server_directory.join("crash-reports").join(format!("crash-{}-server.txt", Local::now().format("%Y-%m-%d_%H.%M.%S")))
+    server_directory.join("crash-reports").join(format!("crash-{}-server.txt", crate::util::get_filename_formatted_date_time()))
 }
 
 fn system_report() -> Vec<(String, String)> {

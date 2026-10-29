@@ -1,8 +1,11 @@
+pub mod chunk_io_error_reporter;
+pub mod chunk_stream;
 pub mod entity_storage;
 pub mod region_file_version;
 pub mod region_storage_info;
 pub mod section_storage;
 pub mod simple_region_storage;
+pub mod storage_exception;
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
@@ -36,9 +39,22 @@ fn invalid(msg: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, msg.to_owned())
 }
 
-fn reported_nbt_exception(error: io::Error) -> io::Error {
-    let cause = if error.to_string() == "unexpected end of packet" { "java.io.EOFException".to_string() } else { format!("java.io.IOException: {error}") };
-    crate::util::java_nio::java_io_error(error.kind(), "net.minecraft.nbt.ReportedNbtException", format!("Loading NBT data\nCaused by: {cause}"))
+const OLD_CHUNK_DATA_VERSION: i32 = 4997;
+
+fn is_old_chunk(nbt: &Nbt) -> bool {
+    !matches!(nbt.get("DataVersion"), Some(Nbt::Int(data_version)) if *data_version >= OLD_CHUNK_DATA_VERSION) || matches!(nbt.get("blending_data"), Some(Nbt::Compound(_)))
+}
+
+fn chunk_stream_failure(version: RegionFileVersion, data: &[u8], mode: chunk_stream::Mode, caller: &'static str) -> io::Result<Vec<u8>> {
+    let failure = match version {
+        RegionFileVersion::Deflate => chunk_stream::simulate(data, true, mode),
+        RegionFileVersion::None => chunk_stream::simulate(data, false, mode),
+        RegionFileVersion::Gzip | RegionFileVersion::Lz4 => Err(storage_exception::unsimulated_stream_failure(version)),
+    };
+    failure.map_err(|mut throwable| {
+        throwable.push_frame(caller);
+        io::Error::new(io::ErrorKind::InvalidData, throwable)
+    })
 }
 
 pub fn decode_nbt(bytes: &[u8]) -> io::Result<Nbt> {
@@ -120,14 +136,19 @@ pub struct RegionFile {
 }
 
 impl RegionFile {
+    #[cfg(test)]
     pub fn open(path: &Path, sync: bool) -> io::Result<RegionFile> {
         fs::create_dir_all(path.parent().unwrap())?;
+        RegionFile::from_file(path, RegionFile::open_file(path, sync)?, None)
+    }
+
+    fn open_file(path: &Path, sync: bool) -> io::Result<File> {
         let mut options = OpenOptions::new();
         options.read(true).write(true).create(true).truncate(false);
         if sync {
             dsync(&mut options);
         }
-        RegionFile::from_file(path, options.open(path)?, None)
+        options.open(path)
     }
 
     pub fn from_file(path: &Path, mut file: File, external: Option<Box<dyn ExternalChunkFiles>>) -> io::Result<RegionFile> {
@@ -180,6 +201,36 @@ impl RegionFile {
     }
 
     pub fn read(&mut self, pos: ChunkPos) -> io::Result<Option<Nbt>> {
+        let Some((version, data)) = self.chunk_stream_data(pos)? else { return Ok(None) };
+        match version.decompress(&data).and_then(|bytes| decode_nbt(&bytes)) {
+            Ok(nbt) => Ok(Some(nbt)),
+            Err(_) => chunk_stream_failure(version, &data, chunk_stream::Mode::Read, storage_exception::READ_CHUNK_STREAM).and_then(|prefix| decode_nbt(&prefix).map(Some)),
+        }
+    }
+
+    pub fn scan_structures(&mut self, pos: ChunkPos) -> io::Result<Option<Nbt>> {
+        let Some((version, data)) = self.chunk_stream_data(pos)? else { return Ok(None) };
+        match version.decompress(&data).and_then(|bytes| decode_nbt(&bytes)) {
+            Ok(nbt) => Ok(Some(nbt)),
+            Err(_) => {
+                let prefix = chunk_stream_failure(version, &data, chunk_stream::Mode::Scan(chunk_stream::ScanKind::Structures), storage_exception::SCAN_CHUNK_STREAM)?;
+                if prefix.first() == Some(&10) { decode_nbt(&prefix).map(Some) } else { Ok(None) }
+            }
+        }
+    }
+
+    pub fn scan(&mut self, pos: ChunkPos) -> io::Result<bool> {
+        let Some((version, data)) = self.chunk_stream_data(pos)? else { return Ok(false) };
+        match version.decompress(&data).and_then(|bytes| decode_nbt(&bytes)) {
+            Ok(nbt) => Ok(is_old_chunk(&nbt)),
+            Err(_) => {
+                let prefix = chunk_stream_failure(version, &data, chunk_stream::Mode::Scan(chunk_stream::ScanKind::OldData), storage_exception::SCAN_CHUNK_STREAM)?;
+                if prefix.first() == Some(&10) { decode_nbt(&prefix).map(|nbt| is_old_chunk(&nbt)) } else { Ok(false) }
+            }
+        }
+    }
+
+    fn chunk_stream_data(&mut self, pos: ChunkPos) -> io::Result<Option<(RegionFileVersion, Vec<u8>)>> {
         let offset = self.offsets[Self::offset_index(pos)];
         if offset == 0 {
             return Ok(None);
@@ -245,7 +296,7 @@ impl RegionFile {
             error!("Chunk {pos} has invalid chunk stream version {compression}");
             return Ok(None);
         };
-        decode_nbt(&compression.decompress(&data)?).map(Some).map_err(reported_nbt_exception)
+        Ok(Some((compression, data)))
     }
 
     pub fn write(&mut self, pos: ChunkPos, nbt: &Nbt) -> io::Result<()> {
@@ -358,28 +409,45 @@ impl RegionStorage {
         self.dir.join(format!("r.{}.{}.mca", pos.x >> 5, pos.z >> 5))
     }
 
-    fn region(&mut self, pos: ChunkPos) -> io::Result<&mut RegionFile> {
+    fn region(&mut self, pos: ChunkPos, callers: &[&'static str]) -> io::Result<&mut RegionFile> {
         let key = (pos.x >> 5, pos.z >> 5);
         if !self.open.contains_key(&key) {
-            let region = RegionFile::open(&self.region_path(pos), self.sync)?;
-            self.open.insert(key, region);
+            let path = self.region_path(pos);
+            let directory = if self.dir.exists() { self.dir.canonicalize().map_err(|e| storage_exception::create_directories_safe_failure(e, &self.dir, callers))? } else { self.dir.clone() };
+            fs::create_dir_all(&directory).map_err(|e| storage_exception::create_directories_safe_failure(e, &directory, callers))?;
+            let file = RegionFile::open_file(&path, self.sync).map_err(|e| storage_exception::open_region_file_failure(e, &path, self.sync, callers))?;
+            self.open.insert(key, RegionFile::from_file(&path, file, None)?);
         }
         Ok(self.open.get_mut(&key).unwrap())
     }
 
     pub fn read(&mut self, pos: ChunkPos) -> io::Result<Option<Nbt>> {
-        if !self.open.contains_key(&(pos.x >> 5, pos.z >> 5)) && !self.region_path(pos).exists() {
+        if !self.open.contains_key(&(pos.x >> 5, pos.z >> 5)) && !self.region_path(pos).is_file() {
             return Ok(None);
         }
-        self.region(pos)?.read(pos)
+        self.region(pos, &storage_exception::READ_GET_REGION_FILE)?.read(pos)
+    }
+
+    pub fn scan_chunk(&mut self, pos: ChunkPos) -> io::Result<bool> {
+        if !self.open.contains_key(&(pos.x >> 5, pos.z >> 5)) && !self.region_path(pos).is_file() {
+            return Ok(false);
+        }
+        self.region(pos, &storage_exception::SCAN_CHUNK_GET_REGION_FILE)?.scan(pos)
+    }
+
+    pub fn scan_structures(&mut self, pos: ChunkPos) -> io::Result<Option<Nbt>> {
+        if !self.open.contains_key(&(pos.x >> 5, pos.z >> 5)) && !self.region_path(pos).is_file() {
+            return Ok(None);
+        }
+        self.region(pos, &storage_exception::SCAN_CHUNK_GET_REGION_FILE)?.scan_structures(pos)
     }
 
     pub fn write(&mut self, pos: ChunkPos, nbt: &Nbt) -> io::Result<()> {
-        self.region(pos)?.write(pos, nbt)
+        self.region(pos, &storage_exception::WRITE_GET_REGION_FILE)?.write(pos, nbt)
     }
 
     pub fn clear(&mut self, pos: ChunkPos) -> io::Result<()> {
-        self.region(pos)?.clear(pos)
+        self.region(pos, &storage_exception::WRITE_GET_REGION_FILE)?.clear(pos)
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
@@ -446,6 +514,51 @@ mod tests {
         for (x, _) in corruptions {
             assert_eq!(store.read(ChunkPos::new(x, 0)).unwrap(), None, "chunk {x}");
         }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn corrupt_chunk_streams_fail_with_java_exceptions_and_traces() {
+        let dir = std::env::temp_dir().join(format!("wafer-region-corrupt-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mut store = RegionStorage::new(dir.clone(), false);
+        store.write(ChunkPos::new(0, 0), &Nbt::Compound(vec![("a".into(), Nbt::Int(1))])).unwrap();
+        store.flush().unwrap();
+        drop(store);
+        let path = dir.join("r.0.0.mca");
+        let mut bytes = fs::read(&path).unwrap();
+        let sector = (u32::from_be_bytes(bytes[0..4].try_into().unwrap()) >> 8) as usize * 4096;
+        bytes[sector + 5..sector + 12].fill(0xab);
+        fs::write(&path, bytes).unwrap();
+        let mut store = RegionStorage::new(dir.clone(), false);
+        let failure = crate::util::java_throwable::JavaThrowable::from_io_error(&store.read(ChunkPos::new(0, 0)).unwrap_err());
+        assert_eq!(failure.description, "java.util.zip.ZipException: incorrect header check");
+        assert_eq!(failure.stack_trace.first().copied(), Some("java.base/java.util.zip.InflaterInputStream.read(InflaterInputStream.java:214)"));
+        assert_eq!(failure.stack_trace.last().copied(), Some(storage_exception::READ_CHUNK_STREAM));
+        let scan_failure = crate::util::java_throwable::JavaThrowable::from_io_error(&store.scan_chunk(ChunkPos::new(0, 0)).unwrap_err());
+        assert_eq!(scan_failure.description, failure.description);
+        assert_eq!(scan_failure.stack_trace.last().copied(), Some(storage_exception::SCAN_CHUNK_STREAM));
+        assert_eq!(store.scan_chunk(ChunkPos::new(1, 0)).unwrap(), false);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn unopenable_region_files_fail_like_file_channel_open() {
+        let dir = std::env::temp_dir().join(format!("wafer-region-denied-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("r.0.0.mca"), []).unwrap();
+        let mut permissions = fs::metadata(dir.join("r.0.0.mca")).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(dir.join("r.0.0.mca"), permissions).unwrap();
+        let mut store = RegionStorage::new(dir.clone(), true);
+        let failure = crate::util::java_throwable::JavaThrowable::from_io_error(&store.read(ChunkPos::new(0, 0)).unwrap_err());
+        assert!(failure.description.starts_with("java.nio.file."), "{}", failure.description);
+        assert!(failure.stack_trace.contains(&"net.minecraft.world.level.chunk.storage.RegionFile.<init>(RegionFile.java:132)"));
+        assert_eq!(failure.stack_trace.last().copied(), Some("net.minecraft.world.level.chunk.storage.RegionFileStorage.read(RegionFileStorage.java:80)"));
+        let mut permissions = fs::metadata(dir.join("r.0.0.mca")).unwrap().permissions();
+        permissions.set_readonly(false);
+        fs::set_permissions(dir.join("r.0.0.mca"), permissions).unwrap();
         fs::remove_dir_all(dir).unwrap();
     }
 

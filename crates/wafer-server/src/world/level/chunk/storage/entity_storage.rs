@@ -9,9 +9,11 @@ use wafer_data::WORLD_VERSION;
 use wafer_protocol::nbt::Nbt;
 
 use super::RegionStorage;
+use super::storage_exception;
 use crate::server::level::ServerLevel;
 use crate::server::command_frames::main_thread_task_frames;
-use crate::server::level::chunk_workers::IoWorker;
+use crate::server::level::chunk_workers::{IoReporting, IoWorker};
+use crate::util::java_throwable::JavaThrowable;
 use crate::util::problem_reporter::PathElement;
 use crate::world::entity::LevelEntity;
 use crate::world::level::storage::tag_value_input;
@@ -40,6 +42,21 @@ const LOAD_ENTITIES_RECURSIVE: [&str; 19] = [
     "net.minecraft.util.thread.AbstractConsecutiveExecutor.run(AbstractConsecutiveExecutor.java:60)",
 ];
 
+const ENTITY_DESERIALIZER_FRAMES: [&str; 5] = [
+    "java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:667)",
+    "java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:503)",
+    "net.minecraft.util.Util.runNamed(Util.java:351)",
+    "net.minecraft.util.thread.AbstractConsecutiveExecutor.pollTask(AbstractConsecutiveExecutor.java:50)",
+    "net.minecraft.util.thread.AbstractConsecutiveExecutor.run(AbstractConsecutiveExecutor.java:60)",
+];
+
+fn entity_storage_frames(first: &'static str, preparing_levels: bool) -> Vec<&'static str> {
+    let mut frames = vec![first];
+    frames.extend(ENTITY_DESERIALIZER_FRAMES);
+    frames.extend(main_thread_task_frames(preparing_levels));
+    frames
+}
+
 pub type EntityChunkRead = (ChunkPos, io::Result<Option<Nbt>>);
 
 pub struct EntityStorage {
@@ -47,11 +64,23 @@ pub struct EntityStorage {
     empty_chunks: FastSet<i64>,
     reads: (Sender<EntityChunkRead>, Receiver<EntityChunkRead>),
     loading_inbox: Arc<AtomicUsize>,
+    reporting: Option<IoReporting>,
 }
 
 impl EntityStorage {
     pub fn new(storage: Option<RegionStorage>) -> EntityStorage {
-        EntityStorage { worker: storage.map(IoWorker::new), empty_chunks: FastSet::default(), reads: channel(), loading_inbox: Arc::default() }
+        EntityStorage { worker: storage.map(IoWorker::new), empty_chunks: FastSet::default(), reads: channel(), loading_inbox: Arc::default(), reporting: None }
+    }
+
+    pub fn reporting(&self) -> Option<&IoReporting> {
+        self.reporting.as_ref()
+    }
+
+    pub fn set_reporting(&mut self, reporting: IoReporting) {
+        if let Some(worker) = &self.worker {
+            worker.set_reporting(reporting.clone());
+        }
+        self.reporting = Some(reporting);
     }
 
     pub fn load_entities(&mut self, pos: ChunkPos) {
@@ -62,7 +91,16 @@ impl EntityStorage {
         };
         let reads = self.reads.0.clone();
         let loading_inbox = self.loading_inbox.clone();
+        let reporting = self.reporting.clone();
         worker.read(pos, move |read| {
+            if let Err(e) = &read {
+                let throwable = JavaThrowable::from_io_error(e);
+                error!("Failed to read chunk {pos}\n{}", storage_exception::entity_manager_completion_exception(&throwable).print_stack_trace().trim_end());
+                error!("Failed to load entity chunk {pos}\n{}", throwable.print_stack_trace().trim_end());
+                if let Some(reporting) = &reporting {
+                    reporting.reporter.report_chunk_load_failure(&throwable, &reporting.info, pos);
+                }
+            }
             loading_inbox.fetch_add(1, Ordering::Relaxed);
             drop(reads.send((pos, read)));
         });
@@ -109,6 +147,19 @@ impl EntityStorage {
     }
 }
 
+fn stored_position(tag: &Nbt) -> Result<ChunkPos, Option<&'static str>> {
+    match tag.get("Position") {
+        None => Err(None),
+        Some(Nbt::IntArray(stored)) if stored.len() == 2 => Ok(ChunkPos::new(stored[0], stored[1])),
+        Some(Nbt::List(elements)) if elements.len() == 2 && elements.iter().all(|element| matches!(element, Nbt::Int(_))) => {
+            Ok(ChunkPos::new(elements[0].as_i64().unwrap_or_default() as i32, elements[1].as_i64().unwrap_or_default() as i32))
+        }
+        Some(Nbt::IntArray(_)) => Err(Some("Input is not a list of 2 ints")),
+        Some(Nbt::List(elements)) if elements.iter().all(|element| matches!(element, Nbt::Int(_))) => Err(Some("Input is not a list of 2 ints")),
+        Some(_) => Err(Some("Not a list")),
+    }
+}
+
 pub fn chunk_tag(pos: ChunkPos, entities: Vec<Nbt>) -> Nbt {
     Nbt::Compound(vec![
         ("DataVersion".into(), Nbt::Int(WORLD_VERSION)),
@@ -119,14 +170,28 @@ pub fn chunk_tag(pos: ChunkPos, entities: Vec<Nbt>) -> Nbt {
 
 impl ServerLevel {
     pub fn read_chunk_entities(&mut self, pos: ChunkPos, tag: &Nbt) -> Vec<LevelEntity> {
-        match tag.get("Position") {
-            Some(Nbt::IntArray(stored)) if stored.len() == 2 => {
-                if *stored != [pos.x, pos.z] {
-                    let (x, z) = (pos.x, pos.z);
-                    error!("Chunk file at [{x}, {z}] is in the wrong location. (Expected [{x}, {z}], got [{}, {}])", stored[0], stored[1]);
+        let reporting = self.entity_manager.reporting().cloned();
+        match stored_position(tag) {
+            Ok(stored) => {
+                if stored != pos {
+                    error!("Chunk file at {pos} is in the wrong location. (Expected {pos}, got {stored})");
+                    if let Some(reporting) = &reporting {
+                        reporting.reporter.report_misplaced_chunk(stored, pos, &reporting.info, entity_storage_frames(storage_exception::ENTITY_STORAGE_MISPLACED_FRAME, self.preparing_levels));
+                    }
                 }
             }
-            _ => warn!("Failed to parse chunk [{}, {}] position info", pos.x, pos.z),
+            Err(field_error) => {
+                if let (Some(field_error), Some(position)) = (field_error, tag.get("Position")) {
+                    error!("Failed to read field (Position={}): {field_error}", crate::nbt::to_string(position));
+                }
+                let mut frames = vec![storage_exception::OPTIONAL_OR_ELSE_THROW];
+                frames.extend(entity_storage_frames(storage_exception::ENTITY_STORAGE_POSITION_FRAME, self.preparing_levels));
+                let throwable = JavaThrowable::new("java.util.NoSuchElementException: No value present", frames);
+                warn!("Failed to parse chunk {pos} position info\n{}", throwable.print_stack_trace().trim_end());
+                if let Some(reporting) = &reporting {
+                    reporting.reporter.report_chunk_load_failure(&throwable, &reporting.info, pos);
+                }
+            }
         }
         let upgraded_chunk_tag = super::simple_region_storage::upgrade_chunk_tag_to_current_version(tag, -1, crate::util::datafix::data_fix_types::DataFixTypes::EntityChunk);
         let tag = &*upgraded_chunk_tag;

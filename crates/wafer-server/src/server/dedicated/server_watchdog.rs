@@ -3,16 +3,21 @@ use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::crash_report::{CrashReport, crash_report_file};
+use crate::crash_report::{CrashReport, ReportType, crash_report_file};
 use crate::util::lifecycle::Lifecycle;
+use crate::world::level::chunk::storage::chunk_io_error_reporter::ChunkIoErrorReporter;
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ServerSnapshot {
-    pub player_count: String,
+    pub player_count: Option<String>,
     pub random_tick_rate: String,
     pub level_stats: String,
     pub world_seed: i64,
     pub world_gen_settings_lifecycle: Lifecycle,
+    pub active_data_packs: String,
+    pub available_data_packs: String,
+    pub enabled_feature_flags: String,
+    pub chunk_io_error_reporter: Option<ChunkIoErrorReporter>,
 }
 
 pub struct ServerTiming {
@@ -79,9 +84,9 @@ fn crash(timing: &ServerTiming, delta_nanos: i64, server_directory: &std::path::
         .add_category("Performance stats")
         .set_detail("Random tick rate", snapshot.random_tick_rate.clone())
         .set_detail("Level stats", snapshot.level_stats.clone());
-    print!("Crash report:\n{}\n", report.get_friendly_report());
+    print!("Crash report:\n{}\n", report.get_friendly_report(&ReportType::CRASH));
     let file = crash_report_file(server_directory);
-    if report.save_to_file(&file) {
+    if report.save_to_file(&file, &ReportType::CRASH) {
         error!("This crash report has been saved to: {}", std::path::absolute(&file).unwrap_or(file).display());
     } else {
         error!("We were unable to save this crash report to disk.");
@@ -103,13 +108,16 @@ fn exit() -> ! {
 
 pub fn fill_system_report(report: &mut CrashReport, snapshot: &ServerSnapshot) {
     report.set_system_detail("Server Running", "true");
-    report.set_system_detail("Player Count", snapshot.player_count.clone());
-    report.set_system_detail("Active Data Packs", "vanilla");
-    report.set_system_detail("Available Data Packs", "minecart_improvements, redstone_experiments, trade_rebalance, vanilla");
-    report.set_system_detail("Enabled Feature Flags", "minecraft:vanilla");
+    if let Some(player_count) = &snapshot.player_count {
+        report.set_system_detail("Player Count", player_count.clone());
+    }
+    report.set_system_detail("Active Data Packs", snapshot.active_data_packs.clone());
+    report.set_system_detail("Available Data Packs", snapshot.available_data_packs.clone());
+    report.set_system_detail("Enabled Feature Flags", snapshot.enabled_feature_flags.clone());
     report.set_system_detail("World Generation", snapshot.world_gen_settings_lifecycle.to_string());
     report.set_system_detail("World Seed", snapshot.world_seed.to_string());
-    report.set_system_detail("Suppressed Exceptions", "~~NONE~~");
+    let suppressed_exceptions = snapshot.chunk_io_error_reporter.as_ref().map_or_else(|| "~~NONE~~".to_string(), |reporter| reporter.suppressed_exceptions().dump());
+    report.set_system_detail("Suppressed Exceptions", suppressed_exceptions);
     report.set_system_detail("Is Modded", "Probably not. Server jar signature and brand is untouched");
     report.set_system_detail("Type", "Dedicated Server");
 }

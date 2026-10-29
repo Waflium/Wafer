@@ -14,11 +14,18 @@ use super::chunk_level::ChunkStatus;
 use crate::world::level::chunk::{ChunkStructures, LevelChunk};
 use crate::world::level::chunk::serialization::{self, ReadChunk, SectionLight};
 use crate::world::level::chunk::storage::RegionStorage;
+use crate::world::level::chunk::storage::chunk_io_error_reporter::ChunkIoErrorReporter;
+use crate::world::level::chunk::storage::region_storage_info::RegionStorageInfo;
+use crate::world::level::chunk::storage::storage_exception;
 use crate::world::ticks::SavedTick;
 
 type Job = Box<dyn FnOnce() + Send>;
 
 static IO_WORKER_COUNT: AtomicUsize = AtomicUsize::new(1);
+
+pub fn next_io_worker_name() -> String {
+    format!("IO-Worker-{}", IO_WORKER_COUNT.fetch_add(1, Ordering::Relaxed))
+}
 
 struct WorkerPool {
     jobs: Mutex<VecDeque<Job>>,
@@ -85,13 +92,23 @@ pub struct ChunkToSave {
     pub light: Vec<SectionLight>,
 }
 
+#[derive(Clone)]
+pub struct IoReporting {
+    pub reporter: ChunkIoErrorReporter,
+    pub info: RegionStorageInfo,
+}
+
 enum IoRequest {
     Read { pos: ChunkPos, reply: Box<dyn FnOnce(io::Result<Option<Nbt>>) + Send> },
+    ScanStructures { pos: ChunkPos, reply: Box<dyn FnOnce(io::Result<Option<Nbt>>) + Send> },
+    ScanOldData { pos: ChunkPos, reply: Box<dyn FnOnce(io::Result<bool>) + Send> },
     Write { pos: ChunkPos, nbt: Nbt },
     Clear { pos: ChunkPos },
     WriteChunk(Box<ChunkToSave>),
     Flush { flush: bool, reply: Sender<io::Result<()>> },
+    SetReporting(IoReporting),
 }
+
 
 #[derive(Clone)]
 pub struct IoWorker {
@@ -105,26 +122,42 @@ impl IoWorker {
         let active_chunk_writes = Arc::new(AtomicUsize::new(0));
         let active = active_chunk_writes.clone();
         thread::Builder::new()
-            .name(format!("IO-Worker-{}", IO_WORKER_COUNT.fetch_add(1, Ordering::Relaxed)))
+            .name(next_io_worker_name())
             .spawn(move || {
+                let mut reporting: Option<IoReporting> = None;
                 for request in incoming {
                     match request {
-                        IoRequest::Read { pos, reply } => reply(storage.read(pos)),
+                        IoRequest::Read { pos, reply } => reply(storage.read(pos).map_err(|e| {
+                            let failure = storage_exception::on_load_worker(&e);
+                            warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+                            io::Error::new(e.kind(), failure)
+                        })),
+                        IoRequest::ScanStructures { pos, reply } => reply(storage.scan_structures(pos).map_err(|e| {
+                            let failure = storage_exception::on_scan_worker(&e);
+                            warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+                            io::Error::new(e.kind(), failure)
+                        })),
+                        IoRequest::ScanOldData { pos, reply } => reply(storage.scan_chunk(pos).map_err(|e| {
+                            let failure = storage_exception::on_scan_worker(&e);
+                            warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+                            io::Error::new(e.kind(), failure)
+                        })),
                         IoRequest::Write { pos, nbt } => {
-                            write(&mut storage, pos, &nbt);
+                            write(&mut storage, pos, &nbt, reporting.as_ref());
                             active.fetch_sub(1, Ordering::Relaxed);
                         }
                         IoRequest::Clear { pos } => {
-                            if storage.clear(pos).is_err() {
-                                error!("Failed to store chunk [{}, {}]", pos.x, pos.z);
+                            if let Err(e) = storage.clear(pos) {
+                                store_failed(pos, &e, reporting.as_ref());
                             }
                         }
                         IoRequest::WriteChunk(save) => {
                             let ChunkToSave { chunk, status, block_entities, game_time, block_ticks, fluid_ticks, light } = *save;
-                            write(&mut storage, chunk.pos, &serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light));
+                            write(&mut storage, chunk.pos, &serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light), reporting.as_ref());
                             active.fetch_sub(1, Ordering::Relaxed);
                         }
                         IoRequest::Flush { flush, reply } => drop(reply.send(if flush { storage.flush() } else { Ok(()) })),
+                        IoRequest::SetReporting(new_reporting) => reporting = Some(new_reporting),
                     }
                 }
             })
@@ -132,13 +165,23 @@ impl IoWorker {
         IoWorker { requests, active_chunk_writes }
     }
 
+    pub fn set_reporting(&self, reporting: IoReporting) {
+        let _ = self.requests.send(IoRequest::SetReporting(reporting));
+    }
+
     pub fn read(&self, pos: ChunkPos, reply: impl FnOnce(io::Result<Option<Nbt>>) + Send + 'static) {
         let _ = self.requests.send(IoRequest::Read { pos, reply: Box::new(reply) });
     }
 
-    pub fn scan_chunk(&self, pos: ChunkPos) -> io::Result<Option<Nbt>> {
+    pub fn scan_structures(&self, pos: ChunkPos) -> io::Result<Option<Nbt>> {
         let (reply, result) = channel();
-        self.read(pos, move |read| drop(reply.send(read)));
+        let _ = self.requests.send(IoRequest::ScanStructures { pos, reply: Box::new(move |scanned| drop(reply.send(scanned))) });
+        result.recv().map_err(|_| io::Error::other("IO worker gone"))?
+    }
+
+    pub fn scan_old_data(&self, pos: ChunkPos) -> io::Result<bool> {
+        let (reply, result) = channel();
+        let _ = self.requests.send(IoRequest::ScanOldData { pos, reply: Box::new(move |scanned| drop(reply.send(scanned))) });
         result.recv().map_err(|_| io::Error::other("IO worker gone"))?
     }
 
@@ -169,11 +212,21 @@ impl IoWorker {
     }
 }
 
-fn write(storage: &mut RegionStorage, pos: ChunkPos, nbt: &Nbt) {
-    if storage.write(pos, nbt).is_err() {
-        error!("Failed to store chunk [{}, {}]", pos.x, pos.z);
-        error!("Failed to save chunk {},{}", pos.x, pos.z);
+fn write(storage: &mut RegionStorage, pos: ChunkPos, nbt: &Nbt, reporting: Option<&IoReporting>) {
+    if let Err(e) = storage.write(pos, nbt) {
+        store_failed(pos, &e, reporting);
     }
+}
+
+fn store_failed(pos: ChunkPos, error: &io::Error, reporting: Option<&IoReporting>) {
+    let store_failure = storage_exception::on_store_worker(error);
+    error!("Failed to store chunk {pos}\n{}", store_failure.print_stack_trace().trim_end());
+    let Some(reporting) = reporting else { return };
+    let throwable = storage_exception::completion_exception_of_store(store_failure);
+    if reporting.info.type_ == "entities" {
+        error!("Failed to store entity chunk {pos}\n{}", throwable.print_stack_trace().trim_end());
+    }
+    reporting.reporter.report_chunk_save_failure(&throwable, &reporting.info, pos);
 }
 
 #[derive(Default)]
