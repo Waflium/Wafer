@@ -86,6 +86,17 @@ fn crash(timing: &ServerTiming, delta_nanos: i64, server_directory: &std::path::
     } else {
         error!("We were unable to save this crash report to disk.");
     }
+    exit()
+}
+
+fn exit() -> ! {
+    let _ = std::thread::Builder::new().name("Timer-0".into()).spawn(|| {
+        std::thread::sleep(Duration::from_millis(10000));
+        crate::logging::flush();
+        std::process::exit(1);
+    });
+    super::begin_shutdown(1);
+    super::halt_and_wait();
     crate::logging::flush();
     std::process::exit(1)
 }

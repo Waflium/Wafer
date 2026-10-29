@@ -96,6 +96,17 @@ fn java_io_exception(e: &io::Error) -> String {
 
 static SHUTDOWN_HOOK: std::sync::OnceLock<(mpsc::UnboundedSender<Event>, std::sync::Mutex<bool>, std::sync::Condvar)> = std::sync::OnceLock::new();
 
+static EXIT_STATUS: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+
+pub fn exit_status() -> i32 {
+    EXIT_STATUS.load(std::sync::atomic::Ordering::Acquire)
+}
+
+pub(crate) fn begin_shutdown(status: i32) {
+    EXIT_STATUS.store(status, std::sync::atomic::Ordering::Release);
+    crate::logging::stop();
+}
+
 pub fn add_shutdown_hook(events: mpsc::UnboundedSender<Event>) {
     let _ = SHUTDOWN_HOOK.set((events.clone(), std::sync::Mutex::new(false), std::sync::Condvar::new()));
     #[cfg(windows)]
@@ -103,11 +114,12 @@ pub fn add_shutdown_hook(events: mpsc::UnboundedSender<Event>) {
         windows_sys::Win32::System::Console::SetConsoleCtrlHandler(Some(console_ctrl_handler), 1);
     }
     #[cfg(unix)]
-    for kind in [tokio::signal::unix::SignalKind::terminate(), tokio::signal::unix::SignalKind::hangup()] {
+    for (kind, status) in [(tokio::signal::unix::SignalKind::terminate(), 143), (tokio::signal::unix::SignalKind::hangup(), 129)] {
         if let Ok(mut signal) = tokio::signal::unix::signal(kind) {
             let events = events.clone();
             tokio::spawn(async move {
                 if signal.recv().await.is_some() {
+                    begin_shutdown(status);
                     let _ = events.send(Event::Halt);
                 }
             });
@@ -122,7 +134,7 @@ pub fn server_stopped() {
     }
 }
 
-fn halt_and_wait() {
+pub(crate) fn halt_and_wait() {
     if let Some((events, stopped, condition)) = SHUTDOWN_HOOK.get() {
         let _ = events.send(Event::Halt);
         let mut stopped = stopped.lock().unwrap();
@@ -137,6 +149,7 @@ unsafe extern "system" fn console_ctrl_handler(ctrl_type: u32) -> windows_sys::c
     use windows_sys::Win32::System::Console::{CTRL_CLOSE_EVENT, CTRL_LOGOFF_EVENT, CTRL_SHUTDOWN_EVENT};
     match ctrl_type {
         CTRL_CLOSE_EVENT | CTRL_LOGOFF_EVENT | CTRL_SHUTDOWN_EVENT => {
+            begin_shutdown(143);
             halt_and_wait();
             1
         }

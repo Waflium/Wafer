@@ -76,6 +76,13 @@ pub fn flush() {
     }
 }
 
+static STOPPED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn stop() {
+    flush();
+    STOPPED.store(true, std::sync::atomic::Ordering::Release);
+}
+
 pub fn shutdown() {
     flush();
     if let Some(logger) = LOGGER.get() {
@@ -107,7 +114,7 @@ pub fn log_as(thread: &str, level: Level, args: fmt::Arguments) {
 }
 
 fn submit(level: Level, thread: ThreadName, args: fmt::Arguments) {
-    if level < Level::Info {
+    if level < Level::Info || STOPPED.load(std::sync::atomic::Ordering::Acquire) {
         return;
     }
     let record = Record { time: SystemTime::now(), thread, level, message: fmt::format(args) };

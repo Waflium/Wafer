@@ -11,5 +11,5 @@ fn main() {
         .expect("server main thread");
     let _ = server_main.join();
     logging::shutdown();
-    std::process::exit(0)
+    std::process::exit(wafer_server::server::dedicated::exit_status())
 }

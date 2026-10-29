@@ -207,6 +207,7 @@ pub(crate) async fn serve_world(
         server::dedicated::add_shutdown_hook(events.clone());
         tokio::spawn(async move {
             if tokio::signal::ctrl_c().await.is_ok() {
+                server::dedicated::begin_shutdown(130);
                 let _ = events.send(server::Event::Halt);
             }
         });
