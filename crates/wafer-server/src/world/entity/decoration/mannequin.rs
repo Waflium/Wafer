@@ -1,8 +1,9 @@
 use wafer_data::{registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
-use crate::network::chat::Component;
+use crate::network::chat::{Component, component_serialization};
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult};
 use crate::world::entity::attributes::{Attribute, MANNEQUIN_ATTRIBUTES};
 use crate::world::entity::avatar::{self, DEFAULT_MAIN_HAND, HUMANOID_ARM_LEFT, HUMANOID_ARM_RIGHT};
 use crate::world::entity::data::{DataValue, Pose, ids, living_entity_defaults};
@@ -18,6 +19,26 @@ const DATA_DESCRIPTION: usize = 19;
 const MODEL_PARTS: [(&str, i8); 7] = [("cape", 1), ("jacket", 2), ("left_sleeve", 4), ("right_sleeve", 8), ("left_pants_leg", 16), ("right_pants_leg", 32), ("hat", 64)];
 const ALL_LAYERS: i8 = 127;
 const VALID_POSES: [(Pose, &str); 5] = [(Pose::Standing, "standing"), (Pose::Crouching, "crouching"), (Pose::Swimming, "swimming"), (Pose::FallFlying, "fall_flying"), (Pose::Sleeping, "sleeping")];
+const POSE_NAMES: [&str; 18] = [
+    "standing",
+    "fall_flying",
+    "sleeping",
+    "swimming",
+    "spin_attack",
+    "crouching",
+    "long_jumping",
+    "dying",
+    "croaking",
+    "using_tongue",
+    "sitting",
+    "roaring",
+    "sniffing",
+    "emerging",
+    "digging",
+    "sliding",
+    "shooting",
+    "inhaling",
+];
 const DEFAULT_DESCRIPTION_KEY: &str = "entity.minecraft.mannequin.label";
 
 fn default_description() -> Nbt {
@@ -141,23 +162,21 @@ impl Mannequin {
         let y_rot = self.entity.y_rot;
         self.entity.y_head_rot = y_rot;
         self.living.y_body_rot = y_rot;
-        living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut self.health, &mut self.absorption, &mut self.equipment, input);
-        if let Some(profile) = tag_value_input::read_or_error(input, "profile", |tag| dc::PROFILE.decode(tag)) {
+        if living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut self.health, &mut self.absorption, &mut self.equipment, input) {
+            self.set_pose(Pose::Sleeping);
+        }
+        if let Some(profile) = tag_value_input::read(input, "profile", |tag| dc::PROFILE.decode_partial(tag)) {
             self.set_profile(profile);
         }
-        let layers = input.get("hidden_layers").and_then(read_hidden_layers).unwrap_or(ALL_LAYERS);
+        let layers = tag_value_input::read(input, "hidden_layers", decode_hidden_layers).unwrap_or(ALL_LAYERS);
         self.entity.data.set(ids::PLAYER_MODE_CUSTOMISATION, DataValue::Byte(layers));
-        let main_hand = match input.get("main_hand").and_then(Nbt::as_str) {
-            Some("left") => HUMANOID_ARM_LEFT,
-            Some("right") => HUMANOID_ARM_RIGHT,
-            _ => DEFAULT_MAIN_HAND,
-        };
+        let main_hand = tag_value_input::read_or_error(input, "main_hand", |tag| codec::string_enum(tag, &[("left", HUMANOID_ARM_LEFT), ("right", HUMANOID_ARM_RIGHT)])).unwrap_or(DEFAULT_MAIN_HAND);
         avatar::set_main_arm(&mut self.entity, main_hand);
-        let pose = input.get("pose").and_then(Nbt::as_str).and_then(|name| VALID_POSES.iter().find(|(_, pose_name)| *pose_name == name)).map_or(Pose::Standing, |(pose, _)| *pose);
+        let pose = tag_value_input::read_or_error(input, "pose", decode_pose).unwrap_or(Pose::Standing);
         self.set_pose(pose);
-        self.set_immovable(tag_value_input::get_i64(input, "immovable").is_some_and(|v| v != 0));
-        self.set_hide_description(tag_value_input::get_i64(input, "hide_description").is_some_and(|v| v != 0));
-        let description = input.get("description").and_then(crate::network::chat::component_serialization::decode_or_partial).map_or_else(default_description, |c| c.to_nbt());
+        self.set_immovable(tag_value_input::get_boolean(input, "immovable").unwrap_or(false));
+        self.set_hide_description(tag_value_input::get_boolean(input, "hide_description").unwrap_or(false));
+        let description = tag_value_input::read(input, "description", component_serialization::decode_partial).map_or_else(default_description, |description| description.to_nbt());
         self.set_description(description);
     }
 
@@ -184,15 +203,16 @@ impl Mannequin {
     }
 }
 
-fn read_hidden_layers(tag: &Nbt) -> Option<i8> {
-    let Nbt::List(parts) = tag else { return None };
-    let mut mask = ALL_LAYERS;
-    for part in parts {
-        let name = part.as_str()?;
-        let (_, part_mask) = MODEL_PARTS.iter().find(|(part_name, _)| *part_name == name)?;
-        mask &= !part_mask;
+fn decode_hidden_layers(tag: &Nbt) -> DecodeResult<i8> {
+    codec::list_partial(tag, |part| codec::string_enum(part, &MODEL_PARTS).into()).map(|masks| masks.iter().fold(ALL_LAYERS, |layers, mask| layers & !mask))
+}
+
+fn decode_pose(tag: &Nbt) -> Result<Pose, String> {
+    let name = codec::string(tag)?;
+    if !POSE_NAMES.contains(&name) {
+        return Err(format!("Unknown element name:{name}"));
     }
-    Some(mask)
+    VALID_POSES.iter().find(|(_, pose_name)| *pose_name == name).map(|(pose, _)| *pose).ok_or_else(|| format!("Invalid pose: {name}"))
 }
 
 impl ServerLevel {

@@ -3,9 +3,11 @@ use std::sync::{LazyLock, OnceLock};
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::{Holder, RegistryElement};
-use crate::util::codec::{self, DataResult};
-use crate::util::random::WeightedList;
+use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::util::random::{WeightedList, weighted_data_codec, weighted_list_codec};
 use crate::world::item::component as dc;
+use crate::world::item::component::codec::{self as component_codec, Codec, RangeError};
+use crate::world::item::component::types::{self, Pair, nbt};
 use crate::world::level::spawn_data::SpawnData;
 
 const SPAWNER_TRIAL_CHAMBER_KEY: &str = "minecraft:spawners/trial_chamber/key";
@@ -62,17 +64,15 @@ impl RegistryElement for TrialSpawnerConfig {
     }
 }
 
-fn weighted_list<T>(tag: &Nbt, element: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<WeightedList<T>> {
-    let entries = codec::list(tag)?;
-    let mut items = Vec::with_capacity(entries.len());
-    for entry in &entries {
-        let Ok(data) = codec::field(entry, "data").and_then(&element) else { continue };
-        let Ok(weight) = codec::field(entry, "weight").and_then(codec::int) else { continue };
-        if weight >= 0 {
-            items.push((data, weight));
-        }
-    }
-    Ok(WeightedList::new(items))
+fn weighted_list<T>(tag: &Nbt, data: Pair, element: impl Fn(&Nbt) -> Option<T>) -> DecodeResult<WeightedList<T>> {
+    weighted_list_codec(weighted_data_codec(data)).0.decode_partial(tag).map(|list| {
+        let items = list.as_list().iter().filter_map(|entry| Some((element(entry.get("data")?)?, entry.get("weight")?.as_i64()? as i32))).collect();
+        WeightedList::new(items)
+    })
+}
+
+fn spawn_data_codec() -> Pair {
+    nbt(Codec::Func(|tag| SpawnData::decode(tag).map(|_| tag.clone()).into()))
 }
 
 fn encode_weighted_list<T>(list: &WeightedList<T>, element: impl Fn(&T) -> Nbt) -> Nbt {
@@ -81,23 +81,37 @@ fn encode_weighted_list<T>(list: &WeightedList<T>, element: impl Fn(&T) -> Nbt) 
 
 impl TrialSpawnerConfig {
     pub fn decode_direct(tag: &Nbt) -> DataResult<TrialSpawnerConfig> {
-        codec::map(tag)?;
-        Ok(TrialSpawnerConfig {
-            spawn_range: codec::decode_or(tag, "spawn_range", DEFAULT.spawn_range, codec::int)?,
-            total_mobs: codec::decode_or(tag, "total_mobs", DEFAULT.total_mobs, codec::float)?,
-            simultaneous_mobs: codec::decode_or(tag, "simultaneous_mobs", DEFAULT.simultaneous_mobs, codec::float)?,
-            total_mobs_added_per_player: codec::decode_or(tag, "total_mobs_added_per_player", DEFAULT.total_mobs_added_per_player, codec::float)?,
-            simultaneous_mobs_added_per_player: codec::decode_or(tag, "simultaneous_mobs_added_per_player", DEFAULT.simultaneous_mobs_added_per_player, codec::float)?,
-            ticks_between_spawn: codec::decode_or(tag, "ticks_between_spawn", DEFAULT.ticks_between_spawn, codec::int)?,
-            spawn_potentials_definition: codec::decode_or(tag, "spawn_potentials", WeightedList::empty(), |t| weighted_list(t, SpawnData::decode))?,
-            loot_tables_to_eject: match codec::optional_field(tag, "loot_tables_to_eject") {
-                Some(t) => weighted_list(t, codec::identifier)?,
-                None => DEFAULT.loot_tables_to_eject.clone(),
-            },
-            items_to_drop_when_ominous: match codec::optional_field(tag, "items_to_drop_when_ominous") {
-                Some(t) => codec::identifier(t)?,
-                None => DEFAULT.items_to_drop_when_ominous.clone(),
-            },
+        TrialSpawnerConfig::decode_direct_partial(tag).into_result()
+    }
+
+    pub fn decode_direct_partial(tag: &Nbt) -> DecodeResult<TrialSpawnerConfig> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let int_range = |min: i32, max: i32| move |tag: &Nbt| Codec::Int(min, max, RangeError::Outside).decode(tag).map(|value| component_codec::as_i32(&value));
+        let non_negative_float = |tag: &Nbt| types::codec_float_range(0.0, f32::MAX).decode(tag).map(|value| component_codec::as_f32(&value));
+        let mut record = codec::Record::default();
+        let spawn_range = record.optional(tag, "spawn_range", int_range(1, 128));
+        let total_mobs = record.optional(tag, "total_mobs", non_negative_float);
+        let simultaneous_mobs = record.optional(tag, "simultaneous_mobs", non_negative_float);
+        let total_mobs_added_per_player = record.optional(tag, "total_mobs_added_per_player", non_negative_float);
+        let simultaneous_mobs_added_per_player = record.optional(tag, "simultaneous_mobs_added_per_player", non_negative_float);
+        let ticks_between_spawn = record.optional(tag, "ticks_between_spawn", int_range(0, i32::MAX));
+        let spawn_potentials = record.optional(tag, "spawn_potentials", |tag| weighted_list(tag, spawn_data_codec(), |data| SpawnData::decode(data).ok()));
+        let loot_tables_to_eject = record.optional(tag, "loot_tables_to_eject", |tag| weighted_list(tag, types::identifier(), |data| data.as_str().map(str::to_string)));
+        let items_to_drop_when_ominous = record.optional(tag, "items_to_drop_when_ominous", |tag| codec::identifier(tag));
+        record.build(|| {
+            Some(TrialSpawnerConfig {
+                spawn_range: spawn_range.unwrap_or(DEFAULT.spawn_range),
+                total_mobs: total_mobs.unwrap_or(DEFAULT.total_mobs),
+                simultaneous_mobs: simultaneous_mobs.unwrap_or(DEFAULT.simultaneous_mobs),
+                total_mobs_added_per_player: total_mobs_added_per_player.unwrap_or(DEFAULT.total_mobs_added_per_player),
+                simultaneous_mobs_added_per_player: simultaneous_mobs_added_per_player.unwrap_or(DEFAULT.simultaneous_mobs_added_per_player),
+                ticks_between_spawn: ticks_between_spawn.unwrap_or(DEFAULT.ticks_between_spawn),
+                spawn_potentials_definition: spawn_potentials.unwrap_or_else(WeightedList::empty),
+                loot_tables_to_eject: loot_tables_to_eject.unwrap_or_else(|| DEFAULT.loot_tables_to_eject.clone()),
+                items_to_drop_when_ominous: items_to_drop_when_ominous.unwrap_or_else(|| DEFAULT.items_to_drop_when_ominous.clone()),
+            })
         })
     }
 

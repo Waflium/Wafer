@@ -352,7 +352,7 @@ fn item_damage_function() -> Pair {
 fn adventure_mode_predicate() -> Pair {
     let (codec, stream) = custom::block_predicate();
     (
-        Codec::Normalize(Box::new(Codec::Compact(Box::new(codec))), custom::non_empty_compact),
+        Codec::NonEmptyCompact(Box::new(codec)),
         Stream::List(Box::new(stream), MAX),
     )
 }

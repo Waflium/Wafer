@@ -46,7 +46,7 @@ pub struct SculkShriekerBlockEntity {
 impl SculkShriekerBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
         self.warning_level = tag_value_input::get_numeric(input, "warning_level").and_then(int_value).unwrap_or(DEFAULT_WARNING_LEVEL);
-        self.vibration_data = Data::load(input.get("listener"));
+        self.vibration_data = tag_value_input::read(input, "listener", Data::decode).unwrap_or_default();
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

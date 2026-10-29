@@ -104,7 +104,7 @@ use super::ai::navigation::path_navigation::{PathNavigation, PathNavigationKind}
 use crate::world::level::pathfinder::path_type::PathType;
 use super::animal::Animal;
 use super::attributes::{self, Attribute};
-use super::data::{DataValue, ids};
+use super::data::{DataValue, Pose, ids};
 use super::entity_save;
 use crate::util::codec::{self, DecodeResult};
 use crate::util::extra_codecs;
@@ -1765,8 +1765,16 @@ impl Mob {
         let y_rot = self.entity.y_rot;
         self.set_y_head_rot(y_rot);
         self.living.y_body_rot = y_rot;
+        if matches!(self.kind, MobKind::SulfurCube(_)) {
+            self.sulfur_cube_read_additional_save_data(nbt);
+        }
         if self.is_cube_mob() {
             self.abstract_cube_mob_read_size(nbt);
+        }
+        match self.kind {
+            MobKind::Turtle(_) => Turtle::read_home_pos(self, nbt),
+            MobKind::Llama(_) | MobKind::TraderLlama(_) => Llama::read_strength(self, nbt),
+            _ => {}
         }
         self.absorption = float("AbsorptionAmount").unwrap_or(0.0);
         if let Some(attributes) = tag_value_input::read(nbt, "attributes", attributes::decode_packed_list) {
@@ -1785,6 +1793,10 @@ impl Mob {
         self.living.hurt_time = short("HurtTime");
         self.living.death_time = short("DeathTime");
         self.entity.set_shared_flag(super::flags::FALL_FLYING, boolean("FallFlying"));
+        if living_entity::read_sleeping_pos(&mut self.entity, nbt) {
+            self.entity.set_pose(Pose::Sleeping);
+            self.refresh_dimensions();
+        }
         if let Some(packed_brain) = tag_value_input::read(nbt, "Brain", brain::Packed::decode) {
             self.living.brain = self.make_brain(packed_brain);
         }
@@ -1793,12 +1805,9 @@ impl Mob {
         self.living.last_hurt_by_mob = tag_value_input::read(nbt, "last_hurt_by_mob", entity_save::decode_uuid);
         self.living.last_hurt_by_mob_timestamp = self.entity.tick_count - int("ticks_since_last_hurt_by_mob").unwrap_or(0);
         self.load_equipment(nbt);
-        self.living.locator_bar_icon = nbt.get("locator_bar_icon").and_then(crate::world::waypoints::waypoint::Icon::from_nbt).unwrap_or_default();
+        self.living.locator_bar_icon = tag_value_input::read(nbt, "locator_bar_icon", crate::world::waypoints::waypoint::Icon::decode).unwrap_or_default();
         self.living.current_impulse_context_reset_grace_time = int("current_impulse_context_reset_grace_time").unwrap_or(0);
-        self.living.current_impulse_impact_pos = match nbt.get("current_explosion_impact_pos") {
-            Some(Nbt::List(v)) if v.len() == 3 => Some(wafer_core::Vec3::new(v[0].as_f64().unwrap_or(0.0), v[1].as_f64().unwrap_or(0.0), v[2].as_f64().unwrap_or(0.0))),
-            _ => None,
-        };
+        self.living.current_impulse_impact_pos = tag_value_input::read(nbt, "current_explosion_impact_pos", extra_codecs::vec3);
         self.can_pick_up_loot = boolean("CanPickUpLoot");
         self.persistence_required = boolean("PersistenceRequired");
         self.drop_chances = [DEFAULT_EQUIPMENT_DROP_CHANCE; 8];
@@ -1842,7 +1851,7 @@ impl Mob {
             MobKind::MushroomCow(mushroom_cow) => {
                 let variant = tag_value_input::read_or_error(nbt, "Type", |tag| crate::util::codec::enum_by_name(tag, mushroom_cow::Variant::by_name)).unwrap_or(mushroom_cow::Variant::DEFAULT);
                 mushroom_cow::set_variant(&mut self.entity, variant);
-                mushroom_cow.stew_effects = nbt.get("stew_effects").filter(|effects| matches!(effects, Nbt::List(_))).cloned();
+                mushroom_cow.stew_effects = tag_value_input::read(nbt, "stew_effects", |tag| dc::SUSPICIOUS_STEW_EFFECTS.decode_partial(tag));
             }
             MobKind::Pig(_) => {
                 if let Some(variant) = read("variant", pig::VARIANT_REGISTRY) {
@@ -1862,12 +1871,12 @@ impl Mob {
             MobKind::Panda(_) | MobKind::Strider(_) => {}
             MobKind::Armadillo(_) | MobKind::Sniffer(_) => {}
             MobKind::Chicken(chicken) => {
-                let variant = tag_value_input::read_or_error(nbt, "variant", crate::util::codec::identifier).and_then(|name| chicken::variant_id(&name));
-                let sound_variant = tag_value_input::read_or_error(nbt, "sound_variant", crate::util::codec::identifier).and_then(|name| chicken::sound_variant_id(&name));
                 chicken.is_chicken_jockey = boolean("IsChickenJockey");
                 if let Some(egg_time) = int("EggLayTime") {
                     chicken.egg_time = egg_time;
                 }
+                let variant = tag_value_input::read_or_error(nbt, "variant", crate::util::codec::identifier).and_then(|name| chicken::variant_id(&name));
+                let sound_variant = tag_value_input::read_or_error(nbt, "sound_variant", crate::util::codec::identifier).and_then(|name| chicken::sound_variant_id(&name));
                 if let Some(variant) = variant {
                     self.entity.data.set(chicken::DATA_VARIANT, DataValue::ChickenVariant(variant));
                 }
@@ -1887,10 +1896,7 @@ impl Mob {
             MobKind::Vex(_) => Vex::read_additional_save_data(self, nbt),
             MobKind::Guardian(_) | MobKind::ElderGuardian(_) => {}
             MobKind::Slime(_) | MobKind::MagmaCube(_) => self.abstract_cube_mob_read_was_on_ground(nbt),
-            MobKind::SulfurCube(_) => {
-                self.sulfur_cube_read_additional_save_data(nbt);
-                self.abstract_cube_mob_read_was_on_ground(nbt);
-            }
+            MobKind::SulfurCube(_) => self.abstract_cube_mob_read_was_on_ground(nbt),
             MobKind::Wolf(_) => {}
             MobKind::Bat(_) | MobKind::Squid(_) | MobKind::GlowSquid(_) | MobKind::Dolphin(_) => {}
             MobKind::IronGolem(_) | MobKind::SnowGolem(_) | MobKind::CopperGolem(_) | MobKind::Allay(_) => {}
@@ -1968,10 +1974,7 @@ impl Mob {
             MobKind::Armadillo(_) => Armadillo::read_additional_save_data(self, nbt),
             MobKind::Fox(_) => Fox::read_additional_save_data(self, nbt),
             MobKind::Rabbit(_) => Rabbit::read_additional_save_data(self, nbt),
-            MobKind::Turtle(_) => {
-                Turtle::read_home_pos(self, nbt);
-                Turtle::read_additional_save_data(self, nbt);
-            }
+            MobKind::Turtle(_) => Turtle::read_additional_save_data(self, nbt),
             _ => {}
         }
         if matches!(self.kind, MobKind::Creeper(_)) {
@@ -3448,6 +3451,13 @@ impl ServerLevel {
     }
 
     pub fn read_level_dependent_save_data(&mut self, id: EntityId, input: &Nbt) {
+        if !self.entity(id).first_tick
+            && self.is_living(id)
+            && let Some(sleeping_pos) = input.get("sleeping_pos").and_then(|tag| extra_codecs::block_pos(tag).value)
+            && !self.set_pos_to_bed_position(id, sleeping_pos)
+        {
+            self.stop_sleeping(id);
+        }
         if self.is_thrown_enderpearl(id) {
             self.thrown_enderpearl_register_to_current_owner(id);
         }

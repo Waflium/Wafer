@@ -17,6 +17,7 @@ use crate::world::entity::projectile::projectile_util::compute_margin;
 use crate::world::entity::{EntityDimensions, EntityId, sound_event};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
+use crate::world::item::component::codec::Codec;
 use crate::world::item::enchantment::enchantment_helper;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::BlockHitResult;
@@ -261,11 +262,8 @@ impl Projectile {
         let pickup = tag_value_input::read_byte(input, "pickup").map_or(Pickup::Disallowed, |v| Pickup::by_ordinal(v as i32));
         self.set_crit_arrow(number("crit").is_some_and(|v| v as i8 != 0));
         self.set_pierce_level(number("PierceLevel").map_or(0, |v| v as i8));
-        let sound_event = input
-            .get("SoundEvent")
-            .and_then(Nbt::as_str)
-            .and_then(crate::commands::arguments::parse_identifier)
-            .and_then(|name| registry::SOUND_EVENT.iter().position(|&s| s == name))
+        let sound_event = tag_value_input::read_or_error(input, "SoundEvent", |tag| Codec::Element("minecraft:sound_event").decode(tag))
+            .and_then(|name| registry::SOUND_EVENT.iter().position(|&s| Some(s) == name.as_str()))
             .map_or_else(|| get_default_hit_ground_sound_event(&self.kind), |id| id as i32);
         let item = tag_value_input::read(input, "item", ItemStack::from_nbt_partial).unwrap_or_else(|| get_default_pickup_item(&self.kind));
         let weapon = tag_value_input::read(input, "weapon", ItemStack::from_nbt_partial);

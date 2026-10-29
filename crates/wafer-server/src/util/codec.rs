@@ -422,6 +422,11 @@ pub fn enum_by_name<T>(tag: &Nbt, by_name: impl FnOnce(&str) -> Option<T>) -> Da
     by_name(name).ok_or_else(|| format!("Unknown element name:{name}"))
 }
 
+pub fn legacy_enum<T>(tag: &Nbt, by_name: impl FnOnce(&str) -> Option<T>) -> DataResult<T> {
+    let key = string(tag)?;
+    by_name(key).ok_or_else(|| format!("No value with id: {key}"))
+}
+
 pub fn to_json(tag: &Nbt) -> serde_json::Value {
     use serde_json::Value;
     match tag {
@@ -582,5 +587,13 @@ mod tests {
         let bad_key = |name: &str| -> DataResult<String> { if name == "a" { Err("bad key".to_string()) } else { Ok(name.to_string()) } };
         assert_eq!(strict_unbounded_map(&parse("{a:1}"), bad_key, int).unwrap_err(), "bad key");
         assert_eq!(strict_unbounded_map(&parse("{a:1,b:2}"), key, int).unwrap(), vec![("a".to_string(), 1), ("b".to_string(), 2)]);
+    }
+
+    #[test]
+    fn a_legacy_enum_reports_unknown_names_like_the_legacy_string_codec() {
+        let by_name = |name: &str| (name == "left_right").then_some(1);
+        assert_eq!(legacy_enum(&parse("\"left_right\""), by_name), Ok(1));
+        assert_eq!(legacy_enum(&parse("\"sideways\""), by_name), Err("No value with id: sideways".to_string()));
+        assert!(legacy_enum(&parse("1"), by_name).is_err());
     }
 }

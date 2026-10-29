@@ -6,6 +6,7 @@ use super::mob::{Mob, MobKind};
 use super::{Entity, EntityId};
 use crate::server::level::ServerLevel;
 use crate::world::level::block::entity::int_value;
+use crate::world::level::storage::tag_value_input;
 
 const NOT_CONVERTING: i32 = -1;
 const DEFAULT_AFFLICTION_TIME: i32 = 0;
@@ -46,8 +47,8 @@ impl ConversionTracker {
     }
 
     pub fn read_additional_save_data(&mut self, entity: &mut Entity, input: &Nbt) {
-        self.affliction_time = input.get(self.affliction_time_tag).and_then(int_value).unwrap_or(DEFAULT_AFFLICTION_TIME);
-        let conversion_time = input.get(self.conversion_time_tag).and_then(int_value).unwrap_or(NOT_CONVERTING);
+        self.affliction_time = tag_value_input::get_numeric(input, self.affliction_time_tag).and_then(int_value).unwrap_or(DEFAULT_AFFLICTION_TIME);
+        let conversion_time = tag_value_input::get_numeric(input, self.conversion_time_tag).and_then(int_value).unwrap_or(NOT_CONVERTING);
         if conversion_time != NOT_CONVERTING {
             self.start_conversion(entity, conversion_time);
         } else {

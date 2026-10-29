@@ -9,6 +9,7 @@ use super::types::{
 use super::{DataComponentPatch, DataComponentType, text};
 use crate::commands::brigadier::StringReader;
 use crate::nbt;
+use crate::util::codec::{self as util_codec, DataResult, DecodeResult, Record};
 use crate::util::hash_ops::{self, HashCode};
 
 macro_rules! rd {
@@ -46,13 +47,6 @@ pub fn show_icon_default(value: Nbt) -> Result<Nbt, String> {
         fields.push(("show_icon".into(), particles));
     }
     Ok(Nbt::Compound(fields))
-}
-
-pub fn non_empty_compact(value: Nbt) -> Result<Nbt, String> {
-    match &value {
-        Nbt::List(items) if items.is_empty() => Err("List must have contents".into()),
-        _ => Ok(value),
-    }
 }
 
 struct ItemCodec;
@@ -389,74 +383,132 @@ pub fn profile() -> Pair {
 struct Profile;
 
 fn player_name(tag: &Nbt) -> Result<Nbt, String> {
-    let name = Codec::String(0, 16).decode(tag)?;
-    let s = name.as_str().unwrap_or("");
-    if s.chars().any(|c| (c as u32) <= 32 || (c as u32) >= 127) {
-        return Err(format!("Player name contained disallowed characters: '{s}'"));
+    let name = codec::string(tag)?;
+    let length = name.encode_utf16().count();
+    if length > 16 {
+        return Err(format!("String \"{name}\" is too long: {length}, expected range [0-16]"));
     }
-    Ok(name)
+    if name.chars().any(|c| (c as u32) <= 32 || (c as u32) >= 127) {
+        return Err(format!("Player name contained disallowed characters: '{name}'"));
+    }
+    Ok(Nbt::String(name.into()))
 }
 
-fn property_map(tag: &Nbt) -> Result<Nbt, String> {
-    let property = Codec::Record(vec![
-        req("name", (Codec::String(0, 64), Stream::Utf8(64))),
-        req("value", (Codec::String(0, 32767), Stream::Utf8(32767))),
-        opt("signature", (Codec::String(0, 1024), Stream::Utf8(1024))),
-    ]);
-    match tag {
-        Nbt::Compound(fields) => {
-            if fields.len() > 16 {
-                return Err(format!("Cannot have more than 16 properties, but was {}", fields.len()));
-            }
-            let mut out = Vec::new();
-            for (name, values) in fields {
-                for value in codec::list(values)? {
-                    let value = Codec::string().decode(&value)?;
-                    out.push(Nbt::Compound(vec![("name".into(), Nbt::String(name.clone())), ("value".into(), value)]));
-                }
-            }
-            Ok(Nbt::List(out))
-        }
-        other => Codec::List(Box::new(property), 0, 16).decode(other),
+fn profile_uuid(tag: &Nbt) -> DecodeResult<Nbt> {
+    crate::util::extra_codecs::uuid(tag).map(crate::world::level::storage::uuid_ints)
+}
+
+fn property(tag: &Nbt) -> DecodeResult<Nbt> {
+    if let Err(error) = codec::map(tag) {
+        return DecodeResult::error(error);
     }
+    let mut record = Record::default();
+    let name = record.required(tag, "name", |tag| Codec::String(0, 64).decode(tag));
+    let value = record.required(tag, "value", |tag| Codec::String(0, 32767).decode(tag));
+    let signature = record.optional(tag, "signature", |tag| Codec::String(0, 1024).decode(tag));
+    record.build(|| {
+        let mut fields = vec![("name".to_string(), name?), ("value".to_string(), value?)];
+        if let Some(signature) = signature {
+            fields.push(("signature".to_string(), signature));
+        }
+        Some(Nbt::Compound(fields))
+    })
+}
+
+fn property_map(tag: &Nbt) -> DecodeResult<Nbt> {
+    let map_form = util_codec::base_map_partial(
+        tag,
+        |key| -> DataResult<String> { Ok(key.to_string()) },
+        |values| util_codec::list_partial(values, |value| util_codec::string(value).map(str::to_string).into()),
+    )
+    .validate(|entries| if entries.len() > 16 { Err(format!("Cannot have more than 16 properties, but was {}", entries.len())) } else { Ok(()) })
+    .map(|entries| {
+        let properties = entries
+            .into_iter()
+            .flat_map(|(name, values)| values.into_iter().map(move |value| Nbt::Compound(vec![("name".into(), Nbt::String(name.clone())), ("value".into(), Nbt::String(value))])));
+        Nbt::List(properties.collect())
+    });
+    util_codec::either_result(map_form, || util_codec::sized_list_partial(tag, 16, property).map(Nbt::List)).map(|either| match either {
+        Ok(properties) | Err(properties) => properties,
+    })
 }
 
 const SKIN_FIELDS: [&str; 3] = ["texture", "cape", "elytra"];
 
+fn profile_fields(name: Option<Nbt>, id: Option<Nbt>, properties: Option<Nbt>) -> Vec<(String, Nbt)> {
+    let mut fields = Vec::new();
+    if let Some(name) = name {
+        fields.push(("name".to_string(), name));
+    }
+    if let Some(id) = id {
+        fields.push(("id".to_string(), id));
+    }
+    if let Some(properties) = properties.filter(|properties| !properties.as_list().is_empty()) {
+        fields.push(("properties".to_string(), properties));
+    }
+    fields
+}
+
+fn stored_game_profile(tag: &Nbt) -> DecodeResult<Vec<(String, Nbt)>> {
+    let mut record = Record::default();
+    let id = record.required(tag, "id", profile_uuid);
+    let name = record.required(tag, "name", player_name);
+    let properties = record.optional(tag, "properties", property_map);
+    record.build(|| Some(profile_fields(Some(name?), Some(id?), properties)))
+}
+
+fn partial_profile(tag: &Nbt) -> DecodeResult<Vec<(String, Nbt)>> {
+    let mut record = Record::default();
+    let name = record.optional(tag, "name", player_name);
+    let id = record.optional(tag, "id", profile_uuid);
+    let properties = record.optional(tag, "properties", property_map);
+    record.build(|| Some(profile_fields(name, id, properties)))
+}
+
+fn skin_patch(tag: &Nbt) -> DecodeResult<Vec<(String, Nbt)>> {
+    let mut record = Record::default();
+    let skins: Vec<Option<Nbt>> = SKIN_FIELDS.iter().map(|key| record.optional(tag, key, |tag| codec::identifier(tag).map(Nbt::String))).collect();
+    let model = record.optional(tag, "model", |tag| Codec::Enum(&["slim", "wide"]).decode(tag));
+    record.build(|| {
+        let mut fields: Vec<(String, Nbt)> = SKIN_FIELDS.iter().zip(skins).filter_map(|(key, skin)| Some((key.to_string(), skin?))).collect();
+        if let Some(model) = model {
+            fields.push(("model".to_string(), model));
+        }
+        Some(fields)
+    })
+}
+
 impl Profile {
-    fn decode_map(tag: &Nbt) -> Result<Nbt, String> {
-        codec::map(tag)?;
-        let field = |name: &str| tag.get(name);
-        let properties = match field("properties") {
-            Some(p) => Some(property_map(p)?).filter(|p| !p.as_list().is_empty()),
-            None => None,
+    fn decode_full(tag: &Nbt) -> DecodeResult<Nbt> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let stored = stored_game_profile(tag);
+        let profile = if stored.is_success() {
+            stored
+        } else {
+            let partial = partial_profile(tag);
+            if partial.is_success() {
+                partial
+            } else {
+                let stored_has_value = stored.value.is_some();
+                let error = format!("{}; {}", partial.error.unwrap_or_default(), stored.error.unwrap_or_default());
+                DecodeResult { value: partial.value.filter(|_| stored_has_value), error: Some(error) }
+            }
         };
-        let id = field("id").map(|v| Codec::Uuid.decode(v)).transpose();
-        let name = field("name").map(player_name).transpose();
-        let mut fields = Vec::new();
-        match (id, name) {
-            (Ok(id), Ok(name)) => {
-                if let Some(name) = name {
-                    fields.push(("name".to_string(), name));
-                }
-                if let Some(id) = id {
-                    fields.push(("id".to_string(), id));
-                }
+        let patch = skin_patch(tag);
+        let error = match (patch.error, profile.error) {
+            (Some(patch_error), Some(profile_error)) => Some(format!("{patch_error}; {profile_error}")),
+            (patch_error, profile_error) => patch_error.or(profile_error),
+        };
+        let value = match (profile.value, patch.value) {
+            (Some(mut fields), Some(patch)) => {
+                fields.extend(patch);
+                Some(Nbt::Compound(fields))
             }
-            (Err(e), _) | (_, Err(e)) => return Err(e),
-        }
-        if let Some(properties) = properties {
-            fields.push(("properties".into(), properties));
-        }
-        for key in SKIN_FIELDS {
-            if let Some(v) = field(key) {
-                fields.push((key.into(), Nbt::String(codec::identifier(v)?)));
-            }
-        }
-        if let Some(model) = field("model") {
-            fields.push(("model".into(), Codec::Enum(&["slim", "wide"]).decode(model)?));
-        }
-        Ok(Nbt::Compound(fields))
+            _ => None,
+        };
+        DecodeResult { value, error }
     }
 
     fn write_properties(value: &Nbt, w: &mut Writer) {
@@ -508,12 +560,17 @@ fn read_uuid(r: &mut Reader) -> Result<Nbt, String> {
 
 impl Custom for Profile {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
-        match tag {
-            Nbt::String(_) => player_name(tag)
-                .map(|name| Nbt::Compound(vec![("name".into(), name)]))
-                .map_err(|e| format!("Failed to parse either. First: Not a map: {}; Second: {e}", nbt::to_string(tag))),
-            other => Profile::decode_map(other).map_err(|e| format!("Failed to parse either. First: {e}; Second: Not a string")),
-        }
+        self.decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
+        util_codec::either_result(Profile::decode_full(tag), || match player_name(tag) {
+            Ok(name) => DecodeResult::success(Nbt::Compound(vec![("name".into(), name)])),
+            Err(error) => DecodeResult::error(error),
+        })
+        .map(|either| match either {
+            Ok(profile) | Err(profile) => profile,
+        })
     }
 
     fn hash(&self, value: &Nbt) -> HashCode {

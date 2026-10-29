@@ -18,6 +18,7 @@ use crate::world::entity::projectile::hurtingprojectile::large_fireball::LargeFi
 use crate::world::entity::projectile::projectile::ProjectileKind;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::world::level::BlockGetter;
+use crate::world::level::block::entity::byte_or;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::clip::for_each_block_intersected_between;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
@@ -136,12 +137,7 @@ impl Ghast {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let explosion_power = match input.get("ExplosionPower") {
-            Some(Nbt::Byte(value)) => *value,
-            Some(value) => value.as_i64().map_or(DEFAULT_EXPLOSION_POWER, |value| value as i8),
-            None => DEFAULT_EXPLOSION_POWER,
-        };
-        ghast_mut(mob).explosion_power = explosion_power as i32;
+        ghast_mut(mob).explosion_power = byte_or(input, "ExplosionPower", DEFAULT_EXPLOSION_POWER) as i32;
     }
 }
 

@@ -38,11 +38,8 @@ impl TheEndGatewayBlockEntity {
 
     pub fn load_additional(&mut self, input: &Nbt) {
         self.age = tag_value_input::get_numeric(input, "Age").and_then(super::long_value).unwrap_or(DEFAULT_AGE);
-        self.exit_portal = match input.get("exit_portal") {
-            Some(Nbt::IntArray(v)) if v.len() == 3 => Some(BlockPos::new(v[0], v[1], v[2])).filter(|&pos| is_in_spawnable_bounds(pos)),
-            _ => None,
-        };
-        self.exact_teleport = super::int_or(input, "ExactTeleport", DEFAULT_EXACT_TELEPORT as i32) != 0;
+        self.exit_portal = tag_value_input::read(input, "exit_portal", crate::util::extra_codecs::block_pos).filter(|&pos| is_in_spawnable_bounds(pos));
+        self.exact_teleport = tag_value_input::get_boolean(input, "ExactTeleport").unwrap_or(DEFAULT_EXACT_TELEPORT);
     }
 
     pub fn is_spawning(&self) -> bool {

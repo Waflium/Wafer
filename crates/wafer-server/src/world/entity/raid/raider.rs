@@ -104,6 +104,7 @@ impl Raider {
         self.patrolling_monster.read_additional_save_data(input);
         self.wave = tag_value_input::get_i64(input, "Wave").map_or(DEFAULT_WAVE, |wave| wave as i32);
         self.can_join_raid = tag_value_input::get_i64(input, "CanJoinRaid").map_or(DEFAULT_CAN_JOIN_RAID, |v| v != 0);
+        tag_value_input::get_numeric(input, "RaidId");
     }
 
     pub fn remove_when_far_away(&self, dist_sqr: f64) -> bool {

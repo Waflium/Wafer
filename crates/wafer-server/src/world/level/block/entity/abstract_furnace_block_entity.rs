@@ -4,8 +4,9 @@ use wafer_data::{BlockState, items};
 use wafer_protocol::nbt::Nbt;
 
 use super::base_container_block_entity::{BaseContainerBlockEntity, save_all_items};
-use super::{BlockEntityKind, float_value, int_or, int_value};
+use super::{BlockEntityKind, float_value, int_or};
 use crate::server::level::ServerLevel;
+use crate::util::codec;
 use crate::world::entity::EntityId;
 use crate::world::entity::player::stacked_item_contents::StackedItemContents;
 use crate::world::item::ItemStack;
@@ -68,14 +69,8 @@ impl AbstractFurnaceBlockEntity {
         self.lit_time_remaining = int_or(input, "lit_time_remaining", 0);
         self.lit_total_time = int_or(input, "lit_total_time", 0);
         self.speed_multiplier = tag_value_input::get_numeric(input, "speed_multiplier").and_then(float_value).unwrap_or(1.0);
-        self.recipes_used = match input.get("RecipesUsed") {
-            Some(Nbt::Compound(fields)) => fields
-                .iter()
-                .map(|(k, v)| Some((crate::commands::arguments::parse_identifier(k)?, int_value(v)?)))
-                .collect::<Option<Vec<_>>>()
-                .unwrap_or_default(),
-            _ => Vec::new(),
-        };
+        self.recipes_used = tag_value_input::read(input, "RecipesUsed", |tag| codec::base_map_partial(tag, |key| codec::identifier(&Nbt::String(key.to_string())), |value| codec::int(value).into()))
+            .unwrap_or_default();
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

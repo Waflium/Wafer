@@ -7,6 +7,7 @@ use crate::world::entity::entity_reference::EntityReference;
 use crate::world::entity::projectile::projectile::{Projectile, ProjectileKind};
 use crate::world::entity::{EntityDimensions, EntityId};
 use crate::world::level::clip::ClipBlock;
+use crate::world::level::storage::tag_value_input;
 use crate::world::phys::hit_result::Type;
 
 pub const INITAL_ACCELERATION_POWER: f64 = 0.1;
@@ -53,11 +54,7 @@ impl Projectile {
     }
 
     pub fn abstract_hurting_projectile_read_additional_save_data(&mut self, input: &Nbt) {
-        let acceleration_power = match input.get("acceleration_power") {
-            Some(Nbt::Double(value)) => *value,
-            Some(value) => value.as_f64().unwrap_or(INITAL_ACCELERATION_POWER),
-            None => INITAL_ACCELERATION_POWER,
-        };
+        let acceleration_power = tag_value_input::get_f64(input, "acceleration_power").unwrap_or(INITAL_ACCELERATION_POWER);
         self.abstract_hurting_projectile_mut().expect("a hurting projectile").acceleration_power = acceleration_power;
     }
 }

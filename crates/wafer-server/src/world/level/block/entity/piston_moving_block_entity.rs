@@ -155,7 +155,7 @@ impl PistonMovingBlockEntity {
 
     pub fn load_additional(&mut self, input: &Nbt) {
         self.moved_state = tag_value_input::read_or_error(input, "blockState", crate::world::level::chunk::serialization::decode_block_state).unwrap_or_else(|| blocks::AIR.default_state());
-        self.direction = tag_value_input::get_numeric(input, "facing").and_then(super::int_value).filter(|v| (0..6).contains(v)).map_or(Direction::Down, Direction::from_3d_data_value);
+        self.direction = tag_value_input::read_byte(input, "facing").map_or(Direction::Down, |value| Direction::from_3d_data_value(value as i32));
         self.progress = tag_value_input::get_numeric(input, "progress").and_then(super::float_value).unwrap_or(DEFAULT_PROGRESS);
         self.progress_o = self.progress;
         self.extending = tag_value_input::get_numeric(input, "extending").and_then(super::int_value).map_or(DEFAULT_EXTENDING, |v| v != 0);

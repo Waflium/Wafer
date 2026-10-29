@@ -212,6 +212,14 @@ fn block_state_options() -> Pair {
 }
 
 fn network_options(tag: Nbt) -> Result<Nbt, String> {
+    dispatch_options(tag, true)
+}
+
+fn persistent_options(tag: Nbt) -> Result<Nbt, String> {
+    dispatch_options(tag, false)
+}
+
+fn dispatch_options(tag: Nbt, plain_block_state: bool) -> Result<Nbt, String> {
     crate::world::item::component::codec::map(&tag)?;
     let ty = tag.get("type").ok_or_else(|| format!("No key type in MapLike[{}]", crate::nbt::to_string(&tag)))?;
     let id = codec::identifier(ty)?;
@@ -221,7 +229,9 @@ fn network_options(tag: Nbt) -> Result<Nbt, String> {
         .find(|name| *name == id)
         .ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:particle_type]: {id}"))?;
     let options = match name {
-        "minecraft:block" | "minecraft:block_marker" | "minecraft:falling_dust" | "minecraft:dust_pillar" | "minecraft:block_crumble" => block_state_options().0.decode(&tag)?,
+        "minecraft:block" | "minecraft:block_marker" | "minecraft:falling_dust" | "minecraft:dust_pillar" | "minecraft:block_crumble" if plain_block_state => {
+            block_state_options().0.decode(&tag)?
+        }
         _ => codec(name).0.decode(&tag)?,
     };
     let Nbt::Compound(mut fields) = options else { return Ok(options) };
@@ -231,4 +241,8 @@ fn network_options(tag: Nbt) -> Result<Nbt, String> {
 
 pub fn dispatch_codec() -> Pair {
     transform(network_options)
+}
+
+pub fn persistent_codec() -> Pair {
+    transform(persistent_options)
 }

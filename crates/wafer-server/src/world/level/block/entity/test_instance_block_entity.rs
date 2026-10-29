@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use wafer_core::{AABB, BlockPos};
 use wafer_data::blocks;
 use wafer_protocol::nbt::Nbt;
@@ -6,8 +8,13 @@ use wafer_protocol::{Reader, Writer};
 use super::BlockEntityKind;
 use crate::gametest::framework::game_test_instance::GameTestInstance;
 use crate::gametest::framework::structure_utils;
-use crate::network::chat::{Arg, ChatFormatting, Component};
+use crate::network::chat::{Arg, ChatFormatting, Component, component_serialization};
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult};
+use crate::util::extra_codecs;
+use crate::world::item::component::codec::Codec;
+use crate::world::item::component::types::{self, Pair, enumeration, identifier, nbt, opt, record, req};
+use crate::world::level::storage::tag_value_input;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::structure::BoundingBox;
@@ -95,6 +102,21 @@ impl Data {
         Nbt::Compound(fields)
     }
 
+    fn decode(tag: &Nbt) -> DecodeResult<Data> {
+        static CODEC: LazyLock<Pair> = LazyLock::new(|| {
+            record(vec![
+                opt("test", identifier()),
+                req("size", extra_codecs::vec3i_codec()),
+                req("rotation", enumeration(&["none", "clockwise_90", "180", "counterclockwise_90"])),
+                req("ignore_entities", types::bool()),
+                req("status", enumeration(&["cleared", "running", "finished"])),
+                opt("error_message", nbt(Codec::Func(component_serialization::decode_custom_name))),
+            ])
+        });
+        let DecodeResult { value, error } = CODEC.0.decode_partial(tag);
+        DecodeResult { value: value.and_then(|decoded| Data::from_nbt(&decoded)), error }
+    }
+
     fn from_nbt(tag: &Nbt) -> Option<Data> {
         Some(Data {
             test: match tag.get("test") {
@@ -126,6 +148,18 @@ pub struct ErrorMarker {
     pub text: Component,
 }
 
+impl ErrorMarker {
+    fn decode_list(tag: &Nbt) -> DecodeResult<Vec<ErrorMarker>> {
+        static CODEC: LazyLock<Pair> = LazyLock::new(|| {
+            record(vec![req("pos", extra_codecs::vec3i_codec()), req("text", nbt(Codec::Func(component_serialization::decode_custom_name)))])
+        });
+        codec::list_partial(tag, |marker| {
+            let DecodeResult { value, error } = CODEC.0.decode_partial(marker);
+            DecodeResult { value: value.and_then(|decoded| Some(ErrorMarker { pos: int_array(decoded.get("pos")?)?, text: Component::from_nbt(decoded.get("text")?) })), error }
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct TestInstanceBlockEntity {
     pub data: Data,
@@ -143,15 +177,11 @@ impl Default for TestInstanceBlockEntity {
 
 impl TestInstanceBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
-        if let Some(data) = input.get("data").and_then(Data::from_nbt) {
+        if let Some(data) = tag_value_input::read(input, "data", Data::decode) {
             self.data = data;
         }
         self.error_markers.clear();
-        if let Some(Nbt::List(markers)) = input.get("errors") {
-            let markers: Option<Vec<ErrorMarker>> =
-                markers.iter().map(|marker| Some(ErrorMarker { pos: int_array(marker.get("pos")?)?, text: Component::from_nbt(marker.get("text")?) })).collect();
-            self.error_markers.extend(markers.unwrap_or_default());
-        }
+        self.error_markers.extend(tag_value_input::read(input, "errors", ErrorMarker::decode_list).unwrap_or_default());
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

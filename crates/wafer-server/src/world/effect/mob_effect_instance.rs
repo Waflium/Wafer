@@ -171,9 +171,9 @@ impl MobEffectInstance {
 
     pub fn decode_list(tag: &Nbt) -> DecodeResult<Vec<MobEffectInstance>> {
         static CODEC: std::sync::LazyLock<types::Pair> = std::sync::LazyLock::new(types::mob_effect_instance);
-        codec::list_partial(tag, |entry| match CODEC.0.decode(entry) {
-            Ok(_) => DecodeResult { value: MobEffectInstance::from_nbt(entry), error: None },
-            Err(error) => DecodeResult::error(error),
+        codec::list_partial(tag, |entry| {
+            let DecodeResult { value, error } = CODEC.0.decode_partial(entry);
+            DecodeResult { value: value.and_then(|decoded| MobEffectInstance::from_nbt(&decoded)), error }
         })
     }
 
@@ -206,5 +206,26 @@ fn numeric(nbt: &Nbt) -> Option<i64> {
         Nbt::Float(v) => Some(v as i64),
         Nbt::Double(v) => Some(v as i64),
         _ => nbt.as_i64(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_broken_effect_is_reported_and_the_others_survive() {
+        let tag = crate::nbt::parse_fully("[{id:\"minecraft:speed\",amplifier:1b,duration:100},{id:\"minecraft:nonexistent\"},{id:\"minecraft:slowness\"}]").unwrap();
+        let decoded = MobEffectInstance::decode_list(&tag);
+        assert!(decoded.error.is_some());
+        assert_eq!(decoded.value.map(|effects| effects.len()), Some(2));
+    }
+
+    #[test]
+    fn valid_effects_decode_without_errors() {
+        let tag = crate::nbt::parse_fully("[{id:\"minecraft:speed\",amplifier:1b,duration:100}]").unwrap();
+        let decoded = MobEffectInstance::decode_list(&tag);
+        assert!(decoded.error.is_none());
+        assert_eq!(decoded.value.unwrap()[0].duration, 100);
     }
 }

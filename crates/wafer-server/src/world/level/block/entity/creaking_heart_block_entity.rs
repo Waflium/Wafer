@@ -62,7 +62,7 @@ enum TraversalNodeStatus {
 
 impl CreakingHeartBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
-        match input.get("creaking").and_then(crate::world::entity::entity_save::uuid_from_nbt) {
+        match crate::world::level::storage::tag_value_input::read(input, "creaking", crate::world::entity::entity_save::decode_uuid) {
             Some(uuid) => {
                 self.creaking_info = Some(CreakingInfo::Uuid(uuid));
                 self.ticks_existed = 0;

@@ -65,7 +65,11 @@ impl VaultConfig {
 
     fn validate(self) -> Result<VaultConfig, String> {
         if self.activation_range > self.deactivation_range {
-            Err(format!("Activation range must ({}) be less or equal to deactivation range ({})", self.activation_range, self.deactivation_range))
+            Err(format!(
+                "Activation range must ({}) be less or equal to deactivation range ({})",
+                crate::nbt::java_double_to_string(self.activation_range),
+                crate::nbt::java_double_to_string(self.deactivation_range)
+            ))
         } else {
             Ok(self)
         }

@@ -89,7 +89,7 @@ impl DecoratedPotBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.decorations = tag_value_input::read_or_error(input, TAG_SHERDS, |sherds| dc::POT_DECORATIONS.decode(sherds)).unwrap_or(Nbt::Compound(Vec::new()));
+        self.decorations = tag_value_input::read(input, TAG_SHERDS, |sherds| dc::POT_DECORATIONS.decode_partial(sherds)).unwrap_or(Nbt::Compound(Vec::new()));
         if !self.try_load_loot_table(input) {
             self.item = tag_value_input::read(input, TAG_ITEM, ItemStack::from_nbt_partial).unwrap_or_else(ItemStack::empty);
         } else {

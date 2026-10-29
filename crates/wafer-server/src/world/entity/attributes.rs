@@ -1475,7 +1475,7 @@ fn packed_attribute_instance() -> &'static types::Pair {
 }
 
 pub fn decode_packed_list(tag: &Nbt) -> DecodeResult<Nbt> {
-    codec::list_partial(tag, |entry| packed_attribute_instance().0.decode(entry).into()).map(Nbt::List)
+    codec::list_partial(tag, |entry| packed_attribute_instance().0.decode_partial(entry)).map(Nbt::List)
 }
 
 impl AttributeMap {
@@ -1632,5 +1632,22 @@ mod tests {
             assert_eq!(wafer_data::registry_id(wafer_data::registry::ATTRIBUTE, attribute.name()), attribute.protocol_id());
         }
         assert_eq!(ATTRIBUTES.len(), Attribute::COUNT);
+    }
+
+    #[test]
+    fn a_broken_attribute_entry_is_reported_and_dropped_from_the_list() {
+        let tag = crate::nbt::parse_fully("[{id:\"minecraft:max_health\",base:5.0d},{id:\"minecraft:nonexistent\",base:1.0d},{id:\"minecraft:movement_speed\",base:0.5d}]").unwrap();
+        let decoded = decode_packed_list(&tag);
+        assert!(decoded.error.is_some());
+        let Some(Nbt::List(entries)) = decoded.value else { panic!("no partial list") };
+        assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn a_valid_attribute_list_decodes_without_errors() {
+        let tag = crate::nbt::parse_fully("[{id:\"minecraft:max_health\",base:5.0d}]").unwrap();
+        let decoded = decode_packed_list(&tag);
+        assert!(decoded.error.is_none());
+        assert!(decoded.value.is_some());
     }
 }

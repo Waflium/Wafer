@@ -190,9 +190,8 @@ impl BeehiveBlockEntity {
 
     pub fn load_additional(&mut self, input: &Nbt) {
         self.stored.clear();
-        if let Some(Nbt::List(bees)) = input.get("bees") {
-            let occupants: Option<Vec<Occupant>> = bees.iter().map(Occupant::load).collect();
-            occupants.unwrap_or_default().into_iter().for_each(|occupant| self.store_bee(occupant));
+        if let Some(bees) = tag_value_input::read(input, "bees", |tag| dc::BEES.decode_partial(tag)) {
+            bees.as_list().iter().filter_map(Occupant::load).for_each(|occupant| self.store_bee(occupant));
         }
         self.saved_flower_pos = tag_value_input::read(input, "flower_pos", crate::util::extra_codecs::block_pos);
     }

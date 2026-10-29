@@ -185,17 +185,17 @@ impl AreaEffectCloud {
         self.radius_per_tick = float("RadiusPerTick", 0.0);
         self.set_radius(float("Radius", DEFAULT_RADIUS));
         self.owner = EntityReference::read(input, "Owner");
-        let custom_particle = input.get("custom_particle").and_then(|particle| {
+        let custom_particle = tag_value_input::read(input, "custom_particle", |tag| particle_types::persistent_codec().0.decode_partial(tag).map(|_| tag.clone())).and_then(|particle| {
             let particle_type = particle.get("type").and_then(Nbt::as_str)?;
             let particle_type = registry::PARTICLE_TYPE.iter().find(|&&name| Some(name.to_string()) == crate::commands::arguments::parse_identifier(particle_type))?;
-            let options = match particle {
+            let options = match &particle {
                 Nbt::Compound(fields) => Nbt::Compound(fields.iter().filter(|(key, _)| key != "type").cloned().collect()),
                 _ => Nbt::Compound(Vec::new()),
             };
             particle_types::parse(particle_type, &options).ok()
         });
         self.set_custom_particle(custom_particle);
-        let contents = input.get("potion_contents").filter(|contents| dc::POTION_CONTENTS.decode(contents).is_ok()).cloned();
+        let contents = tag_value_input::read(input, "potion_contents", |tag| dc::POTION_CONTENTS.decode_partial(tag));
         self.set_potion_contents(contents);
         self.potion_duration_scale = float("potion_duration_scale", 1.0);
     }

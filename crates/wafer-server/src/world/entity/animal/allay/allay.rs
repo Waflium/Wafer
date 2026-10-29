@@ -175,7 +175,7 @@ impl Allay {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         inventory_carrier::read_inventory_from_tag(&mut allay_mut(mob).inventory, input);
-        allay_mut(mob).vibration_data = Data::load(input.get("listener"));
+        allay_mut(mob).vibration_data = tag_value_input::read(input, "listener", Data::decode).unwrap_or_default();
         let duplication_cooldown = tag_value_input::get_i64(input, "DuplicationCooldown").map_or(DEFAULT_DUPLICATION_COOLDOWN, |value| value as i32 as i64);
         set_duplication_cooldown(mob, duplication_cooldown);
     }

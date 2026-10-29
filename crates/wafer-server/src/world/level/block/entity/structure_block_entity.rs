@@ -6,6 +6,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::BlockEntityKind;
 use crate::server::level::ServerLevel;
+use crate::util::codec;
 use crate::world::entity::EntityId;
 use crate::world::level::BlockGetter;
 use crate::world::level::block::mirror::Mirror;
@@ -117,10 +118,9 @@ impl StructureBlockEntity {
         self.structure_pos = BlockPos::new(offset("posX", DEFAULT_POS.x), offset("posY", DEFAULT_POS.y), offset("posZ", DEFAULT_POS.z));
         let size = |key: &str, default: i32| int_or(key, default).clamp(0, MAX_SIZE_PER_AXIS);
         self.structure_size = BlockPos::new(size("sizeX", DEFAULT_SIZE.x), size("sizeY", DEFAULT_SIZE.y), size("sizeZ", DEFAULT_SIZE.z));
-        let legacy = |key: &str| input.get(key).and_then(Nbt::as_str);
-        self.rotation = legacy("rotation").and_then(Rotation::by_legacy_name).unwrap_or(Rotation::None);
-        self.mirror = legacy("mirror").and_then(Mirror::by_legacy_name).unwrap_or(Mirror::None);
-        self.mode = legacy("mode").and_then(|name| StructureMode::VALUES.into_iter().find(|&mode| mode_legacy_name(mode) == name)).unwrap_or(StructureMode::Data);
+        self.rotation = tag_value_input::read_or_error(input, "rotation", |tag| codec::legacy_enum(tag, Rotation::by_legacy_name)).unwrap_or(Rotation::None);
+        self.mirror = tag_value_input::read_or_error(input, "mirror", |tag| codec::legacy_enum(tag, Mirror::by_legacy_name)).unwrap_or(Mirror::None);
+        self.mode = tag_value_input::read_or_error(input, "mode", |tag| codec::legacy_enum(tag, |name| StructureMode::VALUES.into_iter().find(|&mode| mode_legacy_name(mode) == name))).unwrap_or(StructureMode::Data);
         self.ignore_entities = bool_or("ignoreEntities", true);
         self.strict = bool_or("strict", false);
         self.powered = bool_or("powered", false);

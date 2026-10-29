@@ -154,7 +154,7 @@ impl Projectile {
         self.owner = EntityReference::read(input, "Owner");
         self.left_owner = tag_value_input::get_i64(input, "LeftOwner").is_some_and(|v| v != 0);
         self.has_been_shot = tag_value_input::get_i64(input, "HasBeenShot").is_some_and(|v| v != 0);
-        self.can_break = input.get("can_break").filter(|v| dc::CAN_BREAK.decode(v).is_ok()).cloned();
+        self.can_break = tag_value_input::read(input, "can_break", |tag| dc::CAN_BREAK.decode_partial(tag));
     }
 
     pub fn get_movement_to_shoot(&mut self, xd: f64, yd: f64, zd: f64, pow: f32, uncertainty: f32) -> Vec3 {

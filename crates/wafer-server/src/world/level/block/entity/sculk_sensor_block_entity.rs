@@ -24,7 +24,7 @@ pub struct SculkSensorBlockEntity {
 impl SculkSensorBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
         self.last_vibration_frequency = tag_value_input::get_i64(input, "last_vibration_frequency").map_or(DEFAULT_LAST_VIBRATION_FREQUENCY, |value| value as i32);
-        self.vibration_data = Data::load(input.get("listener"));
+        self.vibration_data = tag_value_input::read(input, "listener", Data::decode).unwrap_or_default();
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

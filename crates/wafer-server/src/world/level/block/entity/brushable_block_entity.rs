@@ -4,7 +4,7 @@ use wafer_data::BlockState;
 use wafer_data::properties::DUSTED;
 use wafer_protocol::nbt::Nbt;
 
-use super::{BlockEntityKind, int_value, long_value};
+use super::{BlockEntityKind, long_value};
 use crate::server::level::ServerLevel;
 use crate::server::level::events::PARTICLES_AND_SOUND_BRUSH_BLOCK_COMPLETE;
 use crate::world::entity::attributes::Attribute;
@@ -74,7 +74,7 @@ impl BrushableBlockEntity {
         } else {
             ItemStack::empty()
         };
-        self.hit_direction = tag_value_input::get_numeric(input, "hit_direction").and_then(int_value).map(|value| Direction::from_3d_data_value(value as i8 as i32));
+        self.hit_direction = tag_value_input::read_byte(input, "hit_direction").map(|value| Direction::from_3d_data_value(value as i32));
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

@@ -90,7 +90,7 @@ impl SignBlockEntity {
     pub fn load_additional(&mut self, input: &Nbt) {
         let flag = |key: &str| tag_value_input::get_i64(input, key).is_some_and(|v| v != 0);
         self.allow_op_features = flag("allow_op_features");
-        let text = |key: &str| tag_value_input::read_or_error(input, key, |text| dc::SIGN_TEXT_FRONT.decode(text)).and_then(|text| SignText::from_nbt(&text)).unwrap_or_default();
+        let text = |key: &str| tag_value_input::read(input, key, |text| dc::SIGN_TEXT_FRONT.decode_partial(text)).and_then(|text| SignText::from_nbt(&text)).unwrap_or_default();
         self.front_text = text("front_text");
         self.back_text = text("back_text");
         self.is_waxed = flag("is_waxed");

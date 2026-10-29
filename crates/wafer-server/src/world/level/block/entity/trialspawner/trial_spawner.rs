@@ -12,9 +12,9 @@ use super::trial_spawner_state_data::TrialSpawnerStateData;
 use crate::core::dispenser::default_dispense_item_behavior;
 use crate::core::holder::Holder;
 use crate::server::level::{ServerLevel, events};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::util::problem_reporter::PathElement;
-use crate::world::level::storage::tag_value_input::ScopedCollector;
+use crate::world::level::storage::tag_value_input::{self, ScopedCollector};
 use crate::world::difficulty::Difficulty;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::{LevelEntity, mob, spawn_placements};
@@ -86,7 +86,7 @@ impl TrialSpawner {
 
     pub fn load(&mut self, input: &Nbt) {
         self.data.apply(input);
-        self.config = FullConfig::decode(input).unwrap_or_default();
+        self.config = tag_value_input::read_map(input, FullConfig::decode).unwrap_or_default();
     }
 
     pub fn store(&self, output: &mut Vec<(String, Nbt)>) {
@@ -307,19 +307,26 @@ fn is_default_holder(holder: &Holder<TrialSpawnerConfig>) -> bool {
 }
 
 impl FullConfig {
-    pub fn decode(input: &Nbt) -> DataResult<FullConfig> {
+    pub fn decode(input: &Nbt) -> DecodeResult<FullConfig> {
         let default = || Holder::direct(trial_spawner_config::DEFAULT.clone());
-        Ok(FullConfig {
-            normal: match codec::optional_field(input, "normal_config") {
-                Some(tag) => TrialSpawnerConfig::decode(tag)?,
-                None => default(),
-            },
-            ominous: match codec::optional_field(input, "ominous_config") {
-                Some(tag) => TrialSpawnerConfig::decode(tag)?,
-                None => default(),
-            },
-            target_cooldown_length: codec::decode_or(input, "target_cooldown_length", DEFAULT_TARGET_COOLDOWN_LENGTH, codec::int)?,
-            required_player_range: codec::decode_or(input, "required_player_range", DEFAULT_PLAYER_SCAN_RANGE, codec::int)?,
+        let mut record = codec::Record::default();
+        let normal = record.optional(input, "normal_config", TrialSpawnerConfig::decode);
+        let ominous = record.optional(input, "ominous_config", TrialSpawnerConfig::decode);
+        let target_cooldown_length = record.optional(input, "target_cooldown_length", |tag| match codec::int(tag)? {
+            value if value < 0 => Err(format!("Value must be non-negative: {value}")),
+            value => Ok(value),
+        });
+        let required_player_range = record.optional(input, "required_player_range", |tag| match codec::int(tag)? {
+            value if !(1..=128).contains(&value) => Err(format!("Value {value} outside of range [1:128]")),
+            value => Ok(value),
+        });
+        record.build(|| {
+            Some(FullConfig {
+                normal: normal.unwrap_or_else(default),
+                ominous: ominous.unwrap_or_else(default),
+                target_cooldown_length: target_cooldown_length.unwrap_or(DEFAULT_TARGET_COOLDOWN_LENGTH),
+                required_player_range: required_player_range.unwrap_or(DEFAULT_PLAYER_SCAN_RANGE),
+            })
         })
     }
 

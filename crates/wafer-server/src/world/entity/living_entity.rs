@@ -325,7 +325,14 @@ pub fn add_additional_save_data(entity: &Entity, living: &LivingEntity, health: 
     }
 }
 
-pub fn read_additional_save_data(entity: &mut Entity, living: &mut LivingEntity, health: &mut f32, absorption: &mut f32, equipment: &mut [Option<ItemStack>; 8], nbt: &Nbt) {
+pub fn read_sleeping_pos(entity: &mut Entity, nbt: &Nbt) -> bool {
+    let sleeping_pos = tag_value_input::read(nbt, "sleeping_pos", extra_codecs::block_pos);
+    let sleeping = sleeping_pos.is_some();
+    entity.data.set(ids::SLEEPING_POS, DataValue::OptionalBlockPos(sleeping_pos));
+    sleeping
+}
+
+pub fn read_additional_save_data(entity: &mut Entity, living: &mut LivingEntity, health: &mut f32, absorption: &mut f32, equipment: &mut [Option<ItemStack>; 8], nbt: &Nbt) -> bool {
     let float = |key: &str| tag_value_input::get_f64(nbt, key).map(|v| v as f32);
     let int = |key: &str| tag_value_input::get_numeric(nbt, key).and_then(crate::world::level::block::entity::int_value);
     let boolean = |key: &str| tag_value_input::get_boolean(nbt, key).unwrap_or(false);
@@ -348,6 +355,7 @@ pub fn read_additional_save_data(entity: &mut Entity, living: &mut LivingEntity,
     living.hurt_time = short("HurtTime");
     living.death_time = short("DeathTime");
     entity.set_shared_flag(flags::FALL_FLYING, boolean("FallFlying"));
+    let sleeping = read_sleeping_pos(entity, nbt);
     living.last_hurt_by_player = tag_value_input::read(nbt, "last_hurt_by_player", super::entity_save::decode_uuid);
     living.last_hurt_by_player_memory_time = int("last_hurt_by_player_memory_time").unwrap_or(0);
     living.last_hurt_by_mob = tag_value_input::read(nbt, "last_hurt_by_mob", super::entity_save::decode_uuid);
@@ -356,9 +364,10 @@ pub fn read_additional_save_data(entity: &mut Entity, living: &mut LivingEntity,
     for (slot, stack) in tag_value_input::read(nbt, "equipment", decode_equipment).unwrap_or_default() {
         equipment[slot as usize] = Some(stack);
     }
-    living.locator_bar_icon = nbt.get("locator_bar_icon").and_then(Icon::from_nbt).unwrap_or_default();
+    living.locator_bar_icon = tag_value_input::read(nbt, "locator_bar_icon", Icon::decode).unwrap_or_default();
     living.current_impulse_context_reset_grace_time = int("current_impulse_context_reset_grace_time").unwrap_or(0);
     living.current_impulse_impact_pos = tag_value_input::read(nbt, "current_explosion_impact_pos", extra_codecs::vec3);
+    sleeping
 }
 
 pub fn decode_equipment(tag: &Nbt) -> DecodeResult<Vec<(EquipmentSlot, ItemStack)>> {
@@ -2159,6 +2168,12 @@ impl ServerLevel {
 
     pub fn living_entity_base_tick(&mut self, id: EntityId) {
         self.living_mut(id).swing_state.tick();
+        if self.entity(id).first_tick
+            && let Some(bed_position) = self.get_sleeping_pos(id)
+            && !self.set_pos_to_bed_position(id, bed_position)
+        {
+            self.stop_sleeping(id);
+        }
         self.tick_enchantment_effects(id);
         self.entity_base_tick(id);
         if self.is_alive(id) {
@@ -3670,6 +3685,16 @@ impl ServerLevel {
         let e = self.entity_mut(id);
         e.set_delta_movement(Vec3::ZERO);
         e.needs_sync = true;
+        true
+    }
+
+    pub fn set_pos_to_bed_position(&mut self, id: EntityId, bed_position: BlockPos) -> bool {
+        let state = self.block_state(bed_position);
+        if abstract_bed_block::kind(state.block()).is_none() {
+            return false;
+        }
+        let Some(sleep_height) = abstract_bed_block::get_sleep_height(state, self, bed_position) else { return false };
+        self.set_pos_to_bed(id, sleep_height, bed_position);
         true
     }
 

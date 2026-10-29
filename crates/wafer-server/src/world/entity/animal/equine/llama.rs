@@ -235,8 +235,11 @@ impl Llama {
         out.push(("Strength".into(), Nbt::Int(get_strength(&mob.entity))));
     }
 
-    pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
+    pub fn read_strength(mob: &mut Mob, input: &Nbt) {
         set_strength(&mut mob.entity, tag_value_input::get_i64(input, "Strength").map_or(0, |v| v as i32));
+    }
+
+    pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         AbstractChestedHorse::read_additional_save_data(mob, input);
         let variant = tag_value_input::read_or_error(input, "Variant", crate::util::codec::int).map_or(Variant::DEFAULT, Variant::by_id);
         set_variant(&mut mob.entity, variant);

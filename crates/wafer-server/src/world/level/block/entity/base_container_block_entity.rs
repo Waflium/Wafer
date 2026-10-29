@@ -28,7 +28,7 @@ impl BaseContainerBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.lock_key = tag_value_input::read_or_error(input, "lock", |lock| dc::LOCK.decode(lock));
+        self.lock_key = tag_value_input::read(input, "lock", |lock| dc::LOCK.decode_partial(lock));
         self.name = crate::network::chat::component_serialization::parse_custom_name_safe(input, "CustomName");
     }
 

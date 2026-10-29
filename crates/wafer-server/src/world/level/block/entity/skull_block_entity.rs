@@ -28,9 +28,9 @@ impl SkullBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.owner = tag_value_input::read_or_error(input, TAG_PROFILE, |profile| dc::PROFILE.decode(profile));
-        self.note_block_sound = tag_value_input::read_or_error(input, TAG_NOTE_BLOCK_SOUND, |sound| dc::NOTE_BLOCK_SOUND.decode(sound));
-        self.custom_name = tag_value_input::read_or_error(input, TAG_CUSTOM_NAME, |name| dc::CUSTOM_NAME.decode(name));
+        self.owner = tag_value_input::read(input, TAG_PROFILE, |profile| dc::PROFILE.decode_partial(profile));
+        self.note_block_sound = tag_value_input::read(input, TAG_NOTE_BLOCK_SOUND, |sound| dc::NOTE_BLOCK_SOUND.decode_partial(sound));
+        self.custom_name = tag_value_input::read(input, TAG_CUSTOM_NAME, |name| dc::CUSTOM_NAME.decode_partial(name));
     }
 
     pub fn get_owner_profile(&self) -> Option<&Nbt> {

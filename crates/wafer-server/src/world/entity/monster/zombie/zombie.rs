@@ -327,7 +327,7 @@ impl Zombie {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &wafer_protocol::nbt::Nbt) {
-        let boolean = |key: &str| input.get(key).and_then(wafer_protocol::nbt::Nbt::as_i64).is_some_and(|v| v != 0);
+        let boolean = |key: &str| crate::world::level::storage::tag_value_input::get_boolean(input, key).unwrap_or(false);
         Zombie::set_baby(mob, boolean("IsBaby"));
         Zombie::set_can_break_doors(mob, boolean("CanBreakDoors"));
         let Mob { entity, kind, .. } = mob;

@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use wafer_core::fastutil::OpenHashMap;
 use wafer_core::hash_map::FastMap;
 use wafer_core::mth;
@@ -6,8 +8,12 @@ use wafer_protocol::nbt::Nbt;
 
 use super::anger_level::AngerLevel;
 use crate::server::level::ServerLevel;
+use crate::util::codec::DecodeResult;
+use crate::util::extra_codecs;
 use crate::world::entity::entity_save::uuid_from_nbt;
 use crate::world::entity::{EntityId, RemovalReason};
+use crate::world::item::component::codec::Codec;
+use crate::world::item::component::types::{Pair, empty_list, lenient, list, nbt, non_negative_int, record, req, var_int};
 use crate::world::level::storage::uuid_ints;
 
 pub const CONVERSION_DELAY: i32 = 2;
@@ -43,8 +49,13 @@ impl AngerManagement {
         }
     }
 
-    pub fn load(input: Option<&Nbt>) -> AngerManagement {
-        AngerManagement::new(input.and_then(|input| decode_suspects(input.get("suspects"))).unwrap_or_default())
+    pub fn decode(tag: &Nbt) -> DecodeResult<AngerManagement> {
+        static CODEC: LazyLock<Pair> = LazyLock::new(|| {
+            let uuid = |tag: &Nbt| extra_codecs::uuid(tag).map(uuid_ints);
+            let suspect = record(vec![req("uuid", nbt(Codec::Func(uuid))), req("anger", var_int(non_negative_int()))]);
+            record(vec![lenient("suspects", list(suspect), empty_list())])
+        });
+        CODEC.0.decode_partial(tag).map(|decoded| AngerManagement::new(decode_suspects(decoded.get("suspects")).unwrap_or_default()))
     }
 
     pub fn save(&self) -> Nbt {
@@ -203,4 +214,40 @@ fn decode_suspects(suspects: Option<&Nbt>) -> Option<Vec<(u128, i32)>> {
             Some((uuid, anger))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(snbt: &str) -> Nbt {
+        crate::nbt::parse_fully(snbt).expect("valid snbt")
+    }
+
+    #[test]
+    fn decoding_keeps_every_suspect_of_a_valid_list() {
+        let decoded = AngerManagement::decode(&parse("{suspects:[{uuid:[I;1,2,3,4],anger:5},{uuid:[I;5,6,7,8],anger:9}]}"));
+        assert!(decoded.error.is_none());
+        assert_eq!(decoded.value.unwrap().anger_by_uuid.len(), 2);
+    }
+
+    #[test]
+    fn a_missing_suspects_list_decodes_to_nobody() {
+        let decoded = AngerManagement::decode(&parse("{}"));
+        assert!(decoded.error.is_none());
+        assert_eq!(decoded.value.unwrap().anger_by_uuid.len(), 0);
+    }
+
+    #[test]
+    fn a_broken_suspect_makes_the_lenient_list_fall_back_to_nobody_without_an_error() {
+        let decoded = AngerManagement::decode(&parse("{suspects:[{uuid:[I;1,2,3,4],anger:-1},{uuid:[I;5,6,7,8],anger:9}]}"));
+        assert!(decoded.error.is_none());
+        assert_eq!(decoded.value.map(|anger| anger.anger_by_uuid.len()), Some(0));
+    }
+
+    #[test]
+    fn a_tag_that_is_not_a_compound_is_an_error() {
+        let decoded = AngerManagement::decode(&parse("1"));
+        assert!(decoded.error.is_some());
+    }
 }

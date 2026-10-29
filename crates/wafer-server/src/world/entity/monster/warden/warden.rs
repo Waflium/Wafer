@@ -27,6 +27,7 @@ use crate::world::level::gameevent::game_event_listener::{EntityListenerKind, Ga
 use crate::world::level::gameevent::position_source::PositionSource;
 use crate::world::level::gameevent::vibrations::vibration_system::{Data, VibrationUser};
 use crate::world::level::pathfinder::path_type::PathType;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_CLIENT_ANGER_LEVEL: usize = 16;
 const VIBRATION_COOLDOWN_TICKS: i64 = 40;
@@ -104,9 +105,9 @@ impl Warden {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        warden_mut(mob).anger_management = AngerManagement::load(input.get("anger"));
+        warden_mut(mob).anger_management = tag_value_input::read(input, "anger", AngerManagement::decode).unwrap_or_else(|| AngerManagement::new(Vec::new()));
         sync_client_anger_level(mob);
-        warden_mut(mob).vibration_data = Data::load(input.get("listener"));
+        warden_mut(mob).vibration_data = tag_value_input::read(input, "listener", Data::decode).unwrap_or_default();
     }
 }
 

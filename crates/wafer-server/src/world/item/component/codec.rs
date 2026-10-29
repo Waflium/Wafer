@@ -8,6 +8,9 @@ use crate::util::hash_ops::{self, HashCode};
 
 pub trait Custom: Send + Sync {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String>;
+    fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
+        self.decode(tag).into()
+    }
     fn hash(&self, value: &Nbt) -> HashCode;
     fn write(&self, value: &Nbt, w: &mut Writer) -> Result<(), String>;
     fn read(&self, r: &mut Reader) -> Result<Nbt, String>;
@@ -74,6 +77,7 @@ pub enum Codec {
     List(Box<Codec>, usize, usize),
     SizedList(Box<Codec>, usize, usize),
     Compact(Box<Codec>),
+    NonEmptyCompact(Box<Codec>),
     Map(Box<Codec>, Box<Codec>),
     Record(Vec<Field>),
     Dispatch(Box<Dispatch>),
@@ -362,13 +366,17 @@ impl Codec {
             | Codec::List(..)
             | Codec::SizedList(..)
             | Codec::Compact(_)
+            | Codec::NonEmptyCompact(_)
             | Codec::Map(..)
             | Codec::Record(_)
             | Codec::Dispatch(_)
             | Codec::Either(..)
             | Codec::Xor(..)
             | Codec::Alt(..) => self.decode_partial(tag).into_result(),
-            Codec::Compound => map(tag).map(|_| tag.clone()),
+            Codec::Compound => match tag {
+                Nbt::Compound(_) => Ok(tag.clone()),
+                _ => Err(format!("Not a compound tag: {}", nbt::to_string(tag))),
+            },
             Codec::AnyTag => Ok(tag.clone()),
             Codec::Uuid => decode_uuid(tag),
             Codec::Custom(c) => c.decode(tag),
@@ -378,6 +386,7 @@ impl Codec {
     pub fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
         match self {
             Codec::Func(f) => f(tag),
+            Codec::Custom(c) => c.decode_partial(tag),
             Codec::HolderSet(reg) => decode_holder_set_partial(reg, tag),
             Codec::Lazy(pair) => pair().0.decode_partial(tag),
             Codec::Holder(_, Some(direct)) if !matches!(tag, Nbt::String(_)) || identifier(tag).is_err() => direct.decode_partial(tag),
@@ -416,12 +425,18 @@ impl Codec {
                 errors.reverse();
                 DecodeResult { value: Some(Nbt::List(out)), error: (!errors.is_empty()).then(|| errors.join("; ")) }
             }
-            Codec::Compact(elem) => {
+            Codec::Compact(elem) | Codec::NonEmptyCompact(elem) => {
+                let non_empty = matches!(self, Codec::NonEmptyCompact(_));
                 let first = match list(tag) {
                     Ok(items) => {
                         let (out, mut errors) = decode_elements(elem, &items);
                         errors.reverse();
-                        DecodeResult { value: Some(out), error: (!errors.is_empty()).then(|| errors.join("; ")) }
+                        let first = DecodeResult { value: Some(out), error: (!errors.is_empty()).then(|| errors.join("; ")) };
+                        if non_empty {
+                            first.flat_map(|out| if out.is_empty() { DecodeResult::error("List must have contents") } else { DecodeResult::success(out) })
+                        } else {
+                            first
+                        }
                     }
                     Err(error) => DecodeResult::error(error),
                 };
@@ -505,7 +520,7 @@ impl Codec {
             Codec::Bool => hash_ops::create_boolean(as_i64(value) != 0),
             Codec::Holder(_, Some(direct)) if !matches!(value, Nbt::String(_)) => direct.hash(value),
             Codec::List(elem, _, _) | Codec::SizedList(elem, _, _) => hash_ops::create_list(value.as_list().iter().map(|v| elem.hash(v))),
-            Codec::Compact(elem) => match value {
+            Codec::Compact(elem) | Codec::NonEmptyCompact(elem) => match value {
                 Nbt::List(items) if !elem.accepts(value) => hash_ops::create_list(items.iter().map(|v| elem.hash(v))),
                 single => elem.hash(single),
             },
@@ -742,8 +757,8 @@ fn hash_record(fields: &[Field], value: &Nbt, key: Option<&str>) -> HashCode {
 
 fn elements<'a>(codec: &Codec, value: &'a Nbt) -> Vec<&'a Nbt> {
     match (codec, value) {
-        (Codec::Compact(elem), Nbt::List(items)) if !elem.accepts(value) => items.iter().collect(),
-        (Codec::Compact(_), single) => vec![single],
+        (Codec::Compact(elem) | Codec::NonEmptyCompact(elem), Nbt::List(items)) if !elem.accepts(value) => items.iter().collect(),
+        (Codec::Compact(_) | Codec::NonEmptyCompact(_), single) => vec![single],
         (_, Nbt::List(items)) => items.iter().collect(),
         _ => Vec::new(),
     }
@@ -751,7 +766,7 @@ fn elements<'a>(codec: &Codec, value: &'a Nbt) -> Vec<&'a Nbt> {
 
 fn element_codec(codec: &Codec) -> &Codec {
     match codec {
-        Codec::List(elem, _, _) | Codec::SizedList(elem, _, _) | Codec::Compact(elem) => elem,
+        Codec::List(elem, _, _) | Codec::SizedList(elem, _, _) | Codec::Compact(elem) | Codec::NonEmptyCompact(elem) => elem,
         other => other,
     }
 }
@@ -1014,7 +1029,7 @@ pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, Strin
                 items.push(read(elem, elem_stream, r)?);
             }
             match codec {
-                Codec::Compact(_) if items.len() == 1 => items.pop().unwrap(),
+                Codec::Compact(_) | Codec::NonEmptyCompact(_) if items.len() == 1 => items.pop().unwrap(),
                 _ => Nbt::List(items),
             }
         }

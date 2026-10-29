@@ -8,7 +8,7 @@ use crate::util::extra_codecs;
 use crate::world::level::storage::tag_value_input;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::attributes::{ARMOR_STAND_ATTRIBUTES, Attribute};
-use crate::world::entity::data::{DataValue, ids, living_entity_defaults};
+use crate::world::entity::data::{DataValue, Pose, ids, living_entity_defaults};
 use crate::world::entity::living_entity::{self, LivingEntity};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, RemovalReason, entity_event, sound_event};
 use crate::world::item::ItemStack;
@@ -290,7 +290,9 @@ impl ArmorStand {
         let y_rot = self.entity.y_rot;
         self.set_y_head_rot(y_rot);
         self.set_y_body_rot(y_rot);
-        living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut self.health, &mut self.absorption, &mut self.equipment, nbt);
+        if living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut self.health, &mut self.absorption, &mut self.equipment, nbt) {
+            self.entity.set_pose(Pose::Sleeping);
+        }
         self.set_invisible(boolean("Invisible"));
         self.set_small(boolean("Small"));
         self.set_show_arms(boolean("ShowArms"));

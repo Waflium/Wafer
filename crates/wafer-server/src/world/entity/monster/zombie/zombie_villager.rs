@@ -198,7 +198,7 @@ impl ZombieVillager {
         zombie_villager.gossips = gossips;
         let conversion_time = tag_value_input::get_i64(input, "ConversionTime").map_or(NOT_CONVERTING, |v| v as i32);
         if conversion_time != NOT_CONVERTING {
-            let conversion_starter = input.get("ConversionPlayer").and_then(crate::world::entity::entity_save::uuid_from_nbt);
+            let conversion_starter = tag_value_input::read(input, "ConversionPlayer", crate::world::entity::entity_save::decode_uuid);
             Self::start_converting_detached(mob, conversion_starter, conversion_time);
         } else {
             mob.entity.data.set(DATA_CONVERTING_ID, DataValue::Boolean(false));
@@ -258,7 +258,7 @@ impl ServerLevel {
     pub fn zombie_villager_read_level_dependent_save_data(&mut self, id: EntityId, input: &Nbt) {
         let conversion_time = tag_value_input::get_i64(input, "ConversionTime").map_or(NOT_CONVERTING, |v| v as i32);
         if conversion_time != NOT_CONVERTING {
-            let conversion_starter = input.get("ConversionPlayer").and_then(crate::world::entity::entity_save::uuid_from_nbt);
+            let conversion_starter = input.get("ConversionPlayer").and_then(|tag| crate::world::entity::entity_save::decode_uuid(tag).value);
             self.start_converting(id, conversion_starter, conversion_time);
         }
     }

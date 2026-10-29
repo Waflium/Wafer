@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use wafer_core::{BlockPos, ChunkPos, Direction, Vec3, mth};
 use wafer_data::{BlockState, Tag, block_tags, game_event_tags};
 use wafer_protocol::nbt::Nbt;
@@ -6,7 +8,12 @@ use super::vibration_info::VibrationInfo;
 use super::vibration_selector::VibrationSelector;
 use crate::advancements::triggers::criteria_triggers;
 use crate::server::level::ServerLevel;
+use crate::util::codec::DecodeResult;
+use crate::util::extra_codecs;
 use crate::world::entity::EntityId;
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::types::{Pair, always, codec_float_range, fixed, float, lenient_opt, non_negative_int, nbt, record, req, var_int};
+use crate::world::level::storage::uuid_ints;
 use crate::world::level::gameevent::game_event::{self, Context, GameEvent, RESONATE_1};
 use crate::world::level::gameevent::position_source::PositionSource;
 
@@ -76,9 +83,31 @@ impl Data {
         Some(Data { current_vibration, travel_time_in_ticks, selection_strategy, reload_vibration_particle: true })
     }
 
-    pub fn load(nbt: Option<&Nbt>) -> Data {
-        nbt.and_then(Data::from_nbt).unwrap_or_default()
+    pub fn decode(tag: &Nbt) -> DecodeResult<Data> {
+        static CODEC: LazyLock<Pair> = LazyLock::new(|| {
+            let vibration_info = || {
+                record(vec![
+                    req("game_event", fixed("minecraft:game_event")),
+                    req("distance", float(codec_float_range(0.0, f32::MAX))),
+                    req("pos", nbt(Codec::Func(decode_vec3))),
+                    lenient_opt("source", nbt(Codec::Func(decode_uuid))),
+                    lenient_opt("projectile_owner", nbt(Codec::Func(decode_uuid))),
+                ])
+            };
+            let selector = record(vec![lenient_opt("event", vibration_info()), req("tick", (Codec::long(), Stream::Long))]);
+            record(vec![lenient_opt("event", vibration_info()), req("selector", selector), always("event_delay", var_int(non_negative_int()), Nbt::Int(0))])
+        });
+        let DecodeResult { value, error } = CODEC.0.decode_partial(tag);
+        DecodeResult { value: value.and_then(|nbt| Data::from_nbt(&nbt)), error }
     }
+}
+
+fn decode_vec3(tag: &Nbt) -> DecodeResult<Nbt> {
+    extra_codecs::vec3(tag).map(|pos| Nbt::List(vec![Nbt::Double(pos.x), Nbt::Double(pos.y), Nbt::Double(pos.z)]))
+}
+
+fn decode_uuid(tag: &Nbt) -> DecodeResult<Nbt> {
+    extra_codecs::uuid(tag).map(uuid_ints)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -339,5 +368,39 @@ impl ServerLevel {
             }
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(snbt: &str) -> Nbt {
+        crate::nbt::parse_fully(snbt).expect("valid snbt")
+    }
+
+    #[test]
+    fn data_without_an_event_decodes_with_defaults() {
+        let decoded = Data::decode(&parse("{selector:{tick:7L}}"));
+        assert!(decoded.error.is_none());
+        let data = decoded.value.unwrap();
+        assert!(data.current_vibration.is_none());
+        assert_eq!(data.travel_time_in_ticks, 0);
+    }
+
+    #[test]
+    fn a_broken_event_is_dropped_leniently_and_the_rest_of_the_data_survives() {
+        let decoded = Data::decode(&parse("{event:{game_event:\"minecraft:nonexistent\",distance:1.0f,pos:[1.0d,2.0d,3.0d]},selector:{tick:7L},event_delay:4}"));
+        assert!(decoded.error.is_none());
+        let data = decoded.value.unwrap();
+        assert!(data.current_vibration.is_none());
+        assert_eq!(data.travel_time_in_ticks, 4);
+    }
+
+    #[test]
+    fn data_without_a_selector_fails() {
+        let decoded = Data::decode(&parse("{event_delay:4}"));
+        assert!(decoded.error.is_some());
+        assert!(decoded.value.is_none());
     }
 }

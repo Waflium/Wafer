@@ -67,6 +67,10 @@ impl DataComponentType {
         self.info().codec.decode(tag)
     }
 
+    pub fn decode_partial(self, tag: &Nbt) -> crate::util::codec::DecodeResult<Nbt> {
+        self.info().codec.decode_partial(tag)
+    }
+
     pub fn hash(self, value: &Nbt) -> HashCode {
         self.info().codec.hash(value)
     }
@@ -457,6 +461,29 @@ mod tests {
         assert_eq!(sword.get(ITEM_NAME), Some(&crate::nbt::parse_fully("{translate:\"item.minecraft.diamond_sword\"}").unwrap()));
         assert_eq!(sword.get(USE_EFFECTS), Some(&Nbt::Compound(Vec::new())));
         assert_eq!(sword.len(), 19);
+    }
+
+    #[test]
+    fn an_empty_adventure_predicate_list_must_have_contents() {
+        let empty = CAN_BREAK.decode_partial(&crate::nbt::parse_fully("[]").unwrap());
+        assert!(empty.value.is_none());
+        assert!(empty.error.as_deref().unwrap().contains("List must have contents"));
+    }
+
+    #[test]
+    fn a_single_adventure_predicate_decodes_without_errors() {
+        let single = CAN_BREAK.decode_partial(&crate::nbt::parse_fully("{blocks:\"minecraft:stone\"}").unwrap());
+        assert!(single.error.is_none());
+        assert!(single.value.is_some());
+    }
+
+    #[test]
+    fn a_profile_with_an_overlong_name_is_reported() {
+        let long = PROFILE.decode_partial(&crate::nbt::parse_fully("\"abcdefghijklmnopqrstuvwxyz\"").unwrap());
+        assert!(long.error.as_deref().unwrap().contains("is too long: 26, expected range [0-16]"));
+        let named = PROFILE.decode_partial(&crate::nbt::parse_fully("\"Notch\"").unwrap());
+        assert!(named.error.is_none());
+        assert!(named.value.is_some());
     }
 
     fn same_as_json(nbt: &Nbt, json: &serde_json::Value) -> bool {

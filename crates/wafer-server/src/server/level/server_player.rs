@@ -495,7 +495,7 @@ impl ServerPlayer {
         let mut health = 0.0;
         let mut absorption = 0.0;
         let mut equipment: [Option<ItemStack>; 8] = Default::default();
-        crate::world::entity::living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut health, &mut absorption, &mut equipment, nbt);
+        let sleeping = crate::world::entity::living_entity::read_additional_save_data(&mut self.entity, &mut self.living, &mut health, &mut absorption, &mut equipment, nbt);
         self.health = health;
         self.entity.data.set(ids::PLAYER_ABSORPTION, DataValue::Float(absorption));
         for (slot, index) in [(EquipmentSlot::Offhand, OFFHAND), (EquipmentSlot::Feet, 8), (EquipmentSlot::Legs, 7), (EquipmentSlot::Chest, 6), (EquipmentSlot::Head, 5)] {
@@ -532,6 +532,9 @@ impl ServerPlayer {
         self.seen_credits = tag_value_input::get_boolean(nbt, "seenCredits").unwrap_or(false);
         if let Some(recipe_book) = nbt.get(crate::stats::server_recipe_book::RECIPE_BOOK_TAG) {
             self.recipe_book.load_untrusted(recipe_book);
+        }
+        if sleeping {
+            self.entity.data.set(ids::SLEEPING_POS, DataValue::OptionalBlockPos(None));
         }
         self.respawn_config = nbt.get("respawn").and_then(|r| {
             let forced = r.get("forced").and_then(Nbt::as_i64).is_some_and(|f| f != 0);

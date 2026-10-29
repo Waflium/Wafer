@@ -1,9 +1,13 @@
 use std::borrow::Cow;
+use std::sync::LazyLock;
 
 use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
 use super::waypoint_style_assets;
+use crate::util::codec::DecodeResult;
+use crate::world::item::component::codec::Stream;
+use crate::world::item::component::types::{self, Pair, identifier, opt, record, req};
 use crate::world::scores::team_color::TeamColor;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -62,6 +66,12 @@ impl Icon {
         Nbt::Compound(fields)
     }
 
+    pub fn decode(tag: &Nbt) -> DecodeResult<Icon> {
+        static CODEC: LazyLock<Pair> = LazyLock::new(|| record(vec![req("style", identifier()), opt("color", (types::rgb_color(), Stream::Int))]));
+        let DecodeResult { value, error } = CODEC.0.decode_partial(tag);
+        DecodeResult { value: value.and_then(|decoded| Icon::from_nbt(&decoded)), error }
+    }
+
     pub fn from_nbt(nbt: &Nbt) -> Option<Icon> {
         let Nbt::Compound(_) = nbt else { return None };
         let style = crate::commands::arguments::parse_identifier(nbt.get("style")?.as_str()?)?;
@@ -75,5 +85,28 @@ impl Icon {
             Some(value) => Some(value.as_i64()? as i32),
         };
         Some(Icon { style: Cow::Owned(style), color })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(snbt: &str) -> Nbt {
+        crate::nbt::parse_fully(snbt).expect("valid snbt")
+    }
+
+    #[test]
+    fn an_icon_decodes_its_style_and_color() {
+        let decoded = Icon::decode(&parse("{style:\"minecraft:default\",color:16711680}"));
+        assert!(decoded.error.is_none());
+        assert_eq!(decoded.value, Some(Icon { style: Cow::Owned("minecraft:default".to_string()), color: Some(16711680) }));
+    }
+
+    #[test]
+    fn an_icon_without_a_style_is_an_error() {
+        let decoded = Icon::decode(&parse("{color:16711680}"));
+        assert!(decoded.error.is_some());
+        assert!(decoded.value.is_none());
     }
 }
