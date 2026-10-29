@@ -214,7 +214,9 @@ pub fn decorate_with(generator: &ChunkGenerator, chunks: &mut HashMap<ChunkPos, 
         };
         let light_engine = LevelLightEngine::new(dimension.min_y, dimension.height as i32, true, dimension.has_skylight);
         let ChunkGenerator::Noise(noise) = generator else { unreachable!() };
+        let environment_attributes = crate::world::attribute::environment_attribute_system::EnvironmentAttributeSystem::builder().add_static_layers(dimension).build();
         let mut region = WorldGenRegion::new(center, cache, [true; 9], [false; 9], generator, &noise.state, dimension, generation, &light_engine, crate::world::difficulty::Difficulty::Easy);
+        region.environment_attributes = Some(&environment_attributes);
         region.structure_starts = Some(structure_starts.clone());
         generator.apply_biome_decoration(&mut region, &structure_starts);
     }
