@@ -32,22 +32,21 @@ impl ServerLevel {
         self.minecart_mut(id).set_on_rails(on_rails);
         if on_rails {
             self.old_minecart_behavior_move_along_track(id);
-            if self.entity_ref(id).is_none_or(|e| e.is_removed()) {
-                return;
-            }
             if state.is_block(blocks::ACTIVATOR_RAIL) {
                 self.activate_minecart(id, pos.x, pos.y, pos.z, state.get(POWERED));
+                if self.tick_suspended() {
+                    self.suspend_tick(move |level| level.old_minecart_behavior_tick_end(id));
+                    return;
+                }
             }
         } else {
             self.come_off_track(id);
         }
-        if self.entity_ref(id).is_none_or(|e| e.is_removed()) {
-            return;
-        }
+        self.old_minecart_behavior_tick_end(id);
+    }
+
+    fn old_minecart_behavior_tick_end(&mut self, id: EntityId) {
         self.minecart_apply_effects_from_blocks(id);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
         let flipped = self.minecart(id).is_flipped();
         let e = self.entity_mut(id);
         e.set_x_rot(0.0);
@@ -172,9 +171,6 @@ impl ServerLevel {
             MoverType::SelfMove,
             Vec3::new(mth::clamp(scale * movement.x, -max_speed, max_speed), 0.0, mth::clamp(scale * movement.z, -max_speed, max_speed)),
         );
-        if self.entity_ref(id).is_none_or(|e| e.is_removed()) {
-            return;
-        }
         let e = self.entity_mut(id);
         if exit0[1] != 0 && mth::floor(e.x()) - pos.x == exit0[0] && mth::floor(e.z()) - pos.z == exit0[2] {
             e.set_pos(Vec3::new(e.x(), e.y() + exit0[1] as f64, e.z()));

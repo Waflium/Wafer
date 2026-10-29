@@ -174,7 +174,10 @@ impl Server {
         stack.rotation = rotation;
         stack.level = level;
         stack.permission = 2;
-        stack.names = if entity.is_some() { crate::commands::source::Names::ForEntity } else { crate::commands::source::Names::Constant(name) };
+        stack.names = match entity {
+            Some(entity) => crate::commands::source::Names::OfEntity(self.entity_name(entity), self.entity_display_name(entity)),
+            None => crate::commands::source::Names::Constant(name),
+        };
         stack.entity = entity;
         Some(stack)
     }

@@ -69,9 +69,14 @@ impl ServerLevel {
         let tick_count = self.entity(id).tick_count;
         let minecart = command_block_minecart_mut(self.minecart_mut(id));
         if state && tick_count - minecart.last_activated >= ACTIVATION_DELAY {
-            minecart.last_activated = tick_count;
-            self.pending_minecart_commands.push(id);
+            self.pending_minecart_command = Some(id);
+            self.suspend_tick(move |level| level.minecart_command_block_activated(id));
         }
+    }
+
+    fn minecart_command_block_activated(&mut self, id: EntityId) {
+        let tick_count = self.entity(id).tick_count;
+        command_block_minecart_mut(self.minecart_mut(id)).last_activated = tick_count;
     }
 
     pub fn minecart_command_block_interact(&mut self, player: EntityId) -> InteractionResult {
@@ -80,11 +85,11 @@ impl ServerLevel {
 }
 
 impl Server {
-    pub fn run_pending_minecart_commands(&mut self, level: usize) {
-        for entity in std::mem::take(&mut self.levels[level].pending_minecart_commands) {
-            if self.levels[level].minecart_command_block(entity).is_some() {
-                self.base_command_block_perform_command(CommandBlockOwner::Minecart(level, entity), CommandOrigin::MinecartCommandBlock);
-            }
+    pub fn run_pending_minecart_command(&mut self, level: usize) {
+        if let Some(entity) = self.levels[level].pending_minecart_command.take()
+            && self.levels[level].minecart_command_block(entity).is_some()
+        {
+            self.base_command_block_perform_command(CommandBlockOwner::Minecart(level, entity), CommandOrigin::MinecartCommandBlock);
         }
     }
 }

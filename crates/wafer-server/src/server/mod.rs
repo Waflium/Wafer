@@ -1712,9 +1712,12 @@ impl Server {
         }
         level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_block_ticks(runs);
         while level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_entities() {
-            self.run_pending_minecart_commands(index);
-            self.handle_pending_portal_teleport(index);
-            self.handle_pending_ender_pearl_teleport(index);
+            let suspended = self.levels[index].tick_continuation.is_suspended();
+            self.run_pending_minecart_command(index);
+            if !suspended {
+                self.handle_pending_portal_teleport(index);
+                self.handle_pending_ender_pearl_teleport(index);
+            }
             self.send_global_level_events();
         }
         level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_entities();

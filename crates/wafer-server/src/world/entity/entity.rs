@@ -4033,6 +4033,14 @@ impl ServerLevel {
         let pre = self.entity(id).position();
         self.entity_mut(id).set_delta_movement(Vec3::ZERO);
         self.tick_ridden(id);
+        if self.tick_suspended() {
+            self.suspend_tick(move |level| level.entity_ride_tick_end(id, pre));
+            return;
+        }
+        self.entity_ride_tick_end(id, pre);
+    }
+
+    fn entity_ride_tick_end(&mut self, id: EntityId, pre: Vec3) {
         if self.entity_ref(id).is_none() {
             return;
         }

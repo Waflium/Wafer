@@ -77,6 +77,7 @@ pub enum Anchor {
 pub enum Names {
     ForEntity,
     Constant(Component),
+    OfEntity(String, Component),
 }
 
 #[derive(Clone, Default)]
@@ -220,6 +221,7 @@ impl CommandSourceStack {
         match &self.names {
             Names::ForEntity => self.entity.map_or_else(String::new, |e| server.entity_name(e)),
             Names::Constant(name) => name.get_string(),
+            Names::OfEntity(text_name, _) => text_name.clone(),
         }
     }
 
@@ -227,6 +229,7 @@ impl CommandSourceStack {
         match &self.names {
             Names::ForEntity => self.entity.map_or_else(Component::empty, |e| server.entity_display_name(e)),
             Names::Constant(name) => name.clone(),
+            Names::OfEntity(_, display_name) => display_name.clone(),
         }
     }
 

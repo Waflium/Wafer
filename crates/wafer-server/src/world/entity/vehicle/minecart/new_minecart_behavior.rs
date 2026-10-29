@@ -20,6 +20,7 @@ pub struct MinecartStep {
 #[derive(Default)]
 pub struct NewMinecartBehavior {
     pub lerp_steps: Vec<MinecartStep>,
+    suspended_step: Option<SuspendedTrackStep>,
 }
 
 struct TrackIteration {
@@ -30,7 +31,18 @@ struct TrackIteration {
     has_boosted: bool,
 }
 
+struct SuspendedTrackStep {
+    track_iteration: TrackIteration,
+    initial_step_delta_movement: Vec3,
+    current_pos: BlockPos,
+    current_state: BlockState,
+}
+
 impl TrackIteration {
+    fn new() -> TrackIteration {
+        TrackIteration { movement_left: 0.0, first_iteration: true, has_gained_slope_speed: false, has_halted: false, has_boosted: false }
+    }
+
     fn should_iterate(&self) -> bool {
         self.first_iteration || self.movement_left > 1.0e-5f32 as f64
     }
@@ -79,7 +91,7 @@ impl ServerLevel {
             std::mem::swap(&mut horizontal_out_direction, &mut horizontal_in_direction);
         }
         let flipped = self.minecart(id).is_flipped();
-        let mut y_rot = 180.0 - (mth::atan2(horizontal_out_direction.z, horizontal_out_direction.x) * 180.0 / std::f64::consts::PI) as f32;
+        let mut y_rot = 180.0 - (horizontal_out_direction.z.atan2(horizontal_out_direction.x) * 180.0 / std::f64::consts::PI) as f32;
         y_rot += if flipped { 180.0 } else { 0.0 };
         let previous_position = self.entity(id).position();
         let in_corner = exit0.x != exit1.x && exit0.z != exit1.z;
@@ -87,7 +99,7 @@ impl ServerLevel {
             let from0_to1 = exit1.subtract(exit0);
             let from0_to_pos = previous_position.subtract(Vec3::at_bottom_center_of(target_block_pos)).subtract(exit0);
             let travel_vector_from0 = from0_to1.scale(from0_to1.dot(from0_to_pos) / from0_to1.dot(from0_to1));
-            y_rot = 180.0 - (mth::atan2(travel_vector_from0.z, travel_vector_from0.x) * 180.0 / std::f64::consts::PI) as f32;
+            y_rot = 180.0 - (travel_vector_from0.z.atan2(travel_vector_from0.x) * 180.0 / std::f64::consts::PI) as f32;
             y_rot += if flipped { 180.0 } else { 0.0 };
             Vec3::at_bottom_center_of(target_block_pos).add_vec(exit0).add_vec(travel_vector_from0)
         } else {
@@ -143,7 +155,10 @@ impl ServerLevel {
     }
 
     pub fn new_minecart_behavior_move_along_track(&mut self, id: EntityId) {
-        let mut track_iteration = TrackIteration { movement_left: 0.0, first_iteration: true, has_gained_slope_speed: false, has_halted: false, has_boosted: false };
+        self.new_minecart_behavior_iterate_track(id, TrackIteration::new());
+    }
+
+    fn new_minecart_behavior_iterate_track(&mut self, id: EntityId, mut track_iteration: TrackIteration) {
         while track_iteration.should_iterate() && self.is_alive(id) {
             let initial_step_delta_movement = self.entity(id).delta_movement;
             let current_pos = self.get_current_block_pos_or_rail_below(id);
@@ -158,70 +173,80 @@ impl ServerLevel {
                 self.entity_mut(id).set_old_pos_and_rot();
                 if current_state.is_block(blocks::ACTIVATOR_RAIL) {
                     self.activate_minecart(id, current_pos.x, current_pos.y, current_pos.z, current_state.get(POWERED));
-                    if self.entity_ref(id).is_none() {
+                    if self.tick_suspended() {
+                        self.minecart_mut(id).new_behavior.suspended_step = Some(SuspendedTrackStep { track_iteration, initial_step_delta_movement, current_pos, current_state });
+                        self.suspend_tick(move |level| level.new_minecart_behavior_resume_track(id));
                         return;
                     }
                 }
-                let shape = rail_shape(current_state);
-                let new_delta_movement = self.new_minecart_behavior_calculate_track_speed(id, initial_step_delta_movement.horizontal(), &mut track_iteration, current_pos, current_state, shape);
-                if track_iteration.first_iteration {
-                    track_iteration.movement_left = new_delta_movement.horizontal_distance();
-                } else {
-                    track_iteration.movement_left += new_delta_movement.horizontal_distance() - initial_step_delta_movement.horizontal_distance();
-                }
-                self.entity_mut(id).set_delta_movement(new_delta_movement);
-                track_iteration.movement_left = self.new_minecart_behavior_step_along_track(id, current_pos, shape, track_iteration.movement_left);
+                self.new_minecart_behavior_step_on_rails(id, &mut track_iteration, initial_step_delta_movement, current_pos, current_state);
             } else {
                 self.come_off_track(id);
                 track_iteration.movement_left = 0.0;
             }
-            if self.entity_ref(id).is_none() {
-                return;
-            }
-            let e = self.entity(id);
-            let step_position = e.position();
-            let step_delta = step_position.subtract(e.old_position());
-            let step_length = step_delta.length();
-            if step_length > 1.0e-5f32 as f64 {
-                if step_delta.horizontal_distance_sqr() <= 1.0e-5f32 as f64 {
-                    if !self.minecart(id).is_on_rails() {
-                        let e = self.entity_mut(id);
-                        let x_rot = if e.on_ground { 0.0 } else { mth::rot_lerp(0.2, e.x_rot, 0.0) };
-                        e.set_x_rot(x_rot);
-                    }
-                } else {
-                    let flipped = self.minecart(id).is_flipped();
-                    let on_rails = self.minecart(id).is_on_rails();
-                    let mut y_rot = 180.0 - (mth::atan2(step_delta.z, step_delta.x) * 180.0 / std::f64::consts::PI) as f32;
-                    let mut x_rot = if self.entity(id).on_ground && !on_rails {
-                        0.0
-                    } else {
-                        90.0 - (mth::atan2(step_delta.horizontal_distance(), step_delta.y) * 180.0 / std::f64::consts::PI) as f32
-                    };
-                    y_rot += if flipped { 180.0 } else { 0.0 };
-                    x_rot *= if flipped { -1.0 } else { 1.0 };
-                    self.new_minecart_behavior_set_rotation(id, y_rot, x_rot);
-                }
-                let max_speed = self.new_minecart_behavior_max_speed(id);
-                let e = self.entity(id);
-                let step = MinecartStep { position: step_position, movement: e.delta_movement, y_rot: e.y_rot, x_rot: e.x_rot, weight: step_length.min(max_speed) as f32 };
-                self.minecart_mut(id).new_behavior.lerp_steps.push(step);
-            } else if initial_step_delta_movement.horizontal_distance_sqr() > 0.0 {
-                let e = self.entity(id);
-                let step = MinecartStep { position: step_position, movement: e.delta_movement, y_rot: e.y_rot, x_rot: e.x_rot, weight: 1.0 };
-                self.minecart_mut(id).new_behavior.lerp_steps.push(step);
-            }
-            if step_length > 1.0e-5f32 as f64 || track_iteration.first_iteration {
-                self.apply_effects_from_blocks(id);
-                if self.entity_ref(id).is_none() {
-                    return;
-                }
-                self.apply_effects_from_blocks(id);
-                if self.entity_ref(id).is_none() {
-                    return;
-                }
-            }
+            self.new_minecart_behavior_finish_step(id, &mut track_iteration, initial_step_delta_movement);
             track_iteration.first_iteration = false;
+        }
+    }
+
+    fn new_minecart_behavior_resume_track(&mut self, id: EntityId) {
+        let SuspendedTrackStep { mut track_iteration, initial_step_delta_movement, current_pos, current_state } =
+            self.minecart_mut(id).new_behavior.suspended_step.take().expect("a suspended track step");
+        self.new_minecart_behavior_step_on_rails(id, &mut track_iteration, initial_step_delta_movement, current_pos, current_state);
+        self.new_minecart_behavior_finish_step(id, &mut track_iteration, initial_step_delta_movement);
+        track_iteration.first_iteration = false;
+        self.new_minecart_behavior_iterate_track(id, track_iteration);
+    }
+
+    fn new_minecart_behavior_step_on_rails(&mut self, id: EntityId, track_iteration: &mut TrackIteration, initial_step_delta_movement: Vec3, current_pos: BlockPos, current_state: BlockState) {
+        let shape = rail_shape(current_state);
+        let new_delta_movement = self.new_minecart_behavior_calculate_track_speed(id, initial_step_delta_movement.horizontal(), track_iteration, current_pos, current_state, shape);
+        if track_iteration.first_iteration {
+            track_iteration.movement_left = new_delta_movement.horizontal_distance();
+        } else {
+            track_iteration.movement_left += new_delta_movement.horizontal_distance() - initial_step_delta_movement.horizontal_distance();
+        }
+        self.entity_mut(id).set_delta_movement(new_delta_movement);
+        track_iteration.movement_left = self.new_minecart_behavior_step_along_track(id, current_pos, shape, track_iteration.movement_left);
+    }
+
+    fn new_minecart_behavior_finish_step(&mut self, id: EntityId, track_iteration: &mut TrackIteration, initial_step_delta_movement: Vec3) {
+        let e = self.entity(id);
+        let step_position = e.position();
+        let step_delta = step_position.subtract(e.old_position());
+        let step_length = step_delta.length();
+        if step_length > 1.0e-5f32 as f64 {
+            if step_delta.horizontal_distance_sqr() <= 1.0e-5f32 as f64 {
+                if !self.minecart(id).is_on_rails() {
+                    let e = self.entity_mut(id);
+                    let x_rot = if e.on_ground { 0.0 } else { mth::rot_lerp(0.2, e.x_rot, 0.0) };
+                    e.set_x_rot(x_rot);
+                }
+            } else {
+                let flipped = self.minecart(id).is_flipped();
+                let on_rails = self.minecart(id).is_on_rails();
+                let mut y_rot = 180.0 - (step_delta.z.atan2(step_delta.x) * 180.0 / std::f64::consts::PI) as f32;
+                let mut x_rot = if self.entity(id).on_ground && !on_rails {
+                    0.0
+                } else {
+                    90.0 - (step_delta.horizontal_distance().atan2(step_delta.y) * 180.0 / std::f64::consts::PI) as f32
+                };
+                y_rot += if flipped { 180.0 } else { 0.0 };
+                x_rot *= if flipped { -1.0 } else { 1.0 };
+                self.new_minecart_behavior_set_rotation(id, y_rot, x_rot);
+            }
+            let max_speed = self.new_minecart_behavior_max_speed(id);
+            let e = self.entity(id);
+            let step = MinecartStep { position: step_position, movement: e.delta_movement, y_rot: e.y_rot, x_rot: e.x_rot, weight: step_length.min(max_speed) as f32 };
+            self.minecart_mut(id).new_behavior.lerp_steps.push(step);
+        } else if initial_step_delta_movement.horizontal_distance_sqr() > 0.0 {
+            let e = self.entity(id);
+            let step = MinecartStep { position: step_position, movement: e.delta_movement, y_rot: e.y_rot, x_rot: e.x_rot, weight: 1.0 };
+            self.minecart_mut(id).new_behavior.lerp_steps.push(step);
+        }
+        if step_length > 1.0e-5f32 as f64 || track_iteration.first_iteration {
+            self.apply_effects_from_blocks(id);
+            self.apply_effects_from_blocks(id);
         }
     }
 
@@ -343,9 +368,6 @@ impl ServerLevel {
             movement_left = 0.0;
         }
         self.minecart_move(id, MoverType::SelfMove, new_position.subtract(old_position));
-        if self.entity_ref(id).is_none() {
-            return 0.0;
-        }
         let new_block_state = self.block_state(BlockPos::containing(new_position.x, new_position.y, new_position.z));
         if in_hill {
             if base_rail_block::is_rail(new_block_state) {

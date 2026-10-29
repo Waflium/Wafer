@@ -29,6 +29,7 @@ pub mod server_boss_event;
 pub mod server_entity;
 pub mod server_entity_getter;
 pub mod threaded_level_light_engine;
+pub mod tick_continuation;
 pub mod ticket;
 pub mod world_gen_region;
 
@@ -196,7 +197,8 @@ pub struct ServerLevel {
     empty_time: i32,
     pub handling_tick: bool,
     block_ticks_to_run: std::collections::VecDeque<crate::world::ticks::ScheduledTick<Block>>,
-    pub pending_minecart_commands: Vec<EntityId>,
+    pub pending_minecart_command: Option<EntityId>,
+    pub(crate) tick_continuation: tick_continuation::TickContinuation,
     pub tick_rate_manager: Rc<TickRateManager>,
     block_events: Vec<(BlockPos, Block, i32, i32)>,
     pub game_time: i64,
@@ -293,7 +295,8 @@ impl ServerLevel {
             empty_time: 0,
             handling_tick: false,
             block_ticks_to_run: std::collections::VecDeque::new(),
-            pending_minecart_commands: Vec::new(),
+            pending_minecart_command: None,
+            tick_continuation: tick_continuation::TickContinuation::default(),
             tick_rate_manager: Rc::default(),
             block_events: Vec::new(),
             game_time: 0,
@@ -1436,7 +1439,7 @@ impl ServerLevel {
         while self.tick_entities() {
             self.pending_portal_teleport = None;
             self.pending_ender_pearl_teleport = None;
-            self.pending_minecart_commands.clear();
+            self.pending_minecart_command = None;
         }
         self.tick_after_entities();
     }
@@ -1587,11 +1590,17 @@ impl ServerLevel {
 
     pub fn tick_entities(&mut self) -> bool {
         let Some((start, end)) = self.entity_tick_range else { return false };
+        if self.tick_continuation.is_suspended() {
+            self.resume_entity_tick();
+            if self.has_pending_server_work() {
+                return true;
+            }
+        }
         for i in start..end {
             let Some(id) = self.tick_list.at(i) else { continue };
             if self.players.contains_key(&id) {
                 if !self.ticks_with_vehicle(id) {
-                    self.guard_entity_tick(id, |level| level.tick_non_passenger(id));
+                    self.tick_root_entity(id);
                 }
             } else if let Some(entity) = self.find_entity(id) {
                 if entity.entity().is_removed() {
@@ -1608,24 +1617,27 @@ impl ServerLevel {
                     let in_range = self.find_entity(id).is_some_and(|e| self.in_entity_ticking_range(e.entity().chunk_position()));
                     if in_range {
                         if !self.ticks_with_vehicle(id) {
-                            self.guard_entity_tick(id, |level| level.tick_non_passenger(id));
+                            self.tick_root_entity(id);
                         }
                     } else if self.find_entity(id).is_some_and(|e| e.entity().is_removed()) {
                         self.remove_entity(id);
                     }
                 }
             }
-            if self.pending_portal_teleport.is_some()
-                || self.pending_ender_pearl_teleport.is_some()
-                || !self.pending_minecart_commands.is_empty()
-                || !self.pending_enchantment_functions.is_empty()
-            {
+            if self.has_pending_server_work() {
                 self.entity_tick_range = Some((i + 1, end));
                 return true;
             }
         }
         self.entity_tick_range = Some((end, end));
         false
+    }
+
+    fn has_pending_server_work(&self) -> bool {
+        self.pending_portal_teleport.is_some()
+            || self.pending_ender_pearl_teleport.is_some()
+            || self.pending_minecart_command.is_some()
+            || !self.pending_enchantment_functions.is_empty()
     }
 
     pub(crate) fn guard_entity_tick(&mut self, id: EntityId, tick: impl FnOnce(&mut ServerLevel)) {
@@ -1973,11 +1985,32 @@ impl ServerLevel {
     pub fn tick_non_passenger(&mut self, id: EntityId) {
         self.common_tick(id);
         self.tick_ridden(id);
+        if self.tick_suspended() {
+            self.suspend_tick(move |level| level.tick_non_passenger_passengers(id));
+            return;
+        }
+        self.tick_non_passenger_passengers(id);
+    }
+
+    fn tick_non_passenger_passengers(&mut self, id: EntityId) {
         if self.entity_ref(id).is_none() || self.pending_portal_teleport.as_ref().is_some_and(|pending| pending.entity.id == id) {
             return;
         }
-        for passenger in self.passengers(id).to_vec() {
-            self.tick_passenger(id, passenger);
+        self.tick_passengers(id);
+    }
+
+    fn tick_passengers(&mut self, vehicle: EntityId) {
+        let passengers = self.passengers(vehicle).to_vec();
+        self.tick_passengers_from(vehicle, passengers, 0);
+    }
+
+    fn tick_passengers_from(&mut self, vehicle: EntityId, passengers: Vec<EntityId>, start: usize) {
+        for index in start..passengers.len() {
+            self.tick_passenger(vehicle, passengers[index]);
+            if self.tick_suspended() {
+                self.suspend_tick(move |level| level.tick_passengers_from(vehicle, passengers, index + 1));
+                return;
+            }
         }
     }
 
@@ -1989,13 +2022,19 @@ impl ServerLevel {
         } else if self.players.contains_key(&entity) || self.tick_list.contains(entity) {
             self.common_tick(entity);
             self.ride_tick(entity);
-            if self.entity_ref(entity).is_none() {
+            if self.tick_suspended() {
+                self.suspend_tick(move |level| level.tick_passenger_passengers(entity));
                 return;
             }
-            for passenger in self.passengers(entity).to_vec() {
-                self.tick_passenger(entity, passenger);
-            }
+            self.tick_passenger_passengers(entity);
         }
+    }
+
+    fn tick_passenger_passengers(&mut self, entity: EntityId) {
+        if self.entity_ref(entity).is_none() {
+            return;
+        }
+        self.tick_passengers(entity);
     }
 
     pub fn tick_ridden(&mut self, id: EntityId) {
@@ -2065,6 +2104,14 @@ impl ServerLevel {
             Some(LevelEntity::Boat(_)) => self.tick_boat(id),
             None => return,
         }
+        if self.tick_suspended() {
+            self.suspend_tick(move |level| level.tick_entity_end(id));
+            return;
+        }
+        self.tick_entity_end(id);
+    }
+
+    fn tick_entity_end(&mut self, id: EntityId) {
         let teleporting = self.pending_portal_teleport.as_ref().is_some_and(|pending| pending.entity.id == id && pending.removed);
         if !teleporting && self.find_entity(id).is_some_and(|e| e.entity().is_removed()) {
             self.remove_entity(id);

@@ -117,3 +117,93 @@ fn detector_rails_read_container_minecarts() {
     assert_eq!(signal, 1 + (2.0f32 / 27.0 * 14.0) as i32);
 }
 
+fn activator_line(server: &mut Server, z: i32) {
+    run(server, &format!("fill 0 -61 {z} 14 -61 {z} redstone_block"));
+    run(server, &format!("fill 0 -60 {z} 14 -60 {z} activator_rail[shape=east_west,powered=true]"));
+}
+
+fn tick(server: &mut Server, count: usize) {
+    for _ in 0..count {
+        server.tick();
+    }
+}
+
+#[test]
+fn command_block_minecarts_run_their_command_before_the_rest_of_their_tick() {
+    let mut server = server();
+    activator_line(&mut server, 10);
+    run(&mut server, "summon command_block_minecart 0.5 -60 10.5 {UUID:[I;1,2,3,5],Command:\"setblock ~ ~ ~ fire\"}");
+    tick(&mut server, 3);
+    let out = run(&mut server, "data get entity 00000001-0000-0002-0000-000300000005 Fire");
+    assert_eq!(out, vec!["Minecart with Command Block has the following entity data: 0s".to_string()]);
+    tick(&mut server, 1);
+    let out = run(&mut server, "data get entity 00000001-0000-0002-0000-000300000005 Fire");
+    assert_eq!(out, vec!["Minecart with Command Block has the following entity data: 160s".to_string()]);
+}
+
+#[test]
+fn command_block_minecarts_see_their_state_in_the_middle_of_the_improved_movement() {
+    let mut server = server();
+    server.levels[0].enabled_features = crate::world::flag::FeatureFlagSet::DEFAULT_FLAGS.join(crate::world::flag::FeatureFlagSet::MINECART_IMPROVEMENTS);
+    activator_line(&mut server, 12);
+    run(&mut server, "summon command_block_minecart 0.5 -60 12.5 {UUID:[I;1,2,3,5],Motion:[0.3d,0.0d,0.0d],Command:\"data modify storage t:t pos set from entity @s Pos\"}");
+    tick(&mut server, 4);
+    let out = run(&mut server, "data get storage t:t pos");
+    assert_eq!(out, vec!["Storage t:t has the following contents: [1.3557453124999999d, -59.9d, 12.5d]".to_string()]);
+    let out = run(&mut server, "data get entity 00000001-0000-0002-0000-000300000005 Pos");
+    assert_eq!(out, vec!["Minecart with Command Block has the following entity data: [1.6268516796874999d, -59.9d, 12.5d]".to_string()]);
+}
+
+#[test]
+fn command_block_minecarts_tick_their_passengers_after_the_command() {
+    let mut server = server();
+    activator_line(&mut server, 14);
+    run(&mut server, "summon pig 0.5 -60 14.5 {UUID:[I;1,2,3,7],NoAI:1b}");
+    run(&mut server, "summon command_block_minecart 0.5 -60 14.5 {UUID:[I;1,2,3,6],Command:\"data merge entity 00000001-0000-0002-0000-000300000007 {Motion:[0.0d,5.0d,0.0d]}\"}");
+    run(&mut server, "ride 00000001-0000-0002-0000-000300000007 mount 00000001-0000-0002-0000-000300000006");
+    tick(&mut server, 4);
+    let out = run(&mut server, "data get entity 00000001-0000-0002-0000-000300000007 Motion");
+    assert_eq!(out, vec!["Pig has the following entity data: [0.0d, 0.0d, 0.0d]".to_string()]);
+}
+
+#[test]
+fn level_ticks_without_a_server_finish_suspended_command_block_minecart_ticks() {
+    let mut server = server();
+    activator_line(&mut server, 20);
+    run(&mut server, "summon command_block_minecart 0.5 -60 20.5 {UUID:[I;1,2,3,5],Command:\"say hi\"}");
+    for _ in 0..5 {
+        server.levels[0].tick();
+    }
+    let level = &server.levels[0];
+    assert!(!level.tick_suspended());
+    assert!(!level.tick_continuation.is_suspended());
+    let cart = entity_with_uuid(&server, 5).unwrap();
+    assert_eq!(level.entity(cart).tick_count, 5);
+}
+
+#[test]
+fn command_block_minecarts_riding_a_boat_resume_their_ride_tick_after_the_command() {
+    let mut server = server();
+    activator_line(&mut server, 18);
+    run(&mut server, "summon oak_boat 0.5 -60 18.5 {UUID:[I;1,2,3,9]}");
+    run(&mut server, "summon command_block_minecart 0.5 -60 18.5 {UUID:[I;1,2,3,5],Command:\"tp @e[type=oak_boat,limit=1,sort=nearest] ~5 ~ ~\"}");
+    run(&mut server, "ride 00000001-0000-0002-0000-000300000005 mount 00000001-0000-0002-0000-000300000009");
+    tick(&mut server, 4);
+    let out = run(&mut server, "data get entity 00000001-0000-0002-0000-000300000005 Pos");
+    assert_eq!(out, vec!["Minecart with Command Block has the following entity data: [5.5d, -59.75d, 18.5d]".to_string()]);
+}
+
+#[test]
+fn killed_command_block_minecarts_finish_their_tick_and_still_push_minecarts() {
+    let mut server = server();
+    activator_line(&mut server, 16);
+    run(&mut server, "summon command_block_minecart 0.5 -60 16.5 {UUID:[I;1,2,3,5],Command:\"kill @s\"}");
+    run(&mut server, "summon minecart 1.2 -60 16.5 {UUID:[I;1,2,3,8]}");
+    tick(&mut server, 4);
+    assert!(entity_with_uuid(&server, 5).is_none());
+    let out = run(&mut server, "data get entity 00000001-0000-0002-0000-000300000008 Motion");
+    assert_eq!(out, vec!["Minecart has the following entity data: [0.05634302975382447d, 0.0d, 0.0d]".to_string()]);
+    let out = run(&mut server, "data get entity 00000001-0000-0002-0000-000300000008 Pos");
+    assert_eq!(out, vec!["Minecart has the following entity data: [1.4323773385817005d, -59.9375d, 16.5d]".to_string()]);
+}
+

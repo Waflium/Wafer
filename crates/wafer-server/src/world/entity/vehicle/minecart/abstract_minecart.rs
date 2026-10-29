@@ -238,7 +238,7 @@ impl ServerLevel {
     }
 
     pub fn is_minecart(&self, id: EntityId) -> bool {
-        matches!(self.find_entity(id), Some(LevelEntity::Minecart(_)))
+        matches!(self.find_entity_or_tombstone(id), Some(LevelEntity::Minecart(_)))
     }
 
     pub fn abstract_minecart_passenger_attachment_point(&self, id: EntityId, passenger: EntityId) -> Vec3 {
@@ -356,29 +356,25 @@ impl ServerLevel {
             vehicle_entity::set_damage(e, damage - 1.0);
         }
         self.check_below_world(id);
-        if self.entity(id).is_removed() {
-            return;
-        }
         self.entity_mut(id).compute_speed();
         self.handle_portal(id);
-        if self.entity(id).is_removed() {
-            return;
-        }
         if use_experimental_movement(self) {
             self.new_minecart_behavior_tick(id);
         } else {
             self.old_minecart_behavior_tick(id);
         }
-        if self.entity_ref(id).is_none_or(Entity::is_removed) {
+        if self.tick_suspended() {
+            self.suspend_tick(move |level| level.abstract_minecart_tick_end(id));
             return;
         }
+        self.abstract_minecart_tick_end(id);
+    }
+
+    fn abstract_minecart_tick_end(&mut self, id: EntityId) {
         self.update_fluid_interaction(id);
         if self.entity(id).is_in_lava() {
             self.lava_ignite(id);
             self.lava_hurt(id);
-            if self.entity_ref(id).is_none() {
-                return;
-            }
             self.entity_mut(id).fall_distance *= 0.5;
         }
         self.entity_mut(id).first_tick = false;
@@ -429,9 +425,6 @@ impl ServerLevel {
         }
         let delta = e.delta_movement;
         self.minecart_move(id, MoverType::SelfMove, delta);
-        if self.entity_ref(id).is_none() {
-            return;
-        }
         let air_drag = self.air_drag(id) as f64;
         let e = self.entity_mut(id);
         if !e.on_ground {
@@ -443,22 +436,17 @@ impl ServerLevel {
         if use_experimental_movement(self) {
             let to_position = self.entity(id).position().add_vec(delta);
             self.entity_move(id, mover, delta);
-            if self.entity_ref(id).is_none() {
-                return;
-            }
             let should_continue = self.new_minecart_behavior_push_and_pickup_entities(id);
             if should_continue {
                 let delta = to_position.subtract(self.entity(id).position());
                 self.entity_move(id, mover, delta);
             }
-            if mover == MoverType::Piston && let Some(LevelEntity::Minecart(minecart)) = self.find_entity_mut(id) {
-                minecart.set_on_rails(false);
+            if mover == MoverType::Piston {
+                self.minecart_mut(id).set_on_rails(false);
             }
         } else {
             self.entity_move(id, mover, delta);
-            if self.entity_ref(id).is_some() {
-                self.minecart_apply_effects_from_blocks(id);
-            }
+            self.minecart_apply_effects_from_blocks(id);
         }
     }
 
@@ -469,9 +457,7 @@ impl ServerLevel {
         }
         let position = self.entity(id).position();
         self.apply_effects_from_blocks_between(id, position, position);
-        if self.entity_ref(id).is_some() {
-            self.entity_mut(id).clear_movement_this_tick();
-        }
+        self.entity_mut(id).clear_movement_this_tick();
     }
 
     pub fn get_redstone_direction(&mut self, pos: BlockPos) -> Vec3 {
