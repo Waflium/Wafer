@@ -211,11 +211,14 @@ impl ServerLevel {
     }
 
     pub fn projectile(&self, id: EntityId) -> &Projectile {
-        self.as_projectile(id).expect("a projectile")
+        match self.find_entity_or_tombstone(id) {
+            Some(LevelEntity::Projectile(projectile)) => projectile,
+            _ => unreachable!("not a projectile"),
+        }
     }
 
     pub fn projectile_mut(&mut self, id: EntityId) -> &mut Projectile {
-        match self.find_entity_mut(id) {
+        match self.find_entity_or_tombstone_mut(id) {
             Some(LevelEntity::Projectile(projectile)) => projectile,
             _ => unreachable!("not a projectile"),
         }

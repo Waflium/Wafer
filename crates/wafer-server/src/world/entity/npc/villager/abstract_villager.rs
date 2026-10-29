@@ -96,11 +96,11 @@ impl Mob {
 
 impl ServerLevel {
     pub fn abstract_villager(&self, id: EntityId) -> &AbstractVillager {
-        self.mob(id).and_then(Mob::abstract_villager).expect("an abstract villager")
+        self.mob_or_tombstone(id).and_then(Mob::abstract_villager).expect("an abstract villager")
     }
 
     pub fn abstract_villager_mut(&mut self, id: EntityId) -> &mut AbstractVillager {
-        self.mob_mut(id).and_then(Mob::abstract_villager_mut).expect("an abstract villager")
+        self.mob_or_tombstone_mut(id).and_then(Mob::abstract_villager_mut).expect("an abstract villager")
     }
 
     pub fn is_abstract_villager(&self, id: EntityId) -> bool {

@@ -134,11 +134,11 @@ pub fn finalize_spawn(
 
 impl ServerLevel {
     pub fn raider(&self, id: EntityId) -> &Raider {
-        self.mob(id).and_then(Mob::raider).expect("a raider")
+        self.mob_or_tombstone(id).and_then(Mob::raider).expect("a raider")
     }
 
     pub fn raider_mut(&mut self, id: EntityId) -> &mut Raider {
-        self.mob_mut(id).and_then(Mob::raider_mut).expect("a raider")
+        self.mob_or_tombstone_mut(id).and_then(Mob::raider_mut).expect("a raider")
     }
 
     pub fn raider_current_raid(&self, id: EntityId) -> Option<&Raid> {

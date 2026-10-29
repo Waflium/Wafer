@@ -7,6 +7,7 @@ use crate::network::configuration::ClientInfo;
 use crate::network::connection::Outbound;
 use crate::network::login::Profile;
 use crate::world::entity::living_entity::LivingEntity;
+use crate::world::entity::mob::Mob;
 use crate::world::entity::{Entity, EntityId, LevelEntity, RemovalReason};
 
 const TOMBSTONE_TICKS: i64 = 600;
@@ -56,6 +57,31 @@ impl ServerLevel {
         match self.tombstones.removed.get_index_of(&id) {
             Some(index) => self.tombstones.removed.get_index_mut(index).map(|(_, (entity, _))| entity),
             None => self.other_levels.iter_mut().find_map(|level| level.tombstones.removed.get_mut(&id).map(|(entity, _)| entity)),
+        }
+    }
+
+    pub(crate) fn find_entity_or_tombstone(&self, id: EntityId) -> Option<&LevelEntity> {
+        self.find_entity(id).or_else(|| self.tombstone(id))
+    }
+
+    pub(crate) fn find_entity_or_tombstone_mut(&mut self, id: EntityId) -> Option<&mut LevelEntity> {
+        if self.find_entity(id).is_some() {
+            return self.find_entity_mut(id);
+        }
+        self.tombstone_mut(id)
+    }
+
+    pub(crate) fn mob_or_tombstone(&self, id: EntityId) -> Option<&Mob> {
+        match self.find_entity_or_tombstone(id) {
+            Some(LevelEntity::Mob(mob)) => Some(mob),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn mob_or_tombstone_mut(&mut self, id: EntityId) -> Option<&mut Mob> {
+        match self.find_entity_or_tombstone_mut(id) {
+            Some(LevelEntity::Mob(mob)) => Some(mob),
+            _ => None,
         }
     }
 

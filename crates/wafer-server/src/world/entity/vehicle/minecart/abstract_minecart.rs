@@ -224,14 +224,14 @@ impl AbstractMinecart {
 
 impl ServerLevel {
     pub fn minecart(&self, id: EntityId) -> &AbstractMinecart {
-        match self.find_entity(id) {
+        match self.find_entity_or_tombstone(id) {
             Some(LevelEntity::Minecart(minecart)) => minecart,
             _ => unreachable!("not a minecart"),
         }
     }
 
     pub fn minecart_mut(&mut self, id: EntityId) -> &mut AbstractMinecart {
-        match self.find_entity_mut(id) {
+        match self.find_entity_or_tombstone_mut(id) {
             Some(LevelEntity::Minecart(minecart)) => minecart,
             _ => unreachable!("not a minecart"),
         }

@@ -148,14 +148,14 @@ pub fn can_vehicle_collide(level: &ServerLevel, vehicle: EntityId, entity: Entit
 
 impl ServerLevel {
     pub fn boat(&self, id: EntityId) -> &AbstractBoat {
-        match self.find_entity(id) {
+        match self.find_entity_or_tombstone(id) {
             Some(LevelEntity::Boat(boat)) => boat,
             _ => unreachable!("not a boat"),
         }
     }
 
     pub fn boat_mut(&mut self, id: EntityId) -> &mut AbstractBoat {
-        match self.find_entity_mut(id) {
+        match self.find_entity_or_tombstone_mut(id) {
             Some(LevelEntity::Boat(boat)) => boat,
             _ => unreachable!("not a boat"),
         }

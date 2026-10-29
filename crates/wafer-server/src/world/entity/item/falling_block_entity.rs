@@ -136,7 +136,7 @@ pub fn fall(level: &mut ServerLevel, pos: BlockPos, state: BlockState) -> Entity
 
 impl ServerLevel {
     pub fn falling_block(&mut self, id: EntityId) -> &mut FallingBlockEntity {
-        match self.find_entity_mut(id) {
+        match self.find_entity_or_tombstone_mut(id) {
             Some(LevelEntity::FallingBlock(falling)) => falling,
             _ => unreachable!("not a falling block"),
         }

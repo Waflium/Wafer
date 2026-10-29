@@ -166,11 +166,11 @@ impl ServerLevel {
     }
 
     pub fn ender_dragon(&self, id: EntityId) -> &EnderDragon {
-        ender_dragon(self.mob(id).expect("an ender dragon"))
+        ender_dragon(self.mob_or_tombstone(id).expect("an ender dragon"))
     }
 
     pub fn ender_dragon_mut(&mut self, id: EntityId) -> &mut EnderDragon {
-        ender_dragon_mut(self.mob_mut(id).expect("an ender dragon"))
+        ender_dragon_mut(self.mob_or_tombstone_mut(id).expect("an ender dragon"))
     }
 
     pub fn dragon_phase_manager(&self, id: EntityId) -> &EnderDragonPhaseManager {

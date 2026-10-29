@@ -336,11 +336,11 @@ impl Villager {
 
 impl ServerLevel {
     pub fn villager(&self, id: EntityId) -> &Villager {
-        villager(self.mob(id).expect("a villager"))
+        villager(self.mob_or_tombstone(id).expect("a villager"))
     }
 
     pub fn villager_mut(&mut self, id: EntityId) -> &mut Villager {
-        villager_mut(self.mob_mut(id).expect("a villager"))
+        villager_mut(self.mob_or_tombstone_mut(id).expect("a villager"))
     }
 
     pub fn is_villager(&self, id: EntityId) -> bool {
