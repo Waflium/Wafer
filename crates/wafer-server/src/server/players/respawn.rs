@@ -48,6 +48,9 @@ struct RespawnTransition {
 impl Server {
     pub fn create_common_spawn_info(&self, p: &mut Writer, level_index: usize, player: &ServerPlayer) {
         let level = &self.levels[level_index];
+        if level.dimension_type_id < 0 {
+            p.fail(format!("java.lang.IllegalArgumentException: Can't find id for 'Direct{{DimensionType[{}]}}' in map net.minecraft.core.Registry$1\n\t... 24 more", level.dimension));
+        }
         p.varint(crate::core::data_registries::network_id("minecraft:dimension_type", level.dimension_type_id));
         p.string(level.dimension);
         p.i64(hashed_seed(self.seed));

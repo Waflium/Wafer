@@ -3,7 +3,6 @@ use crate::commands::source::CommandSourceStack;
 use crate::network::chat::Component;
 use crate::server::Server;
 use crate::server::command_frames::{COMMAND_EXECUTION, TASK_QUEUE, origin_frames};
-use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::server::command_origin::CommandOrigin;
 
 pub const RELOAD_COMMAND_FRAME: &str = "net.minecraft.server.commands.ReloadCommand.lambda$register$0(ReloadCommand.java:53)";
@@ -68,6 +67,7 @@ pub fn reload(server: &mut Server, _context: &CommandContext, source: &CommandSo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 
     const ORIGINS: [CommandOrigin; 13] = [
         CommandOrigin::Console,

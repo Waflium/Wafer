@@ -227,7 +227,7 @@ fn encoding_fault(packet: &[u8]) -> Option<(i32, &str)> {
 fn encoder_exception(id: i32, chain: &str) -> (String, String, String) {
     let packet_type = format!("clientbound/{}", wafer_data::packet_name("play", "clientbound", id).unwrap_or_default());
     let wrapper = format!("io.netty.handler.codec.EncoderException: Failed to encode packet '{packet_type}'");
-    let causes = chain.lines().map(|cause| format!("\nCaused by: {cause}")).collect();
+    let causes = chain.lines().map(|line| if line.starts_with('\t') { format!("\n{line}") } else { format!("\nCaused by: {line}") }).collect();
     (packet_type, wrapper, causes)
 }
 
