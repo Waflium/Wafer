@@ -11,7 +11,7 @@ pub fn digit(c: char) -> Option<u32> {
     DECIMAL_DIGIT_ZEROS.iter().find(|&&zero| code >= zero && code < zero + 10).map(|&zero| code - zero)
 }
 
-pub fn parse_int(input: &str) -> Option<i32> {
+fn parse_signed(input: &str, limit: i128) -> Option<i128> {
     let (negative, digits) = match input.strip_prefix('-') {
         Some(rest) => (true, rest),
         None => (false, input.strip_prefix('+').unwrap_or(input)),
@@ -19,14 +19,22 @@ pub fn parse_int(input: &str) -> Option<i32> {
     if digits.is_empty() {
         return None;
     }
-    let mut magnitude: i64 = 0;
+    let mut magnitude: i128 = 0;
     for unit in digits.chars() {
-        magnitude = magnitude * 10 + digit(unit)? as i64;
-        if magnitude > 1 << 31 {
+        magnitude = magnitude * 10 + digit(unit)? as i128;
+        if magnitude > limit {
             return None;
         }
     }
-    i32::try_from(if negative { -magnitude } else { magnitude }).ok()
+    Some(if negative { -magnitude } else { magnitude })
+}
+
+pub fn parse_int(input: &str) -> Option<i32> {
+    i32::try_from(parse_signed(input, 1 << 31)?).ok()
+}
+
+pub fn parse_long(input: &str) -> Option<i64> {
+    i64::try_from(parse_signed(input, 1 << 63)?).ok()
 }
 
 pub fn number_format_exception(input: &str) -> String {
@@ -63,6 +71,32 @@ mod tests {
         ];
         for (input, expected) in cases {
             assert_eq!(parse_int(input), *expected, "{input:?}");
+        }
+    }
+
+    #[test]
+    fn parse_long_matches_java() {
+        let cases: &[(&str, Option<i64>)] = &[
+            ("\u{663}", Some(3)),
+            ("-\u{663}\u{664}", Some(-34)),
+            ("+\u{FF11}\u{FF12}", Some(12)),
+            ("9223372036854775807", Some(i64::MAX)),
+            ("9223372036854775808", None),
+            ("-9223372036854775808", Some(i64::MIN)),
+            ("-9223372036854775809", None),
+            ("99999999999999999999999999999999999999999", None),
+            ("0000000000000000000000000000000000005", Some(5)),
+            ("2147483648", Some(2147483648)),
+            ("", None),
+            ("-", None),
+            ("+", None),
+            (" 5", None),
+            ("5 ", None),
+            ("1L", None),
+            ("\u{1D7D3}", None),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(parse_long(input), *expected, "{input:?}");
         }
     }
 

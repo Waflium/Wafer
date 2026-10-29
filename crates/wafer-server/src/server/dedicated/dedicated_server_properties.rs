@@ -1,5 +1,7 @@
 use super::settings::{Properties, Settings};
 use crate::server::level::game_mode::GameType;
+use crate::util::java_integer::{number_format_exception, parse_int, parse_long};
+use crate::util::string_util::java_trim;
 use crate::world::difficulty::Difficulty;
 
 const SECRET_ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -90,15 +92,15 @@ pub struct InvalidProperty(pub String);
 impl DedicatedServerProperties {
     pub fn new(properties: Properties) -> Result<DedicatedServerProperties, InvalidProperty> {
         let mut s = Settings { properties };
-        let difficulty = |v: &str| match v.parse::<i32>() {
-            Ok(id) => Some(Difficulty::VALUES[id.rem_euclid(4) as usize]),
-            Err(_) => Difficulty::by_name(v),
+        let difficulty = |v: &str| match parse_int(v) {
+            Some(id) => Some(Difficulty::VALUES[id.rem_euclid(4) as usize]),
+            None => Difficulty::by_name(v),
         };
-        let game_type = |v: &str| match v.parse::<i32>() {
-            Ok(id) => Some(GameType::by_id(id)),
-            Err(_) => GameType::by_name(v),
+        let game_type = |v: &str| match parse_int(v) {
+            Some(id) => Some(GameType::by_id(id)),
+            None => GameType::by_name(v),
         };
-        let permission = |v: &str| v.parse::<i32>().ok().map(|level| level.clamp(0, 4));
+        let permission = |v: &str| parse_int(v).map(|level| level.clamp(0, 4));
         let online_mode = s.get_bool("online-mode", true);
         let prevent_proxy_connections = s.get_bool("prevent-proxy-connections", false);
         let server_ip = s.get_string("server-ip", "");
@@ -142,14 +144,14 @@ impl DedicatedServerProperties {
         let network_compression_threshold = s.get_int("network-compression-threshold", 256);
         let broadcast_rcon_to_ops = s.get_bool("broadcast-rcon-to-ops", true);
         let broadcast_console_to_ops = s.get_bool("broadcast-console-to-ops", true);
-        let max_world_size = s.get("max-world-size", |v| v.parse::<i32>().ok().map(|v| v.clamp(1, 29_999_984)), i32::to_string, 29_999_984);
+        let max_world_size = s.get("max-world-size", |v| parse_int(v).map(|v| v.clamp(1, 29_999_984)), i32::to_string, 29_999_984);
         let sync_chunk_writes = s.get_bool("sync-chunk-writes", true);
         let region_file_compression = s.get_string("region-file-compression", "deflate");
         let enable_jmx_monitoring = s.get_bool("enable-jmx-monitoring", false);
         let enable_status = s.get_bool("enable-status", true);
         let hide_online_players = s.get_bool("hide-online-players", false);
         let entity_broadcast_range_percentage = match s.properties.get("entity-broadcast-range-percentage") {
-            Some(raw) => raw.parse::<i32>().map_err(|_| InvalidProperty(format!("java.lang.NumberFormatException: For input string: \"{raw}\"")))?.clamp(10, 1000),
+            Some(raw) => parse_int(raw).ok_or_else(|| InvalidProperty(format!("java.lang.NumberFormatException: {}", number_format_exception(raw))))?.clamp(10, 1000),
             None => 100,
         };
         s.properties.put("entity-broadcast-range-percentage", entity_broadcast_range_percentage.to_string());
@@ -269,11 +271,11 @@ fn split_packs(packs: &str) -> Vec<String> {
 }
 
 pub fn parse_seed(seed: &str) -> Option<i64> {
-    let seed = seed.trim();
+    let seed = java_trim(seed);
     if seed.is_empty() {
         return None;
     }
-    Some(seed.parse::<i64>().unwrap_or_else(|_| java_string_hash(seed) as i64))
+    Some(parse_long(seed).unwrap_or_else(|| java_string_hash(seed) as i64))
 }
 
 fn java_string_hash(s: &str) -> i32 {
@@ -382,5 +384,25 @@ mod tests {
         assert_eq!(properties.level_type, "minecraft:flat");
         assert_eq!(properties.announce_player_achievements, Some(true));
         assert_eq!(properties.properties.get("announce-player-achievements"), None);
+    }
+
+    #[test]
+    fn numbers_accept_unicode_digits_like_java() {
+        let mut raw = Properties::default();
+        raw.put("max-players", "\u{663}\u{660}".into());
+        raw.put("max-tick-time", "\u{FF11}\u{FF12}".into());
+        raw.put("difficulty", "\u{662}".into());
+        raw.put("op-permission-level", "\u{661}".into());
+        raw.put("level-seed", "\u{1} -\u{663}\u{664} \u{1}".into());
+        let properties = DedicatedServerProperties::new(raw).unwrap();
+        assert_eq!(properties.max_players, 30);
+        assert_eq!(properties.max_tick_time, 12);
+        assert_eq!(properties.properties.get("max-tick-time"), Some("12"));
+        assert_eq!(properties.properties.get("difficulty"), Some("normal"));
+        assert_eq!(properties.op_permission_level, 1);
+        assert_eq!(properties.seed, Some(-34));
+        assert_eq!(parse_seed("\u{a0}1"), Some(java_string_hash("\u{a0}1") as i64));
+        assert_eq!(parse_seed("\u{1} \u{1}"), None);
+        assert_eq!(parse_seed("9223372036854775808"), Some(java_string_hash("9223372036854775808") as i64));
     }
 }

@@ -21,6 +21,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::world::level::storage::level_storage_source::{LevelStorageAccess, LevelStorageSource};
 use crate::world::level::storage::{WorldData, WorldDir};
 use crate::util::datafix::data_fixers::get_file_fixer;
+use crate::util::java_integer::parse_int;
 use crate::util::worldupdate::upgrade_progress::UpgradeProgress;
 use super::notifications::NotificationManager;
 use crate::{Listen, ServerConfig, serve_world};
@@ -99,7 +100,7 @@ impl OptionSet {
                 }
                 None => return Err(format!("joptsimple.OptionMissingRequiredArgumentException: Option {option} requires an argument")),
             };
-            if option == "port" && value.parse::<i32>().is_err() {
+            if option == "port" && parse_int(&value).is_none() {
                 return Err(format!("joptsimple.OptionArgumentConversionException: Cannot parse argument '{value}' of option port"));
             }
             options.values.push((option, value));
@@ -280,7 +281,7 @@ pub fn main(args: Vec<String>) {
         error!("Failed to save level {}\n{e}", world_dir.root.display());
     }
     let _ = std::fs::create_dir_all(world_dir.root.join("players/data"));
-    let port = options.value_of("port").and_then(|p| p.parse::<i32>().ok()).filter(|&p| p >= 0).unwrap_or(properties.server_port);
+    let port = options.value_of("port").and_then(parse_int).filter(|&p| p >= 0).unwrap_or(properties.server_port);
     let listen = Listen::Bind { ip: properties.server_ip.clone(), port: port as u16 };
     let mut config = ServerConfig::from_properties(properties, &universe, level_name);
     if properties.code_of_conduct {

@@ -4,6 +4,8 @@ use std::path::Path;
 
 use chrono::{Local, Offset};
 
+use crate::util::java_integer::{parse_int, parse_long};
+
 #[cfg(windows)]
 const LINE_SEPARATOR: &str = "\r\n";
 #[cfg(not(windows))]
@@ -307,11 +309,11 @@ impl Settings {
     }
 
     pub fn get_int(&mut self, key: &str, default: i32) -> i32 {
-        self.get(key, |v| v.parse().ok(), i32::to_string, default)
+        self.get(key, parse_int, i32::to_string, default)
     }
 
     pub fn get_long(&mut self, key: &str, default: i64) -> i64 {
-        self.get(key, |v| v.parse().ok(), i64::to_string, default)
+        self.get(key, parse_long, i64::to_string, default)
     }
 
     pub fn get_bool(&mut self, key: &str, default: bool) -> bool {

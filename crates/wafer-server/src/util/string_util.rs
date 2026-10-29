@@ -19,6 +19,10 @@ pub fn filter_text(input: &str) -> String {
     input.chars().filter(|&c| is_allowed_chat_character(c)).collect()
 }
 
+pub fn java_trim(s: &str) -> &str {
+    s.trim_matches(|c: char| c <= ' ')
+}
+
 pub fn is_whitespace(codepoint: char) -> bool {
     codepoint.is_whitespace() && codepoint != '\u{85}' || matches!(codepoint, '\u{1c}'..='\u{1f}')
 }
