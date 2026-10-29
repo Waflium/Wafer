@@ -56,7 +56,7 @@ impl AbstractVillager {
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
         let abstract_villager = mob.abstract_villager_mut().expect("an abstract villager");
-        abstract_villager.offers = tag_value_input::read_or_error(nbt, "Offers", MerchantOffers::decode);
+        abstract_villager.offers = tag_value_input::read(nbt, "Offers", MerchantOffers::decode);
         inventory_carrier::read_inventory_from_tag(&mut abstract_villager.inventory, nbt);
     }
 }

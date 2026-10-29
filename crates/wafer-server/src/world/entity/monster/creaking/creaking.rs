@@ -16,6 +16,7 @@ use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, RemovalReason, sound_event};
 use crate::world::level::block::entity::BlockEntityKind;
 use crate::world::level::pathfinder::path_type::PathType;
+use crate::world::level::storage::tag_value_input;
 
 pub const DATA_CAN_MOVE: usize = 16;
 pub const DATA_IS_ACTIVE: usize = 17;
@@ -123,10 +124,8 @@ impl Creaking {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        if let Some(Nbt::IntArray(pos)) = input.get("home_pos")
-            && let [x, y, z] = pos[..]
-        {
-            set_transient(mob, BlockPos::new(x, y, z));
+        if let Some(pos) = tag_value_input::read(input, "home_pos", crate::util::extra_codecs::block_pos) {
+            set_transient(mob, pos);
         }
     }
 }

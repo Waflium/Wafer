@@ -6,9 +6,10 @@ use super::entity_reference::EntityReference;
 use super::{Entity, EntityDimensions, EntityId, LevelEntity};
 use crate::server::level::ServerLevel;
 use crate::world::InteractionResult;
-use crate::world::entity::entity_save::uuid_from_nbt;
+use crate::util::codec::{self, DecodeResult, Record};
+use crate::world::entity::entity_save::decode_uuid;
 use crate::world::level::block::entity::{byte_or, float_or};
-use crate::world::level::storage::uuid_ints;
+use crate::world::level::storage::{tag_value_input, uuid_ints};
 
 const DATA_WIDTH_ID: usize = 8;
 const DATA_HEIGHT_ID: usize = 9;
@@ -28,8 +29,14 @@ impl PlayerAction {
         Nbt::Compound(vec![("player".into(), uuid_ints(self.player)), ("timestamp".into(), Nbt::Long(self.timestamp))])
     }
 
-    fn from_nbt(tag: &Nbt) -> Option<PlayerAction> {
-        Some(PlayerAction { player: tag.get("player").and_then(uuid_from_nbt)?, timestamp: tag.get("timestamp").and_then(Nbt::as_i64)? })
+    fn decode(tag: &Nbt) -> DecodeResult<PlayerAction> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let player = record.required(tag, "player", decode_uuid);
+        let timestamp = record.required(tag, "timestamp", |timestamp| DecodeResult::from(codec::long(timestamp)));
+        record.build(|| Some(PlayerAction { player: player?, timestamp: timestamp? }))
     }
 }
 
@@ -95,8 +102,8 @@ impl Interaction {
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
         self.set_width(float_or(input, "width", DEFAULT_WIDTH));
         self.set_height(float_or(input, "height", DEFAULT_HEIGHT));
-        self.attack = input.get("attack").and_then(PlayerAction::from_nbt);
-        self.interaction = input.get("interaction").and_then(PlayerAction::from_nbt);
+        self.attack = tag_value_input::read(input, "attack", PlayerAction::decode);
+        self.interaction = tag_value_input::read(input, "interaction", PlayerAction::decode);
         let response = byte_or(input, "response", DEFAULT_RESPONSE as i8) != 0;
         self.entity.data.set(DATA_RESPONSE_ID, DataValue::Boolean(response));
         let bounding_box = self.get_dimensions().make_bounding_box(self.entity.position());

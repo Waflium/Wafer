@@ -16,6 +16,8 @@ pub mod decoration;
 #[cfg(test)]
 mod data_tests;
 #[cfg(test)]
+mod serialization_error_tests;
+#[cfg(test)]
 mod entity_data_layout_tests;
 #[cfg(test)]
 mod effect_tests;

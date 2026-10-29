@@ -258,7 +258,7 @@ impl Projectile {
         let shake_time = number("shake").map_or(0, |v| v as i8 as i32 & 255);
         self.set_in_ground(number("inGround").is_some_and(|v| v as i8 != 0));
         let base_damage = tag_value_input::get_f64(input, "damage").unwrap_or(ARROW_BASE_DAMAGE);
-        let pickup = number("pickup").map_or(Pickup::Disallowed, |v| Pickup::by_ordinal(v as i8 as i32));
+        let pickup = tag_value_input::read_byte(input, "pickup").map_or(Pickup::Disallowed, |v| Pickup::by_ordinal(v as i32));
         self.set_crit_arrow(number("crit").is_some_and(|v| v as i8 != 0));
         self.set_pierce_level(number("PierceLevel").map_or(0, |v| v as i8));
         let sound_event = input

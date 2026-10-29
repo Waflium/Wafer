@@ -515,8 +515,19 @@ pub fn base_map_partial<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, va
     DecodeResult { value: Some(entries), error }
 }
 
-pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, mut value: impl FnMut(&K, &Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
-    let fields = map(tag)?;
+pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl FnMut(&K, &Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
+    let DecodeResult { value, error } = dispatched_map_partial(tag, key, value);
+    match error {
+        Some(error) => Err(error),
+        None => Ok(value.unwrap_or_default()),
+    }
+}
+
+pub fn dispatched_map_partial<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, mut value: impl FnMut(&K, &Nbt) -> DataResult<V>) -> DecodeResult<Vec<(K, V)>> {
+    let fields = match map(tag) {
+        Ok(fields) => fields,
+        Err(error) => return DecodeResult::error(error),
+    };
     let mut entries = Vec::with_capacity(fields.len());
     let mut errors = Vec::new();
     let mut failed = Vec::new();
@@ -536,7 +547,7 @@ pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, mut 
             }
         }
     }
-    if errors.is_empty() { Ok(entries) } else { Err(map_entry_failures(errors, failed)) }
+    DecodeResult { value: Some(entries), error: (!errors.is_empty()).then(|| map_entry_failures(errors, failed)) }
 }
 
 #[cfg(test)]

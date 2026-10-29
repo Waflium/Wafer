@@ -1785,7 +1785,7 @@ impl Mob {
         self.living.hurt_time = short("HurtTime");
         self.living.death_time = short("DeathTime");
         self.entity.set_shared_flag(super::flags::FALL_FLYING, boolean("FallFlying"));
-        if let Some(packed_brain) = nbt.get("Brain").and_then(brain::Packed::from_nbt) {
+        if let Some(packed_brain) = tag_value_input::read(nbt, "Brain", brain::Packed::decode) {
             self.living.brain = self.make_brain(packed_brain);
         }
         self.living.last_hurt_by_player = tag_value_input::read(nbt, "last_hurt_by_player", entity_save::decode_uuid);
@@ -1840,7 +1840,7 @@ impl Mob {
                 }
             }
             MobKind::MushroomCow(mushroom_cow) => {
-                let variant = nbt.get("Type").and_then(Nbt::as_str).and_then(mushroom_cow::Variant::by_name).unwrap_or(mushroom_cow::Variant::DEFAULT);
+                let variant = tag_value_input::read_or_error(nbt, "Type", |tag| crate::util::codec::enum_by_name(tag, mushroom_cow::Variant::by_name)).unwrap_or(mushroom_cow::Variant::DEFAULT);
                 mushroom_cow::set_variant(&mut self.entity, variant);
                 mushroom_cow.stew_effects = nbt.get("stew_effects").filter(|effects| matches!(effects, Nbt::List(_))).cloned();
             }
@@ -1862,8 +1862,8 @@ impl Mob {
             MobKind::Panda(_) | MobKind::Strider(_) => {}
             MobKind::Armadillo(_) | MobKind::Sniffer(_) => {}
             MobKind::Chicken(chicken) => {
-                let variant = nbt.get("variant").and_then(Nbt::as_str).and_then(chicken::variant_id);
-                let sound_variant = nbt.get("sound_variant").and_then(Nbt::as_str).and_then(chicken::sound_variant_id);
+                let variant = tag_value_input::read_or_error(nbt, "variant", crate::util::codec::identifier).and_then(|name| chicken::variant_id(&name));
+                let sound_variant = tag_value_input::read_or_error(nbt, "sound_variant", crate::util::codec::identifier).and_then(|name| chicken::sound_variant_id(&name));
                 chicken.is_chicken_jockey = boolean("IsChickenJockey");
                 if let Some(egg_time) = int("EggLayTime") {
                     chicken.egg_time = egg_time;

@@ -234,7 +234,7 @@ impl TropicalFish {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let variant = tag_value_input::get_i64(nbt, "Variant").map_or(DEFAULT_VARIANT, |id| Variant::from_packed_id(id as i32));
+        let variant = tag_value_input::read_or_error(nbt, "Variant", crate::util::codec::int).map_or(DEFAULT_VARIANT, Variant::from_packed_id);
         mob.set_packed_variant(variant.get_packed_id());
     }
 

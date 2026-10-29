@@ -73,7 +73,7 @@ impl Shulker {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let attach_face = tag_value_input::get_i64(input, "AttachFace").map_or(DEFAULT_ATTACH_FACE, |id| Direction::from_3d_data_value(id as i32));
+        let attach_face = tag_value_input::read_or_error(input, "AttachFace", crate::util::codec::int).map_or(DEFAULT_ATTACH_FACE, Direction::from_3d_data_value);
         set_attach_face(&mut mob.entity, attach_face);
         let byte = |key: &str, default: i8| tag_value_input::get_numeric(input, key).and_then(crate::world::level::block::entity::byte_value).unwrap_or(default);
         mob.entity.data.set(DATA_PEEK_ID, DataValue::Byte(byte("Peek", DEFAULT_PEEK)));

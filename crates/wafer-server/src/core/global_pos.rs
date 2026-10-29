@@ -1,6 +1,8 @@
 use wafer_core::BlockPos;
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::{codec, extra_codecs};
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct GlobalPos {
     pub dimension: String,
@@ -29,6 +31,14 @@ impl GlobalPos {
             ("dimension".into(), Nbt::String(self.dimension.clone())),
             ("pos".into(), Nbt::IntArray(vec![self.pos.x, self.pos.y, self.pos.z])),
         ])
+    }
+
+    pub fn decode(nbt: &Nbt) -> Result<GlobalPos, String> {
+        codec::map(nbt)?;
+        let mut record = codec::Record::default();
+        let dimension = record.required(nbt, "dimension", |dimension| codec::identifier(dimension));
+        let pos = record.required(nbt, "pos", extra_codecs::block_pos);
+        record.build(|| Some(GlobalPos { dimension: dimension?, pos: pos? })).into_result()
     }
 
     pub fn from_nbt(nbt: &Nbt) -> Option<GlobalPos> {

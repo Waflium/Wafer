@@ -28,6 +28,7 @@ use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, entity_selector, sound_event};
 use crate::world::item::ItemStack;
+use crate::world::level::storage::tag_value_input;
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::{InteractionHand, InteractionResult};
@@ -258,9 +259,8 @@ pub fn is_food(item_stack: &ItemStack) -> bool {
     item_stack.get_item().is(&item_tags::PANDA_FOOD)
 }
 
-fn gene_by_name(tag: &Nbt) -> Option<Gene> {
-    let name = tag.as_str()?;
-    GENES.iter().find(|(n, _)| *n == name).map(|(_, gene)| *gene)
+fn decode_gene(tag: &Nbt) -> Result<Gene, String> {
+    crate::util::codec::string_enum(tag, &GENES)
 }
 
 pub fn get_hurt_sound() -> &'static str {
@@ -360,9 +360,9 @@ impl Panda {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let main_gene = nbt.get("MainGene").and_then(gene_by_name).unwrap_or(Gene::Normal);
+        let main_gene = tag_value_input::read_or_error(nbt, "MainGene", decode_gene).unwrap_or(Gene::Normal);
         set_main_gene(&mut mob.entity, main_gene);
-        let hidden_gene = nbt.get("HiddenGene").and_then(gene_by_name).unwrap_or(Gene::Normal);
+        let hidden_gene = tag_value_input::read_or_error(nbt, "HiddenGene", decode_gene).unwrap_or(Gene::Normal);
         set_hidden_gene(&mut mob.entity, hidden_gene);
     }
 

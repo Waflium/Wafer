@@ -2,8 +2,9 @@ use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
 use super::gossip_type::GossipType;
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::util::java_collections::JavaHashCode;
-use crate::world::entity::entity_save::uuid_from_nbt;
+use crate::world::entity::entity_save::decode_uuid;
 use crate::world::level::storage::uuid_ints;
 
 pub const DISCARD_THRESHOLD: i32 = 2;
@@ -254,15 +255,27 @@ impl GossipContainer {
         )
     }
 
-    pub fn from_nbt(tag: &Nbt) -> Option<GossipContainer> {
-        let Nbt::List(list) = tag else { return None };
-        let mut container = GossipContainer::default();
-        for entry in list {
-            let target = entry.get("Target").and_then(uuid_from_nbt)?;
-            let ty = entry.get("Type").and_then(Nbt::as_str).and_then(GossipType::by_id)?;
-            let value = entry.get("Value").and_then(Nbt::as_i64).filter(|&v| v > 0)? as i32;
-            container.get_or_create(target).put(ty, value);
+    pub fn decode(tag: &Nbt) -> DecodeResult<GossipContainer> {
+        codec::list_partial(tag, GossipContainer::decode_entry).map(|entries| {
+            let mut container = GossipContainer::default();
+            for (target, ty, value) in entries {
+                container.get_or_create(target).put(ty, value);
+            }
+            container
+        })
+    }
+
+    fn decode_entry(tag: &Nbt) -> DecodeResult<(u128, GossipType, i32)> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
         }
-        Some(container)
+        let mut record = Record::default();
+        let target = record.required(tag, "Target", decode_uuid);
+        let ty = record.required(tag, "Type", |ty| codec::enum_by_name(ty, GossipType::by_id));
+        let value = record.required(tag, "Value", |value| {
+            let value = codec::int(value)?;
+            if value < 1 { Err(format!("Value must be positive: {value}")) } else { Ok(value) }
+        });
+        record.build(|| Some((target?, ty?, value?)))
     }
 }

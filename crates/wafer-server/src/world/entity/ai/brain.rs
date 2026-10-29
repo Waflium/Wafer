@@ -14,6 +14,7 @@ use super::memory::memory_value::{MemoryValue, MemoryValueType};
 use super::sensing::sensor::Sensor;
 use super::sensing::sensor_type::SensorType;
 use crate::server::level::ServerLevel;
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::attribute::environment_attribute::EnvironmentAttribute;
 use crate::world::entity::EntityId;
 use crate::world::entity::mob::Mob;
@@ -78,8 +79,13 @@ impl Packed {
         Nbt::Compound(vec![("memories".into(), self.memories.to_nbt())])
     }
 
-    pub fn from_nbt(nbt: &Nbt) -> Option<Packed> {
-        Some(Packed { memories: MemoryMap::from_nbt(nbt.get("memories")?)? })
+    pub fn decode(nbt: &Nbt) -> DecodeResult<Packed> {
+        if let Err(error) = codec::map(nbt) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let memories = record.required(nbt, "memories", MemoryMap::decode);
+        record.build(|| Some(Packed { memories: memories? }))
     }
 }
 

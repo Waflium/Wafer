@@ -87,7 +87,7 @@ impl ShulkerBullet {
         bullet.target_delta_x = double("TXD");
         bullet.target_delta_y = double("TYD");
         bullet.target_delta_z = double("TZD");
-        bullet.current_move_direction = tag_value_input::get_i64(input, "Dir").map(|id| Direction::from_3d_data_value(id as i32));
+        bullet.current_move_direction = tag_value_input::read_or_error(input, "Dir", crate::util::codec::int).map(Direction::from_3d_data_value);
         bullet.final_target = EntityReference::read(input, "Target");
     }
 }

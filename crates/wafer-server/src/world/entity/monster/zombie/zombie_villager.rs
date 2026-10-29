@@ -181,7 +181,7 @@ impl ZombieVillager {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         Zombie::read_additional_save_data(mob, input);
-        let villager_data_optional = input.get("VillagerData").and_then(VillagerData::from_nbt);
+        let villager_data_optional = tag_value_input::read_or_error(input, "VillagerData", VillagerData::decode);
         let finalized = tag_value_input::get_i64(input, "VillagerDataFinalized").is_some_and(|v| v != 0);
         if finalized || villager_data_optional.is_some() {
             set_villager_data_finalized(mob, true);
@@ -191,8 +191,8 @@ impl ZombieVillager {
             };
             mob.entity.data.set(DATA_VILLAGER_DATA, DataValue::VillagerData(villager_data));
         }
-        let trade_offers = tag_value_input::read_or_error(input, "Offers", MerchantOffers::decode);
-        let gossips = input.get("Gossips").and_then(GossipContainer::from_nbt);
+        let trade_offers = tag_value_input::read(input, "Offers", MerchantOffers::decode);
+        let gossips = tag_value_input::read(input, "Gossips", GossipContainer::decode);
         let zombie_villager = zombie_villager_mut(mob);
         zombie_villager.trade_offers = trade_offers;
         zombie_villager.gossips = gossips;

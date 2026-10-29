@@ -262,7 +262,7 @@ impl Parrot {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         crate::world::entity::tamable_animal::TamableAnimal::read_additional_save_data(mob, input);
-        let variant = tag_value_input::get_i64(input, "Variant").map_or(Variant::RedBlue, |id| Variant::by_id(id as i32));
+        let variant = tag_value_input::read_or_error(input, "Variant", crate::util::codec::int).map_or(Variant::RedBlue, Variant::by_id);
         set_variant(&mut mob.entity, variant);
     }
 }

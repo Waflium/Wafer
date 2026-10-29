@@ -225,7 +225,11 @@ impl DataComponentPatch {
     }
 
     pub fn from_nbt(tag: &Nbt) -> Result<DataComponentPatch, String> {
-        let entries = crate::util::codec::dispatched_map(
+        DataComponentPatch::from_nbt_partial(tag).into_result()
+    }
+
+    pub fn from_nbt_partial(tag: &Nbt) -> crate::util::codec::DecodeResult<DataComponentPatch> {
+        let entries = crate::util::codec::dispatched_map_partial(
             tag,
             |key| {
                 let (removed, name) = match key.strip_prefix('!') {
@@ -242,12 +246,14 @@ impl DataComponentPatch {
             |&(ty, removed), value| {
                 if removed { codec::map(value).map(|_| None) } else { ty.decode(value).map(Some) }
             },
-        )?;
-        let mut patch = DataComponentPatch::default();
-        for ((ty, _), value) in entries {
-            patch.put(ty, value);
-        }
-        Ok(patch)
+        );
+        entries.map(|entries| {
+            let mut patch = DataComponentPatch::default();
+            for ((ty, _), value) in entries {
+                patch.put(ty, value);
+            }
+            patch
+        })
     }
 
     pub fn write(&self, w: &mut Writer, delimited: bool) -> Result<(), String> {

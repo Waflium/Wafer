@@ -3,7 +3,7 @@ use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
 use super::item_cost::ItemCost;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::item::{ItemStack, write_slot};
 
 #[derive(Clone, Debug)]
@@ -30,20 +30,27 @@ impl MerchantOffer {
         MerchantOffer { base_cost_a, cost_b, result, uses, max_uses, reward_exp: true, special_price_diff: 0, demand, price_multiplier, xp }
     }
 
-    pub fn decode(tag: &Nbt) -> DataResult<MerchantOffer> {
-        codec::map(tag)?;
+    pub fn decode(tag: &Nbt) -> DecodeResult<MerchantOffer> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
         let lenient_int = |key: &str, default: i32| tag.get(key).and_then(|t| codec::int(t).ok()).unwrap_or(default);
-        Ok(MerchantOffer {
-            base_cost_a: codec::decode_field(tag, "buy", ItemCost::decode)?,
-            cost_b: tag.get("buyB").and_then(|t| ItemCost::decode(t).ok()),
-            result: codec::decode_field(tag, "sell", ItemStack::from_nbt)?,
-            uses: lenient_int("uses", 0),
-            max_uses: lenient_int("maxUses", 4),
-            reward_exp: tag.get("rewardExp").and_then(|t| codec::bool_value(t).ok()).unwrap_or(true),
-            special_price_diff: lenient_int("specialPrice", 0),
-            demand: lenient_int("demand", 0),
-            price_multiplier: tag.get("priceMultiplier").and_then(|t| codec::float(t).ok()).unwrap_or(0.0),
-            xp: lenient_int("xp", 1),
+        let mut record = Record::default();
+        let base_cost_a = record.required(tag, "buy", |t| DecodeResult::from(ItemCost::decode(t)));
+        let result = record.required(tag, "sell", |t| DecodeResult::from(ItemStack::from_nbt(t)));
+        record.build(|| {
+            Some(MerchantOffer {
+                base_cost_a: base_cost_a?,
+                cost_b: tag.get("buyB").and_then(|t| ItemCost::decode(t).ok()),
+                result: result?,
+                uses: lenient_int("uses", 0),
+                max_uses: lenient_int("maxUses", 4),
+                reward_exp: tag.get("rewardExp").and_then(|t| codec::bool_value(t).ok()).unwrap_or(true),
+                special_price_diff: lenient_int("specialPrice", 0),
+                demand: lenient_int("demand", 0),
+                price_multiplier: tag.get("priceMultiplier").and_then(|t| codec::float(t).ok()).unwrap_or(0.0),
+                xp: lenient_int("xp", 1),
+            })
         })
     }
 

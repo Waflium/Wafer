@@ -455,15 +455,16 @@ impl Fox {
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         let boolean = |key: &str, default: bool| tag_value_input::get_i64(input, key).map_or(default, |v| v != 0);
         clear_trusted(&mut mob.entity);
-        let trusted: Vec<EntityReference> = match input.get("Trusted") {
-            Some(Nbt::List(list)) => list.iter().map(crate::world::entity::entity_save::uuid_from_nbt).collect::<Option<Vec<u128>>>().unwrap_or_default().into_iter().map(EntityReference::of).collect(),
-            _ => Vec::new(),
-        };
+        let trusted: Vec<EntityReference> = tag_value_input::read(input, "Trusted", |tag| crate::util::codec::list_partial(tag, crate::world::entity::entity_save::decode_uuid))
+            .unwrap_or_default()
+            .into_iter()
+            .map(EntityReference::of)
+            .collect();
         for reference in trusted {
             add_trusted_entity(&mut mob.entity, reference);
         }
         set_sleeping(&mut mob.entity, boolean("Sleeping", DEFAULT_SLEEPING));
-        let variant = input.get("Type").and_then(Nbt::as_str).and_then(Variant::by_name).unwrap_or(Variant::DEFAULT);
+        let variant = tag_value_input::read_or_error(input, "Type", |tag| crate::util::codec::enum_by_name(tag, Variant::by_name)).unwrap_or(Variant::DEFAULT);
         set_variant(&mut mob.entity, variant);
         set_sitting(&mut mob.entity, boolean("Sitting", DEFAULT_SITTING));
         set_is_crouching(&mut mob.entity, boolean("Crouching", DEFAULT_CROUCHING));

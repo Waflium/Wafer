@@ -2,17 +2,20 @@ use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
 use super::merchant_offer::MerchantOffer;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::item::ItemStack;
 
 #[derive(Clone, Debug, Default)]
 pub struct MerchantOffers(pub Vec<MerchantOffer>);
 
 impl MerchantOffers {
-    pub fn decode(tag: &Nbt) -> DataResult<MerchantOffers> {
-        codec::map(tag)?;
-        let recipes = codec::decode_or(tag, "Recipes", Vec::new(), |t| codec::list_of(t, MerchantOffer::decode))?;
-        Ok(MerchantOffers(recipes))
+    pub fn decode(tag: &Nbt) -> DecodeResult<MerchantOffers> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let recipes = record.with_default(tag, "Recipes", Vec::new(), |t| codec::list_partial(t, MerchantOffer::decode));
+        record.build(|| Some(MerchantOffers(recipes)))
     }
 
     pub fn to_nbt(&self) -> Nbt {

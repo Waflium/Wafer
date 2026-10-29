@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::expirable_value::ExpirableValue;
 use super::memory_module_type::{Erased, MemoryModuleType};
+use crate::util::codec::{self, DecodeResult};
 
 #[derive(Clone, Debug, Default)]
 pub struct MemoryMap {
@@ -28,15 +29,17 @@ impl MemoryMap {
         )
     }
 
-    pub fn from_nbt(nbt: &Nbt) -> Option<MemoryMap> {
-        let Nbt::Compound(entries) = nbt else { return None };
-        let mut memories = Vec::with_capacity(entries.len());
-        for (key, value) in entries {
-            let name = if key.contains(':') { key.clone() } else { format!("minecraft:{key}") };
-            let ty = MemoryModuleType::by_name(&name)?;
-            memories.push((ty, ty.get_codec()?.decode(value)?));
-        }
-        Some(MemoryMap { memories })
+    pub fn decode(nbt: &Nbt) -> DecodeResult<MemoryMap> {
+        codec::dispatched_map_partial(
+            nbt,
+            |key| {
+                let name = codec::identifier(&Nbt::String(key.to_string()))?;
+                let ty = MemoryModuleType::by_name(&name).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:memory_module_type]: {name}"))?;
+                if ty.can_serialize() { Ok(ty) } else { Err(format!("Memory module {name} cannot be encoded")) }
+            },
+            |ty, value| ty.get_codec().expect("a serializable memory").decode(value),
+        )
+        .map(|memories| MemoryMap { memories })
     }
 }
 

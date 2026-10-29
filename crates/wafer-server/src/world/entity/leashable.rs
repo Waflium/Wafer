@@ -3,15 +3,16 @@ use wafer_data::{game_rule, items};
 use wafer_protocol::nbt::Nbt;
 
 use super::decoration::leash_fence_knot_entity::LeashFenceKnotEntity;
-use super::entity_save::uuid_from_nbt;
+use super::entity_save::decode_uuid;
 use super::mob::MobKind;
 use super::{EntityId, LevelEntity, sound_event};
 use crate::network::connection::encode;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::entity::ai::goal::goal::Flag;
+use crate::util::{codec, extra_codecs};
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
-use crate::world::level::storage::uuid_ints;
+use crate::world::level::storage::{tag_value_input, uuid_ints};
 
 pub const LEASH_TAG: &str = "leash";
 pub const LEASH_TOO_FAR_DIST: f64 = 12.0;
@@ -28,11 +29,13 @@ pub enum LeashInfo {
 }
 
 impl LeashInfo {
-    fn read(tag: &Nbt) -> Option<LeashInfo> {
-        match tag {
-            Nbt::Compound(_) => tag.get("UUID").and_then(uuid_from_nbt).map(LeashInfo::Uuid),
-            Nbt::IntArray(v) if v.len() == 3 => Some(LeashInfo::Pos(BlockPos::new(v[0], v[1], v[2]))),
-            _ => None,
+    fn decode(tag: &Nbt) -> Result<LeashInfo, String> {
+        let uuid = codec::map(tag).and_then(|_| codec::decode_field(tag, "UUID", |uuid| decode_uuid(uuid).into_result())).map(LeashInfo::Uuid);
+        let pos = extra_codecs::block_pos(tag).into_result().map(LeashInfo::Pos);
+        match (uuid, pos) {
+            (Ok(info), Err(_)) | (Err(_), Ok(info)) => Ok(info),
+            (Ok(first), Ok(second)) => Err(format!("Both alternatives read successfully, can not pick the correct one; first: {first:?} second: {second:?}")),
+            (Err(first), Err(second)) => Err(format!("{second}; {first}")),
         }
     }
 
@@ -64,7 +67,7 @@ impl LeashData {
     }
 
     pub fn read(input: &Nbt) -> Option<LeashData> {
-        input.get(LEASH_TAG).and_then(LeashInfo::read).map(|info| LeashData { delayed_leash_info: Some(info), ..LeashData::default() })
+        tag_value_input::read_or_error(input, LEASH_TAG, LeashInfo::decode).map(|info| LeashData { delayed_leash_info: Some(info), ..LeashData::default() })
     }
 
     pub fn write(leash_data: Option<&LeashData>, output: &mut Vec<(String, Nbt)>) {

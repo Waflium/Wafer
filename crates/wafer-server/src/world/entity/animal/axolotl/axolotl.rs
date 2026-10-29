@@ -233,7 +233,7 @@ impl Axolotl {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let variant = tag_value_input::get_i64(nbt, VARIANT_TAG).map_or(Variant::DEFAULT, |id| Variant::by_id(id as i32));
+        let variant = tag_value_input::read_or_error(nbt, VARIANT_TAG, crate::util::codec::int).map_or(Variant::DEFAULT, Variant::by_id);
         set_variant(&mut mob.entity, variant);
         set_from_bucket(&mut mob.entity, tag_value_input::get_i64(nbt, "FromBucket").is_some_and(|v| v != 0));
     }

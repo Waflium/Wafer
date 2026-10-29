@@ -41,21 +41,15 @@ impl VillagerData {
         ])
     }
 
-    pub fn from_nbt(tag: &Nbt) -> Option<VillagerData> {
-        let Nbt::Compound(_) = tag else { return None };
+    pub fn decode(tag: &Nbt) -> Result<VillagerData, String> {
+        crate::util::codec::map(tag)?;
         let ty = tag.get("type").and_then(Nbt::as_str).and_then(|name| VillagerType::by_name(&crate::commands::arguments::parse_identifier(name)?)).unwrap_or(DEFAULT_TYPE);
         let profession = tag.get("profession").and_then(Nbt::as_str).and_then(|name| ProfessionId::by_name(&crate::commands::arguments::parse_identifier(name)?)).unwrap_or(ProfessionId::NONE);
         let level = match tag.get("level") {
-            Some(Nbt::Byte(v)) => *v as i32,
-            Some(Nbt::Short(v)) => *v as i32,
-            Some(Nbt::Int(v)) => *v,
-            Some(Nbt::Long(v)) => *v as i32,
-            Some(Nbt::Float(v)) => *v as i32,
-            Some(Nbt::Double(v)) => *v as i32,
-            Some(_) => return None,
+            Some(level) => crate::util::codec::int(level)?,
             None => 1,
         };
-        Some(VillagerData::new(ty, profession, level))
+        Ok(VillagerData::new(ty, profession, level))
     }
 
     pub fn write(&self, w: &mut Writer) {

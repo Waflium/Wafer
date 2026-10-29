@@ -187,7 +187,7 @@ impl Armadillo {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let state = nbt.get("state").and_then(Nbt::as_str).and_then(ArmadilloState::by_name).unwrap_or(ArmadilloState::Idle);
+        let state = tag_value_input::read_or_error(nbt, "state", |tag| crate::util::codec::enum_by_name(tag, ArmadilloState::by_name)).unwrap_or(ArmadilloState::Idle);
         Armadillo::switch_to_state(mob, state);
         if let Some(time) = tag_value_input::get_numeric(nbt, "scute_time").and_then(int_value) {
             armadillo_mut(mob).scute_time = time;

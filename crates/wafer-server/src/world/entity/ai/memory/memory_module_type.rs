@@ -14,7 +14,8 @@ use crate::core::global_pos::GlobalPos;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::ai::behavior::position_tracker::PositionTracker;
 use crate::world::entity::ai::behavior::spear_attack::SpearStatus;
-use crate::world::entity::entity_save::uuid_from_nbt;
+use crate::util::{codec, extra_codecs};
+use crate::world::entity::entity_save::decode_uuid;
 use crate::world::level::pathfinder::path::Path;
 use crate::world::level::storage::uuid_ints;
 
@@ -107,14 +108,14 @@ impl MemoryCodec {
         })
     }
 
-    fn decode_value(self, nbt: &Nbt) -> Option<MemoryValue> {
-        Some(match self {
-            MemoryCodec::GlobalPos => MemoryValue::GlobalPos(GlobalPos::from_nbt(nbt)?),
-            MemoryCodec::Bool => MemoryValue::Bool(nbt.as_i64()? != 0),
-            MemoryCodec::Long => MemoryValue::Long(nbt.as_i64()?),
-            MemoryCodec::Int => MemoryValue::Int(nbt.as_i64()? as i32),
+    fn decode_value(self, nbt: &Nbt) -> Result<MemoryValue, String> {
+        Ok(match self {
+            MemoryCodec::GlobalPos => MemoryValue::GlobalPos(GlobalPos::decode(nbt)?),
+            MemoryCodec::Bool => MemoryValue::Bool(codec::bool_value(nbt)?),
+            MemoryCodec::Long => MemoryValue::Long(codec::long(nbt)?),
+            MemoryCodec::Int => MemoryValue::Int(codec::int(nbt)?),
             MemoryCodec::Unit => MemoryValue::Unit,
-            MemoryCodec::Uuid => MemoryValue::Uuid(uuid_from_nbt(nbt)?),
+            MemoryCodec::Uuid => MemoryValue::Uuid(decode_uuid(nbt).into_result()?),
             MemoryCodec::GlobalPosList => MemoryValue::GlobalPositions(decode_global_positions(nbt)?),
             MemoryCodec::GlobalPosSet => {
                 let mut set: Vec<GlobalPos> = Vec::new();
@@ -125,10 +126,7 @@ impl MemoryCodec {
                 }
                 MemoryValue::GlobalPositions(set)
             }
-            MemoryCodec::BlockPos => match nbt {
-                Nbt::IntArray(v) if v.len() == 3 => MemoryValue::BlockPos(BlockPos::new(v[0], v[1], v[2])),
-                _ => return None,
-            },
+            MemoryCodec::BlockPos => MemoryValue::BlockPos(extra_codecs::block_pos(nbt).into_result()?),
         })
     }
 
@@ -140,18 +138,16 @@ impl MemoryCodec {
         Some(Nbt::Compound(fields))
     }
 
-    pub fn decode(self, nbt: &Nbt) -> Option<ExpirableValue> {
-        let value = self.decode_value(nbt.get("value")?)?;
-        let time_to_live = nbt.get("ttl").and_then(Nbt::as_i64);
-        Some(ExpirableValue { value, time_to_live })
+    pub fn decode(self, nbt: &Nbt) -> Result<ExpirableValue, String> {
+        codec::map(nbt)?;
+        let value = codec::decode_field(nbt, "value", |value| self.decode_value(value))?;
+        let time_to_live = nbt.get("ttl").and_then(|ttl| codec::long(ttl).ok());
+        Ok(ExpirableValue { value, time_to_live })
     }
 }
 
-fn decode_global_positions(nbt: &Nbt) -> Option<Vec<GlobalPos>> {
-    match nbt {
-        Nbt::List(list) => list.iter().map(GlobalPos::from_nbt).collect(),
-        _ => None,
-    }
+fn decode_global_positions(nbt: &Nbt) -> Result<Vec<GlobalPos>, String> {
+    codec::list_partial(nbt, |pos| GlobalPos::decode(pos).into()).into_result()
 }
 
 pub const DUMMY: MemoryModuleType<()> = MemoryModuleType::new(0);

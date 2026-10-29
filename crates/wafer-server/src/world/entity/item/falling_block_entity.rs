@@ -119,7 +119,10 @@ impl FallingBlockEntity {
         self.fall_damage_per_distance = tag_value_input::get_numeric(input, "FallHurtAmount").and_then(float_value).unwrap_or(DEFAULT_FALL_DAMAGE_PER_DISTANCE);
         self.fall_damage_max = tag_value_input::get_numeric(input, "FallHurtMax").and_then(int_value).unwrap_or(DEFAULT_MAX_FALL_DAMAGE);
         self.drop_item = flag("DropItem").unwrap_or(DEFAULT_DROP_ITEM);
-        self.block_data = input.get("TileEntityData").filter(|tag| matches!(tag, Nbt::Compound(_))).cloned();
+        self.block_data = tag_value_input::read_or_error(input, "TileEntityData", |tag| match tag {
+            Nbt::Compound(_) => Ok(tag.clone()),
+            other => Err(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
+        });
         self.cancel_drop = flag("CancelDrop").unwrap_or(DEFAULT_CANCEL_DROP);
     }
 }

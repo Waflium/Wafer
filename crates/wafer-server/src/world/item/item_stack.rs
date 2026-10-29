@@ -493,17 +493,15 @@ impl ItemStack {
             },
             None => (1, None),
         };
-        let patch = match tag.get("components") {
-            Some(components) => match DataComponentPatch::from_nbt(components) {
-                Ok(patch) => patch,
-                Err(error) => return DecodeResult::error(match count_error {
-                    Some(count_error) => format!("{error}; {count_error}"),
-                    None => error,
-                }),
-            },
-            None => DataComponentPatch::default(),
+        let components = match tag.get("components") {
+            Some(components) => DataComponentPatch::from_nbt_partial(components),
+            None => DecodeResult::success(DataComponentPatch::default()),
         };
-        DecodeResult { value: Some(ItemStack::with_patch(item, count, &patch)), error: count_error }
+        let error = match (components.error, count_error) {
+            (Some(error), Some(count_error)) => Some(format!("{error}; {count_error}")),
+            (error, count_error) => error.or(count_error),
+        };
+        DecodeResult { value: Some(ItemStack::with_patch(item, count, &components.value.unwrap_or_default())), error }
     }
 
     pub fn from_optional_nbt(tag: &Nbt) -> Result<Option<ItemStack>, String> {

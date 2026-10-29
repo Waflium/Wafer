@@ -305,10 +305,7 @@ impl Villager {
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
         AbstractVillager::read_additional_save_data(mob, nbt);
-        let villager_data_optional = tag_value_input::read_or_error(nbt, "VillagerData", |tag| {
-            crate::util::codec::map(tag)?;
-            VillagerData::from_nbt(tag).ok_or_else(|| "Invalid villager data".to_string())
-        });
+        let villager_data_optional = tag_value_input::read_or_error(nbt, "VillagerData", VillagerData::decode);
         let finalized = tag_value_input::get_i64(nbt, "VillagerDataFinalized").is_some_and(|v| v != 0);
         if finalized || villager_data_optional.is_some() {
             set_villager_data_finalized(&mut mob.entity, true);
@@ -319,7 +316,7 @@ impl Villager {
         let villager = villager_mut(mob);
         villager.food_level = tag_value_input::get_i64(nbt, "FoodLevel").map_or(DEFAULT_FOOD_LEVEL as i32, |v| v as i8 as i32);
         villager.gossips.clear();
-        if let Some(gossips) = nbt.get("Gossips").and_then(GossipContainer::from_nbt) {
+        if let Some(gossips) = tag_value_input::read(nbt, "Gossips", GossipContainer::decode) {
             villager.gossips.put_all(&gossips);
         }
         villager.villager_xp = long("Xp", DEFAULT_XP as i64) as i32;

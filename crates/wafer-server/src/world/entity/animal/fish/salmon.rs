@@ -10,6 +10,7 @@ use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::{EntityDimensions, EntityId};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
+use crate::world::level::storage::tag_value_input;
 
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.7, 0.4).with_eye_height(0.26);
 pub const TAG_TYPE: &str = "type";
@@ -98,7 +99,7 @@ impl Salmon {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, nbt: &Nbt) {
-        let variant = nbt.get(TAG_TYPE).and_then(Nbt::as_str).and_then(Variant::by_name).unwrap_or(Variant::DEFAULT);
+        let variant = tag_value_input::read_or_error(nbt, TAG_TYPE, |tag| crate::util::codec::enum_by_name(tag, Variant::by_name)).unwrap_or(Variant::DEFAULT);
         mob.set_salmon_variant(variant);
     }
 }

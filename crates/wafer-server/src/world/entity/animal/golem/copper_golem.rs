@@ -157,7 +157,7 @@ impl CopperGolem {
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
         copper_golem_mut(mob).next_weathering_tick = tag_value_input::get_i64(input, "next_weather_age").unwrap_or(UNSET_WEATHERING_TICK);
-        let weather_state = input.get("weather_state").and_then(Nbt::as_str).and_then(WeatherState::by_name).unwrap_or(WeatherState::Unaffected);
+        let weather_state = tag_value_input::read_or_error(input, "weather_state", |tag| crate::util::codec::enum_by_name(tag, WeatherState::by_name)).unwrap_or(WeatherState::Unaffected);
         set_weather_state(&mut mob.entity, weather_state);
     }
 }

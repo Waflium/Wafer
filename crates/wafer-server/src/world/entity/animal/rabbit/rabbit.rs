@@ -224,7 +224,7 @@ impl Rabbit {
     }
 
     pub fn read_additional_save_data(mob: &mut Mob, input: &Nbt) {
-        let variant = tag_value_input::get_numeric(input, "RabbitType").and_then(crate::world::level::block::entity::int_value).map_or(Variant::DEFAULT, Variant::by_id);
+        let variant = tag_value_input::read_or_error(input, "RabbitType", crate::util::codec::int).map_or(Variant::DEFAULT, Variant::by_id);
         set_variant(mob, variant);
         rabbit_mut(mob).more_carrot_ticks = tag_value_input::get_numeric(input, "MoreCarrotTicks").and_then(crate::world::level::block::entity::int_value).unwrap_or(DEFAULT_MORE_CARROT_TICKS);
     }

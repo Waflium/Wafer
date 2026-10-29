@@ -3,15 +3,14 @@ use wafer_protocol::nbt::Nbt;
 use crate::server::level::ServerLevel;
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::ItemStack;
+use crate::world::level::storage::tag_value_input;
 use crate::world::simple_container::SimpleContainer;
 
 pub const TAG_INVENTORY: &str = "Inventory";
 
 pub fn read_inventory_from_tag(inventory: &mut SimpleContainer, input: &Nbt) {
-    if let Some(Nbt::List(list)) = input.get(TAG_INVENTORY) {
-        let items: Vec<ItemStack> = list.iter().filter_map(|tag| ItemStack::from_nbt(tag).ok()).collect();
-        inventory.from_item_list(&items);
-    }
+    let items = tag_value_input::list_or_empty(input, TAG_INVENTORY, ItemStack::from_nbt_partial);
+    inventory.from_item_list(&items);
 }
 
 pub fn write_inventory_to_tag(inventory: &SimpleContainer, output: &mut Vec<(String, Nbt)>) {

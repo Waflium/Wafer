@@ -13,6 +13,7 @@ use crate::world::item::cushion_item;
 use crate::world::item::dye_color::DyeColor;
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
+use crate::world::level::storage::tag_value_input;
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::{InteractionHand, InteractionResult};
 
@@ -73,7 +74,8 @@ impl Cushion {
 
     pub fn read_additional_save_data(&mut self, input: &Nbt) {
         block_attached_entity::read_additional_save_data(&mut self.entity, input);
-        self.set_color(input.get("color").and_then(Nbt::as_str).and_then(DyeColor::by_name).unwrap_or(DEFAULT_COLOR));
+        let color = tag_value_input::read_or_error(input, "color", |tag| crate::util::codec::enum_by_name(tag, DyeColor::by_name)).unwrap_or(DEFAULT_COLOR);
+        self.set_color(color);
     }
 
     pub fn apply_components_from_item_stack(&mut self, stack: &ItemStack) {
