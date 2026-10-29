@@ -9,6 +9,7 @@ use serde_json::{Map, Value};
 use super::notifications::NotificationManager;
 use crate::commands::arguments::java_uuid_from_string;
 use crate::network::chat::{Arg, Component};
+use crate::util::java_collections::JavaHashMap;
 use crate::util::java_throwable::JavaThrowable;
 use crate::world::level::storage::format_uuid;
 
@@ -111,13 +112,13 @@ pub trait StoredUserEntry: Clone {
 
 pub struct StoredUserList<E> {
     file: Option<PathBuf>,
-    entries: Vec<E>,
+    entries: JavaHashMap<E>,
     notifications: NotificationManager,
 }
 
 impl<E: StoredUserEntry> StoredUserList<E> {
     pub fn new(file: Option<PathBuf>) -> StoredUserList<E> {
-        StoredUserList { file, entries: Vec::new(), notifications: NotificationManager::default() }
+        StoredUserList { file, entries: JavaHashMap::new(java_string_hash), notifications: NotificationManager::default() }
     }
 
     pub fn set_notification_manager(&mut self, notifications: NotificationManager) {
@@ -125,29 +126,27 @@ impl<E: StoredUserEntry> StoredUserList<E> {
     }
 
     pub fn contains_key(&self, key: &str) -> bool {
-        self.entries.iter().any(|e| e.key() == key)
+        self.entries.contains_key(key)
     }
 
     pub fn get_key(&mut self, key: &str) -> Option<&E> {
         self.remove_expired();
-        self.entries.iter().find(|e| e.key() == key)
+        self.entries.get(key)
     }
 
     pub fn add(&mut self, entry: E) -> bool {
         let key = entry.key();
-        match self.entries.iter_mut().find(|e| e.key() == key) {
-            Some(existing) if existing.same_as(&entry) => return false,
-            Some(existing) => *existing = entry.clone(),
-            None => self.entries.push(entry.clone()),
+        if self.entries.get(&key).is_some_and(|existing| existing.same_as(&entry)) {
+            return false;
         }
+        self.entries.insert(key, entry.clone());
         self.save_logged("adding");
         entry.notify_added(&self.notifications);
         true
     }
 
     fn remove_key(&mut self, key: &str) -> Option<E> {
-        let index = self.entries.iter().position(|e| e.key() == key)?;
-        let removed = self.entries.remove(index);
+        let removed = self.entries.remove(key)?;
         self.save_logged("removing");
         Some(removed)
     }
@@ -161,8 +160,7 @@ impl<E: StoredUserEntry> StoredUserList<E> {
     }
 
     pub fn entries(&self) -> Vec<&E> {
-        let keys: Vec<String> = self.entries.iter().map(E::key).collect();
-        wafer_protocol::nbt::java_hash_map_order(&keys).into_iter().map(|i| &self.entries[i]).collect()
+        self.entries.iter().map(|(_, entry)| entry).collect()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -170,7 +168,7 @@ impl<E: StoredUserEntry> StoredUserList<E> {
     }
 
     fn remove_expired(&mut self) {
-        if self.entries.iter().any(E::has_expired) {
+        if self.entries.values().any(E::has_expired) {
             self.entries.retain(|e| !e.has_expired());
         }
     }
@@ -223,11 +221,7 @@ impl<E: StoredUserEntry> StoredUserList<E> {
                     return Err(LoadError::Unchecked(JavaThrowable::new(exception.description, stack_trace)));
                 }
             };
-            let key = entry.key();
-            match self.entries.iter_mut().find(|e| e.key() == key) {
-                Some(existing) => *existing = entry,
-                None => self.entries.push(entry),
-            }
+            self.entries.insert(entry.key(), entry);
         }
         Ok(())
     }
@@ -340,7 +334,7 @@ pub type ServerOpList = StoredUserList<OpEntry>;
 
 impl ServerOpList {
     pub fn get(&self, uuid: u128) -> Option<&OpEntry> {
-        self.entries.iter().find(|e| e.user.id == uuid)
+        self.entries.get(&format_uuid(uuid))
     }
 
     pub fn contains(&self, uuid: u128) -> bool {

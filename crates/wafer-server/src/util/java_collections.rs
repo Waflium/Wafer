@@ -890,11 +890,32 @@ impl<V> JavaHashMap<V> {
     pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
         self.entries.values_mut()
     }
+
+    pub fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    pub fn retain(&mut self, mut keep: impl FnMut(&V) -> bool) {
+        self.entries.retain(|_, value| keep(value));
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn removals_keep_the_grown_capacity_like_java() {
+        let key = |i: u128| crate::world::level::storage::format_uuid(((0x1234 * (i + 1)) << 64) | (0x9876543210 * (i + 7)));
+        let mut map = JavaHashMap::new(wafer_core::random::java_string_hash);
+        for i in 0..14 {
+            map.insert(key(i), i);
+        }
+        for i in (0..14).step_by(2) {
+            map.remove(&key(i));
+        }
+        assert_eq!(map.iter().map(|(_, &v)| v).collect::<Vec<_>>(), [7, 3, 13, 5, 9, 1, 11]);
+    }
 
     #[test]
     fn identity_hash_codes_are_positive_and_distinct() {
