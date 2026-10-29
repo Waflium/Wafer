@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 
 use serde_json::Value;
 
-use crate::util::valueproviders::{FloatProvider, float_provider_codec};
+use crate::util::valueproviders::{FloatProvider, float_provider_codec_in};
 use crate::world::entity::attributes::{Attribute, AttributeModifier, Operation};
 use crate::world::item::ItemStack;
 use crate::world::item::component::codec::{Codec, Stream};
@@ -77,7 +77,7 @@ fn explosion_data_codec() -> Pair {
 fn contact_damage_codec() -> Pair {
     record(vec![
         req("damage_type", types::fixed("minecraft:damage_type")),
-        req("amount", float_provider_codec()),
+        req("amount", float_provider_codec_in::<{ 0.0f32.to_bits() }, { f32::INFINITY.to_bits() }>()),
         req("attribute_to_source", types::bool()),
     ])
 }

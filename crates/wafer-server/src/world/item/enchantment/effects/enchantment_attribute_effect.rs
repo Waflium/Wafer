@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::attributes::{Attribute, AttributeModifier, Operation};
 use crate::world::item::component::codec::Field;
 use crate::world::item::component::types::{self, Pair, record, req};
@@ -30,6 +30,11 @@ pub struct EnchantmentAttributeEffect {
 }
 
 impl EnchantmentAttributeEffect {
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<EnchantmentAttributeEffect> {
+        static CODEC: std::sync::LazyLock<Pair> = std::sync::LazyLock::new(map_codec);
+        codec::checked(&CODEC.0, tag, EnchantmentAttributeEffect::decode)
+    }
+
     pub fn decode(tag: &Nbt) -> DataResult<EnchantmentAttributeEffect> {
         Ok(EnchantmentAttributeEffect {
             id: codec::decode_field(tag, "id", codec::identifier)?,

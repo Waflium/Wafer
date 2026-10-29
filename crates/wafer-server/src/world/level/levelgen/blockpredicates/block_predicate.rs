@@ -168,7 +168,8 @@ impl BlockPredicate {
             "matching_blocks" => BlockPredicate::MatchingBlocks { offset: parse_offset(json)?, blocks: BlockSet::parse(json.get("blocks").ok_or("missing blocks")?)? },
             "matching_block_tag" => {
                 let tag = json.get("tag").and_then(Value::as_str).ok_or("missing tag")?;
-                BlockPredicate::MatchingBlockTag { offset: parse_offset(json)?, tag: block_tags::by_name(&resource(tag)).ok_or_else(|| format!("unknown block tag {tag}"))? }
+                let tag = block_tags::by_name(&resource(tag)).unwrap_or_else(|| Box::leak(Box::new(Tag::new(Box::leak(resource(tag).into_boxed_str()), &[]))));
+                BlockPredicate::MatchingBlockTag { offset: parse_offset(json)?, tag }
             }
             "matching_fluids" => BlockPredicate::MatchingFluids { offset: parse_offset(json)?, fluids: FluidSet::parse(json.get("fluids").ok_or("missing fluids")?)? },
             "matching_biomes" => BlockPredicate::MatchingBiomes { biomes: parse_biome_holder_set(json.get("biomes").ok_or("missing biomes")?)? },

@@ -4,7 +4,7 @@ use crate::commands::brigadier::{
     CommandSyntaxException, DynamicCommandExceptionType, READER_INVALID_DOUBLE, READER_INVALID_FLOAT, READER_INVALID_INT, SimpleCommandExceptionType,
     StringReader,
 };
-use crate::util::codec::{self, DataResult, DecodeError};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::component::custom;
 use crate::world::item::component::types::Pair;
 
@@ -54,30 +54,40 @@ impl<T: Copy + PartialOrd> Bounds<T> {
         self.min.is_none() && self.max.is_none()
     }
 
-    fn decode(tag: &Nbt, number: fn(&Nbt) -> DataResult<T>) -> DataResult<Bounds<T>>
+    pub fn as_range_string(&self) -> String
     where
         T: JavaToString,
     {
-        let bounds = match codec::either_first_partial(
-            tag,
-            |t| {
-                codec::map(t).map_err(|message| DecodeError { message, partial: false })?;
-                match (codec::decode_optional(t, "min", number), codec::decode_optional(t, "max", number)) {
-                    (Ok(min), Ok(max)) => Ok(Bounds { min, max }),
-                    (min, max) => Err(DecodeError { message: codec::record_errors(&[min.as_ref().err(), max.as_ref().err()]).unwrap_err(), partial: true }),
-                }
-            },
-            number,
-        )? {
-            Ok(bounds) => bounds,
-            Err(value) => Bounds { min: Some(value), max: Some(value) },
-        };
-        if let (Some(min), Some(max)) = (bounds.min, bounds.max)
-            && min > max
-        {
-            return Err(format!("Swapped bounds in range: Optional[{}] is higher than Optional[{}]", min.java_to_string(), max.java_to_string()));
+        match (self.min, self.max) {
+            (Some(min), Some(max)) => format!("[{}..{}]", min.java_to_string(), max.java_to_string()),
+            (Some(min), None) => format!("[{}..+\u{221e})", min.java_to_string()),
+            (None, Some(max)) => format!("(-\u{221e}..{}]", max.java_to_string()),
+            (None, None) => "(-\u{221e}..+\u{221e})".to_string(),
         }
-        Ok(bounds)
+    }
+
+    fn decode_partial(tag: &Nbt, number: fn(&Nbt) -> DataResult<T>) -> DecodeResult<Bounds<T>>
+    where
+        T: JavaToString,
+    {
+        let range = |tag: &Nbt| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = Record::default();
+            let min = record.optional(tag, "min", number);
+            let max = record.optional(tag, "max", number);
+            record.build(|| Some(Bounds { min, max }))
+        };
+        codec::either_result(range(tag), || DecodeResult::from(number(tag)))
+            .map(|either| match either {
+                Ok(bounds) => bounds,
+                Err(value) => Bounds { min: Some(value), max: Some(value) },
+            })
+            .validate(|bounds| match (bounds.min, bounds.max) {
+                (Some(min), Some(max)) if min > max => Err(format!("Swapped bounds in range: Optional[{}] is higher than Optional[{}]", min.java_to_string(), max.java_to_string())),
+                _ => Ok(()),
+            })
     }
 
     fn from_reader(
@@ -146,7 +156,11 @@ impl Ints {
     pub const ANY: Ints = Ints { bounds: Bounds { min: None, max: None } };
 
     pub fn decode(tag: &Nbt) -> DataResult<Ints> {
-        Ok(Ints { bounds: Bounds::decode(tag, codec::int)? })
+        Ints::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<Ints> {
+        Bounds::decode_partial(tag, codec::int).map(|bounds| Ints { bounds })
     }
 
     pub fn is_any(&self) -> bool {
@@ -193,7 +207,11 @@ impl Doubles {
     }
 
     pub fn decode(tag: &Nbt) -> DataResult<Doubles> {
-        Ok(Doubles::new(Bounds::decode(tag, codec::double)?))
+        Doubles::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<Doubles> {
+        Bounds::decode_partial(tag, codec::double).map(Doubles::new)
     }
 
     pub fn is_any(&self) -> bool {
@@ -249,6 +267,22 @@ mod tests {
     fn doubles(input: &str) -> Result<Doubles, String> {
         let units: Vec<u16> = input.encode_utf16().collect();
         Doubles::from_reader(&mut StringReader::new(&units)).map_err(|e| e.get_message())
+    }
+
+    #[test]
+    fn range_text_follows_guava() {
+        assert_eq!(Bounds { min: Some(-1), max: Some(-1) }.as_range_string(), "[-1..-1]");
+        assert_eq!(Bounds { min: Some(1), max: None }.as_range_string(), "[1..+\u{221e})");
+        assert_eq!(Bounds { min: None, max: Some(8) }.as_range_string(), "(-\u{221e}..8]");
+        assert_eq!(Bounds::<i32> { min: None, max: None }.as_range_string(), "(-\u{221e}..+\u{221e})");
+    }
+
+    #[test]
+    fn a_failed_bound_keeps_the_other_one() {
+        let tag = crate::nbt::parse_fully(r#"{min:1,max:"x"}"#).unwrap();
+        let result = codec::with_nbt_ops(|| Ints::decode_partial(&tag));
+        assert_eq!(result.value.map(|ints| ints.bounds), Some(Bounds { min: Some(1), max: None }));
+        assert_eq!(result.error.as_deref(), Some("Not a number"));
     }
 
     #[test]

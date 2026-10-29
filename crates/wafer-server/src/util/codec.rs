@@ -259,6 +259,61 @@ pub fn list_of<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResu
     Err(errors.join("; "))
 }
 
+fn convert_json_to_nbt_ops(tag: &Nbt) -> Nbt {
+    let narrowest = |value: i64| {
+        if value as i8 as i64 == value {
+            Nbt::Byte(value as i8)
+        } else if value as i16 as i64 == value {
+            Nbt::Short(value as i16)
+        } else if value as i32 as i64 == value {
+            Nbt::Int(value as i32)
+        } else {
+            Nbt::Long(value)
+        }
+    };
+    match tag {
+        Nbt::LazilyParsedNumber(text) => wafer_protocol::lazily_parsed_number::exact_nbt(text),
+        Nbt::List(items) => Nbt::List(items.iter().map(convert_json_to_nbt_ops).collect()),
+        Nbt::Compound(fields) => Nbt::Compound(fields.iter().map(|(name, value)| (name.clone(), convert_json_to_nbt_ops(value))).collect()),
+        Nbt::Long(value) => narrowest(*value),
+        Nbt::Double(value) if value.fract() == 0.0 && value.abs() < 9.2e18 => narrowest(*value as i64),
+        Nbt::Double(value) if f64::from(*value as f32) == *value => Nbt::Float(*value as f32),
+        other => other.clone(),
+    }
+}
+
+fn contains_null(tag: &Nbt) -> bool {
+    match tag {
+        Nbt::End => true,
+        Nbt::List(items) => items.iter().any(contains_null),
+        Nbt::Compound(fields) => fields.iter().any(|(_, value)| contains_null(value)),
+        _ => false,
+    }
+}
+
+pub fn compound_tag(tag: &Nbt) -> DecodeResult<Nbt> {
+    if contains_null(tag) {
+        crate::core::data_registries::throw(
+            "java.lang.NullPointerException",
+            "Cannot invoke \"com.google.gson.JsonElement.getAsJsonPrimitive()\" because \"input\" is null".into(),
+            &["com.mojang.serialization.JsonOps.convertTo(JsonOps.java:61)", "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)"],
+        );
+    }
+    match tag {
+        Nbt::Compound(_) => DecodeResult::success(tag.clone()),
+        other if is_json_value() => DecodeResult::error(format!("Not a compound tag: {}", crate::nbt::to_snbt(&convert_json_to_nbt_ops(other)))),
+        other => DecodeResult::error(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
+    }
+}
+
+pub fn checked<T>(codec: &component_codec::Codec, tag: &Nbt, typed: impl Fn(&Nbt) -> DataResult<T>) -> DecodeResult<T> {
+    let DecodeResult { value, error } = codec.decode_partial(tag);
+    match error {
+        None => DecodeResult::from(typed(tag)),
+        Some(error) => DecodeResult { value: value.and_then(|partial| typed(&partial).ok()), error: Some(error) },
+    }
+}
+
 pub fn compact_list_of<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T>> {
     match tag {
         Nbt::List(_) | Nbt::ByteArray(_) | Nbt::IntArray(_) | Nbt::LongArray(_) => list_of(tag, decode),

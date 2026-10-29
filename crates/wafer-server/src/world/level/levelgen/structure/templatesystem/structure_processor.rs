@@ -12,7 +12,6 @@ use super::{blackstone_replace_processor, block_age_processor, lava_submerged_bl
 use super::rule_test::{self, RuleTest};
 use super::structure_place_settings::StructurePlaceSettings;
 use super::structure_template::StructureBlockInfo;
-use crate::util::codec::DecodeResult;
 use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
 use crate::world::item::component::types::{self, Pair, def, lenient_opt, opt, req};
 use crate::world::level::block::state::block_state;
@@ -66,7 +65,7 @@ impl RuleBlockEntityModifier {
         let cases = vec![
             ("minecraft:clear", vec![]),
             ("minecraft:passthrough", vec![]),
-            ("minecraft:append_static", vec![req("data", (Codec::Func(compound_tag), Stream::Nbt))]),
+            ("minecraft:append_static", vec![req("data", (Codec::Func(crate::util::codec::compound_tag), Stream::Nbt))]),
             ("minecraft:append_loot", vec![req("loot_table", types::identifier())]),
         ];
         (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:rule_block_entity_modifier"), cases })), Stream::Dispatch)
@@ -409,48 +408,4 @@ pub fn list_direct_codec() -> Pair {
 
 pub fn list_holder_codec() -> Pair {
     (Codec::Holder("minecraft:worldgen/processor_list", Some(Box::new(Codec::Lazy(list_direct_codec_lazy)))), Stream::Nbt)
-}
-
-fn convert_and_print(tag: &Nbt) -> String {
-    let narrowest = |value: i64| {
-        if value as i8 as i64 == value {
-            Nbt::Byte(value as i8)
-        } else if value as i16 as i64 == value {
-            Nbt::Short(value as i16)
-        } else if value as i32 as i64 == value {
-            Nbt::Int(value as i32)
-        } else {
-            Nbt::Long(value)
-        }
-    };
-    match tag {
-        Nbt::List(items) => format!("[{}]", items.iter().map(convert_and_print).collect::<Vec<_>>().join(",")),
-        Nbt::Long(value) => crate::nbt::to_snbt(&narrowest(*value)),
-        Nbt::Double(value) if value.fract() == 0.0 && value.abs() < 9.2e18 => crate::nbt::to_snbt(&narrowest(*value as i64)),
-        Nbt::Double(value) if f64::from(*value as f32) == *value => crate::nbt::to_snbt(&Nbt::Float(*value as f32)),
-        other => crate::nbt::to_snbt(other),
-    }
-}
-
-fn contains_null(tag: &Nbt) -> bool {
-    match tag {
-        Nbt::End => true,
-        Nbt::List(items) => items.iter().any(contains_null),
-        Nbt::Compound(fields) => fields.iter().any(|(_, value)| contains_null(value)),
-        _ => false,
-    }
-}
-
-fn compound_tag(tag: &Nbt) -> DecodeResult<Nbt> {
-    if contains_null(tag) {
-        crate::core::data_registries::throw(
-            "java.lang.NullPointerException",
-            "Cannot invoke \"com.google.gson.JsonElement.getAsJsonPrimitive()\" because \"input\" is null".into(),
-            &["com.mojang.serialization.JsonOps.convertTo(JsonOps.java:61)", "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)"],
-        );
-    }
-    match tag {
-        Nbt::Compound(_) => DecodeResult::success(tag.clone()),
-        other => DecodeResult::error(format!("Not a compound tag: {}", convert_and_print(other))),
-    }
 }

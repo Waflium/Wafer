@@ -64,13 +64,27 @@ impl<T> WeightedList<T> {
 pub const SUM_OF_WEIGHTS_EXCEPTION: &str = "java.lang.IllegalArgumentException: Sum of weights must be <= 2147483647";
 const SUM_OF_WEIGHTS_MESSAGE: &str = "Sum of weights must be <= 2147483647";
 
+const SUM_OF_WEIGHTS_FRAMES: &[&str] = &[
+    "net.minecraft.util.random.WeightedRandom.getTotalWeight(WeightedRandom.java:21)",
+    "net.minecraft.util.random.WeightedList.<init>(WeightedList.java:29)",
+    "net.minecraft.util.random.WeightedList.of(WeightedList.java:61)",
+    "com.mojang.datafixers.util.Pair.mapFirst(Pair.java:64)",
+    "com.mojang.serialization.Decoder$2.lambda$decode$0(Decoder.java:63)",
+    "com.mojang.serialization.DataResult$Success.map(DataResult.java:175)",
+    "com.mojang.serialization.Decoder$2.decode(Decoder.java:63)",
+    "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
+    "com.mojang.serialization.Decoder$3.decode(Decoder.java:77)",
+    "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
+    "com.mojang.serialization.Decoder.parse(Decoder.java:18)",
+];
+
 fn total_weight(list: &Nbt) -> i64 {
     list.as_list().iter().filter_map(|entry| entry.get("weight")).map(codec::as_i64).sum()
 }
 
 fn limit_total_weight(list: Nbt) -> Result<Nbt, String> {
     if total_weight(&list) > i32::MAX as i64 {
-        crate::core::data_registries::throw("java.lang.IllegalArgumentException", SUM_OF_WEIGHTS_MESSAGE.into(), &[]);
+        crate::core::data_registries::throw("java.lang.IllegalArgumentException", SUM_OF_WEIGHTS_MESSAGE.into(), SUM_OF_WEIGHTS_FRAMES);
         Err(SUM_OF_WEIGHTS_EXCEPTION.into())
     } else {
         Ok(list)

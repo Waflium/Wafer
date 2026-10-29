@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use chrono::{DateTime, Utc};
 use wafer_core::random::java_string_hash;
 use wafer_protocol::Writer;
+use wafer_protocol::nbt::Nbt;
 use serde_json::{Map, Value};
 
 use super::advancement_requirements::AdvancementRequirements;
@@ -25,13 +26,13 @@ impl Default for AdvancementProgress {
 }
 
 impl AdvancementProgress {
-    pub fn decode(value: &Value) -> Result<AdvancementProgress, String> {
-        let Value::Object(fields) = value else { return Err(format!("Not a JSON object: {value}")) };
+    pub fn decode(value: &Nbt) -> Result<AdvancementProgress, String> {
+        let Nbt::Compound(_) = value else { return Err(format!("Not a JSON object: {}", crate::nbt::to_string(value))) };
         let mut criteria = JavaHashMap::new(java_string_hash);
-        if let Some(map) = fields.get("criteria") {
-            let Value::Object(map) = map else { return Err(format!("Not a JSON object: {map}")) };
+        if let Some(map) = value.get("criteria") {
+            let Nbt::Compound(map) = map else { return Err(format!("Not a JSON object: {}", crate::nbt::to_string(map))) };
             for (name, obtained) in map {
-                let Value::String(obtained) = obtained else { return Err(format!("Not a string: {obtained}")) };
+                let Nbt::String(obtained) = obtained else { return Err(format!("Not a string: {}", crate::nbt::to_string(obtained))) };
                 criteria.insert(name.clone(), CriterionProgress::new(Some(criterion_progress::parse_obtained_time(obtained)?)));
             }
         }

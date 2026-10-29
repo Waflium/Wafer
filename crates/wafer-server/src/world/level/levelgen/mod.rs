@@ -145,8 +145,9 @@ pub fn parse_block_state(v: &Value) -> Result<BlockState, String> {
     let block = Block::by_name(&resource_name(name)).ok_or_else(|| format!("unknown block {name}"))?;
     let mut state = block.default_state();
     for (key, value) in properties.into_iter().flatten() {
-        let value = value.as_str().ok_or("property values are strings")?;
-        state = state.with_property_by_name(key, value).ok_or_else(|| format!("{name} has no {key}={value}"))?;
+        if let Some(with_property) = value.as_str().and_then(|value| state.with_property_by_name(key, value)) {
+            state = with_property;
+        }
     }
     Ok(state)
 }

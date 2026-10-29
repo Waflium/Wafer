@@ -169,7 +169,7 @@ fn write(tag: &Nbt, out: &mut String) {
         }
         Nbt::List(items) => {
             out.push('[');
-            join(out, items.iter().map(to_string).collect());
+            join(out, items.iter().map(to_snbt).collect());
             out.push(']');
         }
         Nbt::Compound(fields) => {
@@ -322,6 +322,13 @@ pub fn add_data_version(tag: &mut Nbt, version: i32) {
             Some((_, value)) => *value = Nbt::Int(version),
             None => entries.push(("DataVersion".to_string(), Nbt::Int(version))),
         }
+    }
+}
+
+pub fn get_json_data_version(element: &crate::util::gson::JsonElement, default: i32) -> i32 {
+    match element.get("DataVersion") {
+        Some(crate::util::gson::JsonElement::Number(text)) => crate::world::item::component::codec::as_i32(&Nbt::LazilyParsedNumber(text.clone())),
+        _ => default,
     }
 }
 

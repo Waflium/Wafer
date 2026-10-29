@@ -11,6 +11,20 @@ fn codec_lazy() -> &'static Pair {
     &CODEC
 }
 
+fn validate_clamped(value: Nbt) -> Result<Nbt, String> {
+    if value.get("type").and_then(Nbt::as_str) == Some("minecraft:clamped") {
+        let float = |key: &str| value.get(key).map_or(0.0, crate::world::item::component::codec::as_f32);
+        if float("max") <= float("min") {
+            return Err(format!(
+                "Max must be larger than min, min: {}, max: {}",
+                crate::nbt::java_float_to_string(float("min")),
+                crate::nbt::java_float_to_string(float("max"))
+            ));
+        }
+    }
+    Ok(value)
+}
+
 pub fn codec() -> Pair {
     let value = |name: &'static str| req(name, (Codec::Lazy(codec_lazy), Stream::Lazy));
     let float = |name: &'static str| req(name, types::float(Codec::float()));
@@ -23,7 +37,7 @@ pub fn codec() -> Pair {
         ("minecraft:lookup", vec![req("values", types::list(types::float(Codec::float()))), value("fallback")]),
     ];
     let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:enchantment_level_based_value_type"), cases }));
-    (Codec::Either(Box::new(Codec::float()), Box::new(dispatch)), Stream::Nbt)
+    (Codec::Either(Box::new(Codec::float()), Box::new(Codec::Normalize(Box::new(dispatch), validate_clamped))), Stream::Nbt)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -64,7 +78,14 @@ impl LevelBasedValue {
                 let value = boxed(&mut record, "value");
                 let min = record.required(tag, "min", codec::float);
                 let max = record.required(tag, "max", codec::float);
-                record.build(|| Some(LevelBasedValue::Clamped { value: value?, min: min?, max: max? }))
+                record.build(|| Some(LevelBasedValue::Clamped { value: value?, min: min?, max: max? })).validate(|clamped| match clamped {
+                    LevelBasedValue::Clamped { min, max, .. } if max <= min => Err(format!(
+                        "Max must be larger than min, min: {}, max: {}",
+                        crate::nbt::java_float_to_string(*min),
+                        crate::nbt::java_float_to_string(*max)
+                    )),
+                    _ => Ok(()),
+                })
             }
             "minecraft:exponent" => {
                 let base = boxed(&mut record, "base");

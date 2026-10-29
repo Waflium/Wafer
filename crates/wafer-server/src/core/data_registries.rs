@@ -677,7 +677,7 @@ fn decode(registry: &str, element: &JsonElement) -> Result<(), String> {
         "minecraft:zombie_nautilus_variant" => decode_with(crate::world::entity::animal::nautilus::zombie_nautilus_variant::direct_codec(), &tag),
         "minecraft:world_clock" => decode_with(crate::world::item::component::types::record(Vec::new()), &tag),
         "minecraft:sulfur_cube_archetype" => decode_with(crate::world::entity::sulfur_cube_archetype::direct_codec(), &tag),
-        "minecraft:timeline" => crate::world::clock::Timeline::parse("", &json()).and_then(|_| crate::world::clock::encode_network_timeline(&json())).map(drop),
+        "minecraft:timeline" => decode_with(crate::world::clock::direct_codec(), &tag),
         "minecraft:test_environment" => decode_with(crate::gametest::framework::test_environment_definition::direct_codec(), &tag),
         "minecraft:test_instance" => decode_with(crate::gametest::framework::game_test_instance::direct_codec(), &tag),
         "minecraft:block_transformer" => decode_with(crate::core::component::block_transformer::direct_codec(), &tag),

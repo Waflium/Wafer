@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use crate::network::chat::{Arg, ChatFormatting, Component, HoverEvent};
 
@@ -221,13 +221,10 @@ impl PackResources {
         }
     }
 
-    pub fn load_metadata(&self) -> Result<serde_json::Map<String, Value>, String> {
-        let Some(supplier) = self.root_resource("pack.mcmeta") else { return Ok(serde_json::Map::new()) };
+    pub fn load_metadata(&self) -> Result<Nbt, String> {
+        let Some(supplier) = self.root_resource("pack.mcmeta") else { return Ok(Nbt::Compound(Vec::new())) };
         let bytes = supplier.read().map_err(|e| e.to_string())?;
-        match serde_json::from_slice::<Value>(&bytes).map_err(|e| e.to_string())? {
-            Value::Object(object) => Ok(object),
-            other => Err(format!("Expected JsonObject, got {other}")),
-        }
+        crate::util::gson::parse_object(&String::from_utf8_lossy(&bytes)).map(|metadata| crate::world::item::component::element_to_nbt(&metadata))
     }
 
     pub fn get_namespaces(&self) -> HashSet<String> {

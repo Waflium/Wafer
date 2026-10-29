@@ -6,7 +6,7 @@ use wafer_data::{DamageType, MobEffect, registry};
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::particles::particle_types;
-use crate::util::valueproviders::float_provider_codec;
+use crate::util::valueproviders::{float_provider_codec, float_provider_codec_in};
 use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
 use crate::world::item::component::custom;
 use crate::world::item::component::types::{self, Pair, def, opt, record, req};
@@ -24,7 +24,7 @@ use crate::world::level::is_in_spawnable_bounds;
 use crate::world::level::server_explosion::{ExplosionDamageCalculator, ExplosionInteraction, ExplosionParticleInfo};
 use crate::server::level::ServerLevel;
 use crate::sounds::sound_event::SoundEvent;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::util::java_round_f;
 use crate::util::valueproviders::FloatProvider;
 use crate::world::damagesource::DamageSource;
@@ -33,16 +33,13 @@ use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::enchantment::enchanted_item_in_use::EnchantedItemInUse;
 use crate::world::item::enchantment::level_based_value::LevelBasedValue;
 
-fn decode_vec3(tag: Nbt) -> Result<Nbt, String> {
-    let values = Codec::list(Codec::Double).decode(&tag)?;
-    if values.as_list().len() != 3 {
-        return Err("Input is not a list of 3 elements".into());
-    }
-    Ok(values)
+fn decode_vec3(tag: &Nbt) -> DecodeResult<Nbt> {
+    crate::util::extra_codecs::fixed_size_list_partial(tag, 3, |element| DecodeResult::from(codec::double(element)))
+        .map(|values| Nbt::List(values.into_iter().map(Nbt::Double).collect()))
 }
 
 fn vec3_codec() -> Pair {
-    types::transform(decode_vec3)
+    (Codec::Func(decode_vec3), Stream::Nbt)
 }
 
 fn zero_vec3() -> Nbt {
@@ -132,7 +129,11 @@ pub fn shared_cases() -> Vec<(&'static str, Vec<Field>)> {
         ("minecraft:apply_exhaustion", vec![level_based("amount")]),
         (
             "minecraft:play_sound",
-            vec![req("sound", types::compact_list(types::sound_event())), req("volume", float_provider_codec()), req("pitch", float_provider_codec())],
+            vec![
+                req("sound", types::compact_list(types::sound_event())),
+                req("volume", float_provider_codec_in::<{ 1.0e-5f32.to_bits() }, { 10.0f32.to_bits() }>()),
+                req("pitch", float_provider_codec_in::<{ 1.0e-5f32.to_bits() }, { 2.0f32.to_bits() }>()),
+            ],
         ),
         ("minecraft:replace_block", replace_fields(false)),
         ("minecraft:replace_disk", replace_fields(true)),
@@ -306,7 +307,11 @@ fn float_provider(tag: &Nbt, min: f32, max: f32) -> DataResult<FloatProvider> {
 
 fn damage_type(tag: &Nbt) -> DataResult<DamageType> {
     let id = codec::identifier(tag)?;
-    DamageType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:damage_type]: {id}"))
+    match DamageType::by_name(&id) {
+        Some(damage_type) => Ok(damage_type),
+        None if crate::core::data_registries::is_loading() => Ok(DamageType(0)),
+        None => Err(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:damage_type]: {id}")),
+    }
 }
 
 fn explosion_interaction(tag: &Nbt) -> DataResult<ExplosionInteraction> {
@@ -348,6 +353,10 @@ fn sound_event(tag: &Nbt) -> DataResult<SoundEvent> {
 }
 
 impl EnchantmentEntityEffect {
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<EnchantmentEntityEffect> {
+        codec::checked(&codec_lazy().0, tag, EnchantmentEntityEffect::decode)
+    }
+
     pub fn decode(tag: &Nbt) -> DataResult<EnchantmentEntityEffect> {
         codec::map(tag)?;
         let ty = codec::decode_field(tag, "type", codec::identifier)?;
@@ -365,10 +374,7 @@ impl EnchantmentEntityEffect {
             "minecraft:damage_entity" => EnchantmentEntityEffect::DamageEntity {
                 min_damage: value("min_damage")?,
                 max_damage: value("max_damage")?,
-                damage_type: codec::decode_field(tag, "damage_type", |t| {
-                    let id = codec::identifier(t)?;
-                    DamageType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:damage_type]: {id}"))
-                })?,
+                damage_type: codec::decode_field(tag, "damage_type", damage_type)?,
             },
             "minecraft:explode" => EnchantmentEntityEffect::Explode {
                 attribute_to_user: codec::decode_or(tag, "attribute_to_user", false, codec::bool_value)?,

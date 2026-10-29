@@ -32,23 +32,24 @@ fn is_symmetrical(width: usize, height: usize, ingredients: &[Option<Ingredient>
     true
 }
 
-fn decode_pattern(tag: &Nbt) -> DataResult<Vec<String>> {
-    let strings = codec::list_of(tag, |line| codec::string(line).map(str::to_string))?;
-    if strings.len() > MAX_SIZE {
-        return Err("Invalid pattern: too many rows, 3 is maximum".into());
-    }
-    let Some(first) = strings.first() else { return Err("Invalid pattern: empty pattern not allowed".into()) };
-    let first_length = first.chars().count();
-    for line in &strings {
-        let length = line.chars().count();
-        if length > MAX_SIZE {
-            return Err("Invalid pattern: too many columns, 3 is maximum".into());
+fn decode_pattern(tag: &Nbt) -> DecodeResult<Vec<String>> {
+    codec::list_partial(tag, |line| DecodeResult::from(codec::string(line).map(str::to_string))).validate(|strings| {
+        if strings.len() > MAX_SIZE {
+            return Err("Invalid pattern: too many rows, 3 is maximum".into());
         }
-        if first_length != length {
-            return Err("Invalid pattern: each row must be the same width".into());
+        let Some(first) = strings.first() else { return Err("Invalid pattern: empty pattern not allowed".into()) };
+        let first_length = first.java_utf16().count();
+        for line in strings {
+            let length = line.java_utf16().count();
+            if length > MAX_SIZE {
+                return Err("Invalid pattern: too many columns, 3 is maximum".into());
+            }
+            if first_length != length {
+                return Err("Invalid pattern: each row must be the same width".into());
+            }
         }
-    }
-    Ok(strings)
+        Ok(())
+    })
 }
 
 fn decode_symbol(symbol: &str) -> DataResult<char> {

@@ -8,7 +8,7 @@ use super::enchantment_entity_effect::{self, EnchantmentEntityEffect};
 use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
 use crate::world::item::component::types::{self, Pair, req};
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::EntityId;
 use crate::world::item::enchantment::enchanted_item_in_use::EnchantedItemInUse;
 use crate::world::item::enchantment::enchantment_helper::equipment_slot_name;
@@ -32,6 +32,10 @@ pub enum EnchantmentLocationBasedEffect {
 }
 
 impl EnchantmentLocationBasedEffect {
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<EnchantmentLocationBasedEffect> {
+        codec::checked(&codec_lazy().0, tag, EnchantmentLocationBasedEffect::decode)
+    }
+
     pub fn decode(tag: &Nbt) -> DataResult<EnchantmentLocationBasedEffect> {
         let ty = codec::decode_field(tag, "type", codec::identifier)?;
         Ok(match ty.as_str() {

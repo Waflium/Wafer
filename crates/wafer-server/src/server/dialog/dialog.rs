@@ -6,6 +6,7 @@ use wafer_protocol::{Reader, Writer};
 
 use crate::commands::arguments::resource_or_id_argument::RawResourceOrId;
 use crate::commands::functions::string_template::{StringTemplate, is_valid_variable_name};
+use crate::util::codec::DecodeResult;
 use crate::util::hash_ops::{self, HashCode};
 use crate::world::item::component::codec::{self, Codec, Custom, Dispatch, Field, RangeError, Selector, Stream};
 use crate::world::item::component::custom;
@@ -17,11 +18,11 @@ use crate::world::item::component::types::{
 const DIALOG_ACTIONS: &[&str] = &["close", "none", "wait_for_response"];
 
 fn width() -> Pair {
-    (Codec::Int(1, 1024, RangeError::Outside), Stream::VarInt)
+    (Codec::Int(1, 1024, RangeError::Within), Stream::VarInt)
 }
 
 fn int_range(min: i32, max: i32) -> Pair {
-    (Codec::Int(min, max, RangeError::Outside), Stream::VarInt)
+    (Codec::Int(min, max, RangeError::Within), Stream::VarInt)
 }
 
 fn chat_string() -> Pair {
@@ -293,13 +294,11 @@ struct DialogListCodec;
 
 impl Custom for DialogListCodec {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
-        if let Nbt::String(raw) = tag
-            && let Some(tag_id) = raw.strip_prefix('#')
-        {
-            let id = codec::identifier(&Nbt::String(tag_id.into()))?;
-            return if codec::tag_exists("minecraft:dialog", &id) { Ok(Nbt::String(format!("#{id}"))) } else { Err(format!("Missing tag: '{id}' in 'minecraft:dialog'")) };
-        }
-        Codec::Compact(Box::new(dialog_holder().0)).decode(tag)
+        self.decode_partial(tag).into_result()
+    }
+
+    fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
+        codec::inline_holder_set("minecraft:dialog", tag, &dialog_holder().0, false)
     }
 
     fn hash(&self, value: &Nbt) -> HashCode {

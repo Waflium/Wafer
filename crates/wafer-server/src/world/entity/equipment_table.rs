@@ -1,7 +1,7 @@
 use wafer_data::EquipmentSlot;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::enchantment::enchantment_helper::equipment_slot_name;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -19,26 +19,38 @@ impl EquipmentTable {
         self.slot_drop_chances.iter().find(|(s, _)| *s == slot).map(|&(_, chance)| chance)
     }
 
-    fn decode_drop_chances(tag: &Nbt) -> DataResult<Vec<(EquipmentSlot, f32)>> {
-        if let Ok(drop_chance) = codec::float(tag) {
-            return Ok(EquipmentTable::create_for_all_slots(drop_chance));
-        }
-        let mut chances: Vec<(EquipmentSlot, f32)> = Vec::new();
-        for (key, value) in codec::map(tag)? {
-            let slot = EquipmentSlot::by_name(key).ok_or_else(|| format!("Unknown element name:{key}"))?;
-            let chance = codec::float(value)?;
-            match chances.iter_mut().find(|(s, _)| *s == slot) {
-                Some(entry) => entry.1 = chance,
-                None => chances.push((slot, chance)),
-            }
-        }
-        Ok(chances)
+    fn decode_drop_chances(tag: &Nbt) -> DecodeResult<Vec<(EquipmentSlot, f32)>> {
+        let slot = |key: &str| EquipmentSlot::by_name(key).ok_or_else(|| format!("Unknown element name:{key}"));
+        let chances = |tag: &Nbt| {
+            codec::base_map_partial(tag, slot, |value| DecodeResult::from(codec::float(value))).map(|entries| {
+                let mut chances: Vec<(EquipmentSlot, f32)> = Vec::new();
+                for (slot, chance) in entries {
+                    match chances.iter_mut().find(|(s, _)| *s == slot) {
+                        Some(entry) => entry.1 = chance,
+                        None => chances.push((slot, chance)),
+                    }
+                }
+                chances
+            })
+        };
+        codec::either_result(DecodeResult::from(codec::float(tag)), || chances(tag)).map(|either| match either {
+            Ok(drop_chance) => EquipmentTable::create_for_all_slots(drop_chance),
+            Err(chances) => chances,
+        })
     }
 
     pub fn decode(tag: &Nbt) -> DataResult<EquipmentTable> {
-        let loot_table = codec::decode_field(tag, "loot_table", codec::identifier)?;
-        let slot_drop_chances = codec::decode_or(tag, "slot_drop_chances", Vec::new(), EquipmentTable::decode_drop_chances)?;
-        Ok(EquipmentTable { loot_table, slot_drop_chances })
+        EquipmentTable::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<EquipmentTable> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let loot_table = record.required(tag, "loot_table", codec::identifier);
+        let slot_drop_chances = record.with_default(tag, "slot_drop_chances", Vec::new(), EquipmentTable::decode_drop_chances);
+        record.build(|| Some(EquipmentTable { loot_table: loot_table?, slot_drop_chances }))
     }
 
     pub fn encode(&self) -> Nbt {

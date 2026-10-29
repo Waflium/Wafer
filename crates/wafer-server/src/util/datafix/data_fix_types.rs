@@ -4,6 +4,7 @@ use crate::datafixers::dsl::TypeReference;
 use crate::datafixers::dynamic::Dynamic;
 use crate::datafixers::json_ops;
 use crate::util::datafix::data_fixers::get_data_fixer;
+use crate::util::gson::JsonElement;
 use crate::util::datafix::fixes::references;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -97,20 +98,22 @@ impl DataFixTypes {
         self.update_tag(tag, from_version, current_version())
     }
 
-    pub fn update_json_to_current_version(self, input: serde_json::Value, data_version: i32) -> serde_json::Value {
+    pub fn update_json_to_current_version(self, input: JsonElement, data_version: i32) -> JsonElement {
         if data_version >= current_version() {
             return input;
         }
-        let updated = self.update(Dynamic::of(json_ops::convert_to_nbt(&input)), data_version, current_version());
-        let mut output = json_ops::convert_from_nbt(updated.get_value());
+        let Ok(Some(tag)) = json_ops::convert_element_to_nbt(&input) else { return input };
+        let updated = self.update(Dynamic::new(tag), data_version, current_version());
+        let mut output = updated.get_value().map_or(JsonElement::Null, json_ops::convert_nbt_to_element);
         if self == DataFixTypes::Advancements
-            && let serde_json::Value::Object(advancements) = &mut output
+            && let JsonElement::Object(advancements) = &mut output
         {
-            for progress in advancements.values_mut() {
-                if let Some(done) = progress.get_mut("done")
-                    && let Some(number) = done.as_f64()
+            for (_, progress) in advancements.iter_mut() {
+                if let JsonElement::Object(members) = progress
+                    && let Some((_, done)) = members.iter_mut().find(|(name, _)| name == "done")
+                    && let JsonElement::Number(text) = done
                 {
-                    *done = serde_json::Value::Bool(number != 0.0);
+                    *done = JsonElement::Boolean(text.parse::<f64>().is_ok_and(|number| number != 0.0));
                 }
             }
         }

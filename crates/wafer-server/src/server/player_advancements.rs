@@ -16,7 +16,9 @@ use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::advancements::advancement_progress::AdvancementProgress;
 use crate::advancements::criterion_trigger_instance::CriterionTriggerInstance;
 use crate::network::connection::Outbound;
+use crate::util::gson::JsonElement;
 use crate::util::java_collections::{JavaHashCode, JavaObjectHashSet, identifier_hash};
+use crate::world::item::component::element_to_nbt;
 use crate::world::entity::EntityId;
 
 #[derive(Clone, Copy)]
@@ -363,24 +365,24 @@ impl PlayerAdvancements {
 }
 
 fn parse_data(text: &str) -> Result<Vec<(String, AdvancementProgress)>, String> {
-    let json = crate::util::gson::parse_strict_value(text)?;
+    let json = crate::util::gson::parse_strict(text)?;
     decode_data(json).map_err(|error| format!("com.google.gson.JsonParseException: {error}"))
 }
 
-fn decode_data(json: Value) -> Result<Vec<(String, AdvancementProgress)>, String> {
-    let from_version = json.get("DataVersion").and_then(Value::as_f64).map_or(1343, |version| version as i32);
+fn decode_data(json: JsonElement) -> Result<Vec<(String, AdvancementProgress)>, String> {
+    let from_version = crate::nbt::get_json_data_version(&json, 1343);
     let json = match json {
-        Value::Object(mut fields) => {
-            fields.shift_remove("DataVersion");
-            crate::util::datafix::data_fix_types::DataFixTypes::Advancements.update_json_to_current_version(Value::Object(fields), from_version)
+        JsonElement::Object(mut fields) => {
+            fields.retain(|(name, _)| name != "DataVersion");
+            crate::util::datafix::data_fix_types::DataFixTypes::Advancements.update_json_to_current_version(JsonElement::Object(fields), from_version)
         }
         other => other,
     };
-    let Value::Object(fields) = json else { return Err(format!("Not a JSON object: {json}")) };
+    let JsonElement::Object(fields) = json else { return Err(format!("Not a JSON object: {}", crate::util::gson::to_json_string(&json))) };
     let mut data = Vec::with_capacity(fields.len());
     for (id, value) in fields {
         let id = crate::resources::identifier::read(&id)?;
-        data.push((id, AdvancementProgress::decode(&value)?));
+        data.push((id, crate::nbt::with_json_source(|| AdvancementProgress::decode(&element_to_nbt(&value)))?));
     }
     Ok(data)
 }

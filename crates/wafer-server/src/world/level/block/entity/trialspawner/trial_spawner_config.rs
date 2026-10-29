@@ -72,7 +72,7 @@ fn weighted_list<T>(tag: &Nbt, data: Pair, element: impl Fn(&Nbt) -> Option<T>) 
 }
 
 fn spawn_data_codec() -> Pair {
-    nbt(Codec::Func(|tag| SpawnData::decode(tag).map(|_| tag.clone()).into()))
+    nbt(Codec::Func(|tag| SpawnData::decode_partial(tag).map(|_| tag.clone())))
 }
 
 fn encode_weighted_list<T>(list: &WeightedList<T>, element: impl Fn(&T) -> Nbt) -> Nbt {

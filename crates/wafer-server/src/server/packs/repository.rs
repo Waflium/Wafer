@@ -3,6 +3,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 
+use wafer_protocol::nbt::Nbt;
+
 use super::metadata::{self, FormatRange, PackFormat};
 use super::{PackLocationInfo, PackResources, PackSource, SharedZip};
 use crate::network::chat::Component;
@@ -234,8 +236,8 @@ fn json_parse_exception(message: String) -> String {
 
 fn read_file_pack_metadata(location: &PackLocationInfo, resources: &ResourcesSupplier) -> Result<Option<PackMetadata>, String> {
     let pack = resources.open_metadata(location);
-    let section = |name: &str| -> Result<Option<serde_json::Value>, String> {
-        let metadata = pack.load_metadata().map_err(|e| format!("com.google.gson.JsonSyntaxException: {e}"))?;
+    let section = |name: &str| -> Result<Option<Nbt>, String> {
+        let metadata = pack.load_metadata()?;
         Ok(metadata.get(name).cloned())
     };
     let meta = match section("pack").and_then(|raw| raw.map(|raw| metadata::pack_section(&raw).map_err(json_parse_exception)).transpose()) {

@@ -207,6 +207,7 @@ impl BlockStateProviderHolder {
                     .iter()
                     .position(|(n, _)| *n == name)
                     .map(|i| BlockStateProviderHolder::Reference(i as u32))
+                    .or_else(|| crate::core::data_registries::is_loading().then_some(BlockStateProviderHolder::Reference(u32::MAX)))
                     .ok_or_else(|| format!("unknown block state provider {name}"))
             }
             other => Ok(BlockStateProviderHolder::Direct(Box::new(BlockStateProvider::parse(other)?))),

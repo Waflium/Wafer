@@ -3,7 +3,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::light_layer::LightLayer;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::util::inclusive_range::InclusiveRange;
 use crate::world::entity::equipment_table::EquipmentTable;
 
@@ -54,13 +54,21 @@ impl SpawnData {
     }
 
     pub fn decode(tag: &Nbt) -> DataResult<SpawnData> {
-        let entity_to_spawn = match codec::field(tag, ENTITY_TAG)? {
-            Nbt::Compound(fields) => fields.clone(),
-            other => return Err(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
-        };
-        let custom_spawn_rules = codec::decode_optional(tag, "custom_spawn_rules", CustomSpawnRules::decode)?;
-        let equipment = codec::decode_optional(tag, "equipment", EquipmentTable::decode)?;
-        Ok(SpawnData::new(entity_to_spawn, custom_spawn_rules, equipment))
+        SpawnData::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<SpawnData> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let entity_to_spawn = record.required(tag, ENTITY_TAG, codec::compound_tag);
+        let custom_spawn_rules = record.optional(tag, "custom_spawn_rules", CustomSpawnRules::decode_partial);
+        let equipment = record.optional(tag, "equipment", EquipmentTable::decode_partial);
+        record.build(|| match entity_to_spawn? {
+            Nbt::Compound(fields) => Some(SpawnData::new(fields, custom_spawn_rules, equipment)),
+            _ => None,
+        })
     }
 
     pub fn encode(&self) -> Nbt {
@@ -88,16 +96,23 @@ impl CustomSpawnRules {
         if LIGHT_RANGE.contains(&range) { Ok(range) } else { Err(format!("Light values must be withing range {LIGHT_RANGE}")) }
     }
 
-    fn light_limit(tag: &Nbt, name: &str) -> DataResult<InclusiveRange> {
+    fn light_limit(record: &mut Record, tag: &Nbt, name: &str) -> Option<InclusiveRange> {
         let range = codec::optional_field(tag, name).and_then(|value| InclusiveRange::decode_int(value).ok()).unwrap_or(LIGHT_RANGE);
-        CustomSpawnRules::check_light_boundaries(range)
+        record.field(CustomSpawnRules::check_light_boundaries(range))
     }
 
     pub fn decode(tag: &Nbt) -> DataResult<CustomSpawnRules> {
-        codec::map(tag)?;
-        let block_light_limit = CustomSpawnRules::light_limit(tag, "block_light_limit")?;
-        let sky_light_limit = CustomSpawnRules::light_limit(tag, "sky_light_limit")?;
-        Ok(CustomSpawnRules { block_light_limit, sky_light_limit })
+        CustomSpawnRules::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<CustomSpawnRules> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
+        let mut record = Record::default();
+        let block_light_limit = CustomSpawnRules::light_limit(&mut record, tag, "block_light_limit");
+        let sky_light_limit = CustomSpawnRules::light_limit(&mut record, tag, "sky_light_limit");
+        record.build(|| Some(CustomSpawnRules { block_light_limit: block_light_limit?, sky_light_limit: sky_light_limit? }))
     }
 
     pub fn encode(&self) -> Nbt {

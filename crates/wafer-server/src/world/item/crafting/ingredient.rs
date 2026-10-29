@@ -1,11 +1,12 @@
-use wafer_data::{Item, items};
+use wafer_data::Item;
 use wafer_protocol::nbt::Nbt;
 
 use super::display::slot_display::SlotDisplay;
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::DataResult;
+use crate::util::codec::{DataResult, DecodeResult};
 use crate::world::entity::player::stacked_contents::IngredientInfo;
 use crate::world::item::ItemStack;
+use crate::world::item::trading::item_cost::decode_item;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ingredient {
@@ -14,16 +15,16 @@ pub struct Ingredient {
 
 impl Ingredient {
     pub fn decode(tag: &Nbt) -> DataResult<Ingredient> {
-        let values = HolderSet::decode("minecraft:item", tag)?;
-        if let HolderSet::Direct(direct_values) = &values {
-            if direct_values.is_empty() {
-                return Err("List must have contents".into());
-            }
-            if direct_values.contains(&(items::AIR.0 as i32)) {
-                return Err("Ingredient can't contain air".into());
-            }
-        }
-        Ok(Ingredient { values })
+        Ingredient::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<Ingredient> {
+        HolderSet::decode_partial_with("minecraft:item", tag, |element| DecodeResult::from(decode_item(element)).map(|item| item.0 as i32))
+            .validate(|values| match values {
+                HolderSet::Direct(direct_values) if direct_values.is_empty() => Err("List must have contents".to_string()),
+                _ => Ok(()),
+            })
+            .map(|values| Ingredient { values })
     }
 
     pub fn test_optional_ingredient(ingredient: Option<&Ingredient>, stack: &ItemStack) -> bool {

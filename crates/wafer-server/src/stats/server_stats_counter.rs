@@ -5,13 +5,16 @@ use wafer_core::random::java_string_hash;
 use wafer_data::WORLD_VERSION;
 use wafer_data::packets::play::clientbound;
 use serde_json::{Map, Value};
+use wafer_protocol::nbt::Nbt;
 
 use super::stat::Stat;
 use super::stat_type::StatType;
 use super::stats_counter::StatsCounter;
 use crate::network::connection::Outbound;
 use crate::util::{FastIndexMap, FastIndexSet, file_util};
+use crate::util::gson::JsonElement;
 use crate::util::java_collections::JavaHashMap;
+use crate::world::item::component::element_to_nbt;
 
 const DEFAULT_TABLE_SIZE: usize = 16;
 
@@ -46,10 +49,10 @@ impl ServerStatsCounter {
         if counter.file.is_file() {
             match std::fs::read(&counter.file) {
                 Err(e) => error!("Couldn't read statistics file {}\n{e}", counter.file.display()),
-                Ok(bytes) => match crate::util::gson::parse_strict_bytes(&bytes) {
+                Ok(bytes) => match crate::util::gson::parse_strict(&String::from_utf8_lossy(&bytes)) {
                     Err(e) => error!("Couldn't parse statistics file {}\n{e}", counter.file.display()),
                     Ok(element) => {
-                        let version = element.get("DataVersion").and_then(Value::as_f64).map_or(1343, |version| version as i32);
+                        let version = crate::nbt::get_json_data_version(&element, 1343);
                         let element = crate::util::datafix::data_fix_types::DataFixTypes::Stats.update_json_to_current_version(element, version);
                         counter.parse(&element)
                     }
@@ -80,13 +83,17 @@ impl ServerStatsCounter {
         result
     }
 
-    pub fn parse(&mut self, element: &Value) {
+    pub fn parse(&mut self, element: &JsonElement) {
+        crate::nbt::with_json_source(|| self.parse_stats(&element_to_nbt(element)));
+    }
+
+    fn parse_stats(&mut self, element: &Nbt) {
         let mut grouped: Vec<Vec<(Stat, i32)>> = Vec::new();
         let error = match element.get("stats") {
             None => None,
-            Some(Value::Object(types)) => {
+            Some(Nbt::Compound(types)) => {
                 let mut errors = Vec::new();
-                let mut failed = Map::new();
+                let mut failed = Vec::new();
                 for (type_key, values) in types {
                     let stat_type = registry_key(type_key, "minecraft:stat_type", StatType::by_key);
                     let typed = match &stat_type {
@@ -99,7 +106,7 @@ impl ServerStatsCounter {
                         .collect();
                     if !entry_errors.is_empty() {
                         errors.push(entry_errors.join("; "));
-                        failed.insert(type_key.clone(), values.clone());
+                        failed.push((type_key.clone(), values.clone()));
                     }
                     if let (Ok(_), Ok((group, _))) = (&stat_type, typed) {
                         grouped.push(group);
@@ -107,7 +114,7 @@ impl ServerStatsCounter {
                 }
                 partial_error(errors, failed)
             }
-            Some(other) => Some(format!("Not a JSON object: {other}")),
+            Some(other) => Some(format!("Not a JSON object: {}", crate::nbt::to_string(other))),
         };
         if let Some(error) = error {
             error!("Failed to parse statistics for {}: {error}", self.file.display());
@@ -182,42 +189,30 @@ fn registry_key<T>(key: &str, registry: &str, lookup: impl FnOnce(&str) -> Optio
     lookup(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / {registry}]: {id}"))
 }
 
-fn parse_typed_stats(stat_type: StatType, values: &Value) -> Result<(Vec<(Stat, i32)>, Option<String>), String> {
-    let Value::Object(entries) = values else { return Err(format!("Not a JSON object: {values}")) };
+fn parse_typed_stats(stat_type: StatType, values: &Nbt) -> Result<(Vec<(Stat, i32)>, Option<String>), String> {
+    let Nbt::Compound(entries) = values else { return Err(format!("Not a JSON object: {}", crate::nbt::to_string(values))) };
     let mut group = Vec::new();
     let mut errors = Vec::new();
-    let mut failed = Map::new();
+    let mut failed = Vec::new();
     for (key, value) in entries {
         let stat = registry_key(key, stat_type.registry_key(), |id| stat_type.get_registry().iter().position(|&e| e == id).map(|value| stat_type.get(value as u16)));
-        match (stat, int_value(value)) {
+        match (stat, crate::util::codec::int(value)) {
             (Ok(stat), Ok(count)) => group.push((stat, count)),
             (stat, count) => {
                 let entry_errors: Vec<String> = [count.err(), stat.err()].into_iter().flatten().collect();
                 errors.push(entry_errors.join("; "));
-                failed.insert(key.clone(), value.clone());
+                failed.push((key.clone(), value.clone()));
             }
         }
     }
     Ok((group, partial_error(errors, failed)))
 }
 
-fn partial_error(errors: Vec<String>, failed: Map<String, Value>) -> Option<String> {
+fn partial_error(errors: Vec<String>, failed: Vec<(String, Nbt)>) -> Option<String> {
     if errors.is_empty() {
         return None;
     }
-    let messages: Vec<String> = errors.into_iter().rev().collect();
-    Some(format!("{} missed input: {}", messages.join("; "), Value::Object(failed)))
-}
-
-fn int_value(value: &Value) -> Result<i32, String> {
-    match value {
-        Value::Number(number) => Ok(match (number.as_i64(), number.as_u64()) {
-            (Some(v), _) => v as i32,
-            (None, Some(v)) => v as i32,
-            (None, None) => number.as_f64().map_or(0, |v| v.trunc() as i128 as i32),
-        }),
-        other => Err(format!("Not a number: {other}")),
-    }
+    Some(crate::util::codec::map_entry_failures(errors, failed))
 }
 
 fn hash_bucket(stat: Stat, table_size: usize) -> usize {
@@ -329,7 +324,7 @@ mod tests {
             send(&mut counter, &mut out);
             let saved = json(&counter, &mut out);
             let mut reloaded = ServerStatsCounter::default();
-            reloaded.parse(&saved);
+            reloaded.parse(&crate::util::gson::parse_strict(&saved.to_string()).unwrap());
             out.push_str(" R");
             reloaded.mark_all_dirty();
             send(&mut reloaded, &mut out);

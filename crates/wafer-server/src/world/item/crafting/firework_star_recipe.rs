@@ -40,7 +40,7 @@ impl FireworkStarRecipe {
 
     fn decode_partial(tag: &Nbt) -> DecodeResult<FireworkStarRecipe> {
         let mut record = Record::default();
-        let shapes = record.required(tag, "shapes", |shapes| codec::unbounded_map(shapes, decode_shape, Ingredient::decode));
+        let shapes = record.required(tag, "shapes", |shapes| codec::base_map_partial(shapes, decode_shape, Ingredient::decode_partial));
         let trail = record.required(tag, "trail", Ingredient::decode);
         let twinkle = record.required(tag, "twinkle", Ingredient::decode);
         let fuel = record.required(tag, "fuel", Ingredient::decode);

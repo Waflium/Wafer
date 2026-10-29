@@ -90,6 +90,25 @@ pub fn double_value(text: &str) -> f64 {
     text.parse::<f64>().unwrap_or(0.0)
 }
 
+const MAX_NUMBER_STRING_LENGTH: usize = 10000;
+
+pub fn number_limits_error(text: &str) -> Option<String> {
+    if parse_long(text).is_some() {
+        return None;
+    }
+    if text.encode_utf16().count() > MAX_NUMBER_STRING_LENGTH {
+        let prefix: String = text.chars().take(30).collect();
+        return Some(format!("Number string too large: {prefix}..."));
+    }
+    let (_, _, fraction_length, exponent) = parts(text);
+    let Some(exponent) = exponent else { return Some("Exponent overflow.".to_string()) };
+    let scale = fraction_length - exponent as i64;
+    if scale > i32::MAX as i64 || scale < i32::MIN as i64 {
+        return Some("Scale out of range.".to_string());
+    }
+    (scale.abs() >= MAX_NUMBER_STRING_LENGTH as i64).then(|| format!("Number has unsupported scale: {text}"))
+}
+
 pub fn long_value_exact(text: &str) -> Result<Option<i64>, String> {
     let (negative, digits, fraction_length, exponent) = parts(text);
     let Some(exponent) = exponent else { return Err("NumberFormatException: Exponent overflow.".to_string()) };
@@ -200,6 +219,19 @@ mod tests {
         assert_eq!(float_value("1e400"), f32::INFINITY);
         assert_eq!(float_value("2.9802322e-8"), 2.9802322e-8);
         assert_eq!(double_value("1.0000000596046448"), 1.0000000596046448);
+    }
+
+    #[test]
+    fn number_limits_follow_gson() {
+        assert_eq!(number_limits_error("5"), None);
+        assert_eq!(number_limits_error("1.5e300"), None);
+        assert_eq!(number_limits_error("1E+9999"), None);
+        assert_eq!(number_limits_error("1E+10000").as_deref(), Some("Number has unsupported scale: 1E+10000"));
+        assert_eq!(number_limits_error("1e-10000").as_deref(), Some("Number has unsupported scale: 1e-10000"));
+        assert_eq!(number_limits_error("1E+99999999999").as_deref(), Some("Exponent overflow."));
+        let long = format!("1{}", "0".repeat(10000));
+        assert_eq!(number_limits_error(&long).as_deref(), Some("Number string too large: 100000000000000000000000000000..."));
+        assert_eq!(number_limits_error(&"9".repeat(18)), None);
     }
 
     #[test]

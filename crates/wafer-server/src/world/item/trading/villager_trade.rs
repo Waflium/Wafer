@@ -45,7 +45,7 @@ impl VillagerTrade {
         let mut record = codec::Record::default();
         let wants = record.required(tag, "wants", TradeCost::decode);
         let additional_wants = record.optional(tag, "additional_wants", TradeCost::decode);
-        let gives = record.required(tag, "gives", |t| Ok::<ItemStackTemplate, String>(ItemStackTemplate::from_nbt(t)));
+        let gives = record.required(tag, "gives", ItemStackTemplate::decode_partial);
         let max_uses = record.with_default(tag, "max_uses", ints::exactly(4), ContextIntProvider::decode_holder);
         let xp = record.with_default(tag, "xp", ints::exactly(1), ContextIntProvider::decode_holder);
         let reputation_discount = record.with_default(tag, "reputation_discount", floats::exactly(0.0), ContextFloatProvider::decode_holder);

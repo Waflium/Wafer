@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use regex_lite::Regex;
-use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use super::{IoSupplier, PackResources, Resource};
 
@@ -17,18 +17,20 @@ pub struct ResourceFilterSection {
 }
 
 impl ResourceFilterSection {
-    pub fn parse(value: &Value) -> Result<ResourceFilterSection, String> {
-        let block = value.get("block").ok_or("No key block in MapLike")?;
-        let block = block.as_array().ok_or_else(|| format!("Not a list: {block}"))?;
-        let pattern = |entry: &Value, key: &str| -> Result<Option<Regex>, String> {
-            match entry.get(key) {
-                None => Ok(None),
-                Some(Value::String(p)) => Regex::new(p).map(Some).map_err(|e| format!("Invalid regex pattern '{p}': {e}")),
-                Some(other) => Err(format!("Not a string: {other}")),
-            }
-        };
-        let block_list = block.iter().map(|entry| Ok(IdentifierPattern { namespace: pattern(entry, "namespace")?, path: pattern(entry, "path")? })).collect::<Result<_, String>>()?;
-        Ok(ResourceFilterSection { block_list })
+    pub fn parse(value: &Nbt) -> Result<ResourceFilterSection, String> {
+        crate::nbt::with_json_source(|| {
+            let block = value.get("block").ok_or("No key block in MapLike")?;
+            let Nbt::List(block) = block else { return Err(format!("Not a list: {}", crate::nbt::to_string(block))) };
+            let pattern = |entry: &Nbt, key: &str| -> Result<Option<Regex>, String> {
+                match entry.get(key) {
+                    None => Ok(None),
+                    Some(Nbt::String(p)) => Regex::new(p).map(Some).map_err(|e| format!("Invalid regex pattern '{p}': {e}")),
+                    Some(other) => Err(format!("Not a string: {}", crate::nbt::to_string(other))),
+                }
+            };
+            let block_list = block.iter().map(|entry| Ok(IdentifierPattern { namespace: pattern(entry, "namespace")?, path: pattern(entry, "path")? })).collect::<Result<_, String>>()?;
+            Ok(ResourceFilterSection { block_list })
+        })
     }
 
     pub fn is_namespace_filtered(&self, namespace: &str) -> bool {

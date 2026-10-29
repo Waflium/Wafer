@@ -20,21 +20,7 @@ impl HolderSet {
     }
 
     pub fn decode_partial(registry: &'static str, tag: &Nbt) -> DecodeResult<HolderSet> {
-        if let Nbt::String(s) = tag
-            && let Some(tag_name) = s.strip_prefix('#')
-        {
-            let key = match crate::resources::identifier::read(tag_name) {
-                Ok(key) => key,
-                Err(error) => return DecodeResult::error(error),
-            };
-            if !component_codec::tag_exists(registry, &key)
-                && let Some(error) = crate::core::data_registries::missing_tag(registry, &key)
-            {
-                return DecodeResult::error(error);
-            }
-            return DecodeResult::success(HolderSet::named(registry, key));
-        }
-        codec::holder_set_partial(tag, registry, |element| {
+        HolderSet::decode_partial_with(registry, tag, |element| {
             let key = match codec::identifier(element) {
                 Ok(key) => key,
                 Err(error) => return DecodeResult::error(error),
@@ -49,7 +35,24 @@ impl HolderSet {
             }
             DecodeResult::error(format!("Failed to get element {key} from registry {registry}"))
         })
-        .map(HolderSet::Direct)
+    }
+
+    pub fn decode_partial_with(registry: &'static str, tag: &Nbt, element: impl Fn(&Nbt) -> DecodeResult<i32>) -> DecodeResult<HolderSet> {
+        if let Nbt::String(s) = tag
+            && let Some(tag_name) = s.strip_prefix('#')
+        {
+            let key = match crate::resources::identifier::read(tag_name) {
+                Ok(key) => key,
+                Err(error) => return DecodeResult::error(error),
+            };
+            if !component_codec::tag_exists(registry, &key)
+                && let Some(error) = crate::core::data_registries::missing_tag(registry, &key)
+            {
+                return DecodeResult::error(error);
+            }
+            return DecodeResult::success(HolderSet::named(registry, key));
+        }
+        codec::holder_set_partial(tag, registry, element).map(HolderSet::Direct)
     }
 
     pub fn contents(&self) -> &[i32] {

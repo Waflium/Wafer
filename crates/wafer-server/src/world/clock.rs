@@ -7,6 +7,8 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
+use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::types::{self, Pair, def, opt, req};
 use crate::world::level::levelgen::density_function::resource_name;
 use crate::world::timeline::{AttributeTrack, AttributeTrackSampler};
 
@@ -125,6 +127,52 @@ impl Timeline {
         }
         Ok(Timeline { id, clock, period_ticks, time_markers, tracks })
     }
+}
+
+fn validate_timeline(timeline: Nbt) -> Result<Nbt, String> {
+    let int = |tag: &Nbt| crate::world::item::component::codec::as_i32(tag);
+    let Some(period_ticks) = timeline.get("period_ticks").map(int) else { return Ok(timeline) };
+    if let Some(Nbt::Compound(time_markers)) = timeline.get("time_markers") {
+        for (marker, info) in time_markers {
+            let ticks = match info {
+                Nbt::Compound(_) => info.get("ticks").map_or(0, int),
+                other => int(other),
+            };
+            if ticks < 0 || ticks >= period_ticks {
+                return Err(format!("Time Marker ResourceKey[minecraft:clock_time_marker / {marker}] must be in range [0; {period_ticks})"));
+            }
+        }
+    }
+    let mut errors = Vec::new();
+    if let Some(Nbt::Compound(tracks)) = timeline.get("tracks") {
+        for (_, track) in tracks {
+            let keyframes = track.get("keyframes").map(Nbt::as_list).unwrap_or_default();
+            if let Some(ticks) = keyframes.iter().map(|keyframe| keyframe.get("ticks").map_or(0, int)).find(|&ticks| ticks < 0 || ticks > period_ticks) {
+                errors.push(format!("Keyframe at tick {ticks} must be in range [0; {period_ticks}]"));
+            }
+        }
+    }
+    if errors.is_empty() {
+        return Ok(timeline);
+    }
+    errors.reverse();
+    Err(errors.join("; "))
+}
+
+fn time_marker_info_codec() -> Codec {
+    let full = Codec::Record(vec![req("ticks", (types::non_negative_int(), Stream::VarInt)), def("show_in_commands", types::bool(), types::b(false))]);
+    Codec::Either(Box::new(types::non_negative_int()), Box::new(full))
+}
+
+pub fn direct_codec() -> Pair {
+    let time_markers = Codec::Map(Box::new(Codec::Identifier), Box::new(time_marker_info_codec()));
+    let record = Codec::Record(vec![
+        req("clock", types::fixed("minecraft:world_clock")),
+        opt("period_ticks", (types::positive_int(), Stream::VarInt)),
+        def("tracks", crate::world::timeline::tracks_codec(), types::empty_map()),
+        def("time_markers", (time_markers, Stream::Nbt), types::empty_map()),
+    ]);
+    (Codec::Normalize(Box::new(record), validate_timeline), Stream::Nbt)
 }
 
 pub fn encode_network_timeline(json: &serde_json::Value) -> Result<Nbt, String> {
@@ -339,5 +387,48 @@ impl ServerClockManager {
 impl Default for ServerClockManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::world::item::component::json_to_nbt;
+
+    fn decode(json: &str) -> Result<(), String> {
+        let tag = json_to_nbt(&serde_json::from_str(json).unwrap());
+        crate::nbt::with_json_source(|| super::direct_codec().0.decode(&tag)).map(drop)
+    }
+
+    #[test]
+    fn a_timeline_reports_time_markers_outside_its_period() {
+        let error = decode(r#"{"clock":"minecraft:overworld","period_ticks":100,"time_markers":{"minecraft:day":100}}"#).unwrap_err();
+        assert_eq!(error, "Time Marker ResourceKey[minecraft:clock_time_marker / minecraft:day] must be in range [0; 100)");
+    }
+
+    #[test]
+    fn a_timeline_reports_keyframes_outside_its_period_with_the_last_track_first() {
+        let track = |tick: i32| format!(r#"{{"keyframes":[{{"ticks":{tick},"value":1}}]}}"#);
+        let json = format!(
+            r#"{{"clock":"minecraft:overworld","period_ticks":10,"tracks":{{"minecraft:visual/moon_angle":{},"minecraft:visual/sun_angle":{}}}}}"#,
+            track(11),
+            track(12)
+        );
+        let error = decode(&json).unwrap_err();
+        assert_eq!(error, "Keyframe at tick 12 must be in range [0; 10]; Keyframe at tick 11 must be in range [0; 10]");
+    }
+
+    #[test]
+    fn a_timeline_reports_both_branches_of_an_unknown_easing() {
+        let json = r#"{"clock":"minecraft:overworld","tracks":{"minecraft:visual/moon_angle":{"ease":"x","keyframes":[{"ticks":6000,"value":540},{"ticks":6000,"value":180}]}}}"#;
+        let error = decode(json).unwrap_err();
+        assert_eq!(
+            error,
+            "Failed to parse either. First: Unknown element id: x; Second: Not a JSON object: \"x\" missed input: {\"minecraft:visual/moon_angle\":{\"ease\":\"x\",\"keyframes\":[{\"ticks\":6000,\"value\":540},{\"ticks\":6000,\"value\":180}]}}"
+        );
+    }
+
+    #[test]
+    fn a_timeline_without_a_clock_is_missing_its_key() {
+        assert_eq!(decode(r#"{"time_markers":{"minecraft:day":1}}"#).unwrap_err(), "No key clock in MapLike[{\"time_markers\":{\"minecraft:day\":1}}]");
     }
 }

@@ -81,7 +81,7 @@ pub fn enchantment_names(enchantments: &HolderSet) -> Vec<&'static str> {
 }
 
 pub fn int_range(json: &Value, min: i32, max: i32) -> Result<i32, String> {
-    let value = json.as_i64().ok_or_else(|| format!("Not a number: {json}"))? as i32;
+    let value = crate::util::valueproviders::json_int(json).ok_or_else(|| format!("Not a number: {json}"))?;
     if value < min || value > max {
         return Err(format!("Value must be within range [{min};{max}]: {value}"));
     }

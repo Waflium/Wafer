@@ -199,8 +199,16 @@ pub fn normal<R: RandomSource + ?Sized>(random: &mut R, mean: f32, deviation: f3
     mean + random.next_gaussian() as f32 * deviation
 }
 
+pub fn json_int(json: &Value) -> Option<i32> {
+    let number = json.as_number()?;
+    match number.as_i64() {
+        Some(value) => Some(value as i32),
+        None => Some(crate::world::item::component::codec::big_decimal_long_value(number.as_f64()?) as i32),
+    }
+}
+
 fn int_field(json: &Value, key: &str) -> Result<i32, String> {
-    json.get(key).and_then(Value::as_i64).map(|v| v as i32).ok_or_else(|| crate::util::codec::no_key(key, json))
+    json.get(key).and_then(json_int).ok_or_else(|| crate::util::codec::no_key(key, json))
 }
 
 fn float_field(json: &Value, key: &str) -> Result<f32, String> {
@@ -214,8 +222,8 @@ pub fn float(v: &Value) -> Result<f32, String> {
 
 impl IntProvider {
     pub fn parse(json: &Value) -> Result<IntProvider, String> {
-        if let Some(value) = json.as_i64() {
-            return Ok(IntProvider::Constant(value as i32));
+        if let Some(value) = json_int(json) {
+            return Ok(IntProvider::Constant(value));
         }
         let ty = json.get("type").and_then(Value::as_str).ok_or("int provider without type")?;
         let min = || int_field(json, "min_inclusive");

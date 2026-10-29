@@ -64,7 +64,7 @@ fn blend_to_gray_codec() -> Codec {
     types::record(vec![types::req("brightness", types::float(types::codec_float_range(0.0, 1.0))), types::req("factor", types::float(types::codec_float_range(0.0, 1.0)))]).0
 }
 
-fn argument_codec(attribute: &EnvironmentAttributeInfo, operation: OperationId) -> Codec {
+pub(crate) fn argument_codec(attribute: &EnvironmentAttributeInfo, operation: OperationId) -> Codec {
     use OperationId as Op;
     match (attribute.ty, operation) {
         (_, Op::Override | Op::Append | Op::Overlay) => value_codec(attribute),
@@ -81,7 +81,7 @@ fn argument_codec(attribute: &EnvironmentAttributeInfo, operation: OperationId) 
     }
 }
 
-const OPERATION_NAMES: [(&str, &str); 16] = [
+pub(crate) const OPERATION_NAMES: [(&str, &str); 16] = [
     ("override", "OVERRIDE"),
     ("alpha_blend", "ALPHA_BLEND"),
     ("add", "ADD"),

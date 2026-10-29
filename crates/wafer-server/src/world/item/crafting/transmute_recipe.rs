@@ -26,12 +26,11 @@ pub struct TransmuteRecipe {
     add_material_count_to_result: bool,
 }
 
-fn decode_material_count(tag: &Nbt) -> DataResult<Ints> {
-    let bounds = Ints::decode(tag)?;
-    match (bounds.bounds.min, bounds.bounds.max) {
-        (Some(min), Some(max)) if min >= MIN_MATERIAL_COUNT && max <= MAX_MATERIAL_COUNT => Ok(bounds),
-        _ => Err(format!("Range must be within [{MIN_MATERIAL_COUNT}..{MAX_MATERIAL_COUNT}], but was {:?}", bounds.bounds)),
-    }
+fn decode_material_count(tag: &Nbt) -> DecodeResult<Ints> {
+    Ints::decode_partial(tag).validate(|bounds| match (bounds.bounds.min, bounds.bounds.max) {
+        (Some(min), Some(max)) if min >= MIN_MATERIAL_COUNT && max <= MAX_MATERIAL_COUNT => Ok(()),
+        _ => Err(format!("Range must be within [{MIN_MATERIAL_COUNT}..{MAX_MATERIAL_COUNT}], but was {}", bounds.bounds.as_range_string())),
+    })
 }
 
 pub fn create_with_original_components(target: &ItemStackTemplate, input: &ItemStack) -> ItemStack {

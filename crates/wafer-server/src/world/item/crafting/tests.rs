@@ -30,6 +30,31 @@ pub fn vanilla_data_files(directory: &str) -> usize {
     vanilla_data_files_with_extension(directory, ".json")
 }
 
+fn decode_recipe(json: serde_json::Value) -> Result<(), String> {
+    let tag = dc::json_to_nbt(&json);
+    crate::nbt::with_json_source(|| super::recipe::Recipe::decode(&tag)).map(drop)
+}
+
+#[test]
+fn a_failed_pattern_row_is_reported_before_the_pattern_check() {
+    let recipe = |pattern: serde_json::Value, key: serde_json::Value| {
+        serde_json::json!({"type": "minecraft:crafting_shaped", "key": key, "pattern": pattern, "result": {"id": "minecraft:stick"}})
+    };
+    let planks = serde_json::json!({"#": "minecraft:oak_planks"});
+    assert_eq!(decode_recipe(recipe(serde_json::json!([1]), planks.clone())).unwrap_err(), "Not a string: 1; Invalid pattern: empty pattern not allowed");
+    let unknown = serde_json::json!({"#": "x"});
+    assert_eq!(
+        decode_recipe(recipe(serde_json::json!(["#"]), unknown)).unwrap_err(),
+        "Map entry '#' : Failed to parse either. First: Not a tag id; Second: Failed to parse either. First: Not a json array: \"x\"; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:item]: minecraft:x"
+    );
+}
+
+#[test]
+fn a_failed_range_bound_is_reported_before_the_range_check() {
+    let json = serde_json::json!({"type": "minecraft:crafting_transmute", "input": "minecraft:dirt", "material": "minecraft:stone", "material_count": {"min": 1, "max": "x"}, "result": "minecraft:stick"});
+    assert_eq!(decode_recipe(json).unwrap_err(), "Not a number: \"x\"; Range must be within [1..8], but was [1..+\u{221e})");
+}
+
 #[test]
 fn every_vanilla_recipe_decodes() {
     assert_eq!(RecipeManager::get().get_recipes().len(), vanilla_data_files("recipe"));

@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use wafer_data::DimensionType;
 
-use crate::util::valueproviders::{IntProvider, int_provider_codec};
+use crate::util::valueproviders::{IntProvider, int_provider_codec, int_provider_codec_in};
 use serde_json::Value;
 use wafer_protocol::nbt::Nbt;
 use crate::world::attribute::EnvironmentAttributeMap;
@@ -47,18 +47,6 @@ pub const MIN_Y: i32 = -2032;
 pub const MAX_Y: i32 = 2031;
 pub const Y_SIZE: i32 = (1 << 12) - 32;
 
-fn monster_spawn_light_level(tag: &Nbt) -> Result<(), String> {
-    let json = serde_json::from_str(&crate::nbt::to_string(tag)).map_err(|e| e.to_string())?;
-    let provider = IntProvider::parse(&json)?;
-    if provider.min_inclusive() < 0 {
-        return Err(format!("Value provider too low: 0 [{}-{}]", provider.min_inclusive(), provider.max_inclusive()));
-    }
-    if provider.max_inclusive() > 15 {
-        return Err(format!("Value provider too high: 15 [{}-{}]", provider.min_inclusive(), provider.max_inclusive()));
-    }
-    Ok(())
-}
-
 fn coordinate_scale(tag: &Nbt) -> Result<(), String> {
     let value = Codec::Double.decode(tag)?.as_f64().unwrap_or(0.0);
     let (min, max) = (1.0e-5f32 as f64, 3.0e7);
@@ -89,7 +77,7 @@ pub fn direct_codec() -> Pair {
         req("logical_height", (Codec::Int(0, Y_SIZE, RangeError::Outside), Stream::Int)),
         req("infiniburn", types::holder_set("minecraft:block")),
         req("ambient_light", types::float(Codec::float())),
-        req("monster_spawn_light_level", custom(monster_spawn_light_level)),
+        req("monster_spawn_light_level", int_provider_codec_in::<0, 15>()),
         req("monster_spawn_block_light_limit", (Codec::Int(0, 15, RangeError::Outside), Stream::Int)),
         def("skybox", types::enumeration(&["none", "overworld", "end"]), types::s("overworld")),
         def("cardinal_light", types::enumeration(&["default", "nether"]), types::s("default")),

@@ -42,7 +42,11 @@ impl SetStewEffectFunction {
             codec::list_partial(t, EffectEntry::decode).validate(|effects| {
                 for (i, entry) in effects.iter().enumerate() {
                     if effects[..i].iter().any(|seen| seen.effect == entry.effect) {
-                        return Err(format!("Encountered duplicate mob effect: '{}'", entry.effect.info().name));
+                        return Err(format!(
+                            "Encountered duplicate mob effect: 'Reference{{ResourceKey[minecraft:mob_effect / {}]=net.minecraft.world.effect.MobEffect@{:x}}}'",
+                            entry.effect.info().name,
+                            crate::util::java_collections::identity_hash_code()
+                        ));
                     }
                 }
                 Ok(())

@@ -151,7 +151,7 @@ fn number(tag: &Nbt) -> Result<&Nbt, String> {
     }
 }
 
-fn big_decimal_long_value(v: f64) -> i64 {
+pub fn big_decimal_long_value(v: f64) -> i64 {
     if v.abs() < 9.2e18 {
         return v as i64;
     }
@@ -160,6 +160,15 @@ fn big_decimal_long_value(v: f64) -> i64 {
     let mantissa = (bits & ((1u64 << 52) - 1)) | (1u64 << 52);
     let magnitude = if shift >= 64 { 0 } else { (mantissa << shift) as i64 };
     if v < 0.0 { magnitude.wrapping_neg() } else { magnitude }
+}
+
+const NUMBER_LIMITS_FRAMES: [&str; 2] = ["com.google.gson.internal.NumberLimits.parseBigDecimal(NumberLimits.java:27)", "com.google.gson.internal.LazilyParsedNumber.asBigDecimal(LazilyParsedNumber.java:41)"];
+
+fn check_number_limits(text: &str, accessor_frame: &'static str) {
+    if let Some(message) = lazily_parsed_number::number_limits_error(text) {
+        let frames = [NUMBER_LIMITS_FRAMES[0], NUMBER_LIMITS_FRAMES[1], accessor_frame];
+        crate::core::data_registries::throw("java.lang.NumberFormatException", message, &frames);
+    }
 }
 
 pub fn as_i64(tag: &Nbt) -> i64 {
@@ -171,7 +180,10 @@ pub fn as_i64(tag: &Nbt) -> i64 {
         Nbt::Float(v) => *v as i64,
         Nbt::Double(v) if nbt::is_json_source() => big_decimal_long_value(*v),
         Nbt::Double(v) => *v as i64,
-        Nbt::LazilyParsedNumber(text) => lazily_parsed_number::long_value(text),
+        Nbt::LazilyParsedNumber(text) => {
+            check_number_limits(text, "com.google.gson.internal.LazilyParsedNumber.longValue(LazilyParsedNumber.java:62)");
+            lazily_parsed_number::long_value(text)
+        }
         _ => 0,
     }
 }
@@ -181,7 +193,10 @@ pub fn as_i32(tag: &Nbt) -> i32 {
         Nbt::Float(v) => *v as i32,
         Nbt::Double(v) if nbt::is_json_source() => big_decimal_long_value(*v) as i32,
         Nbt::Double(v) => *v as i32,
-        Nbt::LazilyParsedNumber(text) => lazily_parsed_number::int_value(text),
+        Nbt::LazilyParsedNumber(text) => {
+            check_number_limits(text, "com.google.gson.internal.LazilyParsedNumber.intValue(LazilyParsedNumber.java:52)");
+            lazily_parsed_number::int_value(text)
+        }
         _ => as_i64(tag) as i32,
     }
 }
@@ -473,6 +488,11 @@ impl Codec {
                         (None, None) => None,
                     };
                     if let (Some(Nbt::String(key)), Some(value)) = (key_result.value, value_result.value) {
+                        if out.iter().any(|(existing, _)| *existing == key) {
+                            errors.push(format!("Duplicate entry for key: '{key}'"));
+                            failed.push((k.clone(), v.clone()));
+                            continue;
+                        }
                         out.push((key, value));
                     }
                     if let Some(error) = entry_error {

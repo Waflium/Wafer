@@ -1,10 +1,9 @@
 
-use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use crate::network::chat::Component;
 use crate::network::chat::component_serialization;
 use crate::world::flag::FeatureFlagSet;
-use crate::world::item::component::json_to_nbt;
 
 const LAST_PRE_MINOR_VERSION: i32 = 81;
 
@@ -50,22 +49,18 @@ pub struct PackMetadataSection {
     pub supported_formats: FormatRange,
 }
 
-fn int(value: &Value) -> Result<i32, String> {
-    match value {
-        Value::Number(n) => Ok(n.as_i64().map(|v| v as i32).or_else(|| n.as_f64().map(|v| v as i32)).unwrap_or(0)),
-        Value::Bool(b) => Ok(*b as i32),
-        other => Err(format!("Not a number: {other}")),
-    }
+fn int(value: &Nbt) -> Result<i32, String> {
+    crate::util::codec::int(value)
 }
 
-fn non_negative_int(value: &Value) -> Result<i32, String> {
+fn non_negative_int(value: &Nbt) -> Result<i32, String> {
     let n = int(value)?;
     if n < 0 { Err(format!("Value must be non-negative: {n}")) } else { Ok(n) }
 }
 
-fn pack_format(value: &Value, default_minor: i32) -> Result<PackFormat, String> {
+fn pack_format(value: &Nbt, default_minor: i32) -> Result<PackFormat, String> {
     match value {
-        Value::Array(list) => {
+        Nbt::List(list) => {
             if list.is_empty() || list.len() > 256 {
                 return Err(format!("List must have between 1 and 256 elements: {}", list.len()));
             }
@@ -80,16 +75,16 @@ fn pack_format(value: &Value, default_minor: i32) -> Result<PackFormat, String> 
     }
 }
 
-fn int_range(value: &Value) -> Result<(i32, i32), String> {
+fn int_range(value: &Nbt) -> Result<(i32, i32), String> {
     let (min, max) = match value {
-        Value::Array(list) => {
+        Nbt::List(list) => {
             if list.len() != 2 {
-                return Err(format!("Input is not a list of 2 elements: {value}"));
+                return Err(format!("Input is not a list of 2 elements: {}", crate::nbt::to_string(value)));
             }
             (int(&list[0])?, int(&list[1])?)
         }
-        Value::Object(object) => {
-            let field = |name: &str| object.get(name).ok_or_else(|| format!("No key {name} in {value}")).and_then(int);
+        Nbt::Compound(_) => {
+            let field = |name: &str| value.get(name).ok_or_else(|| format!("No key {name} in MapLike[{}]", crate::nbt::to_string(value))).and_then(int);
             (field("min_inclusive")?, field("max_inclusive")?)
         }
         other => {
@@ -112,7 +107,7 @@ struct IntermediaryFormat {
 }
 
 impl IntermediaryFormat {
-    fn pack(object: &serde_json::Map<String, Value>) -> Result<IntermediaryFormat, String> {
+    fn pack(object: &Nbt) -> Result<IntermediaryFormat, String> {
         Ok(IntermediaryFormat {
             min: object.get("min_format").map(|v| pack_format(v, 0)).transpose()?,
             max: object.get("max_format").map(|v| pack_format(v, i32::MAX)).transpose()?,
@@ -121,7 +116,7 @@ impl IntermediaryFormat {
         })
     }
 
-    fn overlay(object: &serde_json::Map<String, Value>) -> Result<IntermediaryFormat, String> {
+    fn overlay(object: &Nbt) -> Result<IntermediaryFormat, String> {
         let min = object.get("min_format").map(|v| pack_format(v, 0)).transpose()?;
         Ok(IntermediaryFormat {
             min,
@@ -238,43 +233,56 @@ fn validate_pack_format_for_range(format: i32, min: i32, max: i32) -> Result<(),
     Ok(())
 }
 
-fn object<'a>(value: &'a Value, what: &str) -> Result<&'a serde_json::Map<String, Value>, String> {
-    value.as_object().ok_or_else(|| format!("Not a JSON object: {what}"))
+fn object<'a>(value: &'a Nbt, what: &str) -> Result<&'a Nbt, String> {
+    match value {
+        Nbt::Compound(_) => Ok(value),
+        _ => Err(format!("Not a JSON object: {what}")),
+    }
 }
 
-fn description(value: Option<&Value>) -> Result<Component, String> {
+fn description(value: Option<&Nbt>) -> Result<Component, String> {
     let value = value.ok_or("No key description in MapLike")?;
-    component_serialization::decode(&json_to_nbt(value))
+    component_serialization::decode(value)
 }
 
-pub fn pack_section(value: &Value) -> Result<PackMetadataSection, String> {
-    let object = object(value, "pack")?;
-    let description = description(object.get("description"))?;
-    let supported_formats = IntermediaryFormat::pack(object)?.validate(true, false, "Pack", "supported_formats")?;
-    Ok(PackMetadataSection { description, supported_formats })
+pub fn pack_section(value: &Nbt) -> Result<PackMetadataSection, String> {
+    crate::nbt::with_json_source(|| {
+        let object = object(value, "pack")?;
+        let description = description(object.get("description"))?;
+        let supported_formats = IntermediaryFormat::pack(object)?.validate(true, false, "Pack", "supported_formats")?;
+        Ok(PackMetadataSection { description, supported_formats })
+    })
 }
 
-pub fn fallback_pack_section(value: &Value) -> Result<PackMetadataSection, String> {
-    let description = description(object(value, "pack")?.get("description"))?;
-    let unknown = PackFormat::of(i32::MAX, 0);
-    Ok(PackMetadataSection { description, supported_formats: FormatRange { min: unknown, max: unknown } })
+pub fn fallback_pack_section(value: &Nbt) -> Result<PackMetadataSection, String> {
+    crate::nbt::with_json_source(|| {
+        let description = description(object(value, "pack")?.get("description"))?;
+        let unknown = PackFormat::of(i32::MAX, 0);
+        Ok(PackMetadataSection { description, supported_formats: FormatRange { min: unknown, max: unknown } })
+    })
 }
 
-pub fn features_section(value: &Value) -> Result<FeatureFlagSet, String> {
-    let enabled = object(value, "features")?.get("enabled").ok_or("No key enabled in MapLike")?;
-    let names = enabled.as_array().ok_or_else(|| format!("Not a list: {enabled}"))?;
-    let names: Vec<&str> = names.iter().map(|n| n.as_str().ok_or_else(|| format!("Not a string: {n}"))).collect::<Result<_, _>>()?;
-    FeatureFlagSet::from_names(names)
+pub fn features_section(value: &Nbt) -> Result<FeatureFlagSet, String> {
+    crate::nbt::with_json_source(|| {
+        let enabled = object(value, "features")?.get("enabled").ok_or("No key enabled in MapLike")?;
+        let Nbt::List(names) = enabled else { return Err(format!("Not a list: {}", crate::nbt::to_string(enabled))) };
+        let names: Vec<&str> = names.iter().map(|n| n.as_str().ok_or_else(|| format!("Not a string: {}", crate::nbt::to_string(n)))).collect::<Result<_, _>>()?;
+        FeatureFlagSet::from_names(names)
+    })
 }
 
-pub fn overlays_section(value: &Value) -> Result<Vec<String>, String> {
+pub fn overlays_section(value: &Nbt) -> Result<Vec<String>, String> {
+    crate::nbt::with_json_source(|| overlays(value))
+}
+
+fn overlays(value: &Nbt) -> Result<Vec<String>, String> {
     let entries = object(value, "overlays")?.get("entries").ok_or("No key entries in MapLike")?;
-    let entries = entries.as_array().ok_or_else(|| format!("Not a list: {entries}"))?;
+    let Nbt::List(entries) = entries else { return Err(format!("Not a list: {}", crate::nbt::to_string(entries))) };
     let mut parsed = Vec::with_capacity(entries.len());
     for entry in entries {
         let entry = object(entry, "overlay")?;
         let format = IntermediaryFormat::overlay(entry)?;
-        let directory = entry.get("directory").and_then(Value::as_str).ok_or("No key directory in MapLike")?;
+        let directory = entry.get("directory").and_then(Nbt::as_str).ok_or("No key directory in MapLike")?;
         if directory.is_empty() || !directory.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_' | b'.')) {
             return Err(format!("{directory} is not accepted directory name"));
         }

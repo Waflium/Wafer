@@ -18,12 +18,11 @@ pub struct BookCloningRecipe {
     result: ItemStackTemplate,
 }
 
-fn decode_allowed_generations(tag: &Nbt) -> DataResult<Ints> {
-    let bounds = Ints::decode(tag)?;
-    match (bounds.bounds.min, bounds.bounds.max) {
-        (Some(min), Some(max)) if min >= 0 && max <= 2 => Ok(bounds),
-        _ => Err(format!("Range must be within [0..2], but was {:?}", bounds.bounds)),
-    }
+fn decode_allowed_generations(tag: &Nbt) -> DecodeResult<Ints> {
+    Ints::decode_partial(tag).validate(|bounds| match (bounds.bounds.min, bounds.bounds.max) {
+        (Some(min), Some(max)) if min >= 0 && max <= 2 => Ok(()),
+        _ => Err(format!("Range must be within [0..2], but was {}", bounds.bounds.as_range_string())),
+    })
 }
 
 fn generation(content: &Nbt) -> i32 {
