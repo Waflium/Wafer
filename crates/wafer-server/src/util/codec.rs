@@ -195,6 +195,14 @@ pub fn int(tag: &Nbt) -> DataResult<i32> {
     Ok(component_codec::as_i32(number(tag)?))
 }
 
+pub fn int_range(tag: &Nbt, min: i32, max: i32) -> DataResult<i32> {
+    let value = int(tag)?;
+    if value < min || value > max {
+        return Err(format!("Value must be within range [{min};{max}]: {value}"));
+    }
+    Ok(value)
+}
+
 pub fn long(tag: &Nbt) -> DataResult<i64> {
     Ok(component_codec::as_i64(number(tag)?))
 }
