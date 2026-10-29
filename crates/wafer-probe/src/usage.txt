@@ -1,0 +1,116 @@
+usage: wafer-probe <host:port> <seconds> <out.jsonl> [--view N] [--name NAME] [--wait MS] [--walk] [--say TEXT] [--dig TICKS] [--script FILE]
+       wafer-probe --help
+
+Every received packet is written to <out.jsonl>. The client ticks at 20 Hz and ends each tick with client_tick_end.
+
+SCRIPT FILE
+  One line per client tick, starting at tick 20 after the first position. Lines with ';' run several commands in
+  the same tick (a "suggest" line is never split). A line that is not one of the commands below is sent as a chat
+  command (a leading '/' is optional). A command that fails or times out is reported on stderr and stops the script.
+  Entity references (<ref>) are an entity id, "last" or "target" (the entity set by the last ADD_ENTITY or wait_entity),
+  "self", "vehicle", an entity type such as "pig" or "minecraft:pig" (the nearest known entity of that type) or
+  "last:<type>" (the most recently added entity of that type). <hand> is 0/main or 1/off. <face> is 0-5 or
+  down, up, north, south, west, east. Block-change sequence numbers start at 1 and rise by one for every
+  use_item, use, break (start and stop) and action, like the vanilla client.
+
+TIMING AND WAITING
+  wait <ticks>                          pause the script for N ticks
+  wait_entity <type> [timeout=N]        block until an entity of that type is known, then target the nearest one
+  wait_new_entity <type> [timeout=N]    block until an entity of that type is added after this line, then target it
+  wait_packet <name> [timeout=N]        block until a clientbound play packet with that registry name arrives (open_screen, ...)
+  wait_chat <text> [timeout=N]          block until a system chat message contains the text
+  wait_screen [timeout=N]               block until a container screen is open
+  wait_mounted [timeout=N]              block until the player is a passenger
+  wait_dismounted [timeout=N]           block until the player is not a passenger
+  wait_ack [timeout=N]                  block until block_changed_ack covers the last sequence number sent
+  target <ref>                          set the "last"/"target" entity
+  entities [type]                       print the known entities
+  skip_type <type id>                   entities of this registry id never become "last"
+  A wait that exceeds its timeout (default 200 ticks) prints TIMEOUT on stderr and stops the script.
+
+MOVEMENT AND INPUT
+  move <x> <y> <z> <yRot>               move_player_pos_rot on the ground
+  move_air <x> <y> <z> <yRot> [xRot]    move_player_pos_rot off the ground
+  rot <yRot> <xRot>                     move_player_rot, and the rotation used by use_item and while riding
+  keys [forward|back|left|right|jump|sneak|sprint]...   set the pressed keys (none releases all); player_input is sent
+                                        when the set changes, and sprint also sends player_command start/stop_sprinting
+  hold <ticks> <key>...                 press keys for N ticks without pausing the script
+  input <flags>                         send player_input with raw flags immediately
+  start_fall_flying                     player_command start_fall_flying
+  command <action> <data>               raw player_command (0 stop_sleeping, 1/2 sprint, 3 start_riding_jump, 4 stop_riding_jump, 5 open_inventory, 6 start_fall_flying)
+  respawn | stats                       client_command perform_respawn / request_stats
+  hotbar <slot>                         set_carried_item
+  --walk moves 0.2 blocks in x every tick; --dig TICKS breaks the block below with start/stop_destroy_block.
+
+VEHICLES
+  The client does not simulate vehicle physics. A ridden vehicle starts at its last known position and moves only as
+  scripted. While the player is a passenger the tick sends, in vanilla's order: paddle_boat (boats), player_input (when
+  changed), the riding-jump command, move_player_rot and move_vehicle. move_vehicle is sent only while the vehicle is controlled.
+  mount <ref> [<hand>] [at dx dy dz] [sneak]   interact with the entity (same as interact)
+  dismount [timeout=N]                  hold sneak until the server dismounts the player, then release it
+  ride_control auto|on|off              auto controls boats, horses, donkeys, mules, skeleton/zombie horses, camels, camel
+                                        husks, nautiluses, pigs, striders and happy ghasts when the player is the first
+                                        passenger; use off for an unsaddled mount or a minecart, on to force steering
+  ride_move <dx> <dy> <dz>              move the controlled vehicle by this much every tick (0 0 0 stops it)
+  ride_forward <speed>                  like ride_move, along the vehicle's yaw (re-aimed every tick)
+  ride_to <x> <y> <z> [yRot [xRot]]     put the vehicle there now
+  ride_rot <yRot> <xRot>                set the vehicle rotation (boats; any other controlled vehicle copies the player's
+                                        yaw and half its pitch every tick, like tickRidden, so aim it with rot)
+  ride_ground 0|1                       set the vehicle on_ground flag
+  keys jump / hold <ticks> jump         charge a jump on a horse, camel or nautilus; releasing sends start_riding_jump
+                                        with floor(charge * 100), like LocalPlayer (camel and nautilus dashes use it too)
+  horse_inventory                       player_command open_inventory
+  vehicle <x> <y> <z> <yRot> [1]        raw move_vehicle (1 sets on_ground)
+  paddle <left> <right>                 raw paddle_boat (boats paddle automatically from the keys)
+
+ITEMS
+  use_item                              use_item in the main hand with the current rotation (right click on air)
+  use_item <hand>                       same in that hand
+  use_item <yRot> <xRot>                main hand with that rotation
+  use_item <hand> <yRot> <xRot>
+  hold_use <hand> <ticks>               use_item, wait N ticks, then player_action release_use_item (bows, crossbows, tridents,
+                                        spears, shields, food, potions, spyglass, goat horns)
+  release                               player_action release_use_item
+  use <x> <y> <z> <face> [cx cy cz] [inside] [border] [offhand]
+                                        use_item_on the block at x y z, clicking the face at cursor cx cy cz (default 0.5 0.5 0.5)
+  swap_hands | drop | drop all | stab   player_action swap_item_with_offhand / drop_item / drop_all_items / stab
+  pick_block <x> <y> <z> [data]         pick_item_from_block
+  pick_entity <ref> [data]              pick_item_from_entity
+  action <status> <x> <y> <z> <face>    raw player_action with a new sequence number
+
+INTERACTIONS
+  interact <ref> [<hand>] [at dx dy dz] [sneak]
+                                        interact with the entity; "at" is the hit position relative to the entity
+                                        (default 0 0.2 0); the secondary-action flag is set by "sneak" or the sneak key
+  interact_last <hand> [sneak]          interact with "last" at 0 0.2 0
+  attack <ref>                          attack followed by punch
+  attack_last                           attack "last"
+  punch                                 swing the main hand
+  break <x> <y> <z> <face> <ticks>      start_destroy_block + punch, a punch every tick, stop_destroy_block + punch after N
+                                        ticks (0 = only the start, for creative mode); the script waits meanwhile
+  break_abort <x> <y> <z>               abort_destroy_block
+  select_trade <index>                  select_trade
+  click <slot> <button> <mode>          container_click on the open container with the state id the server last sent
+                                        (mode 0 pickup, 1 quick move, 2 swap, 3 clone, 4 throw, 5 quick craft, 6 pickup all);
+                                        changed slots and the carried item are sent empty
+  quick <slot>                          shift-click a slot
+  button <id>                           container_button_click (enchanting table, lectern, loom, stonecutter)
+  close                                 container_close
+  rename <text>                         rename_item (anvil)
+  beacon <primary> <secondary>          set_beacon (effect registry ids, -1 for none)
+  slot_state <slot> true|false          container_slot_state_changed (crafter)
+  place_recipe <recipe> true|false      place_recipe
+  seen_recipe <recipe>                  recipe_book_seen_recipe
+  book_settings <type> <open> <filter>  recipe_book_change_settings
+  bundle_select <slot> <index>          bundle_item_selected
+  sign <x> <y> <z> <slot> <l1>|<l2>|<l3>|<l4>   sign_update (slot is the sign text slot id)
+  structure <x> <y> <z> <update> <mode> <name|-> <ox> <oy> <oz> <sx> <sy> <sz> <mirror> <rotation> <integrity> <seed> <flags>
+                                        set_structure_block
+  suggest <id> <text>[$]                command_suggestion
+  advancement_tab <tab> | advancement_close   seen_advancements
+
+TEST INSTANCE BLOCKS
+  test_instance <init|query|set|reset|save|export|run> <x> <y> <z> [<test>|-] [<sx> <sy> <sz> [<rotation>]] [ignore_entities]
+                                        test_instance_block_action; <test> defaults to the minecraft namespace, rotation is
+                                        0-3 or none, clockwise_90, 180, counterclockwise_90
+  set_test_block <x> <y> <z> <start|log|fail|accept> [message]   set_test_block

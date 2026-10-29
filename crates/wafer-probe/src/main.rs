@@ -1,3 +1,6 @@
+mod encode;
+mod session;
+
 use std::fmt::Write as _;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -8,6 +11,10 @@ use wafer_protocol::{Codec, Reader, Writer};
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufWriter};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+
+use session::Session;
+
+const USAGE: &str = include_str!("usage.txt");
 
 struct Options {
     addr: String,
@@ -23,8 +30,12 @@ struct Options {
 }
 
 fn options() -> anyhow::Result<Options> {
-    let mut args = std::env::args().skip(1);
-    let usage = "usage: wafer-probe <host:port> <seconds> <out.jsonl> [--view N] [--name NAME] [--wait MS] [--walk] [--say TEXT] [--dig TICKS] [--script FILE]";
+    let mut args = std::env::args().skip(1).peekable();
+    let usage = USAGE;
+    if args.peek().is_some_and(|arg| arg == "--help" || arg == "-h") {
+        print!("{USAGE}");
+        std::process::exit(0);
+    }
     let mut o = Options {
         addr: args.next().context(usage)?,
         duration: Duration::from_secs(args.next().context(usage)?.parse()?),
@@ -171,20 +182,17 @@ async fn main() -> anyhow::Result<()> {
 
     let deadline = tokio::time::Instant::now() + o.duration;
     let mut ticker = tokio::time::interval(Duration::from_millis(50));
-    let mut position: Option<(f64, f64, f64)> = None;
     let mut ticks_loaded = 0u32;
     let mut script = o.script.iter();
-    let mut script_wait = 0u32;
-    let mut sequence = 100;
-    let mut open_container = 0;
-    let mut on_ground = 1u8;
-    let mut last_entity = 0;
-    let mut skip_types: Vec<i32> = Vec::new();
+    let mut s = Session::new();
     loop {
         tokio::select! {
             packet = rx.recv() => {
                 let Some((at, bytes)) = packet else { break };
                 let (id, data) = rec.record("play", at, &bytes).await?;
+                if let Err(error) = s.on_packet(id, &data) {
+                    eprintln!("probe: cannot decode {}: {error:#}", packet_name("play", "clientbound", id).unwrap_or("unknown"));
+                }
                 match id {
                     play::clientbound::KEEP_ALIVE => send(&mut wr, codec, play::serverbound::KEEP_ALIVE, |w| w.bytes(&data)).await?,
                     play::clientbound::PING => send(&mut wr, codec, play::serverbound::PONG, |w| w.bytes(&data)).await?,
@@ -195,7 +203,7 @@ async fn main() -> anyhow::Result<()> {
                         let mut r = Reader::new(&data);
                         let teleport = r.varint()?;
                         let pos = (r.f64()?, r.f64()?, r.f64()?);
-                        if position.is_none() {
+                        if s.pos.is_none() {
                             tokio::time::sleep(Duration::from_millis(100)).await;
                         }
                         send(&mut wr, codec, play::serverbound::ACCEPT_TELEPORTATION, |w| {
@@ -207,39 +215,31 @@ async fn main() -> anyhow::Result<()> {
                             w.f32(0.0);
                         })
                         .await?;
-                        if position.is_none() {
+                        if s.pos.is_none() {
                             send(&mut wr, codec, play::serverbound::PLAYER_LOADED, |_| {}).await?;
                         }
-                        position = Some(pos);
-                    }
-                    play::clientbound::OPEN_SCREEN | play::clientbound::MOUNT_SCREEN_OPEN => open_container = Reader::new(&data).varint()?,
-                    play::clientbound::ADD_ENTITY => {
-                        let mut r = Reader::new(&data);
-                        let id = r.varint()?;
-                        r.uuid()?;
-                        let entity_type = r.varint()?;
-                        if !skip_types.contains(&entity_type) {
-                            last_entity = id;
-                        }
+                        s.pos = Some(pos);
                     }
                     play::clientbound::DISCONNECT => break,
                     _ => {}
                 }
             }
             _ = ticker.tick() => {
-                let Some((x, y, z)) = position.as_mut() else { continue };
+                let Some(mut at) = s.pos else { continue };
                 ticks_loaded += 1;
                 if o.walk {
-                    *x += 0.2;
-                    let (x, y, z) = (*x, *y, *z);
+                    at.0 += 0.2;
+                    s.pos = Some(at);
                     send(&mut wr, codec, play::serverbound::MOVE_PLAYER_POS, |w| {
-                        w.f64(x);
-                        w.f64(y);
-                        w.f64(z);
+                        w.f64(at.0);
+                        w.f64(at.1);
+                        w.f64(at.2);
                         w.u8(1);
                     })
                     .await?;
                 }
+                s.tick_keys();
+                s.tick_activity();
                 if ticks_loaded == 20 && let Some(command) = o.say.as_ref().and_then(|m| m.strip_prefix('/')) {
                     send(&mut wr, codec, play::serverbound::CHAT_COMMAND, |w| w.string(command)).await?;
                 } else if ticks_loaded == 20 && let Some(message) = &o.say {
@@ -256,345 +256,53 @@ async fn main() -> anyhow::Result<()> {
                     .await?;
                 }
                 let mut lines = Vec::new();
-                if ticks_loaded >= 20 && script_wait > 0 {
-                    script_wait -= 1;
-                } else if ticks_loaded >= 20 && let Some(line) = script.next() {
+                if ticks_loaded >= 20 && !s.aborted && !s.script_blocked() && let Some(line) = script.next() {
                     if line.starts_with("suggest ") {
                         lines.push(line.as_str());
                     } else {
-                        lines.extend(line.split(';').map(str::trim));
+                        lines.extend(split_commands(line));
                     }
                 }
                 for line in lines {
                     let words: Vec<&str> = line.split_whitespace().collect();
-                    match words.as_slice() {
-                        ["wait", ticks] => script_wait = ticks.parse()?,
-                        ["suggest", id, ..] => {
-                            let id: i32 = id.parse()?;
-                            let rest = line.splitn(3, ' ').nth(2).unwrap_or("");
-                            let text = rest.strip_suffix('$').unwrap_or(rest);
-                            send(&mut wr, codec, play::serverbound::COMMAND_SUGGESTION, |w| {
-                                w.varint(id);
-                                w.string(text);
-                            })
-                            .await?;
-                        }
-                        ["respawn"] => send(&mut wr, codec, play::serverbound::CLIENT_COMMAND, |w| w.varint(0)).await?,
-                        ["stats"] => send(&mut wr, codec, play::serverbound::CLIENT_COMMAND, |w| w.varint(1)).await?,
-                        ["input", flags] => {
-                            let flags: u8 = flags.parse()?;
-                            send(&mut wr, codec, play::serverbound::PLAYER_INPUT, |w| w.u8(flags)).await?;
-                        }
-                        ["action", status, x, y, z, face] => {
-                            let (status, x, y, z, face): (i32, i32, i32, i32, u8) = (status.parse()?, x.parse()?, y.parse()?, z.parse()?, face.parse()?);
-                            sequence += 1;
-                            send(&mut wr, codec, play::serverbound::PLAYER_ACTION, |w| {
-                                w.varint(status);
-                                w.position(x, y, z);
-                                w.u8(face);
-                                w.varint(sequence);
-                            })
-                            .await?;
-                        }
-                        ["move_air", nx, ny, nz, y_rot, x_rot @ ..] => {
-                            let (nx, ny, nz, y_rot): (f64, f64, f64, f32) = (nx.parse()?, ny.parse()?, nz.parse()?, y_rot.parse()?);
-                            let x_rot: f32 = x_rot.first().map_or(Ok(0.0), |x_rot| x_rot.parse())?;
-                            (*x, *y, *z) = (nx, ny, nz);
-                            on_ground = 0;
-                            send(&mut wr, codec, play::serverbound::MOVE_PLAYER_POS_ROT, |w| {
-                                w.f64(nx);
-                                w.f64(ny);
-                                w.f64(nz);
-                                w.f32(y_rot);
-                                w.f32(x_rot);
-                                w.u8(0);
-                            })
-                            .await?;
-                        }
-                        ["start_fall_flying"] => {
-                            send(&mut wr, codec, play::serverbound::PLAYER_COMMAND, |w| {
-                                w.varint(0);
-                                w.varint(6);
-                                w.varint(0);
-                            })
-                            .await?;
-                        }
-                        ["command", action, data] => {
-                            let (action, data): (i32, i32) = (action.parse()?, data.parse()?);
-                            send(&mut wr, codec, play::serverbound::PLAYER_COMMAND, |w| {
-                                w.varint(0);
-                                w.varint(action);
-                                w.varint(data);
-                            })
-                            .await?;
-                        }
-                        ["structure", x, y, z, update_type, mode, name, ox, oy, oz, sx, sy, sz, mirror, rotation, integrity, seed, flags] => {
-                            let (x, y, z): (i32, i32, i32) = (x.parse()?, y.parse()?, z.parse()?);
-                            let bytes: Vec<i8> = [ox, oy, oz, sx, sy, sz].iter().map(|v| v.parse()).collect::<Result<_, _>>()?;
-                            let (update_type, mode, mirror, rotation): (i32, i32, i32, i32) = (update_type.parse()?, mode.parse()?, mirror.parse()?, rotation.parse()?);
-                            let (integrity, seed, flags): (f32, i64, u8) = (integrity.parse()?, seed.parse()?, flags.parse()?);
-                            let name = if *name == "-" { "" } else { name };
-                            send(&mut wr, codec, play::serverbound::SET_STRUCTURE_BLOCK, |w| {
-                                w.position(x, y, z);
-                                w.varint(update_type);
-                                w.varint(mode);
-                                w.string(name);
-                                bytes.iter().for_each(|&b| w.u8(b as u8));
-                                w.varint(mirror);
-                                w.varint(rotation);
-                                w.string("");
-                                w.f32(integrity);
-                                w.varlong(seed);
-                                w.u8(flags);
-                            })
-                            .await?;
-                        }
-                        ["rot", y_rot, x_rot] => {
-                            let (y_rot, x_rot): (f32, f32) = (y_rot.parse()?, x_rot.parse()?);
-                            send(&mut wr, codec, play::serverbound::MOVE_PLAYER_ROT, |w| {
-                                w.f32(y_rot);
-                                w.f32(x_rot);
-                                w.u8(on_ground);
-                            })
-                            .await?;
-                        }
-                        ["sign", x, y, z, slot, rest @ ..] => {
-                            let (x, y, z, slot): (i32, i32, i32, i32) = (x.parse()?, y.parse()?, z.parse()?, slot.parse()?);
-                            let text = rest.join(" ");
-                            let mut lines: Vec<&str> = text.split('|').collect();
-                            lines.resize(4, "");
-                            send(&mut wr, codec, play::serverbound::SIGN_UPDATE, |w| {
-                                w.position(x, y, z);
-                                for line in &lines[..4] {
-                                    w.string(line);
-                                }
-                                w.varint(slot);
-                            })
-                            .await?;
-                        }
-                        ["button", button] => {
-                            let button: i32 = button.parse()?;
-                            send(&mut wr, codec, play::serverbound::CONTAINER_BUTTON_CLICK, |w| {
-                                w.varint(open_container);
-                                w.varint(button);
-                            })
-                            .await?;
-                        }
-                        ["beacon", primary, secondary] => {
-                            let (primary, secondary): (i32, i32) = (primary.parse()?, secondary.parse()?);
-                            send(&mut wr, codec, play::serverbound::SET_BEACON, |w| {
-                                for effect in [primary, secondary] {
-                                    w.bool(effect >= 0);
-                                    if effect >= 0 {
-                                        w.varint(effect);
-                                    }
-                                }
-                            })
-                            .await?;
-                        }
-                        ["click", slot, button, mode] => {
-                            let (slot, button, mode): (i16, u8, i32) = (slot.parse()?, button.parse()?, mode.parse()?);
-                            send(&mut wr, codec, play::serverbound::CONTAINER_CLICK, |w| {
-                                w.varint(open_container);
-                                w.varint(0);
-                                w.i16(slot);
-                                w.u8(button);
-                                w.varint(mode);
-                                w.varint(0);
-                                w.bool(false);
-                            })
-                            .await?;
-                        }
-                        ["bundle_select", slot, index] => {
-                            let (slot, index): (i32, i32) = (slot.parse()?, index.parse()?);
-                            send(&mut wr, codec, play::serverbound::BUNDLE_ITEM_SELECTED, |w| {
-                                w.varint(slot);
-                                w.varint(index);
-                            })
-                            .await?;
-                        }
-                        ["place_recipe", recipe, use_max_items] => {
-                            let (recipe, use_max_items): (i32, bool) = (recipe.parse()?, use_max_items.parse()?);
-                            send(&mut wr, codec, play::serverbound::PLACE_RECIPE, |w| {
-                                w.varint(open_container);
-                                w.varint(recipe);
-                                w.bool(use_max_items);
-                            })
-                            .await?;
-                        }
-                        ["book_settings", book_type, is_open, is_filtering] => {
-                            let (book_type, is_open, is_filtering): (i32, bool, bool) = (book_type.parse()?, is_open.parse()?, is_filtering.parse()?);
-                            send(&mut wr, codec, play::serverbound::RECIPE_BOOK_CHANGE_SETTINGS, |w| {
-                                w.varint(book_type);
-                                w.bool(is_open);
-                                w.bool(is_filtering);
-                            })
-                            .await?;
-                        }
-                        ["rename", rest @ ..] => {
-                            let name = rest.join(" ");
-                            send(&mut wr, codec, play::serverbound::RENAME_ITEM, |w| w.string(&name)).await?;
-                        }
-                        ["slot_state", slot_id, new_state] => {
-                            let (slot_id, new_state): (i32, bool) = (slot_id.parse()?, new_state.parse()?);
-                            send(&mut wr, codec, play::serverbound::CONTAINER_SLOT_STATE_CHANGED, |w| {
-                                w.varint(slot_id);
-                                w.varint(open_container);
-                                w.bool(new_state);
-                            })
-                            .await?;
-                        }
-                        ["advancement_tab", tab] => {
-                            send(&mut wr, codec, play::serverbound::SEEN_ADVANCEMENTS, |w| {
-                                w.varint(0);
-                                w.string(tab);
-                            })
-                            .await?;
-                        }
-                        ["advancement_close"] => send(&mut wr, codec, play::serverbound::SEEN_ADVANCEMENTS, |w| w.varint(1)).await?,
-                        ["interact_last", hand, rest @ ..] => {
-                            let hand: i32 = hand.parse()?;
-                            let using_secondary_action = rest.first().is_some_and(|flag| *flag == "sneak");
-                            send(&mut wr, codec, play::serverbound::INTERACT, |w| {
-                                w.varint(last_entity);
-                                w.varint(hand);
-                                w.lp_vec3(0.0, 0.2, 0.0);
-                                w.bool(using_secondary_action);
-                            })
-                            .await?;
-                        }
-                        ["skip_type", entity_type] => skip_types.push(entity_type.parse()?),
-                        ["attack_last"] => send(&mut wr, codec, play::serverbound::ATTACK, |w| w.varint(last_entity)).await?,
-                        ["vehicle", vx, vy, vz, y_rot, rest @ ..] => {
-                            let (vx, vy, vz, y_rot): (f64, f64, f64, f32) = (vx.parse()?, vy.parse()?, vz.parse()?, y_rot.parse()?);
-                            let vehicle_on_ground = rest.first().is_some_and(|flag| *flag == "1");
-                            send(&mut wr, codec, play::serverbound::MOVE_VEHICLE, |w| {
-                                w.f64(vx);
-                                w.f64(vy);
-                                w.f64(vz);
-                                w.f32(y_rot);
-                                w.f32(0.0);
-                                w.bool(vehicle_on_ground);
-                            })
-                            .await?;
-                        }
-                        ["paddle", left, right] => {
-                            let (left, right): (u8, u8) = (left.parse()?, right.parse()?);
-                            send(&mut wr, codec, play::serverbound::PADDLE_BOAT, |w| {
-                                w.bool(left != 0);
-                                w.bool(right != 0);
-                            })
-                            .await?;
-                        }
-                        ["seen_recipe", recipe] => {
-                            let recipe: i32 = recipe.parse()?;
-                            send(&mut wr, codec, play::serverbound::RECIPE_BOOK_SEEN_RECIPE, |w| w.varint(recipe)).await?;
-                        }
-                        ["close"] => {
-                            send(&mut wr, codec, play::serverbound::CONTAINER_CLOSE, |w| w.varint(open_container)).await?;
-                            open_container = 0;
-                        }
-                        ["quick", slot] => {
-                            let slot: i16 = slot.parse()?;
-                            send(&mut wr, codec, play::serverbound::CONTAINER_CLICK, |w| {
-                                w.varint(open_container);
-                                w.varint(0);
-                                w.i16(slot);
-                                w.u8(0);
-                                w.varint(1);
-                                w.varint(0);
-                                w.bool(false);
-                            })
-                            .await?;
-                        }
-                        ["use_item", y_rot, x_rot] => {
-                            let (y_rot, x_rot): (f32, f32) = (y_rot.parse()?, x_rot.parse()?);
-                            sequence += 1;
-                            send(&mut wr, codec, play::serverbound::USE_ITEM, |w| {
-                                w.varint(0);
-                                w.varint(sequence);
-                                w.f32(y_rot);
-                                w.f32(x_rot);
-                            })
-                            .await?;
-                        }
-                        ["use_item", hand] => {
-                            let hand: i32 = hand.parse()?;
-                            sequence += 1;
-                            send(&mut wr, codec, play::serverbound::USE_ITEM, |w| {
-                                w.varint(hand);
-                                w.varint(sequence);
-                                w.f32(0.0);
-                                w.f32(0.0);
-                            })
-                            .await?;
-                        }
-                        ["hotbar", slot] => {
-                            let slot: i16 = slot.parse()?;
-                            send(&mut wr, codec, play::serverbound::SET_CARRIED_ITEM, |w| w.i16(slot)).await?;
-                        }
-                        ["move", nx, ny, nz, y_rot] => {
-                            let (nx, ny, nz, y_rot): (f64, f64, f64, f32) = (nx.parse()?, ny.parse()?, nz.parse()?, y_rot.parse()?);
-                            (*x, *y, *z) = (nx, ny, nz);
-                            on_ground = 1;
-                            send(&mut wr, codec, play::serverbound::MOVE_PLAYER_POS_ROT, |w| {
-                                w.f64(nx);
-                                w.f64(ny);
-                                w.f64(nz);
-                                w.f32(y_rot);
-                                w.f32(0.0);
-                                w.u8(1);
-                            })
-                            .await?;
-                        }
-                        ["use", x, y, z, face, cursor @ ..] => {
-                            let (x, y, z, face): (i32, i32, i32, i32) = (x.parse()?, y.parse()?, z.parse()?, face.parse()?);
-                            let cursor: Vec<f32> = cursor.iter().map(|c| c.parse()).collect::<Result<_, _>>()?;
-                            let (cx, cy, cz) = if let [cx, cy, cz] = cursor[..] { (cx, cy, cz) } else { (0.5, 0.5, 0.5) };
-                            sequence += 1;
-                            send(&mut wr, codec, play::serverbound::USE_ITEM_ON, |w| {
-                                w.varint(0);
-                                w.position(x, y, z);
-                                w.varint(face);
-                                w.f32(cx);
-                                w.f32(cy);
-                                w.f32(cz);
-                                w.bool(false);
-                                w.bool(false);
-                                w.varint(sequence);
-                            })
-                            .await?;
-                        }
-                        _ => {
-                            let command = line.strip_prefix('/').unwrap_or(line);
-                            send(&mut wr, codec, play::serverbound::CHAT_COMMAND, |w| w.string(command)).await?;
-                        }
+                    if let Err(error) = s.command(&words, line) {
+                        eprintln!("probe: {line}: {error:#}");
+                        s.aborted = true;
                     }
                 }
-                if o.dig.is_some() {
-                    send(&mut wr, codec, play::serverbound::MOVE_PLAYER_ROT, |w| {
-                        w.f32(0.0);
-                        w.f32(90.0);
-                        w.u8(1);
-                    })
-                    .await?;
-                } else if !o.walk {
-                    send(&mut wr, codec, play::serverbound::MOVE_PLAYER_STATUS_ONLY, |w| w.u8(on_ground)).await?;
-                }
-                if let Some(dig_ticks) = o.dig {
-                    let below = (x.floor() as i32, y.floor() as i32 - 1, z.floor() as i32);
-                    let action = if ticks_loaded == 20 { Some((0, 1)) } else if ticks_loaded == 20 + dig_ticks { Some((3, 2)) } else { None };
-                    if (20..20 + dig_ticks).contains(&ticks_loaded) {
-                        send(&mut wr, codec, play::serverbound::PUNCH, |_| {}).await?;
-                    }
-                    if let Some((status, sequence)) = action {
-                        send(&mut wr, codec, play::serverbound::PLAYER_ACTION, |w| {
-                            w.varint(status);
-                            w.position(below.0, below.1, below.2);
+                flush(&mut wr, codec, &mut s).await?;
+                if s.riding() {
+                    s.tick_riding();
+                    flush(&mut wr, codec, &mut s).await?;
+                } else {
+                    s.send_input_if_changed();
+                    flush(&mut wr, codec, &mut s).await?;
+                    if o.dig.is_some() {
+                        send(&mut wr, codec, play::serverbound::MOVE_PLAYER_ROT, |w| {
+                            w.f32(0.0);
+                            w.f32(90.0);
                             w.u8(1);
-                            w.varint(sequence);
                         })
                         .await?;
+                    } else if !o.walk {
+                        send(&mut wr, codec, play::serverbound::MOVE_PLAYER_STATUS_ONLY, |w| w.u8(s.on_ground)).await?;
+                    }
+                    if let Some(dig_ticks) = o.dig {
+                        let (x, y, z) = s.pos.unwrap_or(at);
+                        let below = (x.floor() as i32, y.floor() as i32 - 1, z.floor() as i32);
+                        let action = if ticks_loaded == 20 { Some((0, 1)) } else if ticks_loaded == 20 + dig_ticks { Some((3, 2)) } else { None };
+                        if (20..20 + dig_ticks).contains(&ticks_loaded) {
+                            send(&mut wr, codec, play::serverbound::PUNCH, |_| {}).await?;
+                        }
+                        if let Some((status, sequence)) = action {
+                            send(&mut wr, codec, play::serverbound::PLAYER_ACTION, |w| {
+                                w.varint(status);
+                                w.position(below.0, below.1, below.2);
+                                w.u8(1);
+                                w.varint(sequence);
+                            })
+                            .await?;
+                        }
                     }
                 }
                 send(&mut wr, codec, play::serverbound::CLIENT_TICK_END, |_| {}).await?;
@@ -607,4 +315,52 @@ async fn main() -> anyhow::Result<()> {
         println!("{count:>5} x {name}");
     }
     Ok(())
+}
+
+fn split_commands(line: &str) -> Vec<&str> {
+    let mut commands = Vec::new();
+    let (mut depth, mut quote, mut start) = (0u32, None, 0);
+    let mut chars = line.char_indices();
+    while let Some((index, c)) = chars.next() {
+        match (c, quote) {
+            ('\\', Some(_)) => {
+                chars.next();
+            }
+            (c, Some(q)) if c == q => quote = None,
+            (_, Some(_)) => {}
+            ('"' | '\'', None) => quote = Some(c),
+            ('[' | '{', None) => depth += 1,
+            (']' | '}', None) => depth = depth.saturating_sub(1),
+            (';', None) if depth == 0 => {
+                commands.push(line[start..index].trim());
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    commands.push(line[start..].trim());
+    commands
+}
+
+async fn flush<W: AsyncWrite + Unpin>(w: &mut W, codec: Codec, s: &mut Session) -> anyhow::Result<()> {
+    for packet in s.outbox.drain(..) {
+        w.write_all(&codec.encode(&packet)).await?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_commands;
+
+    #[test]
+    fn split_commands_splits_on_top_level_semicolons() {
+        assert_eq!(split_commands("wait 1; keys forward ;rot 0 0"), ["wait 1", "keys forward", "rot 0 0"]);
+    }
+
+    #[test]
+    fn split_commands_keeps_nbt_and_quoted_semicolons() {
+        let line = "/summon nautilus 0 -60 3 {Owner:[I;1,2,3,4],CustomName:'\"a;b\"'}; wait_new_entity nautilus";
+        assert_eq!(split_commands(line), ["/summon nautilus 0 -60 3 {Owner:[I;1,2,3,4],CustomName:'\"a;b\"'}", "wait_new_entity nautilus"]);
+    }
 }
