@@ -943,3 +943,24 @@ fn creative_players_take_items_into_a_full_inventory() {
     assert_eq!(run(&mut server, "execute if entity @e[type=item]"), ["Test failed"]);
     assert_eq!(server.levels[0].player(alice.id).inventory.get_item(0).count, 64);
 }
+
+#[test]
+fn frozen_ticks_keep_entities_that_carry_players() {
+    let mut server = server();
+    let _alice = join(&mut server, "Alice", ORIGIN);
+    server.levels[0].chunks.run_until_idle();
+    server.levels[0].process_chunk_events();
+    server.tick();
+    run(&mut server, "summon minecraft:pig 0.5 -60 0.5 {NoAI:1b,Tags:[\"carrier\"]}");
+    run(&mut server, "summon minecraft:pig 4.5 -60 0.5 {NoAI:1b,Tags:[\"alone\"]}");
+    server.tick();
+    assert_eq!(run(&mut server, "ride Alice mount @e[tag=carrier,limit=1]"), ["Alice started riding Pig"]);
+    assert_eq!(run(&mut server, "tick freeze"), ["The game is frozen"]);
+    let age = |server: &Server, tag: &str| server.levels[0].all_entities().find(|&id| server.levels[0].entity(id).tags.iter().any(|t| t == tag)).map(|id| server.levels[0].entity(id).tick_count).unwrap();
+    let (carrier, alone) = (age(&server, "carrier"), age(&server, "alone"));
+    for _ in 0..3 {
+        server.tick();
+    }
+    assert_eq!(age(&server, "carrier"), carrier + 3);
+    assert_eq!(age(&server, "alone"), alone);
+}

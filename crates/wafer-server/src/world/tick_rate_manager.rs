@@ -72,7 +72,7 @@ impl TickRateManager {
         }
     }
 
-    pub fn is_entity_frozen(&self) -> bool {
-        !self.runs_normally()
+    pub fn is_entity_frozen(&self, is_player: bool, player_passengers: usize) -> bool {
+        !self.runs_normally() && !is_player && player_passengers == 0
     }
 }

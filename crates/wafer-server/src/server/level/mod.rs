@@ -1595,7 +1595,7 @@ impl ServerLevel {
             } else if let Some(entity) = self.find_entity(id) {
                 if entity.entity().is_removed() {
                     self.remove_entity(id);
-                } else if !self.tick_rate_manager.is_entity_frozen() {
+                } else if !self.tick_rate_manager.is_entity_frozen(false, self.count_player_passengers(id)) {
                     if self.is_wither(id) {
                         self.wither_check_despawn(id);
                     } else if self.is_ender_dragon(id) {
