@@ -6,13 +6,17 @@ use wafer_data::BlockState;
 use wafer_protocol::nbt::Nbt;
 use serde_json::Value;
 
-use super::pos_rule_test::PosRuleTest;
+use super::pos_rule_test::{self, PosRuleTest};
 use super::{blackstone_replace_processor, block_age_processor, lava_submerged_block_processor};
-use super::rule_test::RuleTest;
+use super::rule_test::{self, RuleTest};
 use super::structure_place_settings::StructurePlaceSettings;
 use super::structure_template::StructureBlockInfo;
+use crate::util::codec::DecodeResult;
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, def, lenient_opt, opt, req};
+use crate::world::level::block::state::block_state;
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::{IntProvider, float};
+use crate::util::valueproviders::{IntProvider, float, positive_int_provider_codec};
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::placement::placement_modifier::parse_heightmap;
 use wafer_data::blocks;
@@ -57,6 +61,16 @@ fn put(tag: &mut Vec<(String, Nbt)>, key: &str, value: Nbt) {
 }
 
 impl RuleBlockEntityModifier {
+    pub fn codec() -> Pair {
+        let cases = vec![
+            ("minecraft:clear", vec![]),
+            ("minecraft:passthrough", vec![]),
+            ("minecraft:append_static", vec![req("data", (Codec::Func(compound_tag), Stream::Nbt))]),
+            ("minecraft:append_loot", vec![req("loot_table", types::identifier())]),
+        ];
+        (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:rule_block_entity_modifier"), cases })), Stream::Dispatch)
+    }
+
     fn parse(json: Option<&Value>) -> Result<RuleBlockEntityModifier, String> {
         let Some(json) = json else { return Ok(RuleBlockEntityModifier::Passthrough) };
         let ty = json.get("type").and_then(Value::as_str).ok_or("block entity modifier without type")?;
@@ -99,6 +113,16 @@ impl RuleBlockEntityModifier {
 impl ProcessorRule {
     pub fn new(input_predicate: RuleTest, loc_predicate: RuleTest, pos_predicate: PosRuleTest, output_state: BlockState, block_entity_modifier: RuleBlockEntityModifier) -> ProcessorRule {
         ProcessorRule { input_predicate, loc_predicate, pos_predicate, output_state, block_entity_modifier }
+    }
+
+    pub fn codec() -> Pair {
+        types::record(vec![
+            req("input_predicate", (Codec::Lazy(rule_test::codec_lazy), Stream::Lazy)),
+            req("location_predicate", (Codec::Lazy(rule_test::codec_lazy), Stream::Lazy)),
+            lenient_opt("position_predicate", pos_rule_test::codec()),
+            req("output_state", block_state::codec()),
+            lenient_opt("block_entity_modifier", RuleBlockEntityModifier::codec()),
+        ])
     }
 
     fn parse(json: &Value) -> Result<ProcessorRule, String> {
@@ -334,5 +358,91 @@ impl StructureProcessorListHolder {
             }),
             StructureProcessorListHolder::Direct(list) => list,
         }
+    }
+}
+
+const HEIGHTMAP_TYPES: &[&str] = &["WORLD_SURFACE_WG", "WORLD_SURFACE", "OCEAN_FLOOR_WG", "OCEAN_FLOOR", "MOTION_BLOCKING", "MOTION_BLOCKING_NO_LEAVES"];
+
+fn single_codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(single_codec);
+    &CODEC
+}
+
+fn list_direct_codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(list_direct_codec);
+    &CODEC
+}
+
+pub fn single_codec() -> Pair {
+    let cases = vec![
+        ("minecraft:blackstone_replace", vec![]),
+        ("minecraft:block_age", vec![req("mossiness", types::float(Codec::float()))]),
+        ("minecraft:block_ignore", vec![req("blocks", types::list(block_state::codec()))]),
+        ("minecraft:block_rot", vec![opt("rottable_blocks", types::holder_set("minecraft:block")), req("integrity", types::float(types::codec_float_range(0.0, 1.0)))]),
+        ("minecraft:capped", vec![req("delegate", (Codec::Lazy(single_codec_lazy), Stream::Lazy)), req("limit", positive_int_provider_codec())]),
+        ("minecraft:gravity", vec![def("heightmap", types::enumeration(HEIGHTMAP_TYPES), Nbt::String("WORLD_SURFACE_WG".into())), def("offset", (Codec::int(), Stream::Int), Nbt::Int(0))]),
+        ("minecraft:jigsaw_replacement", vec![]),
+        ("minecraft:lava_submerged_block", vec![]),
+        ("minecraft:nop", vec![]),
+        ("minecraft:protected_blocks", vec![req("value", types::holder_set("minecraft:block"))]),
+        ("minecraft:rule", vec![req("rules", types::list(ProcessorRule::codec()))]),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "processor_type", selector: Selector::Registry("minecraft:worldgen/structure_processor"), cases })), Stream::Dispatch)
+}
+
+pub fn list_object_codec() -> Pair {
+    types::list((Codec::Lazy(single_codec_lazy), Stream::Lazy))
+}
+
+pub fn list_direct_codec() -> Pair {
+    let primary = types::record(vec![req("processors", list_object_codec())]);
+    (Codec::Either(Box::new(primary.0), Box::new(list_object_codec().0)), Stream::Nbt)
+}
+
+pub fn list_holder_codec() -> Pair {
+    (Codec::Holder("minecraft:worldgen/processor_list", Some(Box::new(Codec::Lazy(list_direct_codec_lazy)))), Stream::Nbt)
+}
+
+fn convert_and_print(tag: &Nbt) -> String {
+    let narrowest = |value: i64| {
+        if value as i8 as i64 == value {
+            Nbt::Byte(value as i8)
+        } else if value as i16 as i64 == value {
+            Nbt::Short(value as i16)
+        } else if value as i32 as i64 == value {
+            Nbt::Int(value as i32)
+        } else {
+            Nbt::Long(value)
+        }
+    };
+    match tag {
+        Nbt::List(items) => format!("[{}]", items.iter().map(convert_and_print).collect::<Vec<_>>().join(",")),
+        Nbt::Long(value) => crate::nbt::to_snbt(&narrowest(*value)),
+        Nbt::Double(value) if value.fract() == 0.0 && value.abs() < 9.2e18 => crate::nbt::to_snbt(&narrowest(*value as i64)),
+        Nbt::Double(value) if f64::from(*value as f32) == *value => crate::nbt::to_snbt(&Nbt::Float(*value as f32)),
+        other => crate::nbt::to_snbt(other),
+    }
+}
+
+fn contains_null(tag: &Nbt) -> bool {
+    match tag {
+        Nbt::End => true,
+        Nbt::List(items) => items.iter().any(contains_null),
+        Nbt::Compound(fields) => fields.iter().any(|(_, value)| contains_null(value)),
+        _ => false,
+    }
+}
+
+fn compound_tag(tag: &Nbt) -> DecodeResult<Nbt> {
+    if contains_null(tag) {
+        crate::core::data_registries::throw(
+            "java.lang.NullPointerException",
+            "Cannot invoke \"com.google.gson.JsonElement.getAsJsonPrimitive()\" because \"input\" is null".into(),
+            &["com.mojang.serialization.JsonOps.convertTo(JsonOps.java:61)", "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)"],
+        );
+    }
+    match tag {
+        Nbt::Compound(_) => DecodeResult::success(tag.clone()),
+        other => DecodeResult::error(format!("Not a compound tag: {}", convert_and_print(other))),
     }
 }

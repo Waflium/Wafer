@@ -2,7 +2,10 @@ use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction};
 use serde_json::Value;
 
-use super::root_placer::{RootPlacer, get_potentially_waterlogged_state};
+use super::mangrove_root_placement;
+use super::root_placer::{RootPlacer, get_potentially_waterlogged_state, root_placer_parts};
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::req;
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::valueproviders::float;
 use crate::world::level::levelgen::blockpredicates::block_predicate::BlockSet;
@@ -31,6 +34,12 @@ impl MangroveRootPlacement {
             random_skew_chance: float(field("random_skew_chance")?)?,
         })
     }
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = root_placer_parts();
+    fields.push(req("mangrove_root_placement", mangrove_root_placement::codec()));
+    fields
 }
 
 #[allow(clippy::too_many_arguments)]

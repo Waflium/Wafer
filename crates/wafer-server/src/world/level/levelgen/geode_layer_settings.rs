@@ -13,3 +13,15 @@ impl GeodeLayerSettings {
         GeodeLayerSettings { filling: layer("filling", 1.7), inner_layer: layer("inner_layer", 2.2), middle_layer: layer("middle_layer", 3.2), outer_layer: layer("outer_layer", 4.2) }
     }
 }
+
+pub fn codec() -> crate::world::item::component::types::Pair {
+    use crate::util::range_codecs::double_range;
+    use crate::world::item::component::types::{record, def};
+    use wafer_protocol::nbt::Nbt;
+    record(vec![
+        def("filling", double_range(0.01, 50.0), Nbt::Double(1.7)),
+        def("inner_layer", double_range(0.01, 50.0), Nbt::Double(2.2)),
+        def("middle_layer", double_range(0.01, 50.0), Nbt::Double(3.2)),
+        def("outer_layer", double_range(0.01, 50.0), Nbt::Double(4.2)),
+    ])
+}

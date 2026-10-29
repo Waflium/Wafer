@@ -26,3 +26,10 @@ impl WeightedRandomSelectorFeature {
         }
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::random::{weighted_data_codec, weighted_list_codec};
+    use crate::world::item::component::types::req;
+    use crate::world::level::levelgen::placement::placed_feature;
+    vec![req("features", weighted_list_codec(weighted_data_codec(placed_feature::holder_codec())))]
+}

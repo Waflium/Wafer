@@ -134,10 +134,7 @@ fn decode_chunk_generator(tag: &Nbt) -> DecodeResult<()> {
 }
 
 fn decode_noise_settings(tag: &Nbt) -> DecodeResult<()> {
-    match tag {
-        Nbt::String(_) => DecodeResult::from(holder("minecraft:worldgen/noise_settings").decode(tag).map(drop)),
-        inline => DecodeResult::from(super::validate("minecraft:worldgen/noise_settings", &codec::to_json(inline))),
-    }
+    super::noise_settings_holder_codec().0.decode_partial(tag).map(drop)
 }
 
 fn decode_biome_source(tag: &Nbt) -> DecodeResult<()> {

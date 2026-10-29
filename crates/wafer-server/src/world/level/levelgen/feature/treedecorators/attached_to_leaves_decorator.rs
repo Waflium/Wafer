@@ -8,7 +8,7 @@ use super::attached_to_logs_decorator::parse_directions;
 use super::tree_decorator::Context;
 use crate::util;
 use crate::util::valueproviders::float;
-use crate::world::level::levelgen::feature::stateproviders::block_state_provider::BlockStateProviderHolder;
+use crate::world::level::levelgen::feature::stateproviders::block_state_provider::{self, BlockStateProviderHolder};
 
 pub struct AttachedToLeavesDecorator {
     probability: f32,
@@ -17,6 +17,20 @@ pub struct AttachedToLeavesDecorator {
     block_provider: BlockStateProviderHolder,
     required_empty_blocks: i32,
     directions: Vec<Direction>,
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::core::direction;
+    use crate::world::item::component::codec::{Codec, RangeError, Stream};
+    use crate::world::item::component::types::{self, req};
+    vec![
+        req("probability", types::float(types::codec_float_range(0.0, 1.0))),
+        req("exclusion_radius_xz", (Codec::Int(0, 16, RangeError::Outside), Stream::Int)),
+        req("exclusion_radius_y", (Codec::Int(0, 16, RangeError::Outside), Stream::Int)),
+        req("block_provider", block_state_provider::holder_codec()),
+        req("required_empty_blocks", (Codec::Int(1, 16, RangeError::Outside), Stream::Int)),
+        req("directions", types::non_empty_list(direction::codec())),
+    ]
 }
 
 impl AttachedToLeavesDecorator {

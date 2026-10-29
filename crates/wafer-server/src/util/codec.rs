@@ -364,6 +364,10 @@ pub fn list_between_partial<T>(tag: &Nbt, min: usize, max: usize, decode: impl F
 }
 
 pub fn holder_set_partial<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
+    holder_set_partial_with(tag, registry, element, false)
+}
+
+pub fn holder_set_partial_with<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -> DecodeResult<T>, always_use_list: bool) -> DecodeResult<Vec<T>> {
     let tag_error = match tag {
         Nbt::String(name) => match name.strip_prefix('#') {
             Some(location) => {
@@ -372,7 +376,10 @@ pub fn holder_set_partial<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -
                         DecodeResult::error(format!("Registry {registry} is not available in this context"))
                     }
                     Ok(location) => DecodeResult::error(format!("Missing tag: '{location}' in '{registry}'")),
-                    Err(message) => DecodeResult::error(message),
+                    Err(message) => {
+                        let compact = compact_list_partial(tag, element);
+                        DecodeResult::error(format!("Failed to parse either. First: {message}; Second: {}", compact.error.expect("an error")))
+                    }
                 };
             }
             None => "Not a tag id".to_string(),
@@ -380,7 +387,7 @@ pub fn holder_set_partial<T>(tag: &Nbt, registry: &str, element: impl Fn(&Nbt) -
         _ if is_json_value() => format!("Not a string: {}", crate::nbt::to_string(tag)),
         _ => "Not a string".to_string(),
     };
-    let compact = compact_list_partial(tag, element);
+    let compact = if always_use_list { list_partial(tag, element) } else { compact_list_partial(tag, element) };
     if compact.value.is_some() {
         return compact;
     }

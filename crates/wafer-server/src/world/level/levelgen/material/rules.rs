@@ -12,17 +12,55 @@ use crate::world::level::levelgen::density_function::{DensityVolume, Df, Parser,
 use crate::world::level::levelgen::synth::NoiseStack;
 use crate::world::level::levelgen::{PositionalRandomFactory, RandomState, parse_block_state};
 
-fn decode_vertical_anchor(tag: wafer_protocol::nbt::Nbt) -> Result<wafer_protocol::nbt::Nbt, String> {
-    use crate::world::item::component::codec::{Codec, RangeError};
+const VERTICAL_ANCHORS: [(&str, &str); 4] =
+    [("absolute", "absolute"), ("above_bottom", "above bottom"), ("below_top", "below top"), ("relative_to_sea_level", "relative to sea level")];
+
+static VERTICAL_ANCHOR_CODECS: std::sync::LazyLock<Vec<crate::world::item::component::codec::Codec>> = std::sync::LazyLock::new(|| {
+    use crate::world::item::component::codec::{Codec, RangeError, Stream};
+    use crate::world::item::component::types::req;
     use crate::world::level::dimension::dimension_type::{MAX_Y, MIN_Y};
-    const KEYS: [&str; 4] = ["absolute", "above_bottom", "below_top", "relative_to_sea_level"];
-    let mut found = KEYS.iter().filter_map(|key| tag.get(key).map(|value| (*key, value)));
-    let (Some((key, value)), None) = (found.next(), found.next()) else { return Err(format!("Not a valid vertical anchor: {}", crate::nbt::to_string(&tag))) };
-    Ok(wafer_protocol::nbt::Nbt::Compound(vec![(key.into(), Codec::Int(MIN_Y, MAX_Y, RangeError::Outside).decode(value)?)]))
+    VERTICAL_ANCHORS.iter().map(|(name, _)| Codec::Record(vec![req(name, (Codec::Int(MIN_Y, MAX_Y, RangeError::Outside), Stream::Int))])).collect()
+});
+
+fn vertical_anchor_text(anchor: &wafer_protocol::nbt::Nbt, index: usize) -> String {
+    let (name, text) = VERTICAL_ANCHORS[index];
+    format!("{} {text}", anchor.get(name).and_then(wafer_protocol::nbt::Nbt::as_i64).unwrap_or(0))
+}
+
+fn read_vertical_anchor(tag: &wafer_protocol::nbt::Nbt, index: usize) -> (crate::util::codec::DecodeResult<wafer_protocol::nbt::Nbt>, String) {
+    use crate::util::codec::DecodeResult;
+    let first = VERTICAL_ANCHOR_CODECS[index].decode_partial(tag);
+    let (second, second_text) = if index == 2 {
+        let second = VERTICAL_ANCHOR_CODECS[3].decode_partial(tag);
+        let text = second.value.as_ref().map(|anchor| vertical_anchor_text(anchor, 3)).unwrap_or_default();
+        (second, text)
+    } else {
+        read_vertical_anchor(tag, index + 1)
+    };
+    let first_text = first.value.as_ref().map(|anchor| vertical_anchor_text(anchor, index)).unwrap_or_default();
+    match (first.is_success(), second.is_success()) {
+        (true, true) => {
+            let input = crate::nbt::to_string(tag);
+            let message = format!(
+                "Both alternatives read successfully, can not pick the correct one; first: (Left[{first_text}], {input}) second: (Right[{second_text}], {input})"
+            );
+            (DecodeResult { value: first.value, error: Some(message) }, format!("Left[{first_text}]"))
+        }
+        (true, false) => (first, format!("Left[{first_text}]")),
+        (false, true) => (second, format!("Right[{second_text}]")),
+        (false, false) => (
+            DecodeResult { value: first.value.and(second.value), error: Some(format!("{}; {}", second.error.unwrap_or_default(), first.error.unwrap_or_default())) },
+            String::new(),
+        ),
+    }
+}
+
+fn decode_vertical_anchor(tag: &wafer_protocol::nbt::Nbt) -> crate::util::codec::DecodeResult<wafer_protocol::nbt::Nbt> {
+    read_vertical_anchor(tag, 0).0
 }
 
 pub fn vertical_anchor_codec() -> crate::world::item::component::types::Pair {
-    crate::world::item::component::types::transform(decode_vertical_anchor)
+    (crate::world::item::component::codec::Codec::Func(decode_vertical_anchor), crate::world::item::component::codec::Stream::Nbt)
 }
 
 #[derive(Clone, Copy, Debug)]

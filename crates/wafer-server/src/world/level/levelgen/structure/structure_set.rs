@@ -2,8 +2,9 @@ use std::sync::LazyLock;
 
 use serde_json::Value;
 
-use super::placement::structure_placement::StructurePlacement;
-use super::structure::StructureHolder;
+use super::placement::structure_placement::{self, StructurePlacement};
+use super::structure::{self, StructureHolder};
+use crate::world::item::component::types::{Pair, list, positive_int, record, req, var_int};
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
 
 pub struct StructureSelectionEntry {
@@ -65,4 +66,14 @@ impl StructureSet {
             .collect::<Result<_, String>>()?;
         Ok(StructureSet { structures, placement: StructurePlacement::parse(json.get("placement").ok_or("missing placement")?)? })
     }
+}
+
+impl StructureSelectionEntry {
+    pub fn codec() -> Pair {
+        record(vec![req("structure", structure::holder_codec()), req("weight", var_int(positive_int()))])
+    }
+}
+
+pub fn direct_codec() -> Pair {
+    record(vec![req("structures", list(StructureSelectionEntry::codec())), req("placement", structure_placement::codec())])
 }

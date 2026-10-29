@@ -2,14 +2,22 @@ use std::sync::LazyLock;
 
 use wafer_core::{BlockPos, ChunkPos};
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use super::BoundingBox;
 use super::pieces::structure_pieces_builder::StructurePiecesBuilder;
-use super::structure_spawn_override::StructureSpawnOverride;
+use super::structure_spawn_override::{self, StructureSpawnOverride};
 use super::structure_start::StructureStart;
-use super::structures::StructureType;
+use super::structures::{
+    StructureType, buried_treasure_structure, desert_pyramid_structure, end_city_structure, igloo_structure, jigsaw_structure, jungle_temple_structure, mineshaft_structure,
+    nether_fortress_structure, nether_fossil_structure, ocean_monument_structure, ocean_ruin_structure, ruined_portal_structure, shipwreck_structure, stronghold_structure,
+    swamp_hut_structure, woodland_mansion_structure,
+};
 use super::terrain_adjustment::TerrainAdjustment;
 use crate::core::holder_set::HolderSet;
+use crate::world::entity::mob_category::MobCategory;
+use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
+use crate::world::item::component::types::{Pair, def, enumeration, holder_set, nbt, req, s};
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::chunk::{Biome, HeightmapType};
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
@@ -265,4 +273,56 @@ impl Structure {
     pub fn find_valid_generation_point<'a>(&'a self, context: &mut GenerationContext) -> Option<GenerationStub<'a>> {
         self.structure_type.find_generation_point(context).filter(|stub| context.is_valid_biome(stub))
     }
+}
+
+pub fn settings_fields() -> Vec<Field> {
+    vec![
+        req("biomes", holder_set("minecraft:worldgen/biome")),
+        req("spawn_overrides", nbt(Codec::Map(Box::new(Codec::Enum(MobCategory::NAMES)), Box::new(structure_spawn_override::codec().0)))),
+        req("step", enumeration(&DECORATION_STEPS)),
+        def("terrain_adaptation", enumeration(TerrainAdjustment::NAMES), s("none")),
+    ]
+}
+
+pub fn simple_codec() -> Vec<Field> {
+    settings_fields()
+}
+
+fn validate(structure: Nbt) -> Result<Nbt, String> {
+    match structure.get("type").and_then(Nbt::as_str) {
+        Some("minecraft:jigsaw") => jigsaw_structure::verify_range(structure),
+        _ => Ok(structure),
+    }
+}
+
+fn direct_codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(direct_codec);
+    &CODEC
+}
+
+pub fn direct_codec() -> Pair {
+    let cases = vec![
+        ("minecraft:buried_treasure", buried_treasure_structure::fields()),
+        ("minecraft:desert_pyramid", desert_pyramid_structure::fields()),
+        ("minecraft:end_city", end_city_structure::fields()),
+        ("minecraft:fortress", nether_fortress_structure::fields()),
+        ("minecraft:igloo", igloo_structure::fields()),
+        ("minecraft:jigsaw", jigsaw_structure::fields()),
+        ("minecraft:jungle_temple", jungle_temple_structure::fields()),
+        ("minecraft:mineshaft", mineshaft_structure::fields()),
+        ("minecraft:nether_fossil", nether_fossil_structure::fields()),
+        ("minecraft:ocean_monument", ocean_monument_structure::fields()),
+        ("minecraft:ocean_ruin", ocean_ruin_structure::fields()),
+        ("minecraft:ruined_portal", ruined_portal_structure::fields()),
+        ("minecraft:shipwreck", shipwreck_structure::fields()),
+        ("minecraft:stronghold", stronghold_structure::fields()),
+        ("minecraft:swamp_hut", swamp_hut_structure::fields()),
+        ("minecraft:woodland_mansion", woodland_mansion_structure::fields()),
+    ];
+    let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/structure_type"), cases }));
+    (Codec::Normalize(Box::new(dispatch), validate), Stream::Dispatch)
+}
+
+pub fn holder_codec() -> Pair {
+    (Codec::Holder("minecraft:worldgen/structure", Some(Box::new(Codec::Lazy(direct_codec_lazy)))), Stream::Nbt)
 }

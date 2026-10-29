@@ -5,13 +5,15 @@ use serde_json::Value;
 use super::Piece;
 use super::ruined_portal_piece::{self, Properties, RuinedPortalPiece, VerticalPlacement};
 use crate::util::valueproviders::float;
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{self, Pair, bool, codec_float_range, enumeration, non_empty_list, positive_float, record, req};
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::chunk::ChunkGenerator;
 use crate::world::level::levelgen::quart_pos;
 use crate::world::level::levelgen::structure::BoundingBox;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub};
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, settings_fields};
 use crate::world::level::levelgen::structure::templatesystem::structure_template;
 use crate::world::level::levelgen::structure::templatesystem::structure_template_manager;
 
@@ -43,7 +45,26 @@ pub struct Setup {
     weight: f32,
 }
 
+pub fn fields() -> Vec<Field> {
+    let mut fields = settings_fields();
+    fields.push(req("setups", non_empty_list(Setup::codec())));
+    fields
+}
+
 impl Setup {
+    fn codec() -> Pair {
+        record(vec![
+            req("placement", enumeration(VerticalPlacement::NAMES)),
+            req("air_pocket_probability", types::float(codec_float_range(0.0, 1.0))),
+            req("mossiness", types::float(codec_float_range(0.0, 1.0))),
+            req("overgrown", bool()),
+            req("vines", bool()),
+            req("can_be_cold", bool()),
+            req("replace_with_blackstone", bool()),
+            req("weight", types::float(positive_float())),
+        ])
+    }
+
     fn parse(json: &Value) -> Result<Setup, String> {
         let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let flag = |key: &str| field(key)?.as_bool().ok_or_else(|| format!("{key} is not a boolean"));

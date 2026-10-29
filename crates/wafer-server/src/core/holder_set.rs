@@ -40,6 +40,7 @@ impl HolderSet {
                 Err(error) => return DecodeResult::error(error),
             };
             if component_codec::registry(registry).contains(&key.as_str()) {
+                crate::core::data_registries::known_reference(registry, &key);
                 return DecodeResult::from(component_codec::registry_id(registry, &key));
             }
             if !codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(registry).is_some() {

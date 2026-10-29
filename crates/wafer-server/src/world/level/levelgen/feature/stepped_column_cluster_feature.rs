@@ -123,3 +123,20 @@ impl SteppedColumnClusterFeature {
         None
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![
+        req("block", block_state_provider::holder_codec()),
+        req("continue_through", block_predicate::codec()),
+        req("can_replace", block_predicate::codec()),
+        req("cannot_place_on", types::holder_set("minecraft:block")),
+        req("cluster_reach", int_provider_codec_in::<0, 13>()),
+        req("column_count", int_provider_codec_in::<1, 150>()),
+        req("column_reach", int_provider_codec_in::<0, 3>()),
+        req("height", int_provider_codec_in::<1, 10>()),
+    ]
+}

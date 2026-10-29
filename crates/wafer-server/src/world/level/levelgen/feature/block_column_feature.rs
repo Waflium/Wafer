@@ -84,3 +84,21 @@ fn truncate(layer_heights: &mut [i32], total_height: i32, new_height: i32, prior
         i += direction;
     }
 }
+
+pub fn layer_codec() -> crate::world::item::component::types::Pair {
+    use super::stateproviders::block_state_provider;
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::types::{record, req};
+    record(vec![req("height", int_provider_codec_in::<0, { i32::MAX }>()), req("provider", block_state_provider::holder_codec())])
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![
+        req("layers", types::list(layer_codec())),
+        req("direction", types::enumeration(&["down", "up", "north", "south", "west", "east"])),
+        req("allowed_placement", block_predicate::codec()),
+        req("prioritize_tip", types::bool()),
+    ]
+}

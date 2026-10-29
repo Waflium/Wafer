@@ -196,7 +196,13 @@ impl Custom for BlockPosCodec {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         let ints: Vec<i32> = match tag {
             Nbt::IntArray(v) => v.clone(),
-            other => codec::list(other)?.iter().map(as_i32).collect(),
+            other => {
+                let items = codec::list(other)?;
+                if items.iter().any(|item| Codec::Double.decode(item).is_err()) {
+                    return Err(format!("Some elements are not ints: {}", nbt::to_string(other)));
+                }
+                items.iter().map(as_i32).collect()
+            }
         };
         if ints.len() != 3 {
             return Err(format!("Input is not a list of 3 ints"));

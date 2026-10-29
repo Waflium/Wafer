@@ -338,3 +338,87 @@ impl FeatureHolder {
         }
     }
 }
+
+fn direct_codec_lazy() -> &'static crate::world::item::component::types::Pair {
+    static CODEC: LazyLock<crate::world::item::component::types::Pair> = LazyLock::new(direct_codec);
+    &CODEC
+}
+
+pub fn direct_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
+    let no_fields = || -> Vec<Field> { Vec::new() };
+    let cases = vec![
+        ("minecraft:bamboo", super::bamboo_feature::fields()),
+        ("minecraft:block_blob", super::block_blob_feature::fields()),
+        ("minecraft:block_column", super::block_column_feature::fields()),
+        ("minecraft:block_pile", super::block_pile_feature::fields()),
+        ("minecraft:blue_ice", no_fields()),
+        ("minecraft:bonus_chest", no_fields()),
+        ("minecraft:chorus_plant", no_fields()),
+        ("minecraft:coral_claw", super::coral_claw_feature::fields()),
+        ("minecraft:coral_tree", super::coral_tree_feature::fields()),
+        ("minecraft:delta_feature", super::delta_feature::fields()),
+        ("minecraft:disk", super::disk_feature::fields()),
+        ("minecraft:end_gateway", super::end_gateway_feature::fields()),
+        ("minecraft:end_island", no_fields()),
+        ("minecraft:end_platform", no_fields()),
+        ("minecraft:end_podium", super::end_podium_feature::fields()),
+        ("minecraft:end_spike", super::end_spike_feature::fields()),
+        ("minecraft:fallen_tree", super::fallen_tree_feature::fields()),
+        ("minecraft:fill_layer", super::fill_layer_feature::fields()),
+        ("minecraft:fossil", super::fossil_feature::fields()),
+        ("minecraft:freeze_top_layer", no_fields()),
+        ("minecraft:geode", super::geode_feature::fields()),
+        ("minecraft:huge_brown_mushroom", super::huge_brown_mushroom_feature::fields()),
+        ("minecraft:huge_fungus", super::huge_fungus_feature::fields()),
+        ("minecraft:huge_red_mushroom", super::huge_red_mushroom_feature::fields()),
+        ("minecraft:iceberg", super::iceberg_feature::fields()),
+        ("minecraft:lake", super::lake_feature::fields()),
+        ("minecraft:large_dripstone", super::large_dripstone_feature::fields()),
+        ("minecraft:monster_room", no_fields()),
+        ("minecraft:multiface_growth", super::multiface_growth_feature::fields()),
+        ("minecraft:netherrack_replace_blobs", super::replace_blobs_feature::fields()),
+        ("minecraft:no_op", no_fields()),
+        ("minecraft:ore", super::ore_feature::fields()),
+        ("minecraft:overlay", super::overlay_feature::fields()),
+        ("minecraft:projected_random_patchy_square", super::projected_random_patchy_square::fields()),
+        ("minecraft:random_boolean_selector", super::random_boolean_selector_feature::fields()),
+        ("minecraft:random_neighbor_spread", super::random_neighbor_spread_feature::fields()),
+        ("minecraft:random_selector", super::random_selector_feature::fields()),
+        ("minecraft:replace_single_block", super::replace_block_feature::fields()),
+        ("minecraft:root_system", super::root_system_feature::fields()),
+        ("minecraft:scattered_ore", super::scattered_ore_feature::fields()),
+        ("minecraft:sculk_patch", super::sculk_patch_feature::fields()),
+        ("minecraft:sequence", super::sequence_feature::fields()),
+        ("minecraft:simple_block", super::simple_block_feature::fields()),
+        ("minecraft:simple_random_selector", super::simple_random_selector_feature::fields()),
+        ("minecraft:single_block_pillar", super::single_block_pillar_feature::fields()),
+        ("minecraft:speleothem", super::speleothem_feature::fields()),
+        ("minecraft:speleothem_cluster", super::speleothem_cluster_feature::fields()),
+        ("minecraft:spike", super::spike_feature::fields()),
+        ("minecraft:spring_feature", super::spring_feature::fields()),
+        ("minecraft:stepped_column_cluster", super::stepped_column_cluster_feature::fields()),
+        ("minecraft:template", super::template_feature::fields()),
+        ("minecraft:tree", super::tree_feature::fields()),
+        ("minecraft:underwater_magma", super::underwater_magma_feature::fields()),
+        ("minecraft:vegetation_patch", super::vegetation_patch_feature::fields()),
+        ("minecraft:vines", no_fields()),
+        ("minecraft:void_start_platform", no_fields()),
+        ("minecraft:waterlogged_vegetation_patch", super::vegetation_patch_feature::fields()),
+        ("minecraft:weighted_random_selector", super::weighted_random_selector_feature::fields()),
+    ];
+    let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/feature_type"), cases }));
+    (Codec::Normalize(Box::new(dispatch), validate), Stream::Dispatch)
+}
+
+fn validate(feature: wafer_protocol::nbt::Nbt) -> Result<wafer_protocol::nbt::Nbt, String> {
+    match feature.get("type").and_then(wafer_protocol::nbt::Nbt::as_str) {
+        Some("minecraft:fossil") => super::fossil_feature::validate(feature),
+        _ => Ok(feature),
+    }
+}
+
+pub fn holder_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, Stream};
+    (Codec::Holder("minecraft:worldgen/feature", Some(Box::new(Codec::Lazy(direct_codec_lazy)))), Stream::Nbt)
+}

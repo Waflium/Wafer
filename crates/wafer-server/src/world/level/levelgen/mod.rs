@@ -23,6 +23,8 @@ pub mod structure;
 pub mod synth;
 pub mod worldgen_random;
 #[cfg(test)]
+mod codec_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod patrol_spawner_tests;
@@ -207,27 +209,6 @@ pub struct WorldgenRegistries {
 
 pub static WORLDGEN: LazyLock<WorldgenRegistries> = LazyLock::new(|| WorldgenRegistries::load().expect("vanilla worldgen data"));
 
-pub fn validate(registry: &str, json: &Value) -> Result<(), String> {
-    if registry == "minecraft:worldgen/noise" {
-        return parse_noise(json).map(drop);
-    }
-    let mut noises = HashMap::new();
-    for (name, source) in crate::core::data_registries::json_entries("minecraft:worldgen/noise") {
-        if let Ok(noise) = serde_json::from_str::<Value>(source).map_err(|e| e.to_string()).and_then(|json| parse_noise(&json)) {
-            noises.insert(name.to_string(), Arc::new(noise));
-        }
-    }
-    let sources: HashMap<&'static str, &'static str> = crate::core::data_registries::json_entries("minecraft:worldgen/density_function").iter().copied().collect();
-    let mut parser = Parser { noises: &noises, sources: &sources, parsed: HashMap::new() };
-    let mut materials = material::MaterialParser::new();
-    match registry {
-        "minecraft:worldgen/density_function" => parser.parse(json).map(drop),
-        "minecraft:worldgen/noise_settings" => WorldgenRegistries::parse_settings("", json, &mut parser, &mut materials).map(drop),
-        "minecraft:worldgen/material_rule" => materials.rule(json, &mut parser).map(drop),
-        _ => materials.condition(json).map(drop),
-    }
-}
-
 pub fn parse_noise(json: &Value) -> Result<NormalNoise, String> {
     let normalize = match json.get("normalize") {
         None | Some(Value::Bool(true)) => Normalization::Enabled,
@@ -334,4 +315,82 @@ impl WorldgenRegistries {
             legacy_random_source: field("legacy_random_source")?.as_bool().ok_or("legacy_random_source")?,
         })
     }
+}
+
+fn guard_y(settings: wafer_protocol::nbt::Nbt) -> Result<wafer_protocol::nbt::Nbt, String> {
+    use crate::world::item::component::codec::as_i32;
+    use crate::world::level::dimension::dimension_type::MAX_Y;
+    let min_y = settings.get("min_y").map_or(0, as_i32);
+    let height = settings.get("height").map_or(0, as_i32);
+    if min_y + height > MAX_Y + 1 {
+        Err(format!("min_y + height cannot be higher than: {}", MAX_Y + 1))
+    } else if height % 16 != 0 {
+        Err("height has to be a multiple of 16".into())
+    } else if min_y % 16 != 0 {
+        Err("min_y has to be a multiple of 16".into())
+    } else {
+        Ok(settings)
+    }
+}
+
+pub fn noise_settings_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, RangeError, Stream};
+    use crate::world::item::component::types::req;
+    use crate::world::level::dimension::dimension_type::{MAX_Y, MIN_Y, Y_SIZE};
+    let fields = vec![
+        req("min_y", (Codec::Int(MIN_Y, MAX_Y, RangeError::Outside), Stream::Int)),
+        req("height", (Codec::Int(0, Y_SIZE, RangeError::Outside), Stream::Int)),
+    ];
+    (Codec::Normalize(Box::new(Codec::Record(fields)), guard_y), Stream::Nbt)
+}
+
+pub fn noise_router_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{record, req};
+    let function = density_function::holder_codec;
+    record(vec![
+        req("temperature", function()),
+        req("vegetation", function()),
+        req("continents", function()),
+        req("erosion", function()),
+        req("depth", function()),
+        req("ridges", function()),
+        req("chunk_surface_level", function()),
+        req("final_density", function()),
+    ])
+}
+
+pub fn spawn_target_point_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, Stream};
+    (
+        Codec::Map(Box::new(density_function::reference_codec().0), Box::new(crate::world::level::biome::climate::parameter_codec().0)),
+        Stream::Nbt,
+    )
+}
+
+fn debug_function_entry_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{self, record, req};
+    record(vec![req("label", types::string()), req("function", density_function::holder_codec())])
+}
+
+pub fn noise_settings_direct_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, Stream};
+    use crate::world::item::component::types::{self, def, opt, record, req};
+    use crate::world::level::block::state::block_state;
+    record(vec![
+        req("noise", noise_settings_codec()),
+        req("default_block", block_state::codec()),
+        req("default_fluid", block_state::codec()),
+        req("noise_router", noise_router_codec()),
+        req("material_rule", material::rule::material_rule::holder_codec()),
+        req("spawn_target", types::list(spawn_target_point_codec())),
+        req("sea_level", (Codec::int(), Stream::Int)),
+        req("disable_mob_generation", types::bool()),
+        opt("aquifers", aquifer::config_codec()),
+        req("legacy_random_source", types::bool()),
+        def("debug_functions", types::list(debug_function_entry_codec()), types::empty_list()),
+    ])
+}
+
+pub fn noise_settings_holder_codec() -> crate::world::item::component::types::Pair {
+    crate::world::item::component::types::holder("minecraft:worldgen/noise_settings", noise_settings_direct_codec())
 }

@@ -54,3 +54,10 @@ fn find_target(level: &mut impl WorldGenLevel, mut cursor: BlockPos, target: Blo
     }
     None
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::types::req;
+    use crate::world::level::block::state::block_state;
+    vec![req("target", block_state::codec()), req("state", block_state::codec()), req("radius", int_provider_codec_in::<0, 12>())]
+}

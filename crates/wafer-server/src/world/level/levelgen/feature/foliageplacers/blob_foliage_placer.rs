@@ -4,6 +4,18 @@ use super::foliage_placer::{FoliageAttachment, FoliagePlacer};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::levelgen::feature::tree_feature::{TreeFeature, TreeSetter};
 
+pub fn blob_parts() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::codec::{Codec, RangeError, Stream};
+    use crate::world::item::component::types::req;
+    let mut fields = super::foliage_placer::foliage_placer_parts();
+    fields.push(req("height", (Codec::Int(0, 16, RangeError::Outside), Stream::Int)));
+    fields
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    blob_parts()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn create_foliage<R: RandomSource>(
     placer: &FoliagePlacer,

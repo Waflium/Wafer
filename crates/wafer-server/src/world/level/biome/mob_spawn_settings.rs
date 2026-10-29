@@ -1,8 +1,10 @@
 use serde_json::Value;
 
 use crate::util::random::WeightedList;
-use crate::util::valueproviders::IntProvider;
+use crate::util::valueproviders::{IntProvider, int_provider_codec};
 use crate::world::entity::entity_type::EntityType;
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{self, req};
 use crate::world::entity::entity_types;
 use crate::world::entity::mob_category::MobCategory;
 use crate::world::level::levelgen::density_function::resource_name;
@@ -11,6 +13,10 @@ use crate::world::level::levelgen::density_function::resource_name;
 pub struct SpawnerData {
     pub entity_type: i32,
     pub count: IntProvider,
+}
+
+pub fn spawner_data_fields() -> Vec<Field> {
+    vec![req("type", types::by_name("minecraft:entity_type")), req("count", int_provider_codec())]
 }
 
 impl SpawnerData {

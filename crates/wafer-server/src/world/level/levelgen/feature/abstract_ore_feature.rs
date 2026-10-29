@@ -46,3 +46,14 @@ fn should_skip_air_check(random: &mut impl RandomSource, discard_chance_on_air_e
         random.next_float() >= discard_chance_on_air_exposure
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::block_replacement;
+    use crate::util::range_codecs::{float_range, int_range};
+    use crate::world::item::component::types::{self, req};
+    vec![
+        req("targets", types::list(block_replacement::codec())),
+        req("size", int_range(0, 64)),
+        req("discard_chance_on_air_exposure", float_range(0.0, 1.0)),
+    ]
+}

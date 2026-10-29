@@ -8,6 +8,8 @@ use wafer_protocol::nbt::Nbt;
 use serde_json::Value;
 
 use super::structure_template_pool::{Projection, shuffle};
+use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, opt, req};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
@@ -15,7 +17,7 @@ use crate::world::level::levelgen::placement::feature_placer::FeaturePlacer;
 use crate::world::level::levelgen::placement::placed_feature::{self, placed_feature_index};
 use crate::world::level::levelgen::structure::BoundingBox;
 use crate::world::level::levelgen::structure::templatesystem::structure_place_settings::StructurePlaceSettings;
-use crate::world::level::levelgen::structure::templatesystem::structure_processor::{StructureProcessor, StructureProcessorListHolder};
+use crate::world::level::levelgen::structure::templatesystem::structure_processor::{self, StructureProcessor, StructureProcessorListHolder};
 use crate::world::level::levelgen::structure::templatesystem::structure_template::{JigsawBlockInfo, JointType, StructureTemplate};
 use crate::world::level::levelgen::structure::templatesystem::structure_template_manager;
 
@@ -102,7 +104,83 @@ impl SinglePoolElement {
     }
 }
 
+const LIST_POOL_ELEMENT_FRAMES: &[&str] = &[
+    "net.minecraft.world.level.levelgen.structure.pools.ListPoolElement.<init>(ListPoolElement.java:34)",
+    "com.mojang.serialization.DataResult$Instance.ap2(DataResult.java:434)",
+    "com.mojang.serialization.codecs.RecordCodecBuilder$Instance$3.decode(RecordCodecBuilder.java:246)",
+    "com.mojang.serialization.codecs.RecordCodecBuilder$2.decode(RecordCodecBuilder.java:107)",
+    "com.mojang.serialization.codecs.KeyDispatchCodec.lambda$decode$2(KeyDispatchCodec.java:46)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.codecs.KeyDispatchCodec.lambda$decode$3(KeyDispatchCodec.java:38)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.codecs.KeyDispatchCodec.decode(KeyDispatchCodec.java:37)",
+    "com.mojang.serialization.MapDecoder.lambda$compressedDecode$1(MapDecoder.java:52)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.MapDecoder.compressedDecode(MapDecoder.java:52)",
+    "com.mojang.serialization.MapCodec$MapCodecCodec.decode(MapCodec.java:159)",
+    "com.mojang.serialization.Decoder.parse(Decoder.java:18)",
+    "com.mojang.serialization.codecs.FieldDecoder.decode(FieldDecoder.java:29)",
+    "com.mojang.serialization.MapCodec$2.decode(MapCodec.java:78)",
+    "com.mojang.serialization.codecs.PairMapCodec.decode(PairMapCodec.java:26)",
+    "com.mojang.serialization.MapDecoder.lambda$compressedDecode$1(MapDecoder.java:52)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.MapDecoder.compressedDecode(MapDecoder.java:52)",
+    "com.mojang.serialization.MapCodec$MapCodecCodec.decode(MapCodec.java:159)",
+    "com.mojang.serialization.codecs.ListCodec$DecoderState.accept(ListCodec.java:74)",
+    "com.mojang.serialization.JsonOps.lambda$getList$21(JsonOps.java:308)",
+    "com.mojang.serialization.codecs.ListCodec.lambda$decode$2(ListCodec.java:45)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.codecs.ListCodec.decode(ListCodec.java:43)",
+    "com.mojang.serialization.Decoder.parse(Decoder.java:18)",
+    "com.mojang.serialization.codecs.FieldDecoder.decode(FieldDecoder.java:29)",
+    "com.mojang.serialization.MapCodec$2.decode(MapCodec.java:78)",
+    "com.mojang.serialization.codecs.RecordCodecBuilder$Instance$3.decode(RecordCodecBuilder.java:249)",
+    "com.mojang.serialization.codecs.RecordCodecBuilder$2.decode(RecordCodecBuilder.java:107)",
+    "com.mojang.serialization.MapDecoder.lambda$compressedDecode$1(MapDecoder.java:52)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.MapDecoder.compressedDecode(MapDecoder.java:52)",
+    "com.mojang.serialization.MapCodec$MapCodecCodec.decode(MapCodec.java:159)",
+    "com.mojang.serialization.Decoder.parse(Decoder.java:18)",
+];
+
+fn projection_codec() -> Field {
+    req("projection", types::enumeration(&["terrain_matching", "rigid"]))
+}
+
+fn single_pool_element_fields() -> Vec<Field> {
+    vec![
+        req("location", types::identifier()),
+        req("processors", structure_processor::list_holder_codec()),
+        projection_codec(),
+        opt("override_liquid_settings", types::enumeration(&["ignore_waterlogging", "apply_waterlogging"])),
+    ]
+}
+
+pub fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(StructurePoolElement::codec);
+    &CODEC
+}
+
+fn check_elements(element: Nbt) -> Result<Nbt, String> {
+    if element.get("element_type").and_then(Nbt::as_str) == Some("minecraft:list_pool_element") && element.get("elements").is_some_and(|elements| elements.as_list().is_empty()) {
+        crate::core::data_registries::throw("java.lang.IllegalArgumentException", "Elements are empty".into(), LIST_POOL_ELEMENT_FRAMES);
+    }
+    Ok(element)
+}
+
 impl StructurePoolElement {
+    pub fn codec() -> Pair {
+        let cases = vec![
+            ("minecraft:single_pool_element", single_pool_element_fields()),
+            ("minecraft:list_pool_element", vec![req("elements", types::list((Codec::Lazy(codec_lazy), Stream::Lazy))), projection_codec()]),
+            ("minecraft:feature_pool_element", vec![req("feature", placed_feature::holder_codec()), projection_codec()]),
+            ("minecraft:empty_pool_element", vec![]),
+            ("minecraft:legacy_single_pool_element", single_pool_element_fields()),
+        ];
+        let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "element_type", selector: Selector::Registry("minecraft:worldgen/structure_pool_element"), cases }));
+        (Codec::Normalize(Box::new(dispatch), check_elements), Stream::Dispatch)
+    }
+
     pub fn parse(json: &Value, list_projection: Option<Projection>) -> Result<StructurePoolElement, String> {
         let ty = json.get("element_type").and_then(Value::as_str).ok_or("pool element without element_type")?;
         let projection = || -> Result<Projection, String> {

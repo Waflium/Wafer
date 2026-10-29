@@ -1,4 +1,5 @@
 pub mod flowing_fluid;
+pub mod fluid_state;
 pub mod lava_fluid;
 pub mod map_color;
 pub mod water_fluid;

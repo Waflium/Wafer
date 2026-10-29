@@ -4,12 +4,20 @@ use wafer_data::{SupportType, blocks};
 use serde_json::Value;
 
 use super::nether_fossil_pieces;
-use crate::world::level::levelgen::heightproviders::HeightProvider;
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::req;
+use crate::world::level::levelgen::heightproviders::{self, HeightProvider};
 use crate::world::level::levelgen::material::WorldGenerationContext;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub};
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, settings_fields};
 
 pub struct NetherFossilStructure {
     pub height: HeightProvider,
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = settings_fields();
+    fields.push(req("height", heightproviders::codec()));
+    fields
 }
 
 impl NetherFossilStructure {

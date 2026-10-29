@@ -29,3 +29,10 @@ impl SequenceFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::extra_codecs::non_empty_holder_set;
+    use crate::world::item::component::types::req;
+    use crate::world::level::levelgen::placement::placed_feature;
+    vec![req("features", non_empty_holder_set(placed_feature::list_codec()))]
+}

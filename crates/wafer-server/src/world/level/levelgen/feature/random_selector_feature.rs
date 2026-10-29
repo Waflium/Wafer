@@ -51,3 +51,16 @@ impl RandomSelectorFeature {
         self.default_feature.value().place(level, random, origin)
     }
 }
+
+pub fn weighted_placed_feature_codec() -> crate::world::item::component::types::Pair {
+    use crate::util::range_codecs::float_range;
+    use crate::world::item::component::types::{record, req};
+    use crate::world::level::levelgen::placement::placed_feature;
+    record(vec![req("feature", placed_feature::holder_codec()), req("chance", float_range(0.0, 1.0))])
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::levelgen::placement::placed_feature;
+    vec![req("features", types::list(weighted_placed_feature_codec())), req("default", placed_feature::holder_codec())]
+}

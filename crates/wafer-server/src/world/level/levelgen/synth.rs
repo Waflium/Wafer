@@ -2,6 +2,8 @@ use wafer_core::mth::{self, lerp3_f, smoothstep};
 use wafer_core::{Interval, RandomSource};
 use wafer_protocol::nbt::Nbt;
 
+pub mod blended_noise;
+
 use super::density_function::DensityVolume;
 use super::AlgorithmRandom;
 
@@ -319,16 +321,35 @@ impl NoiseStack {
     }
 }
 
+fn validate_normalization_type(normalization: Nbt) -> Result<Nbt, String> {
+    match normalization.as_str() {
+        Some("legacy") => Ok(normalization),
+        Some(other) => Err(format!("Invalid normalization type: {other}")),
+        None => Ok(normalization),
+    }
+}
+
+fn validate_parameters(parameters: Nbt) -> Result<Nbt, String> {
+    let octave_count = parameters.get("octave_count").map_or(1, |count| crate::world::item::component::codec::as_i32(count));
+    let modifiers = parameters.get("amplitude_modifiers").map_or(0, |modifiers| modifiers.as_list().len());
+    if modifiers != 0 && modifiers as i64 != octave_count as i64 {
+        return Err(format!("amplitude_modifiers had size {modifiers}, but octave_count was {octave_count}"));
+    }
+    Ok(parameters)
+}
+
 pub fn parameters_codec() -> crate::world::item::component::types::Pair {
     use crate::world::item::component::codec::{Codec, RangeError, Stream};
-    use crate::world::item::component::types::{self, def, record, req};
-    record(vec![
-        def("base_amplitude", (Codec::Double, Stream::Double), Nbt::Double(1.0)),
+    use crate::world::item::component::types::{self, def, req};
+    let normalization = Codec::Either(Box::new(Codec::Bool), Box::new(Codec::Normalize(Box::new(Codec::string()), validate_normalization_type)));
+    let fields = vec![
+        def("base_amplitude", (Codec::DoubleRange(1.0E-5f32 as f64, 1000000.0), Stream::Double), Nbt::Double(1.0)),
         req("base_octave", (Codec::Int(-32, 32, RangeError::Outside), Stream::Int)),
         def("octave_count", (Codec::Int(1, 32, RangeError::Outside), Stream::Int), Nbt::Int(1)),
-        def("normalize", (Codec::Either(Box::new(Codec::Bool), Box::new(Codec::Enum(&["legacy"]))), Stream::Nbt), types::b(true)),
-        def("amplitude_modifiers", types::list((Codec::Double, Stream::Double)), types::empty_list()),
-    ])
+        def("normalize", (normalization, Stream::Nbt), types::b(true)),
+        def("amplitude_modifiers", types::list_sized((Codec::DoubleRange(0.0, 1000000.0), Stream::Double), 0, 32), types::empty_list()),
+    ];
+    (Codec::Normalize(Box::new(Codec::Record(fields)), validate_parameters), Stream::Nbt)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -569,4 +590,8 @@ mod tests {
         assert_eq!(wrap(123.5), 123.5);
         assert_eq!(wrap(16777216.0), 16777216.0 - 33554432.0);
     }
+}
+
+pub fn noise_holder_codec() -> crate::world::item::component::types::Pair {
+    crate::world::item::component::types::holder("minecraft:worldgen/noise", parameters_codec())
 }

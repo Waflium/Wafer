@@ -55,3 +55,9 @@ impl EndGatewayFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::custom;
+    use crate::world::item::component::types::{self, opt, req};
+    vec![opt("exit", custom::block_pos()), req("exact", types::bool())]
+}

@@ -1,9 +1,11 @@
 use wafer_core::random::RandomSource;
 use serde_json::Value;
 
-use super::foliage_placer::{FoliageAttachment, FoliagePlacer};
+use super::foliage_placer::{FoliageAttachment, FoliagePlacer, foliage_placer_parts};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::{IntProvider, float};
+use crate::util::valueproviders::{IntProvider, float, int_provider_codec_in};
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{self, req};
 use crate::world::level::levelgen::feature::tree_feature::{TreeFeature, TreeSetter};
 
 pub struct CherryFoliagePlacer {
@@ -38,6 +40,17 @@ impl CherryFoliagePlacer {
             corner && random.next_float() < self.corner_hole_chance
         }
     }
+}
+
+pub fn fields() -> Vec<Field> {
+    let chance = |name| req(name, types::float(types::codec_float_range(0.0, 1.0)));
+    let mut fields = foliage_placer_parts();
+    fields.push(req("height", int_provider_codec_in::<4, 16>()));
+    fields.push(chance("wide_bottom_layer_hole_chance"));
+    fields.push(chance("corner_hole_chance"));
+    fields.push(chance("hanging_leaves_chance"));
+    fields.push(chance("hanging_leaves_extension_chance"));
+    fields
 }
 
 #[allow(clippy::too_many_arguments)]

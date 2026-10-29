@@ -182,3 +182,17 @@ fn place_weeping_vines_column<R: RandomSource>(level: &mut impl WorldGenLevel, r
         place_pos = place_pos.below();
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::{self, b, def, req};
+    use crate::world::level::block::state::block_state;
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![
+        req("valid_base_block", block_state::codec()),
+        req("stem_state", block_state::codec()),
+        req("hat_state", block_state::codec()),
+        req("decor_state", block_state::codec()),
+        req("replaceable_blocks", block_predicate::codec()),
+        def("planted", types::bool(), b(false)),
+    ]
+}

@@ -22,8 +22,10 @@ impl MobCategory {
         MobCategory::Misc,
     ];
 
+    pub const NAMES: &'static [&'static str] = &["monster", "creature", "ambient", "axolotls", "underground_water_creature", "water_creature", "water_ambient", "misc"];
+
     pub fn name(self) -> &'static str {
-        ["monster", "creature", "ambient", "axolotls", "underground_water_creature", "water_creature", "water_ambient", "misc"][self as usize]
+        Self::NAMES[self as usize]
     }
 
     pub fn by_name(name: &str) -> Option<MobCategory> {

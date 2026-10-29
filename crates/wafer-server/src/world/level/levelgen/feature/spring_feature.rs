@@ -63,3 +63,16 @@ impl SpringFeature {
         false
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::int;
+    use crate::world::item::component::types::{self, b, def, i, req};
+    use crate::world::level::material::fluid_state;
+    vec![
+        req("state", fluid_state::codec()),
+        def("requires_block_below", types::bool(), b(true)),
+        def("rock_count", int(), i(4)),
+        def("hole_count", int(), i(1)),
+        req("valid_blocks", types::holder_set("minecraft:block")),
+    ]
+}

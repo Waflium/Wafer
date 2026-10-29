@@ -4,9 +4,14 @@ use super::Piece;
 use super::end_city_pieces;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::structure::pieces::structure_pieces_builder::StructurePiecesBuilder;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, get_lowest_y_in_5_by_5_box};
+use crate::world::item::component::codec::Field;
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, get_lowest_y_in_5_by_5_box, simple_codec};
 
 const START_OFFSET_IN_CHUNK: i32 = 7;
+
+pub fn fields() -> Vec<Field> {
+    simple_codec()
+}
 
 pub fn find_generation_point(context: &mut GenerationContext) -> Option<GenerationStub<'static>> {
     let block_x = context.chunk_pos.min_block_x() + START_OFFSET_IN_CHUNK;

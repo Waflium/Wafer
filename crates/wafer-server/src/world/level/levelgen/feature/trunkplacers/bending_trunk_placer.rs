@@ -2,9 +2,11 @@ use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction};
 use serde_json::Value;
 
-use super::trunk_placer::{TrunkPlacer, place_below_trunk_block};
+use super::trunk_placer::{TrunkPlacer, place_below_trunk_block, trunk_placer_parts};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::IntProvider;
+use crate::util::valueproviders::{IntProvider, int_provider_codec_in};
+use crate::world::item::component::codec::{Field, Stream};
+use crate::world::item::component::types::{self, def, req};
 use crate::world::level::levelgen::feature::foliageplacers::foliage_placer::FoliageAttachment;
 use crate::world::level::levelgen::feature::tree_feature::{self, TreeFeature, TreeSetter};
 
@@ -20,6 +22,13 @@ impl BendingTrunkPlacer {
             bend_length: IntProvider::parse(json.get("bend_length").ok_or("missing bend_length")?)?,
         })
     }
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = trunk_placer_parts();
+    fields.push(def("min_height_for_leaves", (types::positive_int(), Stream::Int), types::i(1)));
+    fields.push(req("bend_length", int_provider_codec_in::<1, 64>()));
+    fields
 }
 
 #[allow(clippy::too_many_arguments)]

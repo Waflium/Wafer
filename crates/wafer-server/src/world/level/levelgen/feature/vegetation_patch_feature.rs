@@ -165,3 +165,23 @@ fn is_exposed_direction(level: &mut impl WorldGenLevel, pos: BlockPos, direction
     let test_state = level.get_block_state(test_pos);
     !level.is_face_sturdy_full_at(test_pos, test_state, direction.opposite())
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::util::range_codecs::{float_range, int_range};
+    use crate::util::valueproviders::{int_provider_codec, int_provider_codec_in};
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::levelgen::placement::placed_feature;
+    vec![
+        req("replaceable", types::holder_set("minecraft:block")),
+        req("ground_state", block_state_provider::holder_codec()),
+        req("vegetation_feature", placed_feature::holder_codec()),
+        req("surface", types::enumeration(&["ceiling", "floor"])),
+        req("depth", int_provider_codec_in::<1, 128>()),
+        req("extra_bottom_block_chance", float_range(0.0, 1.0)),
+        req("vertical_range", int_range(1, 256)),
+        req("vegetation_chance", float_range(0.0, 1.0)),
+        req("xz_radius", int_provider_codec()),
+        req("extra_edge_column_chance", float_range(0.0, 1.0)),
+    ]
+}

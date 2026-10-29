@@ -64,3 +64,9 @@ impl BambooFeature {
         placed > 0
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::float_range;
+    use crate::world::item::component::types::req;
+    vec![req("probability", float_range(0.0, 1.0))]
+}

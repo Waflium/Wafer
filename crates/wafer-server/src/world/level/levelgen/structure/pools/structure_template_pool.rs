@@ -4,7 +4,12 @@ use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
 use serde_json::Value;
 
-use super::structure_pool_element::StructurePoolElement;
+use wafer_protocol::nbt::Nbt;
+
+use super::structure_pool_element::{self, StructurePoolElement};
+use crate::util::codec::DecodeResult;
+use crate::world::item::component::codec::{Codec, RangeError, Stream};
+use crate::world::item::component::types::{self, Pair, req};
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
 use crate::world::level::levelgen::structure::templatesystem::structure_processor::StructureProcessor;
@@ -132,4 +137,23 @@ pub fn shuffle<T>(list: &mut [T], random: &mut impl RandomSource) {
         let swap_to = random.next_int_bounded(i as i32) as usize;
         list.swap(i - 1, swap_to);
     }
+}
+
+fn direct_codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(direct_codec);
+    &CODEC
+}
+
+fn element_with_weight(tag: &Nbt) -> DecodeResult<Nbt> {
+    static ELEMENT: LazyLock<Codec> = LazyLock::new(|| Codec::Record(vec![req("element", (Codec::Lazy(structure_pool_element::codec_lazy), Stream::Lazy))]));
+    static WEIGHT: LazyLock<Codec> = LazyLock::new(|| Codec::Record(vec![req("weight", (Codec::Int(1, 150, RangeError::Outside), Stream::Int))]));
+    ELEMENT.decode_partial(tag).flat_map(|element| WEIGHT.decode_partial(tag).map(|weight| Nbt::Compound(vec![("element".into(), element), ("weight".into(), weight)])))
+}
+
+pub fn direct_codec() -> Pair {
+    types::record(vec![req("fallback", holder_codec()), req("elements", types::list((Codec::Func(element_with_weight), Stream::Nbt)))])
+}
+
+pub fn holder_codec() -> Pair {
+    (Codec::Holder("minecraft:worldgen/template_pool", Some(Box::new(Codec::Lazy(direct_codec_lazy)))), Stream::Nbt)
 }

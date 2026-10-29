@@ -38,6 +38,8 @@ pub enum VerticalPlacement {
 }
 
 impl VerticalPlacement {
+    pub const NAMES: &'static [&'static str] = &["on_land_surface", "partly_buried", "on_ocean_floor", "in_mountain", "underground", "in_nether"];
+
     const VALUES: [VerticalPlacement; 6] = [
         VerticalPlacement::OnLandSurface,
         VerticalPlacement::PartlyBuried,

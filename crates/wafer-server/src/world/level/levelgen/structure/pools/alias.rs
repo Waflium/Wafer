@@ -1,16 +1,34 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use wafer_core::BlockPos;
 use wafer_core::random::{LegacyRandomSource, RandomSource};
 use serde_json::Value;
 
-use crate::util::random::WeightedList;
+use crate::util::random::{WeightedList, non_empty_weighted_list_codec, weighted_data_codec};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{Pair, identifier, list, req};
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
 
 pub enum PoolAliasBinding {
     Direct { alias: String, target: String },
     Random { alias: String, targets: WeightedList<String> },
     RandomGroup { groups: WeightedList<Vec<PoolAliasBinding>> },
+}
+
+fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(codec);
+    &CODEC
+}
+
+pub fn codec() -> Pair {
+    let lazy = || (Codec::Lazy(codec_lazy), Stream::Lazy);
+    let cases = vec![
+        ("minecraft:direct", vec![req("alias", identifier()), req("target", identifier())]),
+        ("minecraft:random", vec![req("alias", identifier()), req("targets", non_empty_weighted_list_codec(weighted_data_codec(identifier())))]),
+        ("minecraft:random_group", vec![req("groups", non_empty_weighted_list_codec(weighted_data_codec(list(lazy()))))]),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/pool_alias_binding"), cases })), Stream::Dispatch)
 }
 
 impl PoolAliasBinding {

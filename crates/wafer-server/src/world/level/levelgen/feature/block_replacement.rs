@@ -17,3 +17,10 @@ impl BlockReplacement {
         })
     }
 }
+
+pub fn codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{record, req};
+    use crate::world::level::block::state::block_state;
+    use crate::world::level::levelgen::structure::templatesystem::rule_test;
+    record(vec![req("target", rule_test::codec()), req("state", block_state::codec())])
+}

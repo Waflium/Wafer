@@ -211,3 +211,20 @@ fn create_tunnel(
         }
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::valueproviders::{float_provider_codec, float_provider_codec_in, int_provider_codec_in};
+    use crate::world::item::component::types::{self, def, req};
+    vec![
+        req("probability", types::float(types::codec_float_range(0.0, 1.0))),
+        req("y", crate::world::level::levelgen::heightproviders::codec()),
+        req("count", int_provider_codec_in::<0, { i32::MAX }>()),
+        req("thickness", float_provider_codec_in::<{ 0.0f32.to_bits() }, { f32::INFINITY.to_bits() }>()),
+        def("weird_thickness_bias", types::bool(), types::b(false)),
+        req("room_vertical_radius_multiplier", float_provider_codec()),
+        req("horizontal_radius_multiplier", float_provider_codec()),
+        req("vertical_radius_multiplier", float_provider_codec()),
+        def("start_vertical_radius_multiplier", float_provider_codec(), types::f(1.0)),
+        req("floor_level", float_provider_codec_in::<{ (-1.0f32).to_bits() }, { 1.0f32.to_bits() }>()),
+    ]
+}

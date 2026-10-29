@@ -6,7 +6,7 @@ use crate::world::item::component::types::{self, Pair};
 
 fn decode_state(tag: &Nbt) -> Result<BlockState, String> {
     let fields = codec::map(tag)?;
-    let Some((_, id)) = fields.iter().find(|(k, _)| k == "id") else {
+    let Some((_, id)) = fields.iter().find(|(k, v)| k == "id" && !matches!(v, Nbt::End)) else {
         return Err(format!("No key id in MapLike[{}]", crate::nbt::to_string(tag)));
     };
     let id = Codec::Element("minecraft:block").decode(id)?;

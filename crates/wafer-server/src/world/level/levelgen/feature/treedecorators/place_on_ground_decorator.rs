@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use super::tree_decorator::Context;
 use crate::world::level::chunk::HeightmapType;
-use crate::world::level::levelgen::feature::stateproviders::block_state_provider::BlockStateProviderHolder;
+use crate::world::level::levelgen::feature::stateproviders::block_state_provider::{self, BlockStateProviderHolder};
 use crate::world::level::levelgen::feature::tree_feature;
 
 pub struct PlaceOnGroundDecorator {
@@ -14,6 +14,17 @@ pub struct PlaceOnGroundDecorator {
     radius: i32,
     height: i32,
     block_state_provider: BlockStateProviderHolder,
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::codec::Stream;
+    use crate::world::item::component::types::{self, def, req};
+    vec![
+        def("tries", (types::positive_int(), Stream::Int), types::i(128)),
+        def("radius", (types::non_negative_int(), Stream::Int), types::i(2)),
+        def("height", (types::non_negative_int(), Stream::Int), types::i(1)),
+        req("block_state_provider", block_state_provider::holder_codec()),
+    ]
 }
 
 impl PlaceOnGroundDecorator {

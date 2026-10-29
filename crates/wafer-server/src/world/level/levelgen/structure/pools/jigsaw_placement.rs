@@ -10,6 +10,7 @@ use super::alias::PoolAliasLookup;
 use super::jigsaw_junction::JigsawJunction;
 use super::structure_pool_element::StructurePoolElement;
 use super::structure_template_pool::{EMPTY, Projection, TemplatePoolHolder};
+use crate::world::item::component::types::{Pair, either, i, lenient, non_negative_int, record, var_int};
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::structure::BoundingBox;
@@ -32,6 +33,11 @@ pub struct DimensionPadding {
 
 impl DimensionPadding {
     pub const ZERO: DimensionPadding = DimensionPadding { bottom: 0, top: 0 };
+
+    pub fn codec() -> Pair {
+        let record_codec = record(vec![lenient("bottom", var_int(non_negative_int()), i(0)), lenient("top", var_int(non_negative_int()), i(0))]);
+        either(var_int(non_negative_int()), record_codec)
+    }
 }
 
 type SharedShape = Rc<RefCell<Option<VoxelShape>>>;

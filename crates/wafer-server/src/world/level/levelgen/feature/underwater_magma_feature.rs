@@ -70,3 +70,13 @@ fn is_visible_from_outside(level: &mut impl WorldGenLevel, pos: BlockPos, covere
     let state = level.get_block_state(pos);
     !(state.can_occlude() && shapes::is_face_full(state.occlusion_voxel_shape(), covered_direction))
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::{float_range, int_range};
+    use crate::world::item::component::types::req;
+    vec![
+        req("floor_search_range", int_range(0, 512)),
+        req("placement_radius_around_floor", int_range(0, 64)),
+        req("placement_probability_per_valid_position", float_range(0.0, 1.0)),
+    ]
+}

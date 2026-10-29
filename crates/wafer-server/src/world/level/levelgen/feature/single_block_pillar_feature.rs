@@ -40,3 +40,27 @@ impl SingleBlockPillarFeature {
         true
     }
 }
+
+fn verify_vertical(direction: wafer_protocol::nbt::Nbt) -> Result<wafer_protocol::nbt::Nbt, String> {
+    match direction.as_str() {
+        Some("up" | "down") => Ok(direction),
+        _ => Err("Expected a vertical direction".into()),
+    }
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::util::range_codecs::float_range;
+    use crate::world::item::component::codec::Codec;
+    use crate::world::item::component::types::{self, compound, def, f, opt, req, s};
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    use crate::world::level::levelgen::placement::placed_feature;
+    let direction = types::enumeration(&["down", "up", "north", "south", "west", "east"]);
+    vec![
+        req("block", block_state_provider::holder_codec()),
+        def("can_replace", block_predicate::codec(), compound(&[("type", s("minecraft:true"))])),
+        req("direction", (Codec::Normalize(Box::new(direction.0), verify_vertical), direction.1)),
+        def("chance_to_continue", float_range(0.0, 1.0), f(1.0)),
+        opt("cap_feature", placed_feature::holder_codec()),
+    ]
+}

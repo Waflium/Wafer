@@ -84,3 +84,33 @@ impl HeightProvider {
         }
     }
 }
+
+fn codec_lazy() -> &'static crate::world::item::component::types::Pair {
+    static CODEC: std::sync::LazyLock<crate::world::item::component::types::Pair> = std::sync::LazyLock::new(codec);
+    &CODEC
+}
+
+pub fn codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+    use crate::world::item::component::types::{self, def, req};
+    let anchor = super::material::vertical_anchor_codec;
+    let range = || vec![req("min_inclusive", anchor()), req("max_inclusive", anchor())];
+    let inner = |name: &'static str| {
+        let mut fields = range();
+        fields.push(def(name, types::var_int(Codec::Int(1, i32::MAX, crate::world::item::component::codec::RangeError::Outside)), types::i(1)));
+        fields
+    };
+    let mut trapezoid = range();
+    trapezoid.push(def("plateau", (Codec::int(), Stream::Int), types::i(0)));
+    let weighted = types::record(vec![req("data", (Codec::Lazy(codec_lazy), Stream::Lazy)), req("weight", types::var_int(types::non_negative_int()))]);
+    let cases = vec![
+        ("minecraft:constant", vec![req("value", anchor())]),
+        ("minecraft:uniform", range()),
+        ("minecraft:biased_to_bottom", inner("inner")),
+        ("minecraft:very_biased_to_bottom", inner("inner")),
+        ("minecraft:trapezoid", trapezoid),
+        ("minecraft:weighted_list", vec![req("distribution", types::non_empty_weighted_list(weighted))]),
+    ];
+    let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:height_provider_type"), cases }));
+    (Codec::Either(Box::new(anchor().0), Box::new(dispatch)), Stream::Nbt)
+}

@@ -1,14 +1,23 @@
 use wafer_core::random::RandomSource;
 use serde_json::Value;
 
-use super::foliage_placer::{FoliageAttachment, try_place_leaf};
+use super::foliage_placer::{FoliageAttachment, foliage_placer_parts, try_place_leaf};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::IntProvider;
+use crate::util::valueproviders::{IntProvider, int_provider_codec_in};
+use crate::world::item::component::codec::{Codec, Field, RangeError, Stream};
+use crate::world::item::component::types::req;
 use crate::world::level::levelgen::feature::tree_feature::{TreeFeature, TreeSetter};
 
 pub struct RandomSpreadFoliagePlacer {
     pub foliage_height: IntProvider,
     leaf_placement_attempts: i32,
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = foliage_placer_parts();
+    fields.push(req("foliage_height", int_provider_codec_in::<1, 512>()));
+    fields.push(req("leaf_placement_attempts", (Codec::Int(0, 256, RangeError::Outside), Stream::Int)));
+    fields
 }
 
 impl RandomSpreadFoliagePlacer {

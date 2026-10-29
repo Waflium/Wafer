@@ -7,7 +7,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder_set::HolderSet;
 use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
-use crate::world::item::component::custom;
+use crate::util::extra_codecs;
 use crate::world::item::component::types::{self, Pair, def, req};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::block;
@@ -97,7 +97,7 @@ fn codec_lazy() -> &'static Pair {
 }
 
 fn offset() -> Field {
-    def("offset", custom::block_pos(), Nbt::IntArray(vec![0, 0, 0]))
+    def("offset", extra_codecs::offset_codec(), Nbt::IntArray(vec![0, 0, 0]))
 }
 
 pub fn codec() -> Pair {
@@ -117,11 +117,22 @@ pub fn codec() -> Pair {
         ("minecraft:all_of", combining()),
         ("minecraft:not", vec![predicate("predicate")]),
         ("minecraft:true", vec![]),
-        ("minecraft:unobstructed", vec![offset()]),
+        ("minecraft:unobstructed", vec![def("offset", extra_codecs::vec3i_codec(), Nbt::IntArray(vec![0, 0, 0]))]),
         ("minecraft:height_range", vec![req("min_inclusive", vertical_anchor_codec()), req("max_inclusive", vertical_anchor_codec())]),
-        ("minecraft:volume_match", vec![req("min", custom::block_pos()), req("max", custom::block_pos()), predicate("match")]),
+        ("minecraft:volume_match", vec![req("min", extra_codecs::offset_codec()), req("max", extra_codecs::offset_codec()), predicate("match")]),
     ];
-    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:block_predicate_type"), cases })), Stream::Dispatch)
+    let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:block_predicate_type"), cases }));
+    (Codec::Normalize(Box::new(dispatch), validate_volume_match), Stream::Dispatch)
+}
+
+fn validate_volume_match(predicate: Nbt) -> Result<Nbt, String> {
+    if predicate.get("type").and_then(Nbt::as_str) == Some("minecraft:volume_match")
+        && let (Some(Nbt::IntArray(min)), Some(Nbt::IntArray(max))) = (predicate.get("min"), predicate.get("max"))
+        && min.iter().zip(max).any(|(min, max)| min > max)
+    {
+        return Err("min bound cannot be larger than max bound".to_string());
+    }
+    Ok(predicate)
 }
 
 pub enum BlockPredicate {

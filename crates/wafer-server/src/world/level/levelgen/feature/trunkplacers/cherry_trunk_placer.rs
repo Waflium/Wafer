@@ -3,9 +3,13 @@ use wafer_core::{BlockPos, Direction};
 use wafer_data::properties::AXIS;
 use serde_json::Value;
 
-use super::trunk_placer::{TrunkPlacer, place_below_trunk_block};
+use wafer_protocol::nbt::Nbt;
+
+use super::trunk_placer::{TrunkPlacer, place_below_trunk_block, trunk_placer_parts};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::IntProvider;
+use crate::util::valueproviders::{IntProvider, int_provider_codec_in};
+use crate::world::item::component::codec::{Codec, Field, Stream, as_i32};
+use crate::world::item::component::types::{Pair, req};
 use crate::world::level::levelgen::feature::foliageplacers::foliage_placer::FoliageAttachment;
 use crate::world::level::levelgen::feature::tree_feature::{TreeFeature, TreeSetter};
 
@@ -32,6 +36,49 @@ impl CherryTrunkPlacer {
             branch_end_offset_from_top: IntProvider::parse(field("branch_end_offset_from_top")?)?,
         })
     }
+}
+
+fn uniform_int_bounds(value: &Nbt) -> (i32, i32) {
+    (value.get("min_inclusive").map_or(0, as_i32), value.get("max_inclusive").map_or(0, as_i32))
+}
+
+fn validate_uniform_int(value: Nbt) -> Result<Nbt, String> {
+    let (min, max) = uniform_int_bounds(&value);
+    if max < min { Err(format!("Max must be at least min, min_inclusive: {min}, max_inclusive: {max}")) } else { Ok(value) }
+}
+
+fn validate_branch_start_variation(value: Nbt) -> Result<Nbt, String> {
+    let (min, max) = uniform_int_bounds(&value);
+    if max.wrapping_sub(min) < 1 { Err("Need at least 2 blocks variation for the branch starts to fit both branches".into()) } else { Ok(value) }
+}
+
+fn validate_branch_start_range(value: Nbt) -> Result<Nbt, String> {
+    let (min, max) = uniform_int_bounds(&value);
+    if min < -16 {
+        Err(format!("Value provider too low: -16 [{min}-{max}]"))
+    } else if max > 0 {
+        Err(format!("Value provider too high: 0 [{min}-{max}]"))
+    } else {
+        Ok(value)
+    }
+}
+
+fn branch_start_codec() -> Pair {
+    let uniform = Codec::Normalize(
+        Box::new(Codec::Record(vec![req("min_inclusive", (Codec::int(), Stream::Int)), req("max_inclusive", (Codec::int(), Stream::Int))])),
+        validate_uniform_int,
+    );
+    let varied = Codec::Normalize(Box::new(uniform), validate_branch_start_variation);
+    (Codec::Normalize(Box::new(varied), validate_branch_start_range), Stream::Nbt)
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = trunk_placer_parts();
+    fields.push(req("branch_count", int_provider_codec_in::<1, 3>()));
+    fields.push(req("branch_horizontal_length", int_provider_codec_in::<2, 16>()));
+    fields.push(req("branch_start_offset_from_top", branch_start_codec()));
+    fields.push(req("branch_end_offset_from_top", int_provider_codec_in::<-16, 16>()));
+    fields
 }
 
 #[allow(clippy::too_many_arguments)]

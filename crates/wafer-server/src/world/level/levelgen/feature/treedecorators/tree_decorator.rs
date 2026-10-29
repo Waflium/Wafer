@@ -4,12 +4,14 @@ use wafer_data::properties::BooleanProperty;
 use wafer_data::{BlockState, blocks};
 use serde_json::Value;
 
-use super::alter_ground_decorator::AlterGroundDecorator;
-use super::attached_to_leaves_decorator::AttachedToLeavesDecorator;
-use super::attached_to_logs_decorator::AttachedToLogsDecorator;
-use super::pale_moss_decorator::PaleMossDecorator;
-use super::place_on_ground_decorator::PlaceOnGroundDecorator;
+use super::alter_ground_decorator::{self, AlterGroundDecorator};
+use super::attached_to_leaves_decorator::{self, AttachedToLeavesDecorator};
+use super::attached_to_logs_decorator::{self, AttachedToLogsDecorator};
+use super::pale_moss_decorator::{self, PaleMossDecorator};
+use super::place_on_ground_decorator::{self, PlaceOnGroundDecorator};
 use super::{beehive_decorator, cocoa_decorator, creaking_heart_decorator, leave_vine_decorator, shelf_mushroom_decorator, trunk_vine_decorator};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::java_collections::JavaObjectHashSet;
 use crate::util::valueproviders::float;
@@ -27,6 +29,27 @@ pub enum TreeDecorator {
     AttachedToLeaves(AttachedToLeavesDecorator),
     PlaceOnGround(PlaceOnGroundDecorator),
     AttachedToLogs(AttachedToLogsDecorator),
+}
+
+pub fn codec() -> Pair {
+    let cases = vec![
+        ("minecraft:trunk_vine", trunk_vine_decorator::fields()),
+        ("minecraft:leave_vine", leave_vine_decorator::fields()),
+        ("minecraft:pale_moss", pale_moss_decorator::fields()),
+        ("minecraft:creaking_heart", creaking_heart_decorator::fields()),
+        ("minecraft:cocoa", cocoa_decorator::fields()),
+        ("minecraft:shelf_mushroom", shelf_mushroom_decorator::fields()),
+        ("minecraft:beehive", beehive_decorator::fields()),
+        ("minecraft:alter_ground", alter_ground_decorator::fields()),
+        ("minecraft:attached_to_leaves", attached_to_leaves_decorator::fields()),
+        ("minecraft:place_on_ground", place_on_ground_decorator::fields()),
+        ("minecraft:attached_to_logs", attached_to_logs_decorator::fields()),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/tree_decorator_type"), cases })), Stream::Dispatch)
+}
+
+pub fn list_codec() -> Pair {
+    types::list(codec())
 }
 
 impl TreeDecorator {

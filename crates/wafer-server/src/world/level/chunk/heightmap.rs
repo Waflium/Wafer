@@ -47,6 +47,17 @@ impl HeightmapType {
         }
     }
 
+    pub fn codec() -> crate::world::item::component::types::Pair {
+        crate::world::item::component::types::enumeration(&[
+            "WORLD_SURFACE_WG",
+            "WORLD_SURFACE",
+            "OCEAN_FLOOR_WG",
+            "OCEAN_FLOOR",
+            "MOTION_BLOCKING",
+            "MOTION_BLOCKING_NO_LEAVES",
+        ])
+    }
+
     pub fn send_to_client(self) -> bool {
         matches!(self, HeightmapType::WorldSurface | HeightmapType::MotionBlocking | HeightmapType::MotionBlockingNoLeaves)
     }

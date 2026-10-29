@@ -8,6 +8,7 @@ pub mod igloo_pieces;
 pub mod igloo_structure;
 pub mod jigsaw_structure;
 pub mod jungle_temple_piece;
+pub mod jungle_temple_structure;
 pub mod mineshaft_pieces;
 pub mod mineshaft_structure;
 pub mod nether_fortress_pieces;

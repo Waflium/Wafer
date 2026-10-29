@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
+use crate::util::codec::DecodeResult;
+use crate::world::item::component::codec::{self, Codec, RangeError, Stream};
+use crate::world::item::component::types::{self, Pair};
 use crate::world::level::levelgen::density_function::float;
 
 pub fn quantize_coord(coord: f32) -> i64 {
@@ -14,6 +18,50 @@ pub fn quantize_coord(coord: f32) -> i64 {
 pub struct Parameter {
     pub min: i64,
     pub max: i64,
+}
+
+fn make_interval(min: f32, max: f32) -> Result<Nbt, String> {
+    if min.total_cmp(&max).is_gt() {
+        return Err(format!("Cannon construct interval, min > max ({} > {})", crate::nbt::java_float_to_string(min), crate::nbt::java_float_to_string(max)));
+    }
+    Ok(Nbt::Compound(vec![("min".into(), Nbt::Float(min)), ("max".into(), Nbt::Float(max))]))
+}
+
+fn parameter_point_codec() -> Codec {
+    Codec::Float(-2.0, 2.0, false, RangeError::Outside)
+}
+
+fn decode_interval_array(tag: &Nbt) -> DecodeResult<Nbt> {
+    Codec::list(parameter_point_codec()).decode_partial(tag).flat_map(|list| {
+        let [min, max, rest @ ..] = list.as_list() else { return DecodeResult::error("Input is not a list of 2 elements") };
+        let interval = DecodeResult::from(make_interval(codec::as_f32(min), codec::as_f32(max)));
+        if rest.is_empty() {
+            return interval;
+        }
+        let error = match interval.error {
+            Some(error) => format!("Input is not a list of 2 elements; {error}"),
+            None => "Input is not a list of 2 elements".to_string(),
+        };
+        DecodeResult { value: interval.value, error: Some(error) }
+    })
+}
+
+fn interval_from_object(object: Nbt) -> Result<Nbt, String> {
+    make_interval(codec::as_f32(object.get("min").unwrap_or(&Nbt::Float(0.0))), codec::as_f32(object.get("max").unwrap_or(&Nbt::Float(0.0))))
+}
+
+fn interval_from_point(point: Nbt) -> Result<Nbt, String> {
+    match point {
+        Nbt::Float(min) => make_interval(min, min),
+        interval => Ok(interval),
+    }
+}
+
+pub fn parameter_codec() -> Pair {
+    let point = parameter_point_codec;
+    let object = Codec::Normalize(Box::new(Codec::Record(vec![types::req("min", types::float(point())), types::req("max", types::float(point()))])), interval_from_object);
+    let array_or_object = Codec::Alt(Box::new(Codec::Func(decode_interval_array)), Box::new(object), |interval| Ok(interval.clone()));
+    (Codec::Normalize(Box::new(Codec::Either(Box::new(point()), Box::new(array_or_object))), interval_from_point), Stream::Nbt)
 }
 
 impl Parameter {

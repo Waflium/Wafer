@@ -1,9 +1,12 @@
 use wafer_core::{BlockPos, ChunkPos};
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
 use super::abstract_spreading_structure_placement::AbstractSpreadingStructurePlacement;
-use super::concentric_rings_structure_placement::ConcentricRingsStructurePlacement;
-use super::random_spread_structure_placement::RandomSpreadStructurePlacement;
+use super::concentric_rings_structure_placement::{self, ConcentricRingsStructurePlacement};
+use super::random_spread_structure_placement::{self, RandomSpreadStructurePlacement};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::Pair;
 use crate::world::level::chunk::chunk_generator_structure_state::ChunkGeneratorStructureState;
 use crate::world::level::levelgen::structure::structure_set::StructureSetHolder;
 
@@ -11,6 +14,23 @@ pub enum StructurePlacement {
     RandomSpread(RandomSpreadStructurePlacement),
     ConcentricRings(ConcentricRingsStructurePlacement),
     DimensionOrigin,
+}
+
+fn validate(placement: Nbt) -> Result<Nbt, String> {
+    match placement.get("type").and_then(Nbt::as_str) {
+        Some("minecraft:random_spread") => random_spread_structure_placement::validate(placement),
+        _ => Ok(placement),
+    }
+}
+
+pub fn codec() -> Pair {
+    let cases = vec![
+        ("minecraft:concentric_rings", concentric_rings_structure_placement::fields()),
+        ("minecraft:dimension_origin", Vec::new()),
+        ("minecraft:random_spread", random_spread_structure_placement::fields()),
+    ];
+    let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/structure_placement"), cases }));
+    (Codec::Normalize(Box::new(dispatch), validate), Stream::Dispatch)
 }
 
 impl StructurePlacement {

@@ -41,3 +41,7 @@ fn offset_target_pos(random: &mut impl RandomSource, origin: BlockPos, max_dist_
 fn random_placement_in_one_axis_relative_to_origin(random: &mut impl RandomSource, max_distance_from_origin: i32) -> i32 {
     mth::java_round_f32((random.next_float() - random.next_float()) * max_distance_from_origin as f32)
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    super::abstract_ore_feature::fields()
+}

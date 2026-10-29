@@ -55,13 +55,8 @@ pub fn non_empty_list(p: Pair) -> Pair {
     (Codec::List(Box::new(p.0), 1, MAX), Stream::List(Box::new(p.1), MAX))
 }
 
-fn non_zero_total_weight(list: Nbt) -> Result<Nbt, String> {
-    let total: i64 = list.as_list().iter().filter_map(|entry| entry.get("weight")).map(super::codec::as_i64).sum();
-    if total == 0 { Err("Weighted list must contain at least one entry with non-zero weight".into()) } else { Ok(list) }
-}
-
 pub fn non_empty_weighted_list(p: Pair) -> Pair {
-    (Codec::Normalize(Box::new(Codec::list(p.0)), non_zero_total_weight), Stream::List(Box::new(p.1), MAX))
+    crate::util::random::non_empty_weighted_list_codec(p)
 }
 
 pub fn bool() -> Pair {

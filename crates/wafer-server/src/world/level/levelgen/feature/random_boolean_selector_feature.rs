@@ -28,3 +28,9 @@ impl RandomBooleanSelectorFeature {
         (if result { &self.feature_true } else { &self.feature_false }).value().place(level, random, origin)
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::req;
+    use crate::world::level::levelgen::placement::placed_feature;
+    vec![req("feature_true", placed_feature::holder_codec()), req("feature_false", placed_feature::holder_codec())]
+}

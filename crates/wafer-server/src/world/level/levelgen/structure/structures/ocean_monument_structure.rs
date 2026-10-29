@@ -7,10 +7,15 @@ use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::quart_pos;
 use crate::world::level::levelgen::structure::pieces::pieces_container::PiecesContainer;
 use crate::world::level::levelgen::structure::pieces::structure_pieces_builder::StructurePiecesBuilder;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, on_top_of_chunk_center};
+use crate::world::item::component::codec::Field;
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, on_top_of_chunk_center, simple_codec};
 use crate::world::level::levelgen::worldgen_random::WorldgenRandom;
 
 const BIOME_RANGE_CHECK: i32 = 29;
+
+pub fn fields() -> Vec<Field> {
+    simple_codec()
+}
 
 pub fn find_generation_point(context: &mut GenerationContext) -> Option<GenerationStub<'static>> {
     let offset_x = context.chunk_pos.min_block_x() + 9;

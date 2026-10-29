@@ -65,3 +65,18 @@ impl TemplateFeature {
         BlockPos::new(direction.step_x() * size, direction.step_y() * size, direction.step_z() * size)
     }
 }
+
+pub fn template_entry_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{self, def, record, req, s};
+    use crate::world::level::block::rotation;
+    use wafer_protocol::nbt::Nbt;
+    let all = Nbt::List(["none", "clockwise_90", "180", "counterclockwise_90"].into_iter().map(s).collect());
+    record(vec![req("id", types::identifier()), def("rotations", types::list(rotation::codec()), all)])
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::random::{weighted_data_codec, weighted_list_codec};
+    use crate::world::item::component::types::{opt, req};
+    use crate::world::level::levelgen::structure::templatesystem::structure_processor;
+    vec![req("templates", weighted_list_codec(weighted_data_codec(template_entry_codec()))), opt("processors", structure_processor::list_holder_codec())]
+}

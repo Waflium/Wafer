@@ -170,3 +170,25 @@ impl EndSpikeFeature {
         level.set_block_and_update(crystal_pos, fire);
     }
 }
+
+pub fn end_spike_codec() -> crate::world::item::component::types::Pair {
+    use crate::util::range_codecs::int;
+    use crate::world::item::component::types::{self, b, def, i, record};
+    record(vec![
+        def("centerX", int(), i(0)),
+        def("centerZ", int(), i(0)),
+        def("radius", int(), i(0)),
+        def("height", int(), i(0)),
+        def("guarded", types::bool(), b(false)),
+    ])
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::custom;
+    use crate::world::item::component::types::{self, b, def, opt, req};
+    vec![
+        req("spikes", types::list(end_spike_codec())),
+        def("crystal_invulnerable", types::bool(), b(false)),
+        opt("crystal_beam_target", custom::block_pos()),
+    ]
+}

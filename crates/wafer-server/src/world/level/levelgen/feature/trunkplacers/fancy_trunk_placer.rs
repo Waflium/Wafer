@@ -157,3 +157,7 @@ fn tree_shape(height: i32, y: i32) -> f32 {
     }
     distance * 0.5
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    super::trunk_placer::trunk_placer_parts()
+}

@@ -3,9 +3,11 @@ use wafer_core::{BlockPos, Direction};
 use wafer_data::properties::AXIS;
 use serde_json::Value;
 
-use super::trunk_placer::{TrunkPlacer, place_below_trunk_block};
+use super::trunk_placer::{TrunkPlacer, place_below_trunk_block, trunk_placer_parts};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::IntProvider;
+use crate::util::valueproviders::{IntProvider, int_provider_codec_in};
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::req;
 use crate::world::level::levelgen::feature::foliageplacers::foliage_placer::FoliageAttachment;
 use crate::world::level::levelgen::feature::tree_feature::{TreeFeature, TreeSetter};
 
@@ -22,6 +24,13 @@ impl PoplarTrunkPlacer {
             branch_amount: IntProvider::parse(field("branch_amount")?)?,
         })
     }
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = trunk_placer_parts();
+    fields.push(req("trunk_height_above_branches", int_provider_codec_in::<0, 8>()));
+    fields.push(req("branch_amount", int_provider_codec_in::<1, 4>()));
+    fields
 }
 
 #[allow(clippy::too_many_arguments)]

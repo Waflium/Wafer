@@ -1,15 +1,18 @@
 use wafer_core::BlockPos;
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
+use crate::world::item::component::codec::{Codec, Field, RangeError, as_i32};
+use crate::world::item::component::types::{Pair, bool, def, either, empty_list, enumeration, i, identifier, list, opt, record, req, s, var_int};
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
-use crate::world::level::levelgen::heightproviders::HeightProvider;
+use crate::world::level::levelgen::heightproviders::{self, HeightProvider};
 use crate::world::level::levelgen::material::WorldGenerationContext;
 use crate::world::level::levelgen::placement::placement_modifier::parse_heightmap;
-use crate::world::level::levelgen::structure::pools::alias::{PoolAliasBinding, PoolAliasLookup};
+use crate::world::level::levelgen::structure::pools::alias::{self, PoolAliasBinding, PoolAliasLookup};
 use crate::world::level::levelgen::structure::pools::jigsaw_placement::{self, DimensionPadding, JigsawSettings, MaxDistance};
-use crate::world::level::levelgen::structure::pools::structure_template_pool::TemplatePoolHolder;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub};
+use crate::world::level::levelgen::structure::pools::structure_template_pool::{self, TemplatePoolHolder};
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, settings_fields};
 
 const Y_SIZE: i32 = (1 << 12) - 32;
 
@@ -24,6 +27,50 @@ pub struct JigsawStructure {
     pool_aliases: Vec<PoolAliasBinding>,
     dimension_padding: DimensionPadding,
     apply_waterlogging: bool,
+}
+
+const HEIGHTMAP_TYPES: &[&str] = &["WORLD_SURFACE_WG", "WORLD_SURFACE", "OCEAN_FLOOR_WG", "OCEAN_FLOOR", "MOTION_BLOCKING", "MOTION_BLOCKING_NO_LEAVES"];
+
+const LIQUID_SETTINGS: &[&str] = &["ignore_waterlogging", "apply_waterlogging"];
+
+const MAX_TOTAL_STRUCTURE_RANGE: i32 = 128;
+
+fn max_distance_codec() -> Pair {
+    let horizontal_value_codec = || var_int(Codec::Int(1, 128, RangeError::Outside));
+    let full_codec = record(vec![req("horizontal", horizontal_value_codec()), def("vertical", var_int(Codec::Int(1, Y_SIZE, RangeError::Within)), i(Y_SIZE))]);
+    either(full_codec, horizontal_value_codec())
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = settings_fields();
+    fields.push(req("start_pool", structure_template_pool::holder_codec()));
+    fields.push(opt("start_jigsaw_name", identifier()));
+    fields.push(req("size", var_int(Codec::Int(0, 20, RangeError::Outside))));
+    fields.push(req("start_height", heightproviders::codec()));
+    fields.push(req("use_expansion_hack", bool()));
+    fields.push(opt("project_start_to_heightmap", enumeration(HEIGHTMAP_TYPES)));
+    fields.push(req("max_distance_from_center", max_distance_codec()));
+    fields.push(def("pool_aliases", list(alias::codec()), empty_list()));
+    fields.push(def("dimension_padding", DimensionPadding::codec(), i(0)));
+    fields.push(def("liquid_settings", enumeration(LIQUID_SETTINGS), s("apply_waterlogging")));
+    fields
+}
+
+pub fn verify_range(structure: Nbt) -> Result<Nbt, String> {
+    let edge_needed = match structure.get("terrain_adaptation").and_then(Nbt::as_str) {
+        None | Some("none") => 0,
+        Some(_) => 12,
+    };
+    let horizontal = match structure.get("max_distance_from_center") {
+        Some(distance @ Nbt::Compound(_)) => distance.get("horizontal").map_or(0, as_i32),
+        Some(distance) => as_i32(distance),
+        None => 0,
+    };
+    if horizontal + edge_needed > MAX_TOTAL_STRUCTURE_RANGE {
+        Err("Horizontal structure size including terrain adaptation must not exceed 128".into())
+    } else {
+        Ok(structure)
+    }
 }
 
 impl JigsawStructure {

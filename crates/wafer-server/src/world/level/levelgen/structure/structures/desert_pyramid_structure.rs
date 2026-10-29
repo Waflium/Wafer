@@ -5,11 +5,17 @@ use wafer_data::blocks;
 use super::Piece;
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util;
+use crate::world::item::component::codec::Field;
 use crate::world::level::block::entity::BlockEntityKind;
+use crate::world::level::levelgen::structure::structure::simple_codec;
 use crate::world::level::levelgen::structure::BoundingBox;
 use crate::world::level::levelgen::structure::pieces::pieces_container::PiecesContainer;
 
 const DESERT_PYRAMID_ARCHAEOLOGY: &str = "minecraft:archaeology/desert_pyramid";
+
+pub fn fields() -> Vec<Field> {
+    simple_codec()
+}
 
 pub fn after_place(level: &mut impl WorldGenLevel, chunk_bb: &BoundingBox, pieces: &PiecesContainer) {
     let mut unique_sand_placements = Vec::new();

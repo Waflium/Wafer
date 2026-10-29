@@ -9,7 +9,9 @@ use super::poplar_foliage_placer::{self, PoplarFoliagePlacer};
 use super::random_spread_foliage_placer::{self, RandomSpreadFoliagePlacer};
 use super::{acacia_foliage_placer, blob_foliage_placer, bush_foliage_placer, dark_oak_foliage_placer, fancy_foliage_placer, mega_jungle_foliage_placer, mega_pine_foliage_placer, pine_foliage_placer, spruce_foliage_placer};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::IntProvider;
+use crate::util::valueproviders::{IntProvider, int_provider_codec_in};
+use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
+use crate::world::item::component::types::{Pair, req};
 use crate::world::level::levelgen::feature::tree_feature::{self, TreeFeature, TreeSetter};
 
 #[derive(Clone, Copy)]
@@ -254,4 +256,26 @@ pub fn try_place_leaf<R: RandomSource>(level: &mut impl WorldGenLevel, foliage_s
     } else {
         false
     }
+}
+
+pub fn foliage_placer_parts() -> Vec<Field> {
+    vec![req("radius", int_provider_codec_in::<0, 16>()), req("offset", int_provider_codec_in::<0, 16>())]
+}
+
+pub fn codec() -> Pair {
+    let cases = vec![
+        ("minecraft:blob_foliage_placer", blob_foliage_placer::fields()),
+        ("minecraft:spruce_foliage_placer", spruce_foliage_placer::fields()),
+        ("minecraft:pine_foliage_placer", pine_foliage_placer::fields()),
+        ("minecraft:acacia_foliage_placer", acacia_foliage_placer::fields()),
+        ("minecraft:bush_foliage_placer", bush_foliage_placer::fields()),
+        ("minecraft:fancy_foliage_placer", fancy_foliage_placer::fields()),
+        ("minecraft:jungle_foliage_placer", mega_jungle_foliage_placer::fields()),
+        ("minecraft:mega_pine_foliage_placer", mega_pine_foliage_placer::fields()),
+        ("minecraft:dark_oak_foliage_placer", dark_oak_foliage_placer::fields()),
+        ("minecraft:random_spread_foliage_placer", random_spread_foliage_placer::fields()),
+        ("minecraft:cherry_foliage_placer", cherry_foliage_placer::fields()),
+        ("minecraft:poplar_foliage_placer", poplar_foliage_placer::fields()),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/foliage_placer_type"), cases })), Stream::Dispatch)
 }

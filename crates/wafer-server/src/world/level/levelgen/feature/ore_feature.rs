@@ -138,3 +138,7 @@ impl OreFeature {
 fn section_block(level: &mut impl WorldGenLevel, pos: BlockPos) -> BlockState {
     if level.is_outside_build_height(pos.y) { blocks::AIR.default_state() } else { level.get_block_state(pos) }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    super::abstract_ore_feature::fields()
+}

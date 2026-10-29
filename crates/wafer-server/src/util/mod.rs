@@ -26,6 +26,7 @@ pub mod keyframe_track;
 pub mod parsing;
 pub mod png_info;
 pub mod random;
+pub mod range_codecs;
 pub mod signature_validator;
 pub mod spawn_util;
 pub mod special_dates;

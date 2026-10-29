@@ -3,16 +3,26 @@ use serde_json::Value;
 
 use super::ocean_ruin_pieces;
 use crate::util::valueproviders::float;
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{self, codec_float_range, enumeration, req};
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::structure::pieces::structure_pieces_builder::StructurePiecesBuilder;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, on_top_of_chunk_center};
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, on_top_of_chunk_center, settings_fields};
 
 #[derive(Clone, Copy)]
 pub struct OceanRuinStructure {
     pub biome_temp: Type,
     pub large_probability: f32,
     pub cluster_probability: f32,
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = settings_fields();
+    fields.push(req("biome_temp", enumeration(Type::NAMES)));
+    fields.push(req("large_probability", types::float(codec_float_range(0.0, 1.0))));
+    fields.push(req("cluster_probability", types::float(codec_float_range(0.0, 1.0))));
+    fields
 }
 
 impl OceanRuinStructure {
@@ -42,6 +52,8 @@ pub enum Type {
 }
 
 impl Type {
+    pub const NAMES: &'static [&'static str] = &["warm", "cold"];
+
     pub fn by_name(name: &str) -> Option<Type> {
         match name {
             "warm" => Some(Type::Warm),

@@ -33,3 +33,16 @@ pub fn make_cap<R: RandomSource>(feature: &AbstractHugeMushroomFeature, level: &
 pub fn get_tree_radius_for_height(_trunk_height: i32, tree_height: i32, leaf_radius: i32, yo: i32) -> i32 {
     if yo < tree_height && yo >= tree_height - 3 || yo == tree_height { leaf_radius } else { 0 }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::util::range_codecs::int;
+    use crate::world::item::component::types::{def, i, req};
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![
+        req("cap_provider", block_state_provider::holder_codec()),
+        req("stem_provider", block_state_provider::holder_codec()),
+        def("foliage_radius", int(), i(2)),
+        req("can_place_on", block_predicate::codec()),
+    ]
+}

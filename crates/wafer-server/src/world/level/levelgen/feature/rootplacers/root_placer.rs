@@ -4,11 +4,13 @@ use wafer_data::properties::WATERLOGGED;
 use wafer_data::{BlockState, fluid_tags};
 use serde_json::Value;
 
-use super::above_root_placement::AboveRootPlacement;
+use super::above_root_placement::{self, AboveRootPlacement};
 use super::mangrove_root_placer::{self, MangroveRootPlacement};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::IntProvider;
-use crate::world::level::levelgen::feature::stateproviders::block_state_provider::BlockStateProviderHolder;
+use crate::util::valueproviders::{IntProvider, int_provider_codec};
+use crate::world::item::component::codec::{Codec, Dispatch, Field, Selector, Stream};
+use crate::world::item::component::types::{Pair, opt, req};
+use crate::world::level::levelgen::feature::stateproviders::block_state_provider::{self, BlockStateProviderHolder};
 use crate::world::level::levelgen::feature::tree_feature::{self, TreeFeature, TreeSetter};
 
 pub struct RootPlacer {
@@ -20,6 +22,19 @@ pub struct RootPlacer {
 
 pub enum RootPlacerType {
     Mangrove(MangroveRootPlacement),
+}
+
+pub fn root_placer_parts() -> Vec<Field> {
+    vec![
+        req("trunk_offset_y", int_provider_codec()),
+        req("root_provider", block_state_provider::holder_codec()),
+        opt("above_root_placement", above_root_placement::codec()),
+    ]
+}
+
+pub fn codec() -> Pair {
+    let cases = vec![("minecraft:mangrove_root_placer", mangrove_root_placer::fields())];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/root_placer_type"), cases })), Stream::Dispatch)
 }
 
 impl RootPlacer {

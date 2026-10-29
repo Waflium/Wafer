@@ -1,7 +1,12 @@
 use super::Piece;
 use super::swamp_hut_piece::SwampHutPiece;
 use crate::world::level::chunk::HeightmapType;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, on_top_of_chunk_center};
+use crate::world::item::component::codec::Field;
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, on_top_of_chunk_center, simple_codec};
+
+pub fn fields() -> Vec<Field> {
+    simple_codec()
+}
 
 pub fn find_generation_point(context: &mut GenerationContext) -> Option<GenerationStub<'static>> {
     on_top_of_chunk_center(

@@ -50,3 +50,10 @@ impl BlockBlobFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::req;
+    use crate::world::level::block::state::block_state;
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![req("state", block_state::codec()), req("can_place_on", block_predicate::codec())]
+}

@@ -69,3 +69,8 @@ fn drop_previous_and_set_block(level: &mut impl WorldGenLevel, pos: BlockPos, bl
         level.set_block_and_update(pos, block.default_state());
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::{self, b, def};
+    vec![def("active", types::bool(), b(false))]
+}

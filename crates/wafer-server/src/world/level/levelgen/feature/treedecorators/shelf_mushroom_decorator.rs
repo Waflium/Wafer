@@ -6,6 +6,11 @@ use wafer_data::properties::{AGE_1, HORIZONTAL_FACING};
 
 use super::tree_decorator::Context;
 
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::{self, req};
+    vec![req("probability", types::float(types::codec_float_range(0.0, 1.0)))]
+}
+
 pub fn place<R: RandomSource>(placement_probability: f32, context: &mut Context<impl WorldGenLevel, R>) {
     if context.random.next_float() >= placement_probability {
         return;

@@ -4,6 +4,10 @@ use wafer_data::properties::{EAST, NORTH, SOUTH, WEST};
 
 use super::tree_decorator::Context;
 
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    Vec::new()
+}
+
 pub fn place<R: RandomSource>(context: &mut Context<impl WorldGenLevel, R>) {
     for i in 0..context.logs.len() {
         let pos = context.logs[i];

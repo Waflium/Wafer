@@ -92,3 +92,21 @@ fn count_empty_corners(level: &mut impl WorldGenLevel, structure_bounds: Boundin
     });
     count
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::int_range;
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::levelgen::structure::templatesystem::structure_processor;
+    vec![
+        req("fossil_structures", types::non_empty_list(types::identifier())),
+        req("overlay_structures", types::non_empty_list(types::identifier())),
+        req("fossil_processors", structure_processor::list_holder_codec()),
+        req("overlay_processors", structure_processor::list_holder_codec()),
+        req("max_empty_corners_allowed", int_range(0, 7)),
+    ]
+}
+
+pub fn validate(fossil: wafer_protocol::nbt::Nbt) -> Result<wafer_protocol::nbt::Nbt, String> {
+    let size = |key: &str| fossil.get(key).map_or(0, |list| list.as_list().len());
+    if size("fossil_structures") == size("overlay_structures") { Ok(fossil) } else { Err("Fossil structure lists must be equal lengths".into()) }
+}

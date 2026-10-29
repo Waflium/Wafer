@@ -1,9 +1,13 @@
+use std::sync::LazyLock;
+
 use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction};
 use wafer_data::blocks;
 use serde_json::Value;
 
 use super::placement_context::PlacementContext;
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::Pair;
 use crate::util::valueproviders::{IntProvider, float};
 use crate::world::level::biome::BIOME_INFO_NOISE;
 use crate::world::level::chunk::HeightmapType;
@@ -280,4 +284,37 @@ fn find_on_ground_y_position(context: &mut PlacementContext<impl WorldGenLevel>,
 
 fn is_empty(block_state: wafer_data::BlockState) -> bool {
     block_state.is_air() || block_state.is_block(blocks::WATER) || block_state.is_block(blocks::LAVA)
+}
+
+fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(codec);
+    &CODEC
+}
+
+pub fn lazy() -> Pair {
+    (Codec::Lazy(codec_lazy), Stream::Lazy)
+}
+
+pub fn codec() -> Pair {
+    let cases = vec![
+        ("minecraft:block_predicate_filter", super::block_predicate_filter::fields()),
+        ("minecraft:rarity_filter", super::rarity_filter::fields()),
+        ("minecraft:random_chance", super::random_chance_placement::fields()),
+        ("minecraft:surface_relative_threshold_filter", super::surface_relative_threshold_filter::fields()),
+        ("minecraft:surface_water_depth_filter", super::surface_water_depth_filter::fields()),
+        ("minecraft:biome", super::biome_filter::fields()),
+        ("minecraft:count", super::count_placement::fields()),
+        ("minecraft:noise_based_count", super::noise_based_count_placement::fields()),
+        ("minecraft:noise_threshold_count", super::noise_threshold_count_placement::fields()),
+        ("minecraft:count_on_every_layer", super::count_on_every_layer_placement::fields()),
+        ("minecraft:cuboid", crate::world::level::levelgen::feature::cuboid_placement::fields()),
+        ("minecraft:environment_scan", super::environment_scan_placement::fields()),
+        ("minecraft:heightmap", super::heightmap_placement::fields()),
+        ("minecraft:height_range", super::height_range_placement::fields()),
+        ("minecraft:in_square", super::in_square_placement::fields()),
+        ("minecraft:offset", super::offset_placement::fields()),
+        ("minecraft:randomly_selected", super::randomly_selected_placement::fields()),
+        ("minecraft:fixed_placement", super::fixed_placement::fields()),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/placement_modifier_type"), cases })), Stream::Dispatch)
 }

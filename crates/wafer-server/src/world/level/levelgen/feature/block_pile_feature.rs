@@ -51,3 +51,9 @@ impl BlockPileFeature {
         }
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::world::item::component::types::req;
+    vec![req("state_provider", block_state_provider::holder_codec())]
+}

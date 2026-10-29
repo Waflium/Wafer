@@ -122,3 +122,16 @@ fn decorate_logs<R: RandomSource>(level: &mut impl WorldGenLevel, random: &mut R
         decorator.place(&mut context);
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use super::treedecorators::tree_decorator;
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::types::{self, req};
+    vec![
+        req("trunk_provider", block_state_provider::holder_codec()),
+        req("log_length", int_provider_codec_in::<0, 16>()),
+        req("stump_decorators", types::list(tree_decorator::codec())),
+        req("log_decorators", types::list(tree_decorator::codec())),
+    ]
+}

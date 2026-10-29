@@ -1,8 +1,10 @@
 use wafer_core::ChunkPos;
 use serde_json::Value;
 
-use super::abstract_spreading_structure_placement::AbstractSpreadingStructurePlacement;
+use super::abstract_spreading_structure_placement::{AbstractSpreadingStructurePlacement, placement_fields};
 use crate::core::holder_set::HolderSet;
+use crate::world::item::component::codec::{Codec, Field, RangeError};
+use crate::world::item::component::types::{holder_set, req, var_int};
 use crate::world::level::chunk::chunk_generator_structure_state::ChunkGeneratorStructureState;
 use crate::world::level::levelgen::structure::structure::parse_biome_holder_set;
 use crate::world::level::levelgen::structure::structure_set::StructureSetHolder;
@@ -13,6 +15,15 @@ pub struct ConcentricRingsStructurePlacement {
     pub spread: i32,
     pub count: i32,
     pub preferred_biomes: HolderSet,
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = placement_fields();
+    fields.push(req("distance", var_int(Codec::Int(0, 1023, RangeError::Outside))));
+    fields.push(req("spread", var_int(Codec::Int(0, 1023, RangeError::Outside))));
+    fields.push(req("count", var_int(Codec::Int(1, 4095, RangeError::Outside))));
+    fields.push(req("preferred_biomes", holder_set("minecraft:worldgen/biome")));
+    fields
 }
 
 impl ConcentricRingsStructurePlacement {

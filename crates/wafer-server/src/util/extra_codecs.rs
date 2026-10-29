@@ -32,6 +32,18 @@ pub fn fixed_size_ints(tag: &Nbt, size: usize) -> DecodeResult<Vec<i32>> {
         _ => None,
     };
     let mut ints: Vec<i32> = match tag {
+        Nbt::List(values) if crate::nbt::is_json_source() => {
+            let json_numeric = |value: &Nbt| match *value {
+                Nbt::Long(v) => Some(v as i32),
+                Nbt::Double(v) => Some(if v.abs() >= 2f64.powi(84) { 0 } else { v as i128 as i32 }),
+                _ => None,
+            };
+            match values.iter().map(json_numeric).collect::<Option<Vec<i32>>>() {
+                Some(ints) => ints,
+                None => return DecodeResult::error(format!("Some elements are not ints: {}", crate::nbt::to_string(tag))),
+            }
+        }
+        _ if crate::nbt::is_json_source() => return DecodeResult::error(format!("Not a json array: {}", crate::nbt::to_string(tag))),
         Nbt::IntArray(values) => values.clone(),
         Nbt::ByteArray(values) => values.iter().map(|&v| v as i32).collect(),
         Nbt::LongArray(values) => values.iter().map(|&v| v as i32).collect(),
@@ -51,6 +63,28 @@ pub fn fixed_size_ints(tag: &Nbt, size: usize) -> DecodeResult<Vec<i32>> {
     } else {
         DecodeResult { value: None, error }
     }
+}
+
+fn decode_vec3i(tag: &Nbt) -> DecodeResult<Nbt> {
+    fixed_size_ints(tag, 3).map(Nbt::IntArray)
+}
+
+fn decode_offset(tag: &Nbt) -> DecodeResult<Nbt> {
+    fixed_size_ints(tag, 3).flat_map(|ints| {
+        if ints.iter().all(|value| value.wrapping_abs() <= 16) {
+            DecodeResult::success(Nbt::IntArray(ints))
+        } else {
+            DecodeResult::error(format!("Position out of range, expected at most 16: Vec3i{{x={}, y={}, z={}}}", ints[0], ints[1], ints[2]))
+        }
+    })
+}
+
+pub fn offset_codec() -> Pair {
+    (Codec::Func(decode_offset), crate::world::item::component::codec::Stream::Nbt)
+}
+
+pub fn vec3i_codec() -> Pair {
+    (Codec::Func(decode_vec3i), crate::world::item::component::codec::Stream::Nbt)
 }
 
 pub fn fixed_size_longs(tag: &Nbt, size: usize) -> DecodeResult<Vec<i64>> {
@@ -212,4 +246,15 @@ pub fn string_rgb_color() -> Pair {
     let hex = Codec::Normalize(Box::new(Codec::string()), check_string_rgb_hex);
     let numeric = Codec::Either(Box::new(Codec::int()), Box::new(types::vector(3)));
     (Codec::Normalize(Box::new(Codec::Either(Box::new(hex), Box::new(numeric))), decode_string_rgb_color), types::transform(decode_string_rgb_color).1)
+}
+
+fn check_non_empty_holder_set(value: Nbt) -> Result<Nbt, String> {
+    match &value {
+        Nbt::List(items) if items.is_empty() => Err("List must have contents".into()),
+        _ => Ok(value),
+    }
+}
+
+pub fn non_empty_holder_set(list_codec: Pair) -> Pair {
+    (Codec::Normalize(Box::new(list_codec.0), check_non_empty_holder_set), list_codec.1)
 }

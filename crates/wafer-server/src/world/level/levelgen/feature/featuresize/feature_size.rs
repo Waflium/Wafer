@@ -1,5 +1,8 @@
 use serde_json::Value;
 
+use crate::world::item::component::codec::{Codec, Dispatch, Field, RangeError, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, def, opt};
+
 pub struct FeatureSize {
     pub min_clipped_height: Option<i32>,
     pub kind: FeatureSizeType,
@@ -8,6 +11,40 @@ pub struct FeatureSize {
 pub enum FeatureSizeType {
     TwoLayers { limit: i32, lower_size: i32, upper_size: i32 },
     ThreeLayers { limit: i32, upper_limit: i32, lower_size: i32, middle_size: i32, upper_size: i32 },
+}
+
+fn range(max: i32) -> Pair {
+    (Codec::Int(0, max, RangeError::Outside), Stream::Int)
+}
+
+fn min_clipped_height_codec() -> Field {
+    opt("min_clipped_height", range(80))
+}
+
+pub fn codec() -> Pair {
+    let cases = vec![
+        (
+            "minecraft:two_layers_feature_size",
+            vec![
+                def("limit", range(81), types::i(1)),
+                def("lower_size", range(16), types::i(0)),
+                def("upper_size", range(16), types::i(1)),
+                min_clipped_height_codec(),
+            ],
+        ),
+        (
+            "minecraft:three_layers_feature_size",
+            vec![
+                def("limit", range(80), types::i(1)),
+                def("upper_limit", range(80), types::i(1)),
+                def("lower_size", range(16), types::i(0)),
+                def("middle_size", range(16), types::i(1)),
+                def("upper_size", range(16), types::i(1)),
+                min_clipped_height_codec(),
+            ],
+        ),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/feature_size_type"), cases })), Stream::Dispatch)
 }
 
 impl FeatureSize {

@@ -183,3 +183,21 @@ impl WindOffsetter {
         pos.offset(dx, 0, dz)
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::{float_range, int_range};
+    use crate::util::valueproviders::{float_provider_codec_in, int_provider_codec_in};
+    use crate::world::item::component::types::{self, def, i, req};
+    vec![
+        req("replaceable_blocks", types::holder_set("minecraft:block")),
+        def("floor_to_ceiling_search_range", int_range(1, 512), i(30)),
+        req("column_radius", int_provider_codec_in::<1, 16>()),
+        req("height_scale", float_provider_codec_in::<{ 0.0f32.to_bits() }, { 20.0f32.to_bits() }>()),
+        req("max_column_radius_to_cave_height_ratio", float_range(0.1, 1.0)),
+        req("stalactite_bluntness", float_provider_codec_in::<{ 0.1f32.to_bits() }, { 10.0f32.to_bits() }>()),
+        req("stalagmite_bluntness", float_provider_codec_in::<{ 0.1f32.to_bits() }, { 10.0f32.to_bits() }>()),
+        req("wind_speed", float_provider_codec_in::<{ 0.0f32.to_bits() }, { 2.0f32.to_bits() }>()),
+        req("min_radius_for_wind", int_range(0, 100)),
+        req("min_bluntness_for_wind", float_range(0.0, 5.0)),
+    ]
+}

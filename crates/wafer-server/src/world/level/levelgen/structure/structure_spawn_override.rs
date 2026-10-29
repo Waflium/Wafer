@@ -1,7 +1,8 @@
 use serde_json::Value;
 
-use crate::util::random::WeightedList;
+use crate::util::random::{WeightedList, weighted_codec, weighted_list_codec};
 use crate::world::entity::mob_category::MobCategory;
+use crate::world::item::component::types::{Pair, enumeration, record, req};
 use crate::world::level::biome::mob_spawn_settings::{self, SpawnerData};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -14,6 +15,17 @@ pub enum BoundingBoxType {
 pub struct StructureSpawnOverride {
     pub bounding_box: BoundingBoxType,
     pub spawns: WeightedList<SpawnerData>,
+}
+
+impl BoundingBoxType {
+    pub const NAMES: &'static [&'static str] = &["piece", "full"];
+}
+
+pub fn codec() -> Pair {
+    record(vec![
+        req("bounding_box", enumeration(BoundingBoxType::NAMES)),
+        req("spawns", weighted_list_codec(weighted_codec(mob_spawn_settings::spawner_data_fields()))),
+    ])
 }
 
 impl StructureSpawnOverride {

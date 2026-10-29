@@ -148,3 +148,28 @@ fn is_allowed_tree_space(state: BlockState, blocks_above_origin: i32, allowed_ve
     let blocks_above_ground = blocks_above_origin + 1;
     blocks_above_ground <= allowed_vertical_water_height && state.fluid_state().is(&fluid_tags::WATER)
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::util::range_codecs::int_range;
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    use crate::world::level::levelgen::placement::placed_feature;
+    vec![
+        req("feature", placed_feature::holder_codec()),
+        req("required_vertical_space_for_tree", int_range(1, 64)),
+        req("level_test_distance", int_range(0, 16)),
+        req("max_level_deviation", int_range(0, 64)),
+        req("root_radius", int_range(1, 64)),
+        req("root_replaceable", types::holder_set("minecraft:block")),
+        req("root_state_provider", block_state_provider::holder_codec()),
+        req("root_placement_attempts", int_range(1, 256)),
+        req("root_column_max_height", int_range(1, 4096)),
+        req("hanging_root_radius", int_range(1, 64)),
+        req("hanging_roots_vertical_span", int_range(1, 16)),
+        req("hanging_root_state_provider", block_state_provider::holder_codec()),
+        req("hanging_root_placement_attempts", int_range(1, 256)),
+        req("allowed_vertical_water_for_tree", int_range(1, 64)),
+        req("allowed_tree_position", block_predicate::codec()),
+    ]
+}

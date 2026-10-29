@@ -61,3 +61,15 @@ fn can_spread_from(level: &mut impl WorldGenLevel, origin: BlockPos) -> bool {
         level.is_collision_shape_full_block_at(pos, state)
     })
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::int_range;
+    use crate::world::item::component::types::req;
+    vec![
+        req("charge_count", int_range(1, 32)),
+        req("amount_per_charge", int_range(1, 500)),
+        req("spread_attempts", int_range(1, 64)),
+        req("growth_rounds", int_range(0, 8)),
+        req("spread_rounds", int_range(0, 8)),
+    ]
+}

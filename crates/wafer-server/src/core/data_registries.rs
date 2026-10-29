@@ -163,11 +163,42 @@ static PACK_ELEMENTS: Mutex<Vec<PackElement>> = Mutex::new(Vec::new());
 thread_local! {
     static UNBOUND: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
     static UNBOUND_TAGS: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
+    static THROWN: RefCell<Option<JavaThrowable>> = const { RefCell::new(None) };
+    static REFERENCED: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
+}
+
+pub fn known_reference(registry: &str, key: &str) {
+    REFERENCED.with(|referenced| {
+        if !has_thrown()
+            && let Some(referenced) = referenced.borrow_mut().as_mut()
+        {
+            referenced.push((registry.to_string(), key.to_string()));
+        }
+    });
+}
+
+pub fn throw(exception: &str, message: String, frames: &[&'static str]) {
+    THROWN.with(|thrown| {
+        let mut thrown = thrown.borrow_mut();
+        if thrown.is_none() {
+            *thrown = Some(JavaThrowable::new(format!("{exception}: {message}"), frames.to_vec()));
+        }
+    });
+}
+
+pub fn take_thrown() -> Option<JavaThrowable> {
+    THROWN.with(|thrown| thrown.borrow_mut().take())
+}
+
+fn has_thrown() -> bool {
+    THROWN.with(|thrown| thrown.borrow().is_some())
 }
 
 pub fn unknown_reference(registry: &str, key: &str) -> String {
     UNBOUND.with(|unbound| {
-        if let Some(unbound) = unbound.borrow_mut().as_mut() {
+        if !has_thrown()
+            && let Some(unbound) = unbound.borrow_mut().as_mut()
+        {
             unbound.push((registry.to_string(), key.to_string()));
         }
     });
@@ -177,6 +208,7 @@ pub fn unknown_reference(registry: &str, key: &str) -> String {
 pub fn missing_tag(registry: &str, tag: &str) -> Option<String> {
     let loading = registry == "minecraft:dimension" || active().is_some_and(|registries| registries.contains_key(registry));
     let recorded = loading
+        && !has_thrown()
         && UNBOUND_TAGS.with(|unbound| match unbound.borrow_mut().as_mut() {
             Some(unbound) => {
                 unbound.push((registry.to_string(), tag.to_string()));
@@ -293,6 +325,11 @@ pub fn is_loading() -> bool {
     UNBOUND.with(|unbound| unbound.borrow().is_some())
 }
 
+fn with_failed_references(mut unbound: Vec<(String, String)>, referenced: Vec<(String, String)>, failed: &[(&str, &str)]) -> Vec<(String, String)> {
+    unbound.extend(referenced.into_iter().filter(|(registry, key)| failed.iter().any(|(failed_registry, failed_key)| failed_registry == registry && failed_key == key)));
+    unbound
+}
+
 pub fn group_unbound(unbound: Vec<(String, String)>) -> BTreeMap<String, Vec<String>> {
     let mut by_registry: BTreeMap<String, Vec<(String, ())>> = BTreeMap::new();
     for (registry, key) in unbound {
@@ -346,19 +383,31 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool) -> 
     let mut errors = LoadingErrors(Default::default());
     UNBOUND.with(|unbound| unbound.replace(worldgen_stage.then(Vec::new)));
     UNBOUND_TAGS.with(|unbound| unbound.replace(worldgen_stage.then(Vec::new)));
+    REFERENCED.with(|referenced| referenced.replace(worldgen_stage.then(Vec::new)));
+    let mut failed: Vec<(&str, &str)> = Vec::new();
     for element in pack_elements {
+        take_thrown();
         let decoded = match &element.json {
             Ok(json) => crate::nbt::with_json_source(|| decode(element.registry, json)).map_err(ElementFailure::Decode),
             Err(throwable) => Err(ElementFailure::Parse(throwable.clone())),
         };
+        let decoded = match take_thrown() {
+            Some(thrown) => Err(ElementFailure::Throw(thrown)),
+            None => decoded,
+        };
         let unbound = UNBOUND.with(|unbound| unbound.borrow().as_ref().and_then(|unbound| unbound.last().map(|(registry, key)| unknown_reference_message(registry, key))));
         match decoded {
             Err(ElementFailure::Decode(cause)) if unbound.as_ref() == Some(&cause) => {}
-            Err(failure) => errors.parse_error(element.registry, &element.id, &element.pack, element.resource_count, failure),
+            Err(failure) => {
+                failed.push((element.registry, element.id.as_str()));
+                errors.parse_error(element.registry, &element.id, &element.pack, element.resource_count, failure);
+            }
             Ok(()) => {}
         }
     }
-    let unbound_values = group_unbound(UNBOUND.with(|unbound| unbound.take()).unwrap_or_default());
+    let unbound_references = UNBOUND.with(|unbound| unbound.take()).unwrap_or_default();
+    let referenced = REFERENCED.with(|referenced| referenced.take()).unwrap_or_default();
+    let unbound_values = group_unbound(with_failed_references(unbound_references, referenced, &failed));
     let unbound_tags = group_unbound(UNBOUND_TAGS.with(|unbound| unbound.take()).unwrap_or_default());
     for (registry, keys) in &unbound_tags {
         if !unbound_values.contains_key(registry) {
@@ -384,16 +433,18 @@ fn decode(registry: &str, json: &Value) -> Result<(), String> {
     use crate::world::item::component::json_to_nbt;
     use crate::world::level::levelgen;
     match registry {
-        "minecraft:worldgen/noise" | "minecraft:worldgen/density_function" | "minecraft:worldgen/noise_settings" | "minecraft:worldgen/material_rule" | "minecraft:worldgen/material_condition" => {
-            levelgen::validate(registry, json)
-        }
-        "minecraft:worldgen/feature" => levelgen::feature::feature::Feature::parse(json).map(drop),
-        "minecraft:worldgen/placed_feature" => levelgen::placement::placed_feature::PlacedFeature::parse(json).map(drop),
-        "minecraft:worldgen/structure" => levelgen::structure::structure::Structure::parse(json).map(drop),
-        "minecraft:worldgen/structure_set" => levelgen::structure::structure_set::StructureSet::parse(json).map(drop),
-        "minecraft:worldgen/template_pool" => levelgen::structure::pools::structure_template_pool::StructureTemplatePool::parse(json).map(drop),
-        "minecraft:worldgen/processor_list" => levelgen::structure::templatesystem::structure_processor::StructureProcessorList::parse(json).map(drop),
-        "minecraft:worldgen/configured_carver" | "minecraft:worldgen/carver" => levelgen::carver::WorldCarver::parse(json).map(drop),
+        "minecraft:worldgen/material_rule" => decode_with(levelgen::material::rule::material_rule::direct_codec(), json),
+        "minecraft:worldgen/material_condition" => decode_with(levelgen::material::condition::material_condition::direct_codec(), json),
+        "minecraft:worldgen/noise" => decode_with(crate::world::level::levelgen::synth::parameters_codec(), json),
+        "minecraft:worldgen/density_function" => decode_with(levelgen::density_function::direct_codec(), json),
+        "minecraft:worldgen/noise_settings" => decode_with(levelgen::noise_settings_direct_codec(), json),
+        "minecraft:worldgen/feature" => decode_with(levelgen::feature::feature::direct_codec(), json),
+        "minecraft:worldgen/placed_feature" => decode_with(levelgen::placement::placed_feature::direct_codec(), json),
+        "minecraft:worldgen/structure" => decode_with(levelgen::structure::structure::direct_codec(), json),
+        "minecraft:worldgen/structure_set" => decode_with(levelgen::structure::structure_set::direct_codec(), json),
+        "minecraft:worldgen/template_pool" => decode_with(levelgen::structure::pools::structure_template_pool::direct_codec(), json),
+        "minecraft:worldgen/processor_list" => decode_with(levelgen::structure::templatesystem::structure_processor::list_direct_codec(), json),
+        "minecraft:worldgen/configured_carver" | "minecraft:worldgen/carver" => decode_with(levelgen::carver::direct_codec(), json),
         "minecraft:worldgen/world_preset" => levelgen::world_dimensions::decode_world_preset(&json_to_nbt(json)).into_result().map(drop),
         "minecraft:worldgen/flat_level_generator_preset" => levelgen::flat::decode_preset(&json_to_nbt(json)).into_result().map(drop),
         "minecraft:worldgen/multi_noise_biome_source_parameter_list" => crate::world::level::biome::decode_parameter_list(&json_to_nbt(json)),
@@ -496,13 +547,55 @@ fn encode_network(registry: &str, json: &Value) -> Nbt {
 }
 
 fn decode_with(codec: crate::world::item::component::types::Pair, json: &Value) -> Result<(), String> {
-    codec.0.decode(&crate::world::item::component::json_to_nbt(json)).map(drop)
+    let result = codec.0.decode(&crate::world::item::component::json_to_nbt(json)).map(drop);
+    match THROWN.with(|thrown| thrown.borrow().as_ref().map(|thrown| thrown.description.clone())) {
+        Some(description) => Err(description),
+        None => result,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::server::packs::repository::{PackRepository, VANILLA_ID};
     use crate::server::packs::resources::MultiPackResourceManager;
+
+    #[test]
+    fn references_to_entries_that_failed_to_decode_stay_unbound() {
+        let pair = |registry: &str, key: &str| (registry.to_string(), key.to_string());
+        let unbound = vec![pair("minecraft:worldgen/feature", "ta:missing")];
+        let referenced = vec![pair("minecraft:worldgen/feature", "ta:broken"), pair("minecraft:worldgen/feature", "ta:fine"), pair("minecraft:worldgen/noise", "ta:broken")];
+        let failed = [("minecraft:worldgen/feature", "ta:broken"), ("minecraft:worldgen/feature", "ta:unreferenced")];
+        let grouped = super::group_unbound(super::with_failed_references(unbound, referenced, &failed));
+        assert_eq!(grouped.get("minecraft:worldgen/feature").unwrap(), &vec!["ta:broken".to_string(), "ta:missing".to_string()]);
+        assert!(grouped.get("minecraft:worldgen/noise").is_none());
+    }
+
+    #[test]
+    fn vanilla_worldgen_entries_decode_with_their_codecs() {
+        let mut failures = Vec::new();
+        for registry in [
+            "minecraft:worldgen/noise",
+            "minecraft:worldgen/density_function",
+            "minecraft:worldgen/noise_settings",
+            "minecraft:worldgen/material_rule",
+            "minecraft:worldgen/material_condition",
+            "minecraft:worldgen/feature",
+            "minecraft:worldgen/placed_feature",
+            "minecraft:worldgen/structure",
+            "minecraft:worldgen/structure_set",
+            "minecraft:worldgen/template_pool",
+            "minecraft:worldgen/processor_list",
+            "minecraft:worldgen/carver",
+        ] {
+            for (name, source) in super::json_entries(registry) {
+                let json: serde_json::Value = serde_json::from_str(source).unwrap();
+                if let Err(error) = crate::nbt::with_json_source(|| super::decode(registry, &json)) {
+                    failures.push(format!("{registry} {name}: {error}"));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
+    }
 
     #[test]
     fn vanilla_entries_keep_their_builtin_ids_and_send_no_contents() {

@@ -139,3 +139,16 @@ impl LakeFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::world::item::component::types::req;
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![
+        req("fluid", block_state_provider::holder_codec()),
+        req("barrier", block_state_provider::holder_codec()),
+        req("can_place_feature", block_predicate::codec()),
+        req("can_replace_with_air_or_fluid", block_predicate::codec()),
+        req("can_replace_with_barrier", block_predicate::codec()),
+    ]
+}

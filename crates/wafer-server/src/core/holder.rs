@@ -47,6 +47,7 @@ impl<T: RegistryElement> Holder<T> {
         if loading_dynamic && crate::server::reloadable_server_registries::is_reloadable(T::REGISTRY) {
             DecodeResult::error(format!("Registry does not exist: {}", T::REGISTRY))
         } else if T::contains_key(&key) {
+            crate::core::data_registries::known_reference(T::REGISTRY, &key);
             DecodeResult::success(Holder::Reference(key, OnceLock::new()))
         } else if codec::is_nbt_ops() {
             DecodeResult::error(format!("Failed to get element {key} from registry {}", T::REGISTRY))

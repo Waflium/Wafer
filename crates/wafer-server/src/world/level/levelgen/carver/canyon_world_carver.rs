@@ -136,3 +136,29 @@ impl CanyonWorldCarver {
         factor as f64 * vertical_radius * random_between(random, 0.75, 1.0) as f64
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::valueproviders::float_provider_codec;
+    use crate::world::item::component::types::{self, req};
+    vec![
+        req("probability", types::float(types::codec_float_range(0.0, 1.0))),
+        req("y", crate::world::level::levelgen::heightproviders::codec()),
+        req("vertical_rotation", float_provider_codec()),
+        req("shape", shape_codec()),
+    ]
+}
+
+fn shape_codec() -> crate::world::item::component::types::Pair {
+    use crate::util::valueproviders::float_provider_codec;
+    use crate::world::item::component::codec::Codec;
+    use crate::world::item::component::types::{self, record, req};
+    record(vec![
+        req("distance_factor", float_provider_codec()),
+        req("thickness", float_provider_codec()),
+        req("width_smoothness", types::var_int(types::positive_int())),
+        req("horizontal_radius_factor", float_provider_codec()),
+        req("vertical_radius_default_factor", types::float(Codec::float())),
+        req("vertical_radius_center_factor", types::float(Codec::float())),
+        req("y_scale", float_provider_codec()),
+    ])
+}

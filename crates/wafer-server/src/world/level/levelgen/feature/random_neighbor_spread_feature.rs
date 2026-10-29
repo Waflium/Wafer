@@ -57,3 +57,18 @@ impl RandomNeighborSpreadFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![
+        req("block", block_state_provider::holder_codec()),
+        req("accepted_neighbors", types::holder_set("minecraft:block")),
+        req("can_replace", block_predicate::codec()),
+        req("attempts", int_provider_codec_in::<1, 3000>()),
+        req("xz_offset", int_provider_codec_in::<-16, 16>()),
+        req("y_offset", int_provider_codec_in::<-16, 16>()),
+    ]
+}

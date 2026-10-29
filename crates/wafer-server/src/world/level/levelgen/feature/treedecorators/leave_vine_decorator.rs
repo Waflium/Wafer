@@ -5,6 +5,11 @@ use wafer_data::properties::{BooleanProperty, EAST, NORTH, SOUTH, WEST};
 
 use super::tree_decorator::Context;
 
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::{self, req};
+    vec![req("probability", types::float(types::codec_float_range(0.0, 1.0)))]
+}
+
 pub fn place<R: RandomSource>(probability: f32, context: &mut Context<impl WorldGenLevel, R>) {
     for i in 0..context.leaves.len() {
         let pos = context.leaves[i];

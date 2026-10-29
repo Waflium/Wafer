@@ -1,5 +1,8 @@
 mod compiler;
 mod context;
+pub mod density_functions;
+pub mod generator;
+pub mod op;
 mod sampler;
 mod spline;
 
@@ -648,4 +651,22 @@ impl Parser<'_> {
         };
         Ok(Arc::new(function))
     }
+}
+
+fn direct_codec_lazy() -> &'static crate::world::item::component::types::Pair {
+    static CODEC: std::sync::LazyLock<crate::world::item::component::types::Pair> = std::sync::LazyLock::new(direct_codec);
+    &CODEC
+}
+
+pub fn direct_codec() -> crate::world::item::component::types::Pair {
+    density_functions::direct_codec()
+}
+
+pub fn holder_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, Stream};
+    (Codec::Holder("minecraft:worldgen/density_function", Some(Box::new(Codec::Lazy(direct_codec_lazy)))), Stream::Nbt)
+}
+
+pub fn reference_codec() -> crate::world::item::component::types::Pair {
+    crate::world::item::component::types::fixed("minecraft:worldgen/density_function")
 }

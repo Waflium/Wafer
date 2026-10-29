@@ -456,3 +456,16 @@ impl AquiferSamplers {
         }
     }
 }
+
+pub fn config_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::types::{record, req};
+    let function = super::density_function::holder_codec;
+    record(vec![
+        req("barrier", function()),
+        req("fluid_level_floodedness", function()),
+        req("fluid_level_spread", function()),
+        req("lava", function()),
+        req("exclusion", function()),
+        req("surface_level", function()),
+    ])
+}

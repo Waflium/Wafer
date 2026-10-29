@@ -186,3 +186,31 @@ fn inv_sqrt(x: f64) -> f64 {
 fn can_cluster_grow_at_state(state: BlockState) -> bool {
     state.is_air() || state.is_block(blocks::WATER) && state.fluid_state().amount == 8
 }
+
+pub fn chance_range() -> crate::world::item::component::types::Pair {
+    crate::util::range_codecs::double_range(0.0, 1.0)
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::int;
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::types::{self, b, compound, def, i, req, s};
+    use crate::world::level::levelgen::{geode_block_settings, geode_crack_settings, geode_layer_settings};
+    use wafer_protocol::nbt::Nbt;
+    let uniform = |min: i32, max: i32| compound(&[("type", s("minecraft:uniform")), ("min_inclusive", i(min)), ("max_inclusive", i(max))]);
+    vec![
+        req("blocks", geode_block_settings::codec()),
+        req("layers", geode_layer_settings::codec()),
+        req("crack", geode_crack_settings::codec()),
+        def("use_potential_placements_chance", chance_range(), Nbt::Double(0.35)),
+        def("use_alternate_layer0_chance", chance_range(), Nbt::Double(0.0)),
+        def("placements_require_layer0_alternate", types::bool(), b(true)),
+        def("outer_wall_distance", int_provider_codec_in::<1, 20>(), uniform(4, 5)),
+        def("distribution_points", int_provider_codec_in::<1, 20>(), uniform(3, 4)),
+        def("point_offset", int_provider_codec_in::<0, 10>(), uniform(1, 2)),
+        def("min_gen_offset", int(), i(-16)),
+        def("max_gen_offset", int(), i(16)),
+        def("noise_multiplier", chance_range(), Nbt::Double(0.05)),
+        req("invalid_blocks_threshold", int()),
+    ]
+}

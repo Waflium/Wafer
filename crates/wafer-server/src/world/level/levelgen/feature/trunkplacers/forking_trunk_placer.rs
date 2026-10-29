@@ -63,3 +63,7 @@ pub fn place_trunk<R: RandomSource>(
     }
     attachments
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    super::trunk_placer::trunk_placer_parts()
+}

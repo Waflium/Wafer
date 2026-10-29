@@ -1,11 +1,39 @@
+use std::sync::LazyLock;
+
 use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
 use wafer_data::{Block, BlockState, Tag, block_tags};
 use serde_json::Value;
 
 use crate::util::valueproviders::float;
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::types::{self, Pair, req};
+use crate::world::level::block::state::block_state;
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
 use crate::world::level::levelgen::parse_block_state;
+
+pub fn codec_lazy() -> &'static Pair {
+    static CODEC: LazyLock<Pair> = LazyLock::new(codec);
+    &CODEC
+}
+
+pub fn codec() -> Pair {
+    let lazy = || (Codec::Lazy(codec_lazy), Stream::Lazy);
+    let probability = || req("probability", types::float(Codec::float()));
+    let cases = vec![
+        ("minecraft:all_of", vec![req("rules", types::list(lazy()))]),
+        ("minecraft:always_true", vec![]),
+        ("minecraft:any_of", vec![req("rules", types::list(lazy()))]),
+        ("minecraft:block_match", vec![req("block", types::by_name("minecraft:block"))]),
+        ("minecraft:blockstate_match", vec![req("block_state", block_state::codec())]),
+        ("minecraft:not", vec![req("rule", lazy())]),
+        ("minecraft:tag_match", vec![req("tag", types::identifier())]),
+        ("minecraft:height_match", vec![req("min_inclusive", (Codec::int(), Stream::Int)), req("max_inclusive", (Codec::int(), Stream::Int))]),
+        ("minecraft:random_block_match", vec![req("block", types::by_name("minecraft:block")), probability()]),
+        ("minecraft:random_blockstate_match", vec![req("block_state", block_state::codec()), probability()]),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "predicate_type", selector: Selector::Registry("minecraft:rule_test"), cases })), Stream::Dispatch)
+}
 
 pub enum RuleTest {
     AlwaysTrue,

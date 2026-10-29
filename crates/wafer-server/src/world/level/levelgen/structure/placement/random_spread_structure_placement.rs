@@ -1,8 +1,11 @@
 use wafer_core::ChunkPos;
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
-use super::abstract_spreading_structure_placement::AbstractSpreadingStructurePlacement;
+use super::abstract_spreading_structure_placement::{AbstractSpreadingStructurePlacement, placement_fields};
 use super::random_spread_type::RandomSpreadType;
+use crate::world::item::component::codec::{self as component_codec, Codec, Field, RangeError};
+use crate::world::item::component::types::{def, enumeration, req, s, var_int};
 use crate::world::level::chunk::chunk_generator_structure_state::ChunkGeneratorStructureState;
 use crate::world::level::levelgen::worldgen_random::WorldgenRandom;
 
@@ -11,6 +14,19 @@ pub struct RandomSpreadStructurePlacement {
     pub spacing: i32,
     pub separation: i32,
     pub spread_type: RandomSpreadType,
+}
+
+pub fn validate(placement: Nbt) -> Result<Nbt, String> {
+    let int = |key: &str| placement.get(key).map_or(0, component_codec::as_i32);
+    if int("spacing") <= int("separation") { Err("Spacing has to be larger than separation".into()) } else { Ok(placement) }
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = placement_fields();
+    fields.push(req("spacing", var_int(Codec::Int(0, 4096, RangeError::Outside))));
+    fields.push(req("separation", var_int(Codec::Int(0, 4096, RangeError::Outside))));
+    fields.push(def("spread_type", enumeration(RandomSpreadType::NAMES), s("linear")));
+    fields
 }
 
 impl RandomSpreadStructurePlacement {

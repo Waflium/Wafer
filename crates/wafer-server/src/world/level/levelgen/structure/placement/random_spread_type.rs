@@ -7,6 +7,8 @@ pub enum RandomSpreadType {
 }
 
 impl RandomSpreadType {
+    pub const NAMES: &'static [&'static str] = &["linear", "triangular"];
+
     pub fn by_name(name: &str) -> Option<RandomSpreadType> {
         match name {
             "linear" => Some(RandomSpreadType::Linear),

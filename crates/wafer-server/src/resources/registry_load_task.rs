@@ -140,6 +140,7 @@ fn append_frames(throwable: &mut JavaThrowable, frames: &[&'static str]) {
 pub enum ElementFailure {
     Parse(JavaThrowable),
     Decode(String),
+    Throw(JavaThrowable),
 }
 
 pub fn failed_to_parse(element_id: &str, pack_id: &str, resource_count: usize, failure: ElementFailure) -> JavaThrowable {
@@ -148,6 +149,10 @@ pub fn failed_to_parse(element_id: &str, pack_id: &str, resource_count: usize, f
         ElementFailure::Parse(mut parse_error) => {
             append_frames(&mut parse_error, &with_frames(&[LOAD_FROM_RESOURCE_108], &task_frames));
             parse_error
+        }
+        ElementFailure::Throw(mut thrown) => {
+            append_frames(&mut thrown, &with_frames(&[LOAD_FROM_RESOURCE_109], &task_frames));
+            thrown
         }
         ElementFailure::Decode(message) => {
             JavaThrowable::new(format!("{ILLEGAL_STATE_EXCEPTION}: {message}"), with_frames(&[DATA_RESULT_GET_OR_THROW[0], DATA_RESULT_GET_OR_THROW[1], LOAD_FROM_RESOURCE_109], &task_frames))

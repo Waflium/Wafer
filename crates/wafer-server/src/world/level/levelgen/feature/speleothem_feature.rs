@@ -78,3 +78,18 @@ impl SpeleothemFeature {
         }
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::float_range;
+    use crate::world::item::component::types::{self, def, f, req};
+    use crate::world::level::block::state::block_state;
+    vec![
+        req("base_block", block_state::codec()),
+        req("pointed_block", block_state::codec()),
+        req("replaceable_blocks", types::holder_set("minecraft:block")),
+        def("chance_of_taller_generation", float_range(0.0, 1.0), f(0.2)),
+        def("chance_of_directional_spread", float_range(0.0, 1.0), f(0.7)),
+        def("chance_of_spread_radius2", float_range(0.0, 1.0), f(0.5)),
+        def("chance_of_spread_radius3", float_range(0.0, 1.0), f(0.5)),
+    ]
+}

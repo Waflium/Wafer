@@ -74,3 +74,7 @@ impl Rotation {
         Rotation::VALUES[random.next_int_bounded(4) as usize]
     }
 }
+
+pub fn codec() -> crate::world::item::component::types::Pair {
+    crate::world::item::component::types::enumeration(&["none", "clockwise_90", "180", "counterclockwise_90"])
+}

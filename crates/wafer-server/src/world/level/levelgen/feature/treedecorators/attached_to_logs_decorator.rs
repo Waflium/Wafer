@@ -6,12 +6,22 @@ use serde_json::Value;
 use super::tree_decorator::Context;
 use crate::util;
 use crate::util::valueproviders::float;
-use crate::world::level::levelgen::feature::stateproviders::block_state_provider::BlockStateProviderHolder;
+use crate::world::level::levelgen::feature::stateproviders::block_state_provider::{self, BlockStateProviderHolder};
 
 pub struct AttachedToLogsDecorator {
     probability: f32,
     block_provider: BlockStateProviderHolder,
     directions: Vec<Direction>,
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::core::direction;
+    use crate::world::item::component::types::{self, req};
+    vec![
+        req("probability", types::float(types::codec_float_range(0.0, 1.0))),
+        req("block_provider", block_state_provider::holder_codec()),
+        req("directions", types::non_empty_list(direction::codec())),
+    ]
 }
 
 pub fn parse_directions(json: &Value) -> Result<Vec<Direction>, String> {

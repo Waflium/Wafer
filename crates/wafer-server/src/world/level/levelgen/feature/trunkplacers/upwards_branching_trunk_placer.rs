@@ -2,9 +2,11 @@ use wafer_core::random::RandomSource;
 use wafer_core::{BlockPos, Direction};
 use serde_json::Value;
 
-use super::trunk_placer::TrunkPlacer;
+use super::trunk_placer::{TrunkPlacer, trunk_placer_parts};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::{IntProvider, float};
+use crate::util::valueproviders::{IntProvider, float, non_negative_int_provider_codec, positive_int_provider_codec};
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{self, req};
 use crate::world::level::levelgen::blockpredicates::block_predicate::BlockSet;
 use crate::world::level::levelgen::feature::foliageplacers::foliage_placer::FoliageAttachment;
 use crate::world::level::levelgen::feature::tree_feature::{self, TreeFeature, TreeSetter};
@@ -30,6 +32,15 @@ impl UpwardsBranchingTrunkPlacer {
     pub fn valid_tree_pos(&self, level: &mut impl WorldGenLevel, pos: BlockPos) -> bool {
         tree_feature::valid_tree_pos(level, pos) || self.can_grow_through.contains(level.get_block_state(pos).block())
     }
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = trunk_placer_parts();
+    fields.push(req("extra_branch_steps", positive_int_provider_codec()));
+    fields.push(req("place_branch_per_log_probability", types::float(types::codec_float_range(0.0, 1.0))));
+    fields.push(req("extra_branch_length", non_negative_int_provider_codec()));
+    fields.push(req("can_grow_through", types::holder_set("minecraft:block")));
+    fields
 }
 
 #[allow(clippy::too_many_arguments)]

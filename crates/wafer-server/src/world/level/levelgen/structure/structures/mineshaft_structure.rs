@@ -6,12 +6,20 @@ use serde_json::Value;
 
 use super::Piece;
 use super::mineshaft_pieces::MineShaftRoom;
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{enumeration, req};
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::structure::pieces::structure_pieces_builder::StructurePiecesBuilder;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub};
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, settings_fields};
 
 pub struct MineshaftStructure {
     r#type: Type,
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = settings_fields();
+    fields.push(req("mineshaft_type", enumeration(Type::NAMES)));
+    fields
 }
 
 impl MineshaftStructure {
@@ -58,6 +66,8 @@ pub enum Type {
 }
 
 impl Type {
+    pub const NAMES: &'static [&'static str] = &["normal", "mesa"];
+
     fn by_name(name: &str) -> Option<Type> {
         match name {
             "normal" => Some(Type::Normal),

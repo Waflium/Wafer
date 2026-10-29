@@ -4,7 +4,12 @@ use wafer_core::random::RandomSource;
 use super::Piece;
 use super::nether_fortress_pieces::{NetherBridgePieceKind, StartPiece};
 use crate::world::level::levelgen::structure::pieces::structure_pieces_builder::StructurePiecesBuilder;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub};
+use crate::world::item::component::codec::Field;
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, simple_codec};
+
+pub fn fields() -> Vec<Field> {
+    simple_codec()
+}
 
 pub fn find_generation_point(context: &mut GenerationContext) -> Option<GenerationStub<'static>> {
     Some(GenerationStub {

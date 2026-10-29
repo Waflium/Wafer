@@ -4,6 +4,10 @@ use super::foliage_placer::{FoliageAttachment, FoliagePlacer};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::levelgen::feature::tree_feature::{TreeFeature, TreeSetter};
 
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    super::blob_foliage_placer::blob_parts()
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn create_foliage<R: RandomSource>(
     placer: &FoliagePlacer,

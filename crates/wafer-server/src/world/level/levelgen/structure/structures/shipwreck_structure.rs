@@ -2,10 +2,18 @@ use wafer_core::BlockPos;
 
 use super::Piece;
 use super::shipwreck_pieces;
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{bool, req};
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::chunk::HeightmapType;
 use crate::world::level::levelgen::structure::pieces::structure_pieces_builder::StructurePiecesBuilder;
-use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, get_lowest_y_at, get_mean_first_occupied_height, on_top_of_chunk_center};
+use crate::world::level::levelgen::structure::structure::{GenerationContext, GenerationStub, get_lowest_y_at, get_mean_first_occupied_height, on_top_of_chunk_center, settings_fields};
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = settings_fields();
+    fields.push(req("is_beached", bool()));
+    fields
+}
 
 pub fn find_generation_point(context: &mut GenerationContext, is_beached: bool) -> Option<GenerationStub<'static>> {
     let heightmap_type = if is_beached { HeightmapType::WorldSurfaceWg } else { HeightmapType::OceanFloorWg };

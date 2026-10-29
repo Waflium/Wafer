@@ -13,6 +13,11 @@ use crate::world::level::block::entity::beehive_block_entity::Occupant;
 const WORLDGEN_FACING: Direction = Direction::South;
 const SPAWN_DIRECTIONS: [Direction; 3] = [Direction::East, Direction::South, Direction::West];
 
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::{self, req};
+    vec![req("probability", types::float(types::codec_float_range(0.0, 1.0)))]
+}
+
 pub fn place<R: RandomSource>(probability: f32, context: &mut Context<impl WorldGenLevel, R>) {
     if context.logs.is_empty() {
         return;

@@ -21,3 +21,7 @@ pub fn place_trunk<R: RandomSource>(
     }
     vec![FoliageAttachment::new(origin.offset(0, tree_height, 0), 0, false)]
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    super::trunk_placer::trunk_placer_parts()
+}

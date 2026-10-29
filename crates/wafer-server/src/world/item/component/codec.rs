@@ -60,6 +60,8 @@ pub enum Codec {
     Long(i64, i64, RangeError),
     Float(f32, f32, bool, RangeError),
     Double,
+    DoubleRange(f64, f64),
+    Func(fn(&Nbt) -> DecodeResult<Nbt>),
     String(usize, usize),
     Identifier,
     Element(&'static str),
@@ -141,6 +143,17 @@ fn number(tag: &Nbt) -> Result<&Nbt, String> {
     }
 }
 
+fn big_decimal_long_value(v: f64) -> i64 {
+    if v.abs() < 9.2e18 {
+        return v as i64;
+    }
+    let bits = v.to_bits();
+    let shift = ((bits >> 52) & 0x7ff) as i64 - 1075;
+    let mantissa = (bits & ((1u64 << 52) - 1)) | (1u64 << 52);
+    let magnitude = if shift >= 64 { 0 } else { (mantissa << shift) as i64 };
+    if v < 0.0 { magnitude.wrapping_neg() } else { magnitude }
+}
+
 pub fn as_i64(tag: &Nbt) -> i64 {
     match *tag {
         Nbt::Byte(v) => v as i64,
@@ -148,6 +161,7 @@ pub fn as_i64(tag: &Nbt) -> i64 {
         Nbt::Int(v) => v as i64,
         Nbt::Long(v) => v,
         Nbt::Float(v) => v as i64,
+        Nbt::Double(v) if nbt::is_json_source() => big_decimal_long_value(v),
         Nbt::Double(v) => v as i64,
         _ => 0,
     }
@@ -156,6 +170,7 @@ pub fn as_i64(tag: &Nbt) -> i64 {
 pub fn as_i32(tag: &Nbt) -> i32 {
     match *tag {
         Nbt::Float(v) => v as i32,
+        Nbt::Double(v) if nbt::is_json_source() => big_decimal_long_value(v) as i32,
         Nbt::Double(v) => v as i32,
         _ => as_i64(tag) as i32,
     }
@@ -249,7 +264,7 @@ impl Codec {
     }
 
     pub fn float() -> Codec {
-        Codec::Float(f32::MIN, f32::MAX, false, RangeError::Within)
+        Codec::Float(f32::NEG_INFINITY, f32::INFINITY, false, RangeError::Within)
     }
 
     pub fn string() -> Codec {
@@ -281,10 +296,20 @@ impl Codec {
             }
             Codec::Float(min, max, exclusive, err) => {
                 let v = as_f32(number(tag)?);
-                let ok = if *exclusive { v > *min && v <= *max } else { v >= *min && v <= *max };
+                let unbounded = *min == f32::NEG_INFINITY && *max == f32::INFINITY;
+                let above_min = if *exclusive { v.total_cmp(min).is_gt() } else { v.total_cmp(min).is_ge() };
+                let ok = unbounded || (above_min && v.total_cmp(max).is_le());
                 if ok { Ok(Nbt::Float(v)) } else { Err(range_error(*err, float_text(v), float_text(*min), float_text(*max))) }
             }
             Codec::Double => number(tag).map(|n| Nbt::Double(as_f64(n))),
+            Codec::DoubleRange(min, max) => {
+                let v = as_f64(number(tag)?);
+                if v.total_cmp(min).is_ge() && v.total_cmp(max).is_le() {
+                    Ok(Nbt::Double(v))
+                } else {
+                    Err(format!("Value {} outside of range [{}:{}]", nbt::java_double_to_string(v), nbt::java_double_to_string(*min), nbt::java_double_to_string(*max)))
+                }
+            }
             Codec::String(min, max) => {
                 let s = string(tag)?;
                 let len = s.encode_utf16().count();
@@ -305,10 +330,12 @@ impl Codec {
                     Err(format!("Unknown registry key in ResourceKey[minecraft:root / {reg}]: {id}"))
                 }
             }
+            Codec::Holder(_, Some(direct)) if matches!(tag, Nbt::String(_)) && identifier(tag).is_err() => direct.decode(tag),
             Codec::Holder(reg, direct) => match (tag, direct) {
-                (Nbt::String(_), _) => {
+                (Nbt::String(_), _) if direct.is_none() || identifier(tag).is_ok() => {
                     let id = identifier(tag)?;
                     if registry(reg).contains(&id.as_str()) {
+                        crate::core::data_registries::known_reference(reg, &id);
                         Ok(Nbt::String(id))
                     } else if !crate::util::codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(reg).is_some() {
                         crate::core::data_registries::unknown_reference(reg, &id);
@@ -329,7 +356,8 @@ impl Codec {
                 let s = string(tag)?;
                 if names.iter().any(|(n, _)| *n == s) { Ok(Nbt::String(s.into())) } else { Err(format!("Unknown element name:{s}")) }
             }
-            Codec::Lazy(_)
+            Codec::Func(_)
+            | Codec::Lazy(_)
             | Codec::Normalize(..)
             | Codec::List(..)
             | Codec::SizedList(..)
@@ -349,8 +377,10 @@ impl Codec {
 
     pub fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
         match self {
+            Codec::Func(f) => f(tag),
+            Codec::HolderSet(reg) => decode_holder_set_partial(reg, tag),
             Codec::Lazy(pair) => pair().0.decode_partial(tag),
-            Codec::Holder(_, Some(direct)) if !matches!(tag, Nbt::String(_)) => direct.decode_partial(tag),
+            Codec::Holder(_, Some(direct)) if !matches!(tag, Nbt::String(_)) || identifier(tag).is_err() => direct.decode_partial(tag),
             Codec::Normalize(inner, f) => inner.decode_partial(tag).flat_map(|value| DecodeResult::from(f(value))),
             Codec::List(elem, min, max) => {
                 let items = match list(tag) {
@@ -557,34 +587,51 @@ fn finish_record(value: Option<Nbt>, mut errors: Vec<String>) -> DecodeResult<Nb
     DecodeResult { value, error: (!errors.is_empty()).then(|| errors.join("; ")) }
 }
 
-fn decode_holder_set(reg: &'static str, tag: &Nbt) -> Result<Nbt, String> {
-    match tag {
-        Nbt::String(s) if s.starts_with('#') => {
-            let id = identifier(&Nbt::String(s[1..].into())).map_err(|e| format!("Failed to parse either. First: {e}; Second: Not a list"))?;
-            match tag_exists(reg, &id).then_some(()).map_or_else(|| crate::core::data_registries::missing_tag(reg, &id), |_| None) {
-                None => Ok(Nbt::String(format!("#{id}"))),
-                Some(error) => Err(error),
-            }
-        }
-        _ => {
-            let result = crate::util::codec::holder_set_partial(tag, reg, |item| {
-                let id = match identifier(item) {
-                    Ok(id) => id,
-                    Err(error) => return crate::util::codec::DecodeResult::error(error),
-                };
-                if registry(reg).contains(&id.as_str()) {
-                    crate::util::codec::DecodeResult::success(Nbt::String(id))
-                } else if !crate::util::codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(reg).is_some() {
-                    crate::core::data_registries::unknown_reference(reg, &id);
-                    crate::util::codec::DecodeResult::success(Nbt::String(id))
-                } else {
-                    crate::util::codec::DecodeResult::error(format!("Failed to get element {id} from registry {reg}"))
-                }
-            });
-            let mut out = result.into_result()?;
-            if out.len() == 1 { Ok(out.pop().unwrap()) } else { Ok(Nbt::List(out)) }
-        }
+fn holder_set_element(reg: &'static str, item: &Nbt) -> crate::util::codec::DecodeResult<Nbt> {
+    let id = match identifier(item) {
+        Ok(id) => id,
+        Err(error) => return crate::util::codec::DecodeResult::error(error),
+    };
+    if registry(reg).contains(&id.as_str()) {
+        crate::core::data_registries::known_reference(reg, &id);
+        crate::util::codec::DecodeResult::success(Nbt::String(id))
+    } else if !crate::util::codec::is_nbt_ops() && crate::core::data_registries::is_loading() && crate::core::data_registries::get(reg).is_some() {
+        crate::core::data_registries::unknown_reference(reg, &id);
+        crate::util::codec::DecodeResult::success(Nbt::String(id))
+    } else {
+        crate::util::codec::DecodeResult::error(format!("Failed to get element {id} from registry {reg}"))
     }
+}
+
+pub fn inline_holder_set(registry: &'static str, tag: &Nbt, holder: &Codec, always_use_list: bool) -> DecodeResult<Nbt> {
+    decode_holder_set_with(registry, tag, |element| holder.decode_partial(element), always_use_list)
+}
+
+fn decode_holder_set(reg: &'static str, tag: &Nbt) -> Result<Nbt, String> {
+    decode_holder_set_partial(reg, tag).into_result()
+}
+
+fn decode_holder_set_partial(reg: &'static str, tag: &Nbt) -> DecodeResult<Nbt> {
+    decode_holder_set_with(reg, tag, |item| holder_set_element(reg, item), false)
+}
+
+fn decode_holder_set_with(reg: &'static str, tag: &Nbt, element: impl Fn(&Nbt) -> DecodeResult<Nbt>, always_use_list: bool) -> DecodeResult<Nbt> {
+    if let Nbt::String(s) = tag
+        && let Some(location) = s.strip_prefix('#')
+    {
+        return match identifier(&Nbt::String(location.into())) {
+            Ok(id) => match tag_exists(reg, &id).then_some(()).map_or_else(|| crate::core::data_registries::missing_tag(reg, &id), |_| None) {
+                None => DecodeResult::success(Nbt::String(format!("#{id}"))),
+                Some(error) => DecodeResult::error(error),
+            },
+            Err(error) => {
+                let second = if always_use_list { crate::util::codec::list_partial(tag, &element) } else { crate::util::codec::compact_list_partial(tag, &element) };
+                DecodeResult::error(format!("Failed to parse either. First: {error}; Second: {}", second.error.unwrap_or_default()))
+            }
+        };
+    }
+    let result = crate::util::codec::holder_set_partial_with(tag, reg, &element, always_use_list);
+    result.map(|mut out| if out.len() == 1 { out.pop().unwrap() } else { Nbt::List(out) })
 }
 
 fn decode_uuid(tag: &Nbt) -> Result<Nbt, String> {

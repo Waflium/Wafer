@@ -206,3 +206,26 @@ fn random_between_biased(random: &mut impl RandomSource, min: f32, max_exclusive
     let value = normal(random, mean, deviation);
     if value < min { min } else { value.min(max_exclusive) }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::{float_range, int_range};
+    use crate::util::valueproviders::{float_provider_codec_in, int_provider_codec_in};
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::block::state::block_state;
+    vec![
+        req("base_block", block_state::codec()),
+        req("pointed_block", block_state::codec()),
+        req("replaceable_blocks", types::holder_set("minecraft:block")),
+        req("floor_to_ceiling_search_range", int_range(1, 512)),
+        req("height", int_provider_codec_in::<1, 128>()),
+        req("radius", int_provider_codec_in::<1, 128>()),
+        req("max_stalagmite_stalactite_height_diff", int_range(0, 64)),
+        req("height_deviation", int_range(1, 64)),
+        req("speleothem_block_layer_thickness", int_provider_codec_in::<0, 128>()),
+        req("density", float_provider_codec_in::<{ 0.0f32.to_bits() }, { 2.0f32.to_bits() }>()),
+        req("wetness", float_provider_codec_in::<{ 0.0f32.to_bits() }, { 2.0f32.to_bits() }>()),
+        req("chance_of_speleothem_at_max_distance_from_center", float_range(0.0, 1.0)),
+        req("max_distance_from_edge_affecting_chance_of_speleothem", int_range(1, 64)),
+        req("max_distance_from_center_affecting_height_bias", int_range(1, 64)),
+    ]
+}

@@ -8,6 +8,8 @@ pub enum TerrainAdjustment {
 }
 
 impl TerrainAdjustment {
+    pub const NAMES: &'static [&'static str] = &["none", "bury", "beard_thin", "beard_box", "encapsulate"];
+
     pub fn by_name(name: &str) -> Option<TerrainAdjustment> {
         Some(match name {
             "none" => TerrainAdjustment::None,

@@ -45,3 +45,7 @@ fn place_log_if_free_with_offset<R: RandomSource>(
 ) {
     placer.place_log_if_free(level, trunk_setter, random, tree_pos.offset(x, y, z), tree);
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    super::trunk_placer::trunk_placer_parts()
+}

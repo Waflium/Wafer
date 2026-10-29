@@ -3,14 +3,23 @@ use wafer_core::{Axis, BlockPos};
 use wafer_data::properties::AXIS;
 use serde_json::Value;
 
-use super::foliage_placer::{FoliageAttachment, try_place_leaf};
+use super::foliage_placer::{FoliageAttachment, foliage_placer_parts, try_place_leaf};
 use crate::world::level::world_gen_level::WorldGenLevel;
-use crate::util::valueproviders::{IntProvider, float};
+use crate::util::valueproviders::{IntProvider, float, int_provider_codec_in};
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{self, req};
 use crate::world::level::levelgen::feature::tree_feature::{TreeFeature, TreeSetter};
 
 pub struct PoplarFoliagePlacer {
     pub height: IntProvider,
     side_hole_chance: f32,
+}
+
+pub fn fields() -> Vec<Field> {
+    let mut fields = foliage_placer_parts();
+    fields.push(req("height", int_provider_codec_in::<5, 16>()));
+    fields.push(req("side_hole_chance", types::float(types::codec_float_range(0.0, 1.0))));
+    fields
 }
 
 impl PoplarFoliagePlacer {

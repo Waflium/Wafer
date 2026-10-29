@@ -54,8 +54,26 @@ pub fn validate(json: &Value) -> Result<(), String> {
         DecodeResult::from(EnvironmentAttributeMap::parse(&codec::to_json(attributes), true).and_then(|map| map.encode_network()))
     });
     record.required(&tag, "effects", |effects| biome_special_effects::codec().0.decode_partial(effects));
-    record.required(&tag, "carvers", |carvers| DecodeResult::from(Codec::HolderSet("minecraft:worldgen/carver").decode(carvers)));
-    record.required(&tag, "features", |features| Codec::List(Box::new(Codec::HolderSet("minecraft:worldgen/placed_feature")), 0, usize::MAX).decode_partial(features));
+    record.required(&tag, "carvers", |carvers| {
+        let result = crate::world::level::levelgen::carver::list_codec().0.decode_partial(carvers);
+        if let Some(error) = &result.error {
+            crate::error!("Carver: {error}");
+        }
+        match result.value {
+            Some(value) => DecodeResult::success(value),
+            None => result,
+        }
+    });
+    record.required(&tag, "features", |features| {
+        let result = crate::world::level::levelgen::placement::placed_feature::list_of_lists_codec().0.decode_partial(features);
+        if let Some(error) = &result.error {
+            crate::error!("Features: {error}");
+        }
+        match result.value {
+            Some(value) => DecodeResult::success(value),
+            None => result,
+        }
+    });
     record.build(|| Some(())).into_result()
 }
 

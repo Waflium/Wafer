@@ -119,3 +119,26 @@ impl MultifaceGrowthFeature {
 fn is_air_or_water(state: BlockState) -> bool {
     state.is_air() || state.is_block(blocks::WATER)
 }
+
+fn validate_block(block: wafer_protocol::nbt::Nbt) -> Result<wafer_protocol::nbt::Nbt, String> {
+    match block.as_str() {
+        Some("minecraft:glow_lichen" | "minecraft:sculk_vein") => Ok(block),
+        _ => Err("Growth block should be a multiface spreadeable block".into()),
+    }
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::{float_range, int_range};
+    use crate::world::item::component::codec::Codec;
+    use crate::world::item::component::types::{self, b, def, f, i, req};
+    let block = types::by_name("minecraft:block");
+    vec![
+        req("block", (Codec::Normalize(Box::new(block.0), validate_block), block.1)),
+        def("search_range", int_range(1, 64), i(10)),
+        def("can_place_on_floor", types::bool(), b(false)),
+        def("can_place_on_ceiling", types::bool(), b(false)),
+        def("can_place_on_wall", types::bool(), b(false)),
+        def("chance_of_spreading", float_range(0.0, 1.0), f(0.5)),
+        req("can_be_placed_on", types::holder_set("minecraft:block")),
+    ]
+}

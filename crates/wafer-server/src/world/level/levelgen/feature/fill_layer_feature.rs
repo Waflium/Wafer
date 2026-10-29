@@ -30,3 +30,11 @@ impl FillLayerFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::range_codecs::int_range;
+    use crate::world::item::component::types::req;
+    use crate::world::level::block::state::block_state;
+    use crate::world::level::dimension::dimension_type;
+    vec![req("height", int_range(0, dimension_type::Y_SIZE)), req("state", block_state::codec())]
+}

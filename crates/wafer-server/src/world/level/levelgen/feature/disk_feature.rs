@@ -67,3 +67,17 @@ impl DiskFeature {
         placed_any
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::util::range_codecs::int_range;
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::types::req;
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![
+        req("state_provider", block_state_provider::holder_codec()),
+        req("target", block_predicate::codec()),
+        req("radius", int_provider_codec_in::<0, 8>()),
+        req("half_height", int_range(0, 4)),
+    ]
+}

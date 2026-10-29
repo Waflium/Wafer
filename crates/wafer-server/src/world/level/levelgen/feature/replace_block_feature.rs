@@ -26,3 +26,9 @@ impl ReplaceBlockFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::block_replacement;
+    use crate::world::item::component::types::{self, req};
+    vec![req("targets", types::list(block_replacement::codec()))]
+}

@@ -45,3 +45,9 @@ impl SimpleBlockFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::world::item::component::types::{self, b, def, req};
+    vec![req("to_place", block_state_provider::holder_codec()), def("schedule_tick", types::bool(), b(false))]
+}

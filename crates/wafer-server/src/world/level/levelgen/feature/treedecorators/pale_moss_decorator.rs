@@ -16,6 +16,12 @@ pub struct PaleMossDecorator {
     ground_probability: f32,
 }
 
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::world::item::component::types::{self, req};
+    let probability = |name| req(name, types::float(types::codec_float_range(0.0, 1.0)));
+    vec![probability("leaves_probability"), probability("trunk_probability"), probability("ground_probability")]
+}
+
 impl PaleMossDecorator {
     pub fn parse(json: &Value) -> Result<PaleMossDecorator, String> {
         let field = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));

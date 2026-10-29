@@ -1,7 +1,12 @@
 use wafer_core::BlockPos;
 use wafer_core::random::RandomSource;
 use serde_json::Value;
+use wafer_protocol::nbt::Nbt;
 
+use crate::util::codec::DecodeResult;
+use crate::util::extra_codecs;
+use crate::world::item::component::codec::{self as component_codec, Codec, Field, RangeError};
+use crate::world::item::component::types::{Pair, def, enumeration, f, float, codec_float_range, nbt, non_negative_int, opt, record, req, s, var_int};
 use crate::world::level::chunk::chunk_generator_structure_state::ChunkGeneratorStructureState;
 use crate::world::level::levelgen::structure::structure_set::StructureSetHolder;
 use crate::world::level::levelgen::worldgen_random::WorldgenRandom;
@@ -17,6 +22,8 @@ pub enum FrequencyReductionMethod {
 }
 
 impl FrequencyReductionMethod {
+    pub const NAMES: &'static [&'static str] = &["default", "legacy_type_1", "legacy_type_2", "legacy_type_3"];
+
     fn by_name(name: &str) -> Option<FrequencyReductionMethod> {
         Some(match name {
             "default" => FrequencyReductionMethod::Default,
@@ -69,7 +76,28 @@ pub struct ExclusionZone {
     pub chunk_count: i32,
 }
 
+fn other_set(tag: &Nbt) -> DecodeResult<Nbt> {
+    if component_codec::identifier(tag).is_err() {
+        return DecodeResult::error("Inline definitions not allowed here");
+    }
+    DecodeResult::from(Codec::Holder("minecraft:worldgen/structure_set", None).decode(tag))
+}
+
+pub fn placement_fields() -> Vec<Field> {
+    vec![
+        def("locate_offset", extra_codecs::offset_codec(), Nbt::IntArray(vec![0, 0, 0])),
+        def("frequency_reduction_method", enumeration(FrequencyReductionMethod::NAMES), s("default")),
+        def("frequency", float(codec_float_range(0.0, 1.0)), f(1.0)),
+        req("salt", var_int(non_negative_int())),
+        opt("exclusion_zone", ExclusionZone::codec()),
+    ]
+}
+
 impl ExclusionZone {
+    pub fn codec() -> Pair {
+        record(vec![req("other_set", nbt(Codec::Func(other_set))), req("chunk_count", var_int(Codec::Int(1, 16, RangeError::Outside)))])
+    }
+
     fn is_placement_forbidden(&self, state: &ChunkGeneratorStructureState, source_x: i32, source_z: i32) -> bool {
         state.has_structure_chunk_in_range(self.other_set, source_x, source_z, self.chunk_count)
     }

@@ -4,12 +4,14 @@ use wafer_data::properties::DISTANCE;
 use wafer_data::{BlockState, block_tags, blocks};
 use serde_json::Value;
 
-use super::featuresize::feature_size::FeatureSize;
-use super::foliageplacers::foliage_placer::FoliagePlacer;
-use super::rootplacers::root_placer::RootPlacer;
-use super::stateproviders::block_state_provider::BlockStateProviderHolder;
+use super::featuresize::feature_size::{self, FeatureSize};
+use super::foliageplacers::foliage_placer::{self, FoliagePlacer};
+use super::rootplacers::root_placer::{self, RootPlacer};
+use super::stateproviders::block_state_provider::{self, BlockStateProviderHolder};
 use super::treedecorators::tree_decorator::{self, TreeDecorator};
-use super::trunkplacers::trunk_placer::TrunkPlacer;
+use super::trunkplacers::trunk_placer::{self, TrunkPlacer};
+use crate::world::item::component::codec::Field;
+use crate::world::item::component::types::{self, lenient, opt, req};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::java_collections::JavaObjectHashSet;
 use crate::world::level::block::leaves_block;
@@ -245,4 +247,121 @@ pub fn get_lowest_trunk_or_root_of_tree(roots: &[BlockPos], logs: &[BlockPos]) -
         block_positions.extend_from_slice(roots);
     }
     block_positions
+}
+
+pub fn fields() -> Vec<Field> {
+    vec![
+        req("trunk_provider", block_state_provider::holder_codec()),
+        req("trunk_placer", trunk_placer::codec()),
+        req("foliage_provider", block_state_provider::holder_codec()),
+        req("foliage_placer", foliage_placer::codec()),
+        opt("root_placer", root_placer::codec()),
+        req("minimum_size", feature_size::codec()),
+        req("decorators", tree_decorator::list_codec()),
+        lenient("ignore_vines", types::bool(), types::b(false)),
+        req("below_trunk_provider", block_state_provider::holder_codec()),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use crate::world::item::component::json_to_nbt;
+
+    fn tree() -> serde_json::Value {
+        json!({
+            "type": "minecraft:tree",
+            "trunk_provider": {"id": "minecraft:oak_log"},
+            "trunk_placer": {"type": "minecraft:straight_trunk_placer", "base_height": 5, "height_rand_a": 2, "height_rand_b": 0},
+            "foliage_provider": {"id": "minecraft:oak_leaves"},
+            "foliage_placer": {"type": "minecraft:blob_foliage_placer", "radius": 2, "offset": 0, "height": 3},
+            "minimum_size": {"type": "minecraft:two_layers_feature_size"},
+            "decorators": [],
+            "below_trunk_provider": {"type": "minecraft:simple", "state": {"id": "minecraft:dirt"}},
+        })
+    }
+
+    fn decode(json: serde_json::Value) -> Result<(), String> {
+        crate::nbt::with_json_source(|| super::super::feature::direct_codec().0.decode(&json_to_nbt(&json))).map(drop)
+    }
+
+    #[test]
+    fn a_tree_with_every_optional_part_decodes() {
+        let mut tree = tree();
+        tree["ignore_vines"] = json!(true);
+        tree["root_placer"] = json!({
+            "type": "minecraft:mangrove_root_placer",
+            "trunk_offset_y": {"type": "minecraft:uniform", "min_inclusive": 1, "max_inclusive": 3},
+            "root_provider": {"id": "minecraft:mangrove_roots"},
+            "above_root_placement": {"above_root_provider": {"id": "minecraft:moss_carpet"}, "above_root_placement_chance": 0.5},
+            "mangrove_root_placement": {
+                "can_grow_through": "minecraft:mud",
+                "muddy_roots_in": ["minecraft:mud"],
+                "muddy_roots_provider": {"id": "minecraft:muddy_mangrove_roots"},
+                "max_root_width": 8,
+                "max_root_length": 15,
+                "random_skew_chance": 0.2,
+            },
+        });
+        tree["decorators"] = json!([{"type": "minecraft:trunk_vine"}, {"type": "minecraft:beehive", "probability": 0.1}]);
+        tree["trunk_placer"] = json!({
+            "type": "minecraft:cherry_trunk_placer", "base_height": 7, "height_rand_a": 1, "height_rand_b": 0,
+            "branch_count": {"type": "minecraft:uniform", "min_inclusive": 1, "max_inclusive": 3},
+            "branch_horizontal_length": {"type": "minecraft:uniform", "min_inclusive": 2, "max_inclusive": 4},
+            "branch_start_offset_from_top": {"min_inclusive": -4, "max_inclusive": -3},
+            "branch_end_offset_from_top": 2,
+        });
+        assert_eq!(decode(tree), Ok(()));
+    }
+
+    #[test]
+    fn errors_of_every_part_are_joined_in_reverse_field_order() {
+        let mut tree = tree();
+        tree["trunk_placer"]["base_height"] = json!(40);
+        tree["foliage_placer"]["radius"] = json!(40);
+        tree["minimum_size"]["limit"] = json!(100);
+        tree["decorators"] = json!([{"type": "minecraft:cocoa", "probability": 5}]);
+        assert_eq!(
+            decode(tree).unwrap_err(),
+            "Value 5.0 outside of range [0.0:1.0]; Value 100 outside of range [0:81]; Value provider too high: 16 [40-40]; Value 40 outside of range [0:32]"
+        );
+    }
+
+    #[test]
+    fn unknown_part_types_name_their_registries() {
+        let mut tree = tree();
+        tree["trunk_placer"] = json!({"type": "bogus"});
+        tree["foliage_placer"] = json!({"type": "bogus"});
+        tree["minimum_size"] = json!({"type": "bogus"});
+        tree["decorators"] = json!([{"type": "bogus"}]);
+        assert_eq!(
+            decode(tree).unwrap_err(),
+            "Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/tree_decorator_type]: minecraft:bogus; Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/feature_size_type]: minecraft:bogus; Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/foliage_placer_type]: minecraft:bogus; Unknown registry key in ResourceKey[minecraft:root / minecraft:worldgen/trunk_placer_type]: minecraft:bogus"
+        );
+    }
+
+    #[test]
+    fn ignore_vines_falls_back_to_false_whatever_it_holds() {
+        let mut tree = tree();
+        tree["ignore_vines"] = json!("x");
+        assert_eq!(decode(tree), Ok(()));
+    }
+
+    #[test]
+    fn cherry_branch_starts_are_validated_in_three_steps() {
+        let start = |start: serde_json::Value| {
+            let mut tree = tree();
+            tree["trunk_placer"] = json!({
+                "type": "minecraft:cherry_trunk_placer", "base_height": 7, "height_rand_a": 1, "height_rand_b": 0,
+                "branch_count": 1, "branch_horizontal_length": 2, "branch_start_offset_from_top": start, "branch_end_offset_from_top": 2,
+            });
+            decode(tree).unwrap_err()
+        };
+        assert_eq!(start(json!({"min_inclusive": -1, "max_inclusive": -4})), "Max must be at least min, min_inclusive: -1, max_inclusive: -4");
+        assert_eq!(start(json!({"min_inclusive": -4, "max_inclusive": -4})), "Need at least 2 blocks variation for the branch starts to fit both branches");
+        assert_eq!(start(json!({"min_inclusive": -17, "max_inclusive": -15})), "Value provider too low: -16 [-17--15]");
+        assert_eq!(start(json!({"min_inclusive": -4, "max_inclusive": 1})), "Value provider too high: 0 [-4-1]");
+        assert_eq!(start(json!(-3)), "Not a JSON object: -3");
+    }
 }

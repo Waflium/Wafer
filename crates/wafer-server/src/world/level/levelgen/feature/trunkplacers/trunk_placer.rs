@@ -8,6 +8,8 @@ use super::cherry_trunk_placer::{self, CherryTrunkPlacer};
 use super::poplar_trunk_placer::{self, PoplarTrunkPlacer};
 use super::upwards_branching_trunk_placer::{self, UpwardsBranchingTrunkPlacer};
 use super::{dark_oak_trunk_placer, fancy_trunk_placer, forking_trunk_placer, giant_trunk_placer, mega_jungle_trunk_placer, straight_trunk_placer};
+use crate::world::item::component::codec::{Codec, Dispatch, Field, RangeError, Selector, Stream};
+use crate::world::item::component::types::{Pair, req};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::world::level::levelgen::feature::foliageplacers::foliage_placer::FoliageAttachment;
 use crate::world::level::levelgen::feature::tree_feature::{self, TreeFeature, TreeSetter};
@@ -123,4 +125,28 @@ pub fn place_below_trunk_block<R: RandomSource>(level: &mut impl WorldGenLevel, 
     if let Some(block_below_trunk) = tree.below_trunk_provider.value().get_optional_state(level, random, pos) {
         trunk_setter.accept(level, pos, block_below_trunk);
     }
+}
+
+pub fn trunk_placer_parts() -> Vec<Field> {
+    vec![
+        req("base_height", (Codec::Int(0, 32, RangeError::Outside), Stream::Int)),
+        req("height_rand_a", (Codec::Int(0, 24, RangeError::Outside), Stream::Int)),
+        req("height_rand_b", (Codec::Int(0, 24, RangeError::Outside), Stream::Int)),
+    ]
+}
+
+pub fn codec() -> Pair {
+    let cases = vec![
+        ("minecraft:straight_trunk_placer", straight_trunk_placer::fields()),
+        ("minecraft:forking_trunk_placer", forking_trunk_placer::fields()),
+        ("minecraft:giant_trunk_placer", giant_trunk_placer::fields()),
+        ("minecraft:mega_jungle_trunk_placer", mega_jungle_trunk_placer::fields()),
+        ("minecraft:dark_oak_trunk_placer", dark_oak_trunk_placer::fields()),
+        ("minecraft:fancy_trunk_placer", fancy_trunk_placer::fields()),
+        ("minecraft:bending_trunk_placer", bending_trunk_placer::fields()),
+        ("minecraft:upwards_branching_trunk_placer", upwards_branching_trunk_placer::fields()),
+        ("minecraft:cherry_trunk_placer", cherry_trunk_placer::fields()),
+        ("minecraft:poplar_trunk_placer", poplar_trunk_placer::fields()),
+    ];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/trunk_placer_type"), cases })), Stream::Dispatch)
 }

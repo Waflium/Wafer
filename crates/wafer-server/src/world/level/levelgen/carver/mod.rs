@@ -134,3 +134,27 @@ fn can_reach(chunk: ChunkPos, x: f64, z: f64, current_step: i32, total_steps: i3
 fn tunnel_random(seed: i64) -> LegacyRandomSource {
     LegacyRandomSource::new(seed)
 }
+
+pub fn direct_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+    let cases = vec![("minecraft:cave", cave_world_carver::fields()), ("minecraft:canyon", canyon_world_carver::fields())];
+    (Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/carver_type"), cases })), Stream::Nbt)
+}
+
+pub fn holder_codec() -> crate::world::item::component::types::Pair {
+    crate::world::item::component::types::holder("minecraft:worldgen/carver", direct_codec())
+}
+
+fn holder_codec_lazy() -> &'static crate::world::item::component::types::Pair {
+    static CODEC: LazyLock<crate::world::item::component::types::Pair> = LazyLock::new(holder_codec);
+    &CODEC
+}
+
+fn decode_list(tag: &wafer_protocol::nbt::Nbt) -> crate::util::codec::DecodeResult<wafer_protocol::nbt::Nbt> {
+    crate::world::item::component::codec::inline_holder_set("minecraft:worldgen/carver", tag, &holder_codec_lazy().0, false)
+}
+
+pub fn list_codec() -> crate::world::item::component::types::Pair {
+    use crate::world::item::component::codec::{Codec, Stream};
+    (Codec::Func(decode_list), Stream::Nbt)
+}

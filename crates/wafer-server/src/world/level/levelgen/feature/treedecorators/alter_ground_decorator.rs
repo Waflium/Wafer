@@ -4,11 +4,15 @@ use wafer_core::random::RandomSource;
 use serde_json::Value;
 
 use super::tree_decorator::Context;
-use crate::world::level::levelgen::feature::stateproviders::block_state_provider::BlockStateProviderHolder;
+use crate::world::level::levelgen::feature::stateproviders::block_state_provider::{self, BlockStateProviderHolder};
 use crate::world::level::levelgen::feature::tree_feature;
 
 pub struct AlterGroundDecorator {
     provider: BlockStateProviderHolder,
+}
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    vec![crate::world::item::component::types::req("provider", block_state_provider::holder_codec())]
 }
 
 impl AlterGroundDecorator {

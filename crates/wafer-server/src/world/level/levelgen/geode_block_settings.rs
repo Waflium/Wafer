@@ -32,3 +32,19 @@ impl GeodeBlockSettings {
         })
     }
 }
+
+pub fn codec() -> crate::world::item::component::types::Pair {
+    use super::feature::stateproviders::block_state_provider;
+    use crate::world::item::component::types::{self, record, req};
+    use crate::world::level::block::state::block_state;
+    record(vec![
+        req("filling_provider", block_state_provider::holder_codec()),
+        req("inner_layer_provider", block_state_provider::holder_codec()),
+        req("alternate_inner_layer_provider", block_state_provider::holder_codec()),
+        req("middle_layer_provider", block_state_provider::holder_codec()),
+        req("outer_layer_provider", block_state_provider::holder_codec()),
+        req("inner_placements", types::non_empty_list(block_state::codec())),
+        req("cannot_replace", types::holder_set("minecraft:block")),
+        req("invalid_blocks", types::holder_set("minecraft:block")),
+    ])
+}

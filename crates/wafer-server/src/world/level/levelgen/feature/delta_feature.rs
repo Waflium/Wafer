@@ -71,3 +71,15 @@ impl DeltaFeature {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::types::req;
+    use crate::world::level::block::state::block_state;
+    vec![
+        req("contents", block_state::codec()),
+        req("rim", block_state::codec()),
+        req("size", int_provider_codec_in::<0, 16>()),
+        req("rim_size", int_provider_codec_in::<0, 16>()),
+    ]
+}

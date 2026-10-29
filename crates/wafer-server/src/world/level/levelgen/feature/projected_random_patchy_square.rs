@@ -50,3 +50,17 @@ impl ProjectedRandomPatchySquare {
         true
     }
 }
+
+pub fn fields() -> Vec<crate::world::item::component::codec::Field> {
+    use super::stateproviders::block_state_provider;
+    use crate::util::valueproviders::int_provider_codec_in;
+    use crate::world::item::component::codec::Stream;
+    use crate::world::item::component::types::{self, req};
+    use crate::world::level::levelgen::blockpredicates::block_predicate;
+    vec![
+        req("block", block_state_provider::holder_codec()),
+        req("project_through", block_predicate::codec()),
+        req("size", int_provider_codec_in::<1, 16>()),
+        req("max_projection_height", (types::non_negative_int(), Stream::Int)),
+    ]
+}
