@@ -81,6 +81,13 @@ thread_local! {
     static VALIDATING: Cell<Option<*const ReloadableRegistries>> = const { Cell::new(None) };
     static PENDING_KEYS: RefCell<Option<HashMap<&'static str, HashSet<String>>>> = const { RefCell::new(None) };
     static UNBOUND: RefCell<Vec<(String, String)>> = const { RefCell::new(Vec::new()) };
+    static REFERENCED: RefCell<Vec<(String, String)>> = const { RefCell::new(Vec::new()) };
+}
+
+pub fn record_reference(registry: &str, key: &str) {
+    if is_loading() {
+        REFERENCED.with(|referenced| referenced.borrow_mut().push((registry.to_string(), key.to_string())));
+    }
 }
 
 pub fn is_loading() -> bool {
@@ -115,6 +122,14 @@ pub fn get() -> &'static ReloadableRegistries {
     match *BOUND.read().expect("reloadable registries") {
         Some(registries) => registries,
         None => VANILLA.0,
+    }
+}
+
+pub fn current() -> Option<&'static ReloadableRegistries> {
+    match *BOUND.read().expect("reloadable registries") {
+        Some(registries) => Some(registries),
+        None if crate::core::data_registries::any_blocked() => None,
+        None => Some(VANILLA.0),
     }
 }
 
@@ -252,6 +267,7 @@ fn decode_registry<T>(
 pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [RegistryTags], current: Option<&ReloadableRegistries>) -> Result<LoadResult, JavaThrowable> {
     let sources: Vec<Vec<Source>> = RELOADABLE_REGISTRIES.iter().map(|registry| list_sources(resource_manager, registry)).collect();
     UNBOUND.with(|unbound| unbound.borrow_mut().clear());
+    REFERENCED.with(|referenced| referenced.borrow_mut().clear());
     for (&registry, sources) in RELOADABLE_REGISTRIES.iter().zip(&sources) {
         let ids: HashSet<&str> = sources.iter().map(|source| source.id.as_str()).collect();
         crate::tags::load_tags_for_loaded_registry(resource_manager, registry, &|id| ids.contains(id), |id| record_unbound(registry, id));
@@ -297,6 +313,8 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
     if let Some(duplicate) = duplicate_values.duplicate {
         return Err(duplicate);
     }
+    let referenced = REFERENCED.with(|referenced| std::mem::take(&mut *referenced.borrow_mut()));
+    UNBOUND.with(|unbound| unbound.borrow_mut().extend(referenced.into_iter().filter(|reference| errors.0.contains_key(reference))));
     for (registry, keys) in crate::core::data_registries::group_unbound(UNBOUND.with(|unbound| std::mem::take(&mut *unbound.borrow_mut()))) {
         errors.0.insert(("minecraft:root".to_string(), registry.clone()), registry_load_task::unbound_values(&format!("ResourceKey[minecraft:root / {registry}]"), &keys));
     }

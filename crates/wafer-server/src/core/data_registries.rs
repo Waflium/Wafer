@@ -187,6 +187,10 @@ pub fn json_entries(registry: &str) -> &'static [(&'static str, &'static str)] {
 
 static ANY_BLOCKED: AtomicBool = AtomicBool::new(false);
 
+pub fn any_blocked() -> bool {
+    ANY_BLOCKED.load(Ordering::Acquire)
+}
+
 pub fn is_entry_blocked(registry: &str, id: i32) -> bool {
     ANY_BLOCKED.load(Ordering::Acquire) && get(registry).is_some_and(|data| data.is_blocked(id))
 }
@@ -347,6 +351,9 @@ thread_local! {
 }
 
 pub fn known_reference(registry: &str, key: &str) {
+    if !has_thrown() {
+        crate::server::reloadable_server_registries::record_reference(registry, key);
+    }
     REFERENCED.with(|referenced| {
         if !has_thrown()
             && let Some(referenced) = referenced.borrow_mut().as_mut()
@@ -437,13 +444,13 @@ fn unknown_reference_message(registry: &str, key: &str) -> String {
     format!("Unknown registry key in ResourceKey[minecraft:root / {registry}]: {key}")
 }
 
-fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, resource_count: usize, pack_elements: &mut Vec<PackElement>) -> Option<Value> {
+fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, resource_count: usize, pack_elements: &mut Vec<PackElement>, include_vanilla: bool) -> Option<Value> {
     let json = match resource.supplier.read() {
         Ok(bytes) => crate::util::gson::parse_strict_bytes_element_throwable(&bytes),
         Err(error) => Err(JavaThrowable::new(format!("java.io.IOException: {error}"), Vec::new())),
     };
     let parsed = json.as_ref().ok().cloned().map(crate::util::gson::to_value);
-    if resource.source_pack_id != VANILLA_ID {
+    if include_vanilla || resource.source_pack_id != VANILLA_ID {
         pack_elements.push(PackElement { registry, id: id.to_string(), pack: resource.source_pack_id.clone(), resource_count, json });
     }
     parsed
@@ -454,6 +461,7 @@ fn load_registry(
     name: &'static str,
     builtin: &[&'static str],
     pack_elements: &mut Vec<PackElement>,
+    include_vanilla: bool,
 ) -> (DataRegistry, &'static [&'static str]) {
     let directory = name.strip_prefix("minecraft:").unwrap_or(name);
     let resources = resource_manager.list_resources(directory, ".json");
@@ -468,7 +476,7 @@ fn load_registry(
         if let Some(index) = existing {
             blocked[index] = false;
         }
-        let Some(json) = read_element(name, &id, resource, resources.len(), pack_elements) else { continue };
+        let Some(json) = read_element(name, &id, resource, resources.len(), pack_elements, include_vanilla) else { continue };
         let index = match existing {
             Some(index) => index,
             None => {
@@ -501,8 +509,9 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     let mut pack_elements = Vec::new();
     let mut synced = Vec::new();
     let mut registries = HashMap::new();
+    let include_vanilla = resource_manager.hides_vanilla_resources();
     for builtin in wafer_data::builtin_synced_registries() {
-        let (registry, entries) = load_registry(resource_manager, builtin.name, builtin.entries, &mut pack_elements);
+        let (registry, entries) = load_registry(resource_manager, builtin.name, builtin.entries, &mut pack_elements, include_vanilla);
         synced.push(SyncedRegistry { name: builtin.name, entries });
         registries.insert(builtin.name, registry);
     }
@@ -510,7 +519,7 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     let mut unsynchronized = Vec::new();
     for &(name, table) in UNSYNCHRONIZED {
         let builtin: Vec<&'static str> = table.iter().map(|&(entry, _)| entry).collect();
-        let (registry, entries) = load_registry(resource_manager, name, &builtin, &mut pack_elements);
+        let (registry, entries) = load_registry(resource_manager, name, &builtin, &mut pack_elements, include_vanilla);
         unsynchronized.push((name, entries));
         registries.insert(name, registry);
     }
@@ -521,7 +530,7 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     for (location, resource) in &dimension_resources {
         let (namespace, path) = location.split_once(':').unwrap();
         let id = format!("{namespace}:{}", &path["dimension".len() + 1..path.len() - ".json".len()]);
-        if let Some(json) = read_element("minecraft:dimension", &id, resource, dimension_resources.len(), &mut pack_elements) {
+        if let Some(json) = read_element("minecraft:dimension", &id, resource, dimension_resources.len(), &mut pack_elements, include_vanilla) {
             stems.push((leak(id), json));
         }
     }

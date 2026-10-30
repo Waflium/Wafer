@@ -70,7 +70,7 @@ impl LootTable {
     }
 
     pub fn decode_holder(tag: &Nbt) -> DataResult<Holder<LootTable>> {
-        Holder::decode(tag, LootTable::decode)
+        Holder::decode_partial(tag, LootTable::decode_partial).into_result()
     }
 
     pub fn decode_list(tag: &Nbt) -> DataResult<Vec<Holder<LootTable>>> {
@@ -78,7 +78,7 @@ impl LootTable {
     }
 
     pub fn decode_holder_set(tag: &Nbt) -> DecodeResult<Vec<Holder<LootTable>>> {
-        codec::holder_set_partial(tag, LootTable::REGISTRY, |element| Holder::decode_partial(element, |direct| DecodeResult::from(LootTable::decode(direct))))
+        codec::holder_set_partial(tag, LootTable::REGISTRY, |element| Holder::decode_partial(element, LootTable::decode_partial))
     }
 
     pub fn get(key: &str) -> &'static LootTable {
@@ -382,6 +382,30 @@ mod tests {
         let counts: Vec<i32> = (0..200).map(|_| entity_drops(&mut level, id, Some(killer)).last().unwrap().count).collect();
         assert!(counts.iter().all(|c| (1..=4).contains(c)));
         assert!(counts.iter().any(|&c| c > 1));
+    }
+
+    fn decode_error(json: &str) -> String {
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        crate::nbt::with_json_source(|| LootTable::decode(&dc::json_to_nbt(&value))).err().expect("a decode error")
+    }
+
+    #[test]
+    fn an_inline_nested_table_reports_only_its_own_errors() {
+        let error = decode_error(
+            r#"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:loot_table","value":{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:diamond_helmet","modifier":[{"type":"minecraft:set_components","components":{"minecraft:trim":{"material":"ta:nope","pattern":"minecraft:flow"}}}]}]}]}}]}]}"#,
+        );
+        assert_eq!(error, r#"Failed to get element ta:nope from registry minecraft:trim_material missed input: {"minecraft:trim":{"material":"ta:nope","pattern":"minecraft:flow"}}"#);
+    }
+
+    #[test]
+    fn missing_registry_entries_in_a_modifier_list_are_all_reported() {
+        let error = decode_error(
+            r#"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:stone","modifier":[{"type":"minecraft:set_components","components":{"minecraft:trim":{"material":"ta:nope","pattern":"ta:nope2"}}},{"type":"minecraft:set_enchantments","enchantments":{"ta:nope3":1}}]}]}]}"#,
+        );
+        assert_eq!(
+            error,
+            r#"Failed to get element ta:nope3 from registry minecraft:enchantment missed input: {"ta:nope3":1}; Failed to get element ta:nope2 from registry minecraft:trim_pattern; Failed to get element ta:nope from registry minecraft:trim_material missed input: {"minecraft:trim":{"material":"ta:nope","pattern":"ta:nope2"}}"#
+        );
     }
 }
 

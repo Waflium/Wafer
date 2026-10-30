@@ -2,7 +2,7 @@ use crate::util::java_throwable::JavaThrowable;
 
 const ILLEGAL_STATE_EXCEPTION: &str = "java.lang.IllegalStateException";
 
-const FORK_JOIN_TAIL: [&str; 4] = [
+pub(crate) const FORK_JOIN_TAIL: [&str; 4] = [
     "java.base/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:511)",
     "java.base/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1450)",
     "java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:2019)",
@@ -14,7 +14,7 @@ const APPLY_OPERATION: &str = "net.minecraft.util.thread.ParallelMapTransform$Co
 const SINGLE_ELEMENT_LAMBDA: &str = "net.minecraft.util.thread.ParallelMapTransform.lambda$schedule$0(ParallelMapTransform.java:32)";
 const SINGLE_TASK_LAMBDA: &str = "net.minecraft.util.thread.ParallelMapTransform$SingleTaskSplitter.lambda$scheduleBatch$0(ParallelMapTransform.java:160)";
 const BATCHED_TASK_LAMBDA: &str = "net.minecraft.util.thread.ParallelMapTransform$BatchedTaskSplitter.lambda$createTask$0(ParallelMapTransform.java:213)";
-const ASYNC_SUPPLY: [&str; 2] = [
+pub(crate) const ASYNC_SUPPLY: [&str; 2] = [
     "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
     "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.exec(CompletableFuture.java:1781)",
 ];

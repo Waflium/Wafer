@@ -21,7 +21,7 @@ impl SetEnchantmentsFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetEnchantmentsFunction> {
         let mut record = codec::Record::default();
         let enchantments = record.with_default(tag, "enchantments", Vec::new(), |t| {
-            codec::unbounded_map(t, |k| Enchantment::decode_holder(&Nbt::String(k.to_string())), ContextIntProvider::decode_holder)
+            codec::base_map_partial(t, |k| Enchantment::decode_holder(&Nbt::String(k.to_string())), ContextIntProvider::decode_holder_partial)
         });
         let add = record.with_default(tag, "add", false, codec::bool_value);
         record.build(|| Some(SetEnchantmentsFunction { enchantments, add }))

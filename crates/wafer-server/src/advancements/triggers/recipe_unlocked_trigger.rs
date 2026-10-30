@@ -29,6 +29,7 @@ pub fn decode_recipe_list(tag: &Nbt) -> DecodeResult<Vec<Option<String>>> {
             return DecodeResult::from(Recipe::decode(element).map(|_| None));
         };
         if reloadable_server_registries::contains_key(reloadable_server_registries::RECIPE, &key) {
+            crate::core::data_registries::known_reference(reloadable_server_registries::RECIPE, &key);
             DecodeResult::success(Some(key))
         } else if reloadable_server_registries::is_loading() {
             reloadable_server_registries::record_unbound(reloadable_server_registries::RECIPE, &key);

@@ -532,7 +532,7 @@ pub fn to_json(tag: &Nbt) -> serde_json::Value {
 }
 
 pub fn unbounded_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {
-    map(tag)?.iter().map(|(k, v)| Ok((key(k)?, value(v)?))).collect()
+    base_map(tag, key, value)
 }
 
 pub fn strict_unbounded_map<K: std::fmt::Display, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {

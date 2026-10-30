@@ -137,6 +137,10 @@ impl MultiPackResourceManager {
         MultiPackResourceManager { namespaced_managers }
     }
 
+    pub fn hides_vanilla_resources(&self) -> bool {
+        self.namespaced_managers.get("minecraft").is_some_and(|manager| manager.fallbacks.iter().any(|entry| entry.filter.is_some()))
+    }
+
     pub fn list_resources(&self, directory: &str, extension: &str) -> BTreeMap<String, Resource> {
         let mut result = BTreeMap::new();
         for manager in self.namespaced_managers.values() {
@@ -168,5 +172,43 @@ fn pack_filter_section(pack: &PackResources) -> Option<ResourceFilterSection> {
             error!("Failed to get filter section from pack {}", pack.pack_id());
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MultiPackResourceManager;
+    use crate::server::packs::PackResources;
+
+    fn pack(name: &str, mcmeta: &str, files: &[&str]) -> PackResources {
+        let root = std::env::temp_dir().join(format!("wafer-pack-filter-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("pack.mcmeta"), mcmeta).unwrap();
+        for file in files {
+            let path = root.join("data").join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "{}").unwrap();
+        }
+        PackResources::Path { id: name.to_string(), root }
+    }
+
+    #[test]
+    fn a_filter_over_the_minecraft_namespace_hides_vanilla_resources() {
+        let vanilla = pack("vanilla", r#"{"pack":{}}"#, &["minecraft/wolf_variant/black.json"]);
+        let plain = pack("plain", r#"{"pack":{}}"#, &["minecraft/wolf_variant/ashen.json"]);
+        let manager = MultiPackResourceManager::new(vec![vanilla, plain]);
+        assert!(!manager.hides_vanilla_resources());
+
+        let vanilla = pack("vanilla_filtered", r#"{"pack":{}}"#, &["minecraft/wolf_variant/black.json"]);
+        let filtering = pack("filtering", r#"{"pack":{},"filter":{"block":[{"namespace":"minecraft","path":"wolf_variant/black.json"}]}}"#, &["other/x.json"]);
+        let manager = MultiPackResourceManager::new(vec![vanilla, filtering]);
+        assert!(manager.hides_vanilla_resources());
+        assert!(manager.list_resources("wolf_variant", ".json").is_empty());
+
+        let vanilla = pack("vanilla_other", r#"{"pack":{}}"#, &["minecraft/wolf_variant/black.json"]);
+        let other_namespace = pack("other_namespace", r#"{"pack":{},"filter":{"block":[{"namespace":"other"}]}}"#, &["other/x.json"]);
+        let manager = MultiPackResourceManager::new(vec![vanilla, other_namespace]);
+        assert!(!manager.hides_vanilla_resources());
     }
 }

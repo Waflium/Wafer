@@ -4,6 +4,7 @@ use super::packs::resources::MultiPackResourceManager;
 use super::reloadable_server_registries::{self, LoadResult, ReloadableRegistries};
 use super::server_advancement_manager::ServerAdvancementManager;
 use super::server_function_library::{ServerFunctionLibrary, worker_name};
+use crate::core::component::data_component_initializers;
 use crate::util::java_throwable::JavaThrowable;
 use crate::world::item::crafting::recipe_manager::RecipeManager;
 
@@ -22,7 +23,8 @@ impl ReloadableServerResources {
                 .name(worker_name())
                 .spawn_scoped(scope, || {
                     crate::util::catch_throwable(|| {
-                        let loaded = reloadable_server_registries::load(resource_manager, postponed_tags, Some(reloadable_server_registries::get()));
+                        let loaded = reloadable_server_registries::load(resource_manager, postponed_tags, reloadable_server_registries::current())
+                            .and_then(|result| wafer_data::with_pending_tags(postponed_tags, data_component_initializers::build).map(|()| result));
                         let advancements = match &loaded {
                             Ok(LoadResult::Loaded { registries, .. }) => Some(wafer_data::with_pending_tags(postponed_tags, || reloadable_server_registries::with_validating(registries, || ServerAdvancementManager::new(&registries.advancements)))),
                             Ok(LoadResult::Unchanged) => Some(wafer_data::with_pending_tags(postponed_tags, || ServerAdvancementManager::new(&reloadable_server_registries::get().advancements))),
