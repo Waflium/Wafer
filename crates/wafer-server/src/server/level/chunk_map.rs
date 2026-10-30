@@ -14,7 +14,6 @@ use super::ServerLevel;
 use super::server_entity::{Audience, ServerEntity, UpdateInterval};
 use crate::network::connection::encode;
 use crate::world::entity::{Entity, EntityId, LevelEntity};
-use crate::world::level::BlockGetter;
 use crate::world::level::light_layer::LightLayer;
 use crate::world::level::lighting::{section, write_light_data};
 
