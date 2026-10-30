@@ -828,17 +828,26 @@ pub struct JavaHashMap<V> {
     entries: indexmap::IndexMap<String, V>,
     capacity: usize,
     hash: fn(&str) -> i32,
+    inserted_at_head: bool,
 }
 
 impl<V> JavaHashMap<V> {
     pub fn new(hash: fn(&str) -> i32) -> JavaHashMap<V> {
-        JavaHashMap { entries: indexmap::IndexMap::new(), capacity: 16, hash }
+        JavaHashMap { entries: indexmap::IndexMap::new(), capacity: 16, hash, inserted_at_head: false }
     }
 
     pub fn copy_of(hash: fn(&str) -> i32, entries: impl IntoIterator<Item = (String, V)>) -> JavaHashMap<V> {
         let entries: indexmap::IndexMap<String, V> = entries.into_iter().collect();
         let capacity = if entries.is_empty() { 16 } else { ((entries.len() as f64 / 0.75f32 as f64).ceil() as usize).next_power_of_two() };
-        JavaHashMap { entries, capacity, hash }
+        JavaHashMap { entries, capacity, hash, inserted_at_head: false }
+    }
+
+    pub fn compute_if_absent(&mut self, key: &str, default: impl FnOnce() -> V) -> &mut V {
+        self.inserted_at_head = true;
+        if self.entries.len() > self.capacity * 3 / 4 {
+            self.capacity *= 2;
+        }
+        self.entries.entry(key.to_string()).or_insert_with(default)
     }
 
     pub fn len(&self) -> usize {
@@ -883,6 +892,9 @@ impl<V> JavaHashMap<V> {
             (h ^ ((h as u32) >> 16) as i32) as u32 as usize & (self.capacity - 1)
         };
         let mut order: Vec<(&str, &V)> = self.entries.iter().map(|(k, v)| (k.as_str(), v)).collect();
+        if self.inserted_at_head {
+            order.reverse();
+        }
         order.sort_by_key(|(k, _)| bucket(k));
         order.into_iter()
     }
@@ -915,6 +927,62 @@ mod tests {
             map.remove(&key(i));
         }
         assert_eq!(map.iter().map(|(_, &v)| v).collect::<Vec<_>>(), [7, 3, 13, 5, 9, 1, 11]);
+    }
+
+    #[test]
+    fn compute_if_absent_inserts_at_the_head_of_a_bucket() {
+        let names = [
+            "curse",
+            "double_trade_price",
+            "exclusive_set/armor",
+            "exclusive_set/boots",
+            "exclusive_set/bow",
+            "exclusive_set/crossbow",
+            "exclusive_set/damage",
+            "exclusive_set/mining",
+            "exclusive_set/riptide",
+            "in_enchanting_table",
+            "on_mob_spawn_equipment",
+            "on_random_loot",
+            "on_traded_equipment",
+            "prevents_bee_spawns_when_mining",
+            "prevents_decorated_pot_shattering",
+            "prevents_ice_melting",
+            "prevents_infested_spawns",
+            "smelts_loot",
+            "tooltip_order",
+            "tradeable",
+            "treasure",
+        ];
+        let mut map = JavaHashMap::new(identifier_hash);
+        for name in names {
+            map.compute_if_absent(&format!("minecraft:{name}"), || ());
+        }
+        let order: Vec<&str> = map.iter().map(|(key, _)| key.strip_prefix("minecraft:").unwrap()).collect();
+        let expected = [
+            "treasure",
+            "tooltip_order",
+            "prevents_decorated_pot_shattering",
+            "double_trade_price",
+            "tradeable",
+            "on_traded_equipment",
+            "on_random_loot",
+            "exclusive_set/bow",
+            "prevents_infested_spawns",
+            "prevents_bee_spawns_when_mining",
+            "exclusive_set/riptide",
+            "exclusive_set/damage",
+            "on_mob_spawn_equipment",
+            "smelts_loot",
+            "exclusive_set/crossbow",
+            "exclusive_set/armor",
+            "in_enchanting_table",
+            "exclusive_set/boots",
+            "prevents_ice_melting",
+            "exclusive_set/mining",
+            "curse",
+        ];
+        assert_eq!(order, expected);
     }
 
     #[test]
