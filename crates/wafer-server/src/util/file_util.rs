@@ -34,6 +34,10 @@ pub fn sanitize_name(base_name: &str) -> String {
     base_name.replace(['.', '/', '"'], "_")
 }
 
+fn substring(s: &str, end: usize) -> String {
+    wafer_core::java_string::from_utf16(&s.java_utf16().take(end).collect::<Vec<_>>())
+}
+
 pub fn find_available_name(base_dir: &Path, base_name: &str, suffix: &str) -> std::io::Result<String> {
     let mut base_name = sanitize_name(base_name);
     if !is_path_part_portable(&base_name) {
@@ -41,7 +45,7 @@ pub fn find_available_name(base_dir: &Path, base_name: &str, suffix: &str) -> st
     }
     let mut count = 0;
     if base_name.java_utf16().count() > MAX_FILE_NAME - suffix.java_utf16().count() {
-        base_name = base_name.chars().take(MAX_FILE_NAME - suffix.java_utf16().count()).collect();
+        base_name = substring(&base_name, MAX_FILE_NAME - suffix.java_utf16().count());
     }
     loop {
         let mut name_to_test = base_name.clone();
@@ -49,7 +53,7 @@ pub fn find_available_name(base_dir: &Path, base_name: &str, suffix: &str) -> st
             let count_suffix = format!(" ({count})");
             let length = MAX_FILE_NAME - count_suffix.len();
             if name_to_test.java_utf16().count() > length {
-                name_to_test = name_to_test.chars().take(length).collect();
+                name_to_test = substring(&name_to_test, length);
             }
             name_to_test.push_str(&count_suffix);
         }
@@ -70,5 +74,25 @@ pub fn create_directories_safe(dir: &Path) -> std::io::Result<()> {
     match dir.exists() {
         true => std::fs::create_dir_all(dir.canonicalize()?),
         false => std::fs::create_dir_all(dir),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_names_are_cut_in_utf16_units() {
+        let name = "\u{1F600}".repeat(200);
+        assert_eq!(substring(&name, 255).java_utf16().collect::<Vec<_>>(), name.java_utf16().take(255).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn copy_counters_are_never_stripped() {
+        let dir = std::env::temp_dir().join(format!("wafer-find-available-name-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(find_available_name(&dir, "<name>world (<count>3)", ".zip").unwrap(), "_name_world (_count_3).zip");
+        assert_eq!(find_available_name(&dir, "world (3)", ".zip").unwrap(), "world (3).zip");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
