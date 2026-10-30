@@ -612,7 +612,11 @@ pub fn dispatched_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, valu
     }
 }
 
-pub fn dispatched_map_partial<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, mut value: impl FnMut(&K, &Nbt) -> DataResult<V>) -> DecodeResult<Vec<(K, V)>> {
+pub fn dispatched_map_partial<K, V, R: Into<DecodeResult<V>>>(
+    tag: &Nbt,
+    key: impl Fn(&str) -> DataResult<K>,
+    mut value: impl FnMut(&K, &Nbt) -> R,
+) -> DecodeResult<Vec<(K, V)>> {
     let fields = match map(tag) {
         Ok(fields) => fields,
         Err(error) => return DecodeResult::error(error),
@@ -623,13 +627,16 @@ pub fn dispatched_map_partial<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<
     for i in map_entry_order(fields) {
         let (field_key, field_value) = &fields[i];
         match key(field_key) {
-            Ok(key) => match value(&key, field_value) {
-                Ok(value) => entries.push((key, value)),
-                Err(error) => {
+            Ok(key) => {
+                let DecodeResult { value, error } = value(&key, field_value).into();
+                if let Some(error) = error {
                     errors.push(error);
                     failed.push((field_key.clone(), field_value.clone()));
                 }
-            },
+                if let Some(value) = value {
+                    entries.push((key, value));
+                }
+            }
             Err(error) => {
                 errors.push(format!("{error}; {error}"));
                 failed.push((field_key.clone(), field_value.clone()));

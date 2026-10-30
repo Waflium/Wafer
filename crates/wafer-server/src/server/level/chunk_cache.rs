@@ -1505,9 +1505,9 @@ impl ChunkCache {
     }
 
     fn generate_biomes(&mut self, pos: ChunkPos) {
+        let blender = self.blender_for(pos);
         let ChunkGenerator::Noise(noise) = &self.generator else { return };
         let noise = noise.clone();
-        let blender = self.blender_for(pos);
         if self.is_upgrading(pos) {
             let dimension = self.dimension;
             if let Some(chunk) = self.holders.get_mut(pos.pack()).and_then(|holder| holder.loaded.as_deref_mut()) {

@@ -8,6 +8,7 @@ use super::custom;
 use super::types::{Pair, b, bool, def, identifier, lenient, lenient_opt, list, opt, record, req, string};
 use crate::nbt;
 use crate::network::chat::component_serialization::decode_data_source_or_none;
+use crate::util::codec::DecodeResult;
 use crate::util::hash_ops::{self, HashCode};
 
 pub fn text() -> Pair {
@@ -252,9 +253,21 @@ pub fn hash(value: &Nbt) -> HashCode {
     }
 }
 
+pub fn decode_partial(tag: &Nbt) -> DecodeResult<Nbt> {
+    let component = crate::network::chat::component_serialization::decode_partial(tag);
+    match component.error {
+        None => DecodeResult::from(decode(tag)),
+        Some(error) => DecodeResult { value: component.value.map(|component| component.to_nbt()), error: Some(error) },
+    }
+}
+
 impl Custom for TextCodec {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         decode(tag)
+    }
+
+    fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
+        decode_partial(tag)
     }
 
     fn hash(&self, value: &Nbt) -> HashCode {
@@ -421,5 +434,19 @@ mod tests {
         assert_eq!(decode(&parse("{text:\"a\",color:\"#ff0000\"}")), Ok(parse("{text:\"a\",color:\"#FF0000\"}")));
         assert!(decode(&parse("{text:\"a\",extra:[]}")).is_err());
         assert!(decode(&parse("{}")).is_err());
+    }
+
+    #[test]
+    fn an_invalid_color_keeps_the_rest_of_the_component() {
+        let result = decode_partial(&parse("{text:\"a\",extra:[{text:\"b\",color:\"reset\",bold:1b}]}"));
+        assert_eq!(result.error.as_deref(), Some("Invalid color name: reset"));
+        assert_eq!(result.value, Some(parse("{text:\"a\",extra:[{text:\"b\",bold:1b}]}")));
+    }
+
+    #[test]
+    fn a_component_with_an_invalid_color_stays_in_the_patch() {
+        let patch = crate::world::item::component::DataComponentPatch::from_nbt_partial(&parse("{\"minecraft:custom_name\":{text:\"a\",color:\"reset\"}}"));
+        assert!(patch.error.is_some());
+        assert_eq!(patch.value.expect("a partial patch").to_nbt(), parse("{\"minecraft:custom_name\":\"a\"}"));
     }
 }

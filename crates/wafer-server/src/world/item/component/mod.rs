@@ -267,7 +267,7 @@ impl DataComponentPatch {
                 }
             },
             |&(ty, removed), value| {
-                if removed { codec::map(value).map(|_| None) } else { ty.decode(value).map(Some) }
+                if removed { codec::map(value).map(|_| None).into() } else { ty.decode_partial(value).map(Some) }
             },
         );
         entries.map(|entries| {
