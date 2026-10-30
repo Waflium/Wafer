@@ -18,7 +18,7 @@ pub struct FilteredFunction {
 impl FilteredFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<FilteredFunction> {
         let mut record = codec::Record::default();
-        let filter = record.required(tag, "item_filter", ItemPredicate::decode);
+        let filter = record.required(tag, "item_filter", ItemPredicate::decode_partial);
         let on_pass = record.optional(tag, "on_pass", LootItemFunction::decode_holder);
         let on_fail = record.optional(tag, "on_fail", LootItemFunction::decode_holder);
         record.build(|| Some(FilteredFunction { filter: filter?, on_pass, on_fail }))

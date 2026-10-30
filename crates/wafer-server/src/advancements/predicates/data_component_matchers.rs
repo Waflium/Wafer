@@ -18,8 +18,8 @@ impl DataComponentMatchers {
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<DataComponentMatchers> {
         let mut record = codec::Record::default();
-        let exact = record.with_default(tag, "components", DataComponentExactPredicate::default(), DataComponentExactPredicate::decode);
-        let partial = record.with_default(tag, "predicates", Vec::new(), DataComponentPredicate::decode_map);
+        let exact = record.with_default(tag, "components", DataComponentExactPredicate::default(), DataComponentExactPredicate::decode_partial);
+        let partial = record.with_default(tag, "predicates", Vec::new(), DataComponentPredicate::decode_map_partial);
         record.build(|| Some(DataComponentMatchers { exact, partial }))
     }
 

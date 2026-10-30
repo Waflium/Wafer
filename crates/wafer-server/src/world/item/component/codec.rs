@@ -44,6 +44,7 @@ pub struct Field {
     pub stream: Stream,
     pub kind: Kind,
     pub group: usize,
+    pub recursive: bool,
 }
 
 pub enum Selector {
@@ -65,11 +66,17 @@ pub enum Wrap {
     FlatXmap,
     MapXmap,
     MapFlatXmap,
+    RecursiveMap,
+    FlatRestricted,
+    Recursive,
 }
 
 impl Wrap {
     pub fn frames(self) -> Vec<&'static str> {
         match self {
+            Wrap::Recursive => dfu_frames::recursive(),
+            Wrap::RecursiveMap => dfu_frames::recursive_map(),
+            Wrap::FlatRestricted => dfu_frames::flat_restricted(),
             Wrap::CodecView => dfu_frames::codec_view(),
             Wrap::Xmap => dfu_frames::codec_xmap(),
             Wrap::FlatXmap => dfu_frames::codec_flat_xmap(),
@@ -150,11 +157,17 @@ pub enum Stream {
 
 impl Field {
     pub fn new(name: &'static str, codec: Codec, stream: Stream, kind: Kind) -> Field {
-        Field { name, codec, stream, kind, group: 0 }
+        Field { name, codec, stream, kind, group: 0, recursive: false }
     }
 
     pub fn grouped(mut self, size: usize) -> Field {
         self.group = size;
+        self
+    }
+
+    pub fn recursively_grouped(mut self, size: usize) -> Field {
+        self.group = size;
+        self.recursive = true;
         self
     }
 
@@ -184,6 +197,9 @@ fn field_frames(fields: &[Field], index: usize) -> Vec<&'static str> {
             if (start..start + size).contains(&index) {
                 frames.extend(dfu_frames::record_group(size, index - start + 1));
                 frames.push(dfu_frames::record_map_codec());
+                if fields[start].recursive {
+                    frames.extend(dfu_frames::recursive_map());
+                }
                 frames.extend(dfu_frames::record_group(outer_size, start + 1));
             } else {
                 let outer_index = if index < start { index + 1 } else { index + 2 - size };
@@ -523,7 +539,6 @@ impl Codec {
             Codec::List(..) | Codec::SizedList(..) => dfu_frames::list(),
             Codec::Mapped(..) | Codec::Alt(..) => dfu_frames::mapped(),
             Codec::Framed(_, wrap) => wrap.frames(),
-            Codec::Lazy(_) => dfu_frames::recursive(),
             Codec::Record(_) | Codec::Dispatch(_) => dfu_frames::codec_view(),
             _ => Vec::new(),
         }
@@ -610,7 +625,8 @@ impl Codec {
                 for i in crate::util::codec::map_entry_order(fields) {
                     let (k, v) = &fields[i];
                     let key_result = key.decode_partial(&Nbt::String(k.clone()));
-                    let value_result = crate::core::data_registries::unwinding(dfu_frames::map_values, || value.decode_partial(v));
+                    let value_frames = if matches!(**key, Codec::Enum(_)) { dfu_frames::map_values } else { dfu_frames::unbounded_map_values };
+                    let value_result = crate::core::data_registries::unwinding(value_frames, || value.decode_partial(v));
                     let entry_error = match (&value_result.error, &key_result.error) {
                         (Some(value_error), Some(key_error)) => Some(format!("{value_error}; {key_error}")),
                         (Some(error), None) | (None, Some(error)) => Some(error.clone()),

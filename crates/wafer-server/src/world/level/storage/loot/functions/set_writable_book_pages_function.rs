@@ -15,8 +15,7 @@ impl SetWritableBookPagesFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetWritableBookPagesFunction> {
         let mut record = codec::Record::default();
         let pages = record.required(tag, "pages", |t| {
-            let content = dc::WRITABLE_BOOK_CONTENT.decode(&Nbt::Compound(vec![("pages".into(), t.clone())].into()))?;
-            Ok::<Vec<Nbt>, String>(content.get("pages").map_or(Vec::new(), |p| p.as_list().to_vec()))
+            dc::writable_book_pages().0.decode_partial(t).map(|pages| pages.as_list().to_vec())
         });
         let page_operation = record.nested(|| ListOperation::decode(tag, 100));
         record.build(|| Some(SetWritableBookPagesFunction { pages: pages?, page_operation: page_operation? }))

@@ -156,7 +156,8 @@ fn element_with_weight(tag: &Nbt) -> DecodeResult<Nbt> {
 
 pub fn direct_codec() -> Pair {
     let element_with_weight = Codec::Framed(Box::new(Codec::Func(element_with_weight)), Wrap::CodecView);
-    types::record(vec![req("fallback", holder_codec()), req("elements", types::list((element_with_weight, Stream::Nbt)))])
+    let fallback = holder_codec();
+    types::record(vec![req("fallback", (Codec::Framed(Box::new(fallback.0), Wrap::Recursive), fallback.1)), req("elements", types::list((element_with_weight, Stream::Nbt)))])
 }
 
 pub fn holder_codec() -> Pair {

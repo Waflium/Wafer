@@ -3,6 +3,7 @@ use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AdvancementRequirements {
@@ -13,7 +14,8 @@ impl AdvancementRequirements {
     pub const EMPTY: AdvancementRequirements = AdvancementRequirements { requirements: Vec::new() };
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<AdvancementRequirements> {
-        codec::list_partial(tag, |set| codec::list_partial(set, |name| DecodeResult::from(codec::string(name).map(str::to_string)))).map(|requirements| AdvancementRequirements { requirements })
+        codec::wrapped(Wrap::Xmap, || codec::list_partial(tag, |set| codec::list_partial(set, |name| DecodeResult::from(codec::string(name).map(str::to_string)))))
+            .map(|requirements| AdvancementRequirements { requirements })
     }
 
     pub fn write(&self, output: &mut Writer) {

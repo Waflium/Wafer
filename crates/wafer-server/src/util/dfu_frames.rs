@@ -105,6 +105,14 @@ pub fn holder_set_values() -> Vec<&'static str> {
     ]
 }
 
+pub fn flat_restricted() -> Vec<&'static str> {
+    vec!["net.minecraft.network.chat.ComponentSerialization$1.decode(ComponentSerialization.java:53)"]
+}
+
+pub fn recursive_map() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.MapCodec$RecursiveMapCodec.decode(MapCodec.java:113)"]
+}
+
 pub fn recursive() -> Vec<&'static str> {
     vec!["com.mojang.serialization.Codec$RecursiveCodec.decode(Codec.java:219)"]
 }

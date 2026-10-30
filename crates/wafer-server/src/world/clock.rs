@@ -5,7 +5,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DecodeResult, Record};
 use crate::world::attribute::environment_attribute::EnvironmentAttributeInfo;
-use crate::world::item::component::codec::{Codec, Stream};
+use crate::world::item::component::codec::{Codec, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair, def, opt, req};
 use crate::world::level::levelgen::density_function::resource_name;
 use crate::world::timeline::{AttributeTrack, AttributeTrackSampler};
@@ -159,7 +159,7 @@ fn validate_timeline(timeline: Nbt) -> Result<Nbt, String> {
 
 fn time_marker_info_codec() -> Codec {
     let full = Codec::Record(vec![req("ticks", (types::non_negative_int(), Stream::VarInt)), def("show_in_commands", types::bool(), types::b(false))]);
-    Codec::Either(Box::new(types::non_negative_int()), Box::new(full))
+    Codec::Framed(Box::new(Codec::Either(Box::new(types::non_negative_int()), Box::new(full))), Wrap::Xmap)
 }
 
 pub fn direct_codec() -> Pair {
@@ -170,7 +170,7 @@ pub fn direct_codec() -> Pair {
         def("tracks", crate::world::timeline::tracks_codec(), types::empty_map()),
         def("time_markers", (time_markers, Stream::Nbt), types::empty_map()),
     ]);
-    (Codec::Normalize(Box::new(record), validate_timeline), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(record), validate_timeline)), Wrap::FlatXmap), Stream::Nbt)
 }
 
 pub fn encode_network_timeline(json: &serde_json::Value) -> Result<Nbt, String> {

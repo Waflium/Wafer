@@ -394,9 +394,30 @@ pub fn json_ops_null_pointer(tag: &Nbt) -> Option<String> {
     Some(format!("java.lang.NullPointerException: {JSON_OPS_NULL_POINTER}"))
 }
 
+fn json_ops_number_format(tag: &Nbt) -> Option<String> {
+    let Nbt::LazilyParsedNumber(text) = tag else { return None };
+    if !nbt::is_json_source() {
+        return None;
+    }
+    let message = wafer_protocol::lazily_parsed_number::number_limits_error(text)?;
+    let mut frames: Vec<&'static str> = vec![
+        "com.google.gson.internal.NumberLimits.parseBigDecimal(NumberLimits.java:27)",
+        "com.google.gson.JsonPrimitive.getAsBigDecimal(JsonPrimitive.java:185)",
+        "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:68)",
+        JSON_OPS_LEAF[1],
+    ];
+    frames.extend_from_slice(&JSON_OPS_ARG_CONVERTER);
+    crate::core::data_registries::throw_unwinding("java.lang.NumberFormatException", message.clone(), &frames);
+    Some(format!("java.lang.NumberFormatException: {message}"))
+}
+
+pub fn json_ops_failure(tag: &Nbt) -> Option<String> {
+    json_ops_null_pointer(tag).or_else(|| json_ops_number_format(tag))
+}
+
 impl Custom for ArgCodec {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
-        if let Some(message) = json_ops_null_pointer(tag) {
+        if let Some(message) = json_ops_failure(tag) {
             return Err(message);
         }
         match tag {

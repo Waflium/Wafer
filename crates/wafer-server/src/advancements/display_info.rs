@@ -25,19 +25,21 @@ impl DisplayInfo {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<DisplayInfo> {
-        if let Err(error) = codec::map(tag) {
-            return DecodeResult::error(error);
-        }
-        let mut record = Record::default();
-        let icon = record.required(tag, "icon", ItemStackTemplate::decode_partial);
-        let title = record.required(tag, "title", |title| DecodeResult::from(component_serialization::decode(title)));
-        let description = record.required(tag, "description", |description| DecodeResult::from(component_serialization::decode(description)));
-        let background = record.optional(tag, "background", |background| DecodeResult::from(codec::identifier(background)));
-        let ty = record.with_default(tag, "frame", AdvancementType::Task, |frame| DecodeResult::from(AdvancementType::decode(frame)));
-        let show_toast = record.with_default(tag, "show_toast", true, |show| DecodeResult::from(codec::bool_value(show)));
-        let announce_to_chat = record.with_default(tag, "announce_to_chat", true, |announce| DecodeResult::from(codec::bool_value(announce)));
-        let hidden = record.with_default(tag, "hidden", false, |hidden| DecodeResult::from(codec::bool_value(hidden)));
-        record.build(|| Some(DisplayInfo { icon: icon?, title: title?, description: description?, background, ty, show_toast, announce_to_chat, hidden }))
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = Record::default();
+            let icon = record.required(tag, "icon", ItemStackTemplate::decode_partial);
+            let title = record.required(tag, "title", |title| DecodeResult::from(component_serialization::decode(title)));
+            let description = record.required(tag, "description", |description| DecodeResult::from(component_serialization::decode(description)));
+            let background = record.optional(tag, "background", |background| DecodeResult::from(codec::identifier(background)));
+            let ty = record.with_default(tag, "frame", AdvancementType::Task, |frame| DecodeResult::from(AdvancementType::decode(frame)));
+            let show_toast = record.with_default(tag, "show_toast", true, |show| DecodeResult::from(codec::bool_value(show)));
+            let announce_to_chat = record.with_default(tag, "announce_to_chat", true, |announce| DecodeResult::from(codec::bool_value(announce)));
+            let hidden = record.with_default(tag, "hidden", false, |hidden| DecodeResult::from(codec::bool_value(hidden)));
+            record.build(|| Some(DisplayInfo { icon: icon?, title: title?, description: description?, background, ty, show_toast, announce_to_chat, hidden }))
+        })
     }
 
     pub fn serialize_to_network(&self, output: &mut Writer) {

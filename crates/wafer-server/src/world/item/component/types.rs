@@ -239,7 +239,7 @@ pub fn filterable(value: fn() -> Pair) -> Pair {
 
 pub fn mob_effect_instance() -> Pair {
     let mut fields = vec![req("id", by_name("minecraft:mob_effect"))];
-    fields.extend(effect_details_fields());
+    fields.extend(effect_details_fields().into_iter().map(|field| field.recursively_grouped(6)));
     (Codec::Normalize(Box::new(Codec::Record(fields)), custom::show_icon_default), Stream::Record)
 }
 
@@ -256,7 +256,7 @@ fn effect_details_fields() -> Vec<Field> {
 
 fn effect_details() -> &'static Pair {
     static DETAILS: std::sync::LazyLock<Pair> =
-        std::sync::LazyLock::new(|| (Codec::Normalize(Box::new(Codec::Record(effect_details_fields())), custom::show_icon_default), Stream::Record));
+        std::sync::LazyLock::new(|| (Codec::Framed(Box::new(Codec::Normalize(Box::new(Codec::Record(effect_details_fields())), custom::show_icon_default)), Wrap::RecursiveMap), Stream::Record));
     &DETAILS
 }
 
@@ -282,7 +282,7 @@ fn resolvable_float() -> Pair {
 fn enchantments() -> Pair {
     let level = Codec::Int(1, 255, RangeError::Outside);
     (
-        Codec::Map(Box::new(Codec::Holder("minecraft:enchantment", None)), Box::new(level)),
+        Codec::Framed(Box::new(Codec::Map(Box::new(Codec::Holder("minecraft:enchantment", None)), Box::new(level))), Wrap::Xmap),
         Stream::Map(Box::new(Stream::Registry("minecraft:enchantment")), Box::new(Stream::VarInt), MAX),
     )
 }
@@ -315,6 +315,11 @@ fn kinetic_condition() -> Pair {
     ])
 }
 
+fn xmapped_list(element: Pair) -> Pair {
+    let elements = list(element);
+    (Codec::Framed(Box::new(elements.0), Wrap::Xmap), elements.1)
+}
+
 fn color_list() -> Pair {
     let colors = list((Codec::int(), Stream::Int));
     (Codec::Framed(Box::new(colors.0), Wrap::Xmap), colors.1)
@@ -343,7 +348,16 @@ fn writable_page() -> Pair {
 }
 
 fn written_page() -> Pair {
-    text::text()
+    let page = text::text();
+    (Codec::Framed(Box::new(page.0), Wrap::FlatRestricted), page.1)
+}
+
+pub fn written_book_pages() -> Pair {
+    list(filterable(written_page))
+}
+
+pub fn writable_book_pages() -> Pair {
+    list_max(filterable(writable_page), 100)
 }
 
 fn global_pos() -> Pair {
@@ -531,13 +545,13 @@ pub fn build() -> Vec<TypeInfo> {
             |potion| Ok(compound(&[("potion", potion.clone())])),
         )),
         p(float(non_negative_float())),
-        p(list(record(vec![req("id", by_name("minecraft:mob_effect")), lenient("duration", var_int(Codec::int()), i(160))]))),
-        p(record(vec![def("pages", list_max(filterable(writable_page), 100), empty_list())])),
+        p(xmapped_list(record(vec![req("id", by_name("minecraft:mob_effect")), lenient("duration", var_int(Codec::int()), i(160))]))),
+        p(record(vec![def("pages", writable_book_pages(), empty_list())])),
         p(record(vec![
             req("title", filterable(written_title)),
             req("author", string()),
             def("generation", var_int(Codec::Int(0, 3, RangeError::Within)), i(0)),
-            def("pages", list(filterable(written_page)), empty_list()),
+            def("pages", written_book_pages(), empty_list()),
             def("resolved", bool(), b(false)),
         ])),
         p(record(vec![

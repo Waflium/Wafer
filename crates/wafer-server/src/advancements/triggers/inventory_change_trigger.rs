@@ -56,12 +56,17 @@ impl Slots {
     const ANY: Slots = Slots { occupied: Ints::ANY, full: Ints::ANY, empty: Ints::ANY };
 
     fn decode(tag: &Nbt) -> DataResult<Slots> {
-        codec::map(tag)?;
-        Ok(Slots {
-            occupied: codec::decode_or(tag, "occupied", Ints::ANY, Ints::decode)?,
-            full: codec::decode_or(tag, "full", Ints::ANY, Ints::decode)?,
-            empty: codec::decode_or(tag, "empty", Ints::ANY, Ints::decode)?,
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let occupied = record.with_default(tag, "occupied", Ints::ANY, Ints::decode_partial);
+            let full = record.with_default(tag, "full", Ints::ANY, Ints::decode_partial);
+            let empty = record.with_default(tag, "empty", Ints::ANY, Ints::decode_partial);
+            record.build(|| Some(Slots { occupied, full, empty }))
         })
+        .into_result()
     }
 
     fn matches(&self, slots_full: i32, slots_empty: i32, slots_occupied: i32) -> bool {

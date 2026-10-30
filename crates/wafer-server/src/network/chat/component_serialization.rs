@@ -470,7 +470,7 @@ fn decode_arg(tag: &Nbt) -> DataResult<Arg> {
         Nbt::Double(v) => Arg::Double(*v),
         other => {
             let null_pointer = crate::core::data_registries::unwinding(dfu_frames::codec_xmap, || {
-                crate::core::data_registries::unwinding(dfu_frames::either_first, || crate::world::item::component::text::json_ops_null_pointer(other))
+                crate::core::data_registries::unwinding(dfu_frames::either_first, || crate::world::item::component::text::json_ops_failure(other))
             });
             if let Some(message) = null_pointer {
                 return DataResult::error(message);

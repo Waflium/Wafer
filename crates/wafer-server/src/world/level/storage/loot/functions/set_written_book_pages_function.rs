@@ -35,9 +35,7 @@ impl SetWrittenBookPagesFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetWrittenBookPagesFunction> {
         let mut record = codec::Record::default();
         let pages = record.required(tag, "pages", |t| {
-            let probe = Nbt::Compound(vec![("title".into(), Nbt::String(String::new())), ("author".into(), Nbt::String(String::new())), ("pages".into(), t.clone())].into());
-            let content = dc::WRITTEN_BOOK_CONTENT.decode(&probe)?;
-            Ok::<Vec<Nbt>, String>(content.get("pages").map_or(Vec::new(), |p| p.as_list().to_vec()))
+            dc::written_book_pages().0.decode_partial(t).map(|pages| pages.as_list().to_vec())
         });
         let page_operation = record.nested(|| ListOperation::decode(tag, i32::MAX));
         record.build(|| Some(SetWrittenBookPagesFunction { pages: pages?, page_operation: page_operation? }))

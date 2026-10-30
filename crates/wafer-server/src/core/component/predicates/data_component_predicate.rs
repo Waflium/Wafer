@@ -43,7 +43,7 @@ use super::villager_type_predicate::VillagerTypePredicate;
 use super::writable_book_predicate::WritableBookPredicate;
 use super::written_book_predicate::WrittenBookPredicate;
 use crate::core::component::data_component_getter::DataComponentGetter;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::{self as dc, DataComponentType};
 
 #[derive(Debug)]
@@ -68,10 +68,12 @@ pub enum DataComponentPredicate {
 
 impl DataComponentPredicate {
     pub fn decode_map(tag: &Nbt) -> DataResult<Vec<DataComponentPredicate>> {
-        Ok(codec::dispatched_map(tag, |key| DataComponentPredicate::codec(&crate::resources::identifier::read(key)?), |decode, value| decode(value))?
-            .into_iter()
-            .map(|(_, predicate)| predicate)
-            .collect())
+        DataComponentPredicate::decode_map_partial(tag).into_result()
+    }
+
+    pub fn decode_map_partial(tag: &Nbt) -> DecodeResult<Vec<DataComponentPredicate>> {
+        codec::dispatched_map_partial(tag, |key| DataComponentPredicate::codec(&crate::resources::identifier::read(key)?), |decode, value| decode(value))
+            .map(|entries| entries.into_iter().map(|(_, predicate)| predicate).collect())
     }
 
     fn codec(id: &str) -> DataResult<Box<dyn Fn(&Nbt) -> DataResult<DataComponentPredicate>>> {

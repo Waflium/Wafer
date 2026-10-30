@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use crate::world::item::component::codec::{Codec, Field, Stream};
+use crate::world::item::component::codec::{Codec, Field, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair, record, req};
 use crate::world::level::levelgen::density_function::holder_codec;
 
@@ -12,7 +12,7 @@ fn spline_codec_lazy() -> &'static Pair {
 fn point_codec() -> Pair {
     record(vec![
         req("location", types::float(Codec::float())),
-        req("value", (Codec::Lazy(spline_codec_lazy), Stream::Lazy)),
+        req("value", recursive_spline()),
         req("derivative", types::float(Codec::float())),
     ])
 }
@@ -26,5 +26,9 @@ fn spline_codec() -> Pair {
 }
 
 pub fn fields() -> Vec<Field> {
-    vec![req("spline", (Codec::Lazy(spline_codec_lazy), Stream::Lazy))]
+    vec![req("spline", recursive_spline())]
+}
+
+fn recursive_spline() -> Pair {
+    (Codec::Framed(Box::new(Codec::Lazy(spline_codec_lazy)), Wrap::Recursive), Stream::Lazy)
 }

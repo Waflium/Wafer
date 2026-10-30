@@ -15,6 +15,10 @@ pub struct ItemPredicate {
 
 impl ItemPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<ItemPredicate> {
+        ItemPredicate::decode_partial(tag).into_result()
+    }
+
+    pub fn decode_partial(tag: &Nbt) -> DecodeResult<ItemPredicate> {
         codec::as_codec(|| {
             if let Err(error) = codec::map(tag) {
                 return DecodeResult::error(error);
@@ -25,7 +29,6 @@ impl ItemPredicate {
             let components = record.nested(|| DataComponentMatchers::decode_partial(tag));
             record.build(|| Some(ItemPredicate { items, count, components: components? }))
         })
-        .into_result()
     }
 
     pub fn test(&self, item_stack: &ItemStack) -> bool {

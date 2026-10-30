@@ -30,10 +30,7 @@ impl TriggerInstance {
     pub fn decode(tag: &Nbt) -> DecodeResult<TriggerInstance> {
         simple_criterion_trigger::decode(tag, |fields| {
             let player = fields.player();
-            let count = fields.optional("count", |count| {
-                let count = codec::int(count)?;
-                if count <= 0 { Err(format!("Value must be positive: {count}")) } else { Ok(count) }
-            });
+            let count = fields.optional("count", codec::positive_int);
             Some(TriggerInstance { player, count })
         })
     }
