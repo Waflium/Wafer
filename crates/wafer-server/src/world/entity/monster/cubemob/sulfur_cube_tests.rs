@@ -50,6 +50,25 @@ fn swallowed_blocks_change_attributes_and_shearing_ejects_them() {
 }
 
 #[test]
+fn player_push_scales_with_the_client_reported_movement() {
+    let push = |known_movement: Vec3| {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        let mut cube = SulfurCube::create();
+        cube.set_size(2, true);
+        let cube = add(&mut level, cube, Vec3::new(0.5, -60.0, 1.5));
+        level.set_item_slot(cube, EquipmentSlot::Body, ItemStack::new(items::DIRT, 1));
+        level.player_mut(player).known_movement = known_movement;
+        level.entity_mut(player).last_known_speed = Vec3::new(0.0, 0.0, 0.5);
+        level.entity_mut(cube).delta_movement = Vec3::ZERO;
+        level.sulfur_cube_player_touch(cube, player);
+        level.entity(cube).delta_movement.z
+    };
+    assert_eq!(push(Vec3::ZERO), 0.0);
+    assert!((push(Vec3::new(0.0, 0.0, 0.25)) - 0.15).abs() < 1.0e-6);
+}
+
+#[test]
 fn adults_split_into_two_babies() {
     let mut level = testing::level();
     testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);

@@ -567,7 +567,7 @@ impl ServerLevel {
             let knockback = (1.0 - self.attribute_value(id, Attribute::KnockbackResistance)).max(0.0);
             let push_direction = cube_to_pusher.horizontal().normalize().scale(knockback);
             let push_speed_scale = if self.is_passenger(player) { VEHICLE_PUSH_SPEED_SCALE_MULTIPLIER } else { PLAYER_PUSH_SPEED_SCALE_MULTIPLIER };
-            let mut player_speed = self.entity(player).last_known_speed.length() * 2.0 * push_speed_scale as f64;
+            let mut player_speed = self.known_speed(player).length() * 2.0 * push_speed_scale as f64;
             player_speed = player_speed.clamp(0.0, MAX_PLAYER_PUSH_SPEED);
             let on_ground = self.entity(id).on_ground;
             let push_velocity = Vec3::new(push_direction.x, if on_ground { knockback * VERTICAL_PUSH_MULTIPLIER as f64 } else { 0.0 }, push_direction.z).scale(player_speed);
