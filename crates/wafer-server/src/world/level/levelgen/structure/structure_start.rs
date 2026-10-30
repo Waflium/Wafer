@@ -75,7 +75,7 @@ impl StructureStart {
             ("ChunkZ".into(), Nbt::Int(chunk_pos.z)),
             ("references".into(), Nbt::Int(self.get_references())),
             ("Children".into(), self.piece_container.lock().unwrap().save()),
-        ])
+        ].into())
     }
 
     pub fn is_valid(&self) -> bool {

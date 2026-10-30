@@ -165,13 +165,13 @@ impl AttributeTrack {
             .argument_track
             .keyframes
             .iter()
-            .map(|(ticks, value)| Ok(Nbt::Compound(vec![("ticks".into(), Nbt::Int(*ticks)), ("value".into(), self.modifier.encode_argument(attribute, value)?)])))
+            .map(|(ticks, value)| Ok(Nbt::Compound(vec![("ticks".into(), Nbt::Int(*ticks)), ("value".into(), self.modifier.encode_argument(attribute, value)?)].into())))
             .collect::<Result<_, String>>()?;
         fields.push(("keyframes".into(), Nbt::List(keyframes)));
         if self.argument_track.easing_type != EasingType::LINEAR {
             fields.push(("ease".into(), self.argument_track.easing_type.encode()));
         }
-        Ok(Nbt::Compound(fields))
+        Ok(Nbt::Compound(fields.into()))
     }
 
     pub fn bake_sampler(&self, attribute: &EnvironmentAttributeInfo, clock: usize, period_ticks: Option<i32>) -> AttributeTrackSampler {

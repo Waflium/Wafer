@@ -66,6 +66,6 @@ impl EquipmentTable {
             };
             fields.push(("slot_drop_chances".into(), chances));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 }

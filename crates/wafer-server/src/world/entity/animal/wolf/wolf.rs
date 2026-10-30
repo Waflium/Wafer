@@ -456,7 +456,7 @@ impl ServerLevel {
         self.hurt_and_break(id, EquipmentSlot::Body, mth::ceil(damage as f64));
         if crackiness::WOLF_ARMOR.by_damage(damage_before, max_damage) != crackiness::WOLF_ARMOR.by_item(&self.get_body_armor_item(id)) {
             self.entity_play_sound(id, sound_event("minecraft:item.wolf_armor.crack"), 1.0, 1.0);
-            let particle = ParticleOptions { particle_type: "minecraft:item", options: Nbt::Compound(vec![("item".into(), Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:armadillo_scute".into()))]))]) };
+            let particle = ParticleOptions { particle_type: "minecraft:item", options: Nbt::Compound(vec![("item".into(), Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:armadillo_scute".into()))].into()))].into()) };
             let e = self.entity(id);
             let (x, y, z) = (e.x(), e.y() + 1.0, e.z());
             self.send_particles("minecraft:item", |w| particle.write_options(w), x, y, z, 20, (0.2, 0.1, 0.2), 0.1);

@@ -16,7 +16,7 @@ fn add(level: &mut ServerLevel, pos: Vec3, nbt: wafer_protocol::nbt::Nbt) -> Ent
 fn ghastlings_are_small_and_use_their_brain() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 8.5), 180.0, 0.0);
-    let id = add(&mut level, Vec3::new(0.5, -55.0, 0.5), wafer_protocol::nbt::Nbt::Compound(vec![("Age".into(), wafer_protocol::nbt::Nbt::Int(-24000))]));
+    let id = add(&mut level, Vec3::new(0.5, -55.0, 0.5), wafer_protocol::nbt::Nbt::Compound(vec![("Age".into(), wafer_protocol::nbt::Nbt::Int(-24000))].into()));
     assert!(level.is_baby(id));
     assert_eq!(level.entity(id).dimensions.width, 4.0 * 0.2375);
     assert!(level.mob(id).unwrap().ai.goal_selector.get_available_goals().is_empty());
@@ -30,7 +30,7 @@ fn ghastlings_are_small_and_use_their_brain() {
 fn adult_happy_ghasts_float_and_save_their_still_timeout() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 8.5), 180.0, 0.0);
-    let id = add(&mut level, Vec3::new(0.5, -50.0, 0.5), wafer_protocol::nbt::Nbt::Compound(vec![("still_timeout".into(), wafer_protocol::nbt::Nbt::Int(5))]));
+    let id = add(&mut level, Vec3::new(0.5, -50.0, 0.5), wafer_protocol::nbt::Nbt::Compound(vec![("still_timeout".into(), wafer_protocol::nbt::Nbt::Int(5))].into()));
     assert!(!level.is_baby(id));
     assert_eq!(level.mob(id).unwrap().ai.goal_selector.get_available_goals().len(), 3);
     assert!(level.happy_ghast_is_on_still_timeout(id));
@@ -47,7 +47,7 @@ fn adult_happy_ghasts_float_and_save_their_still_timeout() {
 fn riding_a_happy_ghast_plays_the_goggle_sounds() {
     let mut level = testing::level();
     let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 8.5), 180.0, 0.0);
-    let id = add(&mut level, Vec3::new(0.5, -55.0, 0.5), wafer_protocol::nbt::Nbt::Compound(Vec::new()));
+    let id = add(&mut level, Vec3::new(0.5, -55.0, 0.5), wafer_protocol::nbt::Nbt::Compound(Vec::new().into()));
     assert!(level.start_riding(player, id, true, true));
     assert!(level.is_vehicle(id));
     level.tick();

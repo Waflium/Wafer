@@ -189,15 +189,15 @@ fn store_legacy_structure_data_to_chunks(
             let mut start_tag = get_compound_or_empty(&mut structure_tag, "Starts");
             let mut references_tag = get_compound_or_empty(&mut structure_tag, "References");
             for (id, value) in legacy_data.starts.iter() {
-                put(&mut start_tag, id, value.value.clone().unwrap_or(Nbt::Compound(Vec::new())));
+                put(&mut start_tag, id, value.value.clone().unwrap_or(Nbt::Compound(Vec::new().into())));
             }
             for (id, indexes) in legacy_data.indexes.iter() {
                 put(&mut references_tag, id, Nbt::LongArray(indexes.clone()));
             }
-            put(&mut structure_tag, "Starts", Nbt::Compound(start_tag));
-            put(&mut structure_tag, "References", Nbt::Compound(references_tag));
-            put(&mut level_tag, "Structures", Nbt::Compound(structure_tag));
-            put(tag_entries, "Level", Nbt::Compound(level_tag));
+            put(&mut structure_tag, "Starts", Nbt::Compound(start_tag.into()));
+            put(&mut structure_tag, "References", Nbt::Compound(references_tag.into()));
+            put(&mut level_tag, "Structures", Nbt::Compound(structure_tag.into()));
+            put(tag_entries, "Level", Nbt::Compound(level_tag.into()));
             tag
         });
         let finished = futures.push(future)?;

@@ -1,7 +1,7 @@
 use wafer_core::{BlockPos, Direction};
 use wafer_data::block_tags;
 use wafer_data::properties::LIT;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use crate::server::level::ServerLevel;
 use crate::server::level::events::{PARTICLES_INSTANT_POTION_SPLASH, PARTICLES_SPELL_POTION_SPLASH, SOUND_EXTINGUISH_FIRE, SOUND_INSTANT_POTION_SPLASH, SOUND_SPELL_POTION_SPLASH};
@@ -17,7 +17,7 @@ use crate::world::phys::hit_result::HitResult;
 
 pub const SPLASH_RANGE_SQ: f64 = 16.0;
 
-static EMPTY: Nbt = Nbt::Compound(Vec::new());
+static EMPTY: Nbt = Nbt::Compound(TagMap::new());
 
 impl ServerLevel {
     pub fn abstract_thrown_potion_on_hit_block(&mut self, id: EntityId, hit_result: BlockHitResult) {

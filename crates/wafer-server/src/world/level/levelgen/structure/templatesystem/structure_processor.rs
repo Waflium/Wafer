@@ -79,7 +79,7 @@ impl RuleBlockEntityModifier {
             "passthrough" => RuleBlockEntityModifier::Passthrough,
             "append_loot" => RuleBlockEntityModifier::AppendLoot(resource(json.get("loot_table").and_then(Value::as_str).ok_or("missing loot_table")?)),
             "append_static" => match json.get("data").and_then(crate::nbt::from_json) {
-                Some(Nbt::Compound(tag)) => RuleBlockEntityModifier::AppendStatic(tag),
+                Some(Nbt::Compound(tag)) => RuleBlockEntityModifier::AppendStatic(tag.into_vec()),
                 _ => return Err("append_static without compound data".into()),
             },
             other => return Err(format!("unknown block entity modifier {other}")),
@@ -89,11 +89,11 @@ impl RuleBlockEntityModifier {
     fn apply(&self, random: &mut impl RandomSource, existing_tag: Option<Nbt>) -> Option<Nbt> {
         match self {
             RuleBlockEntityModifier::Passthrough => existing_tag,
-            RuleBlockEntityModifier::Clear => Some(Nbt::Compound(Vec::new())),
+            RuleBlockEntityModifier::Clear => Some(Nbt::Compound(Vec::new().into())),
             RuleBlockEntityModifier::AppendLoot(loot_table) => {
                 let mut result = match existing_tag {
                     Some(Nbt::Compound(tag)) => tag,
-                    _ => Vec::new(),
+                    _ => Vec::new().into(),
                 };
                 put(&mut result, "LootTable", Nbt::String(loot_table.clone()));
                 put(&mut result, "LootTableSeed", Nbt::Long(random.next_long()));
@@ -104,7 +104,7 @@ impl RuleBlockEntityModifier {
                     crate::nbt::merge(&mut existing, tag);
                     Some(Nbt::Compound(existing))
                 }
-                _ => Some(Nbt::Compound(tag.clone())),
+                _ => Some(Nbt::Compound(tag.clone().into())),
             },
         }
     }
@@ -352,7 +352,7 @@ impl StructureProcessorListHolder {
     pub fn to_nbt(&self) -> Nbt {
         match self {
             StructureProcessorListHolder::Reference(index) => Nbt::String(crate::core::data_registries::json_entries("minecraft:worldgen/processor_list")[*index].0.to_owned()),
-            StructureProcessorListHolder::Direct(_) => Nbt::Compound(vec![("processors".to_owned(), Nbt::List(Vec::new()))]),
+            StructureProcessorListHolder::Direct(_) => Nbt::Compound(vec![("processors".to_owned(), Nbt::List(Vec::new()))].into()),
         }
     }
 

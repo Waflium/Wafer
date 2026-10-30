@@ -33,7 +33,7 @@ fn craft_copy(content: &Nbt) -> Nbt {
     let Nbt::Compound(fields) = content else { return content.clone() };
     let mut fields: Vec<(String, Nbt)> = fields.iter().filter(|(key, _)| key != "generation").cloned().collect();
     fields.push(("generation".into(), Nbt::Int(generation(content) + 1)));
-    Nbt::Compound(fields)
+    Nbt::Compound(fields.into())
 }
 
 impl BookCloningRecipe {

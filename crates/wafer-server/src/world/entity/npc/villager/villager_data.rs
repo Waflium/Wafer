@@ -38,7 +38,7 @@ impl VillagerData {
             ("level".into(), Nbt::Int(self.level)),
             ("profession".into(), Nbt::String(self.profession.name().into())),
             ("type".into(), Nbt::String(self.ty.name().into())),
-        ])
+        ].into())
     }
 
     pub fn decode(tag: &Nbt) -> Result<VillagerData, String> {

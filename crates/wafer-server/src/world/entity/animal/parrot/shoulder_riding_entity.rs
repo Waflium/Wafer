@@ -18,7 +18,7 @@ impl ServerLevel {
         let mut output = Vec::new();
         self.save_without_id(id, &mut output);
         output.push(("id".into(), Nbt::String(encode_id.into())));
-        if self.set_entity_on_shoulder_of(player, Nbt::Compound(output)) {
+        if self.set_entity_on_shoulder_of(player, Nbt::Compound(output.into())) {
             self.discard(id);
             return true;
         }

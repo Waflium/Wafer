@@ -34,7 +34,7 @@ impl SetFireworkExplosionFunction {
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {
         let mut explosion = match item_stack.get(dc::FIREWORK_EXPLOSION) {
             Some(Nbt::Compound(fields)) => fields.clone(),
-            _ => vec![("shape".into(), Nbt::String("small_ball".into()))],
+            _ => vec![("shape".into(), Nbt::String("small_ball".into()))].into(),
         };
         if let Some(shape) = self.shape {
             put(&mut explosion, "shape", Nbt::String(shape.to_string()));

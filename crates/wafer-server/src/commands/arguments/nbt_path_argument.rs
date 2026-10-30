@@ -342,7 +342,7 @@ impl Node {
     fn preferred_parent(&self) -> Nbt {
         match self {
             Node::AllElements | Node::IndexedElement(_) | Node::MatchElement(_) => Nbt::List(Vec::new()),
-            Node::CompoundChild(_) | Node::MatchObject(..) | Node::MatchRootObject(_) => Nbt::Compound(Vec::new()),
+            Node::CompoundChild(_) | Node::MatchObject(..) | Node::MatchRootObject(_) => Nbt::Compound(Vec::new().into()),
         }
     }
 
@@ -666,7 +666,7 @@ mod tests {
         for _ in 0..511 {
             deep = Nbt::List(vec![deep]);
         }
-        let mut root = Nbt::Compound(Vec::new());
+        let mut root = Nbt::Compound(Vec::new().into());
         let units: Vec<u16> = "a".java_utf16().collect();
         let path = parse(&mut StringReader::new(&units)).unwrap();
         assert_eq!(path.set(&mut root, &deep).map_err(|e| error(&e)), Err("ERR Resulting NBT too deeply nested".to_string()));

@@ -55,7 +55,7 @@ impl WeatherData {
             ("thunder_time".into(), Nbt::Int(self.thunder_time)),
             ("raining".into(), Nbt::Byte(self.raining as i8)),
             ("thundering".into(), Nbt::Byte(self.thundering as i8)),
-        ])
+        ].into())
     }
 
     pub fn decode(nbt: &Nbt) -> DecodeResult<WeatherData> {

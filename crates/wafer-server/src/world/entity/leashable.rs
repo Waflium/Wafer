@@ -48,7 +48,7 @@ impl LeashInfo {
 
     fn write(self) -> Nbt {
         match self {
-            LeashInfo::Uuid(uuid) => Nbt::Compound(vec![("UUID".into(), uuid_ints(uuid))]),
+            LeashInfo::Uuid(uuid) => Nbt::Compound(vec![("UUID".into(), uuid_ints(uuid))].into()),
             LeashInfo::Pos(pos) => Nbt::IntArray(vec![pos.x, pos.y, pos.z]),
         }
     }

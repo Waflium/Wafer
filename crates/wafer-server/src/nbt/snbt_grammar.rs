@@ -757,7 +757,7 @@ fn map_literal(s: &mut State) -> Option<Nbt> {
             None => fields.push((key, value)),
         }
     }
-    Some(Nbt::Compound(fields))
+    Some(Nbt::Compound(fields.into()))
 }
 
 fn array_prefix(s: &mut State) -> Option<ArrayPrefix> {

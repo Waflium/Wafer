@@ -32,7 +32,7 @@ fn saved_data_round_trips() {
     let decoded = MapItemSavedData::decode(&encoded).value.unwrap();
     assert_eq!(decoded.encode(), encoded);
     let mut index = MapIndex::default();
-    assert_eq!(index.encode(), wafer_protocol::nbt::Nbt::Compound(Vec::new()));
+    assert_eq!(index.encode(), wafer_protocol::nbt::Nbt::Compound(Vec::new().into()));
     assert_eq!(index.get_next_map_id().id(), 0);
     assert_eq!(MapIndex::decode(&index.encode()).value.unwrap().get_next_map_id().id(), 1);
 }

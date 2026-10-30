@@ -28,7 +28,7 @@ fn decode_game_rule_map(tag: Nbt) -> Result<Nbt, String> {
         };
         rules.push((id, value));
     }
-    Ok(Nbt::Compound(rules))
+    Ok(Nbt::Compound(rules.into()))
 }
 
 fn definition_lazy() -> &'static Pair {

@@ -7,7 +7,7 @@ fn entity(id: &str, x: f64) -> Nbt {
     Nbt::Compound(vec![
         ("id".into(), Nbt::String(id.into())),
         ("Pos".into(), Nbt::List(vec![Nbt::Double(x), Nbt::Double(-60.0), Nbt::Double(0.5)])),
-    ])
+    ].into())
 }
 
 #[test]

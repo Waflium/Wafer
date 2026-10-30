@@ -126,7 +126,7 @@ pub struct ExplosionParticleInfo {
 }
 
 fn simple_particle(particle_type: &'static str) -> ParticleOptions {
-    particle_types::parse(particle_type, &wafer_protocol::nbt::Nbt::Compound(Vec::new())).expect("a simple particle")
+    particle_types::parse(particle_type, &wafer_protocol::nbt::Nbt::Compound(Vec::new().into())).expect("a simple particle")
 }
 
 fn is_rail_or_below_rail(level: &mut ServerLevel, pos: BlockPos, state: wafer_data::BlockState) -> bool {

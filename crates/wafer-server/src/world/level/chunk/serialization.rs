@@ -94,7 +94,7 @@ fn ticks_to_nbt<T: Copy>(ticks: &[SavedTick<T>], name: impl Fn(T) -> &'static st
                     ("z".into(), Nbt::Int(t.pos.z)),
                     ("t".into(), Nbt::Int(t.delay)),
                     ("p".into(), Nbt::Int(t.priority.0)),
-                ])
+                ].into())
             })
             .collect(),
     )
@@ -124,7 +124,7 @@ pub fn state_to_nbt(state: BlockState) -> Nbt {
     }
     let mut properties: Vec<(String, Nbt)> = state.properties().map(|(name, value)| (name.to_string(), Nbt::String(value.into()))).collect();
     properties.reverse();
-    Nbt::Compound(vec![("id".into(), Nbt::String(block.name().into())), ("properties".into(), Nbt::Compound(properties))])
+    Nbt::Compound(vec![("id".into(), Nbt::String(block.name().into())), ("properties".into(), Nbt::Compound(properties.into()))].into())
 }
 
 pub fn state_from_nbt(nbt: &Nbt) -> Option<BlockState> {
@@ -200,7 +200,7 @@ fn container_to_nbt<T: super::palette::PaletteValue>(container: &PalettedContain
     if let Some(data) = packed.storage {
         fields.push(("data".to_string(), Nbt::LongArray(data)));
     }
-    Nbt::Compound(fields)
+    Nbt::Compound(fields.into())
 }
 
 fn container_from_nbt<T: super::palette::PaletteValue>(
@@ -246,7 +246,7 @@ fn heightmaps_to_nbt(chunk: &LevelChunk, status: ChunkStatus) -> Nbt {
             heightmaps.push((kind.serialization_key().to_string(), Nbt::LongArray(data.to_vec())));
         }
     }
-    Nbt::Compound(heightmaps)
+    Nbt::Compound(heightmaps.into())
 }
 
 pub fn write(chunk: &LevelChunk, status: ChunkStatus, block_entities: Vec<Nbt>, last_update: i64, block_ticks: &[SavedTick<Block>], fluid_ticks: &[SavedTick<Fluid>], light: &[SectionLight]) -> Nbt {
@@ -272,7 +272,7 @@ pub fn write(chunk: &LevelChunk, status: ChunkStatus, block_entities: Vec<Nbt>, 
             tag.push(("SkyLight".into(), layer_to_nbt(layer)));
         }
         tag.push(("Y".into(), Nbt::Byte(section_y as i8)));
-        sections.push(Nbt::Compound(tag));
+        sections.push(Nbt::Compound(tag.into()));
     }
     let mut tag = vec![
         ("DataVersion".into(), Nbt::Int(WORLD_VERSION)),
@@ -310,7 +310,7 @@ pub fn write(chunk: &LevelChunk, status: ChunkStatus, block_entities: Vec<Nbt>, 
         ("Heightmaps".into(), heightmaps_to_nbt(chunk, status)),
         ("structures".into(), pack_structure_data(chunk.pos, &chunk.structures)),
     ]);
-    Nbt::Compound(tag)
+    Nbt::Compound(tag.into())
 }
 
 fn pack_structure_data(pos: ChunkPos, structures: &ChunkStructures) -> Nbt {
@@ -321,7 +321,7 @@ fn pack_structure_data(pos: ChunkPos, structures: &ChunkStructures) -> Nbt {
         .filter(|(_, set)| !set.is_empty())
         .map(|(structure, set)| (structure.key().to_owned(), Nbt::LongArray(set.iter().collect())))
         .collect();
-    Nbt::Compound(vec![("References".into(), Nbt::Compound(references)), ("starts".into(), Nbt::Compound(starts))])
+    Nbt::Compound(vec![("References".into(), Nbt::Compound(references)), ("starts".into(), Nbt::Compound(starts))].into())
 }
 
 fn unpack_structure_data(pos: ChunkPos, tag: Option<&Nbt>, seed: i64) -> ChunkStructures {

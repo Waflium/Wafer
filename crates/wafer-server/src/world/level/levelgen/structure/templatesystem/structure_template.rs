@@ -235,7 +235,7 @@ impl StructureTemplate {
             } else {
                 BlockPos::containing(pos.x, pos.y, pos.z)
             };
-            let nbt = level.save_entity(id).unwrap_or(Nbt::Compound(Vec::new()));
+            let nbt = level.save_entity(id).unwrap_or(Nbt::Compound(Vec::new().into()));
             self.entity_info_list.push(StructureEntityInfo { pos, block_pos, nbt });
         }
     }
@@ -256,7 +256,7 @@ impl StructureTemplate {
                 if let Some(nbt) = &block_info.nbt {
                     block_tag.push(("nbt".to_string(), nbt.clone()));
                 }
-                block_list.push(Nbt::Compound(block_tag));
+                block_list.push(Nbt::Compound(block_tag.into()));
                 for p in 1..self.palettes.len() {
                     palettes[p].add_mapping(self.palettes[p].blocks()[i].state, id);
                 }
@@ -277,13 +277,13 @@ impl StructureTemplate {
                     ("pos".to_string(), Nbt::List(vec![Nbt::Double(entity_info.pos.x), Nbt::Double(entity_info.pos.y), Nbt::Double(entity_info.pos.z)])),
                     ("blockPos".to_string(), int_list_tag(entity_info.block_pos.x, entity_info.block_pos.y, entity_info.block_pos.z)),
                     ("nbt".to_string(), entity_info.nbt.clone()),
-                ])
+                ].into())
             })
             .collect();
         tag.push(("entities".to_string(), Nbt::List(entity_list)));
         tag.push(("size".to_string(), int_list_tag(self.size.x, self.size.y, self.size.z)));
         tag.push(("DataVersion".to_string(), Nbt::Int(wafer_data::WORLD_VERSION)));
-        Nbt::Compound(tag)
+        Nbt::Compound(tag.into())
     }
 
     pub fn get_size(&self) -> BlockPos {

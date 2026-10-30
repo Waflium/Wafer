@@ -30,7 +30,7 @@ impl GlobalPos {
         Nbt::Compound(vec![
             ("dimension".into(), Nbt::String(self.dimension.clone())),
             ("pos".into(), Nbt::IntArray(vec![self.pos.x, self.pos.y, self.pos.z])),
-        ])
+        ].into())
     }
 
     pub fn decode(nbt: &Nbt) -> Result<GlobalPos, String> {

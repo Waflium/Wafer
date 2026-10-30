@@ -144,7 +144,7 @@ impl ServerLevel {
             result = banner_stack.copy_with_count(1);
             let mut layers = result.get(dc::BANNER_PATTERNS).map_or_else(Vec::new, |layers| layers.as_list().to_vec());
             let pattern_name = codec::registry("minecraft:banner_pattern")[pattern as usize];
-            layers.push(Nbt::Compound(vec![("pattern".into(), Nbt::String(pattern_name.into())), ("color".into(), pattern_color)]));
+            layers.push(Nbt::Compound(vec![("pattern".into(), Nbt::String(pattern_name.into())), ("color".into(), pattern_color)].into()));
             result.set_value(dc::BANNER_PATTERNS, Nbt::List(layers));
         }
         if !ItemStack::matches(&result, &self.slot_get(menu, player, RESULT_SLOT)) {

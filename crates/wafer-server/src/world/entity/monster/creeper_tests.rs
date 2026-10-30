@@ -69,7 +69,7 @@ fn creepers_save_and_load_their_fields() {
         ("Fuse".into(), Nbt::Short(12)),
         ("ExplosionRadius".into(), Nbt::Byte(5)),
         ("ignited".into(), Nbt::Byte(1)),
-    ]));
+    ].into()));
     assert!(creeper::is_powered(&mob.entity));
     assert!(creeper::is_ignited(&mob.entity));
     let mut out = Vec::new();
@@ -78,7 +78,7 @@ fn creepers_save_and_load_their_fields() {
     assert_eq!(get(&out, "Fuse"), Some(Nbt::Short(12)));
     assert_eq!(get(&out, "ExplosionRadius"), Some(Nbt::Byte(5)));
     assert_eq!(get(&out, "ignited"), Some(Nbt::Byte(1)));
-    mob.load(&Nbt::Compound(vec![("ignited".into(), Nbt::Byte(0))]));
+    mob.load(&Nbt::Compound(vec![("ignited".into(), Nbt::Byte(0))].into()));
     assert!(creeper::is_ignited(&mob.entity));
     assert!(!creeper::is_powered(&mob.entity));
 }
@@ -231,7 +231,7 @@ fn charged_creepers_make_mobs_drop_their_heads() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 30.5), 0.0, 0.0);
     let mut mob = Creeper::create();
-    mob.load(&Nbt::Compound(vec![("powered".into(), Nbt::Byte(1)), ("ignited".into(), Nbt::Byte(1)), ("Fuse".into(), Nbt::Short(1))]));
+    mob.load(&Nbt::Compound(vec![("powered".into(), Nbt::Byte(1)), ("ignited".into(), Nbt::Byte(1)), ("Fuse".into(), Nbt::Short(1))].into()));
     mob.set_no_ai(true);
     add(&mut level, mob, Vec3::new(0.5, -60.0, 0.5));
     let mut zombie = Zombie::create();
@@ -283,7 +283,7 @@ fn creepers_with_effects_leave_a_lingering_cloud() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 30.5), 0.0, 0.0);
     let mut mob = Creeper::create();
-    mob.load(&Nbt::Compound(vec![("ignited".into(), Nbt::Byte(1)), ("Fuse".into(), Nbt::Short(1))]));
+    mob.load(&Nbt::Compound(vec![("ignited".into(), Nbt::Byte(1)), ("Fuse".into(), Nbt::Short(1))].into()));
     mob.set_no_ai(true);
     let id = add(&mut level, mob, Vec3::new(0.5, -60.0, 0.5));
     level.add_effect(id, MobEffectInstance::new(mob_effects::SPEED, 600, 0), None);

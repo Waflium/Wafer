@@ -132,9 +132,9 @@ mod tests {
     #[test]
     fn loading_reports_missing_rules_like_the_vanilla_constructor() {
         let rules = GameRules::default();
-        assert!(rules.load(&Nbt::Compound(vec![("minecraft:keep_inventory".into(), Nbt::Byte(1))])));
+        assert!(rules.load(&Nbt::Compound(vec![("minecraft:keep_inventory".into(), Nbt::Byte(1))].into())));
         assert!(rules.get_bool(wafer_data::game_rule::KEEP_INVENTORY));
-        assert!(rules.load(&Nbt::Compound(Vec::new())));
+        assert!(rules.load(&Nbt::Compound(Vec::new().into())));
         assert!(!rules.load(&rules.to_nbt()));
     }
 }

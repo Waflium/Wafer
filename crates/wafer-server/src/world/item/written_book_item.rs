@@ -46,7 +46,7 @@ fn resolve(server: &Server, source: &CommandSourceStack, content: &[(String, Nbt
         for (key, value) in fields {
             resolved_page.push((key.clone(), if key == "raw" || key == "filtered" { resolve_page(server, source, value)? } else { value.clone() }));
         }
-        pages.push(Nbt::Compound(resolved_page));
+        pages.push(Nbt::Compound(resolved_page.into()));
     }
     let mut resolved = content.to_vec();
     resolved.retain(|(k, _)| k != "pages" && k != "resolved");
@@ -64,7 +64,7 @@ fn resolve_for_item(server: &Server, source: &CommandSourceStack, item_stack: &m
     }
     match resolve(server, source, content) {
         Some(resolved) => {
-            item_stack.set(dc::WRITTEN_BOOK_CONTENT, Some(Nbt::Compound(resolved)));
+            item_stack.set(dc::WRITTEN_BOOK_CONTENT, Some(Nbt::Compound(resolved.into())));
             true
         }
         None => {

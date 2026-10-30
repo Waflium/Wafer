@@ -45,7 +45,7 @@ impl VaultSharedData {
         if self.connected_particles_range != DEFAULT_DEACTIVATION_RANGE {
             output.push(("connected_particles_range".into(), Nbt::Double(self.connected_particles_range)));
         }
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     pub fn get_display_item(&self) -> &ItemStack {

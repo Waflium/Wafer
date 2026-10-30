@@ -135,7 +135,7 @@ fn get<'a>(fields: &'a [(String, Nbt)], key: &str) -> Option<&'a Nbt> {
 }
 
 fn no_key(key: &str, fields: &[(String, Nbt)]) -> String {
-    format!("No key {key} in MapLike[{}]", snbt(&Nbt::Compound(fields.to_vec())))
+    format!("No key {key} in MapLike[{}]", snbt(&Nbt::Compound(fields.to_vec().into())))
 }
 
 fn required<T>(fields: &[(String, Nbt)], key: &str, decode: impl FnOnce(&Nbt) -> DataResult<T>) -> DataResult<T> {
@@ -568,7 +568,7 @@ fn hover_event(tag: &Nbt) -> DataResult<HoverEvent> {
             });
             let components = optional(get(fields, "components"), |components| {
                 DataResult::from_result(DataComponentPatch::from_nbt(components).map(|patch| match patch.to_nbt() {
-                    Nbt::Compound(fields) => fields,
+                    Nbt::Compound(fields) => fields.into_vec(),
                     _ => Vec::new(),
                 }))
             });

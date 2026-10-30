@@ -107,7 +107,7 @@ fn skeletons_save_and_load_their_fields() {
     assert_eq!(get("FreezingTime"), Some(Nbt::Int(-1)));
     let mut tag = vec![("id".to_string(), Nbt::String("minecraft:skeleton".into()))];
     tag.extend(out);
-    let LevelEntity::Mob(loaded) = level.load_entity(&Nbt::Compound(tag)).unwrap() else { unreachable!() };
+    let LevelEntity::Mob(loaded) = level.load_entity(&Nbt::Compound(tag.into())).unwrap() else { unreachable!() };
     assert!(matches!(loaded.ai.goal_selector.get_available_goals().last().unwrap().get_goal(), Goal::RangedBowAttack(_)));
     let mut out = Vec::new();
     loaded.save(&mut out);
@@ -119,7 +119,7 @@ fn skeletons_save_and_load_their_fields() {
     bogged.save(&mut out);
     assert!(out.iter().any(|(k, v)| k == "sheared" && *v == Nbt::Byte(1)));
     let mut loaded = Bogged::create();
-    loaded.load(&Nbt::Compound(out));
+    loaded.load(&Nbt::Compound(out.into()));
     assert!(bogged::is_sheared(&loaded.entity));
 }
 

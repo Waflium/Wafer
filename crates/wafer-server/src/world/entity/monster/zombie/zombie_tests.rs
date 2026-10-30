@@ -60,7 +60,7 @@ fn zombies_save_and_load_their_fields() {
     assert_eq!(get("DrownedConversionTime"), Some(Nbt::Int(-1)));
     assert_eq!(get("InWaterTime"), Some(Nbt::Int(-1)));
     let mut loaded = Zombie::create();
-    loaded.load(&Nbt::Compound(out));
+    loaded.load(&Nbt::Compound(out.into()));
     assert!(loaded.is_baby());
     assert!(Zombie::can_break_doors(&loaded));
     assert_eq!(loaded.ai.goal_selector.get_available_goals().len(), mob.ai.goal_selector.get_available_goals().len());

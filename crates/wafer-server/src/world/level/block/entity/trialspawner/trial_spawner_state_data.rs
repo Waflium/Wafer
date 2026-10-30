@@ -241,7 +241,7 @@ impl TrialSpawnerStateData {
         if let Some(spawn_data) = &self.next_spawn_data {
             tag.push((TAG_SPAWN_DATA.into(), spawn_data.encode()));
         }
-        Nbt::Compound(tag)
+        Nbt::Compound(tag.into())
     }
 
     pub fn get_dispensing_items(&mut self, level: &mut ServerLevel, config: &TrialSpawnerConfig, pos: BlockPos) -> &WeightedList<ItemStack> {

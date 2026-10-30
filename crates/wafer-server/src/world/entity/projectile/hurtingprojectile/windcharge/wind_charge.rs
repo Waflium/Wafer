@@ -28,7 +28,7 @@ impl Default for WindCharge {
 }
 
 pub fn gust_particle(particle_type: &'static str) -> ParticleOptions {
-    particle_types::parse(particle_type, &wafer_protocol::nbt::Nbt::Compound(Vec::new())).expect("a gust particle")
+    particle_types::parse(particle_type, &wafer_protocol::nbt::Nbt::Compound(Vec::new().into())).expect("a gust particle")
 }
 
 impl WindCharge {

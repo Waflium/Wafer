@@ -273,16 +273,16 @@ fn drinking_potions_stews_and_ominous_bottles() {
         }
     };
     let mut potion = ItemStack::new(items::POTION, 1);
-    potion.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:strong_swiftness".into()))])));
+    potion.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:strong_swiftness".into()))].into())));
     drink(&mut level, potion);
     assert_eq!(level.player(id).inventory.slots[slot], Some(ItemStack::new(items::GLASS_BOTTLE, 1)));
     level.hurt_server(id, DamageSource::new(damage_types::GENERIC), 10.0);
     let mut healing = ItemStack::new(items::POTION, 1);
-    healing.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:healing".into()))])));
+    healing.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:healing".into()))].into())));
     drink(&mut level, healing);
     assert_eq!(level.player(id).health, 14.0);
     let mut stew = ItemStack::new(items::SUSPICIOUS_STEW, 1);
-    stew.set(dc::SUSPICIOUS_STEW_EFFECTS, Some(Nbt::List(vec![Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:night_vision".into())), ("duration".into(), Nbt::Int(100))])])));
+    stew.set(dc::SUSPICIOUS_STEW_EFFECTS, Some(Nbt::List(vec![Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:night_vision".into())), ("duration".into(), Nbt::Int(100))].into())])));
     level.player_mut(id).food_data.food_level = 10;
     drink(&mut level, stew);
     let mut ominous = ItemStack::new(items::OMINOUS_BOTTLE, 1);

@@ -2269,7 +2269,7 @@ mod tests {
         level.scoreboard.borrow_mut().add_player_team("red");
         let entity = ServerLevel::create_entity("minecraft:marker").unwrap();
         let uuid = crate::world::level::storage::format_uuid(entity.entity().uuid);
-        let nbt = wafer_protocol::nbt::Nbt::Compound(vec![("Team".into(), wafer_protocol::nbt::Nbt::String("red".into()))]);
+        let nbt = wafer_protocol::nbt::Nbt::Compound(vec![("Team".into(), wafer_protocol::nbt::Nbt::String("red".into()))].into());
         level.chunks.with_region(ChunkPos::new(0, 0), |region, _| region.load_team(entity.entity(), &nbt));
         assert_eq!(level.scoreboard.borrow().get_players_team(&uuid).map(|team| team.name().to_string()).as_deref(), Some("red"));
     }
@@ -2281,7 +2281,7 @@ mod tests {
         level.scoreboard.borrow_mut().add_player_team("red");
         let entity = ServerLevel::create_entity("minecraft:marker").unwrap();
         let uuid = crate::world::level::storage::format_uuid(entity.entity().uuid);
-        let nbt = wafer_protocol::nbt::Nbt::Compound(vec![("Team".into(), wafer_protocol::nbt::Nbt::String("red".into()))]);
+        let nbt = wafer_protocol::nbt::Nbt::Compound(vec![("Team".into(), wafer_protocol::nbt::Nbt::String("red".into()))].into());
         let scoreboard = level.scoreboard.clone();
         let guard = scoreboard.borrow();
         level.chunks.with_region(ChunkPos::new(0, 0), |region, _| region.load_team(entity.entity(), &nbt));

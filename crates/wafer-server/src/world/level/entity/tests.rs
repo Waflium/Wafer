@@ -202,8 +202,8 @@ fn entities_tick_only_in_entity_ticking_chunks() {
 #[test]
 fn a_data_fixer_exception_leaves_the_entity_chunk_pending() {
     let dir = temp_dir("fixer-exception");
-    let pig = Nbt::Compound(vec![("id".into(), Nbt::String("Pig".into())), ("UUID".into(), Nbt::String("not a uuid".into()))]);
-    let broken = Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(100)), ("Entities".into(), Nbt::List(vec![pig])), ("Position".into(), Nbt::IntArray(vec![5, 0]))]);
+    let pig = Nbt::Compound(vec![("id".into(), Nbt::String("Pig".into())), ("UUID".into(), Nbt::String("not a uuid".into()))].into());
+    let broken = Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(100)), ("Entities".into(), Nbt::List(vec![pig])), ("Position".into(), Nbt::IntArray(vec![5, 0]))].into());
     RegionStorage::new(dir.join("entities"), false).write(ChunkPos::new(5, 0), &broken).unwrap();
     let mut level = level_in(&dir);
     testing::player(&mut level, Vec3::new(8.5, -60.0, 8.5), 0.0, 0.0);

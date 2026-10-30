@@ -249,7 +249,7 @@ impl GossipContainer {
                         ("Target".into(), uuid_ints(entry.target)),
                         ("Type".into(), Nbt::String(entry.ty.id().into())),
                         ("Value".into(), Nbt::Int(entry.value)),
-                    ])
+                    ].into())
                 })
                 .collect(),
         )

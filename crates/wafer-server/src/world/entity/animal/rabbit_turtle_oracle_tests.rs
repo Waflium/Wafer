@@ -403,7 +403,7 @@ fn attributes_touched_by_the_game(nbt: &Nbt) -> Vec<String> {
         .map(|attribute| {
             let mut fields = match attribute {
                 Nbt::Compound(fields) => fields.clone(),
-                _ => Vec::new(),
+                _ => Vec::new().into(),
             };
             fields.sort_by(|a, b| a.0.cmp(&b.0));
             format!("{fields:?}")

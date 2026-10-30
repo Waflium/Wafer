@@ -3477,7 +3477,7 @@ impl crate::server::Server {
             old.save_without_id(&mut data);
             data
         });
-        let saved = Nbt::Compound(data.unwrap_or_default());
+        let saved = Nbt::Compound(data.unwrap_or_default().into());
         if let Err(e) = new_entity.load_in_level(&saved, &self.levels[transition.new_level].scoreboard) {
             panic!("{}", super::entity_save::loading_entity_report(&e));
         }

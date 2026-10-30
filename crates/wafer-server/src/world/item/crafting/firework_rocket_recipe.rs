@@ -72,7 +72,7 @@ impl FireworkRocketRecipe {
                 explosions.push(explosion.clone());
             }
         }
-        let fireworks = Nbt::Compound(vec![("flight_duration".into(), Nbt::Byte(fuel_count as i8)), ("explosions".into(), Nbt::List(explosions))]);
+        let fireworks = Nbt::Compound(vec![("flight_duration".into(), Nbt::Byte(fuel_count as i8)), ("explosions".into(), Nbt::List(explosions))].into());
         let mut components = DataComponentPatch::default();
         components.put(dc::FIREWORKS, Some(dc::FIREWORKS.decode(&fireworks).unwrap_or(fireworks)));
         self.result.apply(self.result.count, &components)

@@ -91,7 +91,7 @@ impl DataFixTypes {
         if from_version >= to_version {
             return tag;
         }
-        self.update(Dynamic::new(tag), from_version, to_version).into_value().unwrap_or_else(|| Nbt::Compound(Vec::new()))
+        self.update(Dynamic::new(tag), from_version, to_version).into_value().unwrap_or_else(|| Nbt::Compound(Vec::new().into()))
     }
 
     pub fn update_tag_to_current_version(self, tag: Nbt, from_version: i32) -> Nbt {

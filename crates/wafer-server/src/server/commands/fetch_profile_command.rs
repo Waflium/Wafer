@@ -41,12 +41,12 @@ fn encode_stored_game_profile(profile: &Profile) -> std::result::Result<Nbt, Str
                 if let Some(signature) = &property.signature {
                     entry.push(("signature".to_string(), Nbt::String(signature.clone())));
                 }
-                Nbt::Compound(entry)
+                Nbt::Compound(entry.into())
             })
             .collect();
         fields.push(("properties".to_string(), Nbt::List(properties)));
     }
-    Ok(Nbt::Compound(fields))
+    Ok(Nbt::Compound(fields.into()))
 }
 
 fn report_resolved_profile(server: &Server, sender: &CommandSourceStack, message_id: &str, argument: Component, profile: &Profile) {

@@ -281,7 +281,7 @@ impl ArmorStand {
             .filter(|(_, accessor, default)| !same_rotations(self.pose(*accessor), *default))
             .map(|(name, accessor, _)| (name.to_string(), Nbt::List(self.pose(*accessor).iter().map(|v| Nbt::Float(*v)).collect())))
             .collect();
-        output.push(("Pose".into(), Nbt::Compound(pose)));
+        output.push(("Pose".into(), Nbt::Compound(pose.into())));
     }
 
     pub fn read_additional_save_data(&mut self, nbt: &Nbt) {

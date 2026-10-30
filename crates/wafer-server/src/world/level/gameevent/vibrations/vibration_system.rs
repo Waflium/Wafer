@@ -70,7 +70,7 @@ impl Data {
         }
         fields.push(("selector".into(), self.selection_strategy.to_nbt()));
         fields.push(("event_delay".into(), Nbt::Int(self.travel_time_in_ticks)));
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn from_nbt(nbt: &Nbt) -> Option<Data> {

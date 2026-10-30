@@ -398,7 +398,7 @@ impl Scoreboard {
             for (objective, score) in player.iter() {
                 let mut entry = vec![("Name".to_string(), Nbt::String(owner.to_string())), ("Objective".into(), Nbt::String(self.objective(*objective).name.clone()))];
                 score.pack(&mut entry);
-                scores.push(Nbt::Compound(entry));
+                scores.push(Nbt::Compound(entry.into()));
             }
         }
         if !scores.is_empty() {
@@ -409,13 +409,13 @@ impl Scoreboard {
             .filter_map(|&slot| self.get_display_objective(slot).map(|id| (slot.serialized_name().to_string(), Nbt::String(self.objective(id).name.clone()))))
             .collect();
         if !slots.is_empty() {
-            fields.push(("DisplaySlots".into(), Nbt::Compound(slots)));
+            fields.push(("DisplaySlots".into(), Nbt::Compound(slots.into())));
         }
         let teams: Vec<Nbt> = self.teams_by_name.stream().map(|(_, team)| team.pack()).collect();
         if !teams.is_empty() {
             fields.push(("Teams".into(), Nbt::List(teams)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn load(&mut self, data: PackedScoreboardSaveData) -> Result<(), JavaThrowable> {

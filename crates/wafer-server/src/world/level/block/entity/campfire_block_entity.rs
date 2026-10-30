@@ -73,7 +73,7 @@ impl CampfireBlockEntity {
     pub fn get_update_tag(&self) -> Nbt {
         let mut output = Vec::new();
         save_all_items(&mut output, &self.items, true);
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     pub fn clear_content(&mut self) {

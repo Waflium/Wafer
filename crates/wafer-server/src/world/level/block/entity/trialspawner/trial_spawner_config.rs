@@ -76,7 +76,7 @@ fn spawn_data_codec() -> Pair {
 }
 
 fn encode_weighted_list<T>(list: &WeightedList<T>, element: impl Fn(&T) -> Nbt) -> Nbt {
-    Nbt::List(list.items.iter().map(|(data, weight)| Nbt::Compound(vec![("data".into(), element(data)), ("weight".into(), Nbt::Int(*weight))])).collect())
+    Nbt::List(list.items.iter().map(|(data, weight)| Nbt::Compound(vec![("data".into(), element(data)), ("weight".into(), Nbt::Int(*weight))].into())).collect())
 }
 
 impl TrialSpawnerConfig {
@@ -148,7 +148,7 @@ impl TrialSpawnerConfig {
         if self.items_to_drop_when_ominous != DEFAULT.items_to_drop_when_ominous {
             output.push(("items_to_drop_when_ominous".into(), Nbt::String(self.items_to_drop_when_ominous.clone())));
         }
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     pub fn encode(holder: &Holder<TrialSpawnerConfig>) -> Nbt {

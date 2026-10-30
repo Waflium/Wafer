@@ -319,7 +319,7 @@ impl<'a> WorldGenRegion<'a> {
 
 fn dummy_block_entity(pos: BlockPos) -> wafer_protocol::nbt::Nbt {
     use wafer_protocol::nbt::Nbt;
-    Nbt::Compound(vec![("x".into(), Nbt::Int(pos.x)), ("y".into(), Nbt::Int(pos.y)), ("z".into(), Nbt::Int(pos.z)), ("id".into(), Nbt::String("DUMMY".into()))])
+    Nbt::Compound(vec![("x".into(), Nbt::Int(pos.x)), ("y".into(), Nbt::Int(pos.y)), ("z".into(), Nbt::Int(pos.z)), ("id".into(), Nbt::String("DUMMY".into()))].into())
 }
 
 fn post_process_pos(state: BlockState, pos: BlockPos) -> Option<BlockPos> {

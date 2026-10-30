@@ -103,7 +103,7 @@ impl BlendingData {
         if self.heights.iter().any(|&height| height != NO_VALUE) {
             tag.push(("heights".to_string(), Nbt::List(self.heights.iter().map(|&height| Nbt::Float(height)).collect())));
         }
-        Nbt::Compound(tag)
+        Nbt::Compound(tag.into())
     }
 
     pub fn area_min_y(&self) -> i32 {

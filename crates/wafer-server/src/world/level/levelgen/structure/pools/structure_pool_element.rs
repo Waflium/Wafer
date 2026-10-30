@@ -76,7 +76,7 @@ impl SinglePoolElement {
         if let Some(apply) = self.override_liquid_settings {
             fields.push(("override_liquid_settings".to_owned(), Nbt::String(liquid_settings_name(apply).to_owned())));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     fn get_settings(&self, rotation: Rotation, chunk_bb: &BoundingBox, apply_waterlogging: bool, keep_jigsaws: bool, legacy: bool) -> StructurePlaceSettings<'_> {
@@ -230,13 +230,13 @@ impl StructurePoolElement {
                 ("element_type".to_owned(), Nbt::String("minecraft:list_pool_element".to_owned())),
                 ("elements".to_owned(), Nbt::List(elements.iter().map(StructurePoolElement::to_nbt).collect())),
                 ("projection".to_owned(), Nbt::String(projection.get_name().to_owned())),
-            ]),
+            ].into()),
             StructurePoolElement::Feature { feature, projection } => Nbt::Compound(vec![
                 ("element_type".to_owned(), Nbt::String("minecraft:feature_pool_element".to_owned())),
                 ("feature".to_owned(), Nbt::String(crate::core::data_registries::json_entries("minecraft:worldgen/placed_feature")[*feature as usize].0.to_owned())),
                 ("projection".to_owned(), Nbt::String(projection.get_name().to_owned())),
-            ]),
-            StructurePoolElement::Empty => Nbt::Compound(vec![("element_type".to_owned(), Nbt::String("minecraft:empty_pool_element".to_owned()))]),
+            ].into()),
+            StructurePoolElement::Empty => Nbt::Compound(vec![("element_type".to_owned(), Nbt::String("minecraft:empty_pool_element".to_owned()))].into()),
         }
     }
 

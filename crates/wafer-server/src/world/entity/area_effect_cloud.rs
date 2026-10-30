@@ -1,6 +1,6 @@
 use wafer_core::{Vec3, mth};
 use wafer_data::{registry, registry_id};
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::data::{DataValue, entity_defaults};
 use super::entity_reference::EntityReference;
@@ -28,7 +28,7 @@ const DEFAULT_WAIT_TIME: i32 = 20;
 const DEFAULT_REAPPLICATION_DELAY: i32 = 20;
 
 fn entity_effect_particle(color: i32) -> ParticleOptions {
-    particle_types::parse("minecraft:entity_effect", &Nbt::Compound(vec![("color".into(), Nbt::Int(color))])).expect("an entity effect particle")
+    particle_types::parse("minecraft:entity_effect", &Nbt::Compound(vec![("color".into(), Nbt::Int(color))].into())).expect("an entity effect particle")
 }
 
 pub struct AreaEffectCloud {
@@ -113,7 +113,7 @@ impl AreaEffectCloud {
     }
 
     fn potion_contents(&self) -> PotionContents<'_> {
-        static EMPTY: Nbt = Nbt::Compound(Vec::new());
+        static EMPTY: Nbt = Nbt::Compound(TagMap::new());
         PotionContents::new(self.potion_contents.as_ref().unwrap_or(&EMPTY))
     }
 
@@ -162,7 +162,7 @@ impl AreaEffectCloud {
             if let Nbt::Compound(options) = &custom_particle.options {
                 fields.extend(options.iter().cloned());
             }
-            output.push(("custom_particle".into(), Nbt::Compound(fields)));
+            output.push(("custom_particle".into(), Nbt::Compound(fields.into())));
         }
         EntityReference::store(self.owner, output, "Owner");
         if let Some(contents) = self.potion_contents.as_ref().filter(|c| !matches!(c, Nbt::Compound(fields) if fields.is_empty())) {
@@ -190,7 +190,7 @@ impl AreaEffectCloud {
             let particle_type = registry::PARTICLE_TYPE.iter().find(|&&name| Some(name.to_string()) == crate::commands::arguments::parse_identifier(particle_type))?;
             let options = match &particle {
                 Nbt::Compound(fields) => Nbt::Compound(fields.iter().filter(|(key, _)| key != "type").cloned().collect()),
-                _ => Nbt::Compound(Vec::new()),
+                _ => Nbt::Compound(Vec::new().into()),
             };
             particle_types::parse(particle_type, &options).ok()
         });

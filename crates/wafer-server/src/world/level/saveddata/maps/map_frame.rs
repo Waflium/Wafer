@@ -28,7 +28,7 @@ impl MapFrame {
             ("pos".into(), Nbt::IntArray(vec![self.pos.x, self.pos.y, self.pos.z])),
             ("rotation".into(), Nbt::Int(self.rotation)),
             ("entity_id".into(), Nbt::Int(self.entity_id)),
-        ])
+        ].into())
     }
 
     pub fn get_id(&self) -> String {

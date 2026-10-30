@@ -423,7 +423,7 @@ impl ServerLevel {
         }
         let tickets = &mut self.chunks.distance_manager.ticket_storage;
         if tickets.dirty {
-            let file = Nbt::Compound(vec![("data".into(), tickets.to_nbt()), ("DataVersion".into(), Nbt::Int(wafer_data::WORLD_VERSION))]);
+            let file = Nbt::Compound(vec![("data".into(), tickets.to_nbt()), ("DataVersion".into(), Nbt::Int(wafer_data::WORLD_VERSION))].into());
             match write_dat(&chunk_tickets_file(dir, self.dimension), &file) {
                 Ok(()) => tickets.dirty = false,
                 Err(_) => error!("Could not save data to chunk_tickets.dat"),

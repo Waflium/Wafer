@@ -166,7 +166,7 @@ pub fn empty_list() -> Nbt {
 }
 
 pub fn empty_map() -> Nbt {
-    Nbt::Compound(Vec::new())
+    Nbt::Compound(Vec::new().into())
 }
 
 pub fn compound(fields: &[(&str, Nbt)]) -> Nbt {

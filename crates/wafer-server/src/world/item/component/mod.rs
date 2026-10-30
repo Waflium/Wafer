@@ -241,7 +241,7 @@ impl DataComponentPatch {
                 .filter(|(t, _)| !t.is_transient())
                 .map(|(t, v)| match v {
                     Some(v) => (t.name().to_string(), v.clone()),
-                    None => (format!("!{}", t.name()), Nbt::Compound(Vec::new())),
+                    None => (format!("!{}", t.name()), Nbt::Compound(Vec::new().into())),
                 })
                 .collect(),
         )
@@ -481,7 +481,7 @@ mod tests {
         assert_eq!(sword.get(TOOL), Some(&tool));
         assert_eq!(sword.get(MAX_DAMAGE), Some(&Nbt::Int(1561)));
         assert_eq!(sword.get(ITEM_NAME), Some(&crate::nbt::parse_fully("{translate:\"item.minecraft.diamond_sword\"}").unwrap()));
-        assert_eq!(sword.get(USE_EFFECTS), Some(&Nbt::Compound(Vec::new())));
+        assert_eq!(sword.get(USE_EFFECTS), Some(&Nbt::Compound(Vec::new().into())));
         assert_eq!(sword.len(), 19);
     }
 

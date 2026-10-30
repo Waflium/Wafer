@@ -94,7 +94,7 @@ fn create_placeholder_hover(hover_event_type: &Arc<Type>, old_hover_event: Dynam
     let text = format!("Legacy hoverEvent: {}", gson::to_stable_string(&old_json));
     let placeholder_hover_event = Dynamic::new(Nbt::Compound(vec![
         ("action".to_string(), Nbt::String("show_text".to_string())),
-        ("contents".to_string(), Nbt::Compound(vec![("text".to_string(), Nbt::String(text))])),
-    ]));
+        ("contents".to_string(), Nbt::Compound(vec![("text".to_string(), Nbt::String(text))].into())),
+    ].into()));
     crate::util::read_typed_or_throw(hover_event_type, placeholder_hover_event, false).value
 }

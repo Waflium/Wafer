@@ -1183,7 +1183,7 @@ mod tests {
         let distance = predicate.get("minecraft:distance").unwrap();
         assert_eq!(distance.get("horizontal"), Some(&Nbt::Double(3.0)));
         assert_eq!(distance.get("x").unwrap().get("min"), Some(&Nbt::Double(1.0)));
-        assert_eq!(tag.get("effects").unwrap().get("minecraft:prevent_equipment_drop"), Some(&Nbt::Compound(Vec::new())));
+        assert_eq!(tag.get("effects").unwrap().get("minecraft:prevent_equipment_drop"), Some(&Nbt::Compound(Vec::new().into())));
     }
 
     fn decode_error(registry: &str, json: serde_json::Value) -> String {

@@ -122,7 +122,7 @@ fn sorted(nbt: Nbt) -> Nbt {
 fn save(level: &ServerLevel, id: EntityId) -> Nbt {
     let mut out = Vec::new();
     level.entities.get(&id).unwrap().save_without_id(&mut out);
-    Nbt::Compound(out)
+    Nbt::Compound(out.into())
 }
 
 fn assert_brain(level: &ServerLevel, id: EntityId, expected: &str) {
@@ -283,7 +283,7 @@ fn armadillos_save_and_load_like_vanilla() {
     let loaded = level.load_entity(&Nbt::Compound(fields)).unwrap();
     let mut out = Vec::new();
     loaded.save_without_id(&mut out);
-    assert_eq!(sorted(Nbt::Compound(out)), sorted(nbt));
+    assert_eq!(sorted(Nbt::Compound(out.into())), sorted(nbt));
     let bad = summon(&mut level, "minecraft:armadillo", Vec3::new(4.5, -60.0, 6.5), r#"state:"sleeping",NoAI:1b"#);
     assert_eq!(armadillo::get_state(level.entity(bad)), ArmadilloState::Idle);
 }

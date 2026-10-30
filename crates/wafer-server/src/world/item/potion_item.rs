@@ -56,7 +56,7 @@ mod tests {
         let dirt = BlockPos::new(0, -61, 0);
         level.set_block(dirt, blocks::DIRT.default_state(), UPDATE_ALL);
         let mut water = ItemStack::new(items::POTION, 1);
-        water.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:water".into()))])));
+        water.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:water".into()))].into())));
         level.player_mut(player).inventory.slots[36] = Some(water.clone());
         assert_eq!(level.use_item_on(player, InteractionHand::MainHand, hit(dirt, Direction::Down)), InteractionResult::Pass);
         assert_eq!(level.use_item_on(player, InteractionHand::MainHand, hit(dirt, Direction::Up)), InteractionResult::SUCCESS);

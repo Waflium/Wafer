@@ -100,7 +100,7 @@ impl MemoryCodec {
             (MemoryCodec::Bool, MemoryValue::Bool(v)) => Nbt::Byte(*v as i8),
             (MemoryCodec::Long, MemoryValue::Long(v)) => Nbt::Long(*v),
             (MemoryCodec::Int, MemoryValue::Int(v)) => Nbt::Int(*v),
-            (MemoryCodec::Unit, MemoryValue::Unit) => Nbt::Compound(Vec::new()),
+            (MemoryCodec::Unit, MemoryValue::Unit) => Nbt::Compound(Vec::new().into()),
             (MemoryCodec::Uuid, MemoryValue::Uuid(uuid)) => uuid_ints(*uuid),
             (MemoryCodec::GlobalPosList | MemoryCodec::GlobalPosSet, MemoryValue::GlobalPositions(list)) => Nbt::List(list.iter().map(GlobalPos::to_nbt).collect()),
             (MemoryCodec::BlockPos, MemoryValue::BlockPos(pos)) => Nbt::IntArray(vec![pos.x, pos.y, pos.z]),
@@ -135,7 +135,7 @@ impl MemoryCodec {
         if let Some(time_to_live) = value.time_to_live {
             fields.push(("ttl".to_string(), Nbt::Long(time_to_live)));
         }
-        Some(Nbt::Compound(fields))
+        Some(Nbt::Compound(fields.into()))
     }
 
     pub fn decode(self, nbt: &Nbt) -> Result<ExpirableValue, String> {

@@ -176,7 +176,7 @@ pub fn chunk_tag(pos: ChunkPos, entities: Vec<Nbt>) -> Nbt {
         ("DataVersion".into(), Nbt::Int(WORLD_VERSION)),
         ("Entities".into(), Nbt::List(entities)),
         ("Position".into(), Nbt::IntArray(vec![pos.x, pos.z])),
-    ])
+    ].into())
 }
 
 impl ServerLevel {

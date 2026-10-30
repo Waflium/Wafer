@@ -298,7 +298,7 @@ impl<R: SectionData> SectionStorage<R> {
                 sections.push((section_y.to_string(), section.pack()));
             }
         }
-        let tag = Nbt::Compound(vec![("Sections".into(), Nbt::Compound(sections)), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]);
+        let tag = Nbt::Compound(vec![("Sections".into(), Nbt::Compound(sections.into())), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into());
         if let Some(io) = &self.io {
             io.write(chunk_pos, tag);
         }

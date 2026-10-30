@@ -48,9 +48,9 @@ fn encode_full(state: BlockState) -> Nbt {
     let mut properties: Vec<(String, Nbt)> = state.properties().map(|(name, value)| (name.to_string(), Nbt::String(value.into()))).collect();
     if !properties.is_empty() {
         properties.sort_by(|a, b| b.0.cmp(&a.0));
-        fields.push(("properties".into(), Nbt::Compound(properties)));
+        fields.push(("properties".into(), Nbt::Compound(properties.into())));
     }
-    Nbt::Compound(fields)
+    Nbt::Compound(fields.into())
 }
 
 fn encode(state: BlockState) -> Nbt {

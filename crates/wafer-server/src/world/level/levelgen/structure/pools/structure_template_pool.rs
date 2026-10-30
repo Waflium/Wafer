@@ -147,7 +147,7 @@ fn direct_codec_lazy() -> &'static Pair {
 fn element_with_weight(tag: &Nbt) -> DecodeResult<Nbt> {
     static ELEMENT: LazyLock<Codec> = LazyLock::new(|| Codec::Record(vec![req("element", (Codec::Lazy(structure_pool_element::codec_lazy), Stream::Lazy))]));
     static WEIGHT: LazyLock<Codec> = LazyLock::new(|| Codec::Record(vec![req("weight", (Codec::Int(1, 150, RangeError::Outside), Stream::Int))]));
-    ELEMENT.decode_partial(tag).flat_map(|element| WEIGHT.decode_partial(tag).map(|weight| Nbt::Compound(vec![("element".into(), element), ("weight".into(), weight)])))
+    ELEMENT.decode_partial(tag).flat_map(|element| WEIGHT.decode_partial(tag).map(|weight| Nbt::Compound(vec![("element".into(), element), ("weight".into(), weight)].into())))
 }
 
 pub fn direct_codec() -> Pair {

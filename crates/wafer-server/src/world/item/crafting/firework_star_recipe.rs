@@ -30,7 +30,7 @@ pub fn explosion(shape: &str, colors: Vec<i32>, fade_colors: Vec<i32>, has_trail
         ("fade_colors".into(), Nbt::List(fade_colors.into_iter().map(Nbt::Int).collect())),
         ("has_trail".into(), Nbt::Byte(has_trail as i8)),
         ("has_twinkle".into(), Nbt::Byte(has_twinkle as i8)),
-    ])
+    ].into())
 }
 
 impl FireworkStarRecipe {

@@ -59,7 +59,7 @@ fn drowned_save_and_load_like_zombies() {
     assert_eq!(get("IsBaby"), Some(Nbt::Byte(1)));
     assert_eq!(get("DrownedConversionTime"), Some(Nbt::Int(-1)));
     let mut loaded = Drowned::create();
-    loaded.load(&Nbt::Compound(out));
+    loaded.load(&Nbt::Compound(out.into()));
     assert!(loaded.is_baby());
     assert_eq!(loaded.entity.dimensions.height, 0.98);
 }

@@ -194,7 +194,7 @@ impl Dynamic {
     }
 
     pub fn empty_map(&self) -> Dynamic {
-        Dynamic::new(Nbt::Compound(Vec::new()))
+        Dynamic::new(Nbt::Compound(Vec::new().into()))
     }
 
     pub fn empty_list(&self) -> Dynamic {
@@ -207,7 +207,7 @@ impl Dynamic {
             let Some(Nbt::String(key)) = key.value else { panic!("Cannot create map with non-string key: {}", snbt(&key.value)) };
             put(&mut map, &key, value.value.unwrap_or(Nbt::End));
         }
-        Dynamic::new(Nbt::Compound(map))
+        Dynamic::new(Nbt::Compound(map.into()))
     }
 
     pub fn create_list(&self, values: impl IntoIterator<Item = Dynamic>) -> Dynamic {
@@ -265,7 +265,7 @@ impl Dynamic {
             None => {
                 let mut entries = Vec::new();
                 put(&mut entries, key, value.value.unwrap_or(Nbt::End));
-                Dynamic::new(Nbt::Compound(entries))
+                Dynamic::new(Nbt::Compound(entries.into()))
             }
             other => Dynamic { value: other },
         }
@@ -589,7 +589,7 @@ impl OptionalDynamic {
     }
 
     pub fn or_else_empty_map(self) -> Dynamic {
-        self.result().unwrap_or_else(|| Dynamic::new(Nbt::Compound(Vec::new())))
+        self.result().unwrap_or_else(|| Dynamic::new(Nbt::Compound(Vec::new().into())))
     }
 
     pub fn or_else_empty_list(self) -> Dynamic {

@@ -194,17 +194,17 @@ impl Style {
                     f
                 }
             };
-            fields.push(("click_event".into(), Nbt::Compound(event)));
+            fields.push(("click_event".into(), Nbt::Compound(event.into())));
         }
         if let Some(hover) = &s.hover_event {
             let event = match hover {
-                HoverEvent::ShowText(text) => Nbt::Compound(vec![("action".into(), Nbt::String("show_text".into())), ("value".into(), text.to_nbt())]),
+                HoverEvent::ShowText(text) => Nbt::Compound(vec![("action".into(), Nbt::String("show_text".into())), ("value".into(), text.to_nbt())].into()),
                 HoverEvent::ShowEntity { id, uuid, name } => {
                     let mut f = vec![("action".into(), Nbt::String("show_entity".into())), ("id".into(), Nbt::String((*id).into())), ("uuid".into(), uuid_ints(*uuid))];
                     if let Some(name) = name {
                         f.insert(0, ("name".into(), name.to_nbt()));
                     }
-                    Nbt::Compound(f)
+                    Nbt::Compound(f.into())
                 }
                 HoverEvent::ShowItem { id, count, components } => {
                     let mut f = vec![("action".into(), Nbt::String("show_item".into())), ("id".into(), Nbt::String((*id).into()))];
@@ -212,9 +212,9 @@ impl Style {
                         f.push(("count".into(), Nbt::Int(*count)));
                     }
                     if !components.is_empty() {
-                        f.push(("components".into(), Nbt::Compound(components.clone())));
+                        f.push(("components".into(), Nbt::Compound(components.clone().into())));
                     }
-                    Nbt::Compound(f)
+                    Nbt::Compound(f.into())
                 }
             };
             fields.push(("hover_event".into(), event));
@@ -230,7 +230,7 @@ impl Style {
     pub fn to_nbt(&self) -> Nbt {
         let mut fields = Vec::new();
         self.write_fields(&mut fields);
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn java_to_string(&self) -> String {
@@ -556,7 +556,7 @@ impl Component {
             Contents::Keybind(keybind) => fields.push(("keybind".into(), Nbt::String(keybind.clone()))),
             Contents::Score { name, objective, .. } => fields.push((
                 "score".into(),
-                Nbt::Compound(vec![("name".into(), Nbt::String(name.clone())), ("objective".into(), Nbt::String(objective.clone()))]),
+                Nbt::Compound(vec![("name".into(), Nbt::String(name.clone())), ("objective".into(), Nbt::String(objective.clone()))].into()),
             )),
             Contents::Selector { pattern, separator, .. } => {
                 fields.push(("selector".into(), Nbt::String(pattern.clone())));
@@ -584,7 +584,7 @@ impl Component {
             fields.push(("extra".into(), Nbt::List(self.siblings.iter().map(Component::to_nbt).collect())));
         }
         self.style.write_fields(&mut fields);
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn to_json(&self) -> String {

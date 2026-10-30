@@ -41,7 +41,7 @@ fn camels_save_their_last_pose_tick() {
     assert_eq!(get("LastPoseTick"), Some(wafer_protocol::nbt::Nbt::Long(-level.game_time)));
     assert_eq!(get("Tame"), Some(wafer_protocol::nbt::Nbt::Byte(1)));
     let mut loaded = ServerLevel::create_entity("minecraft:camel").expect("a camel");
-    loaded.load(&wafer_protocol::nbt::Nbt::Compound(out)).expect("loads");
+    loaded.load(&wafer_protocol::nbt::Nbt::Compound(out.into())).expect("loads");
     assert_eq!(loaded.entity().pose(), Pose::Sitting);
     assert_eq!(loaded.entity().dimensions.height, 2.375 - 1.43);
 }

@@ -45,6 +45,6 @@ impl TimerCallback {
             TimerCallback::Function(id) => ("minecraft:function", id),
             TimerCallback::FunctionTag(id) => ("minecraft:function_tag", id),
         };
-        Nbt::Compound(vec![("id".into(), Nbt::String(id.clone())), ("type".into(), Nbt::String(kind.into()))])
+        Nbt::Compound(vec![("id".into(), Nbt::String(id.clone())), ("type".into(), Nbt::String(kind.into()))].into())
     }
 }

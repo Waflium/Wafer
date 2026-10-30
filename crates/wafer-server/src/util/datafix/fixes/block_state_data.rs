@@ -29,7 +29,7 @@ fn create(name: &str, properties: Properties) -> Dynamic {
     if let Some(properties) = properties {
         entries.push(("Properties".to_string(), Nbt::Compound(properties.iter().map(|(key, value)| (key.to_string(), Nbt::String(value.to_string()))).collect())));
     }
-    Dynamic::new(Nbt::Compound(entries))
+    Dynamic::new(Nbt::Compound(entries.into()))
 }
 
 fn map_tag(id: i32) -> Option<&'static Arc<Dynamic>> {

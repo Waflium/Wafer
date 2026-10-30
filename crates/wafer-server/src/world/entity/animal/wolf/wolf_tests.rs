@@ -140,7 +140,7 @@ fn tamed_wolves_save_and_load_like_vanilla() {
     assert_eq!(get("anger_end_time"), Some(Nbt::Long(level.game_time + 100)));
     assert!(get("Owner").is_some());
     let mut loaded = ServerLevel::create_entity("minecraft:wolf").unwrap();
-    loaded.load(&Nbt::Compound(out.clone())).unwrap();
+    loaded.load(&Nbt::Compound(out.clone().into())).unwrap();
     let LevelEntity::Mob(mob) = &loaded else { unreachable!() };
     assert!(tamable_animal::is_tame(&mob.entity));
     assert!(tamable_animal::is_in_sitting_pose(&mob.entity));
@@ -161,7 +161,7 @@ fn old_owner_names_are_converted_when_loading() {
     cache.add(NameAndId { id: 7, name: "Rozqn".into() });
     level.user_lookup = Some(UserLookup { name_to_id_cache: cache, services: Services::offline(), uses_authentication: false });
     let mut load = |owner: &str| {
-        let tag = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:wolf".into())), ("Owner".into(), Nbt::String(owner.into()))]);
+        let tag = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:wolf".into())), ("Owner".into(), Nbt::String(owner.into()))].into());
         let Some(LevelEntity::Mob(mob)) = level.load_entity(&tag) else { unreachable!() };
         (tamable_animal::is_tame(&mob.entity), tamable_animal::get_owner_reference(&mob.entity).map(|owner| owner.get_uuid()))
     };

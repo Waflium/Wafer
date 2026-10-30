@@ -391,7 +391,7 @@ impl Server {
         let mut clocks = ServerClockManager::new();
         let game_rules = GameRules::new(data_configuration.enabled_features);
         crate::commands::set_enabled_features(data_configuration.enabled_features);
-        let game_rules_changed = game_rules.load(&saved_game_rules.unwrap_or_else(|| Nbt::Compound(Vec::new())));
+        let game_rules_changed = game_rules.load(&saved_game_rules.unwrap_or_else(|| Nbt::Compound(Vec::new().into())));
         game_rules.set_dirty(game_rules_changed);
         if let Some(saved_clocks) = &saved_clocks {
             clocks.load(saved_clocks);

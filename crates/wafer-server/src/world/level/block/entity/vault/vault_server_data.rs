@@ -64,7 +64,7 @@ impl VaultServerData {
         if self.total_ejections_needed != 0 {
             output.push(("total_ejections_needed".into(), Nbt::Int(self.total_ejections_needed)));
         }
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     pub fn set_last_insert_fail_timestamp(&mut self, last_insert_fail_timestamp: i64) {

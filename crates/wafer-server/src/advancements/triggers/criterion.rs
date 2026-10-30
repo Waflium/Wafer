@@ -24,7 +24,7 @@ impl Criterion {
         let Some(trigger) = CriterionTrigger::by_name(&name) else {
             return DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:trigger_type]: {name}"));
         };
-        let empty = Nbt::Compound(Vec::new());
+        let empty = Nbt::Compound(Vec::new().into());
         let value = tag.get("conditions").unwrap_or(&empty);
         trigger.decode_instance(value).map(|trigger_instance| Criterion { trigger, trigger_instance })
     }

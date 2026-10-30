@@ -193,9 +193,9 @@ fn data_compound_or_empty(root: Nbt) -> Nbt {
     match root {
         Nbt::Compound(entries) => match entries.into_iter().find(|(key, _)| key == "Data") {
             Some((_, data @ Nbt::Compound(_))) => data,
-            _ => Nbt::Compound(Vec::new()),
+            _ => Nbt::Compound(Vec::new().into()),
         },
-        _ => Nbt::Compound(Vec::new()),
+        _ => Nbt::Compound(Vec::new().into()),
     }
 }
 
@@ -229,7 +229,7 @@ pub fn read_existing_saved_data(world_dir: &WorldDir, caller_frames: &[&'static 
     };
     let data = match file_contents.get("data") {
         Some(data @ Nbt::Compound(_)) => data.clone(),
-        _ => Nbt::Compound(Vec::new()),
+        _ => Nbt::Compound(Vec::new().into()),
     };
     let mut frames = vec![READ_EXISTING_SAVED_DATA_FRAME, GET_LEVEL_DATA_AND_DIMENSIONS_FRAME];
     frames.extend_from_slice(caller_frames);

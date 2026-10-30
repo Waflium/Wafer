@@ -346,7 +346,7 @@ impl Codec {
 
     pub fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         match self {
-            Codec::Unit => map(tag).map(|_| Nbt::Compound(Vec::new())),
+            Codec::Unit => map(tag).map(|_| Nbt::Compound(Vec::new().into())),
             Codec::Bool if nbt::is_json_source() => match tag {
                 Nbt::Byte(value) => Ok(Nbt::Byte((*value != 0) as i8)),
                 _ => Err(format!("Not a boolean: {}", nbt::to_string(tag))),
@@ -559,7 +559,7 @@ impl Codec {
                     }
                 }
                 let error = (!errors.is_empty()).then(|| crate::util::codec::map_entry_failures(errors, failed));
-                DecodeResult { value: Some(Nbt::Compound(out)), error }
+                DecodeResult { value: Some(Nbt::Compound(out.into())), error }
             }
             Codec::DispatchedMap(key, value_codec) => {
                 let fields = match map(tag) {
@@ -598,7 +598,7 @@ impl Codec {
                     }
                 }
                 let error = (!errors.is_empty()).then(|| crate::util::codec::map_entry_failures(errors, failed));
-                DecodeResult { value: Some(Nbt::Compound(out)), error }
+                DecodeResult { value: Some(Nbt::Compound(out.into())), error }
             }
             Codec::Record(fields) => {
                 let input = match map(tag) {
@@ -608,7 +608,7 @@ impl Codec {
                 let mut out = Vec::new();
                 let mut errors = Vec::new();
                 let complete = decode_fields(fields, tag, input, &mut out, &mut errors);
-                finish_record(complete.then(|| Nbt::Compound(out)), errors)
+                finish_record(complete.then(|| Nbt::Compound(out.into())), errors)
             }
             Codec::Dispatch(d) => decode_dispatch(d, tag),
             Codec::Either(a, b) => crate::util::codec::either_result(a.decode_partial(tag), || b.decode_partial(tag)).map(|either| either.unwrap_or_else(|value| value)),
@@ -875,7 +875,7 @@ fn decode_dispatch(d: &Dispatch, tag: &Nbt) -> DecodeResult<Nbt> {
     let mut errors = Vec::new();
     let complete = crate::core::data_registries::unwinding(dfu_frames::key_dispatch, || decode_fields(fields, tag, input, &mut out, &mut errors));
     out.push((d.key.to_string(), Nbt::String(name)));
-    finish_record(complete.then(|| Nbt::Compound(out)), errors)
+    finish_record(complete.then(|| Nbt::Compound(out.into())), errors)
 }
 
 fn hash_record(fields: &[Field], value: &Nbt, key: Option<&str>) -> HashCode {
@@ -1116,7 +1116,7 @@ pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, Strin
             }
             _ => return Err("not a recursive codec".into()),
         },
-        Stream::Unit => Nbt::Compound(Vec::new()),
+        Stream::Unit => Nbt::Compound(Vec::new().into()),
         Stream::Bool => Nbt::Byte(rd!(r.bool()) as i8),
         Stream::Byte => canonical_number(codec, rd!(r.u8()) as i8 as i64),
         Stream::Short => canonical_number(codec, rd!(r.i16()) as i64),
@@ -1190,13 +1190,13 @@ pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, Strin
                 fields.retain(|(existing, _): &(String, Nbt)| *existing != k);
                 fields.push((k, v));
             }
-            Nbt::Compound(fields)
+            Nbt::Compound(fields.into())
         }
         Stream::Record => match codec {
             Codec::Record(fields) => {
                 let mut out = Vec::new();
                 read_fields(fields, r, &mut out)?;
-                Nbt::Compound(out)
+                Nbt::Compound(out.into())
             }
             _ => return Err("not a record".into()),
         },
@@ -1213,7 +1213,7 @@ pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, Strin
             let (name, fields) = &d.cases[index];
             let mut out = vec![(d.key.to_string(), Nbt::String((*name).into()))];
             read_fields(fields, r, &mut out)?;
-            Nbt::Compound(out)
+            Nbt::Compound(out.into())
         }
         Stream::Either(left, right) => {
             let (Codec::Either(a, b) | Codec::Alt(a, b, _)) = codec else { return Err("not an either".into()) };

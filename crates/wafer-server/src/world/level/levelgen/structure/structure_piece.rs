@@ -78,7 +78,7 @@ impl StructurePiece {
             ("GD".to_owned(), Nbt::Int(self.gen_depth)),
         ];
         fields.extend(additional);
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn get_bounding_box(&self) -> BoundingBox {

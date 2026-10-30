@@ -195,6 +195,6 @@ fn snbt_matches_vanilla() {
 
 #[test]
 fn parse_fully_rejects_trailing_data() {
-    assert_eq!(parse_fully(" {a:1} ").unwrap(), Nbt::Compound(vec![("a".into(), Nbt::Int(1))]));
+    assert_eq!(parse_fully(" {a:1} ").unwrap(), Nbt::Compound(vec![("a".into(), Nbt::Int(1))].into()));
     assert_eq!(error(&parse_fully("{a:1} x").unwrap_err()), "ERR Unexpected trailing data | CTX {a:1} x<--[HERE]");
 }

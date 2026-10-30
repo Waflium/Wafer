@@ -146,6 +146,6 @@ fn bats_rest_when_spawned_and_fly_when_loaded_without_flags() {
     let mut out = Vec::new();
     bat.save(&mut out);
     assert_eq!(out.iter().find(|(k, _)| k == "BatFlags").map(|(_, v)| v.clone()), Some(Nbt::Byte(1)));
-    bat.load(&Nbt::Compound(Vec::new()));
+    bat.load(&Nbt::Compound(Vec::new().into()));
     assert!(!bat.is_resting());
 }

@@ -204,7 +204,7 @@ impl ChargeCursor {
             let names = Direction::VALUES.into_iter().filter(|direction| faces & 1 << direction.ordinal() != 0).map(|direction| Nbt::String(direction.name().into())).collect();
             fields.push(("facings".into(), Nbt::List(names)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     fn is_pos_unreasonable(&self, origin_pos: BlockPos) -> bool {

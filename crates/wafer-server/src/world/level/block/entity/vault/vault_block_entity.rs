@@ -20,7 +20,7 @@ pub struct VaultBlockEntity {
 
 impl VaultBlockEntity {
     pub fn get_update_tag(&self) -> Nbt {
-        Nbt::Compound(vec![(vault_shared_data::TAG_NAME.into(), self.shared_data.encode())])
+        Nbt::Compound(vec![(vault_shared_data::TAG_NAME.into(), self.shared_data.encode())].into())
     }
 
     pub fn save_additional(&self, output: &mut Vec<(String, Nbt)>) {

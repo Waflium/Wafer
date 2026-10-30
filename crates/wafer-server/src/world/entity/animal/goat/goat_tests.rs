@@ -310,7 +310,7 @@ fn summoned_goats_save_like_vanilla() {
     let save = |level: &ServerLevel, id: EntityId| {
         let mut out = Vec::new();
         level.entities.get(&id).unwrap().save_without_id(&mut out);
-        Nbt::Compound(out)
+        Nbt::Compound(out.into())
     };
     let r2_nbt = save(&level, r2);
     assert_eq!(r2_nbt.get("Brain"), Some(&parse_snbt("{memories:{}}").unwrap()));
@@ -325,7 +325,7 @@ fn summoned_goats_save_like_vanilla() {
     let loaded = level.load_entity(&Nbt::Compound(fields)).unwrap();
     let mut out = Vec::new();
     loaded.save_without_id(&mut out);
-    assert_eq!(sorted(Nbt::Compound(out)), sorted(r2_nbt));
+    assert_eq!(sorted(Nbt::Compound(out.into())), sorted(r2_nbt));
 }
 
 #[test]

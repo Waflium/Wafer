@@ -123,7 +123,7 @@ impl ServerLevel {
         }
         if ammo_to_use == 0 {
             let mut copy = projectile.stack.copy_with_count(1);
-            copy.set(dc::INTANGIBLE_PROJECTILE, Some(Nbt::Compound(Vec::new())));
+            copy.set(dc::INTANGIBLE_PROJECTILE, Some(Nbt::Compound(Vec::new().into())));
             return copy;
         }
         let used = projectile.stack.split(ammo_to_use);

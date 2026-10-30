@@ -198,14 +198,14 @@ mod template_entities {
             ("id".into(), Nbt::String("minecraft:wolf".into())),
             ("AngerTime".into(), Nbt::Int(100)),
             ("angry_at".into(), Nbt::IntArray(vec![1, 2, 3, 4])),
-        ])
+        ].into())
     }
 
     fn item_frame_tag() -> Nbt {
         Nbt::Compound(vec![
             ("id".into(), Nbt::String("minecraft:item_frame".into())),
-            ("Item".into(), Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:stone".into())), ("count".into(), Nbt::Int(1))])),
-        ])
+            ("Item".into(), Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:stone".into())), ("count".into(), Nbt::Int(1))].into())),
+        ].into())
     }
 
     fn anger(entity: &LevelEntity) -> (i64, Option<u128>) {

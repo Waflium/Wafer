@@ -299,12 +299,12 @@ mod tests {
         let dimensions = preset("minecraft:normal").encode();
         let Nbt::Compound(entries) = dimensions else { panic!("a compound") };
         let nether = entries.iter().find(|(key, _)| key == NETHER).unwrap().1.clone();
-        let broken_nether = Nbt::Compound(vec![("generator".into(), nether.get("generator").unwrap().clone()), ("type".into(), Nbt::String("minecraft:nope".into()))]);
+        let broken_nether = Nbt::Compound(vec![("generator".into(), nether.get("generator").unwrap().clone()), ("type".into(), Nbt::String("minecraft:nope".into()))].into());
         let overworld = entries.iter().find(|(key, _)| key == OVERWORLD).unwrap().1.clone();
         let tag = Nbt::Compound(vec![
             ("seed".into(), Nbt::Long(5)),
-            ("dimensions".into(), Nbt::Compound(vec![(OVERWORLD.into(), overworld), (NETHER.into(), broken_nether)])),
-        ]);
+            ("dimensions".into(), Nbt::Compound(vec![(OVERWORLD.into(), overworld), (NETHER.into(), broken_nether)].into())),
+        ].into());
         let decoded = codec::with_nbt_ops(|| WorldGenSettings::decode(&tag, &[])).unwrap();
         assert!(decoded.value.is_some());
         assert!(decoded.error.expect("an error").starts_with("Failed to get element minecraft:nope from registry minecraft:dimension_type missed input: "));

@@ -16,7 +16,7 @@ fn saved(display: &Display, key: &str) -> Nbt {
 fn display_transformations_decompose_like_vanilla() {
     let mut display = Display::create_item_display();
     let matrix = [1.2, 0.3, -0.7, 0.1, 0.4, 0.9, 0.2, -1.0, -0.6, 0.1, 1.5, 0.25, 0.0, 0.0, 0.0, 2.0];
-    display.read_additional_save_data(&Nbt::Compound(vec![("transformation".into(), floats(&matrix))]));
+    display.read_additional_save_data(&Nbt::Compound(vec![("transformation".into(), floats(&matrix))].into()));
     let transformation = saved(&display, "transformation");
     assert_eq!(transformation.get("translation"), Some(&floats(&[0.05, -0.5, 0.125])));
     assert_eq!(transformation.get("left_rotation"), Some(&floats(&[-0.122892976, -0.32860938, 0.45001304, 0.8212196])));
@@ -26,11 +26,11 @@ fn display_transformations_decompose_like_vanilla() {
     let mut display = Display::create_block_display();
     let decomposed = Nbt::Compound(vec![
         ("translation".into(), floats(&[0.5, 0.0, -0.5])),
-        ("left_rotation".into(), Nbt::Compound(vec![("angle".into(), Nbt::Float(0.7854)), ("axis".into(), floats(&[0.0, 1.0, 0.0]))])),
+        ("left_rotation".into(), Nbt::Compound(vec![("angle".into(), Nbt::Float(0.7854)), ("axis".into(), floats(&[0.0, 1.0, 0.0]))].into())),
         ("scale".into(), floats(&[2.0, 1.0, 1.0])),
         ("right_rotation".into(), floats(&[0.0, 0.0, 1.0, 1.0])),
-    ]);
-    display.read_additional_save_data(&Nbt::Compound(vec![("transformation".into(), decomposed), ("teleport_duration".into(), Nbt::Int(100))]));
+    ].into());
+    display.read_additional_save_data(&Nbt::Compound(vec![("transformation".into(), decomposed), ("teleport_duration".into(), Nbt::Int(100))].into()));
     let transformation = saved(&display, "transformation");
     assert_eq!(transformation.get("left_rotation"), Some(&floats(&[0.0, 0.38268426, 0.0, 0.9238792])));
     assert_eq!(transformation.get("right_rotation"), Some(&floats(&[0.0, 0.0, 0.70710677, 0.70710677])));

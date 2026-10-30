@@ -70,7 +70,7 @@ impl Palette {
 }
 
 fn legacy_block_state(id: &str, properties: &[(&str, &str)]) -> Arc<Dynamic> {
-    let dynamic = Dynamic::new(Nbt::Compound(Vec::new()));
+    let dynamic = Dynamic::new(Nbt::Compound(Vec::new().into()));
     let mut block_state = dynamic.clone().set("Name", dynamic.create_string(id));
     if !properties.is_empty() {
         let map = dynamic.create_map(properties.iter().map(|(key, value)| (dynamic.create_string(*key), dynamic.create_string(*value))).collect::<Vec<_>>());

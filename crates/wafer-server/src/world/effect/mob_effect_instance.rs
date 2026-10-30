@@ -145,7 +145,7 @@ impl MobEffectInstance {
     pub fn to_nbt(&self) -> Nbt {
         let mut fields = vec![("id".into(), Nbt::String(self.effect.info().name.into()))];
         self.write_details(&mut fields);
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     fn write_details(&self, fields: &mut Vec<(String, Nbt)>) {
@@ -165,7 +165,7 @@ impl MobEffectInstance {
         if let Some(hidden) = &self.hidden_effect {
             let mut hidden_fields = Vec::new();
             hidden.write_details(&mut hidden_fields);
-            fields.push(("hidden_effect".into(), Nbt::Compound(hidden_fields)));
+            fields.push(("hidden_effect".into(), Nbt::Compound(hidden_fields.into())));
         }
     }
 

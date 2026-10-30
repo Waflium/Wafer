@@ -24,8 +24,8 @@ impl CelebrateVillagersSurvivedRaid {
 
     fn get_firework(color: DyeColor, flight_duration: i32) -> ItemStack {
         let mut rocket = ItemStack::new(items::FIREWORK_ROCKET, 1);
-        let explosion = Nbt::Compound(vec![("shape".into(), Nbt::String("burst".into())), ("colors".into(), Nbt::IntArray(vec![color.get_firework_color()]))]);
-        let fireworks = Nbt::Compound(vec![("flight_duration".into(), Nbt::Byte(flight_duration as i8)), ("explosions".into(), Nbt::List(vec![explosion]))]);
+        let explosion = Nbt::Compound(vec![("shape".into(), Nbt::String("burst".into())), ("colors".into(), Nbt::IntArray(vec![color.get_firework_color()]))].into());
+        let fireworks = Nbt::Compound(vec![("flight_duration".into(), Nbt::Byte(flight_duration as i8)), ("explosions".into(), Nbt::List(vec![explosion]))].into());
         let fireworks = dc::FIREWORKS.decode(&fireworks).unwrap_or(fireworks);
         rocket.set(dc::FIREWORKS, Some(fireworks));
         rocket

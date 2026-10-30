@@ -25,6 +25,6 @@ impl DataPackConfig {
 
     pub fn to_nbt(&self) -> Nbt {
         let strings = |values: &[String]| Nbt::List(values.iter().map(|v| Nbt::String(v.clone())).collect());
-        Nbt::Compound(vec![("Enabled".to_string(), strings(&self.enabled)), ("Disabled".to_string(), strings(&self.disabled))])
+        Nbt::Compound(vec![("Enabled".to_string(), strings(&self.enabled)), ("Disabled".to_string(), strings(&self.disabled))].into())
     }
 }

@@ -126,7 +126,7 @@ impl Raids {
             .map(|(id, raid)| {
                 let mut fields = vec![("id".to_string(), Nbt::Int(id))];
                 raid.save(&mut fields);
-                Nbt::Compound(fields)
+                Nbt::Compound(fields.into())
             })
             .collect();
         if !raids.is_empty() {
@@ -134,7 +134,7 @@ impl Raids {
         }
         data.push(("next_id".into(), Nbt::Int(self.next_id)));
         data.push(("tick".into(), Nbt::Int(self.tick)));
-        write_dat(&Raids::file(dir), &Nbt::Compound(vec![("data".into(), Nbt::Compound(data)), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]))
+        write_dat(&Raids::file(dir), &Nbt::Compound(vec![("data".into(), Nbt::Compound(data.into())), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into()))
     }
 }
 

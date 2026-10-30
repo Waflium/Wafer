@@ -18,7 +18,7 @@ pub struct TestBlock;
 pub fn set_mode_on_stack(item_stack: &mut ItemStack, mode: TestBlockMode) {
     let mut properties = match item_stack.get(dc::BLOCK_STATE) {
         Some(wafer_protocol::nbt::Nbt::Compound(properties)) => properties.clone(),
-        _ => Vec::new(),
+        _ => Vec::new().into(),
     };
     properties.retain(|(name, _)| name != "mode");
     properties.push(("mode".into(), wafer_protocol::nbt::Nbt::String(mode.name().into())));

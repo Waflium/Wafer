@@ -142,7 +142,7 @@ fn amphibians_save_and_load_their_fields() {
         let loaded = level.load_entity(&Nbt::Compound(fields)).unwrap();
         let mut out = Vec::new();
         loaded.save_without_id(&mut out);
-        assert_eq!(sorted(Nbt::Compound(out)), sorted(saved.clone()), "{entity_type}");
+        assert_eq!(sorted(Nbt::Compound(out.into())), sorted(saved.clone()), "{entity_type}");
         match entity_type {
             "minecraft:axolotl" => {
                 assert_eq!(saved.get("Variant"), Some(&Nbt::Int(4)));
@@ -305,7 +305,7 @@ fn frogs_pick_their_variant_by_biome() {
         let LevelEntity::Mob(mob) = &entity else { unreachable!() };
         let mut out = Vec::new();
         entity.save_without_id(&mut out);
-        let nbt = Nbt::Compound(out);
+        let nbt = Nbt::Compound(out.into());
         let variant = variant_utils::variant_name(frog::VARIANT_REGISTRY, frog::get_variant(&mob.entity));
         let parts: Vec<&str> = expected[i].splitn(4, ' ').collect();
         assert_eq!(format!("\"{variant}\""), parts[0]);

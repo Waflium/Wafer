@@ -218,7 +218,7 @@ impl Mob {
         }
         let mut tag = match bucket.get(dc::BUCKET_ENTITY_DATA) {
             Some(Nbt::Compound(tag)) => tag.clone(),
-            _ => Vec::new(),
+            _ => Vec::new().into(),
         };
         tag.retain(|(key, _)| key != "age" && key != "age_locked");
         tag.push(("age".into(), Nbt::Int(self.ageable().map_or(0, |ageable| ageable.age))));

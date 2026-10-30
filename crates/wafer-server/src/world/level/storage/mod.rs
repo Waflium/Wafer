@@ -372,7 +372,7 @@ impl WorldData {
             difficulty,
             difficulty_locked: false,
             hardcore,
-            clocks: Nbt::Compound(Vec::new()),
+            clocks: Nbt::Compound(Vec::new().into()),
             weather: WeatherData::default(),
             special_world_property,
             world_gen_settings_lifecycle,
@@ -380,7 +380,7 @@ impl WorldData {
             server_brands: Vec::new(),
             was_modded: false,
             removed_features: Default::default(),
-            game_rules: Nbt::Compound(Vec::new()),
+            game_rules: Nbt::Compound(Vec::new().into()),
             data_configuration,
             level_name,
             allow_commands: false,
@@ -429,7 +429,7 @@ impl WorldData {
             difficulty: setting("difficulty").and_then(Nbt::as_str).and_then(Difficulty::by_name).unwrap_or(Difficulty::Normal),
             difficulty_locked: flag("locked"),
             hardcore: flag("hardcore"),
-            clocks: Nbt::Compound(Vec::new()),
+            clocks: Nbt::Compound(Vec::new().into()),
             weather: WeatherData::default(),
             special_world_property,
             world_gen_settings_lifecycle,
@@ -445,7 +445,7 @@ impl WorldData {
                 features.insert(feature.to_string());
                 features
             }),
-            game_rules: Nbt::Compound(Vec::new()),
+            game_rules: Nbt::Compound(Vec::new().into()),
             data_configuration,
             level_name: level.get("LevelName").and_then(Nbt::as_str).unwrap_or("").to_string(),
             allow_commands: level.get("allowCommands").and_then(Nbt::as_i64).map_or(game_type == GameType::Creative, |v| v != 0),
@@ -476,7 +476,7 @@ impl WorldData {
             ("ServerBrands", Nbt::List(self.server_brands.iter().map(|b| string(b)).collect())),
             ("version", Nbt::Int(LEVEL_NBT_VERSION)),
             ("LastPlayed", Nbt::Long(now)),
-            ("spawn", Nbt::Compound(self.spawn.to_nbt_fields())),
+            ("spawn", Nbt::Compound(self.spawn.to_nbt_fields().into())),
             (
                 "Version",
                 compound(vec![

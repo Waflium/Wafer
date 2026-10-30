@@ -42,7 +42,7 @@ impl SetCustomModelDataFunction {
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {
-        let component = item_stack.get(dc::CUSTOM_MODEL_DATA).cloned().unwrap_or(Nbt::Compound(Vec::new()));
+        let component = item_stack.get(dc::CUSTOM_MODEL_DATA).cloned().unwrap_or(Nbt::Compound(Vec::new().into()));
         let list = |key: &str| component.get(key).map_or(Vec::new(), |v| v.as_list().to_vec());
         let floats = match &self.floats {
             Some(operation) => {
@@ -78,7 +78,7 @@ impl SetCustomModelDataFunction {
             ("flags".into(), Nbt::List(flags)),
             ("strings".into(), Nbt::List(strings)),
             ("colors".into(), Nbt::List(colors)),
-        ]);
+        ].into());
         let value = dc::CUSTOM_MODEL_DATA.decode(&value).unwrap_or(value);
         item_stack.set(dc::CUSTOM_MODEL_DATA, Some(value));
         item_stack

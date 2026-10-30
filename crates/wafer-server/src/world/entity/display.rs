@@ -153,7 +153,7 @@ fn encode_transformation(transformation: &Transformation) -> Nbt {
         ("left_rotation".into(), extra_codecs::quaternionf_to_nbt(transformation.left_rotation)),
         ("scale".into(), extra_codecs::vector3f_to_nbt(transformation.scale)),
         ("right_rotation".into(), extra_codecs::quaternionf_to_nbt(transformation.right_rotation)),
-    ])
+    ].into())
 }
 
 impl Display {

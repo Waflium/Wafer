@@ -28,7 +28,7 @@ fn saved(level: &ServerLevel, id: EntityId) -> Vec<(String, Nbt)> {
 fn mannequins_fall_take_damage_and_die() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 8.5), 180.0, 0.0);
-    let id = add_mannequin(&mut level, Vec3::new(0.5, -55.0, 0.5), Nbt::Compound(Vec::new()));
+    let id = add_mannequin(&mut level, Vec3::new(0.5, -55.0, 0.5), Nbt::Compound(Vec::new().into()));
     for _ in 0..40 {
         level.tick();
     }
@@ -51,7 +51,7 @@ fn mannequins_fall_take_damage_and_die() {
 fn immovable_mannequins_do_not_fall() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 8.5), 180.0, 0.0);
-    let id = add_mannequin(&mut level, Vec3::new(0.5, -55.0, 0.5), Nbt::Compound(vec![("immovable".into(), Nbt::Byte(1))]));
+    let id = add_mannequin(&mut level, Vec3::new(0.5, -55.0, 0.5), Nbt::Compound(vec![("immovable".into(), Nbt::Byte(1))].into()));
     for _ in 0..20 {
         level.tick();
     }
@@ -67,14 +67,14 @@ fn mannequins_save_their_avatar_fields() {
         ("pose".into(), Nbt::String("crouching".into())),
         ("hide_description".into(), Nbt::Byte(1)),
     ];
-    let id = add_mannequin(&mut level, Vec3::new(0.5, -60.0, 0.5), Nbt::Compound(fields));
+    let id = add_mannequin(&mut level, Vec3::new(0.5, -60.0, 0.5), Nbt::Compound(fields.into()));
     let out = saved(&level, id);
     let get = |key: &str| out.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
     assert_eq!(get("hidden_layers"), Some(Nbt::List(vec![Nbt::String("cape".into()), Nbt::String("hat".into())])));
     assert_eq!(get("main_hand"), Some(Nbt::String("left".into())));
     assert_eq!(get("pose"), Some(Nbt::String("crouching".into())));
     assert_eq!(get("hide_description"), Some(Nbt::Byte(1)));
-    assert_eq!(get("profile"), Some(Nbt::Compound(Vec::new())));
+    assert_eq!(get("profile"), Some(Nbt::Compound(Vec::new().into())));
     assert!(get("description").is_none());
     assert_eq!(level.entity(id).dimensions.height, 1.5);
 }

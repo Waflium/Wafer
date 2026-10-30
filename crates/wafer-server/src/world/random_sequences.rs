@@ -206,7 +206,7 @@ impl RandomSequences {
             .iter()
             .map(|(key, source)| {
                 let (lo, hi) = source.state();
-                (key.to_string(), Nbt::Compound(vec![("source".into(), Nbt::LongArray(vec![lo, hi]))]))
+                (key.to_string(), Nbt::Compound(vec![("source".into(), Nbt::LongArray(vec![lo, hi]))].into()))
             })
             .collect();
         let mut fields = vec![("salt".into(), Nbt::Int(self.salt))];
@@ -217,7 +217,7 @@ impl RandomSequences {
             fields.push(("include_sequence_id".into(), Nbt::Byte(0)));
         }
         fields.push(("sequences".into(), Nbt::Compound(sequences)));
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn save(&mut self) -> io::Result<()> {
@@ -225,7 +225,7 @@ impl RandomSequences {
         if !self.dirty {
             return Ok(());
         }
-        let file = Nbt::Compound(vec![("data".into(), self.to_nbt()), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]);
+        let file = Nbt::Compound(vec![("data".into(), self.to_nbt()), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into());
         write_dat(&RandomSequences::file(dir), &file)?;
         self.dirty = false;
         Ok(())

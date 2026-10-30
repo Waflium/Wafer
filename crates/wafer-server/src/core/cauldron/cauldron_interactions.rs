@@ -35,7 +35,7 @@ pub fn is_water_potion(item_in_hand: &ItemStack) -> bool {
 
 pub fn water_potion() -> ItemStack {
     let mut stack = ItemStack::new(items::POTION, 1);
-    stack.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:water".into()))])));
+    stack.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String("minecraft:water".into()))].into())));
     stack
 }
 

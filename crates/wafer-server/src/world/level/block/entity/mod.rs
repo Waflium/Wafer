@@ -427,17 +427,17 @@ impl BlockEntity {
     pub fn save_with_full_metadata(&self) -> Nbt {
         let mut output = self.save_without_metadata_fields();
         self.save_metadata(&mut output);
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     pub fn save_with_id(&self) -> Nbt {
         let mut output = self.save_without_metadata_fields();
         output.push(("id".into(), Nbt::String(self.ty.name().into())));
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     pub fn save_without_metadata(&self) -> Nbt {
-        Nbt::Compound(self.save_without_metadata_fields())
+        Nbt::Compound(self.save_without_metadata_fields().into())
     }
 
     fn save_without_metadata_fields(&self) -> Vec<(String, Nbt)> {
@@ -450,7 +450,7 @@ impl BlockEntity {
     pub fn save_custom_only(&self) -> Nbt {
         let mut output = Vec::new();
         self.save_additional(&mut output);
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     fn save_metadata(&self, output: &mut Vec<(String, Nbt)>) {
@@ -486,7 +486,7 @@ impl BlockEntity {
         match self.update_tag_kind() {
             UpdateTag::CustomOnly => self.save_custom_only(),
             UpdateTag::WithoutMetadata => self.save_without_metadata(),
-            UpdateTag::None => Nbt::Compound(Vec::new()),
+            UpdateTag::None => Nbt::Compound(Vec::new().into()),
         }
     }
 

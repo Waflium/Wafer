@@ -31,7 +31,7 @@ impl WobbleStyle {
 
 fn pot_decorations_side(decorations: &Nbt, side: &str) -> Option<ItemStack> {
     match decorations.get(side)? {
-        Nbt::String(id) => ItemStackTemplate { item: id.clone(), count: 1, components: Nbt::Compound(Vec::new()) }.create(),
+        Nbt::String(id) => ItemStackTemplate { item: id.clone(), count: 1, components: Nbt::Compound(Vec::new().into()) }.create(),
         template => ItemStackTemplate::from_nbt(template).create(),
     }
 }
@@ -55,7 +55,7 @@ impl Default for DecoratedPotBlockEntity {
         DecoratedPotBlockEntity {
             wobble_started_at_tick: 0,
             last_wobble_style: None,
-            decorations: Nbt::Compound(Vec::new()),
+            decorations: Nbt::Compound(Vec::new().into()),
             item: ItemStack::empty(),
             loot_table: None,
             loot_table_seed: 0,
@@ -89,7 +89,7 @@ impl DecoratedPotBlockEntity {
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {
-        self.decorations = tag_value_input::read(input, TAG_SHERDS, |sherds| dc::POT_DECORATIONS.decode_partial(sherds)).unwrap_or(Nbt::Compound(Vec::new()));
+        self.decorations = tag_value_input::read(input, TAG_SHERDS, |sherds| dc::POT_DECORATIONS.decode_partial(sherds)).unwrap_or(Nbt::Compound(Vec::new().into()));
         if !self.try_load_loot_table(input) {
             self.item = tag_value_input::read(input, TAG_ITEM, ItemStack::from_nbt_partial).unwrap_or_else(ItemStack::empty);
         } else {
@@ -121,7 +121,7 @@ impl DecoratedPotBlockEntity {
     }
 
     pub fn apply_implicit_components<'a>(&mut self, get: &mut impl FnMut(DataComponentType) -> Option<&'a Nbt>) {
-        self.decorations = get(dc::POT_DECORATIONS).cloned().unwrap_or(Nbt::Compound(Vec::new()));
+        self.decorations = get(dc::POT_DECORATIONS).cloned().unwrap_or(Nbt::Compound(Vec::new().into()));
         let mut items = [ItemStack::empty()];
         super::base_container_block_entity::copy_into(get(dc::CONTAINER), &mut items);
         let [item] = items;

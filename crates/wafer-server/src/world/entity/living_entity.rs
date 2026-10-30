@@ -321,7 +321,7 @@ pub fn add_additional_save_data(entity: &Entity, living: &LivingEntity, health: 
         .filter_map(|slot| equipment[slot as usize].as_ref().filter(|stack| !stack.is_empty()).map(|stack| (super::mob::slot_name(slot).to_string(), stack.to_nbt())))
         .collect();
     if !slots.is_empty() {
-        output.push(("equipment".into(), Nbt::Compound(slots)));
+        output.push(("equipment".into(), Nbt::Compound(slots.into())));
     }
     if living.locator_bar_icon.has_data() {
         output.push(("locator_bar_icon".into(), living.locator_bar_icon.to_nbt()));

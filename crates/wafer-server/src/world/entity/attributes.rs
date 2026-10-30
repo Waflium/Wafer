@@ -154,7 +154,7 @@ impl AttributeModifier {
             ("id".into(), Nbt::String(self.id.to_string())),
             ("amount".into(), Nbt::Double(self.amount)),
             ("operation".into(), Nbt::String(self.operation.name().into())),
-        ])
+        ].into())
     }
 
     pub fn from_nbt(nbt: &Nbt) -> Option<AttributeModifier> {
@@ -314,7 +314,7 @@ impl AttributeInstance {
         if !modifiers.is_empty() {
             fields.push(("modifiers".into(), Nbt::List(modifiers)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     fn apply(&mut self, base_value: f64, modifiers: Vec<AttributeModifier>) {

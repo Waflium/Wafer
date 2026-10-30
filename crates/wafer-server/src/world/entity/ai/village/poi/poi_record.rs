@@ -23,7 +23,7 @@ impl PoiRecord {
         if self.free_tickets != 0 {
             fields.push(("free_tickets".to_string(), Nbt::Int(self.free_tickets)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn unpack(nbt: &Nbt) -> Option<PoiRecord> {

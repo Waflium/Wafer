@@ -162,7 +162,7 @@ fn cows_save_vanillas_fields() {
     mob.save(&mut saved);
     assert!(saved.iter().any(|(k, v)| k == "Type" && v.as_str() == Some("brown")));
     let mut loaded = MushroomCow::create();
-    loaded.load(&Nbt::Compound(saved));
+    loaded.load(&Nbt::Compound(saved.into()));
     assert_eq!(mushroom_cow::get_variant(&loaded.entity), mushroom_cow::Variant::Brown);
     let mut mob = Cow::create();
     let warm = crate::world::entity::variant::variant_utils::read_variant(cow::VARIANT_REGISTRY, "warm").unwrap();
@@ -280,7 +280,7 @@ fn sheep_save_their_color_and_wool() {
     assert!(saved.iter().any(|(k, v)| k == "Color" && *v == Nbt::Byte(12)));
     assert!(saved.iter().any(|(k, v)| k == "Sheared" && *v == Nbt::Byte(1)));
     let mut loaded = Sheep::create();
-    loaded.load(&Nbt::Compound(saved));
+    loaded.load(&Nbt::Compound(saved.into()));
     assert_eq!(sheep::get_color(&loaded.entity).name, "brown");
     let id = loaded.entity.id;
     level.add_fresh_entity(LevelEntity::Mob(Box::new(loaded)));

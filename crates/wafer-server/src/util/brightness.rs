@@ -19,7 +19,7 @@ impl Brightness {
     }
 
     pub fn encode(self) -> Nbt {
-        Nbt::Compound(vec![("block".into(), Nbt::Int(self.block)), ("sky".into(), Nbt::Int(self.sky))])
+        Nbt::Compound(vec![("block".into(), Nbt::Int(self.block)), ("sky".into(), Nbt::Int(self.sky))].into())
     }
 
     pub fn pack(self) -> i32 {

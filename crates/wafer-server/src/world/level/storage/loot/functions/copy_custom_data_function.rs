@@ -31,7 +31,7 @@ impl MergeStrategy {
                 });
             }
             MergeStrategy::Merge => {
-                let _ = path.get_or_create_each(target, &|| Nbt::Compound(Vec::new()), |tag| {
+                let _ = path.get_or_create_each(target, &|| Nbt::Compound(Vec::new().into()), |tag| {
                     if let Nbt::Compound(fields) = tag {
                         for source in sources {
                             if let Nbt::Compound(source_fields) = source {
@@ -85,7 +85,7 @@ impl CopyCustomDataFunction {
             if let Ok(source_tags) = op.source_path.get(&source_tag)
                 && !source_tags.is_empty()
             {
-                let target = result.get_or_insert_with(|| item_stack.get(dc::CUSTOM_DATA).cloned().unwrap_or(Nbt::Compound(Vec::new())));
+                let target = result.get_or_insert_with(|| item_stack.get(dc::CUSTOM_DATA).cloned().unwrap_or(Nbt::Compound(Vec::new().into())));
                 op.op.merge(target, &op.target_path, &source_tags);
             }
         }

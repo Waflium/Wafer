@@ -57,7 +57,7 @@ impl ItemCost {
         if !self.components.is_empty() {
             fields.push(("components".to_string(), self.components.to_nbt()));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn write(&self, w: &mut Writer) {

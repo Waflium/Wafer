@@ -106,7 +106,7 @@ pub fn set_variant(mob: &mut Mob, variant: Variant) {
             operation: ModifierOperation::AddValue,
         });
         if !mob.entity.has_custom_name() {
-            mob.entity.set_custom_name(Some(Nbt::Compound(vec![("translate".into(), Nbt::String(KILLER_BUNNY.into()))])));
+            mob.entity.set_custom_name(Some(Nbt::Compound(vec![("translate".into(), Nbt::String(KILLER_BUNNY.into()))].into())));
         }
     } else {
         mob.living.attributes.instance(Attribute::AttackDamage).expect("rabbits have attack damage").remove_modifier(EVIL_ATTACK_POWER_MODIFIER);

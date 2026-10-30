@@ -46,7 +46,7 @@ fn default_description() -> Nbt {
 }
 
 fn default_profile() -> Nbt {
-    Nbt::Compound(Vec::new())
+    Nbt::Compound(Vec::new().into())
 }
 
 pub struct Mannequin {

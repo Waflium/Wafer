@@ -202,9 +202,9 @@ fn write_updated_level_data(world_folder: &CopyOnWriteFSPath, to_version: i32) -
     let unfixed_data_tag = match &unfixed_level_dat {
         wafer_protocol::nbt::Nbt::Compound(entries) => match entries.iter().find(|(key, _)| key == "Data") {
             Some((_, data @ wafer_protocol::nbt::Nbt::Compound(_))) => data.clone(),
-            _ => wafer_protocol::nbt::Nbt::Compound(Vec::new()),
+            _ => wafer_protocol::nbt::Nbt::Compound(Vec::new().into()),
         },
-        _ => wafer_protocol::nbt::Nbt::Compound(Vec::new()),
+        _ => wafer_protocol::nbt::Nbt::Compound(Vec::new().into()),
     };
     let data_version = Dynamic::new(unfixed_data_tag.clone()).get("DataVersion").as_int(-1);
     let mut fixed = DataFixTypes::Level.update(Dynamic::new(unfixed_data_tag), data_version, to_version);

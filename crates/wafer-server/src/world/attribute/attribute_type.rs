@@ -273,7 +273,7 @@ impl AttributeType {
                         Ok(Nbt::Compound(vec![
                             ("particle".into(), data(particle_types::dispatch_codec(), &particle.particle)?),
                             ("probability".into(), Nbt::Float(particle.probability)),
-                        ]))
+                        ].into()))
                     })
                     .collect::<Result<_, String>>()?,
             ),

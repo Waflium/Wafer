@@ -53,7 +53,7 @@ impl ServerLevel {
         if let Some(owner) = self.projectile_get_owner(id).filter(|&owner| self.is_living(owner)) {
             cloud.set_owner(Some(self.entity(owner).uuid));
         }
-        let particle = particle_types::parse("minecraft:dragon_breath", &Nbt::Compound(vec![("power".into(), Nbt::Float(1.0))])).expect("a dragon breath particle");
+        let particle = particle_types::parse("minecraft:dragon_breath", &Nbt::Compound(vec![("power".into(), Nbt::Float(1.0))].into())).expect("a dragon breath particle");
         cloud.set_custom_particle(Some(particle));
         cloud.set_radius(3.0);
         cloud.duration = 600;

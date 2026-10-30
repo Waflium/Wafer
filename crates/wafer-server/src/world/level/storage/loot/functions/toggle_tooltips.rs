@@ -47,7 +47,7 @@ impl ToggleTooltips {
             fields.push(("hide_tooltip".to_string(), hide_tooltip));
         }
         fields.push(("hidden_components".to_string(), Nbt::List(hidden.into_iter().map(Nbt::String).collect())));
-        let value = Nbt::Compound(fields);
+        let value = Nbt::Compound(fields.into());
         let value = dc::TOOLTIP_DISPLAY.decode(&value).unwrap_or(value);
         item_stack.set(dc::TOOLTIP_DISPLAY, Some(value));
         item_stack

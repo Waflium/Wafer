@@ -251,7 +251,7 @@ fn comparable_entity(tag: &wafer_protocol::nbt::Nbt) -> String {
             wafer_protocol::nbt::Nbt::Compound(fields) => {
                 let mut fields: Vec<_> = fields.iter().filter(|(key, _)| key != "UUID").map(|(key, value)| (key.clone(), sorted(value))).collect();
                 fields.sort_by(|a, b| a.0.cmp(&b.0));
-                wafer_protocol::nbt::Nbt::Compound(fields)
+                wafer_protocol::nbt::Nbt::Compound(fields.into())
             }
             wafer_protocol::nbt::Nbt::List(values) => wafer_protocol::nbt::Nbt::List(values.iter().map(sorted).collect()),
             other => other.clone(),

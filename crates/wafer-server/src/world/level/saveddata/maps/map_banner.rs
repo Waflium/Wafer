@@ -38,7 +38,7 @@ impl MapBanner {
         if let Some(name) = &self.name {
             fields.push(("name".into(), name.clone()));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn from_world(level: &ServerLevel, pos: BlockPos) -> Option<MapBanner> {

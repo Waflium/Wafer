@@ -125,7 +125,7 @@ fn without(nbt: Nbt, keys: &[&str]) -> Nbt {
 fn saved(level: &ServerLevel, id: EntityId) -> Nbt {
     let mut out = Vec::new();
     level.save_without_id(id, &mut out);
-    Nbt::Compound(out)
+    Nbt::Compound(out.into())
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -258,7 +258,7 @@ fn villagers_restock_and_turn_into_witches_like_vanilla() {
     let loaded = level.load_entity(&saved_villager).unwrap();
     let mut out = Vec::new();
     loaded.save_without_id(&mut out);
-    let reloaded = Nbt::Compound(out);
+    let reloaded = Nbt::Compound(out.into());
     assert_eq!(reloaded.get("VillagerDataFinalized"), Some(&Nbt::Byte(1)));
     assert_eq!(sorted(without(reloaded, &["VillagerDataFinalized"])), sorted(without(saved(&level, villager), &["VillagerDataFinalized"])));
     let pos = level.entity(villager).position();

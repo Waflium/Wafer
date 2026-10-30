@@ -164,6 +164,6 @@ impl CustomBossEvent {
             ("Players", (!self.players.is_empty()).then(|| Nbt::List(self.players.iter().map(|&u| uuid_ints(u)).collect()))),
         ];
         fields.extend(defaults.into_iter().filter_map(|(key, value)| Some((key.to_string(), value?))));
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 }

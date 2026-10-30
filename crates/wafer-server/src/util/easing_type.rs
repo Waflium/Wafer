@@ -72,7 +72,7 @@ impl EasingType {
         match self {
             EasingType::Simple(i) => Nbt::String(SIMPLE[*i].0.into()),
             EasingType::CubicBezier(bezier) => {
-                Nbt::Compound(vec![("cubic_bezier".into(), Nbt::List(bezier.controls.iter().map(|&control| Nbt::Float(control)).collect()))])
+                Nbt::Compound(vec![("cubic_bezier".into(), Nbt::List(bezier.controls.iter().map(|&control| Nbt::Float(control)).collect()))].into())
             }
         }
     }

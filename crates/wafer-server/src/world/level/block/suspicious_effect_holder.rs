@@ -15,7 +15,7 @@ pub fn try_get(item: Item) -> Option<Nbt> {
                 if duration != 160 {
                     compound.push(("duration".to_string(), Nbt::Int(duration)));
                 }
-                Nbt::Compound(compound)
+                Nbt::Compound(compound.into())
             })
             .collect(),
     ))

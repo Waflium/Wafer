@@ -120,7 +120,7 @@ impl Tadpole {
         bucketable::save_default_data_to_bucket_tag(mob, bucket);
         let mut tag = match bucket.get(crate::world::item::component::BUCKET_ENTITY_DATA) {
             Some(Nbt::Compound(tag)) => tag.clone(),
-            _ => Vec::new(),
+            _ => Vec::new().into(),
         };
         let mut put = |key: &str, value: Nbt| {
             tag.retain(|(k, _)| k != key);

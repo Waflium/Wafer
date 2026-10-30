@@ -30,10 +30,131 @@ pub enum Nbt {
     ByteArray(Vec<i8>),
     String(String),
     List(Vec<Nbt>),
-    Compound(Vec<(String, Nbt)>),
+    Compound(TagMap),
     IntArray(Vec<i32>),
     LongArray(Vec<i64>),
     LazilyParsedNumber(String),
+}
+
+#[derive(Clone, Default)]
+pub struct TagMap {
+    entries: Vec<(String, Nbt)>,
+    capacity: u32,
+}
+
+impl TagMap {
+    pub const fn new() -> TagMap {
+        TagMap { entries: Vec::new(), capacity: 0 }
+    }
+
+    pub fn with_capacity_of_copy(entries: Vec<(String, Nbt)>, size: usize) -> TagMap {
+        TagMap { entries, capacity: if size == 0 { 0 } else { table_size_for_copy(size) as u32 } }
+    }
+
+    pub fn into_vec(self) -> Vec<(String, Nbt)> {
+        self.entries
+    }
+
+    pub fn table_capacity(&self) -> usize {
+        let mut capacity = if self.capacity == 0 { 16 } else { self.capacity as usize };
+        while self.entries.len() > capacity * 3 / 4 {
+            capacity *= 2;
+        }
+        capacity
+    }
+
+    pub fn iteration_order(&self) -> Vec<usize> {
+        let capacity = self.table_capacity();
+        let mut order: Vec<usize> = (0..self.entries.len()).collect();
+        order.sort_by_key(|&i| java_bucket(&self.entries[i].0, capacity));
+        order
+    }
+
+    pub fn iteration(&self) -> impl Iterator<Item = &(String, Nbt)> {
+        self.iteration_order().into_iter().map(|i| &self.entries[i])
+    }
+
+    pub fn shallow_copy(&self) -> TagMap {
+        let entries: Vec<(String, Nbt)> = self.iteration().cloned().collect();
+        let size = entries.len();
+        TagMap::with_capacity_of_copy(entries, size)
+    }
+
+    pub fn put(&mut self, key: &str, value: Nbt) {
+        match self.entries.iter_mut().find(|(k, _)| k == key) {
+            Some((_, slot)) => *slot = value,
+            None => self.entries.push((key.to_string(), value)),
+        }
+    }
+}
+
+fn table_size_for_copy(size: usize) -> usize {
+    ((size as f32 / 0.75f32 + 1.0f32) as usize).next_power_of_two()
+}
+
+impl std::fmt::Debug for TagMap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.entries.fmt(f)
+    }
+}
+
+impl std::ops::Deref for TagMap {
+    type Target = Vec<(String, Nbt)>;
+
+    fn deref(&self) -> &Vec<(String, Nbt)> {
+        &self.entries
+    }
+}
+
+impl std::ops::DerefMut for TagMap {
+    fn deref_mut(&mut self) -> &mut Vec<(String, Nbt)> {
+        &mut self.entries
+    }
+}
+
+impl From<Vec<(String, Nbt)>> for TagMap {
+    fn from(entries: Vec<(String, Nbt)>) -> TagMap {
+        TagMap { entries, capacity: 0 }
+    }
+}
+
+impl FromIterator<(String, Nbt)> for TagMap {
+    fn from_iter<I: IntoIterator<Item = (String, Nbt)>>(iter: I) -> TagMap {
+        TagMap { entries: iter.into_iter().collect(), capacity: 0 }
+    }
+}
+
+impl IntoIterator for TagMap {
+    type Item = (String, Nbt);
+    type IntoIter = std::vec::IntoIter<(String, Nbt)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a TagMap {
+    type Item = &'a (String, Nbt);
+    type IntoIter = std::slice::Iter<'a, (String, Nbt)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut TagMap {
+    type Item = &'a mut (String, Nbt);
+    type IntoIter = std::slice::IterMut<'a, (String, Nbt)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.iter_mut()
+    }
+}
+
+impl Extend<(String, Nbt)> for TagMap {
+    fn extend<I: IntoIterator<Item = (String, Nbt)>>(&mut self, iter: I) {
+        self.entries.extend(iter);
+    }
 }
 
 pub fn float_tag_value(v: f32) -> f32 {
@@ -189,7 +310,7 @@ impl Nbt {
                 }
             }),
             Nbt::Compound(fields) => w.layer(&COMPOUND_TAG_WRITE, |w| {
-                for &i in &java_hash_map_order(&fields.iter().map(|f| f.0.as_str()).collect::<Vec<_>>()) {
+                for i in fields.iteration_order() {
                     let (name, value) = &fields[i];
                     w.u8(value.tag_id());
                     if matches!(value, Nbt::End) {
@@ -296,7 +417,7 @@ fn read_payload(r: &mut Reader, id: u8, depth: u32) -> Result<Nbt, DecodeError> 
             Nbt::List((0..len).map(|_| read_payload(r, element, depth + 1).map(try_unwrap)).collect::<Result<_, _>>()?)
         }
         10 => {
-            let mut fields = Vec::new();
+            let mut fields = TagMap::new();
             loop {
                 let field = r.u8()?;
                 if field == 0 {
@@ -345,17 +466,18 @@ fn java_string_hash(s: &str) -> i32 {
     s.java_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
 }
 
+fn java_bucket(key: &str, capacity: usize) -> usize {
+    let h = java_string_hash(key);
+    ((h ^ ((h as u32) >> 16) as i32) as u32 as usize) & (capacity - 1)
+}
+
 pub fn java_hash_map_order<S: AsRef<str>>(keys: &[S]) -> Vec<usize> {
     let mut capacity = 16usize;
     while keys.len() > capacity * 3 / 4 {
         capacity *= 2;
     }
-    let bucket = |key: &str| {
-        let h = java_string_hash(key);
-        ((h ^ ((h as u32) >> 16) as i32) as u32 as usize) & (capacity - 1)
-    };
     let mut order: Vec<usize> = (0..keys.len()).collect();
-    order.sort_by_key(|&i| bucket(keys[i].as_ref()));
+    order.sort_by_key(|&i| java_bucket(keys[i].as_ref(), capacity));
     order
 }
 
@@ -366,7 +488,7 @@ mod tests {
     #[test]
     fn compound_layout() {
         let mut w = Writer::new();
-        Nbt::Compound(vec![("a".into(), Nbt::Byte(1))]).write(&mut w);
+        Nbt::Compound(vec![("a".into(), Nbt::Byte(1))].into()).write(&mut w);
         assert_eq!(w.as_slice(), &[10, 1, 0, 1, b'a', 1, 0]);
     }
 
@@ -376,8 +498,8 @@ mod tests {
             ("name".into(), Nbt::String(" é😀".into())),
             ("list".into(), Nbt::List(vec![Nbt::Int(1), Nbt::Int(2)])),
             ("longs".into(), Nbt::LongArray(vec![-1, 7])),
-            ("nested".into(), Nbt::Compound(vec![("f".into(), Nbt::Float(0.5))])),
-        ]);
+            ("nested".into(), Nbt::Compound(vec![("f".into(), Nbt::Float(0.5))].into())),
+        ].into());
         let mut w = Writer::new();
         value.write_named("root", &mut w);
         let (name, read) = Nbt::read_named(&mut Reader::new(w.as_slice())).unwrap();
@@ -386,7 +508,7 @@ mod tests {
 
     #[test]
     fn mixed_lists_wrap_on_the_wire() {
-        let wrapper = Nbt::Compound(vec![(String::new(), Nbt::Int(1))]);
+        let wrapper = Nbt::Compound(vec![(String::new(), Nbt::Int(1))].into());
         for list in [Nbt::List(vec![wrapper.clone(), Nbt::Int(2)]), Nbt::List(vec![wrapper]), Nbt::List(vec![Nbt::String("a".into()), Nbt::Byte(1)])] {
             let mut w = Writer::new();
             list.write(&mut w);

@@ -37,7 +37,7 @@ impl Abilities {
             ("mayBuild".into(), Nbt::Byte(self.may_build as i8)),
             ("flySpeed".into(), Nbt::Float(self.flying_speed)),
             ("walkSpeed".into(), Nbt::Float(self.walking_speed)),
-        ])
+        ].into())
     }
 
     pub fn decode(nbt: &Nbt) -> DecodeResult<Abilities> {

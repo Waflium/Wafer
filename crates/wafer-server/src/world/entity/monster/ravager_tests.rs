@@ -14,7 +14,7 @@ fn ravagers_have_vanillas_attributes_and_save_their_ticks() {
     assert_eq!(attributes.value(Attribute::StepHeight), 1.0);
     assert_eq!(mob.xp_reward, 20);
     assert_eq!(mob.max_head_y_rot(), 45);
-    mob.load(&Nbt::Compound(vec![("StunTick".into(), Nbt::Int(12)), ("RoarTick".into(), Nbt::Int(3))]));
+    mob.load(&Nbt::Compound(vec![("StunTick".into(), Nbt::Int(12)), ("RoarTick".into(), Nbt::Int(3))].into()));
     assert!(Ravager::is_immobile(&mob));
     assert!(!Ravager::has_line_of_sight(&mob));
     let mut out = Vec::new();

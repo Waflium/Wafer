@@ -49,7 +49,7 @@ impl SignText {
         }
         fields.push(("color".into(), Nbt::String(self.color.name.into())));
         fields.push(("has_glowing_text".into(), Nbt::Byte(self.has_glowing_text as i8)));
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn has_glowing_text(&self) -> bool {

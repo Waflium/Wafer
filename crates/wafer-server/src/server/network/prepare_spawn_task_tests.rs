@@ -16,8 +16,8 @@ fn world_with_broken_player(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("wafer-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("players/data")).unwrap();
-    let frog = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:frog".into())), ("Variant".into(), Nbt::Int(99))]);
-    let player = Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(3086)), ("ShoulderEntityLeft".into(), frog)]);
+    let frog = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:frog".into())), ("Variant".into(), Nbt::Int(99))].into());
+    let player = Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(3086)), ("ShoulderEntityLeft".into(), frog)].into());
     write_compressed(&player, &dir.join(format!("players/data/{}.dat", format_uuid(UUID)))).unwrap();
     dir
 }

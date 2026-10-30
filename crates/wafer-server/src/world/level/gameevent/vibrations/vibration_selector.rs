@@ -43,7 +43,7 @@ impl VibrationSelector {
             fields.push(("event".to_string(), event.to_nbt()));
         }
         fields.push(("tick".into(), Nbt::Long(self.current_vibration_data.map_or(-1, |(_, tick)| tick))));
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn from_nbt(nbt: &Nbt) -> Option<VibrationSelector> {

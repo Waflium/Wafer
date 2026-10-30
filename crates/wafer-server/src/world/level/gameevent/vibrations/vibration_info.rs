@@ -47,7 +47,7 @@ impl VibrationInfo {
         if let Some(uuid) = self.projectile_owner_uuid {
             fields.push(("projectile_owner".into(), uuid_ints(uuid)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn from_nbt(nbt: &Nbt) -> Option<VibrationInfo> {

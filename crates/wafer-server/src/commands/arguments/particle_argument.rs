@@ -10,7 +10,7 @@ pub static ERROR_INVALID_OPTIONS: DynamicCommandExceptionType = DynamicCommandEx
 
 pub fn read_particle(reader: &mut StringReader) -> Result<ParticleOptions, CommandSyntaxException> {
     let particle_type = read_particle_type(reader)?;
-    let extra_data = if reader.can_read() && reader.peek() == b'{' as u16 { crate::nbt::parse_as_argument(reader)? } else { Nbt::Compound(Vec::new()) };
+    let extra_data = if reader.can_read() && reader.peek() == b'{' as u16 { crate::nbt::parse_as_argument(reader)? } else { Nbt::Compound(Vec::new().into()) };
     particle_types::parse(particle_type, &extra_data).map_err(|message| ERROR_INVALID_OPTIONS.create(message))
 }
 

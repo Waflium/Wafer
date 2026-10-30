@@ -1601,7 +1601,7 @@ impl Mob {
             .map(|slot| (slot_name(slot).to_string(), Nbt::Float(self.drop_chances[slot as usize])))
             .collect();
         if !drop_chances.is_empty() {
-            out.push(("drop_chances".into(), Nbt::Compound(drop_chances)));
+            out.push(("drop_chances".into(), Nbt::Compound(drop_chances.into())));
         }
         super::leashable::LeashData::write(self.leash_data.as_ref(), out);
         if self.home_radius > -1 {
@@ -2396,7 +2396,7 @@ impl Mob {
             .into_iter()
             .filter_map(|slot| self.item_by_slot(slot).map(|stack| (slot_name(slot).to_string(), stack.to_nbt())))
             .collect();
-        (!slots.is_empty()).then_some(Nbt::Compound(slots))
+        (!slots.is_empty()).then_some(Nbt::Compound(slots.into()))
     }
 
     pub fn load_equipment(&mut self, nbt: &Nbt) {

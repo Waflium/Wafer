@@ -71,7 +71,7 @@ fn pillager_inventories_are_saved() {
     let mut out = Vec::new();
     mob.save(&mut out);
     let mut loaded = Pillager::create();
-    loaded.load(&Nbt::Compound(out));
+    loaded.load(&Nbt::Compound(out.into()));
     assert_eq!(pillager::pillager(&loaded).inventory.items[0], ItemStack::new(items::DIAMOND, 3));
     assert!(loaded.can_pick_up_loot);
 }

@@ -26,7 +26,7 @@ struct PlayerAction {
 
 impl PlayerAction {
     fn to_nbt(self) -> Nbt {
-        Nbt::Compound(vec![("player".into(), uuid_ints(self.player)), ("timestamp".into(), Nbt::Long(self.timestamp))])
+        Nbt::Compound(vec![("player".into(), uuid_ints(self.player)), ("timestamp".into(), Nbt::Long(self.timestamp))].into())
     }
 
     fn decode(tag: &Nbt) -> DecodeResult<PlayerAction> {

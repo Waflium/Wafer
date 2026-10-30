@@ -265,7 +265,7 @@ impl MapItemSavedData {
         if self.frame_markers.len() > 0 {
             fields.push(("frames".into(), Nbt::List(self.frame_markers.iter().map(|(_, frame)| frame.encode()).collect())));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn set_dirty(&mut self) {
@@ -401,10 +401,10 @@ impl MapItemSavedData {
             ("x".into(), Nbt::Double(position.x as f64)),
             ("z".into(), Nbt::Double(position.z as f64)),
             ("rotation".into(), Nbt::Float(180.0)),
-        ]);
+        ].into());
         let mut decorations = match item_stack.get(dc::MAP_DECORATIONS) {
             Some(Nbt::Compound(decorations)) => decorations.clone(),
-            _ => Vec::new(),
+            _ => Vec::new().into(),
         };
         match decorations.iter_mut().find(|(id, _)| id == key) {
             Some((_, entry)) => *entry = new_decoration,

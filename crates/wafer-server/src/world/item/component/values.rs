@@ -276,7 +276,7 @@ impl ItemStackTemplate {
         ItemStackTemplate {
             item: string(v.get("id")).unwrap_or_default(),
             count: i32_or(v.get("count"), 1),
-            components: v.get("components").cloned().unwrap_or(Nbt::Compound(Vec::new())),
+            components: v.get("components").cloned().unwrap_or(Nbt::Compound(Vec::new().into())),
         }
     }
 
@@ -288,7 +288,7 @@ impl ItemStackTemplate {
         if !matches!(&self.components, Nbt::Compound(c) if c.is_empty()) {
             fields.push(("components".into(), self.components.clone()));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn create(&self) -> Option<crate::world::item::ItemStack> {
@@ -302,7 +302,7 @@ impl ItemStackTemplate {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<ItemStackTemplate> {
-        let alternative = || DecodeResult::from(decode_item(tag)).map(|item| ItemStackTemplate { item, count: 1, components: Nbt::Compound(Vec::new()) });
+        let alternative = || DecodeResult::from(decode_item(tag)).map(|item| ItemStackTemplate { item, count: 1, components: Nbt::Compound(Vec::new().into()) });
         crate::util::codec::either_result(ItemStackTemplate::decode_map_partial(tag), alternative).map(|either| match either {
             Ok(template) | Err(template) => template,
         })
@@ -315,7 +315,7 @@ impl ItemStackTemplate {
         let mut record = Record::default();
         let item = record.required(tag, "id", |id| DecodeResult::from(decode_item(id)));
         let count = record.with_default(tag, "count", 1, |count| DecodeResult::from(Codec::Int(1, 99, RangeError::Within).decode(count)).map(|count| as_i32(&count)));
-        let components = record.with_default(tag, "components", Nbt::Compound(Vec::new()), |components| {
+        let components = record.with_default(tag, "components", Nbt::Compound(Vec::new().into()), |components| {
             DecodeResult::from(super::DataComponentPatch::from_nbt(components)).map(|_| components.clone())
         });
         record.build(|| Some(ItemStackTemplate { item: item?, count, components }))
@@ -347,7 +347,7 @@ impl ItemStackTemplate {
 }
 
 pub fn container_slots(v: &Nbt) -> Vec<(i32, ItemStackTemplate)> {
-    v.as_list().iter().map(|s| (i32_or(s.get("slot"), 0), s.get("item").map(ItemStackTemplate::from_nbt).unwrap_or(ItemStackTemplate { item: String::new(), count: 0, components: Nbt::Compound(Vec::new()) }))).collect()
+    v.as_list().iter().map(|s| (i32_or(s.get("slot"), 0), s.get("item").map(ItemStackTemplate::from_nbt).unwrap_or(ItemStackTemplate { item: String::new(), count: 0, components: Nbt::Compound(Vec::new().into()) }))).collect()
 }
 
 pub fn templates(v: &Nbt) -> Vec<ItemStackTemplate> {
@@ -420,7 +420,7 @@ pub fn attribute_modifiers(v: &Nbt) -> Vec<AttributeModifier> {
 }
 
 pub fn typed_entity_data(v: &Nbt) -> (String, Nbt) {
-    let Nbt::Compound(fields) = v else { return (String::new(), Nbt::Compound(Vec::new())) };
+    let Nbt::Compound(fields) = v else { return (String::new(), Nbt::Compound(Vec::new().into())) };
     let id = string(v.get("id")).unwrap_or_default();
     (id, Nbt::Compound(fields.iter().filter(|(k, _)| k != "id").cloned().collect()))
 }

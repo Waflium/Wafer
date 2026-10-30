@@ -151,7 +151,7 @@ impl PlayerTeam {
         if !self.players.is_empty() {
             fields.push(("Players".into(), Nbt::List(self.players.iter().map(|p| Nbt::String(p.into())).collect())));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 }
 

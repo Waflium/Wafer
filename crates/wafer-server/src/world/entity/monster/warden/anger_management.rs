@@ -61,10 +61,10 @@ impl AngerManagement {
     pub fn save(&self) -> Nbt {
         let pairs = self.create_uuid_anger_pairs();
         if pairs.is_empty() {
-            return Nbt::Compound(Vec::new());
+            return Nbt::Compound(Vec::new().into());
         }
-        let suspects = pairs.into_iter().map(|(uuid, anger)| Nbt::Compound(vec![("uuid".into(), uuid_ints(uuid)), ("anger".into(), Nbt::Int(anger))])).collect();
-        Nbt::Compound(vec![("suspects".into(), Nbt::List(suspects))])
+        let suspects = pairs.into_iter().map(|(uuid, anger)| Nbt::Compound(vec![("uuid".into(), uuid_ints(uuid)), ("anger".into(), Nbt::Int(anger))].into())).collect();
+        Nbt::Compound(vec![("suspects".into(), Nbt::List(suspects))].into())
     }
 
     fn create_uuid_anger_pairs(&self) -> Vec<(u128, i32)> {

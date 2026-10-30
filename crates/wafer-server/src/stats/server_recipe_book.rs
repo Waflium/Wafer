@@ -88,7 +88,7 @@ impl ServerRecipeBook {
         self.base.book_settings.encode(&mut output);
         output.push(("recipes".into(), Nbt::List(self.known.iter().map(|&id| Nbt::String(id.into())).collect())));
         output.push(("toBeDisplayed".into(), Nbt::List(self.highlight.iter().map(|&id| Nbt::String(id.into())).collect())));
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     pub fn decode_packed(tag: &Nbt) -> DecodeResult<Packed> {

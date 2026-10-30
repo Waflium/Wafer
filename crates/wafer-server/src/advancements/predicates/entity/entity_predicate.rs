@@ -56,7 +56,7 @@ fn decode_parts(tag: Nbt) -> Result<Nbt, String> {
             .ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_sub_predicate_type]: {id}"))?;
         parts.push((id, sub_codec.0.decode(value)?));
     }
-    Ok(Nbt::Compound(parts))
+    Ok(Nbt::Compound(parts.into()))
 }
 
 pub fn codec() -> Pair {

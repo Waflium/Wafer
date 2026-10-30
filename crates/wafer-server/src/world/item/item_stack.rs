@@ -390,7 +390,7 @@ impl ItemStack {
 
     pub fn show_item(&self) -> HoverEvent {
         let components = match self.components_patch().to_nbt() {
-            Nbt::Compound(fields) => fields,
+            Nbt::Compound(fields) => fields.into_vec(),
             _ => Vec::new(),
         };
         HoverEvent::ShowItem { id: self.item.name(), count: self.count, components }
@@ -466,7 +466,7 @@ impl ItemStack {
         if !self.components_patch().is_empty() {
             fields.push(("components".into(), self.components_patch().to_nbt()));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn from_nbt(tag: &Nbt) -> Result<ItemStack, String> {

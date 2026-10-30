@@ -59,7 +59,7 @@ impl Settings {
             ("size".into(), Nbt::Double(self.size)),
             ("lerp_time".into(), Nbt::Long(self.lerp_time)),
             ("lerp_target".into(), Nbt::Double(self.lerp_target)),
-        ])
+        ].into())
     }
 
     pub fn from_nbt(nbt: &Nbt) -> Option<Settings> {
@@ -186,7 +186,7 @@ impl WorldBorder {
             return Ok(());
         }
         self.dirty = false;
-        let file = Nbt::Compound(vec![("data".into(), Settings::of(self).to_nbt()), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]);
+        let file = Nbt::Compound(vec![("data".into(), Settings::of(self).to_nbt()), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into());
         write_dat(&WorldBorder::file(dir), &file)
     }
 

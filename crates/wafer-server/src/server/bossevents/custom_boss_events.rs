@@ -112,7 +112,7 @@ impl CustomBossEvents {
             return Ok(());
         }
         let events = self.events.iter().map(|(id, e)| (id.to_string(), e.pack())).collect();
-        let file = Nbt::Compound(vec![("data".into(), Nbt::Compound(events)), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]);
+        let file = Nbt::Compound(vec![("data".into(), Nbt::Compound(events)), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into());
         write_dat(&CustomBossEvents::file(&dir), &file)?;
         self.dirty = false;
         self.events.values_mut().for_each(|e| e.dirty = false);

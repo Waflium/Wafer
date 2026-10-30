@@ -45,7 +45,7 @@ impl ClockInstance {
         if self.paused {
             fields.push(("paused".into(), Nbt::Byte(1)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     fn from_nbt(nbt: &Nbt) -> ClockInstance {
@@ -187,7 +187,7 @@ pub fn encode_network_timeline(json: &serde_json::Value) -> Result<Nbt, String> 
         }
     }
     if !tracks.is_empty() {
-        fields.push(("tracks".into(), Nbt::Compound(tracks)));
+        fields.push(("tracks".into(), Nbt::Compound(tracks.into())));
     }
     let time_markers: Vec<(String, Nbt)> = json["time_markers"]
         .as_object()
@@ -197,7 +197,7 @@ pub fn encode_network_timeline(json: &serde_json::Value) -> Result<Nbt, String> 
             let encoded = match info.as_i64() {
                 Some(ticks) => Nbt::Int(ticks as i32),
                 None if info["show_in_commands"].as_bool().unwrap_or(false) => {
-                    Nbt::Compound(vec![("ticks".into(), Nbt::Int(info["ticks"].as_i64().unwrap_or(0) as i32)), ("show_in_commands".into(), Nbt::Byte(1))])
+                    Nbt::Compound(vec![("ticks".into(), Nbt::Int(info["ticks"].as_i64().unwrap_or(0) as i32)), ("show_in_commands".into(), Nbt::Byte(1))].into())
                 }
                 None => Nbt::Int(info["ticks"].as_i64().unwrap_or(0) as i32),
             };
@@ -205,9 +205,9 @@ pub fn encode_network_timeline(json: &serde_json::Value) -> Result<Nbt, String> 
         })
         .collect();
     if !time_markers.is_empty() {
-        fields.push(("time_markers".into(), Nbt::Compound(time_markers)));
+        fields.push(("time_markers".into(), Nbt::Compound(time_markers.into())));
     }
-    Ok(Nbt::Compound(fields))
+    Ok(Nbt::Compound(fields.into()))
 }
 
 pub fn timelines() -> &'static [Timeline] {

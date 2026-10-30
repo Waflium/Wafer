@@ -292,7 +292,7 @@ impl DedicatedServerProperties {
         if key == FLAT {
             let settings = crate::util::gson::parse_lenient(if self.generator_settings.is_empty() { "{}" } else { &self.generator_settings })
                 .map(|settings| crate::world::item::component::element_to_nbt(&settings))
-                .unwrap_or_else(|_| wafer_protocol::nbt::Nbt::Compound(Vec::new()));
+                .unwrap_or_else(|_| wafer_protocol::nbt::Nbt::Compound(Vec::new().into()));
             let parsed = crate::nbt::with_json_source(|| flat::decode_settings(&settings));
             if let Some(error) = parsed.error {
                 error!("{error}");

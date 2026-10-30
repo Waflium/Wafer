@@ -207,7 +207,7 @@ impl EnderDragonFight {
         if !self.respawn_crystals.is_empty() {
             data.push(("respawn_crystals".into(), Nbt::List(self.respawn_crystals.iter().map(|&uuid| uuid_tag(uuid)).collect())));
         }
-        write_dat(&EnderDragonFight::file(dir), &Nbt::Compound(vec![("data".into(), Nbt::Compound(data)), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]))
+        write_dat(&EnderDragonFight::file(dir), &Nbt::Compound(vec![("data".into(), Nbt::Compound(data.into())), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into()))
     }
 
     pub fn set_dirty(&mut self) {

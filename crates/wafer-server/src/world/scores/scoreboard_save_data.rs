@@ -76,7 +76,7 @@ impl ScoreboardSaveData {
             })
         });
         let dirty = packed.is_none();
-        ScoreboardSaveData { dir, packed: packed.unwrap_or_default(), data: raw.filter(|_| !dirty).unwrap_or(Nbt::Compound(Vec::new())), dirty }
+        ScoreboardSaveData { dir, packed: packed.unwrap_or_default(), data: raw.filter(|_| !dirty).unwrap_or(Nbt::Compound(Vec::new().into())), dirty }
     }
 
     pub fn take_packed(&mut self) -> PackedScoreboardSaveData {
@@ -95,7 +95,7 @@ impl ScoreboardSaveData {
         if !self.dirty {
             return Ok(());
         }
-        let file = Nbt::Compound(vec![("data".into(), self.data.clone()), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]);
+        let file = Nbt::Compound(vec![("data".into(), self.data.clone()), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into());
         write_dat(&ScoreboardSaveData::file(dir), &file)?;
         self.dirty = false;
         Ok(())

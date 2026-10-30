@@ -365,7 +365,7 @@ impl Raid {
 }
 
 fn banner_pattern_layer(pattern: &str, color: &str) -> Nbt {
-    Nbt::Compound(vec![("pattern".into(), Nbt::String(pattern.into())), ("color".into(), Nbt::String(color.into()))])
+    Nbt::Compound(vec![("pattern".into(), Nbt::String(pattern.into())), ("color".into(), Nbt::String(color.into()))].into())
 }
 
 pub fn get_ominous_banner_instance() -> ItemStack {
@@ -379,8 +379,8 @@ pub fn get_ominous_banner_instance() -> ItemStack {
         banner_pattern_layer("minecraft:circle", "light_gray"),
         banner_pattern_layer("minecraft:border", "black"),
     ]);
-    let tooltip_display = Nbt::Compound(vec![("hidden_components".into(), Nbt::List(vec![Nbt::String(dc::BANNER_PATTERNS.name().into())]))]);
-    let item_name = Nbt::Compound(vec![("translate".into(), Nbt::String("block.minecraft.ominous_banner".into()))]);
+    let tooltip_display = Nbt::Compound(vec![("hidden_components".into(), Nbt::List(vec![Nbt::String(dc::BANNER_PATTERNS.name().into())]))].into());
+    let item_name = Nbt::Compound(vec![("translate".into(), Nbt::String("block.minecraft.ominous_banner".into()))].into());
     let mut banner = ItemStack::new(wafer_data::items::WHITE_BANNER, 1);
     banner.set(dc::BANNER_PATTERNS, Some(dc::BANNER_PATTERNS.decode(&patterns).unwrap_or(patterns)));
     banner.set(dc::TOOLTIP_DISPLAY, Some(dc::TOOLTIP_DISPLAY.decode(&tooltip_display).unwrap_or(tooltip_display)));

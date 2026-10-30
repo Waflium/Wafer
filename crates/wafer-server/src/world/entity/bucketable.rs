@@ -21,7 +21,7 @@ pub fn save_default_data_to_bucket_tag(entity: &Mob, bucket: &mut ItemStack) {
     bucket.set(dc::CUSTOM_NAME, custom_name);
     let mut tag = match bucket.get(dc::BUCKET_ENTITY_DATA) {
         Some(Nbt::Compound(tag)) => tag.clone(),
-        _ => Vec::new(),
+        _ => Vec::new().into(),
     };
     let mut put_boolean = |key: &str, value: bool| {
         tag.retain(|(k, _)| k != key);

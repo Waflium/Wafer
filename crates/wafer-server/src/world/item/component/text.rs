@@ -163,14 +163,14 @@ fn from_list(mut items: Vec<Nbt>) -> Nbt {
     }
     let mut fields = match first {
         Nbt::String(s) => vec![("text".to_string(), Nbt::String(s))],
-        Nbt::Compound(fields) => fields,
+        Nbt::Compound(fields) => fields.into_vec(),
         other => vec![("text".to_string(), other)],
     };
     match fields.iter_mut().find(|(k, _)| k == "extra") {
         Some((_, Nbt::List(extra))) => extra.extend(rest),
         _ => fields.push(("extra".into(), Nbt::List(rest))),
     }
-    Nbt::Compound(fields)
+    Nbt::Compound(fields.into())
 }
 
 fn decode_full(tag: &Nbt) -> Result<Nbt, String> {
@@ -183,7 +183,7 @@ fn decode_full(tag: &Nbt) -> Result<Nbt, String> {
         None => CONTENTS.iter().find(|c| decode_contents(c, tag).is_ok()).ok_or_else(|| "No matching codec found".to_string())?,
     };
     let mut fields = match decode_contents(contents, tag)? {
-        Nbt::Compound(fields) => fields,
+        Nbt::Compound(fields) => fields.into_vec(),
         _ => Vec::new(),
     };
     if let Nbt::Compound(style) = STYLE.decode(tag)? {
@@ -242,7 +242,7 @@ fn collapse(fields: Vec<(String, Nbt)>) -> Nbt {
     {
         return Nbt::String(text.clone());
     }
-    Nbt::Compound(fields)
+    Nbt::Compound(fields.into())
 }
 
 pub fn hash(value: &Nbt) -> HashCode {

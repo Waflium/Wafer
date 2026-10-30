@@ -335,7 +335,7 @@ impl LevelEntity {
         let id = self.encode_id()?;
         let mut out = vec![("id".to_string(), Nbt::String(id.into()))];
         self.save_without_id(&mut out);
-        Some(Nbt::Compound(out))
+        Some(Nbt::Compound(out.into()))
     }
 
     pub fn save_without_id(&self, out: &mut Vec<(String, Nbt)>) {
@@ -572,7 +572,7 @@ fn update_custom_entity_tag(level: &ServerLevel, entity: &mut LevelEntity, entit
     entity.save_without_id(&mut tag);
     let uuid = entity.entity().uuid;
     crate::nbt::merge(&mut tag, &unsafe_data);
-    let tag = Nbt::Compound(tag);
+    let tag = Nbt::Compound(tag.into());
     let converted = level.with_old_owner_converted(entity, &tag);
     if let Err(e) = entity.load_in_level(&converted, &level.scoreboard) {
         panic!("{}", loading_entity_report(&e));
@@ -816,7 +816,7 @@ impl ServerLevel {
         let encode_id = entity.encode_id()?;
         let mut out = vec![("id".to_string(), Nbt::String(encode_id.into()))];
         self.save_without_id(id, &mut out);
-        Some(Nbt::Compound(out))
+        Some(Nbt::Compound(out.into()))
     }
 
     pub fn save_without_id(&self, id: EntityId, out: &mut Vec<(String, Nbt)>) {
@@ -981,7 +981,7 @@ impl ServerLevel {
         }
         let mut fields = Vec::new();
         self.save_without_id(id, &mut fields);
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 }
 
@@ -1026,7 +1026,7 @@ mod tests {
     }
 
     fn marker_tag(uuid: u128, team: Nbt) -> Nbt {
-        Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:marker".into())), ("UUID".into(), uuid_ints(uuid)), ("Team".into(), team)])
+        Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:marker".into())), ("UUID".into(), uuid_ints(uuid)), ("Team".into(), team)].into())
     }
 
     fn team_of(level: &ServerLevel, uuid: u128) -> Option<String> {
@@ -1051,7 +1051,7 @@ mod tests {
         level.scoreboard.borrow_mut().add_player_team("red");
         let mut entity = ServerLevel::create_entity("minecraft:marker").unwrap();
         let uuid = entity.entity().uuid;
-        let data = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:marker".into())), ("Team".into(), Nbt::String("red".into()))]);
+        let data = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:marker".into())), ("Team".into(), Nbt::String("red".into()))].into());
         let mut stack = ItemStack::new(wafer_data::items::STONE, 1);
         stack.set(crate::world::item::component::ENTITY_DATA, Some(data));
         apply_default_stack_config(&level, &mut entity, &stack).unwrap();
@@ -1063,7 +1063,7 @@ mod tests {
             ("id".into(), Nbt::String("minecraft:marker".into())),
             ("Pos".into(), Nbt::List(pos.iter().map(|&v| Nbt::Double(v)).collect())),
             ("Rotation".into(), Nbt::List(rotation.iter().map(|&v| Nbt::Float(v)).collect())),
-        ])
+        ].into())
     }
 
     #[test]
@@ -1081,7 +1081,7 @@ mod tests {
     }
 
     fn arrow_tag(pickup: Nbt) -> Nbt {
-        Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:arrow".into())), ("inBlockState".into(), Nbt::String("minecraft:not_a_block".into())), ("pickup".into(), pickup)])
+        Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:arrow".into())), ("inBlockState".into(), Nbt::String("minecraft:not_a_block".into())), ("pickup".into(), pickup)].into())
     }
 
     #[test]
@@ -1103,7 +1103,7 @@ mod tests {
     #[test]
     fn passenger_arrows_with_pickup_three_are_skipped_but_their_vehicle_loads() {
         let mut level = testing::level();
-        let cow = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:cow".into())), ("Passengers".into(), Nbt::List(vec![arrow_tag(Nbt::Byte(3))]))]);
+        let cow = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:cow".into())), ("Passengers".into(), Nbt::List(vec![arrow_tag(Nbt::Byte(3))]))].into());
         let loaded = level.load_entity_recursive(&cow, &[], &mut |_| {});
         assert_eq!(loaded.len(), 1);
     }

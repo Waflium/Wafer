@@ -243,7 +243,7 @@ fn skeleton_and_zombie_horses_have_vanillas_attributes() {
 fn skeleton_trap_horses_keep_their_trap_goal_until_triggered() {
     use wafer_protocol::nbt::Nbt;
     let mut horse = super::skeleton_horse::SkeletonHorse::create();
-    horse.load(&Nbt::Compound(vec![("SkeletonTrap".into(), Nbt::Byte(1)), ("SkeletonTrapTime".into(), Nbt::Int(5))]));
+    horse.load(&Nbt::Compound(vec![("SkeletonTrap".into(), Nbt::Byte(1)), ("SkeletonTrapTime".into(), Nbt::Int(5))].into()));
     assert!(super::skeleton_horse::SkeletonHorse::is_trap(&horse));
     assert_eq!(horse.ai.goal_selector.get_available_goals().last().unwrap().get_priority(), 1);
     super::skeleton_horse::SkeletonHorse::set_trap(&mut horse, false);

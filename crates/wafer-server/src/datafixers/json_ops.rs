@@ -70,7 +70,7 @@ pub fn convert_element_to_nbt(input: &JsonElement) -> Result<Option<Nbt>, String
                     None => return Err(format!("Unsupported null value for key {name}")),
                 }
             }
-            Some(Nbt::Compound(entries))
+            Some(Nbt::Compound(entries.into()))
         }
         JsonElement::Array(elements) => {
             let mut list = Vec::new();

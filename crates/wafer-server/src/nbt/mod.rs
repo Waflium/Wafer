@@ -286,7 +286,7 @@ pub fn write_block_state(state: wafer_data::BlockState) -> Nbt {
     if state.block().possible_states().nth(1).is_some() {
         tag.push(("properties".to_string(), Nbt::Compound(state.properties().map(|(name, value)| (name.to_string(), Nbt::String(value.into()))).collect())));
     }
-    Nbt::Compound(tag)
+    Nbt::Compound(tag.into())
 }
 
 pub fn read_block_state(tag: &Nbt) -> wafer_data::BlockState {

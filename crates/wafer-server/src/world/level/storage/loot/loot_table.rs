@@ -318,7 +318,7 @@ mod tests {
             Nbt::Compound(fields) => {
                 let mut fields: Vec<(String, Nbt)> = fields.iter().map(|(k, v)| (k.clone(), sorted(v))).collect();
                 fields.sort_by(|a, b| a.0.cmp(&b.0));
-                Nbt::Compound(fields)
+                Nbt::Compound(fields.into())
             }
             Nbt::List(values) => Nbt::List(values.iter().map(sorted).collect()),
             other => other.clone(),

@@ -12,7 +12,7 @@ pub struct PotionContents<'a> {
 impl PotionContents<'_> {
     pub fn create_item_stack(item: wafer_data::Item, potion: &str) -> crate::world::item::ItemStack {
         let mut item_stack = crate::world::item::ItemStack::new(item, 1);
-        item_stack.set(crate::world::item::component::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String(potion.into()))])));
+        item_stack.set(crate::world::item::component::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String(potion.into()))].into())));
         item_stack
     }
 }
@@ -101,12 +101,12 @@ pub fn has_instant_effects(potion: &Potion) -> bool {
 pub fn with_effect_added(contents: Option<&Nbt>, effect: &MobEffectInstance) -> Nbt {
     let mut fields = match contents {
         Some(Nbt::String(potion)) => vec![("potion".to_string(), Nbt::String(potion.clone()))],
-        Some(Nbt::Compound(fields)) => fields.clone(),
+        Some(Nbt::Compound(fields)) => fields.to_vec(),
         _ => Vec::new(),
     };
     match fields.iter_mut().find(|(key, _)| key == "custom_effects") {
         Some((_, Nbt::List(effects))) => effects.push(effect.to_nbt()),
         _ => fields.push(("custom_effects".into(), Nbt::List(vec![effect.to_nbt()]))),
     }
-    Nbt::Compound(fields)
+    Nbt::Compound(fields.into())
 }

@@ -64,7 +64,7 @@ fn summon(level: &mut ServerLevel, fish: &Fish, parity: i32) -> EntityId {
         }
     };
     if !fish.nbt.is_empty() {
-        let nbt = Nbt::Compound(fish.nbt.clone());
+        let nbt = Nbt::Compound(fish.nbt.clone().into());
         mob.load(&nbt);
         for (key, id) in [("NoGravity", ids::NO_GRAVITY), ("Silent", ids::SILENT)] {
             if nbt.get(key).is_some() {
@@ -285,7 +285,7 @@ fn puffed_pufferfish_sting_touching_players_like_vanilla() {
         level.tick_player(player);
     }
     let mut pufferfish = Pufferfish::create();
-    pufferfish.load(&Nbt::Compound(vec![("NoAI".into(), Nbt::Byte(1)), ("PuffState".into(), Nbt::Int(2))]));
+    pufferfish.load(&Nbt::Compound(vec![("NoAI".into(), Nbt::Byte(1)), ("PuffState".into(), Nbt::Int(2))].into()));
     pufferfish.entity.snap_to(0.5, -60.0, 0.5, 0.0, 0.0);
     level.add_fresh_entity(LevelEntity::Mob(Box::new(pufferfish)));
     for (tick, expected) in include_str!("sting_oracle.txt").lines().enumerate() {
@@ -315,7 +315,7 @@ fn salmon_go_into_buckets_and_come_back_out() {
     let bucket = level.player(player).inventory.slots[36].clone().unwrap();
     assert_eq!(bucket.item, items::SALMON_BUCKET);
     assert_eq!(bucket.get(dc::SALMON_SIZE), Some(&Nbt::String("small".into())));
-    assert_eq!(bucket.get(dc::BUCKET_ENTITY_DATA), Some(&Nbt::Compound(vec![("NoAI".into(), Nbt::Byte(1)), ("Health".into(), Nbt::Float(2.0))])));
+    assert_eq!(bucket.get(dc::BUCKET_ENTITY_DATA), Some(&Nbt::Compound(vec![("NoAI".into(), Nbt::Byte(1)), ("Health".into(), Nbt::Float(2.0))].into())));
     level.tick();
     assert!(level.use_item(player, InteractionHand::MainHand).consumes_action());
     assert_eq!(level.player(player).inventory.slots[36], Some(ItemStack::new(items::BUCKET, 1)));
@@ -354,11 +354,11 @@ fn fish_save_and_load_their_data() {
     tropical.save(&mut out);
     assert!(out.contains(&("FromBucket".into(), Nbt::Byte(1))));
     let mut loaded = TropicalFish::create();
-    loaded.load(&Nbt::Compound(out));
+    loaded.load(&Nbt::Compound(out.into()));
     assert_eq!(loaded.get_packed_variant(), tropical_fish::COMMON_VARIANTS[7].get_packed_id());
     assert!(loaded.from_bucket());
     let mut pufferfish = Pufferfish::create();
-    pufferfish.load(&Nbt::Compound(vec![("PuffState".into(), Nbt::Int(7))]));
+    pufferfish.load(&Nbt::Compound(vec![("PuffState".into(), Nbt::Int(7))].into()));
     assert_eq!(pufferfish.get_puff_state(), 2);
     assert_eq!((pufferfish.entity.dimensions.width, pufferfish.entity.dimensions.height), (0.7, 0.7));
 }

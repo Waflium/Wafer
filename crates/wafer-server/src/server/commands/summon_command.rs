@@ -209,7 +209,7 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
     }
     let mut tag = match nbt {
         Nbt::Compound(fields) => fields.clone(),
-        _ => Vec::new(),
+        _ => Vec::new().into(),
     };
     tag.retain(|(k, _)| k != "id");
     tag.push(("id".into(), Nbt::String(entity_type.into())));
@@ -250,13 +250,13 @@ fn spawn_entity(server: &mut Server, source: &CommandSourceStack, entity_type: &
 
 pub fn summon(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let entity_type = summonable_entity_type(context, "entity")?;
-    spawn_entity(server, source, &entity_type, source.position, &Nbt::Compound(Vec::new()), true)
+    spawn_entity(server, source, &entity_type, source.position, &Nbt::Compound(Vec::new().into()), true)
 }
 
 pub fn summon_at(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let entity_type = summonable_entity_type(context, "entity")?;
     let pos = context.get_coordinates("pos").position(server, source);
-    spawn_entity(server, source, &entity_type, pos, &Nbt::Compound(Vec::new()), true)
+    spawn_entity(server, source, &entity_type, pos, &Nbt::Compound(Vec::new().into()), true)
 }
 
 pub fn summon_with_nbt(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {

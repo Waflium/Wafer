@@ -91,7 +91,7 @@ impl BaseContainerBlockEntity {
             if self.loot_table_seed != 0 {
                 loot.push(("seed".into(), Nbt::Long(self.loot_table_seed)));
             }
-            set(dc::CONTAINER_LOOT, Some(Nbt::Compound(loot)));
+            set(dc::CONTAINER_LOOT, Some(Nbt::Compound(loot.into())));
         }
     }
 }
@@ -116,7 +116,7 @@ pub fn save_all_items(output: &mut Vec<(String, Nbt)>, items: &[ItemStack], also
             let Nbt::Compound(fields) = stack.to_nbt() else { unreachable!("stacks save as compounds") };
             let mut entry = vec![("Slot".to_string(), Nbt::Byte(slot as u8 as i8))];
             entry.extend(fields);
-            Nbt::Compound(entry)
+            Nbt::Compound(entry.into())
         })
         .collect();
     if !list.is_empty() || also_when_empty {
@@ -153,7 +153,7 @@ pub fn from_items(items: &[ItemStack]) -> Nbt {
             .filter(|(_, stack)| !stack.is_empty())
             .map(|(slot, stack)| {
                 let template = ItemStackTemplate { item: stack.item.name().to_string(), count: stack.count, components: stack.components_patch().to_nbt() };
-                Nbt::Compound(vec![("slot".into(), Nbt::Int(slot as i32)), ("item".into(), template.to_nbt())])
+                Nbt::Compound(vec![("slot".into(), Nbt::Int(slot as i32)), ("item".into(), template.to_nbt())].into())
             })
             .collect(),
     )

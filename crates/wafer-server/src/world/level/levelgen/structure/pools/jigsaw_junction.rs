@@ -19,7 +19,7 @@ impl JigsawJunction {
             ("source_z".to_owned(), Nbt::Int(self.source_z)),
             ("delta_y".to_owned(), Nbt::Int(self.delta_y)),
             ("dest_proj".to_owned(), Nbt::String(self.dest_projection.get_name().to_owned())),
-        ])
+        ].into())
     }
 
     pub fn deserialize(tag: &Nbt) -> JigsawJunction {

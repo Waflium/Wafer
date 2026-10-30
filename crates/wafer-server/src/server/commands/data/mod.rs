@@ -125,7 +125,7 @@ fn modify(server: &mut Server, context: &CommandContext, source: &CommandSourceS
                 let Nbt::Compound(fields) = tag else { return Err(ERROR_EXPECTED_OBJECT.create(nbt::to_string(tag))) };
                 nbt::merge(&mut combined, fields);
             }
-            path.get_or_create_each(target, &|| Nbt::Compound(Vec::new()), |tag| {
+            path.get_or_create_each(target, &|| Nbt::Compound(Vec::new().into()), |tag| {
                 let original = tag.clone();
                 let Nbt::Compound(fields) = tag else { return Err(ERROR_EXPECTED_OBJECT.create(nbt::to_string(tag))) };
                 nbt::merge(fields, &combined);

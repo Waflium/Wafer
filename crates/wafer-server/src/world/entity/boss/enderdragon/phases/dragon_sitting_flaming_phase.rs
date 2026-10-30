@@ -69,7 +69,7 @@ impl ServerLevel {
             flame.set_owner(Some(self.entity(dragon).uuid));
             flame.set_radius(radius);
             flame.duration = FLAME_DURATION;
-            let particle = particle_types::parse("minecraft:dragon_breath", &Nbt::Compound(vec![("power".into(), Nbt::Float(1.0))])).expect("a dragon breath particle");
+            let particle = particle_types::parse("minecraft:dragon_breath", &Nbt::Compound(vec![("power".into(), Nbt::Float(1.0))].into())).expect("a dragon breath particle");
             flame.set_custom_particle(Some(particle));
             flame.set_potion_duration_scale(0.25);
             flame.add_effect(&MobEffectInstance::new(mob_effects::INSTANT_DAMAGE, 0, 0));

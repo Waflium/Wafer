@@ -245,7 +245,7 @@ impl Axolotl {
         bucket.set(dc::AXOLOTL_VARIANT, Some(Nbt::String(get_variant(&mob.entity).get_serialized_name().into())));
         let mut tag = match bucket.get(dc::BUCKET_ENTITY_DATA) {
             Some(Nbt::Compound(tag)) => tag.clone(),
-            _ => Vec::new(),
+            _ => Vec::new().into(),
         };
         let mut put = |key: &str, value: Nbt| {
             tag.retain(|(k, _)| k != key);

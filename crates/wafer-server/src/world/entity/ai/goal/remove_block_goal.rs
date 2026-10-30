@@ -74,7 +74,7 @@ impl RemoveBlockGoal {
             let xd = ((random.next_float() - 0.5) * 0.08) as f64;
             let yd = ((random.next_float() - 0.5) * 0.08) as f64;
             let zd = ((random.next_float() - 0.5) * 0.08) as f64;
-            let particle = ParticleOptions { particle_type: "minecraft:item", options: Nbt::Compound(vec![("item".into(), Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:egg".into()))]))]) };
+            let particle = ParticleOptions { particle_type: "minecraft:item", options: Nbt::Compound(vec![("item".into(), Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:egg".into()))].into()))].into()) };
             level.send_particles("minecraft:item", |w| particle.write_options(w), eat_pos.x as f64 + 0.5, eat_pos.y as f64 + 0.7, eat_pos.z as f64 + 0.5, 3, (xd, yd, zd), 0.15f32 as f64);
         }
         if self.ticks_since_reached_goal % 2 == 0 {

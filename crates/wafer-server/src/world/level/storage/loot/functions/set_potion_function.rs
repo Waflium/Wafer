@@ -19,7 +19,7 @@ pub fn decode_potion(tag: &Nbt) -> DataResult<String> {
 pub fn with_potion(item_stack: &mut ItemStack, potion: &str) {
     let mut contents = match item_stack.get(dc::POTION_CONTENTS) {
         Some(Nbt::Compound(fields)) => fields.clone(),
-        _ => Vec::new(),
+        _ => Vec::new().into(),
     };
     contents.retain(|(key, _)| key != "potion");
     contents.insert(0, ("potion".into(), Nbt::String(potion.to_string())));

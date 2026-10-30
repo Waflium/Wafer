@@ -16,7 +16,7 @@ impl SetCustomDataFunction {
         let fields = record.required(tag, "tag", |t| {
             NbtPredicate::decode(t).map(|predicate| {
                 let Nbt::Compound(fields) = predicate.tag else { unreachable!("compound tag") };
-                fields
+                fields.into_vec()
             })
         });
         record.build(|| Some(SetCustomDataFunction { tag: fields? }))
@@ -25,7 +25,7 @@ impl SetCustomDataFunction {
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {
         let mut custom_data = match item_stack.get(dc::CUSTOM_DATA) {
             Some(Nbt::Compound(fields)) => fields.clone(),
-            _ => Vec::new(),
+            _ => Vec::new().into(),
         };
         crate::nbt::merge(&mut custom_data, &self.tag);
         item_stack.set(dc::CUSTOM_DATA, if custom_data.is_empty() { None } else { Some(Nbt::Compound(custom_data)) });

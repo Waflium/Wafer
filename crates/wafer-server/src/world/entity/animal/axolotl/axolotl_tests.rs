@@ -122,7 +122,7 @@ pub fn assert_rows(text: &str, label: &str, ids: &[EntityId], level: &mut Server
 pub fn save(level: &ServerLevel, id: EntityId) -> Nbt {
     let mut out = Vec::new();
     level.entities.get(&id).unwrap().save_without_id(&mut out);
-    Nbt::Compound(out)
+    Nbt::Compound(out.into())
 }
 
 const ORACLE: &str = include_str!("axolotl_oracle.txt");

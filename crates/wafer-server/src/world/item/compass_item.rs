@@ -15,8 +15,8 @@ use crate::world::{InteractionHand, InteractionResult};
 fn tracker(dimension: &str, pos: BlockPos) -> Nbt {
     Nbt::Compound(vec![(
         "target".into(),
-        Nbt::Compound(vec![("dimension".into(), Nbt::String(dimension.into())), ("pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z]))]),
-    )])
+        Nbt::Compound(vec![("dimension".into(), Nbt::String(dimension.into())), ("pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z]))].into()),
+    )].into())
 }
 
 pub fn inventory_tick(item_stack: &mut ItemStack, level: &mut ServerLevel) {
@@ -29,7 +29,7 @@ pub fn inventory_tick(item_stack: &mut ItemStack, level: &mut ServerLevel) {
     let Some(Nbt::IntArray(pos)) = target.get("pos") else { return };
     let block_pos = BlockPos::new(pos[0], pos[1], pos[2]);
     if !(level.is_in_world_bounds(block_pos) && level.chunks.poi_manager.exists(block_pos, |ty| ty == PoiType::Lodestone)) {
-        item_stack.set(dc::LODESTONE_TRACKER, Some(Nbt::Compound(Vec::new())));
+        item_stack.set(dc::LODESTONE_TRACKER, Some(Nbt::Compound(Vec::new().into())));
     }
 }
 

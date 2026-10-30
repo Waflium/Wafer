@@ -65,7 +65,7 @@ impl BrushableBlockEntity {
         if !self.item.is_empty() {
             tag.push(("item".into(), self.item.to_nbt()));
         }
-        Nbt::Compound(tag)
+        Nbt::Compound(tag.into())
     }
 
     pub fn load_additional(&mut self, input: &Nbt) {

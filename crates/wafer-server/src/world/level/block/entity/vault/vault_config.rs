@@ -92,6 +92,6 @@ impl VaultConfig {
         if let Some(override_loot_table_to_display) = &self.override_loot_table_to_display {
             output.push(("override_loot_table_to_display".into(), Nbt::String(override_loot_table_to_display.clone())));
         }
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 }

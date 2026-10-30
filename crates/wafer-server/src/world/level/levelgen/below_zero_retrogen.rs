@@ -34,7 +34,7 @@ impl BelowZeroRetrogen {
         if self.has_bedrock_holes() {
             tag.push(("missing_bedrock".to_string(), Nbt::LongArray(self.missing_bedrock.clone())));
         }
-        Nbt::Compound(tag)
+        Nbt::Compound(tag.into())
     }
 
     pub fn replace_old_bedrock(chunk: &mut ProtoChunk) {
@@ -87,13 +87,13 @@ mod tests {
 
     #[test]
     fn codec_matches_vanilla() {
-        let tag = Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:spawn".into())), ("missing_bedrock".into(), Nbt::LongArray(vec![5, 0]))]);
+        let tag = Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:spawn".into())), ("missing_bedrock".into(), Nbt::LongArray(vec![5, 0]))].into());
         let retrogen = BelowZeroRetrogen::decode(&tag).unwrap();
         assert_eq!(retrogen.target_status(), ChunkStatus::Spawn);
         assert!(retrogen.has_bedrock_hole(0, 0) && !retrogen.has_bedrock_hole(1, 0) && retrogen.has_bedrock_hole(2, 0));
-        assert_eq!(retrogen.encode(), Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:spawn".into())), ("missing_bedrock".into(), Nbt::LongArray(vec![5]))]));
-        let empty = Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:full".into())), ("missing_bedrock".into(), Nbt::LongArray(vec![0]))]);
-        assert_eq!(BelowZeroRetrogen::decode(&empty).unwrap().encode(), Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:full".into()))]));
-        assert!(BelowZeroRetrogen::decode(&Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:empty".into()))])).is_none());
+        assert_eq!(retrogen.encode(), Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:spawn".into())), ("missing_bedrock".into(), Nbt::LongArray(vec![5]))].into()));
+        let empty = Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:full".into())), ("missing_bedrock".into(), Nbt::LongArray(vec![0]))].into());
+        assert_eq!(BelowZeroRetrogen::decode(&empty).unwrap().encode(), Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:full".into()))].into()));
+        assert!(BelowZeroRetrogen::decode(&Nbt::Compound(vec![("target_status".into(), Nbt::String("minecraft:empty".into()))].into())).is_none());
     }
 }

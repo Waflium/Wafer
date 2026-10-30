@@ -26,7 +26,7 @@ fn decode_pattern(tag: &Nbt) -> DataResult<Nbt> {
 
 pub fn apply_trim(base_item: &ItemStack, material_item: &ItemStack, pattern: &Nbt) -> ItemStack {
     let Some(material) = material_item.get(dc::PROVIDES_TRIM_MATERIAL) else { return ItemStack::empty() };
-    let new_trim = Nbt::Compound(vec![("material".into(), material.clone()), ("pattern".into(), pattern.clone())]);
+    let new_trim = Nbt::Compound(vec![("material".into(), material.clone()), ("pattern".into(), pattern.clone())].into());
     let new_trim = dc::TRIM.decode(&new_trim).unwrap_or(new_trim);
     if base_item.get(dc::TRIM) == Some(&new_trim) {
         return ItemStack::empty();

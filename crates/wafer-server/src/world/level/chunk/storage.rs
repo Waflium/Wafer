@@ -498,8 +498,8 @@ mod tests {
     fn region_round_trip() {
         let dir = std::env::temp_dir().join(format!("wafer-region-{}", std::process::id()));
         let mut store = RegionStorage::new(dir.clone(), false);
-        let small = Nbt::Compound(vec![("a".into(), Nbt::Int(1))]);
-        let large = Nbt::Compound(vec![("big".into(), Nbt::LongArray((0..3000).map(|i| i * 7919).collect()))]);
+        let small = Nbt::Compound(vec![("a".into(), Nbt::Int(1))].into());
+        let large = Nbt::Compound(vec![("big".into(), Nbt::LongArray((0..3000).map(|i| i * 7919).collect()))].into());
         store.write(ChunkPos::new(0, 0), &small).unwrap();
         store.write(ChunkPos::new(-1, 33), &large).unwrap();
         store.write(ChunkPos::new(0, 0), &large).unwrap();
@@ -516,7 +516,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("wafer-region-unreadable-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let mut store = RegionStorage::new(dir.clone(), false);
-        let tag = Nbt::Compound(vec![("a".into(), Nbt::Int(1))]);
+        let tag = Nbt::Compound(vec![("a".into(), Nbt::Int(1))].into());
         let corruptions: [(i32, fn(&mut [u8])); 6] = [
             (0, |chunk| chunk[..4].copy_from_slice(&0i32.to_be_bytes())),
             (1, |chunk| chunk[..4].copy_from_slice(&(-5i32).to_be_bytes())),
@@ -553,7 +553,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("wafer-region-corrupt-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let mut store = RegionStorage::new(dir.clone(), false);
-        store.write(ChunkPos::new(0, 0), &Nbt::Compound(vec![("a".into(), Nbt::Int(1))])).unwrap();
+        store.write(ChunkPos::new(0, 0), &Nbt::Compound(vec![("a".into(), Nbt::Int(1))].into())).unwrap();
         store.flush().unwrap();
         drop(store);
         let path = dir.join("r.0.0.mca");

@@ -50,7 +50,7 @@ fn witch_mut(mob: &mut Mob) -> &mut Witch {
 
 pub fn create_item_stack(item: wafer_data::Item, potion: &str) -> ItemStack {
     let mut item_stack = ItemStack::new(item, 1);
-    item_stack.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String(potion.into()))])));
+    item_stack.set(dc::POTION_CONTENTS, Some(Nbt::Compound(vec![("potion".into(), Nbt::String(potion.into()))].into())));
     item_stack
 }
 

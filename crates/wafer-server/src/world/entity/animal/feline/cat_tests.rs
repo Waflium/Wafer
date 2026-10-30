@@ -125,7 +125,7 @@ fn tamed_cats_save_and_load_like_vanilla() {
     let tail = &keys[keys.iter().position(|&k| k == "Owner").unwrap()..];
     assert_eq!(tail, ["Owner", "Sitting", "variant", "sound_variant", "CollarColor"]);
     let mut loaded = ServerLevel::create_entity("minecraft:cat").unwrap();
-    loaded.load(&Nbt::Compound(out.clone())).unwrap();
+    loaded.load(&Nbt::Compound(out.clone().into())).unwrap();
     let LevelEntity::Mob(mob) = &loaded else { unreachable!() };
     assert!(tamable_animal::is_tame(&mob.entity));
     assert!(tamable_animal::is_in_sitting_pose(&mob.entity));
@@ -237,7 +237,7 @@ fn ocelots_learn_to_trust_players_who_hold_still_with_fish() {
     level.save_without_id(ocelot, &mut out);
     assert_eq!(out.iter().find(|(k, _)| k == "Trusting").map(|(_, v)| v.clone()), Some(Nbt::Byte(1)));
     let mut loaded = ServerLevel::create_entity("minecraft:ocelot").unwrap();
-    loaded.load(&Nbt::Compound(out)).unwrap();
+    loaded.load(&Nbt::Compound(out.into())).unwrap();
     let LevelEntity::Mob(mob) = &loaded else { unreachable!() };
     assert!(ocelot::is_trusting(&mob.entity));
     assert!(!mob.ai.goal_selector.get_available_goals().iter().any(|goal| matches!(goal.get_goal(), Goal::OcelotAvoidEntity(_))));

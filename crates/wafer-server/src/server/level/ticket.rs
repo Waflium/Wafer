@@ -149,7 +149,7 @@ impl Ticket {
         if self.ticks_left != 0 {
             fields.push(("ticks_left".into(), Nbt::Long(self.ticks_left)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     fn from_nbt(tag: &Nbt) -> Option<(i64, Ticket)> {
@@ -225,7 +225,7 @@ impl TicketStorage {
             .into_iter()
             .flat_map(|map| map.iter().flat_map(|(pos, tickets)| tickets.iter().filter(|t| t.ty.persist()).map(move |t| t.to_nbt(pos))))
             .collect();
-        Nbt::Compound(if tickets.is_empty() { Vec::new() } else { vec![("tickets".into(), Nbt::List(tickets))] })
+        Nbt::Compound(if tickets.is_empty() { Vec::new().into() } else { vec![("tickets".into(), Nbt::List(tickets))].into() })
     }
 
     pub fn activate_all_deactivated_tickets(&mut self, updates: &mut Vec<TicketUpdate>) {

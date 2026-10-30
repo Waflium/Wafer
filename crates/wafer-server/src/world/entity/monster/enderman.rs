@@ -544,7 +544,7 @@ impl ServerLevel {
 
     fn hurt_with_clean_water(&mut self, id: EntityId, source: DamageSource, thrown_potion: EntityId, damage: f32) -> bool {
         let potion_item_stack = self.projectile(thrown_potion).get_item();
-        let empty = Nbt::Compound(Vec::new());
+        let empty = Nbt::Compound(Vec::new().into());
         let potion_contents = PotionContents::new(potion_item_stack.get(dc::POTION_CONTENTS).unwrap_or(&empty));
         if potion_contents.is_tag("minecraft:hurts_water_sensitive_entities") { self.living_entity_hurt_server(id, source, damage) } else { false }
     }

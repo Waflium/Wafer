@@ -99,7 +99,7 @@ impl Properties {
             ("overgrown".into(), Nbt::Byte(self.overgrown as i8)),
             ("vines".into(), Nbt::Byte(self.vines as i8)),
             ("replace_with_blackstone".into(), Nbt::Byte(self.replace_with_blackstone as i8)),
-        ])
+        ].into())
     }
 }
 

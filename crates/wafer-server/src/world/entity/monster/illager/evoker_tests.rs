@@ -63,7 +63,7 @@ fn vexes_starve_when_their_life_runs_out() {
     let mut level = testing::level();
     let _player = testing::player(&mut level, Vec3::new(0.5, -60.0, 8.5), 0.0, 0.0);
     let mut mob = Vex::create();
-    mob.load(&Nbt::Compound(vec![("life_ticks".into(), Nbt::Int(2))]));
+    mob.load(&Nbt::Compound(vec![("life_ticks".into(), Nbt::Int(2))].into()));
     mob.set_no_ai(true);
     let vex = add(&mut level, mob, Vec3::new(0.5, -55.0, 0.5));
     level.tick();

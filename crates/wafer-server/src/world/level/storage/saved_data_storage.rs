@@ -100,7 +100,7 @@ impl SavedDataStorage {
         }
         for (id, data) in to_save {
             let Some(file) = self.get_data_file(&id) else { continue };
-            let tag = Nbt::Compound(vec![("data".into(), data), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]);
+            let tag = Nbt::Compound(vec![("data".into(), data), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into());
             if write_dat(&file, &tag).is_err() {
                 error!("Could not save data to {}", file.file_name().map_or_else(String::new, |name| name.to_string_lossy().into_owned()));
             }

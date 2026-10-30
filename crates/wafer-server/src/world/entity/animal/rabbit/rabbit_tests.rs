@@ -56,7 +56,7 @@ fn rabbit_types_save_with_their_legacy_ids() {
     rabbit::rabbit_mut(&mut mob).more_carrot_ticks = 12;
     let mut out = Vec::new();
     mob.save(&mut out);
-    let nbt = Nbt::Compound(out);
+    let nbt = Nbt::Compound(out.into());
     assert_eq!(nbt.get("RabbitType"), Some(&Nbt::Int(3)));
     assert_eq!(nbt.get("MoreCarrotTicks"), Some(&Nbt::Int(12)));
     let mut loaded = Rabbit::create();
@@ -64,7 +64,7 @@ fn rabbit_types_save_with_their_legacy_ids() {
     assert_eq!(rabbit::get_variant(&loaded.entity), Variant::WhiteSplotched);
     assert_eq!(rabbit::rabbit(&loaded).more_carrot_ticks, 12);
     let mut unknown = Rabbit::create();
-    unknown.load(&Nbt::Compound(vec![("RabbitType".into(), Nbt::Int(42))]));
+    unknown.load(&Nbt::Compound(vec![("RabbitType".into(), Nbt::Int(42))].into()));
     assert_eq!(rabbit::get_variant(&unknown.entity), Variant::Brown);
 }
 

@@ -109,8 +109,8 @@ impl Stopwatches {
         }
         let current_time = Stopwatches::current_time();
         let entries = self.stopwatches.iter().map(|(id, s)| (id.to_string(), Nbt::Long(s.elapsed_milliseconds(current_time)))).collect();
-        let data = Nbt::Compound(vec![("stopwatches".into(), Nbt::Compound(entries))]);
-        write_dat(&Stopwatches::file(dir), &Nbt::Compound(vec![("data".into(), data), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]))?;
+        let data = Nbt::Compound(vec![("stopwatches".into(), Nbt::Compound(entries))].into());
+        write_dat(&Stopwatches::file(dir), &Nbt::Compound(vec![("data".into(), data), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into()))?;
         self.dirty = false;
         Ok(())
     }

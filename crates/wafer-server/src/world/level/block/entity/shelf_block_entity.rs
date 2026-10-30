@@ -39,7 +39,7 @@ impl ShelfBlockEntity {
         let mut output = Vec::new();
         save_all_items(&mut output, &self.items, true);
         output.push((ALIGN_ITEMS_TO_BOTTOM_TAG.into(), Nbt::Byte(self.align_items_to_bottom as i8)));
-        Nbt::Compound(output)
+        Nbt::Compound(output.into())
     }
 
     pub fn get_items(&self) -> &[ItemStack] {

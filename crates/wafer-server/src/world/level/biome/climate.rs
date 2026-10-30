@@ -24,7 +24,7 @@ fn make_interval(min: f32, max: f32) -> Result<Nbt, String> {
     if min.total_cmp(&max).is_gt() {
         return Err(format!("Cannon construct interval, min > max ({} > {})", crate::nbt::java_float_to_string(min), crate::nbt::java_float_to_string(max)));
     }
-    Ok(Nbt::Compound(vec![("min".into(), Nbt::Float(min)), ("max".into(), Nbt::Float(max))]))
+    Ok(Nbt::Compound(vec![("min".into(), Nbt::Float(min)), ("max".into(), Nbt::Float(max))].into()))
 }
 
 fn parameter_point_codec() -> Codec {

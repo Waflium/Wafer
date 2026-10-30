@@ -34,10 +34,10 @@ impl FillPlayerHead {
                 if let Some(signature) = &property.signature {
                     fields.push(("signature".into(), Nbt::String(signature.clone())));
                 }
-                Nbt::Compound(fields)
+                Nbt::Compound(fields.into())
             })
             .collect();
-        let value = Nbt::Compound(vec![("name".into(), Nbt::String(profile.name.clone())), ("id".into(), id), ("properties".into(), Nbt::List(properties))]);
+        let value = Nbt::Compound(vec![("name".into(), Nbt::String(profile.name.clone())), ("id".into(), id), ("properties".into(), Nbt::List(properties))].into());
         let value = dc::PROFILE.decode(&value).unwrap_or(value);
         item_stack.set(dc::PROFILE, Some(value));
         item_stack

@@ -163,7 +163,7 @@ fn raider_fields_save_and_load() {
         ("CanJoinRaid".to_string(), Nbt::Byte(1)),
         ("patrol_target".to_string(), Nbt::IntArray(vec![100, -60, 7])),
     ]);
-    let LevelEntity::Mob(loaded) = level.load_entity(&Nbt::Compound(tag)).unwrap() else { unreachable!() };
+    let LevelEntity::Mob(loaded) = level.load_entity(&Nbt::Compound(tag.into())).unwrap() else { unreachable!() };
     let raider = loaded.raider().unwrap();
     assert!(raider.can_join_raid());
     assert_eq!(raider.get_wave(), 3);

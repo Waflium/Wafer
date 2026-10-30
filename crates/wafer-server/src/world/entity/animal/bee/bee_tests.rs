@@ -18,7 +18,7 @@ fn add_bee(level: &mut ServerLevel, pos: Vec3, data: Vec<(String, Nbt)>) -> Enti
     let mut mob = Bee::create();
     mob.entity.snap_to(pos.x, pos.y, pos.z, 0.0, 0.0);
     mob.persistence_required = true;
-    Bee::read_additional_save_data(&mut mob, &Nbt::Compound(data));
+    Bee::read_additional_save_data(&mut mob, &Nbt::Compound(data.into()));
     let id = mob.entity.id;
     level.add_fresh_entity(LevelEntity::Mob(Box::new(mob)));
     id

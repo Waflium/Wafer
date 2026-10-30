@@ -66,7 +66,7 @@ impl SetStewEffectFunction {
             duration = duration.wrapping_mul(20);
         }
         let mut effects = item_stack.get(dc::SUSPICIOUS_STEW_EFFECTS).map_or(Vec::new(), |e| e.as_list().to_vec());
-        effects.push(Nbt::Compound(vec![("id".into(), Nbt::String(effect.info().name.to_string())), ("duration".into(), Nbt::Int(duration))]));
+        effects.push(Nbt::Compound(vec![("id".into(), Nbt::String(effect.info().name.to_string())), ("duration".into(), Nbt::Int(duration))].into()));
         let value = Nbt::List(effects);
         let value = dc::SUSPICIOUS_STEW_EFFECTS.decode(&value).unwrap_or(value);
         item_stack.set(dc::SUSPICIOUS_STEW_EFFECTS, Some(value));

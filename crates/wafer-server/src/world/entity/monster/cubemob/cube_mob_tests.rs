@@ -257,12 +257,12 @@ fn size_and_ground_state_save_and_load() {
     assert_eq!(get(&out, "Age"), None);
     assert_eq!(get(&out, "AgeLocked"), None);
     let mut loaded = Slime::create();
-    loaded.load(&Nbt::Compound(out));
+    loaded.load(&Nbt::Compound(out.into()));
     assert_eq!(loaded.get_size(), 4);
     assert!(loaded.abstract_cube_mob().unwrap().was_on_ground);
     assert_eq!(loaded.living.attributes.value(Attribute::MaxHealth), 16.0);
     let mut defaulted = Slime::create();
-    defaulted.load(&Nbt::Compound(vec![("Age".into(), Nbt::Int(-24000))]));
+    defaulted.load(&Nbt::Compound(vec![("Age".into(), Nbt::Int(-24000))].into()));
     assert_eq!(defaulted.get_size(), 1);
     assert!(!defaulted.is_baby());
 }

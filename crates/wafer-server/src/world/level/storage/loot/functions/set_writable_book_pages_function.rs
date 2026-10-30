@@ -15,7 +15,7 @@ impl SetWritableBookPagesFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetWritableBookPagesFunction> {
         let mut record = codec::Record::default();
         let pages = record.required(tag, "pages", |t| {
-            let content = dc::WRITABLE_BOOK_CONTENT.decode(&Nbt::Compound(vec![("pages".into(), t.clone())]))?;
+            let content = dc::WRITABLE_BOOK_CONTENT.decode(&Nbt::Compound(vec![("pages".into(), t.clone())].into()))?;
             Ok::<Vec<Nbt>, String>(content.get("pages").map_or(Vec::new(), |p| p.as_list().to_vec()))
         });
         let page_operation = record.absorb(ListOperation::decode(tag, 100));
@@ -25,7 +25,7 @@ impl SetWritableBookPagesFunction {
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {
         let original = item_stack.get(dc::WRITABLE_BOOK_CONTENT).and_then(|c| c.get("pages")).map_or(Vec::new(), |p| p.as_list().to_vec());
         let new_pages = self.page_operation.apply(&original, &self.pages, 100);
-        let value = Nbt::Compound(vec![("pages".into(), Nbt::List(new_pages))]);
+        let value = Nbt::Compound(vec![("pages".into(), Nbt::List(new_pages))].into());
         let value = dc::WRITABLE_BOOK_CONTENT.decode(&value).unwrap_or(value);
         item_stack.set(dc::WRITABLE_BOOK_CONTENT, Some(value));
         item_stack

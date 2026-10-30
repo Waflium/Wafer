@@ -33,7 +33,7 @@ impl SpawnData {
             }
             None => entity_to_spawn.retain(|(key, _)| key != "id"),
         }
-        SpawnData { entity_to_spawn: Nbt::Compound(entity_to_spawn), custom_spawn_rules, equipment }
+        SpawnData { entity_to_spawn: Nbt::Compound(entity_to_spawn.into()), custom_spawn_rules, equipment }
     }
 
     pub fn get_entity_to_spawn(&self) -> &Nbt {
@@ -66,7 +66,7 @@ impl SpawnData {
         let custom_spawn_rules = record.optional(tag, "custom_spawn_rules", CustomSpawnRules::decode_partial);
         let equipment = record.optional(tag, "equipment", EquipmentTable::decode_partial);
         record.build(|| match entity_to_spawn? {
-            Nbt::Compound(fields) => Some(SpawnData::new(fields, custom_spawn_rules, equipment)),
+            Nbt::Compound(fields) => Some(SpawnData::new(fields.into_vec(), custom_spawn_rules, equipment)),
             _ => None,
         })
     }
@@ -79,7 +79,7 @@ impl SpawnData {
         if let Some(equipment) = &self.equipment {
             fields.push(("equipment".into(), equipment.encode()));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 }
 
@@ -123,7 +123,7 @@ impl CustomSpawnRules {
         if self.sky_light_limit != LIGHT_RANGE {
             fields.push(("sky_light_limit".to_string(), self.sky_light_limit.encode_int()));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn is_valid_position(&self, block_spawn_pos: BlockPos, level: &mut ServerLevel) -> bool {

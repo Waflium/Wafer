@@ -330,8 +330,8 @@ impl ServerPlayer {
             ender_pearls: Vec::new(),
             player_list_order: 0,
             fishing: None,
-            shoulder_entity_left: Nbt::Compound(Vec::new()),
-            shoulder_entity_right: Nbt::Compound(Vec::new()),
+            shoulder_entity_left: Nbt::Compound(Vec::new().into()),
+            shoulder_entity_right: Nbt::Compound(Vec::new().into()),
             time_entity_sat_on_shoulder: 0,
             cooldowns: Default::default(),
         };
@@ -436,7 +436,7 @@ impl ServerPlayer {
             .filter_map(|(name, slot)| Some((name.to_string(), stack_at(slot)?.to_nbt())))
             .collect();
         if !equipment.is_empty() || stack_at(self.inventory.selected_slot()).is_some() {
-            nbt.push(("equipment".into(), Nbt::Compound(equipment)));
+            nbt.push(("equipment".into(), Nbt::Compound(equipment.into())));
         }
         if self.living.locator_bar_icon.has_data() {
             nbt.push(("locator_bar_icon".into(), self.living.locator_bar_icon.to_nbt()));
@@ -461,7 +461,7 @@ impl ServerPlayer {
         if let Some((dimension, pos)) = &self.last_death_location {
             nbt.push((
                 "LastDeathLocation".into(),
-                Nbt::Compound(vec![("dimension".into(), s(dimension)), ("pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z]))]),
+                Nbt::Compound(vec![("dimension".into(), s(dimension)), ("pos".into(), Nbt::IntArray(vec![pos.x, pos.y, pos.z]))].into()),
             ));
         }
         nbt.push(("warden_spawn_tracker".into(), self.warden_spawn_tracker.to_nbt()));
@@ -483,7 +483,7 @@ impl ServerPlayer {
             if respawn.forced {
                 fields.push(("forced".into(), Nbt::Byte(1)));
             }
-            nbt.push(("respawn".into(), Nbt::Compound(fields)));
+            nbt.push(("respawn".into(), Nbt::Compound(fields.into())));
         }
         nbt.push(("spawn_extra_particles_on_fall".into(), Nbt::Byte(self.spawn_extra_particles_on_fall as i8)));
         if let Some(pos) = self.raid_omen_position {
@@ -496,7 +496,7 @@ impl ServerPlayer {
         if !is_empty_compound(&self.shoulder_entity_right) {
             nbt.push(("ShoulderEntityRight".into(), self.shoulder_entity_right.clone()));
         }
-        Nbt::Compound(nbt)
+        Nbt::Compound(nbt.into())
     }
 
     pub fn saved_sleeping_pos(nbt: &Nbt) -> Option<BlockPos> {
@@ -556,7 +556,7 @@ impl ServerPlayer {
                 Nbt::Compound(_) => Ok(tag.clone()),
                 other => Err(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
             })
-            .unwrap_or(Nbt::Compound(Vec::new()))
+            .unwrap_or(Nbt::Compound(Vec::new().into()))
         };
         self.set_shoulder_entity_left(compound("ShoulderEntityLeft"));
         self.set_shoulder_entity_right(compound("ShoulderEntityRight"));
@@ -728,8 +728,8 @@ impl ServerLevel {
         if root_vehicle == id || !self.has_exactly_one_player_passenger(root_vehicle) {
             return None;
         }
-        let entity = self.save_entity(root_vehicle).unwrap_or(Nbt::Compound(Vec::new()));
-        Some(Nbt::Compound(vec![("Attach".into(), crate::world::level::storage::uuid_ints(self.entity(vehicle).uuid)), ("Entity".into(), entity)]))
+        let entity = self.save_entity(root_vehicle).unwrap_or(Nbt::Compound(Vec::new().into()));
+        Some(Nbt::Compound(vec![("Attach".into(), crate::world::level::storage::uuid_ints(self.entity(vehicle).uuid)), ("Entity".into(), entity)].into()))
     }
 
     pub fn load_and_spawn_parent_vehicle(&mut self, id: EntityId, player_input: &Nbt) {
@@ -987,12 +987,12 @@ impl ServerLevel {
 
     pub fn remove_entities_on_shoulder(&mut self, id: EntityId) {
         if self.player(id).time_entity_sat_on_shoulder + 20 < self.game_time {
-            let left = std::mem::replace(&mut self.player_mut(id).shoulder_entity_left, Nbt::Compound(Vec::new()));
+            let left = std::mem::replace(&mut self.player_mut(id).shoulder_entity_left, Nbt::Compound(Vec::new().into()));
             self.respawn_entity_on_shoulder(id, &left);
-            self.player_mut(id).set_shoulder_entity_left(Nbt::Compound(Vec::new()));
-            let right = std::mem::replace(&mut self.player_mut(id).shoulder_entity_right, Nbt::Compound(Vec::new()));
+            self.player_mut(id).set_shoulder_entity_left(Nbt::Compound(Vec::new().into()));
+            let right = std::mem::replace(&mut self.player_mut(id).shoulder_entity_right, Nbt::Compound(Vec::new().into()));
             self.respawn_entity_on_shoulder(id, &right);
-            self.player_mut(id).set_shoulder_entity_right(Nbt::Compound(Vec::new()));
+            self.player_mut(id).set_shoulder_entity_right(Nbt::Compound(Vec::new().into()));
         }
     }
 

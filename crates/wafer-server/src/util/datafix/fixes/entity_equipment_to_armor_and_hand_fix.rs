@@ -35,7 +35,7 @@ impl EntityEquipmentToArmorAndHandFix {
         if !equals(&new_equipment_type, &self.get_output_schema().get_type(ENTITY_EQUIPMENT), false) {
             panic!("Output entity_equipment type does not match expected");
         }
-        let empty_stack = value::decode(&new_item_stack_type, Some(Nbt::Compound(Vec::new())))
+        let empty_stack = value::decode(&new_item_stack_type, Some(Nbt::Compound(Vec::new().into())))
             .value
             .expect("Could not parse newly created empty itemstack.")
             .0;

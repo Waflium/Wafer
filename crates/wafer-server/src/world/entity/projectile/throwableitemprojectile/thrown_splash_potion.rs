@@ -33,7 +33,7 @@ impl ThrownSplashPotion {
 
 impl ServerLevel {
     pub fn thrown_splash_potion_on_hit_as_potion(&mut self, id: EntityId, potion_item: &ItemStack, hit_result: HitResult) {
-        let empty = Nbt::Compound(Vec::new());
+        let empty = Nbt::Compound(Vec::new().into());
         let contents = PotionContents::new(potion_item.get(dc::POTION_CONTENTS).unwrap_or(&empty));
         let duration_scale = potion_item.get(dc::POTION_DURATION_SCALE).and_then(Nbt::as_f64).map_or(1.0, |scale| scale as f32);
         let mob_effects = contents.get_all_effects();

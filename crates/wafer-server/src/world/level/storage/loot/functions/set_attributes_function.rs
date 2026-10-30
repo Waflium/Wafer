@@ -86,7 +86,7 @@ impl SetAttributesFunction {
                 ("amount".into(), Nbt::Double(amount as f64)),
                 ("operation".into(), Nbt::String(modifier.operation.name().to_string())),
                 ("slot".into(), Nbt::String(slot.to_string())),
-            ]));
+            ].into()));
         }
         item_modifiers
     }

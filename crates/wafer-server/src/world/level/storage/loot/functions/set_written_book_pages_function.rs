@@ -8,7 +8,7 @@ use crate::world::level::storage::loot::loot_context::LootContext;
 
 pub fn written_book_content(item_stack: &ItemStack) -> Vec<(String, Nbt)> {
     match item_stack.get(dc::WRITTEN_BOOK_CONTENT) {
-        Some(Nbt::Compound(fields)) => fields.clone(),
+        Some(Nbt::Compound(fields)) => fields.to_vec(),
         _ => vec![
             ("title".into(), Nbt::String(String::new())),
             ("author".into(), Nbt::String(String::new())),
@@ -35,7 +35,7 @@ impl SetWrittenBookPagesFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetWrittenBookPagesFunction> {
         let mut record = codec::Record::default();
         let pages = record.required(tag, "pages", |t| {
-            let probe = Nbt::Compound(vec![("title".into(), Nbt::String(String::new())), ("author".into(), Nbt::String(String::new())), ("pages".into(), t.clone())]);
+            let probe = Nbt::Compound(vec![("title".into(), Nbt::String(String::new())), ("author".into(), Nbt::String(String::new())), ("pages".into(), t.clone())].into());
             let content = dc::WRITTEN_BOOK_CONTENT.decode(&probe)?;
             Ok::<Vec<Nbt>, String>(content.get("pages").map_or(Vec::new(), |p| p.as_list().to_vec()))
         });
@@ -49,7 +49,7 @@ impl SetWrittenBookPagesFunction {
         let new_pages = self.page_operation.apply(&original, &self.pages, i32::MAX as usize);
         put(&mut content, "pages", Nbt::List(new_pages));
         put(&mut content, "resolved", Nbt::Byte(0));
-        let value = Nbt::Compound(content);
+        let value = Nbt::Compound(content.into());
         let value = dc::WRITTEN_BOOK_CONTENT.decode(&value).unwrap_or(value);
         item_stack.set(dc::WRITTEN_BOOK_CONTENT, Some(value));
         item_stack

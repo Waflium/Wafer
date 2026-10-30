@@ -150,7 +150,7 @@ impl Entry {
         Ok(Nbt::Compound(vec![
             ("modifier".into(), Nbt::String(self.modifier.operation_id().name().into())),
             ("argument".into(), self.modifier.encode_argument(attribute, &self.argument)?),
-        ]))
+        ].into()))
     }
 
     fn parse(attribute: &EnvironmentAttributeInfo, json: &Json) -> Result<Entry, String> {

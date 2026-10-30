@@ -136,7 +136,7 @@ pub fn decode(ty: &Arc<Type>, input: Option<Nbt>) -> DataResult<(Value, Option<N
                 }
                 error = combine(entry_error, error);
             }
-            DataResult { value: Some((Value::CompoundList(values), Some(Nbt::Compound(failed)))), error }
+            DataResult { value: Some((Value::CompoundList(values), Some(Nbt::Compound(failed.into())))), error }
         }
         Type::TaggedChoice(choice) => {
             let key = match &input {
@@ -159,7 +159,7 @@ pub fn decode(ty: &Arc<Type>, input: Option<Nbt>) -> DataResult<(Value, Option<N
 
 fn merge_to_map(prefix: Option<Nbt>, values: Vec<(String, Nbt)>) -> DataResult<Option<Nbt>> {
     match prefix {
-        None => DataResult::success(Some(Nbt::Compound(values))),
+        None => DataResult::success(Some(Nbt::Compound(values.into()))),
         Some(Nbt::Compound(mut entries)) => {
             for (key, value) in values {
                 put(&mut entries, &key, value);
@@ -223,7 +223,7 @@ pub fn encode(ty: &Arc<Type>, value: &Value, prefix: Option<Nbt>) -> DataResult<
         (Type::Remainder, Value::Dynamic(dynamic)) => match (&dynamic.value, prefix) {
             (None, prefix) => DataResult::success(prefix),
             (Some(casted), None) => DataResult::success(Some(casted.clone())),
-            (Some(Nbt::Compound(entries)), prefix @ Some(Nbt::Compound(_))) => merge_to_map(prefix, entries.clone()),
+            (Some(Nbt::Compound(entries)), prefix @ Some(Nbt::Compound(_))) => merge_to_map(prefix, entries.to_vec()),
             (Some(casted), Some(prefix)) => match get_stream(casted) {
                 Some(values) if get_stream(&prefix).is_some() => merge_to_list(Some(prefix), values),
                 _ => DataResult {

@@ -62,7 +62,7 @@ impl Occupant {
         let entity_type = registry::ENTITY_TYPE[level.entity(entity).entity_type as usize];
         let mut entity_tag = match level.save_entity(entity) {
             Some(Nbt::Compound(fields)) => fields,
-            _ => vec![("id".into(), Nbt::String(entity_type.into()))],
+            _ => vec![("id".into(), Nbt::String(entity_type.into()))].into(),
         };
         entity_tag.retain(|(key, _)| !IGNORED_BEE_TAGS.contains(&key.as_str()));
         let has_nectar = entity_tag.iter().find(|(key, _)| key == "HasNectar").and_then(|(_, value)| value.as_i64()).is_some_and(|v| v != 0);
@@ -70,7 +70,7 @@ impl Occupant {
     }
 
     pub fn create(ticks_in_hive: i32) -> Occupant {
-        Occupant { entity_data: Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:bee".into()))]), ticks_in_hive, min_ticks_in_hive: 600 }
+        Occupant { entity_data: Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:bee".into()))].into()), ticks_in_hive, min_ticks_in_hive: 600 }
     }
 
     pub fn save(&self) -> Nbt {
@@ -78,7 +78,7 @@ impl Occupant {
             ("entity_data".into(), self.entity_data.clone()),
             ("ticks_in_hive".into(), Nbt::Int(self.ticks_in_hive)),
             ("min_ticks_in_hive".into(), Nbt::Int(self.min_ticks_in_hive)),
-        ])
+        ].into())
     }
 
     pub fn load(tag: &Nbt) -> Option<Occupant> {

@@ -1104,7 +1104,7 @@ impl ServerLevel {
         if !pages.is_empty() {
             content.push(("pages".to_owned(), Nbt::List(pages)));
         }
-        carried.set_value(dc::WRITABLE_BOOK_CONTENT, Nbt::Compound(content));
+        carried.set_value(dc::WRITABLE_BOOK_CONTENT, Nbt::Compound(content.into()));
     }
 
     fn sign_book(&mut self, id: EntityId, title: FilteredText, contents: Vec<FilteredText>, slot: usize) {
@@ -1119,13 +1119,13 @@ impl ServerLevel {
             content.push(("pages".to_owned(), Nbt::List(pages)));
         }
         content.push(("resolved".to_owned(), Nbt::Byte(1)));
-        written_book.set_value(dc::WRITTEN_BOOK_CONTENT, Nbt::Compound(content));
+        written_book.set_value(dc::WRITTEN_BOOK_CONTENT, Nbt::Compound(content.into()));
         p.inventory.slots[inventory_slot(slot)] = Some(written_book);
     }
 
     fn filterable_from_outgoing(&self, id: EntityId, text: &FilteredText) -> Nbt {
         let raw = if self.player(id).client.text_filtering { text.filtered_or_empty() } else { text.raw.as_str() };
-        Nbt::Compound(vec![("raw".to_owned(), Nbt::String(raw.to_owned()))])
+        Nbt::Compound(vec![("raw".to_owned(), Nbt::String(raw.to_owned()))].into())
     }
 
     fn handle_rename_item(&mut self, id: EntityId, name: &str) {
@@ -1395,7 +1395,7 @@ impl crate::server::Server {
                 } else {
                     let mut output = Vec::new();
                     level.save_without_id(entity_id, &mut output);
-                    Nbt::Compound(output)
+                    Nbt::Compound(output.into())
                 };
                 level.player(id).connection.send(clientbound::TAG_QUERY, |w| {
                     w.varint(transaction_id);
@@ -1876,7 +1876,7 @@ mod server_tests {
         let mut book = crate::world::item::ItemStack::new(wafer_data::items::WRITTEN_BOOK, 1);
         book.set_value(
             crate::world::item::component::WRITTEN_BOOK_CONTENT,
-            wafer_protocol::nbt::Nbt::Compound(vec![("title".into(), wafer_protocol::nbt::Nbt::Compound(vec![("raw".into(), wafer_protocol::nbt::Nbt::String("T".into()))])), ("author".into(), wafer_protocol::nbt::Nbt::String("me".into()))]),
+            wafer_protocol::nbt::Nbt::Compound(vec![("title".into(), wafer_protocol::nbt::Nbt::Compound(vec![("raw".into(), wafer_protocol::nbt::Nbt::String("T".into()))].into())), ("author".into(), wafer_protocol::nbt::Nbt::String("me".into()))].into()),
         );
         server.levels[0].player_mut(alice).inventory.slots[crate::world::item::HOTBAR_START] = Some(book);
         packets(&mut alice_packets);

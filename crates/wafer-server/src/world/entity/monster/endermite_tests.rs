@@ -22,7 +22,7 @@ fn level() -> ServerLevel {
 
 fn endermite_with_life(life: i32, persistent: bool) -> Mob {
     let mut mob = Endermite::create();
-    Endermite::read_additional_save_data(&mut mob, &Nbt::Compound(vec![("Lifetime".into(), Nbt::Int(life))]));
+    Endermite::read_additional_save_data(&mut mob, &Nbt::Compound(vec![("Lifetime".into(), Nbt::Int(life))].into()));
     mob.persistence_required = persistent;
     mob
 }
@@ -75,6 +75,6 @@ fn endermite_lifetime_survives_saving() {
     let mut saved = Vec::new();
     mob.save(&mut saved);
     let mut loaded = Endermite::create();
-    loaded.load(&Nbt::Compound(saved));
+    loaded.load(&Nbt::Compound(saved.into()));
     assert_eq!(lifetime(&loaded), Some(105));
 }

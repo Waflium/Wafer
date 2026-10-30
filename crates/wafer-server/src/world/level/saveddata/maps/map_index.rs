@@ -42,6 +42,6 @@ impl MapIndex {
         if self.last_map_id != NO_MAP_ID {
             fields.push(("map".into(), Nbt::Int(self.last_map_id)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 }

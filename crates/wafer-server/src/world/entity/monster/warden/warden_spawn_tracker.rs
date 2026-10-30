@@ -115,7 +115,7 @@ impl WardenSpawnTracker {
             ("ticks_since_last_warning".into(), Nbt::Int(self.ticks_since_last_warning)),
             ("warning_level".into(), Nbt::Int(self.warning_level)),
             ("cooldown_ticks".into(), Nbt::Int(self.cooldown_ticks)),
-        ])
+        ].into())
     }
 
     pub fn decode(input: &Nbt) -> DecodeResult<WardenSpawnTracker> {

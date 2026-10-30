@@ -922,5 +922,5 @@ pub fn get_chunk_data_fix_context_tag(dimension: &str, generator_identifier: Opt
     if let Some(identifier) = generator_identifier {
         context.push(("generator".to_string(), wafer_protocol::nbt::Nbt::String(identifier.to_string())));
     }
-    wafer_protocol::nbt::Nbt::Compound(context)
+    wafer_protocol::nbt::Nbt::Compound(context.into())
 }

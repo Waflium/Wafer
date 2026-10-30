@@ -20,9 +20,9 @@ impl MerchantOffers {
 
     pub fn to_nbt(&self) -> Nbt {
         if self.0.is_empty() {
-            return Nbt::Compound(Vec::new());
+            return Nbt::Compound(Vec::new().into());
         }
-        Nbt::Compound(vec![("Recipes".into(), Nbt::List(self.0.iter().map(MerchantOffer::to_nbt).collect()))])
+        Nbt::Compound(vec![("Recipes".into(), Nbt::List(self.0.iter().map(MerchantOffer::to_nbt).collect()))].into())
     }
 
     pub fn is_empty(&self) -> bool {

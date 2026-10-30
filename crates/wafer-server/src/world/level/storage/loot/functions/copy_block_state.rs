@@ -37,7 +37,7 @@ impl CopyBlockState {
         let Some(state) = context.params.block_state else { return item_stack };
         let mut item_state = match item_stack.get(dc::BLOCK_STATE) {
             Some(Nbt::Compound(fields)) => fields.clone(),
-            _ => Vec::new(),
+            _ => Vec::new().into(),
         };
         for &property in &self.properties {
             if let Some(value) = state.property_value_by_name(property) {

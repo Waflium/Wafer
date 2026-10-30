@@ -77,7 +77,7 @@ impl CommandStorage {
         let Some(dir) = self.dir.clone() else { return Ok(()) };
         for (namespace, container) in &mut self.namespaces {
             let Some(container) = container.as_mut().filter(|c| c.dirty) else { continue };
-            let file = Nbt::Compound(vec![("data".into(), container.to_nbt()), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]);
+            let file = Nbt::Compound(vec![("data".into(), container.to_nbt()), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into());
             write_dat(&dir.join(namespace.as_str()).join("command_storage.dat"), &file)?;
             container.dirty = false;
         }
@@ -89,15 +89,15 @@ impl Container {
     fn from_nbt(data: &Nbt) -> Option<Container> {
         let Some(Nbt::Compound(contents)) = data.get("contents") else { return None };
         let storage = contents.iter().filter_map(|(path, tag)| match tag {
-            Nbt::Compound(fields) => Some((path.clone(), fields.clone())),
+            Nbt::Compound(fields) => Some((path.clone(), fields.to_vec())),
             _ => None,
         });
         Some(Container { storage: storage.collect(), dirty: false })
     }
 
     fn to_nbt(&self) -> Nbt {
-        let contents = self.storage.iter().map(|(path, fields)| (path.clone(), Nbt::Compound(fields.clone()))).collect();
-        Nbt::Compound(vec![("contents".into(), Nbt::Compound(contents))])
+        let contents = self.storage.iter().map(|(path, fields)| (path.clone(), Nbt::Compound(fields.clone().into()))).collect();
+        Nbt::Compound(vec![("contents".into(), Nbt::Compound(contents))].into())
     }
 }
 

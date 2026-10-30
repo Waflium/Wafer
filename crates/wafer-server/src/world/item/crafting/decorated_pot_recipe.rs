@@ -67,7 +67,7 @@ impl DecoratedPotRecipe {
                 decorations.push((name.to_string(), template.to_nbt()));
             }
         }
-        let decorations = Nbt::Compound(decorations);
+        let decorations = Nbt::Compound(decorations.into());
         let mut components = DataComponentPatch::default();
         components.put(dc::POT_DECORATIONS, Some(dc::POT_DECORATIONS.decode(&decorations).unwrap_or(decorations)));
         self.result.apply(self.result.count, &components)

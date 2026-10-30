@@ -324,7 +324,7 @@ fn armor_swaps_with_its_equipment_slot() {
     level.player_mut(id).inventory.slots[slot] = Some(ItemStack::new(items::IRON_HELMET, 1));
     assert_eq!(level.use_item(id, InteractionHand::MainHand), crate::world::InteractionResult::Fail);
     let mut hat = ItemStack::new(items::STONE, 2);
-    hat.set(crate::world::item::component::EQUIPPABLE, Some(wafer_protocol::nbt::Nbt::Compound(vec![("slot".into(), wafer_protocol::nbt::Nbt::String("head".into()))])));
+    hat.set(crate::world::item::component::EQUIPPABLE, Some(wafer_protocol::nbt::Nbt::Compound(vec![("slot".into(), wafer_protocol::nbt::Nbt::String("head".into()))].into())));
     level.player_mut(id).inventory.slots[slot] = Some(hat.clone());
     assert!(level.use_item(id, InteractionHand::MainHand).consumes_action());
     assert_eq!(level.player(id).inventory.slots[slot], Some(hat.copy_with_count(1)));

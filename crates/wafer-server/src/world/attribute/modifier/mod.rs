@@ -158,11 +158,11 @@ impl AttributeModifier {
                 if argument.alpha == 1.0 {
                     Nbt::Float(argument.value)
                 } else {
-                    Nbt::Compound(vec![("value".into(), Nbt::Float(argument.value)), ("alpha".into(), Nbt::Float(argument.alpha))])
+                    Nbt::Compound(vec![("value".into(), Nbt::Float(argument.value)), ("alpha".into(), Nbt::Float(argument.alpha))].into())
                 }
             }
             (AttributeModifier::Color(_), Value::BlendToGray(argument)) => {
-                Nbt::Compound(vec![("brightness".into(), Nbt::Float(argument.brightness)), ("factor".into(), Nbt::Float(argument.factor))])
+                Nbt::Compound(vec![("brightness".into(), Nbt::Float(argument.brightness)), ("factor".into(), Nbt::Float(argument.factor))].into())
             }
             (AttributeModifier::Color(_), Value::Argb(argument)) => Nbt::String(hex_color(argb::color_from_vector4f(*argument), 8)),
             (AttributeModifier::Color(_), Value::Rgb(argument)) => Nbt::String(hex_color(argb::transparent(argb::color_from_vector3f(*argument)), 6)),

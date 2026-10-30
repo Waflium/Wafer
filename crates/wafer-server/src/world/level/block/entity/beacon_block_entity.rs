@@ -137,7 +137,7 @@ impl BeaconBlockEntity {
             output.push(("CustomName".into(), name.clone()));
         }
         if self.is_locked() {
-            output.push(("lock".into(), self.lock_key.clone().unwrap_or(Nbt::Compound(Vec::new()))));
+            output.push(("lock".into(), self.lock_key.clone().unwrap_or(Nbt::Compound(Vec::new().into()))));
         }
     }
 

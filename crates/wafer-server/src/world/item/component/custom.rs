@@ -145,7 +145,7 @@ struct TemplateCodec(Codec);
 impl Custom for TemplateCodec {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         self.0.decode(tag).or_else(|first| {
-            ItemCodec.decode(tag).map(|id| Nbt::Compound(vec![("id".into(), id)])).map_err(|second| format!("Failed to parse either. First: {first}; Second: {second}"))
+            ItemCodec.decode(tag).map(|id| Nbt::Compound(vec![("id".into(), id)].into())).map_err(|second| format!("Failed to parse either. First: {first}; Second: {second}"))
         })
     }
 
@@ -177,7 +177,7 @@ impl Custom for TemplateCodec {
         if !patch.is_empty() {
             fields.push(("components".into(), patch.to_nbt()));
         }
-        Ok(Nbt::Compound(fields))
+        Ok(Nbt::Compound(fields.into()))
     }
 }
 
@@ -351,7 +351,7 @@ impl Custom for Container {
         for index in 0..size.max(0) {
             if rd!(r.bool()) {
                 let item = codec::read(&template_codec, &template_stream, r)?;
-                slots.push(Nbt::Compound(vec![("slot".into(), Nbt::Int(index)), ("item".into(), item)]));
+                slots.push(Nbt::Compound(vec![("slot".into(), Nbt::Int(index)), ("item".into(), item)].into()));
             }
         }
         Ok(Nbt::List(slots))
@@ -412,7 +412,7 @@ fn property(tag: &Nbt) -> DecodeResult<Nbt> {
         if let Some(signature) = signature {
             fields.push(("signature".to_string(), signature));
         }
-        Some(Nbt::Compound(fields))
+        Some(Nbt::Compound(fields.into()))
     })
 }
 
@@ -426,7 +426,7 @@ fn property_map(tag: &Nbt) -> DecodeResult<Nbt> {
     .map(|entries| {
         let properties = entries
             .into_iter()
-            .flat_map(|(name, values)| values.into_iter().map(move |value| Nbt::Compound(vec![("name".into(), Nbt::String(name.clone())), ("value".into(), Nbt::String(value))])));
+            .flat_map(|(name, values)| values.into_iter().map(move |value| Nbt::Compound(vec![("name".into(), Nbt::String(name.clone())), ("value".into(), Nbt::String(value))].into())));
         Nbt::List(properties.collect())
     });
     util_codec::either_result(map_form, || util_codec::sized_list_partial(tag, 16, property).map(Nbt::List)).map(|either| match either {
@@ -505,7 +505,7 @@ impl Profile {
         let value = match (profile.value, patch.value) {
             (Some(mut fields), Some(patch)) => {
                 fields.extend(patch);
-                Some(Nbt::Compound(fields))
+                Some(Nbt::Compound(fields.into()))
             }
             _ => None,
         };
@@ -539,7 +539,7 @@ impl Profile {
             if rd!(r.bool()) {
                 p.push(("signature".into(), Nbt::String(rd!(r.string(1024)).into())));
             }
-            out.push(Nbt::Compound(p));
+            out.push(Nbt::Compound(p.into()));
         }
         Ok((!out.is_empty()).then_some(Nbt::List(out)))
     }
@@ -566,7 +566,7 @@ impl Custom for Profile {
 
     fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
         util_codec::either_result(Profile::decode_full(tag), || match player_name(tag) {
-            Ok(name) => DecodeResult::success(Nbt::Compound(vec![("name".into(), name)])),
+            Ok(name) => DecodeResult::success(Nbt::Compound(vec![("name".into(), name)].into())),
             Err(error) => DecodeResult::error(error),
         })
         .map(|either| match either {
@@ -662,7 +662,7 @@ impl Custom for Profile {
         if rd!(r.bool()) {
             fields.push(("model".into(), Nbt::String(if rd!(r.bool()) { "slim" } else { "wide" }.into())));
         }
-        Ok(Nbt::Compound(fields))
+        Ok(Nbt::Compound(fields.into()))
     }
 }
 
@@ -764,7 +764,7 @@ impl Custom for ExactPredicate {
             }
             out.push((id, ty.decode(value)?));
         }
-        Ok(Nbt::Compound(out))
+        Ok(Nbt::Compound(out.into()))
     }
 
     fn hash(&self, value: &Nbt) -> HashCode {
@@ -790,7 +790,7 @@ impl Custom for ExactPredicate {
             let ty = DataComponentType::by_id(rd!(r.varint())).ok_or("unknown component")?;
             out.push((ty.name().to_string(), ty.read(r)?));
         }
-        Ok(Nbt::Compound(out))
+        Ok(Nbt::Compound(out.into()))
     }
 }
 
@@ -818,7 +818,7 @@ impl Custom for PartialPredicates {
                 ));
             }
         }
-        Ok(Nbt::Compound(out))
+        Ok(Nbt::Compound(out.into()))
     }
 
     fn hash(&self, value: &Nbt) -> HashCode {
@@ -862,7 +862,7 @@ impl Custom for PartialPredicates {
             };
             out.push((id, rd!(Nbt::read(r))));
         }
-        Ok(Nbt::Compound(out))
+        Ok(Nbt::Compound(out.into()))
     }
 }
 

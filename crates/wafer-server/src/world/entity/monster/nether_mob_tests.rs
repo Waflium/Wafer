@@ -133,7 +133,7 @@ fn canonical(nbt: &Nbt, game_time: i64) -> Nbt {
                 })
                 .collect();
             fields.sort_by(|a, b| a.0.cmp(&b.0));
-            Nbt::Compound(fields)
+            Nbt::Compound(fields.into())
         }
         Nbt::List(items) => Nbt::List(items.iter().map(|item| canonical(item, game_time)).collect()),
         other => other.clone(),

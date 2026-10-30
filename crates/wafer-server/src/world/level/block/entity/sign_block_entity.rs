@@ -126,7 +126,7 @@ impl SignBlockEntity {
         set(dc::SIGN_TEXT_FRONT, Some(self.front_text.to_nbt()));
         set(dc::SIGN_TEXT_BACK, Some(self.back_text.to_nbt()));
         if self.is_waxed {
-            set(dc::WAXED, Some(Nbt::Compound(Vec::new())));
+            set(dc::WAXED, Some(Nbt::Compound(Vec::new().into())));
         }
     }
 }

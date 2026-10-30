@@ -121,11 +121,11 @@ impl TimerQueue {
                     ("trigger_time".into(), Nbt::Long(event.trigger_time)),
                     ("callback".into(), event.callback.to_nbt()),
                     ("id".into(), Nbt::String(event.id.clone())),
-                ])
+                ].into())
             })
             .collect();
-        let data = Nbt::Compound(vec![("events".into(), Nbt::List(events))]);
-        let file = Nbt::Compound(vec![("data".into(), data), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))]);
+        let data = Nbt::Compound(vec![("events".into(), Nbt::List(events))].into());
+        let file = Nbt::Compound(vec![("data".into(), data), ("DataVersion".into(), Nbt::Int(WORLD_VERSION))].into());
         write_dat(&TimerQueue::file(dir), &file)?;
         self.dirty = false;
         Ok(())

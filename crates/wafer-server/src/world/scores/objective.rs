@@ -88,7 +88,7 @@ impl Objective {
         if let Some(format) = &self.number_format {
             fields.push(("format".into(), format.to_nbt()));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 }
 

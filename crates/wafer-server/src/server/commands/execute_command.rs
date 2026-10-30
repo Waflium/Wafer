@@ -540,7 +540,7 @@ pub fn if_predicate_run(server: &mut Server, context: &CommandContext, source: &
 
 pub fn summon(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Sources {
     let entity_type = super::summon_command::summonable_entity_type(context, "entity")?;
-    let (id, _) = super::summon_command::create_entity(server, source, &entity_type, source.position, &Nbt::Compound(Vec::new()), true)?;
+    let (id, _) = super::summon_command::create_entity(server, source, &entity_type, source.position, &Nbt::Compound(Vec::new().into()), true)?;
     Ok(vec![source.with_entity(id)])
 }
 

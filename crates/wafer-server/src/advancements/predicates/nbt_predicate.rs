@@ -27,7 +27,7 @@ impl NbtPredicate {
     pub fn matches_components(&self, components: &(impl DataComponentGetter + ?Sized)) -> bool {
         match components.get(dc::CUSTOM_DATA) {
             Some(data) => compare_nbt(&self.tag, Some(&data)),
-            None => compare_nbt(&self.tag, Some(&Nbt::Compound(Vec::new()))),
+            None => compare_nbt(&self.tag, Some(&Nbt::Compound(Vec::new().into()))),
         }
     }
 

@@ -27,7 +27,7 @@ fn spawner_tag(level: &mut ServerLevel) -> Nbt {
     let BlockEntityKind::Spawner(spawner) = &level.get_block_entity(SPAWNER).expect("the spawner").kind else { panic!("not a spawner") };
     let mut output = Vec::new();
     spawner.save_additional(&mut output);
-    Nbt::Compound(output)
+    Nbt::Compound(output.into())
 }
 
 fn delay(level: &mut ServerLevel) -> Nbt {

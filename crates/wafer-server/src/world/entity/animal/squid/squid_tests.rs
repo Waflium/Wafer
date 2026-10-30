@@ -171,7 +171,7 @@ fn squids_save_and_load_like_vanilla() {
     assert_eq!(get("DarkTicksRemaining"), Some(Nbt::Int(0)));
     assert_eq!(get("Age"), Some(Nbt::Int(-24000)));
     let mut loaded = GlowSquid::create();
-    loaded.load(&Nbt::Compound(vec![("DarkTicksRemaining".into(), Nbt::Int(42)), ("Age".into(), Nbt::Int(-5))]));
+    loaded.load(&Nbt::Compound(vec![("DarkTicksRemaining".into(), Nbt::Int(42)), ("Age".into(), Nbt::Int(-5))].into()));
     assert_eq!(loaded.get_dark_ticks_remaining(), 42);
     assert!(loaded.is_baby());
     assert_eq!(loaded.entity.dimensions.width, 0.5);

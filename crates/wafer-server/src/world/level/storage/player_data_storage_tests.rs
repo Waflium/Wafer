@@ -17,12 +17,12 @@ fn world(name: &str) -> WorldDir {
 }
 
 fn player_tag(level: i32) -> Nbt {
-    Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(wafer_data::WORLD_VERSION)), ("XpLevel".into(), Nbt::Int(level))])
+    Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(wafer_data::WORLD_VERSION)), ("XpLevel".into(), Nbt::Int(level))].into())
 }
 
 fn entity_chunk_with_broken_uuid() -> Nbt {
-    let pig = Nbt::Compound(vec![("id".into(), Nbt::String("Pig".into())), ("UUID".into(), Nbt::String("not a uuid".into()))]);
-    Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(100)), ("Entities".into(), Nbt::List(vec![pig])), ("Position".into(), Nbt::IntArray(vec![0, 0]))])
+    let pig = Nbt::Compound(vec![("id".into(), Nbt::String("Pig".into())), ("UUID".into(), Nbt::String("not a uuid".into()))].into());
+    Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(100)), ("Entities".into(), Nbt::List(vec![pig])), ("Position".into(), Nbt::IntArray(vec![0, 0]))].into())
 }
 
 fn player_files(dir: &WorldDir) -> Vec<String> {
@@ -73,11 +73,11 @@ fn a_missing_file_falls_back_to_dat_old_without_a_backup() {
 #[test]
 fn saved_data_may_be_uncompressed() {
     let dir = world("saved-data-uncompressed");
-    let data = Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(wafer_data::WORLD_VERSION)), ("data".into(), Nbt::Compound(vec![("value".into(), Nbt::Int(3))]))]);
+    let data = Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(wafer_data::WORLD_VERSION)), ("data".into(), Nbt::Compound(vec![("value".into(), Nbt::Int(3))].into()))].into());
     let file = dir.data("weather");
     std::fs::write(&file, encode_nbt(&data)).unwrap();
     let read = read_saved_data(&file, "main", "weather", DataFixTypes::SavedDataWeather, |data| DecodeResult::success(data.clone()));
-    assert_eq!(read, Some(Nbt::Compound(vec![("value".into(), Nbt::Int(3))])));
+    assert_eq!(read, Some(Nbt::Compound(vec![("value".into(), Nbt::Int(3))].into())));
     std::fs::remove_dir_all(dir.root).unwrap();
 }
 

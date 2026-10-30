@@ -49,7 +49,7 @@ impl MobBucketItem {
         if let LevelEntity::Mob(mob) = &mut entity
             && mob.is_bucketable()
         {
-            let entity_data = item_stack.get(dc::BUCKET_ENTITY_DATA).cloned().unwrap_or(Nbt::Compound(Vec::new()));
+            let entity_data = item_stack.get(dc::BUCKET_ENTITY_DATA).cloned().unwrap_or(Nbt::Compound(Vec::new().into()));
             mob.load_from_bucket_tag(&entity_data);
             age_loaded = matches!(mob.kind, MobKind::Tadpole(_)) && matches!(entity_data.get("Age"), Some(Nbt::Int(_)));
             mob.set_from_bucket(true);

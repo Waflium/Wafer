@@ -284,7 +284,7 @@ impl BaseSpawner {
             .spawn_potentials
             .items
             .iter()
-            .map(|(data, weight)| Nbt::Compound(vec![("data".into(), data.encode()), ("weight".into(), Nbt::Int(*weight))]))
+            .map(|(data, weight)| Nbt::Compound(vec![("data".into(), data.encode()), ("weight".into(), Nbt::Int(*weight))].into()))
             .collect();
         output.push(("SpawnPotentials".into(), Nbt::List(potentials)));
     }

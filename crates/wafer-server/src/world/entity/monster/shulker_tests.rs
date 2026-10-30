@@ -46,7 +46,7 @@ fn shulkers_save_their_attachment_peek_and_colour() {
     input.push(("AttachFace".to_string(), Nbt::Byte(0)));
     input.push(("Peek".to_string(), Nbt::Byte(30)));
     input.push(("Color".to_string(), Nbt::Byte(4)));
-    Shulker::read_additional_save_data(level.mob_mut(id).unwrap(), &Nbt::Compound(input));
+    Shulker::read_additional_save_data(level.mob_mut(id).unwrap(), &Nbt::Compound(input.into()));
     let mut out = Vec::new();
     level.save_without_id(id, &mut out);
     let get = |key: &str| out.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());

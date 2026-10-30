@@ -273,7 +273,7 @@ impl ServerLevel {
             match level.filter(|level| !level.entity(ender_pearl).is_removed()) {
                 None => warn!("Trying to save removed ender pearl, skipping"),
                 Some(level) => {
-                    let Nbt::Compound(mut pearl_tag) = level.save_entity(ender_pearl).unwrap_or(Nbt::Compound(Vec::new())) else { unreachable!("entities save as compounds") };
+                    let Nbt::Compound(mut pearl_tag) = level.save_entity(ender_pearl).unwrap_or(Nbt::Compound(Vec::new().into())) else { unreachable!("entities save as compounds") };
                     pearl_tag.push(("ender_pearl_dimension".into(), Nbt::String(level.dimension.into())));
                     pearls_output.push(Nbt::Compound(pearl_tag));
                 }

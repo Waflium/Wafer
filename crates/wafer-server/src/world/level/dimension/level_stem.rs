@@ -65,6 +65,6 @@ impl LevelStem {
     }
 
     pub fn encode(&self) -> Nbt {
-        Nbt::Compound(vec![("generator".into(), self.generator.encode()), ("type".into(), self.dimension_type.encode())])
+        Nbt::Compound(vec![("generator".into(), self.generator.encode()), ("type".into(), self.dimension_type.encode())].into())
     }
 }

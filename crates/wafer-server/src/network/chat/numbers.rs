@@ -50,7 +50,7 @@ impl NumberFormat {
             NumberFormat::Styled(style) => style.write_fields(&mut fields),
             NumberFormat::Fixed(component) => fields.push(("value".into(), component.to_nbt())),
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn from_nbt(tag: &Nbt) -> Result<NumberFormat, String> {

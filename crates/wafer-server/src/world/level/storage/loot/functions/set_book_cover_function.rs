@@ -16,7 +16,7 @@ impl SetBookCoverFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetBookCoverFunction> {
         let mut record = codec::Record::default();
         let title = record.optional(tag, "title", |t| {
-            let probe = Nbt::Compound(vec![("title".into(), t.clone()), ("author".into(), Nbt::String(String::new()))]);
+            let probe = Nbt::Compound(vec![("title".into(), t.clone()), ("author".into(), Nbt::String(String::new()))].into());
             let content = dc::WRITTEN_BOOK_CONTENT.decode(&probe)?;
             Ok::<Nbt, String>(content.get("title").cloned().unwrap_or_else(|| t.clone()))
         });
@@ -42,7 +42,7 @@ impl SetBookCoverFunction {
         if let Some(generation) = self.generation {
             put(&mut content, "generation", Nbt::Int(generation));
         }
-        let value = Nbt::Compound(content);
+        let value = Nbt::Compound(content.into());
         let value = dc::WRITTEN_BOOK_CONTENT.decode(&value).unwrap_or(value);
         item_stack.set(dc::WRITTEN_BOOK_CONTENT, Some(value));
         item_stack

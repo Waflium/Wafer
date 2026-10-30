@@ -38,7 +38,7 @@ impl PoiSection {
             fields.push(("Valid".to_string(), Nbt::Byte(1)));
         }
         fields.push(("Records".to_string(), Nbt::List(self.records.stream_values().map(PoiRecord::pack).collect())));
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn unpack(nbt: &Nbt) -> Option<PoiSection> {

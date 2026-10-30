@@ -559,7 +559,7 @@ pub(crate) fn map_entry_order(fields: &[(String, Nbt)]) -> Vec<usize> {
 
 pub(crate) fn map_entry_failures(errors: Vec<String>, failed: Vec<(String, Nbt)>) -> String {
     let messages: Vec<String> = errors.into_iter().rev().collect();
-    format!("{} missed input: {}", messages.join("; "), crate::nbt::to_string(&Nbt::Compound(failed)))
+    format!("{} missed input: {}", messages.join("; "), crate::nbt::to_string(&Nbt::Compound(failed.into())))
 }
 
 pub fn base_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: impl Fn(&Nbt) -> DataResult<V>) -> DataResult<Vec<(K, V)>> {

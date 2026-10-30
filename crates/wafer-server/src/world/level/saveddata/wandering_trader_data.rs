@@ -31,7 +31,7 @@ impl WanderingTraderData {
     }
 
     pub fn encode(&self) -> Nbt {
-        Nbt::Compound(vec![("spawn_delay".into(), Nbt::Int(self.spawn_delay)), ("spawn_chance".into(), Nbt::Int(self.spawn_chance))])
+        Nbt::Compound(vec![("spawn_delay".into(), Nbt::Int(self.spawn_delay)), ("spawn_chance".into(), Nbt::Int(self.spawn_chance))].into())
     }
 
     pub fn spawn_delay(&self) -> i32 {

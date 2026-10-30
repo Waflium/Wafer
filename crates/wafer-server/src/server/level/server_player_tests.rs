@@ -44,7 +44,7 @@ fn summon_pearl(server: &mut Server, level: usize, owner: u128, pos: [f64; 3], m
         ("Pos".into(), doubles(pos)),
         ("Motion".into(), doubles(motion)),
         ("Owner".into(), uuid_ints(owner)),
-    ]);
+    ].into());
     let level = &mut server.levels[level];
     let pearl = level.load_entity(&tag).expect("an ender pearl");
     let id = pearl.entity().id;
@@ -98,10 +98,10 @@ fn ender_pearls_without_a_loaded_level_are_skipped() {
     let saved = Nbt::Compound(vec![(
         "ender_pearls".into(),
         Nbt::List(vec![
-            Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:ender_pearl".into())), ("ender_pearl_dimension".into(), Nbt::String("minecraft:the_moon".into()))]),
-            Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:ender_pearl".into()))]),
+            Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:ender_pearl".into())), ("ender_pearl_dimension".into(), Nbt::String("minecraft:the_moon".into()))].into()),
+            Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:ender_pearl".into()))].into()),
         ]),
-    )]);
+    )].into());
     let before = server.levels.iter().map(|l| l.entities.len()).sum::<usize>();
     server.load_and_spawn_ender_pearls(&saved);
     assert_eq!(server.levels.iter().map(|l| l.entities.len()).sum::<usize>(), before);

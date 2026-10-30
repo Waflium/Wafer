@@ -42,6 +42,6 @@ impl WorldGenSettings {
         let mut fields = Vec::new();
         self.options.encode(&mut fields);
         fields.push(("dimensions".into(), self.dimensions.encode()));
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 }

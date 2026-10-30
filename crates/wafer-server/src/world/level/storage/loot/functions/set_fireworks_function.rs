@@ -23,7 +23,7 @@ impl SetFireworksFunction {
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {
         let mut fireworks = match item_stack.get(dc::FIREWORKS) {
             Some(Nbt::Compound(fields)) => fields.clone(),
-            _ => Vec::new(),
+            _ => Vec::new().into(),
         };
         if let Some(flight_duration) = self.flight_duration {
             put(&mut fireworks, "flight_duration", Nbt::Int(flight_duration));

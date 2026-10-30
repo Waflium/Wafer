@@ -266,13 +266,13 @@ fn shearing_a_snow_golem_drops_its_pumpkin() {
 #[test]
 fn golems_save_and_load_their_fields() {
     let mut golem = IronGolem::create();
-    golem.load(&Nbt::Compound(vec![("PlayerCreated".into(), Nbt::Byte(1)), ("Health".into(), Nbt::Float(60.0))]));
+    golem.load(&Nbt::Compound(vec![("PlayerCreated".into(), Nbt::Byte(1)), ("Health".into(), Nbt::Float(60.0))].into()));
     let mut out = Vec::new();
     golem.save(&mut out);
     assert!(out.iter().any(|(key, value)| key == "PlayerCreated" && *value == Nbt::Byte(1)));
     assert!(out.iter().any(|(key, _)| key == "anger_end_time"));
     let mut snow_golem = SnowGolem::create();
-    snow_golem.load(&Nbt::Compound(vec![("Pumpkin".into(), Nbt::Byte(0))]));
+    snow_golem.load(&Nbt::Compound(vec![("Pumpkin".into(), Nbt::Byte(0))].into()));
     let mut out = Vec::new();
     snow_golem.save(&mut out);
     assert!(out.iter().any(|(key, value)| key == "Pumpkin" && *value == Nbt::Byte(0)));

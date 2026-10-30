@@ -37,7 +37,7 @@ impl BiomeSourceDefinition {
 
     fn encode(&self) -> Nbt {
         match self {
-            BiomeSourceDefinition::MultiNoisePreset(preset) => Nbt::Compound(vec![("preset".into(), Nbt::String(preset.clone())), ("type".into(), Nbt::String("minecraft:multi_noise".into()))]),
+            BiomeSourceDefinition::MultiNoisePreset(preset) => Nbt::Compound(vec![("preset".into(), Nbt::String(preset.clone())), ("type".into(), Nbt::String("minecraft:multi_noise".into()))].into()),
             BiomeSourceDefinition::Built(_, tag) => tag.clone(),
         }
     }
@@ -123,14 +123,14 @@ impl UnseededChunkGenerator {
                 let layers = flat
                     .layers
                     .iter()
-                    .map(|&(state, height): &(BlockState, u32)| Nbt::Compound(vec![("block".into(), string(state.block().name())), ("height".into(), Nbt::Int(height as i32))]))
+                    .map(|&(state, height): &(BlockState, u32)| Nbt::Compound(vec![("block".into(), string(state.block().name())), ("height".into(), Nbt::Int(height as i32))].into()))
                     .collect();
                 let mut settings = vec![("features".to_string(), Nbt::Byte(flat.features as i8)), ("biome".into(), string(flat.biome.name())), ("layers".into(), Nbt::List(layers))];
                 if let Some(overrides) = &flat.structure_overrides {
                     settings.push(("structure_overrides".into(), overrides.to_nbt()));
                 }
                 settings.push(("lakes".into(), Nbt::Byte(flat.lakes as i8)));
-                Nbt::Compound(vec![("settings".into(), Nbt::Compound(settings)), ("type".into(), string("minecraft:flat"))])
+                Nbt::Compound(vec![("settings".into(), Nbt::Compound(settings.into())), ("type".into(), string("minecraft:flat"))].into())
             }
             UnseededChunkGenerator::Noise(noise) => Nbt::Compound(vec![
                 (
@@ -142,8 +142,8 @@ impl UnseededChunkGenerator {
                 ),
                 ("biome_source".into(), noise.biome_source.encode()),
                 ("type".into(), string("minecraft:noise")),
-            ]),
-            UnseededChunkGenerator::Debug => Nbt::Compound(vec![("type".into(), string("minecraft:debug"))]),
+            ].into()),
+            UnseededChunkGenerator::Debug => Nbt::Compound(vec![("type".into(), string("minecraft:debug"))].into()),
         }
     }
 }
@@ -181,7 +181,7 @@ fn decode_biome_source(tag: &Nbt) -> DecodeResult<BiomeSourceDefinition> {
             let biome = record.required(tag, "biome", |biome| DecodeResult::from(holder("minecraft:worldgen/biome").decode(biome)));
             record.build(|| {
                 let biome = Biome::by_name(biome?.as_str()?)?;
-                let encoded = Nbt::Compound(vec![("biome".into(), Nbt::String(biome.name().to_string())), ("type".into(), ty_tag)]);
+                let encoded = Nbt::Compound(vec![("biome".into(), Nbt::String(biome.name().to_string())), ("type".into(), ty_tag)].into());
                 Some(BiomeSourceDefinition::Built(Arc::new(BiomeSource::Fixed(biome)), encoded))
             })
         }
@@ -196,11 +196,11 @@ fn decode_biome_source(tag: &Nbt) -> DecodeResult<BiomeSourceDefinition> {
                     fields.push(("scale".into(), Nbt::Int(scale)));
                 }
                 fields.push(("type".into(), ty_tag));
-                Some(BiomeSourceDefinition::Built(Arc::new(BiomeSource::Checkerboard(CheckerboardColumnBiomeSource::new(allowed, scale))), Nbt::Compound(fields)))
+                Some(BiomeSourceDefinition::Built(Arc::new(BiomeSource::Checkerboard(CheckerboardColumnBiomeSource::new(allowed, scale))), Nbt::Compound(fields.into())))
             })
         }
         "minecraft:multi_noise" => decode_multi_noise(tag, ty_tag),
-        _ => record.build(|| Some(BiomeSourceDefinition::Built(Arc::new(BiomeSource::TheEnd(TheEndBiomeSource::create())), Nbt::Compound(vec![("type".into(), ty_tag)])))),
+        _ => record.build(|| Some(BiomeSourceDefinition::Built(Arc::new(BiomeSource::TheEnd(TheEndBiomeSource::create())), Nbt::Compound(vec![("type".into(), ty_tag)].into())))),
     }
 }
 
@@ -215,7 +215,7 @@ fn decode_multi_noise(tag: &Nbt, ty_tag: Nbt) -> DecodeResult<BiomeSourceDefinit
     let DecodeResult { value: parameters_value, error: parameters_error } = parameters;
     if let (Some(source), None) = (parameters_value, &parameters_error) {
         let biomes = tag.get("biomes").cloned().unwrap_or(Nbt::End);
-        return DecodeResult::success(BiomeSourceDefinition::Built(Arc::new(BiomeSource::MultiNoise(source)), Nbt::Compound(vec![("biomes".into(), biomes), ("type".into(), ty_tag)])));
+        return DecodeResult::success(BiomeSourceDefinition::Built(Arc::new(BiomeSource::MultiNoise(source)), Nbt::Compound(vec![("biomes".into(), biomes), ("type".into(), ty_tag)].into())));
     }
     let preset = match tag.get("preset") {
         Some(preset) => DecodeResult::from(holder("minecraft:worldgen/multi_noise_biome_source_parameter_list").decode(preset)),

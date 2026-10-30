@@ -63,7 +63,7 @@ impl Icon {
         if let Some(color) = self.color {
             fields.push(("color".to_string(), Nbt::Int(color)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn decode(tag: &Nbt) -> DecodeResult<Icon> {

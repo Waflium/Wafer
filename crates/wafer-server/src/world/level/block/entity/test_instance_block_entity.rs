@@ -99,7 +99,7 @@ impl Data {
         if let Some(error_message) = &self.error_message {
             fields.push(("error_message".into(), error_message.to_nbt()));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     fn decode(tag: &Nbt) -> DecodeResult<Data> {
@@ -190,7 +190,7 @@ impl TestInstanceBlockEntity {
             let markers = self
                 .error_markers
                 .iter()
-                .map(|marker| Nbt::Compound(vec![("pos".into(), Nbt::IntArray(vec![marker.pos.x, marker.pos.y, marker.pos.z])), ("text".into(), marker.text.to_nbt())]))
+                .map(|marker| Nbt::Compound(vec![("pos".into(), Nbt::IntArray(vec![marker.pos.x, marker.pos.y, marker.pos.z])), ("text".into(), marker.text.to_nbt())].into()))
                 .collect();
             output.push(("errors".into(), Nbt::List(markers)));
         }

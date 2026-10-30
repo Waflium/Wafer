@@ -90,7 +90,7 @@ fn home_and_egg_survive_saving() {
     let mut out = Vec::new();
     mob.save(&mut out);
     assert_eq!(out.iter().filter(|(key, _)| key == "home_pos").count(), 1);
-    let nbt = Nbt::Compound(out);
+    let nbt = Nbt::Compound(out.into());
     assert_eq!(nbt.get("home_pos"), Some(&Nbt::IntArray(vec![1, 2, 3])));
     assert_eq!(nbt.get("has_egg"), Some(&Nbt::Byte(1)));
     let mut loaded = Turtle::create();
@@ -99,7 +99,7 @@ fn home_and_egg_survive_saving() {
     assert!(turtle::has_egg(&loaded.entity));
     let mut homeless = Turtle::create();
     homeless.entity.set_pos(Vec3::new(10.5, 64.0, -3.5));
-    homeless.load(&Nbt::Compound(Vec::new()));
+    homeless.load(&Nbt::Compound(Vec::new().into()));
     assert_eq!(turtle::get_home_pos(&homeless), BlockPos::new(10, 64, -4));
 }
 

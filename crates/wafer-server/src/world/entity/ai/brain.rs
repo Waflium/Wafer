@@ -77,7 +77,7 @@ impl Packed {
     pub const EMPTY: Packed = Packed { memories: MemoryMap::EMPTY };
 
     pub fn to_nbt(&self) -> Nbt {
-        Nbt::Compound(vec![("memories".into(), self.memories.to_nbt())])
+        Nbt::Compound(vec![("memories".into(), self.memories.to_nbt())].into())
     }
 
     pub fn decode(nbt: &Nbt) -> DecodeResult<Packed> {

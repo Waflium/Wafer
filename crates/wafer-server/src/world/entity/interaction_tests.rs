@@ -10,7 +10,7 @@ fn interactions_record_attacks_and_interactions() {
     let mut level = testing::level();
     let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
     let mut interaction = Interaction::create();
-    interaction.read_additional_save_data(&Nbt::Compound(vec![("width".into(), Nbt::Float(2.0)), ("height".into(), Nbt::Float(3.0))]));
+    interaction.read_additional_save_data(&Nbt::Compound(vec![("width".into(), Nbt::Float(2.0)), ("height".into(), Nbt::Float(3.0))].into()));
     interaction.entity.snap_to(0.5, -60.0, 2.5, 0.0, 0.0);
     let id = interaction.entity.id;
     level.add_fresh_entity(LevelEntity::Interaction(interaction));
@@ -27,7 +27,7 @@ fn interactions_record_attacks_and_interactions() {
     assert!(out.iter().any(|(k, v)| k == "width" && *v == Nbt::Float(2.0)));
     assert!(out.iter().any(|(k, _)| k == "attack"));
     assert!(out.iter().any(|(k, _)| k == "interaction"));
-    interaction.read_additional_save_data(&Nbt::Compound(vec![("response".into(), Nbt::Byte(1))]));
+    interaction.read_additional_save_data(&Nbt::Compound(vec![("response".into(), Nbt::Byte(1))].into()));
     assert_eq!(level.get_last_attacker(id), None);
     assert!(!level.skip_attack_interaction(id, player));
     assert_eq!(level.get_last_attacker(id), Some(player));

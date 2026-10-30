@@ -34,7 +34,7 @@ impl SetContainerLootTable {
         if self.seed != 0 {
             fields.push(("seed".into(), Nbt::Long(self.seed)));
         }
-        item_stack.set(dc::CONTAINER_LOOT, Some(Nbt::Compound(fields)));
+        item_stack.set(dc::CONTAINER_LOOT, Some(Nbt::Compound(fields.into())));
         item_stack
     }
 }

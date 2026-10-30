@@ -81,7 +81,7 @@ impl MerchantOffer {
         if self.xp != 1 {
             fields.push(("xp".into(), Nbt::Int(self.xp)));
         }
-        Nbt::Compound(fields)
+        Nbt::Compound(fields.into())
     }
 
     pub fn get_base_cost_a(&self) -> &ItemStack {
