@@ -80,6 +80,15 @@ impl TagMap {
         TagMap { entries: self.iteration().map(|(key, value)| (key.clone(), value.copy())).collect(), capacity: 0 }
     }
 
+    pub fn merge(&mut self, other: &TagMap) {
+        for (key, other_tag) in other.iteration() {
+            match (self.entries.iter_mut().find(|(k, _)| k == key), other_tag) {
+                (Some((_, Nbt::Compound(self_compound))), Nbt::Compound(other_compound)) => self_compound.merge(other_compound),
+                _ => self.put(key, other_tag.copy()),
+            }
+        }
+    }
+
     pub fn shallow_copy(self) -> TagMap {
         let size = self.entries.len();
         let entries = self.into_iteration();
@@ -123,6 +132,7 @@ impl std::ops::Deref for TagMap {
 
 impl std::ops::DerefMut for TagMap {
     fn deref_mut(&mut self) -> &mut Vec<(String, Nbt)> {
+        self.capacity = self.table_capacity() as u32;
         &mut self.entries
     }
 }
@@ -514,6 +524,81 @@ mod tests {
         let copy = fields.shallow_copy().copy();
         assert_eq!(copy.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), ["Owner", "SkullOwner", "id"]);
         assert_eq!(copy.table_capacity(), 16);
+    }
+
+    fn grown(keep: &[&str]) -> TagMap {
+        let mut fields = TagMap::new();
+        for i in 0..13 {
+            fields.put(&format!("grow{i}"), Nbt::Int(i));
+        }
+        for key in keep {
+            fields.put(key, Nbt::Int(key.len() as i32));
+        }
+        for i in 0..13 {
+            fields.remove_key(&format!("grow{i}"));
+        }
+        fields
+    }
+
+    fn keys(fields: &TagMap) -> Vec<&str> {
+        fields.iteration().map(|(key, _)| key.as_str()).collect()
+    }
+
+    #[test]
+    fn copy_resets_the_capacity_that_removals_kept() {
+        let source = grown(&["ax", "h", "i"]);
+        assert_eq!(keys(&source), ["h", "i", "ax"]);
+        assert_eq!(keys(&source.clone()), ["h", "i", "ax"]);
+        assert_eq!(keys(&source.copy()), ["ax", "h", "i"]);
+        assert_eq!(keys(&source.copy().copy()), ["ax", "h", "i"]);
+    }
+
+    #[test]
+    fn copy_resets_the_capacity_of_nested_compounds_and_lists() {
+        let nested: TagMap = vec![
+            ("inner".to_string(), Nbt::Compound(grown(&["ax", "h", "i"]))),
+            ("list".to_string(), Nbt::List(vec![Nbt::Compound(grown(&["ax", "h", "i"]))])),
+        ]
+        .into();
+        let copy = nested.copy();
+        let Some((_, Nbt::Compound(inner))) = copy.iter().find(|(key, _)| key == "inner") else { panic!("inner") };
+        let Some((_, Nbt::List(list))) = copy.iter().find(|(key, _)| key == "list") else { panic!("list") };
+        let Nbt::Compound(listed) = &list[0] else { panic!("listed") };
+        assert_eq!(keys(inner), ["ax", "h", "i"]);
+        assert_eq!(keys(listed), ["ax", "h", "i"]);
+        let Some((_, Nbt::Compound(original))) = nested.iter().find(|(key, _)| key == "inner") else { panic!("inner") };
+        assert_eq!(keys(original), ["h", "i", "ax"]);
+    }
+
+    #[test]
+    fn merge_inserts_in_the_iteration_order_of_the_source() {
+        let other = grown(&["ax", "g"]);
+        assert_eq!(keys(&other), ["g", "ax"]);
+        let mut target = TagMap::new();
+        target.merge(&other);
+        assert_eq!(keys(&target), ["g", "ax"]);
+        assert_eq!(keys(&other.copy()), ["g", "ax"]);
+    }
+
+    #[test]
+    fn merge_copies_the_merged_values() {
+        let other: TagMap = vec![("inner".to_string(), Nbt::Compound(grown(&["ax", "h", "i"])))].into();
+        let mut target = TagMap::new();
+        target.merge(&other);
+        let Some((_, Nbt::Compound(inner))) = target.iter().find(|(key, _)| key == "inner") else { panic!("inner") };
+        assert_eq!(keys(inner), ["ax", "h", "i"]);
+        let mut existing: TagMap = vec![("inner".to_string(), Nbt::Compound(TagMap::new()))].into();
+        existing.merge(&other);
+        let Some((_, Nbt::Compound(inner))) = existing.iter().find(|(key, _)| key == "inner") else { panic!("inner") };
+        assert_eq!(keys(inner), ["ax", "h", "i"]);
+    }
+
+    #[test]
+    fn vec_removals_keep_the_grown_table_capacity() {
+        let mut fields: TagMap = (0..13).map(|i| (format!("grow{i}"), Nbt::Int(i))).chain(["ax", "h", "i"].map(|key| (key.to_string(), Nbt::Int(0)))).collect();
+        fields.retain(|(key, _)| !key.starts_with("grow"));
+        assert_eq!(keys(&fields), ["h", "i", "ax"]);
+        assert_eq!(keys(&fields.copy()), ["ax", "h", "i"]);
     }
 
     #[test]
