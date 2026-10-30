@@ -741,7 +741,7 @@ impl ServerLevel {
         if state.is_air() {
             return false;
         }
-        self.level_event(None, events::PARTICLES_AND_SOUND_DESTROY_BLOCK, pos, state.id() as i32);
+        block::of(state).spawn_destroy_particles(self, pos, state);
         if drop_resources {
             let block_entity = if state.has_block_entity() { self.get_block_entity(pos).cloned() } else { None };
             self.drop_resources_with_entity(state, pos, block_entity.as_ref(), breaker, None);

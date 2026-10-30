@@ -265,6 +265,8 @@ mod command_block_tests;
 #[cfg(test)]
 mod end_gateway_block_tests;
 #[cfg(test)]
+mod fire_block_tests;
+#[cfg(test)]
 mod piston_tests;
 #[cfg(test)]
 mod shulker_box_tests;
@@ -410,6 +412,14 @@ pub trait BlockBehaviour: Send + Sync {
     fn handle_precipitation(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, precipitation: Precipitation) {}
 
     fn random_tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {}
+
+    fn spawn_destroy_by_entity_particles(&self, level: &mut ServerLevel, entity: Option<EntityId>, pos: BlockPos, state: BlockState) {
+        level.level_event(entity, crate::server::level::events::PARTICLES_AND_SOUND_DESTROY_BLOCK, pos, state.id() as i32);
+    }
+
+    fn spawn_destroy_particles(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState) {
+        self.spawn_destroy_by_entity_particles(level, None, pos, state);
+    }
 
     fn player_will_destroy(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState, player: EntityId) -> BlockState {
         block_player_will_destroy(level, pos, state, player)
@@ -573,7 +583,7 @@ pub fn base_entity_block_get_menu_provider(level: &mut ServerLevel, pos: BlockPo
 }
 
 pub fn block_player_will_destroy(level: &mut ServerLevel, pos: BlockPos, state: BlockState, player: EntityId) -> BlockState {
-    level.level_event(Some(player), crate::server::level::events::PARTICLES_AND_SOUND_DESTROY_BLOCK, pos, state.id() as i32);
+    of(state).spawn_destroy_by_entity_particles(level, Some(player), pos, state);
     if state.is(&wafer_data::block_tags::GUARDED_BY_PIGLINS) {
         crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(level, player, false);
     }

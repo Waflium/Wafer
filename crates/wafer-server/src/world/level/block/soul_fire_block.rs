@@ -36,7 +36,9 @@ impl BlockBehaviour for SoulFireBlock {
         base_fire_block::entity_inside(effects, FIRE_DAMAGE);
     }
 
-    fn player_will_destroy(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState, _player: EntityId) -> BlockState {
-        base_fire_block::player_will_destroy(level, pos, state)
+    fn spawn_destroy_by_entity_particles(&self, _level: &mut ServerLevel, _entity: Option<EntityId>, _pos: BlockPos, _state: BlockState) {}
+
+    fn player_will_destroy(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState, player: EntityId) -> BlockState {
+        base_fire_block::player_will_destroy(level, pos, state, player)
     }
 }

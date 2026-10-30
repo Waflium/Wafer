@@ -72,7 +72,7 @@ pub fn on_place(state: BlockState, level: &mut ServerLevel, pos: BlockPos, old_s
     }
 }
 
-pub fn player_will_destroy(level: &mut ServerLevel, pos: BlockPos, state: BlockState) -> BlockState {
+pub fn player_will_destroy(level: &mut ServerLevel, pos: BlockPos, state: BlockState, player: EntityId) -> BlockState {
     level.level_event(None, SOUND_EXTINGUISH_FIRE, pos, 0);
-    state
+    super::block_player_will_destroy(level, pos, state, player)
 }
