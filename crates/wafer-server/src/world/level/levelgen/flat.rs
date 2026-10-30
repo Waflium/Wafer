@@ -78,6 +78,20 @@ pub fn decode_preset(tag: &Nbt) -> DecodeResult<()> {
     record.build(|| display.and(settings))
 }
 
+fn decode_biome(tag: &Nbt) -> Option<Biome> {
+    if let Nbt::Compound(_) = tag {
+        return crate::world::level::biome::validate(tag).ok().map(|()| crate::world::level::biome::inline_biome::register(tag));
+    }
+    codec::string(tag).ok().and_then(|id| crate::resources::identifier::parse(id).ok()).and_then(|id| {
+        Biome::by_name(&id).or_else(|| {
+            allows_unbound_references().then(|| {
+                crate::core::data_registries::unknown_reference(BIOME, &id);
+                Biome::by_name("minecraft:plains").expect("plains biome")
+            })
+        })
+    })
+}
+
 pub fn decode_settings(tag: &Nbt) -> DecodeResult<FlatLevelSource> {
     if let Err(error) = codec::map(tag) {
         return DecodeResult::error(error);
@@ -86,14 +100,7 @@ pub fn decode_settings(tag: &Nbt) -> DecodeResult<FlatLevelSource> {
     let layers = record.required(tag, "layers", |layers| codec::list_partial(layers, decode_layer));
     let lakes = record.with_default(tag, "lakes", false, codec::bool_value);
     let features = record.with_default(tag, "features", false, codec::bool_value);
-    let biome = tag.get("biome").and_then(|biome| codec::string(biome).ok()).and_then(|id| crate::resources::identifier::parse(id).ok()).and_then(|id| {
-        Biome::by_name(&id).or_else(|| {
-            allows_unbound_references().then(|| {
-                crate::core::data_registries::unknown_reference(BIOME, &id);
-                Biome::by_name("minecraft:plains").expect("plains biome")
-            })
-        })
-    });
+    let biome = tag.get("biome").and_then(decode_biome);
     let structure_overrides = tag.get("structure_overrides").and_then(StructureOverrides::from_nbt);
     let mut settings = record.build(|| {
         let layers = layers?;

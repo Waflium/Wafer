@@ -42,6 +42,9 @@ static SETTINGS: LazyLock<Vec<BiomeGenerationSettings>> = LazyLock::new(|| {
 });
 
 pub fn get(biome: Biome) -> &'static BiomeGenerationSettings {
+    if biome.is_inline() {
+        return &super::inline_biome::get(biome).generation;
+    }
     &SETTINGS[biome.0 as usize]
 }
 

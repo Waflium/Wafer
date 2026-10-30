@@ -78,7 +78,8 @@ impl Builder {
 
     pub fn add_biome_layer(mut self, biomes: &[EnvironmentAttributeMap]) -> Self {
         let mut provided: Vec<usize> = Vec::new();
-        for biome in biomes {
+        let inline_biomes = crate::world::level::biome::inline_biome::attribute_maps();
+        for biome in biomes.iter().chain(&inline_biomes) {
             for id in biome.key_set() {
                 if !provided.contains(&id) {
                     provided.push(id);
@@ -181,7 +182,12 @@ impl ValueSampler {
                         } else {
                             access.noise_biome(mth::floor(pos.x) >> 2, mth::floor(pos.y) >> 2, mth::floor(pos.z) >> 2)
                         };
-                        match &by_biome[biome.0 as usize] {
+                        let entry = if biome.is_inline() {
+                            crate::world::level::biome::inline_biome::get(biome).attributes.get(self.attribute.id)
+                        } else {
+                            by_biome[biome.0 as usize].as_ref()
+                        };
+                        match entry {
                             Some(entry) => entry.apply_modifier(&result),
                             None => result,
                         }

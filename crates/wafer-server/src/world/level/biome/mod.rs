@@ -3,6 +3,7 @@ pub mod biome_source;
 pub mod biome_special_effects;
 pub mod climate;
 pub mod feature_sorter;
+pub mod inline_biome;
 pub mod mob_spawn_settings;
 pub mod the_end_biome_source;
 
@@ -143,6 +144,9 @@ pub static BIOME_INFO_NOISE: LazyLock<SimplexNoise> = LazyLock::new(|| SimplexNo
 
 impl Biome {
     fn climate(self) -> ClimateSettings {
+        if self.is_inline() {
+            return inline_biome::get(self).climate;
+        }
         CLIMATE[self.0 as usize]
     }
 

@@ -237,6 +237,32 @@ fn container_from_nbt<T: super::palette::PaletteValue>(
     PalettedContainer::unpack(strategy, PackedData { palette, storage }).map(|container| (container, recoverable))
 }
 
+const UNREGISTERED_HOLDER_FRAMES: [&str; 11] = [
+    "com.mojang.serialization.DataResult$Error.getOrThrow(DataResult.java:287)",
+    "com.mojang.serialization.DataResult.getOrThrow(DataResult.java:81)",
+    "net.minecraft.nbt.CompoundTag.store(CompoundTag.java:606)",
+    "net.minecraft.nbt.CompoundTag.store(CompoundTag.java:596)",
+    "net.minecraft.world.level.chunk.storage.SerializableChunkData.write(SerializableChunkData.java:432)",
+    "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
+    "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.exec(CompletableFuture.java:1781)",
+    "java.base/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:511)",
+    "java.base/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1450)",
+    "java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:2019)",
+    "java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:187)",
+];
+
+pub const UNREGISTERED_HOLDER_MESSAGE: &str = "java.lang.IllegalStateException: Unregistered holder in ";
+
+fn unregistered_biome_holder(biome: Biome) -> JavaThrowable {
+    JavaThrowable::new(
+        format!(
+            "{UNREGISTERED_HOLDER_MESSAGE}ResourceKey[minecraft:root / minecraft:worldgen/biome]: Direct{{net.minecraft.world.level.biome.Biome@{:x}}}",
+            crate::world::level::biome::inline_biome::identity_hash(biome)
+        ),
+        UNREGISTERED_HOLDER_FRAMES.to_vec(),
+    )
+}
+
 fn heightmaps_to_nbt(chunk: &LevelChunk, status: ChunkStatus) -> Nbt {
     let mut heightmaps = Vec::new();
     for kind in HeightmapType::VALUES {
@@ -269,7 +295,15 @@ pub fn write(chunk: &LevelChunk, status: ChunkStatus, block_entities: Vec<Nbt>, 
         let mut tag = Vec::new();
         if let Some(s) = section {
             tag.push(("block_states".into(), container_to_nbt(&s.states, state_to_nbt)));
-            tag.push(("biomes".into(), container_to_nbt(&s.biomes, |b| Nbt::String(b.name().into()))));
+            tag.push((
+                "biomes".into(),
+                container_to_nbt(&s.biomes, |biome| {
+                    if biome.is_inline() {
+                        crate::crash_report::throw_java_exception(unregistered_biome_holder(biome));
+                    }
+                    Nbt::String(biome.name().into())
+                }),
+            ));
         }
         if let Some(layer) = block_light {
             tag.push(("BlockLight".into(), layer_to_nbt(layer)));

@@ -29,6 +29,8 @@ pub mod worldgen_random;
 #[cfg(test)]
 mod codec_tests;
 #[cfg(test)]
+mod flat_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod patrol_spawner_tests;

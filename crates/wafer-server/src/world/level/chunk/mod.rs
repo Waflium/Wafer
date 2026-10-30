@@ -29,16 +29,25 @@ use crate::world::level::lighting::sky_light_sources::{ChunkBlocks, ChunkSkyLigh
 pub struct Biome(pub u16);
 
 impl Biome {
+    pub const INLINE: u16 = 0x8000;
+
     pub fn by_name(name: &str) -> Option<Biome> {
         SyncedRegistry::get("minecraft:worldgen/biome").id_of(name).map(|id| Biome(id as u16))
     }
 
+    pub fn is_inline(self) -> bool {
+        self.0 & Biome::INLINE != 0
+    }
+
     pub fn name(self) -> &'static str {
+        if self.is_inline() {
+            return "[unregistered]";
+        }
         SyncedRegistry::get("minecraft:worldgen/biome").entries[self.0 as usize]
     }
 
     pub fn is(self, tag: &str) -> bool {
-        wafer_data::tag("minecraft:worldgen/biome", tag).contains(&(self.0 as i32))
+        !self.is_inline() && wafer_data::tag("minecraft:worldgen/biome", tag).contains(&(self.0 as i32))
     }
 
     fn count() -> usize {
@@ -57,6 +66,9 @@ impl PaletteValue for BlockState {
 
 impl PaletteValue for Biome {
     fn global_id(self) -> u32 {
+        if self.is_inline() {
+            return u32::MAX;
+        }
         crate::core::data_registries::biome_network_id(self.0 as u32)
     }
     fn from_global_id(id: u32) -> Option<Biome> {
@@ -92,6 +104,24 @@ impl LevelChunkSection {
             states: PalettedContainer::new(blocks::AIR.default_state(), block_strategy()),
             biomes: PalettedContainer::new(biome, biome_strategy()),
         }
+    }
+
+    pub fn with_fixed_biome(biome: Biome) -> LevelChunkSection {
+        let mut section = LevelChunkSection::new(Biome::by_name("minecraft:plains").expect("plains biome"));
+        section.fill_fixed_biome(biome);
+        section
+    }
+
+    pub fn fill_fixed_biome(&mut self, biome: Biome) {
+        let mut biomes = self.biomes.recreate();
+        for x in 0..4 {
+            for y in 0..4 {
+                for z in 0..4 {
+                    biomes.get_and_set(x, y, z, biome);
+                }
+            }
+        }
+        self.biomes = biomes;
     }
 
     pub fn from_containers(states: PalettedContainer<BlockState>, biomes: PalettedContainer<Biome>) -> LevelChunkSection {
@@ -543,12 +573,12 @@ impl ChunkGenerator {
         match self {
             ChunkGenerator::Flat(flat) => {
                 for section in &mut chunk.sections {
-                    *section = LevelChunkSection::new(flat.biome);
+                    *section = LevelChunkSection::with_fixed_biome(flat.biome);
                 }
             }
             ChunkGenerator::Debug(debug) => {
                 for section in &mut chunk.sections {
-                    *section = LevelChunkSection::new(debug.biome());
+                    *section = LevelChunkSection::with_fixed_biome(debug.biome());
                 }
             }
             ChunkGenerator::Noise(noise) => {
@@ -677,7 +707,8 @@ impl FlatLevelSource {
     }
 
     pub fn generate(&self, pos: ChunkPos, dimension: &DimensionType) -> LevelChunk {
-        let mut chunk = LevelChunk::empty(pos, dimension, self.biome);
+        let sections = (0..dimension.height / 16).map(|_| LevelChunkSection::with_fixed_biome(self.biome)).collect();
+        let mut chunk = LevelChunk::with_sections(pos, dimension, sections);
         let layers = self.get_layers();
         for (layer_index, layer) in layers.iter().enumerate().take(chunk.height() as usize) {
             let Some(state) = *layer else { continue };

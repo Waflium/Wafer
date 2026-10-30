@@ -8,6 +8,8 @@ use std::thread;
 use wafer_core::ChunkPos;
 use wafer_protocol::nbt::Nbt;
 
+use crate::util::java_throwable::JavaThrowable;
+
 use wafer_data::{Block, Fluid};
 
 use super::chunk_level::ChunkStatus;
@@ -25,6 +27,16 @@ static IO_WORKER_COUNT: AtomicUsize = AtomicUsize::new(1);
 
 pub fn next_io_worker_name() -> String {
     format!("IO-Worker-{}", IO_WORKER_COUNT.fetch_add(1, Ordering::Relaxed))
+}
+
+pub fn is_unregistered_holder(throwable: &JavaThrowable) -> bool {
+    throwable.description.starts_with(serialization::UNREGISTERED_HOLDER_MESSAGE)
+}
+
+pub fn report_unregistered_holder(throwable: &JavaThrowable) {
+    let name = next_io_worker_name();
+    let id = name.rsplit('-').next().and_then(|n| n.parse::<u32>().ok()).map_or(0, |n| 111 + n);
+    crate::crash_report::on_thread_exception(&name, id, throwable);
 }
 
 pub fn io_worker_count() -> usize {
@@ -177,6 +189,7 @@ impl IoWorker {
                             let ChunkToSave { chunk, status, block_entities, game_time, block_ticks, fluid_ticks, light } = *save;
                             match guarded(|| Ok(serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light))) {
                                 Ok(nbt) => write(&mut storage, chunk.pos, &nbt, reporting.as_ref()),
+                                Err(e) if is_unregistered_holder(&JavaThrowable::from_io_error(&e)) => report_unregistered_holder(&JavaThrowable::from_io_error(&e)),
                                 Err(e) => store_failed(chunk.pos, &e, reporting.as_ref()),
                             }
                             active.fetch_sub(1, Ordering::Relaxed);

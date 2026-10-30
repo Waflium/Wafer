@@ -133,7 +133,8 @@ impl UnseededChunkGenerator {
                     .iter()
                     .map(|&(state, height): &(BlockState, u32)| Nbt::Compound(vec![("block".into(), string(state.block().name())), ("height".into(), Nbt::Int(height as i32))].into()))
                     .collect();
-                let mut settings = vec![("features".to_string(), Nbt::Byte(flat.features as i8)), ("biome".into(), string(flat.biome.name())), ("layers".into(), Nbt::List(layers))];
+                let biome = if flat.biome.is_inline() { crate::world::level::biome::inline_biome::get(flat.biome).tag.clone() } else { string(flat.biome.name()) };
+                let mut settings = vec![("features".to_string(), Nbt::Byte(flat.features as i8)), ("biome".into(), biome), ("layers".into(), Nbt::List(layers))];
                 if let Some(overrides) = &flat.structure_overrides {
                     settings.push(("structure_overrides".into(), overrides.to_nbt()));
                 }
