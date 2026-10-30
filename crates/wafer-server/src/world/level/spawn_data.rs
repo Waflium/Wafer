@@ -59,13 +59,15 @@ impl SpawnData {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let mut record = Record::default();
-        let entity_to_spawn = record.required(tag, ENTITY_TAG, codec::compound_tag);
-        let custom_spawn_rules = record.optional(tag, "custom_spawn_rules", CustomSpawnRules::decode_partial);
-        let equipment = record.optional(tag, "equipment", EquipmentTable::decode_partial);
-        record.build(|| match entity_to_spawn? {
-            Nbt::Compound(fields) => Some(SpawnData::new(fields, custom_spawn_rules, equipment)),
-            _ => None,
+        codec::as_codec(|| {
+            let mut record = Record::default();
+            let entity_to_spawn = record.required(tag, ENTITY_TAG, codec::compound_tag);
+            let custom_spawn_rules = record.optional(tag, "custom_spawn_rules", CustomSpawnRules::decode_partial);
+            let equipment = record.optional(tag, "equipment", EquipmentTable::decode_partial);
+            record.build(|| match entity_to_spawn? {
+                Nbt::Compound(fields) => Some(SpawnData::new(fields, custom_spawn_rules, equipment)),
+                _ => None,
+            })
         })
     }
 

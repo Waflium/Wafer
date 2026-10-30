@@ -973,6 +973,9 @@ pub fn parsing<T>(decode: impl FnOnce() -> Result<T, String>) -> Result<T, Strin
 }
 
 #[cfg(test)]
+mod dfu_trace_tests;
+
+#[cfg(test)]
 mod tests {
     use crate::server::packs::repository::{PackRepository, VANILLA_ID};
     use crate::server::packs::resources::MultiPackResourceManager;
