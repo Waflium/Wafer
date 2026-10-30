@@ -133,10 +133,9 @@ pub(crate) fn read_compressed(file: &Path) -> io::Result<Nbt> {
 }
 
 pub(crate) fn write_compressed(tag: &Nbt, file: &Path) -> io::Result<()> {
-    let output = crate::rfr::io::RecordedWrite::new(fs::OpenOptions::new().write(true).create(true).truncate(true).open(file)?, Some(crate::rfr::io::absolute_path_string(file)));
-    let mut gz = GzEncoder::new(output, Compression::default());
+    let mut gz = GzEncoder::new(fs::OpenOptions::new().write(true).create(true).truncate(true).open(file)?, Compression::default());
     gz.write_all(&encode_nbt(tag))?;
-    gz.finish()?.get_ref().sync_all()
+    gz.finish()?.sync_all()
 }
 
 pub(crate) fn create_temp_file(dir: &Path, prefix: &str, suffix: &str) -> io::Result<PathBuf> {

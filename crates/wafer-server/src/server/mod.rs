@@ -152,7 +152,7 @@ fn create_level(
         }
         DimensionTypeHolder::Direct(tag) => (-1, crate::core::data_registries::inline_dimension_type(dimension, tag)),
     };
-    let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes).with_info(RegionStorageInfo::new(&config.level_name, dimension, "chunk")));
+    let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes));
     let generator_identifier = generator.get_type_name_for_data_fixer();
     let mut chunks = ChunkCache::new(dimension_type, generator, storage);
     chunks.data_fix_context = Some(level::chunk_map::get_chunk_data_fix_context_tag(dimension, generator_identifier));
@@ -160,9 +160,9 @@ fn create_level(
     chunks.generate_structures = generate_structures;
     chunks.set_seed(seed);
     if let Some(dir) = world_dir {
-        chunks.set_poi_storage(RegionStorage::new(dir.poi(dimension), config.sync_chunk_writes).with_info(RegionStorageInfo::new(&config.level_name, dimension, "poi")));
+        chunks.set_poi_storage(RegionStorage::new(dir.poi(dimension), config.sync_chunk_writes));
     }
-    let entity_storage = world_dir.map(|d| RegionStorage::new(d.entities(dimension), config.sync_chunk_writes).with_info(RegionStorageInfo::new(&config.level_name, dimension, "entities")));
+    let entity_storage = world_dir.map(|d| RegionStorage::new(d.entities(dimension), config.sync_chunk_writes));
     let mut level = ServerLevel::new(dimension, dimension_type_id, chunks, entity_storage, config.view_distance, config.simulation_distance);
     if let Some(dir) = world_dir {
         level.chunks.set_error_reporting(chunk_io_error_reporter.clone(), &config.level_name, dimension);
@@ -415,7 +415,6 @@ impl Server {
         let world_gen_settings_lifecycle = data.world_gen_settings_lifecycle;
         let mut stems = dimensions.levels_in_creation_order().into_iter();
         let (_, overworld_stem) = stems.next().expect("overworld settings");
-        let profiled_duration = crate::util::profiling::rfr::rust_profiler::instance().on_world_loaded_started();
         let mut overworld = create_level(&config, world_dir.as_ref(), OVERWORLD, &overworld_stem, is_debug, generate_structures, seed, &chunk_io_error_reporter);
         overworld.chunks.game_rules = game_rules.clone();
         dedicated::set_overworld_created();
@@ -593,9 +592,6 @@ impl Server {
         server.attach_user_lookup();
         server.set_difficulty(server.config.difficulty, true);
         server.prepare_levels(&mut load_listener);
-        if let Some(profiled_duration) = profiled_duration {
-            profiled_duration(true);
-        }
         server.update_effective_respawn_data();
         Ok(server)
     }
@@ -2617,7 +2613,6 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
         }
         profiler::pop();
         server.mark_ready();
-        crate::util::profiling::rfr::rust_profiler::instance().on_server_tick(server.smoothed_tick_time_millis);
         profiler::push("nextTickWait");
         let delayed_tasks_max_next_tick = (Instant::now() + this_tick).max(next_tick);
         let mut may_have_delayed_tasks = true;

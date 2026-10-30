@@ -7,7 +7,7 @@ use chrono::{Datelike, Timelike};
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
-use crate::rfr::io::path_string;
+use crate::util::java_nio::path_string;
 
 pub struct FileZipper {
     output_file: PathBuf,

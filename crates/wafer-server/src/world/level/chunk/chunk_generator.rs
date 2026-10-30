@@ -346,7 +346,7 @@ impl ChunkGenerator {
         closest_pos
     }
 
-    pub fn create_structures(&self, state: &ChunkGeneratorStructureState, source_chunk_pos: ChunkPos, dimension: &DimensionType, level: &str, structures: &mut ChunkStructures, upgrading: bool) {
+    pub fn create_structures(&self, state: &ChunkGeneratorStructureState, source_chunk_pos: ChunkPos, dimension: &DimensionType, structures: &mut ChunkStructures, upgrading: bool) {
         state.ensure_structures_generated(self);
         for &set in state.possible_structure_sets() {
             let structure_set = set.value();
@@ -358,7 +358,7 @@ impl ChunkGenerator {
                 continue;
             }
             if entries.len() == 1 {
-                self.try_generate_structure(&entries[0], structures, state.get_level_seed(), source_chunk_pos, dimension, level, upgrading);
+                self.try_generate_structure(&entries[0], structures, state.get_level_seed(), source_chunk_pos, dimension, upgrading);
                 continue;
             }
             let mut options: Vec<&StructureSelectionEntry> = entries.iter().collect();
@@ -376,7 +376,7 @@ impl ChunkGenerator {
                     index += 1;
                 }
                 let selected = options[index];
-                if self.try_generate_structure(selected, structures, state.get_level_seed(), source_chunk_pos, dimension, level, upgrading) {
+                if self.try_generate_structure(selected, structures, state.get_level_seed(), source_chunk_pos, dimension, upgrading) {
                     break;
                 }
                 options.remove(index);
@@ -385,10 +385,10 @@ impl ChunkGenerator {
         }
     }
 
-    fn try_generate_structure(&self, selected: &StructureSelectionEntry, structures: &mut ChunkStructures, seed: i64, source_chunk_pos: ChunkPos, dimension: &DimensionType, level: &str, upgrading: bool) -> bool {
+    fn try_generate_structure(&self, selected: &StructureSelectionEntry, structures: &mut ChunkStructures, seed: i64, source_chunk_pos: ChunkPos, dimension: &DimensionType, upgrading: bool) -> bool {
         let structure = selected.structure.value();
         let references = structures.get_start_for_structure(selected.structure).map_or(0, |start| start.get_references());
-        match structure.generate(selected.structure, self, seed, source_chunk_pos, level, references, dimension.min_y, dimension.height as i32, structure.biomes()) {
+        match structure.generate(selected.structure, self, seed, source_chunk_pos, references, dimension.min_y, dimension.height as i32, structure.biomes()) {
             Some(start) => {
                 let bounding_box = start.get_bounding_box();
                 let outside = bounding_box.min.y < below_zero_retrogen::UPGRADE_MIN_Y || bounding_box.max.y > below_zero_retrogen::UPGRADE_MIN_Y + below_zero_retrogen::UPGRADE_HEIGHT - 1;

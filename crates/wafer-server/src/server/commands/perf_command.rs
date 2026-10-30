@@ -58,7 +58,7 @@ fn save_results(source: CommandSourceStack, report: PathBuf, context: MetricsRep
         return;
     }
     if let Err(e) = std::fs::remove_dir_all(&report) {
-        warn!("Failed to delete temporary profiling file {}\n{e}", crate::rfr::io::path_string(&report));
+        warn!("Failed to delete temporary profiling file {}\n{e}", crate::util::java_nio::path_string(&report));
     }
     on_server_thread(&sender, thread_name, move |server| {
         source.send_success(server, || tr("commands.perf.reportSaved", vec![Arg::String(zip_file)]), false);

@@ -477,10 +477,7 @@ mod tests {
     #[test]
     fn commands_packet_matches_vanilla() {
         for level in 0..=4 {
-            let mut expected = oracle(level).expect("run cargo xtask vanilla");
-            if let Some(at) = expected.windows(4).position(|name| name == b"jfr") {
-                expected[at + 1] = b'r';
-            }
+            let expected = oracle(level).expect("run cargo xtask vanilla");
             let mut w = Writer::new();
             write_commands_packet(&mut w, &source(level));
             assert!(w.as_slice() == expected.as_slice(), "permission level {level}: {} bytes, vanilla {}", w.as_slice().len(), expected.len());

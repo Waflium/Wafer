@@ -37,6 +37,7 @@ pub mod game_mode_command;
 mod game_rule_command;
 mod help_command;
 mod item;
+mod jfr_command;
 mod kick_command;
 mod kill_command;
 pub mod list_players_command;
@@ -64,7 +65,6 @@ mod schedule_command;
 mod scoreboard_command;
 #[cfg(test)]
 mod scoreboard_command_tests;
-mod rfr_command;
 mod seed_command;
 mod set_block_command;
 mod set_player_idle_timeout_command;
@@ -204,6 +204,8 @@ static EXECUTORS: &[(&str, CommandFn)] = &[
     ("difficulty hard", difficulty_command::set_difficulty),
     ("gamemode gamemode", game_mode_command::set_mode_self),
     ("gamemode gamemode target", game_mode_command::set_mode_targets),
+    ("jfr start", jfr_command::start_jfr),
+    ("jfr stop", jfr_command::stop_jfr),
     ("kick targets", kick_command::kick),
     ("kick targets reason", kick_command::kick_with_reason),
     ("kill", kill_command::kill_self),
@@ -270,8 +272,6 @@ static EXECUTORS: &[(&str, CommandFn)] = &[
     ("save-on", save_commands::save_on),
     ("perf start", perf_command::start),
     ("perf stop", perf_command::stop),
-    ("rfr start", rfr_command::start_rfr),
-    ("rfr stop", rfr_command::stop_rfr),
     ("seed", seed_command::seed),
     ("setidletimeout minutes", set_player_idle_timeout_command::set_idle_timeout),
     ("stop", stop_command::stop),
@@ -488,8 +488,7 @@ mod tests {
                 let execute = crate::commands::node_at("execute");
                 lines.extend(super::help_command::smart_usage(execute, &source).iter().map(|l| format!("/execute {l}")));
             }
-            let expected: Vec<String> = expected.lines().map(|line| if line == "/jfr (start|stop)" { "/rfr (start|stop)".to_string() } else { line.to_string() }).collect();
-            assert_eq!(lines, expected, "permission level {level}");
+            assert_eq!(lines, expected.lines().collect::<Vec<_>>(), "permission level {level}");
         }
         let lines = run(&mut server, "help");
         assert!(lines.contains(&"/time (set|add|pause|resume|rate|query|of)".to_string()), "{lines:?}");

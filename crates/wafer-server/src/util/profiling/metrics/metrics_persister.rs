@@ -7,7 +7,7 @@ use chrono::{DateTime, Local};
 
 use super::metric_category::MetricCategory;
 use super::metric_sampler::MetricSampler;
-use crate::rfr::io::path_string;
+use crate::util::java_nio::path_string;
 use crate::util::csv_output;
 use crate::util::profiling::profile_results::ProfileResults;
 

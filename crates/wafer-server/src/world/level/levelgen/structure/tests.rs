@@ -32,7 +32,7 @@ fn structure_starts_match_vanilla_dump() {
         for z in range[1]..=range[3] {
             let pos = ChunkPos::new(x, z);
             let mut structures = ChunkStructures::default();
-            generator.create_structures(&state, pos, oracle_dimension_type(), "minecraft:overworld", &mut structures, false);
+            generator.create_structures(&state, pos, oracle_dimension_type(), &mut structures, false);
             for (holder, start) in &structures.starts {
                 actual.insert(format!("{x} {z} {} {}", holder.key(), crate::nbt::to_string(&start.create_tag(pos))));
             }

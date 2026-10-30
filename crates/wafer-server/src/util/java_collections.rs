@@ -957,18 +957,3 @@ mod tests {
         }
     }
 }
-
-pub fn java_string_hash_code(value: Option<&str>) -> i32 {
-    value.map_or(0, wafer_core::random::java_string_hash)
-}
-
-pub fn java_hash_map_iteration_order(hashes: &[i32]) -> Vec<usize> {
-    let mut capacity = 16usize;
-    while hashes.len() > capacity * 3 / 4 {
-        capacity *= 2;
-    }
-    let bucket = |h: i32| ((h ^ ((h as u32) >> 16) as i32) as u32 as usize) & (capacity - 1);
-    let mut order: Vec<usize> = (0..hashes.len()).collect();
-    order.sort_by_key(|&i| bucket(hashes[i]));
-    order
-}

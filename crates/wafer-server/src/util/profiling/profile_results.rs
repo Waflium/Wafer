@@ -219,7 +219,7 @@ impl FilledProfileResults {
         match saved {
             Ok(()) => true,
             Err(e) => {
-                error!("Could not save profiler results to {}\n{e}", crate::rfr::io::path_string(file));
+                error!("Could not save profiler results to {}\n{e}", crate::util::java_nio::path_string(file));
                 false
             }
         }

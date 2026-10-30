@@ -41,18 +41,18 @@ const HELP: &[&str] = &[
     "--help                                                                     ",
     "--initSettings         Initializes 'server.properties' and 'eula.txt', then",
     "                         quits                                             ",
-    "--nogui                                                                    ",
+    "--jfrProfile                                                               ",
+    "--nogui                                                                 ",
     "--pidFile <Path>                                                           ",
     "--port <Integer>       (default: -1)                                       ",
     "--recreateRegionFiles                                                      ",
-    "--rfrProfile                                                               ",
     "--safeMode             Loads level with vanilla datapack only              ",
     "--serverId <String>                                                        ",
     "--universe <String>    (default: .)                                        ",
     "--world <String>                                                           ",
 ];
 
-const FLAGS: [&str; 10] = ["nogui", "initSettings", "demo", "bonusChest", "forceUpgrade", "eraseCache", "recreateRegionFiles", "safeMode", "help", "rfrProfile"];
+const FLAGS: [&str; 10] = ["nogui", "initSettings", "demo", "bonusChest", "forceUpgrade", "eraseCache", "recreateRegionFiles", "safeMode", "help", "jfrProfile"];
 const WITH_ARGUMENT: [&str; 5] = ["universe", "world", "port", "serverId", "pidFile"];
 
 #[derive(Default)]
@@ -164,8 +164,8 @@ fn start(args: Vec<String>) {
         let _main = crate::util::java_stack::enter("net.minecraft.server.Main.main(Main.java:104)");
         crate::crash_report::preload();
     }
-    if options.has("rfrProfile") {
-        crate::util::profiling::rfr::rust_profiler::instance().start(crate::util::profiling::rfr::environment::Environment::Server);
+    if options.has("jfrProfile") {
+        crate::util::profiling::jfr::jfr_profiler::INSTANCE.start();
     }
     let settings_file = Path::new("server.properties");
     let settings = match DedicatedServerSettings::new(settings_file) {

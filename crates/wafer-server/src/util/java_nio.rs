@@ -1,6 +1,6 @@
 use std::fmt;
 use std::io;
-use std::path::Path;
+use std::path::{Component, Path};
 
 #[derive(Debug)]
 pub struct JavaException {
@@ -40,6 +40,30 @@ pub fn for_path(error: io::Error, path: &Path) -> io::Error {
         io::ErrorKind::DirectoryNotEmpty => java_io_error(error.kind(), "java.nio.file.DirectoryNotEmptyException", message),
         _ => java_io_error(error.kind(), "java.nio.file.FileSystemException", format!("{message}: {}", os_message(&error))),
     }
+}
+
+pub fn path_string(path: &Path) -> String {
+    let mut out = String::new();
+    for component in path.components() {
+        let part = match component {
+            Component::Prefix(prefix) => {
+                out.push_str(&prefix.as_os_str().to_string_lossy());
+                continue;
+            }
+            Component::RootDir => {
+                out.push(std::path::MAIN_SEPARATOR);
+                continue;
+            }
+            Component::CurDir => ".".into(),
+            Component::ParentDir => "..".into(),
+            Component::Normal(part) => part.to_string_lossy(),
+        };
+        if !out.is_empty() && !out.ends_with(std::path::MAIN_SEPARATOR) {
+            out.push(std::path::MAIN_SEPARATOR);
+        }
+        out.push_str(&part);
+    }
+    out
 }
 
 pub fn os_message(error: &io::Error) -> String {

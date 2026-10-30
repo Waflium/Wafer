@@ -10,7 +10,6 @@ fn main() {
         })
         .expect("server main thread");
     let _ = server_main.join();
-    wafer_server::server::dedicated::run_shutdown_hooks();
     logging::shutdown();
     std::process::exit(wafer_server::server::dedicated::exit_status())
 }

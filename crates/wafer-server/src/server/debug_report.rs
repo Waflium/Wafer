@@ -116,7 +116,7 @@ impl Server {
 
     fn dump_classpath(&self, path: &Path) -> io::Result<()> {
         let mut output = BufWriter::new(File::create(path)?);
-        let classpath = std::env::current_exe().map(|exe| crate::rfr::io::path_string(&exe)).unwrap_or_default();
+        let classpath = std::env::current_exe().map(|exe| crate::util::java_nio::path_string(&exe)).unwrap_or_default();
         for entry in classpath.split(if cfg!(windows) { ';' } else { ':' }) {
             writeln!(output, "{entry}")?;
         }
