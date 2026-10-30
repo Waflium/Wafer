@@ -1649,7 +1649,6 @@ impl Server {
         let player = self.player_mut(id);
         if timeout > 0 && player.last_action_time.elapsed() > Duration::from_secs(timeout as u64 * 60) && !player.won_game {
             player.disconnect("multiplayer.disconnect.idling");
-            player.disconnect_site = Some(crate::server::players::player_list::DisconnectSite::Idle);
             return true;
         }
         false
@@ -1811,7 +1810,7 @@ impl Server {
         self.update_player_names_array();
         self.custom_boss_events.on_player_disconnect(id);
         {
-            let site = site.or(player.disconnect_site).unwrap_or(players::player_list::DisconnectSite::LostConnection);
+            let site = site.unwrap_or(players::player_list::DisconnectSite::LostConnection);
             let _scope = main_thread_frames::enter_complete(site.remove_frames());
             self.save_player_data(&saved, &player);
         }

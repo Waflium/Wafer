@@ -35,16 +35,10 @@ const TICK_CONNECTION: [&str; 3] = [
     "net.minecraft.server.dedicated.DedicatedServer.tickConnection(DedicatedServer.java:401)",
     "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1127)",
 ];
-const CONNECTION_TICK: [&str; 2] = [
-    "net.minecraft.network.Connection.tick(Connection.java:368)",
-    "net.minecraft.server.network.ServerConnectionListener.tick(ServerConnectionListener.java:175)",
-];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DisconnectSite {
     LostConnection,
-    Idle,
-    KeepConnectionAlive,
     RemoveAll,
 }
 
@@ -54,18 +48,6 @@ impl DisconnectSite {
         match self {
             DisconnectSite::LostConnection => {
                 frames.push("net.minecraft.server.network.ServerConnectionListener.tick(ServerConnectionListener.java:188)");
-                frames.extend(TICK_CONNECTION);
-                frames.extend(TICK_LOOP);
-            }
-            DisconnectSite::Idle | DisconnectSite::KeepConnectionAlive => {
-                frames.extend(DISCONNECT_BLOCKING);
-                if self == DisconnectSite::KeepConnectionAlive {
-                    frames.push("net.minecraft.server.network.ServerCommonPacketListenerImpl.keepConnectionAlive(ServerCommonPacketListenerImpl.java:129)");
-                    frames.push("net.minecraft.server.network.ServerGamePacketListenerImpl.tick(ServerGamePacketListenerImpl.java:324)");
-                } else {
-                    frames.push("net.minecraft.server.network.ServerGamePacketListenerImpl.tick(ServerGamePacketListenerImpl.java:336)");
-                }
-                frames.extend(CONNECTION_TICK);
                 frames.extend(TICK_CONNECTION);
                 frames.extend(TICK_LOOP);
             }
