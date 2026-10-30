@@ -104,7 +104,7 @@ fn decode_dimension(id: &str, element: &JsonElement) -> Result<(), String> {
 static DECODED_WORLD_PRESETS: Mutex<Vec<(String, WorldPreset)>> = Mutex::new(Vec::new());
 
 fn decode_world_preset(id: &str, element: &JsonElement) -> Result<(), String> {
-    let decoded = WorldPreset::decode(&crate::world::item::component::element_to_nbt(element));
+    let decoded = unwinding(|| vec![dfu_frames::DECODER_PARSE], || WorldPreset::decode(&crate::world::item::component::element_to_nbt(element)));
     if let Some(error) = decoded.error {
         return Err(error);
     }
@@ -706,7 +706,7 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool, tag
         take_thrown();
         let decoded = match &element.json {
             Ok(json) if element.registry == DIMENSION_REGISTRY => crate::nbt::with_json_source(|| decode_dimension(&element.id, json)).map_err(ElementFailure::Decode),
-            Ok(json) if element.registry == "minecraft:worldgen/world_preset" => crate::nbt::with_json_source(|| decode_world_preset(&element.id, json)).map_err(ElementFailure::Decode),
+            Ok(json) if element.registry == "minecraft:worldgen/world_preset" => crate::nbt::with_json_source(|| recording(|| decode_world_preset(&element.id, json))).map_err(ElementFailure::Decode),
             Ok(json) => crate::nbt::with_json_source(|| recording(|| decode(element.registry, json))).map_err(ElementFailure::Decode),
             Err(throwable) => Err(ElementFailure::Parse(throwable.clone())),
         };
@@ -842,8 +842,8 @@ fn decode(registry: &str, element: &JsonElement) -> Result<(), String> {
         "minecraft:worldgen/template_pool" => decode_with(levelgen::structure::pools::structure_template_pool::direct_codec(), &tag),
         "minecraft:worldgen/processor_list" => decode_with(levelgen::structure::templatesystem::structure_processor::list_direct_codec(), &tag),
         "minecraft:worldgen/configured_carver" | "minecraft:worldgen/carver" => decode_with(levelgen::carver::direct_codec(), &tag),
-        "minecraft:worldgen/world_preset" => levelgen::presets::world_preset::WorldPreset::validate(&tag),
-        "minecraft:worldgen/flat_level_generator_preset" => levelgen::flat::decode_preset(&tag).into_result().map(drop),
+        "minecraft:worldgen/world_preset" => parsing(|| levelgen::presets::world_preset::WorldPreset::validate(&tag)),
+        "minecraft:worldgen/flat_level_generator_preset" => parsing(|| levelgen::flat::decode_preset(&tag).into_result()).map(drop),
         "minecraft:worldgen/multi_noise_biome_source_parameter_list" => crate::world::level::biome::decode_parameter_list(&tag),
         "minecraft:worldgen/biome" => crate::world::level::biome::validate(&tag),
         "minecraft:dimension" => LevelStem::validate(&tag),

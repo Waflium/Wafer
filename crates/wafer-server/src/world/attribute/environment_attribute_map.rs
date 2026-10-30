@@ -49,10 +49,11 @@ impl Custom for Validated {
 
 fn value_codec(attribute: &EnvironmentAttributeInfo) -> Codec {
     let inner = attribute.ty.condition_value_codec().0;
-    match attribute.value_range {
+    let validated = match attribute.value_range {
         AttributeRange::Any => inner,
         range => Codec::Custom(Box::new(Validated { inner, range })),
-    }
+    };
+    Codec::Framed(Box::new(validated), Wrap::FlatXmap)
 }
 
 fn float_with_alpha_codec() -> Codec {

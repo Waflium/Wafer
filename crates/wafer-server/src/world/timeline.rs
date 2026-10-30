@@ -14,7 +14,7 @@ use crate::world::attribute::environment_attribute_map::{OPERATION_NAMES, argume
 use crate::world::attribute::environment_attributes::ATTRIBUTES;
 use crate::world::attribute::modifier::{AttributeModifier, OperationId};
 use crate::world::attribute::Value;
-use crate::world::item::component::codec::{Codec, Custom, Stream, Wrap};
+use crate::world::item::component::codec::{Codec, Custom, Field, Stream, Wrap, decode_map_codec};
 use crate::world::item::component::types::{self, Pair, def, req};
 
 pub mod timelines {
@@ -75,10 +75,10 @@ fn decode_easing(tag: &Nbt) -> DecodeResult<Nbt> {
     codec::either_result(simple(tag), || cubic_bezier(tag)).map(|either| either.unwrap_or_else(|easing| easing))
 }
 
-fn keyframe_track_codec(attribute: &EnvironmentAttributeInfo, operation: OperationId) -> Codec {
+fn keyframe_track_fields(attribute: &EnvironmentAttributeInfo, operation: OperationId) -> Vec<Field> {
     let keyframe = Codec::Record(vec![req("ticks", (types::non_negative_int(), Stream::VarInt)), req("value", (argument_codec(attribute, operation), Stream::Nbt))]);
     let keyframes = Codec::Framed(Box::new(Codec::Normalize(Box::new(Codec::list(keyframe)), validate_keyframes)), Wrap::FlatXmap);
-    Codec::Record(vec![req("keyframes", (keyframes, Stream::Nbt)), def("ease", (Codec::Func(decode_easing), Stream::Nbt), types::s("linear"))])
+    vec![req("keyframes", (keyframes, Stream::Nbt)), def("ease", (Codec::Func(decode_easing), Stream::Nbt), types::s("linear"))]
 }
 
 fn decode_modifier(attribute: &EnvironmentAttributeInfo, tag: &Nbt) -> DataResult<OperationId> {
@@ -112,7 +112,7 @@ impl Custom for TrackCodec {
         };
         codec::as_codec(|| {
             modifier.flat_map(|operation| {
-                codec::with_frames(crate::util::dfu_frames::key_dispatch, || codec::wrapped(Wrap::MapXmap, || keyframe_track_codec(attribute, operation).decode_partial(tag)))
+                codec::with_frames(crate::util::dfu_frames::key_dispatch, || codec::wrapped(Wrap::MapXmap, || decode_map_codec(&keyframe_track_fields(attribute, operation), tag)))
             })
         })
     }

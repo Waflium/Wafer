@@ -53,7 +53,7 @@ pub fn list_sized(p: Pair, min: usize, max: usize) -> Pair {
 }
 
 pub fn non_empty_list(p: Pair) -> Pair {
-    (Codec::List(Box::new(p.0), 1, MAX), Stream::List(Box::new(p.1), MAX))
+    (Codec::Framed(Box::new(Codec::List(Box::new(p.0), 1, MAX)), Wrap::FlatXmap), Stream::List(Box::new(p.1), MAX))
 }
 
 pub fn non_empty_weighted_list(p: Pair) -> Pair {

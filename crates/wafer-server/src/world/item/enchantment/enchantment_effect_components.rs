@@ -11,7 +11,7 @@ use super::effects::enchantment_value_effect::{self as value_effect, Enchantment
 use super::targeted_conditional_effect::{self, TargetedConditionalEffect};
 use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::util::hash_ops::{self, HashCode};
-use crate::world::item::component::codec::{Codec, Custom, Stream};
+use crate::world::item::component::codec::{Codec, Custom, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair, opt};
 use crate::world::level::storage::loot::parameters::loot_context_param_sets::{self, ContextKeySet};
 use crate::world::level::storage::loot::validatable::{self, Validatable};
@@ -170,7 +170,7 @@ fn component_key(tag: &Nbt) -> DecodeResult<Nbt> {
 }
 
 pub fn components_codec() -> Pair {
-    (Codec::DispatchedMap(Box::new(Codec::Func(component_key)), component_entry_codec), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::DispatchedMap(Box::new(Codec::Func(component_key)), component_entry_codec)), Wrap::Xmap), Stream::Nbt)
 }
 
 fn decode_component_type(key: &str) -> DataResult<String> {
@@ -207,11 +207,28 @@ fn assign<T>(slot: &mut T, result: DecodeResult<T>) -> DecodeResult<()> {
 impl EnchantmentEffectComponents {
     pub fn decode(tag: &Nbt) -> DataResult<EnchantmentEffectComponents> {
         let mut effects = EnchantmentEffectComponents::default();
-        codec::dispatched_map(tag, decode_component_type, |id, value| effects.decode_component(id, value).into_result())?;
+        codec::wrapped(Wrap::Xmap, || codec::dispatched_map(tag, decode_component_type, |id, value| effects.decode_component(id, value).into_result()))?;
         Ok(effects)
     }
 
     fn decode_component(&mut self, id: &str, value: &Nbt) -> DecodeResult<()> {
+        let result = match id {
+            "minecraft:attributes"
+            | "minecraft:crossbow_charge_time"
+            | "minecraft:crossbow_charging_sounds"
+            | "minecraft:trident_sound"
+            | "minecraft:prevent_equipment_drop"
+            | "minecraft:prevent_armor_change"
+            | "minecraft:trident_spin_attack_strength" => self.decode_component_value(id, value),
+            _ => codec::wrapped(Wrap::FlatXmap, || self.decode_component_value(id, value)),
+        };
+        if result.value.is_some() {
+            self.components.push(id.to_string());
+        }
+        result
+    }
+
+    fn decode_component_value(&mut self, id: &str, value: &Nbt) -> DecodeResult<()> {
         let enchanted_damage = &loot_context_param_sets::ENCHANTED_DAMAGE;
         let enchanted_item = &loot_context_param_sets::ENCHANTED_ITEM;
         let enchanted_entity = &loot_context_param_sets::ENCHANTED_ENTITY;
@@ -264,9 +281,6 @@ impl EnchantmentEffectComponents {
             "minecraft:trident_spin_attack_strength" => assign(&mut self.trident_spin_attack_strength, EnchantmentValueEffect::decode_partial(value).map(Some)),
             other => unreachable!("enchantment effect component type {other}"),
         };
-        if result.value.is_some() {
-            self.components.push(id.to_string());
-        }
         result
     }
 

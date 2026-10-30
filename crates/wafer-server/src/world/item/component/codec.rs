@@ -706,16 +706,7 @@ impl Codec {
                 let error = (!errors.is_empty()).then(|| crate::util::codec::map_entry_failures(errors, failed));
                 DecodeResult { value: Some(Nbt::Compound(out.into())), error }
             }
-            Codec::Record(fields) => {
-                let input = match map(tag) {
-                    Ok(input) => input,
-                    Err(error) => return DecodeResult::error(error),
-                };
-                let mut out = Vec::new();
-                let mut errors = Vec::new();
-                let complete = decode_fields(fields, tag, input, &mut out, &mut errors);
-                finish_record(complete.then(|| Nbt::Compound(out.into())), errors)
-            }
+            Codec::Record(fields) => decode_map_codec(fields, tag),
             Codec::Dispatch(d) => decode_dispatch(d, tag),
             Codec::Either(a, b) => crate::util::codec::either_result(
                 crate::core::data_registries::unwinding(dfu_frames::either_first, || a.decode_partial(tag)),
@@ -978,6 +969,17 @@ fn case_frames(selector: &Selector, name: &str) -> Vec<&'static str> {
         | (Selector::Registry("minecraft:worldgen/density_function_type"), "minecraft:gradient" | "minecraft:clamp" | "minecraft:interval_select") => dfu_frames::map_codec_flat_xmap(),
         _ => Vec::new(),
     }
+}
+
+pub fn decode_map_codec(fields: &[Field], tag: &Nbt) -> DecodeResult<Nbt> {
+    let input = match map(tag) {
+        Ok(input) => input,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let mut out = Vec::new();
+    let mut errors = Vec::new();
+    let complete = decode_fields(fields, tag, input, &mut out, &mut errors);
+    finish_record(complete.then(|| Nbt::Compound(out.into())), errors)
 }
 
 fn decode_dispatch(d: &Dispatch, tag: &Nbt) -> DecodeResult<Nbt> {

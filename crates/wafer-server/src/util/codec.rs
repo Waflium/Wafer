@@ -265,7 +265,7 @@ pub fn int_range(tag: &Nbt, min: i32, max: i32) -> DataResult<i32> {
     Ok(value)
 }
 
-fn int_range_with(tag: &Nbt, min: i32, max: i32, message: impl FnOnce(i32) -> String) -> DataResult<i32> {
+pub fn int_range_with(tag: &Nbt, min: i32, max: i32, message: impl FnOnce(i32) -> String) -> DataResult<i32> {
     let value = crate::core::data_registries::unwinding(|| dfu_frames::int_leaf(true), || -> DataResult<i32> { Ok(component_codec::as_i32(number(tag)?)) })?;
     if value < min || value > max {
         return Err(message(value));

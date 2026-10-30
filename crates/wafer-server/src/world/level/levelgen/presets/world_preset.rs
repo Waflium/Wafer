@@ -1,6 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DecodeResult, Record};
+use crate::world::item::component::codec::Wrap;
 use crate::world::level::dimension::level_stem::{LevelStem, OVERWORLD};
 use crate::world::level::levelgen::world_dimensions::WorldDimensions;
 
@@ -14,14 +15,17 @@ impl WorldPreset {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let mut record = Record::default();
-        let dimensions = record.required(tag, "dimensions", |dimensions| {
-            codec::base_map_partial(dimensions, |key| codec::identifier(&Nbt::String(key.to_string())), LevelStem::decode)
-        });
-        record
-            .build(|| dimensions)
-            .validate(|dimensions| if dimensions.iter().any(|(key, _)| key == OVERWORLD) { Ok(()) } else { Err("Missing overworld dimension".to_string()) })
-            .map(|dimensions| WorldPreset { dimensions })
+        codec::wrapped(Wrap::FlatXmap, || {
+            codec::as_codec(|| {
+                let mut record = Record::default();
+                let dimensions = record.required(tag, "dimensions", |dimensions| {
+                    codec::base_map_partial(dimensions, |key| codec::identifier(&Nbt::String(key.to_string())), LevelStem::decode)
+                });
+                record.build(|| dimensions)
+            })
+        })
+        .validate(|dimensions| if dimensions.iter().any(|(key, _)| key == OVERWORLD) { Ok(()) } else { Err("Missing overworld dimension".to_string()) })
+        .map(|dimensions| WorldPreset { dimensions })
     }
 
     pub fn validate(tag: &Nbt) -> Result<(), String> {

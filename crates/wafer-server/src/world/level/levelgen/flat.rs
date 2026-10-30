@@ -3,6 +3,8 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::world::level::chunk::Biome;
 use crate::util::codec::{self, DecodeResult, Record};
+use crate::util::dfu_frames;
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::values::decode_item;
 use crate::world::level::chunk::FlatLevelSource;
 
@@ -69,13 +71,15 @@ pub fn decode_preset(tag: &Nbt) -> DecodeResult<()> {
     if let Err(error) = codec::map(tag) {
         return DecodeResult::error(error);
     }
-    let mut record = Record::default();
-    let display = record.required(tag, "display", |display| DecodeResult::from(decode_item(display)));
-    let settings = record.required(tag, "settings", |settings| {
-        let settings = decode_settings(settings);
-        DecodeResult { value: settings.value.map(drop), error: settings.error }
-    });
-    record.build(|| display.and(settings))
+    codec::as_codec(|| {
+        let mut record = Record::default();
+        let display = record.required(tag, "display", |display| DecodeResult::from(decode_item(display)));
+        let settings = record.required(tag, "settings", |settings| {
+            let settings = decode_settings(settings);
+            DecodeResult { value: settings.value.map(drop), error: settings.error }
+        });
+        record.build(|| display.and(settings))
+    })
 }
 
 fn decode_biome(tag: &Nbt) -> Option<Biome> {
@@ -96,19 +100,30 @@ pub fn decode_settings(tag: &Nbt) -> DecodeResult<FlatLevelSource> {
     if let Err(error) = codec::map(tag) {
         return DecodeResult::error(error);
     }
-    let mut record = Record::default();
-    let layers = record.required(tag, "layers", |layers| codec::list_partial(layers, decode_layer));
-    let lakes = record.with_default(tag, "lakes", false, codec::bool_value);
-    let features = record.with_default(tag, "features", false, codec::bool_value);
-    let biome = tag.get("biome").and_then(decode_biome);
-    let structure_overrides = tag.get("structure_overrides").and_then(StructureOverrides::from_nbt);
-    let mut settings = record.build(|| {
-        let layers = layers?;
-        let biome = biome.unwrap_or_else(|| {
-            error!("Unknown biome, defaulting to plains");
-            Biome::by_name("minecraft:plains").expect("plains biome")
-        });
-        Some(FlatLevelSource { layers, biome, structure_overrides, lakes, features, generation: Default::default() })
+    let mut settings = codec::with_frames(dfu_frames::stable, || {
+        codec::wrapped(Wrap::FlatXmap, || {
+            codec::as_codec(|| {
+                let mut record = Record::default();
+                record.skip();
+                let layers = record.required(tag, "layers", |layers| codec::list_partial(layers, decode_layer));
+                let lakes = record.with_default(tag, "lakes", false, codec::bool_value);
+                let features = record.with_default(tag, "features", false, codec::bool_value);
+                record.skip();
+                record.skip();
+                record.skip();
+                record.skip();
+                let biome = tag.get("biome").and_then(decode_biome);
+                let structure_overrides = tag.get("structure_overrides").and_then(StructureOverrides::from_nbt);
+                record.build(|| {
+                    let layers = layers?;
+                    let biome = biome.unwrap_or_else(|| {
+                        error!("Unknown biome, defaulting to plains");
+                        Biome::by_name("minecraft:plains").expect("plains biome")
+                    });
+                    Some(FlatLevelSource { layers, biome, structure_overrides, lakes, features, generation: Default::default() })
+                })
+            })
+        })
     });
     if let Some(value) = &settings.value
         && value.layers.iter().map(|&(_, height)| height as i64).sum::<i64>() > Y_SIZE
@@ -126,14 +141,14 @@ fn decode_layer(tag: &Nbt) -> DecodeResult<(wafer_data::BlockState, u32)> {
     if let Err(error) = codec::map(tag) {
         return DecodeResult::error(error);
     }
-    let mut record = Record::default();
-    let height = record.required(tag, "height", |height| match codec::int(height) {
-        Ok(height) if (0..=Y_SIZE as i32).contains(&height) => DecodeResult::success(height),
-        Ok(height) => DecodeResult::error(format!("Value {height} outside of range [0:{Y_SIZE}]")),
-        Err(error) => DecodeResult::error(error),
-    });
-    let block = record.required(tag, "block", |block| {
-        DecodeResult::from(codec::identifier(block).and_then(|id| Block::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:block]: {id}"))))
-    });
-    record.build(|| Some((block?.default_state(), height? as u32)))
+    codec::as_codec(|| {
+        let mut record = Record::default();
+        let height = record.required(tag, "height", |height| {
+            DecodeResult::from(codec::int_range_with(height, 0, Y_SIZE as i32, |height| format!("Value {height} outside of range [0:{Y_SIZE}]")))
+        });
+        let block = record.required(tag, "block", |block| {
+            DecodeResult::from(codec::identifier(block).and_then(|id| Block::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:block]: {id}"))))
+        });
+        record.build(|| Some((block?.default_state(), height? as u32)))
+    })
 }

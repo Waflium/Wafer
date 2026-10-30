@@ -394,7 +394,7 @@ pub fn noise_settings_direct_codec() -> crate::world::item::component::types::Pa
         req("disable_mob_generation", types::bool()),
         opt("aquifers", aquifer::config_codec()),
         req("legacy_random_source", types::bool()),
-        def("debug_functions", types::list(debug_function_entry_codec()), types::empty_list()),
+        def("debug_functions", (Codec::Framed(Box::new(types::list(debug_function_entry_codec()).0), crate::world::item::component::codec::Wrap::Xmap), Stream::Nbt), types::empty_list()),
     ])
 }
 

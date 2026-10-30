@@ -339,7 +339,7 @@ fn validate_parameters(parameters: Nbt) -> Result<Nbt, String> {
 }
 
 pub fn parameters_codec() -> crate::world::item::component::types::Pair {
-    use crate::world::item::component::codec::{Codec, RangeError, Stream};
+    use crate::world::item::component::codec::{Codec, RangeError, Stream, Wrap};
     use crate::world::item::component::types::{self, def, req};
     let normalization = Codec::Either(Box::new(Codec::Bool), Box::new(Codec::Normalize(Box::new(Codec::string()), validate_normalization_type)));
     let fields = vec![
@@ -349,7 +349,8 @@ pub fn parameters_codec() -> crate::world::item::component::types::Pair {
         def("normalize", (normalization, Stream::Nbt), types::b(true)),
         def("amplitude_modifiers", types::list_sized((Codec::DoubleRange(0.0, 1000000.0), Stream::Double), 0, 32), types::empty_list()),
     ];
-    (Codec::Normalize(Box::new(Codec::Record(fields)), validate_parameters), Stream::Nbt)
+    let validated = Codec::Framed(Box::new(Codec::Normalize(Box::new(Codec::Record(fields)), validate_parameters)), Wrap::FlatXmap);
+    (Codec::Framed(Box::new(validated), Wrap::Xmap), Stream::Nbt)
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -50,23 +50,27 @@ impl<T> TargetedConditionalEffect<T> {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let mut record = codec::Record::default();
-        let enchanted = record.required(tag, "enchanted", EnchantmentTarget::decode);
-        let affected = record.required(tag, "affected", EnchantmentTarget::decode);
-        let effect = record.required(tag, "effect", effect);
-        let requirements = record.optional(tag, "requirements", LootItemCondition::decode_holder_partial);
-        record.build(|| Some(TargetedConditionalEffect { enchanted: enchanted?, affected: affected?, effect: effect?, requirements }))
+        codec::as_codec(|| {
+            let mut record = codec::Record::default();
+            let enchanted = record.required(tag, "enchanted", EnchantmentTarget::decode);
+            let affected = record.required(tag, "affected", EnchantmentTarget::decode);
+            let effect = record.required(tag, "effect", effect);
+            let requirements = record.optional(tag, "requirements", LootItemCondition::decode_holder_partial);
+            record.build(|| Some(TargetedConditionalEffect { enchanted: enchanted?, affected: affected?, effect: effect?, requirements }))
+        })
     }
 
     pub fn decode_equipment_drops<R: Into<DecodeResult<T>>>(tag: &Nbt, effect: impl FnOnce(&Nbt) -> R) -> DecodeResult<TargetedConditionalEffect<T>> {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let mut record = codec::Record::default();
-        let enchanted = record.required(tag, "enchanted", EnchantmentTarget::decode_non_damage);
-        let effect = record.required(tag, "effect", effect);
-        let requirements = record.optional(tag, "requirements", LootItemCondition::decode_holder_partial);
-        record.build(|| Some(TargetedConditionalEffect { enchanted: enchanted?, affected: EnchantmentTarget::Victim, effect: effect?, requirements }))
+        codec::as_codec(|| {
+            let mut record = codec::Record::default();
+            let enchanted = record.required(tag, "enchanted", EnchantmentTarget::decode_non_damage);
+            let effect = record.required(tag, "effect", effect);
+            let requirements = record.optional(tag, "requirements", LootItemCondition::decode_holder_partial);
+            record.build(|| Some(TargetedConditionalEffect { enchanted: enchanted?, affected: EnchantmentTarget::Victim, effect: effect?, requirements }))
+        })
     }
 
     pub fn matches(&self, context: &mut LootContext) -> bool {

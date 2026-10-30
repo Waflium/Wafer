@@ -43,8 +43,13 @@ pub enum Precipitation {
 }
 
 pub fn validate(tag: &Nbt) -> Result<(), String> {
-    use crate::util::codec::{self, DecodeResult, Record};
+    use crate::util::codec;
     codec::map(tag)?;
+    crate::core::data_registries::parsing(|| codec::as_codec(|| decode_direct(tag)).into_result())
+}
+
+fn decode_direct(tag: &Nbt) -> crate::util::codec::DecodeResult<()> {
+    use crate::util::codec::{self, DecodeResult, Record};
     let mut record = Record::default();
     record.nested(|| {
         let mut climate = Record::default();
@@ -80,7 +85,7 @@ pub fn validate(tag: &Nbt) -> Result<(), String> {
         });
         generation.build(|| Some(()))
     });
-    record.build(|| Some(())).into_result()
+    record.build(|| Some(()))
 }
 
 fn network_codec() -> Pair {
