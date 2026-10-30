@@ -56,7 +56,7 @@ fn item(ty: dc::DataComponentType, value: Nbt) -> ItemStack {
 }
 
 fn compound(key: &str, value: Nbt) -> Nbt {
-    Nbt::Compound(vec![(key.to_string(), value)])
+    Nbt::Compound(vec![(key.to_string(), value)].into())
 }
 
 fn equipment(stack: ItemStack) -> Vec<u8> {

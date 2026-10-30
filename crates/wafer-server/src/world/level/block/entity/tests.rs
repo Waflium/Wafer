@@ -387,8 +387,8 @@ fn chunk_packets_with_oversized_block_entity_text_fail_like_vanillas_codecs() {
         ("x".into(), Nbt::Int(3)),
         ("y".into(), Nbt::Int(-60)),
         ("z".into(), Nbt::Int(5)),
-        ("front_text".into(), Nbt::Compound(vec![("messages".into(), messages)])),
-    ]);
+        ("front_text".into(), Nbt::Compound(vec![("messages".into(), messages)].into())),
+    ].into());
     level.get_block_entity(pos).unwrap().load_with_components(&tag);
     let packet = crate::network::connection::encode(wafer_data::packets::play::clientbound::LEVEL_CHUNK_WITH_LIGHT, |w| level.chunks.write_chunk_with_light(pos.chunk(), w));
     let (_, fault) = crate::network::connection::encoding_fault(&packet).expect("the chunk packet fails to encode");

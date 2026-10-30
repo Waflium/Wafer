@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     fn faults_in_nested_tags_carry_compound_and_list_frames() {
-        let compound = |key: &str, value: Nbt| Nbt::Compound(vec![(key.into(), value)]);
+        let compound = |key: &str, value: Nbt| Nbt::Compound(vec![(key.into(), value)].into());
         let long = || Nbt::String("a".repeat(70000));
         let nested = compound("a", Nbt::List(vec![compound("b", long())]));
         let (_, root) = fault_frames(&nested);
