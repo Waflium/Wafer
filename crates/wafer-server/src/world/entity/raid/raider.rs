@@ -345,11 +345,11 @@ impl ObtainRaidLeaderBannerGoal {
     }
 
     pub fn can_continue_to_use(&mut self, level: &mut ServerLevel, mob: EntityId) -> bool {
-        let (Some(pursued_banner_item_entity), Some(_)) = (self.pursued_banner_item_entity, self.path_to_banner.as_ref()) else { return false };
+        let (Some(pursued_banner_item_entity), Some(path_to_banner)) = (self.pursued_banner_item_entity, self.path_to_banner.as_ref()) else { return false };
         if level.entity_ref(pursued_banner_item_entity).is_none_or(|entity| entity.is_removed()) {
             return false;
         }
-        if level.mob(mob).expect("a raider").ai.navigation.get_path().is_none_or(Path::is_done) { false } else { !self.cannot_pick_up_banner(level, mob) }
+        if path_to_banner.is_done() { false } else { !self.cannot_pick_up_banner(level, mob) }
     }
 
     fn cannot_pick_up_banner(&self, level: &ServerLevel, mob: EntityId) -> bool {

@@ -32,7 +32,7 @@ pub fn create() -> OneShot {
             if path.not_started() || path.is_done() {
                 return false;
             }
-            if last_checked_node.as_ref() == Some(path.get_next_node()) {
+            if last_checked_node == Some(path.get_next_node()) {
                 remaining_cooldown = COOLDOWN_BEFORE_RERUNNING_IN_SAME_NODE;
             } else {
                 remaining_cooldown -= 1;
@@ -40,9 +40,9 @@ pub fn create() -> OneShot {
                     return false;
                 }
             }
-            last_checked_node = Some(*path.get_next_node());
-            let from_node = path.get_previous_node().copied();
-            let to_node = *path.get_next_node();
+            last_checked_node = Some(path.get_next_node());
+            let from_node = path.get_previous_node();
+            let to_node = path.get_next_node();
             let from_pos = from_node.expect("a previous node").as_block_pos();
             let from_state = level.block_state(from_pos);
             if is_mob_interactable_door(from_state) {

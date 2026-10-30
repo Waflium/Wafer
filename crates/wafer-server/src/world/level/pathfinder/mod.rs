@@ -5,6 +5,8 @@ pub mod node;
 pub mod node_evaluator;
 pub mod path;
 pub mod path_finder;
+#[cfg(test)]
+mod path_tests;
 pub mod path_type;
 pub mod path_type_cache;
 pub mod pathfinding_context;

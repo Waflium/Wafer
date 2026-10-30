@@ -489,8 +489,8 @@ impl PathNavigation {
         let Some(path) = &mut self.path else { return };
         let region = PathNavigationRegion::new(level);
         for i in 0..path.get_node_count() {
-            let node = *path.get_node(i);
-            let next_node = (i + 1 < path.get_node_count()).then(|| *path.get_node(i + 1));
+            let node = path.get_node(i);
+            let next_node = (i + 1 < path.get_node_count()).then(|| path.get_node(i + 1));
             let state = region.get_block_state(BlockPos::new(node.x, node.y, node.z));
             if state.is(&block_tags::CAULDRONS) {
                 path.replace_node(i, node.clone_and_move(node.x, node.y + 1, node.z));
