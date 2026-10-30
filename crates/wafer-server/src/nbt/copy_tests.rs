@@ -1,5 +1,6 @@
 use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::{Nbt, TagMap};
+use wafer_protocol::{Reader, Writer};
 
 use crate::commands::arguments::nbt_path_argument::{NbtPath, parse};
 use crate::commands::brigadier::StringReader;
@@ -101,6 +102,23 @@ fn typed_entity_data_keeps_the_capacity_of_the_stripped_id() {
     assert_eq!(compound_keys(&unsafe_data.copy()), ["t4", "t5", "t6", "t10", "t7", "t8", "t9", "t11", "t0", "t1", "t2", "t3"]);
     let encoded = dc::ENTITY_DATA.encode(&decoded);
     assert_eq!(compound_keys(&encoded), ["t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11", "id", "t0", "t1", "t2", "t3"]);
+}
+
+#[test]
+fn typed_entity_data_is_streamed_in_the_order_of_the_stripped_tag() {
+    let mut source = TagMap::new();
+    source.put("id", Nbt::String("minecraft:pig".into()));
+    for i in 0..12 {
+        source.put(&format!("t{i}"), Nbt::Int(i));
+    }
+    let decoded = dc::ENTITY_DATA.decode(&Nbt::Compound(source)).unwrap();
+    let mut writer = Writer::new();
+    dc::ENTITY_DATA.write(&decoded, &mut writer).unwrap();
+    let mut reader = Reader::new(writer.as_slice());
+    reader.varint().unwrap();
+    let Nbt::Compound(streamed) = Nbt::read(&mut reader).unwrap() else { panic!("not a compound") };
+    let wire: Vec<&str> = streamed.iter().map(|(key, _)| key.as_str()).collect();
+    assert_eq!(wire, ["t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11", "t0", "t1", "t2", "t3"]);
 }
 
 #[test]

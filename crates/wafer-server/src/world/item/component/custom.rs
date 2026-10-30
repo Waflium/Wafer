@@ -266,7 +266,9 @@ impl Custom for TypedEntityData {
         let Nbt::Compound(fields) = value else { return Err("not a compound".into()) };
         let id = value.get("id").and_then(Nbt::as_str).unwrap_or("");
         w.varint(codec::network_registry_id(self.0, id)?);
-        Nbt::Compound(fields.iter().filter(|(k, _)| k != "id").cloned().collect()).write(w);
+        let mut tag = fields.copy();
+        tag.remove_key("id");
+        Nbt::Compound(tag).write(w);
         Ok(())
     }
 
