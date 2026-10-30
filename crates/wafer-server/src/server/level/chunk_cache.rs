@@ -1135,9 +1135,13 @@ impl ChunkCache {
                     let level = self.reporting.as_ref().map_or_else(String::new, |reporting| reporting.info.dimension.clone());
                     let upgrading = self.is_upgrading(pos);
                     let mut structures = if upgrading { self.structure_chunks.remove(&pos).unwrap_or_default() } else { ChunkStructures::default() };
+                    let profiled = job.profiled.take();
                     let token = self.new_async_token(job);
                     chunk_workers::execute(move || {
                         generator.create_structures(&state, pos, dimension, &level, &mut structures, upgrading);
+                        if let Some(profiled) = profiled {
+                            profiled(true);
+                        }
                         let _ = results.send(WorkResult::StructureStarts { pos, token, structures });
                     });
                 }
@@ -1171,6 +1175,7 @@ impl ChunkCache {
                     std::array::from_fn(|i| self.stored_biomes(ChunkPos::new(pos.x + i as i32 % 3 - 1, pos.z + i as i32 / 3 - 1)));
                 let upgrading = self.is_upgrading(pos);
                 let old = self.holders.get_mut(pos.pack()).unwrap().loaded.take();
+                let profiled = job.profiled.take();
                 let token = self.new_async_token(job);
                 let (generator, dimension, results) = (self.generator.clone(), self.dimension, self.results.0.clone());
                 chunk_workers::execute(move || {
@@ -1185,6 +1190,9 @@ impl ChunkCache {
                             chunk
                         }
                     };
+                    if let Some(profiled) = profiled {
+                        profiled(true);
+                    }
                     let _ = results.send(WorkResult::Generated { pos, token, chunk });
                 });
             }
