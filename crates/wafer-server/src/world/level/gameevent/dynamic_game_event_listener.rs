@@ -28,7 +28,7 @@ impl ServerLevel {
 
     pub fn dynamic_game_event_listener_remove(&mut self, dynamic: &mut DynamicGameEventListener) {
         if let Some((x, y, z)) = dynamic.last_section
-            && let Some(chunk) = self.chunks.loaded_chunk_mut(ChunkPos::new(x, z))
+            && let Some(chunk) = self.chunks.chunk_without_loading_mut(ChunkPos::new(x, z))
         {
             chunk.unregister_game_event_listener(y, dynamic.listener);
         }
@@ -40,7 +40,7 @@ impl ServerLevel {
             self.dynamic_game_event_listener_remove(dynamic);
             dynamic.last_section = Some(current_section);
             let (x, y, z) = current_section;
-            if let Some(chunk) = self.chunks.loaded_chunk_mut(ChunkPos::new(x, z)) {
+            if let Some(chunk) = self.chunks.chunk_without_loading_mut(ChunkPos::new(x, z)) {
                 chunk.get_listener_registry(y).register(dynamic.listener);
             }
         }

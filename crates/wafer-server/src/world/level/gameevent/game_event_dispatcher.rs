@@ -20,7 +20,7 @@ impl ServerLevel {
         for chunk_x in section_min_x..=section_max_x {
             for chunk_z in section_min_z..=section_max_z {
                 let chunk_pos = ChunkPos::new(chunk_x, chunk_z);
-                if self.chunks.loaded_chunk(chunk_pos).is_none() {
+                if self.chunks.get_chunk_now(chunk_pos).is_none() {
                     continue;
                 }
                 for section in section_min_y..=section_max_y {

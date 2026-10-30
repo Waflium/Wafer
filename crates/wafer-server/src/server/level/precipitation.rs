@@ -4,6 +4,7 @@ use wafer_data::properties::LAYERS;
 use wafer_data::{BlockState, blocks};
 
 use super::ServerLevel;
+use super::chunk_level::ChunkStatus;
 use crate::world::entity::relative;
 use crate::world::entity::relative::PositionMoveRotation;
 use crate::world::level::biome::{self, Precipitation};
@@ -22,7 +23,9 @@ impl ServerLevel {
 
     pub fn get_noise_biome(&self, quart_x: i32, quart_y: i32, quart_z: i32) -> Biome {
         let chunk = ChunkPos::new(quart_x >> 2, quart_z >> 2);
-        if let Some(chunk) = self.chunks.loaded_chunk(chunk) {
+        if self.chunks.count_get_chunk_without_loading_at(chunk, ChunkStatus::Biomes)
+            && let Some(chunk) = self.chunks.loaded_chunk(chunk)
+        {
             return chunk.noise_biome(quart_x, quart_y, quart_z);
         }
         match &self.chunks.generator {

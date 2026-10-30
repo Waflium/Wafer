@@ -393,7 +393,7 @@ impl ServerLevel {
 
     pub fn get_chunk(&mut self, pos: ChunkPos) -> &mut crate::world::level::chunk::LevelChunk {
         self.load_chunk(pos);
-        self.chunks.chunk(pos)
+        self.chunks.loaded_full_chunk(pos)
     }
 
     pub fn get_chunk_structures_at(&mut self, pos: ChunkPos, status: super::chunk_level::ChunkStatus) -> &crate::world::level::chunk::ChunkStructures {
@@ -759,7 +759,7 @@ impl ServerLevel {
                 let positions: Vec<BlockPos> = changed_blocks.iter().map(|position| relative_to_block_pos(chunk_pos, section_y, position)).collect();
                 let packet = if positions.len() == 1 {
                     let pos = *positions.first().unwrap();
-                    let state = self.block_state(pos);
+                    let state = self.chunks.loaded_block_state(pos);
                     encode(clientbound::BLOCK_UPDATE, |p| {
                         p.position(pos.x, pos.y, pos.z);
                         p.varint(state.id() as i32);
@@ -770,7 +770,7 @@ impl ServerLevel {
                         .iter()
                         .map(|&pos| {
                             let local = ((pos.x & 15) << 8 | (pos.z & 15) << 4 | (pos.y & 15)) as i64;
-                            (self.block_state(pos).id() as i64) << 12 | local
+                            (self.chunks.loaded_block_state(pos).id() as i64) << 12 | local
                         })
                         .collect();
                     encode(clientbound::SECTION_BLOCKS_UPDATE, |p| {
@@ -783,7 +783,7 @@ impl ServerLevel {
                     self.player(player).connection.send_raw(packet.clone());
                 }
                 for pos in positions {
-                    if self.block_state(pos).has_block_entity()
+                    if self.chunks.loaded_block_state(pos).has_block_entity()
                         && let Some(packet) = self.block_entity_update_packet(pos)
                     {
                         for &player in &players {

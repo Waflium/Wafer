@@ -122,6 +122,7 @@ enum IoRequest {
 pub struct IoWorker {
     requests: Sender<IoRequest>,
     pub active_chunk_writes: Arc<AtomicUsize>,
+    queued_requests: Arc<AtomicUsize>,
 }
 
 impl IoWorker {
@@ -129,12 +130,15 @@ impl IoWorker {
         let (requests, incoming) = channel::<IoRequest>();
         let active_chunk_writes = Arc::new(AtomicUsize::new(0));
         let active = active_chunk_writes.clone();
+        let queued_requests = Arc::new(AtomicUsize::new(0));
+        let queued = queued_requests.clone();
         thread::Builder::new()
             .name(next_io_worker_name())
             .spawn(move || {
                 let _frames = crate::server::main_thread_frames::enter_complete(storage_exception::store_worker_frames());
                 let mut reporting: Option<IoReporting> = None;
                 for request in incoming {
+                    queued.fetch_sub(1, Ordering::Relaxed);
                     match request {
                         IoRequest::Read { pos, reply } => match guarded(|| storage.read(pos)) {
                             Err(e) if storage_exception::is_java_error(&e) => {
@@ -183,41 +187,54 @@ impl IoWorker {
                 }
             })
             .expect("IO worker thread");
-        IoWorker { requests, active_chunk_writes }
+        IoWorker { requests, active_chunk_writes, queued_requests }
+    }
+
+    fn submit(&self, request: IoRequest) -> Result<(), std::sync::mpsc::SendError<IoRequest>> {
+        self.queued_requests.fetch_add(1, Ordering::Relaxed);
+        let sent = self.requests.send(request);
+        if sent.is_err() {
+            self.queued_requests.fetch_sub(1, Ordering::Relaxed);
+        }
+        sent
+    }
+
+    pub fn queue_size(&self) -> usize {
+        self.queued_requests.load(Ordering::Relaxed)
     }
 
     pub fn set_reporting(&self, reporting: IoReporting) {
-        let _ = self.requests.send(IoRequest::SetReporting(reporting));
+        let _ = self.submit(IoRequest::SetReporting(reporting));
     }
 
     pub fn read(&self, pos: ChunkPos, reply: impl FnOnce(io::Result<Option<Nbt>>) + Send + 'static) {
-        let _ = self.requests.send(IoRequest::Read { pos, reply: Box::new(reply) });
+        let _ = self.submit(IoRequest::Read { pos, reply: Box::new(reply) });
     }
 
     pub fn scan_structures(&self, pos: ChunkPos) -> io::Result<Option<Nbt>> {
         let (reply, result) = channel();
-        let _ = self.requests.send(IoRequest::ScanStructures { pos, reply: Box::new(move |scanned| drop(reply.send(scanned))) });
+        let _ = self.submit(IoRequest::ScanStructures { pos, reply: Box::new(move |scanned| drop(reply.send(scanned))) });
         result.recv().map_err(|_| io::Error::other("IO worker gone"))?
     }
 
     pub fn scan_old_data(&self, pos: ChunkPos) -> io::Result<bool> {
         let (reply, result) = channel();
-        let _ = self.requests.send(IoRequest::ScanOldData { pos, reply: Box::new(move |scanned| drop(reply.send(scanned))) });
+        let _ = self.submit(IoRequest::ScanOldData { pos, reply: Box::new(move |scanned| drop(reply.send(scanned))) });
         result.recv().map_err(|_| io::Error::other("IO worker gone"))?
     }
 
     pub fn write(&self, pos: ChunkPos, nbt: Nbt) {
         self.active_chunk_writes.fetch_add(1, Ordering::Relaxed);
-        let _ = self.requests.send(IoRequest::Write { pos, nbt });
+        let _ = self.submit(IoRequest::Write { pos, nbt });
     }
 
     pub fn clear(&self, pos: ChunkPos) {
-        let _ = self.requests.send(IoRequest::Clear { pos });
+        let _ = self.submit(IoRequest::Clear { pos });
     }
 
     pub fn write_chunk(&self, save: ChunkToSave) {
         self.active_chunk_writes.fetch_add(1, Ordering::Relaxed);
-        let _ = self.requests.send(IoRequest::WriteChunk(Box::new(save)));
+        let _ = self.submit(IoRequest::WriteChunk(Box::new(save)));
     }
 
     pub fn flush(&self) -> io::Result<()> {
@@ -226,7 +243,7 @@ impl IoWorker {
 
     pub fn synchronize(&self, flush: bool) -> io::Result<()> {
         let (reply, result) = channel();
-        if self.requests.send(IoRequest::Flush { flush, reply }).is_err() {
+        if self.submit(IoRequest::Flush { flush, reply }).is_err() {
             return Err(io::Error::other("IO worker gone"));
         }
         result.recv().unwrap_or_else(|_| Err(io::Error::other("IO worker gone")))

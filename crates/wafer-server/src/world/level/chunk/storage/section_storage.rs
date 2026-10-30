@@ -123,6 +123,10 @@ impl<R: SectionData> SectionStorage<R> {
         self.reporting = Some(reporting);
     }
 
+    pub fn io_queue_size(&self) -> usize {
+        self.io.as_ref().map_or(0, IoWorker::queue_size)
+    }
+
     pub fn section_range(&self) -> (i32, i32) {
         (self.min_section_y, self.max_section_y)
     }

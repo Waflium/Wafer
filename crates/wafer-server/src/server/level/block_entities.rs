@@ -43,10 +43,11 @@ impl ServerLevel {
     }
 
     pub fn block_entity_changed(&mut self, pos: BlockPos) {
-        if self.chunks.loaded_chunk(pos.chunk()).is_some()
-            && let Some(chunk) = self.chunks.chunk_if_present(pos.chunk())
-        {
-            chunk.mark_unsaved();
+        if self.chunks.loaded_chunk(pos.chunk()).is_some() {
+            self.chunks.count_get_chunk(pos.chunk());
+            if let Some(chunk) = self.chunks.chunk_if_present(pos.chunk()) {
+                chunk.mark_unsaved();
+            }
         }
     }
 

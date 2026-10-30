@@ -326,6 +326,7 @@ pub struct Server {
     ready: bool,
     defers_full_status_changes: bool,
     metrics_recorder: Option<ActiveMetricsRecorder>,
+    metrics_gauges: metrics_recording::MetricsGauges,
     on_metrics_recording_stopped: Option<OnMetricsRecordingStopped>,
     on_metrics_recording_finished: Option<OnMetricsRecordingFinished>,
     will_start_recording_metrics: bool,
@@ -597,6 +598,7 @@ impl Server {
             ready: false,
             defers_full_status_changes,
             metrics_recorder: None,
+            metrics_gauges: Default::default(),
             on_metrics_recording_stopped: None,
             on_metrics_recording_finished: None,
             will_start_recording_metrics: false,
@@ -762,7 +764,6 @@ impl Server {
         }
         for level in &mut self.levels {
             if level.poll_chunk_task() {
-                profiler::increment_counter("runTask", 1);
                 return true;
             }
         }
@@ -2718,7 +2719,7 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
         }
         profiler::pop();
         drop(profiler_scope);
-        server.end_metrics_recording_tick();
+        server.end_metrics_recording_tick(events.len());
     }
 }
 

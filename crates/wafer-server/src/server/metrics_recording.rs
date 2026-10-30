@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 
 use super::{MetricsReportContext, OnMetricsRecordingFinished, Server, ServerTask};
@@ -11,18 +12,57 @@ use crate::util::profiling::metrics::server_metrics_samplers_provider::ServerMet
 use crate::util::profiling::profile_results::ProfileResults;
 use crate::util::profiling::profiler;
 
-const CONSECUTIVE_EXECUTOR_QUEUES: [&str; 7] = [
-    "light-queue-size",
-    "entity-deserializer-queue-size",
-    "worldgen-queue-size",
-    "dispatcher-queue-size",
-    "IOWorker-poi-queue-size",
-    "IOWorker-chunk-queue-size",
-    "IOWorker-entities-queue-size",
-];
+type Gauge = Arc<AtomicUsize>;
 
-fn measured(name: String, category: MetricCategory) -> ProfilerMeasured {
-    ProfilerMeasured { name, category, sampler: Arc::new(|| 0.0) }
+#[derive(Default)]
+struct LevelGauges {
+    chunk_source: Gauge,
+    light: Gauge,
+    entity_deserializer: Gauge,
+    worldgen: Gauge,
+    worldgen_dispatcher: Gauge,
+    light_dispatcher: Gauge,
+    ticket_dispatcher: Gauge,
+    poi: Gauge,
+    chunk: Gauge,
+    entities: Gauge,
+}
+
+#[derive(Default)]
+pub(crate) struct MetricsGauges {
+    levels: Vec<LevelGauges>,
+    server: Gauge,
+}
+
+fn measured(name: impl Into<String>, category: MetricCategory, gauge: &Gauge) -> ProfilerMeasured {
+    let gauge = gauge.clone();
+    ProfilerMeasured { name: name.into(), category, sampler: Arc::new(move || gauge.load(Ordering::Relaxed) as f64) }
+}
+
+impl MetricsGauges {
+    fn measured_instances(&mut self, dimensions: &[&str]) -> Vec<ProfilerMeasured> {
+        self.levels = dimensions.iter().map(|_| LevelGauges::default()).collect();
+        let mut measured_instances = Vec::new();
+        for (dimension, gauges) in dimensions.iter().zip(&self.levels) {
+            measured_instances.push(measured(format!("Chunk source main thread executor for {dimension}-pending-tasks"), MetricCategory::EventLoops, &gauges.chunk_source));
+            let executors = [
+                ("light", &gauges.light),
+                ("entity-deserializer", &gauges.entity_deserializer),
+                ("worldgen", &gauges.worldgen),
+                ("dispatcher", &gauges.worldgen_dispatcher),
+                ("dispatcher", &gauges.light_dispatcher),
+                ("dispatcher", &gauges.ticket_dispatcher),
+                ("IOWorker-poi", &gauges.poi),
+                ("IOWorker-chunk", &gauges.chunk),
+                ("IOWorker-entities", &gauges.entities),
+            ];
+            for (name, gauge) in executors {
+                measured_instances.push(measured(format!("{name}-queue-size"), MetricCategory::ConsecutiveExecutors, gauge));
+            }
+        }
+        measured_instances.push(measured("Server-pending-tasks", MetricCategory::EventLoops, &self.server));
+        measured_instances
+    }
 }
 
 impl Server {
@@ -73,7 +113,11 @@ impl Server {
         }
     }
 
-    pub(crate) fn end_metrics_recording_tick(&mut self) {
+    pub(crate) fn end_metrics_recording_tick(&mut self, pending_events: usize) {
+        if self.metrics_recorder.is_none() {
+            return;
+        }
+        self.refresh_metrics_gauges(pending_events);
         let Some(recorder) = &mut self.metrics_recorder else { return };
         let EndTickOutcome::Finished(results) = recorder.end_tick() else { return };
         let recorder = self.metrics_recorder.take().expect("recorder");
@@ -115,16 +159,53 @@ impl Server {
         }
     }
 
-    fn profiler_measured(&self) -> Vec<ProfilerMeasured> {
-        let mut measured_instances = Vec::new();
-        for level in &self.levels {
-            measured_instances.push(measured(format!("Chunk source main thread executor for {}-pending-tasks", level.dimension), MetricCategory::EventLoops));
-            for queue in CONSECUTIVE_EXECUTOR_QUEUES {
-                measured_instances.push(measured(queue.to_string(), MetricCategory::ConsecutiveExecutors));
-            }
-        }
-        measured_instances.push(measured("Server-pending-tasks".to_string(), MetricCategory::EventLoops));
-        measured_instances
+    fn profiler_measured(&mut self) -> Vec<ProfilerMeasured> {
+        let dimensions: Vec<&str> = self.levels.iter().map(|level| &*level.dimension).collect();
+        self.metrics_gauges.measured_instances(&dimensions)
     }
 
+    fn refresh_metrics_gauges(&self, pending_events: usize) {
+        self.metrics_gauges.server.store(self.tasks.borrow().len() + pending_events, Ordering::Relaxed);
+        for (level, gauges) in self.levels.iter().zip(&self.metrics_gauges.levels) {
+            let chunks = &level.chunks;
+            gauges.chunk_source.store(chunks.main_thread_pending_tasks(), Ordering::Relaxed);
+            gauges.light.store(chunks.light_queue_size(), Ordering::Relaxed);
+            gauges.entity_deserializer.store(level.entity_manager.loading_inbox_size(), Ordering::Relaxed);
+            gauges.worldgen.store(chunks.worldgen_queue_size(), Ordering::Relaxed);
+            gauges.ticket_dispatcher.store(chunks.ticket_dispatcher_queue_size(), Ordering::Relaxed);
+            gauges.poi.store(chunks.poi_io_queue_size(), Ordering::Relaxed);
+            gauges.chunk.store(chunks.chunk_io_queue_size(), Ordering::Relaxed);
+            gauges.entities.store(level.entity_manager.io_queue_size(), Ordering::Relaxed);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::server::level::testing;
+
+    #[test]
+    fn every_level_registers_the_executors_vanilla_registers() {
+        let mut server = testing::server();
+        let measured = server.profiler_measured();
+        let named = |name: &str| measured.iter().filter(|instance| instance.name == name).count();
+        assert_eq!(measured.len(), 3 * 10 + 1);
+        assert_eq!(named("dispatcher-queue-size"), 9);
+        for name in ["light", "entity-deserializer", "worldgen", "IOWorker-poi", "IOWorker-chunk", "IOWorker-entities"] {
+            assert_eq!(named(&format!("{name}-queue-size")), 3, "{name}");
+        }
+        assert_eq!(named("Chunk source main thread executor for minecraft:the_nether-pending-tasks"), 1);
+        assert_eq!(named("Server-pending-tasks"), 1);
+    }
+
+    #[test]
+    fn the_measured_values_follow_the_servers_queues() {
+        let mut server = testing::server();
+        let measured = server.profiler_measured();
+        let value = |name: &str| (measured.iter().find(|instance| instance.name == name).unwrap().sampler)();
+        assert_eq!(value("Server-pending-tasks"), 0.0);
+        server.refresh_metrics_gauges(7);
+        assert_eq!(value("Server-pending-tasks"), 7.0);
+        assert_eq!(value("light-queue-size"), 0.0);
+    }
 }

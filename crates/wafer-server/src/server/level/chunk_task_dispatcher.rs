@@ -21,6 +21,10 @@ impl<T> Default for ChunkTaskPriorityQueue<T> {
 }
 
 impl<T> ChunkTaskPriorityQueue<T> {
+    pub fn size(&self) -> usize {
+        self.queues_per_priority.iter().flat_map(IndexMap::values).map(Vec::len).sum()
+    }
+
     fn queue(&mut self, priority: i32) -> &mut IndexMap<i64, Vec<T>> {
         &mut self.queues_per_priority[priority as usize]
     }
@@ -128,6 +132,10 @@ impl ThrottlingChunkTaskDispatcher {
             max_chunks_in_execution,
             mailbox: Default::default(),
         }
+    }
+
+    pub fn mailbox_size(&self) -> usize {
+        self.mailbox.iter().map(VecDeque::len).sum()
     }
 
     fn schedule(&mut self, message: Message) {

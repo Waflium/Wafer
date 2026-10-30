@@ -86,6 +86,7 @@ impl ServerLevel {
     }
 
     pub fn get_living_entities(&self, area: &AABB, predicate: impl Fn(&ServerLevel, EntityId) -> bool) -> Vec<EntityId> {
+        crate::util::profiling::profiler::increment_counter("getEntities", 1);
         let mut found = Vec::new();
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
             for &id in section.entities() {

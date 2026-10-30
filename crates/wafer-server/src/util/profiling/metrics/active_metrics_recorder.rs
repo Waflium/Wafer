@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn csv_columns_follow_java_hash_set_order_like_vanilla() {
-        let mut samplers = vec![tick_time_sampler(get_nanos)];
+        let mut samplers = Vec::new();
         for i in 0..32 {
             samplers.push(MetricSampler::create(&format!("cpu#{i}"), MetricCategory::Cpu, || 0.0));
         }
@@ -182,21 +182,18 @@ mod tests {
         let mut measured_instances = Vec::new();
         for dimension in ["minecraft:overworld", "minecraft:the_nether", "minecraft:the_end"] {
             measured_instances.push(measured(&format!("Chunk source main thread executor for {dimension}-pending-tasks"), MetricCategory::EventLoops));
-            for queue in ["light", "entity-deserializer", "worldgen", "dispatcher", "IOWorker-poi", "IOWorker-chunk", "IOWorker-entities"] {
+            for queue in ["light", "entity-deserializer", "worldgen", "dispatcher", "dispatcher", "dispatcher", "IOWorker-poi", "IOWorker-chunk", "IOWorker-entities"] {
                 measured_instances.push(measured(&format!("{queue}-queue-size"), MetricCategory::ConsecutiveExecutors));
             }
         }
         measured_instances.push(measured("Server-pending-tasks", MetricCategory::EventLoops));
         samplers.extend(get_registered_samplers(measured_instances));
-        let recorder = ActiveMetricsRecorder::create_started(ServerMetricsSamplersProvider::with_samplers(samplers), get_nanos);
+        let recorder = ActiveMetricsRecorder::create_started(ServerMetricsSamplersProvider::with_samplers(tick_time_sampler(get_nanos), samplers), get_nanos);
         let job = recorder.into_save_job(ProfileResults::Empty);
         let cpus: Vec<String> = [29, 28, 27, 15, 14, 13, 12, 11, 10, 31, 30, 19, 18, 17, 16, 26, 2, 1, 25, 0, 24, 23, 22, 21, 20, 9, 8, 7, 6, 5, 4, 3].iter().map(|i| format!("cpu#{i}")).collect();
         assert_eq!(columns(&job, MetricCategory::Cpu), cpus);
-        let mut executors = columns(&job, MetricCategory::ConsecutiveExecutors);
-        executors.sort();
-        let mut expected = ["light", "entity-deserializer", "worldgen", "dispatcher", "IOWorker-poi", "IOWorker-chunk", "IOWorker-entities"].map(|queue| format!("{queue}-queue-size"));
-        expected.sort();
-        assert_eq!(executors, expected);
+        let expected = ["light", "entity-deserializer", "worldgen", "dispatcher", "IOWorker-poi", "IOWorker-chunk", "IOWorker-entities"].map(|queue| format!("{queue}-queue-size"));
+        assert_eq!(columns(&job, MetricCategory::ConsecutiveExecutors), expected);
         let event_loops = [
             "Chunk source main thread executor for minecraft:the_end-pending-tasks",
             "Chunk source main thread executor for minecraft:overworld-pending-tasks",

@@ -15,6 +15,8 @@ pub mod lent_levels;
 mod entity_tombstones_tests;
 #[cfg(test)]
 mod tick_continuation_tests;
+#[cfg(test)]
+mod profiler_counter_tests;
 pub mod demo_mode;
 pub mod game_mode;
 #[cfg(test)]
@@ -718,13 +720,13 @@ impl ServerLevel {
         if (block_changed || new_block.is_instance_of("BaseRailBlock")) && (flags & UPDATE_NEIGHBORS != 0 || moved_by_piston) {
             block::of(old).affect_neighbors_after_removal(old, self, pos, moved_by_piston);
         }
-        if !self.block_state(pos).is_block(new_block) {
+        if !self.chunks.loaded_block_state(pos).is_block(new_block) {
             return false;
         }
         if flags & UPDATE_SKIP_ON_PLACE == 0 {
             block::of(state).on_place(state, self, pos, old, moved_by_piston);
         }
-        if state.has_block_entity() && self.block_state(pos).is_block(new_block) {
+        if state.has_block_entity() && self.chunks.loaded_block_state(pos).is_block(new_block) {
             let existing = self.chunks.block_entity(pos, EntityCreationType::Check).map(|e| e.is_valid_block_state(state));
             if existing == Some(false) {
                 let ty = self.chunks.block_entity_ref(pos).map(BlockEntity::ty);
@@ -1023,11 +1025,11 @@ impl ServerLevel {
     }
 
     pub fn post_process_generation(&mut self, chunk_pos: ChunkPos) {
-        let chunk = self.chunks.chunk(chunk_pos);
+        let chunk = self.chunks.loaded_full_chunk(chunk_pos);
         let min_section_y = chunk.min_y() >> 4;
         let section_count = chunk.post_processing.len();
         for section_index in 0..section_count {
-            let offsets = std::mem::take(&mut self.chunks.chunk(chunk_pos).post_processing[section_index]);
+            let offsets = std::mem::take(&mut self.chunks.loaded_full_chunk(chunk_pos).post_processing[section_index]);
             for packed in offsets {
                 let pos = BlockPos::new(
                     chunk_pos.min_block_x() + (packed & 15) as i32,
@@ -1048,14 +1050,14 @@ impl ServerLevel {
                 }
             }
         }
-        let pending: Vec<BlockPos> = self.chunks.chunk(chunk_pos).block_entities.pending.keys().collect();
+        let pending: Vec<BlockPos> = self.chunks.loaded_full_chunk(chunk_pos).block_entities.pending.keys().collect();
         if !pending.is_empty() {
             let _frames = crate::server::main_thread_frames::enter(PREPARE_TICKING_CHUNK_POST_PROCESS.into_iter().chain(crate::server::main_thread_frames::CHUNK_SOURCE_TASK));
             for pos in pending {
                 self.chunks.block_entity(pos, EntityCreationType::Check);
             }
         }
-        self.chunks.chunk(chunk_pos).block_entities.pending.clear();
+        self.chunks.loaded_full_chunk(chunk_pos).block_entities.pending.clear();
         UpgradeData::upgrade(self, chunk_pos);
     }
 
@@ -1490,6 +1492,24 @@ impl ServerLevel {
         max_results: usize,
     ) {
         profiler::increment_counter("getEntities", 1);
+        self.collect_entities_of_type(type_test, area, selector, output, max_results);
+    }
+
+    pub fn has_entities(&self, type_test: impl Fn(&ServerLevel, EntityId) -> bool, area: &AABB, selector: impl Fn(&ServerLevel, EntityId) -> bool) -> bool {
+        profiler::increment_counter("hasEntities", 1);
+        let mut output = Vec::new();
+        self.collect_entities_of_type(type_test, area, selector, &mut output, 1);
+        !output.is_empty()
+    }
+
+    fn collect_entities_of_type(
+        &self,
+        type_test: impl Fn(&ServerLevel, EntityId) -> bool,
+        area: &AABB,
+        selector: impl Fn(&ServerLevel, EntityId) -> bool,
+        output: &mut Vec<EntityId>,
+        max_results: usize,
+    ) {
         let mut aborted = false;
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
             if aborted {
@@ -1523,6 +1543,7 @@ impl ServerLevel {
     }
 
     pub fn items_in(&self, area: &AABB, except: Option<EntityId>) -> Vec<EntityId> {
+        profiler::increment_counter("getEntities", 1);
         let mut found = Vec::new();
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
             for &id in section.entities() {
@@ -2458,7 +2479,7 @@ impl BlockGetter for ServerLevel {
         if !self.chunks.is_outside_build_height(pos.y) {
             self.load_chunk(pos.chunk());
         }
-        self.chunks.block_state(pos)
+        self.chunks.loaded_block_state(pos)
     }
 
     fn get_block_support_shape(&mut self, state: BlockState, pos: BlockPos) -> std::borrow::Cow<'static, wafer_core::shapes::VoxelShape> {
@@ -2642,7 +2663,11 @@ impl crate::world::level::server_level_accessor::ServerLevelAccessor for ServerL
 
     fn get_height(&mut self, kind: crate::world::level::chunk::HeightmapType, x: i32, z: i32) -> i32 {
         if (-30_000_000..30_000_000).contains(&x) && (-30_000_000..30_000_000).contains(&z) {
-            match self.chunks.loaded_chunk_mut(ChunkPos::new(x >> 4, z >> 4)) {
+            let chunk_pos = ChunkPos::new(x >> 4, z >> 4);
+            if self.chunks.has_chunk(chunk_pos) {
+                self.chunks.count_get_chunk(chunk_pos);
+            }
+            match self.chunks.loaded_chunk_mut(chunk_pos) {
                 Some(chunk) => chunk.get_height(kind, x, z) + 1,
                 None => self.chunks.min_y(),
             }

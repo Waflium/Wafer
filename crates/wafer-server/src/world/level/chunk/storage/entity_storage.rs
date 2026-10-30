@@ -123,6 +123,10 @@ impl EntityStorage {
         Some(read)
     }
 
+    pub fn io_queue_size(&self) -> usize {
+        self.worker.as_ref().map_or(0, IoWorker::queue_size)
+    }
+
     pub fn loading_inbox_size(&self) -> usize {
         self.loading_inbox.load(Ordering::Relaxed)
     }

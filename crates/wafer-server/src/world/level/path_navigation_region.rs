@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use wafer_core::shapes::VoxelShape;
-use wafer_core::{AABB, BlockPos};
+use wafer_core::{AABB, BlockPos, ChunkPos};
 use wafer_data::{BlockState, FluidState, blocks};
 
 use crate::server::level::ServerLevel;
@@ -12,16 +12,29 @@ use crate::world::phys::shapes::collision_context::CollisionContext;
 
 pub struct PathNavigationRegion<'a> {
     pub level: &'a ServerLevel,
+    snapshot: bool,
 }
 
 impl<'a> PathNavigationRegion<'a> {
     pub fn new(level: &'a ServerLevel) -> PathNavigationRegion<'a> {
-        PathNavigationRegion { level }
+        PathNavigationRegion { level, snapshot: false }
+    }
+
+    pub fn snapshot(level: &'a ServerLevel, start: BlockPos, end: BlockPos) -> PathNavigationRegion<'a> {
+        for chunk_x in (start.x >> 4)..=(end.x >> 4) {
+            for chunk_z in (start.z >> 4)..=(end.z >> 4) {
+                level.chunks.get_chunk_now(ChunkPos::new(chunk_x, chunk_z));
+            }
+        }
+        PathNavigationRegion { level, snapshot: true }
     }
 
     pub fn get_block_state(&self, pos: BlockPos) -> BlockState {
         if self.level.chunks.is_outside_build_height(pos.y) {
             return blocks::AIR.default_state();
+        }
+        if !self.snapshot {
+            self.level.chunks.count_get_chunk(pos.chunk());
         }
         self.level.chunks.loaded_chunk(pos.chunk()).map_or(blocks::VOID_AIR.default_state(), |chunk| chunk.block_state(pos))
     }

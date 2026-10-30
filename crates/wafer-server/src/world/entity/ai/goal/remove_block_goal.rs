@@ -109,7 +109,7 @@ impl RemoveBlockGoal {
 }
 
 fn is_valid_target(level: &ServerLevel, block_to_remove: Block, pos: BlockPos) -> bool {
-    match level.chunks.loaded_chunk(pos.chunk()) {
+    match level.chunks.chunk_without_loading(pos.chunk()) {
         Some(chunk) => chunk.block_state(pos).is_block(block_to_remove) && chunk.block_state(pos.above()).is_air() && chunk.block_state(pos.above().above()).is_air(),
         None => false,
     }

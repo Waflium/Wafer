@@ -68,8 +68,8 @@ fn calculate_difficulty(base: Difficulty, total_game_time: i64, local_game_time:
 impl ServerLevel {
     pub fn current_difficulty_at(&mut self, pos: BlockPos) -> DifficultyInstance {
         let (mut local_time, mut moon_brightness) = (0, 0.0);
-        if let Some(chunk) = self.chunks.chunk_if_present(pos.chunk()) {
-            local_time = chunk.inhabited_time;
+        if let Some(inhabited_time) = self.chunks.chunk_without_loading(pos.chunk()).map(|chunk| chunk.inhabited_time) {
+            local_time = inhabited_time;
             moon_brightness = self.moon_brightness(pos);
         }
         DifficultyInstance::new(self.difficulty, self.overworld_clock_time, local_time, moon_brightness)

@@ -83,6 +83,10 @@ impl ThreadedLevelLightEngine {
         self.queue.submit((ty, task), pos, level);
     }
 
+    pub fn pending_task_count(&self) -> usize {
+        self.light_tasks.len()
+    }
+
     pub fn has_work(&self) -> bool {
         self.queue.has_work() || !self.light_tasks.is_empty() || self.engine.has_light_work()
     }

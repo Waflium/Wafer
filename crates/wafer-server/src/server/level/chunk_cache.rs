@@ -112,7 +112,7 @@ pub struct ChunkCache {
     world_gen_entity_sounds: Vec<(Vec3, i32, SoundSource, f32, f32)>,
     pub scoreboard: Rc<RefCell<Scoreboard>>,
     full_status_changes: VecDeque<(ChunkPos, FullChunkStatus)>,
-    last_chunk: Cell<[Option<(ChunkPos, bool)>; 4]>,
+    last_chunk: Cell<[Option<(ChunkPos, ChunkStatus, bool)>; 4]>,
     server_view_distance: i32,
     live_futures: usize,
     pub block_entity_tickers: BlockEntityTickers,
@@ -309,6 +309,30 @@ impl ChunkCache {
         self.holders.map.get(&pos.pack()).map(|h| h.ticket_level)
     }
 
+    pub fn main_thread_pending_tasks(&self) -> usize {
+        self.distance_manager.main_thread_tasks.len() + self.holders.futures.woken.len() + self.arrived.len()
+    }
+
+    pub fn light_queue_size(&self) -> usize {
+        self.light_engine.pending_task_count()
+    }
+
+    pub fn worldgen_queue_size(&self) -> usize {
+        self.worldgen_queue.size()
+    }
+
+    pub fn ticket_dispatcher_queue_size(&self) -> usize {
+        self.distance_manager.ticket_dispatcher_queue_size()
+    }
+
+    pub fn chunk_io_queue_size(&self) -> usize {
+        self.io.as_ref().map_or(0, IoWorker::queue_size)
+    }
+
+    pub fn poi_io_queue_size(&self) -> usize {
+        self.poi_manager.storage.io_queue_size()
+    }
+
     pub fn loaded_chunks_count(&self) -> usize {
         self.holders.map.len()
     }
@@ -350,9 +374,49 @@ impl ChunkCache {
         self.chunks.get_mut(&pos).expect("full chunk")
     }
 
+    pub fn loaded_full_chunk(&mut self, pos: ChunkPos) -> &mut LevelChunk {
+        if !self.chunks.contains_key(&pos) {
+            self.chunk(pos);
+        }
+        self.chunks.get_mut(&pos).expect("full chunk")
+    }
+
+    pub fn get_chunk_now(&self, pos: ChunkPos) -> Option<&LevelChunk> {
+        profiler::increment_counter("getChunkNow", 1);
+        if let Some(present) = self.cached_entry(pos) {
+            return if present { self.chunks.get(&pos) } else { None };
+        }
+        if !self.is_full(pos.pack()) {
+            return None;
+        }
+        self.store_in_cache(pos, ChunkStatus::Full, true);
+        self.chunks.get(&pos)
+    }
+
+    pub fn count_get_chunk(&self, pos: ChunkPos) {
+        profiler::increment_counter("getChunk", 1);
+        if self.cached_chunk(pos, ChunkStatus::Full, true).is_none() {
+            profiler::increment_counter("getChunkCacheMiss", 1);
+            self.store_in_cache(pos, ChunkStatus::Full, self.is_full(pos.pack()));
+        }
+    }
+
+    pub fn count_get_chunk_without_loading_at(&self, pos: ChunkPos, status: ChunkStatus) -> bool {
+        profiler::increment_counter("getChunk", 1);
+        match self.cached_chunk(pos, status, false) {
+            Some(present) => present,
+            None => {
+                profiler::increment_counter("getChunkCacheMiss", 1);
+                let present = self.holders.map.get(&pos.pack()).is_some_and(|h| !h.is_status_disallowed(status) && h.status_done(&self.holders.futures, status));
+                self.store_in_cache(pos, status, present);
+                present
+            }
+        }
+    }
+
     pub fn begin_chunk_load(&mut self, pos: ChunkPos) -> Option<FutureId> {
         profiler::increment_counter("getChunk", 1);
-        if self.cached_chunk(pos, true).is_some() {
+        if self.cached_chunk(pos, ChunkStatus::Full, true).is_some() {
             return None;
         }
         profiler::increment_counter("getChunkCacheMiss", 1);
@@ -367,31 +431,42 @@ impl ChunkCache {
         if !self.holders.futures.is_success(future) {
             panic!("Chunk not there when requested: {pos:?}");
         }
-        self.store_in_cache(pos, true);
+        self.store_in_cache(pos, ChunkStatus::Full, true);
     }
 
-    pub fn chunk_without_loading(&self, pos: ChunkPos) -> Option<&LevelChunk> {
+    fn count_chunk_without_loading(&self, pos: ChunkPos) -> bool {
         profiler::increment_counter("getChunk", 1);
-        let present = match self.cached_chunk(pos, false) {
+        match self.cached_chunk(pos, ChunkStatus::Full, false) {
             Some(present) => present,
             None => {
                 profiler::increment_counter("getChunkCacheMiss", 1);
                 let present = self.is_full(pos.pack());
-                self.store_in_cache(pos, present);
+                self.store_in_cache(pos, ChunkStatus::Full, present);
                 present
             }
-        };
-        if present { self.chunks.get(&pos) } else { None }
+        }
     }
 
-    fn cached_chunk(&self, pos: ChunkPos, load_or_generate: bool) -> Option<bool> {
-        self.last_chunk.get().into_iter().flatten().find(|&(p, present)| p == pos && (present || !load_or_generate)).map(|(_, present)| present)
+    pub fn chunk_without_loading(&self, pos: ChunkPos) -> Option<&LevelChunk> {
+        if self.count_chunk_without_loading(pos) { self.chunks.get(&pos) } else { None }
     }
 
-    fn store_in_cache(&self, pos: ChunkPos, present: bool) {
+    pub fn chunk_without_loading_mut(&mut self, pos: ChunkPos) -> Option<&mut LevelChunk> {
+        if self.count_chunk_without_loading(pos) { self.chunks.get_mut(&pos) } else { None }
+    }
+
+    fn cached_entry(&self, pos: ChunkPos) -> Option<bool> {
+        self.last_chunk.get().into_iter().flatten().find(|&(p, status, _)| p == pos && status == ChunkStatus::Full).map(|(_, _, present)| present)
+    }
+
+    fn cached_chunk(&self, pos: ChunkPos, status: ChunkStatus, load_or_generate: bool) -> Option<bool> {
+        self.last_chunk.get().into_iter().flatten().find(|&(p, s, present)| p == pos && s == status && (present || !load_or_generate)).map(|(_, _, present)| present)
+    }
+
+    fn store_in_cache(&self, pos: ChunkPos, status: ChunkStatus, present: bool) {
         let mut last_chunk = self.last_chunk.get();
         last_chunk.copy_within(0..3, 1);
-        last_chunk[0] = Some((pos, present));
+        last_chunk[0] = Some((pos, status, present));
         self.last_chunk.set(last_chunk);
     }
 
@@ -502,6 +577,7 @@ impl ChunkCache {
             return false;
         }
         let result = self.wait_for_result();
+        profiler::increment_counter("runTask", 1);
         self.apply_work_result(result);
         true
     }
@@ -740,6 +816,14 @@ impl ChunkCache {
     }
 
     pub fn poll_task(&mut self) -> bool {
+        let ran = self.run_one_task();
+        if ran {
+            profiler::increment_counter("runTask", 1);
+        }
+        ran
+    }
+
+    fn run_one_task(&mut self) -> bool {
         if self.process_woken() {
             return true;
         }
@@ -784,6 +868,7 @@ impl ChunkCache {
             Ok(result) => {
                 self.store_arrived(result);
                 if let Some(result) = self.next_ready_result() {
+                    profiler::increment_counter("runTask", 1);
                     self.apply_work_result(result);
                 }
             }
@@ -2020,7 +2105,7 @@ impl ChunkCache {
     }
 
     pub fn set_block_state(&mut self, pos: BlockPos, state: BlockState) -> Option<BlockState> {
-        let chunk = self.chunk(pos.chunk());
+        let chunk = self.loaded_full_chunk(pos.chunk());
         let index = ((pos.y - chunk.min_y()) >> 4) as usize;
         let was_empty = chunk.sections[index].has_only_air();
         let old = chunk.set_block_state(pos, state)?;
@@ -2045,7 +2130,7 @@ impl ChunkCache {
 
     pub fn block_entity(&mut self, pos: BlockPos, creation: EntityCreationType) -> Option<&mut BlockEntity> {
         let chunk_pos = pos.chunk();
-        self.chunk(chunk_pos);
+        self.loaded_full_chunk(chunk_pos);
         let ChunkCache { chunks, block_entity_tickers, .. } = self;
         chunks.get_mut(&chunk_pos).unwrap().get_block_entity(pos, creation, block_entity_tickers)
     }
@@ -2055,19 +2140,19 @@ impl ChunkCache {
     }
 
     pub fn remove_block_entity(&mut self, pos: BlockPos) -> Option<BlockEntity> {
-        self.chunk(pos.chunk()).remove_block_entity(pos)
+        self.loaded_full_chunk(pos.chunk()).remove_block_entity(pos)
     }
 
     pub fn add_and_register_block_entity(&mut self, entity: BlockEntity) {
         let chunk_pos = entity.pos().chunk();
-        self.chunk(chunk_pos);
+        self.loaded_full_chunk(chunk_pos);
         let ChunkCache { chunks, block_entity_tickers, .. } = self;
         chunks.get_mut(&chunk_pos).unwrap().add_and_register_block_entity(entity, block_entity_tickers);
     }
 
     pub fn update_block_entity_ticker(&mut self, pos: BlockPos) {
         let chunk_pos = pos.chunk();
-        self.chunk(chunk_pos);
+        self.loaded_full_chunk(chunk_pos);
         let ChunkCache { chunks, block_entity_tickers, .. } = self;
         chunks.get_mut(&chunk_pos).unwrap().update_block_entity_ticker(pos, block_entity_tickers);
     }
@@ -2078,7 +2163,7 @@ impl ChunkCache {
 
     pub fn write_chunk_with_light(&mut self, pos: ChunkPos, w: &mut Writer) {
         if !self.chunks.contains_key(&pos) {
-            self.chunk(pos);
+            self.loaded_full_chunk(pos);
         }
         let chunk = &self.chunks[&pos];
         w.i32(pos.x);
@@ -2322,6 +2407,17 @@ impl ChunkCache {
 fn is_position_ticking(distance_manager: &DistanceManager, holders: &ChunkHolders, pos: ChunkPos) -> bool {
     let key = pos.pack();
     distance_manager.in_block_ticking_range(key) && holders.map.get(&key).is_some_and(|h| h.is_ticking(&holders.futures))
+}
+
+impl ChunkCache {
+    pub fn loaded_block_state(&mut self, pos: BlockPos) -> BlockState {
+        if self.is_outside_build_height(pos.y) {
+            return blocks::VOID_AIR.default_state();
+        }
+        let is_debug = self.is_debug;
+        let state = self.loaded_full_chunk(pos.chunk()).block_state(pos);
+        if is_debug { debug_level_source::get_block_state(pos) } else { state }
+    }
 }
 
 impl BlockGetter for ChunkCache {

@@ -253,7 +253,7 @@ impl TransportItemsBetweenContainers {
         let mut candidates = Vec::new();
         for z in center.z - radius..=center.z + radius {
             for x in center.x - radius..=center.x + radius {
-                let Some(level_chunk) = level.chunks.loaded_chunk(ChunkPos::new(x, z)) else { continue };
+                let Some(level_chunk) = level.chunks.get_chunk_now(ChunkPos::new(x, z)) else { continue };
                 candidates.clear();
                 candidates.extend(
                     level_chunk.block_entities.map.keys_in_order().into_iter().filter(|pos| level_chunk.block_entities.map.get(pos).is_some_and(|entity| matches!(entity.kind, BlockEntityKind::Chest(_)))),

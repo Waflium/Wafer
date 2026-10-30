@@ -215,7 +215,7 @@ impl PathNavigation {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn create_path_with_max_length(&mut self, level: &ServerLevel, mob: EntityId, targets: &[BlockPos], _radius_offset: i32, _above: bool, reach_range: i32, max_path_length: f32) -> Option<Path> {
+    fn create_path_with_max_length(&mut self, level: &ServerLevel, mob: EntityId, targets: &[BlockPos], radius_offset: i32, above: bool, reach_range: i32, max_path_length: f32) -> Option<Path> {
         if targets.is_empty() {
             return None;
         }
@@ -232,7 +232,11 @@ impl PathNavigation {
             return Some(path.clone());
         }
         profiler::push("pathfind");
-        let path = self.path_finder.find_path(PathNavigationRegion::new(level), mob, targets, max_path_length, reach_range, self.max_visited_nodes_multiplier);
+        let mob_pos = level.entity(mob).block_position();
+        let from_pos = if above { mob_pos.above() } else { mob_pos };
+        let radius = (max_path_length + radius_offset as f32) as i32;
+        let region = PathNavigationRegion::snapshot(level, from_pos.offset(-radius, -radius, -radius), from_pos.offset(radius, radius, radius));
+        let path = self.path_finder.find_path(region, mob, targets, max_path_length, reach_range, self.max_visited_nodes_multiplier);
         profiler::pop();
         if let Some(path) = &path {
             self.target_pos = Some(path.get_target());

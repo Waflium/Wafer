@@ -129,7 +129,7 @@ pub fn for_each_block_collision<'c>(
         let (x, y, z) = (x0 + cx, y0 + cy, z0 + cz);
         let chunk_pos = ChunkPos::new(x >> 4, z >> 4);
         let chunk = match cached_chunk {
-            Some((p, c)) if p == chunk_pos => c,
+            Some((p, Some(c))) if p == chunk_pos => Some(c),
             _ => {
                 let c = chunk_for_collisions(chunk_pos);
                 cached_chunk = Some((chunk_pos, c));

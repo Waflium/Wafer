@@ -79,6 +79,10 @@ impl PersistentEntitySectionManager {
         self.permanent_storage.loading_inbox_size()
     }
 
+    pub fn io_queue_size(&self) -> usize {
+        self.permanent_storage.io_queue_size()
+    }
+
     fn visibility(&self, chunk_key: i64) -> Visibility {
         self.chunk_visibility.get(&chunk_key).copied().unwrap_or_default()
     }
@@ -319,7 +323,9 @@ impl ServerLevel {
 
     pub fn run_entity_deserializer_queue_as_task(&mut self) -> bool {
         let _scope = main_thread_frames::enter(std::iter::once(ENTITY_DESERIALIZER_TASK_RUN).chain(main_thread_frames::SERVER_TASK_POLL));
-        self.run_entity_deserializer_queue()
+        let tasks = self.run_entity_deserializer_queue();
+        crate::util::profiling::profiler::increment_counter("runTask", tasks);
+        tasks > 0
     }
 
     fn flush_entity_storage(&mut self, flush_storage: bool, save_all_frame: &'static str) {
@@ -328,10 +334,10 @@ impl ServerLevel {
         self.run_entity_deserializer_queue();
     }
 
-    fn run_entity_deserializer_queue(&mut self) -> bool {
-        let mut ran_task = false;
+    fn run_entity_deserializer_queue(&mut self) -> i32 {
+        let mut ran_task = 0;
         while let Some((pos, read)) = self.entity_manager.permanent_storage.poll_read() {
-            ran_task = true;
+            ran_task += 1;
             let entities = match read {
                 Ok(Some(tag)) => match crate::util::catch_exception(|| self.read_chunk_entities(pos, &tag)) {
                     Ok(entities) => Some(entities),

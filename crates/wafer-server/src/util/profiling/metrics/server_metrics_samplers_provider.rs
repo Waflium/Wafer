@@ -54,18 +54,14 @@ pub struct ServerMetricsSamplersProvider {
 
 impl ServerMetricsSamplersProvider {
     pub fn new(wall_time_source: fn() -> i64, is_dedicated_server: bool, measured: Vec<ProfilerMeasured>) -> ServerMetricsSamplersProvider {
-        let mut samplers = vec![tick_time_sampler(wall_time_source)];
-        if is_dedicated_server {
-            samplers.extend(runtime_independent_samplers(measured));
-        }
-        ServerMetricsSamplersProvider::with_samplers(samplers)
+        let samplers = if is_dedicated_server { runtime_independent_samplers(measured) } else { Vec::new() };
+        ServerMetricsSamplersProvider::with_samplers(tick_time_sampler(wall_time_source), samplers)
     }
 
-    pub fn with_samplers(samplers: Vec<MetricSampler>) -> ServerMetricsSamplersProvider {
+    pub fn with_samplers(tick_time: MetricSampler, samplers: Vec<MetricSampler>) -> ServerMetricsSamplersProvider {
         let mut provider = ServerMetricsSamplersProvider { samplers: ObjectOpenHashMap::default(), sampler_factory: ProfilerSamplerAdapter::new() };
-        for sampler in samplers {
-            provider.add(sampler);
-        }
+        provider.add(tick_time);
+        provider.add_all(samplers);
         provider
     }
 
@@ -75,10 +71,16 @@ impl ServerMetricsSamplersProvider {
         self.samplers.entry_or_insert_with_hash(&name, hash_code, || sampler);
     }
 
-    pub fn samplers(&mut self, profiler: &ProfilerSupplier) -> impl Iterator<Item = &mut MetricSampler> {
-        for sampler in self.sampler_factory.new_samplers_found_in_profiler(profiler) {
+    fn add_all(&mut self, samplers: Vec<MetricSampler>) {
+        self.samplers.try_capacity(self.samplers.len() + samplers.len());
+        for sampler in samplers {
             self.add(sampler);
         }
+    }
+
+    pub fn samplers(&mut self, profiler: &ProfilerSupplier) -> impl Iterator<Item = &mut MetricSampler> {
+        let new_samplers = self.sampler_factory.new_samplers_found_in_profiler(profiler);
+        self.add_all(new_samplers);
         self.samplers.iter_mut().map(|(_, sampler)| sampler)
     }
 

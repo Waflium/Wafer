@@ -362,7 +362,7 @@ impl ServerLevel {
         for x in listener_chunk_pos.x - 1..=listener_chunk_pos.x + 1 {
             for z in listener_chunk_pos.z - 1..=listener_chunk_pos.z + 1 {
                 let chunk_pos = ChunkPos::new(x, z);
-                if !self.in_block_ticking_range(chunk_pos) || self.chunks.loaded_chunk(chunk_pos).is_none() {
+                if !self.in_block_ticking_range(chunk_pos) || self.chunks.get_chunk_now(chunk_pos).is_none() {
                     return false;
                 }
             }

@@ -148,6 +148,10 @@ impl Default for DistanceManager {
 }
 
 impl DistanceManager {
+    pub fn ticket_dispatcher_queue_size(&self) -> usize {
+        self.ticket_dispatcher.mailbox_size()
+    }
+
     fn apply_ticket_updates(&mut self, holders: &mut ChunkHolders, updates: Vec<TicketUpdate>) {
         for update in updates {
             if update.simulation {

@@ -202,7 +202,7 @@ pub fn if_entity_run(server: &mut Server, context: &CommandContext, source: &Com
 fn is_chunk_loaded(server: &Server, context: &CommandContext, source: &CommandSourceStack) -> bool {
     let pos = context.get_coordinates("pos").block_pos(server, source);
     let level = &server.levels[source.level];
-    level.chunks.has_chunk(pos.chunk()) && level.in_entity_ticking_range(pos.chunk()) && level.entity_manager.are_entities_loaded(pos.chunk().pack())
+    level.chunks.get_chunk_now(pos.chunk()).is_some() && level.in_entity_ticking_range(pos.chunk()) && level.entity_manager.are_entities_loaded(pos.chunk().pack())
 }
 
 pub fn if_loaded(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Sources {

@@ -82,6 +82,13 @@ impl<V> ObjectOpenHashMap<V> {
         &mut self.slots[pos].as_mut().expect("slot").2
     }
 
+    pub fn try_capacity(&mut self, capacity: usize) {
+        let needed = array_size(capacity, DEFAULT_LOAD_FACTOR);
+        if needed > self.slots.len() {
+            self.rehash(needed);
+        }
+    }
+
     fn rehash(&mut self, new_n: usize) {
         let mask = new_n - 1;
         let mut new_slots = empty_slots::<V>(new_n);

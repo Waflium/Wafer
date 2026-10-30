@@ -39,7 +39,7 @@ impl PathNavigation {
     }
 
     pub fn ground_path_navigation_create_path(&mut self, level: &ServerLevel, mob: EntityId, mut pos: BlockPos, reach_range: i32) -> Option<Path> {
-        let chunk = level.chunks.loaded_chunk(pos.chunk())?;
+        let chunk = level.chunks.get_chunk_now(pos.chunk())?;
         if !self.can_path_to_targets_below_surface {
             pos = self.find_surface_position(level, chunk, pos);
         }
