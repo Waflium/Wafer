@@ -13,6 +13,7 @@ use crate::util::file_util;
 use crate::util::gson;
 use crate::util::java_nio::{self, java_io_error};
 use crate::util::worldupdate::upgrade_progress::{Status, Type, UpgradeProgress};
+use crate::world::level::chunk::storage::WRITE_COMPRESSED_PATH;
 use crate::world::level::storage::WorldData;
 use crate::world::level::storage::level_storage_source::LevelStorageAccess;
 
@@ -210,8 +211,10 @@ fn write_updated_level_data(world_folder: &CopyOnWriteFSPath, to_version: i32) -
     let mut fixed = DataFixTypes::Level.update(Dynamic::new(unfixed_data_tag), data_version, to_version);
     fixed = add_versions_to_level_data(fixed, to_version);
     let dynamic = fixed.empty_map().set("Data", fixed);
-    write_compressed(dynamic.get_value().expect("level data"), &level_dat_path)
+    write_compressed(dynamic.get_value().expect("level data"), &level_dat_path, &WRITE_UPDATED_LEVEL_DATA_CALLERS)
 }
+
+const WRITE_UPDATED_LEVEL_DATA_CALLERS: [&str; 3] = [WRITE_COMPRESSED_PATH[0], WRITE_COMPRESSED_PATH[1], "net.minecraft.util.filefix.FileFixerUpper.writeUpdatedLevelData(FileFixerUpper.java:245)"];
 
 fn add_versions_to_level_data(fixed: Dynamic, to_version: i32) -> Dynamic {
     let fixed = fixed.clone().set("DataVersion", fixed.create_int(to_version));

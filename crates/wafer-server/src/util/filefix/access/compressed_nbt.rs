@@ -8,9 +8,11 @@ use crate::datafixers::dynamic::Dynamic;
 use crate::util::filefix::virtualfilesystem::copy_on_write_fs_path::CopyOnWriteFSPath;
 use crate::util::filefix::virtualfilesystem::copy_on_write_fs_provider::OpenOptions;
 use crate::util::filefix::virtualfilesystem::files;
-use crate::world::level::chunk::storage::{decode_compressed_nbt, encode_nbt};
+use crate::world::level::chunk::storage::{WRITE_COMPRESSED_PATH, decode_compressed_nbt, encode_nbt};
 
 use super::AutoCloseable;
+
+const WRITE_FILE_CALLERS: [&str; 3] = [WRITE_COMPRESSED_PATH[0], WRITE_COMPRESSED_PATH[1], "net.minecraft.util.filefix.access.CompressedNbt.writeFile(CompressedNbt.java:62)"];
 
 pub fn read_compressed(path: &CopyOnWriteFSPath) -> io::Result<Nbt> {
     let mut input = files::new_input_stream(path)?;
@@ -19,9 +21,9 @@ pub fn read_compressed(path: &CopyOnWriteFSPath) -> io::Result<Nbt> {
     decode_compressed_nbt(&bytes).map_err(io::Error::other)
 }
 
-pub fn write_compressed(tag: &Nbt, path: &CopyOnWriteFSPath) -> io::Result<()> {
+pub fn write_compressed(tag: &Nbt, path: &CopyOnWriteFSPath, callers: &[&'static str]) -> io::Result<()> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(&encode_nbt(tag))?;
+    encoder.write_all(&encode_nbt(tag, callers))?;
     let bytes = encoder.finish()?;
     let mut out = files::new_output_stream(path, &OpenOptions::sync_output())?;
     out.write_all(&bytes)?;
@@ -73,7 +75,7 @@ impl CompressedNbt {
         };
         let result = (|| -> io::Result<()> {
             files::create_directories_safe(&self.path.get_parent().expect("parent"))?;
-            write_compressed(cast, &self.path)
+            write_compressed(cast, &self.path, &WRITE_FILE_CALLERS)
         })();
         if let Err(e) = result {
             error!("Failed to write to {}\n{e}", self.path);

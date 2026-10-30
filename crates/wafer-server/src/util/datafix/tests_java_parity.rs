@@ -91,7 +91,7 @@ fn buffet_options_that_parse_to_null_write_an_end_tag_like_vanilla() {
     for (input, snbt, expected_hex, loaded) in END_TAG_LEVELS {
         let level = update_value("level", 1505, 1506, input);
         assert_eq!(crate::nbt::to_string(&level), *snbt);
-        let bytes = encode_nbt(&level);
+        let bytes = encode_nbt(&level, &[]);
         assert_eq!(hex(&bytes), *expected_hex, "{input}");
         assert_eq!(crate::nbt::to_string(&decode_nbt(&bytes).unwrap()), *loaded, "{input}");
     }
@@ -101,7 +101,7 @@ fn buffet_options_that_parse_to_null_write_an_end_tag_like_vanilla() {
 fn an_end_tag_in_a_nested_compound_ends_the_parents_when_written() {
     let level = update_value("level", 1505, 5023, r#"{generatorName:"buffet",generatorOptions:"",LevelName:"w",RandomSeed:5L,A:1,B:2,C:3,D:4,E:5,F:6,G:7}"#);
     assert!(crate::nbt::to_string(&level).ends_with(r#"world_gen_settings:{RandomSeed:5L,generatorName:"buffet",generatorOptions:END}}"#));
-    let loaded = decode_nbt(&encode_nbt(&level)).unwrap();
+    let loaded = decode_nbt(&encode_nbt(&level, &[])).unwrap();
     assert_eq!(
         crate::nbt::to_string(&loaded),
         r#"{A:1,B:2,C:3,D:4,E:5,F:6,G:7,RandomSeed:5L,difficulty_settings:{difficulty:"normal",hardcore:0b,locked:0b},generatorName:"buffet",scheduled_events:{events:[]},spawn:{dimension:"minecraft:overworld",pitch:0.0f,pos:[I;0,0,0],yaw:0.0f},wandering_trader_migration_data:{spawn_chance:25,spawn_delay:24000},weather_data:{clear_weather_time:0,rain_time:0,raining:0b,thunder_time:0,thundering:0b},world_gen_settings:{}}"#
@@ -144,7 +144,7 @@ const SURROGATE_ENTITY_HEX: &str = "0a00000a000a437573746f6d4e616d65080004746578
 fn lone_surrogates_in_text_components_are_written_like_vanilla() {
     let entity = update_value("entity", 3817, 5023, r#"{id:"minecraft:pig",CustomName:'{"text":"a\\ud83d\\ude00 \\ud800"}'}"#);
     assert_eq!(escape_lone_surrogates(&crate::nbt::to_string(&entity)), "{CustomName:{text:\"a\u{1F600} \\ud800\"},id:\"minecraft:pig\"}");
-    assert_eq!(hex(&encode_nbt(&entity)), SURROGATE_ENTITY_HEX);
+    assert_eq!(hex(&encode_nbt(&entity, &[])), SURROGATE_ENTITY_HEX);
 }
 
 #[test]
@@ -152,5 +152,5 @@ fn lone_surrogates_are_read_back_from_nbt() {
     let bytes = unhex(SURROGATE_ENTITY_HEX);
     let entity = decode_nbt(&bytes).unwrap();
     assert_eq!(escape_lone_surrogates(&crate::nbt::to_string(&entity)), "{CustomName:{text:\"a\u{1F600} \\ud800\"},id:\"minecraft:pig\"}");
-    assert_eq!(encode_nbt(&entity), bytes);
+    assert_eq!(encode_nbt(&entity, &[]), bytes);
 }

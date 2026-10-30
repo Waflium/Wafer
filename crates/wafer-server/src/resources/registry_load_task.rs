@@ -101,11 +101,6 @@ const COMPLETION_EXCEPTION_FRAMES: [&str; 5] = [
     "java.base/java.util.concurrent.CompletableFuture$Completion.exec(CompletableFuture.java:504)",
 ];
 
-fn max_allowed_executor_threads() -> usize {
-    let processors = std::thread::available_parallelism().map_or(1, |count| count.get());
-    processors.saturating_sub(1).clamp(1, 255)
-}
-
 fn parallel_map_transform_frames(resource_count: usize) -> Vec<&'static str> {
     let mut frames = vec![LOAD_LAMBDA];
     if resource_count == 1 {
@@ -113,7 +108,7 @@ fn parallel_map_transform_frames(resource_count: usize) -> Vec<&'static str> {
         frames.extend(ASYNC_SUPPLY);
     } else {
         frames.push(APPLY_OPERATION);
-        if resource_count <= max_allowed_executor_threads() * 16 {
+        if resource_count <= crate::util::max_allowed_executor_threads() * 16 {
             frames.push(SINGLE_TASK_LAMBDA);
         } else {
             frames.push(BATCHED_TASK_LAMBDA);

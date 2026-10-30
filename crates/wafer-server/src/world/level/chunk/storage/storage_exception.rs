@@ -77,6 +77,11 @@ mod nio {
         "java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:371)",
         "java.base/java.nio.file.Files.newInputStream(Files.java:154)",
     ];
+    pub const NEW_OUTPUT_STREAM: [&str; 3] = [
+        "java.base/sun.nio.fs.WindowsFileSystemProvider.newByteChannel(WindowsFileSystemProvider.java:231)",
+        "java.base/java.nio.file.spi.FileSystemProvider.newOutputStream(FileSystemProvider.java:426)",
+        "java.base/java.nio.file.Files.newOutputStream(Files.java:215)",
+    ];
     pub const CREATE_DIRECTORIES: [&str; 4] = [
         "java.base/sun.nio.fs.WindowsFileSystemProvider.createDirectory(WindowsFileSystemProvider.java:503)",
         "java.base/java.nio.file.Files.createDirectory(Files.java:647)",
@@ -118,6 +123,11 @@ mod nio {
         "java.base/java.nio.file.Files.newByteChannel(Files.java:399)",
         "java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:371)",
         "java.base/java.nio.file.Files.newInputStream(Files.java:154)",
+    ];
+    pub const NEW_OUTPUT_STREAM: [&str; 3] = [
+        "java.base/sun.nio.fs.UnixFileSystemProvider.newByteChannel(UnixFileSystemProvider.java:261)",
+        "java.base/java.nio.file.spi.FileSystemProvider.newOutputStream(FileSystemProvider.java:426)",
+        "java.base/java.nio.file.Files.newOutputStream(Files.java:215)",
     ];
     pub const CREATE_DIRECTORIES: [&str; 4] = [
         "java.base/sun.nio.fs.UnixFileSystemProvider.createDirectory(UnixFileSystemProvider.java:418)",
@@ -190,6 +200,14 @@ pub fn new_input_stream_failure(error: io::Error, path: &Path) -> JavaThrowable 
     throwable
 }
 
+pub fn new_output_stream_failure(error: io::Error, path: &Path) -> JavaThrowable {
+    let frames = syscall_frames(&error);
+    let mut throwable = path_throwable(error, path);
+    throwable.stack_trace.extend(frames);
+    throwable.stack_trace.extend(nio::NEW_OUTPUT_STREAM);
+    throwable
+}
+
 fn path_throwable(error: io::Error, path: &Path) -> JavaThrowable {
     JavaThrowable::from_io_error(&crate::util::java_nio::for_path(error, Path::new(&java_path(path))))
 }
@@ -236,6 +254,13 @@ pub fn on_load_worker_uncaught(error: &io::Error) -> JavaThrowable {
 pub fn on_scan_worker(error: &io::Error) -> JavaThrowable {
     let [submit, schedule, run] = SUBMIT_THROWING_TASK;
     on_io_worker_thread(error, &[SCAN_CHUNK, submit, schedule, run])
+}
+
+pub fn store_worker_frames() -> Vec<&'static str> {
+    let mut frames = vec![RUN_STORE, STORE_PENDING_CHUNK, STRICT_QUEUE_RUN];
+    frames.extend(CONSECUTIVE_EXECUTOR_TAIL);
+    frames.extend(THREAD_TAIL);
+    frames
 }
 
 pub fn on_store_worker(error: &io::Error) -> JavaThrowable {

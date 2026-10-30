@@ -691,6 +691,7 @@ impl ServerLevel {
             if p.keep_alive_time.elapsed() >= KEEP_ALIVE_INTERVAL {
                 if p.keep_alive_challenge.is_some() {
                     p.disconnect("disconnect.timeout");
+                    p.disconnect_site = Some(crate::server::players::player_list::DisconnectSite::KeepConnectionAlive);
                 } else {
                     let challenge = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64;
                     p.keep_alive_challenge = Some(challenge);

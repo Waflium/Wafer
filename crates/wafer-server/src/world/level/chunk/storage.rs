@@ -76,11 +76,33 @@ pub fn decode_compressed_nbt(bytes: &[u8]) -> Result<Nbt, String> {
     decode_nbt(&decompressed).map_err(|e| format!("java.io.IOException: {e}"))
 }
 
-pub fn encode_nbt(nbt: &Nbt) -> Vec<u8> {
+const STRING_FALLBACK_WRITE_UTF: [&str; 4] = [
+    "java.base/java.io.DataOutputStream.writeUTF(DataOutputStream.java:370)",
+    "java.base/java.io.DataOutputStream.writeUTF(DataOutputStream.java:338)",
+    "net.minecraft.util.DelegateDataOutput.writeUTF(DelegateDataOutput.java:83)",
+    "net.minecraft.nbt.NbtIo$StringFallbackDataOutput.writeUTF(NbtIo.java:207)",
+];
+const NETWORK_WRITE_UTF_FRAMES: usize = 3;
+const NBT_IO_WRITE: [&str; 3] = [
+    "net.minecraft.nbt.NbtIo.writeUnnamedTag(NbtIo.java:168)",
+    "net.minecraft.nbt.NbtIo.writeUnnamedTagWithFallback(NbtIo.java:172)",
+    "net.minecraft.nbt.NbtIo.write(NbtIo.java:117)",
+];
+pub const WRITE_COMPRESSED_STREAM: &str = "net.minecraft.nbt.NbtIo.writeCompressed(NbtIo.java:78)";
+pub const WRITE_COMPRESSED_PATH: [&str; 2] = [WRITE_COMPRESSED_STREAM, "net.minecraft.nbt.NbtIo.writeCompressed(NbtIo.java:72)"];
+pub const REGION_FILE_STORAGE_WRITE: [&str; 1] = ["net.minecraft.world.level.chunk.storage.RegionFileStorage.write(RegionFileStorage.java:116)"];
+
+pub fn encode_nbt(nbt: &Nbt, callers: &[&'static str]) -> Vec<u8> {
     let mut w = Writer::new();
     nbt.write_named("", &mut w);
     for fault in w.faults() {
-        error!("Failed to write NBT String\n{}", fault.root().description);
+        let root = fault.root();
+        let mut frames = STRING_FALLBACK_WRITE_UTF.to_vec();
+        frames.extend_from_slice(&root.frames[NETWORK_WRITE_UTF_FRAMES..]);
+        frames.extend(NBT_IO_WRITE);
+        frames.extend_from_slice(callers);
+        frames.extend(crate::server::main_thread_frames::current());
+        error!("Failed to write NBT String\n{}", crate::util::java_throwable::JavaThrowable::new(root.description.clone(), frames).print_stack_trace().trim_end());
     }
     w.into_inner()
 }
@@ -301,8 +323,8 @@ impl RegionFile {
         Ok(Some((compression, data)))
     }
 
-    pub fn write(&mut self, pos: ChunkPos, nbt: &Nbt) -> io::Result<()> {
-        let compressed = self.version.compress(&encode_nbt(nbt))?;
+    pub fn write(&mut self, pos: ChunkPos, nbt: &Nbt, callers: &[&'static str]) -> io::Result<()> {
+        let compressed = self.version.compress(&encode_nbt(nbt, callers))?;
         let mut record = Vec::with_capacity(compressed.len() + 5);
         record.extend(((compressed.len() + 1) as u32).to_be_bytes());
         record.push(self.version.id());
@@ -445,7 +467,7 @@ impl RegionStorage {
     }
 
     pub fn write(&mut self, pos: ChunkPos, nbt: &Nbt) -> io::Result<()> {
-        self.region(pos, &storage_exception::WRITE_GET_REGION_FILE)?.write(pos, nbt)
+        self.region(pos, &storage_exception::WRITE_GET_REGION_FILE)?.write(pos, nbt, &REGION_FILE_STORAGE_WRITE)
     }
 
     pub fn clear(&mut self, pos: ChunkPos) -> io::Result<()> {

@@ -64,7 +64,7 @@ fn a_corrupted_file_is_backed_up_and_dat_old_is_loaded() {
 #[test]
 fn a_missing_file_falls_back_to_dat_old_without_a_backup() {
     let dir = world("player-data-missing");
-    write_compressed(&player_tag(5), &dir.root.join(format!("players/data/{}.dat_old", format_uuid(UUID)))).unwrap();
+    write_compressed(&player_tag(5), &dir.root.join(format!("players/data/{}.dat_old", format_uuid(UUID))), &[]).unwrap();
     assert_eq!(PlayerDataStorage::new(&dir).load("Steve", UUID).unwrap().get("XpLevel"), Some(&Nbt::Int(5)));
     assert_eq!(player_files(&dir), vec![format!("{}.dat_old", format_uuid(UUID))]);
     std::fs::remove_dir_all(dir.root).unwrap();
@@ -75,7 +75,7 @@ fn saved_data_may_be_uncompressed() {
     let dir = world("saved-data-uncompressed");
     let data = Nbt::Compound(vec![("DataVersion".into(), Nbt::Int(wafer_data::WORLD_VERSION)), ("data".into(), Nbt::Compound(vec![("value".into(), Nbt::Int(3))].into()))].into());
     let file = dir.data("weather");
-    std::fs::write(&file, encode_nbt(&data)).unwrap();
+    std::fs::write(&file, encode_nbt(&data, &[])).unwrap();
     let read = read_saved_data(&file, "main", "weather", DataFixTypes::SavedDataWeather, |data| DecodeResult::success(data.clone()));
     assert_eq!(read, Some(Nbt::Compound(vec![("value".into(), Nbt::Int(3))].into())));
     std::fs::remove_dir_all(dir.root).unwrap();
@@ -85,7 +85,7 @@ fn saved_data_may_be_uncompressed() {
 fn a_data_fixer_exception_is_an_error_instead_of_a_panic() {
     let dir = world("saved-data-fixer-exception");
     let file = dir.root.join("entities.dat");
-    write_compressed(&entity_chunk_with_broken_uuid(), &file).unwrap();
+    write_compressed(&entity_chunk_with_broken_uuid(), &file, &[]).unwrap();
     let error = read_tag_from_disk(&file, DataFixTypes::EntityChunk, wafer_data::WORLD_VERSION).unwrap_err();
     assert!(error.to_string().contains("Invalid UUID string: not a uuid"), "{error}");
     std::fs::remove_dir_all(dir.root).unwrap();

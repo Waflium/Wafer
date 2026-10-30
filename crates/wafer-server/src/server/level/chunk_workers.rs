@@ -132,6 +132,7 @@ impl IoWorker {
         thread::Builder::new()
             .name(next_io_worker_name())
             .spawn(move || {
+                let _frames = crate::server::main_thread_frames::enter_complete(storage_exception::store_worker_frames());
                 let mut reporting: Option<IoReporting> = None;
                 for request in incoming {
                     match request {

@@ -5,6 +5,14 @@ use wafer_protocol::nbt::Nbt;
 
 use super::{WorldDir, create_temp_file, format_uuid, read_compressed, write_compressed};
 use crate::util::datafix::data_fix_types::DataFixTypes;
+use crate::world::level::chunk::storage::WRITE_COMPRESSED_PATH;
+
+const SAVE_CALLERS: [&str; 4] = [
+    WRITE_COMPRESSED_PATH[0],
+    WRITE_COMPRESSED_PATH[1],
+    "net.minecraft.world.level.storage.PlayerDataStorage.save(PlayerDataStorage.java:41)",
+    "net.minecraft.server.players.PlayerList.save(PlayerList.java:310)",
+];
 
 pub struct PlayerDataStorage {
     player_dir: PathBuf,
@@ -19,7 +27,7 @@ impl PlayerDataStorage {
         let saved = (|| {
             let string_uuid = format_uuid(uuid);
             let tmp_file = create_temp_file(&self.player_dir, &format!("{string_uuid}-"), ".dat")?;
-            write_compressed(data_to_store, &tmp_file)?;
+            write_compressed(data_to_store, &tmp_file, &SAVE_CALLERS)?;
             let real_file = self.player_dir.join(format!("{string_uuid}.dat"));
             let old_file = self.player_dir.join(format!("{string_uuid}.dat_old"));
             crate::util::safe_replace_file(&real_file, &tmp_file, &old_file);

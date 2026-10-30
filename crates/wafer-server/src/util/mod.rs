@@ -84,6 +84,15 @@ pub fn is_catching_exception() -> bool {
     CATCHING_EXCEPTION.with(std::cell::Cell::get)
 }
 
+pub fn io_pool() -> &'static cached_thread_pool::CachedThreadPool {
+    static IO_POOL: std::sync::OnceLock<cached_thread_pool::CachedThreadPool> = std::sync::OnceLock::new();
+    IO_POOL.get_or_init(|| cached_thread_pool::CachedThreadPool::with_names(crate::server::level::chunk_workers::next_io_worker_name))
+}
+
+pub fn max_allowed_executor_threads() -> usize {
+    std::thread::available_parallelism().map_or(1, |count| count.get()).saturating_sub(1).clamp(1, 255)
+}
+
 pub fn catch_exception<T>(function: impl FnOnce() -> T) -> Result<T, String> {
     let outer = CATCHING_EXCEPTION.with(|catching| catching.replace(true));
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(function));

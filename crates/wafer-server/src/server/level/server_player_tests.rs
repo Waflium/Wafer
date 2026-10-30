@@ -175,7 +175,7 @@ fn logging_out_unloads_the_owners_pearls() {
     run(&mut server, "execute in minecraft:the_nether run tp Alice 0.5 128 0.5");
     let pearl = summon_pearl(&mut server, 0, offline_uuid("Alice"), [0.5, -58.0, 0.5], [0.0, 0.0, 0.0]);
     let other = summon_pearl(&mut server, 0, 7, [0.5, -58.0, 0.5], [0.0, 0.0, 0.0]);
-    server.remove_player(0, None);
+    server.remove_player(0, None, None);
     assert!(server.levels[0].entity_ref(pearl).is_none());
     assert!(server.levels[0].entity_ref(other).is_some());
 }

@@ -77,7 +77,7 @@ use crate::world::level::saveddata::weather_data::WeatherDataCell;
 use game_mode::GameType;
 use crate::world::level::saveddata::maps::map_id::MapId;
 use crate::world::level::saveddata::maps::map_item_saved_data::MapItemSavedData;
-use crate::world::level::storage::saved_data_storage::SavedDataStorage;
+use crate::world::level::storage::saved_data_storage::{SavedDataStorage, SavedDataWrites, collect_dirty_tags_to_save};
 use crate::world::level::storage::{WorldDir, read_saved_data_dat, write_dat};
 use wafer_protocol::nbt::Nbt;
 use crate::world::tick_rate_manager::TickRateManager;
@@ -177,6 +177,7 @@ pub struct ServerLevel {
     pub command_storage: Rc<RefCell<crate::world::level::storage::command_storage::CommandStorage>>,
     pub random_sequences: Rc<RefCell<crate::world::random_sequences::RandomSequences>>,
     pub server_data_storage: Rc<RefCell<SavedDataStorage>>,
+    saved_data_writes: SavedDataWrites,
     pub game_rules: GameRules,
     pub enabled_features: FeatureFlagSet,
     pub spawn_protection: SpawnProtection,
@@ -290,6 +291,7 @@ impl ServerLevel {
             command_storage: Rc::new(RefCell::new(crate::world::level::storage::command_storage::CommandStorage::new(None))),
             random_sequences: Rc::new(RefCell::new(crate::world::random_sequences::RandomSequences::load(None))),
             server_data_storage: Rc::new(RefCell::new(SavedDataStorage::new(None))),
+            saved_data_writes: SavedDataWrites::default(),
             game_rules: GameRules::default(),
             enabled_features: FeatureFlagSet::DEFAULT_FLAGS,
             difficulty: crate::world::difficulty::Difficulty::Easy,
@@ -396,7 +398,7 @@ impl ServerLevel {
         }
         {
             let _scope = crate::server::main_thread_frames::enter(["net.minecraft.server.level.ServerLevel.save(ServerLevel.java:917)"]);
-            self.save_level_data(dir);
+            self.save_level_data(dir, flush);
         }
         let _scope = crate::server::main_thread_frames::enter(["net.minecraft.server.level.ServerLevel.save(ServerLevel.java:922)"]);
         if flush {
@@ -415,7 +417,16 @@ impl ServerLevel {
         }
     }
 
-    fn save_level_data(&mut self, dir: &WorldDir) {
+    fn save_level_data(&mut self, dir: &WorldDir, sync: bool) {
+        let tags_to_save = collect_dirty_tags_to_save(|| self.collect_level_data(dir));
+        if sync {
+            self.saved_data_writes.save_and_join(tags_to_save);
+        } else {
+            self.saved_data_writes.schedule_save(tags_to_save);
+        }
+    }
+
+    fn collect_level_data(&mut self, dir: &WorldDir) {
         crate::server::log_save_failure("world_border.dat", self.world_border.save());
         crate::server::log_save_failure("raids.dat", self.raids.save());
         if let Some(fight) = &mut self.dragon_fight {
@@ -1406,9 +1417,12 @@ impl ServerLevel {
     }
 
     pub fn close(&mut self) {
-        if self.world_border.save().is_err() {
-            error!("Could not save data to world_border.dat");
-        }
+        let tags_to_save = collect_dirty_tags_to_save(|| {
+            if self.world_border.save().is_err() {
+                error!("Could not save data to world_border.dat");
+            }
+        });
+        self.saved_data_writes.save_and_join(tags_to_save);
         if self.chunks.save(self.game_time, true).is_err() {
             warn!("Failed to synchronize chunks");
         }

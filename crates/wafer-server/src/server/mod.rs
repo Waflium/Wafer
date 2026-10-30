@@ -58,6 +58,7 @@ use crate::{LevelType, ServerConfig};
 use crate::commands::arguments::selector::entity_world::EntityWorld;
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{ChatFormatting, Component, player_joined_or_left};
+use crate::world::level::storage::saved_data_storage::{SavedDataWrites, collect_dirty_tags_to_save};
 use crate::network::configuration::{ChatVisibility, CommonListenerCookie};
 use crate::network::server_status::Favicon;
 use crate::network::connection::{Outbound, Packet};
@@ -267,6 +268,7 @@ pub struct Server {
     aggregated_tick_times_nanos: i64,
     smoothed_tick_time_millis: f32,
     pending_logins: Vec<PendingLogin>,
+    saved_data_writes: SavedDataWrites,
     login_disconnections_to_report: usize,
     prepare_spawn_tasks: Vec<PrepareSpawnTask>,
     tasks: VecDeque<Task>,
@@ -533,6 +535,7 @@ impl Server {
             aggregated_tick_times_nanos: 0,
             smoothed_tick_time_millis: 0.0,
             pending_logins: Vec::new(),
+            saved_data_writes: SavedDataWrites::default(),
             login_disconnections_to_report: 0,
             prepare_spawn_tasks: Vec::new(),
             tasks: VecDeque::new(),
@@ -905,8 +908,11 @@ impl Server {
 
     pub fn save_everything(&mut self, silent: bool, flush: bool, force: bool) -> bool {
         self.flush_other_level_ender_pearls();
-        for player in self.players() {
-            self.save_player(player);
+        {
+            let _scope = main_thread_frames::enter(players::player_list::SAVE_EVERYTHING_SAVE_ALL);
+            for player in self.players() {
+                self.save_player(player);
+            }
         }
         let result = {
             let _scope = main_thread_frames::enter(["net.minecraft.server.MinecraftServer.saveEverything(MinecraftServer.java:631)"]);
@@ -968,16 +974,24 @@ impl Server {
         self.clocks.dirty = false;
         self.weather.set_dirty(false);
         self.game_rules.set_dirty(false);
-        if data.save(dir, &self.world_gen_settings, dirty).is_err() {
+        if data.save_level_data(dir).is_err() {
             error!("Failed to save level {}", dir.root.display());
         }
-        log_save_failure("command_storage.dat", self.command_storage.borrow_mut().save());
-        log_save_failure("random_sequences.dat", self.random_sequences.borrow_mut().save());
-        log_save_failure("scheduled_events.dat", self.scheduled_events.save());
-        log_save_failure("custom_boss_events.dat", self.custom_boss_events.save());
-        log_save_failure("stopwatches.dat", self.stopwatches.save());
-        log_save_failure("scoreboard.dat", self.scoreboard_save_data.save());
-        self.data_storage.borrow_mut().save();
+        let tags_to_save = collect_dirty_tags_to_save(|| {
+            data.save_saved_data(dir, &self.world_gen_settings, dirty);
+            log_save_failure("command_storage.dat", self.command_storage.borrow_mut().save());
+            log_save_failure("random_sequences.dat", self.random_sequences.borrow_mut().save());
+            log_save_failure("scheduled_events.dat", self.scheduled_events.save());
+            log_save_failure("custom_boss_events.dat", self.custom_boss_events.save());
+            log_save_failure("stopwatches.dat", self.stopwatches.save());
+            log_save_failure("scoreboard.dat", self.scoreboard_save_data.save());
+            self.data_storage.borrow_mut().save();
+        });
+        if flush {
+            self.saved_data_writes.save_and_join(tags_to_save);
+        } else {
+            self.saved_data_writes.schedule_save(tags_to_save);
+        }
         true
     }
 
@@ -992,10 +1006,15 @@ impl Server {
         }
     }
 
-    fn auto_save(&mut self) {
+    fn auto_save(&mut self, tick_server: &'static str) {
         self.ticks_until_autosave = self.compute_next_autosave_interval();
         profiler::push("save");
-        self.save_everything(true, false, false);
+        {
+            let mut frames = vec![AUTO_SAVE_SAVE_EVERYTHING, tick_server];
+            frames.extend(&command_frames::TICK_LOOP[1..]);
+            let _scope = main_thread_frames::enter_complete(frames);
+            self.save_everything(true, false, false);
+        }
         profiler::pop();
     }
 
@@ -1048,8 +1067,11 @@ impl Server {
         info!("Stopping server");
         info!("Saving players");
         self.flush_other_level_ender_pearls();
-        for player in self.players() {
-            self.save_player(player);
+        {
+            let _scope = main_thread_frames::enter_complete(players::player_list::stop_server_save_all_frames());
+            for player in self.players() {
+                self.save_player(player);
+            }
         }
         self.remove_all();
         info!("Saving worlds");
@@ -1068,6 +1090,7 @@ impl Server {
         for level in &mut self.levels {
             level.close();
         }
+        crate::util::io_pool().await_tasks(Duration::from_secs(3));
     }
 
     pub fn modify_clock(&mut self, clock: usize) {
@@ -1187,7 +1210,7 @@ impl Server {
                 self.entity_level_mut(id).entity_moved(id);
                 self.send_global_level_events();
                 if self.player(id).disconnected {
-                    self.remove_player(conn, None);
+                    self.remove_player(conn, None, None);
                 }
             }
             Event::Left { conn, reason } => {
@@ -1593,6 +1616,7 @@ impl Server {
         let player = self.player_mut(id);
         if timeout > 0 && player.last_action_time.elapsed() > Duration::from_secs(timeout as u64 * 60) && !player.won_game {
             player.disconnect("multiplayer.disconnect.idling");
+            player.disconnect_site = Some(crate::server::players::player_list::DisconnectSite::Idle);
             return true;
         }
         false
@@ -1704,13 +1728,13 @@ impl Server {
         while let Some(&id) = self.player_list.get(i) {
             self.player_mut(id).disconnect("multiplayer.disconnect.server_shutdown");
             if let Some(conn) = self.connections.iter().find_map(|(&conn, &player)| (player == id).then_some(conn)) {
-                self.remove_player(conn, None);
+                self.remove_player(conn, None, Some(players::player_list::DisconnectSite::RemoveAll));
             }
             i += 1;
         }
     }
 
-    fn remove_player(&mut self, conn: ConnId, reason: Option<Component>) {
+    fn remove_player(&mut self, conn: ConnId, reason: Option<Component>, site: Option<players::player_list::DisconnectSite>) {
         self.lost_connections.remove(&conn);
         let Some(id) = self.connections.remove(&conn) else { return };
         let Some(level_index) = self.level_of(id) else { return };
@@ -1753,7 +1777,11 @@ impl Server {
         self.scoreboard.borrow_mut().server.remove_connection(id);
         self.update_player_names_array();
         self.custom_boss_events.on_player_disconnect(id);
-        self.save_player_data(&saved, &player);
+        {
+            let site = site.or(player.disconnect_site).unwrap_or(players::player_list::DisconnectSite::LostConnection);
+            let _scope = main_thread_frames::enter_complete(site.remove_frames());
+            self.save_player_data(&saved, &player);
+        }
         self.notification_manager.player_left(&NameAndId { id: player.profile.uuid, name: player.profile.name.clone() });
         for other in self.players() {
             other.connection.send(clientbound::PLAYER_INFO_REMOVE, |p| {
@@ -1787,7 +1815,7 @@ impl Server {
             if self.empty_ticks >= empty_tick_threshold {
                 if self.empty_ticks == empty_tick_threshold {
                     info!("Server empty for {} seconds, pausing", self.config.pause_when_empty_seconds);
-                    self.auto_save();
+                    self.auto_save(TICK_SERVER_PAUSED_AUTO_SAVE);
                 }
                 self.tick_logins();
                 self.tick_prepare_spawns();
@@ -1840,7 +1868,7 @@ impl Server {
                 && let Some(conn) = self.connections.iter().find(|&(_, &p)| p == id).map(|(&c, _)| c)
                 && let Some(reason) = self.lost_connections.remove(&conn)
             {
-                self.remove_player(conn, Some(reason));
+                self.remove_player(conn, Some(reason), None);
                 continue;
             }
             let ticked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -1870,7 +1898,7 @@ impl Server {
             if !connected || self.kick_if_idle(id) || self.tick_second(id) {
                 let conn = self.connections.iter().find(|&(_, &p)| p == id).map(|(&c, _)| c);
                 if let Some(conn) = conn {
-                    self.remove_player(conn, None);
+                    self.remove_player(conn, None, None);
                 }
             }
         }
@@ -1898,7 +1926,7 @@ impl Server {
         }
         self.ticks_until_autosave -= 1;
         if self.ticks_until_autosave <= 0 {
-            self.auto_save();
+            self.auto_save(TICK_SERVER_AUTO_SAVE);
         }
         profiler::push("tallying");
         let tick_time = start.elapsed().as_nanos() as i64;
@@ -2459,6 +2487,10 @@ const CONNECTION_TICK_FRAMES: [&str; 7] = [
     "net.minecraft.server.dedicated.DedicatedServer.tickConnection(DedicatedServer.java:401)",
     "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1127)",
 ];
+
+const AUTO_SAVE_SAVE_EVERYTHING: &str = "net.minecraft.server.MinecraftServer.autoSave(MinecraftServer.java:1023)";
+const TICK_SERVER_AUTO_SAVE: &str = "net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:989)";
+const TICK_SERVER_PAUSED_AUTO_SAVE: &str = "net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:969)";
 
 pub(crate) const RUN_SERVER_INITIALIZE_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:774)";
 pub(crate) const RUN_SERVER_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)";

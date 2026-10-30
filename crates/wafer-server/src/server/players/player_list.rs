@@ -4,6 +4,7 @@ use crate::commands::arguments::selector::entity_selector::java_equals_ignore_ca
 use crate::network::chat::Component;
 use crate::network::login::Profile;
 use crate::server::Server;
+use crate::server::command_frames::{SPIN, TICK_LOOP};
 use crate::server::level::ServerLevel;
 use crate::server::player_advancements::PlayerAdvancements;
 use crate::server::server_advancement_manager::ServerAdvancementManager;
@@ -11,6 +12,81 @@ use crate::stats::server_stats_counter::ServerStatsCounter;
 use crate::util::file_util;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::{WorldDir, format_uuid};
+
+pub const SAVE_ALL: &str = "net.minecraft.server.players.PlayerList.saveAll(PlayerList.java:647)";
+pub const SAVE_EVERYTHING_SAVE_ALL: [&str; 2] = [SAVE_ALL, "net.minecraft.server.MinecraftServer.saveEverything(MinecraftServer.java:630)"];
+const STOP_SERVER_TAIL: [&str; 2] = [
+    "net.minecraft.server.dedicated.DedicatedServer.stopServer(DedicatedServer.java:705)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:793)",
+];
+const REMOVE: [&str; 4] = [
+    "net.minecraft.server.players.PlayerList.remove(PlayerList.java:324)",
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.removePlayerFromWorld(ServerGamePacketListenerImpl.java:1648)",
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.onDisconnect(ServerGamePacketListenerImpl.java:1637)",
+    "net.minecraft.network.Connection.handleDisconnection(Connection.java:638)",
+];
+const DISCONNECT_BLOCKING: [&str; 3] = [
+    "net.minecraft.util.thread.BlockableEventLoop.executeBlocking(BlockableEventLoop.java:98)",
+    "net.minecraft.server.network.ServerCommonPacketListenerImpl.disconnect(ServerCommonPacketListenerImpl.java:187)",
+    "net.minecraft.server.network.ServerCommonPacketListenerImpl.disconnect(ServerCommonPacketListenerImpl.java:181)",
+];
+const TICK_CONNECTION: [&str; 3] = [
+    "net.minecraft.server.MinecraftServer.tickConnection(MinecraftServer.java:1158)",
+    "net.minecraft.server.dedicated.DedicatedServer.tickConnection(DedicatedServer.java:401)",
+    "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1127)",
+];
+const CONNECTION_TICK: [&str; 2] = [
+    "net.minecraft.network.Connection.tick(Connection.java:368)",
+    "net.minecraft.server.network.ServerConnectionListener.tick(ServerConnectionListener.java:175)",
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DisconnectSite {
+    LostConnection,
+    Idle,
+    KeepConnectionAlive,
+    RemoveAll,
+}
+
+impl DisconnectSite {
+    pub fn remove_frames(self) -> Vec<&'static str> {
+        let mut frames = REMOVE.to_vec();
+        match self {
+            DisconnectSite::LostConnection => {
+                frames.push("net.minecraft.server.network.ServerConnectionListener.tick(ServerConnectionListener.java:188)");
+                frames.extend(TICK_CONNECTION);
+                frames.extend(TICK_LOOP);
+            }
+            DisconnectSite::Idle | DisconnectSite::KeepConnectionAlive => {
+                frames.extend(DISCONNECT_BLOCKING);
+                if self == DisconnectSite::KeepConnectionAlive {
+                    frames.push("net.minecraft.server.network.ServerCommonPacketListenerImpl.keepConnectionAlive(ServerCommonPacketListenerImpl.java:129)");
+                    frames.push("net.minecraft.server.network.ServerGamePacketListenerImpl.tick(ServerGamePacketListenerImpl.java:324)");
+                } else {
+                    frames.push("net.minecraft.server.network.ServerGamePacketListenerImpl.tick(ServerGamePacketListenerImpl.java:336)");
+                }
+                frames.extend(CONNECTION_TICK);
+                frames.extend(TICK_CONNECTION);
+                frames.extend(TICK_LOOP);
+            }
+            DisconnectSite::RemoveAll => {
+                frames.extend(DISCONNECT_BLOCKING);
+                frames.push("net.minecraft.server.players.PlayerList.removeAll(PlayerList.java:731)");
+                frames.push("net.minecraft.server.MinecraftServer.stopServer(MinecraftServer.java:657)");
+                frames.extend(STOP_SERVER_TAIL);
+                frames.extend(SPIN);
+            }
+        }
+        frames
+    }
+}
+
+pub fn stop_server_save_all_frames() -> Vec<&'static str> {
+    let mut frames = vec![SAVE_ALL, "net.minecraft.server.MinecraftServer.stopServer(MinecraftServer.java:656)"];
+    frames.extend(STOP_SERVER_TAIL);
+    frames.extend(SPIN);
+    frames
+}
 
 impl Server {
     pub fn get_player_stats(&self, profile: &Profile) -> ServerStatsCounter {

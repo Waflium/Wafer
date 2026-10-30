@@ -13,7 +13,7 @@ use crate::util::filefix::virtualfilesystem::copy_on_write_fs_provider::OpenOpti
 use crate::util::filefix::virtualfilesystem::files;
 use crate::world::level::chunk::storage::region_storage_info::RegionStorageInfo;
 use crate::world::level::chunk::storage::simple_region_storage::upgrade_chunk_tag;
-use crate::world::level::chunk::storage::{ExternalChunkFiles, RegionFile};
+use crate::world::level::chunk::storage::{ExternalChunkFiles, REGION_FILE_STORAGE_WRITE, RegionFile};
 
 use super::AutoCloseable;
 
@@ -96,7 +96,8 @@ impl CowRegionFileStorage {
 
     fn write(&mut self, pos: ChunkPos, value: &Nbt) -> io::Result<()> {
         let region = self.get_region_file(pos, true)?.expect("created region file");
-        region.write(pos, value)
+        let _frames = crate::server::main_thread_frames::enter_complete(crate::world::level::chunk::storage::storage_exception::store_worker_frames());
+        region.write(pos, value, &REGION_FILE_STORAGE_WRITE)
     }
 
     fn close(&mut self) -> io::Result<()> {

@@ -390,7 +390,7 @@ fn a_corrupt_chunk_fails_the_upgrade_with_a_completion_exception() {
     std::fs::create_dir_all(world.join("region")).unwrap();
     let region_path = world.join("region/r.0.0.mca");
     let mut region = RegionFile::open(&region_path, false).unwrap();
-    region.write(ChunkPos::new(0, 0), &crate::nbt::parse_fully("{DataVersion:1343,Level:{xPos:0,zPos:0}}").unwrap()).unwrap();
+    region.write(ChunkPos::new(0, 0), &crate::nbt::parse_fully("{DataVersion:1343,Level:{xPos:0,zPos:0}}").unwrap(), &[]).unwrap();
     region.close().unwrap();
     drop(region);
     let mut file = std::fs::OpenOptions::new().read(true).write(true).open(&region_path).unwrap();

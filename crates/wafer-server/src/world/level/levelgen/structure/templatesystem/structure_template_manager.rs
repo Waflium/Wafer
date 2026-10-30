@@ -12,7 +12,7 @@ use crate::server::packs::Resource;
 use crate::server::packs::repository::{PackRepository, VANILLA_ID};
 use crate::server::packs::resources::MultiPackResourceManager;
 use crate::util::file_util;
-use crate::world::level::chunk::storage::{decode_nbt, encode_nbt};
+use crate::world::level::chunk::storage::{WRITE_COMPRESSED_STREAM, decode_nbt, encode_nbt};
 
 const STRUCTURE_DIRECTORY: &str = "structure";
 const STRUCTURE_FILE_EXTENSION: &str = ".nbt";
@@ -145,11 +145,13 @@ fn create_and_validate_path_to_structure(source_dir: &Path, id: &str) -> Option<
     Some(decomposed_path.iter().fold(source_dir.join(namespace), |path, part| path.join(part)))
 }
 
+const SAVE_CALLERS: [&str; 2] = [WRITE_COMPRESSED_STREAM, "net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager.save(StructureTemplateManager.java:155)"];
+
 fn save_to(file: &Path, template: &StructureTemplate) -> std::io::Result<bool> {
     let Some(parent) = file.parent() else { return Ok(false) };
     file_util::create_directories_safe(parent)?;
     let mut output = GzEncoder::new(std::fs::File::create(file)?, Compression::default());
-    output.write_all(&encode_nbt(&template.save()))?;
+    output.write_all(&encode_nbt(&template.save(), &SAVE_CALLERS))?;
     output.finish()?;
     Ok(true)
 }

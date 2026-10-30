@@ -2,6 +2,12 @@ use crate::commands::brigadier::{CommandContext, CommandSyntaxException, SimpleC
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::Component;
 use crate::server::Server;
+use crate::server::command_frames::command_frames;
+use crate::server::main_thread_frames;
+
+const SAVE_ALL_SAVE_EVERYTHING: &str = "net.minecraft.server.commands.SaveAllCommand.saveAll(SaveAllCommand.java:32)";
+const REGISTER: &str = "net.minecraft.server.commands.SaveAllCommand.lambda$register$0(SaveAllCommand.java:20)";
+const REGISTER_FLUSH: &str = "net.minecraft.server.commands.SaveAllCommand.lambda$register$1(SaveAllCommand.java:23)";
 
 static ERROR_FAILED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.save.failed");
 static ERROR_ALREADY_ON: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.save.alreadyOn");
@@ -9,7 +15,13 @@ static ERROR_ALREADY_OFF: SimpleCommandExceptionType = SimpleCommandExceptionTyp
 
 fn save(server: &mut Server, source: &CommandSourceStack, flush: bool) -> Result<i32, CommandSyntaxException> {
     source.send_success(server, || Component::translatable("commands.save.saving"), false);
-    if !server.save_everything(true, flush, true) {
+    let mut frames = vec![SAVE_ALL_SAVE_EVERYTHING, if flush { REGISTER_FLUSH } else { REGISTER }];
+    frames.extend(command_frames(server.command_origin));
+    let saved = {
+        let _scope = main_thread_frames::enter_complete(frames);
+        server.save_everything(true, flush, true)
+    };
+    if !saved {
         return Err(ERROR_FAILED.create());
     }
     source.send_success(server, || Component::translatable("commands.save.success"), true);

@@ -29,7 +29,7 @@ use crate::util::extra_codecs;
 use crate::server::log_save_failure;
 use crate::world::difficulty::Difficulty;
 use crate::util::java_throwable::JavaThrowable;
-use crate::world::level::chunk::storage::{decode_nbt, encode_nbt};
+use crate::world::level::chunk::storage::{WRITE_COMPRESSED_PATH, decode_nbt, encode_nbt, storage_exception};
 use crate::util::lifecycle::Lifecycle;
 use crate::world::level::levelgen::world_dimensions::SpecialWorldProperty;
 use crate::world::level::levelgen::world_gen_settings::WorldGenSettings;
@@ -96,12 +96,11 @@ pub fn read_saved_data<T>(file: &Path, thread: &str, id: &str, data_fix_type: Da
 }
 
 pub fn write_dat(path: &Path, nbt: &Nbt) -> io::Result<()> {
+    if saved_data_storage::collect_dirty_tag(path, nbt) {
+        return Ok(());
+    }
     fs::create_dir_all(path.parent().unwrap())?;
-    let tmp = path.with_extension("dat_tmp");
-    let mut gz = GzEncoder::new(File::create(&tmp)?, Compression::default());
-    gz.write_all(&encode_nbt(nbt))?;
-    gz.finish()?.sync_all()?;
-    fs::rename(tmp, path)
+    write_compressed(nbt, path, &[])
 }
 
 const READ_LEVEL_DATA_TAG_RAW: &str = "net.minecraft.world.level.storage.LevelStorageSource.readLevelDataTagRaw(LevelStorageSource.java:269)";
@@ -132,9 +131,19 @@ pub(crate) fn read_compressed(file: &Path) -> io::Result<Nbt> {
     decode_nbt(&bytes)
 }
 
-pub(crate) fn write_compressed(tag: &Nbt, file: &Path) -> io::Result<()> {
-    let mut gz = GzEncoder::new(fs::OpenOptions::new().write(true).create(true).truncate(true).open(file)?, Compression::default());
-    gz.write_all(&encode_nbt(tag))?;
+const WRITE_COMPRESSED_OPEN: &str = "net.minecraft.nbt.NbtIo.writeCompressed(NbtIo.java:70)";
+
+pub(crate) fn write_compressed(tag: &Nbt, file: &Path, callers: &[&'static str]) -> io::Result<()> {
+    let output = fs::OpenOptions::new().write(true).create(true).truncate(true).open(file).map_err(|error| {
+        let kind = error.kind();
+        let mut throwable = storage_exception::new_output_stream_failure(error, file);
+        throwable.stack_trace.push(WRITE_COMPRESSED_OPEN);
+        throwable.stack_trace.extend_from_slice(callers.get(WRITE_COMPRESSED_PATH.len()..).unwrap_or_default());
+        throwable.stack_trace.extend(crate::server::main_thread_frames::current());
+        io::Error::new(kind, throwable)
+    })?;
+    let mut gz = GzEncoder::new(output, Compression::default());
+    gz.write_all(&encode_nbt(tag, callers))?;
     gz.finish()?.sync_all()
 }
 
@@ -149,10 +158,12 @@ pub(crate) fn create_temp_file(dir: &Path, prefix: &str, suffix: &str) -> io::Re
     }
 }
 
+const SAVE_LEVEL_DATA_CALLERS: [&str; 3] = [WRITE_COMPRESSED_PATH[0], WRITE_COMPRESSED_PATH[1], "net.minecraft.world.level.storage.LevelStorageSource$LevelStorageAccess.saveLevelData(LevelStorageSource.java:546)"];
+
 fn save_level_dat(dir: &WorldDir, root: &Nbt) -> io::Result<()> {
     fs::create_dir_all(&dir.root)?;
     let data_file = create_temp_file(&dir.root, "level", ".dat")?;
-    write_compressed(root, &data_file)?;
+    write_compressed(root, &data_file, &SAVE_LEVEL_DATA_CALLERS)?;
     crate::util::safe_replace_file(&dir.level_dat(), &data_file, &dir.old_level_dat());
     Ok(())
 }
@@ -450,12 +461,6 @@ impl WorldData {
             allow_commands: level.get("allowCommands").and_then(Nbt::as_i64).map_or(game_type == GameType::Creative, |v| v != 0),
             singleplayer_uuid: level.get("singleplayer_uuid").filter(|uuid| crate::world::entity::entity_save::decode_uuid(uuid).into_result().is_ok()).cloned(),
         }
-    }
-
-    pub fn save(&self, dir: &WorldDir, gen_settings: &WorldGenSettings, dirty: DirtySavedData) -> io::Result<()> {
-        let level_data = self.save_level_data(dir);
-        self.save_saved_data(dir, gen_settings, dirty);
-        level_data
     }
 
     pub fn save_level_data(&self, dir: &WorldDir) -> io::Result<()> {
