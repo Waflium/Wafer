@@ -235,6 +235,10 @@ impl WorldDir {
     pub fn data_folder(&self) -> PathBuf {
         self.root.join("data")
     }
+    pub fn dimension_path(&self, dimension: &str) -> PathBuf {
+        let (ns, path) = dimension.split_once(':').unwrap();
+        self.root.join("dimensions").join(ns).join(path)
+    }
     pub fn regions(&self, dimension: &str) -> PathBuf {
         let (ns, path) = dimension.split_once(':').unwrap();
         self.root.join("dimensions").join(ns).join(path).join("region")

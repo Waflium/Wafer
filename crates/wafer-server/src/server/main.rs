@@ -28,6 +28,7 @@ use crate::util::datafix::data_fixers::get_file_fixer;
 use crate::util::java_integer::parse_int;
 use crate::util::java_throwable::JavaThrowable;
 use crate::util::worldupdate::upgrade_progress::UpgradeProgress;
+use crate::util::worldupdate::world_upgrader::WorldUpgrader;
 use super::notifications::NotificationManager;
 use crate::{Listen, ServerConfig, serve_world};
 
@@ -164,6 +165,7 @@ fn start(args: Vec<String>) {
         let _main = crate::util::java_stack::enter("net.minecraft.server.Main.main(Main.java:104)");
         crate::crash_report::preload();
     }
+    crate::network::chat::load_language();
     if options.has("jfrProfile") {
         crate::util::profiling::jfr::jfr_profiler::INSTANCE.start();
     }
@@ -305,6 +307,10 @@ fn start(args: Vec<String>) {
     data_packs.update_components_and_static_registry_tags();
     data_packs.finalize_recipe_loading();
     crate::world::level::levelgen::structure::templatesystem::structure_template_manager::on_resource_manager_reload(&resource_manager);
+    let recreate_region_files = options.has("recreateRegionFiles");
+    if options.has("forceUpgrade") || recreate_region_files {
+        force_upgrade(world_dir.root.clone(),&dimensions.dimensions, options.has("eraseCache"), recreate_region_files);
+    }
     if let Err(e) = world_data.save_level_data(&world_dir) {
         error!("Failed to save level {}\n{e}", world_dir.root.display());
     }
@@ -331,6 +337,30 @@ fn start(args: Vec<String>) {
     runtime.shutdown_background();
     if let Some(management_runtime) = management_runtime {
         management_runtime.shutdown_background();
+    }
+}
+
+fn force_upgrade(
+    level_directory: PathBuf,
+    dimensions: &[(String, crate::world::level::dimension::level_stem::LevelStem)],
+    erase_cache: bool,
+    recreate_region_files: bool,
+) {
+    info!("Forcing world upgrade!");
+    let upgrader = WorldUpgrader::new(level_directory, dimensions, erase_cache, recreate_region_files);
+    let mut last_status = None;
+    while !upgrader.is_finished() {
+        let status = upgrader.get_status();
+        if last_status != Some(status) {
+            last_status = Some(status);
+            info!("{}", upgrader.get_status().component().get_string());
+        }
+        let total_chunks = upgrader.get_total_chunks();
+        if total_chunks > 0 {
+            let done = upgrader.get_converted() + upgrader.get_skipped();
+            info!("{}% completed ({} / {} chunks)...", (done as f32 / total_chunks as f32 * 100.0f32).floor() as i32, done, total_chunks);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 }
 

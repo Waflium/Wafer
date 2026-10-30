@@ -707,6 +707,10 @@ fn apply_deprecated_translations(translations: &mut HashMap<String, String>) {
     }
 }
 
+pub fn load_language() {
+    language();
+}
+
 fn language() -> &'static HashMap<String, String> {
     static LANGUAGE: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
         let mut translations = serde_json::from_str(wafer_data::LANGUAGE_EN_US).expect("en_us.json");

@@ -86,6 +86,12 @@ impl TagMap {
         TagMap { entries, capacity: if size == 0 { 0 } else { table_size_for_copy(size) as u32 } }
     }
 
+    pub fn remove_key(&mut self, key: &str) -> Option<Nbt> {
+        self.capacity = self.table_capacity() as u32;
+        let index = self.entries.iter().position(|(k, _)| k == key)?;
+        Some(self.entries.remove(index).1)
+    }
+
     pub fn put(&mut self, key: &str, value: Nbt) {
         match self.entries.iter_mut().find(|(k, _)| k == key) {
             Some((_, slot)) => *slot = value,
@@ -508,6 +514,21 @@ mod tests {
         let copy = fields.shallow_copy().copy();
         assert_eq!(copy.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), ["Owner", "SkullOwner", "id"]);
         assert_eq!(copy.table_capacity(), 16);
+    }
+
+    #[test]
+    fn removed_keys_keep_the_grown_table_capacity() {
+        let mut fields = TagMap::new();
+        for i in 0..13 {
+            fields.put(&format!("k{i}"), Nbt::Byte(0));
+        }
+        assert!(fields.remove_key("k0").is_some());
+        assert!(fields.remove_key("k0").is_none());
+        for i in 1..5 {
+            fields.remove_key(&format!("k{i}"));
+        }
+        assert_eq!(fields.len(), 8);
+        assert_eq!(fields.table_capacity(), 32);
     }
 
     #[test]

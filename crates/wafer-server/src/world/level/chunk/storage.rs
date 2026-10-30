@@ -216,6 +216,47 @@ impl RegionFile {
         Ok(region)
     }
 
+    pub fn new(path: &Path, sync: bool) -> io::Result<RegionFile> {
+        RegionFile::from_file(path, RegionFile::open_file(path, sync)?, None)
+    }
+
+    pub fn get_path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn does_chunk_exist(&mut self, pos: ChunkPos) -> bool {
+        let offset = self.offsets[Self::offset_index(pos)];
+        if offset == 0 {
+            return false;
+        }
+        let (sector, count) = ((offset >> 8) as u64, (offset & 0xFF) as u64);
+        let mut header = [0u8; 5];
+        let read = self.file.seek(SeekFrom::Start(sector * SECTOR_BYTES)).and_then(|_| {
+            let mut total = 0;
+            while total < header.len() {
+                match self.file.read(&mut header[total..])? {
+                    0 => break,
+                    n => total += n,
+                }
+            }
+            Ok(total)
+        });
+        if !matches!(read, Ok(5)) {
+            return false;
+        }
+        let length = i32::from_be_bytes(header[..4].try_into().unwrap());
+        let version = header[4];
+        if version & EXTERNAL_STREAM_FLAG != 0 {
+            RegionFileVersion::from_id(version & !EXTERNAL_STREAM_FLAG).is_some() && self.external_path(pos).is_file()
+        } else {
+            if RegionFileVersion::from_id(version).is_none() || length == 0 {
+                return false;
+            }
+            let stream_length = length.wrapping_sub(1);
+            stream_length >= 0 && stream_length as i64 <= 4096 * count as i64
+        }
+    }
+
     fn offset_index(pos: ChunkPos) -> usize {
         ((pos.x & 31) + (pos.z & 31) * 32) as usize
     }
@@ -481,6 +522,16 @@ impl RegionStorage {
         }
         Ok(())
     }
+
+    pub fn close(&mut self) -> io::Result<()> {
+        let mut result = Ok(());
+        for (_, mut region) in self.open.drain() {
+            if let Err(e) = region.close() {
+                result = Err(e);
+            }
+        }
+        result
+    }
 }
 
 #[cfg(test)]
@@ -583,6 +634,39 @@ mod tests {
         let mut permissions = fs::metadata(dir.join("r.0.0.mca")).unwrap().permissions();
         permissions.set_readonly(false);
         fs::set_permissions(dir.join("r.0.0.mca"), permissions).unwrap();
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn chunk_existence_checks_the_stream_header() {
+        let dir = std::env::temp_dir().join(format!("wafer-region-exists-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mut store = RegionStorage::new(dir.clone(), false);
+        let tag = Nbt::Compound(vec![("a".into(), Nbt::Int(1))].into());
+        for x in 0..4 {
+            store.write(ChunkPos::new(x, 0), &tag).unwrap();
+        }
+        store.close().unwrap();
+        let path = dir.join("r.0.0.mca");
+        let mut bytes = fs::read(&path).unwrap();
+        let sector = |bytes: &[u8], x: usize| (u32::from_be_bytes(bytes[x * 4..x * 4 + 4].try_into().unwrap()) >> 8) as usize * 4096;
+        let corruptions: [fn(&mut [u8]); 3] = [
+            |chunk| chunk[..4].copy_from_slice(&0i32.to_be_bytes()),
+            |chunk| chunk[4] = 9,
+            |chunk| chunk[..4].copy_from_slice(&i32::MAX.to_be_bytes()),
+        ];
+        for (x, corrupt) in corruptions.into_iter().enumerate() {
+            let start = sector(&bytes, x + 1);
+            corrupt(&mut bytes[start..]);
+        }
+        fs::write(&path, bytes).unwrap();
+        let mut region = RegionFile::new(&path, false).unwrap();
+        assert!(region.does_chunk_exist(ChunkPos::new(0, 0)));
+        assert!(!region.does_chunk_exist(ChunkPos::new(1, 0)));
+        assert!(!region.does_chunk_exist(ChunkPos::new(2, 0)));
+        assert!(!region.does_chunk_exist(ChunkPos::new(3, 0)));
+        assert!(!region.does_chunk_exist(ChunkPos::new(4, 0)));
+        region.close().unwrap();
         fs::remove_dir_all(dir).unwrap();
     }
 

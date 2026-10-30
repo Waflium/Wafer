@@ -82,6 +82,14 @@ impl UnseededChunkGenerator {
         matches!(self, UnseededChunkGenerator::Flat(_))
     }
 
+    pub fn get_type_name_for_data_fixer(&self) -> &'static str {
+        match self {
+            UnseededChunkGenerator::Flat(_) => "minecraft:flat",
+            UnseededChunkGenerator::Debug => "minecraft:debug",
+            UnseededChunkGenerator::Noise(_) => "minecraft:noise",
+        }
+    }
+
     pub fn create(&self, seed: i64) -> ChunkGenerator {
         match self {
             UnseededChunkGenerator::Flat(flat) => ChunkGenerator::Flat(flat.clone()),
