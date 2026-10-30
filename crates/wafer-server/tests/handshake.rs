@@ -224,9 +224,16 @@ async fn joins_superflat_world() {
     let (data, _) = c.recv_until(play::clientbound::SET_CHUNK_CACHE_CENTER).await;
     let mut r = Reader::new(&data);
     assert_eq!((r.varint().unwrap(), r.varint().unwrap()), ((target_x.floor() as i32) >> 4, (z.floor() as i32) >> 4));
-    let (_, skipped) = c.recv_until(play::clientbound::CHUNK_BATCH_FINISHED).await;
-    let forgotten = skipped.iter().filter(|&&id| id == play::clientbound::FORGET_LEVEL_CHUNK).count();
-    let loaded = skipped.iter().filter(|&&id| id == play::clientbound::LEVEL_CHUNK_WITH_LIGHT).count();
+    let (mut forgotten, mut loaded) = (0, 0);
+    for _ in 0..20 {
+        let (_, skipped) = c.recv_until(play::clientbound::CHUNK_BATCH_FINISHED).await;
+        forgotten += skipped.iter().filter(|&&id| id == play::clientbound::FORGET_LEVEL_CHUNK).count();
+        loaded += skipped.iter().filter(|&&id| id == play::clientbound::LEVEL_CHUNK_WITH_LIGHT).count();
+        if loaded >= forgotten {
+            break;
+        }
+        c.send(play::serverbound::CHUNK_BATCH_RECEIVED, |w| w.f32(64.0)).await;
+    }
     assert!(loaded > 0);
     assert_eq!(forgotten, loaded, "the view area keeps its shape when it moves");
 }
