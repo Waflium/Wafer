@@ -22,6 +22,8 @@ pub enum Waiter {
     Task(u64),
     Range(u64),
     ReleasePlayerTicket(i64),
+    SpawnSearch(u64),
+    ReadyToSend(i64),
     FullStatus { future: FutureId, node: i64, holder: u64, token: u64, status: FullChunkStatus },
 }
 
@@ -87,6 +89,7 @@ impl Futures {
 pub struct ChunkHolder {
     pub pos: ChunkPos,
     pub id: u64,
+    pub order: u64,
     pub highest_allowed_status: Option<ChunkStatus>,
     pub started_work: Option<ChunkStatus>,
     pub futures: [Option<FutureId>; ChunkStatus::ALL.len()],
@@ -103,6 +106,7 @@ pub struct ChunkHolder {
     pub entity_ticking_chunk_future: FutureId,
     pub was_accessible_since_last_save: bool,
     pub pending_full_state_confirmation: u64,
+    pub send_sync: FutureId,
 }
 
 impl ChunkHolder {
@@ -111,6 +115,7 @@ impl ChunkHolder {
         ChunkHolder {
             pos,
             id,
+            order: 0,
             highest_allowed_status: None,
             started_work: None,
             futures: [None; ChunkStatus::ALL.len()],
@@ -127,6 +132,7 @@ impl ChunkHolder {
             entity_ticking_chunk_future: UNLOADED,
             was_accessible_since_last_save: false,
             pending_full_state_confirmation: 0,
+            send_sync: UNLOADED,
         }
     }
 
@@ -164,7 +170,7 @@ impl ChunkHolder {
     }
 
     pub fn referenced_futures(&self) -> impl Iterator<Item = FutureId> + '_ {
-        self.futures.iter().flatten().copied().chain([self.full_chunk_future, self.ticking_chunk_future, self.entity_ticking_chunk_future])
+        self.futures.iter().flatten().copied().chain([self.full_chunk_future, self.ticking_chunk_future, self.entity_ticking_chunk_future, self.send_sync])
     }
 }
 
@@ -182,6 +188,7 @@ pub struct ChunkHolders {
     pub chunks_to_update_futures: IndexSet<i64>,
     pub modified: bool,
     next_id: u64,
+    next_order: u64,
 }
 
 impl ChunkHolders {
@@ -215,6 +222,12 @@ impl ChunkHolders {
 
     pub fn future_count(&self) -> usize {
         self.futures.futures.len()
+    }
+
+    pub fn ordered_keys(&self) -> Vec<i64> {
+        let mut holders: Vec<(u64, i64)> = self.map.iter().map(|(&node, holder)| (holder.order, node)).collect();
+        holders.sort_unstable();
+        holders.into_iter().map(|(_, node)| node).collect()
     }
 
     pub fn get(&self, node: i64) -> Option<&ChunkHolder> {
@@ -252,6 +265,9 @@ impl ChunkHolders {
                     ChunkHolder::new(ChunkPos::unpack(node), self.next_id, level)
                 }
             };
+            let mut holder = holder;
+            self.next_order += 1;
+            holder.order = self.next_order;
             self.map.insert(node, holder);
             self.modified = true;
         }

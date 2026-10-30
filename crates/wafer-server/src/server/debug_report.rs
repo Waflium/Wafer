@@ -125,7 +125,7 @@ impl Server {
 
     fn dump_misc_stats(&self, path: &Path) -> io::Result<()> {
         let mut output = BufWriter::new(File::create(path)?);
-        writeln!(output, "pending_tasks: {}", self.tasks.len())?;
+        writeln!(output, "pending_tasks: {}", self.tasks.borrow().len())?;
         writeln!(output, "average_tick_time: {}", java_format_fixed(f64::from(self.smoothed_tick_time_millis), 6))?;
         let tick_times: Vec<String> = self.tick_times_nanos.iter().map(ToString::to_string).collect();
         writeln!(output, "tick_times: [{}]", tick_times.join(", "))?;

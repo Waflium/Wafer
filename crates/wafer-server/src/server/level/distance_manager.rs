@@ -290,6 +290,12 @@ impl DistanceManager {
             }
             MainThreadTask::Poll => self.ticket_dispatcher.poll_task(),
             MainThreadTask::ReleasePlayerTicket(pos) => self.ticket_dispatcher.release(pos, false, false),
+            MainThreadTask::FullStep(_)
+            | MainThreadTask::ApplyLoaded(_)
+            | MainThreadTask::PrepareTickingChunk(_)
+            | MainThreadTask::FullChunkStatusChange { .. }
+            | MainThreadTask::ChunkReadyToSend(_)
+            | MainThreadTask::LightUpdate { .. } => unreachable!("not a ticket task"),
         }
         self.run_dispatcher();
     }

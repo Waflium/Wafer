@@ -224,7 +224,11 @@ pub(crate) enum Task {
     Chained { player: EntityId, run: Box<dyn FnOnce(&mut Server)> },
     CommandSuggestions { player: EntityId },
     Rcon { command: String, reply: tokio::sync::oneshot::Sender<String> },
+    SpawnSearch(u64),
+    StructureStarts { level: usize, pos: wafer_core::ChunkPos, starts: wafer_core::hash_map::FastMap<crate::world::level::levelgen::structure::structure::StructureHolder, i32> },
 }
+
+pub(crate) type ServerTasks = Rc<RefCell<VecDeque<Task>>>;
 
 struct PendingLogin {
     profile: Profile,
@@ -271,7 +275,9 @@ pub struct Server {
     saved_data_writes: SavedDataWrites,
     login_disconnections_to_report: usize,
     prepare_spawn_tasks: Vec<PrepareSpawnTask>,
-    tasks: VecDeque<Task>,
+    tasks: ServerTasks,
+    spawn_finders: HashMap<u64, level::player_spawn_finder::PlayerSpawnFinder>,
+    next_spawn_finder: u64,
     console_inputs: Vec<(String, CommandSourceStack, bool)>,
     pub rcon_buffer: std::cell::RefCell<String>,
     pub command_origin: command_origin::CommandOrigin,
@@ -473,7 +479,9 @@ impl Server {
         let data_storage = Rc::new(RefCell::new(SavedDataStorage::new(world_dir.as_ref().map(WorldDir::data_folder))));
         let tick_rate_manager = ServerTickRateManager::default();
         let main_thread_wakeup = levels[0].chunks.main_thread_wakeup();
-        for level in &mut levels {
+        let tasks: ServerTasks = Rc::default();
+        for (index, level) in levels.iter_mut().enumerate() {
+            level.chunks.server_tasks = Some((tasks.clone(), index));
             level.chunks.set_main_thread_wakeup(main_thread_wakeup.clone());
             level.entity_manager.set_main_thread_wakeup(main_thread_wakeup.clone());
             level.game_rules = game_rules.clone();
@@ -538,7 +546,9 @@ impl Server {
             saved_data_writes: SavedDataWrites::default(),
             login_disconnections_to_report: 0,
             prepare_spawn_tasks: Vec::new(),
-            tasks: VecDeque::new(),
+            tasks,
+            spawn_finders: HashMap::new(),
+            next_spawn_finder: 0,
             console_inputs: Vec::new(),
             rcon_buffer: std::cell::RefCell::new(String::new()),
             command_origin: command_origin::CommandOrigin::default(),
@@ -733,16 +743,30 @@ impl Server {
         }
     }
 
+    pub(crate) fn managed_block(&mut self, mut condition: impl FnMut(&mut Server) -> bool) {
+        let wakeup = self.overworld().chunks.main_thread_wakeup();
+        while !condition(self) {
+            let seen = wakeup.generation();
+            if !self.poll_task() {
+                wakeup.wait(seen, Duration::from_micros(100));
+            }
+        }
+    }
+
     fn poll_task(&mut self) -> bool {
         crate::crash_report::throw_delayed_exception();
-        let mut did_something = false;
+        let task = self.tasks.borrow_mut().pop_front();
+        if let Some(task) = task {
+            self.run_task(task);
+            return true;
+        }
         for level in &mut self.levels {
             if level.poll_chunk_task() {
                 profiler::increment_counter("runTask", 1);
-                did_something = true;
+                return true;
             }
         }
-        did_something
+        false
     }
 
     pub fn overworld(&self) -> &ServerLevel {
@@ -1220,10 +1244,10 @@ impl Server {
             }
             Event::Verify { profile, address, user_name, reply } => self.pending_logins.push(PendingLogin { profile, address, user_name, reply, waiting_for_dupe: false }),
             Event::PrepareSpawn { uuid, name, reply } => self.start_prepare_spawn(uuid, &name, reply),
-            Event::PrepareSpawnClosed { uuid } => self.prepare_spawn_tasks.retain(|t| t.uuid != uuid),
+            Event::PrepareSpawnClosed { uuid } => self.close_prepare_spawn(uuid),
             Event::Console(line, has_level) => self.console_inputs.push((line, CommandSourceStack::server(self), has_level)),
             Event::Halt => self.halt(),
-            Event::Rcon { command, reply } => self.tasks.push_back(Task::Rcon { command, reply }),
+            Event::Rcon { command, reply } => self.tasks.borrow_mut().push_back(Task::Rcon { command, reply }),
         }
     }
 
@@ -1303,8 +1327,9 @@ impl Server {
         let (level_index, position, y_rot, x_rot) = match prepared {
             Some(index) => {
                 let task = self.prepare_spawn_tasks.swap_remove(index);
-                self.levels[task.level].wait_for_entities_around(BlockPos::containing(task.position.x, task.position.y, task.position.z).chunk(), 3);
-                (task.level, task.position, task.angle.0, task.angle.1)
+                let position = task.position.expect("ready spawn position");
+                self.levels[task.level].wait_for_entities_around(BlockPos::containing(position.x, position.y, position.z).chunk(), 3);
+                (task.level, position, task.angle.0, task.angle.1)
             }
             None => self.spawn_position(saved.as_ref()),
         };
@@ -1463,27 +1488,34 @@ impl Server {
         }
     }
 
+    fn run_task(&mut self, task: Task) {
+        profiler::increment_counter("runTask", 1);
+        match task {
+            Task::Chat { player, body, signature } if self.has_player(player) => self.run_chat(player, body, signature),
+            Task::Command { player, command } if self.has_player(player) => self.run_unsigned_command(player, &command),
+            Task::SignedCommand { player, command, time_stamp, salt, arguments, last_seen } if self.has_player(player) => {
+                self.run_signed_command(player, &command, time_stamp, salt, arguments, last_seen);
+            }
+            Task::Chained { player, run } if self.has_player(player) => run(self),
+            Task::CommandSuggestions { player } if self.has_player(player) => self.try_process_command_suggestions(player),
+            Task::Rcon { command, reply } => {
+                self.rcon_buffer.borrow_mut().clear();
+                let source = CommandSourceStack::rcon(self);
+                self.run_from(CommandOrigin::Rcon, |server| crate::commands::perform_prefixed_command(server, &source, &command));
+                let _ = reply.send(self.rcon_buffer.take());
+            }
+            Task::StructureStarts { level, pos, starts } => self.levels[level].structure_check.on_structure_load(pos, starts),
+            Task::SpawnSearch(finder) => self.run_spawn_search_step(finder),
+            _ => {}
+        }
+    }
+
     fn run_all_tasks(&mut self) -> bool {
         let mut ran_task = false;
-        while let Some(task) = self.tasks.pop_front() {
+        loop {
+            let Some(task) = self.tasks.borrow_mut().pop_front() else { break };
             ran_task = true;
-            profiler::increment_counter("runTask", 1);
-            match task {
-                Task::Chat { player, body, signature } if self.has_player(player) => self.run_chat(player, body, signature),
-                Task::Command { player, command } if self.has_player(player) => self.run_unsigned_command(player, &command),
-                Task::SignedCommand { player, command, time_stamp, salt, arguments, last_seen } if self.has_player(player) => {
-                    self.run_signed_command(player, &command, time_stamp, salt, arguments, last_seen);
-                }
-                Task::Chained { player, run } if self.has_player(player) => run(self),
-                Task::CommandSuggestions { player } if self.has_player(player) => self.try_process_command_suggestions(player),
-                Task::Rcon { command, reply } => {
-                    self.rcon_buffer.borrow_mut().clear();
-                    let source = CommandSourceStack::rcon(self);
-                    self.run_from(CommandOrigin::Rcon, |server| crate::commands::perform_prefixed_command(server, &source, &command));
-                    let _ = reply.send(self.rcon_buffer.take());
-                }
-                _ => {}
-            }
+            self.run_task(task);
         }
         for level in &mut self.levels {
             ran_task |= level.run_entity_deserializer_queue_as_task();

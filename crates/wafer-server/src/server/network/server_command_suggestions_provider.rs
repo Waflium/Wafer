@@ -21,7 +21,7 @@ impl Server {
         let command = reader.string(MAX_COMMAND_LENGTH)?.to_owned();
         let provider = &mut self.player_mut(id).command_suggestions;
         if provider.last_request.replace((request_id, command)).is_none() && provider.has_budget {
-            self.tasks.push_back(Task::CommandSuggestions { player: id });
+            self.tasks.borrow_mut().push_back(Task::CommandSuggestions { player: id });
         }
         Ok(())
     }

@@ -4,7 +4,8 @@ use indexmap::IndexMap;
 
 use wafer_core::fastutil::LongOpenHashSet;
 
-use super::chunk_level;
+use super::chunk_level::{self, FullChunkStatus};
+use crate::world::level::light_layer::LightLayer;
 
 pub const PRIORITY_LEVEL_COUNT: i32 = chunk_level::MAX_LEVEL + 2;
 
@@ -102,6 +103,12 @@ pub enum MainThreadTask {
     RemoveTicket(i64),
     Poll,
     ReleasePlayerTicket(i64),
+    FullStep(u64),
+    ApplyLoaded(u64),
+    PrepareTickingChunk(u64),
+    FullChunkStatusChange { node: i64, status: FullChunkStatus },
+    ChunkReadyToSend(i64),
+    LightUpdate { layer: LightLayer, node: i64 },
 }
 
 pub struct ThrottlingChunkTaskDispatcher {

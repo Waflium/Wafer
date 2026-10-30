@@ -333,9 +333,17 @@ impl ServerLevel {
         for (pos, starts) in self.chunks.take_structure_starts_available() {
             self.structure_check.on_structure_load(pos, starts);
         }
-        for pos in self.chunks.take_ticking_ready() {
+        for (pos, future) in self.chunks.take_ticking_ready() {
             self.post_process_generation(pos);
             self.chunks.start_ticking_chunk(pos);
+            if self.chunks.send_sync_done(pos) {
+                self.on_chunk_ready_to_send(pos);
+            } else {
+                self.chunks.when_send_sync_done_ready_to_send(pos);
+            }
+            self.chunks.finish_ticking_chunk(future);
+        }
+        for pos in self.chunks.take_chunks_ready_to_send() {
             self.on_chunk_ready_to_send(pos);
         }
         while !self.defer_full_status_changes
@@ -373,10 +381,14 @@ impl ServerLevel {
         let _scope = crate::server::main_thread_frames::chunk_source_block();
         self.process_chunk_events();
         while !self.chunks.is_future_done(future) {
-            self.chunks.managed_block_step();
-            self.process_chunk_events();
+            self.managed_block_step();
         }
         self.chunks.end_chunk_load(pos, future);
+    }
+
+    pub fn managed_block_step(&mut self) {
+        self.chunks.managed_block_level_step();
+        self.process_chunk_events();
     }
 
     pub fn get_chunk(&mut self, pos: ChunkPos) -> &mut crate::world::level::chunk::LevelChunk {
@@ -389,8 +401,7 @@ impl ServerLevel {
         let _scope = crate::server::main_thread_frames::chunk_source_block();
         self.process_chunk_events();
         while !self.chunks.is_future_done(future) {
-            self.chunks.managed_block_step();
-            self.process_chunk_events();
+            self.managed_block_step();
         }
         self.chunks.end_chunk_at_status(pos, future)
     }
@@ -401,7 +412,9 @@ impl ServerLevel {
     }
 
     pub fn finish_chunk_work(&mut self) {
-        self.chunks.run_until_idle();
+        while self.chunks.run_idle_step() {
+            self.process_chunk_events();
+        }
         self.process_chunk_events();
         self.wait_for_entities();
     }
@@ -891,7 +904,7 @@ mod tests {
         let (mut level, mut packets) = level_with_player();
         let torch = BlockPos::new(3 * 16 + 8, -60, 8);
         level.set_block(torch, blocks::TORCH.default_state(), UPDATE_ALL);
-        level.chunks.run_light_updates();
+        level.finish_chunk_work();
         level.tick();
         let sent = updates(&mut packets);
         let order: Vec<&Update> = sent.iter().map(|(u, _)| u).collect();
@@ -908,7 +921,7 @@ mod tests {
         level.set_block(torch, blocks::AIR.default_state(), UPDATE_ALL);
         level.tick();
         assert_eq!(updates(&mut packets).into_iter().map(|(u, _)| u).collect::<Vec<_>>(), [Update::Block(torch)]);
-        level.chunks.run_light_updates();
+        level.finish_chunk_work();
         level.tick();
         let sent = updates(&mut packets);
         let (_, data) = sent.iter().find(|(u, _)| *u == Update::Light(3, 0)).expect("light update after removal");

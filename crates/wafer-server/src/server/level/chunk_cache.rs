@@ -14,12 +14,13 @@ use wafer_protocol::{Writer, stream_codec};
 
 use super::chunk_holder::{ChunkGenerationTask, ChunkHolders, FutureId, RangeThen, RangeWait, UNLOADED, Waiter};
 use super::chunk_level::{self, ChunkPyramid, ChunkStatus, FullChunkStatus};
-use super::chunk_task_dispatcher::ChunkTaskPriorityQueue;
+use super::chunk_task_dispatcher::{ChunkTaskPriorityQueue, MainThreadTask};
 use super::chunk_workers::{self, ChunkToSave, IoReporting, IoWorker, MainThreadWakeup, ResultSender, WorkResult};
 use super::distance_manager::DistanceManager;
 use super::threaded_level_light_engine::{LightTask, TaskType, ThreadedLevelLightEngine};
 use super::ticket::{Ticket, TicketType};
 use super::SoundSource;
+use crate::server::{ServerTasks, Task};
 use crate::util::profiling::profiler;
 use crate::world::difficulty::Difficulty;
 use crate::world::scores::scoreboard::Scoreboard;
@@ -83,9 +84,7 @@ pub struct ChunkCache {
     pub last_spawn_state: Option<SpawnState>,
     io: Option<IoWorker>,
     pub light_engine: ThreadedLevelLightEngine,
-    light_changes: Vec<(LightLayer, i64)>,
     ticking_light_changes: Vec<(LightLayer, i64)>,
-    waiting_for_light: FastSet<ChunkPos>,
     pub block_ticks: LevelTicks<Block>,
     pub fluid_ticks: LevelTicks<Fluid>,
     pub game_time: i64,
@@ -97,21 +96,22 @@ pub struct ChunkCache {
     next_token: u64,
     in_flight: VecDeque<u64>,
     arrived: HashMap<u64, WorkResult>,
-    light_done: Vec<u64>,
     unload_queue: VecDeque<i64>,
     waiting_unloads: IndexSet<i64>,
     next_chunk_save_time: FastMap<i64, Instant>,
     chunks_to_eagerly_save: IndexSet<i64>,
     unsaved_listener: (std::sync::mpsc::Sender<i64>, Receiver<i64>),
-    ticking_ready: Vec<ChunkPos>,
+    loaded_results: HashMap<u64, io::Result<Option<serialization::ReadChunk>>>,
+    ticking_ready: Vec<(ChunkPos, FutureId)>,
+    chunks_ready_to_send: Vec<ChunkPos>,
     structure_starts_available: Vec<(ChunkPos, FastMap<StructureHolder, i32>)>,
+    pub server_tasks: Option<(ServerTasks, usize)>,
     world_gen_chunk_entities: Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)>,
     legacy_chunk_entities: Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)>,
     world_gen_entity_teams: Vec<(u128, String)>,
     world_gen_entity_sounds: Vec<(Vec3, i32, SoundSource, f32, f32)>,
     pub scoreboard: Rc<RefCell<Scoreboard>>,
     full_status_changes: VecDeque<(ChunkPos, FullChunkStatus)>,
-    full_status_tasks: VecDeque<(ChunkPos, FullChunkStatus)>,
     last_chunk: Cell<[Option<(ChunkPos, bool)>; 4]>,
     server_view_distance: i32,
     live_futures: usize,
@@ -153,9 +153,7 @@ impl ChunkCache {
             last_spawn_state: None,
             io: storage.map(IoWorker::new),
             light_engine: ThreadedLevelLightEngine::new(dimension.min_y, dimension.height as i32, dimension.has_skylight),
-            light_changes: Vec::new(),
             ticking_light_changes: Vec::new(),
-            waiting_for_light: FastSet::default(),
             block_ticks: LevelTicks::default(),
             fluid_ticks: LevelTicks::default(),
             game_time: 0,
@@ -167,21 +165,22 @@ impl ChunkCache {
             next_token: 0,
             in_flight: VecDeque::new(),
             arrived: HashMap::new(),
-            light_done: Vec::new(),
             unload_queue: VecDeque::new(),
             waiting_unloads: IndexSet::new(),
             next_chunk_save_time: FastMap::default(),
             chunks_to_eagerly_save: IndexSet::new(),
             unsaved_listener: std::sync::mpsc::channel(),
+            loaded_results: HashMap::new(),
             ticking_ready: Vec::new(),
+            chunks_ready_to_send: Vec::new(),
             structure_starts_available: Vec::new(),
+            server_tasks: None,
             world_gen_chunk_entities: Vec::new(),
             legacy_chunk_entities: Vec::new(),
             world_gen_entity_teams: Vec::new(),
             world_gen_entity_sounds: Vec::new(),
             scoreboard: Rc::default(),
             full_status_changes: VecDeque::new(),
-            full_status_tasks: VecDeque::new(),
             last_chunk: Cell::new([None; 4]),
             server_view_distance: 0,
             live_futures: 0,
@@ -207,11 +206,6 @@ impl ChunkCache {
         }
         self.reporting = Some(reporting);
         self.poi_manager.storage.set_reporting(IoReporting { reporter, info: RegionStorageInfo::new(level_id, dimension, "poi") });
-    }
-
-    pub fn get_chunk_at_status(&mut self, pos: ChunkPos, status: ChunkStatus) {
-        let future = self.chunk_future_main_thread(pos, status, true);
-        self.managed_block(future);
     }
 
     pub fn set_seed(&mut self, seed: i64) {
@@ -278,6 +272,11 @@ impl ChunkCache {
         self.chunk_range_future(pos.pack(), radius, |_| Some(ChunkStatus::Full), |c| RangeThen::Complete(c.holders.futures.new_pending()))
     }
 
+    pub fn when_complete_run_spawn_search(&mut self, future: FutureId, finder: u64) {
+        self.holders.futures.then(future, Waiter::SpawnSearch(finder));
+        self.process_woken();
+    }
+
     pub fn update_chunk_forced(&mut self, pos: ChunkPos, forced: bool) -> bool {
         self.distance_manager.update_chunk_forced(&mut self.holders, pos, forced)
     }
@@ -324,7 +323,7 @@ impl ChunkCache {
 
     pub fn chunks_with_at_least_full_status(&self) -> Vec<i64> {
         let level = chunk_level::by_status(ChunkStatus::Full);
-        self.holders.map.iter().filter(|(_, h)| h.ticket_level <= level).map(|(&key, _)| key).collect()
+        self.holders.ordered_keys().into_iter().filter(|key| self.holders.map[key].ticket_level <= level).collect()
     }
 
     pub fn latest_status_is_full(&self, key: i64) -> bool {
@@ -446,7 +445,10 @@ impl ChunkCache {
             .chunk_structures(pos)
             .map(|structures| structures.starts.iter().filter(|(_, start)| start.is_valid()).map(|(&structure, start)| (structure, start.get_references())).collect())
             .unwrap_or_default();
-        self.structure_starts_available.push((pos, starts));
+        match &self.server_tasks {
+            Some((tasks, level)) => tasks.borrow_mut().push_back(Task::StructureStarts { level: *level, pos, starts }),
+            None => self.structure_starts_available.push((pos, starts)),
+        }
     }
 
     fn chunk_future_main_thread(&mut self, pos: ChunkPos, status: ChunkStatus, load_or_generate: bool) -> FutureId {
@@ -484,10 +486,29 @@ impl ChunkCache {
     }
 
     pub fn managed_block_step(&mut self) {
-        if !self.poll_task() {
-            assert!(!self.in_flight.is_empty(), "waiting for a chunk with nothing to wait for");
-            let result = self.wait_for_result();
-            self.apply_work_result(result);
+        self.managed_block_level_step();
+        self.finish_ticking_chunks_detached();
+    }
+
+    pub fn managed_block_level_step(&mut self) {
+        assert!(self.run_idle_step(), "waiting for a chunk with nothing to wait for");
+    }
+
+    pub fn run_idle_step(&mut self) -> bool {
+        if self.poll_task() {
+            return true;
+        }
+        if self.in_flight.is_empty() {
+            return false;
+        }
+        let result = self.wait_for_result();
+        self.apply_work_result(result);
+        true
+    }
+
+    fn finish_ticking_chunks_detached(&mut self) {
+        for &(_, future) in &self.ticking_ready {
+            self.holders.futures.complete(future, true);
         }
     }
 
@@ -523,13 +544,8 @@ impl ChunkCache {
     }
 
     pub fn run_until_idle(&mut self) {
-        loop {
-            while self.poll_task() {}
-            if self.in_flight.is_empty() {
-                return;
-            }
-            let result = self.wait_for_result();
-            self.apply_work_result(result);
+        while self.run_idle_step() {
+            self.finish_ticking_chunks_detached();
         }
     }
 
@@ -538,27 +554,65 @@ impl ChunkCache {
     }
 
     pub fn chunk_to_send(&self, pos: ChunkPos) -> bool {
-        self.is_ticking(pos) && !self.waiting_for_light.contains(&pos)
+        self.holders.map.get(&pos.pack()).is_some_and(|h| self.holders.futures.is_done(h.send_sync) && h.is_ticking(&self.holders.futures))
     }
 
     pub fn wait_for_light_before_sending(&mut self, center_chunk: ChunkPos, chunk_radius: i32) {
         let affected_light_chunk_radius = chunk_radius + 1;
-        for x in center_chunk.x - affected_light_chunk_radius..=center_chunk.x + affected_light_chunk_radius {
-            for z in center_chunk.z - affected_light_chunk_radius..=center_chunk.z + affected_light_chunk_radius {
+        for z in center_chunk.z - affected_light_chunk_radius..=center_chunk.z + affected_light_chunk_radius {
+            for x in center_chunk.x - affected_light_chunk_radius..=center_chunk.x + affected_light_chunk_radius {
                 let pos = ChunkPos::new(x, z);
                 if self.holders.map.contains_key(&pos.pack()) {
-                    self.waiting_for_light.insert(pos);
+                    let sync = self.wait_for_pending_light_tasks(pos);
+                    self.add_send_dependency(pos.pack(), sync);
                 }
             }
         }
+    }
+
+    fn wait_for_pending_light_tasks(&mut self, pos: ChunkPos) -> FutureId {
+        let future = self.holders.futures.new_pending();
+        self.add_light_task(TaskType::PostUpdate, LightTask::CompleteFuture(pos, future));
+        future
+    }
+
+    fn add_send_dependency(&mut self, node: i64, sync: FutureId) {
+        let current = self.holders.map[&node].send_sync;
+        let combined = if self.holders.futures.is_done(current) {
+            sync
+        } else {
+            let combined = self.holders.futures.new_pending();
+            let range = self.holders.add_range(RangeWait { deps: vec![current, sync], remaining: 2, then: RangeThen::Complete(combined) });
+            self.holders.futures.then(current, Waiter::Range(range));
+            self.holders.futures.then(sync, Waiter::Range(range));
+            combined
+        };
+        self.holders.map.get_mut(&node).unwrap().send_sync = combined;
+    }
+
+    pub fn send_sync_done(&self, pos: ChunkPos) -> bool {
+        self.holders.map.get(&pos.pack()).is_none_or(|h| self.holders.futures.is_done(h.send_sync))
+    }
+
+    pub fn when_send_sync_done_ready_to_send(&mut self, pos: ChunkPos) {
+        let Some(holder) = self.holders.map.get(&pos.pack()) else { return };
+        self.holders.futures.then(holder.send_sync, Waiter::ReadyToSend(pos.pack()));
     }
 
     pub fn is_position_ticking(&self, pos: ChunkPos) -> bool {
         is_position_ticking(&self.distance_manager, &self.holders, pos)
     }
 
-    pub fn take_ticking_ready(&mut self) -> Vec<ChunkPos> {
+    pub fn take_ticking_ready(&mut self) -> Vec<(ChunkPos, FutureId)> {
         std::mem::take(&mut self.ticking_ready)
+    }
+
+    pub fn take_chunks_ready_to_send(&mut self) -> Vec<ChunkPos> {
+        std::mem::take(&mut self.chunks_ready_to_send)
+    }
+
+    pub fn finish_ticking_chunk(&mut self, future: FutureId) {
+        self.holders.futures.complete(future, true);
     }
 
     pub fn start_ticking_chunk(&mut self, pos: ChunkPos) {
@@ -585,7 +639,7 @@ impl ChunkCache {
     }
 
     pub fn pending_tasks_count(&self) -> usize {
-        self.distance_manager.main_thread_tasks.len() + self.full_status_tasks.len()
+        self.distance_manager.main_thread_tasks.len()
     }
 
     pub fn dump_chunks(&self, output: &mut impl std::io::Write, any_player_close_enough_for_spawning: impl Fn(ChunkPos) -> bool) -> io::Result<()> {
@@ -613,8 +667,8 @@ impl ChunkCache {
             None => "not completed",
         };
         let tickets = &self.distance_manager.ticket_storage;
-        for holder in self.holders.map.values() {
-            let key = holder.pos.pack();
+        for key in self.holders.ordered_keys() {
+            let holder = &self.holders.map[&key];
             let chunk = holder.loaded.as_deref();
             let full_status = match holder.full_status() {
                 FullChunkStatus::Inaccessible => "INACCESSIBLE",
@@ -692,19 +746,15 @@ impl ChunkCache {
         if self.run_distance_manager_updates() {
             return true;
         }
+        self.light_engine.try_schedule_update();
         if let Some(task) = self.distance_manager.main_thread_tasks.pop_front() {
-            self.distance_manager.run_main_thread_task(&mut self.holders, task);
-            return true;
-        }
-        if let Some(change) = self.full_status_tasks.pop_front() {
-            self.full_status_changes.push_back(change);
+            self.run_main_thread_task(task);
             return true;
         }
         if self.run_worldgen() {
             return true;
         }
-        if self.light_engine.has_work() {
-            self.run_light_batch();
+        if self.run_light_worker() {
             return true;
         }
         if let Some(result) = self.next_ready_result() {
@@ -754,13 +804,17 @@ impl ChunkCache {
                         self.finish_range(range);
                     }
                 }
-                Waiter::ReleasePlayerTicket(pos) => {
-                    self.distance_manager.main_thread_tasks.push_back(super::chunk_task_dispatcher::MainThreadTask::ReleasePlayerTicket(pos))
+                Waiter::ReleasePlayerTicket(pos) => self.distance_manager.main_thread_tasks.push_back(MainThreadTask::ReleasePlayerTicket(pos)),
+                Waiter::ReadyToSend(node) => self.distance_manager.main_thread_tasks.push_back(MainThreadTask::ChunkReadyToSend(node)),
+                Waiter::SpawnSearch(finder) => {
+                    if let Some((tasks, _)) = &self.server_tasks {
+                        tasks.borrow_mut().push_back(Task::SpawnSearch(finder));
+                    }
                 }
                 Waiter::FullStatus { future, node, holder, token, status } => {
                     let confirmed = self.holders.get(node).is_some_and(|h| h.id == holder && h.pending_full_state_confirmation == token);
                     if confirmed && self.holders.futures.is_success(future) {
-                        self.full_status_tasks.push_back((ChunkPos::unpack(node), status));
+                        self.distance_manager.main_thread_tasks.push_back(MainThreadTask::FullChunkStatusChange { node, status });
                     }
                 }
             }
@@ -940,18 +994,39 @@ impl ChunkCache {
     }
 
     fn finish_range(&mut self, range: u64) {
+        if matches!(self.holders.ranges[&range].then, RangeThen::Ticking { .. }) {
+            self.distance_manager.main_thread_tasks.push_back(MainThreadTask::PrepareTickingChunk(range));
+            return;
+        }
         let wait = self.holders.ranges.remove(&range).unwrap();
         let success = wait.deps.iter().all(|&d| self.holders.futures.is_success(d));
-        match wait.then {
-            RangeThen::Complete(future) => {
-                self.holders.futures.complete(future, success);
+        if let RangeThen::Complete(future) = wait.then {
+            self.holders.futures.complete(future, success);
+        }
+    }
+
+    fn run_main_thread_task(&mut self, task: MainThreadTask) {
+        match task {
+            MainThreadTask::FullStep(token) => self.run_full_step(token),
+            MainThreadTask::ApplyLoaded(token) => self.run_apply_loaded(token),
+            MainThreadTask::PrepareTickingChunk(range) => self.run_prepare_ticking_chunk(range),
+            MainThreadTask::FullChunkStatusChange { node, status } => self.full_status_changes.push_back((ChunkPos::unpack(node), status)),
+            MainThreadTask::ChunkReadyToSend(node) => self.chunks_ready_to_send.push(ChunkPos::unpack(node)),
+            MainThreadTask::LightUpdate { layer, node } => self.run_light_update_task(layer, node),
+            MainThreadTask::Run { .. } | MainThreadTask::RemoveTicket(_) | MainThreadTask::Poll | MainThreadTask::ReleasePlayerTicket(_) => {
+                self.distance_manager.run_main_thread_task(&mut self.holders, task)
             }
-            RangeThen::Ticking { pos, future } => {
-                if success {
-                    self.ticking_ready.push(pos);
-                }
-                self.holders.futures.complete(future, success);
-            }
+        }
+    }
+
+    fn run_prepare_ticking_chunk(&mut self, range: u64) {
+        let wait = self.holders.ranges.remove(&range).unwrap();
+        let success = wait.deps.iter().all(|&d| self.holders.futures.is_success(d));
+        let RangeThen::Ticking { pos, future } = wait.then else { unreachable!("not a ticking range") };
+        if success && self.chunks.contains_key(&pos) {
+            self.ticking_ready.push((pos, future));
+        } else {
+            self.holders.futures.complete(future, success);
         }
     }
 
@@ -1292,33 +1367,54 @@ impl ChunkCache {
                 self.add_light_task(TaskType::PostUpdate, LightTask::LightChunkDone { pos, done: token });
             }
             ChunkStatus::Full => {
-                let mut proto_ticks = None;
-                if let Some(chunk) = self.chunks.get_mut(&pos) {
-                    if let Some(proto) = chunk.proto.take() {
-                        chunk.mark_unsaved();
-                        let proto = *proto;
-                        proto_ticks = Some((LevelChunkTicks::with_pending(proto.block_ticks.scheduled_ticks()), LevelChunkTicks::with_pending(proto.fluid_ticks.scheduled_ticks())));
-                        if !proto.entities.is_empty() {
-                            self.world_gen_chunk_entities.push((pos, proto.entities));
-                        }
-                    }
-                    if !chunk.legacy_entities.is_empty() {
-                        self.legacy_chunk_entities.push((pos, std::mem::take(&mut chunk.legacy_entities)));
-                    }
-                    chunk.loaded = true;
-                    chunk.register_all_block_entities_after_level_load(&mut self.block_entity_tickers);
-                    chunk.set_unsaved_listener(self.unsaved_listener.0.clone());
-                }
-                let holder = self.holders.get_mut(pos.pack()).unwrap();
-                let (block_ticks, fluid_ticks) = match holder.saved_ticks.take() {
-                    Some(ticks) => *ticks,
-                    None => proto_ticks.unwrap_or_default(),
-                };
-                self.block_ticks.register_container(pos, block_ticks);
-                self.fluid_ticks.register_container(pos, fluid_ticks);
-                self.complete_step(job);
+                let token = self.new_token(job);
+                self.distance_manager.main_thread_tasks.push_back(MainThreadTask::FullStep(token));
             }
         }
+    }
+
+    fn run_full_step(&mut self, token: u64) {
+        let job = self.jobs.remove(&token).expect("full step job");
+        let pos = job.pos;
+        if self.holders.get(pos.pack()).is_none_or(|h| h.id != job.holder) {
+            self.holders.futures.complete(job.work, false);
+            return;
+        }
+        let mut proto_ticks = None;
+        if let Some(chunk) = self.chunks.get_mut(&pos) {
+            if let Some(proto) = chunk.proto.take() {
+                chunk.mark_unsaved();
+                let proto = *proto;
+                proto_ticks = Some((LevelChunkTicks::with_pending(proto.block_ticks.scheduled_ticks()), LevelChunkTicks::with_pending(proto.fluid_ticks.scheduled_ticks())));
+                if !proto.entities.is_empty() {
+                    self.world_gen_chunk_entities.push((pos, proto.entities));
+                }
+            }
+            if !chunk.legacy_entities.is_empty() {
+                self.legacy_chunk_entities.push((pos, std::mem::take(&mut chunk.legacy_entities)));
+            }
+            chunk.loaded = true;
+            chunk.register_all_block_entities_after_level_load(&mut self.block_entity_tickers);
+            chunk.set_unsaved_listener(self.unsaved_listener.0.clone());
+        }
+        let holder = self.holders.get_mut(pos.pack()).unwrap();
+        let (block_ticks, fluid_ticks) = match holder.saved_ticks.take() {
+            Some(ticks) => *ticks,
+            None => proto_ticks.unwrap_or_default(),
+        };
+        self.block_ticks.register_container(pos, block_ticks);
+        self.fluid_ticks.register_container(pos, fluid_ticks);
+        self.complete_step(job);
+    }
+
+    fn run_apply_loaded(&mut self, token: u64) {
+        let job = self.jobs.remove(&token).expect("load job");
+        let result = self.loaded_results.remove(&token).expect("load result");
+        if self.holders.get(job.pos.pack()).is_none_or(|h| h.id != job.holder) {
+            self.holders.futures.complete(job.work, false);
+            return;
+        }
+        self.apply_loaded(job, result);
     }
 
     fn generate_biomes(&mut self, pos: ChunkPos) {
@@ -1811,13 +1907,18 @@ impl ChunkCache {
             WorkResult::Wake => return,
         };
         self.in_flight.pop_front();
+        if let WorkResult::Loaded { result, .. } = result {
+            self.loaded_results.insert(token, result);
+            self.distance_manager.main_thread_tasks.push_back(MainThreadTask::ApplyLoaded(token));
+            return;
+        }
         let job = self.jobs.remove(&token).expect("job of a result");
         if self.holders.get(pos.pack()).is_none_or(|h| h.id != job.holder) {
             self.holders.futures.complete(job.work, false);
             return;
         }
         match result {
-            WorkResult::Loaded { result, .. } => self.apply_loaded(job, result),
+            WorkResult::Loaded { .. } => unreachable!("loads are applied by their main thread task"),
             WorkResult::Generated { mut chunk, .. } => {
                 self.biome_chunks.remove(&pos);
                 chunk.mark_unsaved();
@@ -1869,51 +1970,50 @@ impl ChunkCache {
     }
 
     fn add_light_task(&mut self, ty: TaskType, task: LightTask) {
-        self.light_engine.add_task(&mut self.chunks, ty, task, &mut self.light_changes, &mut self.light_done);
-        self.finish_light_steps();
-        self.on_light_updates();
+        let queue_level = self.holders.map.get(&task.chunk_pos().pack()).map_or(super::chunk_task_dispatcher::PRIORITY_LEVEL_COUNT - 1, |holder| holder.queue_level.min(super::chunk_task_dispatcher::PRIORITY_LEVEL_COUNT - 1));
+        self.light_engine.add_task(ty, task, queue_level);
     }
 
-    fn run_light_batch(&mut self) {
-        self.light_engine.run_update(&mut self.chunks, &mut self.light_changes, &mut self.light_done);
-        self.finish_light_steps();
-        self.on_light_updates();
-        self.process_woken();
-    }
-
-    fn finish_light_steps(&mut self) {
-        for token in std::mem::take(&mut self.light_done) {
+    fn run_light_worker(&mut self) -> bool {
+        if !self.light_engine.run_worker(&mut self.chunks) {
+            return false;
+        }
+        for token in std::mem::take(&mut self.light_engine.done) {
             let job = self.jobs.remove(&token).expect("light step");
             self.complete_step(job);
         }
+        for future in std::mem::take(&mut self.light_engine.completed_futures) {
+            self.holders.futures.complete(future, true);
+        }
+        for (layer, node) in std::mem::take(&mut self.light_engine.changes) {
+            self.distance_manager.main_thread_tasks.push_back(MainThreadTask::LightUpdate { layer, node });
+        }
+        self.process_woken();
+        true
     }
 
     pub fn run_light_updates(&mut self) {
         while self.light_engine.has_work() {
-            self.run_light_batch();
+            self.light_engine.try_schedule_update();
+            self.run_light_worker();
         }
-        self.on_light_updates();
-        self.waiting_for_light.clear();
     }
 
-    fn on_light_updates(&mut self) {
-        for (layer, section_node) in self.light_changes.drain(..) {
-            let pos = ChunkPos::new(section::x(section_node), section::z(section_node));
-            let Some(holder) = self.holders.map.get(&pos.pack()) else { continue };
-            if !holder.status_done(&self.holders.futures, ChunkStatus::InitializeLight) || holder.is_status_disallowed(ChunkStatus::InitializeLight) {
-                continue;
-            }
-            if let Some(chunk) = self.chunks.get_mut(&pos) {
-                chunk.mark_unsaved();
-            }
-            if holder.is_ticking(&self.holders.futures) {
-                self.ticking_light_changes.push((layer, section_node));
-            }
+    fn run_light_update_task(&mut self, layer: LightLayer, section_node: i64) {
+        let pos = ChunkPos::new(section::x(section_node), section::z(section_node));
+        let Some(holder) = self.holders.map.get(&pos.pack()) else { return };
+        if !holder.status_done(&self.holders.futures, ChunkStatus::InitializeLight) || holder.is_status_disallowed(ChunkStatus::InitializeLight) {
+            return;
+        }
+        if let Some(chunk) = self.chunks.get_mut(&pos) {
+            chunk.mark_unsaved();
+        }
+        if holder.is_ticking(&self.holders.futures) {
+            self.ticking_light_changes.push((layer, section_node));
         }
     }
 
     pub fn take_light_changes(&mut self) -> Vec<(LightLayer, i64)> {
-        self.on_light_updates();
         std::mem::take(&mut self.ticking_light_changes)
     }
 
@@ -2129,6 +2229,7 @@ impl ChunkCache {
         }
         if had_chunk {
             self.add_light_task(TaskType::PreUpdate, LightTask::UpdateChunkStatus(chunk_pos));
+            self.light_engine.try_schedule_update();
         }
     }
 
@@ -2182,26 +2283,32 @@ impl ChunkCache {
         if !flush {
             self.next_chunk_save_time.clear();
             let now = Instant::now();
-            let visible: Vec<i64> = self.holders.map.keys().copied().collect();
+            let visible = self.holders.ordered_keys();
             let saved = visible.into_iter().filter(|&pos| self.save_chunk_if_needed(pos, now)).count();
             return Ok(saved);
         }
-        let mut full: Vec<ChunkPos> = self
-            .holders
-            .map
-            .values()
-            .chain(self.holders.pending_unloads.values())
-            .filter(|h| h.was_accessible_since_last_save && h.status_done(&self.holders.futures, ChunkStatus::Full))
-            .map(|h| h.pos)
-            .collect();
-        full.sort();
-        for &pos in &full {
-            self.refresh_accessibility(pos.pack());
-            if let Some(holder) = self.holders.pending_unloads.get_mut(&pos.pack()) {
-                holder.was_accessible_since_last_save = holder.full_status().is_or_after(FullChunkStatus::Full);
+        let chunks_to_save: Vec<i64> = self.holders.ordered_keys().into_iter().filter(|key| self.holders.map[key].was_accessible_since_last_save).collect();
+        for &key in &chunks_to_save {
+            self.refresh_accessibility(key);
+        }
+        let mut saved = 0;
+        loop {
+            let mut did_work = false;
+            for &key in &chunks_to_save {
+                while self.holders.get(key).is_some_and(|holder| !holder.is_ready_for_saving(&self.holders.futures)) {
+                    self.managed_block_step();
+                }
+                let Some(holder) = self.holders.get(key) else { continue };
+                let pos = holder.pos;
+                if holder.status_done(&self.holders.futures, ChunkStatus::Full) && self.save_chunk(pos) {
+                    did_work = true;
+                    saved += 1;
+                }
+            }
+            if !did_work {
+                break;
             }
         }
-        let saved = full.into_iter().filter(|&pos| self.save_chunk(pos)).count();
         self.poi_manager.storage.flush_all();
         self.process_unloads(true);
         self.poi_manager.storage.synchronize(true);
@@ -2442,6 +2549,7 @@ mod tests {
         let pos = BlockPos::new(100, -60, 100);
         level.set_block(pos, blocks::STONE.default_state(), UPDATE_ALL);
         assert!(level.chunks.has_chunk(pos.chunk()));
+        level.finish_chunk_work();
         level.tick();
         assert!(level.chunks.has_chunk(pos.chunk()));
         level.tick();

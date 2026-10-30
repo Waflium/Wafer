@@ -1,8 +1,9 @@
 use wafer_core::hash_map::FastMap;
-use std::collections::VecDeque;
 
 use wafer_core::{BlockPos, ChunkPos};
 
+use super::chunk_holder::FutureId;
+use super::chunk_task_dispatcher::ChunkTaskPriorityQueue;
 use crate::world::level::chunk::LevelChunk;
 use crate::world::level::chunk::data_layer::DataLayer;
 use crate::world::level::light_layer::LightLayer;
@@ -26,11 +27,37 @@ pub enum LightTask {
     LightChunk { pos: ChunkPos, lighted: bool },
     LightChunkDone { pos: ChunkPos, done: u64 },
     UpdateChunkStatus(ChunkPos),
+    CompleteFuture(ChunkPos, FutureId),
+}
+
+impl LightTask {
+    pub fn chunk_pos(&self) -> ChunkPos {
+        match *self {
+            LightTask::CheckBlock(pos) => pos.chunk(),
+            LightTask::UpdateSectionStatus(section_node, _) | LightTask::QueueSectionData(_, section_node, _) => ChunkPos::new(section::x(section_node), section::z(section_node)),
+            LightTask::RetainData(pos, _)
+            | LightTask::InitializeLight(pos)
+            | LightTask::InitializeLightDone { pos, .. }
+            | LightTask::LightChunk { pos, .. }
+            | LightTask::LightChunkDone { pos, .. }
+            | LightTask::UpdateChunkStatus(pos)
+            | LightTask::CompleteFuture(pos, _) => pos,
+        }
+    }
+
+    pub fn at_top_priority(&self) -> bool {
+        matches!(self, LightTask::UpdateSectionStatus(..) | LightTask::QueueSectionData(..) | LightTask::RetainData(..) | LightTask::UpdateChunkStatus(..))
+    }
 }
 
 pub struct ThreadedLevelLightEngine {
     pub engine: LevelLightEngine,
-    light_tasks: VecDeque<(TaskType, LightTask)>,
+    queue: ChunkTaskPriorityQueue<(TaskType, LightTask)>,
+    light_tasks: Vec<(TaskType, LightTask)>,
+    scheduled: bool,
+    pub changes: Vec<(LightLayer, i64)>,
+    pub done: Vec<u64>,
+    pub completed_futures: Vec<FutureId>,
     min_section: i32,
     max_section: i32,
 }
@@ -39,24 +66,53 @@ impl ThreadedLevelLightEngine {
     pub fn new(min_y: i32, height: i32, has_sky_light: bool) -> ThreadedLevelLightEngine {
         ThreadedLevelLightEngine {
             engine: LevelLightEngine::new(min_y, height, true, has_sky_light),
-            light_tasks: VecDeque::new(),
+            queue: ChunkTaskPriorityQueue::default(),
+            light_tasks: Vec::new(),
+            scheduled: false,
+            changes: Vec::new(),
+            done: Vec::new(),
+            completed_futures: Vec::new(),
             min_section: min_y >> 4,
             max_section: ((min_y + height) >> 4) - 1,
         }
     }
 
-    pub fn add_task(&mut self, chunks: &mut FastMap<ChunkPos, LevelChunk>, ty: TaskType, task: LightTask, changes: &mut Vec<(LightLayer, i64)>, done: &mut Vec<u64>) {
-        self.light_tasks.push_back((ty, task));
-        if self.light_tasks.len() >= TASKS_PER_BATCH {
-            self.run_update(chunks, changes, done);
-        }
+    pub fn add_task(&mut self, ty: TaskType, task: LightTask, queue_level: i32) {
+        let level = if task.at_top_priority() { 0 } else { queue_level };
+        let pos = task.chunk_pos().pack();
+        self.queue.submit((ty, task), pos, level);
     }
 
     pub fn has_work(&self) -> bool {
-        !self.light_tasks.is_empty() || self.engine.has_light_work()
+        self.queue.has_work() || !self.light_tasks.is_empty() || self.engine.has_light_work()
     }
 
-    pub fn run_update(&mut self, chunks: &mut FastMap<ChunkPos, LevelChunk>, changes: &mut Vec<(LightLayer, i64)>, done: &mut Vec<u64>) {
+    pub fn try_schedule_update(&mut self) {
+        if self.has_work() {
+            self.scheduled = true;
+        }
+    }
+
+    pub fn run_worker(&mut self, chunks: &mut FastMap<ChunkPos, LevelChunk>) -> bool {
+        let mut worked = false;
+        while let Some((_, tasks)) = self.queue.pop() {
+            worked = true;
+            for task in tasks {
+                self.light_tasks.push(task);
+                if self.light_tasks.len() >= TASKS_PER_BATCH {
+                    self.run_update(chunks);
+                }
+            }
+        }
+        if self.scheduled {
+            self.scheduled = false;
+            worked = true;
+            self.run_update(chunks);
+        }
+        worked
+    }
+
+    fn run_update(&mut self, chunks: &mut FastMap<ChunkPos, LevelChunk>) {
         let total = self.light_tasks.len().min(TASKS_PER_BATCH);
         let mut batch: Vec<(TaskType, LightTask)> = self.light_tasks.drain(..total).collect();
         let mut correct = Vec::new();
@@ -64,13 +120,15 @@ impl ThreadedLevelLightEngine {
             let chunks: &FastMap<ChunkPos, LevelChunk> = chunks;
             for (ty, task) in &mut batch {
                 if *ty == TaskType::PreUpdate {
-                    self.run_task(chunks, task, &mut correct, done);
+                    self.run_task(chunks, task, &mut correct);
                 }
             }
-            self.engine.run_light_updates(chunks, changes);
+            let mut changes = std::mem::take(&mut self.changes);
+            self.engine.run_light_updates(chunks, &mut changes);
+            self.changes = changes;
             for (ty, task) in &mut batch {
                 if *ty == TaskType::PostUpdate {
-                    self.run_task(chunks, task, &mut correct, done);
+                    self.run_task(chunks, task, &mut correct);
                 }
             }
         }
@@ -81,7 +139,7 @@ impl ThreadedLevelLightEngine {
         }
     }
 
-    fn run_task(&mut self, chunks: &FastMap<ChunkPos, LevelChunk>, task: &mut LightTask, correct: &mut Vec<ChunkPos>, done: &mut Vec<u64>) {
+    fn run_task(&mut self, chunks: &FastMap<ChunkPos, LevelChunk>, task: &mut LightTask, correct: &mut Vec<ChunkPos>) {
         let engine = &mut self.engine;
         if let LightTask::QueueSectionData(layer, section_node, data) = task {
             engine.queue_section_data(*layer, *section_node, data.take());
@@ -104,7 +162,7 @@ impl ThreadedLevelLightEngine {
             LightTask::InitializeLightDone { pos, lighted, done: future } => {
                 engine.set_light_enabled(chunks, pos, lighted);
                 engine.retain_data(pos, false);
-                done.push(future);
+                self.done.push(future);
             }
             LightTask::LightChunk { pos, lighted } => {
                 if !lighted {
@@ -113,7 +171,7 @@ impl ThreadedLevelLightEngine {
             }
             LightTask::LightChunkDone { pos, done: future } => {
                 correct.push(pos);
-                done.push(future);
+                self.done.push(future);
             }
             LightTask::UpdateChunkStatus(pos) => {
                 engine.retain_data(pos, false);
@@ -126,6 +184,7 @@ impl ThreadedLevelLightEngine {
                     engine.update_section_status(section::of(pos.x, section_y, pos.z), true);
                 }
             }
+            LightTask::CompleteFuture(_, future) => self.completed_futures.push(future),
         }
     }
 }

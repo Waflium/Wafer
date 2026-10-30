@@ -16,7 +16,7 @@ const OVERWORLD_PORTAL_RADIUS: i32 = 128;
 
 pub fn find_closest_portal_position(level: &mut ServerLevel, approximate_exit_pos: BlockPos, to_nether: bool) -> Option<BlockPos> {
     let radius = if to_nether { NETHER_PORTAL_RADIUS } else { OVERWORLD_PORTAL_RADIUS };
-    poi_manager::ensure_loaded_and_valid(&mut level.chunks, approximate_exit_pos, radius);
+    poi_manager::ensure_loaded_and_valid(level, approximate_exit_pos, radius);
     let records = level.chunks.poi_manager.get_in_square(&|poi_type| poi_type == PoiType::NetherPortal, approximate_exit_pos, radius, Occupancy::Any);
     let mut closest: Option<BlockPos> = None;
     for pos in records.into_iter().map(|record| record.pos) {

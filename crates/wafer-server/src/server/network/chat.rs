@@ -130,7 +130,7 @@ impl Server {
         let Some(last_seen) = self.unpack_and_apply_last_seen(id, &update) else { return Ok(()) };
         if self.try_handle_chat(id, &content, false) {
             let body = SignedMessageBody { content, time_stamp, salt, last_seen };
-            self.tasks.push_back(Task::Chat { player: id, body, signature });
+            self.tasks.borrow_mut().push_back(Task::Chat { player: id, body, signature });
         }
         Ok(())
     }
@@ -153,7 +153,7 @@ impl Server {
     pub(in crate::server) fn handle_chat_command(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
         let command = packet.reader().string(32767)?.to_owned();
         if self.try_handle_chat(id, &command, true) {
-            self.tasks.push_back(Task::Command { player: id, command });
+            self.tasks.borrow_mut().push_back(Task::Command { player: id, command });
         }
         Ok(())
     }
@@ -188,7 +188,7 @@ impl Server {
         let update = Update::read(&mut r)?;
         let Some(last_seen) = self.unpack_and_apply_last_seen(id, &update) else { return Ok(()) };
         if self.try_handle_chat(id, &command, true) {
-            self.tasks.push_back(Task::SignedCommand { player: id, command, time_stamp, salt, arguments, last_seen });
+            self.tasks.borrow_mut().push_back(Task::SignedCommand { player: id, command, time_stamp, salt, arguments, last_seen });
         }
         Ok(())
     }
@@ -351,7 +351,7 @@ impl Server {
     }
 
     pub fn chain(&mut self, player: EntityId, run: impl FnOnce(&mut Server) + 'static) {
-        self.tasks.push_back(Task::Chained { player, run: Box::new(run) });
+        self.tasks.borrow_mut().push_back(Task::Chained { player, run: Box::new(run) });
     }
 }
 

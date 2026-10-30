@@ -3,7 +3,7 @@ use wafer_core::{BlockPos, ChunkPos};
 use super::poi_record::PoiRecord;
 use super::poi_section::PoiSection;
 use super::poi_types::{self, PoiType};
-use crate::server::level::chunk_cache::ChunkCache;
+use crate::server::level::ServerLevel;
 use crate::server::level::chunk_workers::IoWorker;
 use crate::server::level::chunk_level::ChunkStatus;
 use crate::server::level::chunk_tracker::TrackerLevels;
@@ -338,16 +338,16 @@ impl PoiManager {
     }
 }
 
-pub fn ensure_loaded_and_valid(chunks: &mut ChunkCache, center: BlockPos, radius: i32) {
+pub fn ensure_loaded_and_valid(level: &mut ServerLevel, center: BlockPos, radius: i32) {
     let center_chunk = center.chunk();
     let chunk_radius = radius.div_euclid(16);
-    let (min_section_y, max_section_y) = chunks.poi_manager.section_range();
+    let (min_section_y, max_section_y) = level.chunks.poi_manager.section_range();
     for z in center_chunk.z - chunk_radius..=center_chunk.z + chunk_radius {
         for y in min_section_y..=max_section_y {
             for x in center_chunk.x - chunk_radius..=center_chunk.x + chunk_radius {
                 let pos = ChunkPos::new(x, z);
-                if chunks.poi_manager.needs_loading(pos, y) && chunks.poi_manager.loaded_chunks.add(pos.pack()) {
-                    chunks.get_chunk_at_status(pos, ChunkStatus::Empty);
+                if level.chunks.poi_manager.needs_loading(pos, y) && level.chunks.poi_manager.loaded_chunks.add(pos.pack()) {
+                    level.get_chunk_structures_at(pos, ChunkStatus::Empty);
                 }
             }
         }
