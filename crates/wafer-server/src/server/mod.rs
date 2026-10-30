@@ -2303,7 +2303,7 @@ pub fn run(
             uses_authentication: config.online_mode,
             operator_permission_level: config.op_permission_level,
         };
-        match old_users_converter.convert_old_users() {
+        match crate::util::catch_throwable(|| old_users_converter.convert_old_users()).and_then(|result| result) {
             Ok(true) => name_to_id_cache.save(),
             Ok(false) => {}
             Err(throwable) => {
@@ -2419,7 +2419,10 @@ pub fn run(
     }
     server.notification_manager.server_started();
     server.status_icon = server.load_status_icon();
-    server.build_server_status();
+    {
+        let _scope = main_thread_frames::enter(BUILD_SERVER_STATUS_FRAMES);
+        server.build_server_status();
+    }
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_server_loop(&mut server, &mut events, &tasks, &timing)));
     let crashed = result.is_err();
     if let Err(panic) = result {
@@ -2523,6 +2526,12 @@ const CONNECTION_TICK_FRAMES: [&str; 7] = [
 const AUTO_SAVE_SAVE_EVERYTHING: &str = "net.minecraft.server.MinecraftServer.autoSave(MinecraftServer.java:1023)";
 const TICK_SERVER_AUTO_SAVE: &str = "net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:989)";
 const TICK_SERVER_PAUSED_AUTO_SAVE: &str = "net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:969)";
+
+const BUILD_SERVER_STATUS_FRAMES: [&str; 3] = [
+    "net.minecraft.server.dedicated.DedicatedServer.enforceSecureProfile(DedicatedServer.java:604)",
+    "net.minecraft.server.MinecraftServer.buildServerStatus(MinecraftServer.java:1065)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:724)",
+];
 
 pub(crate) const RUN_SERVER_INITIALIZE_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:774)";
 pub(crate) const RUN_SERVER_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)";

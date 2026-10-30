@@ -233,15 +233,81 @@ fn idle_worker_main_frames() -> Vec<String> {
     .collect()
 }
 
+const SIGNALLER_JOIN_FRAMES: [&str; 7] = [
+    "java.base/jdk.internal.misc.Unsafe.park(Native Method)",
+    "java.base/java.util.concurrent.locks.LockSupport.park(LockSupport.java:223)",
+    "java.base/java.util.concurrent.CompletableFuture$Signaller.block(CompletableFuture.java:1885)",
+    "java.base/java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:4364)",
+    "java.base/java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:4310)",
+    "java.base/java.util.concurrent.CompletableFuture.waitingGet(CompletableFuture.java:1919)",
+    "java.base/java.util.concurrent.CompletableFuture.join(CompletableFuture.java:2138)",
+];
+
+fn services_discovery_thread() -> ThreadDumpEntry {
+    let frames = SIGNALLER_JOIN_FRAMES
+        .iter()
+        .chain(
+            [
+                "com.mojang.authlib.services.RetryableFetch.lambda$fetch$0(RetryableFetch.java:69)",
+                "com.mojang.authlib.services.RetryableFetch$$Lambda/0x0000000094c13660.get(Unknown Source)",
+                "com.mojang.authlib.services.MinecraftServicesDiscoveryService.getEndpoint(MinecraftServicesDiscoveryService.java:136)",
+            ]
+            .iter(),
+        )
+        .map(|frame| thread_info_frames(&[*frame]).remove(0))
+        .collect();
+    ThreadDumpEntry {
+        name: "Minecraft Services Discovery".to_string(),
+        daemon: true,
+        priority: 5,
+        id: 73,
+        state: "WAITING",
+        lock: Some("java.util.concurrent.CompletableFuture$Signaller@761f3cee".to_string()),
+        in_native: false,
+        frames,
+        locked_synchronizers: vec!["java.util.concurrent.ThreadPoolExecutor$Worker@72eae541".to_string()],
+    }
+}
+
+fn services_discovery_idle_thread() -> ThreadDumpEntry {
+    let frames = [
+        "java.base/jdk.internal.misc.Unsafe.park(Native Method)",
+        "java.base/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:271)",
+        "java.base/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.awaitNanos(AbstractQueuedSynchronizer.java:1803)",
+        "java.base/java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(ScheduledThreadPoolExecutor.java:1166)",
+        "java.base/java.util.concurrent.ScheduledThreadPoolExecutor$DelayedWorkQueue.take(ScheduledThreadPoolExecutor.java:883)",
+        "java.base/java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1016)",
+        "java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1076)",
+        "java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)",
+        "java.base/java.lang.Thread.runWith(Thread.java:1487)",
+        "java.base/java.lang.Thread.run(Thread.java:1474)",
+    ]
+    .iter()
+    .map(|frame| thread_info_frames(&[*frame]).remove(0))
+    .collect();
+    ThreadDumpEntry {
+        name: "Minecraft Services Discovery".to_string(),
+        daemon: true,
+        priority: 5,
+        id: 73,
+        state: "TIMED_WAITING",
+        lock: Some("java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject@7fcadac2".to_string()),
+        in_native: false,
+        frames,
+        locked_synchronizers: Vec::new(),
+    }
+}
+
 fn dump_thread_info(server_frames: &[&'static str]) -> String {
+    let server_waiting = server_frames.first().is_some_and(|frame| frame.contains("Unsafe.park"));
     let mut entries = vec![
         ThreadDumpEntry {
             name: "Server thread".to_string(),
             daemon: false,
             priority: 8,
             id: 105,
-            state: "RUNNABLE",
-            lock: None,
+            state: if server_waiting { "WAITING" } else { "RUNNABLE" },
+            lock: server_waiting.then(|| "java.util.concurrent.CompletableFuture$Signaller@2f8d84b9".to_string()),
             in_native: false,
             frames: thread_info_frames(server_frames),
             locked_synchronizers: Vec::new(),
@@ -294,6 +360,11 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
             locked_synchronizers: Vec::new(),
         },
     ];
+    if crate::server::services::discovery_executor_blocked() {
+        entries.push(services_discovery_thread());
+    } else if crate::server::services::discovery_executor_started() {
+        entries.push(services_discovery_idle_thread());
+    }
     for index in 1..=crate::server::level::chunk_workers::io_worker_count() {
         entries.push(ThreadDumpEntry {
             name: format!("IO-Worker-{index}"),

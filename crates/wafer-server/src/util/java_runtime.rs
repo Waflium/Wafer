@@ -17,8 +17,30 @@ pub fn os_arch() -> &'static str {
     }
 }
 
+static INPUT_ARGUMENTS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+pub fn split_jvm_arguments(args: Vec<String>) -> Vec<String> {
+    let jvm_count = args.iter().take_while(|argument| argument.starts_with("-D") || argument.starts_with("-X")).count();
+    let mut jvm_arguments = args;
+    let program_arguments = jvm_arguments.split_off(jvm_count);
+    let _ = INPUT_ARGUMENTS.set(jvm_arguments);
+    program_arguments
+}
+
 pub fn input_arguments() -> Vec<String> {
-    Vec::new()
+    INPUT_ARGUMENTS.get().cloned().unwrap_or_default()
+}
+
+pub fn get_property(name: &str) -> Option<String> {
+    let prefix = format!("-D{name}");
+    INPUT_ARGUMENTS.get()?.iter().rev().find_map(|argument| {
+        let rest = argument.strip_prefix(&prefix)?;
+        match rest.strip_prefix('=') {
+            Some(value) => Some(value.to_string()),
+            None if rest.is_empty() => Some(String::new()),
+            None => None,
+        }
+    })
 }
 
 pub fn class_cast_exception(from: &str, to: &str) -> String {

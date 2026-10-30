@@ -132,6 +132,7 @@ pub const SERVER_MAIN: &str = "ServerMain";
 pub const BUNDLER_MAIN_TAIL: [&str; 2] = ["net.minecraft.bundler.Main.lambda$run$0(Main.java:54)", "java.base/java.lang.Thread.run(Thread.java:1474)"];
 
 pub fn main(args: Vec<String>) {
+    let args = crate::util::java_runtime::split_jvm_arguments(args);
     let _thread = crate::util::java_stack::enter_all(&BUNDLER_MAIN_TAIL);
     std::panic::set_hook(Box::new(|info| {
         if crate::util::is_catching_exception() {

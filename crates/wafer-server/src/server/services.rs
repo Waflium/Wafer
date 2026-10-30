@@ -8,17 +8,41 @@ use rsa::pkcs8::DecodePublicKey;
 use crate::server::players::NameAndId;
 use crate::server::players::old_users_converter::{ConversionError, ProfileLookupCallback};
 use crate::util::java_collections::JavaHashSet;
+use crate::util::java_http_url_connection::{self, Failure, Method, Response};
+use crate::util::java_url::JavaUrl;
 use crate::util::java_throwable::JavaThrowable;
 use crate::util::signature_validator::SignatureValidator;
 use crate::util::gson::json_reader::{JsonReader, JsonToken, Strictness};
 
-const DISCOVERY_URL: &str = "https://discovery.minecraftservices.com/minecraft/client";
 const REFRESH_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 const MAX_BACKOFF_EXPONENT: u32 = 6;
-const CONNECT_TIMEOUT: Duration = Duration::from_millis(5000);
-const READ_TIMEOUT: Duration = Duration::from_millis(5100);
 
 pub type Callers<'a> = &'a [&'static str];
+
+struct Environment {
+    discovery_url: String,
+    name: String,
+}
+
+impl Environment {
+    fn determine() -> Environment {
+        let environment = |discovery_url: &str, name: &str| Environment { discovery_url: discovery_url.to_string(), name: name.to_string() };
+        let name = crate::util::java_runtime::get_property("minecraft.api.env");
+        match name.map(|name| name.to_lowercase()).as_deref() {
+            Some("prod") => environment("https://discovery.minecraftservices.com/minecraft/client", "PROD"),
+            Some("staging") => environment("https://discovery-staging.minecraftservices.com/minecraft/client", "STAGING"),
+            _ => match crate::util::java_runtime::get_property("minecraft.api.discovery.host") {
+                Some(discovery) => environment(&discovery, "properties"),
+                None => environment("https://discovery.minecraftservices.com/minecraft/client", "PROD"),
+            },
+        }
+    }
+}
+
+enum Fetch<T> {
+    Died,
+    Finished(Option<T>),
+}
 
 struct Fetched<T> {
     value: Mutex<Option<Arc<T>>>,
@@ -57,6 +81,10 @@ impl<T> Fetched<T> {
         self.attempt.notify_waiters();
     }
 
+    fn is_ready(&self) -> bool {
+        *self.ready.0.lock().unwrap()
+    }
+
     fn has_value(&self) -> bool {
         self.value.lock().unwrap().is_some()
     }
@@ -64,12 +92,15 @@ impl<T> Fetched<T> {
 
 fn retryable_fetch<T: Send + Sync + 'static, F>(target: Arc<Fetched<T>>, retry: Duration, fetch: impl Fn() -> F + Send + 'static)
 where
-    F: Future<Output = Option<T>> + Send,
+    F: Future<Output = Fetch<T>> + Send,
 {
     tokio::spawn(async move {
         let mut failures = 0;
         loop {
-            target.attempted(fetch().await);
+            match fetch().await {
+                Fetch::Died => return,
+                Fetch::Finished(value) => target.attempted(value),
+            }
             let delay = if target.has_value() {
                 failures = 0;
                 REFRESH_INTERVAL
@@ -161,7 +192,7 @@ struct ServicesKeySet {
 pub struct Services {
     discovery: Arc<Fetched<serde_json::Value>>,
     key_set: Arc<Fetched<ServicesKeySet>>,
-    http: Option<(reqwest::Client, tokio::runtime::Handle)>,
+    runtime: Option<tokio::runtime::Handle>,
 }
 
 enum UrlFailure {
@@ -171,21 +202,25 @@ enum UrlFailure {
 
 impl Services {
     pub fn create() -> Services {
-        info!("Environment: Environment[discoveryUrl={DISCOVERY_URL}, name=PROD]");
-        let client = reqwest::Client::builder().connector_layer(tower::timeout::TimeoutLayer::new(CONNECT_TIMEOUT)).read_timeout(READ_TIMEOUT).build().expect("an HTTP client");
-        let services = Services {
-            discovery: Arc::new(Fetched::new(false)),
-            key_set: Arc::new(Fetched::new(false)),
-            http: Some((client.clone(), tokio::runtime::Handle::current())),
-        };
-        let http = client.clone();
+        let environment = Environment::determine();
+        info!("Environment: Environment[discoveryUrl={}, name={}]", environment.discovery_url, environment.name);
+        DISCOVERY_STARTED.store(true, std::sync::atomic::Ordering::Relaxed);
+        let services = Services { discovery: Arc::new(Fetched::new(false)), key_set: Arc::new(Fetched::new(false)), runtime: Some(tokio::runtime::Handle::current()) };
         retryable_fetch(services.discovery.clone(), Duration::from_secs(60), move || {
-            let http = http.clone();
-            async move { get_json(&http, DISCOVERY_URL).await }
+            let discovery_url = environment.discovery_url.clone();
+            async move {
+                match JavaUrl::constant(&discovery_url) {
+                    Ok(url) => Fetch::Finished(get_json(&url).await),
+                    Err(_) => {
+                        DISCOVERY_DIED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        Fetch::Died
+                    }
+                }
+            }
         });
         let this = services.clone();
         retryable_fetch(services.key_set.clone(), Duration::from_secs(5 * 60), move || {
-            let (http, this) = (client.clone(), this.clone());
+            let this = this.clone();
             async move {
                 let url = match this.url_async_on("authentication", "getPublicKeys", Some(DISCOVERY_THREAD)).await {
                     Ok(url) => url,
@@ -194,17 +229,19 @@ impl Services {
                         if let Err(failure) = this.url_async_on("authentication", "getPublicKeys", Some(DISCOVERY_THREAD)).await {
                             warn!(thread: DISCOVERY_THREAD, "Failed to connect\n{}", services_unavailable(&failure, &KEY_UNAVAILABLE_CONTEXT).throwable.print_stack_trace().trim_end());
                         }
-                        return None;
+                        return Fetch::Finished(None);
                     }
                 };
-                let response = match client_get(&http, &url, &KEY_FETCH_CONTEXT).await {
-                    Ok(response) => response?,
+                let Ok(url) = JavaUrl::constant(&url) else { return Fetch::Died };
+                let response = match client_get(&url, &KEY_FETCH_CONTEXT).await {
+                    Ok(Some(response)) => response,
+                    Ok(None) => return Fetch::Finished(None),
                     Err(exception) => {
                         for _ in 0..2 {
                             exception.log_html_body(Some(DISCOVERY_THREAD));
                             error!(thread: DISCOVERY_THREAD, "Failed to request Minecraft Services public key\n{}", exception.throwable.print_stack_trace().trim_end());
                         }
-                        return None;
+                        return Fetch::Finished(None);
                     }
                 };
                 let keys = response["playerCertificateKeys"].as_array().map(Vec::as_slice).unwrap_or_default();
@@ -212,14 +249,14 @@ impl Services {
                 if profile_keys.is_none() {
                     error!(thread: DISCOVERY_THREAD, "Received malformed Minecraft Services public key data");
                 }
-                Some(ServicesKeySet { profile_keys: profile_keys? })
+                Fetch::Finished(profile_keys.map(|profile_keys| ServicesKeySet { profile_keys }))
             }
         });
         services
     }
 
     pub fn offline() -> Services {
-        Services { discovery: Arc::new(Fetched::new(true)), key_set: Arc::new(Fetched::new(true)), http: None }
+        Services { discovery: Arc::new(Fetched::new(true)), key_set: Arc::new(Fetched::new(true)), runtime: None }
     }
 
     pub async fn url_async(&self, service: &str, endpoint: &str) -> Option<String> {
@@ -251,7 +288,7 @@ impl Services {
     }
 
     pub fn find_profile_by_name(&self, name: &str, callers: Callers) -> Option<NameAndId> {
-        let (http, runtime) = self.http.as_ref()?;
+        let runtime = self.runtime.as_ref()?;
         let context: Vec<&'static str> = [FIND_PROFILE_BY_NAME].into_iter().chain(callers.iter().copied()).collect();
         runtime.block_on(async {
             let url = match self.url_async_on("profiles", "getByName", None).await {
@@ -261,8 +298,8 @@ impl Services {
                     return None;
                 }
             };
-            let url = url.replace("{name}", &name.to_lowercase());
-            let found = match client_get(http, &url, &context).await {
+            let url = constant_url(&url.replace("{name}", &name.to_lowercase()), &context);
+            let found = match client_get(&url, &context).await {
                 Ok(found) => found?,
                 Err(exception) => {
                     exception.log_html_body(None);
@@ -332,8 +369,9 @@ impl Services {
             warn!("Services are available, but unable to find uri for PROFILES/getManyByName");
             return Err(unavailable(UrlFailure::MissingEndpoint));
         };
-        let Some((http, runtime)) = self.http.as_ref() else { return Err(unavailable(UrlFailure::Offline)) };
-        let body = runtime.block_on(client_post(http, url, names, &context))?;
+        let Some(runtime) = self.runtime.as_ref() else { return Err(unavailable(UrlFailure::Offline)) };
+        let url = constant_url(url, &context);
+        let body = runtime.block_on(client_post(&url, names, &context))?;
         let Some(body) = body else { return Ok(Vec::new()) };
         let profiles = body.as_array().cloned().unwrap_or_default();
         profiles
@@ -346,12 +384,8 @@ impl Services {
             .ok_or_else(|| json_failure("[invalid profile]", true, &[READ_SERVICE_RESPONSE_145], &[POST_WITH_ETAG, CLIENT_POST], &context))
     }
 
-    pub fn fetch_profile(&self, id: u128) -> Option<NameAndId> {
-        self.fetch_game_profile(id, &[]).map(|profile| NameAndId { id: profile.uuid, name: profile.name })
-    }
-
     pub fn fetch_game_profile(&self, id: u128, callers: Callers) -> Option<crate::network::login::Profile> {
-        let (http, runtime) = self.http.as_ref()?;
+        let runtime = self.runtime.as_ref()?;
         let context: Vec<&'static str> = [FETCH_PROFILE].into_iter().chain(callers.iter().copied()).collect();
         runtime.block_on(async {
             let endpoint = match self.url_async_on("session", "getProfileById", None).await {
@@ -366,11 +400,10 @@ impl Services {
                     return None;
                 }
             };
-            let endpoint = endpoint.replace("{profileId}", &format!("{id:032x}"));
-            let separator = if endpoint.contains('?') { '&' } else { '?' };
-            let url = format!("{endpoint}{separator}unsigned=false");
+            let url_frames: Vec<&'static str> = [FETCH_PROFILE_UNCACHED_URL].into_iter().chain(context.iter().copied()).collect();
+            let url = constant_url(&endpoint.replace("{profileId}", &format!("{id:032x}")), &url_frames).with_query("unsigned=false");
             let frames: Vec<&'static str> = [FETCH_PROFILE_UNCACHED_GET].into_iter().chain(context.iter().copied()).collect();
-            let found = match client_get(http, &url, &frames).await {
+            let found = match client_get(&url, &frames).await {
                 Ok(found) => found?,
                 Err(exception) => {
                     exception.log_html_body(None);
@@ -397,8 +430,36 @@ impl Services {
     }
 
     pub fn can_validate_profile_keys(&self) -> bool {
+        let _frames = (!self.key_set.is_ready()).then(|| crate::server::main_thread_frames::enter(KEY_SET_JOIN_FRAMES));
         self.key_set.get().is_some_and(|keys| !keys.profile_keys.is_empty())
     }
+}
+
+const KEY_SET_JOIN_FRAMES: [&str; 12] = [
+    "java.base/jdk.internal.misc.Unsafe.park(Native Method)",
+    "java.base/java.util.concurrent.locks.LockSupport.park(LockSupport.java:223)",
+    "java.base/java.util.concurrent.CompletableFuture$Signaller.block(CompletableFuture.java:1885)",
+    "java.base/java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:4364)",
+    "java.base/java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:4310)",
+    "java.base/java.util.concurrent.CompletableFuture.waitingGet(CompletableFuture.java:1919)",
+    "java.base/java.util.concurrent.CompletableFuture.join(CompletableFuture.java:2138)",
+    "com.mojang.authlib.services.RetryableFetch.lambda$fetch$0(RetryableFetch.java:69)",
+    "com.mojang.authlib.services.RetryableFetch$$Lambda/0x0000000094c13660.get(Unknown Source)",
+    "com.mojang.authlib.services.ServicesKeySet.lambda$lazy$1(ServicesKeySet.java:11)",
+    "com.mojang.authlib.services.ServicesKeySet$$Lambda/0x0000000094c15f00.keys(Unknown Source)",
+    "net.minecraft.server.Services.canValidateProfileKeys(Services.java:38)",
+];
+
+static DISCOVERY_DIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+static DISCOVERY_STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn discovery_executor_started() -> bool {
+    DISCOVERY_STARTED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn discovery_executor_blocked() -> bool {
+    DISCOVERY_DIED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 const DISCOVERY_THREAD: &str = "Minecraft Services Discovery";
@@ -461,98 +522,7 @@ const GET_URL: &str = "com.mojang.authlib.services.MinecraftServicesDiscoverySer
 const GET_ENDPOINT_OFFLINE: &str = "com.mojang.authlib.services.MinecraftServicesDiscoveryService.getEndpoint(MinecraftServicesDiscoveryService.java:139)";
 const GET_ENDPOINT_MISSING: &str = "com.mojang.authlib.services.MinecraftServicesDiscoveryService.getEndpoint(MinecraftServicesDiscoveryService.java:145)";
 
-const HTTPS_CONNECT_FRAMES: [&str; 17] = [
-    "java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:284)",
-    "java.base/java.net.Socket.connect(Socket.java:659)",
-    "java.base/sun.security.ssl.SSLSocketImpl.connect(SSLSocketImpl.java:304)",
-    "java.base/sun.net.NetworkClient.doConnect(NetworkClient.java:161)",
-    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:516)",
-    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:604)",
-    "java.base/sun.net.www.protocol.https.HttpsClient.<init>(HttpsClient.java:206)",
-    "java.base/sun.net.www.protocol.https.HttpsClient.New(HttpsClient.java:288)",
-    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.getNewHttpClient(AbstractDelegateHttpsURLConnection.java:196)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1008)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:899)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.connect(HttpURLConnection.java:872)",
-    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:181)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1377)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1302)",
-    "java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:493)",
-    "java.base/sun.net.www.protocol.https.HttpsURLConnectionImpl.getResponseCode(HttpsURLConnectionImpl.java:307)",
-];
-
-const HTTP_CONNECT_FRAMES: [&str; 14] = [
-    "java.base/java.net.Socket.connect(Socket.java:659)",
-    "java.base/sun.net.NetworkClient.doConnect(NetworkClient.java:161)",
-    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:516)",
-    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:604)",
-    "java.base/sun.net.www.http.HttpClient.<init>(HttpClient.java:276)",
-    "java.base/sun.net.www.http.HttpClient.New(HttpClient.java:380)",
-    "java.base/sun.net.www.http.HttpClient.New(HttpClient.java:393)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.getNewHttpClient(HttpURLConnection.java:1030)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1008)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:899)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.connect(HttpURLConnection.java:872)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1377)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1302)",
-    "java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:493)",
-];
-
-const HTTPS_READ_HEADER_FRAMES: [&str; 6] = [
-    "java.base/sun.net.www.http.HttpClient.parseHTTP(HttpClient.java:727)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1392)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1302)",
-    "java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:493)",
-    "java.base/sun.net.www.protocol.https.HttpsURLConnectionImpl.getResponseCode(HttpsURLConnectionImpl.java:307)",
-    READ_SERVICE_RESPONSE_130,
-];
-
-const READ_TIMED_OUT_FRAMES: [&str; 15] = [
-    "java.base/sun.nio.ch.NioSocketImpl.timedRead(NioSocketImpl.java:277)",
-    "java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:302)",
-    "java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:354)",
-    "java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:798)",
-    "java.base/java.net.Socket$SocketInputStream.implRead(Socket.java:974)",
-    "java.base/java.net.Socket$SocketInputStream.read(Socket.java:964)",
-    "java.base/sun.security.ssl.SSLSocketInputRecord.read(SSLSocketInputRecord.java:489)",
-    "java.base/sun.security.ssl.SSLSocketInputRecord.readHeader(SSLSocketInputRecord.java:483)",
-    "java.base/sun.security.ssl.SSLSocketInputRecord.bytesInCompletePacket(SSLSocketInputRecord.java:70)",
-    "java.base/sun.security.ssl.SSLSocketImpl.readApplicationRecord(SSLSocketImpl.java:1461)",
-    "java.base/sun.security.ssl.SSLSocketImpl$AppInputStream.read(SSLSocketImpl.java:1068)",
-    "java.base/java.io.BufferedInputStream.fill(BufferedInputStream.java:289)",
-    "java.base/java.io.BufferedInputStream.read1(BufferedInputStream.java:330)",
-    "java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:388)",
-    "java.base/sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:795)",
-];
-
-const UNEXPECTED_EOF_FRAMES: [&str; 4] = [
-    "java.base/sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:923)",
-    "java.base/sun.net.www.http.HttpClient.parseHTTP(HttpClient.java:727)",
-    "java.base/sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:920)",
-    "java.base/sun.net.www.http.HttpClient.parseHTTP(HttpClient.java:727)",
-];
-
-const PREMATURE_EOF_FRAMES: [&str; 15] = [
-    "java.base/sun.net.www.MeteredStream.justRead(MeteredStream.java:58)",
-    "java.base/sun.net.www.MeteredStream.read(MeteredStream.java:135)",
-    "java.base/java.io.FilterInputStream.read(FilterInputStream.java:119)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3322)",
-    "java.base/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)",
-    "java.base/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)",
-    "java.base/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)",
-    "java.base/java.io.InputStreamReader.read(InputStreamReader.java:183)",
-    "java.base/java.io.Reader.read(Reader.java:372)",
-    "org.apache.commons.io.IOUtils.copyLarge(IOUtils.java:1579)",
-    "org.apache.commons.io.IOUtils.copyLarge(IOUtils.java:1558)",
-    "org.apache.commons.io.IOUtils.copy(IOUtils.java:1355)",
-    "org.apache.commons.io.IOUtils.copy(IOUtils.java:1128)",
-    "org.apache.commons.io.IOUtils.toString(IOUtils.java:3134)",
-    READ_SERVICE_RESPONSE_141,
-];
-
 const BUILD_HTTP_EXCEPTION_169: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:169)";
-const READ_SERVICE_RESPONSE_130: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:130)";
-const READ_SERVICE_RESPONSE_141: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:141)";
 const READ_SERVICE_RESPONSE_145: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:145)";
 const READ_SERVICE_RESPONSE_147: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:147)";
 const READ_SERVICE_RESPONSE_151: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:151)";
@@ -601,101 +571,6 @@ const JSON_TREE_READER_FRAMES: [&str; 4] = [
     "com.google.gson.internal.bind.CollectionTypeAdapterFactory$Adapter.read(CollectionTypeAdapterFactory.java:82)",
     "com.google.gson.internal.bind.CollectionTypeAdapterFactory$Adapter.read(CollectionTypeAdapterFactory.java:64)",
 ];
-
-enum IoFailure {
-    UnknownHost(String),
-    ConnectionRefused,
-    ConnectTimedOut,
-    ReadTimedOut,
-    UnexpectedEof,
-    PrematureEof,
-    Other(String),
-}
-
-fn classify_failure(error: &reqwest::Error, url: &str) -> IoFailure {
-    let mut chain = String::new();
-    let mut source: Option<&dyn std::error::Error> = Some(error);
-    let mut refused = false;
-    let mut unexpected_eof = false;
-    while let Some(current) = source {
-        chain.push_str(&current.to_string());
-        chain.push(' ');
-        if let Some(io) = current.downcast_ref::<std::io::Error>() {
-            refused |= io.kind() == std::io::ErrorKind::ConnectionRefused;
-            unexpected_eof |= io.kind() == std::io::ErrorKind::UnexpectedEof;
-        }
-        source = current.source();
-    }
-    let connect_timed_out = error.is_timeout() && chain.contains("client error (Connect)");
-    let host = || reqwest::Url::parse(url).ok().and_then(|url| url.host_str().map(str::to_string)).unwrap_or_default();
-    let incomplete = chain.contains("connection closed before message completed") || unexpected_eof;
-    if chain.contains("dns error") || chain.contains("failed to lookup address") || chain.contains("No such host") {
-        IoFailure::UnknownHost(host())
-    } else if refused {
-        IoFailure::ConnectionRefused
-    } else if connect_timed_out {
-        IoFailure::ConnectTimedOut
-    } else if error.is_timeout() {
-        IoFailure::ReadTimedOut
-    } else if chain.contains("error reading a body from connection") && incomplete {
-        IoFailure::PrematureEof
-    } else if incomplete {
-        IoFailure::UnexpectedEof
-    } else {
-        IoFailure::Other(error.to_string())
-    }
-}
-
-fn connection_refused_message() -> &'static str {
-    if cfg!(windows) { "Connection refused: getsockopt" } else { "Connection refused" }
-}
-
-fn io_failure(url: &str, failure: IoFailure, tail: &[&'static str]) -> MinecraftClientException {
-    let outer_tail: Vec<&'static str> = tail.to_vec();
-    let connect_frames: Vec<&'static str> = if url.starts_with("http://") { HTTP_CONNECT_FRAMES.to_vec() } else { HTTPS_CONNECT_FRAMES.to_vec() };
-    let (cause_description, cause_head): (String, Vec<&'static str>) = match failure {
-        IoFailure::UnknownHost(host) => (
-            format!("java.net.UnknownHostException: {host}"),
-            ["java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:569)"].into_iter().chain(connect_frames.iter().copied()).chain([READ_SERVICE_RESPONSE_130]).collect(),
-        ),
-        IoFailure::ConnectionRefused => (
-            format!("java.net.ConnectException: {}", connection_refused_message()),
-            [
-                "java.base/sun.nio.ch.Net.pollConnect(Native Method)",
-                "java.base/sun.nio.ch.Net.pollConnectNow(Net.java:639)",
-                "java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:543)",
-                "java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:594)",
-            ]
-            .into_iter()
-            .chain(connect_frames.iter().copied())
-            .chain([READ_SERVICE_RESPONSE_130])
-            .collect(),
-        ),
-        IoFailure::ConnectTimedOut => (
-            "java.net.SocketTimeoutException: Connect timed out".to_string(),
-            ["java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:547)", "java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:594)"]
-                .into_iter()
-                .chain(connect_frames.iter().copied())
-                .chain([READ_SERVICE_RESPONSE_130])
-                .collect(),
-        ),
-        IoFailure::ReadTimedOut => ("java.net.SocketTimeoutException: Read timed out".to_string(), READ_TIMED_OUT_FRAMES.into_iter().chain(HTTPS_READ_HEADER_FRAMES).collect()),
-        IoFailure::UnexpectedEof => ("java.net.SocketException: Unexpected end of file from server".to_string(), UNEXPECTED_EOF_FRAMES.into_iter().chain(HTTPS_READ_HEADER_FRAMES[1..].iter().copied()).collect()),
-        IoFailure::PrematureEof => ("java.io.IOException: Premature EOF".to_string(), PREMATURE_EOF_FRAMES.to_vec()),
-        IoFailure::Other(message) => (format!("java.io.IOException: {message}"), Vec::new()),
-    };
-    let message = cause_description.split_once(": ").map_or(cause_description.clone(), |(_, message)| message.to_string());
-    let cause_trace: Vec<&'static str> = cause_head.into_iter().chain(outer_tail.iter().copied()).collect();
-    let outer_trace: Vec<&'static str> = [READ_SERVICE_RESPONSE_151].into_iter().chain(outer_tail.iter().copied()).collect();
-    let message = format!("Failed to read from {url} due to {message}");
-    MinecraftClientException {
-        error_type: ErrorType::ServiceUnavailable,
-        throwable: JavaThrowable::new(format!("com.mojang.authlib.exceptions.MinecraftClientException: {message}"), outer_trace).with_cause(JavaThrowable::new(cause_description, cause_trace)),
-        message,
-        http: None,
-        html_body_log: None,
-    }
-}
 
 fn json_text(value: Option<&serde_json::Value>) -> String {
     match value {
@@ -814,23 +689,38 @@ fn services_unavailable(failure: &UrlFailure, context: &[&'static str]) -> Minec
     }
 }
 
-async fn read_service_response(
-    result: Result<reqwest::Response, reqwest::Error>,
-    url: &str,
-    array_class: bool,
-    call: &[&'static str],
-    context: &[&'static str],
-) -> Result<Option<serde_json::Value>, MinecraftClientException> {
+fn io_failure(url: &JavaUrl, failure: &Failure, tail: &[&'static str]) -> MinecraftClientException {
+    let mut cause = failure.cause(url);
+    cause.push_frames(tail);
+    let message = cause.description.split_once(": ").map_or(cause.description.clone(), |(_, message)| message.to_string());
+    let message = format!("Failed to read from {url} due to {message}");
+    let outer_trace: Vec<&'static str> = [READ_SERVICE_RESPONSE_151].into_iter().chain(tail.iter().copied()).collect();
+    MinecraftClientException {
+        error_type: ErrorType::ServiceUnavailable,
+        throwable: JavaThrowable::new(format!("com.mojang.authlib.exceptions.MinecraftClientException: {message}"), outer_trace).with_cause(cause),
+        message,
+        http: None,
+        html_body_log: None,
+    }
+}
+
+fn constant_url(spec: &str, frames: &[&'static str]) -> JavaUrl {
+    JavaUrl::constant(spec).unwrap_or_else(|mut error| {
+        error.push_frames(frames);
+        crate::crash_report::throw_java_exception(error)
+    })
+}
+
+async fn read_service_response(result: Result<Response, Failure>, url: &JavaUrl, array_class: bool, call: &[&'static str], context: &[&'static str]) -> Result<Option<serde_json::Value>, MinecraftClientException> {
     let tail: Vec<&'static str> = call.iter().copied().chain(context.iter().copied()).collect();
-    let response = result.map_err(|e| io_failure(url, classify_failure(&e, url), &tail))?;
-    let status = response.status().as_u16();
+    let response = result.map_err(|failure| io_failure(url, &failure, &tail))?;
+    let status = response.status;
     if status == 304 {
         return Ok(None);
     }
-    let content_type = response.headers().get(reqwest::header::CONTENT_TYPE).and_then(|value| value.to_str().ok()).map(str::to_string);
-    let body = response.text().await.map_err(|e| io_failure(url, classify_failure(&e, url), &tail))?;
+    let body = String::from_utf8_lossy(&response.body).into_owned();
     if status >= 400 {
-        return Err(http_failure(url, status, content_type.as_deref(), &body, call, context));
+        return Err(http_failure(&url.to_string(), status, response.content_type.as_deref(), &body, call, context));
     }
     if body.is_empty() {
         return Ok(None);
@@ -842,16 +732,17 @@ async fn read_service_response(
     }
 }
 
-async fn client_get(http: &reqwest::Client, url: &str, context: &[&'static str]) -> Result<Option<serde_json::Value>, MinecraftClientException> {
-    read_service_response(http.get(url).send().await, url, false, &[GET_WITH_ETAG, CLIENT_GET], context).await
+async fn client_get(url: &JavaUrl, context: &[&'static str]) -> Result<Option<serde_json::Value>, MinecraftClientException> {
+    read_service_response(java_http_url_connection::send(Method::Get, url, None).await, url, false, &[GET_WITH_ETAG, CLIENT_GET], context).await
 }
 
-async fn client_post(http: &reqwest::Client, url: &str, body: &[String], context: &[&'static str]) -> Result<Option<serde_json::Value>, MinecraftClientException> {
-    read_service_response(http.post(url).json(body).send().await, url, true, &[POST_WITH_ETAG, CLIENT_POST], context).await
+async fn client_post(url: &JavaUrl, body: &[String], context: &[&'static str]) -> Result<Option<serde_json::Value>, MinecraftClientException> {
+    let body = serde_json::to_vec(body).unwrap_or_default();
+    read_service_response(java_http_url_connection::send(Method::Post, url, Some(&body)).await, url, true, &[POST_WITH_ETAG, CLIENT_POST], context).await
 }
 
-async fn get_json(http: &reqwest::Client, url: &str) -> Option<serde_json::Value> {
-    match client_get(http, url, &DISCOVERY_CONTEXT).await {
+async fn get_json(url: &JavaUrl) -> Option<serde_json::Value> {
+    match client_get(url, &DISCOVERY_CONTEXT).await {
         Ok(value) => value,
         Err(exception) => {
             exception.log_html_body(Some(DISCOVERY_THREAD));
@@ -889,28 +780,79 @@ mod tests {
         assert_eq!(exception.to_authentication_exception(&[CALLER]).print_stack_trace(), expected);
     }
 
-    #[test]
-    fn connection_failures_are_unavailable_exceptions_caused_by_the_socket_error() {
-        let exception = io_failure("https://example.test/x", IoFailure::ConnectionRefused, &[CALLER]);
-        let trace = exception.to_authentication_exception(&[CALLER]).print_stack_trace();
-        let refused = connection_refused_message();
-        assert!(trace.starts_with(&format!("com.mojang.authlib.exceptions.AuthenticationUnavailableException\n\tat {TO_AUTHENTICATION_EXCEPTION}\n\tat {CALLER}\n")));
-        assert!(!trace.contains("Caused by"));
-        let trace = exception.throwable.print_stack_trace();
-        assert!(trace.starts_with(&format!(
-            "com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://example.test/x due to {refused}\n\tat {READ_SERVICE_RESPONSE_151}\n\tat {CALLER}\nCaused by: java.net.ConnectException: {refused}\n"
-        )));
-        assert!(trace.contains("\tat java.base/sun.nio.ch.NioSocketImpl.connect(NioSocketImpl.java:594)\n"));
-        assert!(trace.ends_with(&format!("\tat {READ_SERVICE_RESPONSE_130}\n\t... 1 more\n")));
+    fn discovery_failure_trace(fixture: &str, failure: Failure) -> (String, String) {
+        let url_text = fixture.split_once("Failed to read from ").and_then(|(_, rest)| rest.split_once(" due to ")).map(|(url, _)| url).expect("the failed url");
+        let url = JavaUrl::parse(url_text).unwrap();
+        let tail: Vec<&'static str> = [GET_WITH_ETAG, CLIENT_GET].into_iter().chain(DISCOVERY_CONTEXT).collect();
+        (io_failure(&url, &failure, &tail).throwable.print_stack_trace(), fixture.to_string())
     }
 
     #[test]
-    fn timeouts_use_the_matching_socket_exception_text() {
-        let connect = io_failure("https://example.test/x", IoFailure::ConnectTimedOut, &[CALLER]).throwable.print_stack_trace();
-        assert!(connect.contains("Caused by: java.net.SocketTimeoutException: Connect timed out\n\tat java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(NioSocketImpl.java:547)\n"));
-        let read = io_failure("https://example.test/x", IoFailure::ReadTimedOut, &[CALLER]).throwable.print_stack_trace();
-        assert!(read.contains("Caused by: java.net.SocketTimeoutException: Read timed out\n"));
-        assert!(read.starts_with("com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://example.test/x due to Read timed out\n"));
+    fn io_failures_reproduce_the_bundled_server_traces() {
+        use crate::util::java_http_url_connection::{Handshake, Phase};
+        macro_rules! fixture {
+            ($name:literal) => {
+                include_str!(concat!("services_fixtures/", $name, ".txt"))
+            };
+        }
+        let header = Phase::Header;
+        let body = Phase::Body { status: 200 };
+        let mut cases: Vec<(&str, Failure)> = vec![
+            (fixture!("tls_silent"), Failure::Handshake(Handshake::ReadTimedOut)),
+            (fixture!("tls_close"), Failure::Handshake(Handshake::Eof)),
+            (fixture!("tls_rst"), Failure::Handshake(Handshake::ResetOnWrite)),
+            (fixture!("tls_garbage"), Failure::Handshake(Handshake::Unrecognized)),
+            (fixture!("t_alert"), Failure::Handshake(Handshake::Alert("handshake_failure".to_string()))),
+            (fixture!("t_rsthello"), Failure::Handshake(Handshake::ResetOnRead)),
+            (fixture!("http_silent"), Failure::ReadTimedOut(header)),
+            (fixture!("http_close"), Failure::UnexpectedEof),
+            (fixture!("http_rst"), Failure::ConnectionReset(header)),
+            (fixture!("http_trunc"), Failure::PrematureEof { chunked: false, status: 200 }),
+            (fixture!("http_trunc_chunked"), Failure::PrematureEof { chunked: true, status: 200 }),
+            (fixture!("http_trunc_rst"), Failure::ConnectionReset(body)),
+            (fixture!("http_body_silent"), Failure::ReadTimedOut(body)),
+            (fixture!("t_silent"), Failure::ReadTimedOut(header)),
+            (fixture!("t_closeg"), Failure::UnexpectedEof),
+            (fixture!("t_rst"), Failure::ConnectionReset(header)),
+            (fixture!("t_trunc"), Failure::PrematureEof { chunked: false, status: 200 }),
+            (fixture!("t_truncrst"), Failure::ConnectionReset(body)),
+            (fixture!("t_bodysilent"), Failure::ReadTimedOut(body)),
+            (fixture!("t_errtrunc"), Failure::PrematureEof { chunked: false, status: 500 }),
+            (fixture!("unknownhost"), Failure::UnknownHost("nonexistent.invalid".to_string())),
+            (fixture!("unknownhost_tls"), Failure::UnknownHost("nonexistent.invalid".to_string())),
+            (fixture!("blackhole"), Failure::ConnectTimedOut),
+            (fixture!("blackhole2"), Failure::ConnectTimedOut),
+        ];
+        if cfg!(windows) {
+            cases.push((fixture!("refused"), Failure::ConnectionRefused));
+        }
+        for (fixture, failure) in cases {
+            let (actual, expected) = discovery_failure_trace(fixture, failure);
+            let first_line = expected.lines().next().unwrap().to_string();
+            assert_eq!(actual.trim_end(), expected.trim_end(), "{first_line}");
+        }
+    }
+
+    #[test]
+    fn invalid_constant_urls_are_errors_with_the_malformed_url_cause() {
+        let error = JavaUrl::constant("notaurl").unwrap_err();
+        let trace = error.print_stack_trace();
+        assert_eq!(
+            trace,
+            "java.lang.Error: Couldn't create constant for notaurl\n\
+             \tat com.mojang.authlib.HttpDiscoveryService.constantURL(HttpDiscoveryService.java:41)\n\
+             Caused by: java.net.MalformedURLException: no protocol: notaurl\n\
+             \tat java.base/java.net.URL.<init>(URL.java:735)\n\
+             \tat java.base/java.net.URL.<init>(URL.java:630)\n\
+             \tat java.base/java.net.URL.<init>(URL.java:566)\n\
+             \tat com.mojang.authlib.HttpDiscoveryService.constantURL(HttpDiscoveryService.java:39)\n"
+        );
+    }
+
+    #[test]
+    fn environment_is_chosen_like_the_authlib_environment_parser() {
+        let environment = Environment::determine();
+        assert_eq!((environment.discovery_url.as_str(), environment.name.as_str()), ("https://discovery.minecraftservices.com/minecraft/client", "PROD"));
     }
 
     #[test]

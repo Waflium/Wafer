@@ -25,6 +25,8 @@ pub mod java_collections;
 pub mod java_file_store;
 pub mod java_gzip;
 pub mod java_heap;
+pub mod java_http_url_connection;
+pub mod java_url;
 pub mod java_inflater;
 pub mod java_integer;
 pub mod java_regex;
