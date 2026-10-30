@@ -381,7 +381,66 @@ fn contains_null(tag: &Nbt) -> bool {
     }
 }
 
+const JSON_NUMBER_CONVERSION: [&str; 4] = [
+    "com.google.gson.internal.NumberLimits.parseBigDecimal(NumberLimits.java:27)",
+    "com.google.gson.JsonPrimitive.getAsBigDecimal(JsonPrimitive.java:185)",
+    "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:68)",
+    "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)",
+];
+
+const JSON_MAP_CONVERSION: [&str; 17] = [
+    "com.mojang.serialization.DynamicOps.lambda$convertMap$32(DynamicOps.java:250)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.Iterator.forEachRemaining(Iterator.java:133)",
+    "java.base/java.util.Spliterators$IteratorSpliterator.forEachRemaining(Spliterators.java:1939)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:153)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:176)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:632)",
+    "net.minecraft.nbt.NbtOps.createMap(NbtOps.java:280)",
+    "net.minecraft.nbt.NbtOps.createMap(NbtOps.java:27)",
+    "com.mojang.serialization.DynamicOps.convertMap(DynamicOps.java:249)",
+    "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:53)",
+    "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)",
+    "net.minecraft.resources.DelegatingOps.convertTo(DelegatingOps.java:52)",
+];
+
+const COMPOUND_TAG_CONVERSION: [&str; 7] = [
+    "com.mojang.serialization.Dynamic.convert(Dynamic.java:231)",
+    "com.mojang.serialization.Dynamic.convert(Dynamic.java:213)",
+    "net.minecraft.nbt.CompoundTag.lambda$static$0(CompoundTag.java:32)",
+    "com.mojang.serialization.Decoder$1.lambda$decode$1(Decoder.java:49)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.Decoder$1.decode(Decoder.java:49)",
+    "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
+];
+
+fn unsupported_number(tag: &Nbt) -> Option<(String, usize)> {
+    match tag {
+        Nbt::LazilyParsedNumber(text) => wafer_protocol::lazily_parsed_number::number_limits_error(text).map(|message| (message, 0)),
+        Nbt::Compound(fields) => fields.iter().find_map(|(_, value)| unsupported_number(value)).map(|(message, depth)| (message, depth + 1)),
+        _ => None,
+    }
+}
+
+fn throw_unsupported_number(tag: &Nbt) {
+    let Some((message, depth)) = unsupported_number(tag) else { return };
+    let mut frames: Vec<&'static str> = JSON_NUMBER_CONVERSION.to_vec();
+    for level in 0..depth {
+        let end = if level + 1 == depth { JSON_MAP_CONVERSION.len() } else { JSON_MAP_CONVERSION.len() - 1 };
+        frames.extend_from_slice(&JSON_MAP_CONVERSION[..end]);
+    }
+    frames.extend_from_slice(&COMPOUND_TAG_CONVERSION);
+    crate::core::data_registries::throw_unwinding("java.lang.NumberFormatException", message, &frames);
+}
+
 pub fn compound_tag(tag: &Nbt) -> DecodeResult<Nbt> {
+    if is_json_value() {
+        throw_unsupported_number(tag);
+    }
     if contains_null(tag) {
         crate::core::data_registries::throw(
             "java.lang.NullPointerException",

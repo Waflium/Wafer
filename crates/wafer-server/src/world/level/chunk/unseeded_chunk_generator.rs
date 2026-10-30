@@ -109,19 +109,23 @@ impl UnseededChunkGenerator {
             Ok(ty) => ty,
             Err(error) => return DecodeResult::error(error),
         };
-        let mut record = Record::default();
-        match ty.as_str() {
-            "minecraft:noise" => {
-                let biome_source = record.required(tag, "biome_source", decode_biome_source);
-                let settings = record.required(tag, "settings", decode_noise_settings);
-                record.build(|| Some(UnseededChunkGenerator::Noise(NoiseGeneratorDefinition { settings: settings?, biome_source: biome_source? })))
-            }
-            "minecraft:flat" => {
-                let settings = record.required(tag, "settings", flat::decode_settings);
-                record.build(|| settings.map(UnseededChunkGenerator::Flat))
-            }
-            _ => record.build(|| Some(UnseededChunkGenerator::Debug)),
-        }
+        codec::as_codec(|| {
+            codec::with_frames(crate::util::dfu_frames::key_dispatch, || {
+                let mut record = Record::default();
+                match ty.as_str() {
+                    "minecraft:noise" => {
+                        let biome_source = record.required(tag, "biome_source", decode_biome_source);
+                        let settings = record.required(tag, "settings", decode_noise_settings);
+                        record.build(|| Some(UnseededChunkGenerator::Noise(NoiseGeneratorDefinition { settings: settings?, biome_source: biome_source? })))
+                    }
+                    "minecraft:flat" => {
+                        let settings = record.required(tag, "settings", flat::decode_settings);
+                        record.build(|| settings.map(UnseededChunkGenerator::Flat))
+                    }
+                    _ => record.build(|| Some(UnseededChunkGenerator::Debug)),
+                }
+            })
+        })
     }
 
     pub fn encode(&self) -> Nbt {

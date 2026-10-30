@@ -36,7 +36,8 @@ impl DimensionPadding {
 
     pub fn codec() -> Pair {
         let record_codec = record(vec![lenient("bottom", var_int(non_negative_int()), i(0)), lenient("top", var_int(non_negative_int()), i(0))]);
-        either(var_int(non_negative_int()), record_codec)
+        let (codec, stream) = either(var_int(non_negative_int()), record_codec);
+        (crate::world::item::component::codec::Codec::Framed(Box::new(codec), crate::world::item::component::codec::Wrap::Xmap), stream)
     }
 }
 

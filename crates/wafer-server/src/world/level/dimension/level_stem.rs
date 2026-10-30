@@ -43,17 +43,19 @@ impl LevelStem {
         if let Err(error) = crate::util::codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let mut record = Record::default();
-        let dimension_type = record.required(tag, "type", |dimension_type| {
-            DecodeResult::from(types::holder("minecraft:dimension_type", dimension_type::direct_codec()).0.decode(dimension_type))
-        });
-        let generator = record.required(tag, "generator", UnseededChunkGenerator::decode);
-        record.build(|| {
-            let dimension_type = match dimension_type? {
-                Nbt::String(key) => DimensionTypeHolder::Reference(key),
-                direct => DimensionTypeHolder::Direct { decoded: direct, source: tag.get("type")?.clone(), json_source: crate::nbt::is_json_source() },
-            };
-            Some(LevelStem { dimension_type, generator: generator? })
+        crate::util::codec::as_codec(|| {
+            let mut record = Record::default();
+            let dimension_type = record.required(tag, "type", |dimension_type| {
+                DecodeResult::from(types::holder("minecraft:dimension_type", dimension_type::direct_codec()).0.decode(dimension_type))
+            });
+            let generator = record.required(tag, "generator", UnseededChunkGenerator::decode);
+            record.build(|| {
+                let dimension_type = match dimension_type? {
+                    Nbt::String(key) => DimensionTypeHolder::Reference(key),
+                    direct => DimensionTypeHolder::Direct { decoded: direct, source: tag.get("type")?.clone(), json_source: crate::nbt::is_json_source() },
+                };
+                Some(LevelStem { dimension_type, generator: generator? })
+            })
         })
     }
 
