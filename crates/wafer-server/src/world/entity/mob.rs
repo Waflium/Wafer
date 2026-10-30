@@ -140,6 +140,7 @@ pub const WEARING_ARMOR_UPGRADE_MATERIAL_ATTEMPTS: f32 = 3.0;
 pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
 pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
 pub const RANDOM_SPAWN_BONUS_ID: &str = "minecraft:random_spawn_bonus";
+const MOB_DO_HURT_TARGET_FRAME: [&str; 1] = ["net.minecraft.world.entity.Mob.doHurtTarget(Mob.java:1494)"];
 
 fn default_attack_reach() -> f64 {
     (2.04f32 as f64).sqrt() - 0.6f32 as f64
@@ -3215,7 +3216,10 @@ impl ServerLevel {
         dmg = self.modify_damage(&weapon_item, target, &damage_source, dmg);
         dmg += crate::world::item::get_attack_damage_bonus(self, &weapon_item, target, &damage_source);
         let old_movement = self.entity(target).delta_movement;
-        let was_hurt = self.hurt_server(target, damage_source, dmg);
+        let was_hurt = {
+            let _scope = self.is_player(target).then(|| crate::server::main_thread_frames::enter_static(&MOB_DO_HURT_TARGET_FRAME));
+            self.hurt_server(target, damage_source, dmg)
+        };
         if was_hurt {
             let knockback = self.get_knockback(id, target, &damage_source);
             self.living_entity_cause_extra_knockback(id, target, knockback, old_movement, &damage_source, dmg, true);

@@ -13,6 +13,11 @@ pub const THROW_THRESHOLD_TIME: i32 = 10;
 pub const BASE_DAMAGE: f32 = 8.0;
 pub const PROJECTILE_SHOOT_POWER: f32 = 2.5;
 pub const USE_DURATION: i32 = 72000;
+const RELEASE_USING_FRAMES: [&str; 3] = [
+    "net.minecraft.world.item.TridentItem.releaseUsing(TridentItem.java:119)",
+    "net.minecraft.world.item.ItemStack.releaseUsing(ItemStack.java:756)",
+    "net.minecraft.world.entity.LivingEntity.releaseUsingItem(LivingEntity.java:3746)",
+];
 
 fn trident_sound(item_stack: &ItemStack) -> SoundEvent {
     enchantment_helper::pick_highest_trident_sound(item_stack).and_then(|sound| SoundEvent::from_nbt(&sound)).unwrap_or_else(|| sound_event("minecraft:item.trident.throw").into())
@@ -61,7 +66,10 @@ pub fn release_using(level: &mut ServerLevel, item_stack: &ItemStack, entity: En
     yd *= riptide_strength / dist;
     zd *= riptide_strength / dist;
     level.entity_mut(player).push(xd as f64, yd as f64, zd as f64);
-    level.start_auto_spin_attack(player, 20, BASE_DAMAGE, item_stack);
+    {
+        let _scope = crate::server::main_thread_frames::enter_static(&RELEASE_USING_FRAMES);
+        level.start_auto_spin_attack(player, 20, BASE_DAMAGE, item_stack);
+    }
     if level.entity(player).on_ground {
         let height_difference = 1.1999999f32;
         level.move_entity(player, MoverType::SelfMove, Vec3::new(0.0, height_difference as f64, 0.0));

@@ -51,6 +51,18 @@ use crate::world::waypoints::waypoint_transmitter::{self, Connection, EntityAzim
 const SPEED_MODIFIER_POWDER_SNOW_ID: &str = "minecraft:powder_snow";
 const TICKS_REQUIRED_TO_FREEZE: i32 = 140;
 
+const HANDLE_FALL_FLYING_COLLISIONS_PLAYER_FRAMES: [&str; 9] = [
+    "net.minecraft.world.entity.LivingEntity.handleFallFlyingCollisions(LivingEntity.java:2713)",
+    "net.minecraft.world.entity.LivingEntity.travelFallFlying(LivingEntity.java:2652)",
+    "net.minecraft.world.entity.LivingEntity.travel(LivingEntity.java:2479)",
+    "net.minecraft.world.entity.player.Player.travel(Player.java:1477)",
+    "net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3233)",
+    "net.minecraft.world.entity.player.Player.aiStep(Player.java:490)",
+    "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2886)",
+    "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
+    "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
+];
+
 pub struct LivingEntity {
     pub attributes: AttributeMap,
     pub y_body_rot: f32,
@@ -3215,6 +3227,7 @@ impl ServerLevel {
             if dmg > 0.0 {
                 let sound = self.get_fall_damage_sound(id, dmg as i32);
                 self.entity_play_sound(id, sound_event(sound), 1.0, 1.0);
+                let _scope = self.is_player(id).then(|| crate::server::main_thread_frames::enter(HANDLE_FALL_FLYING_COLLISIONS_PLAYER_FRAMES));
                 self.hurt(id, DamageSource::new(damage_types::FLY_INTO_WALL), dmg);
             }
         }
@@ -3890,6 +3903,44 @@ mod tests {
         assert!(level.hurt_server(id, attack, 1.0));
         assert_eq!(level.health(id), 3.0);
         assert!(level.entity(id).needs_sync);
+    }
+
+    #[test]
+    fn a_shoulder_entity_failing_on_a_fall_flying_collision_matches_vanilla() {
+        let mut level = testing::level();
+        let player = testing::player(&mut level, Vec3::new(0.5, -60.0, 0.5), 0.0, 0.0);
+        level.handle_player_loaded(player);
+        level.game_time = 100;
+        let bad = wafer_protocol::nbt::Nbt::Compound(vec![("id".into(), wafer_protocol::nbt::Nbt::String("minecraft:arrow".into())), ("pickup".into(), wafer_protocol::nbt::Nbt::Byte(3))].into());
+        level.player_mut(player).set_shoulder_entity_left(bad);
+        level.entity_mut(player).horizontal_collision = true;
+        let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| level.handle_fall_flying_collisions(player, 1.0, 0.0))).unwrap_err();
+        let reported = thrown.downcast::<crate::crash_report::ReportedException>().expect("a reported exception");
+        assert_eq!(
+            reported.0.reported_exception().stack_trace,
+            [
+                "net.minecraft.world.entity.Entity.load(Entity.java:2481)",
+                "net.minecraft.world.entity.EntityType.lambda$create$1(EntityType.java:299)",
+                "net.minecraft.util.Util.ifElse(Util.java:690)",
+                "net.minecraft.world.entity.EntityType.create(EntityType.java:298)",
+                "net.minecraft.server.level.ServerPlayer.respawnEntityOnShoulder(ServerPlayer.java:911)",
+                "net.minecraft.server.level.ServerPlayer.removeEntitiesOnShoulder(ServerPlayer.java:900)",
+                "net.minecraft.world.entity.player.Player.hurtServer(Player.java:739)",
+                "net.minecraft.server.level.ServerPlayer.hurtServer(ServerPlayer.java:1078)",
+                "net.minecraft.world.entity.Entity.hurt(Entity.java:2153)",
+                "net.minecraft.world.entity.LivingEntity.handleFallFlyingCollisions(LivingEntity.java:2713)",
+                "net.minecraft.world.entity.LivingEntity.travelFallFlying(LivingEntity.java:2652)",
+                "net.minecraft.world.entity.LivingEntity.travel(LivingEntity.java:2479)",
+                "net.minecraft.world.entity.player.Player.travel(Player.java:1477)",
+                "net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3233)",
+                "net.minecraft.world.entity.player.Player.aiStep(Player.java:490)",
+                "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2886)",
+                "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
+                "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
+                "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)",
+                "java.base/java.lang.Thread.run(Thread.java:1474)",
+            ]
+        );
     }
 
     fn raised_shield(level: &mut ServerLevel, attacker_z: f64) -> (EntityId, EntityId) {

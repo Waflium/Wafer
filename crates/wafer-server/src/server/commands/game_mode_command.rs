@@ -7,6 +7,11 @@ use crate::server::Server;
 use crate::server::level::game_mode::GameType;
 use crate::world::entity::EntityId;
 
+const SET_GAME_MODE_FRAMES: [&str; 2] = [
+    "net.minecraft.server.commands.GameModeCommand.setGameMode(GameModeCommand.java:70)",
+    "net.minecraft.server.commands.GameModeCommand.setGameMode(GameModeCommand.java:66)",
+];
+
 pub fn set_mode_self(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let player = source.player_or_exception(server)?;
     Ok(set_mode(server, source, &[player], context.get_game_mode("gamemode")))
@@ -23,6 +28,7 @@ fn set_mode(server: &mut Server, source: &CommandSourceStack, players: &[EntityI
 
 pub fn set_game_mode(server: &mut Server, player: EntityId, game_type: GameType) {
     let source = CommandSourceStack::player(server, player);
+    let _scope = crate::server::main_thread_frames::enter_static(&SET_GAME_MODE_FRAMES);
     set_game_mode_as(server, &source, player, game_type);
 }
 

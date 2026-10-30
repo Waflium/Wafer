@@ -756,6 +756,10 @@ impl Session {
             }
             ["respawn"] => self.send(play::serverbound::CLIENT_COMMAND, |w| w.varint(0)),
             ["stats"] => self.send(play::serverbound::CLIENT_COMMAND, |w| w.varint(1)),
+            ["change_game_mode", mode] => {
+                let mode: i32 = parse(mode)?;
+                self.send(play::serverbound::CHANGE_GAME_MODE, |w| w.varint(mode));
+            }
             ["input", flags] => {
                 let flags: u8 = parse(flags)?;
                 self.keys = flags;

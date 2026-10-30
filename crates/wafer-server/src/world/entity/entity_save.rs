@@ -299,14 +299,15 @@ fn owner_read_frames(entity_type: &str) -> Vec<&'static str> {
     }
 }
 
-fn throw_creating_entity_exception(cause: JavaThrowable, site: &[&'static str]) -> ! {
+fn throw_creating_entity_exception(cause: JavaThrowable, site: &[&'static str], fill: impl FnOnce(&mut crate::crash_report::CrashReportCategory)) -> ! {
     let mut shared = ENTITY_TYPE_CREATE[..3].to_vec();
     shared.extend_from_slice(site);
     let mut cause_frames = cause.stack_trace;
     cause_frames.extend_from_slice(&shared);
-    let report = crate::crash_report::CrashReport::of_exception("Loading entity NBT", &JavaThrowable::new(cause.description, cause_frames));
+    let mut report = crate::crash_report::CrashReport::of_exception("Loading entity NBT", &JavaThrowable::new(cause.description, cause_frames));
     let mut reported_frames = vec![ENTITY_LOAD_REPORT];
     reported_frames.extend_from_slice(&shared);
+    fill(report.add_category_with_stack_trace("Entity being loaded", reported_frames.iter().map(|frame| frame.to_string()).collect()));
     report.throw_reported(reported_frames)
 }
 
@@ -983,7 +984,7 @@ impl ServerLevel {
         };
         let below_create = || ENTITY_TYPE_CREATE[..3].iter().copied().chain(site.iter().copied()).collect();
         if let Err(cause) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt, &below_create), &self.scoreboard) {
-            throw_creating_entity_exception(cause, site);
+            throw_creating_entity_exception(cause, site, |category| self.fill_detached_crash_report_category(&entity, category));
         }
         let entity = self.reassess_weapon_goal_detached(entity);
         let entity = self.read_level_dependent_save_data_detached(entity, nbt);

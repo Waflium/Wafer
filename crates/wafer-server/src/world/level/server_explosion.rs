@@ -38,6 +38,11 @@ pub enum BlockInteraction {
     TriggerBlock,
 }
 
+const HURT_ENTITIES_FRAMES: [&str; 2] = [
+    "net.minecraft.world.level.ServerExplosion.hurtEntities(ServerExplosion.java:201)",
+    "net.minecraft.world.level.ServerExplosion.explode(ServerExplosion.java:248)",
+];
+const EXPLODE_FRAMES: [&str; 2] = ["net.minecraft.server.level.ServerLevel.explode(ServerLevel.java:1218)", "net.minecraft.world.level.Level.explode(Level.java:529)"];
 const MAX_DROPS_PER_COMBINED_STACK: i32 = 16;
 const LARGE_EXPLOSION_RADIUS: f32 = 2.0;
 
@@ -263,7 +268,10 @@ impl ServerLevel {
         };
         let damage_source = damage_source.unwrap_or_else(|| default_damage_source(source, indirect_source));
         let mut explosion = ServerExplosion { source, indirect_source, damage_source, center, radius, fire, block_interaction, damage_calculator, hit_players: Vec::new() };
-        let block_count = self.run_explosion(&mut explosion);
+        let block_count = {
+            let _scope = crate::server::main_thread_frames::enter_static(&EXPLODE_FRAMES);
+            self.run_explosion(&mut explosion)
+        };
         let explosion_particle = if explosion.is_small() { small_explosion_particles } else { large_explosion_particles };
         let play_sound = source.is_none_or(|s| !self.entity(s).is_silent());
         let ids: Vec<EntityId> = self.players.keys().copied().collect();
@@ -422,6 +430,7 @@ impl ServerLevel {
             let exposure = if !should_damage_entity && knockback_multiplier == 0.0 { 0.0 } else { self.seen_percent(c, id) };
             if should_damage_entity && explosion.source.is_none_or(|source| self.do_teams_allow_damage(source, id)) {
                 let damage = explosion.damage_calculator.get_entity_damage_amount(self, explosion, id, exposure);
+                let _scope = self.is_player(id).then(|| crate::server::main_thread_frames::enter_static(&HURT_ENTITIES_FRAMES));
                 self.hurt_server(id, explosion.damage_source.clone(), damage);
             }
             if self.entity_ref(id).is_none() {

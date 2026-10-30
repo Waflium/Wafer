@@ -69,6 +69,11 @@ pub const DIMENSIONS: EntityDimensions = crate::world::entity::avatar::STANDING_
 const SERVER_PLAYER_LOGGER: &str = "net.minecraft.server.level.ServerPlayer";
 const RESPAWN_ENTITY_ON_SHOULDER_FRAME: &str = "net.minecraft.server.level.ServerPlayer.respawnEntityOnShoulder(ServerPlayer.java:911)";
 pub(crate) const DO_TICK_REPORT_FRAME: &str = "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:818)";
+const DIE_REMOVE_ENTITIES_ON_SHOULDER_FRAMES: [&str; 3] = [
+    "net.minecraft.server.level.ServerPlayer.die(ServerPlayer.java:990)",
+    "net.minecraft.world.entity.LivingEntity.hurtServer(LivingEntity.java:1328)",
+    "net.minecraft.world.entity.player.Player.hurtServer(Player.java:757)",
+];
 const REMOVE_ENTITIES_ON_SHOULDER_LEFT_FRAME: &str = "net.minecraft.server.level.ServerPlayer.removeEntitiesOnShoulder(ServerPlayer.java:900)";
 const REMOVE_ENTITIES_ON_SHOULDER_RIGHT_FRAME: &str = "net.minecraft.server.level.ServerPlayer.removeEntitiesOnShoulder(ServerPlayer.java:902)";
 const HANDLE_SHOULDER_ENTITIES_FRAMES: [&str; 5] = [
@@ -1079,7 +1084,10 @@ impl ServerLevel {
         } else {
             self.player(id).connection.send(clientbound::PLAYER_COMBAT_KILL, |p| clientbound_player_combat_kill_packet::write(p, id, &crate::network::chat::Component::empty()));
         }
-        self.remove_entities_on_shoulder(id);
+        {
+            let _scope = crate::server::main_thread_frames::enter_static(&DIE_REMOVE_ENTITIES_ON_SHOULDER_FRAMES);
+            self.remove_entities_on_shoulder(id);
+        }
         if self.game_rules.get_bool(game_rule::FORGIVE_DEAD_PLAYERS) {
             self.tell_neutral_mobs_that_i_died(id);
         }

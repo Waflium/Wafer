@@ -27,6 +27,8 @@ pub mod section_tracker;
 pub mod server_player;
 #[cfg(test)]
 mod server_player_tests;
+#[cfg(test)]
+mod shoulder_failure_tests;
 pub mod player_spawn_finder;
 pub mod progress;
 mod precipitation;
@@ -1794,11 +1796,19 @@ impl ServerLevel {
 
     pub(crate) fn guard_entity_tick(&mut self, id: EntityId, tick: impl FnOnce(&mut ServerLevel)) {
         if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(self))) {
-            let mut report = match panic.downcast::<crate::crash_report::ReportedException>() {
-                Ok(reported) => reported.0,
-                Err(panic) => crate::crash_report::CrashReport::new("Ticking entity", crate::crash_report::exception_of(&panic), crate::server::crash_frames()),
+            let (mut report, reported) = match panic.downcast::<crate::crash_report::ReportedException>() {
+                Ok(reported) => (reported.0, true),
+                Err(panic) => (crate::crash_report::CrashReport::new("Ticking entity", crate::crash_report::exception_of(&panic), crate::server::crash_frames()), false),
             };
-            self.fill_crash_report_category(id, report.add_category("Entity being ticked"));
+            let category = if reported {
+                let mut frames: Vec<String> = crate::server::command_frames::ENTITY_TICK[1..].iter().map(|frame| frame.to_string()).collect();
+                frames.push(crate::server::command_frames::TICK_CHILDREN_LEVELS.to_string());
+                frames.extend(crate::server::main_thread_frames::current().into_iter().map(str::to_string));
+                report.add_category_with_stack_trace("Entity being ticked", frames)
+            } else {
+                report.add_category("Entity being ticked")
+            };
+            self.fill_crash_report_category(id, category);
             std::panic::resume_unwind(Box::new(crate::crash_report::ReportedException(report)));
         }
     }

@@ -18,6 +18,8 @@ use crate::world::entity::{EntityDimensions, EntityId};
 use crate::world::item::ItemStack;
 use crate::world::level::pathfinder::path_type::PathType;
 
+const DO_HURT_TARGET_FRAME: [&str; 1] = ["net.minecraft.world.entity.monster.skeleton.WitherSkeleton.doHurtTarget(WitherSkeleton.java:97)"];
+
 pub const DIMENSIONS: EntityDimensions = EntityDimensions::scalable(0.7, 2.4).with_eye_height(2.1).with_vehicle_attachment(&[Vec3::new(0.0, 0.875f32 as f64, 0.0)]);
 
 #[derive(Default)]
@@ -73,7 +75,11 @@ impl ServerLevel {
     }
 
     pub fn wither_skeleton_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
-        if !self.mob_do_hurt_target(id, target) {
+        let was_hurt = {
+            let _scope = self.is_player(target).then(|| crate::server::main_thread_frames::enter_static(&DO_HURT_TARGET_FRAME));
+            self.mob_do_hurt_target(id, target)
+        };
+        if !was_hurt {
             return false;
         }
         if self.is_living(target) {

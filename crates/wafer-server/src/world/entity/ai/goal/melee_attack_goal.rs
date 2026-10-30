@@ -123,6 +123,7 @@ impl MeleeAttackGoal {
         if self.can_perform_attack(level, mob, target) {
             self.reset_attack_cooldown();
             level.swing_for_attack(mob, InteractionHand::MainHand);
+            let _scope = crate::server::entity_tick_frames::melee_attack(level, mob, target);
             level.do_hurt_target(mob, target);
         }
     }

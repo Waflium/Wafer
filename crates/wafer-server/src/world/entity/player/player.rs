@@ -24,6 +24,9 @@ use crate::world::attribute::bed_rule::BedRule;
 use crate::network::chat::Component;
 use crate::world::{InteractionHand, InteractionResult};
 
+const ATTACK_HURT_FRAMES: [&str; 2] = ["net.minecraft.world.entity.Entity.hurtOrSimulate(Entity.java:2163)", "net.minecraft.world.entity.player.Player.attack(Player.java:1042)"];
+const START_AUTO_SPIN_ATTACK_FRAME: [&str; 1] = ["net.minecraft.world.entity.player.Player.startAutoSpinAttack(Player.java:553)"];
+
 impl ServerLevel {
     pub fn player_tick(&mut self, id: EntityId) {
         let spectator = self.is_spectator(id);
@@ -232,6 +235,7 @@ impl ServerLevel {
         living.auto_spin_attack_dmg = dmg;
         living.auto_spin_attack_item_stack = Some(item_stack_used);
         if self.is_player(id) {
+            let _scope = crate::server::main_thread_frames::enter_static(&START_AUTO_SPIN_ATTACK_FRAME);
             self.remove_entities_on_shoulder(id);
         }
         self.set_living_entity_flag(id, crate::world::entity::using_item::FLAG_SPIN_ATTACK, true);
@@ -277,7 +281,10 @@ impl ServerLevel {
             let sweep_attack = self.is_sweep_attack(id, full_strength_attack, critical_attack, knockback_attack);
             let old_living_entity_health = if self.is_living(entity) { self.health(entity) } else { 0.0 };
             let old_movement = self.entity(entity).delta_movement;
-            let was_hurt = self.hurt_server(entity, damage_source, total_damage);
+            let was_hurt = {
+                let _scope = self.is_player(entity).then(|| crate::server::main_thread_frames::enter_static(&ATTACK_HURT_FRAMES));
+                self.hurt_server(entity, damage_source, total_damage)
+            };
             if was_hurt {
                 let knockback = self.get_knockback(id, entity, &damage_source) + if knockback_attack { 0.5 } else { 0.0 };
                 self.cause_extra_knockback(id, entity, knockback, old_movement, &damage_source, total_damage, true);

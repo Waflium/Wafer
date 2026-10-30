@@ -39,6 +39,8 @@ use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, sound_event};
 use crate::world::item::ItemStack;
 
+const DO_HURT_TARGET_FRAME: [&str; 1] = ["net.minecraft.world.entity.monster.zombie.Zombie.doHurtTarget(Zombie.java:317)"];
+const HUSK_DO_HURT_TARGET_FRAME: [&str; 1] = ["net.minecraft.world.entity.monster.zombie.Husk.doHurtTarget(Husk.java:70)"];
 const SPEED_MODIFIER_BABY_ID: &str = "minecraft:baby";
 const SPEED_MODIFIER_BABY: AttributeModifier = AttributeModifier { id: Cow::Borrowed(SPEED_MODIFIER_BABY_ID), amount: 0.5, operation: Operation::AddMultipliedBase };
 const REINFORCEMENT_CALLER_CHARGE_ID: &str = "minecraft:reinforcement_caller_charge";
@@ -367,7 +369,10 @@ impl ServerLevel {
     }
 
     pub fn zombie_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
-        let result = self.mob_do_hurt_target(id, target);
+        let result = {
+            let _scope = self.is_player(target).then(|| crate::server::main_thread_frames::enter_static(&DO_HURT_TARGET_FRAME));
+            self.mob_do_hurt_target(id, target)
+        };
         if result {
             let pos = self.entity(id).block_position();
             let difficulty = self.current_difficulty_at(pos).get_effective_difficulty();
@@ -382,7 +387,10 @@ impl ServerLevel {
     }
 
     pub fn husk_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
-        let result = self.zombie_do_hurt_target(id, target);
+        let result = {
+            let _scope = self.is_player(target).then(|| crate::server::main_thread_frames::enter_static(&HUSK_DO_HURT_TARGET_FRAME));
+            self.zombie_do_hurt_target(id, target)
+        };
         if result && self.item_by_slot_ref(id, EquipmentSlot::Mainhand).is_none() && self.is_living(target) {
             let pos = self.entity(id).block_position();
             let difficulty = self.current_difficulty_at(pos).get_effective_difficulty();

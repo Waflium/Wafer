@@ -249,7 +249,15 @@ impl ServerLevel {
         let radius = creeper(mob).explosion_radius as f32 * explosion_multiplier;
         let position = mob.entity.position();
         self.living_mut(id).dead = true;
-        self.explode(Some(id), Some(id), None, position, radius, false, ExplosionInteraction::Mob);
+        {
+            let _scope = crate::server::main_thread_frames::enter(
+                ["net.minecraft.world.entity.monster.Creeper.explodeCreeper(Creeper.java:244)", "net.minecraft.world.entity.monster.Creeper.tick(Creeper.java:157)"]
+                    .into_iter()
+                    .chain(crate::server::command_frames::ENTITY_TICK)
+                    .chain([crate::server::command_frames::TICK_CHILDREN_LEVELS]),
+            );
+            self.explode(Some(id), Some(id), None, position, radius, false, ExplosionInteraction::Mob);
+        }
         self.spawn_lingering_cloud(id);
         self.trigger_on_death_mob_effects(id, RemovalReason::Killed);
         self.remove(id, RemovalReason::Discarded);

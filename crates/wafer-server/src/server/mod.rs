@@ -6,6 +6,7 @@ pub mod commands;
 mod debug_report;
 pub mod dedicated;
 pub mod dialog;
+pub mod entity_tick_frames;
 pub mod level;
 pub mod network;
 pub mod packs;

@@ -150,6 +150,8 @@ impl ServerLevel {
             }
             serverbound::ATTACK => {
                 let entity_id = r.varint()?;
+                let _processing = crate::server::main_thread_frames::enter_static(&crate::server::main_thread_frames::PACKET_PROCESSING);
+                let _packet = crate::server::main_thread_frames::enter_static(&HANDLE_ATTACK_FRAMES);
                 self.handle_attack(id, entity_id);
             }
             serverbound::INTERACT => {
@@ -416,7 +418,11 @@ impl ServerLevel {
                     self.server_player_drop(id, true);
                 }
             }
-            RELEASE_USE_ITEM => self.release_using_item(id),
+            RELEASE_USE_ITEM => {
+                let _processing = crate::server::main_thread_frames::enter_static(&crate::server::main_thread_frames::PACKET_PROCESSING);
+                let _packet = crate::server::main_thread_frames::enter_static(&HANDLE_RELEASE_USE_ITEM_FRAMES);
+                self.release_using_item(id)
+            }
             START_DESTROY_BLOCK | CHANGE_DESTROY_DIRECTION | ABORT_DESTROY_BLOCK | STOP_DESTROY_BLOCK => {
                 let action = match action {
                     START_DESTROY_BLOCK => BlockBreakAction::StartDestroyBlock,
@@ -1537,6 +1543,8 @@ impl crate::server::Server {
             let name = Component::translatable(&format!("selectWorld.gameMode.{}", mode.name())).get_string();
             warn!("Player {} tried to change game mode to {name} without required permissions", player.profile.name);
         } else {
+            let _processing = crate::server::main_thread_frames::enter_static(&crate::server::main_thread_frames::PACKET_PROCESSING);
+            let _packet = crate::server::main_thread_frames::enter_static(&HANDLE_CHANGE_GAME_MODE_FRAMES);
             crate::server::commands::game_mode_command::set_game_mode(self, id, mode);
         }
         Ok(())
@@ -1557,6 +1565,24 @@ impl crate::server::Server {
         Ok(())
     }
 }
+
+const HANDLE_ATTACK_FRAMES: [&str; 3] = [
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.handleAttack(ServerGamePacketListenerImpl.java:2032)",
+    "net.minecraft.network.protocol.game.ServerboundAttackPacket.handle(ServerboundAttackPacket.java:24)",
+    "net.minecraft.network.protocol.game.ServerboundAttackPacket.handle(ServerboundAttackPacket.java:9)",
+];
+
+const HANDLE_CHANGE_GAME_MODE_FRAMES: [&str; 3] = [
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.handleChangeGameMode(ServerGamePacketListenerImpl.java:2347)",
+    "net.minecraft.network.protocol.game.ServerboundChangeGameModePacket.handle(ServerboundChangeGameModePacket.java:24)",
+    "net.minecraft.network.protocol.game.ServerboundChangeGameModePacket.handle(ServerboundChangeGameModePacket.java:9)",
+];
+
+const HANDLE_RELEASE_USE_ITEM_FRAMES: [&str; 3] = [
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlayerAction(ServerGamePacketListenerImpl.java:1470)",
+    "net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.handle(ServerboundPlayerActionPacket.java:50)",
+    "net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.handle(ServerboundPlayerActionPacket.java:10)",
+];
 
 const HANDLE_PLACE_RECIPE: [&str; 9] = [
     "net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlaceRecipe(ServerGamePacketListenerImpl.java:2232)",

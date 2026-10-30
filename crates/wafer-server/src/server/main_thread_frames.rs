@@ -1,10 +1,11 @@
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::sync::Mutex;
 
 use super::command_frames::{PREPARE_LEVELS, SPIN, TICK_LOOP};
 
 struct Scope {
-    frames: Vec<&'static str>,
+    frames: Cow<'static, [&'static str]>,
     absolute: bool,
 }
 
@@ -72,25 +73,36 @@ pub const SERVER_CHUNK_POLL: [&str; 3] = [
     "net.minecraft.server.MinecraftServer.pollTask(MinecraftServer.java:888)",
 ];
 
-fn push(frames: Vec<&'static str>, absolute: bool) -> FrameScope {
+fn push(frames: Cow<'static, [&'static str]>, absolute: bool) -> FrameScope {
     SCOPES.with(|scopes| scopes.borrow_mut().push(Scope { frames, absolute }));
     publish();
     FrameScope(())
 }
 
 pub fn enter(frames: impl IntoIterator<Item = &'static str>) -> FrameScope {
-    push(frames.into_iter().collect(), false)
+    push(Cow::Owned(frames.into_iter().collect()), false)
+}
+
+pub fn enter_static(frames: &'static [&'static str]) -> FrameScope {
+    push(Cow::Borrowed(frames), false)
 }
 
 pub fn enter_absolute(frames: impl IntoIterator<Item = &'static str>) -> FrameScope {
     let mut frames: Vec<&'static str> = frames.into_iter().collect();
     frames.extend(SPIN);
-    push(frames, true)
+    push(Cow::Owned(frames), true)
 }
 
 pub fn enter_complete(frames: Vec<&'static str>) -> FrameScope {
-    push(frames, true)
+    push(Cow::Owned(frames), true)
 }
+
+pub const PACKET_PROCESSING: [&str; 4] = [
+    "net.minecraft.network.PacketProcessor$ListenerAndPacket.handle(PacketProcessor.java:55)",
+    "net.minecraft.network.PacketProcessor.processQueuedPackets(PacketProcessor.java:38)",
+    "net.minecraft.server.MinecraftServer.processPacketsAndTick(MinecraftServer.java:1011)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:752)",
+];
 
 pub fn current() -> Vec<&'static str> {
     SCOPES.with(|scopes| {

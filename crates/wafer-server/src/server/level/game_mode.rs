@@ -17,6 +17,8 @@ use crate::world::level::block::{self, BlockHitResult, game_master_block};
 use crate::world::level::{BlockGetter, update_flags};
 use crate::world::{InteractionHand, InteractionResult, item};
 
+const SET_GAME_MODE_FRAME: [&str; 1] = ["net.minecraft.server.level.ServerPlayer.setGameMode(ServerPlayer.java:1914)"];
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum GameType {
     #[default]
@@ -177,7 +179,10 @@ impl ServerLevel {
             w.f32(game_type.id() as f32);
         });
         if game_type == GameType::Spectator {
-            self.remove_entities_on_shoulder(player);
+            {
+                let _scope = crate::server::main_thread_frames::enter_static(&SET_GAME_MODE_FRAME);
+                self.remove_entities_on_shoulder(player);
+            }
             self.stop_riding(player);
             self.stop_using_item(player);
             self.stop_all_location_based_effects(player);

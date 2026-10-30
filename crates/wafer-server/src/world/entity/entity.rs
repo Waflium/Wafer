@@ -3603,19 +3603,30 @@ pub fn get_collision_horizontal_escape_vector(collider_width: f64, colliding_wid
 
 impl ServerLevel {
     pub fn fill_crash_report_category(&self, id: EntityId, category: &mut crate::crash_report::CrashReportCategory) {
-        use crate::crash_report::CrashReportCategory;
         let entity = self.entity(id);
+        let type_name = registry::ENTITY_TYPE[entity.entity_type as usize];
+        let class = if self.dragon_parts.contains_key(id) { "net.minecraft.world.entity.boss.enderdragon.EnderDragonPart" } else { super::entity_class_names::canonical_name(type_name) };
+        let vehicle = self.vehicle(id).map_or("null".to_string(), |vehicle| self.entity_to_string(vehicle));
+        let passengers = format!("[{}]", self.passengers(id).iter().map(|&passenger| self.entity_to_string(passenger)).collect::<Vec<_>>().join(", "));
+        self.fill_entity_crash_report_category(entity, id, class, self.plain_text_name(id), passengers, vehicle, category);
+    }
+
+    pub fn fill_detached_crash_report_category(&self, entity: &LevelEntity, category: &mut crate::crash_report::CrashReportCategory) {
+        let class = super::entity_class_names::canonical_name(registry::ENTITY_TYPE[entity.entity().entity_type as usize]);
+        self.fill_entity_crash_report_category(entity.entity(), entity.entity().id, class, entity.name().get_string(), "[]".to_string(), "null".to_string(), category);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn fill_entity_crash_report_category(&self, entity: &Entity, id: EntityId, class: &str, name: String, passengers: String, vehicle: String, category: &mut crate::crash_report::CrashReportCategory) {
+        use crate::crash_report::CrashReportCategory;
         let (x, y, z) = (entity.x(), entity.y(), entity.z());
         let movement = entity.delta_movement;
         let fixed = |value: f64| crate::util::java_format_fixed(value, 2);
         let location = CrashReportCategory::format_location(self.chunks.min_y(), self.chunks.max_y(), mth::floor(x), mth::floor(y), mth::floor(z));
         let type_name = registry::ENTITY_TYPE[entity.entity_type as usize];
-        let class = if self.dragon_parts.contains_key(id) { "net.minecraft.world.entity.boss.enderdragon.EnderDragonPart" } else { super::entity_class_names::canonical_name(type_name) };
-        let vehicle = self.vehicle(id).map_or("null".to_string(), |vehicle| self.entity_to_string(vehicle));
-        let passengers = format!("[{}]", self.passengers(id).iter().map(|&passenger| self.entity_to_string(passenger)).collect::<Vec<_>>().join(", "));
         category.set_detail("Entity Type", format!("{type_name} ({class})"));
         category.set_detail("Entity ID", id.to_string());
-        category.set_detail("Entity Name", self.plain_text_name(id));
+        category.set_detail("Entity Name", name);
         category.set_detail("Entity's Exact location", format!("{}, {}, {}", fixed(x), fixed(y), fixed(z)));
         category.set_detail("Entity's Block location", location);
         category.set_detail("Entity's Momentum", format!("{}, {}, {}", fixed(movement.x), fixed(movement.y), fixed(movement.z)));
