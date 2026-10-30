@@ -270,6 +270,8 @@ mod fire_block_tests;
 mod piston_tests;
 #[cfg(test)]
 mod shulker_box_tests;
+#[cfg(test)]
+mod straw_bed_tests;
 pub mod portal;
 pub mod state;
 mod pointed_dripstone_block;

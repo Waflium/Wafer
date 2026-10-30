@@ -250,11 +250,14 @@ impl BlockBehaviour for AbstractBedBlock {
                 }
             }
         }
+        super::block_player_will_destroy(level, pos, state, player)
+    }
+
+    fn spawn_destroy_particles(&self, level: &mut ServerLevel, pos: BlockPos, state: BlockState) {
         if self.kind == BedKind::StrawBed {
-            level.level_event(Some(player), crate::server::level::events::PARTICLES_DESTROY_BLOCK, pos, state.id() as i32);
-            state
+            level.level_event(None, crate::server::level::events::PARTICLES_DESTROY_BLOCK, pos, state.id() as i32);
         } else {
-            super::block_player_will_destroy(level, pos, state, player)
+            self.spawn_destroy_by_entity_particles(level, None, pos, state);
         }
     }
 
