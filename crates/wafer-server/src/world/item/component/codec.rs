@@ -958,14 +958,7 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
         Stream::Long => w.i64(java_i64(codec, value)),
         Stream::Float => w.f32(as_f32(value)),
         Stream::Double => w.f64(as_f64(value)),
-        Stream::Utf8(max) => {
-            let s = value.as_str().unwrap_or("");
-            let length = s.java_utf16().count();
-            if length > *max {
-                return Err(format!("String too big (was {length} characters, max {max})"));
-            }
-            w.string(s)
-        }
+        Stream::Utf8(max) => w.string_max(value.as_str().unwrap_or(""), *max),
         Stream::Identifier => w.string(value.as_str().unwrap_or("")),
         Stream::Registry(reg) => w.varint(network_registry_id(reg, value.as_str().unwrap_or(""))?),
         Stream::Holder(reg, direct_stream) => match value {
