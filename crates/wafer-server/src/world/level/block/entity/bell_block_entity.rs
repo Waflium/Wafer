@@ -5,6 +5,7 @@ use super::BlockEntityKind;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::effect::MobEffectInstance;
 use crate::world::entity::EntityId;
+use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::level::block::bell_block::EVENT_BELL_RING;
 
 const DURATION: i32 = 50;
@@ -123,6 +124,12 @@ impl ServerLevel {
             let nearby_entities: Vec<EntityId> = self.get_entities(None, &aabb).into_iter().filter(|&id| self.is_living(id)).collect();
             if let Some(bell) = self.bell(block_pos) {
                 bell.nearby_entities = Some(nearby_entities);
+            }
+        }
+        let nearby_entities = self.bell(block_pos).and_then(|bell| bell.nearby_entities.clone()).unwrap_or_default();
+        for entity in nearby_entities {
+            if is_alive_and_present(self, entity) && closer_to_center_than(self, block_pos, entity, HEAR_BELL_RADIUS) {
+                self.get_brain_mut(entity).set_memory(memory_module_type::HEARD_BELL_TIME, game_time);
             }
         }
     }

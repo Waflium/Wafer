@@ -329,3 +329,17 @@ fn villagers_release_pois_in_other_dimensions() {
     assert_eq!(nether.chunks.poi_manager.get_in_range(&is_home, pos, 1, Occupancy::HasSpace).len(), 1);
 }
 
+#[test]
+fn ringing_a_bell_makes_villagers_within_range_hear_it() {
+    let (mut level, _player) = duel_level();
+    let bell = BlockPos::new(4, -60, 4);
+    level.set_block(bell, blocks::BELL.default_state(), UPDATE_ALL);
+    let near = summon(&mut level, "minecraft:villager", Vec3::new(14.5, -60.0, 4.5), r#"Tags:["v"],PersistenceRequired:1b"#);
+    let far = summon(&mut level, "minecraft:villager", Vec3::new(40.5, -60.0, 4.5), r#"Tags:["v"],PersistenceRequired:1b"#);
+    assert!(level.get_brain(near).get_memory(memory_module_type::HEARD_BELL_TIME).is_none());
+    level.bell_on_hit(bell, wafer_core::Direction::North);
+    level.tick();
+    assert!(level.get_brain(near).get_memory(memory_module_type::HEARD_BELL_TIME).is_some());
+    assert!(level.get_brain(far).get_memory(memory_module_type::HEARD_BELL_TIME).is_none());
+}
+
