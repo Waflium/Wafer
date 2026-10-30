@@ -25,12 +25,14 @@ impl TradeSet {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let mut record = Record::default();
-        let trades = record.required(tag, "trades", |t| HolderSet::decode_partial(super::villager_trade::REGISTRY, t));
-        let amount = record.required(tag, "amount", ContextIntProvider::decode_holder_partial);
-        let allow_duplicates = record.with_default(tag, "allow_duplicates", false, codec::bool_value);
-        let random_sequence = record.optional(tag, "random_sequence", codec::identifier);
-        record.build(|| Some(TradeSet { trades: trades?, amount: amount?, allow_duplicates, random_sequence }))
+        codec::as_codec(|| {
+            let mut record = Record::default();
+            let trades = record.required(tag, "trades", |t| HolderSet::decode_partial(super::villager_trade::REGISTRY, t));
+            let amount = record.required(tag, "amount", ContextIntProvider::decode_holder_partial);
+            let allow_duplicates = record.with_default(tag, "allow_duplicates", false, codec::bool_value);
+            let random_sequence = record.optional(tag, "random_sequence", codec::identifier);
+            record.build(|| Some(TradeSet { trades: trades?, amount: amount?, allow_duplicates, random_sequence }))
+        })
     }
 
     pub fn get_optional(key: &str) -> Option<&'static TradeSet> {

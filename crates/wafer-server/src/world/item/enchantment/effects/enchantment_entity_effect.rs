@@ -72,7 +72,7 @@ fn replace_fields(radius: bool) -> Vec<Field> {
         fields.push(level_based("radius"));
         fields.push(level_based("height"));
     }
-    fields.push(def("offset", custom::block_pos(), zero_vec3i()));
+    fields.push(def("offset", if radius { crate::util::extra_codecs::vec3i_codec() } else { custom::block_pos() }, zero_vec3i()));
     fields.push(opt("predicate", block_predicate::codec()));
     fields.push(req("block_state", block_state_provider::holder_codec()));
     fields.push(opt("trigger_game_event", types::fixed("minecraft:game_event")));

@@ -22,11 +22,13 @@ impl TradeCost {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let mut record = codec::Record::default();
-        let item = record.required(tag, "id", decode_item);
-        let count = record.with_default(tag, "count", ints::exactly(1), ContextIntProvider::decode_holder);
-        let components = record.with_default(tag, "components", DataComponentExactPredicate::default(), DataComponentExactPredicate::decode);
-        record.build(|| Some(TradeCost { item: item?, count, components }))
+        codec::as_codec(|| {
+            let mut record = codec::Record::default();
+            let item = record.required(tag, "id", decode_item);
+            let count = record.with_default(tag, "count", ints::exactly(1), ContextIntProvider::decode_holder);
+            let components = record.with_default(tag, "components", DataComponentExactPredicate::default(), DataComponentExactPredicate::decode);
+            record.build(|| Some(TradeCost { item: item?, count, components }))
+        })
     }
 
     pub fn to_item_cost(&self, loot_context: &mut LootContext, additional_cost: i32) -> ItemCost {

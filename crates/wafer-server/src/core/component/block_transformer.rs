@@ -37,7 +37,8 @@ fn block_transform_data_codec() -> Pair {
 }
 
 pub fn direct_codec() -> Pair {
-    types::list_sized(block_transform_data_codec(), 1, 200)
+    let (list, stream) = types::list_sized(block_transform_data_codec(), 1, 200);
+    (crate::world::item::component::codec::Codec::Framed(Box::new(list), crate::world::item::component::codec::Wrap::Xmap), stream)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

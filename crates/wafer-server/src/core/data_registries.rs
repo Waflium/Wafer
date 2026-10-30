@@ -856,9 +856,9 @@ fn decode(registry: &str, element: &JsonElement) -> Result<(), String> {
             decode_with(enchantment_provider::direct_codec(), &tag)?;
             enchantment_provider::EnchantmentProvider::parse(&json()).map(drop)
         }
-        "minecraft:villager_trade" => crate::world::item::trading::villager_trade::VillagerTrade::decode(&tag).map(drop),
-        "minecraft:trade_set" => crate::world::item::trading::trade_set::TradeSet::decode(&tag).map(drop),
-        "minecraft:trial_spawner" => crate::world::level::block::entity::trialspawner::trial_spawner_config::TrialSpawnerConfig::decode_direct(&tag).map(drop),
+        "minecraft:villager_trade" => parsing(|| crate::world::item::trading::villager_trade::VillagerTrade::decode(&tag)).map(drop),
+        "minecraft:trade_set" => parsing(|| crate::world::item::trading::trade_set::TradeSet::decode(&tag)).map(drop),
+        "minecraft:trial_spawner" => parsing(|| crate::world::level::block::entity::trialspawner::trial_spawner_config::TrialSpawnerConfig::decode_direct(&tag)).map(drop),
         "minecraft:painting_variant" => decode_with(crate::world::entity::decoration::painting::painting_variant::direct_codec(), &tag),
         "minecraft:damage_type" => decode_with(crate::world::damagesource::damage_type::direct_codec(), &tag),
         "minecraft:banner_pattern" => decode_with(crate::world::level::block::entity::banner_pattern::direct_codec(), &tag),

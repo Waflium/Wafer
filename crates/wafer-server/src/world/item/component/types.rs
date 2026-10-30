@@ -16,6 +16,10 @@ pub fn opt(name: &'static str, p: Pair) -> Field {
     Field::new(name, p.0, p.1, Kind::Optional)
 }
 
+pub fn opt_mapped(name: &'static str, p: Pair) -> Field {
+    Field::new(name, p.0, p.1, Kind::OptionalMapped)
+}
+
 pub fn def(name: &'static str, p: Pair, default: Nbt) -> Field {
     Field::new(name, p.0, p.1, Kind::Default(default))
 }

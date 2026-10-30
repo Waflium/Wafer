@@ -39,6 +39,7 @@ const INT_STREAM_FRAMES: [&str; 14] = [
 ];
 
 const VEC3I_FIXED_SIZE: &str = "net.minecraft.core.Vec3i.lambda$static$0(Vec3i.java:19)";
+pub const BLOCK_POS_FIXED_SIZE: &str = "net.minecraft.core.BlockPos.lambda$static$0(BlockPos.java:35)";
 
 fn throw_int_stream_element(value: &Nbt, owner: &'static str) {
     let Nbt::LazilyParsedNumber(text) = value else { return };

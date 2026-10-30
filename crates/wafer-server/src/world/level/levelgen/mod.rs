@@ -348,7 +348,7 @@ pub fn noise_settings_codec() -> crate::world::item::component::types::Pair {
         req("min_y", (Codec::Int(MIN_Y, MAX_Y, RangeError::Outside), Stream::Int)),
         req("height", (Codec::Int(0, Y_SIZE, RangeError::Outside), Stream::Int)),
     ];
-    (Codec::Normalize(Box::new(Codec::Record(fields)), guard_y), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(Codec::Record(fields)), guard_y)), crate::world::item::component::codec::Wrap::FlatXmap), Stream::Nbt)
 }
 
 pub fn noise_router_codec() -> crate::world::item::component::types::Pair {

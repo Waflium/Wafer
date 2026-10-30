@@ -48,7 +48,7 @@ impl TestData {
 }
 
 fn test_data_fields() -> Vec<Field> {
-    vec![
+    let fields = vec![
         req("environment", test_environment_definition::holder_codec()),
         def("dimension", types::identifier(), types::s("minecraft:overworld")),
         req("structure", types::identifier()),
@@ -61,7 +61,9 @@ fn test_data_fields() -> Vec<Field> {
         def("required_successes", types::var_int(types::positive_int()), types::i(1)),
         def("sky_access", types::bool(), types::b(false)),
         def("padding", types::var_int(Codec::Int(0, 128, RangeError::Outside)), types::i(0)),
-    ]
+    ];
+    let size = fields.len();
+    fields.into_iter().map(|field| field.grouped(size)).collect()
 }
 
 pub fn direct_codec() -> Pair {

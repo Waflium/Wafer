@@ -1,7 +1,7 @@
 use serde_json::Value;
 
 use crate::world::item::component::codec::{Codec, Dispatch, Field, RangeError, Selector, Stream};
-use crate::world::item::component::types::{self, Pair, def, opt};
+use crate::world::item::component::types::{self, Pair, def, opt_mapped};
 
 pub struct FeatureSize {
     pub min_clipped_height: Option<i32>,
@@ -18,7 +18,7 @@ fn range(max: i32) -> Pair {
 }
 
 fn min_clipped_height_codec() -> Field {
-    opt("min_clipped_height", range(80))
+    opt_mapped("min_clipped_height", range(80))
 }
 
 pub fn codec() -> Pair {

@@ -31,6 +31,7 @@ pub enum RangeError {
 pub enum Kind {
     Required,
     Optional,
+    OptionalMapped,
     Default(Nbt),
     Lenient(Nbt),
     LenientOptional,
@@ -195,7 +196,7 @@ fn field_frames(fields: &[Field], index: usize) -> Vec<&'static str> {
     let mut frames = match field.kind {
         Kind::Required | Kind::Plain => dfu_frames::required_field(),
         Kind::Optional | Kind::LenientOptional => dfu_frames::optional_field(),
-        Kind::Default(_) | Kind::Lenient(_) | Kind::AlwaysPresent(_) => dfu_frames::optional_field_with_default(),
+        Kind::OptionalMapped | Kind::Default(_) | Kind::Lenient(_) | Kind::AlwaysPresent(_) => dfu_frames::optional_field_with_default(),
     };
     if fields.len() == 1 && field.group == XMAPPED_SINGLE {
         frames.extend(dfu_frames::map_codec_xmap());
@@ -966,7 +967,9 @@ fn case_frames(selector: &Selector, name: &str) -> Vec<&'static str> {
             "minecraft:uniform" | "minecraft:biased_to_bottom" | "minecraft:very_biased_to_bottom" | "minecraft:clamped" | "minecraft:clamped_normal" | "minecraft:trapezoid",
         )
         | (Selector::Registry("minecraft:float_provider_type"), "minecraft:uniform" | "minecraft:clamped_normal" | "minecraft:trapezoid")
-        | (Selector::Registry("minecraft:worldgen/density_function_type"), "minecraft:gradient" | "minecraft:clamp" | "minecraft:interval_select") => dfu_frames::map_codec_flat_xmap(),
+        | (Selector::Registry("minecraft:worldgen/density_function_type"), "minecraft:gradient" | "minecraft:clamp" | "minecraft:interval_select")
+        | (Selector::Registry("minecraft:block_predicate_type"), "minecraft:volume_match")
+        | (Selector::Registry("minecraft:worldgen/feature_type"), "minecraft:fossil") => dfu_frames::map_codec_flat_xmap(),
         _ => Vec::new(),
     }
 }
@@ -1222,8 +1225,8 @@ fn write_fields(fields: &[Field], value: &Nbt, w: &mut Writer) -> Result<(), Str
         let composite = [stream_codec::composite(fields.len() as u8, index as u8 + 1)];
         let frames: &[Frame] = if (1..=stream_codec::MAX_COMPOSITE_SIZE).contains(&fields.len()) { &composite } else { &[] };
         w.layer(frames, |w| match (&field.kind, present) {
-            (Kind::Optional | Kind::LenientOptional, None) => Ok(w.bool(false)),
-            (Kind::Optional | Kind::LenientOptional, Some(v)) => {
+            (Kind::Optional | Kind::OptionalMapped | Kind::LenientOptional, None) => Ok(w.bool(false)),
+            (Kind::Optional | Kind::OptionalMapped | Kind::LenientOptional, Some(v)) => {
                 w.bool(true);
                 w.layer(stream_codec::OPTIONAL, |w| write(&field.codec, &field.stream, v, w))
             }
@@ -1391,7 +1394,7 @@ pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, Strin
 fn read_fields(fields: &[Field], r: &mut Reader, out: &mut Vec<(String, Nbt)>) -> Result<(), String> {
     for field in fields {
         match &field.kind {
-            Kind::Optional | Kind::LenientOptional => {
+            Kind::Optional | Kind::OptionalMapped | Kind::LenientOptional => {
                 if rd!(r.bool()) {
                     out.push((field.name.into(), read(&field.codec, &field.stream, r)?));
                 }

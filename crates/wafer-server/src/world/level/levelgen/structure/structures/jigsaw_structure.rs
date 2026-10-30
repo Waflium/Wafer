@@ -38,7 +38,8 @@ const MAX_TOTAL_STRUCTURE_RANGE: i32 = 128;
 fn max_distance_codec() -> Pair {
     let horizontal_value_codec = || var_int(Codec::Int(1, 128, RangeError::Outside));
     let full_codec = record(vec![req("horizontal", horizontal_value_codec()), def("vertical", var_int(Codec::Int(1, Y_SIZE, RangeError::Within)), i(Y_SIZE))]);
-    either(full_codec, horizontal_value_codec())
+    let (codec, stream) = either(full_codec, horizontal_value_codec());
+    (Codec::Framed(Box::new(codec), crate::world::item::component::codec::Wrap::Xmap), stream)
 }
 
 pub fn fields() -> Vec<Field> {

@@ -21,13 +21,13 @@ pub fn codec() -> Pair {
     let lazy = || (Codec::Lazy(codec_lazy), Stream::Lazy);
     let probability = || req("probability", types::float(Codec::float()));
     let cases = vec![
-        ("minecraft:all_of", vec![req("rules", types::list(lazy()))]),
+        ("minecraft:all_of", vec![req("rules", types::list(lazy())).xmapped()]),
         ("minecraft:always_true", vec![]),
-        ("minecraft:any_of", vec![req("rules", types::list(lazy()))]),
-        ("minecraft:block_match", vec![req("block", types::by_name("minecraft:block"))]),
-        ("minecraft:blockstate_match", vec![req("block_state", block_state::codec())]),
-        ("minecraft:not", vec![req("rule", lazy())]),
-        ("minecraft:tag_match", vec![req("tag", types::identifier())]),
+        ("minecraft:any_of", vec![req("rules", types::list(lazy())).xmapped()]),
+        ("minecraft:block_match", vec![req("block", types::by_name("minecraft:block")).xmapped()]),
+        ("minecraft:blockstate_match", vec![req("block_state", block_state::codec()).xmapped()]),
+        ("minecraft:not", vec![req("rule", lazy()).xmapped()]),
+        ("minecraft:tag_match", vec![req("tag", types::identifier()).xmapped()]),
         ("minecraft:height_match", vec![req("min_inclusive", (Codec::int(), Stream::Int)), req("max_inclusive", (Codec::int(), Stream::Int))]),
         ("minecraft:random_block_match", vec![req("block", types::by_name("minecraft:block")), probability()]),
         ("minecraft:random_blockstate_match", vec![req("block_state", block_state::codec()), probability()]),

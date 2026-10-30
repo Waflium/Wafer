@@ -205,6 +205,13 @@ impl Custom for BlockPosCodec {
         Ok(Nbt::IntArray(ints))
     }
 
+    fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
+        if !crate::nbt::is_json_source() {
+            return DecodeResult::from(self.decode(tag));
+        }
+        util_codec::with_frames(crate::util::dfu_frames::stable, || crate::util::extra_codecs::fixed_size_ints_owned(tag, 3, crate::util::extra_codecs::BLOCK_POS_FIXED_SIZE)).map(Nbt::IntArray)
+    }
+
     fn hash(&self, value: &Nbt) -> HashCode {
         match value {
             Nbt::IntArray(v) => hash_ops::create_int_list(v),

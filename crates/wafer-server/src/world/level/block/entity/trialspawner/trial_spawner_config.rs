@@ -87,29 +87,33 @@ impl TrialSpawnerConfig {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let int_range = |min: i32, max: i32| move |tag: &Nbt| Codec::Int(min, max, RangeError::Outside).decode(tag).map(|value| component_codec::as_i32(&value));
-        let non_negative_float = |tag: &Nbt| types::codec_float_range(0.0, f32::MAX).decode(tag).map(|value| component_codec::as_f32(&value));
-        let mut record = codec::Record::default();
-        let spawn_range = record.optional(tag, "spawn_range", int_range(1, 128));
-        let total_mobs = record.optional(tag, "total_mobs", non_negative_float);
-        let simultaneous_mobs = record.optional(tag, "simultaneous_mobs", non_negative_float);
-        let total_mobs_added_per_player = record.optional(tag, "total_mobs_added_per_player", non_negative_float);
-        let simultaneous_mobs_added_per_player = record.optional(tag, "simultaneous_mobs_added_per_player", non_negative_float);
-        let ticks_between_spawn = record.optional(tag, "ticks_between_spawn", int_range(0, i32::MAX));
-        let spawn_potentials = record.optional(tag, "spawn_potentials", |tag| weighted_list(tag, spawn_data_codec(), |data| SpawnData::decode(data).ok()));
-        let loot_tables_to_eject = record.optional(tag, "loot_tables_to_eject", |tag| weighted_list(tag, types::identifier(), |data| data.as_str().map(str::to_string)));
-        let items_to_drop_when_ominous = record.optional(tag, "items_to_drop_when_ominous", |tag| codec::identifier(tag));
-        record.build(|| {
-            Some(TrialSpawnerConfig {
-                spawn_range: spawn_range.unwrap_or(DEFAULT.spawn_range),
-                total_mobs: total_mobs.unwrap_or(DEFAULT.total_mobs),
-                simultaneous_mobs: simultaneous_mobs.unwrap_or(DEFAULT.simultaneous_mobs),
-                total_mobs_added_per_player: total_mobs_added_per_player.unwrap_or(DEFAULT.total_mobs_added_per_player),
-                simultaneous_mobs_added_per_player: simultaneous_mobs_added_per_player.unwrap_or(DEFAULT.simultaneous_mobs_added_per_player),
-                ticks_between_spawn: ticks_between_spawn.unwrap_or(DEFAULT.ticks_between_spawn),
-                spawn_potentials_definition: spawn_potentials.unwrap_or_else(WeightedList::empty),
-                loot_tables_to_eject: loot_tables_to_eject.unwrap_or_else(|| DEFAULT.loot_tables_to_eject.clone()),
-                items_to_drop_when_ominous: items_to_drop_when_ominous.unwrap_or_else(|| DEFAULT.items_to_drop_when_ominous.clone()),
+        let int_range = |min: i32, max: i32| move |tag: &Nbt| Codec::Int(min, max, RangeError::Outside).decode_partial(tag).map(|value| component_codec::as_i32(&value));
+        let non_negative_float = |tag: &Nbt| types::codec_float_range(0.0, f32::MAX).decode_partial(tag).map(|value| component_codec::as_f32(&value));
+        codec::as_codec(|| {
+            let mut record = codec::Record::default();
+            let spawn_range = record.with_default(tag, "spawn_range", DEFAULT.spawn_range, int_range(1, 128));
+            let total_mobs = record.with_default(tag, "total_mobs", DEFAULT.total_mobs, non_negative_float);
+            let simultaneous_mobs = record.with_default(tag, "simultaneous_mobs", DEFAULT.simultaneous_mobs, non_negative_float);
+            let total_mobs_added_per_player = record.with_default(tag, "total_mobs_added_per_player", DEFAULT.total_mobs_added_per_player, non_negative_float);
+            let simultaneous_mobs_added_per_player = record.with_default(tag, "simultaneous_mobs_added_per_player", DEFAULT.simultaneous_mobs_added_per_player, non_negative_float);
+            let ticks_between_spawn = record.with_default(tag, "ticks_between_spawn", DEFAULT.ticks_between_spawn, int_range(0, i32::MAX));
+            let spawn_potentials = record.with_default(tag, "spawn_potentials", WeightedList::empty(), |tag| weighted_list(tag, spawn_data_codec(), |data| SpawnData::decode(data).ok()));
+            let loot_tables_to_eject = record.with_default(tag, "loot_tables_to_eject", DEFAULT.loot_tables_to_eject.clone(), |tag| {
+                weighted_list(tag, types::identifier(), |data| data.as_str().map(str::to_string))
+            });
+            let items_to_drop_when_ominous = record.with_default(tag, "items_to_drop_when_ominous", DEFAULT.items_to_drop_when_ominous.clone(), |tag| codec::identifier(tag));
+            record.build(|| {
+                Some(TrialSpawnerConfig {
+                    spawn_range,
+                    total_mobs,
+                    simultaneous_mobs,
+                    total_mobs_added_per_player,
+                    simultaneous_mobs_added_per_player,
+                    ticks_between_spawn,
+                    spawn_potentials_definition: spawn_potentials,
+                    loot_tables_to_eject,
+                    items_to_drop_when_ominous,
+                })
             })
         })
     }
