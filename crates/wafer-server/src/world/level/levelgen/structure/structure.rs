@@ -284,10 +284,10 @@ impl Structure {
 
 pub fn settings_fields() -> Vec<Field> {
     vec![
-        req("biomes", holder_set("minecraft:worldgen/biome")),
-        req("spawn_overrides", nbt(Codec::Map(Box::new(Codec::Enum(MobCategory::NAMES)), Box::new(structure_spawn_override::codec().0)))),
-        req("step", enumeration(&DECORATION_STEPS)),
-        def("terrain_adaptation", enumeration(TerrainAdjustment::NAMES), s("none")),
+        req("biomes", holder_set("minecraft:worldgen/biome")).grouped(4),
+        req("spawn_overrides", nbt(Codec::Map(Box::new(Codec::Enum(MobCategory::NAMES)), Box::new(structure_spawn_override::codec().0)))).grouped(4),
+        req("step", enumeration(&DECORATION_STEPS)).grouped(4),
+        def("terrain_adaptation", enumeration(TerrainAdjustment::NAMES), s("none")).grouped(4),
     ]
 }
 

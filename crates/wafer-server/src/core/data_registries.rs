@@ -1,6 +1,8 @@
 use wafer_core::java_string::JavaStr;
 use std::any::Any;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+
+use crate::util::dfu_frames;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -338,6 +340,9 @@ thread_local! {
     static UNBOUND: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
     static UNBOUND_TAGS: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
     static THROWN: RefCell<Option<JavaThrowable>> = const { RefCell::new(None) };
+    static RECORDING: Cell<bool> = const { Cell::new(false) };
+    static DEPTH: Cell<usize> = const { Cell::new(0) };
+    static UNWOUND_TO: Cell<usize> = const { Cell::new(0) };
     static REFERENCED: RefCell<Option<Vec<(String, String)>>> = const { RefCell::new(None) };
 }
 
@@ -352,12 +357,47 @@ pub fn known_reference(registry: &str, key: &str) {
 }
 
 pub fn throw(exception: &str, message: String, frames: &[&'static str]) {
+    throw_at(exception, message, frames, 0);
+}
+
+pub fn throw_unwinding(exception: &str, message: String, frames: &[&'static str]) {
+    throw_at(exception, message, frames, DEPTH.with(Cell::get));
+}
+
+fn throw_at(exception: &str, message: String, frames: &[&'static str], unwind_from: usize) {
     THROWN.with(|thrown| {
         let mut thrown = thrown.borrow_mut();
         if thrown.is_none() {
             *thrown = Some(JavaThrowable::new(format!("{exception}: {message}"), frames.to_vec()));
+            UNWOUND_TO.with(|unwound_to| unwound_to.set(unwind_from));
         }
     });
+}
+
+pub fn recording<R>(decode: impl FnOnce() -> R) -> R {
+    let previous = RECORDING.with(|recording| recording.replace(true));
+    DEPTH.with(|depth| depth.set(0));
+    let result = decode();
+    RECORDING.with(|recording| recording.set(previous));
+    result
+}
+
+pub fn unwinding<R>(frames: impl FnOnce() -> Vec<&'static str>, decode: impl FnOnce() -> R) -> R {
+    if !RECORDING.with(Cell::get) {
+        return decode();
+    }
+    let depth = DEPTH.with(|depth| depth.replace(depth.get() + 1));
+    let result = decode();
+    DEPTH.with(|current| current.set(depth));
+    if depth < UNWOUND_TO.with(Cell::get) {
+        THROWN.with(|thrown| {
+            if let Some(thrown) = thrown.borrow_mut().as_mut() {
+                thrown.push_frames(&frames());
+                UNWOUND_TO.with(|unwound_to| unwound_to.set(depth));
+            }
+        });
+    }
+    result
 }
 
 pub fn take_thrown() -> Option<JavaThrowable> {
@@ -604,7 +644,7 @@ fn validate_registries(pack_elements: &[&PackElement], worldgen_stage: bool, tag
         let decoded = match &element.json {
             Ok(json) if element.registry == DIMENSION_REGISTRY => crate::nbt::with_json_source(|| decode_dimension(&element.id, json)).map_err(ElementFailure::Decode),
             Ok(json) if element.registry == "minecraft:worldgen/world_preset" => crate::nbt::with_json_source(|| decode_world_preset(&element.id, json)).map_err(ElementFailure::Decode),
-            Ok(json) => crate::nbt::with_json_source(|| decode(element.registry, json)).map_err(ElementFailure::Decode),
+            Ok(json) => crate::nbt::with_json_source(|| recording(|| decode(element.registry, json))).map_err(ElementFailure::Decode),
             Err(throwable) => Err(ElementFailure::Parse(throwable.clone())),
         };
         let decoded = match take_thrown() {
@@ -848,7 +888,7 @@ fn encode_network(registry: &str, json: &Value) -> Nbt {
 }
 
 fn decode_with(codec: crate::world::item::component::types::Pair, tag: &Nbt) -> Result<(), String> {
-    let result = codec.0.decode(tag).map(drop);
+    let result = unwinding(|| vec![dfu_frames::DECODER_PARSE], || codec.0.decode_partial(tag).into_result()).map(drop);
     match THROWN.with(|thrown| thrown.borrow().as_ref().map(|thrown| thrown.description.clone())) {
         Some(description) => Err(description),
         None => result,
@@ -1194,6 +1234,28 @@ mod tests {
         super::take_thrown();
         crate::nbt::with_json_source(|| super::decode("minecraft:jukebox_song", &element)).ok();
         assert!(super::take_thrown().is_none());
+    }
+
+    fn thrown_while_decoding(registry: &str, json: &str) -> String {
+        let element = crate::util::gson::parse_strict(json).unwrap();
+        super::take_thrown();
+        let decoded = crate::nbt::with_json_source(|| super::recording(|| super::decode(registry, &element)));
+        assert!(decoded.is_err());
+        super::take_thrown().expect("the decoder throws").print_stack_trace()
+    }
+
+    #[test]
+    fn number_format_exceptions_carry_the_codec_path_up_to_the_registry_root() {
+        let jukebox = r#"{"sound_event":"minecraft:music_disc.13","description":"x","length_in_seconds":10,"comparator_output":1E+10000}"#;
+        assert_eq!(thrown_while_decoding("minecraft:jukebox_song", jukebox), include_str!("dfu_traces/jukebox_comparator_number_format.txt"));
+        let structure = r#"{"type":"minecraft:buried_treasure","biomes":"minecraft:plains","step":"surface_structures","spawn_overrides":{"monster":{"bounding_box":"full","spawns":[{"type":"minecraft:pig","count":1,"weight":1E+10000}]}}}"#;
+        assert_eq!(thrown_while_decoding("minecraft:worldgen/structure", structure), include_str!("dfu_traces/structure_spawn_weight_number_format.txt"));
+    }
+
+    #[test]
+    fn an_overflowing_sum_of_weights_carries_the_codec_path_up_to_the_registry_root() {
+        let structure = r#"{"type":"minecraft:buried_treasure","biomes":"minecraft:plains","step":"surface_structures","spawn_overrides":{"monster":{"bounding_box":"full","spawns":[{"type":"minecraft:pig","count":1,"weight":2147483647},{"type":"minecraft:pig","count":1,"weight":2147483647}]}}}"#;
+        assert_eq!(thrown_while_decoding("minecraft:worldgen/structure", structure), include_str!("dfu_traces/structure_spawn_weights_overflow.txt"));
     }
 
     #[test]

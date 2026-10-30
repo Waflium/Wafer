@@ -6,6 +6,7 @@ use wafer_protocol::{Frame, Reader, Writer, stream_codec};
 use crate::commands::arguments::parse_identifier;
 use crate::nbt;
 use crate::util::codec::DecodeResult;
+use crate::util::dfu_frames;
 use crate::util::hash_ops::{self, HashCode};
 
 pub trait Custom: Send + Sync {
@@ -42,6 +43,7 @@ pub struct Field {
     pub codec: Codec,
     pub stream: Stream,
     pub kind: Kind,
+    pub group: usize,
 }
 
 pub enum Selector {
@@ -77,6 +79,7 @@ pub enum Codec {
     IdEnum(&'static [(&'static str, i32)]),
     Lazy(fn() -> &'static (Codec, Stream)),
     Normalize(Box<Codec>, fn(Nbt) -> Result<Nbt, String>),
+    Mapped(Box<Codec>, fn(Nbt) -> Result<Nbt, String>),
     List(Box<Codec>, usize, usize),
     SizedList(Box<Codec>, usize, usize),
     Compact(Box<Codec>),
@@ -125,8 +128,38 @@ pub enum Stream {
 
 impl Field {
     pub fn new(name: &'static str, codec: Codec, stream: Stream, kind: Kind) -> Field {
-        Field { name, codec, stream, kind }
+        Field { name, codec, stream, kind, group: 0 }
     }
+
+    pub fn grouped(mut self, size: usize) -> Field {
+        self.group = size;
+        self
+    }
+}
+
+fn field_frames(fields: &[Field], index: usize) -> Vec<&'static str> {
+    let field = &fields[index];
+    let mut frames = match field.kind {
+        Kind::Required | Kind::Plain => dfu_frames::required_field(),
+        _ => dfu_frames::optional_field(),
+    };
+    match fields.iter().position(|field| field.group > 0) {
+        Some(start) => {
+            let size = fields[start].group;
+            let outer_size = fields.len() + 1 - size;
+            if (start..start + size).contains(&index) {
+                frames.extend(dfu_frames::record_group(size, index - start + 1));
+                frames.push(dfu_frames::record_map_codec());
+                frames.extend(dfu_frames::record_group(outer_size, start + 1));
+            } else {
+                let outer_index = if index < start { index + 1 } else { index + 2 - size };
+                frames.extend(dfu_frames::record_group(outer_size, outer_index));
+            }
+        }
+        None => frames.extend(dfu_frames::record_group(fields.len(), index + 1)),
+    }
+    frames.push(dfu_frames::record_map_codec());
+    frames
 }
 
 fn float_text(v: f32) -> String {
@@ -167,7 +200,7 @@ const NUMBER_LIMITS_FRAMES: [&str; 2] = ["com.google.gson.internal.NumberLimits.
 fn check_number_limits(text: &str, accessor_frame: &'static str) {
     if let Some(message) = lazily_parsed_number::number_limits_error(text) {
         let frames = [NUMBER_LIMITS_FRAMES[0], NUMBER_LIMITS_FRAMES[1], accessor_frame];
-        crate::core::data_registries::throw("java.lang.NumberFormatException", message, &frames);
+        crate::core::data_registries::throw_unwinding("java.lang.NumberFormatException", message, &frames);
     }
 }
 
@@ -395,6 +428,7 @@ impl Codec {
             Codec::Func(_)
             | Codec::Lazy(_)
             | Codec::Normalize(..)
+            | Codec::Mapped(..)
             | Codec::List(..)
             | Codec::SizedList(..)
             | Codec::Compact(_)
@@ -416,14 +450,29 @@ impl Codec {
         }
     }
 
+    fn unwound_frames(&self) -> Vec<&'static str> {
+        match self {
+            Codec::Int(min, max, _) => dfu_frames::int_leaf(*min != i32::MIN || *max != i32::MAX),
+            Codec::Long(min, max, _) => dfu_frames::long_leaf(*min != i64::MIN || *max != i64::MAX),
+            Codec::List(..) | Codec::SizedList(..) => dfu_frames::list(),
+            Codec::Mapped(..) => dfu_frames::mapped(),
+            Codec::Record(_) | Codec::Dispatch(_) => dfu_frames::codec_view(),
+            _ => Vec::new(),
+        }
+    }
+
     pub fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
+        crate::core::data_registries::unwinding(|| self.unwound_frames(), || self.decode_partial_unwinding(tag))
+    }
+
+    fn decode_partial_unwinding(&self, tag: &Nbt) -> DecodeResult<Nbt> {
         match self {
             Codec::Func(f) => f(tag),
             Codec::Custom(c) => c.decode_partial(tag),
             Codec::HolderSet(reg) => decode_holder_set_partial(reg, tag),
             Codec::Lazy(pair) => pair().0.decode_partial(tag),
             Codec::Holder(_, Some(direct)) if !matches!(tag, Nbt::String(_)) || identifier(tag).is_err() => direct.decode_partial(tag),
-            Codec::Normalize(inner, f) => inner.decode_partial(tag).flat_map(|value| DecodeResult::from(f(value))),
+            Codec::Normalize(inner, f) | Codec::Mapped(inner, f) => inner.decode_partial(tag).flat_map(|value| DecodeResult::from(f(value))),
             Codec::List(elem, min, max) => {
                 let items = match list(tag) {
                     Ok(items) => items,
@@ -490,7 +539,7 @@ impl Codec {
                 for i in crate::util::codec::map_entry_order(fields) {
                     let (k, v) = &fields[i];
                     let key_result = key.decode_partial(&Nbt::String(k.clone()));
-                    let value_result = value.decode_partial(v);
+                    let value_result = crate::core::data_registries::unwinding(dfu_frames::map_values, || value.decode_partial(v));
                     let entry_error = match (&value_result.error, &key_result.error) {
                         (Some(value_error), Some(key_error)) => Some(format!("{value_error}; {key_error}")),
                         (Some(error), None) | (None, Some(error)) => Some(error.clone()),
@@ -626,7 +675,7 @@ impl Codec {
             },
             Codec::Custom(c) => c.hash(value),
             Codec::Lazy(pair) => pair().0.hash(value),
-            Codec::Normalize(inner, _) => inner.hash(value),
+            Codec::Normalize(inner, _) | Codec::Mapped(inner, _) => inner.hash(value),
             _ => hash_ops::hash_nbt(value),
         }
     }
@@ -746,7 +795,7 @@ fn decode_uuid(tag: &Nbt) -> Result<Nbt, String> {
 
 fn decode_fields(fields: &[Field], tag: &Nbt, input: &[(String, Nbt)], out: &mut Vec<(String, Nbt)>, errors: &mut Vec<String>) -> bool {
     let mut complete = true;
-    for field in fields {
+    for (index, field) in fields.iter().enumerate() {
         let present = input.iter().find(|(k, v)| k == field.name && !matches!(v, Nbt::End)).map(|(_, v)| v);
         match (&field.kind, present) {
             (Kind::Required, None) => {
@@ -756,7 +805,7 @@ fn decode_fields(fields: &[Field], tag: &Nbt, input: &[(String, Nbt)], out: &mut
             (Kind::AlwaysPresent(default), None) => out.push((field.name.into(), default.clone())),
             (_, None) => {}
             (kind, Some(v)) => {
-                let result = field.codec.decode_partial(v);
+                let result = crate::core::data_registries::unwinding(|| field_frames(fields, index), || field.codec.decode_partial(v));
                 let failed = result.error.is_some();
                 let lenient = matches!(kind, Kind::Lenient(_) | Kind::LenientOptional);
                 if let Some(error) = result.error
@@ -824,7 +873,7 @@ fn decode_dispatch(d: &Dispatch, tag: &Nbt) -> DecodeResult<Nbt> {
     let (_, fields) = d.cases.iter().find(|(n, _)| *n == name).unwrap();
     let mut out = Vec::new();
     let mut errors = Vec::new();
-    let complete = decode_fields(fields, tag, input, &mut out, &mut errors);
+    let complete = crate::core::data_registries::unwinding(dfu_frames::key_dispatch, || decode_fields(fields, tag, input, &mut out, &mut errors));
     out.push((d.key.to_string(), Nbt::String(name)));
     finish_record(complete.then(|| Nbt::Compound(out)), errors)
 }
@@ -887,7 +936,7 @@ pub fn read_utf8(r: &mut Reader, max: usize) -> Result<String, String> {
 
 pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Result<(), String> {
     match codec {
-        Codec::Normalize(inner, _) => return write(inner, stream, value, w),
+        Codec::Normalize(inner, _) | Codec::Mapped(inner, _) => return write(inner, stream, value, w),
         Codec::Alt(primary, _, _) if !matches!(stream, Stream::Either(..)) => return write(primary, stream, value, w),
         _ => {}
     }
@@ -1062,7 +1111,7 @@ fn canonical_number(codec: &Codec, v: i64) -> Nbt {
 
 pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, String> {
     match codec {
-        Codec::Normalize(inner, f) => return f(read(inner, stream, r)?),
+        Codec::Normalize(inner, f) | Codec::Mapped(inner, f) => return f(read(inner, stream, r)?),
         Codec::Alt(primary, _, _) if !matches!(stream, Stream::Either(..)) && !matches!(stream, Stream::Nbt) => return read(primary, stream, r),
         _ => {}
     }

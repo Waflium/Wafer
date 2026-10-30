@@ -32,6 +32,7 @@ pub mod java_runtime;
 pub mod java_simple_date_format;
 pub mod java_stack;
 pub mod java_nio;
+pub mod dfu_frames;
 pub mod java_throwable;
 pub mod java_uuid;
 pub mod keyframe_track;

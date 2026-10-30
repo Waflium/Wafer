@@ -71,11 +71,6 @@ const SUM_OF_WEIGHTS_FRAMES: &[&str] = &[
     "com.mojang.datafixers.util.Pair.mapFirst(Pair.java:64)",
     "com.mojang.serialization.Decoder$2.lambda$decode$0(Decoder.java:63)",
     "com.mojang.serialization.DataResult$Success.map(DataResult.java:175)",
-    "com.mojang.serialization.Decoder$2.decode(Decoder.java:63)",
-    "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
-    "com.mojang.serialization.Decoder$3.decode(Decoder.java:77)",
-    "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
-    "com.mojang.serialization.Decoder.parse(Decoder.java:18)",
 ];
 
 fn total_weight(list: &Nbt) -> i64 {
@@ -84,7 +79,7 @@ fn total_weight(list: &Nbt) -> i64 {
 
 fn limit_total_weight(list: Nbt) -> Result<Nbt, String> {
     if total_weight(&list) > i32::MAX as i64 {
-        crate::core::data_registries::throw("java.lang.IllegalArgumentException", SUM_OF_WEIGHTS_MESSAGE.into(), SUM_OF_WEIGHTS_FRAMES);
+        crate::core::data_registries::throw_unwinding("java.lang.IllegalArgumentException", SUM_OF_WEIGHTS_MESSAGE.into(), SUM_OF_WEIGHTS_FRAMES);
         Err(SUM_OF_WEIGHTS_EXCEPTION.into())
     } else {
         Ok(list)
@@ -96,6 +91,10 @@ fn non_zero_total_weight(list: Nbt) -> Result<Nbt, String> {
 }
 
 pub fn weighted_codec(mut element_fields: Vec<Field>) -> Pair {
+    let element_size = element_fields.len();
+    if element_size > 1 {
+        element_fields = element_fields.into_iter().map(|field| field.grouped(element_size)).collect();
+    }
     element_fields.push(req("weight", types::var_int(types::non_negative_int())));
     types::record(element_fields)
 }
@@ -106,7 +105,7 @@ pub fn weighted_data_codec(data: Pair) -> Pair {
 
 pub fn weighted_list_codec(weighted: Pair) -> Pair {
     let stream = Stream::List(Box::new(weighted.1), i32::MAX as usize);
-    (Codec::Normalize(Box::new(Codec::list(weighted.0)), limit_total_weight), stream)
+    (Codec::Mapped(Box::new(Codec::list(weighted.0)), limit_total_weight), stream)
 }
 
 pub fn non_empty_weighted_list_codec(weighted: Pair) -> Pair {
