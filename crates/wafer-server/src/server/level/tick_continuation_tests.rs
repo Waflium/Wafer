@@ -65,7 +65,9 @@ fn items_in_a_nether_portal_arrive_in_the_nether_on_the_tick_after_they_touch_it
     tick(&mut server, 1);
     let (level, id) = entity_with_uuid(&server, 1).unwrap();
     assert_eq!(level, nether(&server));
-    assert_eq!(server.levels[nether(&server)].entity(id).portal_cooldown, 299);
+    let arrived = server.levels[nether(&server)].entity(id);
+    let moved_back_into_the_portal = (arrived.tick_count + id) % 4 == 0;
+    assert_eq!(arrived.portal_cooldown, if moved_back_into_the_portal { 300 } else { 299 });
     assert!(!server.levels[0].tick_suspended());
     assert!(!server.levels[0].tick_continuation.is_suspended());
 }

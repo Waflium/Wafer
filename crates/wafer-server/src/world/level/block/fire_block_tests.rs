@@ -12,7 +12,6 @@ use crate::server::level::events::{PARTICLES_AND_SOUND_DESTROY_BLOCK, SOUND_EXTI
 use crate::server::level::server_player::ServerPlayer;
 use crate::server::level::testing;
 use crate::world::entity::EntityId;
-use crate::world::level::BlockGetter;
 use crate::world::level::block;
 use crate::world::level::update_flags::UPDATE_ALL;
 
