@@ -1,6 +1,6 @@
 use wafer_core::java_string::JavaStr;
 use wafer_protocol::lazily_parsed_number;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 use wafer_protocol::{Frame, Reader, Writer, stream_codec};
 
 use crate::commands::arguments::parse_identifier;
@@ -259,7 +259,7 @@ pub fn string(tag: &Nbt) -> Result<&str, String> {
     }
 }
 
-pub fn map(tag: &Nbt) -> Result<&[(String, Nbt)], String> {
+pub fn map(tag: &Nbt) -> Result<&TagMap, String> {
     match tag {
         Nbt::Compound(fields) => Ok(fields),
         other if nbt::is_json_source() => Err(format!("Not a JSON object: {}", nbt::to_string(other))),
@@ -441,7 +441,7 @@ impl Codec {
             | Codec::Xor(..)
             | Codec::Alt(..) => self.decode_partial(tag).into_result(),
             Codec::Compound => match tag {
-                Nbt::Compound(_) => Ok(tag.clone()),
+                Nbt::Compound(_) => Ok(tag.copy()),
                 _ => Err(format!("Not a compound tag: {}", nbt::to_string(tag))),
             },
             Codec::AnyTag => Ok(tag.clone()),
@@ -1016,7 +1016,7 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
         Stream::Map(ks, vs, max) => {
             let (Codec::Map(kc, vc), Nbt::Compound(fields)) = (codec, value) else { return Err("not a map".into()) };
             write_count(w, fields.len(), *max)?;
-            for i in wafer_protocol::nbt::java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>()) {
+            for i in fields.iteration_order() {
                 let (k, v) = &fields[i];
                 write(kc, ks, &Nbt::String(k.clone()), w)?;
                 write(vc, vs, v, w)?;

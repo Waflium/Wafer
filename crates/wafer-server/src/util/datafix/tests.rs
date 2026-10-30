@@ -1,6 +1,7 @@
 use crate::datafixers::dsl::TypeReference;
 use crate::datafixers::dynamic::Dynamic;
 use crate::util::datafix::data_fixers::get_data_fixer;
+use wafer_protocol::nbt::Nbt;
 use crate::util::datafix::schemas::{v1451_6, v3818_5, v704, v705};
 
 fn update(ty: &'static str, from: i32, to: i32, input: &str) -> String {
@@ -67,6 +68,115 @@ fn updates_match_the_vanilla_oracle() {
             eprintln!("{case}\n  vanilla: {vanilla}\n  wafer:   {actual}");
         }
     }
+    assert_eq!(mismatches, 0);
+}
+
+fn update_bytes(ty: &'static str, from: i32, to: i32, input: &str) -> String {
+    let input = crate::nbt::parse_fully(input).expect("valid snbt");
+    let output = get_data_fixer().update(TypeReference(ty), Dynamic::new(input), from, to);
+    let mut writer = wafer_protocol::Writer::new();
+    output.get_value().expect("a value").write_named("", &mut writer);
+    writer.as_slice().iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn key_order(dynamic: &Dynamic) -> Vec<String> {
+    match dynamic.get_value() {
+        Some(Nbt::Compound(fields)) => fields.iteration().map(|(key, _)| key.clone()).collect(),
+        other => panic!("not a compound: {other:?}"),
+    }
+}
+
+#[test]
+fn dynamic_updates_follow_the_java_hash_map_capacities() {
+    let input = crate::nbt::parse_fully(r#"{pos:[I;1,2,3],angle:45.0f,dimension:"minecraft:the_nether",forced:1b}"#).expect("valid snbt");
+    let mut dynamic = Dynamic::new(input);
+    assert_eq!(key_order(&dynamic), ["pos", "forced", "angle", "dimension"]);
+    dynamic = dynamic.set("dimension", Dynamic::new(Nbt::String("x".into())));
+    assert_eq!(key_order(&dynamic), ["angle", "pos", "dimension", "forced"]);
+    dynamic = dynamic.set("yaw", Dynamic::new(Nbt::Float(1.0)));
+    assert_eq!(key_order(&dynamic), ["angle", "pos", "dimension", "forced", "yaw"]);
+    dynamic = dynamic.set("pitch", Dynamic::new(Nbt::Float(0.0)));
+    assert_eq!(key_order(&dynamic), ["angle", "pitch", "pos", "dimension", "forced", "yaw"]);
+    dynamic = dynamic.remove("angle");
+    assert_eq!(key_order(&dynamic), ["pitch", "pos", "dimension", "forced", "yaw"]);
+}
+
+#[test]
+fn copies_of_compounds_size_their_tables_from_the_entry_count() {
+    use wafer_protocol::nbt::TagMap;
+    let fields = |keys: &[&str]| -> TagMap { keys.iter().map(|key| (key.to_string(), Nbt::Byte(0))).collect() };
+    let small = fields(&["Owner", "id", "SkullOwner"]).shallow_copy();
+    assert_eq!(small.table_capacity(), 4);
+    assert_eq!(small.iteration().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), ["Owner", "SkullOwner", "id"]);
+    let twelve: Vec<String> = (0..12).map(|i| format!("k{i}")).collect();
+    let twelve: Vec<&str> = twelve.iter().map(String::as_str).collect();
+    assert_eq!(fields(&twelve).shallow_copy().table_capacity(), 16);
+    let thirteen: Vec<String> = (0..13).map(|i| format!("k{i}")).collect();
+    let thirteen: Vec<&str> = thirteen.iter().map(String::as_str).collect();
+    assert_eq!(fields(&thirteen).shallow_copy().table_capacity(), 32);
+}
+
+fn dump_capacities(path: &str, tag: &Nbt, out: &mut String) {
+    match tag {
+        Nbt::Compound(fields) => {
+            let capacity = if fields.is_empty() { 0 } else { fields.table_capacity() };
+            let keys: Vec<&str> = fields.iteration().map(|(key, _)| key.as_str()).collect();
+            out.push_str(&format!("{path} cap={capacity} keys=[{}]\n", keys.join(", ")));
+            for (key, value) in fields.iteration() {
+                dump_capacities(&format!("{path}.{key}"), value, out);
+            }
+        }
+        Nbt::List(items) => {
+            for (index, item) in items.iter().enumerate() {
+                dump_capacities(&format!("{path}[{index}]"), item, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+#[ignore]
+fn dump_update_capacities_for_the_vanilla_cap_oracle() {
+    let cases = std::fs::read_to_string(std::env::var("WAFER_DFU_CASES").expect("WAFER_DFU_CASES points at the CapOracle input")).unwrap();
+    let mut out = String::new();
+    for (index, case) in cases.lines().filter(|line| !line.is_empty()).enumerate() {
+        let fields: Vec<&str> = case.splitn(4, '\t').collect();
+        let ty: &'static str = Box::leak(fields[0].to_string().into_boxed_str());
+        out.push_str(&format!("CASE {index} {}\n", case.chars().take(160).collect::<String>()));
+        let input = crate::nbt::parse_fully(fields[3]).expect("valid snbt");
+        let (from, to) = (fields[1].parse().unwrap(), fields[2].parse().unwrap());
+        match std::panic::catch_unwind(|| get_data_fixer().update(TypeReference(ty), Dynamic::new(input), from, to)) {
+            Ok(output) => dump_capacities("", output.get_value().expect("a value"), &mut out),
+            Err(_) => out.push_str("ERR\n"),
+        }
+    }
+    std::fs::write(std::env::var("WAFER_DFU_OUT").expect("WAFER_DFU_OUT is the output path"), out).unwrap();
+}
+
+#[test]
+#[ignore]
+fn update_bytes_match_the_vanilla_order_oracle() {
+    let cases = std::fs::read_to_string(std::env::var("WAFER_DFU_CASES").expect("WAFER_DFU_CASES points at the DfuOrderOracle input")).unwrap();
+    let expected = std::fs::read_to_string(std::env::var("WAFER_DFU_EXPECTED").expect("WAFER_DFU_EXPECTED points at the DfuOrderOracle output")).unwrap();
+    let mut expected = expected.lines();
+    let mut mismatches = 0;
+    let mut total = 0;
+    for case in cases.lines().filter(|line| !line.is_empty()) {
+        let fields: Vec<&str> = case.splitn(4, '\t').collect();
+        let ty: &'static str = Box::leak(fields[0].to_string().into_boxed_str());
+        let vanilla = expected.next().expect("an expected line");
+        if vanilla == "ERR" {
+            continue;
+        }
+        let actual = std::panic::catch_unwind(|| update_bytes(ty, fields[1].parse().unwrap(), fields[2].parse().unwrap(), fields[3])).unwrap_or_else(|_| "PANIC".to_string());
+        total += 1;
+        if actual != vanilla {
+            mismatches += 1;
+            eprintln!("{case}\n  vanilla: {vanilla}\n  wafer:   {actual}");
+        }
+    }
+    eprintln!("{mismatches} of {total} cases differ");
     assert_eq!(mismatches, 0);
 }
 

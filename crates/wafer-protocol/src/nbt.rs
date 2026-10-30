@@ -47,10 +47,6 @@ impl TagMap {
         TagMap { entries: Vec::new(), capacity: 0 }
     }
 
-    pub fn with_capacity_of_copy(entries: Vec<(String, Nbt)>, size: usize) -> TagMap {
-        TagMap { entries, capacity: if size == 0 { 0 } else { table_size_for_copy(size) as u32 } }
-    }
-
     pub fn into_vec(self) -> Vec<(String, Nbt)> {
         self.entries
     }
@@ -74,10 +70,20 @@ impl TagMap {
         self.iteration_order().into_iter().map(|i| &self.entries[i])
     }
 
-    pub fn shallow_copy(&self) -> TagMap {
-        let entries: Vec<(String, Nbt)> = self.iteration().cloned().collect();
-        let size = entries.len();
-        TagMap::with_capacity_of_copy(entries, size)
+    pub fn into_iteration(self) -> Vec<(String, Nbt)> {
+        let order = self.iteration_order();
+        let mut slots: Vec<Option<(String, Nbt)>> = self.entries.into_iter().map(Some).collect();
+        order.into_iter().map(|i| slots[i].take().expect("each entry is visited once")).collect()
+    }
+
+    pub fn copy(&self) -> TagMap {
+        TagMap { entries: self.iteration().map(|(key, value)| (key.clone(), value.copy())).collect(), capacity: 0 }
+    }
+
+    pub fn shallow_copy(self) -> TagMap {
+        let size = self.entries.len();
+        let entries = self.into_iteration();
+        TagMap { entries, capacity: if size == 0 { 0 } else { table_size_for_copy(size) as u32 } }
     }
 
     pub fn put(&mut self, key: &str, value: Nbt) {
@@ -89,7 +95,7 @@ impl TagMap {
 }
 
 fn table_size_for_copy(size: usize) -> usize {
-    ((size as f32 / 0.75f32 + 1.0f32) as usize).next_power_of_two()
+    ((size as f64 / 0.75f64).ceil() as usize).next_power_of_two()
 }
 
 impl std::fmt::Debug for TagMap {
@@ -188,6 +194,14 @@ impl PartialEq for Nbt {
 }
 
 impl Nbt {
+    pub fn copy(&self) -> Nbt {
+        match self {
+            Nbt::List(items) => Nbt::List(items.iter().map(Nbt::copy).collect()),
+            Nbt::Compound(fields) => Nbt::Compound(fields.copy()),
+            other => other.clone(),
+        }
+    }
+
     fn tag_id(&self) -> u8 {
         match self {
             Nbt::End => 0,

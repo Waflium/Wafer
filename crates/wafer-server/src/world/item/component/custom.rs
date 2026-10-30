@@ -1,6 +1,6 @@
 use wafer_core::java_string::JavaStr;
 use wafer_data::Item;
-use wafer_protocol::nbt::{Nbt, java_hash_map_order};
+use wafer_protocol::nbt::Nbt;
 use wafer_protocol::{Reader, Writer};
 
 use super::codec::{self, Codec, Custom, Field, Kind, RangeError, Stream, as_i32, as_i64};
@@ -774,7 +774,7 @@ impl Custom for ExactPredicate {
     fn write(&self, value: &Nbt, w: &mut Writer) -> Result<(), String> {
         let Nbt::Compound(fields) = value else { return Err("not a map".into()) };
         w.varint(fields.len() as i32);
-        for i in java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>()) {
+        for i in fields.iteration_order() {
             let (key, v) = &fields[i];
             let ty = DataComponentType::by_name(key).ok_or("unknown component")?;
             w.varint(ty.0 as i32);

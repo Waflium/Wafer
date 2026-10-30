@@ -1,5 +1,4 @@
-use wafer_core::random::java_string_hash;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use crate::util::codec::DecodeResult;
 
@@ -97,27 +96,15 @@ pub fn get_stream(tag: &Nbt) -> Option<Vec<Nbt>> {
     }
 }
 
-pub fn java_map_order(entries: &[(String, Nbt)]) -> Vec<&(String, Nbt)> {
-    let mut capacity = 16;
-    for len in 1..=entries.len() {
-        if len > capacity * 3 / 4 {
-            capacity *= 2;
-        }
+pub fn merge_to_map_like(prefix: Option<TagMap>, values: &TagMap) -> TagMap {
+    if values.is_empty() {
+        return prefix.unwrap_or_default();
     }
-    let bucket = |key: &str| {
-        let h = java_string_hash(key);
-        (h ^ ((h as u32) >> 16) as i32) as u32 as usize & (capacity - 1)
-    };
-    let mut order: Vec<&(String, Nbt)> = entries.iter().collect();
-    order.sort_by_key(|(key, _)| bucket(key));
-    order
-}
-
-pub fn put(entries: &mut Vec<(String, Nbt)>, key: &str, value: Nbt) {
-    match entries.iter_mut().find(|(k, _)| k == key) {
-        Some((_, slot)) => *slot = value,
-        None => entries.push((key.to_string(), value)),
+    let mut output = prefix.map_or_else(TagMap::new, TagMap::shallow_copy);
+    for (key, value) in values.iteration() {
+        output.put(key, value.clone());
     }
+    output
 }
 
 pub fn snbt(value: &Option<Nbt>) -> String {
@@ -194,7 +181,7 @@ impl Dynamic {
     }
 
     pub fn empty_map(&self) -> Dynamic {
-        Dynamic::new(Nbt::Compound(Vec::new().into()))
+        Dynamic::new(Nbt::Compound(TagMap::new()))
     }
 
     pub fn empty_list(&self) -> Dynamic {
@@ -202,12 +189,12 @@ impl Dynamic {
     }
 
     pub fn create_map(&self, entries: impl IntoIterator<Item = (Dynamic, Dynamic)>) -> Dynamic {
-        let mut map = Vec::new();
+        let mut map = TagMap::new();
         for (key, value) in entries {
             let Some(Nbt::String(key)) = key.value else { panic!("Cannot create map with non-string key: {}", snbt(&key.value)) };
-            put(&mut map, &key, value.value.unwrap_or(Nbt::End));
+            map.put(&key, value.value.unwrap_or(Nbt::End));
         }
-        Dynamic::new(Nbt::Compound(map.into()))
+        Dynamic::new(Nbt::Compound(map))
     }
 
     pub fn create_list(&self, values: impl IntoIterator<Item = Dynamic>) -> Dynamic {
@@ -248,9 +235,10 @@ impl Dynamic {
 
     pub fn remove(self, key: &str) -> Dynamic {
         match self.value {
-            Some(Nbt::Compound(mut entries)) => {
-                entries.retain(|(k, _)| k != key);
-                Dynamic::new(Nbt::Compound(entries))
+            Some(Nbt::Compound(entries)) => {
+                let mut result = entries.shallow_copy();
+                result.retain(|(k, _)| k != key);
+                Dynamic::new(Nbt::Compound(result))
             }
             other => Dynamic { value: other },
         }
@@ -258,14 +246,15 @@ impl Dynamic {
 
     pub fn set(self, key: &str, value: Dynamic) -> Dynamic {
         match self.value {
-            Some(Nbt::Compound(mut entries)) => {
-                put(&mut entries, key, value.value.unwrap_or(Nbt::End));
-                Dynamic::new(Nbt::Compound(entries))
+            Some(Nbt::Compound(entries)) => {
+                let mut output = entries.shallow_copy();
+                output.put(key, value.value.unwrap_or(Nbt::End));
+                Dynamic::new(Nbt::Compound(output))
             }
             None => {
-                let mut entries = Vec::new();
-                put(&mut entries, key, value.value.unwrap_or(Nbt::End));
-                Dynamic::new(Nbt::Compound(entries.into()))
+                let mut output = TagMap::new();
+                output.put(key, value.value.unwrap_or(Nbt::End));
+                Dynamic::new(Nbt::Compound(output))
             }
             other => Dynamic { value: other },
         }
@@ -340,7 +329,7 @@ impl Dynamic {
     pub fn as_map_opt(&self) -> DataResult<Vec<(Dynamic, Dynamic)>> {
         match &self.value {
             Some(Nbt::Compound(entries)) => DataResult::success(
-                java_map_order(entries).into_iter().map(|(key, value)| (Dynamic::new(Nbt::String(key.clone())), Dynamic::new(value.clone()))).collect(),
+                entries.iteration().map(|(key, value)| (Dynamic::new(Nbt::String(key.clone())), Dynamic::new(value.clone()))).collect(),
             ),
             other => DataResult::error(format!("Not a map: {}", snbt(other))),
         }
@@ -589,7 +578,7 @@ impl OptionalDynamic {
     }
 
     pub fn or_else_empty_map(self) -> Dynamic {
-        self.result().unwrap_or_else(|| Dynamic::new(Nbt::Compound(Vec::new().into())))
+        self.result().unwrap_or_else(|| Dynamic::new(Nbt::Compound(TagMap::new())))
     }
 
     pub fn or_else_empty_list(self) -> Dynamic {

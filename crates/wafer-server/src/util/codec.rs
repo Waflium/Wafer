@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use crate::world::item::component::codec as component_codec;
 
@@ -149,7 +149,7 @@ pub fn decode_field<T>(tag: &Nbt, name: &str, decode: impl FnOnce(&Nbt) -> DataR
     decode(field(tag, name)?)
 }
 
-pub fn map(tag: &Nbt) -> DataResult<&[(String, Nbt)]> {
+pub fn map(tag: &Nbt) -> DataResult<&TagMap> {
     component_codec::map(tag)
 }
 
@@ -550,11 +550,11 @@ pub fn strict_unbounded_map<K: std::fmt::Display, V>(tag: &Nbt, key: impl Fn(&st
     Ok(entries)
 }
 
-pub(crate) fn map_entry_order(fields: &[(String, Nbt)]) -> Vec<usize> {
+pub(crate) fn map_entry_order(fields: &TagMap) -> Vec<usize> {
     if crate::nbt::is_json_source() {
         return (0..fields.len()).collect();
     }
-    wafer_protocol::nbt::java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>())
+    fields.iteration_order()
 }
 
 pub(crate) fn map_entry_failures(errors: Vec<String>, failed: Vec<(String, Nbt)>) -> String {

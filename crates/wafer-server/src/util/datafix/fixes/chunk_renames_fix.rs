@@ -3,7 +3,7 @@ use std::sync::Arc;
 use wafer_protocol::nbt::Nbt;
 
 use crate::datafixers::data_fix::{DataFix, DataFixBase, TypeRewriteRule};
-use crate::datafixers::dynamic::{Dynamic, put};
+use crate::datafixers::dynamic::{Dynamic, merge_to_map_like};
 use crate::datafixers::schemas::schema::Schema;
 use crate::datafixers::typed::{Typed, find_field, type_finder};
 use crate::datafixers::types::{field, named, optional};
@@ -61,13 +61,8 @@ fn merge_remainders(chunk: &Typed, level_remainder: Dynamic) -> Dynamic {
     let chunk_remainder = chunk.get_remainder();
     let Some(Nbt::Compound(level_entries)) = &level_remainder.value else { return level_remainder };
     match chunk_remainder.value {
-        None => Dynamic::new(Nbt::Compound(level_entries.clone())),
-        Some(Nbt::Compound(mut entries)) => {
-            for (key, value) in level_entries {
-                put(&mut entries, key, value.clone());
-            }
-            Dynamic::new(Nbt::Compound(entries))
-        }
+        None => Dynamic::new(Nbt::Compound(merge_to_map_like(None, level_entries))),
+        Some(Nbt::Compound(entries)) => Dynamic::new(Nbt::Compound(merge_to_map_like(Some(entries), level_entries))),
         Some(_) => level_remainder,
     }
 }

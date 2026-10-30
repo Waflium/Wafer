@@ -1,4 +1,4 @@
-use wafer_protocol::nbt::{Nbt, java_hash_map_order};
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::{java_double_to_string, java_float_to_string, quote_and_escape};
 use crate::network::chat::{ChatFormatting, Component};
@@ -132,7 +132,7 @@ impl Visitor {
         }
     }
 
-    fn compound(&mut self, fields: &[(String, Nbt)]) {
+    fn compound(&mut self, fields: &TagMap) {
         if fields.is_empty() {
             self.text("{");
             self.text("}");
@@ -142,7 +142,7 @@ impl Visitor {
             self.text("}");
         } else {
             self.text("{");
-            let order = java_hash_map_order(&fields.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>());
+            let order = fields.iteration_order();
             for (n, &i) in order.iter().enumerate() {
                 let (key, value) = &fields[i];
                 self.text("");

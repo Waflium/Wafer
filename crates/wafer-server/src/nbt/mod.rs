@@ -7,7 +7,7 @@ pub mod text_component_tag_visitor;
 use wafer_core::java_string::JavaStr;
 use std::cell::Cell;
 
-use wafer_protocol::nbt::{Nbt, double_tag_value, float_tag_value, java_hash_map_order};
+use wafer_protocol::nbt::{Nbt, TagMap, double_tag_value, float_tag_value, java_hash_map_order};
 
 use crate::commands::brigadier::{CommandSyntaxException, SimpleCommandExceptionType, StringReader};
 use crate::commands::shared_suggestion_provider;
@@ -63,10 +63,18 @@ pub fn parse_fully(input: &str) -> Result<Nbt, CommandSyntaxException> {
 }
 
 pub fn merge(target: &mut Vec<(String, Nbt)>, other: &[(String, Nbt)]) {
-    for i in java_hash_map_order(&other.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>()) {
+    merge_in_order(target, other, java_hash_map_order(&other.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>()));
+}
+
+pub fn merge_tags(target: &mut TagMap, other: &TagMap) {
+    merge_in_order(target, other, other.iteration_order());
+}
+
+fn merge_in_order(target: &mut Vec<(String, Nbt)>, other: &[(String, Nbt)], order: Vec<usize>) {
+    for i in order {
         let (key, value) = &other[i];
         match (target.iter_mut().find(|(k, _)| k == key), value) {
-            (Some((_, Nbt::Compound(own))), Nbt::Compound(other)) => merge(own, other),
+            (Some((_, Nbt::Compound(own))), Nbt::Compound(other)) => merge_tags(own, other),
             (Some((_, own)), _) => *own = value.clone(),
             (None, _) => target.push((key.clone(), value.clone())),
         }

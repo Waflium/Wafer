@@ -3,9 +3,9 @@ use std::sync::Arc;
 use wafer_core::ChunkPos;
 use wafer_core::fastutil::Long2ObjectOpenHashMap;
 use wafer_core::random::java_string_hash;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
-use crate::datafixers::dynamic::{Dynamic, put};
+use crate::datafixers::dynamic::Dynamic;
 use crate::datafixers::schemas::schema::Schema;
 use crate::server::level::chunk_map::get_chunk_data_fix_context_tag;
 use crate::util::datafix::data_fix_types::DataFixTypes;
@@ -152,13 +152,13 @@ fn extract_legacy_structure_data(structure_data: &Dynamic, extracted_data_contai
     }
 }
 
-fn get_compound_or_empty(entries: &mut Vec<(String, Nbt)>, key: &str) -> Vec<(String, Nbt)> {
+fn get_compound_or_empty(entries: &mut TagMap, key: &str) -> TagMap {
     match entries.iter().position(|(entry_key, _)| entry_key == key) {
         Some(index) => match &mut entries[index].1 {
             Nbt::Compound(compound) => std::mem::take(compound),
-            _ => Vec::new(),
+            _ => TagMap::new(),
         },
-        None => Vec::new(),
+        None => TagMap::new(),
     }
 }
 
@@ -189,15 +189,15 @@ fn store_legacy_structure_data_to_chunks(
             let mut start_tag = get_compound_or_empty(&mut structure_tag, "Starts");
             let mut references_tag = get_compound_or_empty(&mut structure_tag, "References");
             for (id, value) in legacy_data.starts.iter() {
-                put(&mut start_tag, id, value.value.clone().unwrap_or(Nbt::Compound(Vec::new().into())));
+                start_tag.put(id, value.value.clone().unwrap_or(Nbt::Compound(TagMap::new())));
             }
             for (id, indexes) in legacy_data.indexes.iter() {
-                put(&mut references_tag, id, Nbt::LongArray(indexes.clone()));
+                references_tag.put(id, Nbt::LongArray(indexes.clone()));
             }
-            put(&mut structure_tag, "Starts", Nbt::Compound(start_tag.into()));
-            put(&mut structure_tag, "References", Nbt::Compound(references_tag.into()));
-            put(&mut level_tag, "Structures", Nbt::Compound(structure_tag.into()));
-            put(tag_entries, "Level", Nbt::Compound(level_tag.into()));
+            structure_tag.put("Starts", Nbt::Compound(start_tag));
+            structure_tag.put("References", Nbt::Compound(references_tag));
+            level_tag.put("Structures", Nbt::Compound(structure_tag));
+            tag_entries.put("Level", Nbt::Compound(level_tag));
             tag
         });
         let finished = futures.push(future)?;

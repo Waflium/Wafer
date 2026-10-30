@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::dsl::ConstType;
-use super::dynamic::{DataResult, Dynamic, get_number_value, get_stream, java_map_order, put, snbt};
+use super::dynamic::{DataResult, Dynamic, get_number_value, get_stream, merge_to_map_like, snbt};
 use super::types::Type;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -124,7 +124,7 @@ pub fn decode(ty: &Arc<Type>, input: Option<Nbt>) -> DataResult<(Value, Option<N
             let mut values = Vec::new();
             let mut failed = Vec::new();
             let mut error = None;
-            for (name, item) in java_map_order(entries) {
+            for (name, item) in entries.iteration() {
                 let key_result = decode(key, Some(Nbt::String(name.clone())));
                 let value_result = decode(element, Some(item.clone()));
                 let entry_error = combine(value_result.error.clone(), key_result.error.clone());
@@ -157,18 +157,24 @@ pub fn decode(ty: &Arc<Type>, input: Option<Nbt>) -> DataResult<(Value, Option<N
     }
 }
 
-fn merge_to_map(prefix: Option<Nbt>, values: Vec<(String, Nbt)>) -> DataResult<Option<Nbt>> {
+fn build_record(prefix: Option<Nbt>, values: Vec<(String, Nbt)>) -> DataResult<Option<Nbt>> {
+    let mut builder = TagMap::new();
+    for (key, value) in values {
+        builder.put(&key, value);
+    }
     match prefix {
-        None => DataResult::success(Some(Nbt::Compound(values.into()))),
-        Some(Nbt::Compound(mut entries)) => {
-            for (key, value) in values {
-                put(&mut entries, &key, value);
+        None => DataResult::success(Some(Nbt::Compound(builder))),
+        Some(Nbt::Compound(compound)) => {
+            let mut result = compound.shallow_copy();
+            for (key, value) in builder.into_iteration() {
+                result.put(&key, value);
             }
-            DataResult::success(Some(Nbt::Compound(entries)))
+            DataResult::success(Some(Nbt::Compound(result)))
         }
         Some(other) => DataResult { value: Some(Some(other.clone())), error: Some(format!("mergeToMap called with not a map: {}", crate::nbt::to_string(&other))) },
     }
 }
+
 
 fn merge_to_list(prefix: Option<Nbt>, values: Vec<Nbt>) -> DataResult<Option<Nbt>> {
     match prefix {
@@ -223,7 +229,7 @@ pub fn encode(ty: &Arc<Type>, value: &Value, prefix: Option<Nbt>) -> DataResult<
         (Type::Remainder, Value::Dynamic(dynamic)) => match (&dynamic.value, prefix) {
             (None, prefix) => DataResult::success(prefix),
             (Some(casted), None) => DataResult::success(Some(casted.clone())),
-            (Some(Nbt::Compound(entries)), prefix @ Some(Nbt::Compound(_))) => merge_to_map(prefix, entries.to_vec()),
+            (Some(Nbt::Compound(entries)), Some(Nbt::Compound(prefix))) => DataResult::success(Some(Nbt::Compound(merge_to_map_like(Some(prefix), entries)))),
             (Some(casted), Some(prefix)) => match get_stream(casted) {
                 Some(values) if get_stream(&prefix).is_some() => merge_to_list(Some(prefix), values),
                 _ => DataResult {
@@ -232,7 +238,11 @@ pub fn encode(ty: &Arc<Type>, value: &Value, prefix: Option<Nbt>) -> DataResult<
                 },
             },
         },
-        (Type::EmptyPart, Value::Unit) => merge_to_map(prefix, Vec::new()),
+        (Type::EmptyPart, Value::Unit) => match prefix {
+            None => DataResult::success(Some(Nbt::Compound(TagMap::new()))),
+            Some(Nbt::Compound(prefix)) => DataResult::success(Some(Nbt::Compound(merge_to_map_like(Some(prefix), &TagMap::new())))),
+            Some(other) => DataResult { value: Some(Some(other.clone())), error: Some(format!("mergeToMap called with not a map: {}", crate::nbt::to_string(&other))) },
+        },
         (Type::Named(_, element), value) => encode(element, value, prefix),
         (Type::RecursivePoint(..), value) => encode(&ty.unfold(), value, prefix),
         (Type::Hook(element, _, post_write), value) => encode(element, value, prefix).map(|result| post_write(Dynamic::of(result)).value),
@@ -246,7 +256,7 @@ pub fn encode(ty: &Arc<Type>, value: &Value, prefix: Option<Nbt>) -> DataResult<
             if let Some(Some(encoded)) = encoded.value {
                 values.push((name.to_string(), encoded));
             }
-            let built = merge_to_map(prefix, values);
+            let built = build_record(prefix, values);
             DataResult { value: built.value, error: combine(error, built.error) }
         }
         (Type::Product(first, second), Value::Pair(first_value, second_value)) => {
@@ -282,21 +292,25 @@ pub fn encode(ty: &Arc<Type>, value: &Value, prefix: Option<Nbt>) -> DataResult<
                     encoded.push((key, value));
                 }
             }
-            let built = merge_to_map(prefix, encoded);
+            let built = build_record(prefix, encoded);
             DataResult { value: if lost { None } else { built.value }, error: combine(error, built.error) }
         }
         (Type::TaggedChoice(choice), Value::Choice(key, inner)) => {
             let Some(choice_type) = choice.get(key) else { return DataResult { value: None, error: Some(format!("Unsupported key: {key}")) } };
             let encoded = encode_start(choice_type, inner);
-            let mut values = Vec::new();
+            let mut values = TagMap::new();
             let error = encoded.error.clone();
             match encoded.value {
-                Some(Some(Nbt::Compound(entries))) => values.extend(entries),
+                Some(Some(Nbt::Compound(entries))) => {
+                    for (name, value) in entries.into_iteration() {
+                        values.put(&name, value);
+                    }
+                }
                 Some(other) => return DataResult { value: None, error: combine(error, Some(not_a_map(&other))) },
                 None => return DataResult { value: None, error },
             }
-            put(&mut values, &choice.name, Nbt::String(key.clone()));
-            let built = merge_to_map(prefix, values);
+            values.put(&choice.name, Nbt::String(key.clone()));
+            let built = build_record(prefix, values.into_vec());
             DataResult { value: built.value, error: combine(error, built.error) }
         }
         (ty, value) => DataResult { value: Some(prefix), error: Some(format!("Value {value:?} doesn't match type {ty:?}")) },

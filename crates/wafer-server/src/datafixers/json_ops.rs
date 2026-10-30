@@ -2,7 +2,6 @@ use serde_json::{Map, Number, Value};
 use wafer_protocol::lazily_parsed_number::long_value_exact;
 use wafer_protocol::nbt::Nbt;
 
-use super::dynamic::java_map_order;
 use crate::nbt::{java_double_to_string, java_float_to_string};
 use crate::util::gson::JsonElement;
 
@@ -52,7 +51,7 @@ pub fn convert_from_nbt(input: Option<&Nbt>) -> Value {
         Nbt::List(values) => Value::Array(values.iter().map(|value| convert_from_nbt(Some(value))).collect()),
         Nbt::Compound(entries) => {
             let mut fields = Map::new();
-            for (key, value) in java_map_order(entries) {
+            for (key, value) in entries.iteration() {
                 fields.insert(key.clone(), convert_from_nbt(Some(value)));
             }
             Value::Object(fields)
@@ -118,7 +117,7 @@ pub fn convert_nbt_to_element(input: &Nbt) -> JsonElement {
         Nbt::ByteArray(values) => JsonElement::Array(values.iter().map(|value| JsonElement::Number(value.to_string())).collect()),
         Nbt::String(value) => JsonElement::String(value.clone()),
         Nbt::List(values) => JsonElement::Array(values.iter().map(convert_nbt_to_element).collect()),
-        Nbt::Compound(entries) => JsonElement::Object(entries.iter().map(|(name, value)| (name.clone(), convert_nbt_to_element(value))).collect()),
+        Nbt::Compound(entries) => JsonElement::Object(entries.iteration().map(|(name, value)| (name.clone(), convert_nbt_to_element(value))).collect()),
         Nbt::IntArray(values) => JsonElement::Array(values.iter().map(|value| JsonElement::Number(value.to_string())).collect()),
         Nbt::LongArray(values) => JsonElement::Array(values.iter().map(|value| JsonElement::Number(value.to_string())).collect()),
     }
