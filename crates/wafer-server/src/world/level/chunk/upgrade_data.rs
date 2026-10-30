@@ -166,7 +166,7 @@ impl UpgradeData {
     }
 
     pub fn upgrade(level: &mut ServerLevel, chunk_pos: ChunkPos) {
-        let mut data = std::mem::take(&mut level.chunks.chunk(chunk_pos).upgrade_data);
+        let mut data = std::mem::take(&mut level.chunks.loaded_full_chunk(chunk_pos).upgrade_data);
         data.upgrade_inside(level, chunk_pos);
         for direction8 in Direction8::VALUES {
             data.upgrade_sides(level, chunk_pos, direction8);
@@ -180,7 +180,7 @@ impl UpgradeData {
             level.schedule_fluid_tick_with_priority(tick.pos, ty, tick.delay, tick.priority);
         }
         process_leaves_chunk(level);
-        level.chunks.chunk(chunk_pos).upgrade_data = data;
+        level.chunks.loaded_full_chunk(chunk_pos).upgrade_data = data;
     }
 
     fn upgrade_sides(&mut self, level: &mut ServerLevel, chunk_pos: ChunkPos, direction8: Direction8) {
@@ -224,7 +224,7 @@ impl UpgradeData {
                 let y = (coordinate >> 8) & 15;
                 let z = (coordinate >> 4) & 15;
                 let pos = BlockPos::new(chunk_pos.min_block_x() + x, bottom_y_in_section + y, chunk_pos.min_block_z() + z);
-                let state = level.chunks.chunk(chunk_pos).sections[section_index].states.get(x as usize, y as usize, z as usize);
+                let state = level.chunks.loaded_full_chunk(chunk_pos).sections[section_index].states.get(x as usize, y as usize, z as usize);
                 let mut new_state = state;
                 for direction in Direction::VALUES {
                     let neighbour_pos = pos.relative(direction);
