@@ -1,4 +1,4 @@
-use wafer_protocol::Writer;
+use wafer_protocol::{Writer, stream_codec};
 
 use super::last_seen_messages::LastSeenMessages;
 use super::message_signature_cache::MessageSignatureCache;
@@ -26,7 +26,7 @@ impl SignedMessageBody {
     }
 
     pub fn write_packed(&self, w: &mut Writer, cache: &MessageSignatureCache) {
-        w.string_max(&self.content, 256);
+        w.layer(&[stream_codec::composite(4, 1)], |w| w.string_max(&self.content, 256));
         w.i64(self.time_stamp);
         w.i64(self.salt);
         w.varint(self.last_seen.entries.len() as i32);

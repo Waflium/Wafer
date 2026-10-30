@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 
 use wafer_core::{BlockPos, ChunkPos, Vec3};
 use wafer_data::{Block, BlockState, DimensionType, Fluid, blocks};
-use wafer_protocol::Writer;
+use wafer_protocol::{Writer, stream_codec};
 
 use super::chunk_holder::{ChunkGenerationTask, ChunkHolders, FutureId, RangeThen, RangeWait, UNLOADED, Waiter};
 use super::chunk_level::{self, ChunkPyramid, ChunkStatus, FullChunkStatus};
@@ -1995,7 +1995,7 @@ impl ChunkCache {
         let chunk = &self.chunks[&pos];
         w.i32(pos.x);
         w.i32(pos.z);
-        chunk.write_data(w);
+        w.layer(&[stream_codec::composite(4, 3)], |w| chunk.write_data(w));
         lighting::write_light_data(w, pos, &self.light_engine.engine, None, None);
     }
 

@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::ServerLevel;
 use crate::network::connection::encode;
+use crate::network::protocol::game::clientbound_block_entity_data_packet;
 use crate::util::profiling::profiler;
 use crate::world::container::ContainerRef;
 use crate::world::entity::attributes::Attribute;
@@ -147,11 +148,7 @@ impl ServerLevel {
         }
         let tag = entity.get_update_tag();
         let ty = entity.ty();
-        Some(encode(clientbound::BLOCK_ENTITY_DATA, |p| {
-            p.position(pos.x, pos.y, pos.z);
-            p.varint(ty.0 as i32);
-            tag.write(p);
-        }))
+        Some(encode(clientbound::BLOCK_ENTITY_DATA, |p| clientbound_block_entity_data_packet::write(p, pos, ty.0 as i32, &tag)))
     }
 
     pub fn tick_block_entities(&mut self) {

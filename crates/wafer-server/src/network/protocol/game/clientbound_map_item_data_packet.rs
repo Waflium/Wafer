@@ -1,4 +1,4 @@
-use wafer_protocol::Writer;
+use wafer_protocol::{Writer, stream_codec};
 
 use crate::world::level::saveddata::maps::map_decoration::MapDecoration;
 use crate::world::level::saveddata::maps::map_id::MapId;
@@ -20,8 +20,12 @@ impl ClientboundMapItemDataPacket {
         w.bool(self.locked);
         w.bool(self.decorations.is_some());
         if let Some(decorations) = &self.decorations {
-            w.varint(decorations.len() as i32);
-            decorations.iter().for_each(|decoration| decoration.write(w));
+            w.layer(&[stream_codec::composite(5, 4)], |w| {
+                w.layer(stream_codec::OPTIONAL, |w| {
+                    w.varint(decorations.len() as i32);
+                    w.layer(stream_codec::COLLECTION, |w| decorations.iter().for_each(|decoration| decoration.write(w)));
+                });
+            });
         }
         MapPatch::write(self.color_patch.as_ref(), w);
     }

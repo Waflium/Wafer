@@ -1,5 +1,5 @@
 use wafer_core::BlockPos;
-use wafer_protocol::Writer;
+use wafer_protocol::{Frame, Writer, stream_codec};
 
 use crate::world::item::{ItemStack, write_slot};
 
@@ -162,11 +162,11 @@ impl DataValue {
             DataValue::Int(v) => w.varint(*v),
             DataValue::Float(v) => w.f32(*v),
             DataValue::String(v) => w.string(v),
-            DataValue::Component(v) => v.write(w),
+            DataValue::Component(v) => w.layer(stream_codec::FROM_CODEC, |w| v.write(w)),
             DataValue::OptionalComponent(v) => {
                 w.bool(v.is_some());
                 if let Some(c) = v {
-                    c.write(w);
+                    w.layer(stream_codec::OPTIONAL, |w| w.layer(stream_codec::FROM_CODEC, |w| c.write(w)));
                 }
             }
             DataValue::ItemStack(v) => write_slot(w, v.as_ref()),
@@ -312,14 +312,24 @@ impl SynchedEntityData {
     }
 }
 
+const DATA_VALUE_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.syncher.SynchedEntityData$DataValue.write(SynchedEntityData.java:142)")];
+const SET_ENTITY_DATA_PACK: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket.pack(ClientboundSetEntityDataPacket.java:26)")];
+const SET_ENTITY_DATA_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket.write(ClientboundSetEntityDataPacket.java:44)")];
+
 pub fn write_values(w: &mut Writer, entity_id: i32, values: &[(usize, DataValue)]) {
-    w.varint(entity_id);
-    for (id, value) in values {
-        w.u8(*id as u8);
-        w.varint(value.serializer_id());
-        value.write(w);
-    }
-    w.u8(0xFF);
+    w.layer(stream_codec::OF_MEMBER, |w| {
+        w.layer(&SET_ENTITY_DATA_WRITE, |w| {
+            w.varint(entity_id);
+            w.layer(&SET_ENTITY_DATA_PACK, |w| {
+                for (id, value) in values {
+                    w.u8(*id as u8);
+                    w.varint(value.serializer_id());
+                    w.layer(&DATA_VALUE_WRITE, |w| value.write(w));
+                }
+                w.u8(0xFF);
+            });
+        });
+    });
 }
 
 pub fn entity_defaults() -> Vec<DataValue> {

@@ -23,10 +23,16 @@ use std::sync::LazyLock;
 
 use wafer_data::{Item, registry};
 use wafer_protocol::nbt::Nbt;
-use wafer_protocol::{Reader, Writer};
+use wafer_protocol::{Frame, Reader, Writer, stream_codec};
 
 use crate::util::hash_ops::HashCode;
 use codec::{Codec, Stream};
+
+const DATA_COMPONENT_PATCH_ENCODE_COMPONENT: [Frame; 1] = [Frame::Fixed("net.minecraft.core.component.DataComponentPatch$3.encodeComponent(DataComponentPatch.java:139)")];
+const DATA_COMPONENT_PATCH_ENCODE: [Frame; 2] = [
+    Frame::Fixed("net.minecraft.core.component.DataComponentPatch$3.encode(DataComponentPatch.java:125)"),
+    Frame::Fixed("net.minecraft.core.component.DataComponentPatch$3.encode(DataComponentPatch.java:74)"),
+];
 
 pub use custom::patch_of;
 pub use types::*;
@@ -77,7 +83,8 @@ impl DataComponentType {
 
     pub fn write(self, value: &Nbt, w: &mut Writer) -> Result<(), String> {
         let info = self.info();
-        codec::write(&info.codec, &info.stream, value, w)
+        let mapped: &[Frame] = if self == LORE { stream_codec::MAP } else { &[] };
+        w.layer(mapped, |w| codec::write(&info.codec, &info.stream, value, w))
     }
 
     pub fn read(self, r: &mut Reader) -> Result<Nbt, String> {
@@ -276,19 +283,22 @@ impl DataComponentPatch {
         let positive = self.entries.iter().filter(|(_, v)| v.is_some()).count();
         w.varint(positive as i32);
         w.varint((self.entries.len() - positive) as i32);
-        for (t, v) in &self.entries {
-            if let Some(v) = v {
-                w.varint(t.0 as i32);
-                if delimited {
-                    let mut inner = Writer::new();
-                    t.write(v, &mut inner)?;
-                    w.varint(inner.as_slice().len() as i32);
-                    w.bytes(inner.as_slice());
-                } else {
-                    t.write(v, w)?;
+        w.layer(&DATA_COMPONENT_PATCH_ENCODE, |w| {
+            for (t, v) in &self.entries {
+                if let Some(v) = v {
+                    w.varint(t.0 as i32);
+                    if delimited {
+                        let mut inner = Writer::new();
+                        t.write(v, &mut inner)?;
+                        w.varint(inner.as_slice().len() as i32);
+                        w.bytes(inner.as_slice());
+                    } else {
+                        w.layer(&DATA_COMPONENT_PATCH_ENCODE_COMPONENT, |w| t.write(v, w))?;
+                    }
                 }
             }
-        }
+            Ok::<(), String>(())
+        })?;
         for (t, v) in &self.entries {
             if v.is_none() {
                 w.varint(t.0 as i32);

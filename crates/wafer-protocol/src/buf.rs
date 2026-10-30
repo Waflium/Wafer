@@ -1,6 +1,8 @@
 use wafer_core::java_string::JavaStr;
 use std::fmt;
 
+use crate::fault::{Fault, Frame};
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum DecodeError {
     UnexpectedEof,
@@ -141,10 +143,16 @@ impl<'a> Reader<'a> {
 
 const DEFAULT_STRING_MAX_LEN: usize = 32767;
 
+const STRING_TOO_BIG_FRAMES: &[Frame] = &[
+    Frame::Fixed("net.minecraft.network.Utf8String.write(Utf8String.java:38)"),
+    Frame::Fixed("net.minecraft.network.codec.ByteBufCodecs$14.encode(ByteBufCodecs.java:246)"),
+    Frame::Fixed("net.minecraft.network.codec.ByteBufCodecs$14.encode(ByteBufCodecs.java:238)"),
+];
+
 #[derive(Default)]
 pub struct Writer {
     buf: Vec<u8>,
-    faults: Vec<String>,
+    faults: Vec<Fault>,
 }
 
 impl Writer {
@@ -153,11 +161,48 @@ impl Writer {
     }
 
     pub fn fail(&mut self, chain: String) {
-        self.faults.push(chain);
+        let mut causes = chain.lines().filter(|line| !line.starts_with('\t')).rev();
+        let mut fault = Fault::new(causes.next().unwrap_or_default(), &[]);
+        for description in causes {
+            fault = Fault::new(description, &[]).with_cause(fault);
+        }
+        self.faults.push(fault);
     }
 
-    pub fn faults(&self) -> &[String] {
+    pub fn fail_with(&mut self, fault: Fault) {
+        self.faults.push(fault);
+    }
+
+    pub fn faults(&self) -> &[Fault] {
         &self.faults
+    }
+
+    pub fn fault_count(&self) -> usize {
+        self.faults.len()
+    }
+
+    #[inline(always)]
+    pub fn layer<R>(&mut self, frames: &[Frame], write: impl FnOnce(&mut Writer) -> R) -> R {
+        let faults = self.faults.len();
+        let result = write(self);
+        if self.faults.len() != faults {
+            self.unwind(faults, frames);
+        }
+        result
+    }
+
+    #[cold]
+    pub fn wrap_faults(&mut self, first_fault: usize, wrap: impl Fn(Fault) -> Fault) {
+        for fault in &mut self.faults[first_fault..] {
+            *fault = wrap(std::mem::replace(fault, Fault::new("", &[])));
+        }
+    }
+
+    #[cold]
+    pub fn unwind(&mut self, first_fault: usize, frames: &[Frame]) {
+        for fault in &mut self.faults[first_fault..] {
+            fault.push_frames(frames);
+        }
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -261,7 +306,7 @@ impl Writer {
         if s.len() > max_len {
             let length = s.java_utf16().count();
             if length > max_len {
-                self.fail(format!("io.netty.handler.codec.EncoderException: String too big (was {length} characters, max {max_len})"));
+                self.fail_with(Fault::new(format!("io.netty.handler.codec.EncoderException: String too big (was {length} characters, max {max_len})"), STRING_TOO_BIG_FRAMES));
             }
         }
         self.varint(s.len() as i32);
@@ -374,7 +419,38 @@ mod tests {
         w.string(&"\u{20AC}".repeat(11000));
         assert!(w.faults().is_empty());
         w.string(&"a".repeat(32768));
-        assert_eq!(w.faults(), ["io.netty.handler.codec.EncoderException: String too big (was 32768 characters, max 32767)"]);
+        assert_eq!(descriptions(&w), ["io.netty.handler.codec.EncoderException: String too big (was 32768 characters, max 32767)"]);
+    }
+
+    fn descriptions(w: &Writer) -> Vec<&str> {
+        w.faults().iter().map(|fault| fault.description.as_str()).collect()
+    }
+
+    #[test]
+    fn string_faults_carry_the_codec_frames_and_the_layers_they_pass() {
+        let mut w = Writer::new();
+        w.layer(&[Frame::composite(2, 1)], |w| w.string_max(&"a".repeat(17), 16));
+        w.string_max("fine", 16);
+        assert_eq!(
+            w.faults()[0].frames,
+            [
+                "net.minecraft.network.Utf8String.write(Utf8String.java:38)",
+                "net.minecraft.network.codec.ByteBufCodecs$14.encode(ByteBufCodecs.java:246)",
+                "net.minecraft.network.codec.ByteBufCodecs$14.encode(ByteBufCodecs.java:238)",
+                "net.minecraft.network.codec.StreamCodec$8.encode(StreamCodec.java:162)",
+            ]
+        );
+        assert_eq!(w.faults().len(), 1);
+    }
+
+    #[test]
+    fn layers_only_touch_faults_raised_inside_them() {
+        let mut w = Writer::new();
+        w.string_max(&"a".repeat(17), 16);
+        w.layer(&[Frame::Fixed("x.A.a(A.java:1)")], |w| w.string_max(&"b".repeat(17), 16));
+        w.layer(&[Frame::Fixed("x.A.a(A.java:1)")], |w| w.string_max("ok", 16));
+        assert_eq!(w.faults()[0].frames.len(), 3);
+        assert_eq!(w.faults()[1].frames.len(), 4);
     }
 
     #[test]
@@ -384,7 +460,7 @@ mod tests {
         w.string_max(&"\u{20AC}".repeat(16), 16);
         assert!(w.faults().is_empty());
         w.string_max(&"a".repeat(17), 16);
-        assert_eq!(w.faults(), ["io.netty.handler.codec.EncoderException: String too big (was 17 characters, max 16)"]);
+        assert_eq!(descriptions(&w), ["io.netty.handler.codec.EncoderException: String too big (was 17 characters, max 16)"]);
     }
 
     #[test]

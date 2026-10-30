@@ -1,4 +1,5 @@
 use wafer_data::packets::play::clientbound;
+use wafer_protocol::stream_codec;
 
 use super::command_response_tracker::CommandResponseTracker;
 use crate::commands::brigadier::{CommandContext, CommandSyntaxException};
@@ -46,7 +47,7 @@ fn show_title(server: &mut Server, context: &CommandContext, source: &CommandSou
     let mut tracker = CommandResponseTracker::new();
     for player in context.get_players(server, source, "targets")? {
         let resolved = component_utils::update_for_entity(server, source, title, Some(player))?;
-        server.player(player).connection.send(id, |p| resolved.write(p));
+        server.player(player).connection.send(id, |p| p.layer(&[stream_codec::composite(1, 1)], |p| resolved.write(p)));
         tracker.track(player);
     }
     send_feedback(server, source, tracker, key)

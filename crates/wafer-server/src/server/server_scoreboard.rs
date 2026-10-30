@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use wafer_data::packets::play::clientbound;
-use wafer_protocol::Writer;
+use wafer_protocol::{Frame, Writer, stream_codec};
 use indexmap::IndexMap;
 
 use crate::network::chat::Component;
@@ -14,6 +14,9 @@ use crate::world::scores::player_team::PlayerTeam;
 use crate::world::scores::score::Score;
 use crate::world::scores::scoreboard::Scoreboard;
 use crate::world::scores::scoreboard_save_data::ScoreboardSaveData;
+
+const SET_OBJECTIVE_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundSetObjectivePacket.write(ClientboundSetObjectivePacket.java:58)")];
+const SET_PLAYER_TEAM_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.write(ClientboundSetPlayerTeamPacket.java:91)")];
 
 pub const METHOD_ADD: u8 = 0;
 pub const METHOD_REMOVE: u8 = 1;
@@ -252,13 +255,17 @@ impl Scoreboard {
 
 pub fn set_objective_packet(objective: &Objective, method: u8) -> Vec<u8> {
     encode(clientbound::SET_OBJECTIVE, |w| {
-        w.string(objective.name());
-        w.u8(method);
-        if method == METHOD_ADD || method == METHOD_CHANGE {
-            objective.display_name().write(w);
-            w.varint(objective.render_type() as i32);
-            NumberFormat::write_optional(objective.number_format(), w);
-        }
+        w.layer(stream_codec::OF_MEMBER, |w| {
+            w.layer(&SET_OBJECTIVE_WRITE, |w| {
+                w.string(objective.name());
+                w.u8(method);
+                if method == METHOD_ADD || method == METHOD_CHANGE {
+                    objective.display_name().write(w);
+                    w.varint(objective.render_type() as i32);
+                    NumberFormat::write_optional(objective.number_format(), w);
+                }
+            });
+        });
     })
 }
 
@@ -271,14 +278,14 @@ pub fn set_display_objective_packet(slot: DisplaySlot, objective: Option<&Object
 
 pub fn set_score_packet(owner: &str, objective: &str, score: i32, display: Option<&Component>, number_format: Option<&NumberFormat>) -> Vec<u8> {
     encode(clientbound::SET_SCORE, |w| {
-        w.string(owner);
-        w.string(objective);
+        w.layer(&[stream_codec::composite(5, 1)], |w| w.string(owner));
+        w.layer(&[stream_codec::composite(5, 2)], |w| w.string(objective));
         w.varint(score);
         w.bool(display.is_some());
         if let Some(display) = display {
-            display.write(w);
+            w.layer(&[stream_codec::composite(5, 4)], |w| w.layer(stream_codec::OPTIONAL, |w| display.write(w)));
         }
-        NumberFormat::write_optional(number_format, w);
+        w.layer(&[stream_codec::composite(5, 5)], |w| NumberFormat::write_optional(number_format, w));
     })
 }
 
@@ -293,9 +300,9 @@ pub fn reset_score_packet(owner: &str, objective: Option<&str>) -> Vec<u8> {
 }
 
 fn write_team_parameters(team: &PlayerTeam, w: &mut Writer) {
-    team.display_name().write(w);
-    team.player_prefix().write(w);
-    team.player_suffix().write(w);
+    w.layer(&[stream_codec::composite(7, 1)], |w| team.display_name().write(w));
+    w.layer(&[stream_codec::composite(7, 2)], |w| team.player_prefix().write(w));
+    w.layer(&[stream_codec::composite(7, 3)], |w| team.player_suffix().write(w));
     w.varint(team.name_tag_visibility().id());
     w.varint(team.collision_rule().id());
     w.bool(team.color().is_some());
@@ -307,13 +314,15 @@ fn write_team_parameters(team: &PlayerTeam, w: &mut Writer) {
 
 pub fn set_player_team_add_or_modify_packet(team: &PlayerTeam, create_new: bool) -> Vec<u8> {
     encode(clientbound::SET_PLAYER_TEAM, |w| {
-        w.string(team.name());
-        w.u8(if create_new { 0 } else { 2 });
-        write_team_parameters(team, w);
-        if create_new {
-            w.varint(team.player_count() as i32);
-            team.players().for_each(|p| w.string(p));
-        }
+        w.layer(stream_codec::OF_MEMBER, |w| {
+            w.string(team.name());
+            w.u8(if create_new { 0 } else { 2 });
+            w.layer(&SET_PLAYER_TEAM_WRITE, |w| write_team_parameters(team, w));
+            if create_new {
+                w.varint(team.player_count() as i32);
+                team.players().for_each(|p| w.string(p));
+            }
+        });
     })
 }
 

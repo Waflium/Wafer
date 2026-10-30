@@ -1,5 +1,5 @@
-use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
+use wafer_protocol::{Writer, stream_codec};
 
 use super::{ChatFormatting, Component, Style};
 
@@ -75,14 +75,14 @@ impl NumberFormat {
         match self {
             NumberFormat::Blank => {}
             NumberFormat::Styled(style) => style.to_nbt().write(w),
-            NumberFormat::Fixed(component) => component.write(w),
+            NumberFormat::Fixed(component) => w.layer(stream_codec::DISPATCH, |w| w.layer(&[stream_codec::composite(1, 1)], |w| component.write(w))),
         }
     }
 
     pub fn write_optional(format: Option<&NumberFormat>, w: &mut Writer) {
         w.bool(format.is_some());
         if let Some(format) = format {
-            format.write(w);
+            w.layer(stream_codec::OPTIONAL, |w| format.write(w));
         }
     }
 }

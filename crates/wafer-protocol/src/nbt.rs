@@ -1,7 +1,22 @@
 use wafer_core::java_string::JavaStr;
 use crate::java_string::{from_utf16, utf16_units};
 use crate::lazily_parsed_number::{double_value, exact_nbt, parse_long};
+use crate::fault::{Fault, Frame};
 use crate::{DecodeError, Reader, Writer};
+
+const WRITE_UTF: [Frame; 3] = [
+    Frame::Fixed("java.base/java.io.DataOutputStream.writeUTF(DataOutputStream.java:370)"),
+    Frame::Fixed("java.base/java.io.DataOutputStream.writeUTF(DataOutputStream.java:338)"),
+    Frame::Fixed("io.netty.buffer.ByteBufOutputStream.writeUTF(ByteBufOutputStream.java:160)"),
+];
+const STRING_TAG_WRITE: Frame = Frame::Fixed("net.minecraft.nbt.StringTag.write(StringTag.java:76)");
+const NAMED_TAG_KEY: Frame = Frame::Fixed("net.minecraft.nbt.CompoundTag.writeNamedTag(CompoundTag.java:504)");
+const NAMED_TAG_VALUE: [Frame; 1] = [Frame::Fixed("net.minecraft.nbt.CompoundTag.writeNamedTag(CompoundTag.java:506)")];
+const COMPOUND_TAG_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.nbt.CompoundTag.write(CompoundTag.java:208)")];
+const LIST_TAG_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.nbt.ListTag.write(ListTag.java:193)")];
+const WRITE_ANY_TAG: Frame = Frame::Fixed("net.minecraft.nbt.NbtIo.writeAnyTag(NbtIo.java:156)");
+const WRITE_NBT_CAUSE: Frame = Frame::Fixed("net.minecraft.network.FriendlyByteBuf.writeNbt(FriendlyByteBuf.java:459)");
+const WRITE_NBT_WRAP: Frame = Frame::Fixed("net.minecraft.network.FriendlyByteBuf.writeNbt(FriendlyByteBuf.java:461)");
 
 #[derive(Clone, Debug)]
 pub enum Nbt {
@@ -73,7 +88,7 @@ impl Nbt {
 
     pub fn write_named(&self, name: &str, w: &mut Writer) {
         w.u8(self.tag_id());
-        write_string(w, name);
+        write_string(w, name, None);
         self.write_payload(w);
     }
 
@@ -130,8 +145,16 @@ impl Nbt {
     }
 
     pub fn write(&self, w: &mut Writer) {
+        let faults = w.fault_count();
         w.u8(self.tag_id());
         self.write_payload(w);
+        if w.fault_count() != faults {
+            w.wrap_faults(faults, |mut root| {
+                root.push_frames(&[WRITE_ANY_TAG, WRITE_NBT_CAUSE]);
+                let description = format!("io.netty.handler.codec.EncoderException: {}", root.description);
+                Fault::new(description, &[WRITE_NBT_WRAP]).with_cause(root)
+            });
+        }
     }
 
     fn write_payload(&self, w: &mut Writer) {
@@ -147,34 +170,36 @@ impl Nbt {
                 w.bytes(&(v.len() as i32).to_be_bytes());
                 v.iter().for_each(|b| w.u8(*b as u8));
             }
-            Nbt::String(s) => write_string(w, s),
-            Nbt::List(items) => {
+            Nbt::String(s) => write_string(w, s, Some(STRING_TAG_WRITE)),
+            Nbt::List(items) => w.layer(&LIST_TAG_WRITE, |w| {
                 let element = list_element_type(items);
                 w.u8(element);
                 w.bytes(&(items.len() as i32).to_be_bytes());
                 for item in items {
                     if element == 10 && !matches!(item, Nbt::Compound(f) if !is_wrapper(f)) {
-                        w.u8(item.tag_id());
-                        write_string(w, "");
-                        item.write_payload(w);
-                        w.u8(0);
+                        w.layer(&COMPOUND_TAG_WRITE, |w| {
+                            w.u8(item.tag_id());
+                            write_string(w, "", Some(NAMED_TAG_KEY));
+                            w.layer(&NAMED_TAG_VALUE, |w| item.write_payload(w));
+                            w.u8(0);
+                        });
                     } else {
                         item.write_payload(w);
                     }
                 }
-            }
-            Nbt::Compound(fields) => {
+            }),
+            Nbt::Compound(fields) => w.layer(&COMPOUND_TAG_WRITE, |w| {
                 for &i in &java_hash_map_order(&fields.iter().map(|f| f.0.as_str()).collect::<Vec<_>>()) {
                     let (name, value) = &fields[i];
                     w.u8(value.tag_id());
                     if matches!(value, Nbt::End) {
                         continue;
                     }
-                    write_string(w, name);
-                    value.write_payload(w);
+                    write_string(w, name, Some(NAMED_TAG_KEY));
+                    w.layer(&NAMED_TAG_VALUE, |w| value.write_payload(w));
                 }
                 w.u8(0);
-            }
+            }),
             Nbt::IntArray(v) => {
                 w.bytes(&(v.len() as i32).to_be_bytes());
                 v.iter().for_each(|i| w.bytes(&i.to_be_bytes()));
@@ -188,7 +213,7 @@ impl Nbt {
     }
 }
 
-fn write_string(w: &mut Writer, s: &str) {
+fn write_string(w: &mut Writer, s: &str, origin: Option<Frame>) {
     let mut bytes = Vec::with_capacity(s.len());
     for unit in utf16_units(s) {
         match unit {
@@ -213,7 +238,9 @@ fn write_string(w: &mut Writer, s: &str) {
             display(&units[units.len() - 8..]),
             bytes.len()
         );
-        w.fail(format!("io.netty.handler.codec.EncoderException: {message}\n{message}"));
+        let mut fault = Fault::new(message, &WRITE_UTF);
+        fault.push_frames(origin.as_slice());
+        w.fail_with(fault);
         w.u16(0);
         return;
     }
@@ -383,11 +410,83 @@ mod tests {
         let mut w = Writer::new();
         Nbt::String("a".repeat(70000)).write(&mut w);
         let message = "java.io.UTFDataFormatException: encoded string (aaaaaaaa...aaaaaaaa) too long: 70000 bytes";
-        assert_eq!(w.faults(), [format!("io.netty.handler.codec.EncoderException: {message}\n{message}")]);
+        assert_eq!(w.faults()[0].description, format!("io.netty.handler.codec.EncoderException: {message}"));
+        assert_eq!(w.faults()[0].root().description, message);
         assert_eq!(w.as_slice(), &[8, 0, 0]);
         let mut w = Writer::new();
         Nbt::String("\u{20AC}".repeat(21846)).write(&mut w);
         assert_eq!(w.faults().len(), 1);
-        assert!(w.faults()[0].ends_with("(\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}...\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}) too long: 65538 bytes"));
+        assert!(w.faults()[0].root().description.ends_with("(\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}...\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}\u{20AC}) too long: 65538 bytes"));
+    }
+
+    fn fault_frames(tag: &Nbt) -> (Vec<&'static str>, Vec<&'static str>) {
+        let mut w = Writer::new();
+        w.layer(&[Frame::composite(2, 1)], |w| w.layer(crate::stream_codec::TAG_CODEC, |w| tag.write(w)));
+        let fault = &w.faults()[0];
+        (fault.frames.clone(), fault.root().frames.clone())
+    }
+
+    const COMMON: [&str; 3] = [
+        "net.minecraft.network.codec.ByteBufCodecs$18.encode(ByteBufCodecs.java:309)",
+        "net.minecraft.network.codec.ByteBufCodecs$18.encode(ByteBufCodecs.java:294)",
+        "net.minecraft.network.codec.StreamCodec$8.encode(StreamCodec.java:162)",
+    ];
+
+    #[test]
+    fn faults_in_a_root_string_carry_the_write_nbt_frames() {
+        let (outer, root) = fault_frames(&Nbt::String("a".repeat(70000)));
+        assert_eq!(outer[0], "net.minecraft.network.FriendlyByteBuf.writeNbt(FriendlyByteBuf.java:461)");
+        assert_eq!(outer[1..], COMMON[..3]);
+        assert_eq!(
+            root,
+            [
+                "java.base/java.io.DataOutputStream.writeUTF(DataOutputStream.java:370)",
+                "java.base/java.io.DataOutputStream.writeUTF(DataOutputStream.java:338)",
+                "io.netty.buffer.ByteBufOutputStream.writeUTF(ByteBufOutputStream.java:160)",
+                "net.minecraft.nbt.StringTag.write(StringTag.java:76)",
+                "net.minecraft.nbt.NbtIo.writeAnyTag(NbtIo.java:156)",
+                "net.minecraft.network.FriendlyByteBuf.writeNbt(FriendlyByteBuf.java:459)",
+                COMMON[0],
+                COMMON[1],
+                COMMON[2],
+            ]
+        );
+    }
+
+    #[test]
+    fn faults_in_nested_tags_carry_compound_and_list_frames() {
+        let compound = |key: &str, value: Nbt| Nbt::Compound(vec![(key.into(), value)]);
+        let long = || Nbt::String("a".repeat(70000));
+        let nested = compound("a", Nbt::List(vec![compound("b", long())]));
+        let (_, root) = fault_frames(&nested);
+        assert_eq!(
+            root[3..12],
+            [
+                "net.minecraft.nbt.StringTag.write(StringTag.java:76)",
+                "net.minecraft.nbt.CompoundTag.writeNamedTag(CompoundTag.java:506)",
+                "net.minecraft.nbt.CompoundTag.write(CompoundTag.java:208)",
+                "net.minecraft.nbt.ListTag.write(ListTag.java:193)",
+                "net.minecraft.nbt.CompoundTag.writeNamedTag(CompoundTag.java:506)",
+                "net.minecraft.nbt.CompoundTag.write(CompoundTag.java:208)",
+                "net.minecraft.nbt.NbtIo.writeAnyTag(NbtIo.java:156)",
+                "net.minecraft.network.FriendlyByteBuf.writeNbt(FriendlyByteBuf.java:459)",
+                COMMON[0],
+            ]
+        );
+        let (_, root) = fault_frames(&compound(&"k".repeat(70000), Nbt::Byte(1)));
+        assert_eq!(
+            root[3..6],
+            [
+                "net.minecraft.nbt.CompoundTag.writeNamedTag(CompoundTag.java:504)",
+                "net.minecraft.nbt.CompoundTag.write(CompoundTag.java:208)",
+                "net.minecraft.nbt.NbtIo.writeAnyTag(NbtIo.java:156)",
+            ]
+        );
+        let mixed = Nbt::List(vec![long(), Nbt::Byte(1)]);
+        let (_, root) = fault_frames(&mixed);
+        assert_eq!(root[3..7].len(), 4);
+        assert_eq!(root[4], "net.minecraft.nbt.CompoundTag.writeNamedTag(CompoundTag.java:506)");
+        assert_eq!(root[5], "net.minecraft.nbt.CompoundTag.write(CompoundTag.java:208)");
+        assert_eq!(root[6], "net.minecraft.nbt.ListTag.write(ListTag.java:193)");
     }
 }

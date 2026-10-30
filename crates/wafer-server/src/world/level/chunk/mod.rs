@@ -13,8 +13,8 @@ pub mod unseeded_chunk_generator;
 use wafer_core::hash_map::FastMap;
 use wafer_core::{BlockPos, ChunkPos};
 use wafer_data::{BlockState, DimensionType, SyncedRegistry, blocks};
-use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
+use wafer_protocol::{Writer, stream_codec};
 
 pub use heightmap::{Heightmap, HeightmapType};
 use palette::{PaletteValue, PalettedContainer, Strategy};
@@ -419,17 +419,21 @@ impl LevelChunk {
         w.varint(data.as_slice().len() as i32);
         w.bytes(data.as_slice());
         let positions = self.block_entities.map.keys_in_order();
-        w.varint(positions.len() as i32);
-        for pos in positions {
-            let entity = self.block_entities.map.get(&pos).unwrap();
-            w.u8(((pos.x & 15) << 4 | (pos.z & 15)) as u8);
-            w.i16(pos.y as i16);
-            w.varint(entity.ty().0 as i32);
-            match entity.get_update_tag() {
-                Nbt::Compound(fields) if fields.is_empty() => w.u8(0),
-                tag => tag.write(w),
-            }
-        }
+        w.layer(&[stream_codec::composite(3, 3)], |w| {
+            w.varint(positions.len() as i32);
+            w.layer(stream_codec::COLLECTION, |w| {
+                for pos in positions {
+                    let entity = self.block_entities.map.get(&pos).unwrap();
+                    w.u8(((pos.x & 15) << 4 | (pos.z & 15)) as u8);
+                    w.i16(pos.y as i16);
+                    w.varint(entity.ty().0 as i32);
+                    w.layer(&[stream_codec::composite(4, 4)], |w| match entity.get_update_tag() {
+                        Nbt::Compound(fields) if fields.is_empty() => w.u8(0),
+                        tag => w.layer(stream_codec::OPTIONAL_COMPOUND_TAG, |w| tag.write(w)),
+                    });
+                }
+            });
+        });
     }
 }
 

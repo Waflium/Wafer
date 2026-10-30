@@ -80,7 +80,7 @@ pub fn encode_nbt(nbt: &Nbt) -> Vec<u8> {
     let mut w = Writer::new();
     nbt.write_named("", &mut w);
     for fault in w.faults() {
-        error!("Failed to write NBT String\n{}", fault.lines().last().unwrap_or_default());
+        error!("Failed to write NBT String\n{}", fault.root().description);
     }
     w.into_inner()
 }

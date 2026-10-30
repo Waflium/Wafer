@@ -1,10 +1,14 @@
 use wafer_data::packets::play::clientbound;
-use wafer_protocol::Writer;
+use wafer_protocol::{Frame, Writer, stream_codec};
 
 use super::ServerLevel;
 use crate::network::chat::{ChatFormatting, Component};
 use crate::network::connection::Outbound;
 use crate::world::entity::EntityId;
+
+const WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundBossEventPacket.write(ClientboundBossEventPacket.java:63)")];
+const ADD_OPERATION_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundBossEventPacket$AddOperation.write(ClientboundBossEventPacket.java:180)")];
+const UPDATE_NAME_OPERATION_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundBossEventPacket$UpdateNameOperation.write(ClientboundBossEventPacket.java:242)")];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BossBarColor {
@@ -120,26 +124,30 @@ impl ServerBossEvent {
     }
 
     fn write(&self, w: &mut Writer, operation: Operation) {
-        w.uuid(self.id);
-        w.varint(operation as i32);
-        let properties = |w: &mut Writer| w.u8(self.darken_screen as u8 | (self.play_boss_music as u8) << 1 | (self.create_world_fog as u8) << 2);
-        match operation {
-            Operation::Add => {
-                self.name.write(w);
-                w.f32(self.progress);
-                w.varint(self.color as i32);
-                w.varint(self.overlay as i32);
-                properties(w);
-            }
-            Operation::Remove => {}
-            Operation::UpdateProgress => w.f32(self.progress),
-            Operation::UpdateName => self.name.write(w),
-            Operation::UpdateStyle => {
-                w.varint(self.color as i32);
-                w.varint(self.overlay as i32);
-            }
-            Operation::UpdateProperties => properties(w),
-        }
+        w.layer(stream_codec::OF_MEMBER, |w| {
+            w.layer(&WRITE, |w| {
+                w.uuid(self.id);
+                w.varint(operation as i32);
+                let properties = |w: &mut Writer| w.u8(self.darken_screen as u8 | (self.play_boss_music as u8) << 1 | (self.create_world_fog as u8) << 2);
+                match operation {
+                    Operation::Add => w.layer(&ADD_OPERATION_WRITE, |w| {
+                        self.name.write(w);
+                        w.f32(self.progress);
+                        w.varint(self.color as i32);
+                        w.varint(self.overlay as i32);
+                        properties(w);
+                    }),
+                    Operation::Remove => {}
+                    Operation::UpdateProgress => w.f32(self.progress),
+                    Operation::UpdateName => w.layer(&UPDATE_NAME_OPERATION_WRITE, |w| self.name.write(w)),
+                    Operation::UpdateStyle => {
+                        w.varint(self.color as i32);
+                        w.varint(self.overlay as i32);
+                    }
+                    Operation::UpdateProperties => properties(w),
+                }
+            });
+        });
     }
 
     fn send(&self, connection: &Outbound, operation: Operation) {

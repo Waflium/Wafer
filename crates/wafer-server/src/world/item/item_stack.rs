@@ -1,6 +1,6 @@
 use wafer_data::{BlockState, Item, Rarity, items};
 use wafer_protocol::nbt::Nbt;
-use wafer_protocol::{Reader, Writer};
+use wafer_protocol::{Frame, Reader, Writer};
 
 use super::adventure_mode_predicate::AdventureModePredicate;
 use super::component::swing_animation::SwingAnimation;
@@ -517,12 +517,19 @@ fn potion_name(id: &str) -> &str {
     path.strip_prefix("long_").or_else(|| path.strip_prefix("strong_")).unwrap_or(path)
 }
 
+const OPTIONAL_STREAM_CODEC_ENCODE: [Frame; 2] = [
+    Frame::Fixed("net.minecraft.world.item.ItemStack$1.encode(ItemStack.java:166)"),
+    Frame::Fixed("net.minecraft.world.item.ItemStack$1.encode(ItemStack.java:144)"),
+];
+
 pub fn write_slot(w: &mut Writer, stack: Option<&ItemStack>) {
     match stack {
         Some(s) if !s.is_empty() => {
-            w.varint(s.count);
-            w.varint(s.item.0 as i32);
-            s.components_patch().write(w, false).expect("component value encodes");
+            w.layer(&OPTIONAL_STREAM_CODEC_ENCODE, |w| {
+                w.varint(s.count);
+                w.varint(s.item.0 as i32);
+                s.components_patch().write(w, false).expect("component value encodes");
+            });
         }
         _ => w.varint(0),
     }

@@ -5,6 +5,7 @@ use crate::util::profiling::profiler;
 use wafer_data::packets::play::clientbound;
 use wafer_data::properties::{HORIZONTAL_FACING, OCCUPIED, OPEN};
 use wafer_protocol::nbt::Nbt;
+use wafer_protocol::{Frame, stream_codec};
 use wafer_data::{BlockState, EquipmentSlot, EquipmentSlotGroup, MobEffect, block_tags, blocks, damage_type_tags, damage_types, entity_type_tags, fluid_tags, game_rule, item_tags, items, mob_effects};
 
 use super::ai::brain::Brain;
@@ -431,14 +432,20 @@ fn for_each_modifier(stack: &ItemStack, slot: EquipmentSlot, mut f: impl FnMut(A
     enchantment_helper::for_each_modifier(stack, slot, f);
 }
 
+const SET_EQUIPMENT_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket.write(ClientboundSetEquipmentPacket.java:51)")];
+
 pub fn set_equipment(id: EntityId, slots: &[(EquipmentSlot, Option<ItemStack>)]) -> Vec<u8> {
     encode(clientbound::SET_EQUIPMENT, |p| {
-        p.varint(id);
-        for (i, (slot, stack)) in slots.iter().enumerate() {
-            let last = i == slots.len() - 1;
-            p.u8(*slot as u8 | if last { 0 } else { 0x80 });
-            crate::world::item::write_slot(p, stack.as_ref());
-        }
+        p.layer(stream_codec::OF_MEMBER, |p| {
+            p.layer(&SET_EQUIPMENT_WRITE, |p| {
+                p.varint(id);
+                for (i, (slot, stack)) in slots.iter().enumerate() {
+                    let last = i == slots.len() - 1;
+                    p.u8(*slot as u8 | if last { 0 } else { 0x80 });
+                    crate::world::item::write_slot(p, stack.as_ref());
+                }
+            });
+        });
     })
 }
 

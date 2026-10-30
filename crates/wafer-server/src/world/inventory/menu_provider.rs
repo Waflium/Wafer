@@ -1,6 +1,7 @@
 use wafer_core::{BlockPos, Vec3};
 use wafer_data::packets::play::clientbound;
 use wafer_data::{block_entity_types as types, registry, registry_id};
+use wafer_protocol::stream_codec;
 
 use super::abstract_container_menu::{AbstractContainerMenu, MenuKind, menu_type_id};
 use super::inventory_menu::CONTAINER_ID;
@@ -260,7 +261,7 @@ impl ServerLevel {
         self.player(player).connection.send(clientbound::OPEN_SCREEN, |w| {
             w.varint(container_id);
             w.varint(menu_type);
-            title.write(w);
+            w.layer(&[stream_codec::composite(3, 3)], |w| title.write(w));
         });
         self.menu_broadcast_changes(&mut menu, player);
         self.menu_set_synchronizer(&mut menu, player);

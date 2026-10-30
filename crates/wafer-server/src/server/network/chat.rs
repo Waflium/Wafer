@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use wafer_data::packets::play::clientbound;
+use wafer_protocol::stream_codec;
 
 use super::super::command_origin::CommandOrigin;
 use super::super::{Server, Task};
@@ -22,6 +23,7 @@ use crate::network::chat::{ChatFormatting, Component};
 use crate::network::chat_type::{ChatType, broadcast_chat_message};
 use crate::network::configuration::ChatVisibility;
 use crate::network::connection::Packet;
+use crate::network::protocol::game::{clientbound_disguised_chat_packet, clientbound_system_chat_packet};
 use crate::server::network::game::is_illegal_chat_char;
 use crate::server::level::server_player::ServerPlayer;
 use crate::util::tick_throttler::TickThrottler;
@@ -77,10 +79,7 @@ impl ServerPlayer {
         }
         if message.is_system() {
             let content = message.decorated_content();
-            self.connection.send(clientbound::DISGUISED_CHAT, |w| {
-                content.write(w);
-                chat_type.write(w);
-            });
+            self.connection.send(clientbound::DISGUISED_CHAT, |w| clientbound_disguised_chat_packet::write(w, &content, chat_type));
         } else {
             self.send_player_chat_message(message, chat_type);
         }
@@ -98,13 +97,13 @@ impl ServerPlayer {
             if let Some(signature) = &message.signature {
                 signature.write(w);
             }
-            message.signed_body.write_packed(w, &chat.message_signature_cache);
+            w.layer(&[stream_codec::composite(8, 5)], |w| message.signed_body.write_packed(w, &chat.message_signature_cache));
             w.bool(message.unsigned_content.is_some());
             if let Some(content) = &message.unsigned_content {
-                content.write(w);
+                w.layer(&[stream_codec::composite(8, 6)], |w| w.layer(stream_codec::OPTIONAL, |w| content.write(w)));
             }
             w.varint(0);
-            chat_type.write(w);
+            w.layer(&[stream_codec::composite(8, 8)], |w| chat_type.write(w));
         });
         if let Some(signature) = &message.signature {
             chat.message_signature_cache.push(&message.signed_body, Some(signature));
@@ -265,10 +264,7 @@ impl Server {
             false
         } else if !is_command && player.client.chat_visibility == ChatVisibility::Hidden {
             let disabled = Component::translatable("chat.disabled.options").with_color(ChatFormatting::Red);
-            player.connection.send(clientbound::SYSTEM_CHAT, |p| {
-                disabled.write(p);
-                p.bool(false);
-            });
+            player.connection.send(clientbound::SYSTEM_CHAT, |p| clientbound_system_chat_packet::write(p, &disabled, false));
             false
         } else {
             player.reset_last_action_time();

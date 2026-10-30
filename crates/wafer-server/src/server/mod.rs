@@ -2019,7 +2019,7 @@ fn write_respawn_data(p: &mut wafer_protocol::Writer, data: &RespawnData) {
 fn disconnect_invalid_player_data(profile: &Profile, connection: &Outbound) {
     let reason = crate::network::chat::translate("multiplayer.disconnect.invalid_player_data");
     info!("{} ({}) lost connection: {}", profile.name, format_uuid(profile.uuid), reason.get_string());
-    connection.send(clientbound::DISCONNECT, |p| reason.write(p));
+    connection.send(clientbound::DISCONNECT, |p| reason.write_trusted_context_free(p));
 }
 
 pub(crate) fn log_save_failure(file_name: &str, result: std::io::Result<()>) {

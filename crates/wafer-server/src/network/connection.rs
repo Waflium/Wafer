@@ -1,7 +1,7 @@
 use std::io;
 
 use anyhow::bail;
-use wafer_protocol::{ALWAYS_ENCODABLE_LEN, Codec, Reader, Writer};
+use wafer_protocol::{ALWAYS_ENCODABLE_LEN, Codec, Fault, Reader, Writer, stream_codec};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -14,6 +14,7 @@ use tokio::time::{Instant, Sleep};
 
 use super::chat::{Arg, Component};
 use super::encryption::{Decryptor, Encryptor};
+use crate::util::java_throwable::JavaThrowable;
 
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -185,11 +186,11 @@ impl Outbound {
             return;
         }
         let packet = encode(id, body);
-        if let Some((id, chain)) = encoding_fault(&packet) {
-            let (packet_type, wrapper, causes) = encoder_exception(id, chain);
-            error!(thread: &self.io_thread, "Error sending packet {packet_type}\n{wrapper}{causes}");
+        if let Some((id, fault)) = encoding_fault(&packet) {
+            let encoder_exception = encoder_exception(id, fault, NettyPath::Listener);
+            error!(thread: &self.io_thread, "Error sending packet {}\n{}", encoder_exception.packet_type, encoder_exception.wrapper.print_stack_trace().trim_end());
             if let Some(fallback) = fallback() {
-                warn!(thread: &self.io_thread, "Failed to deliver packet, sending fallback {packet_type}\nnet.minecraft.network.SkipPacketEncoderException: {wrapper}\nCaused by: {wrapper}{causes}");
+                warn!(thread: &self.io_thread, "Failed to deliver packet, sending fallback {}\n{}", encoder_exception.packet_type, encoder_exception.skip().print_stack_trace().trim_end());
                 self.send_raw(fallback);
             }
             return;
@@ -227,25 +228,121 @@ pub fn encode(id: i32, body: impl FnOnce(&mut Writer)) -> Vec<u8> {
     };
     let packet = w.as_slice();
     let id_len = packet.iter().position(|&b| b & 0x80 == 0).map_or(packet.len(), |i| i + 1);
-    let mut faulted = Vec::with_capacity(FAULTED_PACKET.len() + id_len + fault.len());
+    let mut fault = fault.clone();
+    if fault.has_frames() {
+        fault.push_frames(stream_codec::MAP_STREAM);
+        fault.push_frames(stream_codec::ID_DISPATCH);
+    }
+    let mut faulted = Vec::with_capacity(FAULTED_PACKET.len() + id_len + 256);
     faulted.extend_from_slice(&FAULTED_PACKET);
     faulted.extend_from_slice(&packet[..id_len]);
-    faulted.extend_from_slice(fault.as_bytes());
+    fault.write_to(&mut faulted);
     faulted
 }
 
-fn encoding_fault(packet: &[u8]) -> Option<(i32, &str)> {
+pub(crate) fn encoding_fault(packet: &[u8]) -> Option<(i32, Fault)> {
     let rest = packet.strip_prefix(&FAULTED_PACKET)?;
     let mut r = Reader::new(rest);
     let id = r.varint().ok()?;
-    Some((id, std::str::from_utf8(&rest[rest.len() - r.remaining()..]).unwrap_or_default()))
+    let mut fault = &rest[rest.len() - r.remaining()..];
+    Some((id, Fault::read_from(&mut fault)?))
 }
 
-fn encoder_exception(id: i32, chain: &str) -> (String, String, String) {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum NettyPath {
+    Plain,
+    Listener,
+    Bundle,
+}
+
+const ABSTRACT_CHANNEL_HANDLER_CONTEXT_WRITE: &str = "io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:800)";
+const MESSAGE_TO_MESSAGE_ENCODER_WRITE: &str = "io.netty.handler.codec.MessageToMessageEncoder.write(MessageToMessageEncoder.java:113)";
+const EVENT_LOOP_TAIL: [&str; 7] = [
+    "io.netty.util.concurrent.AbstractEventExecutor.runTask(AbstractEventExecutor.java:148)",
+    "io.netty.util.concurrent.AbstractEventExecutor.safeExecute(AbstractEventExecutor.java:141)",
+    "io.netty.util.concurrent.SingleThreadEventExecutor.runAllTasks(SingleThreadEventExecutor.java:535)",
+    "io.netty.channel.SingleThreadIoEventLoop.run(SingleThreadIoEventLoop.java:201)",
+    "io.netty.util.concurrent.SingleThreadEventExecutor$5.run(SingleThreadEventExecutor.java:1204)",
+    "io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+fn netty_write_path(path: NettyPath) -> Vec<&'static str> {
+    let mut frames = vec![
+        "io.netty.handler.codec.MessageToByteEncoder.write(MessageToByteEncoder.java:107)",
+        ABSTRACT_CHANNEL_HANDLER_CONTEXT_WRITE,
+        "io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:737)",
+    ];
+    if path == NettyPath::Bundle {
+        frames.push("io.netty.handler.codec.MessageToMessageEncoder.writeVoidPromise(MessageToMessageEncoder.java:133)");
+        frames.push("io.netty.handler.codec.MessageToMessageEncoder.write(MessageToMessageEncoder.java:118)");
+    } else {
+        frames.push(MESSAGE_TO_MESSAGE_ENCODER_WRITE);
+    }
+    frames.extend([
+        ABSTRACT_CHANNEL_HANDLER_CONTEXT_WRITE,
+        "io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:737)",
+        "io.netty.channel.ChannelOutboundHandlerAdapter.write(ChannelOutboundHandlerAdapter.java:113)",
+        "net.minecraft.network.Connection$2.write(Connection.java:487)",
+        ABSTRACT_CHANNEL_HANDLER_CONTEXT_WRITE,
+    ]);
+    if path == NettyPath::Listener {
+        frames.extend([
+            "io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:731)",
+            "io.netty.channel.DefaultChannelPipeline.write(DefaultChannelPipeline.java:1031)",
+            "io.netty.channel.Channel.write(Channel.java:272)",
+            "net.minecraft.network.Connection.doSendPacket(Connection.java:323)",
+        ]);
+    } else {
+        frames.extend([
+            "io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:737)",
+            "io.netty.channel.DefaultChannelPipeline.write(DefaultChannelPipeline.java:1036)",
+            "io.netty.channel.Channel.write(Channel.java:267)",
+            "net.minecraft.network.Connection.doSendPacket(Connection.java:329)",
+        ]);
+    }
+    frames.push("net.minecraft.network.Connection.lambda$sendPacket$0(Connection.java:317)");
+    frames.extend(EVENT_LOOP_TAIL);
+    frames
+}
+
+fn throwable_from_fault(fault: &Fault) -> JavaThrowable {
+    let throwable = JavaThrowable::new(fault.description.clone(), fault.frames.clone());
+    match &fault.cause {
+        Some(cause) => throwable.with_cause(throwable_from_fault(cause)),
+        None => throwable,
+    }
+}
+
+pub(super) struct EncoderException {
+    pub(super) packet_type: String,
+    pub(super) wrapper: JavaThrowable,
+    path: NettyPath,
+}
+
+impl EncoderException {
+    pub(super) fn skip(&self) -> JavaThrowable {
+        let mut frames = vec!["net.minecraft.network.PacketEncoder.encode(PacketEncoder.java:43)", "net.minecraft.network.PacketEncoder.encode(PacketEncoder.java:12)"];
+        frames.extend(netty_write_path(self.path));
+        JavaThrowable::new(format!("net.minecraft.network.SkipPacketEncoderException: {}", self.wrapper.description), frames).with_cause(self.wrapper.clone())
+    }
+}
+
+pub(super) fn encoder_exception(id: i32, fault: Fault, path: NettyPath) -> EncoderException {
     let packet_type = format!("clientbound/{}", wafer_data::packet_name("play", "clientbound", id).unwrap_or_default());
-    let wrapper = format!("io.netty.handler.codec.EncoderException: Failed to encode packet '{packet_type}'");
-    let causes = chain.lines().map(|line| if line.starts_with('\t') { format!("\n{line}") } else { format!("\nCaused by: {line}") }).collect();
-    (packet_type, wrapper, causes)
+    let description = format!("io.netty.handler.codec.EncoderException: Failed to encode packet '{packet_type}'");
+    let mut wrapper = JavaThrowable::new(description, vec!["net.minecraft.network.codec.IdDispatchCodec.encode(IdDispatchCodec.java:61)"]).with_cause(throwable_from_fault(&fault));
+    wrapper.push_frames(&["net.minecraft.network.codec.IdDispatchCodec.encode(IdDispatchCodec.java:14)", "net.minecraft.network.PacketEncoder.encode(PacketEncoder.java:26)", "net.minecraft.network.PacketEncoder.encode(PacketEncoder.java:12)"]);
+    wrapper.push_frames(&netty_write_path(path));
+    EncoderException { packet_type, wrapper, path }
+}
+
+fn bundle_path(bundled: bool) -> NettyPath {
+    if bundled { NettyPath::Bundle } else { NettyPath::Plain }
+}
+
+fn packet_id(packet: &[u8]) -> Option<i32> {
+    Reader::new(packet).varint().ok()
 }
 
 fn is_skippable(id: i32) -> bool {
@@ -280,20 +377,24 @@ pub fn spawn_io(
         }
     });
     tokio::spawn(async move {
+        let mut bundled = false;
         while let Some(first) = rx.recv().await {
             let mut frames = Vec::new();
             let mut fault = None;
             let mut next = Some(first);
             while let Some(item) = next.take().or_else(|| rx.try_recv().ok()) {
                 let packet = split_fallback(&item).1;
-                if let Some((id, chain)) = encoding_fault(packet) {
-                    let (packet_type, wrapper, causes) = encoder_exception(id, chain);
-                    error!(thread: &write_thread, "Error sending packet {packet_type}\n{wrapper}{causes}");
+                if let Some((id, encoding_fault)) = encoding_fault(packet) {
+                    let encoder_exception = encoder_exception(id, encoding_fault, bundle_path(bundled));
+                    error!(thread: &write_thread, "Error sending packet {}\n{}", encoder_exception.packet_type, encoder_exception.wrapper.print_stack_trace().trim_end());
                     if is_skippable(id) {
                         continue;
                     }
-                    fault = Some(vec![wrapper]);
+                    fault = Some(vec![encoder_exception.wrapper.description]);
                     break;
+                }
+                if packet_id(packet) == Some(wafer_data::packets::play::clientbound::BUNDLE_DELIMITER) {
+                    bundled = !bundled;
                 }
                 match w.codec.try_encode(packet) {
                     Ok(frame) => {
@@ -313,9 +414,16 @@ pub fn spawn_io(
                 rx.close();
                 while let Ok(item) = rx.try_recv() {
                     let (fallback_type, packet) = split_fallback(&item);
-                    if let Some((id, chain)) = encoding_fault(packet) {
-                        let (packet_type, wrapper, causes) = encoder_exception(id, chain);
-                        error!(thread: &write_thread, "Error sending packet {packet_type}\n{wrapper}{causes}");
+                    if packet_id(packet) == Some(wafer_data::packets::play::clientbound::BUNDLE_DELIMITER) {
+                        bundled = !bundled;
+                        continue;
+                    }
+                    if bundled {
+                        continue;
+                    }
+                    if let Some((id, encoding_fault)) = encoding_fault(packet) {
+                        let encoder_exception = encoder_exception(id, encoding_fault, NettyPath::Plain);
+                        error!(thread: &write_thread, "Error sending packet {}\n{}", encoder_exception.packet_type, encoder_exception.wrapper.print_stack_trace().trim_end());
                     } else if let Some(fallback_type) = fallback_type {
                         let name = wafer_data::packet_name("play", "clientbound", fallback_type).unwrap_or_default();
                         warn!(thread: &write_thread, "Failed to deliver packet, sending fallback clientbound/{name}\nio.netty.channel.StacklessClosedChannelException\n\tat io.netty.channel.AbstractChannel$AbstractUnsafe.write(Object, ChannelPromise)(Unknown Source)");
@@ -370,12 +478,12 @@ mod tests {
         let ok = encode(SYSTEM_CHAT, |w| w.string("hi"));
         assert!(encoding_fault(&ok).is_none());
         let faulted = encode(SET_ENTITY_DATA, |w| w.string(&"a".repeat(40000)));
-        let (id, chain) = encoding_fault(&faulted).unwrap();
+        let (id, fault) = encoding_fault(&faulted).unwrap();
         assert_eq!(id, SET_ENTITY_DATA);
-        let (packet_type, wrapper, causes) = encoder_exception(id, chain);
-        assert_eq!(packet_type, "clientbound/minecraft:set_entity_data");
-        assert_eq!(wrapper, "io.netty.handler.codec.EncoderException: Failed to encode packet 'clientbound/minecraft:set_entity_data'");
-        assert_eq!(causes, "\nCaused by: io.netty.handler.codec.EncoderException: String too big (was 40000 characters, max 32767)");
+        let exception = encoder_exception(id, fault, NettyPath::Plain);
+        assert_eq!(exception.packet_type, "clientbound/minecraft:set_entity_data");
+        assert_eq!(exception.wrapper.description, "io.netty.handler.codec.EncoderException: Failed to encode packet 'clientbound/minecraft:set_entity_data'");
+        assert_eq!(exception.wrapper.cause.as_deref().map(|cause| cause.description.as_str()), Some("io.netty.handler.codec.EncoderException: String too big (was 40000 characters, max 32767)"));
         assert!(is_skippable(SYSTEM_CHAT));
         assert!(!is_skippable(SET_ENTITY_DATA));
     }

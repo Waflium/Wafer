@@ -7,6 +7,7 @@ use super::entity::command_block_entity::Mode;
 use super::mirror::Mirror;
 use super::rotation::Rotation;
 use super::{BlockBehaviour, BlockHitResult};
+use crate::network::protocol::game::clientbound_block_entity_data_packet;
 use crate::server::Server;
 use crate::server::command_origin::CommandOrigin;
 use crate::server::level::ServerLevel;
@@ -96,11 +97,7 @@ impl ServerLevel {
         let Some(entity) = self.get_block_entity(pos) else { return };
         let tag = entity.save_custom_only();
         let ty = entity.ty();
-        self.player(player).connection.send(clientbound::BLOCK_ENTITY_DATA, |p| {
-            p.position(pos.x, pos.y, pos.z);
-            p.varint(ty.0 as i32);
-            tag.write(p);
-        });
+        self.player(player).connection.send(clientbound::BLOCK_ENTITY_DATA, |p| clientbound_block_entity_data_packet::write(p, pos, ty.0 as i32, &tag));
     }
 }
 

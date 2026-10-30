@@ -596,7 +596,11 @@ impl Component {
     }
 
     pub fn write(&self, w: &mut wafer_protocol::Writer) {
-        self.to_nbt().write(w);
+        w.layer(wafer_protocol::stream_codec::FROM_CODEC, |w| self.to_nbt().write(w));
+    }
+
+    pub fn write_trusted_context_free(&self, w: &mut wafer_protocol::Writer) {
+        w.layer(wafer_protocol::stream_codec::MAP, |w| w.layer(wafer_protocol::stream_codec::COMPOUND_TAG_CODEC, |w| self.to_nbt().write(w)));
     }
 
     pub fn get_string_with_limit(&self, limit: usize) -> String {

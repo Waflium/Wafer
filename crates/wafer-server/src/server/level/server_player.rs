@@ -23,6 +23,7 @@ use crate::network::chat::remote_chat_session::RemoteChatSession;
 use crate::network::chat::{Arg, ChatFormatting, Component};
 use crate::network::configuration::ClientInfo;
 use crate::network::connection::Outbound;
+use crate::network::protocol::game::{clientbound_player_combat_kill_packet, clientbound_system_chat_packet};
 use crate::network::login::Profile;
 use crate::util::codec::{self, DecodeResult};
 use crate::core::global_pos::GlobalPos;
@@ -227,18 +228,12 @@ impl ServerPlayer {
             self.accepts_system_messages(false).then(|| {
                 let contents = Component::literal(message.get_string_with_limit(256)).with_color(ChatFormatting::Yellow);
                 let message = Component::translatable_with("multiplayer.message_not_delivered", vec![Arg::Component(contents)]).with_color(ChatFormatting::Red);
-                crate::network::connection::encode(clientbound::SYSTEM_CHAT, |w| {
-                    message.write(w);
-                    w.bool(false);
-                })
+                crate::network::connection::encode(clientbound::SYSTEM_CHAT, |w| clientbound_system_chat_packet::write(w, &message, false))
             })
         };
         self.connection.send_with_fallback(
             clientbound::SYSTEM_CHAT,
-            |w| {
-                message.write(w);
-                w.bool(overlay);
-            },
+            |w| clientbound_system_chat_packet::write(w, message, overlay),
             self.accepts_system_messages(false).then_some(clientbound::SYSTEM_CHAT),
             fallback,
         );
@@ -675,7 +670,7 @@ impl ServerPlayer {
     }
 
     pub fn disconnect_with(&mut self, reason: crate::network::chat::Component) {
-        self.connection.send(clientbound::DISCONNECT, |p| reason.write(p));
+        self.connection.send(clientbound::DISCONNECT, |p| reason.write_trusted_context_free(p));
         self.disconnected = true;
         self.disconnect_reason = Some(reason.get_string());
     }
@@ -1031,17 +1026,11 @@ impl ServerLevel {
                 let explanation = Component::translatable_with("death.attack.message_too_long", vec![Arg::Component(Component::literal(truncated_death_message).with_color(ChatFormatting::Yellow))]);
                 let fake_death_message = Component::translatable_with("death.attack.even_more_magic", vec![Arg::Component(display_name)])
                     .with_hover(crate::network::chat::HoverEvent::ShowText(Box::new(explanation)));
-                Some(crate::network::connection::encode(clientbound::PLAYER_COMBAT_KILL, |p| {
-                    p.varint(id);
-                    fake_death_message.write(p);
-                }))
+                Some(crate::network::connection::encode(clientbound::PLAYER_COMBAT_KILL, |p| clientbound_player_combat_kill_packet::write(p, id, &fake_death_message)))
             };
             self.player(id).connection.send_with_fallback(
                 clientbound::PLAYER_COMBAT_KILL,
-                |p| {
-                    p.varint(id);
-                    message.write(p);
-                },
+                |p| clientbound_player_combat_kill_packet::write(p, id, &message),
                 Some(clientbound::PLAYER_COMBAT_KILL),
                 fallback,
             );
@@ -1052,10 +1041,7 @@ impl ServerLevel {
                 Some(Visibility::Never) => {}
             }
         } else {
-            self.player(id).connection.send(clientbound::PLAYER_COMBAT_KILL, |p| {
-                p.varint(id);
-                crate::network::chat::Component::empty().write(p);
-            });
+            self.player(id).connection.send(clientbound::PLAYER_COMBAT_KILL, |p| clientbound_player_combat_kill_packet::write(p, id, &crate::network::chat::Component::empty()));
         }
         self.remove_entities_on_shoulder(id);
         if self.game_rules.get_bool(game_rule::FORGIVE_DEAD_PLAYERS) {

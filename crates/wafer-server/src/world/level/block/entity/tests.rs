@@ -375,3 +375,44 @@ fn creaking_hearts_keep_their_creaking() {
     assert_eq!(saved.get("extra"), None);
     assert!(level.get_block_entity(pos).unwrap().has_update_packet());
 }
+
+#[test]
+fn chunk_packets_with_oversized_block_entity_text_fail_like_vanillas_codecs() {
+    let (mut level, _) = level_with_player();
+    let pos = BlockPos::new(3, -60, 5);
+    level.set_block(pos, blocks::OAK_SIGN.default_state(), UPDATE_ALL);
+    let messages = Nbt::List(vec![Nbt::String("a".repeat(70000)), Nbt::String(String::new()), Nbt::String(String::new()), Nbt::String(String::new())]);
+    let tag = Nbt::Compound(vec![
+        ("id".into(), Nbt::String("minecraft:sign".into())),
+        ("x".into(), Nbt::Int(3)),
+        ("y".into(), Nbt::Int(-60)),
+        ("z".into(), Nbt::Int(5)),
+        ("front_text".into(), Nbt::Compound(vec![("messages".into(), messages)])),
+    ]);
+    level.get_block_entity(pos).unwrap().load_with_components(&tag);
+    let packet = crate::network::connection::encode(wafer_data::packets::play::clientbound::LEVEL_CHUNK_WITH_LIGHT, |w| level.chunks.write_chunk_with_light(pos.chunk(), w));
+    let (_, fault) = crate::network::connection::encoding_fault(&packet).expect("the chunk packet fails to encode");
+    let short = |frame: &&'static str| {
+        let (path, location) = frame.split_once('(').unwrap();
+        format!("{}({location}", path.rsplit_once('.').unwrap().1)
+    };
+    let outer: Vec<String> = fault.frames.iter().map(short).collect();
+    assert_eq!(
+        outer,
+        [
+            "writeNbt(FriendlyByteBuf.java:461)",
+            "encode(ByteBufCodecs.java:395)",
+            "encode(ByteBufCodecs.java:387)",
+            "encode(StreamCodec.java:214)",
+            "encode(ByteBufCodecs.java:492)",
+            "encode(ByteBufCodecs.java:477)",
+            "encode(StreamCodec.java:187)",
+            "encode(StreamCodec.java:213)",
+            "encode(StreamCodec.java:103)",
+            "encode(StreamCodec.java:93)",
+            "encode(IdDispatchCodec.java:56)",
+        ]
+    );
+    let root: Vec<String> = fault.root().frames.iter().map(short).collect();
+    assert_eq!(root[..8], ["writeUTF(DataOutputStream.java:370)", "writeUTF(DataOutputStream.java:338)", "writeUTF(ByteBufOutputStream.java:160)", "write(StringTag.java:76)", "write(ListTag.java:193)", "writeNamedTag(CompoundTag.java:506)", "write(CompoundTag.java:208)", "writeNamedTag(CompoundTag.java:506)"]);
+}

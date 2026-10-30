@@ -1,5 +1,5 @@
-use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
+use wafer_protocol::{Writer, stream_codec};
 
 use super::map_decoration_type::MapDecorationTypeHolder;
 
@@ -24,7 +24,7 @@ impl MapDecoration {
         w.u8(self.rot as u8);
         w.bool(self.name.is_some());
         if let Some(name) = &self.name {
-            name.write(w);
+            w.layer(&[stream_codec::composite(5, 5)], |w| w.layer(stream_codec::OPTIONAL, |w| name.write(w)));
         }
     }
 }

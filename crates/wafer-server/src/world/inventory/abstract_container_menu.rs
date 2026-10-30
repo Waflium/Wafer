@@ -1,6 +1,7 @@
 use wafer_core::BlockPos;
 use wafer_data::packets::play::clientbound;
 use wafer_data::{EquipmentSlot, registry, registry_id};
+use wafer_protocol::{Frame, stream_codec};
 
 use super::beacon_menu::PAYMENT_SLOT;
 use super::crafter_menu::{INV_SLOT_START, SLOT_COUNT, USE_ROW_SLOT_END};
@@ -28,6 +29,8 @@ use crate::world::item::crafting::recipe_manager::RecipeManager;
 use crate::world::item::crafting::recipe_property_set::{BLAST_FURNACE_INPUT, CAMPFIRE_INPUT, FURNACE_INPUT, RecipePropertySetKey, SMOKER_INPUT};
 use crate::world::item::crafting::recipe_type::RecipeType;
 use crate::world::item::{ItemStack, write_slot};
+
+const CONTAINER_SET_SLOT_WRITE: [Frame; 1] = [Frame::Fixed("net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket.write(ClientboundContainerSetSlotPacket.java:35)")];
 use crate::world::level::block::entity::crafter_block_entity::NUM_DATA;
 use crate::world::simple_container::{SimpleContainer, SimpleContainerKind};
 
@@ -1218,7 +1221,7 @@ impl ServerLevel {
             if !menu.remote_carried.matches(&carried) {
                 menu.remote_carried.force(&carried);
                 if menu.has_synchronizer {
-                    self.player(player).connection.send(clientbound::SET_CURSOR_ITEM, |w| write_slot(w, Some(&carried)));
+                    self.player(player).connection.send(clientbound::SET_CURSOR_ITEM, |w| w.layer(&[stream_codec::composite(1, 1)], |w| write_slot(w, Some(&carried))));
                 }
             }
         }
@@ -1236,10 +1239,14 @@ impl ServerLevel {
 
     pub fn send_container_set_slot(&self, player: EntityId, container_id: i32, state_id: i32, slot: usize, stack: &ItemStack) {
         self.player(player).connection.send(clientbound::CONTAINER_SET_SLOT, |w| {
-            w.varint(container_id);
-            w.varint(state_id);
-            w.i16(slot as i16);
-            write_slot(w, Some(stack));
+            w.layer(stream_codec::OF_MEMBER, |w| {
+                w.layer(&CONTAINER_SET_SLOT_WRITE, |w| {
+                    w.varint(container_id);
+                    w.varint(state_id);
+                    w.i16(slot as i16);
+                    write_slot(w, Some(stack));
+                });
+            });
         });
     }
 
@@ -1277,9 +1284,11 @@ impl ServerLevel {
             self.player(player).connection.send(clientbound::CONTAINER_SET_CONTENT, |w| {
                 w.varint(container_id);
                 w.varint(state_id);
-                w.varint(items.len() as i32);
-                items.iter().for_each(|s| write_slot(w, Some(s)));
-                write_slot(w, Some(&carried));
+                w.layer(&[stream_codec::composite(4, 3)], |w| {
+                    w.varint(items.len() as i32);
+                    w.layer(stream_codec::COLLECTION, |w| items.iter().for_each(|s| write_slot(w, Some(s))));
+                });
+                w.layer(&[stream_codec::composite(4, 4)], |w| write_slot(w, Some(&carried)));
             });
             for i in 0..menu.data_count() {
                 self.send_container_data(player, container_id, i, menu.remote_data_slots[i]);
@@ -1387,7 +1396,7 @@ impl ServerLevel {
             if should_send_set_slot_packet && let Some(index) = crate::world::item::inventory_index(slot) {
                 p.connection.send(clientbound::SET_PLAYER_INVENTORY, |w| {
                     w.varint(index as i32);
-                    write_slot(w, Some(&item));
+                    w.layer(&[stream_codec::composite(2, 2)], |w| write_slot(w, Some(&item)));
                 });
             }
         }

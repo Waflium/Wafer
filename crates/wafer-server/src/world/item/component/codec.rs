@@ -1,7 +1,7 @@
 use wafer_core::java_string::JavaStr;
 use wafer_protocol::lazily_parsed_number;
 use wafer_protocol::nbt::Nbt;
-use wafer_protocol::{Reader, Writer};
+use wafer_protocol::{Frame, Reader, Writer, stream_codec};
 
 use crate::commands::arguments::parse_identifier;
 use crate::nbt;
@@ -954,9 +954,12 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
             let items = elements(codec, value);
             write_count(w, items.len(), *max)?;
             let elem = element_codec(codec);
-            for item in items {
-                write(elem, elem_stream, item, w)?;
-            }
+            w.layer(stream_codec::COLLECTION, |w| {
+                for item in items {
+                    write(elem, elem_stream, item, w)?;
+                }
+                Ok::<(), String>(())
+            })?;
         }
         Stream::FixedList(elem_stream, size) => {
             let items = elements(codec, value);
@@ -1001,7 +1004,7 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
                 write(b, right, value, w)?;
             }
         }
-        Stream::Nbt => value.write(w),
+        Stream::Nbt => w.layer(stream_codec::FROM_CODEC, |w| value.write(w)),
         Stream::Uuid => {
             let v = match value {
                 Nbt::IntArray(v) if v.len() == 4 => v.clone(),
@@ -1019,18 +1022,20 @@ pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Res
 }
 
 fn write_fields(fields: &[Field], value: &Nbt, w: &mut Writer) -> Result<(), String> {
-    for field in fields {
+    for (index, field) in fields.iter().enumerate() {
         let present = value.get(field.name);
-        match (&field.kind, present) {
-            (Kind::Optional | Kind::LenientOptional, None) => w.bool(false),
+        let composite = [stream_codec::composite(fields.len() as u8, index as u8 + 1)];
+        let frames: &[Frame] = if (1..=stream_codec::MAX_COMPOSITE_SIZE).contains(&fields.len()) { &composite } else { &[] };
+        w.layer(frames, |w| match (&field.kind, present) {
+            (Kind::Optional | Kind::LenientOptional, None) => Ok(w.bool(false)),
             (Kind::Optional | Kind::LenientOptional, Some(v)) => {
                 w.bool(true);
-                write(&field.codec, &field.stream, v, w)?;
+                w.layer(stream_codec::OPTIONAL, |w| write(&field.codec, &field.stream, v, w))
             }
-            (Kind::Default(d) | Kind::Lenient(d) | Kind::AlwaysPresent(d), v) => write(&field.codec, &field.stream, v.unwrap_or(d), w)?,
-            (Kind::Required | Kind::Plain, Some(v)) => write(&field.codec, &field.stream, v, w)?,
-            (Kind::Required | Kind::Plain, None) => return Err(format!("missing field {}", field.name)),
-        }
+            (Kind::Default(d) | Kind::Lenient(d) | Kind::AlwaysPresent(d), v) => write(&field.codec, &field.stream, v.unwrap_or(d), w),
+            (Kind::Required | Kind::Plain, Some(v)) => write(&field.codec, &field.stream, v, w),
+            (Kind::Required | Kind::Plain, None) => Err(format!("missing field {}", field.name)),
+        })?;
     }
     Ok(())
 }
