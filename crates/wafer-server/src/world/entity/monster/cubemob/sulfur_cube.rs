@@ -217,12 +217,11 @@ impl Mob {
             bucket.set(dc::SULFUR_CUBE_CONTENT, Some(crate::world::item::component::bundle_contents::template_of(body)));
         }
         let mut tag = match bucket.get(dc::BUCKET_ENTITY_DATA) {
-            Some(Nbt::Compound(tag)) => tag.clone(),
+            Some(Nbt::Compound(tag)) => tag.copy(),
             _ => Vec::new().into(),
         };
-        tag.retain(|(key, _)| key != "age" && key != "age_locked");
-        tag.push(("age".into(), Nbt::Int(self.ageable().map_or(0, |ageable| ageable.age))));
-        tag.push(("age_locked".into(), Nbt::Byte(self.is_age_locked() as i8)));
+        tag.put("age", Nbt::Int(self.ageable().map_or(0, |ageable| ageable.age)));
+        tag.put("age_locked", Nbt::Byte(self.is_age_locked() as i8));
         bucket.set(dc::BUCKET_ENTITY_DATA, Some(Nbt::Compound(tag)));
     }
 

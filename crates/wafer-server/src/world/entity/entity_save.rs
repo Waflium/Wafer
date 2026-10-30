@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use wafer_core::hash_map::java_hash_map_order;
 use wafer_core::random::{RandomSource, java_string_hash};
 use wafer_core::{AABB, Axis, BlockPos, Vec3, mth};
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::data::{DataValue, ids};
 use super::entity_spawn_reason::EntitySpawnReason;
@@ -68,7 +68,7 @@ pub fn decode_uuid(tag: &Nbt) -> DecodeResult<u128> {
 
 pub fn decode_custom_data(tag: &Nbt) -> Result<Nbt, String> {
     let flattened_error = match tag {
-        Nbt::Compound(_) => return Ok(tag.clone()),
+        Nbt::Compound(_) => return Ok(tag.copy()),
         Nbt::String(snbt) => match crate::nbt::parse_fully(snbt) {
             Ok(parsed @ Nbt::Compound(_)) => return Ok(parsed),
             Ok(other) => format!("Expected compound tag, got {}", crate::nbt::to_string(&other)),
@@ -131,7 +131,7 @@ impl Entity {
             out.push(("Tags".into(), Nbt::List(tags)));
         }
         if let Some(data) = self.custom_data.as_ref().filter(|d| !matches!(d, Nbt::Compound(f) if f.is_empty())) {
-            out.push(("data".into(), data.clone()));
+            out.push(("data".into(), data.copy()));
         }
     }
 
@@ -578,12 +578,13 @@ fn update_custom_entity_tag(level: &ServerLevel, entity: &mut LevelEntity, entit
         return None;
     }
     let mut collector = tag_value_input::ScopedCollector::new_empty(TYPED_ENTITY_DATA_LOGGER);
-    let unsafe_data: Vec<(String, Nbt)> = fields.iter().filter(|(k, _)| k != "id").cloned().collect();
-    let mut tag = Vec::new();
-    entity.save_without_id(&mut tag);
+    let (_, Nbt::Compound(unsafe_data)) = crate::world::item::component::values::typed_entity_data(entity_data) else { unreachable!("typed entity data is a compound") };
+    let mut saved = Vec::new();
+    entity.save_without_id(&mut saved);
+    let mut tag: TagMap = saved.into();
     let uuid = entity.entity().uuid;
-    crate::nbt::merge(&mut tag, &unsafe_data);
-    let tag = Nbt::Compound(tag.into());
+    tag.merge(&unsafe_data);
+    let tag = Nbt::Compound(tag);
     let converted = level.with_old_owner_converted(entity, &tag);
     if let Err(e) = entity.load_in_level(&converted, &level.scoreboard) {
         panic!("{}", loading_entity_report(&e));

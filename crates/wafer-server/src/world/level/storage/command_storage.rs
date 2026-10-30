@@ -3,7 +3,7 @@ use std::io;
 use std::path::PathBuf;
 
 use wafer_data::WORLD_VERSION;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::{read_saved_data_dat, write_dat};
 
@@ -14,7 +14,7 @@ pub struct CommandStorage {
 
 #[derive(Default)]
 struct Container {
-    storage: Vec<(String, Vec<(String, Nbt)>)>,
+    storage: Vec<(String, TagMap)>,
     dirty: bool,
 }
 
@@ -41,19 +41,19 @@ impl CommandStorage {
         self.namespaces.get_mut(namespace).unwrap().as_mut()
     }
 
-    pub fn get(&mut self, id: &str) -> Vec<(String, Nbt)> {
+    pub fn get(&mut self, id: &str) -> TagMap {
         let (namespace, path) = id.split_once(':').unwrap();
         self.container(namespace).and_then(|c| c.storage.iter().find(|(p, _)| p == path)).map(|(_, tag)| tag.clone()).unwrap_or_default()
     }
 
-    pub fn write_back(&mut self, id: &str, contents: Vec<(String, Nbt)>) {
+    pub fn write_back(&mut self, id: &str, contents: TagMap) {
         let (namespace, path) = id.split_once(':').unwrap();
         if let Some(entry) = self.container(namespace).and_then(|c| c.storage.iter_mut().find(|(p, _)| p == path)) {
             entry.1 = contents;
         }
     }
 
-    pub fn set(&mut self, id: &str, contents: Vec<(String, Nbt)>) {
+    pub fn set(&mut self, id: &str, contents: TagMap) {
         let (namespace, path) = id.split_once(':').unwrap();
         if self.container(namespace).is_none() {
             self.namespaces.insert(namespace.to_string(), Some(Container::default()));
@@ -89,14 +89,14 @@ impl Container {
     fn from_nbt(data: &Nbt) -> Option<Container> {
         let Some(Nbt::Compound(contents)) = data.get("contents") else { return None };
         let storage = contents.iter().filter_map(|(path, tag)| match tag {
-            Nbt::Compound(fields) => Some((path.clone(), fields.to_vec())),
+            Nbt::Compound(fields) => Some((path.clone(), fields.copy())),
             _ => None,
         });
         Some(Container { storage: storage.collect(), dirty: false })
     }
 
     fn to_nbt(&self) -> Nbt {
-        let contents = self.storage.iter().map(|(path, fields)| (path.clone(), Nbt::Compound(fields.clone().into()))).collect();
+        let contents = self.storage.iter().map(|(path, fields)| (path.clone(), Nbt::Compound(fields.copy()))).collect();
         Nbt::Compound(vec![("contents".into(), Nbt::Compound(contents))].into())
     }
 }
@@ -109,14 +109,14 @@ mod tests {
     fn saves_per_namespace() {
         let dir = std::env::temp_dir().join(format!("wafer-command-storage-{}", std::process::id()));
         let mut storage = CommandStorage::new(Some(dir.clone()));
-        storage.set("a:x", vec![("v".into(), Nbt::Int(1))]);
-        storage.set("b:y/z", vec![("w".into(), Nbt::String("s".into()))]);
+        storage.set("a:x", vec![("v".into(), Nbt::Int(1))].into());
+        storage.set("b:y/z", vec![("w".into(), Nbt::String("s".into()))].into());
         storage.save().unwrap();
         assert!(dir.join("a/command_storage.dat").exists() && dir.join("b/command_storage.dat").exists());
         let mut loaded = CommandStorage::new(Some(dir.clone()));
-        assert_eq!(loaded.get("a:x"), vec![("v".to_string(), Nbt::Int(1))]);
-        assert_eq!(loaded.get("b:y/z"), vec![("w".to_string(), Nbt::String("s".into()))]);
-        assert_eq!(loaded.get("c:none"), Vec::new());
+        assert_eq!(Nbt::Compound(loaded.get("a:x")), Nbt::Compound(vec![("v".to_string(), Nbt::Int(1))].into()));
+        assert_eq!(Nbt::Compound(loaded.get("b:y/z")), Nbt::Compound(vec![("w".to_string(), Nbt::String("s".into()))].into()));
+        assert_eq!(Nbt::Compound(loaded.get("c:none")), Nbt::Compound(TagMap::new()));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

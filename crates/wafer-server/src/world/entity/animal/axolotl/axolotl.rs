@@ -244,18 +244,14 @@ impl Axolotl {
         bucketable::save_default_data_to_bucket_tag(mob, bucket);
         bucket.set(dc::AXOLOTL_VARIANT, Some(Nbt::String(get_variant(&mob.entity).get_serialized_name().into())));
         let mut tag = match bucket.get(dc::BUCKET_ENTITY_DATA) {
-            Some(Nbt::Compound(tag)) => tag.clone(),
+            Some(Nbt::Compound(tag)) => tag.copy(),
             _ => Vec::new().into(),
         };
-        let mut put = |key: &str, value: Nbt| {
-            tag.retain(|(k, _)| k != key);
-            tag.push((key.to_string(), value));
-        };
-        put("Age", Nbt::Int(mob.ageable().expect("an axolotl").age));
-        put("AgeLocked", Nbt::Byte(mob.is_age_locked() as i8));
+        tag.put("Age", Nbt::Int(mob.ageable().expect("an axolotl").age));
+        tag.put("AgeLocked", Nbt::Byte(mob.is_age_locked() as i8));
         let brain = &mob.living.brain;
         if brain.has_memory_value(memory_module_type::HAS_HUNTING_COOLDOWN) {
-            put("HuntingCooldown", Nbt::Long(brain.get_time_until_expiry(memory_module_type::HAS_HUNTING_COOLDOWN)));
+            tag.put("HuntingCooldown",Nbt::Long(brain.get_time_until_expiry(memory_module_type::HAS_HUNTING_COOLDOWN)));
         }
         bucket.set(dc::BUCKET_ENTITY_DATA, Some(Nbt::Compound(tag)));
     }

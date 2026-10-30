@@ -300,7 +300,7 @@ pub fn compound_tag(tag: &Nbt) -> DecodeResult<Nbt> {
         );
     }
     match tag {
-        Nbt::Compound(_) => DecodeResult::success(tag.clone()),
+        Nbt::Compound(_) => DecodeResult::success(tag.copy()),
         other if is_json_value() => DecodeResult::error(format!("Not a compound tag: {}", crate::nbt::to_snbt(&convert_json_to_nbt_ops(other)))),
         other => DecodeResult::error(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
     }

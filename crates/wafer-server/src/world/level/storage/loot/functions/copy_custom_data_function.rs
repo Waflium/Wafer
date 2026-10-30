@@ -25,7 +25,7 @@ impl MergeStrategy {
             MergeStrategy::Append => {
                 let _ = path.get_or_create_each(target, &|| Nbt::List(Vec::new()), |tag| {
                     if let Nbt::List(list) = tag {
-                        list.extend(sources.iter().cloned());
+                        list.extend(sources.iter().map(Nbt::copy));
                     }
                     Ok(0)
                 });
@@ -35,7 +35,7 @@ impl MergeStrategy {
                     if let Nbt::Compound(fields) = tag {
                         for source in sources {
                             if let Nbt::Compound(source_fields) = source {
-                                crate::nbt::merge(fields, source_fields);
+                                fields.merge(source_fields);
                             }
                         }
                     }
@@ -85,13 +85,13 @@ impl CopyCustomDataFunction {
             if let Ok(source_tags) = op.source_path.get(&source_tag)
                 && !source_tags.is_empty()
             {
-                let target = result.get_or_insert_with(|| item_stack.get(dc::CUSTOM_DATA).cloned().unwrap_or(Nbt::Compound(Vec::new().into())));
+                let target = result.get_or_insert_with(|| item_stack.get(dc::CUSTOM_DATA).map_or(Nbt::Compound(Vec::new().into()), Nbt::copy));
                 op.op.merge(target, &op.target_path, &source_tags);
             }
         }
         if let Some(result_tag) = result {
             let empty = matches!(&result_tag, Nbt::Compound(fields) if fields.is_empty());
-            item_stack.set(dc::CUSTOM_DATA, if empty { None } else { Some(result_tag) });
+            item_stack.set(dc::CUSTOM_DATA, if empty { None } else { Some(result_tag.copy()) });
         }
         item_stack
     }

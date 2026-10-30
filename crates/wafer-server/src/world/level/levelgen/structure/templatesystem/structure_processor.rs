@@ -4,7 +4,7 @@ use std::sync::{LazyLock, OnceLock};
 use wafer_core::random::{LegacyRandomSource, RandomSource};
 use wafer_core::{BlockPos, mth};
 use wafer_data::BlockState;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 use serde_json::Value;
 
 use super::pos_rule_test::{self, PosRuleTest};
@@ -50,14 +50,7 @@ pub enum RuleBlockEntityModifier {
     Passthrough,
     Clear,
     AppendLoot(String),
-    AppendStatic(Vec<(String, Nbt)>),
-}
-
-fn put(tag: &mut Vec<(String, Nbt)>, key: &str, value: Nbt) {
-    match tag.iter_mut().find(|(k, _)| k == key) {
-        Some((_, existing)) => *existing = value,
-        None => tag.push((key.to_owned(), value)),
-    }
+    AppendStatic(TagMap),
 }
 
 impl RuleBlockEntityModifier {
@@ -79,7 +72,7 @@ impl RuleBlockEntityModifier {
             "passthrough" => RuleBlockEntityModifier::Passthrough,
             "append_loot" => RuleBlockEntityModifier::AppendLoot(resource(json.get("loot_table").and_then(Value::as_str).ok_or("missing loot_table")?)),
             "append_static" => match json.get("data").and_then(crate::nbt::from_json) {
-                Some(Nbt::Compound(tag)) => RuleBlockEntityModifier::AppendStatic(tag.into_vec()),
+                Some(Nbt::Compound(tag)) => RuleBlockEntityModifier::AppendStatic(tag),
                 _ => return Err("append_static without compound data".into()),
             },
             other => return Err(format!("unknown block entity modifier {other}")),
@@ -92,19 +85,19 @@ impl RuleBlockEntityModifier {
             RuleBlockEntityModifier::Clear => Some(Nbt::Compound(Vec::new().into())),
             RuleBlockEntityModifier::AppendLoot(loot_table) => {
                 let mut result = match existing_tag {
-                    Some(Nbt::Compound(tag)) => tag,
-                    _ => Vec::new().into(),
+                    Some(Nbt::Compound(tag)) => tag.copy(),
+                    _ => TagMap::new(),
                 };
-                put(&mut result, "LootTable", Nbt::String(loot_table.clone()));
-                put(&mut result, "LootTableSeed", Nbt::Long(random.next_long()));
+                result.put("LootTable", Nbt::String(loot_table.clone()));
+                result.put("LootTableSeed", Nbt::Long(random.next_long()));
                 Some(Nbt::Compound(result))
             }
             RuleBlockEntityModifier::AppendStatic(tag) => match existing_tag {
                 Some(Nbt::Compound(mut existing)) => {
-                    crate::nbt::merge(&mut existing, tag);
+                    existing.merge(tag);
                     Some(Nbt::Compound(existing))
                 }
-                _ => Some(Nbt::Compound(tag.clone().into())),
+                _ => Some(Nbt::Compound(tag.copy())),
             },
         }
     }

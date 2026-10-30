@@ -64,11 +64,11 @@ mod vanilla_trial_chambers {
     fn register(configs: &mut Vec<Config>, location: &'static str, normal_nbt: &str, ominous_nbt: &str) {
         let normal_tag = parse(normal_nbt);
         let ominous_tag = parse(ominous_nbt);
-        let Nbt::Compound(mut ominous_merged_entries) = normal_tag.clone() else { unreachable!() };
+        let Nbt::Compound(mut ominous_merged_entries) = normal_tag.copy() else { unreachable!() };
         let Nbt::Compound(ominous_entries) = &ominous_tag else { unreachable!() };
-        crate::nbt::merge(&mut ominous_merged_entries, ominous_entries);
+        ominous_merged_entries.merge(ominous_entries);
         let ominous_merged_tag = Nbt::Compound(ominous_merged_entries);
-        let ominous_merged_tag_defaults_omitted = remove_defaults(ominous_merged_tag.clone());
+        let ominous_merged_tag_defaults_omitted = remove_defaults(ominous_merged_tag.copy());
         put(configs, (normal_tag.clone(), ominous_tag, location));
         put(configs, (normal_tag.clone(), ominous_merged_tag, location));
         put(configs, (normal_tag, ominous_merged_tag_defaults_omitted, location));

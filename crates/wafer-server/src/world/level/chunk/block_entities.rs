@@ -346,7 +346,7 @@ impl LevelChunk {
         {
             return Some(put_keep_packed(entity.save_with_full_metadata(), false));
         }
-        self.block_entities.pending.get(&pos).map(|tag| put_keep_packed(tag.clone(), true))
+        self.block_entities.pending.get(&pos).map(|tag| put_keep_packed(tag.copy(), true))
     }
 
     pub fn load_block_entities(&mut self, tags: &[Nbt]) {

@@ -1,5 +1,5 @@
 use wafer_core::BlockPos;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::light_layer::LightLayer;
 use crate::server::level::ServerLevel;
@@ -18,29 +18,27 @@ pub struct SpawnData {
 
 impl Default for SpawnData {
     fn default() -> SpawnData {
-        SpawnData::new(Vec::new(), None, None)
+        SpawnData::new(TagMap::new(), None, None)
     }
 }
 
 impl SpawnData {
-    pub fn new(mut entity_to_spawn: Vec<(String, Nbt)>, custom_spawn_rules: Option<CustomSpawnRules>, equipment: Option<EquipmentTable>) -> SpawnData {
+    pub fn new(mut entity_to_spawn: TagMap, custom_spawn_rules: Option<CustomSpawnRules>, equipment: Option<EquipmentTable>) -> SpawnData {
         let id = entity_to_spawn.iter().find(|(key, _)| key == "id").and_then(|(_, id)| codec::identifier(id).ok());
         match id {
-            Some(id) => {
-                if let Some((_, value)) = entity_to_spawn.iter_mut().find(|(key, _)| key == "id") {
-                    *value = Nbt::String(id);
-                }
+            Some(id) => entity_to_spawn.put("id", Nbt::String(id)),
+            None => {
+                entity_to_spawn.remove_key("id");
             }
-            None => entity_to_spawn.retain(|(key, _)| key != "id"),
         }
-        SpawnData { entity_to_spawn: Nbt::Compound(entity_to_spawn.into()), custom_spawn_rules, equipment }
+        SpawnData { entity_to_spawn: Nbt::Compound(entity_to_spawn), custom_spawn_rules, equipment }
     }
 
     pub fn get_entity_to_spawn(&self) -> &Nbt {
         &self.entity_to_spawn
     }
 
-    pub fn get_entity_to_spawn_mut(&mut self) -> &mut Vec<(String, Nbt)> {
+    pub fn get_entity_to_spawn_mut(&mut self) -> &mut TagMap {
         let Nbt::Compound(fields) = &mut self.entity_to_spawn else { unreachable!("the entity to spawn is a compound") };
         fields
     }
@@ -66,13 +64,13 @@ impl SpawnData {
         let custom_spawn_rules = record.optional(tag, "custom_spawn_rules", CustomSpawnRules::decode_partial);
         let equipment = record.optional(tag, "equipment", EquipmentTable::decode_partial);
         record.build(|| match entity_to_spawn? {
-            Nbt::Compound(fields) => Some(SpawnData::new(fields.into_vec(), custom_spawn_rules, equipment)),
+            Nbt::Compound(fields) => Some(SpawnData::new(fields, custom_spawn_rules, equipment)),
             _ => None,
         })
     }
 
     pub fn encode(&self) -> Nbt {
-        let mut fields = vec![(ENTITY_TAG.to_string(), self.entity_to_spawn.clone())];
+        let mut fields = vec![(ENTITY_TAG.to_string(), self.entity_to_spawn.copy())];
         if let Some(custom_spawn_rules) = &self.custom_spawn_rules {
             fields.push(("custom_spawn_rules".into(), custom_spawn_rules.encode()));
         }

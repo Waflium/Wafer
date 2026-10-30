@@ -422,7 +422,9 @@ pub fn attribute_modifiers(v: &Nbt) -> Vec<AttributeModifier> {
 pub fn typed_entity_data(v: &Nbt) -> (String, Nbt) {
     let Nbt::Compound(fields) = v else { return (String::new(), Nbt::Compound(Vec::new().into())) };
     let id = string(v.get("id")).unwrap_or_default();
-    (id, Nbt::Compound(fields.iter().filter(|(k, _)| k != "id").cloned().collect()))
+    let mut tag = fields.copy();
+    tag.remove_key("id");
+    (id, Nbt::Compound(tag))
 }
 
 pub fn block_state_properties(v: &Nbt) -> Vec<(String, String)> {

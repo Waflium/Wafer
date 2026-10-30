@@ -1,6 +1,6 @@
 use wafer_core::BlockPos;
 use wafer_data::commands::CommandNode;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use crate::commands::arguments::coordinates::get_loaded_block_pos;
 use crate::commands::arguments::nbt_path_argument::NbtPath;
@@ -50,7 +50,7 @@ impl DataAccessor {
     pub fn get_data(&self, server: &mut Server) -> Result<Nbt, CommandSyntaxException> {
         Ok(match self {
             DataAccessor::Entity(entity) => crate::commands::arguments::selector::entity_world::EntityWorld::entity_tag_to_compare(server, *entity),
-            DataAccessor::Storage(id) => Nbt::Compound(server.command_storage.borrow_mut().get(id).into()),
+            DataAccessor::Storage(id) => Nbt::Compound(server.command_storage.borrow_mut().get(id)),
             DataAccessor::Block(level, pos) => server.levels[*level].block_entity_data(*pos).ok_or_else(|| ERROR_NOT_A_BLOCK_ENTITY.create())?,
         })
     }
@@ -172,9 +172,9 @@ impl DataAccessor {
     }
 }
 
-fn into_fields(tag: Nbt) -> Vec<(String, Nbt)> {
+fn into_fields(tag: Nbt) -> TagMap {
     match tag {
-        Nbt::Compound(fields) => fields.into_vec(),
+        Nbt::Compound(fields) => fields,
         _ => unreachable!("data roots are compounds"),
     }
 }

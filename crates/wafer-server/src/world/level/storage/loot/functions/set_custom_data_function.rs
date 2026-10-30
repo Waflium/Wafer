@@ -1,4 +1,4 @@
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use crate::advancements::predicates::nbt_predicate::NbtPredicate;
 use crate::util::codec::{self, DecodeResult};
@@ -7,7 +7,7 @@ use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
 
 pub struct SetCustomDataFunction {
-    tag: Vec<(String, Nbt)>,
+    tag: TagMap,
 }
 
 impl SetCustomDataFunction {
@@ -16,7 +16,7 @@ impl SetCustomDataFunction {
         let fields = record.required(tag, "tag", |t| {
             NbtPredicate::decode(t).map(|predicate| {
                 let Nbt::Compound(fields) = predicate.tag else { unreachable!("compound tag") };
-                fields.into_vec()
+                fields
             })
         });
         record.build(|| Some(SetCustomDataFunction { tag: fields? }))
@@ -24,10 +24,10 @@ impl SetCustomDataFunction {
 
     pub fn run(&self, mut item_stack: ItemStack, _context: &mut LootContext) -> ItemStack {
         let mut custom_data = match item_stack.get(dc::CUSTOM_DATA) {
-            Some(Nbt::Compound(fields)) => fields.clone(),
-            _ => Vec::new().into(),
+            Some(Nbt::Compound(fields)) => fields.copy(),
+            _ => TagMap::new(),
         };
-        crate::nbt::merge(&mut custom_data, &self.tag);
+        custom_data.merge(&self.tag);
         item_stack.set(dc::CUSTOM_DATA, if custom_data.is_empty() { None } else { Some(Nbt::Compound(custom_data)) });
         item_stack
     }

@@ -27,7 +27,7 @@ impl DataComponentExactPredicate {
     }
 
     pub fn to_nbt(&self) -> Nbt {
-        Nbt::Compound(self.expected_components.iter().filter(|(ty, _)| !ty.is_transient()).map(|(ty, value)| (ty.name().to_string(), value.clone())).collect())
+        Nbt::Compound(self.expected_components.iter().filter(|(ty, _)| !ty.is_transient()).map(|(ty, value)| (ty.name().to_string(), ty.encode(value))).collect())
     }
 
     pub fn as_patch(&self) -> crate::world::item::component::DataComponentPatch {

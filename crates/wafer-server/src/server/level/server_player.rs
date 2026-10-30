@@ -515,10 +515,10 @@ impl ServerPlayer {
         }
         nbt.push(("post_effects".into(), Nbt::List(self.post_effects.iter().map(|p| s(p)).collect())));
         if !is_empty_compound(&self.shoulder_entity_left) {
-            nbt.push(("ShoulderEntityLeft".into(), self.shoulder_entity_left.clone()));
+            nbt.push(("ShoulderEntityLeft".into(), self.shoulder_entity_left.copy()));
         }
         if !is_empty_compound(&self.shoulder_entity_right) {
-            nbt.push(("ShoulderEntityRight".into(), self.shoulder_entity_right.clone()));
+            nbt.push(("ShoulderEntityRight".into(), self.shoulder_entity_right.copy()));
         }
         Nbt::Compound(nbt.into())
     }

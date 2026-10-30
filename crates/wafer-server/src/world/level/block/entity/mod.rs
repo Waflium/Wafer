@@ -907,5 +907,5 @@ pub fn decode_component_map(tag: &Nbt) -> Result<DataComponentMap, String> {
 }
 
 pub fn encode_component_map(map: &DataComponentMap) -> Nbt {
-    Nbt::Compound(map.iter().filter(|(ty, _)| !ty.is_transient()).map(|(ty, value)| (ty.name().to_string(), value.clone())).collect())
+    Nbt::Compound(map.iter().filter(|(ty, _)| !ty.is_transient()).map(|(ty, value)| (ty.name().to_string(), ty.encode(value))).collect())
 }

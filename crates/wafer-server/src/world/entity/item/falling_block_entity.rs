@@ -104,7 +104,7 @@ impl FallingBlockEntity {
         out.push(("FallHurtAmount".into(), Nbt::Float(self.fall_damage_per_distance)));
         out.push(("FallHurtMax".into(), Nbt::Int(self.fall_damage_max)));
         if let Some(block_data) = &self.block_data {
-            out.push(("TileEntityData".into(), block_data.clone()));
+            out.push(("TileEntityData".into(), block_data.copy()));
         }
         out.push(("CancelDrop".into(), Nbt::Byte(self.cancel_drop as i8)));
     }
@@ -120,7 +120,7 @@ impl FallingBlockEntity {
         self.fall_damage_max = tag_value_input::get_numeric(input, "FallHurtMax").and_then(int_value).unwrap_or(DEFAULT_MAX_FALL_DAMAGE);
         self.drop_item = flag("DropItem").unwrap_or(DEFAULT_DROP_ITEM);
         self.block_data = tag_value_input::read_or_error(input, "TileEntityData", |tag| match tag {
-            Nbt::Compound(_) => Ok(tag.clone()),
+            Nbt::Compound(_) => Ok(tag.copy()),
             other => Err(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
         });
         self.cancel_drop = flag("CancelDrop").unwrap_or(DEFAULT_CANCEL_DROP);
@@ -220,11 +220,8 @@ impl ServerLevel {
                                     && let Some(block_entity) = self.get_block_entity(pos)
                                 {
                                     let Nbt::Compound(mut merged) = block_entity.save_without_metadata() else { unreachable!("block entities save compounds") };
-                                    for (name, tag) in block_data {
-                                        match merged.iter_mut().find(|(k, _)| *k == name) {
-                                            Some(slot) => slot.1 = tag,
-                                            None => merged.push((name, tag)),
-                                        }
+                                    for (name, tag) in block_data.iteration() {
+                                        merged.put(name, tag.copy());
                                     }
                                     let collector = crate::world::level::storage::tag_value_input::ScopedCollector::new(block_entity.problem_path(), "net.minecraft.world.entity.item.FallingBlockEntity");
                                     block_entity.load_with_components(&Nbt::Compound(merged));

@@ -1,7 +1,7 @@
 use wafer_core::BlockPos;
 use wafer_data::BlockState;
 use wafer_data::properties::TRIAL_SPAWNER_STATE;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::BlockEntityKind;
 use super::trialspawner::trial_spawner::{self, TrialSpawner};
@@ -47,10 +47,10 @@ impl ServerLevel {
     }
 
     pub fn trial_spawner_set_entity_data(&mut self, pos: BlockPos, entity_type: &str, entity_data: Option<&Nbt>) {
-        let mut spawn_data = SpawnData::new(Vec::new(), None, None);
-        spawn_data.get_entity_to_spawn_mut().push(("id".into(), Nbt::String(entity_type.into())));
+        let mut spawn_data = SpawnData::new(TagMap::new(), None, None);
+        spawn_data.get_entity_to_spawn_mut().put("id", Nbt::String(entity_type.into()));
         if let Some(Nbt::Compound(data)) = entity_data {
-            crate::nbt::merge(spawn_data.get_entity_to_spawn_mut(), data);
+            spawn_data.get_entity_to_spawn_mut().merge(data);
         }
         self.trial_spawner_with(pos, |level, trial_spawner| trial_spawner.override_entity_to_spawn(level, pos, spawn_data));
         self.block_entity_set_changed(pos);

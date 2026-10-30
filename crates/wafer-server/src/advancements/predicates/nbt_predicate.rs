@@ -18,7 +18,7 @@ impl NbtPredicate {
                 Ok(other) => format!("Expected compound tag, got {}", crate::nbt::to_string(&other)),
                 Err(e) => e.get_message(),
             },
-            Nbt::Compound(_) => return Ok(NbtPredicate { tag: tag.clone() }),
+            Nbt::Compound(_) => return Ok(NbtPredicate { tag: tag.copy() }),
             _ => "Not a string".to_string(),
         };
         Err(format!("Failed to parse either. First: {flattened_error}; Second: Not a compound tag: {}", crate::nbt::to_string(tag)))

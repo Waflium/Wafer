@@ -208,11 +208,10 @@ pub fn create_entity(server: &mut Server, source: &CommandSourceStack, entity_ty
         return Err(CommandSyntaxException::new(Component::translatable("command.failed").with_hover(HoverEvent::ShowText(Box::new(hover)))));
     }
     let mut tag = match nbt {
-        Nbt::Compound(fields) => fields.clone(),
+        Nbt::Compound(fields) => fields.copy(),
         _ => Vec::new().into(),
     };
-    tag.retain(|(k, _)| k != "id");
-    tag.push(("id".into(), Nbt::String(entity_type.into())));
+    tag.put("id", Nbt::String(entity_type.into()));
     let mut site = SUMMON_LOAD_ENTITY.to_vec();
     site.extend(command_frames(server.command_origin));
     let mut level = server.lend_level(source.level);

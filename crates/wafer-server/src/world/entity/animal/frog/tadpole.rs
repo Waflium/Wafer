@@ -119,15 +119,11 @@ impl Tadpole {
     pub fn save_to_bucket_tag(mob: &Mob, bucket: &mut ItemStack) {
         bucketable::save_default_data_to_bucket_tag(mob, bucket);
         let mut tag = match bucket.get(crate::world::item::component::BUCKET_ENTITY_DATA) {
-            Some(Nbt::Compound(tag)) => tag.clone(),
+            Some(Nbt::Compound(tag)) => tag.copy(),
             _ => Vec::new().into(),
         };
-        let mut put = |key: &str, value: Nbt| {
-            tag.retain(|(k, _)| k != key);
-            tag.push((key.to_string(), value));
-        };
-        put("Age", Nbt::Int(tadpole(mob).age));
-        put("AgeLocked", Nbt::Byte(mob.is_age_locked() as i8));
+        tag.put("Age", Nbt::Int(tadpole(mob).age));
+        tag.put("AgeLocked", Nbt::Byte(mob.is_age_locked() as i8));
         bucket.set(crate::world::item::component::BUCKET_ENTITY_DATA, Some(Nbt::Compound(tag)));
     }
 

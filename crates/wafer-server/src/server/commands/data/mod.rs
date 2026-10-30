@@ -2,7 +2,7 @@ pub mod data_accessor;
 
 use wafer_core::java_string::JavaStr;
 use wafer_data::commands::CommandNode;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use self::data_accessor::{DataAccessor, KINDS};
 use super::loot_context_sources;
@@ -117,18 +117,18 @@ fn modify(server: &mut Server, context: &CommandContext, source: &CommandSourceS
         "append" => path.insert(-1, target, &tags),
         "set" => path.set(target, tags.last().expect("sources are never empty")),
         "merge" => {
-            let mut combined = Vec::new();
+            let mut combined = TagMap::new();
             for tag in &tags {
                 if is_too_deep(tag, 0) {
                     return Err(ERROR_DATA_TOO_DEEP.create());
                 }
                 let Nbt::Compound(fields) = tag else { return Err(ERROR_EXPECTED_OBJECT.create(nbt::to_string(tag))) };
-                nbt::merge(&mut combined, fields);
+                combined.merge(fields);
             }
-            path.get_or_create_each(target, &|| Nbt::Compound(Vec::new().into()), |tag| {
-                let original = tag.clone();
+            path.get_or_create_each(target, &|| Nbt::Compound(TagMap::new()), |tag| {
                 let Nbt::Compound(fields) = tag else { return Err(ERROR_EXPECTED_OBJECT.create(nbt::to_string(tag))) };
-                nbt::merge(fields, &combined);
+                let original = Nbt::Compound(fields.copy());
+                fields.merge(&combined);
                 Ok((original != *tag) as i32)
             })
         }
@@ -217,8 +217,8 @@ fn merge_data(server: &mut Server, context: &CommandContext, source: &CommandSou
         return Err(ERROR_DATA_TOO_DEEP.create());
     }
     let (Nbt::Compound(old_fields), Nbt::Compound(fields)) = (&old, tag) else { unreachable!("compounds") };
-    let mut result = old_fields.clone();
-    nbt::merge(&mut result, fields);
+    let mut result = old_fields.copy();
+    result.merge(fields);
     let result = Nbt::Compound(result);
     if old == result {
         return Err(ERROR_MERGE_UNCHANGED.create());

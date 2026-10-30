@@ -69,6 +69,14 @@ impl DataComponentType {
         !self.info().persistent
     }
 
+    pub fn encode(self, value: &Nbt) -> Nbt {
+        if self == CUSTOM_DATA || self == BUCKET_ENTITY_DATA || self == ENTITY_DATA || self == BLOCK_ENTITY_DATA {
+            value.copy()
+        } else {
+            value.clone()
+        }
+    }
+
     pub fn decode(self, tag: &Nbt) -> Result<Nbt, String> {
         self.info().codec.decode(tag)
     }
@@ -240,7 +248,7 @@ impl DataComponentPatch {
                 .iter()
                 .filter(|(t, _)| !t.is_transient())
                 .map(|(t, v)| match v {
-                    Some(v) => (t.name().to_string(), v.clone()),
+                    Some(v) => (t.name().to_string(), t.encode(v)),
                     None => (format!("!{}", t.name()), Nbt::Compound(Vec::new().into())),
                 })
                 .collect(),

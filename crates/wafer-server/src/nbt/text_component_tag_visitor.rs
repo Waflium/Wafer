@@ -190,7 +190,7 @@ mod tests {
             "pretty" => format!("PRETTY {}", to_pretty_component(&nbt::parse_fully(f[1]).unwrap()).to_json()),
             "merge" => {
                 let (Nbt::Compound(mut root), Nbt::Compound(other)) = (nbt::parse_fully(f[1]).unwrap(), nbt::parse_fully(f[2]).unwrap()) else { panic!("not compounds") };
-                nbt::merge(&mut root, &other);
+                root.merge(&other);
                 format!("MERGE {}", to_pretty_component(&Nbt::Compound(root)).to_json())
             }
             op => panic!("unknown op {op}"),

@@ -128,7 +128,7 @@ pub fn update_custom_block_entity_tag(level: &mut ServerLevel, player: Option<En
     let Nbt::Compound(mut tag) = entity.save_custom_only() else { return false };
     let old = Nbt::Compound(tag.clone());
     if let Nbt::Compound(fields) = &data {
-        crate::nbt::merge(&mut tag, fields);
+        tag.merge(fields);
     }
     let tag = Nbt::Compound(tag);
     if tag == old {

@@ -95,10 +95,7 @@ impl BaseSpawner {
     pub fn set_entity_id(&mut self, entity_type: &str, random: &mut impl RandomSource) {
         let spawn_data = self.get_or_create_next_spawn_data(None, random, BlockPos::ZERO);
         let entity = spawn_data.get_entity_to_spawn_mut();
-        match entity.iter_mut().find(|(key, _)| key == "id") {
-            Some((_, id)) => *id = Nbt::String(entity_type.into()),
-            None => entity.push(("id".into(), Nbt::String(entity_type.into()))),
-        }
+        entity.put("id", Nbt::String(entity_type.into()));
     }
 
     pub fn set_entity_data(&mut self, entity_data: &Nbt, random: &mut impl RandomSource) {
@@ -107,7 +104,7 @@ impl BaseSpawner {
         self.set_entity_id(&entity_type, random);
         let spawn_data = self.get_or_create_next_spawn_data(None, random, BlockPos::ZERO);
         if let Nbt::Compound(data) = &data {
-            crate::nbt::merge(spawn_data.get_entity_to_spawn_mut(), data);
+            spawn_data.get_entity_to_spawn_mut().merge(data);
         }
     }
 

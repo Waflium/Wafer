@@ -235,7 +235,7 @@ impl StructureTemplate {
             } else {
                 BlockPos::containing(pos.x, pos.y, pos.z)
             };
-            let nbt = level.save_entity(id).unwrap_or(Nbt::Compound(Vec::new().into()));
+            let nbt = level.save_entity(id).unwrap_or(Nbt::Compound(Vec::new().into())).copy();
             self.entity_info_list.push(StructureEntityInfo { pos, block_pos, nbt });
         }
     }
@@ -429,7 +429,7 @@ impl StructureTemplate {
             if bounding_box.is_some_and(|bounding_box| !bounding_box.is_inside(block_pos)) {
                 continue;
             }
-            let Nbt::Compound(mut tag) = entity_info.nbt.clone() else { continue };
+            let Nbt::Compound(mut tag) = entity_info.nbt.copy() else { continue };
             let pos = transform_vec(entity_info.pos, mirror, rotation, pivot).add(position.x as f64, position.y as f64, position.z as f64);
             set_tag(&mut tag, "Pos", Nbt::List(vec![Nbt::Double(pos.x), Nbt::Double(pos.y), Nbt::Double(pos.z)]));
             tag.retain(|(key, _)| key != "UUID");
@@ -587,7 +587,7 @@ pub fn process_block_infos<R: RandomSource>(
         if process_only_in_current_chunk && chunk_bb.is_some_and(|chunk_bb| !chunk_bb.is_inside(block_pos)) {
             continue;
         }
-        let mut processed_block_info = Some(StructureBlockInfo { pos: block_pos, state: block_info.state, nbt: block_info.nbt.clone() });
+        let mut processed_block_info = Some(StructureBlockInfo { pos: block_pos, state: block_info.state, nbt: block_info.nbt.as_ref().map(Nbt::copy) });
         for processor in &settings.processors {
             let Some(info) = processed_block_info else { break };
             processed_block_info = processor.process_block(level, position, reference_pos, block_info.pos, info, settings, random);

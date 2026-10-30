@@ -43,7 +43,7 @@ impl DataSource {
                     None => Vec::new(),
                 }
             }
-            DataSource::Storage(id) => vec![Nbt::Compound(context.world.command_storage().borrow_mut().get(id).into())],
+            DataSource::Storage(id) => vec![Nbt::Compound(context.world.command_storage().borrow_mut().get(id))],
         })
     }
 }

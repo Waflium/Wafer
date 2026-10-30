@@ -1,5 +1,5 @@
 use wafer_data::items;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::animal::axolotl::axolotl::{self, Axolotl};
 use super::animal::frog::tadpole::{self, Tadpole};
@@ -20,13 +20,10 @@ pub fn save_default_data_to_bucket_tag(entity: &Mob, bucket: &mut ItemStack) {
     };
     bucket.set(dc::CUSTOM_NAME, custom_name);
     let mut tag = match bucket.get(dc::BUCKET_ENTITY_DATA) {
-        Some(Nbt::Compound(tag)) => tag.clone(),
-        _ => Vec::new().into(),
+        Some(Nbt::Compound(tag)) => tag.copy(),
+        _ => TagMap::new(),
     };
-    let mut put_boolean = |key: &str, value: bool| {
-        tag.retain(|(k, _)| k != key);
-        tag.push((key.to_string(), Nbt::Byte(value as i8)));
-    };
+    let mut put_boolean = |key: &str, value: bool| tag.put(key, Nbt::Byte(value as i8));
     if entity.is_no_ai() {
         put_boolean("NoAI", entity.is_no_ai());
     }
@@ -45,8 +42,7 @@ pub fn save_default_data_to_bucket_tag(entity: &Mob, bucket: &mut ItemStack) {
     if entity.is_persistence_required() {
         put_boolean("PersistenceRequired", entity.is_persistence_required());
     }
-    tag.retain(|(k, _)| k != "Health");
-    tag.push(("Health".to_string(), Nbt::Float(entity.health)));
+    tag.put("Health", Nbt::Float(entity.health));
     bucket.set(dc::BUCKET_ENTITY_DATA, Some(Nbt::Compound(tag)));
 }
 

@@ -75,14 +75,14 @@ impl Occupant {
 
     pub fn save(&self) -> Nbt {
         Nbt::Compound(vec![
-            ("entity_data".into(), self.entity_data.clone()),
+            ("entity_data".into(), self.entity_data.copy()),
             ("ticks_in_hive".into(), Nbt::Int(self.ticks_in_hive)),
             ("min_ticks_in_hive".into(), Nbt::Int(self.min_ticks_in_hive)),
         ].into())
     }
 
     pub fn load(tag: &Nbt) -> Option<Occupant> {
-        let entity_data = tag.get("entity_data").filter(|data| data.get("id").and_then(Nbt::as_str).is_some())?.clone();
+        let entity_data = tag.get("entity_data").filter(|data| data.get("id").and_then(Nbt::as_str).is_some())?.copy();
         let int = |key: &str| match tag.get(key)? {
             Nbt::Byte(v) => Some(*v as i32),
             Nbt::Short(v) => Some(*v as i32),
@@ -94,7 +94,7 @@ impl Occupant {
     }
 
     pub fn create_entity(&self, level: &mut ServerLevel, hive_pos: BlockPos, site: &dyn Fn() -> Vec<&'static str>) -> Option<LevelEntity> {
-        let Nbt::Compound(mut entity_tag) = self.entity_data.clone() else { return None };
+        let Nbt::Compound(mut entity_tag) = self.entity_data.copy() else { return None };
         entity_tag.retain(|(key, _)| !IGNORED_BEE_TAGS.contains(&key.as_str()));
         let collector = tag_value_input::ScopedCollector::new_empty("net.minecraft.world.entity.EntityType");
         let entity = level.load_entity_typed(&Nbt::Compound(entity_tag), site);

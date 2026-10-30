@@ -318,7 +318,7 @@ impl Node {
                     let before = out.len();
                     out.extend((0..items.len()).filter(|&i| compare_nbt(pattern, Some(&items[i]))).map(|i| child(steps, Step::Index(i))));
                     if out.len() == before {
-                        items.push(pattern.clone());
+                        items.push(pattern.copy());
                         out.push(child(steps, Step::Index(items.len() - 1)));
                     }
                 }
@@ -327,7 +327,7 @@ impl Node {
                 if let Nbt::Compound(fields) = parent {
                     match compound_get(fields, name) {
                         None => {
-                            fields.push((name.clone(), pattern.clone()));
+                            fields.push((name.clone(), pattern.copy()));
                             out.push(child(steps, Step::Key(name.clone())));
                         }
                         Some(result) if compare_nbt(pattern, Some(result)) => out.push(child(steps, Step::Key(name.clone()))),
@@ -566,19 +566,21 @@ impl NbtPath {
         if is_too_deep(to_add, self.nodes.len()) {
             return Err(ERROR_DATA_TOO_DEEP.create());
         }
+        let first_copy = to_add.copy();
         let parents = self.get_or_create_parents(root)?;
         let last = &self.nodes[self.nodes.len() - 1].0;
         Ok(parents
             .iter()
             .map(|f| match f {
-                Found::At(steps) => last.set_tag(at_mut(root, steps), to_add),
+                Found::At(steps) => last.set_tag(at_mut(root, steps), &first_copy),
                 Found::Value(_) => 0,
             })
             .sum())
     }
 
     pub fn insert(&self, index: i32, root: &mut Nbt, to_insert: &[Nbt]) -> Result<i32, CommandSyntaxException> {
-        if to_insert.iter().any(|t| is_too_deep(t, self.nodes.len())) {
+        let to_insert_copy: Vec<Nbt> = to_insert.iter().map(Nbt::copy).collect();
+        if to_insert_copy.iter().any(|t| is_too_deep(t, self.nodes.len())) {
             return Err(ERROR_DATA_TOO_DEEP.create());
         }
         let targets = self.get_or_create(root, &|| Nbt::List(Vec::new()))?;
@@ -591,7 +593,7 @@ impl NbtPath {
             let Some(size) = collection_len(tag) else { return Err(ERROR_EXPECTED_LIST.create(nbt::to_string(tag))) };
             let mut actual = if index < 0 { size as i64 + index as i64 + 1 } else { index as i64 };
             let mut modified = false;
-            for source in to_insert {
+            for source in &to_insert_copy {
                 let accepts = matches!(tag, Nbt::List(_)) || numeric(source).is_some();
                 if accepts && (actual < 0 || actual > collection_len(tag).unwrap() as i64) {
                     return Err(ERROR_INVALID_INDEX.create(actual as i32));
