@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::EntityId;
 
 pub fn codec() -> crate::world::item::component::types::Pair {
@@ -16,8 +16,15 @@ pub struct SheepPredicate {
 
 impl SheepPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<SheepPredicate> {
-        codec::map(tag)?;
-        Ok(SheepPredicate { sheared: codec::decode_optional(tag, "sheared", codec::bool_value)? })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let sheared = record.optional(tag, "sheared", codec::bool_value);
+            record.build(|| Some(SheepPredicate { sheared }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

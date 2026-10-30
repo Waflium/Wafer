@@ -15,7 +15,7 @@ pub fn codec() -> Pair {
 
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::item_predicate::ItemPredicate;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::ItemStack;
 
 #[derive(Debug)]
@@ -25,8 +25,15 @@ pub struct ContainerPredicate {
 
 impl ContainerPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<ContainerPredicate> {
-        codec::map(tag)?;
-        Ok(ContainerPredicate { items: codec::decode_optional(tag, "items", |t| CollectionPredicate::decode(t, ItemPredicate::decode))? })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let items = record.optional(tag, "items", |t| CollectionPredicate::decode(t, ItemPredicate::decode));
+            record.build(|| Some(ContainerPredicate { items }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

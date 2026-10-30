@@ -8,7 +8,8 @@ pub fn codec() -> Pair {
     custom::exact_components()
 }
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::entity::EntityId;
 use crate::world::entity::entity_components::EntityComponents;
 
@@ -19,7 +20,7 @@ pub struct EntityExactDataComponentsPredicate {
 
 impl EntityExactDataComponentsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityExactDataComponentsPredicate> {
-        Ok(EntityExactDataComponentsPredicate { predicate: DataComponentExactPredicate::decode(tag)? })
+        codec::wrapped(Wrap::Xmap, || DataComponentExactPredicate::decode(tag)).map(|predicate| EntityExactDataComponentsPredicate { predicate })
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

@@ -82,7 +82,11 @@ impl DataComponentType {
     }
 
     pub fn decode_partial(self, tag: &Nbt) -> crate::util::codec::DecodeResult<Nbt> {
-        self.info().codec.decode_partial(tag)
+        if caches_encoding(self.name()) {
+            crate::util::codec::with_frames(crate::util::dfu_frames::encoder_cache, || self.info().codec.decode_partial(tag))
+        } else {
+            self.info().codec.decode_partial(tag)
+        }
     }
 
     pub fn hash(self, value: &Nbt) -> HashCode {
@@ -99,6 +103,66 @@ impl DataComponentType {
         let info = self.info();
         codec::read(&info.codec, &info.stream, r)
     }
+}
+
+fn caches_encoding(name: &str) -> bool {
+    matches!(
+        name.strip_prefix("minecraft:").unwrap_or(name),
+        "custom_name"
+            | "item_name"
+            | "item_model"
+            | "lore"
+            | "enchantments"
+            | "can_place_on"
+            | "can_break"
+            | "attribute_modifiers"
+            | "tooltip_display"
+            | "food"
+            | "consumable"
+            | "use_remainder"
+            | "use_cooldown"
+            | "damage_resistant"
+            | "tool"
+            | "weapon"
+            | "attack_range"
+            | "enchantable"
+            | "equippable"
+            | "repairable"
+            | "tooltip_style"
+            | "death_protection"
+            | "blocks_attacks"
+            | "piercing_weapon"
+            | "kinetic_weapon"
+            | "block_transformer"
+            | "stored_enchantments"
+            | "map_decorations"
+            | "charged_projectiles"
+            | "bundle_contents"
+            | "potion_contents"
+            | "potion_duration_scale"
+            | "suspicious_stew_effects"
+            | "writable_book_content"
+            | "written_book_content"
+            | "trim"
+            | "debug_stick_state"
+            | "instrument"
+            | "provides_trim_material"
+            | "provides_banner_patterns"
+            | "recipes"
+            | "lodestone_tracker"
+            | "firework_explosion"
+            | "fireworks"
+            | "profile"
+            | "banner_patterns"
+            | "pot_decorations"
+            | "container"
+            | "block_state"
+            | "bees"
+            | "sulfur_cube_content"
+            | "break_sound"
+            | "sign_text_front"
+            | "sign_text_back"
+    )
 }
 
 impl std::fmt::Debug for DataComponentType {
@@ -260,7 +324,7 @@ impl DataComponentPatch {
     }
 
     pub fn from_nbt_partial(tag: &Nbt) -> crate::util::codec::DecodeResult<DataComponentPatch> {
-        let entries = crate::util::codec::dispatched_map_partial(
+        let entries = crate::util::codec::wrapped(codec::Wrap::Xmap, || crate::util::codec::dispatched_map_partial(
             tag,
             |key| {
                 let (removed, name) = match key.strip_prefix('!') {
@@ -277,7 +341,7 @@ impl DataComponentPatch {
             |&(ty, removed), value| {
                 if removed { codec::map(value).map(|_| None).into() } else { ty.decode_partial(value).map(Some) }
             },
-        );
+        ));
         entries.map(|entries| {
             let mut patch = DataComponentPatch::default();
             for ((ty, _), value) in entries {

@@ -16,7 +16,7 @@ pub struct EntityHasScoreCondition {
 impl EntityHasScoreCondition {
     pub fn decode(tag: &Nbt) -> DecodeResult<EntityHasScoreCondition> {
         let mut record = codec::Record::default();
-        let scores = record.required(tag, "scores", |t| codec::unbounded_map(t, |k| Ok(k.to_string()), IntRangePredicate::decode));
+        let scores = record.required(tag, "scores", |t| codec::base_map_partial(t, |k| Ok(k.to_string()), IntRangePredicate::decode));
         let entity_target = record.required(tag, "entity", EntityTarget::decode);
         record.build(|| Some(EntityHasScoreCondition { scores: scores?, entity_target: entity_target? }))
     }

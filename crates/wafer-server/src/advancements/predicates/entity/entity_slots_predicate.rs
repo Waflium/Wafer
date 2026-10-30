@@ -7,7 +7,8 @@ pub fn codec() -> Pair {
     slots_predicate::codec()
 }
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::entity::EntityId;
 
 #[derive(Debug)]
@@ -17,7 +18,7 @@ pub struct EntitySlotsPredicate {
 
 impl EntitySlotsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntitySlotsPredicate> {
-        Ok(EntitySlotsPredicate { slots: SlotsPredicate::decode(tag)? })
+        codec::wrapped(Wrap::Xmap, || SlotsPredicate::decode(tag)).map(|slots| EntitySlotsPredicate { slots })
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

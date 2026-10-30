@@ -10,6 +10,7 @@ use crate::network::chat::component_utils;
 use crate::network::chat::{Component, HoverEvent, Style};
 use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::util::problem_reporter::{PathElement, ProblemReporter};
+use crate::world::item::component::codec::Wrap;
 use crate::world::level::storage::loot::validation_context_source::ValidationContextSource;
 
 pub struct Advancement {
@@ -47,8 +48,10 @@ impl Advancement {
         let display = record.optional(tag, "display", DisplayInfo::decode_partial);
         let rewards = record.with_default(tag, "rewards", AdvancementRewards::default(), AdvancementRewards::decode_partial);
         let criteria = record.required(tag, "criteria", |criteria| {
-            codec::base_map_partial(criteria, |name| Ok(name.to_string()), Criterion::decode)
-                .validate(|criteria| if criteria.is_empty() { Err("Advancement criteria cannot be empty".into()) } else { Ok(()) })
+            codec::wrapped(Wrap::FlatXmap, || {
+                codec::base_map_partial(criteria, |name| Ok(name.to_string()), Criterion::decode)
+                    .validate(|criteria| if criteria.is_empty() { Err("Advancement criteria cannot be empty".into()) } else { Ok(()) })
+            })
         });
         let requirements = record.optional(tag, "requirements", AdvancementRequirements::decode_partial);
         let sends_telemetry_event = record.with_default(tag, "sends_telemetry_event", false, |sends| DecodeResult::from(codec::bool_value(sends)));

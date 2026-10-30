@@ -18,7 +18,7 @@ impl SetWritableBookPagesFunction {
             let content = dc::WRITABLE_BOOK_CONTENT.decode(&Nbt::Compound(vec![("pages".into(), t.clone())].into()))?;
             Ok::<Vec<Nbt>, String>(content.get("pages").map_or(Vec::new(), |p| p.as_list().to_vec()))
         });
-        let page_operation = record.absorb(ListOperation::decode(tag, 100));
+        let page_operation = record.nested(|| ListOperation::decode(tag, 100));
         record.build(|| Some(SetWritableBookPagesFunction { pages: pages?, page_operation: page_operation? }))
     }
 

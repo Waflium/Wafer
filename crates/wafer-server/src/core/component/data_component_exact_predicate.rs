@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::data_component_getter::DataComponentGetter;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::DataComponentType;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -11,14 +12,16 @@ pub struct DataComponentExactPredicate {
 
 impl DataComponentExactPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<DataComponentExactPredicate> {
-        let expected_components = codec::dispatched_map(
-            tag,
-            |id| {
-                let id = crate::resources::identifier::read(id)?;
-                DataComponentType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {id}"))
-            },
-            |ty, value| ty.decode(value),
-        )?;
+        let expected_components = codec::wrapped(Wrap::Xmap, || {
+            codec::dispatched_map(
+                tag,
+                |id| {
+                    let id = crate::resources::identifier::read(id)?;
+                    DataComponentType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {id}"))
+                },
+                |ty, value| ty.decode_partial(value).into_result(),
+            )
+        })?;
         Ok(DataComponentExactPredicate { expected_components })
     }
 

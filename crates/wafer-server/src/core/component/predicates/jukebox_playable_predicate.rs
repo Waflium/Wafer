@@ -7,7 +7,7 @@ pub fn codec() -> Pair {
 }
 
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::codec::registry;
 
 #[derive(Debug)]
@@ -17,8 +17,15 @@ pub struct JukeboxPlayablePredicate {
 
 impl JukeboxPlayablePredicate {
     pub fn decode(tag: &Nbt) -> DataResult<JukeboxPlayablePredicate> {
-        codec::map(tag)?;
-        Ok(JukeboxPlayablePredicate { song: codec::decode_optional(tag, "song", |t| HolderSet::decode("minecraft:jukebox_song", t))? })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let song = record.optional(tag, "song", |t| HolderSet::decode_partial("minecraft:jukebox_song", t));
+            record.build(|| Some(JukeboxPlayablePredicate { song }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

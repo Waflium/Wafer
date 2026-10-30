@@ -6,7 +6,7 @@ use wafer_core::mth;
 use wafer_protocol::nbt::Nbt;
 
 use super::ints::{self, ContextIntProvider};
-use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair, def, req};
 use super::stored_number_access::StoredNumberAccess;
 use super::{ArithmeticException, ArithmeticResult, Case, decode_holder_list_partial, decode_weighted_list, get_random};
@@ -154,7 +154,15 @@ impl ContextFloatProvider {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<ContextFloatProvider> {
-        codec::either_result(DecodeResult::from(codec::float(tag)), || ContextFloatProvider::decode_typed(tag)).map(|value| match value {
+        codec::recursive(|| {
+            codec::wrapped(Wrap::Xmap, || {
+                codec::either_result(
+                    codec::either_first(|| codec::wrapped(Wrap::Xmap, || DecodeResult::from(codec::float(tag)))),
+                    || codec::either_second(|| ContextFloatProvider::decode_typed(tag)),
+                )
+            })
+        })
+        .map(|value| match value {
             Ok(value) => ContextFloatProvider::ConstantValue(value),
             Err(provider) => provider,
         })
@@ -171,7 +179,7 @@ impl ContextFloatProvider {
         let mut record = Record::default();
         let holder = |record: &mut Record, key: &str| record.required(tag, key, ContextFloatProvider::decode_holder_partial);
         let fallback = |record: &mut Record| record.with_default(tag, "fallback", exactly(0.0), ContextFloatProvider::decode_holder_partial);
-        match ty.as_str() {
+        codec::as_dispatch(|| match ty.as_str() {
             "minecraft:abs" => {
                 let input = holder(&mut record, "input");
                 record.build(|| Some(ContextFloatProvider::Absolute(input?)))
@@ -301,7 +309,7 @@ impl ContextFloatProvider {
                 record.build(|| Some(ContextFloatProvider::WeightedListValue(distribution?)))
             }
             other => DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:context_float_provider_type]: {other}")),
-        }
+        })
     }
 
     pub fn get_float(&self, context: &mut LootContext) -> f32 {

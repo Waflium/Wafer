@@ -8,7 +8,8 @@ pub fn codec() -> Pair {
     custom::partial_components()
 }
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::entity::EntityId;
 use crate::world::entity::entity_components::EntityComponents;
 
@@ -19,7 +20,7 @@ pub struct EntityPartialComponentsPredicate {
 
 impl EntityPartialComponentsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityPartialComponentsPredicate> {
-        Ok(EntityPartialComponentsPredicate { predicates: DataComponentPredicate::decode_map(tag)? })
+        codec::wrapped(Wrap::Xmap, || DataComponentPredicate::decode_map(tag)).map(|predicates| EntityPartialComponentsPredicate { predicates })
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

@@ -1,6 +1,8 @@
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::util::codec::{self, DecodeResult};
+use crate::util::dfu_frames;
+use crate::world::item::component::codec::Wrap;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ListOperation {
@@ -10,37 +12,31 @@ pub enum ListOperation {
     Append,
 }
 
-fn non_negative(tag: &Nbt) -> DataResult<i32> {
-    let value = codec::int(tag)?;
-    if value < 0 {
-        return Err(format!("Value must be non-negative: {value}"));
-    }
-    Ok(value)
-}
-
 impl ListOperation {
     pub fn decode(tag: &Nbt, max_size: i32) -> DecodeResult<ListOperation> {
-        let mode = match codec::decode_field(tag, "mode", |t| codec::string_enum(t, &[("replace_all", 0), ("replace_section", 1), ("insert", 2), ("append", 3)])) {
-            Ok(mode) => mode,
-            Err(error) => return DecodeResult::error(error),
-        };
-        let mut record = codec::Record::default();
-        let operation = match mode {
-            0 => DecodeResult::success(ListOperation::ReplaceAll),
-            1 => {
-                let offset = record.with_default(tag, "offset", 0, non_negative);
-                let size = record.optional(tag, "size", non_negative);
-                record.build(|| Some(ListOperation::ReplaceSection { offset, size }))
-            }
-            2 => {
-                let offset = record.with_default(tag, "offset", 0, non_negative);
-                record.build(|| Some(ListOperation::Insert { offset }))
-            }
-            _ => DecodeResult::success(ListOperation::Append),
-        };
-        operation.validate(|operation| match operation {
-            ListOperation::ReplaceSection { size: Some(size), .. } if *size > max_size => Err(format!("Size value too large: {size}, max size is {max_size}")),
-            _ => Ok(()),
+        codec::wrapped(Wrap::MapFlatXmap, || {
+            let mode = match codec::decode_field(tag, "mode", |t| codec::string_enum(t, &[("replace_all", 0), ("replace_section", 1), ("insert", 2), ("append", 3)])) {
+                Ok(mode) => mode,
+                Err(error) => return DecodeResult::error(error),
+            };
+            let mut record = codec::Record::default();
+            let operation = codec::with_frames(dfu_frames::key_dispatch, || match mode {
+                0 => DecodeResult::success(ListOperation::ReplaceAll),
+                1 => {
+                    let offset = record.with_default(tag, "offset", 0, codec::non_negative_int);
+                    let size = record.optional(tag, "size", codec::non_negative_int);
+                    record.build(|| Some(ListOperation::ReplaceSection { offset, size }))
+                }
+                2 => {
+                    let offset = record.with_default(tag, "offset", 0, codec::non_negative_int);
+                    record.build(|| Some(ListOperation::Insert { offset }))
+                }
+                _ => DecodeResult::success(ListOperation::Append),
+            });
+            operation.validate(|operation| match operation {
+                ListOperation::ReplaceSection { size: Some(size), .. } if *size > max_size => Err(format!("Size value too large: {size}, max size is {max_size}")),
+                _ => Ok(()),
+            })
         })
     }
 
@@ -95,13 +91,15 @@ pub struct StandAlone<T> {
 
 impl<T> StandAlone<T> {
     pub fn decode<R: Into<DecodeResult<T>>>(tag: &Nbt, value: impl Fn(&Nbt) -> R, max_size: i32) -> DecodeResult<StandAlone<T>> {
-        if let Err(error) = codec::map(tag) {
-            return DecodeResult::error(error);
-        }
-        let mut record = codec::Record::default();
-        let values = record.required(tag, "values", |t| codec::sized_list_partial(t, max_size as usize, |element| value(element).into()));
-        let operation = record.absorb(ListOperation::decode(tag, max_size));
-        record.build(|| Some(StandAlone { value: values?, operation: operation? }))
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let values = record.required(tag, "values", |t| codec::sized_list_partial(t, max_size as usize, |element| value(element).into()));
+            let operation = record.nested(|| ListOperation::decode(tag, max_size));
+            record.build(|| Some(StandAlone { value: values?, operation: operation? }))
+        })
     }
 }
 

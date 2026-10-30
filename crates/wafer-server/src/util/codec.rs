@@ -265,6 +265,34 @@ pub fn int_range(tag: &Nbt, min: i32, max: i32) -> DataResult<i32> {
     Ok(value)
 }
 
+fn int_range_with(tag: &Nbt, min: i32, max: i32, message: impl FnOnce(i32) -> String) -> DataResult<i32> {
+    let value = crate::core::data_registries::unwinding(|| dfu_frames::int_leaf(true), || -> DataResult<i32> { Ok(component_codec::as_i32(number(tag)?)) })?;
+    if value < min || value > max {
+        return Err(message(value));
+    }
+    Ok(value)
+}
+
+pub fn non_negative_int(tag: &Nbt) -> DataResult<i32> {
+    int_range_with(tag, 0, i32::MAX, |value| format!("Value must be non-negative: {value}"))
+}
+
+pub fn positive_int(tag: &Nbt) -> DataResult<i32> {
+    int_range_with(tag, 1, i32::MAX, |value| format!("Value must be positive: {value}"))
+}
+
+pub fn byte(tag: &Nbt) -> DataResult<i8> {
+    crate::core::data_registries::unwinding(dfu_frames::byte_leaf, || Ok(component_codec::as_byte(number(tag)?)))
+}
+
+pub fn unsigned_byte(tag: &Nbt) -> DataResult<i32> {
+    with_frames(dfu_frames::codec_xmap, || byte(tag).map(|value| value as u8 as i32))
+}
+
+pub fn short(tag: &Nbt) -> DataResult<i16> {
+    crate::core::data_registries::unwinding(dfu_frames::short_leaf, || Ok(component_codec::as_short(number(tag)?)))
+}
+
 pub fn long(tag: &Nbt) -> DataResult<i64> {
     crate::core::data_registries::unwinding(|| dfu_frames::long_leaf(false), || Ok(component_codec::as_i64(number(tag)?)))
 }
@@ -468,6 +496,26 @@ pub fn list_element<R>(decode: impl FnOnce() -> R) -> R {
     crate::core::data_registries::unwinding(dfu_frames::list, decode)
 }
 
+pub fn with_frames<R>(frames: fn() -> Vec<&'static str>, decode: impl FnOnce() -> R) -> R {
+    crate::core::data_registries::unwinding(frames, decode)
+}
+
+pub fn wrapped<R>(wrap: component_codec::Wrap, decode: impl FnOnce() -> R) -> R {
+    crate::core::data_registries::unwinding(|| wrap.frames(), decode)
+}
+
+pub fn either_first<R>(decode: impl FnOnce() -> R) -> R {
+    with_frames(dfu_frames::either_first, decode)
+}
+
+pub fn either_second<R>(decode: impl FnOnce() -> R) -> R {
+    with_frames(dfu_frames::either_second, decode)
+}
+
+pub fn recursive<R>(decode: impl FnOnce() -> R) -> R {
+    with_frames(dfu_frames::recursive, decode)
+}
+
 pub fn list_partial<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
     sized_list_partial(tag, usize::MAX, decode)
 }
@@ -551,7 +599,7 @@ pub fn holder_set_partial_with<T>(tag: &Nbt, registry: &str, element: impl Fn(&N
         _ if is_json_value() => format!("Not a string: {}", crate::nbt::to_string(tag)),
         _ => "Not a string".to_string(),
     };
-    let compact = if always_use_list { list_partial(tag, element) } else { compact_list_partial(tag, element) };
+    let compact = with_frames(dfu_frames::holder_set_values, || if always_use_list { list_partial(tag, element) } else { compact_list_partial(tag, element) });
     if compact.value.is_some() {
         return compact;
     }
@@ -559,10 +607,14 @@ pub fn holder_set_partial_with<T>(tag: &Nbt, registry: &str, element: impl Fn(&N
 }
 
 pub fn compact_list_partial<T>(tag: &Nbt, element: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
+    wrapped(component_codec::Wrap::Xmap, || compact_list_alternatives(tag, element))
+}
+
+fn compact_list_alternatives<T>(tag: &Nbt, element: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
     match tag {
-        Nbt::List(_) | Nbt::ByteArray(_) | Nbt::IntArray(_) | Nbt::LongArray(_) => list_partial(tag, element),
+        Nbt::List(_) | Nbt::ByteArray(_) | Nbt::IntArray(_) | Nbt::LongArray(_) => either_first(|| list_partial(tag, element)),
         single => {
-            let result = element(single);
+            let result = either_second(|| element(single));
             if result.value.is_some() {
                 return result.map(|value| vec![value]);
             }
@@ -650,7 +702,7 @@ pub fn base_map<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, value: imp
     let mut failed = Vec::new();
     for i in map_entry_order(fields) {
         let (field_key, field_value) = &fields[i];
-        match (key(field_key), value(field_value)) {
+        match (key(field_key), with_frames(dfu_frames::unbounded_map_values, || value(field_value))) {
             (Ok(key), Ok(value)) => entries.push((key, value)),
             (key, value) => {
                 errors.push([value.err(), key.err()].into_iter().flatten().collect::<Vec<_>>().join("; "));
@@ -672,7 +724,7 @@ pub fn base_map_partial<K, V>(tag: &Nbt, key: impl Fn(&str) -> DataResult<K>, va
     for i in map_entry_order(fields) {
         let (field_key, field_value) = &fields[i];
         let key = key(field_key);
-        let DecodeResult { value, error } = value(field_value);
+        let DecodeResult { value, error } = with_frames(dfu_frames::unbounded_map_values, || value(field_value));
         if error.is_some() || key.is_err() {
             errors.push([error, key.as_ref().err().cloned()].into_iter().flatten().collect::<Vec<_>>().join("; "));
             failed.push((field_key.clone(), field_value.clone()));
@@ -709,7 +761,7 @@ pub fn dispatched_map_partial<K, V, R: Into<DecodeResult<V>>>(
         let (field_key, field_value) = &fields[i];
         match key(field_key) {
             Ok(key) => {
-                let DecodeResult { value, error } = value(&key, field_value).into();
+                let DecodeResult { value, error } = with_frames(dfu_frames::dispatched_map_values, || value(&key, field_value).into());
                 if let Some(error) = error {
                     errors.push(error);
                     failed.push((field_key.clone(), field_value.clone()));

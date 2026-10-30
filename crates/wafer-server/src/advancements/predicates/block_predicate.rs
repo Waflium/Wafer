@@ -7,7 +7,7 @@ use super::nbt_predicate::NbtPredicate;
 use super::state_properties_predicate::StatePropertiesPredicate;
 use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::level::BlockGetter;
 use crate::world::level::block::entity::BlockEntity;
 use crate::world::level::block::state::pattern::block_in_world::BlockInWorld;
@@ -22,14 +22,19 @@ pub struct BlockPredicate {
 
 impl BlockPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<BlockPredicate> {
-        codec::map(tag)?;
+        codec::as_codec(|| BlockPredicate::decode_map(tag)).into_result()
+    }
+
+    pub fn decode_map(tag: &Nbt) -> DecodeResult<BlockPredicate> {
+        if let Err(error) = codec::map(tag) {
+            return DecodeResult::error(error);
+        }
         let mut record = codec::Record::default();
-        let blocks = record.field(codec::decode_optional(tag, "blocks", |t| HolderSet::decode("minecraft:block", t)));
-        let properties = record.field(codec::decode_optional(tag, "state", StatePropertiesPredicate::decode));
-        let nbt = record.field(codec::decode_optional(tag, "nbt", NbtPredicate::decode));
-        let components = record.field(DataComponentMatchers::decode(tag));
-        record.finish()?;
-        Ok(BlockPredicate { blocks: blocks.unwrap(), properties: properties.unwrap(), nbt: nbt.unwrap(), components: components.unwrap() })
+        let blocks = record.optional(tag, "blocks", |t| HolderSet::decode_partial("minecraft:block", t));
+        let properties = record.optional(tag, "state", StatePropertiesPredicate::decode);
+        let nbt = record.optional(tag, "nbt", NbtPredicate::decode);
+        let components = record.nested(|| DataComponentMatchers::decode_partial(tag));
+        record.build(|| Some(BlockPredicate { blocks, properties, nbt, components: components? }))
     }
 
     pub fn matches(&self, level: &mut ServerLevel, pos: BlockPos) -> bool {

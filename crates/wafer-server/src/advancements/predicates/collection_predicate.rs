@@ -14,7 +14,7 @@ pub fn codec(element: fn() -> Pair) -> Pair {
 use super::collection_contents_predicate::CollectionContentsPredicate;
 use super::collection_counts_predicate::CollectionCountsPredicate;
 use super::min_max_bounds::Ints;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 
 #[derive(Debug)]
 pub struct CollectionPredicate<P> {
@@ -25,12 +25,17 @@ pub struct CollectionPredicate<P> {
 
 impl<P> CollectionPredicate<P> {
     pub fn decode(tag: &Nbt, element: fn(&Nbt) -> DataResult<P>) -> DataResult<CollectionPredicate<P>> {
-        codec::map(tag)?;
-        Ok(CollectionPredicate {
-            contains: codec::decode_optional(tag, "contains", |t| CollectionContentsPredicate::decode(t, element))?,
-            counts: codec::decode_optional(tag, "count", |t| CollectionCountsPredicate::decode(t, element))?,
-            size: codec::decode_optional(tag, "size", Ints::decode)?,
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let contains = record.optional(tag, "contains", |t| CollectionContentsPredicate::decode(t, element));
+            let counts = record.optional(tag, "count", |t| CollectionCountsPredicate::decode(t, element));
+            let size = record.optional(tag, "size", Ints::decode_partial);
+            record.build(|| Some(CollectionPredicate { contains, counts, size }))
         })
+        .into_result()
     }
 
     pub fn test<T>(&self, values: &[T], test: impl Fn(&P, &T) -> bool) -> bool {

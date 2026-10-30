@@ -2,8 +2,10 @@ use wafer_protocol::nbt::Nbt;
 
 use super::list_operation::StandAlone;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
+use crate::world::item::component::codec::Wrap;
+use crate::world::item::component::types;
 use crate::world::item::component::{self as dc, codec as component_codec};
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::floats::ContextFloatProvider;
@@ -18,23 +20,22 @@ pub struct SetCustomModelDataFunction {
     colors: Option<StandAlone<Holder<ContextIntProvider>>>,
 }
 
-fn color_provider(tag: &Nbt) -> DataResult<Holder<ContextIntProvider>> {
-    match ContextIntProvider::decode_holder(tag) {
-        Ok(provider) => Ok(provider),
-        Err(error) => match tag.as_list() {
-            [r, g, b] => {
-                let channel = |c: &Nbt| codec::float(c).map(|v| (v * 255.0) as i32 & 0xFF);
-                Ok(ints::exactly((channel(r)? << 16) | (channel(g)? << 8) | channel(b)?))
-            }
-            _ => Err(error),
-        },
-    }
+fn color_provider(tag: &Nbt) -> DecodeResult<Holder<ContextIntProvider>> {
+    codec::wrapped(Wrap::Xmap, || {
+        codec::either_result(
+            codec::either_first(|| ContextIntProvider::decode_holder_partial(tag)),
+            || codec::either_second(|| types::rgb_color().decode_partial(tag).map(|color| ints::exactly(component_codec::as_i32(&color)))),
+        )
+    })
+    .map(|either| match either {
+        Ok(provider) | Err(provider) => provider,
+    })
 }
 
 impl SetCustomModelDataFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetCustomModelDataFunction> {
         let mut record = codec::Record::default();
-        let floats = record.optional(tag, "floats", |t| StandAlone::decode(t, ContextFloatProvider::decode_holder, i32::MAX));
+        let floats = record.optional(tag, "floats", |t| StandAlone::decode(t, ContextFloatProvider::decode_holder_partial, i32::MAX));
         let flags = record.optional(tag, "flags", |t| StandAlone::decode(t, codec::bool_value, i32::MAX));
         let strings = record.optional(tag, "strings", |t| StandAlone::decode(t, |s| Ok::<String, String>(codec::string(s)?.to_string()), i32::MAX));
         let colors = record.optional(tag, "colors", |t| StandAlone::decode(t, color_provider, i32::MAX));

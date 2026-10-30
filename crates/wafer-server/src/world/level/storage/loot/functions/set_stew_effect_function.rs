@@ -6,6 +6,7 @@ use crate::core::holder::Holder;
 use crate::util::codec::{self, DecodeResult};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
+use crate::world::item::component::codec::Wrap;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::providers::number::ints::ContextIntProvider;
 use crate::world::level::storage::loot::validatable::{self, Validatable};
@@ -18,16 +19,18 @@ struct EffectEntry {
 
 impl EffectEntry {
     fn decode(tag: &Nbt) -> DecodeResult<EffectEntry> {
-        if let Err(error) = codec::map(tag) {
-            return DecodeResult::error(error);
-        }
-        let mut record = codec::Record::default();
-        let effect = record.required(tag, "type", |t| {
-            let id = codec::identifier(t)?;
-            MobEffect::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:mob_effect]: {id}"))
-        });
-        let duration = record.required(tag, "duration", ContextIntProvider::decode_holder);
-        record.build(|| Some(EffectEntry { effect: effect?, duration: duration? }))
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let effect = record.required(tag, "type", |t| {
+                let id = codec::identifier(t)?;
+                MobEffect::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:mob_effect]: {id}"))
+            });
+            let duration = record.required(tag, "duration", ContextIntProvider::decode_holder_partial);
+            record.build(|| Some(EffectEntry { effect: effect?, duration: duration? }))
+        })
     }
 }
 
@@ -39,17 +42,19 @@ impl SetStewEffectFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetStewEffectFunction> {
         let mut record = codec::Record::default();
         let effects = record.with_default(tag, "effects", Vec::new(), |t| {
-            codec::list_partial(t, EffectEntry::decode).validate(|effects| {
-                for (i, entry) in effects.iter().enumerate() {
-                    if effects[..i].iter().any(|seen| seen.effect == entry.effect) {
-                        return Err(format!(
-                            "Encountered duplicate mob effect: 'Reference{{ResourceKey[minecraft:mob_effect / {}]=net.minecraft.world.effect.MobEffect@{:x}}}'",
-                            entry.effect.info().name,
-                            crate::util::java_collections::identity_hash_code()
-                        ));
+            codec::wrapped(Wrap::FlatXmap, || {
+                codec::list_partial(t, EffectEntry::decode).validate(|effects| {
+                    for (i, entry) in effects.iter().enumerate() {
+                        if effects[..i].iter().any(|seen| seen.effect == entry.effect) {
+                            return Err(format!(
+                                "Encountered duplicate mob effect: 'Reference{{ResourceKey[minecraft:mob_effect / {}]=net.minecraft.world.effect.MobEffect@{:x}}}'",
+                                entry.effect.info().name,
+                                crate::util::java_collections::identity_hash_code()
+                            ));
+                        }
                     }
-                }
-                Ok(())
+                    Ok(())
+                })
             })
         });
         record.build(|| Some(SetStewEffectFunction { effects }))

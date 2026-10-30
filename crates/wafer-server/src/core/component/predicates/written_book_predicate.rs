@@ -18,7 +18,8 @@ pub fn codec() -> Pair {
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::min_max_bounds::Ints;
 use crate::network::chat::Component;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::codec as component_codec;
 
 fn raw(value: &Nbt) -> &Nbt {
@@ -35,7 +36,7 @@ pub struct PagePredicate {
 
 impl PagePredicate {
     fn decode(tag: &Nbt) -> DataResult<PagePredicate> {
-        Ok(PagePredicate { contents: crate::network::chat::component_serialization::decode(tag)? })
+        codec::wrapped(Wrap::Xmap, || crate::network::chat::component_serialization::decode(tag)).map(|contents| PagePredicate { contents })
     }
 
     fn test(&self, value: &Nbt) -> bool {
@@ -54,15 +55,19 @@ pub struct WrittenBookPredicate {
 
 impl WrittenBookPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<WrittenBookPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let pages = record.field(codec::decode_optional(tag, "pages", |t| CollectionPredicate::decode(t, PagePredicate::decode)));
-        let author = record.field(codec::decode_optional(tag, "author", |t| Ok(codec::string(t)?.to_string())));
-        let title = record.field(codec::decode_optional(tag, "title", |t| Ok(codec::string(t)?.to_string())));
-        let generation = record.field(codec::decode_or(tag, "generation", Ints::ANY, Ints::decode));
-        let resolved = record.field(codec::decode_optional(tag, "resolved", codec::bool_value));
-        record.finish()?;
-        Ok(WrittenBookPredicate { pages: pages.unwrap(), author: author.unwrap(), title: title.unwrap(), generation: generation.unwrap(), resolved: resolved.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let pages = record.optional(tag, "pages", |t| CollectionPredicate::decode(t, PagePredicate::decode));
+            let author = record.optional(tag, "author", |t| Ok::<_, String>(codec::string(t)?.to_string()));
+            let title = record.optional(tag, "title", |t| Ok::<_, String>(codec::string(t)?.to_string()));
+            let generation = record.with_default(tag, "generation", Ints::ANY, Ints::decode_partial);
+            let resolved = record.optional(tag, "resolved", codec::bool_value);
+            record.build(|| Some(WrittenBookPredicate { pages, author, title, generation, resolved }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

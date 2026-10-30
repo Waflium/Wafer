@@ -53,12 +53,14 @@ fn award_matched_from(level: &mut ServerLevel, player: EntityId, matched_conditi
 }
 
 pub fn decode<T>(tag: &Nbt, read: impl FnOnce(&mut Fields) -> Option<T>) -> DecodeResult<T> {
-    let mut fields = match Fields::new(tag) {
-        Ok(fields) => fields,
-        Err(error) => return DecodeResult::error(error),
-    };
-    let value = read(&mut fields);
-    fields.build(|| value)
+    codec::as_codec(|| {
+        let mut fields = match Fields::new(tag) {
+            Ok(fields) => fields,
+            Err(error) => return DecodeResult::error(error),
+        };
+        let value = read(&mut fields);
+        fields.build(|| value)
+    })
 }
 
 pub struct Fields<'a> {

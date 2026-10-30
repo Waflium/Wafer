@@ -7,7 +7,7 @@ use super::light_predicate::{self, LightPredicate};
 use super::min_max_bounds::{Doubles, doubles_codec};
 use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::custom;
 use crate::world::item::component::types::{self, Pair, def, opt, record};
 use crate::world::level::block::campfire_block;
@@ -39,13 +39,17 @@ struct PositionPredicate {
 
 impl PositionPredicate {
     fn decode(tag: &Nbt) -> DataResult<PositionPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let x = record.field(codec::decode_or(tag, "x", Doubles::ANY, Doubles::decode));
-        let y = record.field(codec::decode_or(tag, "y", Doubles::ANY, Doubles::decode));
-        let z = record.field(codec::decode_or(tag, "z", Doubles::ANY, Doubles::decode));
-        record.finish()?;
-        Ok(PositionPredicate { x: x.unwrap(), y: y.unwrap(), z: z.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let x = record.with_default(tag, "x", Doubles::ANY, Doubles::decode_partial);
+            let y = record.with_default(tag, "y", Doubles::ANY, Doubles::decode_partial);
+            let z = record.with_default(tag, "z", Doubles::ANY, Doubles::decode_partial);
+            record.build(|| Some(PositionPredicate { x, y, z }))
+        })
+        .into_result()
     }
 
     fn matches(&self, x: f64, y: f64, z: f64) -> bool {
@@ -89,29 +93,23 @@ fn decode_structures(tag: &Nbt) -> DataResult<HolderSet> {
 
 impl LocationPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<LocationPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let position = record.field(codec::decode_optional(tag, "position", PositionPredicate::decode));
-        let biomes = record.field(codec::decode_optional(tag, "biomes", |t| HolderSet::decode("minecraft:worldgen/biome", t)));
-        let structures = record.field(codec::decode_optional(tag, "structures", decode_structures));
-        let dimension = record.field(codec::decode_optional(tag, "dimension", codec::identifier));
-        let smokey = record.field(codec::decode_optional(tag, "smokey", codec::bool_value));
-        let light = record.field(codec::decode_optional(tag, "light", LightPredicate::decode));
-        let block = record.field(codec::decode_optional(tag, "block", BlockPredicate::decode));
-        let fluid = record.field(codec::decode_optional(tag, "fluid", FluidPredicate::decode));
-        let can_see_sky = record.field(codec::decode_optional(tag, "can_see_sky", codec::bool_value));
-        record.finish()?;
-        Ok(LocationPredicate {
-            position: position.unwrap(),
-            biomes: biomes.unwrap(),
-            structures: structures.unwrap(),
-            dimension: dimension.unwrap(),
-            smokey: smokey.unwrap(),
-            light: light.unwrap(),
-            block: block.unwrap(),
-            fluid: fluid.unwrap(),
-            can_see_sky: can_see_sky.unwrap(),
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let position = record.optional(tag, "position", PositionPredicate::decode);
+            let biomes = record.optional(tag, "biomes", |t| HolderSet::decode("minecraft:worldgen/biome", t));
+            let structures = record.optional(tag, "structures", decode_structures);
+            let dimension = record.optional(tag, "dimension", codec::identifier);
+            let smokey = record.optional(tag, "smokey", codec::bool_value);
+            let light = record.optional(tag, "light", LightPredicate::decode);
+            let block = record.optional(tag, "block", BlockPredicate::decode);
+            let fluid = record.optional(tag, "fluid", FluidPredicate::decode);
+            let can_see_sky = record.optional(tag, "can_see_sky", codec::bool_value);
+            record.build(|| Some(LocationPredicate { position, biomes, structures, dimension, smokey, light, block, fluid, can_see_sky }))
         })
+        .into_result()
     }
 
     pub fn matches(&self, level: &mut ServerLevel, x: f64, y: f64, z: f64) -> bool {

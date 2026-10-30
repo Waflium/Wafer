@@ -68,7 +68,7 @@ pub enum Wrap {
 }
 
 impl Wrap {
-    fn frames(self) -> Vec<&'static str> {
+    pub fn frames(self) -> Vec<&'static str> {
         match self {
             Wrap::CodecView => dfu_frames::codec_view(),
             Wrap::Xmap => dfu_frames::codec_xmap(),
@@ -275,6 +275,16 @@ pub fn as_i32(tag: &Nbt) -> i32 {
         }
         _ => as_i64(tag) as i32,
     }
+}
+
+pub fn as_byte(tag: &Nbt) -> i8 {
+    check_narrowing_number(tag, "java.base/java.lang.Number.byteValue(Number.java:105)");
+    as_i64(tag) as i8
+}
+
+pub fn as_short(tag: &Nbt) -> i16 {
+    check_narrowing_number(tag, "java.base/java.lang.Number.shortValue(Number.java:120)");
+    as_i64(tag) as i16
 }
 
 pub fn as_f64(tag: &Nbt) -> f64 {
@@ -501,7 +511,12 @@ impl Codec {
 
     fn unwound_frames(&self) -> Vec<&'static str> {
         match self {
-            Codec::Byte | Codec::UnsignedByte => dfu_frames::byte_leaf(),
+            Codec::Byte => dfu_frames::byte_leaf(),
+            Codec::UnsignedByte => {
+                let mut frames = dfu_frames::byte_leaf();
+                frames.extend(dfu_frames::codec_xmap());
+                frames
+            }
             Codec::Short => dfu_frames::short_leaf(),
             Codec::Int(min, max, _) => dfu_frames::int_leaf(*min != i32::MIN || *max != i32::MAX),
             Codec::Long(min, max, _) => dfu_frames::long_leaf(*min != i64::MIN || *max != i64::MAX),
@@ -920,6 +935,11 @@ fn case_frames(selector: &Selector, name: &str) -> Vec<&'static str> {
         (Selector::Registry("minecraft:worldgen/structure_type"), "minecraft:jigsaw") | (Selector::Registry("minecraft:worldgen/structure_placement"), "minecraft:random_spread") => {
             dfu_frames::map_codec_flat_xmap()
         }
+        (
+            Selector::Registry("minecraft:int_provider_type"),
+            "minecraft:uniform" | "minecraft:biased_to_bottom" | "minecraft:very_biased_to_bottom" | "minecraft:clamped" | "minecraft:clamped_normal" | "minecraft:trapezoid",
+        )
+        | (Selector::Registry("minecraft:float_provider_type"), "minecraft:uniform" | "minecraft:clamped_normal" | "minecraft:trapezoid") => dfu_frames::map_codec_flat_xmap(),
         _ => Vec::new(),
     }
 }

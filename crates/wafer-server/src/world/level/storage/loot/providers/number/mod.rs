@@ -6,6 +6,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder::{Holder, RegistryElement};
 use crate::util::codec::{self, DecodeResult, Record};
+use crate::world::item::component::codec::Wrap;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
 use crate::world::level::storage::loot::validatable::{self, Validatable};
@@ -36,13 +37,15 @@ pub struct Case<V: RegistryElement> {
 
 impl<V: RegistryElement> Case<V> {
     pub fn decode_partial(tag: &Nbt, value: fn(&Nbt) -> DecodeResult<Holder<V>>) -> DecodeResult<Case<V>> {
-        if let Err(error) = codec::map(tag) {
-            return DecodeResult::error(error);
-        }
-        let mut record = Record::default();
-        let condition = record.required(tag, "condition", LootItemCondition::decode_holder_partial);
-        let value = record.required(tag, "value", value);
-        record.build(|| Some(Case { condition: condition?, value: value? }))
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = Record::default();
+            let condition = record.required(tag, "condition", LootItemCondition::decode_holder_partial);
+            let value = record.required(tag, "value", value);
+            record.build(|| Some(Case { condition: condition?, value: value? }))
+        })
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {
@@ -55,19 +58,22 @@ pub fn decode_holder_list_partial<V: RegistryElement>(tag: &Nbt, holder: fn(&Nbt
 }
 
 pub fn decode_weighted_list<V: RegistryElement>(tag: &Nbt, holder: fn(&Nbt) -> DecodeResult<Holder<V>>) -> DecodeResult<Vec<(Holder<V>, i32)>> {
-    codec::list_partial(tag, |entry| {
-        if let Err(error) = codec::map(entry) {
-            return DecodeResult::error(error);
-        }
-        let mut record = Record::default();
-        let data = record.required(entry, "data", holder);
-        let weight = record.required(entry, "weight", |t| {
-            let weight = codec::int(t)?;
-            if weight < 0 { Err(format!("Value must be non-negative: {weight}")) } else { Ok(weight) }
-        });
-        record.build(|| Some((data?, weight?)))
+    codec::wrapped(Wrap::FlatXmap, || {
+        codec::wrapped(Wrap::Xmap, || {
+            codec::list_partial(tag, |entry| {
+                codec::as_codec(|| {
+                    if let Err(error) = codec::map(entry) {
+                        return DecodeResult::error(error);
+                    }
+                    let mut record = Record::default();
+                    let data = record.required(entry, "data", holder);
+                    let weight = record.required(entry, "weight", codec::non_negative_int);
+                    record.build(|| Some((data?, weight?)))
+                })
+            })
+        })
+        .validate(|entries| if entries.is_empty() { Err("Weighted list must contain at least one entry with non-zero weight".to_string()) } else { Ok(()) })
     })
-    .validate(|entries| if entries.is_empty() { Err("Weighted list must contain at least one entry with non-zero weight".to_string()) } else { Ok(()) })
 }
 
 pub fn get_random<'v, V>(distribution: &'v [(V, i32)], context: &mut LootContext) -> &'v V {

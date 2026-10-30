@@ -3,6 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use super::loot_item_function::LootItemFunction;
 use crate::core::holder::Holder;
 use crate::util::codec::{self, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::validatable;
@@ -20,7 +21,7 @@ impl SequenceFunction {
     }
 
     pub fn decode_inline(tag: &Nbt) -> DecodeResult<SequenceFunction> {
-        LootItemFunction::decode_holder_set(tag).map(|functions| SequenceFunction { functions })
+        codec::wrapped(Wrap::Xmap, || LootItemFunction::decode_holder_set(tag)).map(|functions| SequenceFunction { functions })
     }
 
     pub fn run(&self, mut item_stack: ItemStack, context: &mut LootContext) -> ItemStack {

@@ -11,6 +11,7 @@ use super::transmute_result::TransmuteResult;
 use crate::advancements::predicates::min_max_bounds::{Bounds, Ints};
 use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::values::ItemStackTemplate;
 
 const MIN_MATERIAL_COUNT: i32 = 1;
@@ -27,9 +28,11 @@ pub struct TransmuteRecipe {
 }
 
 fn decode_material_count(tag: &Nbt) -> DecodeResult<Ints> {
-    Ints::decode_partial(tag).validate(|bounds| match (bounds.bounds.min, bounds.bounds.max) {
-        (Some(min), Some(max)) if min >= MIN_MATERIAL_COUNT && max <= MAX_MATERIAL_COUNT => Ok(()),
-        _ => Err(format!("Range must be within [{MIN_MATERIAL_COUNT}..{MAX_MATERIAL_COUNT}], but was {}", bounds.bounds.as_range_string())),
+    codec::wrapped(Wrap::FlatXmap, || {
+        Ints::decode_partial(tag).validate(|bounds| match (bounds.bounds.min, bounds.bounds.max) {
+            (Some(min), Some(max)) if min >= MIN_MATERIAL_COUNT && max <= MAX_MATERIAL_COUNT => Ok(()),
+            _ => Err(format!("Range must be within [{MIN_MATERIAL_COUNT}..{MAX_MATERIAL_COUNT}], but was {}", bounds.bounds.as_range_string())),
+        })
     })
 }
 
@@ -48,7 +51,7 @@ impl TransmuteRecipe {
 
     fn decode_partial(tag: &Nbt) -> DecodeResult<TransmuteRecipe> {
         let mut record = Record::default();
-        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let base = NormalCraftingRecipe::decode_in(&mut record, tag);
         let input = record.required(tag, "input", Ingredient::decode);
         let material = record.required(tag, "material", Ingredient::decode);
         let material_count = record.with_default(tag, "material_count", DEFAULT_MATERIAL_COUNT, decode_material_count);

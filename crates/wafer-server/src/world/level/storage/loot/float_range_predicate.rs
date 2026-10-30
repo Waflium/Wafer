@@ -3,7 +3,8 @@ use wafer_protocol::nbt::Nbt;
 use super::loot_context::LootContext;
 use super::providers::number::floats::{self, ContextFloatProvider};
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::codec::{Codec, Stream};
 use crate::world::item::component::types::{self, Pair, opt};
 use crate::world::level::storage::loot::validatable::{self, Validatable};
@@ -20,13 +21,29 @@ pub enum FloatRangePredicate {
 }
 
 impl FloatRangePredicate {
-    pub fn decode(tag: &Nbt) -> DataResult<FloatRangePredicate> {
-        match codec::either(tag, ContextFloatProvider::decode_holder, |t| {
-            Ok((codec::decode_optional(t, "min", ContextFloatProvider::decode_holder)?, codec::decode_optional(t, "max", ContextFloatProvider::decode_holder)?))
-        })? {
-            Ok(point) => Ok(FloatRangePredicate::Point(point)),
-            Err((min, max)) => Ok(FloatRangePredicate::Line { min, max }),
-        }
+    pub fn decode(tag: &Nbt) -> DecodeResult<FloatRangePredicate> {
+        codec::wrapped(Wrap::Xmap, || {
+            codec::either_result(
+                codec::either_first(|| codec::wrapped(Wrap::Xmap, || ContextFloatProvider::decode_holder_partial(tag))),
+                || {
+                    codec::either_second(|| {
+                        codec::as_codec(|| {
+                            if let Err(error) = codec::map(tag) {
+                                return DecodeResult::error(error);
+                            }
+                            let mut record = codec::Record::default();
+                            let min = record.optional(tag, "min", ContextFloatProvider::decode_holder_partial);
+                            let max = record.optional(tag, "max", ContextFloatProvider::decode_holder_partial);
+                            record.build(|| Some((min, max)))
+                        })
+                    })
+                },
+            )
+        })
+        .map(|either| match either {
+            Ok(point) => FloatRangePredicate::Point(point),
+            Err((min, max)) => FloatRangePredicate::Line { min, max },
+        })
     }
 
     pub fn test(&self, context: &mut LootContext, input: f32) -> bool {

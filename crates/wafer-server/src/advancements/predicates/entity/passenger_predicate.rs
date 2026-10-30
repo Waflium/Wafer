@@ -8,7 +8,8 @@ pub fn codec() -> Pair {
     entity_predicate::codec()
 }
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::entity::EntityId;
 
 #[derive(Debug)]
@@ -18,7 +19,7 @@ pub struct PassengerPredicate {
 
 impl PassengerPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<PassengerPredicate> {
-        Ok(PassengerPredicate { passenger: Box::new(EntityPredicate::decode(tag)?) })
+        codec::wrapped(Wrap::Xmap, || EntityPredicate::decode(tag)).map(|passenger| PassengerPredicate { passenger: Box::new(passenger) })
     }
 
     pub fn matches(&self, level: &mut ServerLevel, entity: EntityId, position: Option<Vec3>) -> bool {

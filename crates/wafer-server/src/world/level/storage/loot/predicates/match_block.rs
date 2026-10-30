@@ -1,7 +1,8 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::advancements::predicates::block_predicate::BlockPredicate;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::parameters::loot_context_params::LootContextParam;
 
@@ -10,8 +11,8 @@ pub struct MatchBlock {
 }
 
 impl MatchBlock {
-    pub fn decode(tag: &Nbt) -> DataResult<MatchBlock> {
-        Ok(MatchBlock { predicate: BlockPredicate::decode(tag)? })
+    pub fn decode(tag: &Nbt) -> DecodeResult<MatchBlock> {
+        codec::wrapped(Wrap::MapXmap, || BlockPredicate::decode_map(tag)).map(|predicate| MatchBlock { predicate })
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

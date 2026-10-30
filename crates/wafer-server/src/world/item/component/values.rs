@@ -3,7 +3,7 @@
 use wafer_data::{Block, ItemUseAnimation, Rarity};
 use wafer_protocol::nbt::Nbt;
 
-use super::codec::{Codec, RangeError, as_f32, as_f64, as_i32, as_i64};
+use super::codec::{Codec, Wrap, as_f32, as_f64, as_i32, as_i64};
 use super::types::compound;
 use crate::commands::arguments::registry_tag;
 use crate::util::codec::{DecodeResult, Record};
@@ -303,22 +303,30 @@ impl ItemStackTemplate {
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<ItemStackTemplate> {
         let alternative = || DecodeResult::from(decode_item(tag)).map(|item| ItemStackTemplate { item, count: 1, components: Nbt::Compound(Vec::new().into()) });
-        crate::util::codec::either_result(ItemStackTemplate::decode_map_partial(tag), alternative).map(|either| match either {
+        crate::util::codec::wrapped(Wrap::Xmap, || {
+            crate::util::codec::either_result(
+                crate::util::codec::either_first(|| ItemStackTemplate::decode_map_partial(tag)),
+                || crate::util::codec::either_second(alternative),
+            )
+        })
+        .map(|either| match either {
             Ok(template) | Err(template) => template,
         })
     }
 
     fn decode_map_partial(tag: &Nbt) -> DecodeResult<ItemStackTemplate> {
-        if let Err(error) = crate::util::codec::map(tag) {
-            return DecodeResult::error(error);
-        }
-        let mut record = Record::default();
-        let item = record.required(tag, "id", |id| DecodeResult::from(decode_item(id)));
-        let count = record.with_default(tag, "count", 1, |count| DecodeResult::from(Codec::Int(1, 99, RangeError::Within).decode(count)).map(|count| as_i32(&count)));
-        let components = record.with_default(tag, "components", Nbt::Compound(Vec::new().into()), |components| {
-            DecodeResult::from(super::DataComponentPatch::from_nbt(components)).map(|_| components.clone())
-        });
-        record.build(|| Some(ItemStackTemplate { item: item?, count, components }))
+        crate::util::codec::as_codec(|| {
+            if let Err(error) = crate::util::codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = Record::default();
+            let item = record.required(tag, "id", |id| DecodeResult::from(decode_item(id)));
+            let count = record.with_default(tag, "count", 1, |count| crate::util::codec::int_range(count, 1, 99));
+            let components = record.with_default(tag, "components", Nbt::Compound(Vec::new().into()), |components| {
+                DecodeResult::from(super::DataComponentPatch::from_nbt(components)).map(|_| components.clone())
+            });
+            record.build(|| Some(ItemStackTemplate { item: item?, count, components }))
+        })
     }
 
     pub fn item(&self) -> wafer_data::Item {

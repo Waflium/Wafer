@@ -11,6 +11,7 @@ use super::{
 };
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::types::{self, Pair};
 use crate::world::entity::EntityId;
 use crate::world::level::storage::loot::loot_context::{LootContext, LootContextBuilder};
@@ -70,11 +71,9 @@ pub struct EntityPredicate {
 
 impl EntityPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityPredicate> {
-        let mut parts: Vec<EntitySubPredicate> = codec::dispatched_map(
-            tag,
-            |key| EntitySubPredicate::codec(&crate::resources::identifier::read(key)?),
-            |decode, value| decode(value),
-        )?
+        let mut parts: Vec<EntitySubPredicate> = codec::wrapped(Wrap::Xmap, || {
+            codec::dispatched_map(tag, |key| EntitySubPredicate::codec(&crate::resources::identifier::read(key)?), |decode, value| decode(value))
+        })?
         .into_iter()
         .map(|(_, part)| part)
         .collect();

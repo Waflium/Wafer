@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::ServerLevel;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::entity::EntityId;
 
 pub fn codec() -> crate::world::item::component::types::Pair {
@@ -16,11 +17,7 @@ pub struct PeriodicEntityTickPredicate {
 
 impl PeriodicEntityTickPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<PeriodicEntityTickPredicate> {
-        let periodic_tick = codec::int(tag)?;
-        if periodic_tick <= 0 {
-            return Err(format!("Value must be positive: {periodic_tick}"));
-        }
-        Ok(PeriodicEntityTickPredicate { periodic_tick })
+        codec::wrapped(Wrap::Xmap, || codec::positive_int(tag)).map(|periodic_tick| PeriodicEntityTickPredicate { periodic_tick })
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::server::network::movement::Input;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::types::{self, Pair, opt, record};
 
 pub fn codec() -> Pair {
@@ -23,20 +23,16 @@ pub struct InputPredicate {
 
 impl InputPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<InputPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let mut flag = |key| record.field(codec::decode_optional(tag, key, codec::bool_value));
-        let (forward, backward, left, right, jump, sneak, sprint) = (flag("forward"), flag("backward"), flag("left"), flag("right"), flag("jump"), flag("sneak"), flag("sprint"));
-        record.finish()?;
-        Ok(InputPredicate {
-            forward: forward.unwrap(),
-            backward: backward.unwrap(),
-            left: left.unwrap(),
-            right: right.unwrap(),
-            jump: jump.unwrap(),
-            sneak: sneak.unwrap(),
-            sprint: sprint.unwrap(),
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let mut flag = |key| record.optional(tag, key, codec::bool_value);
+            let (forward, backward, left, right, jump, sneak, sprint) = (flag("forward"), flag("backward"), flag("left"), flag("right"), flag("jump"), flag("sneak"), flag("sprint"));
+            record.build(|| Some(InputPredicate { forward, backward, left, right, jump, sneak, sprint }))
         })
+        .into_result()
     }
 
     pub fn matches(&self, input: Input) -> bool {

@@ -5,6 +5,7 @@ use crate::commands::brigadier::{
     StringReader,
 };
 use crate::util::codec::{self, DataResult, DecodeResult, Record};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::custom;
 use crate::world::item::component::types::Pair;
 
@@ -71,23 +72,27 @@ impl<T: Copy + PartialOrd> Bounds<T> {
         T: JavaToString,
     {
         let range = |tag: &Nbt| {
-            if let Err(error) = codec::map(tag) {
-                return DecodeResult::error(error);
-            }
-            let mut record = Record::default();
-            let min = record.optional(tag, "min", number);
-            let max = record.optional(tag, "max", number);
-            record.build(|| Some(Bounds { min, max }))
+            codec::as_codec(|| {
+                if let Err(error) = codec::map(tag) {
+                    return DecodeResult::error(error);
+                }
+                let mut record = Record::default();
+                let min = record.optional(tag, "min", number);
+                let max = record.optional(tag, "max", number);
+                record.build(|| Some(Bounds { min, max }))
+            })
         };
-        codec::either_result(range(tag), || DecodeResult::from(number(tag)))
-            .map(|either| match either {
-                Ok(bounds) => bounds,
-                Err(value) => Bounds { min: Some(value), max: Some(value) },
-            })
-            .validate(|bounds| match (bounds.min, bounds.max) {
-                (Some(min), Some(max)) if min > max => Err(format!("Swapped bounds in range: Optional[{}] is higher than Optional[{}]", min.java_to_string(), max.java_to_string())),
-                _ => Ok(()),
-            })
+        codec::wrapped(Wrap::FlatXmap, || {
+            codec::wrapped(Wrap::Xmap, || codec::either_result(codec::either_first(|| range(tag)), || codec::either_second(|| DecodeResult::from(number(tag)))))
+                .map(|either| match either {
+                    Ok(bounds) => bounds,
+                    Err(value) => Bounds { min: Some(value), max: Some(value) },
+                })
+                .validate(|bounds| match (bounds.min, bounds.max) {
+                    (Some(min), Some(max)) if min > max => Err(format!("Swapped bounds in range: Optional[{}] is higher than Optional[{}]", min.java_to_string(), max.java_to_string())),
+                    _ => Ok(()),
+                })
+        })
     }
 
     fn from_reader(
@@ -160,7 +165,7 @@ impl Ints {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<Ints> {
-        Bounds::decode_partial(tag, codec::int).map(|bounds| Ints { bounds })
+        codec::wrapped(Wrap::Xmap, || Bounds::decode_partial(tag, codec::int)).map(|bounds| Ints { bounds })
     }
 
     pub fn is_any(&self) -> bool {
@@ -211,7 +216,7 @@ impl Doubles {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<Doubles> {
-        Bounds::decode_partial(tag, codec::double).map(Doubles::new)
+        codec::wrapped(Wrap::Xmap, || Bounds::decode_partial(tag, codec::double)).map(Doubles::new)
     }
 
     pub fn is_any(&self) -> bool {

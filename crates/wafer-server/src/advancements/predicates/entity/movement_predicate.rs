@@ -9,7 +9,7 @@ pub fn codec() -> Pair {
     )
 }
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::EntityId;
 
 #[derive(Debug)]
@@ -25,21 +25,17 @@ pub struct MovementPredicate {
 
 impl MovementPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<MovementPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let mut bound = |key| record.field(codec::decode_or(tag, key, Doubles::ANY, Doubles::decode));
-        let (x, y, z) = (bound("x"), bound("y"), bound("z"));
-        let (speed, horizontal_speed, vertical_speed, fall_distance) = (bound("speed"), bound("horizontal_speed"), bound("vertical_speed"), bound("fall_distance"));
-        record.finish()?;
-        Ok(MovementPredicate {
-            x: x.unwrap(),
-            y: y.unwrap(),
-            z: z.unwrap(),
-            speed: speed.unwrap(),
-            horizontal_speed: horizontal_speed.unwrap(),
-            vertical_speed: vertical_speed.unwrap(),
-            fall_distance: fall_distance.unwrap(),
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let mut bound = |key| record.with_default(tag, key, Doubles::ANY, Doubles::decode_partial);
+            let (x, y, z) = (bound("x"), bound("y"), bound("z"));
+            let (speed, horizontal_speed, vertical_speed, fall_distance) = (bound("speed"), bound("horizontal_speed"), bound("vertical_speed"), bound("fall_distance"));
+            record.build(|| Some(MovementPredicate { x, y, z, speed, horizontal_speed, vertical_speed, fall_distance }))
         })
+        .into_result()
     }
 
     pub fn matches(&self, x: f64, y: f64, z: f64, fall_distance: f64) -> bool {

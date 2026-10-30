@@ -9,6 +9,7 @@ pub fn codec() -> Pair {
 
 use crate::advancements::predicates::enchantment_predicate::EnchantmentPredicate;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::DataComponentType;
 use crate::world::item::component::values::ItemEnchantments;
 
@@ -20,7 +21,7 @@ pub struct EnchantmentsPredicate {
 
 impl EnchantmentsPredicate {
     pub fn decode(component_type: DataComponentType, tag: &Nbt) -> DataResult<EnchantmentsPredicate> {
-        Ok(EnchantmentsPredicate { component_type, enchantments: codec::list_of(tag, EnchantmentPredicate::decode)? })
+        Ok(EnchantmentsPredicate { component_type, enchantments: codec::wrapped(Wrap::Xmap, || codec::list_of(tag, EnchantmentPredicate::decode))? })
     }
 
     pub fn component_type(&self) -> DataComponentType {

@@ -14,7 +14,8 @@ pub fn codec() -> Pair {
     firework_predicate_codec()
 }
 
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::codec as component_codec;
 
 const SHAPES: &[(&str, &str)] = &[("small_ball", "small_ball"), ("large_ball", "large_ball"), ("star", "star"), ("creeper", "creeper"), ("burst", "burst")];
@@ -28,13 +29,17 @@ pub struct FireworkPredicate {
 
 impl FireworkPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<FireworkPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let shape = record.field(codec::decode_optional(tag, "shape", |t| codec::string_enum(t, SHAPES)));
-        let twinkle = record.field(codec::decode_optional(tag, "has_twinkle", codec::bool_value));
-        let trail = record.field(codec::decode_optional(tag, "has_trail", codec::bool_value));
-        record.finish()?;
-        Ok(FireworkPredicate { shape: shape.unwrap(), twinkle: twinkle.unwrap(), trail: trail.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let shape = record.optional(tag, "shape", |t| codec::string_enum(t, SHAPES));
+            let twinkle = record.optional(tag, "has_twinkle", codec::bool_value);
+            let trail = record.optional(tag, "has_trail", codec::bool_value);
+            record.build(|| Some(FireworkPredicate { shape, twinkle, trail }))
+        })
+        .into_result()
     }
 
     pub fn test(&self, firework_explosion: &Nbt) -> bool {
@@ -56,7 +61,7 @@ pub struct FireworkExplosionPredicate {
 
 impl FireworkExplosionPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<FireworkExplosionPredicate> {
-        Ok(FireworkExplosionPredicate { predicate: FireworkPredicate::decode(tag)? })
+        codec::wrapped(Wrap::Xmap, || FireworkPredicate::decode(tag)).map(|predicate| FireworkExplosionPredicate { predicate })
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

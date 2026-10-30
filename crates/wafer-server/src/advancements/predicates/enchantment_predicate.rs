@@ -9,7 +9,7 @@ pub fn codec() -> Pair {
 
 use super::min_max_bounds::Ints;
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::codec::registry;
 use crate::world::item::component::values::ItemEnchantments;
 
@@ -21,12 +21,16 @@ pub struct EnchantmentPredicate {
 
 impl EnchantmentPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EnchantmentPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let enchantments = record.field(codec::decode_optional(tag, "enchantments", |t| HolderSet::decode("minecraft:enchantment", t)));
-        let level = record.field(codec::decode_or(tag, "levels", Ints::ANY, Ints::decode));
-        record.finish()?;
-        Ok(EnchantmentPredicate { enchantments: enchantments.unwrap(), level: level.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let enchantments = record.optional(tag, "enchantments", |t| HolderSet::decode_partial("minecraft:enchantment", t));
+            let level = record.with_default(tag, "levels", Ints::ANY, Ints::decode_partial);
+            record.build(|| Some(EnchantmentPredicate { enchantments, level }))
+        })
+        .into_result()
     }
 
     pub fn contained_in(&self, item_enchantments: &ItemEnchantments) -> bool {

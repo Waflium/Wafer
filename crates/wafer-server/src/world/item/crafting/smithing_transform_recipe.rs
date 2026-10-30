@@ -26,7 +26,7 @@ impl SmithingTransformRecipe {
 
     fn decode_partial(tag: &Nbt) -> DecodeResult<SmithingTransformRecipe> {
         let mut record = Record::default();
-        let base = record.absorb(SimpleSmithingRecipe::decode_partial(tag));
+        let base = record.nested(|| SimpleSmithingRecipe::decode_partial(tag));
         let template = record.optional(tag, "template", Ingredient::decode);
         let base_ingredient = record.required(tag, "base", Ingredient::decode);
         let addition = record.optional(tag, "addition", Ingredient::decode);

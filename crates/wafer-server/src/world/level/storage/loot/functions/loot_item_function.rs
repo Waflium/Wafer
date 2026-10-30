@@ -44,6 +44,7 @@ use super::toggle_tooltips::ToggleTooltips;
 use crate::core::holder::{Holder, RegistryElement};
 use crate::server::reloadable_server_registries;
 use crate::util::codec::{self, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::ItemStack;
 use crate::world::level::storage::loot::loot_context::LootContext;
 use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
@@ -119,7 +120,12 @@ impl LootItemFunction {
     }
 
     pub fn decode_direct(tag: &Nbt) -> DecodeResult<LootItemFunction> {
-        codec::either_result(LootItemFunction::decode_typed(tag), || SequenceFunction::decode_inline(tag)).map(|function| match function {
+        codec::recursive(|| {
+            codec::wrapped(Wrap::Xmap, || {
+                codec::either_result(codec::either_first(|| LootItemFunction::decode_typed(tag)), || codec::either_second(|| SequenceFunction::decode_inline(tag)))
+            })
+        })
+        .map(|function| match function {
             Ok(function) => function,
             Err(sequence) => LootItemFunction { condition: None, function: LootItemFunctionType::Sequence(sequence) },
         })

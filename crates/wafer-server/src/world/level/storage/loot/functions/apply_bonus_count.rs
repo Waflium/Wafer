@@ -1,7 +1,8 @@
 use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
-use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::util::codec::{self, DecodeResult};
+use crate::util::dfu_frames;
 use crate::world::item::ItemStack;
 use crate::world::item::enchantment::enchantment::Enchantment;
 use crate::world::item::enchantment::enchantment_helper::get_item_enchantment_level;
@@ -44,30 +45,39 @@ pub struct ApplyBonusCount {
 }
 
 impl ApplyBonusCount {
-    fn decode_formula(tag: &Nbt) -> DataResult<Formula> {
-        let formula_type = codec::decode_field(tag, "formula", codec::identifier)?;
-        let parameters = codec::optional_field(tag, "parameters");
-        Ok(match formula_type.as_str() {
-            "minecraft:binomial_with_bonus_count" => {
-                let parameters = parameters.ok_or("No key parameters")?;
-                Formula::BinomialWithBonusCount {
-                    extra_rounds: codec::decode_field(parameters, "extra", codec::int)?,
-                    probability: codec::decode_field(parameters, "probability", codec::float)?,
-                }
-            }
-            "minecraft:ore_drops" => Formula::OreDrops,
-            "minecraft:uniform_bonus_count" => {
-                let parameters = parameters.ok_or("No key parameters")?;
-                Formula::UniformBonusCount { bonus_multiplier: codec::decode_field(parameters, "bonusMultiplier", codec::int)? }
-            }
-            other => return Err(format!("No formula type with id: '{other}'")),
+    fn decode_formula(tag: &Nbt) -> DecodeResult<Formula> {
+        let Some(type_name) = tag.get("formula") else {
+            return DecodeResult::error(format!("Missing \"formula\" in: MapLike[{}]", crate::nbt::to_string(tag)));
+        };
+        let formula_type = match codec::identifier(type_name) {
+            Ok(formula_type) => formula_type,
+            Err(error) => return DecodeResult::error(error),
+        };
+        if !matches!(formula_type.as_str(), "minecraft:binomial_with_bonus_count" | "minecraft:ore_drops" | "minecraft:uniform_bonus_count") {
+            return DecodeResult::error(format!("No formula type with id: '{formula_type}'"));
+        }
+        let no_parameters = Nbt::Compound(Vec::new().into());
+        let parameters = tag.get("parameters").unwrap_or(&no_parameters);
+        codec::with_frames(dfu_frames::dispatch_optional_value, || match formula_type.as_str() {
+            "minecraft:binomial_with_bonus_count" => codec::as_codec(|| {
+                let mut record = codec::Record::default();
+                let extra_rounds = record.required(parameters, "extra", codec::int);
+                let probability = record.required(parameters, "probability", codec::float);
+                record.build(|| Some(Formula::BinomialWithBonusCount { extra_rounds: extra_rounds?, probability: probability? }))
+            }),
+            "minecraft:uniform_bonus_count" => codec::as_codec(|| {
+                let mut record = codec::Record::default();
+                let bonus_multiplier = record.required(parameters, "bonusMultiplier", codec::int);
+                record.build(|| Some(Formula::UniformBonusCount { bonus_multiplier: bonus_multiplier? }))
+            }),
+            _ => codec::map(parameters).map(|_| Formula::OreDrops).into(),
         })
     }
 
     pub fn decode(tag: &Nbt) -> DecodeResult<ApplyBonusCount> {
         let mut record = codec::Record::default();
         let enchantment = record.required(tag, "enchantment", Enchantment::decode_holder);
-        let formula = record.absorb(ApplyBonusCount::decode_formula(tag).into());
+        let formula = record.nested(|| ApplyBonusCount::decode_formula(tag));
         record.build(|| Some(ApplyBonusCount { enchantment: enchantment?, formula: formula? }))
     }
 

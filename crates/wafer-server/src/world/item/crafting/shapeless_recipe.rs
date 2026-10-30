@@ -24,7 +24,7 @@ impl ShapelessRecipe {
 
     fn decode_partial(tag: &Nbt) -> DecodeResult<ShapelessRecipe> {
         let mut record = Record::default();
-        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let base = NormalCraftingRecipe::decode_in(&mut record, tag);
         let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
         let ingredients = record.required(tag, "ingredients", |ingredients| codec::list_between_partial(ingredients, 1, 9, |element| DecodeResult::from(Ingredient::decode(element))));
         record.build(|| {

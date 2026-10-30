@@ -22,7 +22,7 @@ impl SingleItemRecipe {
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<SingleItemRecipe> {
         let mut record = Record::default();
-        let common_info = record.absorb(CommonInfo::decode_partial(tag));
+        let common_info = record.nested(|| CommonInfo::decode_partial(tag));
         let input = record.required(tag, "ingredient", Ingredient::decode);
         let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
         record.build(|| Some(SingleItemRecipe::new(common_info?, input?, result?)))

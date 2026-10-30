@@ -1,7 +1,8 @@
 use wafer_protocol::nbt::Nbt;
 
 use super::min_max_bounds::Ints;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 
 #[derive(Debug)]
 pub struct Entry<P> {
@@ -23,7 +24,20 @@ pub struct CollectionCountsPredicate<P> {
 
 impl<P> CollectionCountsPredicate<P> {
     pub fn decode(tag: &Nbt, element: fn(&Nbt) -> DataResult<P>) -> DataResult<CollectionCountsPredicate<P>> {
-        let entries = codec::list_of(tag, |t| Ok(Entry { test: codec::decode_field(t, "test", element)?, count: codec::decode_field(t, "count", Ints::decode)? }))?;
+        let entries = codec::wrapped(Wrap::Xmap, || {
+            codec::list_of(tag, |t| {
+                codec::as_codec(|| {
+                    if let Err(error) = codec::map(t) {
+                        return DecodeResult::error(error);
+                    }
+                    let mut record = codec::Record::default();
+                    let test = record.required(t, "test", element);
+                    let count = record.required(t, "count", Ints::decode_partial);
+                    record.build(|| Some(Entry { test: test?, count: count? }))
+                })
+                .into_result()
+            })
+        })?;
         Ok(CollectionCountsPredicate { entries })
     }
 

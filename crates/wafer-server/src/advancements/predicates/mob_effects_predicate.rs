@@ -2,7 +2,8 @@ use wafer_data::MobEffect;
 use wafer_protocol::nbt::Nbt;
 
 use super::min_max_bounds::{Ints, ints_codec};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::effect::MobEffectInstance;
 use crate::world::item::component::codec::{Codec, Stream};
 use crate::world::item::component::types::{self, Pair, def, opt, record};
@@ -30,14 +31,18 @@ pub struct MobEffectInstancePredicate {
 
 impl MobEffectInstancePredicate {
     fn decode(tag: &Nbt) -> DataResult<MobEffectInstancePredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let amplifier = record.field(codec::decode_or(tag, "amplifier", Ints::ANY, Ints::decode));
-        let duration = record.field(codec::decode_or(tag, "duration", Ints::ANY, Ints::decode));
-        let ambient = record.field(codec::decode_optional(tag, "ambient", codec::bool_value));
-        let visible = record.field(codec::decode_optional(tag, "visible", codec::bool_value));
-        record.finish()?;
-        Ok(MobEffectInstancePredicate { amplifier: amplifier.unwrap(), duration: duration.unwrap(), ambient: ambient.unwrap(), visible: visible.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let amplifier = record.with_default(tag, "amplifier", Ints::ANY, Ints::decode_partial);
+            let duration = record.with_default(tag, "duration", Ints::ANY, Ints::decode_partial);
+            let ambient = record.optional(tag, "ambient", codec::bool_value);
+            let visible = record.optional(tag, "visible", codec::bool_value);
+            record.build(|| Some(MobEffectInstancePredicate { amplifier, duration, ambient, visible }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, instance: Option<&MobEffectInstance>) -> bool {
@@ -59,14 +64,16 @@ pub struct MobEffectsPredicate {
 
 impl MobEffectsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<MobEffectsPredicate> {
-        let effect_map = codec::base_map(
-            tag,
-            |key| {
-                let id = crate::resources::identifier::read(key)?;
-                MobEffect::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:mob_effect]: {id}"))
-            },
-            MobEffectInstancePredicate::decode,
-        )?;
+        let effect_map = codec::wrapped(Wrap::Xmap, || {
+            codec::base_map(
+                tag,
+                |key| {
+                    let id = crate::resources::identifier::read(key)?;
+                    MobEffect::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:mob_effect]: {id}"))
+                },
+                MobEffectInstancePredicate::decode,
+            )
+        })?;
         Ok(MobEffectsPredicate { effect_map })
     }
 

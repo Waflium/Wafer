@@ -9,7 +9,8 @@ pub fn codec() -> Pair {
 
 use crate::advancements::predicates::nbt_predicate::NbtPredicate;
 use crate::core::component::data_component_getter::DataComponentGetter;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 
 #[derive(Debug)]
 pub struct CustomDataPredicate {
@@ -18,7 +19,7 @@ pub struct CustomDataPredicate {
 
 impl CustomDataPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<CustomDataPredicate> {
-        Ok(CustomDataPredicate { value: NbtPredicate::decode(tag)? })
+        codec::wrapped(Wrap::Xmap, || NbtPredicate::decode(tag)).map(|value| CustomDataPredicate { value })
     }
 
     pub fn matches(&self, components: &(impl DataComponentGetter + ?Sized)) -> bool {

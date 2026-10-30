@@ -3,7 +3,8 @@ use wafer_protocol::nbt::Nbt;
 use super::loot_context::LootContext;
 use super::providers::number::ints::{self, ContextIntProvider};
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::codec::{Codec, Stream};
 use crate::world::item::component::types::{self, Pair, opt};
 use crate::world::level::storage::loot::validatable::{self, Validatable};
@@ -20,13 +21,29 @@ pub enum IntRangePredicate {
 }
 
 impl IntRangePredicate {
-    pub fn decode(tag: &Nbt) -> DataResult<IntRangePredicate> {
-        match codec::either(tag, ContextIntProvider::decode_holder, |t| {
-            Ok((codec::decode_optional(t, "min", ContextIntProvider::decode_holder)?, codec::decode_optional(t, "max", ContextIntProvider::decode_holder)?))
-        })? {
-            Ok(point) => Ok(IntRangePredicate::Point(point)),
-            Err((min, max)) => Ok(IntRangePredicate::Line { min, max }),
-        }
+    pub fn decode(tag: &Nbt) -> DecodeResult<IntRangePredicate> {
+        codec::wrapped(Wrap::Xmap, || {
+            codec::either_result(
+                codec::either_first(|| codec::wrapped(Wrap::Xmap, || ContextIntProvider::decode_holder_partial(tag))),
+                || {
+                    codec::either_second(|| {
+                        codec::as_codec(|| {
+                            if let Err(error) = codec::map(tag) {
+                                return DecodeResult::error(error);
+                            }
+                            let mut record = codec::Record::default();
+                            let min = record.optional(tag, "min", ContextIntProvider::decode_holder_partial);
+                            let max = record.optional(tag, "max", ContextIntProvider::decode_holder_partial);
+                            record.build(|| Some((min, max)))
+                        })
+                    })
+                },
+            )
+        })
+        .map(|either| match either {
+            Ok(point) => IntRangePredicate::Point(point),
+            Err((min, max)) => IntRangePredicate::Line { min, max },
+        })
     }
 
     pub fn test(&self, context: &mut LootContext, input: i32) -> bool {

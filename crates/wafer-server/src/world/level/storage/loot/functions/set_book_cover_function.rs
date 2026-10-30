@@ -21,13 +21,7 @@ impl SetBookCoverFunction {
             Ok::<Nbt, String>(content.get("title").cloned().unwrap_or_else(|| t.clone()))
         });
         let author = record.optional(tag, "author", |t| Ok::<String, String>(codec::string(t)?.to_string()));
-        let generation = record.optional(tag, "generation", |t| {
-            let value = codec::int(t)?;
-            if !(0..=3).contains(&value) {
-                return Err(format!("Value must be within range [0;3]: {value}"));
-            }
-            Ok(value)
-        });
+        let generation = record.optional(tag, "generation", |t| codec::int_range(t, 0, 3));
         record.build(|| Some(SetBookCoverFunction { author, title, generation }))
     }
 

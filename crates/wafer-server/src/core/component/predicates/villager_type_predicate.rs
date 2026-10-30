@@ -7,7 +7,8 @@ pub fn codec() -> Pair {
 }
 
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::codec::registry_id;
 
 #[derive(Debug)]
@@ -17,7 +18,7 @@ pub struct VillagerTypePredicate {
 
 impl VillagerTypePredicate {
     pub fn decode(tag: &Nbt) -> DataResult<VillagerTypePredicate> {
-        Ok(VillagerTypePredicate { villager_types: HolderSet::decode("minecraft:villager_type", tag)? })
+        codec::wrapped(Wrap::Xmap, || HolderSet::decode("minecraft:villager_type", tag)).map(|villager_types| VillagerTypePredicate { villager_types })
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

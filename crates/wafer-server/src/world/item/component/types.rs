@@ -1,6 +1,6 @@
 use wafer_protocol::nbt::Nbt;
 
-use super::codec::{Codec, Dispatch, Field, Kind, RangeError, Selector, Stream};
+use super::codec::{Codec, Dispatch, Field, Kind, RangeError, Selector, Stream, Wrap};
 use crate::util::codec::DecodeResult;
 use super::{DataComponentType, TypeInfo, custom, text};
 
@@ -315,11 +315,16 @@ fn kinetic_condition() -> Pair {
     ])
 }
 
+fn color_list() -> Pair {
+    let colors = list((Codec::int(), Stream::Int));
+    (Codec::Framed(Box::new(colors.0), Wrap::Xmap), colors.1)
+}
+
 fn firework_explosion() -> Pair {
     record(vec![
         req("shape", enumeration(&["small_ball", "large_ball", "star", "creeper", "burst"])),
-        def("colors", list((Codec::int(), Stream::Int)), empty_list()),
-        def("fade_colors", list((Codec::int(), Stream::Int)), empty_list()),
+        def("colors", color_list(), empty_list()),
+        def("fade_colors", color_list(), empty_list()),
         def("has_trail", bool(), b(false)),
         def("has_twinkle", bool(), b(false)),
     ])

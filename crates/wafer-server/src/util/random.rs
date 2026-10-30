@@ -2,7 +2,7 @@ use wafer_core::RandomSource;
 use serde_json::Value;
 use wafer_protocol::nbt::Nbt;
 
-use crate::world::item::component::codec::{self, Codec, Field, Stream};
+use crate::world::item::component::codec::{self, Codec, Field, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair, req};
 
 #[derive(Clone, PartialEq, Debug)]
@@ -110,5 +110,5 @@ pub fn weighted_list_codec(weighted: Pair) -> Pair {
 
 pub fn non_empty_weighted_list_codec(weighted: Pair) -> Pair {
     let list = weighted_list_codec(weighted);
-    (Codec::Normalize(Box::new(list.0), non_zero_total_weight), list.1)
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(list.0), non_zero_total_weight)), Wrap::FlatXmap), list.1)
 }

@@ -56,8 +56,8 @@ impl AbstractCookingRecipe {
 
     fn decode_partial(ty: RecipeType, tag: &Nbt) -> DecodeResult<AbstractCookingRecipe> {
         let mut record = Record::default();
-        let common_info = record.absorb(CommonInfo::decode_partial(tag));
-        let book_info = record.absorb(CookingBookInfo::decode_partial(tag));
+        let common_info = record.nested(|| CommonInfo::decode_partial(tag));
+        let book_info = record.nested(|| CookingBookInfo::decode_partial(tag));
         let input = record.required(tag, "ingredient", Ingredient::decode);
         let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
         let experience = record.with_default(tag, "experience", 0.0, codec::float);

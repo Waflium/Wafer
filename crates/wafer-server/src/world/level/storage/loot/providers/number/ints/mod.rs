@@ -7,7 +7,7 @@ use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
 use super::floats::{self, ContextFloatProvider};
-use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair, def, req};
 use super::stored_number_access::StoredNumberAccess;
 use super::{ArithmeticException, ArithmeticResult, Case, DIVISION_BY_ZERO, INTEGER_OVERFLOW, decode_holder_list_partial, decode_weighted_list, get_random};
@@ -151,7 +151,7 @@ impl ContextIntProvider {
     }
 
     pub fn decode_holder_partial(tag: &Nbt) -> DecodeResult<Holder<ContextIntProvider>> {
-        Holder::decode_partial(tag, |direct| crate::core::data_registries::unwinding(crate::util::dfu_frames::recursive, || ContextIntProvider::decode_partial(direct)))
+        Holder::decode_partial(tag, ContextIntProvider::decode_partial)
     }
 
     fn decode_holders(tag: &Nbt) -> DecodeResult<Vec<Holder<ContextIntProvider>>> {
@@ -163,16 +163,16 @@ impl ContextIntProvider {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<ContextIntProvider> {
-        crate::core::data_registries::unwinding(crate::util::dfu_frames::codec_xmap, || {
-            codec::either_result(
-                crate::core::data_registries::unwinding(crate::util::dfu_frames::either_first, || {
-                    crate::core::data_registries::unwinding(crate::util::dfu_frames::codec_xmap, || DecodeResult::from(codec::int(tag)))
-                }),
-                || crate::core::data_registries::unwinding(crate::util::dfu_frames::either_second, || ContextIntProvider::decode_typed(tag)),
-            )
-            .map(|value| match value {
-                Ok(value) => ContextIntProvider::ConstantValue(value),
-                Err(provider) => provider,
+        codec::recursive(|| {
+            codec::wrapped(Wrap::Xmap, || {
+                codec::either_result(
+                    codec::either_first(|| codec::wrapped(Wrap::Xmap, || DecodeResult::from(codec::int(tag)))),
+                    || codec::either_second(|| ContextIntProvider::decode_typed(tag)),
+                )
+                .map(|value| match value {
+                    Ok(value) => ContextIntProvider::ConstantValue(value),
+                    Err(provider) => provider,
+                })
             })
         })
     }
@@ -188,7 +188,7 @@ impl ContextIntProvider {
         let mut record = Record::default();
         let holder = |record: &mut Record, key: &str| record.required(tag, key, ContextIntProvider::decode_holder_partial);
         let fallback = |record: &mut Record| record.with_default(tag, "fallback", exactly(0), ContextIntProvider::decode_holder_partial);
-        match ty.as_str() {
+        codec::as_dispatch(|| match ty.as_str() {
             "minecraft:abs" => {
                 let input = holder(&mut record, "input");
                 record.build(|| Some(ContextIntProvider::Absolute(input?)))
@@ -303,7 +303,7 @@ impl ContextIntProvider {
                 record.build(|| Some(ContextIntProvider::WeightedListValue(distribution?)))
             }
             other => DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:context_int_provider_type]: {other}")),
-        }
+        })
     }
 
     pub fn get_int(&self, context: &mut LootContext) -> i32 {

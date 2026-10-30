@@ -4,7 +4,7 @@ use super::damage_source_predicate::DamageSourcePredicate;
 use super::entity::entity_predicate::EntityPredicate;
 use super::min_max_bounds::Doubles;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::EntityId;
 
@@ -19,15 +19,19 @@ pub struct DamagePredicate {
 
 impl DamagePredicate {
     pub fn decode(tag: &Nbt) -> DataResult<DamagePredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let dealt_damage = record.field(codec::decode_or(tag, "dealt", Doubles::ANY, Doubles::decode));
-        let taken_damage = record.field(codec::decode_or(tag, "taken", Doubles::ANY, Doubles::decode));
-        let source_entity = record.field(codec::decode_optional(tag, "source_entity", EntityPredicate::decode));
-        let blocked = record.field(codec::decode_optional(tag, "blocked", codec::bool_value));
-        let ty = record.field(codec::decode_optional(tag, "type", DamageSourcePredicate::decode));
-        record.finish()?;
-        Ok(DamagePredicate { dealt_damage: dealt_damage.unwrap(), taken_damage: taken_damage.unwrap(), source_entity: source_entity.unwrap(), blocked: blocked.unwrap(), ty: ty.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let dealt_damage = record.with_default(tag, "dealt", Doubles::ANY, Doubles::decode_partial);
+            let taken_damage = record.with_default(tag, "taken", Doubles::ANY, Doubles::decode_partial);
+            let source_entity = record.optional(tag, "source_entity", EntityPredicate::decode);
+            let blocked = record.optional(tag, "blocked", codec::bool_value);
+            let ty = record.optional(tag, "type", DamageSourcePredicate::decode);
+            record.build(|| Some(DamagePredicate { dealt_damage, taken_damage, source_entity, blocked, ty }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, level: &mut ServerLevel, player: EntityId, source: &DamageSource, original_damage: f32, actual_damage: f32, blocked: bool) -> bool {

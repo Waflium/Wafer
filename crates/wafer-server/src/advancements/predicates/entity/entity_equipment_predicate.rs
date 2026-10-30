@@ -10,7 +10,7 @@ pub fn codec() -> Pair {
     record(["head", "chest", "legs", "feet", "body", "mainhand", "offhand"].into_iter().map(|slot| opt(slot, (custom::item_predicate(), Stream::Nbt))).collect())
 }
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 
@@ -27,20 +27,16 @@ pub struct EntityEquipmentPredicate {
 
 impl EntityEquipmentPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityEquipmentPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let mut slot = |key| record.field(codec::decode_optional(tag, key, ItemPredicate::decode));
-        let (head, chest, legs, feet, body, mainhand, offhand) = (slot("head"), slot("chest"), slot("legs"), slot("feet"), slot("body"), slot("mainhand"), slot("offhand"));
-        record.finish()?;
-        Ok(EntityEquipmentPredicate {
-            head: head.unwrap(),
-            chest: chest.unwrap(),
-            legs: legs.unwrap(),
-            feet: feet.unwrap(),
-            body: body.unwrap(),
-            mainhand: mainhand.unwrap(),
-            offhand: offhand.unwrap(),
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let mut slot = |key| record.optional(tag, key, ItemPredicate::decode);
+            let (head, chest, legs, feet, body, mainhand, offhand) = (slot("head"), slot("chest"), slot("legs"), slot("feet"), slot("body"), slot("mainhand"), slot("offhand"));
+            record.build(|| Some(EntityEquipmentPredicate { head, chest, legs, feet, body, mainhand, offhand }))
         })
+        .into_result()
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

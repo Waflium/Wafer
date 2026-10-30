@@ -27,13 +27,18 @@ pub struct DamageSourcePredicate {
 
 impl DamageSourcePredicate {
     pub fn decode(tag: &Nbt) -> DataResult<DamageSourcePredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let tags = record.with_default(tag, "tags", Vec::new(), |t| codec::list_partial(t, |e| DecodeResult::from(TagPredicate::decode("minecraft:damage_type", e))));
-        let direct_entity = record.optional(tag, "direct_entity", |t| DecodeResult::from(EntityPredicate::decode(t)));
-        let source_entity = record.optional(tag, "source_entity", |t| DecodeResult::from(EntityPredicate::decode(t)));
-        let is_direct = record.optional(tag, "is_direct", |t| DecodeResult::from(codec::bool_value(t)));
-        record.build(|| Some(DamageSourcePredicate { tags, direct_entity, source_entity, is_direct })).into_result()
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let tags = record.with_default(tag, "tags", Vec::new(), |t| codec::list_partial(t, |e| DecodeResult::from(TagPredicate::decode("minecraft:damage_type", e))));
+            let direct_entity = record.optional(tag, "direct_entity", |t| DecodeResult::from(EntityPredicate::decode(t)));
+            let source_entity = record.optional(tag, "source_entity", |t| DecodeResult::from(EntityPredicate::decode(t)));
+            let is_direct = record.optional(tag, "is_direct", |t| DecodeResult::from(codec::bool_value(t)));
+            record.build(|| Some(DamageSourcePredicate { tags, direct_entity, source_entity, is_direct }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, level: &mut ServerLevel, position: Option<Vec3>, source: &DamageSource) -> bool {

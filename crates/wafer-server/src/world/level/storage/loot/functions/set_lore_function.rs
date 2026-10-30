@@ -18,7 +18,7 @@ impl SetLoreFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetLoreFunction> {
         let mut record = codec::Record::default();
         let lore = record.required(tag, "lore", |t| codec::sized_list_partial(t, 256, decode_component));
-        let mode = record.absorb(ListOperation::decode(tag, 256));
+        let mode = record.nested(|| ListOperation::decode(tag, 256));
         let resolution_context = record.optional(tag, "entity", EntityTarget::decode);
         record.build(|| Some(SetLoreFunction { lore: lore?, mode: mode?, resolution_context }))
     }

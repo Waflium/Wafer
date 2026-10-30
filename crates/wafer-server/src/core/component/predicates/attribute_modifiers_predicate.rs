@@ -21,7 +21,7 @@ pub fn codec() -> Pair {
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::min_max_bounds::Doubles;
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::codec::{self as component_codec, registry_id};
 
 const OPERATIONS: &[(&str, &str)] = &[("add_value", "add_value"), ("add_multiplied_base", "add_multiplied_base"), ("add_multiplied_total", "add_multiplied_total")];
@@ -50,14 +50,19 @@ pub struct EntryPredicate {
 
 impl EntryPredicate {
     fn decode(tag: &Nbt) -> DataResult<EntryPredicate> {
-        codec::map(tag)?;
-        Ok(EntryPredicate {
-            attribute: codec::decode_optional(tag, "attribute", |t| HolderSet::decode("minecraft:attribute", t))?,
-            id: codec::decode_optional(tag, "id", codec::identifier)?,
-            amount: codec::decode_or(tag, "amount", Doubles::ANY, Doubles::decode)?,
-            operation: codec::decode_optional(tag, "operation", |t| codec::string_enum(t, OPERATIONS))?,
-            slot: codec::decode_optional(tag, "slot", |t| codec::string_enum(t, SLOT_GROUPS))?,
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let attribute = record.optional(tag, "attribute", |t| HolderSet::decode_partial("minecraft:attribute", t));
+            let id = record.optional(tag, "id", codec::identifier);
+            let amount = record.with_default(tag, "amount", Doubles::ANY, Doubles::decode_partial);
+            let operation = record.optional(tag, "operation", |t| codec::string_enum(t, OPERATIONS));
+            let slot = record.optional(tag, "slot", |t| codec::string_enum(t, SLOT_GROUPS));
+            record.build(|| Some(EntryPredicate { attribute, id, amount, operation, slot }))
         })
+        .into_result()
     }
 
     fn test(&self, value: &Nbt) -> bool {
@@ -87,8 +92,15 @@ pub struct AttributeModifiersPredicate {
 
 impl AttributeModifiersPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<AttributeModifiersPredicate> {
-        codec::map(tag)?;
-        Ok(AttributeModifiersPredicate { modifiers: codec::decode_optional(tag, "modifiers", |t| CollectionPredicate::decode(t, EntryPredicate::decode))? })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let modifiers = record.optional(tag, "modifiers", |t| CollectionPredicate::decode(t, EntryPredicate::decode));
+            record.build(|| Some(AttributeModifiersPredicate { modifiers }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

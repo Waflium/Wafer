@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::game_mode::GameType;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::types::{self, Pair};
 
 pub fn codec() -> Pair {
@@ -19,13 +20,15 @@ impl GameTypePredicate {
     }
 
     pub fn decode(tag: &Nbt) -> DataResult<GameTypePredicate> {
-        let types = codec::list_of(tag, |t| {
-            codec::string_enum(t, &[
-                ("survival", GameType::Survival),
-                ("creative", GameType::Creative),
-                ("adventure", GameType::Adventure),
-                ("spectator", GameType::Spectator),
-            ])
+        let types = codec::wrapped(Wrap::Xmap, || {
+            codec::list_of(tag, |t| {
+                codec::string_enum(t, &[
+                    ("survival", GameType::Survival),
+                    ("creative", GameType::Creative),
+                    ("adventure", GameType::Adventure),
+                    ("spectator", GameType::Spectator),
+                ])
+            })
         })?;
         Ok(GameTypePredicate { types })
     }

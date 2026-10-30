@@ -4,9 +4,10 @@ use super::crafting_input::CraftingInput;
 use super::ingredient::Ingredient;
 use super::transmute_recipe::create_with_original_components_extra;
 use crate::advancements::predicates::min_max_bounds::{Bounds, Ints};
-use crate::util::codec::{DataResult, DecodeResult, Record};
+use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::component::values::ItemStackTemplate;
 
 const DEFAULT_BOOK_GENERATION_RANGES: Ints = Ints { bounds: Bounds { min: Some(0), max: Some(1) } };
@@ -19,9 +20,11 @@ pub struct BookCloningRecipe {
 }
 
 fn decode_allowed_generations(tag: &Nbt) -> DecodeResult<Ints> {
-    Ints::decode_partial(tag).validate(|bounds| match (bounds.bounds.min, bounds.bounds.max) {
-        (Some(min), Some(max)) if min >= 0 && max <= 2 => Ok(()),
-        _ => Err(format!("Range must be within [0..2], but was {}", bounds.bounds.as_range_string())),
+    codec::wrapped(Wrap::FlatXmap, || {
+        Ints::decode_partial(tag).validate(|bounds| match (bounds.bounds.min, bounds.bounds.max) {
+            (Some(min), Some(max)) if min >= 0 && max <= 2 => Ok(()),
+            _ => Err(format!("Range must be within [0..2], but was {}", bounds.bounds.as_range_string())),
+        })
     })
 }
 

@@ -206,7 +206,7 @@ impl LootItemCondition {
             "minecraft:entity_properties" => LootItemEntityPropertyCondition::decode(tag).map(LootItemCondition::EntityProperties),
             "minecraft:killed_by_player" => DecodeResult::success(LootItemCondition::KilledByPlayer(LootItemKilledByPlayerCondition)),
             "minecraft:entity_scores" => EntityHasScoreCondition::decode(tag).map(LootItemCondition::EntityScores),
-            "minecraft:match_block" => DecodeResult::from(MatchBlock::decode(tag)).map(LootItemCondition::MatchBlock),
+            "minecraft:match_block" => MatchBlock::decode(tag).map(LootItemCondition::MatchBlock),
             "minecraft:match_tool" => MatchTool::decode(tag).map(LootItemCondition::MatchTool),
             "minecraft:table_bonus" => BonusLevelTableCondition::decode(tag).map(LootItemCondition::TableBonus),
             "minecraft:survives_explosion" => DecodeResult::success(LootItemCondition::SurvivesExplosion(ExplosionCondition)),

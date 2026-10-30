@@ -25,8 +25,8 @@ impl ShapedRecipe {
 
     fn decode_partial(tag: &Nbt) -> DecodeResult<ShapedRecipe> {
         let mut record = Record::default();
-        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
-        let pattern = record.absorb(ShapedRecipePattern::decode_partial(tag));
+        let base = NormalCraftingRecipe::decode_in(&mut record, tag);
+        let pattern = record.nested(|| ShapedRecipePattern::decode_partial(tag));
         let result = record.required(tag, "result", ItemStackTemplate::decode_partial);
         record.build(|| {
             let mut base = base?;

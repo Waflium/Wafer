@@ -16,7 +16,7 @@ impl SetFireworksFunction {
     pub fn decode(tag: &Nbt) -> DecodeResult<SetFireworksFunction> {
         let mut record = codec::Record::default();
         let explosions = record.optional(tag, "explosions", |t| StandAlone::decode(t, |explosion| dc::FIREWORK_EXPLOSION.decode(explosion), 256));
-        let flight_duration = record.optional(tag, "flight_duration", |t| Ok::<i32, String>(codec::int(t)? as i8 as u8 as i32));
+        let flight_duration = record.optional(tag, "flight_duration", codec::unsigned_byte);
         record.build(|| Some(SetFireworksFunction { explosions, flight_duration }))
     }
 

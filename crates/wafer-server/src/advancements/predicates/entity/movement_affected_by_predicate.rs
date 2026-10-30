@@ -8,7 +8,8 @@ pub fn codec() -> Pair {
     location_predicate::codec()
 }
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::entity::EntityId;
 
 #[derive(Debug)]
@@ -18,7 +19,7 @@ pub struct MovementAffectedByPredicate {
 
 impl MovementAffectedByPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<MovementAffectedByPredicate> {
-        Ok(MovementAffectedByPredicate { predicate: LocationPredicate::decode(tag)? })
+        codec::wrapped(Wrap::Xmap, || LocationPredicate::decode(tag)).map(|predicate| MovementAffectedByPredicate { predicate })
     }
 
     pub fn matches(&self, level: &mut ServerLevel, entity: EntityId) -> bool {

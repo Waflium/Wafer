@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::item_predicate::ItemPredicate;
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::inventory::slot_ranges::{self, SlotRange};
 use crate::world::item::ItemStack;
 use crate::world::item::component::codec::{Codec, Stream};
@@ -19,7 +20,9 @@ pub struct SlotsPredicate {
 
 impl SlotsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<SlotsPredicate> {
-        let slots = codec::base_map(tag, |name| slot_ranges::name_to_ids(name).ok_or_else(|| format!("Unknown element name:{name}")), ItemPredicate::decode)?;
+        let slots = codec::wrapped(Wrap::Xmap, || {
+            codec::base_map(tag, |name| slot_ranges::name_to_ids(name).ok_or_else(|| format!("Unknown element name:{name}")), ItemPredicate::decode)
+        })?;
         Ok(SlotsPredicate { slots })
     }
 

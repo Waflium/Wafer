@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::EntityId;
 
 pub fn codec() -> crate::world::item::component::types::Pair {
@@ -18,12 +18,16 @@ pub struct EntityTagPredicate {
 
 impl EntityTagPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityTagPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let mut strings = |key| record.field(codec::decode_optional(tag, key, |t| codec::list_of(t, |s| Ok(codec::string(s)?.to_string()))));
-        let (any_of, all_of, none_of) = (strings("any_of"), strings("all_of"), strings("none_of"));
-        record.finish()?;
-        Ok(EntityTagPredicate { any_of: any_of.unwrap(), all_of: all_of.unwrap(), none_of: none_of.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let mut strings = |key| record.optional(tag, key, |t| codec::list_of(t, |s| Ok(codec::string(s)?.to_string())));
+            let (any_of, all_of, none_of) = (strings("any_of"), strings("all_of"), strings("none_of"));
+            record.build(|| Some(EntityTagPredicate { any_of, all_of, none_of }))
+        })
+        .into_result()
     }
 
     pub fn matches_tags(&self, tags: &[String]) -> bool {

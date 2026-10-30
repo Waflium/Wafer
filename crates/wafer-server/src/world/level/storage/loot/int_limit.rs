@@ -3,7 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use super::loot_context::LootContext;
 use super::providers::number::ints::ContextIntProvider;
 use crate::core::holder::Holder;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DecodeResult};
 use crate::world::level::storage::loot::validatable::{self, Validatable};
 use crate::world::level::storage::loot::validation_context::ValidationContext;
 
@@ -13,11 +13,15 @@ pub struct IntLimit {
 }
 
 impl IntLimit {
-    pub fn decode(tag: &Nbt) -> DataResult<IntLimit> {
-        codec::map(tag)?;
-        Ok(IntLimit {
-            min: codec::decode_optional(tag, "min", ContextIntProvider::decode_holder)?,
-            max: codec::decode_optional(tag, "max", ContextIntProvider::decode_holder)?,
+    pub fn decode(tag: &Nbt) -> DecodeResult<IntLimit> {
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let min = record.optional(tag, "min", ContextIntProvider::decode_holder_partial);
+            let max = record.optional(tag, "max", ContextIntProvider::decode_holder_partial);
+            record.build(|| Some(IntLimit { min, max }))
         })
     }
 

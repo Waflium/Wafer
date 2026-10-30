@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::EntityId;
 
 pub fn codec() -> crate::world::item::component::types::Pair {
@@ -17,12 +17,16 @@ pub struct RaiderPredicate {
 
 impl RaiderPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<RaiderPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let has_raid = record.field(codec::decode_or(tag, "has_raid", false, codec::bool_value));
-        let is_captain = record.field(codec::decode_or(tag, "is_captain", false, codec::bool_value));
-        record.finish()?;
-        Ok(RaiderPredicate { has_raid: has_raid.unwrap(), is_captain: is_captain.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let has_raid = record.with_default(tag, "has_raid", false, codec::bool_value);
+            let is_captain = record.with_default(tag, "is_captain", false, codec::bool_value);
+            record.build(|| Some(RaiderPredicate { has_raid, is_captain }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

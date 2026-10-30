@@ -31,7 +31,7 @@ impl DyeRecipe {
 
     fn decode_partial(tag: &Nbt) -> DecodeResult<DyeRecipe> {
         let mut record = Record::default();
-        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let base = NormalCraftingRecipe::decode_in(&mut record, tag);
         let target = record.required(tag, "target", Ingredient::decode);
         let dye = record.required(tag, "dye", Ingredient::decode);
         let result = record.required(tag, "result", ItemStackTemplate::decode_partial);

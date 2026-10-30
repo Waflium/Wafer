@@ -12,7 +12,7 @@ pub fn codec() -> Pair {
 use super::firework_explosion_predicate::FireworkPredicate;
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::min_max_bounds::Ints;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::codec as component_codec;
 
 #[derive(Debug)]
@@ -23,12 +23,16 @@ pub struct FireworksPredicate {
 
 impl FireworksPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<FireworksPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let explosions = record.field(codec::decode_optional(tag, "explosions", |t| CollectionPredicate::decode(t, FireworkPredicate::decode)));
-        let flight_duration = record.field(codec::decode_or(tag, "flight_duration", Ints::ANY, Ints::decode));
-        record.finish()?;
-        Ok(FireworksPredicate { explosions: explosions.unwrap(), flight_duration: flight_duration.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let explosions = record.optional(tag, "explosions", |t| CollectionPredicate::decode(t, FireworkPredicate::decode));
+            let flight_duration = record.with_default(tag, "flight_duration", Ints::ANY, Ints::decode_partial);
+            record.build(|| Some(FireworksPredicate { explosions, flight_duration }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

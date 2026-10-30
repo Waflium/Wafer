@@ -8,7 +8,8 @@ pub fn codec() -> Pair {
     custom::nbt_predicate()
 }
 use crate::server::level::ServerLevel;
-use crate::util::codec::DataResult;
+use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::entity::EntityId;
 
 #[derive(Debug)]
@@ -18,7 +19,7 @@ pub struct EntityNbtPredicate {
 
 impl EntityNbtPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<EntityNbtPredicate> {
-        Ok(EntityNbtPredicate { nbt: NbtPredicate::decode(tag)? })
+        codec::wrapped(Wrap::Xmap, || NbtPredicate::decode(tag)).map(|nbt| EntityNbtPredicate { nbt })
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

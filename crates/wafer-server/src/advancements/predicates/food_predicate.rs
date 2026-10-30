@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use super::min_max_bounds::{Doubles, Ints, doubles_codec, ints_codec};
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::food::FoodData;
 use crate::world::item::component::types::{self, Pair, def, record};
 
@@ -19,12 +19,16 @@ impl FoodPredicate {
     pub const ANY: FoodPredicate = FoodPredicate { level: Ints::ANY, saturation: Doubles::ANY };
 
     pub fn decode(tag: &Nbt) -> DataResult<FoodPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let level = record.field(codec::decode_or(tag, "level", Ints::ANY, Ints::decode));
-        let saturation = record.field(codec::decode_or(tag, "saturation", Doubles::ANY, Doubles::decode));
-        record.finish()?;
-        Ok(FoodPredicate { level: level.unwrap(), saturation: saturation.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let level = record.with_default(tag, "level", Ints::ANY, Ints::decode_partial);
+            let saturation = record.with_default(tag, "saturation", Doubles::ANY, Doubles::decode_partial);
+            record.build(|| Some(FoodPredicate { level, saturation }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, food: &FoodData) -> bool {

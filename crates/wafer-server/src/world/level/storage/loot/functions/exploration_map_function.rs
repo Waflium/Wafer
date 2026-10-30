@@ -34,7 +34,7 @@ impl ExplorationMapFunction {
             let key = codec::identifier(t)?;
             MapDecorationTypeHolder::by_name(&key).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:map_decoration_type]: {key}"))
         });
-        let zoom = record.with_default(tag, "zoom", DEFAULT_ZOOM, |t| Ok::<i8, String>(codec::int(t)? as i8));
+        let zoom = record.with_default(tag, "zoom", DEFAULT_ZOOM, codec::byte);
         let search_radius = record.with_default(tag, "search_radius", DEFAULT_SEARCH_RADIUS, codec::int);
         let skip_known_structures = record.with_default(tag, "skip_existing_chunks", DEFAULT_SKIP_EXISTING, codec::bool_value);
         record.build(|| Some(ExplorationMapFunction { destination: destination?, map_decoration, zoom, search_radius, skip_known_structures }))

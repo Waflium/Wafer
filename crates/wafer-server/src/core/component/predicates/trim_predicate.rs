@@ -7,7 +7,7 @@ pub fn codec() -> Pair {
 }
 
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::codec::registry_id;
 
 fn holder_in(set: &HolderSet, registry: &str, holder: Option<&Nbt>) -> bool {
@@ -22,12 +22,16 @@ pub struct TrimPredicate {
 
 impl TrimPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<TrimPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let material = record.field(codec::decode_optional(tag, "material", |t| HolderSet::decode("minecraft:trim_material", t)));
-        let pattern = record.field(codec::decode_optional(tag, "pattern", |t| HolderSet::decode("minecraft:trim_pattern", t)));
-        record.finish()?;
-        Ok(TrimPredicate { material: material.unwrap(), pattern: pattern.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let material = record.optional(tag, "material", |t| HolderSet::decode_partial("minecraft:trim_material", t));
+            let pattern = record.optional(tag, "pattern", |t| HolderSet::decode_partial("minecraft:trim_pattern", t));
+            record.build(|| Some(TrimPredicate { material, pattern }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

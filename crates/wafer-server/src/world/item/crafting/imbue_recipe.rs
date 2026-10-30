@@ -25,7 +25,7 @@ impl ImbueRecipe {
 
     fn decode_partial(tag: &Nbt) -> DecodeResult<ImbueRecipe> {
         let mut record = Record::default();
-        let base = record.absorb(NormalCraftingRecipe::decode_partial(tag));
+        let base = NormalCraftingRecipe::decode_in(&mut record, tag);
         let source = record.required(tag, "source", Ingredient::decode);
         let material = record.required(tag, "material", Ingredient::decode);
         let result = record.required(tag, "result", ItemStackTemplate::decode_partial);

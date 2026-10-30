@@ -94,6 +94,17 @@ pub fn xor_second() -> Vec<&'static str> {
     vec!["com.mojang.serialization.codecs.XorCodec.decode(XorCodec.java:17)"]
 }
 
+pub fn dispatch_optional_value() -> Vec<&'static str> {
+    vec!["net.minecraft.util.ExtraCodecs$6.lambda$decode$1(ExtraCodecs.java:767)", DATA_RESULT_SUCCESS_FLAT_MAP, "net.minecraft.util.ExtraCodecs$6.decode(ExtraCodecs.java:765)"]
+}
+
+pub fn holder_set_values() -> Vec<&'static str> {
+    vec![
+        "com.mojang.serialization.codecs.EitherCodec.decode(EitherCodec.java:18)",
+        "net.minecraft.core.registries.codec.HolderSetCodec.decode(HolderSetCodec.java:51)",
+    ]
+}
+
 pub fn recursive() -> Vec<&'static str> {
     vec!["com.mojang.serialization.Codec$RecursiveCodec.decode(Codec.java:219)"]
 }
@@ -144,6 +155,34 @@ pub fn list() -> Vec<&'static str> {
 
 pub fn mapped() -> Vec<&'static str> {
     vec!["com.mojang.serialization.Decoder$2.decode(Decoder.java:63)", "com.mojang.serialization.Codec$2.decode(Codec.java:74)"]
+}
+
+pub fn unbounded_map_values() -> Vec<&'static str> {
+    let mut frames = vec![DECODER_PARSE];
+    frames.extend(&MAP_VALUES[..11]);
+    frames.push("com.mojang.serialization.codecs.UnboundedMapCodec.lambda$decode$0(UnboundedMapCodec.java:22)");
+    frames.push(DATA_RESULT_SUCCESS_FLAT_MAP);
+    frames.push("com.mojang.serialization.codecs.UnboundedMapCodec.decode(UnboundedMapCodec.java:22)");
+    frames
+}
+
+pub fn dispatched_map_values() -> Vec<&'static str> {
+    let mut frames = vec![
+        DECODER_PARSE,
+        "com.mojang.serialization.codecs.DispatchedMapCodec.lambda$parseEntry$6(DispatchedMapCodec.java:59)",
+        DATA_RESULT_SUCCESS_FLAT_MAP,
+        "com.mojang.serialization.codecs.DispatchedMapCodec.parseEntry(DispatchedMapCodec.java:59)",
+        "com.mojang.serialization.codecs.DispatchedMapCodec.lambda$decode$0(DispatchedMapCodec.java:46)",
+    ];
+    frames.extend(&MAP_VALUES[1..10]);
+    frames.push("com.mojang.serialization.codecs.DispatchedMapCodec.lambda$decode$5(DispatchedMapCodec.java:44)");
+    frames.push(DATA_RESULT_SUCCESS_FLAT_MAP);
+    frames.push("com.mojang.serialization.codecs.DispatchedMapCodec.decode(DispatchedMapCodec.java:40)");
+    frames
+}
+
+pub fn encoder_cache() -> Vec<&'static str> {
+    vec!["net.minecraft.util.EncoderCache$2.decode(EncoderCache.java:34)"]
 }
 
 pub fn map_values() -> Vec<&'static str> {

@@ -3,7 +3,7 @@ use wafer_protocol::nbt::Nbt;
 use super::data_component_matchers::DataComponentMatchers;
 use super::min_max_bounds::Ints;
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::ItemStack;
 
 #[derive(Debug)]
@@ -15,13 +15,17 @@ pub struct ItemPredicate {
 
 impl ItemPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<ItemPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let items = record.field(codec::decode_optional(tag, "items", |t| HolderSet::decode("minecraft:item", t)));
-        let count = record.field(codec::decode_or(tag, "count", Ints::ANY, Ints::decode));
-        let components = record.field(DataComponentMatchers::decode(tag));
-        record.finish()?;
-        Ok(ItemPredicate { items: items.unwrap(), count: count.unwrap(), components: components.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let items = record.optional(tag, "items", |t| HolderSet::decode_partial("minecraft:item", t));
+            let count = record.with_default(tag, "count", Ints::ANY, Ints::decode_partial);
+            let components = record.nested(|| DataComponentMatchers::decode_partial(tag));
+            record.build(|| Some(ItemPredicate { items, count, components: components? }))
+        })
+        .into_result()
     }
 
     pub fn test(&self, item_stack: &ItemStack) -> bool {

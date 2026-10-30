@@ -14,7 +14,8 @@ use crate::server::level::ServerLevel;
 use crate::stats::stat::Stat;
 use crate::stats::stat_type::StatType;
 use crate::stats::stats_counter::StatsCounter;
-use crate::util::codec::{self, DataResult, DecodeError};
+use crate::util::codec::{self, DataResult, DecodeError, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::entity::EntityId;
 
 pub const LOOKING_AT_RANGE: f64 = 100.0;
@@ -59,21 +60,25 @@ struct StatMatcher {
 }
 
 impl StatMatcher {
-    fn decode(tag: &Nbt) -> DataResult<StatMatcher> {
-        let stat_type = codec::decode_field(tag, "type", |t| {
+    fn decode(tag: &Nbt) -> DecodeResult<StatMatcher> {
+        let stat_type = match codec::decode_field(tag, "type", |t| {
             let id = codec::identifier(t)?;
             crate::world::item::component::codec::registry_id("minecraft:stat_type", &id).map_err(|_| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:stat_type]: {id}"))
-        })?;
+        }) {
+            Ok(stat_type) => stat_type,
+            Err(error) => return DecodeResult::error(error),
+        };
         let stat_type = StatType::by_id(stat_type).expect("a stat type");
-        let mut record = codec::Record::default();
-        let value = record.field(codec::decode_field(tag, "stat", |t| {
-            let id = codec::identifier(t)?;
-            crate::world::item::component::codec::registry_id(stat_type.registry_key(), &id)
-                .map_err(|_| format!("Unknown registry key in ResourceKey[minecraft:root / {}]: {id}", stat_type.registry_key()))
-        }));
-        let range = record.field(codec::decode_or(tag, "value", Ints::ANY, Ints::decode));
-        record.finish()?;
-        Ok(StatMatcher { stat: stat_type.get(value.unwrap() as u16), range: range.unwrap() })
+        codec::as_dispatch(|| {
+            let mut record = codec::Record::default();
+            let value = record.required(tag, "stat", |t| {
+                let id = codec::identifier(t)?;
+                crate::world::item::component::codec::registry_id(stat_type.registry_key(), &id)
+                    .map_err(|_| format!("Unknown registry key in ResourceKey[minecraft:root / {}]: {id}", stat_type.registry_key()))
+            });
+            let range = record.with_default(tag, "value", Ints::ANY, Ints::decode_partial);
+            record.build(|| Some(StatMatcher { stat: stat_type.get(value? as u16), range }))
+        })
     }
 
     fn matches(&self, counter: &impl StatsCounter) -> bool {
@@ -123,29 +128,26 @@ pub struct PlayerPredicate {
 
 impl PlayerPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<PlayerPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let level = record.field(codec::decode_or(tag, "level", Ints::ANY, Ints::decode));
-        let food = record.field(codec::decode_or(tag, "food", FoodPredicate::ANY, FoodPredicate::decode));
-        let game_type = record.field(codec::decode_or(tag, "gamemode", GameTypePredicate::any(), GameTypePredicate::decode));
-        let stats = record.field(codec::decode_or(tag, "stats", Vec::new(), |t| codec::list_of(t, StatMatcher::decode)));
-        let recipes = record.field(codec::decode_or(tag, "recipes", Vec::new(), |t| codec::base_map(t, crate::resources::identifier::read, codec::bool_value)));
-        let advancements = record.field(codec::decode_or(tag, "advancements", Vec::new(), |t| {
-            codec::base_map(t, crate::resources::identifier::read, AdvancementPredicate::decode)
-        }));
-        let looking_at = record.field(codec::decode_optional(tag, "looking_at", |t| Ok(Box::new(EntityPredicate::decode(t)?))));
-        let input = record.field(codec::decode_optional(tag, "input", InputPredicate::decode));
-        record.finish()?;
-        Ok(PlayerPredicate {
-            level: level.unwrap(),
-            food: food.unwrap(),
-            game_type: game_type.unwrap(),
-            stats: stats.unwrap(),
-            recipes: recipes.unwrap(),
-            advancements: advancements.unwrap(),
-            looking_at: looking_at.unwrap(),
-            input: input.unwrap(),
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let level = record.with_default(tag, "level", Ints::ANY, Ints::decode_partial);
+            let food = record.with_default(tag, "food", FoodPredicate::ANY, FoodPredicate::decode);
+            let game_type = record.with_default(tag, "gamemode", GameTypePredicate::any(), GameTypePredicate::decode);
+            let stats = record.with_default(tag, "stats", Vec::new(), |t| codec::list_partial(t, StatMatcher::decode));
+            let recipes = record.with_default(tag, "recipes", Vec::new(), |t| {
+                codec::wrapped(Wrap::Xmap, || codec::base_map(t, crate::resources::identifier::read, codec::bool_value))
+            });
+            let advancements = record.with_default(tag, "advancements", Vec::new(), |t| {
+                codec::base_map(t, crate::resources::identifier::read, AdvancementPredicate::decode)
+            });
+            let looking_at = record.optional(tag, "looking_at", |t| Ok::<_, String>(Box::new(EntityPredicate::decode(t)?)));
+            let input = record.optional(tag, "input", InputPredicate::decode);
+            record.build(|| Some(PlayerPredicate { level, food, game_type, stats, recipes, advancements, looking_at, input }))
         })
+        .into_result()
     }
 
     pub fn matches(&self, level: &mut ServerLevel, entity: EntityId) -> bool {

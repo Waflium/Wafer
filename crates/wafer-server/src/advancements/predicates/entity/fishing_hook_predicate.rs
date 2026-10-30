@@ -1,7 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::entity::EntityId;
 
 pub fn codec() -> crate::world::item::component::types::Pair {
@@ -16,8 +16,15 @@ pub struct FishingHookPredicate {
 
 impl FishingHookPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<FishingHookPredicate> {
-        codec::map(tag)?;
-        Ok(FishingHookPredicate { in_open_water: codec::decode_optional(tag, "in_open_water", codec::bool_value)? })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let in_open_water = record.optional(tag, "in_open_water", codec::bool_value);
+            record.build(|| Some(FishingHookPredicate { in_open_water }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, level: &ServerLevel, entity: EntityId) -> bool {

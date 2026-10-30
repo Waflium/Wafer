@@ -1,6 +1,7 @@
 use wafer_protocol::nbt::Nbt;
 
 use crate::util::codec::{self, DataResult};
+use crate::world::item::component::codec::Wrap;
 
 #[derive(Debug)]
 pub enum CollectionContentsPredicate<P> {
@@ -11,7 +12,7 @@ pub enum CollectionContentsPredicate<P> {
 
 impl<P> CollectionContentsPredicate<P> {
     pub fn decode(tag: &Nbt, element: fn(&Nbt) -> DataResult<P>) -> DataResult<CollectionContentsPredicate<P>> {
-        let mut predicates = codec::list_of(tag, element)?;
+        let mut predicates = codec::wrapped(Wrap::Xmap, || codec::list_of(tag, element))?;
         Ok(match predicates.len() {
             0 => CollectionContentsPredicate::Zero,
             1 => CollectionContentsPredicate::Single(predicates.remove(0)),

@@ -11,7 +11,7 @@ pub fn codec() -> Pair {
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
 use crate::advancements::predicates::mob_effects_predicate::MobEffectsPredicate;
 use crate::core::holder_set::HolderSet;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::alchemy::potion_contents::PotionContents;
 use crate::world::item::component::codec::registry_id;
 
@@ -23,12 +23,16 @@ pub struct PotionsPredicate {
 
 impl PotionsPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<PotionsPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let potions = record.field(codec::decode_optional(tag, "potions", |t| HolderSet::decode("minecraft:potion", t)));
-        let effects = record.field(codec::decode_optional(tag, "effects", |t| CollectionPredicate::decode(t, MobEffectsPredicate::decode)));
-        record.finish()?;
-        Ok(PotionsPredicate { potions: potions.unwrap(), effects: effects.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let potions = record.optional(tag, "potions", |t| HolderSet::decode_partial("minecraft:potion", t));
+            let effects = record.optional(tag, "effects", |t| CollectionPredicate::decode(t, MobEffectsPredicate::decode));
+            record.build(|| Some(PotionsPredicate { potions, effects }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {

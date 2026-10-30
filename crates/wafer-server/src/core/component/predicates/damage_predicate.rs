@@ -9,7 +9,7 @@ pub fn codec() -> Pair {
 
 use crate::advancements::predicates::min_max_bounds::Ints;
 use crate::core::component::data_component_getter::DataComponentGetter;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::{self as dc, codec as component_codec};
 
 #[derive(Debug)]
@@ -20,12 +20,16 @@ pub struct DamagePredicate {
 
 impl DamagePredicate {
     pub fn decode(tag: &Nbt) -> DataResult<DamagePredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let durability = record.field(codec::decode_or(tag, "durability", Ints::ANY, Ints::decode));
-        let damage = record.field(codec::decode_or(tag, "damage", Ints::ANY, Ints::decode));
-        record.finish()?;
-        Ok(DamagePredicate { durability: durability.unwrap(), damage: damage.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let durability = record.with_default(tag, "durability", Ints::ANY, Ints::decode_partial);
+            let damage = record.with_default(tag, "damage", Ints::ANY, Ints::decode_partial);
+            record.build(|| Some(DamagePredicate { durability, damage }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, components: &(impl DataComponentGetter + ?Sized)) -> bool {

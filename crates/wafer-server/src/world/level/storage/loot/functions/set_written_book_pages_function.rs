@@ -39,7 +39,7 @@ impl SetWrittenBookPagesFunction {
             let content = dc::WRITTEN_BOOK_CONTENT.decode(&probe)?;
             Ok::<Vec<Nbt>, String>(content.get("pages").map_or(Vec::new(), |p| p.as_list().to_vec()))
         });
-        let page_operation = record.absorb(ListOperation::decode(tag, i32::MAX));
+        let page_operation = record.nested(|| ListOperation::decode(tag, i32::MAX));
         record.build(|| Some(SetWrittenBookPagesFunction { pages: pages?, page_operation: page_operation? }))
     }
 

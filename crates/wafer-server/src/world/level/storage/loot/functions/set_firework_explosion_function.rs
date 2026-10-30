@@ -2,6 +2,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::set_written_book_pages_function::put;
 use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 use crate::world::item::ItemStack;
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::loot_context::LootContext;
@@ -17,7 +18,7 @@ pub struct SetFireworkExplosionFunction {
 }
 
 fn color_list(tag: &Nbt) -> DataResult<Nbt> {
-    Ok(Nbt::IntArray(codec::list_of(tag, codec::int)?))
+    codec::wrapped(Wrap::Xmap, || Ok(Nbt::IntArray(codec::list_of(tag, codec::int)?)))
 }
 
 impl SetFireworkExplosionFunction {

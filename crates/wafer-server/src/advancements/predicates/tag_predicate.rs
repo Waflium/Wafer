@@ -16,11 +16,16 @@ pub struct TagPredicate {
 
 impl TagPredicate {
     pub fn decode(registry: &'static str, tag: &Nbt) -> DataResult<TagPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let id = record.required(tag, "id", |t| DecodeResult::from(HolderSet::decode(registry, t)));
-        let expected = record.required(tag, "expected", |t| DecodeResult::from(codec::bool_value(t)));
-        record.build(|| Some(TagPredicate { tag: id?, expected: expected? })).into_result()
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let id = record.required(tag, "id", |t| DecodeResult::from(HolderSet::decode(registry, t)));
+            let expected = record.required(tag, "expected", |t| DecodeResult::from(codec::bool_value(t)));
+            record.build(|| Some(TagPredicate { tag: id?, expected: expected? }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, id: i32) -> bool {

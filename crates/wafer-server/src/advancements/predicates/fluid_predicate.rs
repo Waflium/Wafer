@@ -4,7 +4,7 @@ use wafer_protocol::nbt::Nbt;
 use super::state_properties_predicate::{self, StatePropertiesPredicate};
 use crate::core::holder_set::HolderSet;
 use crate::server::level::ServerLevel;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
 use crate::world::item::component::types::{self, Pair, opt, record};
 use crate::world::level::BlockGetter;
 
@@ -20,12 +20,16 @@ pub struct FluidPredicate {
 
 impl FluidPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<FluidPredicate> {
-        codec::map(tag)?;
-        let mut record = codec::Record::default();
-        let fluids = record.field(codec::decode_optional(tag, "fluids", |t| HolderSet::decode("minecraft:fluid", t)));
-        let properties = record.field(codec::decode_optional(tag, "state", StatePropertiesPredicate::decode));
-        record.finish()?;
-        Ok(FluidPredicate { fluids: fluids.unwrap(), properties: properties.unwrap() })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let fluids = record.optional(tag, "fluids", |t| HolderSet::decode_partial("minecraft:fluid", t));
+            let properties = record.optional(tag, "state", StatePropertiesPredicate::decode);
+            record.build(|| Some(FluidPredicate { fluids, properties }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, level: &mut ServerLevel, pos: BlockPos) -> bool {

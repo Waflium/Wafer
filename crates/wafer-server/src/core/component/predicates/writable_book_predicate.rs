@@ -8,7 +8,8 @@ pub fn codec() -> Pair {
 }
 
 use crate::advancements::predicates::collection_predicate::CollectionPredicate;
-use crate::util::codec::{self, DataResult};
+use crate::util::codec::{self, DataResult, DecodeResult};
+use crate::world::item::component::codec::Wrap;
 
 #[derive(Debug)]
 pub struct PagePredicate {
@@ -17,7 +18,7 @@ pub struct PagePredicate {
 
 impl PagePredicate {
     fn decode(tag: &Nbt) -> DataResult<PagePredicate> {
-        Ok(PagePredicate { contents: codec::string(tag)?.to_string() })
+        codec::wrapped(Wrap::Xmap, || codec::string(tag).map(str::to_string)).map(|contents| PagePredicate { contents })
     }
 
     fn test(&self, value: &Nbt) -> bool {
@@ -36,8 +37,15 @@ pub struct WritableBookPredicate {
 
 impl WritableBookPredicate {
     pub fn decode(tag: &Nbt) -> DataResult<WritableBookPredicate> {
-        codec::map(tag)?;
-        Ok(WritableBookPredicate { pages: codec::decode_optional(tag, "pages", |t| CollectionPredicate::decode(t, PagePredicate::decode))? })
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = codec::Record::default();
+            let pages = record.optional(tag, "pages", |t| CollectionPredicate::decode(t, PagePredicate::decode));
+            record.build(|| Some(WritableBookPredicate { pages }))
+        })
+        .into_result()
     }
 
     pub fn matches(&self, value: &Nbt) -> bool {
