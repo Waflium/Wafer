@@ -631,14 +631,12 @@ impl ServerLevel {
 
     pub fn release_poi(&mut self, id: EntityId, memory_type: MemoryModuleType<GlobalPos>) {
         let Some(memory) = self.get_brain(id).get_memory_internal(memory_type).flatten().cloned() else { return };
-        if memory.dimension != self.dimension {
-            return;
-        }
-        let ty = self.chunks.poi_manager.get_type(memory.pos);
+        let Some(poi_level) = self.level_for_dimension_mut(&memory.dimension) else { return };
+        let ty = poi_level.chunks.poi_manager.get_type(memory.pos);
         if let Some(ty) = ty
             && poi_memory_matches(memory_type, self.mob(id).expect("a villager"), ty)
         {
-            self.chunks.poi_manager.release(memory.pos);
+            self.level_for_dimension_mut(&memory.dimension).expect("the dimension of the memory").chunks.poi_manager.release(memory.pos);
         }
     }
 

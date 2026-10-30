@@ -119,6 +119,13 @@ impl ServerLevel {
         }
     }
 
+    pub fn level_for_dimension_mut(&mut self, dimension: &str) -> Option<&mut ServerLevel> {
+        if self.dimension == dimension {
+            return Some(self);
+        }
+        self.other_levels.iter_mut().find(|level| level.dimension == dimension)
+    }
+
     pub fn level_with_player(&self, id: crate::world::entity::EntityId) -> Option<&ServerLevel> {
         if self.players.contains_key(&id) {
             Some(self)

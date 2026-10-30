@@ -5,9 +5,13 @@ use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
 use super::villager;
+use crate::core::global_pos::GlobalPos;
 use crate::server::level::{ServerLevel, testing};
 use crate::world::InteractionHand;
 use crate::world::entity::ai::behavior::long_jump_to_random_pos;
+use crate::world::entity::ai::memory::memory_module_type;
+use crate::world::entity::ai::village::poi::poi_manager::Occupancy;
+use crate::world::entity::ai::village::poi::poi_types::PoiType;
 use crate::world::entity::schedule::Activity;
 use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::entity_types;
@@ -303,5 +307,25 @@ fn trade(level: &mut ServerLevel, player: EntityId, villager: EntityId) {
     assert_saved(level, villager, &oracle_value("trade", "nbt"), &[(probe, uuid_tag(level, player))]);
     assert_eq!(sorted(level.get_offers(villager).to_nbt()), sorted(parse_snbt(&all_offers[1]).unwrap()));
     assert_eq!(offers_packet(level, villager, 2), all_bytes[1]);
+}
+
+#[test]
+fn villagers_release_pois_in_other_dimensions() {
+    let (mut level, _player) = duel_level();
+    let mut nether = testing::level();
+    nether.dimension = "minecraft:the_nether";
+    nether.index = 1;
+    level.other_levels.push(nether);
+    let villager = summon(&mut level, "minecraft:villager", Vec3::new(8.5, -60.0, 0.5), r#"Tags:["v"],PersistenceRequired:1b"#);
+    let pos = BlockPos::new(40, -60, 40);
+    let is_home = |poi_type: PoiType| poi_type == PoiType::Home;
+    let nether = level.level_for_dimension_mut("minecraft:the_nether").unwrap();
+    nether.chunks.poi_manager.add(pos, PoiType::Home);
+    assert_eq!(nether.chunks.poi_manager.take(&is_home, |_, _| true, pos, 1), Some(pos));
+    assert!(nether.chunks.poi_manager.get_in_range(&is_home, pos, 1, Occupancy::HasSpace).is_empty());
+    level.mob_mut(villager).unwrap().living.brain.set_memory(memory_module_type::HOME, GlobalPos::of("minecraft:the_nether", pos));
+    level.release_poi(villager, memory_module_type::HOME);
+    let nether = level.level_for_dimension_mut("minecraft:the_nether").unwrap();
+    assert_eq!(nether.chunks.poi_manager.get_in_range(&is_home, pos, 1, Occupancy::HasSpace).len(), 1);
 }
 
