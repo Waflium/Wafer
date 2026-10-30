@@ -855,7 +855,7 @@ mod tests {
         assert_eq!(
             furnace.print_stack_trace().lines().take(3).collect::<Vec<_>>(),
             [
-                "java.lang.ClassCastException: class net.minecraft.world.item.crafting.ShapelessRecipe cannot be cast to class net.minecraft.world.item.crafting.AbstractCookingRecipe (net.minecraft.world.item.crafting.ShapelessRecipe and net.minecraft.world.item.crafting.AbstractCookingRecipe are in unnamed module of loader 'app')",
+                crate::util::java_runtime::class_cast_exception("net.minecraft.world.item.crafting.ShapelessRecipe", "net.minecraft.world.item.crafting.AbstractCookingRecipe").as_str(),
                 "\tat net.minecraft.world.inventory.AbstractFurnaceMenu$1.recipeMatches(AbstractFurnaceMenu.java:191)",
                 "\tat net.minecraft.recipebook.ServerPlaceRecipe.placeRecipe(ServerPlaceRecipe.java:89)",
             ]

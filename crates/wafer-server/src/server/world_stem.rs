@@ -34,11 +34,11 @@ impl ConstructorSavedData {
         let random_sequences = RandomSequences::load(world_dir.map(WorldDir::data_folder));
         let file = |id: &str| world_dir.map(|dir| dir.data(id));
         let weather = file("weather")
-            .and_then(|file| read_saved_data(&file, "main", "weather", DataFixTypes::SavedDataWeather, WeatherData::decode));
+            .and_then(|file| read_saved_data(&file, crate::server::main::SERVER_MAIN, "weather", DataFixTypes::SavedDataWeather, WeatherData::decode));
         let game_rules = file("game_rules")
-            .and_then(|file| read_saved_data(&file, "main", "game_rules", DataFixTypes::SavedDataGameRules, crate::world::level::gamerules::GameRules::decode_saved));
+            .and_then(|file| read_saved_data(&file, crate::server::main::SERVER_MAIN, "game_rules", DataFixTypes::SavedDataGameRules, crate::world::level::gamerules::GameRules::decode_saved));
         let clocks = file("world_clocks")
-            .and_then(|file| read_saved_data(&file, "main", "world_clocks", DataFixTypes::SavedDataWorldClocks, crate::world::clock::ServerClockManager::decode_saved));
+            .and_then(|file| read_saved_data(&file, crate::server::main::SERVER_MAIN, "world_clocks", DataFixTypes::SavedDataWorldClocks, crate::world::clock::ServerClockManager::decode_saved));
         let custom_boss_events = CustomBossEvents::load(world_dir.map(WorldDir::data_folder));
         let scheduled_events = TimerQueue::load(world_dir.map(WorldDir::data_folder));
         ConstructorSavedData { random_sequences, weather, game_rules, clocks, custom_boss_events, scheduled_events }

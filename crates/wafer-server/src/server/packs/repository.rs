@@ -243,13 +243,15 @@ const DISCOVER_FRAMES: [&str; 5] = [
     "net.minecraft.server.packs.repository.PackRepository.reload(PackRepository.java:36)",
 ];
 
-pub const CONFIGURE_PACK_REPOSITORY_FRAMES: [&str; 6] = [
+pub const CONFIGURE_PACK_REPOSITORY_FRAMES: [&str; 8] = [
     "net.minecraft.server.MinecraftServer.configurePackRepository(MinecraftServer.java:1561)",
     "net.minecraft.server.WorldLoader$PackConfig.createResourceManager(WorldLoader.java:87)",
     "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
     "net.minecraft.util.Util.blockUntilDone(Util.java:1118)",
     "net.minecraft.util.Util.blockUntilDone(Util.java:1106)",
     "net.minecraft.server.Main.main(Main.java:177)",
+    crate::server::main::BUNDLER_MAIN_TAIL[0],
+    crate::server::main::BUNDLER_MAIN_TAIL[1],
 ];
 
 fn is_json_parse_exception(exception: &JavaThrowable) -> bool {

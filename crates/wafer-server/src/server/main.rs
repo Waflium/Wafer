@@ -128,7 +128,11 @@ fn resolve(name: &str) -> Result<&'static str, String> {
     }
 }
 
+pub const SERVER_MAIN: &str = "ServerMain";
+pub const BUNDLER_MAIN_TAIL: [&str; 2] = ["net.minecraft.bundler.Main.lambda$run$0(Main.java:54)", "java.base/java.lang.Thread.run(Thread.java:1474)"];
+
 pub fn main(args: Vec<String>) {
+    let _thread = crate::util::java_stack::enter_all(&BUNDLER_MAIN_TAIL);
     std::panic::set_hook(Box::new(|info| {
         if crate::util::is_catching_exception() {
             return;
@@ -366,14 +370,14 @@ fn force_upgrade(
 
 pub(crate) struct Abort;
 
-const MAIN_GET_UNFIXED_DATA_TAG_WITH_FALLBACK: &str = "net.minecraft.server.Main.main(Main.java:148)";
-const MAIN_FIX_AND_GET_SUMMARY_FROM_TAG: &str = "net.minecraft.server.Main.main(Main.java:153)";
+const MAIN_GET_UNFIXED_DATA_TAG_WITH_FALLBACK: [&str; 3] = ["net.minecraft.server.Main.main(Main.java:148)", BUNDLER_MAIN_TAIL[0], BUNDLER_MAIN_TAIL[1]];
+const MAIN_FIX_AND_GET_SUMMARY_FROM_TAG: [&str; 3] = ["net.minecraft.server.Main.main(Main.java:153)", BUNDLER_MAIN_TAIL[0], BUNDLER_MAIN_TAIL[1]];
 
 pub(crate) fn fix_world_data(access: &mut LevelStorageAccess, notification_manager: NotificationManager) -> Result<Option<Nbt>, Abort> {
     if !access.has_world_data() {
         return Ok(None);
     }
-    let level_data_unfixed = match access.get_unfixed_data_tag_with_fallback(&[MAIN_GET_UNFIXED_DATA_TAG_WITH_FALLBACK]) {
+    let level_data_unfixed = match access.get_unfixed_data_tag_with_fallback(&MAIN_GET_UNFIXED_DATA_TAG_WITH_FALLBACK) {
         Ok(level_data_unfixed) => level_data_unfixed,
         Err(e) if e.is_io_exception() || e.is_nbt_exception() => {
             error!("Failed to load world data. World files may be corrupted. Shutting down.\n{}", e.print_stack_trace().trim_end());
@@ -384,7 +388,7 @@ pub(crate) fn fix_world_data(access: &mut LevelStorageAccess, notification_manag
             return Err(Abort);
         }
     };
-    let summary = match access.fix_and_get_summary_from_tag(&level_data_unfixed, &[MAIN_FIX_AND_GET_SUMMARY_FROM_TAG]) {
+    let summary = match access.fix_and_get_summary_from_tag(&level_data_unfixed, &MAIN_FIX_AND_GET_SUMMARY_FROM_TAG) {
         Ok(summary) => summary,
         Err(e) => {
             error!("Failed to start the minecraft server\n{}", e.print_stack_trace().trim_end());

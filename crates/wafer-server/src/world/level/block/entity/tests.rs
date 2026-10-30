@@ -436,9 +436,11 @@ fn failed_creations_throw_vanilla_exceptions() {
 \tat net.minecraft.world.level.block.entity.BlockEntityType.create(BlockEntityType.java:25)\n"
     );
     let banner = super::create_exception(wafer_data::block_entity_types::BANNER, pos, blocks::DIRT.default_state());
+    let cast = crate::util::java_runtime::class_cast_exception("net.minecraft.world.level.block.Block", "net.minecraft.world.level.block.AbstractBannerBlock");
+    assert!(cast.contains(" are in unnamed module of loader java.net.URLClassLoader @"));
     assert_eq!(
         banner.print_stack_trace(),
-        "java.lang.ClassCastException: class net.minecraft.world.level.block.Block cannot be cast to class net.minecraft.world.level.block.AbstractBannerBlock (net.minecraft.world.level.block.Block and net.minecraft.world.level.block.AbstractBannerBlock are in unnamed module of loader 'app')\n\
+        cast + "\n\
 \tat net.minecraft.world.level.block.entity.BannerBlockEntity.<init>(BannerBlockEntity.java:32)\n\
 \tat net.minecraft.world.level.block.entity.BlockEntityType.create(BlockEntityType.java:25)\n"
     );

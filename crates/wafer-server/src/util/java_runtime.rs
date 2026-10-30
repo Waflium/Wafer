@@ -22,7 +22,12 @@ pub fn input_arguments() -> Vec<String> {
 }
 
 pub fn class_cast_exception(from: &str, to: &str) -> String {
-    format!("java.lang.ClassCastException: class {from} cannot be cast to class {to} ({from} and {to} are in unnamed module of loader 'app')")
+    format!("java.lang.ClassCastException: class {from} cannot be cast to class {to} ({from} and {to} are in unnamed module of loader {})", application_class_loader())
+}
+
+fn application_class_loader() -> &'static str {
+    static LOADER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    LOADER.get_or_init(|| format!("java.net.URLClassLoader @{:x}", crate::util::java_collections::identity_hash_code()))
 }
 
 pub fn current_time_millis() -> i64 {

@@ -80,11 +80,13 @@ const CREATE_REPORT_WITH_BRIEF_INFO_329: &str = "net.minecraft.resources.Registr
 const LOAD_COMPLETION_FREEZE_ERRORS: &str = "net.minecraft.resources.RegistryDataLoader.lambda$load$2(RegistryDataLoader.java:263)";
 const LOAD_COMPLETION_VALIDATE_ERRORS: &str = "net.minecraft.resources.RegistryDataLoader.lambda$load$2(RegistryDataLoader.java:268)";
 
-const EXECUTION_EXCEPTION_FRAMES: [&str; 4] = [
+const EXECUTION_EXCEPTION_FRAMES: [&str; 6] = [
     "java.base/java.util.concurrent.CompletableFuture.wrapInExecutionException(CompletableFuture.java:345)",
     "java.base/java.util.concurrent.CompletableFuture.reportGet(CompletableFuture.java:440)",
     "java.base/java.util.concurrent.CompletableFuture.get(CompletableFuture.java:2094)",
     "net.minecraft.server.Main.main(Main.java:198)",
+    crate::server::main::BUNDLER_MAIN_TAIL[0],
+    crate::server::main::BUNDLER_MAIN_TAIL[1],
 ];
 
 const LOOT_VALIDATION: [&str; 3] = [

@@ -34,7 +34,7 @@ impl TimerQueue {
     pub fn load(dir: Option<PathBuf>) -> TimerQueue {
         let mut queue = TimerQueue { dir, queue: BTreeMap::new(), sequential_id: 0, events: IndexMap::new(), dirty: false };
         let Some(dir) = queue.dir.clone() else { return queue };
-        match read_saved_data(&TimerQueue::file(&dir), "main", "scheduled_events", DataFixTypes::SavedDataScheduledEvents, TimerQueue::decode) {
+        match read_saved_data(&TimerQueue::file(&dir), crate::server::main::SERVER_MAIN, "scheduled_events", DataFixTypes::SavedDataScheduledEvents, TimerQueue::decode) {
             Some(events) => events.into_iter().for_each(|(time, id, callback)| queue.schedule(&id, time, callback)),
             None => queue.dirty = true,
         }

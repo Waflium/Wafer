@@ -131,13 +131,13 @@ impl RandomSequences {
                     None => DecodeResult::error("Not a map: null"),
                 });
                 if let Some(error) = decoded.error {
-                    error!(thread: "main", "Failed to parse saved data for 'SavedDataType[minecraft:random_sequences]': {error}");
+                    error!(thread: crate::server::main::SERVER_MAIN, "Failed to parse saved data for 'SavedDataType[minecraft:random_sequences]': {error}");
                 }
                 decoded.value
             }
             Ok(None) => None,
             Err(_) => {
-                error!(thread: "main", "Error loading saved data: SavedDataType[minecraft:random_sequences]");
+                error!(thread: crate::server::main::SERVER_MAIN, "Error loading saved data: SavedDataType[minecraft:random_sequences]");
                 None
             }
         });
