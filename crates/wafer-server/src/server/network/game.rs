@@ -12,6 +12,7 @@ use crate::network::chat::Component;
 use crate::server::level::game_mode::{BlockBreakAction, GameType};
 use crate::server::network::movement::Input;
 use crate::util::Prediction;
+use crate::util::profiling::profiler;
 use crate::world::entity::EntityId;
 use crate::world::entity::player::player_model_part::PlayerModelPart;
 use crate::network::hashed_stack::HashedStack;
@@ -685,14 +686,17 @@ impl ServerLevel {
         let p = self.player_mut(id);
         p.chat.tick();
         p.drop_spam_throttler.tick();
-        if p.keep_alive_time.elapsed() >= KEEP_ALIVE_INTERVAL {
-            if p.keep_alive_challenge.is_some() {
-                p.disconnect("disconnect.timeout");
-            } else {
-                let challenge = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64;
-                p.keep_alive_challenge = Some(challenge);
-                p.keep_alive_time = Instant::now();
-                p.connection.send(clientbound::KEEP_ALIVE, |w| w.i64(challenge));
+        {
+            let _keep_alive = profiler::zone("keepAlive");
+            if p.keep_alive_time.elapsed() >= KEEP_ALIVE_INTERVAL {
+                if p.keep_alive_challenge.is_some() {
+                    p.disconnect("disconnect.timeout");
+                } else {
+                    let challenge = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as i64;
+                    p.keep_alive_challenge = Some(challenge);
+                    p.keep_alive_time = Instant::now();
+                    p.connection.send(clientbound::KEEP_ALIVE, |w| w.i64(challenge));
+                }
             }
         }
         !self.player(id).disconnected

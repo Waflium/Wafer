@@ -385,7 +385,7 @@ impl ServerLevel {
     }
 
     pub fn villager_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "villagerBrain");
         if self.mob(id).is_none() {
             return;
         }

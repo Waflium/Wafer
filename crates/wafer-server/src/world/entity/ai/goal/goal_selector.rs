@@ -1,6 +1,7 @@
 use super::goal::{Flag, Goal};
 use super::wrapped_goal::WrappedGoal;
 use crate::server::level::ServerLevel;
+use crate::util::profiling::profiler;
 use crate::world::entity::EntityId;
 
 #[derive(Default)]
@@ -53,6 +54,7 @@ impl GoalSelector {
     }
 
     pub fn tick(&mut self, level: &mut ServerLevel, mob: EntityId) {
+        profiler::push("goalCleanup");
         for goal in &mut self.available_goals {
             if goal.is_running() && (GoalSelector::goal_contains_any_flags(goal, self.disabled_flags) || !goal.can_continue_to_use(level, mob)) {
                 goal.stop(level, mob);
@@ -63,6 +65,8 @@ impl GoalSelector {
                 *locked = None;
             }
         }
+        profiler::pop();
+        profiler::push("goalUpdate");
         for i in 0..self.available_goals.len() {
             let goal = &self.available_goals[i];
             if !goal.is_running()
@@ -80,15 +84,18 @@ impl GoalSelector {
                 self.available_goals[i].start(level, mob);
             }
         }
+        profiler::pop();
         self.tick_running_goals(level, mob, true);
     }
 
     pub fn tick_running_goals(&mut self, level: &mut ServerLevel, mob: EntityId, force_tick_all_running_goals: bool) {
+        profiler::push("goalTick");
         for goal in &mut self.available_goals {
             if goal.is_running() && (force_tick_all_running_goals || goal.requires_update_every_tick()) {
                 goal.tick(level, mob);
             }
         }
+        profiler::pop();
     }
 
     pub fn get_available_goals(&self) -> &[WrappedGoal] {

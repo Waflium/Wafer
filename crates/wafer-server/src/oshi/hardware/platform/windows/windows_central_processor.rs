@@ -3,7 +3,8 @@ use windows_sys::Win32::System::SystemInformation::{GetNativeSystemInfo, SYSTEM_
 use crate::jna::platform::win32::advapi32_util::{ROOT_LOCAL_MACHINE, registry_get_int_value, registry_get_keys, registry_get_string_value};
 use crate::oshi::OshiResult;
 use crate::oshi::driver::windows::logical_processor_information::{get_logical_processor_information_ex, physical_package_count};
-use crate::oshi::hardware::central_processor::{CentralProcessor, ProcessorIdentifier};
+use crate::oshi::hardware::central_processor::{CentralProcessor, ProcessorIdentifier, TICK_IDLE, TICK_IRQ, TICK_SOFTIRQ, TICK_SYSTEM, TICK_TYPE_COUNT, TICK_USER};
+use crate::oshi::util::platform::windows::perf_counter_query::localize_if_needed;
 use crate::oshi::util::parse_util::split_whitespaces;
 
 const CPU_REGISTRY_ROOT: &str = "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\";
@@ -77,6 +78,50 @@ impl CentralProcessor for WindowsCentralProcessor {
     fn get_logical_processor_count(&self) -> i32 {
         self.logical_processor_count
     }
+
+    fn get_processor_cpu_load_ticks(&self) -> Vec<[i64; TICK_TYPE_COUNT]> {
+        localize_if_needed(PROCESSOR_INFORMATION, true);
+        query_processor_cpu_load_ticks(self.logical_processor_count.max(0) as usize)
+    }
+}
+
+const PROCESSOR_INFORMATION: &str = "Processor Information";
+const SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION: i32 = 8;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct SystemProcessorPerformanceInformation {
+    idle_time: i64,
+    kernel_time: i64,
+    user_time: i64,
+    dpc_time: i64,
+    interrupt_time: i64,
+    interrupt_count: u32,
+}
+
+#[link(name = "ntdll")]
+unsafe extern "system" {
+    fn NtQuerySystemInformation(system_information_class: i32, system_information: *mut std::ffi::c_void, system_information_length: u32, return_length: *mut u32) -> i32;
+}
+
+fn query_processor_cpu_load_ticks(logical_processor_count: usize) -> Vec<[i64; TICK_TYPE_COUNT]> {
+    let mut ticks = vec![[0i64; TICK_TYPE_COUNT]; logical_processor_count];
+    let mut information = vec![SystemProcessorPerformanceInformation::default(); logical_processor_count];
+    let mut returned = 0u32;
+    let length = (information.len() * std::mem::size_of::<SystemProcessorPerformanceInformation>()) as u32;
+    let status = unsafe { NtQuerySystemInformation(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION, information.as_mut_ptr().cast(), length, &mut returned) };
+    if status < 0 {
+        return ticks;
+    }
+    let filled = returned as usize / std::mem::size_of::<SystemProcessorPerformanceInformation>();
+    for (ticks, information) in ticks.iter_mut().zip(&information).take(filled) {
+        ticks[TICK_USER] = information.user_time;
+        ticks[TICK_SYSTEM] = (information.kernel_time - information.idle_time - information.dpc_time - information.interrupt_time).max(0);
+        ticks[TICK_IDLE] = information.idle_time;
+        ticks[TICK_IRQ] = information.interrupt_time;
+        ticks[TICK_SOFTIRQ] = information.dpc_time;
+    }
+    ticks
 }
 
 #[cfg(test)]

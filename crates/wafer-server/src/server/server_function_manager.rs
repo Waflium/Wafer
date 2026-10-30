@@ -6,6 +6,7 @@ use super::server_function_library::ServerFunctionLibrary;
 use crate::commands::execute_command_in_context;
 use crate::commands::functions::CommandFunction;
 use crate::commands::source::{CommandResultCallback, CommandSourceStack};
+use crate::util::profiling::profiler;
 
 const TICK_FUNCTION_TAG: &str = "minecraft:tick";
 const LOAD_FUNCTION_TAG: &str = "minecraft:load";
@@ -30,13 +31,14 @@ impl ServerFunctionManager {
         if server.functions.post_reload {
             server.functions.post_reload = false;
             let functions = server.functions.library.get_tag(LOAD_FUNCTION_TAG).to_vec();
-            server.run_from(CommandOrigin::LoadFunctions, |server| ServerFunctionManager::execute_tag_functions(server, &functions));
+            server.run_from(CommandOrigin::LoadFunctions, |server| ServerFunctionManager::execute_tag_functions(server, &functions, LOAD_FUNCTION_TAG));
         }
         let ticking = server.functions.ticking.clone();
-        server.run_from(CommandOrigin::TickFunctions, |server| ServerFunctionManager::execute_tag_functions(server, &ticking));
+        server.run_from(CommandOrigin::TickFunctions, |server| ServerFunctionManager::execute_tag_functions(server, &ticking, TICK_FUNCTION_TAG));
     }
 
-    fn execute_tag_functions(server: &mut Server, functions: &[Arc<CommandFunction>]) {
+    fn execute_tag_functions(server: &mut Server, functions: &[Arc<CommandFunction>], load_function_tag: &str) {
+        let _zone = profiler::zone(load_function_tag);
         for function in functions {
             let sender = ServerFunctionManager::game_loop_sender(server);
             ServerFunctionManager::execute(server, function, &sender);
@@ -44,6 +46,7 @@ impl ServerFunctionManager {
     }
 
     pub fn execute(server: &mut Server, function: &CommandFunction, sender: &CommandSourceStack) {
+        let _zone = profiler::zone_with(|| format!("function {}", function.id()));
         if let Ok(function) = function.instantiate(None) {
             execute_command_in_context(server, |context| context.queue_initial_function_call(function, sender, CommandResultCallback::EMPTY));
         }

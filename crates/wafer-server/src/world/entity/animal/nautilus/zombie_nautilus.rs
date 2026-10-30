@@ -1,5 +1,7 @@
 use std::sync::OnceLock;
 
+use crate::util::profiling::profiler;
+
 use wafer_data::{EquipmentSlot, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
@@ -121,11 +123,14 @@ impl ServerLevel {
     }
 
     pub fn zombie_nautilus_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "zombieNautilusBrain");
         if self.mob(id).is_none() {
             return;
         }
-        zombie_nautilus_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("zombieNautilusActivityUpdate");
+            zombie_nautilus_ai::update_activity(self.get_brain_mut(id));
+        }
         self.abstract_nautilus_custom_server_ai_step(id);
     }
 

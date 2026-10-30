@@ -21,12 +21,37 @@ pub struct LogicalProcessor {
     pub processor_group: i32,
 }
 
-pub trait CentralProcessor {
+pub trait CentralProcessor: Send {
     fn get_processor_identifier(&self) -> OshiResult<ProcessorIdentifier>;
     fn get_physical_package_count(&self) -> i32;
     fn get_physical_processor_count(&self) -> i32;
     fn get_logical_processor_count(&self) -> i32;
+
+    fn get_processor_cpu_load_ticks(&self) -> Vec<[i64; TICK_TYPE_COUNT]> {
+        vec![[0; TICK_TYPE_COUNT]; self.get_logical_processor_count().max(0) as usize]
+    }
+
+    fn get_processor_cpu_load_between_ticks(&self, old_ticks: &[[i64; TICK_TYPE_COUNT]]) -> Vec<f64> {
+        let ticks = self.get_processor_cpu_load_ticks();
+        ticks
+            .iter()
+            .zip(old_ticks)
+            .map(|(ticks, old_ticks)| {
+                let total: i64 = ticks.iter().zip(old_ticks).map(|(ticks, old_ticks)| ticks - old_ticks).sum();
+                let idle = ticks[TICK_IDLE] + ticks[TICK_IOWAIT] - old_ticks[TICK_IDLE] - old_ticks[TICK_IOWAIT];
+                if total > 0 && idle >= 0 { (total - idle) as f64 / total as f64 } else { 0.0 }
+            })
+            .collect()
+    }
 }
+
+pub const TICK_TYPE_COUNT: usize = 8;
+pub const TICK_USER: usize = 0;
+pub const TICK_SYSTEM: usize = 2;
+pub const TICK_IDLE: usize = 3;
+pub const TICK_IOWAIT: usize = 4;
+pub const TICK_IRQ: usize = 5;
+pub const TICK_SOFTIRQ: usize = 6;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProcessorIdentifier {

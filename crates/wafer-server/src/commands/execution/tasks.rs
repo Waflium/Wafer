@@ -7,6 +7,7 @@ use crate::commands::functions::InstantiatedFunction;
 use crate::commands::source::{CommandResultCallback, CommandSourceStack};
 use crate::commands::{CUSTOM_EXECUTORS, CUSTOM_MODIFIERS, EXECUTORS, MODIFIERS, not_implemented, unimplemented_modifier};
 use crate::server::Server;
+use crate::util::profiling::profiler;
 
 pub static ERROR_FORK_LIMIT_REACHED: DynamicCommandExceptionType = DynamicCommandExceptionType(|limit| tr("command.forkLimit", vec![limit]));
 
@@ -23,6 +24,7 @@ impl BuildContexts {
         let mut modifiers = initial_modifiers;
         let mut current_sources = initial_sources;
         if !current_stage.is_execute() {
+            let _prepare = profiler::zone_with(|| format!("prepare {}", self.0.top_context().input));
             let fork_limit = ExecutionContext::with(|c| c.fork_limit()) as usize;
             while !current_stage.is_execute() {
                 let context = current_stage.top_context();
@@ -91,6 +93,7 @@ pub struct ExecuteCommand {
 
 impl ExecuteCommand {
     pub fn execute(&self, server: &mut Server, sender: &CommandSourceStack, frame: &Frame) {
+        let _zone = profiler::zone_with(|| format!("execute {}", self.stage.top_context().input));
         ExecutionContext::with(ExecutionContext::increment_cost);
         let forked = self.modifiers.is_forked();
         match run_executable(server, &self.stage, sender, forked) {

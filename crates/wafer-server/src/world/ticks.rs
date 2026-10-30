@@ -187,11 +187,12 @@ impl<T: Copy + Eq + Hash> ProtoChunkTicks<T> {
 pub struct LevelTicks<T> {
     containers: FastMap<ChunkPos, LevelChunkTicks<T>>,
     to_run_this_tick: HashSet<(BlockPos, T)>,
+    pub containers_to_tick: usize,
 }
 
 impl<T: Copy + Eq + Hash> Default for LevelTicks<T> {
     fn default() -> Self {
-        LevelTicks { containers: FastMap::default(), to_run_this_tick: HashSet::new() }
+        LevelTicks { containers: FastMap::default(), to_run_this_tick: HashSet::new(), containers_to_tick: 0 }
     }
 }
 
@@ -246,6 +247,7 @@ impl<T: Copy + Eq + Hash> LevelTicks<T> {
             .filter(|(pos, c)| c.peek().is_some_and(|t| t.trigger_tick <= current_tick) && can_tick(**pos))
             .map(|(pos, _)| *pos)
             .collect();
+        self.containers_to_tick = due.len();
         let mut out = Vec::new();
         while out.len() < max_ticks && !due.is_empty() {
             let best = (0..due.len()).min_by_key(|&i| self.containers[&due[i]].peek().unwrap().intra_tick_key()).unwrap();

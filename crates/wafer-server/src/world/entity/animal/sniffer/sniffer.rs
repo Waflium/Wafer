@@ -1,4 +1,6 @@
 use wafer_core::random::RandomSource;
+
+use crate::util::profiling::profiler;
 use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::{block_tags, item_tags, items, registry, registry_id};
 
@@ -350,11 +352,15 @@ impl ServerLevel {
     }
 
     pub fn sniffer_custom_server_ai_step(&mut self, id: EntityId) {
+        profiler::push("snifferBrain");
         Brain::tick(self, id);
         if self.mob(id).is_none() {
+            profiler::pop();
             return;
         }
+        profiler::pop_push("snifferActivityUpdate");
         sniffer_ai::update_activity(self.get_brain_mut(id));
+        profiler::pop();
         self.animal_custom_server_ai_step(id);
     }
 }

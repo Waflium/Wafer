@@ -1,5 +1,7 @@
 use std::sync::OnceLock;
 
+use crate::util::profiling::profiler;
+
 use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::{block_tags, entity_type_tags, item_tags, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
@@ -164,11 +166,14 @@ impl ServerLevel {
     }
 
     pub fn frog_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "frogBrain");
         if self.mob(id).is_none() {
             return;
         }
-        frog_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("frogActivityUpdate");
+            frog_ai::update_activity(self.get_brain_mut(id));
+        }
         self.animal_custom_server_ai_step(id);
     }
 

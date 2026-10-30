@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::ServerLevel;
 use crate::network::connection::encode;
+use crate::util::profiling::profiler;
 use crate::world::container::ContainerRef;
 use crate::world::entity::attributes::Attribute;
 use crate::world::level::block::entity::{BlockEntity, BlockEntityKind, BlockEntityTicker};
@@ -183,6 +184,7 @@ impl ServerLevel {
         }
         let Some(entity) = self.chunks.block_entity_ref(pos) else { return };
         let ty = entity.ty();
+        let _zone = profiler::zone_with(|| ty.name().to_string());
         let state = self.chunks.loaded_chunk(pos.chunk()).map(|c| c.block_state(pos)).unwrap_or_else(|| wafer_data::blocks::AIR.default_state());
         if !ty.is_valid(state) {
             return;

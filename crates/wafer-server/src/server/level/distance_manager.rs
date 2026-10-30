@@ -400,6 +400,10 @@ impl DistanceManager {
         self.ticket_storage.has_tickets()
     }
 
+    pub fn get_debug_status(&self) -> String {
+        self.ticket_dispatcher.get_debug_status("player ticket throttler")
+    }
+
     pub fn ticket_level(&self, pos: ChunkPos, simulation: bool) -> i32 {
         self.ticket_storage.ticket_level_at(pos.pack(), simulation)
     }

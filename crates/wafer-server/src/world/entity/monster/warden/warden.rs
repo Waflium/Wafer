@@ -257,7 +257,7 @@ impl ServerLevel {
     }
 
     pub fn warden_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "wardenBrain");
         if self.mob(id).is_none() {
             return;
         }

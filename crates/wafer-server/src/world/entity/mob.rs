@@ -2,6 +2,8 @@ use std::cell::Cell;
 
 use wafer_core::random::RandomSource;
 use wafer_core::{AABB, BlockPos};
+
+use crate::util::profiling::profiler;
 use wafer_data::{EquipmentSlot, EquipmentSlotGroup, Item, damage_types, entity_type_tags, game_rule, items};
 use wafer_protocol::nbt::Nbt;
 
@@ -2742,6 +2744,7 @@ impl ServerLevel {
     }
 
     fn mob_base_tick_end(&mut self, id: EntityId) {
+        let _zone = profiler::zone("mobBaseTick");
         if !self.is_alive(id) {
             return;
         }
@@ -2811,6 +2814,7 @@ impl ServerLevel {
         if entity_type_tags::BURN_IN_DAYLIGHT.contains(self.entity(id).entity_type as usize) {
             self.burn_undead(id);
         }
+        let _looting = profiler::zone("looting");
         let mob = self.mob(id).expect("a mob");
         if mob.can_pick_up_loot() && self.is_alive(id) && !mob.living.dead && self.game_rules.get_bool(game_rule::MOB_GRIEFING) {
             let (x, y, z) = self.get_pickup_reach(id);
@@ -3275,20 +3279,36 @@ impl ServerLevel {
     pub fn mob_server_ai_step(&mut self, id: EntityId) {
         let mob = self.mob_mut(id).expect("a mob");
         mob.living.no_action_time += 1;
+        profiler::push("sensing");
         mob.ai.sensing.tick();
+        profiler::pop();
         let id_based_tick_count = mob.entity.tick_count.wrapping_add(id);
         if id_based_tick_count % 2 != 0 && mob.entity.tick_count > 1 {
+            profiler::push("targetSelector");
             self.with_target_selector(id, |selector, level| selector.tick_running_goals(level, id, false));
+            profiler::pop();
+            profiler::push("goalSelector");
             self.with_goal_selector(id, |selector, level| selector.tick_running_goals(level, id, false));
+            profiler::pop();
         } else {
+            profiler::push("targetSelector");
             self.with_target_selector(id, |selector, level| selector.tick(level, id));
+            profiler::pop();
+            profiler::push("goalSelector");
             self.with_goal_selector(id, |selector, level| selector.tick(level, id));
+            profiler::pop();
         }
         if self.mob(id).is_none() {
             return;
         }
+        profiler::push("navigation");
         self.get_navigation(id, |navigation, level| navigation.tick(level, id));
+        profiler::pop();
+        profiler::push("mob tick");
         self.custom_server_ai_step(id);
+        profiler::pop();
+        profiler::push("controls");
+        profiler::push("move");
         match self.mob(id).expect("a mob").ai.move_control.kind {
             MoveControlKind::Default => self.move_control_tick(id),
             MoveControlKind::Drowned => self.drowned_move_control_tick(id),
@@ -3312,7 +3332,9 @@ impl ServerLevel {
             MoveControlKind::Turtle => self.turtle_move_control_tick(id),
             MoveControlKind::Flying(control) => self.flying_move_control_tick(id, control),
         }
+        profiler::pop_push("look");
         self.look_control_tick(id);
+        profiler::pop_push("jump");
         match self.mob(id).expect("a mob").kind {
             MobKind::Rabbit(_) => self.rabbit_jump_control_tick(id),
             MobKind::Creaking(_) => {
@@ -3324,6 +3346,8 @@ impl ServerLevel {
             }
             _ => self.jump_control_tick(id),
         }
+        profiler::pop();
+        profiler::pop();
     }
 
     pub fn with_goal_selector(&mut self, id: EntityId, f: impl FnOnce(&mut GoalSelector, &mut ServerLevel)) {

@@ -38,8 +38,39 @@ const CHUNK_IO_ERROR_NUGGETS: &[&str] = &[
     "loss.mca",
 ];
 
+const PROFILE_NUGGETS: &[&str] = &[
+    "I'd Rather Be Surfing",
+    "Shiny numbers!",
+    "Am I not running fast enough? :(",
+    "I'm working as hard as I can!",
+    "Will I ever be good enough for you? :(",
+    "Speedy. Zoooooom!",
+    "Hello world",
+    "40% better than a crash report.",
+    "Now with extra numbers",
+    "Now with less numbers",
+    "Now with the same numbers",
+    "You should add flames to things, it makes them go faster!",
+    "Do you feel the need for... optimization?",
+    "*cracks redstone whip*",
+    "Maybe if you treated it better then it'll have more motivation to work faster! Poor server.",
+];
+
+const TEST_NUGGETS: &[&str] = &[
+    "Don't mind me",
+    "One day I will be a real crash!",
+    "Booo! Haha, did I scare you?",
+    "Help, I'm trapped in a report factory!",
+    "Have I answered your question?",
+    "No hugs here, sorry",
+    "I Can't Believe It's Not A Crash Report!",
+    "Where's the kaboom!?",
+];
+
 impl ReportType {
     pub const CRASH: ReportType = ReportType { header: "Minecraft Crash Report", nuggets: wafer_data::CRASH_REPORT_NUGGETS };
+    pub const PROFILE: ReportType = ReportType { header: "Minecraft Profiler Results", nuggets: PROFILE_NUGGETS };
+    pub const TEST: ReportType = ReportType { header: "Minecraft Test Report", nuggets: TEST_NUGGETS };
     pub const CHUNK_IO_ERROR: ReportType = ReportType { header: "Minecraft Chunk IO Error Report", nuggets: CHUNK_IO_ERROR_NUGGETS };
 
     pub fn get_error_comment(&self) -> &'static str {

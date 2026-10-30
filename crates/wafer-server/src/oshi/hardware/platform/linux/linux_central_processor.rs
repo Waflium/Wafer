@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 
 use crate::oshi::OshiResult;
 use crate::oshi::driver::linux::lshw;
-use crate::oshi::hardware::central_processor::{CentralProcessor, LogicalProcessor, ProcessorIdentifier};
+use crate::oshi::hardware::central_processor::{CentralProcessor, LogicalProcessor, ProcessorIdentifier, TICK_TYPE_COUNT};
 use crate::oshi::software::os::platform::linux::linux_operating_system::statics;
 use crate::oshi::util::executing_command::run_native;
 use crate::oshi::util::file_util::{get_int_from_file, get_string_from_file, read_file};
@@ -10,6 +10,7 @@ use crate::oshi::util::parse_util::{get_first_int_value, java_trim, parse_hertz,
 
 const CPUINFO: &str = "/proc/cpuinfo";
 const MODEL: &str = "/proc/device-tree/model";
+const PROC_STAT: &str = "/proc/stat";
 const SYS_CPU: &str = "/sys/devices/system/cpu/";
 
 pub struct LinuxCentralProcessor {
@@ -230,6 +231,21 @@ impl CentralProcessor for LinuxCentralProcessor {
 
     fn get_logical_processor_count(&self) -> i32 {
         self.logical_processors.len() as i32
+    }
+
+    fn get_processor_cpu_load_ticks(&self) -> Vec<[i64; TICK_TYPE_COUNT]> {
+        let mut ticks = vec![[0i64; TICK_TYPE_COUNT]; self.logical_processors.len()];
+        for line in read_file(PROC_STAT) {
+            let Some(rest) = line.strip_prefix("cpu") else { continue };
+            let mut fields = rest.split_whitespace();
+            let Some(index) = fields.next().and_then(|index| index.parse::<usize>().ok()) else { continue };
+            if let Some(cpu) = ticks.get_mut(index) {
+                for (slot, field) in cpu.iter_mut().zip(fields) {
+                    *slot = field.parse().unwrap_or(0);
+                }
+            }
+        }
+        ticks
     }
 }
 

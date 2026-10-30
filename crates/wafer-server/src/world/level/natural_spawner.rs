@@ -10,6 +10,7 @@ use super::potential_calculator::PotentialCalculator;
 use super::server_level_accessor::ServerLevelAccessor;
 use super::world_gen_level::WorldGenLevel;
 use crate::server::level::ServerLevel;
+use crate::util::profiling::profiler;
 use crate::util::random::WeightedList;
 use crate::util::valueproviders::{IntProvider, random_between_inclusive};
 use crate::world::attribute::environment_attributes;
@@ -104,6 +105,7 @@ pub fn get_filtered_spawning_categories(state: &SpawnState, spawn_enemies: bool,
 
 pub fn spawn_for_chunk(level: &mut ServerLevel, chunk: ChunkPos, state: &mut SpawnState, spawning_categories: &[MobCategory]) {
     let state = RefCell::new(state);
+    profiler::push("spawner");
     for &mob_category in spawning_categories {
         if state.borrow_mut().can_spawn_for_category_local(level, mob_category, chunk) {
             spawn_category_for_chunk(
@@ -115,6 +117,7 @@ pub fn spawn_for_chunk(level: &mut ServerLevel, chunk: ChunkPos, state: &mut Spa
             );
         }
     }
+    profiler::pop();
 }
 
 pub fn spawn_category_for_chunk(mob_category: MobCategory, level: &mut ServerLevel, chunk: ChunkPos, extra_test: &mut SpawnPredicate, spawn_callback: &mut AfterSpawnCallback) {

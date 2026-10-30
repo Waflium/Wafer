@@ -1,4 +1,6 @@
 use wafer_core::random::RandomSource;
+
+use crate::util::profiling::profiler;
 use wafer_core::{Vec3, mth};
 use wafer_data::{block_tags, item_tags, items, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
@@ -256,11 +258,14 @@ impl ServerLevel {
     }
 
     pub fn camel_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "camelBrain");
         if self.mob(id).is_none() {
             return;
         }
-        camel_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("camelActivityUpdate");
+            camel_ai::update_activity(self.get_brain_mut(id));
+        }
         self.animal_custom_server_ai_step(id);
     }
 

@@ -3,6 +3,7 @@ use wafer_core::random::RandomSource;
 use wafer_protocol::nbt::Nbt;
 
 use super::activity_data::ActivityData;
+use crate::util::profiling::profiler;
 use super::behavior::behavior::Status;
 use super::behavior::behavior_control::BehaviorControl;
 use super::memory::expirable_value::ExpirableValue;
@@ -421,6 +422,11 @@ impl Brain {
 
     pub fn is_active(&self, activity: Activity) -> bool {
         self.active_activities.contains(&activity)
+    }
+
+    pub fn tick_in_zone(level: &mut ServerLevel, body: EntityId, zone: &str) {
+        let _zone = profiler::zone(zone);
+        Brain::tick(level, body);
     }
 
     pub fn tick(level: &mut ServerLevel, body: EntityId) {

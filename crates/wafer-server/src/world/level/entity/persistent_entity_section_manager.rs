@@ -529,6 +529,26 @@ impl PersistentEntitySectionManager {
         self.known_uuids.len()
     }
 
+    pub fn dump_sections(&self, output: &mut impl std::io::Write) -> std::io::Result<()> {
+        let mut csv_output =
+            crate::util::csv_output::builder().add_column("x").add_column("y").add_column("z").add_column("visibility").add_column("load_status").add_column("entity_count").build(output)?;
+        for chunk_key in self.section_storage.all_chunks_with_existing_sections().iter() {
+            let load_status = self.chunk_load_statuses.get(chunk_key).map(|status| format!("{status:?}").to_uppercase());
+            for section_key in self.section_storage.existing_section_positions_in_chunk(chunk_key) {
+                let Some(section) = self.section_storage.get_section(section_key) else { continue };
+                csv_output.write_row(&[
+                    Some((section_key >> 42).to_string()),
+                    Some(((section_key << 44) >> 44).to_string()),
+                    Some(((section_key << 22) >> 42).to_string()),
+                    Some(format!("{:?}", section.status()).to_uppercase()),
+                    load_status.clone(),
+                    Some(section.entities().len().to_string()),
+                ])?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn gather_stats(&self) -> String {
         format!(
             "{},{},{},{},{},{},{}",

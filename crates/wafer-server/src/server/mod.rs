@@ -3,6 +3,7 @@ pub mod bossevents;
 pub mod command_frames;
 pub mod command_origin;
 pub mod commands;
+mod debug_report;
 pub mod dedicated;
 pub mod dialog;
 pub mod level;
@@ -16,6 +17,7 @@ pub mod eula;
 pub mod jsonrpc;
 pub mod main;
 pub mod main_thread_frames;
+mod metrics_recording;
 pub mod notifications;
 pub mod player_advancements;
 pub mod server_advancement_manager;
@@ -61,6 +63,9 @@ use crate::network::server_status::Favicon;
 use crate::network::connection::{Outbound, Packet};
 use crate::network::login::{Profile, Verdict};
 use crate::util::java_throwable::JavaThrowable;
+use crate::util::profiling::metrics::active_metrics_recorder::ActiveMetricsRecorder;
+use crate::util::profiling::profile_results::ProfileResults;
+use crate::util::profiling::profiler;
 use crate::world::clock::ServerClockManager;
 use crate::world::entity::EntityId;
 use crate::util::lifecycle::Lifecycle;
@@ -312,6 +317,18 @@ pub struct Server {
     stopping: bool,
     ready: bool,
     defers_full_status_changes: bool,
+    metrics_recorder: Option<ActiveMetricsRecorder>,
+    on_metrics_recording_stopped: Option<OnMetricsRecordingStopped>,
+    on_metrics_recording_finished: Option<OnMetricsRecordingFinished>,
+    will_start_recording_metrics: bool,
+}
+
+pub type OnMetricsRecordingStopped = Box<dyn FnOnce(&mut Server, &ProfileResults)>;
+pub type OnMetricsRecordingFinished = Box<dyn FnOnce(PathBuf, MetricsReportContext, std::sync::mpsc::Sender<ServerTask>) + Send>;
+
+pub struct MetricsReportContext {
+    pub level_name: String,
+    pub snapshot: dedicated::server_watchdog::ServerSnapshot,
 }
 
 impl Server {
@@ -567,6 +584,10 @@ impl Server {
             stopping: false,
             ready: false,
             defers_full_status_changes,
+            metrics_recorder: None,
+            on_metrics_recording_stopped: None,
+            on_metrics_recording_finished: None,
+            will_start_recording_metrics: false,
         };
         server.name_to_id_cache.set_resolve_offline_users(!server.config.online_mode);
         server.attach_user_lookup();
@@ -717,7 +738,10 @@ impl Server {
         crate::crash_report::throw_delayed_exception();
         let mut did_something = false;
         for level in &mut self.levels {
-            did_something |= level.poll_chunk_task();
+            if level.poll_chunk_task() {
+                profiler::increment_counter("runTask", 1);
+                did_something = true;
+            }
         }
         did_something
     }
@@ -974,7 +998,9 @@ impl Server {
 
     fn auto_save(&mut self) {
         self.ticks_until_autosave = self.compute_next_autosave_interval();
+        profiler::push("save");
         self.save_everything(true, false, false);
+        profiler::pop();
     }
 
     pub fn set_auto_save(&mut self, enable: bool) -> bool {
@@ -1020,6 +1046,9 @@ impl Server {
 
     fn stop_server(&mut self) {
         self.notification_manager.server_shutting_down();
+        if self.is_recording_metrics() {
+            self.cancel_recording_metrics();
+        }
         info!("Stopping server");
         info!("Saving players");
         self.flush_other_level_ender_pearls();
@@ -1390,6 +1419,7 @@ impl Server {
         let mut ran_task = false;
         while let Some(task) = self.tasks.pop_front() {
             ran_task = true;
+            profiler::increment_counter("runTask", 1);
             match task {
                 Task::Chat { player, body, signature } if self.has_player(player) => self.run_chat(player, body, signature),
                 Task::Command { player, command } if self.has_player(player) => self.run_unsigned_command(player, &command),
@@ -1742,9 +1772,13 @@ impl Server {
         }
         self.tick_count += 1;
         self.tick_rate_manager.tick();
+        profiler::push("commandFunctions");
         ServerFunctionManager::tick(self);
+        profiler::pop();
         if self.tick_rate_manager.runs_normally() {
+            profiler::push("clocks");
             self.clocks.tick(self.game_rules.get_bool(game_rule::ADVANCE_TIME));
+            profiler::pop();
         }
         let overworld_clock_time = self.clocks.clocks[ServerClockManager::id_of(OVERWORLD).unwrap()].total_ticks;
         for level in &mut self.levels {
@@ -1752,6 +1786,8 @@ impl Server {
             level.overworld_clock_time = overworld_clock_time;
         }
         if self.tick_count % 20 == 0 {
+            profiler::push("timeSync");
+            profiler::push("timeSync");
             let game_time = self.overworld().game_time;
             for p in self.players() {
                 p.connection.send(clientbound::SET_TIME, |w| {
@@ -1759,13 +1795,21 @@ impl Server {
                     w.varint(0);
                 });
             }
+            profiler::pop();
+            profiler::pop();
         }
+        profiler::push("levels");
         self.update_effective_respawn_data();
         for index in 0..self.levels.len() {
+            profiler::push_with(|| format!("ServerLevel[{}] {}", self.level_name, self.levels[index].dimension));
+            profiler::push("tick");
             if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.tick_level(index))) {
                 self.throw_exception_ticking_world(index, payload);
             }
+            profiler::pop();
+            profiler::pop();
         }
+        profiler::pop_push("connection");
         for id in self.player_ids() {
             if !self.lost_connections.is_empty()
                 && let Some(conn) = self.connections.iter().find(|&(_, &p)| p == id).map(|(&c, _)| c)
@@ -1798,14 +1842,20 @@ impl Server {
         self.tick_logins();
         self.tick_prepare_spawns();
         self.handle_console_inputs();
+        profiler::pop_push("players");
         self.tick_player_list();
+        profiler::pop_push("debugSubscribers");
         if self.tick_rate_manager.runs_normally() {
+            profiler::pop_push("gameTests");
             crate::gametest::framework::game_test_ticker::tick(self);
         }
+        profiler::pop_push("server gui refresh");
         self.update_scoreboard_waypoints();
+        profiler::pop_push("send chunks");
         for id in self.player_ids() {
             self.entity_level_mut(id).send_next_chunks(id);
         }
+        profiler::pop();
         self.server_activity_monitor.tick();
         if self.last_status.is_none_or(|t| t.elapsed() >= STATUS_EXPIRE_TIME) {
             self.last_status = Some(Instant::now());
@@ -1815,11 +1865,13 @@ impl Server {
         if self.ticks_until_autosave <= 0 {
             self.auto_save();
         }
+        profiler::push("tallying");
         let tick_time = start.elapsed().as_nanos() as i64;
         let tick_index = (self.tick_count % 100) as usize;
         self.aggregated_tick_times_nanos += tick_time - self.tick_times_nanos[tick_index];
         self.tick_times_nanos[tick_index] = tick_time;
         self.smoothed_tick_time_millis = self.smoothed_tick_time_millis * 0.8 + tick_time as f32 / 1000000.0 * 0.19999999;
+        profiler::pop();
     }
 
     fn tick_level(&mut self, index: usize) {
@@ -1845,7 +1897,9 @@ impl Server {
         level.update_sky_brightness();
         if runs && index == 0 {
             let time = level.tick_time();
+            profiler::push("scheduledFunctions");
             TimerQueue::tick(self, time);
+            profiler::pop();
         }
         level::lent_levels::LentLevels::lend(&mut self.levels, index).level().begin_block_ticks(runs);
         while let Some(pos) = self.levels[index].run_block_ticks() {
@@ -2487,6 +2541,7 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
         }
         next_tick += this_tick;
         timing.set_next_tick_time(next_tick, server.tick_rate_manager.milliseconds_per_tick());
+        let profiler_scope = server.create_profiler();
         if ticks.is_multiple_of(SNAPSHOT_INTERVAL)
             && let Ok(mut snapshot) = timing.snapshot.lock()
         {
@@ -2497,6 +2552,8 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             level.chunks.tick_deadline = Some(next_tick);
         }
         server.refresh_spawn_protection();
+        profiler::push("tick");
+        profiler::push("scheduledPacketProcessing");
         while let Ok(event) = events.try_recv() {
             server.handle(event);
         }
@@ -2504,12 +2561,15 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             level.chunks.run_light_updates();
             level.process_chunk_events();
         }
+        profiler::pop();
         {
             let _scope = main_thread_frames::tick();
             server.tick();
         }
+        profiler::pop();
         server.mark_ready();
         crate::util::profiling::rfr::rust_profiler::instance().on_server_tick(server.smoothed_tick_time_millis);
+        profiler::push("nextTickWait");
         let delayed_tasks_max_next_tick = (Instant::now() + this_tick).max(next_tick);
         let mut may_have_delayed_tasks = true;
         let have_time = |may_have_delayed_tasks: bool| Instant::now() < if may_have_delayed_tasks { delayed_tasks_max_next_tick } else { next_tick };
@@ -2518,6 +2578,7 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             loop {
                 let mut ran_server_task = false;
                 while let Ok(task) = tasks.try_recv() {
+                    profiler::increment_counter("runTask", 1);
                     task(server);
                     ran_server_task = true;
                 }
@@ -2533,6 +2594,7 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
         loop {
             let seen = wakeup.generation();
             while let Ok(task) = tasks.try_recv() {
+                profiler::increment_counter("runTask", 1);
                 task(server);
             }
             if !have_time(may_have_delayed_tasks) {
@@ -2546,6 +2608,9 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
         if sprinting {
             server.tick_rate_manager.end_tick_work();
         }
+        profiler::pop();
+        drop(profiler_scope);
+        server.end_metrics_recording_tick();
     }
 }
 

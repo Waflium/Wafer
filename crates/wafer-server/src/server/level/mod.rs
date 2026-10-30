@@ -6,6 +6,7 @@ pub mod chunk_map;
 pub mod chunk_task_dispatcher;
 pub mod chunk_tracker;
 pub mod chunk_workers;
+mod debug_report;
 pub mod distance_manager;
 pub mod events;
 pub mod entity_tombstones;
@@ -39,6 +40,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::util::datafix::data_fix_types::DataFixTypes;
+use crate::util::profiling::profiler;
 use crate::util::FastIndexMap;
 
 use wafer_core::random::{LegacyRandomSource, RandomSource};
@@ -1418,6 +1420,7 @@ impl ServerLevel {
     }
 
     pub fn get_entities_matching(&self, except: Option<EntityId>, area: &AABB, selector: impl Fn(&ServerLevel, EntityId) -> bool) -> Vec<EntityId> {
+        profiler::increment_counter("getEntities", 1);
         let mut found = Vec::new();
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
             for &id in section.entities() {
@@ -1458,6 +1461,7 @@ impl ServerLevel {
         output: &mut Vec<EntityId>,
         max_results: usize,
     ) {
+        profiler::increment_counter("getEntities", 1);
         let mut aborted = false;
         self.entity_manager.section_storage.for_each_accessible_non_empty_section(area, |section| {
             if aborted {
@@ -1532,8 +1536,11 @@ impl ServerLevel {
         self.environment_attributes.invalidate_tick_cache();
         let runs = self.tick_rate_manager.runs_normally();
         if runs {
+            profiler::push("world border");
             self.world_border.tick();
+            profiler::pop_push("weather");
             self.advance_weather_cycle();
+            profiler::pop();
         }
         self.update_region_level_data();
         runs
@@ -1625,29 +1632,47 @@ impl ServerLevel {
 
     pub fn tick_after_block_ticks(&mut self, runs: bool) {
         if !self.is_debug() && runs {
+            profiler::pop_push("cleanup");
+            profiler::pop();
+            profiler::pop_push("fluidTicks");
             self.tick_fluid_ticks();
+            profiler::pop();
         }
+        profiler::pop_push("raid");
         if runs {
             self.raids_tick();
         }
+        profiler::pop_push("chunkSource");
+        profiler::push("purge");
         if runs {
             self.chunks.purge_stale_tickets();
         }
         self.chunks.run_distance_manager_updates();
         self.process_chunk_events();
+        profiler::pop_push("chunks");
         if !self.is_debug() {
+            profiler::push("pollingChunks");
             if runs {
+                profiler::push("tickingChunks");
                 self.tick_chunks();
+                profiler::pop();
             }
+            profiler::push("broadcast");
             self.broadcast_changed_chunks();
+            profiler::pop();
+            profiler::pop();
         }
         self.tick_chunk_map();
+        profiler::pop_push("unload");
         self.chunks.tick_unloads(self.no_save, false);
         self.unload_block_entities();
+        profiler::pop();
+        profiler::pop_push("blockEvents");
         if runs {
             self.run_block_events();
         }
         self.handling_tick = false;
+        profiler::pop();
         if self.chunks.has_active_tickets() {
             self.empty_time = 0;
         }
@@ -1655,8 +1680,11 @@ impl ServerLevel {
             self.empty_time += 1;
         }
         if self.empty_time < 300 {
+            profiler::push("entities");
             if self.dragon_fight.is_some() && runs {
+                profiler::push("dragonFight");
                 self.dragon_fight_tick();
+                profiler::pop();
             }
             self.entity_tick_range = Some((0, self.tick_list.begin_iteration()));
         }
@@ -1667,13 +1695,18 @@ impl ServerLevel {
         for i in start..end {
             let Some(id) = self.tick_list.at(i) else { continue };
             if self.players.contains_key(&id) {
+                profiler::push("checkDespawn");
+                profiler::pop();
                 if !self.ticks_with_vehicle(id) {
+                    profiler::push("tick");
                     self.tick_root_entity(id);
+                    profiler::pop();
                 }
             } else if let Some(entity) = self.find_entity(id) {
                 if entity.entity().is_removed() {
                     self.remove_entity(id);
                 } else if !self.tick_rate_manager.is_entity_frozen(false, self.count_player_passengers(id)) {
+                    profiler::push("checkDespawn");
                     if self.is_wither(id) {
                         self.wither_check_despawn(id);
                     } else if self.is_ender_dragon(id) {
@@ -1682,10 +1715,13 @@ impl ServerLevel {
                     } else if self.is_shulker_bullet(id) {
                         self.shulker_bullet_check_despawn(id);
                     }
+                    profiler::pop();
                     let in_range = self.find_entity(id).is_some_and(|e| self.in_entity_ticking_range(e.entity().chunk_position()));
                     if in_range {
                         if !self.ticks_with_vehicle(id) {
+                            profiler::push("tick");
                             self.tick_root_entity(id);
+                            profiler::pop();
                         }
                     } else if self.find_entity(id).is_some_and(|e| e.entity().is_removed()) {
                         self.remove_entity(id);
@@ -1719,10 +1755,16 @@ impl ServerLevel {
     pub fn tick_after_entities(&mut self) {
         if self.entity_tick_range.take().is_some() {
             self.tick_list.end_iteration();
+            profiler::pop_push("blockEntities");
             self.tick_block_entities();
+            profiler::pop();
         }
+        profiler::push("entityManagement");
         self.remove_untracked_entities();
         self.tick_entity_manager();
+        profiler::pop();
+        profiler::push("debugSynchronizers");
+        profiler::pop();
     }
 
     fn create_tick<T>(&mut self, pos: BlockPos, ty: T, delay: i32, priority: TickPriority) -> ScheduledTick<T> {
@@ -1754,9 +1796,15 @@ impl ServerLevel {
     }
 
     pub fn begin_block_ticks(&mut self, runs: bool) {
+        profiler::push("tickPending");
         if !self.is_debug() && runs {
+            profiler::push("blockTicks");
+            profiler::push("collect");
             let entity_manager = &self.entity_manager;
             let due = self.chunks.collect_block_ticks(self.game_time, 65536, |c| entity_manager.are_entities_loaded(c.pack()));
+            profiler::increment_counter("containersToTick", self.chunks.block_ticks.containers_to_tick as i32);
+            profiler::pop_push("run");
+            profiler::increment_counter("ticksToRun", due.len() as i32);
             self.block_ticks_to_run.extend(due);
         }
     }
@@ -1776,8 +1824,12 @@ impl ServerLevel {
     }
 
     fn tick_fluid_ticks(&mut self) {
+        profiler::push("collect");
         let entity_manager = &self.entity_manager;
         let due = self.chunks.collect_fluid_ticks(self.game_time, 65536, |c| entity_manager.are_entities_loaded(c.pack()));
+        profiler::increment_counter("containersToTick", self.chunks.fluid_ticks.containers_to_tick as i32);
+        profiler::pop_push("run");
+        profiler::increment_counter("ticksToRun", due.len() as i32);
         for tick in due {
             self.chunks.fluid_ticks.ran(tick.pos, tick.ty);
             let state = self.block_state(tick.pos);
@@ -1785,6 +1837,8 @@ impl ServerLevel {
                 crate::world::level::material::tick(self, tick.pos, state);
             }
         }
+        profiler::pop_push("cleanup");
+        profiler::pop();
     }
 
     pub fn in_entity_ticking_range(&self, chunk: ChunkPos) -> bool {
@@ -1801,6 +1855,7 @@ impl ServerLevel {
     }
 
     fn tick_chunks(&mut self) {
+        profiler::push("naturalSpawnCount");
         let chunk_count = self.chunks.distance_manager.natural_spawn_chunk_count() as i32;
         let mut spawn_cookie = natural_spawner::create_state(chunk_count, self, LocalMobCapCalculator::default());
         let do_mob_spawning = self.game_rules.get_bool(wafer_data::game_rule::SPAWN_MOBS);
@@ -1811,18 +1866,24 @@ impl ServerLevel {
         } else {
             Vec::new()
         };
+        profiler::pop_push("filteringSpawningChunks");
         let mut spawning_chunks = self.collect_spawning_chunks();
+        profiler::pop_push("shuffleSpawningChunks");
         crate::util::shuffle(&mut spawning_chunks, &mut self.random);
+        profiler::pop_push("tickSpawningChunks");
         for chunk in spawning_chunks {
             self.tick_spawning_chunk(chunk, &spawning_categories, &mut spawn_cookie);
         }
         self.chunks.last_spawn_state = Some(spawn_cookie);
+        profiler::pop_push("tickTickingChunks");
         for chunk in self.chunks.block_ticking_chunks() {
             self.tick_chunk(chunk, tick_speed);
         }
         if do_mob_spawning {
+            profiler::pop_push("customSpawners");
             self.tick_custom_spawners(self.chunks.spawn_enemies);
         }
+        profiler::pop();
     }
 
     pub fn get_random_player(&mut self) -> Option<EntityId> {
@@ -1909,6 +1970,12 @@ impl ServerLevel {
     }
 
     fn tick_thunder(&mut self, pos: ChunkPos) {
+        profiler::push("thunder");
+        self.tick_thunder_inner(pos);
+        profiler::pop();
+    }
+
+    fn tick_thunder_inner(&mut self, pos: ChunkPos) {
         if self.is_raining() && self.is_thundering() && self.random.next_int_bounded(100000) == 0 {
             let target = self.block_random_pos(pos.min_block_x(), 0, pos.min_block_z(), 15);
             let target = self.find_lightning_target_around(target);
@@ -1974,12 +2041,19 @@ impl ServerLevel {
 
     fn tick_chunk(&mut self, pos: ChunkPos, tick_speed: i32) {
         let (min_x, min_z) = (pos.min_block_x(), pos.min_block_z());
+        profiler::push("iceandsnow");
         for _ in 0..tick_speed {
             if self.random.next_int_bounded(48) == 0 {
                 let pos = self.block_random_pos(min_x, 0, min_z, 15);
                 self.tick_precipitation(pos);
             }
         }
+        profiler::pop_push("tickBlocks");
+        self.tick_chunk_blocks(pos, tick_speed, min_x, min_z);
+        profiler::pop();
+    }
+
+    fn tick_chunk_blocks(&mut self, pos: ChunkPos, tick_speed: i32, min_x: i32, min_z: i32) {
         if tick_speed <= 0 {
             return;
         }
@@ -1991,7 +2065,11 @@ impl ServerLevel {
             let min_y = self.chunks.min_y() + next as i32 * 16;
             for _ in 0..tick_speed {
                 let block_pos = self.block_random_pos(min_x, min_y, min_z, 15);
-                let Some(state) = self.chunks.loaded_chunk(pos).map(|c| c.block_state(block_pos)) else { return };
+                profiler::push("randomTick");
+                let Some(state) = self.chunks.loaded_chunk(pos).map(|c| c.block_state(block_pos)) else {
+                    profiler::pop();
+                    return;
+                };
                 if state.is_randomly_ticking() {
                     block::of(state).random_tick(state, self, block_pos);
                 }
@@ -1999,6 +2077,7 @@ impl ServerLevel {
                 if fluid.is_randomly_ticking() {
                     crate::world::level::material::random_tick(self, block_pos, fluid);
                 }
+                profiler::pop();
             }
         }
     }
@@ -2055,9 +2134,17 @@ impl ServerLevel {
         false
     }
 
+    pub(crate) fn entity_registered_name(&self, id: EntityId) -> String {
+        let entity_type = self.entity_ref(id).map_or(0, |entity| entity.entity_type);
+        wafer_data::registry::ENTITY_TYPE.get(entity_type as usize).copied().unwrap_or("").to_string()
+    }
+
     pub fn tick_non_passenger(&mut self, id: EntityId) {
+        profiler::push_with(|| self.entity_registered_name(id));
+        profiler::increment_counter("tickNonPassenger", 1);
         self.common_tick(id);
         self.tick_ridden(id);
+        profiler::pop();
         self.then_tick(move |level| level.tick_passengers(id));
     }
 
@@ -2082,8 +2169,11 @@ impl ServerLevel {
                 self.stop_riding(entity);
             }
         } else if self.players.contains_key(&entity) || self.tick_list.contains(entity) {
+            profiler::push_with(|| self.entity_registered_name(entity));
+            profiler::increment_counter("tickPassenger", 1);
             self.common_tick(entity);
             self.ride_tick(entity);
+            profiler::pop();
             self.then_tick(move |level| level.tick_passengers(entity));
         }
     }

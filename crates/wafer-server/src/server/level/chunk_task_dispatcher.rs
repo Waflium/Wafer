@@ -127,6 +127,11 @@ impl ThrottlingChunkTaskDispatcher {
         self.mailbox[message.priority()].push_back(message);
     }
 
+    pub fn get_debug_status(&self, executor_scheduler_name: &str) -> String {
+        let positions: Vec<String> = self.chunk_positions_in_execution.iter().map(|key| format!("{key}:{}", wafer_core::ChunkPos::unpack(key))).collect();
+        format!("{executor_scheduler_name}=[{}], s={}", positions.join(","), self.sleeping)
+    }
+
     pub fn on_level_change(&mut self, pos: i64, new_level: i32) {
         self.schedule(Message::LevelChange { pos, new_level });
     }

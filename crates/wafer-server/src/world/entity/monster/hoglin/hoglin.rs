@@ -166,7 +166,7 @@ impl ServerLevel {
     }
 
     pub fn hoglin_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "hoglinBrain");
         if self.mob(id).is_none() {
             return;
         }

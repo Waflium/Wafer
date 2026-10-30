@@ -20,6 +20,7 @@ use super::distance_manager::DistanceManager;
 use super::threaded_level_light_engine::{LightTask, TaskType, ThreadedLevelLightEngine};
 use super::ticket::{Ticket, TicketType};
 use super::SoundSource;
+use crate::util::profiling::profiler;
 use crate::world::difficulty::Difficulty;
 use crate::world::scores::scoreboard::Scoreboard;
 use crate::world::entity::ai::village::poi::poi_manager::PoiManager;
@@ -352,9 +353,11 @@ impl ChunkCache {
     }
 
     pub fn begin_chunk_load(&mut self, pos: ChunkPos) -> Option<FutureId> {
+        profiler::increment_counter("getChunk", 1);
         if self.cached_chunk(pos, true).is_some() {
             return None;
         }
+        profiler::increment_counter("getChunkCacheMiss", 1);
         Some(self.chunk_future_main_thread(pos, ChunkStatus::Full, true))
     }
 
@@ -370,9 +373,11 @@ impl ChunkCache {
     }
 
     pub fn chunk_without_loading(&self, pos: ChunkPos) -> Option<&LevelChunk> {
+        profiler::increment_counter("getChunk", 1);
         let present = match self.cached_chunk(pos, false) {
             Some(present) => present,
             None => {
+                profiler::increment_counter("getChunkCacheMiss", 1);
                 let present = self.is_full(pos.pack());
                 self.store_in_cache(pos, present);
                 present
@@ -451,7 +456,9 @@ impl ChunkCache {
         if load_or_generate {
             self.add_ticket(Ticket::new(TicketType::Unknown, target_level), pos);
             if self.chunk_absent(key, target_level) {
+                profiler::push("chunkLoad");
                 self.run_distance_manager_updates();
+                profiler::pop();
                 if self.chunk_absent(key, target_level) {
                     panic!("No chunk holder after ticket has been added: {pos:?}");
                 }
@@ -578,6 +585,66 @@ impl ChunkCache {
         fluid_ticks.collect(game_time, max, |c| entities_loaded(c) && is_position_ticking(distance_manager, holders, c))
     }
 
+    pub fn pending_tasks_count(&self) -> usize {
+        self.distance_manager.main_thread_tasks.len() + self.full_status_tasks.len()
+    }
+
+    pub fn dump_chunks(&self, output: &mut impl std::io::Write, any_player_close_enough_for_spawning: impl Fn(ChunkPos) -> bool) -> io::Result<()> {
+        let mut csv_output = crate::util::csv_output::builder()
+            .add_column("x")
+            .add_column("z")
+            .add_column("level")
+            .add_column("in_memory")
+            .add_column("status")
+            .add_column("full_status")
+            .add_column("accessible_ready")
+            .add_column("ticking_ready")
+            .add_column("entity_ticking_ready")
+            .add_column("ticket")
+            .add_column("spawning")
+            .add_column("block_entity_count")
+            .add_column("ticking_ticket")
+            .add_column("ticking_level")
+            .add_column("block_ticks")
+            .add_column("fluid_ticks")
+            .build(output)?;
+        let print_future = |future| match self.holders.futures.result(future) {
+            Some(true) => "done",
+            Some(false) => "unloaded",
+            None => "not completed",
+        };
+        let tickets = &self.distance_manager.ticket_storage;
+        for holder in self.holders.map.values() {
+            let key = holder.pos.pack();
+            let chunk = holder.loaded.as_deref();
+            let full_status = match holder.full_status() {
+                FullChunkStatus::Inaccessible => "INACCESSIBLE",
+                FullChunkStatus::Full => "FULL",
+                FullChunkStatus::BlockTicking => "BLOCK_TICKING",
+                FullChunkStatus::EntityTicking => "ENTITY_TICKING",
+            };
+            csv_output.write_row(&[
+                Some(holder.pos.x.to_string()),
+                Some(holder.pos.z.to_string()),
+                Some(holder.ticket_level.to_string()),
+                Some(chunk.is_some().to_string()),
+                holder.persisted_status.map(|status| format!("minecraft:{}", status.get_name())),
+                chunk.map(|_| full_status.to_string()),
+                Some(print_future(holder.full_chunk_future).to_string()),
+                Some(print_future(holder.ticking_chunk_future).to_string()),
+                Some(print_future(holder.entity_ticking_chunk_future).to_string()),
+                Some(tickets.get_ticket_debug_string(key, false)),
+                Some(any_player_close_enough_for_spawning(holder.pos).to_string()),
+                Some(chunk.map_or(0, |chunk| chunk.block_entities.map.len()).to_string()),
+                Some(tickets.get_ticket_debug_string(key, true)),
+                Some(self.distance_manager.simulation_level(key).to_string()),
+                Some(chunk.map_or(0, |_| self.block_ticks.container(holder.pos).map_or(0, |ticks| ticks.count())).to_string()),
+                Some(chunk.map_or(0, |_| self.fluid_ticks.container(holder.pos).map_or(0, |ticks| ticks.count())).to_string()),
+            ])?;
+        }
+        Ok(())
+    }
+
     pub fn block_ticking_chunks(&self) -> Vec<ChunkPos> {
         self.distance_manager.entity_ticking_chunks().into_iter().map(ChunkPos::unpack).filter(|&p| self.is_ticking(p)).collect()
     }
@@ -600,10 +667,13 @@ impl ChunkCache {
 
     pub fn tick_unloads(&mut self, no_save: bool, have_time: bool) {
         let deadline = self.tick_deadline;
+        profiler::push("poi");
         self.poi_manager.tick(&mut || have_time || deadline.is_none_or(|deadline| Instant::now() < deadline));
+        profiler::pop_push("chunk_unload");
         if !no_save {
             self.process_unloads(have_time);
         }
+        profiler::pop();
         self.clear_cache();
         let count = self.holders.future_count();
         if count > 4096 && count > 2 * self.live_futures {
@@ -1677,6 +1747,7 @@ impl ChunkCache {
     }
 
     fn apply_loaded(&mut self, job: Job, result: io::Result<Option<serialization::ReadChunk>>) {
+        profiler::increment_counter("chunkLoad", 1);
         let pos = job.pos;
         let result = match self.poi_manager.storage.prefetched_load_failure(pos) {
             Some(exception) => Err(io::Error::other(exception)),
@@ -1868,15 +1939,18 @@ impl ChunkCache {
         chunk.mark_unsaved();
         let is_empty = chunk.sections[index].has_only_air();
         let light_changed = lighting::has_different_light_properties(old, state);
-        if light_changed {
-            chunk.update_sky_light_sources(pos);
-        }
         if was_empty != is_empty {
             let section_node = section::of(pos.x >> 4, pos.y >> 4, pos.z >> 4);
             self.add_light_task(TaskType::PreUpdate, LightTask::UpdateSectionStatus(section_node, is_empty));
         }
         if light_changed {
+            profiler::push("updateSkyLightSources");
+            if let Some(chunk) = self.chunks.get_mut(&pos.chunk()) {
+                chunk.update_sky_light_sources(pos);
+            }
+            profiler::pop_push("queueCheckLight");
             self.add_light_task(TaskType::PreUpdate, LightTask::CheckBlock(pos));
+            profiler::pop();
         }
         Some(old)
     }
@@ -2096,6 +2170,7 @@ impl ChunkCache {
         }
         self.poi_manager.storage.flush(pos);
         let Some(chunk) = self.chunks.get_mut(&pos).filter(|c| c.unsaved) else { return false };
+        profiler::increment_counter("chunkSave", 1);
         let block_entities = chunk.block_entities_for_saving(&mut self.block_entity_tickers);
         let light = self.light_to_save(pos);
         let block_ticks = self.block_ticks.pack(pos, self.game_time);

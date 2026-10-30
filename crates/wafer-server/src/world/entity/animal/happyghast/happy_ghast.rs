@@ -1,4 +1,6 @@
 use wafer_core::{AABB, Vec3, mth};
+
+use crate::util::profiling::profiler;
 use wafer_data::{EquipmentSlot, item_tags, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
@@ -353,11 +355,14 @@ impl ServerLevel {
 
     pub fn happy_ghast_custom_server_ai_step(&mut self, id: EntityId) {
         if self.is_baby(id) {
-            Brain::tick(self, id);
+            Brain::tick_in_zone(self, id, "happyGhastBrain");
             if self.mob(id).is_none() {
                 return;
             }
-            happy_ghast_ai::update_activity(self.get_brain_mut(id));
+            {
+                let _zone = profiler::zone("happyGhastActivityUpdate");
+                happy_ghast_ai::update_activity(self.get_brain_mut(id));
+            }
         }
         self.happy_ghast_check_restriction(id);
         self.animal_custom_server_ai_step(id);

@@ -1,4 +1,6 @@
 use wafer_core::random::RandomSource;
+
+use crate::util::profiling::profiler;
 use wafer_core::Vec3;
 use wafer_data::{damage_types, item_tags, items, mob_effects, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
@@ -357,11 +359,14 @@ impl ServerLevel {
     }
 
     pub fn axolotl_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "axolotlBrain");
         if self.mob(id).is_none() {
             return;
         }
-        axolotl_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("axolotlActivityUpdate");
+            axolotl_ai::update_activity(self.get_brain_mut(id));
+        }
         let mob = self.mob_mut(id).expect("an axolotl");
         if !mob.is_no_ai() {
             let play_dead_ticks = mob.living.brain.get_memory(memory_module_type::PLAY_DEAD_TICKS).copied();

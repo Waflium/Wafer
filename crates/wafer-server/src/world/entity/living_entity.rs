@@ -1,5 +1,7 @@
 use wafer_core::random::RandomSource;
 use wafer_core::{AABB, BlockPos, Vec3, mth};
+
+use crate::util::profiling::profiler;
 use wafer_data::packets::play::clientbound;
 use wafer_data::properties::{HORIZONTAL_FACING, OCCUPIED, OPEN};
 use wafer_protocol::nbt::Nbt;
@@ -2118,6 +2120,7 @@ impl ServerLevel {
         if self.living(id).swing_state.animation > 0.0 {
             y_body_rot_t = e.y_rot;
         }
+        profiler::push("headTurn");
         if self.is_mob(id) {
             self.mob_tick_head_turn(id);
         } else if self.is_armor_stand(id) {
@@ -2125,6 +2128,8 @@ impl ServerLevel {
         } else {
             self.living_entity_tick_head_turn(id, y_body_rot_t);
         }
+        profiler::pop();
+        profiler::push("rangeChecks");
         let e = self.entity_mut(id);
         while e.y_rot - e.y_rot_o < -180.0 {
             e.y_rot_o -= 360.0;
@@ -2139,6 +2144,7 @@ impl ServerLevel {
         while living.y_body_rot - living.y_body_rot_o >= 180.0 {
             living.y_body_rot_o += 360.0;
         }
+        profiler::pop();
         let fall_flying = self.entity(id).is_fall_flying();
         let living = self.living_mut(id);
         living.fall_fly_ticks = if fall_flying { living.fall_fly_ticks + 1 } else { 0 };
@@ -2182,6 +2188,7 @@ impl ServerLevel {
     }
 
     fn living_entity_base_tick_end(&mut self, id: EntityId) {
+        let _zone = profiler::zone("livingEntityBaseTick");
         if self.is_alive(id) {
             if self.is_in_wall(id) {
                 self.hurt_server(id, DamageSource::new(damage_types::IN_WALL), 1.0);
@@ -2743,6 +2750,7 @@ impl ServerLevel {
             dy = 0.0;
         }
         e.set_delta_movement(Vec3::new(dx, dy, dz));
+        profiler::push("ai");
         living.xxa *= 0.98;
         living.zza *= 0.98;
         if immobile {
@@ -2750,8 +2758,12 @@ impl ServerLevel {
             living.xxa = 0.0;
             living.zza = 0.0;
         } else if self.is_effective_ai(id) {
+            profiler::push("newAi");
             self.server_ai_step(id);
+            profiler::pop();
         }
+        profiler::pop();
+        profiler::push("jump");
         let affected_by_fluids = self.is_affected_by_fluids(id);
         let (e, living) = self.entity_and_living(id);
         if living.jumping && affected_by_fluids {
@@ -2773,6 +2785,8 @@ impl ServerLevel {
         } else {
             self.living_mut(id).no_jump_delay = 0;
         }
+        profiler::pop();
+        profiler::push("travel");
         if self.entity(id).is_fall_flying() {
             self.update_fall_flying(id);
         }
@@ -2791,6 +2805,8 @@ impl ServerLevel {
             }
         }
         self.apply_effects_from_blocks(id);
+        profiler::pop();
+        profiler::push("freezing");
         let e = self.entity_mut(id);
         if !e.is_in_powder_snow || !self.can_freeze(id) {
             let e = self.entity_mut(id);
@@ -2800,12 +2816,15 @@ impl ServerLevel {
         self.remove_frost(id);
         self.try_add_frost(id);
         self.tick_freezing_damage(id);
+        profiler::pop();
+        profiler::push("push");
         if self.living(id).auto_spin_attack_ticks > 0 {
             self.living_mut(id).auto_spin_attack_ticks -= 1;
             let current = self.entity(id).bounding_box();
             self.check_auto_spin_attack(id, before_travel_box, current);
         }
         self.push_entities(id);
+        profiler::pop();
         if self.is_sensitive_to_water(id) && self.is_in_water_or_rain(id) {
             self.hurt_server(id, DamageSource::new(damage_types::DROWN), 1.0);
         }

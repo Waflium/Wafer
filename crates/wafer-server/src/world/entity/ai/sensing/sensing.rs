@@ -1,4 +1,5 @@
 use crate::server::level::ServerLevel;
+use crate::util::profiling::profiler;
 use crate::world::entity::EntityId;
 
 #[derive(Default)]
@@ -23,7 +24,9 @@ impl ServerLevel {
         if sensing.unseen.contains(&target) {
             return false;
         }
+        profiler::push("hasLineOfSight");
         let has_line_of_sight = self.has_line_of_sight(mob, target);
+        profiler::pop();
         let sensing = &mut self.mob_mut(mob).expect("a mob").ai.sensing;
         if has_line_of_sight {
             sensing.seen.push(target);

@@ -173,6 +173,7 @@ pub fn perform_prefixed_command_without_level(server: &mut Server, source: &Comm
 }
 
 pub fn perform_command(server: &mut Server, parse: ParseResults, command: &str, source: &CommandSourceStack) {
+    let _zone = crate::util::profiling::profiler::zone_with(|| format!("/{command}"));
     let Some(chain) = finish_parsing(server, parse, command, source) else { return };
     execute_command_in_context(server, |context| context.queue_initial_command_execution(chain, source, CommandResultCallback::EMPTY));
 }

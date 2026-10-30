@@ -1,4 +1,6 @@
 use wafer_core::random::{LegacyRandomSource, RandomSource};
+
+use crate::util::profiling::profiler;
 use wafer_core::{Vec3, mth};
 use wafer_data::{item_tags, items, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
@@ -225,11 +227,14 @@ impl ServerLevel {
     }
 
     pub fn goat_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "goatBrain");
         if self.mob(id).is_none() {
             return;
         }
-        goat_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("goatActivityUpdate");
+            goat_ai::update_activity(self.get_brain_mut(id));
+        }
         self.animal_custom_server_ai_step(id);
     }
 

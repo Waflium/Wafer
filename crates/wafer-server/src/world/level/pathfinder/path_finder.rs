@@ -7,6 +7,8 @@ use super::path::Path;
 use super::pathfinding_context::PathfindingContext;
 use super::target::Target;
 use super::walk_node_evaluator::WalkNodeEvaluator;
+use crate::util::profiling::metrics::metric_category::MetricCategory;
+use crate::util::profiling::profiler;
 use crate::world::entity::EntityId;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 
@@ -63,6 +65,8 @@ impl PathFinder {
     }
 
     fn find_path_from(&mut self, context: &PathfindingContext, from: u32, targets: &mut [(Target, BlockPos)], max_path_length: f32, reach_range: i32, max_visited_nodes_multiplier: f32) -> Option<Path> {
+        let _zone = profiler::zone("find_path");
+        profiler::mark_for_charting(MetricCategory::PathFinding);
         let h = self.get_best_h(from, targets);
         let nodes = &mut self.node_evaluator.node_evaluator_mut().nodes;
         let from_node = &mut nodes[from as usize];

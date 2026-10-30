@@ -113,6 +113,14 @@ impl Ticket {
         Ticket { ty, level, ticks_left: ty.timeout() }
     }
 
+    fn to_string(&self) -> String {
+        if self.ty.has_timeout() {
+            format!("Ticket[{} {}] with {} ticks left ( out of{})", self.ty.name(), self.level, self.ticks_left, self.ty.timeout())
+        } else {
+            format!("Ticket[{} {}] with no timeout", self.ty.name(), self.level)
+        }
+    }
+
     fn reset_ticks_left(&mut self) {
         self.ticks_left = self.ty.timeout();
     }
@@ -305,6 +313,10 @@ impl TicketStorage {
 
     pub fn ticket_level_at(&self, key: i64, simulation: bool) -> i32 {
         ticket_level_at(self.tickets(key), simulation)
+    }
+
+    pub fn get_ticket_debug_string(&self, key: i64, simulation: bool) -> String {
+        lowest_ticket(self.tickets(key), simulation).map_or_else(|| "no_ticket".to_string(), Ticket::to_string)
     }
 
     pub fn remove_ticket(&mut self, key: i64, ticket: Ticket, updates: &mut Vec<TicketUpdate>) -> bool {

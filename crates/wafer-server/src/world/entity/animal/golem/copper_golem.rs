@@ -1,4 +1,6 @@
 use wafer_core::random::RandomSource;
+
+use crate::util::profiling::profiler;
 use wafer_core::{BlockPos, Direction};
 use wafer_data::properties::{CHEST_TYPE, COPPER_GOLEM_POSE, ChestType, CopperGolemPose, HORIZONTAL_FACING};
 use wafer_data::{EquipmentSlot, block_entity_types, blocks, game_rule, item_tags, items, registry, registry_id};
@@ -176,11 +178,14 @@ impl ServerLevel {
     }
 
     pub fn copper_golem_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "copperGolemBrain");
         if self.mob(id).is_none() {
             return;
         }
-        copper_golem_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("copperGolemActivityUpdate");
+            copper_golem_ai::update_activity(self.get_brain_mut(id));
+        }
     }
 
     pub fn copper_golem_tick(&mut self, id: EntityId) {

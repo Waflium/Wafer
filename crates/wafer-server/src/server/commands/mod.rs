@@ -49,6 +49,7 @@ mod loot_context_sources;
 mod msg_command;
 mod op_command;
 mod particle_command;
+mod perf_command;
 pub(crate) mod place_command;
 mod play_sound_command;
 mod post_effect_command;
@@ -267,6 +268,8 @@ static EXECUTORS: &[(&str, CommandFn)] = &[
     ("save-all flush", save_commands::save_all_flush),
     ("save-off", save_commands::save_off),
     ("save-on", save_commands::save_on),
+    ("perf start", perf_command::start),
+    ("perf stop", perf_command::stop),
     ("rfr start", rfr_command::start_rfr),
     ("rfr stop", rfr_command::stop_rfr),
     ("seed", seed_command::seed),

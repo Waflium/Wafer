@@ -326,6 +326,213 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
     out
 }
 
+fn qualified_frames(frames: &[&str]) -> Vec<String> {
+    frames.iter().map(ToString::to_string).collect()
+}
+
+fn jvm_thread(name: &str, daemon: bool, priority: u32, id: u32, state: &'static str, lock: Option<&str>, in_native: bool, frames: Vec<String>) -> ThreadDumpEntry {
+    ThreadDumpEntry { name: name.to_string(), daemon, priority, id, state, lock: lock.map(ToString::to_string), in_native, frames, locked_synchronizers: Vec::new() }
+}
+
+pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
+    let reference_queue_lock = |address: &str| format!("java.lang.ref.ReferenceQueue$Lock@{address}");
+    let server_frames = qualified_frames(&[
+        "java.management@25.0.4/sun.management.ThreadImpl.dumpThreads0(Native Method)",
+        "java.management@25.0.4/sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:505)",
+        "java.management@25.0.4/sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:493)",
+        "app//net.minecraft.util.Util.dumpThreadInfo(Util.java:500)",
+        "app//net.minecraft.server.MinecraftServer.dumpThreads(MinecraftServer.java:1878)",
+        "app//net.minecraft.server.MinecraftServer.saveDebugReport(MinecraftServer.java:1833)",
+        "app//net.minecraft.server.MinecraftServer.lambda$createProfiler$1(MinecraftServer.java:1917)",
+        "app//net.minecraft.server.MinecraftServer$$Lambda/0x000000001f08d9f8.run(Unknown Source)",
+        "app//net.minecraft.util.thread.BlockableEventLoop.lambda$submitAsync$0(BlockableEventLoop.java:75)",
+    ]);
+    let mut entries = vec![
+        jvm_thread("Server thread", false, 8, 105, "RUNNABLE", None, false, server_frames),
+        jvm_thread(
+            "Server Watchdog",
+            true,
+            8,
+            117,
+            "TIMED_WAITING",
+            None,
+            false,
+            qualified_frames(&[
+                "java.base@25.0.4/java.lang.Thread.sleepNanos0(Native Method)",
+                "java.base@25.0.4/java.lang.Thread.sleepNanos(Thread.java:509)",
+                "java.base@25.0.4/java.lang.Thread.sleep(Thread.java:540)",
+                "app//net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:72)",
+                "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)",
+                "java.base@25.0.4/java.lang.Thread.run(Thread.java:1474)",
+            ]),
+        ),
+        jvm_thread(
+            "Server console handler",
+            true,
+            8,
+            107,
+            "RUNNABLE",
+            None,
+            true,
+            qualified_frames(&[
+                "java.base@25.0.4/java.io.FileInputStream.readBytes(Native Method)",
+                "java.base@25.0.4/java.io.FileInputStream.read(FileInputStream.java:281)",
+                "java.base@25.0.4/java.lang.System$In.read(System.java:1872)",
+                "java.base@25.0.4/java.io.BufferedInputStream.read1(BufferedInputStream.java:328)",
+                "java.base@25.0.4/java.io.BufferedInputStream.read(BufferedInputStream.java:388)",
+                "java.base@25.0.4/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)",
+                "java.base@25.0.4/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)",
+                "java.base@25.0.4/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)",
+                "java.base@25.0.4/java.io.InputStreamReader.read(InputStreamReader.java:177)",
+            ]),
+        ),
+        jvm_thread("Attach Listener", true, 5, 19, "RUNNABLE", None, false, Vec::new()),
+        jvm_thread("Notification Thread", true, 9, 37, "RUNNABLE", None, false, Vec::new()),
+        jvm_thread("Signal Dispatcher", true, 9, 18, "RUNNABLE", None, false, Vec::new()),
+        jvm_thread("DestroyJavaVM", false, 5, 109, "RUNNABLE", None, false, Vec::new()),
+        jvm_thread(
+            "Reference Handler",
+            true,
+            10,
+            16,
+            "RUNNABLE",
+            None,
+            false,
+            qualified_frames(&[
+                "java.base@25.0.4/java.lang.ref.Reference.waitForReferencePendingList(Native Method)",
+                "java.base@25.0.4/java.lang.ref.Reference.processPendingReferences(Reference.java:246)",
+                "java.base@25.0.4/java.lang.ref.Reference$ReferenceHandler.run(Reference.java:208)",
+            ]),
+        ),
+        jvm_thread(
+            "Finalizer",
+            true,
+            8,
+            17,
+            "WAITING",
+            Some(&reference_queue_lock("486e74d")),
+            false,
+            qualified_frames(&[
+                "java.base@25.0.4/java.lang.Object.wait0(Native Method)",
+                "java.base@25.0.4/java.lang.Object.wait(Object.java:389)",
+                "java.base@25.0.4/java.lang.Object.wait(Object.java:351)",
+                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:137)",
+                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:215)",
+                "java.base@25.0.4/java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:165)",
+            ]),
+        ),
+        jvm_thread(
+            "Common-Cleaner",
+            true,
+            8,
+            38,
+            "TIMED_WAITING",
+            Some(&reference_queue_lock("10c42094")),
+            false,
+            qualified_frames(&[
+                "java.base@25.0.4/java.lang.Object.wait0(Native Method)",
+                "java.base@25.0.4/java.lang.Object.wait(Object.java:389)",
+                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:123)",
+                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:201)",
+                "java.base@25.0.4/jdk.internal.ref.CleanerImpl.run(CleanerImpl.java:146)",
+                "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)",
+                "java.base@25.0.4/java.lang.Thread.run(Thread.java:1474)",
+                "java.base@25.0.4/jdk.internal.misc.InnocuousThread.run(InnocuousThread.java:148)",
+            ]),
+        ),
+        jvm_thread(
+            "JNA Cleaner",
+            true,
+            5,
+            52,
+            "TIMED_WAITING",
+            Some(&reference_queue_lock("54834fb0")),
+            false,
+            qualified_frames(&[
+                "java.base@25.0.4/java.lang.Object.wait0(Native Method)",
+                "java.base@25.0.4/java.lang.Object.wait(Object.java:389)",
+                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:123)",
+                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:201)",
+                "app//com.sun.jna.internal.Cleaner$CleanerThread.run(Cleaner.java:154)",
+            ]),
+        ),
+        jvm_thread(
+            "Timer hack thread",
+            true,
+            5,
+            69,
+            "TIMED_WAITING",
+            None,
+            false,
+            qualified_frames(&[
+                "java.base@25.0.4/java.lang.Thread.sleepNanos0(Native Method)",
+                "java.base@25.0.4/java.lang.Thread.sleepNanos(Thread.java:509)",
+                "java.base@25.0.4/java.lang.Thread.sleep(Thread.java:540)",
+                "app//net.minecraft.util.Util$9.run(Util.java:1009)",
+            ]),
+        ),
+    ];
+    for index in 1..=crate::server::level::chunk_workers::io_worker_count() {
+        let name = format!("IO-Worker-{index}");
+        if name == blocked_io_worker {
+            entries.push(ThreadDumpEntry {
+                name,
+                daemon: false,
+                priority: 8,
+                id: 110 + index as u32,
+                state: "WAITING",
+                lock: Some("java.util.concurrent.CompletableFuture$Signaller@5b64b5e2".to_string()),
+                in_native: false,
+                frames: qualified_frames(&[
+                    "java.base@25.0.4/jdk.internal.misc.Unsafe.park(Native Method)",
+                    "java.base@25.0.4/java.util.concurrent.locks.LockSupport.park(LockSupport.java:223)",
+                    "java.base@25.0.4/java.util.concurrent.CompletableFuture$Signaller.block(CompletableFuture.java:1885)",
+                    "java.base@25.0.4/java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:4364)",
+                    "java.base@25.0.4/java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:4310)",
+                    "java.base@25.0.4/java.util.concurrent.CompletableFuture.waitingGet(CompletableFuture.java:1919)",
+                    "java.base@25.0.4/java.util.concurrent.CompletableFuture.join(CompletableFuture.java:2138)",
+                    "app//net.minecraft.util.thread.BlockableEventLoop.executeBlocking(BlockableEventLoop.java:96)",
+                    "app//net.minecraft.server.MinecraftServer.lambda$createProfiler$2(MinecraftServer.java:1912)",
+                ]),
+                locked_synchronizers: vec!["java.util.concurrent.ThreadPoolExecutor$Worker@7f43bd7".to_string()],
+            });
+        } else {
+            entries.push(ThreadDumpEntry {
+                name,
+                daemon: false,
+                priority: 5,
+                id: 110 + index as u32,
+                state: "TIMED_WAITING",
+                lock: Some("java.util.concurrent.SynchronousQueue$Transferer@43a01550".to_string()),
+                in_native: false,
+                frames: idle_io_worker_frames(),
+                locked_synchronizers: Vec::new(),
+            });
+        }
+    }
+    let pool = "java.util.concurrent.ForkJoinPool@49ba0150".to_string();
+    for index in 1..=crate::server::level::chunk_workers::worker_main_count() {
+        entries.push(ThreadDumpEntry {
+            name: format!("Worker-Main-{index}"),
+            daemon: true,
+            priority: 5,
+            id: 70 + index as u32,
+            state: "WAITING",
+            lock: Some(pool.clone()),
+            in_native: false,
+            frames: idle_worker_main_frames(),
+            locked_synchronizers: Vec::new(),
+        });
+    }
+    entries.sort_by(|a, b| a.name.encode_utf16().cmp(b.name.encode_utf16()));
+    let mut out = String::new();
+    for entry in &entries {
+        entry.render(&mut out);
+        out.push('\n');
+    }
+    out
+}
+
 pub fn create_watchdog_crash_report(message: &str) -> CrashReport {
     let server_frames = crate::server::main_thread_frames::published();
     let frames: Vec<&'static str> = thread_info_frames(&server_frames).into_iter().map(|frame| &*Box::leak(frame.into_boxed_str())).collect();
@@ -353,18 +560,25 @@ fn exit() -> ! {
     std::process::exit(1)
 }
 
-pub fn fill_system_report(report: &mut CrashReport, snapshot: &ServerSnapshot) {
-    report.set_system_detail("Server Running", "true");
+pub fn server_system_details(snapshot: &ServerSnapshot) -> Vec<(&'static str, String)> {
+    let mut details = vec![("Server Running", "true".to_string())];
     if let Some(player_count) = &snapshot.player_count {
-        report.set_system_detail("Player Count", player_count.clone());
+        details.push(("Player Count", player_count.clone()));
     }
-    report.set_system_detail("Active Data Packs", snapshot.active_data_packs.clone());
-    report.set_system_detail("Available Data Packs", snapshot.available_data_packs.clone());
-    report.set_system_detail("Enabled Feature Flags", snapshot.enabled_feature_flags.clone());
-    report.set_system_detail("World Generation", snapshot.world_gen_settings_lifecycle.to_string());
-    report.set_system_detail("World Seed", snapshot.world_seed.to_string());
+    details.push(("Active Data Packs", snapshot.active_data_packs.clone()));
+    details.push(("Available Data Packs", snapshot.available_data_packs.clone()));
+    details.push(("Enabled Feature Flags", snapshot.enabled_feature_flags.clone()));
+    details.push(("World Generation", snapshot.world_gen_settings_lifecycle.to_string()));
+    details.push(("World Seed", snapshot.world_seed.to_string()));
     let suppressed_exceptions = snapshot.chunk_io_error_reporter.as_ref().map_or_else(|| "~~NONE~~".to_string(), |reporter| reporter.suppressed_exceptions().dump());
-    report.set_system_detail("Suppressed Exceptions", suppressed_exceptions);
-    report.set_system_detail("Is Modded", "Probably not. Server jar signature and brand is untouched");
-    report.set_system_detail("Type", "Dedicated Server");
+    details.push(("Suppressed Exceptions", suppressed_exceptions));
+    details.push(("Is Modded", "Probably not. Server jar signature and brand is untouched".to_string()));
+    details.push(("Type", "Dedicated Server".to_string()));
+    details
+}
+
+pub fn fill_system_report(report: &mut CrashReport, snapshot: &ServerSnapshot) {
+    for (key, value) in server_system_details(snapshot) {
+        report.set_system_detail(key, value);
+    }
 }

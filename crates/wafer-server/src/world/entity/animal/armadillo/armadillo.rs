@@ -1,4 +1,6 @@
 use wafer_core::random::RandomSource;
+
+use crate::util::profiling::profiler;
 use wafer_data::{damage_type_tags, entity_type_tags, item_tags, items, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
@@ -222,11 +224,14 @@ impl ServerLevel {
     }
 
     pub fn armadillo_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "armadilloBrain");
         if self.mob(id).is_none() {
             return;
         }
-        armadillo_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("armadilloActivityUpdate");
+            armadillo_ai::update_activity(self.get_brain_mut(id));
+        }
         if self.is_alive(id)
             && {
                 let armadillo = armadillo_mut(self.mob_mut(id).expect("an armadillo"));

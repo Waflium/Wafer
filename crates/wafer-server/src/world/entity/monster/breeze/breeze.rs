@@ -1,4 +1,6 @@
 use wafer_core::Vec3;
+
+use crate::util::profiling::profiler;
 use wafer_core::random::RandomSource;
 use wafer_data::{registry, registry_id};
 
@@ -136,11 +138,15 @@ impl ServerLevel {
     }
 
     pub fn breeze_custom_server_ai_step(&mut self, id: EntityId) {
+        profiler::push("breezeBrain");
         Brain::tick(self, id);
         if self.mob(id).is_none() {
+            profiler::pop();
             return;
         }
+        profiler::pop_push("breezeActivityUpdate");
         breeze_ai::update_activity(self, id);
+        profiler::pop();
     }
 
     pub fn breeze_can_attack(&self, id: EntityId, target: EntityId) -> bool {

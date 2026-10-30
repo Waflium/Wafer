@@ -1,4 +1,6 @@
 use wafer_core::{BlockPos, Vec3};
+
+use crate::util::profiling::profiler;
 use wafer_data::{EquipmentSlot, blocks, item_tags, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
@@ -265,11 +267,14 @@ impl ServerLevel {
     }
 
     pub fn allay_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "allayBrain");
         if self.mob(id).is_none() {
             return;
         }
-        allay_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("allayActivityUpdate");
+            allay_ai::update_activity(self.get_brain_mut(id));
+        }
     }
 
     pub fn allay_ai_step(&mut self, id: EntityId) {

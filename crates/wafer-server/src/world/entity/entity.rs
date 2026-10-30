@@ -1,6 +1,8 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI32, Ordering};
 
+use crate::util::profiling::profiler;
+
 use wafer_core::hash_map::FastSet;
 use wafer_core::random::{LegacyRandomSource, RandomSource};
 use wafer_core::shapes::{BooleanOp, VoxelShape, join_is_not_empty};
@@ -1428,6 +1430,7 @@ impl ServerLevel {
                 return;
             }
         }
+        profiler::push("move");
         let e = self.entity_mut(id);
         if e.stuck_speed_multiplier.length_sqr() > 1.0e-7 {
             if mover != MoverType::Piston {
@@ -1464,6 +1467,7 @@ impl ServerLevel {
             self.entity_moved(id);
             self.record_movement(id, mover, movement);
         }
+        profiler::pop_push("rest");
         let x_collision = !mth::equal(delta.x, movement.x);
         let z_collision = !mth::equal(delta.z, movement.z);
         let local = self.is_local_instance_authoritative(id);
@@ -1485,6 +1489,7 @@ impl ServerLevel {
             self.check_fall_damage(id, movement.y, on_ground, effect_state, effect_pos);
         }
         if self.entity_ref(id).is_none_or(Entity::is_removed) {
+            profiler::pop();
             return;
         }
         let e = self.entity(id);
@@ -1498,6 +1503,7 @@ impl ServerLevel {
         let factor = self.block_speed_factor(id) as f64;
         let e = self.entity_mut(id);
         e.set_delta_movement(e.delta_movement.multiply(factor, 1.0, factor));
+        profiler::pop();
     }
 
     fn record_movement(&mut self, id: EntityId, mover: MoverType, movement: Vec3) {
@@ -2503,6 +2509,7 @@ impl ServerLevel {
     }
 
     pub fn entity_base_tick(&mut self, id: EntityId) {
+        let _zone = profiler::zone("entityBaseTick");
         let e = self.entity_mut(id);
         e.compute_speed();
         e.in_block_state = None;

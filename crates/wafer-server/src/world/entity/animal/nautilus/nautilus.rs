@@ -1,4 +1,6 @@
 use wafer_core::Vec3;
+
+use crate::util::profiling::profiler;
 use wafer_data::{damage_types, registry, registry_id};
 use wafer_protocol::nbt::Nbt;
 
@@ -111,11 +113,14 @@ impl ServerLevel {
     }
 
     pub fn nautilus_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "nautilusBrain");
         if self.mob(id).is_none() {
             return;
         }
-        nautilus_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("nautilusActivityUpdate");
+            nautilus_ai::update_activity(self.get_brain_mut(id));
+        }
         self.abstract_nautilus_custom_server_ai_step(id);
     }
 

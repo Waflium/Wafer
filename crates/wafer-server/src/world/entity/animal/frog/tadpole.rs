@@ -1,4 +1,6 @@
 use wafer_data::{item_tags, items, registry, registry_id};
+
+use crate::util::profiling::profiler;
 use wafer_protocol::nbt::Nbt;
 
 use super::tadpole_ai;
@@ -143,11 +145,14 @@ impl Tadpole {
 
 impl ServerLevel {
     pub fn tadpole_custom_server_ai_step(&mut self, id: EntityId) {
-        Brain::tick(self, id);
+        Brain::tick_in_zone(self, id, "tadpoleBrain");
         if self.mob(id).is_none() {
             return;
         }
-        tadpole_ai::update_activity(self.get_brain_mut(id));
+        {
+            let _zone = profiler::zone("tadpoleActivityUpdate");
+            tadpole_ai::update_activity(self.get_brain_mut(id));
+        }
     }
 
     pub fn tadpole_ai_step(&mut self, id: EntityId) {

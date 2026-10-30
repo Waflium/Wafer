@@ -150,6 +150,11 @@ impl SystemReport {
         self.entries
     }
 
+    pub fn to_line_separated_string(&self) -> String {
+        let separator = if cfg!(windows) { "\r\n" } else { "\n" };
+        self.entries.iter().map(|(key, value)| format!("{key}: {value}")).collect::<Vec<_>>().join(separator)
+    }
+
     pub fn set_detail_value(&mut self, key: &str, value: impl Into<String>) {
         let _scope = enter("setDetail", 92);
         self.entries.push((key.to_string(), value.into()));

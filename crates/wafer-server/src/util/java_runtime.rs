@@ -21,6 +21,10 @@ pub fn input_arguments() -> Vec<String> {
     Vec::new()
 }
 
+pub fn current_time_millis() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
+}
+
 pub fn available_processors() -> usize {
     std::thread::available_parallelism().map_or(1, |n| n.get())
 }

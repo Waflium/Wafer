@@ -2,6 +2,7 @@ use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::block_tags;
 
 use crate::server::level::ServerLevel;
+use crate::util::profiling::profiler;
 use crate::world::entity::EntityId;
 use crate::world::entity::attributes::Attribute;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
@@ -230,7 +231,9 @@ impl PathNavigation {
         {
             return Some(path.clone());
         }
+        profiler::push("pathfind");
         let path = self.path_finder.find_path(PathNavigationRegion::new(level), mob, targets, max_path_length, reach_range, self.max_visited_nodes_multiplier);
+        profiler::pop();
         if let Some(path) = &path {
             self.target_pos = Some(path.get_target());
             self.reach_range = reach_range;
