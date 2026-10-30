@@ -680,7 +680,7 @@ impl Codec {
                     let key_result = key.decode_partial(&Nbt::String(k.clone()));
                     let value_result = match (&key_result.value, &key_result.error) {
                         (Some(decoded_key), None) => match value_codec(decoded_key) {
-                            Some(codec) => codec.decode_partial(v),
+                            Some(codec) => crate::util::codec::with_frames(dfu_frames::dispatched_map_values, || codec.decode_partial(v)),
                             None => DecodeResult::error(format!("No codec for key {}", nbt::to_string(decoded_key))),
                         },
                         _ => DecodeResult { value: None, error: key_result.error.clone() },
@@ -974,7 +974,8 @@ fn case_frames(selector: &Selector, name: &str) -> Vec<&'static str> {
             Selector::Registry("minecraft:int_provider_type"),
             "minecraft:uniform" | "minecraft:biased_to_bottom" | "minecraft:very_biased_to_bottom" | "minecraft:clamped" | "minecraft:clamped_normal" | "minecraft:trapezoid",
         )
-        | (Selector::Registry("minecraft:float_provider_type"), "minecraft:uniform" | "minecraft:clamped_normal" | "minecraft:trapezoid") => dfu_frames::map_codec_flat_xmap(),
+        | (Selector::Registry("minecraft:float_provider_type"), "minecraft:uniform" | "minecraft:clamped_normal" | "minecraft:trapezoid")
+        | (Selector::Registry("minecraft:worldgen/density_function_type"), "minecraft:gradient" | "minecraft:clamp" | "minecraft:interval_select") => dfu_frames::map_codec_flat_xmap(),
         _ => Vec::new(),
     }
 }

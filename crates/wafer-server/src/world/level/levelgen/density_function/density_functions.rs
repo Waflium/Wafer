@@ -5,7 +5,7 @@ use super::op::{
     binary_function, blend_density_function, cache_function, clamp_function, find_top_surface_function, interpolated_function, interval_select_function, lerp_function,
     pow_function, range_choice_function, round_function, slice_function, spline_function, unary_function,
 };
-use crate::world::item::component::codec::{Codec, Dispatch, RangeError, Selector, Stream};
+use crate::world::item::component::codec::{Codec, Dispatch, RangeError, Selector, Stream, Wrap};
 use crate::world::item::component::types::Pair;
 use crate::world::level::levelgen::synth::blended_noise;
 
@@ -63,5 +63,5 @@ fn full_direct_codec() -> Codec {
 }
 
 pub fn direct_codec() -> Pair {
-    (Codec::Either(Box::new(noise_value_codec()), Box::new(full_direct_codec())), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Either(Box::new(noise_value_codec()), Box::new(full_direct_codec()))), Wrap::Xmap), Stream::Nbt)
 }

@@ -890,8 +890,18 @@ fn decode(registry: &str, element: &JsonElement) -> Result<(), String> {
         "minecraft:dialog" => crate::server::dialog::validate(&tag),
         "minecraft:dimension_type" => {
             use crate::world::level::dimension::dimension_type;
-            let decoded = parsing(|| dimension_type::direct_codec().0.decode(&tag))?;
-            dimension_type::check(&decoded).map_err(|e| format!("Caught exception decoding {}: {e}", crate::util::gson::to_json_string(element)))?;
+            let caught = |message: &str| format!("Caught exception decoding {}: {message}", crate::util::gson::to_json_string(element));
+            let decoded = match dimension_type::direct_codec().0.decode(&tag) {
+                Ok(decoded) => decoded,
+                Err(error) => match take_thrown() {
+                    Some(thrown) => return Err(caught(thrown.description.split_once(": ").map_or(thrown.description.as_str(), |(_, message)| message))),
+                    None => return Err(error),
+                },
+            };
+            if let Some(thrown) = take_thrown() {
+                return Err(caught(thrown.description.split_once(": ").map_or(thrown.description.as_str(), |(_, message)| message)));
+            }
+            dimension_type::check(&decoded).map_err(|e| caught(&e))?;
             dimension_type::encode_network(&json()).map(drop)
         }
         _ => Ok(()),

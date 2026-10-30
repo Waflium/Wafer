@@ -14,7 +14,7 @@ use crate::world::attribute::environment_attribute_map::{OPERATION_NAMES, argume
 use crate::world::attribute::environment_attributes::ATTRIBUTES;
 use crate::world::attribute::modifier::{AttributeModifier, OperationId};
 use crate::world::attribute::Value;
-use crate::world::item::component::codec::{Codec, Custom, Stream};
+use crate::world::item::component::codec::{Codec, Custom, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair, def, req};
 
 pub mod timelines {
@@ -77,7 +77,7 @@ fn decode_easing(tag: &Nbt) -> DecodeResult<Nbt> {
 
 fn keyframe_track_codec(attribute: &EnvironmentAttributeInfo, operation: OperationId) -> Codec {
     let keyframe = Codec::Record(vec![req("ticks", (types::non_negative_int(), Stream::VarInt)), req("value", (argument_codec(attribute, operation), Stream::Nbt))]);
-    let keyframes = Codec::Normalize(Box::new(Codec::list(keyframe)), validate_keyframes);
+    let keyframes = Codec::Framed(Box::new(Codec::Normalize(Box::new(Codec::list(keyframe)), validate_keyframes)), Wrap::FlatXmap);
     Codec::Record(vec![req("keyframes", (keyframes, Stream::Nbt)), def("ease", (Codec::Func(decode_easing), Stream::Nbt), types::s("linear"))])
 }
 
@@ -110,7 +110,11 @@ impl Custom for TrackCodec {
                 Err(error) => DecodeResult { value: Some(OperationId::Override), error: Some(error) },
             },
         };
-        modifier.flat_map(|operation| keyframe_track_codec(attribute, operation).decode_partial(tag))
+        codec::as_codec(|| {
+            modifier.flat_map(|operation| {
+                codec::with_frames(crate::util::dfu_frames::key_dispatch, || codec::wrapped(Wrap::MapXmap, || keyframe_track_codec(attribute, operation).decode_partial(tag)))
+            })
+        })
     }
 
     fn hash(&self, value: &Nbt) -> HashCode {

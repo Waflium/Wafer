@@ -7,7 +7,7 @@ use super::trade_cost::TradeCost;
 use crate::core::holder::Holder;
 use crate::core::holder_set::HolderSet;
 use crate::util::codec::{self, DataResult, DecodeResult};
-use crate::world::item::component::codec::registry_id;
+use crate::world::item::component::codec::{Wrap, registry_id};
 use crate::world::item::component::values::{ItemEnchantments, ItemStackTemplate};
 use crate::world::item::component as dc;
 use crate::world::level::storage::loot::functions::loot_item_function::LootItemFunction;
@@ -42,31 +42,34 @@ impl VillagerTrade {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let mut record = codec::Record::default();
-        let wants = record.required(tag, "wants", TradeCost::decode);
-        let additional_wants = record.optional(tag, "additional_wants", TradeCost::decode);
-        let gives = record.required(tag, "gives", ItemStackTemplate::decode_partial);
-        let max_uses = record.with_default(tag, "max_uses", ints::exactly(4), ContextIntProvider::decode_holder);
-        let xp = record.with_default(tag, "xp", ints::exactly(1), ContextIntProvider::decode_holder);
-        let reputation_discount = record.with_default(tag, "reputation_discount", floats::exactly(0.0), ContextFloatProvider::decode_holder);
-        let merchant_predicate = record.optional(tag, "merchant_predicate", LootItemCondition::decode_holder_partial);
-        let given_item_modifier = record.optional(tag, "given_item_modifier", LootItemFunction::decode_holder);
-        let double_trade_price_enchantments = record.optional(tag, "double_trade_price_enchantments", |t| HolderSet::decode_partial("minecraft:enchantment", t));
-        record
-            .build(|| {
-                Some(VillagerTrade {
-                    wants: wants?,
-                    additional_wants,
-                    gives: gives?,
-                    max_uses,
-                    xp,
-                    reputation_discount,
-                    merchant_predicate,
-                    given_item_modifier,
-                    double_trade_price_enchantments,
+        codec::wrapped(Wrap::FlatXmap, || {
+            codec::as_codec(|| {
+                let mut record = codec::Record::default();
+                let wants = record.required(tag, "wants", TradeCost::decode);
+                let additional_wants = record.optional(tag, "additional_wants", TradeCost::decode);
+                let gives = record.required(tag, "gives", ItemStackTemplate::decode_partial);
+                let max_uses = record.with_default(tag, "max_uses", ints::exactly(4), ContextIntProvider::decode_holder);
+                let xp = record.with_default(tag, "xp", ints::exactly(1), ContextIntProvider::decode_holder);
+                let reputation_discount = record.with_default(tag, "reputation_discount", floats::exactly(0.0), ContextFloatProvider::decode_holder);
+                let merchant_predicate = record.optional(tag, "merchant_predicate", LootItemCondition::decode_holder_partial);
+                let given_item_modifier = record.optional(tag, "given_item_modifier", LootItemFunction::decode_holder);
+                let double_trade_price_enchantments = record.optional(tag, "double_trade_price_enchantments", |t| HolderSet::decode_partial("minecraft:enchantment", t));
+                record.build(|| {
+                    Some(VillagerTrade {
+                        wants: wants?,
+                        additional_wants,
+                        gives: gives?,
+                        max_uses,
+                        xp,
+                        reputation_discount,
+                        merchant_predicate,
+                        given_item_modifier,
+                        double_trade_price_enchantments,
+                    })
                 })
             })
-            .validate(|trade| validatable::validator_for_context(&loot_context_param_sets::VILLAGER_TRADE, trade))
+        })
+        .validate(|trade| validatable::validator_for_context(&loot_context_param_sets::VILLAGER_TRADE, trade))
     }
 
     pub fn by_id(id: i32) -> &'static VillagerTrade {

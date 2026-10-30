@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use super::{biome_condition, noise_threshold_condition, not_condition, stone_depth_condition, vertical_gradient_condition, water_condition, y_condition};
-use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream, Wrap};
 use crate::world::item::component::types::Pair;
 
 fn direct_codec_lazy() -> &'static Pair {
@@ -27,5 +27,5 @@ pub fn direct_codec() -> Pair {
 }
 
 pub fn holder_codec() -> Pair {
-    (Codec::Holder("minecraft:worldgen/material_condition", Some(Box::new(Codec::Lazy(direct_codec_lazy)))), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Holder("minecraft:worldgen/material_condition", Some(Box::new(Codec::Lazy(direct_codec_lazy))))), Wrap::Xmap), Stream::Nbt)
 }

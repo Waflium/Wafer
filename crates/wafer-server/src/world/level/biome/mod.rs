@@ -46,31 +46,39 @@ pub fn validate(tag: &Nbt) -> Result<(), String> {
     use crate::util::codec::{self, DecodeResult, Record};
     codec::map(tag)?;
     let mut record = Record::default();
-    record.required(tag, "has_precipitation", codec::bool_value);
-    record.required(tag, "temperature", codec::float);
-    record.optional(tag, "temperature_modifier", |modifier| codec::string_enum(modifier, &[("none", ()), ("frozen", ())]));
-    record.required(tag, "downfall", codec::float);
-    record.optional(tag, "attributes", crate::world::attribute::environment_attribute_map::decode_only_positional);
-    record.required(tag, "effects", |effects| biome_special_effects::codec().0.decode_partial(effects));
-    record.required(tag, "carvers", |carvers| {
-        let result = crate::world::level::levelgen::carver::list_codec().0.decode_partial(carvers);
-        if let Some(error) = &result.error {
-            crate::error!("Carver: {error}");
-        }
-        match result.value {
-            Some(value) => DecodeResult::success(value),
-            None => result,
-        }
+    record.nested(|| {
+        let mut climate = Record::default();
+        climate.required(tag, "has_precipitation", codec::bool_value);
+        climate.required(tag, "temperature", codec::float);
+        climate.with_default(tag, "temperature_modifier", (), |modifier| codec::string_enum(modifier, &[("none", ()), ("frozen", ())]));
+        climate.required(tag, "downfall", codec::float);
+        climate.build(|| Some(()))
     });
-    record.required(tag, "features", |features| {
-        let result = crate::world::level::levelgen::placement::placed_feature::list_of_lists_codec().0.decode_partial(features);
-        if let Some(error) = &result.error {
-            crate::error!("Features: {error}");
-        }
-        match result.value {
-            Some(value) => DecodeResult::success(value),
-            None => result,
-        }
+    record.with_default(tag, "attributes", (), |attributes| crate::world::attribute::environment_attribute_map::decode_only_positional(attributes).map(|_| ()));
+    record.required(tag, "effects", |effects| biome_special_effects::codec().0.decode_partial(effects));
+    record.nested(|| {
+        let mut generation = Record::default();
+        generation.required(tag, "carvers", |carvers| {
+            let result = codec::with_frames(crate::util::dfu_frames::promote_partial, || crate::world::level::levelgen::carver::list_codec().0.decode_partial(carvers));
+            if let Some(error) = &result.error {
+                crate::error!("Carver: {error}");
+            }
+            match result.value {
+                Some(value) => DecodeResult::success(value),
+                None => result,
+            }
+        });
+        generation.required(tag, "features", |features| {
+            let result = codec::with_frames(crate::util::dfu_frames::promote_partial, || crate::world::level::levelgen::placement::placed_feature::list_of_lists_codec().0.decode_partial(features));
+            if let Some(error) = &result.error {
+                crate::error!("Features: {error}");
+            }
+            match result.value {
+                Some(value) => DecodeResult::success(value),
+                None => result,
+            }
+        });
+        generation.build(|| Some(()))
     });
     record.build(|| Some(())).into_result()
 }

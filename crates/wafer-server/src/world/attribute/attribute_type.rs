@@ -57,7 +57,7 @@ struct SpawnDataList(Codec);
 
 impl Custom for SpawnDataList {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
-        let result = self.0.decode_partial(tag);
+        let result = crate::util::codec::with_frames(crate::util::dfu_frames::promote_partial, || self.0.decode_partial(tag));
         match (result.value, result.error) {
             (Some(list), Some(error)) => {
                 if crate::core::data_registries::is_loading() {

@@ -70,6 +70,10 @@ pub fn codec_flat_xmap() -> Vec<&'static str> {
     vec![DECODER_1_DECODE, CODEC_2_DECODE]
 }
 
+pub fn promote_partial() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.Decoder$3.decode(Decoder.java:77)", CODEC_2_DECODE]
+}
+
 pub fn map_codec_xmap() -> Vec<&'static str> {
     vec![MAP_DECODER_4_DECODE, MAP_CODEC_2_DECODE]
 }

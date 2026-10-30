@@ -9,7 +9,7 @@ use super::environment_attributes::ATTRIBUTES;
 use super::modifier::{AttributeModifier, OperationId};
 use super::{AttributeRange, AttributeType, EnvironmentAttribute, Value};
 use crate::util::codec::DecodeResult;
-use crate::world::item::component::codec::{Codec, Custom, Dispatch, Field, Kind, Selector, Stream};
+use crate::world::item::component::codec::{Codec, Custom, Dispatch, Field, Kind, Selector, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair};
 use crate::world::level::levelgen::density_function::resource_name;
 use wafer_protocol::{Reader, Writer};
@@ -110,7 +110,7 @@ fn full_codec(attribute: &EnvironmentAttributeInfo) -> Codec {
 }
 
 fn entry_codec(attribute: &EnvironmentAttributeInfo) -> Codec {
-    Codec::Either(Box::new(value_codec(attribute)), Box::new(full_codec(attribute)))
+    Codec::Framed(Box::new(Codec::Either(Box::new(value_codec(attribute)), Box::new(full_codec(attribute)))), Wrap::Xmap)
 }
 
 static ENTRY_CODECS: LazyLock<Vec<Codec>> = LazyLock::new(|| ATTRIBUTES.iter().map(entry_codec).collect());
@@ -121,14 +121,17 @@ fn entry_codec_of(key: &Nbt) -> Option<&'static Codec> {
 }
 
 pub fn codec() -> Pair {
-    (Codec::DispatchedMap(Box::new(types::by_name("minecraft:environment_attribute").0), entry_codec_of), Stream::Nbt)
+    let dispatched = Codec::DispatchedMap(Box::new(types::by_name("minecraft:environment_attribute").0), entry_codec_of);
+    (Codec::Framed(Box::new(Codec::Framed(Box::new(dispatched), Wrap::Xmap)), Wrap::Recursive), Stream::Nbt)
 }
 
 pub fn decode_only_positional(tag: &Nbt) -> DecodeResult<Nbt> {
-    codec().0.decode_partial(tag).validate(|map| {
-        let Nbt::Compound(entries) = map else { return Ok(()) };
-        let illegal: Vec<&str> = entries.iter().map(|(name, _)| name.as_str()).filter(|name| EnvironmentAttributeInfo::by_name(name).is_some_and(|attribute| !attribute.is_positional)).collect();
-        if illegal.is_empty() { Ok(()) } else { Err(format!("The following attributes cannot be positional: [{}]", illegal.join(", "))) }
+    crate::util::codec::wrapped(Wrap::FlatXmap, || {
+        codec().0.decode_partial(tag).validate(|map| {
+            let Nbt::Compound(entries) = map else { return Ok(()) };
+            let illegal: Vec<&str> = entries.iter().map(|(name, _)| name.as_str()).filter(|name| EnvironmentAttributeInfo::by_name(name).is_some_and(|attribute| !attribute.is_positional)).collect();
+            if illegal.is_empty() { Ok(()) } else { Err(format!("The following attributes cannot be positional: [{}]", illegal.join(", "))) }
+        })
     })
 }
 

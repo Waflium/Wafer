@@ -663,8 +663,8 @@ pub fn direct_codec() -> crate::world::item::component::types::Pair {
 }
 
 pub fn holder_codec() -> crate::world::item::component::types::Pair {
-    use crate::world::item::component::codec::{Codec, Stream};
-    (Codec::Holder("minecraft:worldgen/density_function", Some(Box::new(Codec::Lazy(direct_codec_lazy)))), Stream::Nbt)
+    use crate::world::item::component::codec::{Codec, Stream, Wrap};
+    (Codec::Framed(Box::new(Codec::Holder("minecraft:worldgen/density_function", Some(Box::new(Codec::Lazy(direct_codec_lazy))))), Wrap::Xmap), Stream::Nbt)
 }
 
 pub fn reference_codec() -> crate::world::item::component::types::Pair {

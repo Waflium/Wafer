@@ -9,7 +9,7 @@ use serde_json::Value;
 use wafer_protocol::nbt::Nbt;
 
 use crate::core::holder_set::HolderSet;
-use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream, Wrap};
 use crate::world::item::component::json_to_nbt;
 use crate::world::item::component::types::{self, Pair, opt, record, req};
 use crate::world::level::block::state::block_state;
@@ -82,7 +82,7 @@ pub fn direct_codec() -> Pair {
         Box::new(Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:worldgen/block_state_provider_type"), cases }))),
         simple_provider_to_full,
     );
-    (Codec::Xor(Box::new(block_state::full_codec().0), Box::new(typed), block_state::java_to_string, provider_to_string), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Xor(Box::new(block_state::full_codec().0), Box::new(typed), block_state::java_to_string, provider_to_string)), Wrap::Xmap), Stream::Nbt)
 }
 
 fn object_to_string(class: &str) -> String {
