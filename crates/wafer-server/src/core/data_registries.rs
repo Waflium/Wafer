@@ -890,7 +890,7 @@ fn decode(registry: &str, element: &JsonElement) -> Result<(), String> {
         "minecraft:dialog" => crate::server::dialog::validate(&tag),
         "minecraft:dimension_type" => {
             use crate::world::level::dimension::dimension_type;
-            let decoded = dimension_type::direct_codec().0.decode(&tag)?;
+            let decoded = parsing(|| dimension_type::direct_codec().0.decode(&tag))?;
             dimension_type::check(&decoded).map_err(|e| format!("Caught exception decoding {}: {e}", crate::util::gson::to_json_string(element)))?;
             dimension_type::encode_network(&json()).map(drop)
         }
@@ -951,7 +951,11 @@ fn encode_network(registry: &str, json: &Value) -> Nbt {
 }
 
 fn decode_with(codec: crate::world::item::component::types::Pair, tag: &Nbt) -> Result<(), String> {
-    let result = unwinding(|| vec![dfu_frames::DECODER_PARSE], || codec.0.decode_partial(tag).into_result()).map(drop);
+    parsing(|| codec.0.decode_partial(tag).into_result()).map(drop)
+}
+
+pub fn parsing<T>(decode: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    let result = unwinding(|| vec![dfu_frames::DECODER_PARSE], decode);
     match THROWN.with(|thrown| thrown.borrow().as_ref().map(|thrown| thrown.description.clone())) {
         Some(description) => Err(description),
         None => result,

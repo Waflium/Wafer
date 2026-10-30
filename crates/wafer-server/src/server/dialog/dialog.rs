@@ -8,7 +8,7 @@ use crate::commands::arguments::resource_or_id_argument::RawResourceOrId;
 use crate::commands::functions::string_template::{StringTemplate, is_valid_variable_name};
 use crate::util::codec::DecodeResult;
 use crate::util::hash_ops::{self, HashCode};
-use crate::world::item::component::codec::{self, Codec, Custom, Dispatch, Field, RangeError, Selector, Stream};
+use crate::world::item::component::codec::{self, Codec, Custom, Dispatch, Field, RangeError, Selector, Stream, Wrap};
 use crate::world::item::component::custom;
 use crate::world::item::component::text::text;
 use crate::world::item::component::types::{
@@ -95,7 +95,7 @@ fn action() -> Pair {
 }
 
 fn action_button_fields() -> Vec<Field> {
-    vec![req("label", text()), opt("tooltip", text()), def("width", width(), i(150)), opt("action", action())]
+    vec![req("label", text()).grouped(3), opt("tooltip", text()).grouped(3), def("width", width(), i(150)).grouped(3), opt("action", action())]
 }
 
 fn action_button() -> Pair {
@@ -223,7 +223,7 @@ fn common_dialog_data() -> Vec<Field> {
 }
 
 fn with_common(fields: Vec<Field>) -> Vec<Field> {
-    let mut all = common_dialog_data();
+    let mut all: Vec<Field> = common_dialog_data().into_iter().map(|field| field.wrapped_group(7, Wrap::MapFlatXmap)).collect();
     all.extend(fields);
     all
 }
@@ -273,7 +273,7 @@ fn direct_codec() -> &'static Pair {
 }
 
 pub fn validate(tag: &Nbt) -> Result<(), String> {
-    decode_direct(tag).map(drop)
+    crate::core::data_registries::parsing(|| DIRECT.0.decode_partial(tag).into_result()).map(drop)
 }
 
 pub fn decode_direct(tag: &Nbt) -> Result<Nbt, String> {

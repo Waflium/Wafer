@@ -104,7 +104,7 @@ pub fn codec() -> crate::world::item::component::types::Pair {
     trapezoid.push(def("plateau", (Codec::int(), Stream::Int), types::i(0)));
     let weighted = types::record(vec![req("data", (Codec::Lazy(codec_lazy), Stream::Lazy)), req("weight", types::var_int(types::non_negative_int()))]);
     let cases = vec![
-        ("minecraft:constant", vec![req("value", anchor())]),
+        ("minecraft:constant", vec![req("value", anchor()).xmapped()]),
         ("minecraft:uniform", range()),
         ("minecraft:biased_to_bottom", inner("inner")),
         ("minecraft:very_biased_to_bottom", inner("inner")),
@@ -112,5 +112,5 @@ pub fn codec() -> crate::world::item::component::types::Pair {
         ("minecraft:weighted_list", vec![req("distribution", types::non_empty_weighted_list(weighted))]),
     ];
     let dispatch = Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:height_provider_type"), cases }));
-    (Codec::Either(Box::new(anchor().0), Box::new(dispatch)), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Either(Box::new(anchor().0), Box::new(dispatch))), crate::world::item::component::codec::Wrap::Xmap), Stream::Nbt)
 }

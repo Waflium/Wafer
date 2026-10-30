@@ -19,7 +19,7 @@ static VERTICAL_ANCHOR_CODECS: std::sync::LazyLock<Vec<crate::world::item::compo
     use crate::world::item::component::codec::{Codec, RangeError, Stream};
     use crate::world::item::component::types::req;
     use crate::world::level::dimension::dimension_type::{MAX_Y, MIN_Y};
-    VERTICAL_ANCHORS.iter().map(|(name, _)| Codec::Record(vec![req(name, (Codec::Int(MIN_Y, MAX_Y, RangeError::Outside), Stream::Int))])).collect()
+    VERTICAL_ANCHORS.iter().map(|(name, _)| Codec::Record(vec![req(name, (Codec::Int(MIN_Y, MAX_Y, RangeError::Outside), Stream::Int)).xmapped()])).collect()
 });
 
 fn vertical_anchor_text(anchor: &wafer_protocol::nbt::Nbt, index: usize) -> String {
@@ -29,14 +29,16 @@ fn vertical_anchor_text(anchor: &wafer_protocol::nbt::Nbt, index: usize) -> Stri
 
 fn read_vertical_anchor(tag: &wafer_protocol::nbt::Nbt, index: usize) -> (crate::util::codec::DecodeResult<wafer_protocol::nbt::Nbt>, String) {
     use crate::util::codec::DecodeResult;
-    let first = VERTICAL_ANCHOR_CODECS[index].decode_partial(tag);
-    let (second, second_text) = if index == 2 {
-        let second = VERTICAL_ANCHOR_CODECS[3].decode_partial(tag);
-        let text = second.value.as_ref().map(|anchor| vertical_anchor_text(anchor, 3)).unwrap_or_default();
-        (second, text)
-    } else {
-        read_vertical_anchor(tag, index + 1)
-    };
+    let first = crate::util::codec::with_frames(crate::util::dfu_frames::xor_first, || VERTICAL_ANCHOR_CODECS[index].decode_partial(tag));
+    let (second, second_text) = crate::util::codec::with_frames(crate::util::dfu_frames::xor_second, || {
+        if index == 2 {
+            let second = VERTICAL_ANCHOR_CODECS[3].decode_partial(tag);
+            let text = second.value.as_ref().map(|anchor| vertical_anchor_text(anchor, 3)).unwrap_or_default();
+            (second, text)
+        } else {
+            read_vertical_anchor(tag, index + 1)
+        }
+    });
     let first_text = first.value.as_ref().map(|anchor| vertical_anchor_text(anchor, index)).unwrap_or_default();
     match (first.is_success(), second.is_success()) {
         (true, true) => {
@@ -60,7 +62,13 @@ fn decode_vertical_anchor(tag: &wafer_protocol::nbt::Nbt) -> crate::util::codec:
 }
 
 pub fn vertical_anchor_codec() -> crate::world::item::component::types::Pair {
-    (crate::world::item::component::codec::Codec::Func(decode_vertical_anchor), crate::world::item::component::codec::Stream::Nbt)
+    (
+        crate::world::item::component::codec::Codec::Framed(
+            Box::new(crate::world::item::component::codec::Codec::Func(decode_vertical_anchor)),
+            crate::world::item::component::codec::Wrap::Xmap,
+        ),
+        crate::world::item::component::codec::Stream::Nbt,
+    )
 }
 
 #[derive(Clone, Copy, Debug)]

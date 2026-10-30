@@ -21,7 +21,46 @@ pub fn fixed_size_list_partial<T>(tag: &Nbt, size: usize, decode: impl Fn(&Nbt) 
     DecodeResult { value, error }
 }
 
+const INT_STREAM_FRAMES: [&str; 14] = [
+    "com.mojang.serialization.DynamicOps.lambda$getIntStream$16(DynamicOps.java:169)",
+    "java.base/java.util.stream.ReferencePipeline$4$1.accept(ReferencePipeline.java:231)",
+    "java.base/java.util.AbstractList$RandomAccessSpliterator.tryAdvance(AbstractList.java:708)",
+    "java.base/java.util.stream.ReferencePipeline.forEachWithCancel(ReferencePipeline.java:147)",
+    "java.base/java.util.stream.AbstractPipeline.copyIntoWithCancel(AbstractPipeline.java:588)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:574)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:635)",
+    "java.base/java.util.stream.AbstractPipeline.evaluateToArrayNode(AbstractPipeline.java:291)",
+    "java.base/java.util.stream.IntPipeline.toArray(IntPipeline.java:564)",
+    "net.minecraft.util.Util.fixedSize(Util.java:962)",
+    "com.mojang.serialization.Decoder$1.lambda$decode$1(Decoder.java:49)",
+    "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)",
+    "com.mojang.serialization.Decoder$1.decode(Decoder.java:49)",
+];
+
+const VEC3I_FIXED_SIZE: &str = "net.minecraft.core.Vec3i.lambda$static$0(Vec3i.java:19)";
+
+fn throw_int_stream_element(value: &Nbt, owner: &'static str) {
+    let Nbt::LazilyParsedNumber(text) = value else { return };
+    let Some(message) = wafer_protocol::lazily_parsed_number::number_limits_error(text) else { return };
+    let mut frames: Vec<&'static str> = vec![
+        "com.google.gson.internal.NumberLimits.parseBigDecimal(NumberLimits.java:27)",
+        "com.google.gson.internal.LazilyParsedNumber.asBigDecimal(LazilyParsedNumber.java:41)",
+        "com.google.gson.internal.LazilyParsedNumber.intValue(LazilyParsedNumber.java:52)",
+    ];
+    frames.extend_from_slice(&INT_STREAM_FRAMES[..10]);
+    frames.push(INT_STREAM_FRAMES[10]);
+    frames.push(owner);
+    frames.extend_from_slice(&INT_STREAM_FRAMES[11..]);
+    frames.push("com.mojang.serialization.Codec$2.decode(Codec.java:74)");
+    crate::core::data_registries::throw_unwinding("java.lang.NumberFormatException", message, &frames);
+}
+
 pub fn fixed_size_ints(tag: &Nbt, size: usize) -> DecodeResult<Vec<i32>> {
+    fixed_size_ints_owned(tag, size, VEC3I_FIXED_SIZE)
+}
+
+pub fn fixed_size_ints_owned(tag: &Nbt, size: usize, owner: &'static str) -> DecodeResult<Vec<i32>> {
     let numeric = |value: &Nbt| match *value {
         Nbt::Byte(v) => Some(v as i32),
         Nbt::Short(v) => Some(v as i32),
@@ -39,10 +78,16 @@ pub fn fixed_size_ints(tag: &Nbt, size: usize) -> DecodeResult<Vec<i32>> {
                 Nbt::Double(v) => Some(if v.abs() >= 2f64.powi(84) { 0 } else { *v as i128 as i32 }),
                 _ => None,
             };
-            match values.iter().map(json_numeric).collect::<Option<Vec<i32>>>() {
-                Some(ints) => ints,
-                None => return DecodeResult::error(format!("Some elements are not ints: {}", crate::nbt::to_string(tag))),
+            if values.iter().any(|value| json_numeric(value).is_none()) {
+                return DecodeResult::error(format!("Some elements are not ints: {}", crate::nbt::to_string(tag)));
             }
+            values
+                .iter()
+                .map(|value| {
+                    throw_int_stream_element(value, owner);
+                    json_numeric(value).expect("a number")
+                })
+                .collect()
         }
         _ if crate::nbt::is_json_source() => return DecodeResult::error(format!("Not a json array: {}", crate::nbt::to_string(tag))),
         Nbt::IntArray(values) => values.clone(),
@@ -71,12 +116,14 @@ fn decode_vec3i(tag: &Nbt) -> DecodeResult<Nbt> {
 }
 
 fn decode_offset(tag: &Nbt) -> DecodeResult<Nbt> {
-    fixed_size_ints(tag, 3).flat_map(|ints| {
-        if ints.iter().all(|value| value.wrapping_abs() <= 16) {
-            DecodeResult::success(Nbt::IntArray(ints))
-        } else {
-            DecodeResult::error(format!("Position out of range, expected at most 16: Vec3i{{x={}, y={}, z={}}}", ints[0], ints[1], ints[2]))
-        }
+    codec::wrapped(component_codec::Wrap::FlatXmap, || {
+        fixed_size_ints(tag, 3).flat_map(|ints| {
+            if ints.iter().all(|value| value.wrapping_abs() <= 16) {
+                DecodeResult::success(Nbt::IntArray(ints))
+            } else {
+                DecodeResult::error(format!("Position out of range, expected at most 16: Vec3i{{x={}, y={}, z={}}}", ints[0], ints[1], ints[2]))
+            }
+        })
     })
 }
 
@@ -257,5 +304,5 @@ fn check_non_empty_holder_set(value: Nbt) -> Result<Nbt, String> {
 }
 
 pub fn non_empty_holder_set(list_codec: Pair) -> Pair {
-    (Codec::Normalize(Box::new(list_codec.0), check_non_empty_holder_set), list_codec.1)
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(list_codec.0), check_non_empty_holder_set)), component_codec::Wrap::FlatXmap), list_codec.1)
 }

@@ -239,7 +239,7 @@ pub fn filterable(value: fn() -> Pair) -> Pair {
 
 pub fn mob_effect_instance() -> Pair {
     let mut fields = vec![req("id", by_name("minecraft:mob_effect"))];
-    fields.extend(effect_details_fields().into_iter().map(|field| field.recursively_grouped(6)));
+    fields.extend(effect_details_fields().into_iter().map(|field| field.wrapped_group(6, Wrap::RecursiveMap)));
     (Codec::Normalize(Box::new(Codec::Record(fields)), custom::show_icon_default), Stream::Record)
 }
 

@@ -44,7 +44,7 @@ pub struct Field {
     pub stream: Stream,
     pub kind: Kind,
     pub group: usize,
-    pub recursive: bool,
+    pub group_wrap: Option<Wrap>,
 }
 
 pub enum Selector {
@@ -157,7 +157,7 @@ pub enum Stream {
 
 impl Field {
     pub fn new(name: &'static str, codec: Codec, stream: Stream, kind: Kind) -> Field {
-        Field { name, codec, stream, kind, group: 0, recursive: false }
+        Field { name, codec, stream, kind, group: 0, group_wrap: None }
     }
 
     pub fn grouped(mut self, size: usize) -> Field {
@@ -165,9 +165,14 @@ impl Field {
         self
     }
 
-    pub fn recursively_grouped(mut self, size: usize) -> Field {
+    pub fn record_wrapped(mut self, wrap: Wrap) -> Field {
+        self.group_wrap = Some(wrap);
+        self
+    }
+
+    pub fn wrapped_group(mut self, size: usize, wrap: Wrap) -> Field {
         self.group = size;
-        self.recursive = true;
+        self.group_wrap = Some(wrap);
         self
     }
 
@@ -175,9 +180,15 @@ impl Field {
         self.group = XMAPPED_SINGLE;
         self
     }
+
+    pub fn unwrapped(mut self) -> Field {
+        self.group = PLAIN_SINGLE;
+        self
+    }
 }
 
 const XMAPPED_SINGLE: usize = usize::MAX;
+const PLAIN_SINGLE: usize = usize::MAX - 1;
 
 fn field_frames(fields: &[Field], index: usize) -> Vec<&'static str> {
     let field = &fields[index];
@@ -190,6 +201,9 @@ fn field_frames(fields: &[Field], index: usize) -> Vec<&'static str> {
         frames.extend(dfu_frames::map_codec_xmap());
         return frames;
     }
+    if fields.len() == 1 && field.group == PLAIN_SINGLE {
+        return frames;
+    }
     match fields.iter().position(|field| field.group > 0) {
         Some(start) => {
             let size = fields[start].group;
@@ -197,8 +211,8 @@ fn field_frames(fields: &[Field], index: usize) -> Vec<&'static str> {
             if (start..start + size).contains(&index) {
                 frames.extend(dfu_frames::record_group(size, index - start + 1));
                 frames.push(dfu_frames::record_map_codec());
-                if fields[start].recursive {
-                    frames.extend(dfu_frames::recursive_map());
+                if let Some(wrap) = fields[start].group_wrap {
+                    frames.extend(wrap.frames());
                 }
                 frames.extend(dfu_frames::record_group(outer_size, start + 1));
             } else {
@@ -209,6 +223,11 @@ fn field_frames(fields: &[Field], index: usize) -> Vec<&'static str> {
         None => frames.extend(dfu_frames::record_group(fields.len(), index + 1)),
     }
     frames.push(dfu_frames::record_map_codec());
+    if fields.iter().all(|field| field.group == 0)
+        && let Some(wrap) = fields[0].group_wrap
+    {
+        frames.extend(wrap.frames());
+    }
     frames
 }
 

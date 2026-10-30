@@ -12,8 +12,8 @@ use super::{blackstone_replace_processor, block_age_processor, lava_submerged_bl
 use super::rule_test::{self, RuleTest};
 use super::structure_place_settings::StructurePlaceSettings;
 use super::structure_template::StructureBlockInfo;
-use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
-use crate::world::item::component::types::{self, Pair, def, lenient_opt, opt, req};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream, Wrap};
+use crate::world::item::component::types::{self, Pair, def, lenient, opt, req};
 use crate::world::level::block::state::block_state;
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::valueproviders::{IntProvider, float, positive_int_provider_codec};
@@ -112,9 +112,9 @@ impl ProcessorRule {
         types::record(vec![
             req("input_predicate", (Codec::Lazy(rule_test::codec_lazy), Stream::Lazy)),
             req("location_predicate", (Codec::Lazy(rule_test::codec_lazy), Stream::Lazy)),
-            lenient_opt("position_predicate", pos_rule_test::codec()),
+            lenient("position_predicate", pos_rule_test::codec(), types::compound(&[("predicate_type", types::s("minecraft:always_true"))])),
             req("output_state", block_state::codec()),
-            lenient_opt("block_entity_modifier", RuleBlockEntityModifier::codec()),
+            lenient("block_entity_modifier", RuleBlockEntityModifier::codec(), types::compound(&[("type", types::s("minecraft:passthrough"))])),
         ])
     }
 
@@ -392,12 +392,13 @@ pub fn single_codec() -> Pair {
 }
 
 pub fn list_object_codec() -> Pair {
-    types::list((Codec::Lazy(single_codec_lazy), Stream::Lazy))
+    let list = types::list((Codec::Lazy(single_codec_lazy), Stream::Lazy));
+    (Codec::Framed(Box::new(list.0), Wrap::Xmap), list.1)
 }
 
 pub fn list_direct_codec() -> Pair {
-    let primary = types::record(vec![req("processors", list_object_codec())]);
-    (Codec::Either(Box::new(primary.0), Box::new(list_object_codec().0)), Stream::Nbt)
+    let primary = types::record(vec![req("processors", list_object_codec()).unwrapped()]);
+    (Codec::Framed(Box::new(Codec::Either(Box::new(primary.0), Box::new(list_object_codec().0))), Wrap::Xmap), Stream::Nbt)
 }
 
 pub fn list_holder_codec() -> Pair {

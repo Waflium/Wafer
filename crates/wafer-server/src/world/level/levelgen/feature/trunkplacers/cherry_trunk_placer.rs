@@ -8,7 +8,7 @@ use wafer_protocol::nbt::Nbt;
 use super::trunk_placer::{TrunkPlacer, place_below_trunk_block, trunk_placer_parts};
 use crate::world::level::world_gen_level::WorldGenLevel;
 use crate::util::valueproviders::{IntProvider, int_provider_codec_in};
-use crate::world::item::component::codec::{Codec, Field, Stream, as_i32};
+use crate::world::item::component::codec::{Codec, Field, Stream, Wrap, as_i32};
 use crate::world::item::component::types::{Pair, req};
 use crate::world::level::levelgen::feature::foliageplacers::foliage_placer::FoliageAttachment;
 use crate::world::level::levelgen::feature::tree_feature::{TreeFeature, TreeSetter};
@@ -65,11 +65,14 @@ fn validate_branch_start_range(value: Nbt) -> Result<Nbt, String> {
 
 fn branch_start_codec() -> Pair {
     let uniform = Codec::Normalize(
-        Box::new(Codec::Record(vec![req("min_inclusive", (Codec::int(), Stream::Int)), req("max_inclusive", (Codec::int(), Stream::Int))])),
+        Box::new(Codec::Record(vec![
+            req("min_inclusive", (Codec::int(), Stream::Int)).record_wrapped(Wrap::MapFlatXmap),
+            req("max_inclusive", (Codec::int(), Stream::Int)),
+        ])),
         validate_uniform_int,
     );
-    let varied = Codec::Normalize(Box::new(uniform), validate_branch_start_variation);
-    (Codec::Normalize(Box::new(varied), validate_branch_start_range), Stream::Nbt)
+    let varied = Codec::Framed(Box::new(Codec::Normalize(Box::new(uniform), validate_branch_start_variation)), Wrap::FlatXmap);
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(varied), validate_branch_start_range)), Wrap::FlatXmap), Stream::Nbt)
 }
 
 pub fn fields() -> Vec<Field> {
