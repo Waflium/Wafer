@@ -264,13 +264,39 @@ pub fn loading_entity_exception(cause: JavaThrowable, passenger_depth: usize, si
     loading_entity_exception_with(cause, passenger_depth, site, false)
 }
 
-pub fn loading_entity_exception_with(cause: JavaThrowable, passenger_depth: usize, site: &[&'static str], typed: bool) -> JavaThrowable {
+fn entity_creation_frames(passenger_depth: usize, site: &[&'static str], typed: bool) -> Vec<&'static str> {
     let mut shared = if typed { ENTITY_TYPE_CREATE_TYPED.to_vec() } else { ENTITY_TYPE_CREATE.to_vec() };
     for _ in 0..passenger_depth {
         shared.extend(ENTITY_TYPE_LOAD_PASSENGERS);
     }
     shared.extend_from_slice(site);
-    reported_loading_entity_nbt(cause, &shared)
+    shared
+}
+
+pub fn loading_entity_exception_with(cause: JavaThrowable, passenger_depth: usize, site: &[&'static str], typed: bool) -> JavaThrowable {
+    reported_loading_entity_nbt(cause, &entity_creation_frames(passenger_depth, site, typed))
+}
+
+const TAMABLE_ANIMAL_READ: &str = "net.minecraft.world.entity.TamableAnimal.readAdditionalSaveData(TamableAnimal.java:69)";
+const ABSTRACT_HORSE_READ: &str = "net.minecraft.world.entity.animal.equine.AbstractHorse.readAdditionalSaveData(AbstractHorse.java:829)";
+const ABSTRACT_CHESTED_HORSE_READ: &str = "net.minecraft.world.entity.animal.equine.AbstractChestedHorse.readAdditionalSaveData(AbstractChestedHorse.java:107)";
+const LLAMA_READ: &str = "net.minecraft.world.entity.animal.equine.Llama.readAdditionalSaveData(Llama.java:160)";
+
+fn owner_read_frames(entity_type: &str) -> Vec<&'static str> {
+    match entity_type {
+        "minecraft:wolf" => vec![TAMABLE_ANIMAL_READ, "net.minecraft.world.entity.animal.wolf.Wolf.readAdditionalSaveData(Wolf.java:270)"],
+        "minecraft:cat" => vec![TAMABLE_ANIMAL_READ, "net.minecraft.world.entity.animal.feline.Cat.readAdditionalSaveData(Cat.java:243)"],
+        "minecraft:parrot" => vec![TAMABLE_ANIMAL_READ, "net.minecraft.world.entity.animal.parrot.Parrot.readAdditionalSaveData(Parrot.java:495)"],
+        "minecraft:zombie_nautilus" => vec![TAMABLE_ANIMAL_READ, "net.minecraft.world.entity.animal.nautilus.ZombieNautilus.readAdditionalSaveData(ZombieNautilus.java:144)"],
+        "minecraft:horse" => vec![ABSTRACT_HORSE_READ, "net.minecraft.world.entity.animal.equine.Horse.readAdditionalSaveData(Horse.java:77)"],
+        "minecraft:donkey" | "minecraft:mule" => vec![ABSTRACT_HORSE_READ, ABSTRACT_CHESTED_HORSE_READ],
+        "minecraft:llama" => vec![ABSTRACT_HORSE_READ, ABSTRACT_CHESTED_HORSE_READ, LLAMA_READ],
+        "minecraft:trader_llama" => vec![ABSTRACT_HORSE_READ, ABSTRACT_CHESTED_HORSE_READ, LLAMA_READ, "net.minecraft.world.entity.animal.equine.TraderLlama.readAdditionalSaveData(TraderLlama.java:58)"],
+        "minecraft:skeleton_horse" => vec![ABSTRACT_HORSE_READ, "net.minecraft.world.entity.animal.equine.SkeletonHorse.readAdditionalSaveData(SkeletonHorse.java:152)"],
+        "minecraft:camel" | "minecraft:camel_husk" => vec![ABSTRACT_HORSE_READ, "net.minecraft.world.entity.animal.camel.Camel.readAdditionalSaveData(Camel.java:130)"],
+        "minecraft:nautilus" => vec![TAMABLE_ANIMAL_READ],
+        _ => vec![ABSTRACT_HORSE_READ],
+    }
 }
 
 fn throw_creating_entity_exception(cause: JavaThrowable, site: &[&'static str]) -> ! {
@@ -585,7 +611,7 @@ fn update_custom_entity_tag(level: &ServerLevel, entity: &mut LevelEntity, entit
     let uuid = entity.entity().uuid;
     tag.merge(&unsafe_data);
     let tag = Nbt::Compound(tag);
-    let converted = level.with_old_owner_converted(entity, &tag);
+    let converted = level.with_old_owner_converted(entity, &tag, &Vec::new);
     if let Err(e) = entity.load_in_level(&converted, &level.scoreboard) {
         panic!("{}", loading_entity_report(&e));
     }
@@ -924,13 +950,16 @@ impl ServerLevel {
         true
     }
 
-    pub fn with_old_owner_converted<'a>(&self, entity: &LevelEntity, nbt: &'a Nbt) -> std::borrow::Cow<'a, Nbt> {
+    pub fn with_old_owner_converted<'a>(&self, entity: &LevelEntity, nbt: &'a Nbt, below_create: &dyn Fn() -> Vec<&'static str>) -> std::borrow::Cow<'a, Nbt> {
         let reads_owner = matches!(entity, LevelEntity::Mob(mob) if mob.tamable_animal().is_some() || mob.abstract_horse().is_some());
         let Nbt::Compound(fields) = nbt else { return std::borrow::Cow::Borrowed(nbt) };
         if !reads_owner || !matches!(nbt.get("Owner"), Some(Nbt::String(_))) {
             return std::borrow::Cow::Borrowed(nbt);
         }
-        let owner = super::entity_reference::EntityReference::read_with_old_owner_conversion(nbt, "Owner", self);
+        let mut callers = owner_read_frames(wafer_data::registry::ENTITY_TYPE[entity.entity().entity_type as usize]);
+        callers.push(ENTITY_LOAD_READ_ADDITIONAL_SAVE_DATA);
+        callers.extend(below_create());
+        let owner = super::entity_reference::EntityReference::read_with_old_owner_conversion(nbt, "Owner", self, &callers);
         let mut fields = fields.clone();
         fields.retain(|(key, _)| key != "Owner");
         if let Some(owner) = owner {
@@ -952,7 +981,8 @@ impl ServerLevel {
             warn!("Skipping Entity with id {entity_type}");
             return None;
         };
-        if let Err(cause) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt), &self.scoreboard) {
+        let below_create = || ENTITY_TYPE_CREATE[..3].iter().copied().chain(site.iter().copied()).collect();
+        if let Err(cause) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt, &below_create), &self.scoreboard) {
             throw_creating_entity_exception(cause, site);
         }
         let entity = self.reassess_weapon_goal_detached(entity);
@@ -974,7 +1004,8 @@ impl ServerLevel {
             warn!("Skipping Entity with id {entity_type}");
             return None;
         };
-        if let Err(cause) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt), &self.scoreboard) {
+        let below_create = || entity_creation_frames(passenger_depth, &site(), typed);
+        if let Err(cause) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt, &below_create), &self.scoreboard) {
             warn!("Exception loading entity: \n{}", loading_entity_exception_with(cause, passenger_depth, &site(), typed).print_stack_trace().trim_end());
             return None;
         }

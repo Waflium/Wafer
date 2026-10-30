@@ -30,6 +30,7 @@ pub struct Connection {
     server: Arc<ManagementServer>,
     client: ClientInfo,
     thread: String,
+    tls: bool,
 }
 
 enum Handshake {
@@ -42,6 +43,35 @@ enum Closed {
     Exception(String),
 }
 
+const NETTY_READ_FRAMES: [&str; 18] = [
+    "java.base/sun.nio.ch.SocketChannelImpl.throwConnectionReset(SocketChannelImpl.java:399)",
+    "java.base/sun.nio.ch.SocketChannelImpl.implRead(SocketChannelImpl.java:431)",
+    "java.base/sun.nio.ch.SocketChannelImpl.read(SocketChannelImpl.java:489)",
+    "io.netty.buffer.AdaptivePoolingAllocator$AdaptiveByteBuf.setBytes(AdaptivePoolingAllocator.java:2527)",
+    "io.netty.buffer.AbstractByteBuf.writeBytes(AbstractByteBuf.java:1139)",
+    "io.netty.channel.socket.nio.NioSocketChannel.doReadBytes(NioSocketChannel.java:350)",
+    "io.netty.channel.nio.AbstractNioByteChannel$NioByteUnsafe.read(AbstractNioByteChannel.java:161)",
+    "io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.handle(AbstractNioChannel.java:445)",
+    "io.netty.channel.nio.NioIoHandler$DefaultNioRegistration.handle(NioIoHandler.java:388)",
+    "io.netty.channel.nio.NioIoHandler.processSelectedKey(NioIoHandler.java:596)",
+    "io.netty.channel.nio.NioIoHandler.processSelectedKeysPlain(NioIoHandler.java:541)",
+    "io.netty.channel.nio.NioIoHandler.processSelectedKeys(NioIoHandler.java:514)",
+    "io.netty.channel.nio.NioIoHandler.run(NioIoHandler.java:484)",
+    "io.netty.channel.SingleThreadIoEventLoop.runIo(SingleThreadIoEventLoop.java:225)",
+    "io.netty.channel.SingleThreadIoEventLoop.run(SingleThreadIoEventLoop.java:196)",
+    "io.netty.util.concurrent.SingleThreadEventExecutor$5.run(SingleThreadEventExecutor.java:1204)",
+    "io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+fn java_read_exception(error: &std::io::Error, tls: bool) -> String {
+    if error.kind() == std::io::ErrorKind::ConnectionReset && !tls {
+        let frames: String = NETTY_READ_FRAMES.iter().map(|frame| format!("\n\tat {frame}")).collect();
+        return format!("java.net.SocketException: Connection reset{frames}");
+    }
+    java_io_exception(error)
+}
+
 fn java_io_exception(error: &std::io::Error) -> String {
     match error.kind() {
         std::io::ErrorKind::ConnectionReset => "java.net.SocketException: Connection reset".into(),
@@ -52,7 +82,7 @@ fn java_io_exception(error: &std::io::Error) -> String {
 
 impl Connection {
     pub fn new(server: Arc<ManagementServer>, connection_id: i32, thread: String) -> Connection {
-        Connection { server, client: ClientInfo { connection_id }, thread }
+        Connection { server, client: ClientInfo { connection_id }, thread, tls: false }
     }
 
     fn log(&self, message: std::fmt::Arguments) {
@@ -81,7 +111,8 @@ impl Connection {
         self.log(format_args!("Management connection closed for {address}"));
     }
 
-    pub async fn run_tls<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(self, stream: S, remote: SocketAddr, acceptor: tokio_rustls::TlsAcceptor) {
+    pub async fn run_tls<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(mut self, stream: S, remote: SocketAddr, acceptor: tokio_rustls::TlsAcceptor) {
+        self.tls = true;
         let address = loggable_address(remote, true);
         self.log(format_args!("Management connection opened for {address}"));
         match acceptor.accept(stream).await {
@@ -121,7 +152,7 @@ impl Connection {
                         continue;
                     }
                     Err(e) => {
-                        self.exception_caught(&java_io_exception(&e));
+                        self.exception_caught(&java_read_exception(&e, self.tls));
                         return self.close(&mut codec);
                     }
                 },
@@ -220,7 +251,7 @@ impl Connection {
                 None => None,
             },
             Some(Ok(_)) => None,
-            Some(Err(tokio_tungstenite::tungstenite::Error::Io(e))) => Some(Closed::Exception(java_io_exception(&e))),
+            Some(Err(tokio_tungstenite::tungstenite::Error::Io(e))) => Some(Closed::Exception(java_read_exception(&e, self.tls))),
             Some(Err(_)) | None => Some(Closed::Cleanly),
         }
     }
@@ -265,7 +296,7 @@ impl Connection {
                         buffer.extend_from_slice(&chunk[..n]);
                         drained = n < chunk.len();
                     }
-                    Err(e) => return Closed::Exception(java_io_exception(&e)),
+                    Err(e) => return Closed::Exception(java_read_exception(&e, self.tls)),
                 },
                 notification = notifications.recv() => match notification {
                     Some(text) => {

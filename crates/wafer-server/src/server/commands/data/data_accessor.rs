@@ -79,7 +79,7 @@ impl DataAccessor {
                 let previous_framed_item = level.item_frame_item(*id);
                 let mut collector = tag_value_input::ScopedCollector::new_empty(ENTITY_DATA_ACCESSOR_LOGGER);
                 let Some(entity) = level.entities.get(id) else { return Err(ERROR_NO_PLAYERS.create()) };
-                let converted = level.with_old_owner_converted(entity, &tag);
+                let converted = level.with_old_owner_converted(entity, &tag, &Vec::new);
                 let entity = level.entities.get_mut(id).expect("the entity");
                 let uuid = entity.entity().uuid;
                 let previous_dimensions = entity.entity().dimensions;

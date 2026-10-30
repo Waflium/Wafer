@@ -2,6 +2,7 @@ use std::fmt;
 use std::io;
 
 use crate::crash_report::CrashReport;
+use crate::util::java_throwable::JavaThrowable;
 
 use super::aborted_file_fix_exception::AbortedFileFixException;
 use super::atomic_move_not_supported_file_fix_exception::AtomicMoveNotSupportedFileFixException;
@@ -110,6 +111,7 @@ impl fmt::Display for UncheckedException {
 #[derive(Debug)]
 pub enum FileFixFailure {
     Io(io::Error),
+    Throwable(JavaThrowable),
     Exception(FileFixException),
     Unchecked(UncheckedException),
 }
@@ -125,6 +127,7 @@ impl fmt::Display for FileFixFailure {
         match self {
             FileFixFailure::Unchecked(e) => write!(f, "{e}"),
             FileFixFailure::Io(e) => write!(f, "java.io.UncheckedIOException: {e}\nCaused by: {e}"),
+            FileFixFailure::Throwable(throwable) => f.write_str(throwable.print_stack_trace().trim_end()),
             FileFixFailure::Exception(e) => match e.cause() {
                 Some(cause) => write!(f, "{e}\nCaused by: {cause}"),
                 None => write!(f, "{e}"),

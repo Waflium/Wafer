@@ -169,9 +169,13 @@ impl LevelStorageAccess {
     }
 
     pub fn get_unfixed_data_tag(&self, use_fallback: bool) -> io::Result<Dynamic> {
+        self.get_unfixed_data_tag_at(use_fallback, &[]).map_err(io::Error::other)
+    }
+
+    pub fn get_unfixed_data_tag_at(&self, use_fallback: bool, callers: &[&'static str]) -> Result<Dynamic, JavaThrowable> {
         self.check_lock();
         let data_file = if use_fallback { self.level_directory.old_data_file() } else { self.level_directory.data_file() };
-        let root = super::get_unfixed_data_tag(&data_file, &[]).map_err(io::Error::other)?;
+        let root = super::get_unfixed_data_tag(&data_file, callers)?;
         Ok(Dynamic::new(data_compound_or_empty(root)))
     }
 

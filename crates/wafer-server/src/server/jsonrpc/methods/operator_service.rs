@@ -1,6 +1,6 @@
 use serde_json::{Map, Value};
 
-use super::{ClientInfo, decode_params, get_user, log};
+use super::{ClientInfo, decode_params, get_users, log};
 use crate::server::Server;
 use crate::server::jsonrpc::api::PlayerDto;
 use crate::server::jsonrpc::codec::{self, DecodeResult, Fields};
@@ -56,12 +56,11 @@ fn deop(server: &mut Server, user: &NameAndId, client: ClientInfo) {
 }
 
 fn resolve(server: &Server, operators: &[OperatorDto]) -> Vec<Op> {
+    let users = get_users(server, &operators.iter().map(|o| (o.player.id, o.player.name.as_deref())).collect::<Vec<_>>());
     operators
         .iter()
-        .filter_map(|o| {
-            get_user(server, o.player.id, o.player.name.as_deref())
-                .map(|user| Op { user, permission_level: o.permission_level, bypasses_player_limit: o.bypasses_player_limit })
-        })
+        .zip(users)
+        .filter_map(|(o, user)| user.map(|user| Op { user, permission_level: o.permission_level, bypasses_player_limit: o.bypasses_player_limit }))
         .collect()
 }
 
@@ -91,7 +90,7 @@ pub fn clear(server: &mut Server, client: ClientInfo) -> Value {
 
 pub fn remove(server: &mut Server, params: &Value, client: ClientInfo) -> Result<Value, String> {
     let players = decode_params(params, |v| codec::list(v, PlayerDto::decode))?;
-    let users: Vec<NameAndId> = players.iter().filter_map(|p| get_user(server, p.id, p.name.as_deref())).collect();
+    let users: Vec<NameAndId> = get_users(server, &players.iter().map(|p| (p.id, p.name.as_deref())).collect::<Vec<_>>()).into_iter().flatten().collect();
     for user in &users {
         deop(server, user, client);
     }

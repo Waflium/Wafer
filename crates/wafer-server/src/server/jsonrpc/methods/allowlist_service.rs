@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde_json::Value;
 
-use super::{ClientInfo, decode_params, get_user, log};
+use super::{ClientInfo, decode_params, get_users, log};
 use crate::server::Server;
 use crate::server::jsonrpc::api::PlayerDto;
 use crate::server::jsonrpc::codec;
@@ -36,7 +36,7 @@ fn players(value: &Value) -> Result<Vec<PlayerDto>, String> {
 }
 
 fn resolve(server: &Server, players: &[PlayerDto]) -> Vec<Option<NameAndId>> {
-    players.iter().map(|p| get_user(server, p.id, p.name.as_deref())).collect()
+    get_users(server, &players.iter().map(|p| (p.id, p.name.as_deref())).collect::<Vec<_>>())
 }
 
 pub fn get(server: &mut Server, _client: ClientInfo) -> Value {

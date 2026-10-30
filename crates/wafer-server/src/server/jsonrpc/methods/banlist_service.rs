@@ -5,7 +5,7 @@ use wafer_core::hash_map::java_hash_map_order;
 use wafer_core::random::java_string_hash;
 use serde_json::{Map, Value};
 
-use super::{ClientInfo, decode_params, get_user, log};
+use super::{ClientInfo, decode_params, get_users, log};
 use crate::server::Server;
 use crate::server::jsonrpc::api::PlayerDto;
 use crate::server::jsonrpc::codec::{self, DecodeResult, Fields};
@@ -127,7 +127,8 @@ fn bans(value: &Value) -> Result<Vec<UserBanDto>, String> {
 }
 
 fn resolve(server: &Server, bans: &[UserBanDto]) -> Vec<UserBan> {
-    bans.iter().filter_map(|b| get_user(server, b.player.id, b.player.name.as_deref()).map(|u| b.to_user_ban(u))).collect()
+    let users = get_users(server, &bans.iter().map(|b| (b.player.id, b.player.name.as_deref())).collect::<Vec<_>>());
+    bans.iter().zip(users).filter_map(|(b, user)| user.map(|u| b.to_user_ban(u))).collect()
 }
 
 fn hash_set_order(bans: Vec<UserBan>) -> Vec<UserBan> {
@@ -161,7 +162,7 @@ pub fn clear(server: &mut Server, _client: ClientInfo) -> Value {
 
 pub fn remove(server: &mut Server, params: &Value, client: ClientInfo) -> Result<Value, String> {
     let players = decode_params(params, |v| codec::list(v, PlayerDto::decode))?;
-    let users: Vec<NameAndId> = players.iter().filter_map(|p| get_user(server, p.id, p.name.as_deref())).collect();
+    let users: Vec<NameAndId> = get_users(server, &players.iter().map(|p| (p.id, p.name.as_deref())).collect::<Vec<_>>()).into_iter().flatten().collect();
     for user in users {
         remove_user_ban(server, &user, client);
     }

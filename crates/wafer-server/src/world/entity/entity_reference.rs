@@ -6,6 +6,12 @@ use crate::world::entity::EntityId;
 use crate::world::level::storage::uuid_ints;
 use crate::world::level::storage::tag_value_input;
 
+const READ_WITH_OLD_OWNER_CONVERSION: [&str; 3] = [
+    "net.minecraft.world.entity.EntityReference.lambda$readWithOldOwnerConversion$0(EntityReference.java:135)",
+    "java.base/java.util.Optional.map(Optional.java:260)",
+    "net.minecraft.world.entity.EntityReference.readWithOldOwnerConversion(EntityReference.java:135)",
+];
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct EntityReference {
     uuid: u128,
@@ -53,10 +59,11 @@ impl EntityReference {
         })
     }
 
-    pub fn read_with_old_owner_conversion(input: &Nbt, key: &str, level: &ServerLevel) -> Option<EntityReference> {
+    pub fn read_with_old_owner_conversion(input: &Nbt, key: &str, level: &ServerLevel, callers: &[&'static str]) -> Option<EntityReference> {
         EntityReference::read(input, key).or_else(|| {
             let old_name = input.get(key).and_then(Nbt::as_str)?;
-            convert_mob_owner_if_necessary(level.user_lookup.as_ref()?, old_name).map(EntityReference::of)
+            let frames: Vec<&'static str> = READ_WITH_OLD_OWNER_CONVERSION.into_iter().chain(callers.iter().copied()).collect();
+            convert_mob_owner_if_necessary(level.user_lookup.as_ref()?, old_name, &frames).map(EntityReference::of)
         })
     }
 

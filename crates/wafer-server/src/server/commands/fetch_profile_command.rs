@@ -15,9 +15,9 @@ use crate::world::level::storage::{format_uuid, uuid_ints};
 
 const RESOLVE_NAME: &str = "net.minecraft.server.commands.FetchProfileCommand.lambda$resolveName$0(FetchProfileCommand.java:110)";
 const RESOLVE_ID: &str = "net.minecraft.server.commands.FetchProfileCommand.lambda$resolveId$0(FetchProfileCommand.java:127)";
-const POOL_RUN_WORKER: &str = "java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)";
-const POOL_WORKER_RUN: &str = "java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)";
-const THREAD_RUN: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
+pub(crate) const POOL_RUN_WORKER: &str = "java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)";
+pub(crate) const POOL_WORKER_RUN: &str = "java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)";
+pub(crate) const THREAD_RUN: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
 
 static NO_PROFILE: DynamicCommandExceptionType = DynamicCommandExceptionType(|id| tr("commands.fetchprofile.no_profile", vec![id]));
 
@@ -116,7 +116,7 @@ pub fn resolve_id(server: &mut Server, context: &CommandContext, source: &Comman
     Ok(1)
 }
 
-static DOWNLOAD_POOL: LazyLock<CachedThreadPool> = LazyLock::new(|| CachedThreadPool::new("Download-"));
+pub(crate) static DOWNLOAD_POOL: LazyLock<CachedThreadPool> = LazyLock::new(|| CachedThreadPool::new("Download-"));
 
 fn resolve_on_io_pool(server: &mut Server, task: impl FnOnce() -> Box<dyn FnOnce(&mut Server) + Send + Sync> + Send + 'static) {
     match server.task_sender.clone() {

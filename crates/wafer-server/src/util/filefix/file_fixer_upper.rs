@@ -12,6 +12,7 @@ use crate::util::datafix::data_fix_types::{DataFixTypes, current_version};
 use crate::util::file_util;
 use crate::util::gson;
 use crate::util::java_nio::{self, java_io_error};
+use crate::util::java_throwable::JavaThrowable;
 use crate::util::worldupdate::upgrade_progress::{Status, Type, UpgradeProgress};
 use crate::world::level::chunk::storage::WRITE_COMPRESSED_PATH;
 use crate::world::level::storage::WorldData;
@@ -33,6 +34,23 @@ const FILE_FIXER_INTRODUCTION_VERSION: i32 = 4772;
 const FILE_FIX_DIRECTORY_NAME: &str = "filefix";
 const NEW_WORLD_TEMP_NAME: &str = "new_world";
 const UPGRADE_IN_PROGRESS_NAME: &str = "upgrade_in_progress.json";
+const FIX_GET_UNFIXED_DATA_TAG: &str = "net.minecraft.util.filefix.FileFixerUpper.fix(FileFixerUpper.java:112)";
+const FIX_UNCHECKED_IO_EXCEPTION: &str = "net.minecraft.util.filefix.FileFixerUpper.fix(FileFixerUpper.java:115)";
+const FIX_ENTRY: &str = "net.minecraft.util.filefix.FileFixerUpper.fix(FileFixerUpper.java:80)";
+const MAIN_FIX: &str = "net.minecraft.server.Main.main(Main.java:162)";
+
+fn fix_callers() -> [&'static str; 4] {
+    [FIX_ENTRY, MAIN_FIX, crate::server::main::BUNDLER_MAIN_TAIL[0], crate::server::main::BUNDLER_MAIN_TAIL[1]]
+}
+
+pub(crate) fn unfixed_data_tag_callers() -> Vec<&'static str> {
+    [FIX_GET_UNFIXED_DATA_TAG].into_iter().chain(fix_callers()).collect()
+}
+
+pub(crate) fn unchecked_io_exception(cause: JavaThrowable) -> JavaThrowable {
+    let callers: Vec<&'static str> = [FIX_UNCHECKED_IO_EXCEPTION].into_iter().chain(fix_callers()).collect();
+    JavaThrowable::new(format!("java.io.UncheckedIOException: {}", cause.description), callers).with_cause(cause)
+}
 
 pub struct FileFixerUpper {
     file_fixes: Vec<FileFix>,
@@ -77,7 +95,7 @@ impl FileFixerUpper {
                     return Err(AbortedFileFixException::of(e).into());
                 }
                 Err(FileFixFailure::Exception(e)) => return Err(e.into()),
-                Err(unchecked @ FileFixFailure::Unchecked(_)) => return Err(unchecked),
+                Err(unchecked @ (FileFixFailure::Unchecked(_) | FileFixFailure::Throwable(_))) => return Err(unchecked),
             };
             if let Err(e) = swap_in_fixed_world(world_access, &moves, &file_fix_directory, &temp_world, upgrade_progress) {
                 if let FileFixException::Aborted(aborted) = &e {
@@ -92,12 +110,13 @@ impl FileFixerUpper {
                 }
                 return Err(e.into());
             }
-            level_data_tag = match world_access.get_unfixed_data_tag(false) {
+            level_data_tag = match world_access.get_unfixed_data_tag_at(false, &unfixed_data_tag_callers()) {
                 Ok(level_data_tag) => level_data_tag,
-                Err(e) => {
+                Err(cause) if cause.is_io_exception() => {
                     upgrade_progress.notifications().world_upgrade_failed("The world upgrade failed while reading level.dat");
-                    return Err(FileFixFailure::Io(e));
+                    return Err(FileFixFailure::Throwable(unchecked_io_exception(cause)));
                 }
+                Err(cause) => return Err(FileFixFailure::Throwable(cause)),
             };
             loaded_version = level_data_tag.get("DataVersion").as_int(-1);
         }

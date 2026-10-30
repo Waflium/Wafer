@@ -499,3 +499,33 @@ fn interrupted_upgrade_moves_fail_with_the_vanilla_messages() {
     assert_eq!(crate::util::gson::from_json_object(""), Ok(None));
     assert_eq!(FileMove::decode_moves(None, &from, &to), Err("Not a JSON object: null".to_string()));
 }
+
+#[test]
+fn an_unreadable_level_dat_after_the_swap_is_an_unchecked_io_exception_with_the_fix_frames() {
+    let dir = temp_dir("unreadable-level-dat");
+    let file = dir.join("level.dat");
+    std::fs::write(&file, "this is not gzip").unwrap();
+    let cause = crate::world::level::storage::get_unfixed_data_tag(&file, &super::file_fixer_upper::unfixed_data_tag_callers()).unwrap_err();
+    let failure = super::file_fix_exception::FileFixFailure::Throwable(super::file_fixer_upper::unchecked_io_exception(cause));
+    assert_eq!(
+        failure.to_string(),
+        "java.io.UncheckedIOException: java.util.zip.ZipException: Not in GZIP format\n\
+         \tat net.minecraft.util.filefix.FileFixerUpper.fix(FileFixerUpper.java:115)\n\
+         \tat net.minecraft.util.filefix.FileFixerUpper.fix(FileFixerUpper.java:80)\n\
+         \tat net.minecraft.server.Main.main(Main.java:162)\n\
+         \tat net.minecraft.bundler.Main.lambda$run$0(Main.java:54)\n\
+         \tat java.base/java.lang.Thread.run(Thread.java:1474)\n\
+         Caused by: java.util.zip.ZipException: Not in GZIP format\n\
+         \tat java.base/java.util.zip.GZIPInputStream.readHeader(GZIPInputStream.java:231)\n\
+         \tat java.base/java.util.zip.GZIPInputStream.<init>(GZIPInputStream.java:86)\n\
+         \tat java.base/java.util.zip.GZIPInputStream.<init>(GZIPInputStream.java:118)\n\
+         \tat net.minecraft.nbt.NbtIo.createDecompressorStream(NbtIo.java:41)\n\
+         \tat net.minecraft.nbt.NbtIo.readCompressed(NbtIo.java:49)\n\
+         \tat net.minecraft.nbt.NbtIo.readCompressed(NbtIo.java:36)\n\
+         \tat net.minecraft.world.level.storage.LevelStorageSource.readLevelDataTagRaw(LevelStorageSource.java:269)\n\
+         \tat net.minecraft.world.level.storage.LevelStorageSource$LevelStorageAccess.getUnfixedDataTag(LevelStorageSource.java:513)\n\
+         \tat net.minecraft.util.filefix.FileFixerUpper.fix(FileFixerUpper.java:112)\n\
+         \t... 4 more"
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+}

@@ -608,13 +608,18 @@ fn ensure_directory_exists(directory: &Path) -> Result<(), ConversionError> {
     Ok(())
 }
 
-pub fn convert_mob_owner_if_necessary(lookup: &UserLookup, owner: &str) -> Option<u128> {
+const CONVERT_MOB_OWNER_GET: &str = "net.minecraft.server.players.OldUsersConverter.convertMobOwnerIfNecessary(OldUsersConverter.java:246)";
+const CONVERT_MOB_OWNER_LOOKUP: &str = "net.minecraft.server.players.OldUsersConverter.convertMobOwnerIfNecessary(OldUsersConverter.java:267)";
+
+pub fn convert_mob_owner_if_necessary(lookup: &UserLookup, owner: &str, callers: &[&'static str]) -> Option<u128> {
     if !owner.is_empty() && owner.java_utf16().count() <= 16 {
-        if let Some(profile) = lookup.name_to_id_cache.get(&lookup.services, owner, &[]) {
+        let get_callers: Vec<&'static str> = [CONVERT_MOB_OWNER_GET].into_iter().chain(callers.iter().copied()).collect();
+        if let Some(profile) = lookup.name_to_id_cache.get(&lookup.services, owner, &get_callers) {
             Some(profile.id)
         } else if lookup.uses_authentication {
             let mut callback = MobOwnerCallback { name_to_id_cache: &lookup.name_to_id_cache, profiles: Vec::new() };
-            let _ = lookup.services.find_profiles_by_names(&[owner], &[], &mut callback);
+            let lookup_callers: Vec<&'static str> = [LOOKUP_PLAYERS, CONVERT_MOB_OWNER_LOOKUP].into_iter().chain(callers.iter().copied()).collect();
+            let _ = lookup.services.find_profiles_by_names(&[owner], &lookup_callers, &mut callback);
             callback.profiles.first().map(|profile| profile.id)
         } else {
             Some(offline_uuid(owner))
