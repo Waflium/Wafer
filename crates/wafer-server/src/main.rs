@@ -1,6 +1,10 @@
 use wafer_server::logging;
 
 fn main() {
+    #[cfg(windows)]
+    unsafe {
+        windows_sys::Win32::Media::timeBeginPeriod(1);
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let server_main = std::thread::Builder::new()
         .name("main".into())
