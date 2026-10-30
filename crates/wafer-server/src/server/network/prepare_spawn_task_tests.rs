@@ -45,3 +45,23 @@ fn a_data_fixer_exception_while_placing_disconnects_the_player() {
     assert!(server.player_list.is_empty());
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn the_join_spawn_search_finishes_through_server_tasks() {
+    use crate::server::level::player_spawn_finder::Finished;
+    let mut server = testing::server_with(testing::flat_config());
+    let id = server.find_spawn(0, wafer_core::BlockPos::new(0, -60, 0));
+    assert!(server.spawn_finders[&id].finished().is_none());
+    server.managed_block(|server| server.spawn_finders[&id].finished().is_some());
+    assert!(matches!(server.spawn_finders[&id].finished(), Some(Finished::Spawn(_))));
+}
+
+#[test]
+fn a_cancelled_spawn_search_never_finishes_with_a_position() {
+    use crate::server::level::player_spawn_finder::Finished;
+    let mut server = testing::server_with(testing::flat_config());
+    let id = server.find_spawn(0, wafer_core::BlockPos::new(0, -60, 0));
+    server.spawn_finders.get_mut(&id).unwrap().cancel();
+    while server.poll_task() {}
+    assert!(matches!(server.spawn_finders[&id].finished(), Some(Finished::Failed)));
+}

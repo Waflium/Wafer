@@ -105,7 +105,7 @@ pub struct ChunkCache {
     ticking_ready: Vec<(ChunkPos, FutureId)>,
     chunks_ready_to_send: Vec<ChunkPos>,
     structure_starts_available: Vec<(ChunkPos, FastMap<StructureHolder, i32>)>,
-    pub server_tasks: Option<(ServerTasks, usize)>,
+    pub(crate) server_tasks: Option<(ServerTasks, usize)>,
     world_gen_chunk_entities: Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)>,
     legacy_chunk_entities: Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)>,
     world_gen_entity_teams: Vec<(u128, String)>,
@@ -2344,7 +2344,7 @@ mod tests {
     use wafer_core::{BlockPos, ChunkPos, Vec3};
     use wafer_data::{DimensionType, blocks};
 
-    use super::{ChunkCache, ChunkStatus, WorkResult};
+    use super::{ChunkCache, ChunkStatus, MainThreadTask, WorkResult};
     use crate::network::configuration::ClientInfo;
     use crate::network::connection::Outbound;
     use crate::network::login::Profile;
@@ -2484,6 +2484,67 @@ mod tests {
             assert_eq!(persisted(&cache, x, z), None, "{x} {z}");
         }
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn flushed_saves_write_the_holders_in_their_creation_order() {
+        let dir = std::env::temp_dir().join(format!("wafer-save-order-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), Some(RegionStorage::new(dir.clone(), false)));
+        let targets = [ChunkPos::new(5, 3), ChunkPos::new(1, 1), ChunkPos::new(3, 7), ChunkPos::new(0, 0)];
+        for pos in targets {
+            cache.chunk(pos);
+            cache.set_block_state(BlockPos::new(pos.min_block_x(), -60, pos.min_block_z()), blocks::STONE.default_state());
+        }
+        let creation_order: Vec<ChunkPos> = cache.holders.ordered_keys().into_iter().map(ChunkPos::unpack).filter(|pos| targets.contains(pos)).collect();
+        cache.save(0, true).unwrap();
+        let header = std::fs::read(dir.join("r.0.0.mca")).unwrap();
+        let mut by_sector: Vec<(u32, ChunkPos)> = targets.iter().map(|&pos| (u32::from_be_bytes(header[(pos.x + pos.z * 32) as usize * 4..][..4].try_into().unwrap()) >> 8, pos)).collect();
+        by_sector.sort();
+        assert_eq!(by_sector.into_iter().map(|(_, pos)| pos).collect::<Vec<_>>(), creation_order);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn structure_starts_are_queued_on_the_server_task_queue() {
+        let tasks: crate::server::ServerTasks = Default::default();
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), None);
+        cache.server_tasks = Some((tasks.clone(), 2));
+        cache.chunk(ChunkPos::new(0, 0));
+        assert!(tasks.borrow().iter().any(|task| matches!(task, crate::server::Task::StructureStarts { level: 2, pos, .. } if *pos == ChunkPos::new(0, 0))));
+        assert!(cache.take_structure_starts_available().is_empty());
+    }
+
+    #[test]
+    fn the_full_step_waits_for_the_main_thread_task_queue() {
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), None);
+        let future = cache.begin_chunk_load(ChunkPos::new(2, 2)).unwrap();
+        while cache.distance_manager.main_thread_tasks.iter().all(|task| !matches!(task, MainThreadTask::FullStep(_))) {
+            assert!(cache.run_idle_step());
+        }
+        assert!(!cache.is_future_done(future));
+        assert!(cache.loaded_chunk(ChunkPos::new(2, 2)).is_none());
+        while !cache.is_future_done(future) {
+            assert!(cache.run_idle_step());
+        }
+        assert!(cache.loaded_chunk(ChunkPos::new(2, 2)).is_some());
+    }
+
+    #[test]
+    fn chunks_become_ticking_after_the_level_handled_them() {
+        let mut level = testing::level();
+        level.chunks.add_ticket_with_radius(super::TicketType::Forced, ChunkPos::new(0, 0), 1);
+        let pos = ChunkPos::new(0, 0);
+        let mut seen_unhandled = false;
+        while level.chunks.run_idle_step() {
+            if !level.chunks.ticking_ready.is_empty() {
+                assert!(!level.chunks.is_ticking(pos));
+                seen_unhandled = true;
+                level.process_chunk_events();
+                assert!(level.chunks.is_ticking(pos));
+            }
+        }
+        assert!(seen_unhandled);
     }
 
     #[test]

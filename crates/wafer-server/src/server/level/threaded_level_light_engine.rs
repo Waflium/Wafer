@@ -188,3 +188,39 @@ impl ThreadedLevelLightEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::level::chunk_holder::Futures;
+
+    #[test]
+    fn light_tasks_run_closest_chunk_first_and_in_order_within_a_chunk() {
+        let mut futures = Futures::default();
+        let (a, b, c) = (futures.new_pending(), futures.new_pending(), futures.new_pending());
+        let mut engine = ThreadedLevelLightEngine::new(-64, 384, true);
+        engine.add_task(TaskType::PostUpdate, LightTask::CompleteFuture(ChunkPos::new(1, 0), a), 10);
+        engine.add_task(TaskType::PostUpdate, LightTask::CompleteFuture(ChunkPos::new(2, 0), b), 3);
+        engine.add_task(TaskType::PostUpdate, LightTask::CompleteFuture(ChunkPos::new(1, 0), c), 10);
+        let mut chunks = FastMap::default();
+        engine.try_schedule_update();
+        assert!(engine.run_worker(&mut chunks));
+        assert_eq!(engine.completed_futures, [b, a, c]);
+    }
+
+    #[test]
+    fn light_updates_wait_for_the_update_to_be_scheduled() {
+        let mut futures = Futures::default();
+        let future = futures.new_pending();
+        let mut engine = ThreadedLevelLightEngine::new(-64, 384, true);
+        let mut chunks = FastMap::default();
+        engine.add_task(TaskType::PostUpdate, LightTask::CompleteFuture(ChunkPos::new(0, 0), future), 0);
+        engine.run_worker(&mut chunks);
+        assert!(engine.completed_futures.is_empty());
+        assert!(engine.has_work());
+        engine.try_schedule_update();
+        engine.run_worker(&mut chunks);
+        assert_eq!(engine.completed_futures, [future]);
+        assert!(!engine.has_work());
+    }
+}
