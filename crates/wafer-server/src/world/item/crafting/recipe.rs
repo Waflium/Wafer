@@ -63,6 +63,35 @@ impl Recipe {
         }
     }
 
+    pub fn get_class_name(&self) -> &'static str {
+        match self {
+            Recipe::Crafting(CraftingRecipe::Shaped(_)) => "net.minecraft.world.item.crafting.ShapedRecipe",
+            Recipe::Crafting(CraftingRecipe::Shapeless(_)) => "net.minecraft.world.item.crafting.ShapelessRecipe",
+            Recipe::Crafting(CraftingRecipe::Transmute(_)) => "net.minecraft.world.item.crafting.TransmuteRecipe",
+            Recipe::Crafting(CraftingRecipe::Dye(_)) => "net.minecraft.world.item.crafting.DyeRecipe",
+            Recipe::Crafting(CraftingRecipe::Imbue(_)) => "net.minecraft.world.item.crafting.ImbueRecipe",
+            Recipe::Crafting(CraftingRecipe::BannerDuplicate(_)) => "net.minecraft.world.item.crafting.BannerDuplicateRecipe",
+            Recipe::Crafting(CraftingRecipe::BookCloning(_)) => "net.minecraft.world.item.crafting.BookCloningRecipe",
+            Recipe::Crafting(CraftingRecipe::DecoratedPot(_)) => "net.minecraft.world.item.crafting.DecoratedPotRecipe",
+            Recipe::Crafting(CraftingRecipe::FireworkRocket(_)) => "net.minecraft.world.item.crafting.FireworkRocketRecipe",
+            Recipe::Crafting(CraftingRecipe::FireworkStar(_)) => "net.minecraft.world.item.crafting.FireworkStarRecipe",
+            Recipe::Crafting(CraftingRecipe::FireworkStarFade(_)) => "net.minecraft.world.item.crafting.FireworkStarFadeRecipe",
+            Recipe::Crafting(CraftingRecipe::MapExtending(_)) => "net.minecraft.world.item.crafting.MapExtendingRecipe",
+            Recipe::Crafting(CraftingRecipe::RepairItem(_)) => "net.minecraft.world.item.crafting.RepairItemRecipe",
+            Recipe::Crafting(CraftingRecipe::ShieldDecoration(_)) => "net.minecraft.world.item.crafting.ShieldDecorationRecipe",
+            Recipe::Cooking(recipe) => match recipe.get_type() {
+                RecipeType::Blasting => "net.minecraft.world.item.crafting.BlastingRecipe",
+                RecipeType::Smoking => "net.minecraft.world.item.crafting.SmokingRecipe",
+                RecipeType::CampfireCooking => "net.minecraft.world.item.crafting.CampfireCookingRecipe",
+                _ => "net.minecraft.world.item.crafting.SmeltingRecipe",
+            },
+            Recipe::Stonecutter(_) => "net.minecraft.world.item.crafting.StonecutterRecipe",
+            Recipe::Smithing(SmithingRecipe::Transform(_)) => "net.minecraft.world.item.crafting.SmithingTransformRecipe",
+            Recipe::Smithing(SmithingRecipe::Trim(_)) => "net.minecraft.world.item.crafting.SmithingTrimRecipe",
+            Recipe::Brewing(_) => "net.minecraft.world.item.crafting.BrewingRecipe",
+        }
+    }
+
     pub fn is_special(&self) -> bool {
         match self {
             Recipe::Crafting(recipe) => recipe.is_special(),

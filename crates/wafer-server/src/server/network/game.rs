@@ -843,6 +843,24 @@ mod tests {
         level.player_mut(other).load_nbt(&saved).unwrap();
         assert_eq!(level.player(other).inventory.slots[36], Some(sword));
     }
+
+    #[test]
+    fn wrong_recipe_types_throw_vanilla_class_cast_exceptions() {
+        let furnace = place_recipe_class_cast_exception(MenuKind::Furnace(crate::world::item::crafting::recipe_type::RecipeType::Smelting), "net.minecraft.world.item.crafting.ShapelessRecipe");
+        assert_eq!(
+            furnace.print_stack_trace().lines().take(3).collect::<Vec<_>>(),
+            [
+                "java.lang.ClassCastException: class net.minecraft.world.item.crafting.ShapelessRecipe cannot be cast to class net.minecraft.world.item.crafting.AbstractCookingRecipe (net.minecraft.world.item.crafting.ShapelessRecipe and net.minecraft.world.item.crafting.AbstractCookingRecipe are in unnamed module of loader 'app')",
+                "\tat net.minecraft.world.inventory.AbstractFurnaceMenu$1.recipeMatches(AbstractFurnaceMenu.java:191)",
+                "\tat net.minecraft.recipebook.ServerPlaceRecipe.placeRecipe(ServerPlaceRecipe.java:89)",
+            ]
+        );
+        let crafting = place_recipe_class_cast_exception(MenuKind::Crafting, "net.minecraft.world.item.crafting.SmeltingRecipe");
+        assert!(crafting.print_stack_trace().starts_with("java.lang.ClassCastException: class net.minecraft.world.item.crafting.CraftingInput cannot be cast to class net.minecraft.world.item.crafting.SingleRecipeInput"));
+        assert_eq!(crafting.print_stack_trace().lines().count(), 15);
+        let inventory = place_recipe_class_cast_exception(MenuKind::Inventory, "net.minecraft.world.item.crafting.SmeltingRecipe");
+        assert!(inventory.print_stack_trace().contains("\tat net.minecraft.world.inventory.AbstractCraftingMenu.handlePlacement(AbstractCraftingMenu.java:46)\n\tat net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlaceRecipe(ServerGamePacketListenerImpl.java:2232)"));
+    }
 }
 
 fn was_block_placement_attempt(player: &crate::server::level::server_player::ServerPlayer, stack: &ItemStack) -> bool {
@@ -1163,10 +1181,11 @@ impl ServerLevel {
                     display_info.display.display.write(w);
                 }),
                 Some(PostPlaceAction::Nothing) => {}
-                None => error!(
-                    "Failed to handle packet ServerboundPlaceRecipePacket[containerId={container_id}, recipe=RecipeDisplayId[index={}], useMaxItems={use_max_items}], suppressing error",
-                    display_info.display.id.0
-                ),
+                None => {
+                    let exception = place_recipe_class_cast_exception(menu.kind, recipe.value.get_class_name());
+                    self.restore_container_menu(id, menu);
+                    crate::crash_report::throw_java_exception(exception);
+                }
             }
         }
         self.restore_container_menu(id, menu);
@@ -1533,6 +1552,55 @@ impl crate::server::Server {
         }
         Ok(())
     }
+}
+
+const HANDLE_PLACE_RECIPE: [&str; 9] = [
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlaceRecipe(ServerGamePacketListenerImpl.java:2232)",
+    "net.minecraft.network.protocol.game.ServerboundPlaceRecipePacket.handle(ServerboundPlaceRecipePacket.java:29)",
+    "net.minecraft.network.protocol.game.ServerboundPlaceRecipePacket.handle(ServerboundPlaceRecipePacket.java:10)",
+    "net.minecraft.network.PacketProcessor$ListenerAndPacket.handle(PacketProcessor.java:55)",
+    "net.minecraft.network.PacketProcessor.processQueuedPackets(PacketProcessor.java:38)",
+    "net.minecraft.server.MinecraftServer.processPacketsAndTick(MinecraftServer.java:1011)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:752)",
+    "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+const PLACE_RECIPE: [&str; 3] = [
+    "net.minecraft.recipebook.ServerPlaceRecipe.placeRecipe(ServerPlaceRecipe.java:89)",
+    "net.minecraft.recipebook.ServerPlaceRecipe.tryPlaceRecipe(ServerPlaceRecipe.java:69)",
+    "net.minecraft.recipebook.ServerPlaceRecipe.placeRecipe(ServerPlaceRecipe.java:54)",
+];
+
+fn place_recipe_class_cast_exception(menu: MenuKind, recipe_class: &'static str) -> crate::util::java_throwable::JavaThrowable {
+    let (from, to, mut frames) = match menu {
+        MenuKind::Furnace(_) => (
+            recipe_class,
+            "net.minecraft.world.item.crafting.AbstractCookingRecipe",
+            [&["net.minecraft.world.inventory.AbstractFurnaceMenu$1.recipeMatches(AbstractFurnaceMenu.java:191)"][..], &PLACE_RECIPE, &["net.minecraft.world.inventory.AbstractFurnaceMenu.handlePlacement(AbstractFurnaceMenu.java:177)"]].concat(),
+        ),
+        MenuKind::Crafting => (
+            "net.minecraft.world.item.crafting.CraftingInput",
+            "net.minecraft.world.item.crafting.SingleRecipeInput",
+            vec![
+                "net.minecraft.world.item.crafting.SingleItemRecipe.matches(SingleItemRecipe.java:12)",
+                "net.minecraft.world.item.crafting.RecipeManager.getRecipeFor(RecipeManager.java:116)",
+                "net.minecraft.world.inventory.CraftingMenu.slotChangedCraftingGrid(CraftingMenu.java:58)",
+                "net.minecraft.world.inventory.CraftingMenu.finishPlacingRecipe(CraftingMenu.java:94)",
+                "net.minecraft.world.inventory.AbstractCraftingMenu.handlePlacement(AbstractCraftingMenu.java:72)",
+            ],
+        ),
+        _ => (
+            recipe_class,
+            "net.minecraft.world.item.crafting.CraftingRecipe",
+            [&["net.minecraft.world.inventory.AbstractCraftingMenu$1.recipeMatches(AbstractCraftingMenu.java:61)"][..], &PLACE_RECIPE, &["net.minecraft.world.inventory.AbstractCraftingMenu.handlePlacement(AbstractCraftingMenu.java:46)"]].concat(),
+        ),
+    };
+    frames.extend(HANDLE_PLACE_RECIPE);
+    crate::util::java_throwable::JavaThrowable::new(
+        format!("java.lang.ClassCastException: class {from} cannot be cast to class {to} ({from} and {to} are in unnamed module of loader 'app')"),
+        frames,
+    )
 }
 
 #[cfg(test)]
