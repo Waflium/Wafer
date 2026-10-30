@@ -23,7 +23,7 @@ fn block_entities_save_like_vanilla() {
         let state = Block::by_name(block).unwrap().default_state();
         let Nbt::Compound(mut tag) = crate::nbt::parse_fully(snbt).unwrap() else { panic!("{snbt}") };
         tag.push(("id".into(), Nbt::String(state.block().block_entity_type().unwrap().name().into())));
-        let entity = BlockEntity::load_static(BlockPos::new(1, 64, -3), state, &Nbt::Compound(tag)).unwrap();
+        let entity = BlockEntity::load_static(BlockPos::new(1, 64, -3), state, &Nbt::Compound(tag), &[]).unwrap();
         let saved = hex(&entity.save_with_full_metadata());
         if saved != save {
             failures.push(format!("{block} {snbt}\n  save: {}\n  want: {save}", crate::nbt::to_string(&entity.save_with_full_metadata())));

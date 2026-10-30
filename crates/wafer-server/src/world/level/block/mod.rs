@@ -551,6 +551,12 @@ pub trait BlockBehaviour: Send + Sync {
     }
 }
 
+pub fn class_name(block: wafer_data::Block) -> String {
+    let class = block.info().classes.first().copied().unwrap_or("Block");
+    let package = if matches!(class, "MovingPistonBlock" | "PistonBaseBlock" | "PistonHeadBlock") { "net.minecraft.world.level.block.piston" } else { "net.minecraft.world.level.block" };
+    format!("{package}.{class}")
+}
+
 pub fn block_fall_on(level: &mut ServerLevel, state: BlockState, _pos: BlockPos, entity: EntityId, fall_distance: f64) {
     let reduced = fall_distance * (1.0f32 - state.block().info().fall_distance_reduction) as f64;
     level.cause_fall_damage(entity, reduced, 1.0, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::FALL));

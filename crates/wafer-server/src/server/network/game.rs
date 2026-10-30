@@ -1603,7 +1603,7 @@ fn place_recipe_class_cast_exception(menu: MenuKind, recipe_class: &'static str)
     };
     frames.extend(HANDLE_PLACE_RECIPE);
     crate::util::java_throwable::JavaThrowable::new(
-        format!("java.lang.ClassCastException: class {from} cannot be cast to class {to} ({from} and {to} are in unnamed module of loader 'app')"),
+        crate::util::java_runtime::class_cast_exception(from, to),
         frames,
     )
 }

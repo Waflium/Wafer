@@ -456,7 +456,7 @@ pub fn read(nbt: &Nbt, dimension: &DimensionType, seed: i64) -> Result<ReadChunk
     chunk.light_correct = nbt.get("isLightOn").and_then(Nbt::as_i64).is_some_and(|b| b != 0);
     let block_entities = nbt.get("block_entities").map(Nbt::as_list).unwrap_or(&[]);
     if status == ChunkStatus::Full {
-        chunk.load_block_entities(block_entities);
+        chunk.post_load_block_entities = block_entities.to_vec();
     } else {
         for tag in block_entities {
             chunk.block_entities.pending.insert(crate::world::level::block::entity::BlockEntity::get_pos_from_tag(chunk.pos, tag), tag.clone());

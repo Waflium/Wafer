@@ -21,6 +21,10 @@ pub fn input_arguments() -> Vec<String> {
     Vec::new()
 }
 
+pub fn class_cast_exception(from: &str, to: &str) -> String {
+    format!("java.lang.ClassCastException: class {from} cannot be cast to class {to} ({from} and {to} are in unnamed module of loader 'app')")
+}
+
 pub fn current_time_millis() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
 }

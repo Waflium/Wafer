@@ -306,7 +306,7 @@ impl<'a> WorldGenRegion<'a> {
             let entity = if tag.get("id").and_then(wafer_protocol::nbt::Nbt::as_str) == Some("DUMMY") {
                 if state.has_block_entity() { BlockEntity::new_for(pos, state) } else { None }
             } else {
-                BlockEntity::load_static(pos, state, tag)
+                BlockEntity::load_static(pos, state, tag, &["net.minecraft.server.level.WorldGenRegion.getBlockEntity(WorldGenRegion.java:247)"])
             };
             if let Some(entity) = entity {
                 chunk.block_entities.pending.remove(&pos);

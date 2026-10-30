@@ -18,6 +18,7 @@ pub mod creaking_heart_block_entity;
 pub mod container_openers_counter;
 pub mod crafter_block_entity;
 pub mod decorated_pot_block_entity;
+mod create_frames;
 mod dispenser_block_entity;
 pub mod decorated_pot_pattern;
 pub mod enchanting_table_block_entity;
@@ -302,13 +303,18 @@ impl BlockEntity {
         PathElement::Text(format!("{}@BlockPos{{x={}, y={}, z={}}}", self.get_name_for_reporting(), self.pos.x, self.pos.y, self.pos.z))
     }
 
-    pub fn load_static(pos: BlockPos, state: BlockState, tag: &Nbt) -> Option<BlockEntity> {
+    pub fn load_static(pos: BlockPos, state: BlockState, tag: &Nbt, callers: &[&'static str]) -> Option<BlockEntity> {
         let Some(ty) = tag.get("id").and_then(Nbt::as_str).and_then(crate::commands::arguments::parse_identifier).and_then(|id| BlockEntityType::by_name(&id)) else {
             error!("Skipping block entity with invalid type: {}", tag.get("id").map_or("null".to_string(), crate::nbt::to_string));
             return None;
         };
         let Some(mut entity) = BlockEntity::new(ty, pos, state) else {
-            error!("Failed to create block entity {} for block {state:?} at position {pos} ", ty.name());
+            let mut thrown = create_exception(ty, pos, state);
+            thrown.stack_trace.push(LOAD_STATIC_CREATE);
+            thrown.stack_trace.extend_from_slice(callers);
+            thrown.stack_trace.extend(crate::server::main_thread_frames::current());
+            error!("Failed to create block entity {} for block {state:?} at position {pos} 
+{}", block_entity_type_to_string(ty), thrown.print_stack_trace().trim_end());
             return None;
         };
         let _collector = tag_value_input::ScopedCollector::new(entity.problem_path(), BLOCK_ENTITY_LOGGER).logging_as("Server thread");
@@ -808,6 +814,28 @@ pub fn long_value(tag: &Nbt) -> Option<i64> {
 
 pub fn int_or(input: &Nbt, key: &str, default: i32) -> i32 {
     tag_value_input::get_numeric(input, key).and_then(int_value).unwrap_or(default)
+}
+
+const LOAD_STATIC_CREATE: &str = "net.minecraft.world.level.block.entity.BlockEntity.loadStatic(BlockEntity.java:197)";
+
+fn block_entity_type_to_string(ty: BlockEntityType) -> String {
+    static HASHES: std::sync::Mutex<Vec<Option<i32>>> = std::sync::Mutex::new(Vec::new());
+    let mut hashes = HASHES.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let index = ty.0 as usize;
+    if hashes.len() <= index {
+        hashes.resize(index + 1, None);
+    }
+    let hash = *hashes[index].get_or_insert_with(crate::util::java_collections::identity_hash_code);
+    format!("net.minecraft.world.level.block.entity.BlockEntityType@{hash:x}")
+}
+
+fn create_exception(ty: BlockEntityType, pos: BlockPos, state: BlockState) -> crate::util::java_throwable::JavaThrowable {
+    let description = if ty == types::BANNER {
+        crate::util::java_runtime::class_cast_exception(&crate::world::level::block::class_name(state.block()), "net.minecraft.world.level.block.AbstractBannerBlock")
+    } else {
+        format!("java.lang.IllegalStateException: Invalid block entity {} // {} state at {pos}, got {state:?}", ty.name(), canonical_class_name(ty.name()))
+    };
+    crate::util::java_throwable::JavaThrowable::new(description, create_frames::create_frames(ty.name()).to_vec())
 }
 
 fn canonical_class_name(type_name: &str) -> &'static str {

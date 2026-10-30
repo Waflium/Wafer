@@ -1393,6 +1393,8 @@ impl ChunkCache {
             if !chunk.legacy_entities.is_empty() {
                 self.legacy_chunk_entities.push((pos, std::mem::take(&mut chunk.legacy_entities)));
             }
+            let block_entities = std::mem::take(&mut chunk.post_load_block_entities);
+            chunk.load_block_entities(&block_entities);
             chunk.loaded = true;
             chunk.register_all_block_entities_after_level_load(&mut self.block_entity_tickers);
             chunk.set_unsaved_listener(self.unsaved_listener.0.clone());

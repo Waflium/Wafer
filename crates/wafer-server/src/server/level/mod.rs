@@ -134,6 +134,14 @@ const WORLD_GEN_CHUNK_ENTITIES_SITE: [&str; 7] = [
     "net.minecraft.world.level.chunk.status.ChunkStatusTasks.lambda$full$0(ChunkStatusTasks.java:165)",
     "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
 ];
+const PREPARE_TICKING_CHUNK_POST_PROCESS: [&str; 6] = [
+    "net.minecraft.world.level.chunk.LevelChunk.postProcessGeneration(LevelChunk.java:607)",
+    "net.minecraft.server.level.ChunkMap.lambda$prepareTickingChunk$2(ChunkMap.java:712)",
+    "net.minecraft.server.level.ChunkResult$Success.map(ChunkResult.java:63)",
+    "net.minecraft.server.level.ChunkMap.lambda$prepareTickingChunk$1(ChunkMap.java:710)",
+    "java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:667)",
+    "java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:503)",
+];
 fn chunk_entities_site(caller_frames: &[&'static str]) -> Vec<&'static str> {
     let mut site = vec![crate::world::entity::entity_save::LOAD_ENTITY_RECURSIVE_REASON];
     site.extend(LOAD_ENTITIES_RECURSIVE_STREAM);
@@ -1039,8 +1047,12 @@ impl ServerLevel {
                 }
             }
         }
-        for pos in self.chunks.chunk(chunk_pos).block_entities.pending.keys().collect::<Vec<_>>() {
-            self.chunks.block_entity(pos, EntityCreationType::Check);
+        let pending: Vec<BlockPos> = self.chunks.chunk(chunk_pos).block_entities.pending.keys().collect();
+        if !pending.is_empty() {
+            let _frames = crate::server::main_thread_frames::enter(PREPARE_TICKING_CHUNK_POST_PROCESS.into_iter().chain(crate::server::main_thread_frames::CHUNK_SOURCE_TASK));
+            for pos in pending {
+                self.chunks.block_entity(pos, EntityCreationType::Check);
+            }
         }
         self.chunks.chunk(chunk_pos).block_entities.pending.clear();
     }

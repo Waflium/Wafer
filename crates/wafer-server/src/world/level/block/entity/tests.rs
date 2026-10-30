@@ -72,6 +72,9 @@ fn block_entities_are_saved_with_their_chunk() {
     assert_eq!(list[0].get("id"), Some(&Nbt::String("minecraft:furnace".into())));
     assert_eq!(list[0].get("keepPacked"), Some(&Nbt::Byte(0)));
     let mut read = crate::world::level::chunk::serialization::read(&saved, dimension, 0).unwrap().chunk;
+    assert!(read.block_entities.map.is_empty());
+    let post_load = std::mem::take(&mut read.post_load_block_entities);
+    read.load_block_entities(&post_load);
     let entity = read.block_entities.map.get(&pos).unwrap();
     assert_eq!(entity.container_base().unwrap().items[0], ItemStack::new(items::RAW_IRON, 3));
     let mut packed = list[0].clone();
@@ -415,4 +418,28 @@ fn chunk_packets_with_oversized_block_entity_text_fail_like_vanillas_codecs() {
     );
     let root: Vec<String> = fault.root().frames.iter().map(short).collect();
     assert_eq!(root[..8], ["writeUTF(DataOutputStream.java:370)", "writeUTF(DataOutputStream.java:338)", "writeUTF(ByteBufOutputStream.java:160)", "write(StringTag.java:76)", "write(ListTag.java:193)", "writeNamedTag(CompoundTag.java:506)", "write(CompoundTag.java:208)", "writeNamedTag(CompoundTag.java:506)"]);
+}
+
+#[test]
+fn failed_creations_throw_vanilla_exceptions() {
+    let pos = BlockPos::new(0, -62, 0);
+    let chest = super::create_exception(wafer_data::block_entity_types::CHEST, pos, blocks::DIRT.default_state());
+    assert_eq!(
+        chest.print_stack_trace(),
+        "java.lang.IllegalStateException: Invalid block entity minecraft:chest // net.minecraft.world.level.block.entity.ChestBlockEntity state at BlockPos{x=0, y=-62, z=0}, got Block{minecraft:dirt}\n\
+\tat net.minecraft.world.level.block.entity.BlockEntity.validateBlockState(BlockEntity.java:65)\n\
+\tat net.minecraft.world.level.block.entity.BlockEntity.<init>(BlockEntity.java:59)\n\
+\tat net.minecraft.world.level.block.entity.BaseContainerBlockEntity.<init>(BaseContainerBlockEntity.java:41)\n\
+\tat net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity.<init>(RandomizableContainerBlockEntity.java:25)\n\
+\tat net.minecraft.world.level.block.entity.ChestBlockEntity.<init>(ChestBlockEntity.java:67)\n\
+\tat net.minecraft.world.level.block.entity.ChestBlockEntity.<init>(ChestBlockEntity.java:71)\n\
+\tat net.minecraft.world.level.block.entity.BlockEntityType.create(BlockEntityType.java:25)\n"
+    );
+    let banner = super::create_exception(wafer_data::block_entity_types::BANNER, pos, blocks::DIRT.default_state());
+    assert_eq!(
+        banner.print_stack_trace(),
+        "java.lang.ClassCastException: class net.minecraft.world.level.block.Block cannot be cast to class net.minecraft.world.level.block.AbstractBannerBlock (net.minecraft.world.level.block.Block and net.minecraft.world.level.block.AbstractBannerBlock are in unnamed module of loader 'app')\n\
+\tat net.minecraft.world.level.block.entity.BannerBlockEntity.<init>(BannerBlockEntity.java:32)\n\
+\tat net.minecraft.world.level.block.entity.BlockEntityType.create(BlockEntityType.java:25)\n"
+    );
 }

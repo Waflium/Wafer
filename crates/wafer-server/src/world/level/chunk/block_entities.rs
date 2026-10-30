@@ -142,6 +142,23 @@ pub struct ChunkBlockEntities {
     pub tickers_in_level: HashMap<BlockPos, (u64, BlockEntityTicker)>,
 }
 
+const GET_BLOCK_ENTITY: [&str; 3] = [
+    "net.minecraft.world.level.chunk.LevelChunk.promotePendingBlockEntity(LevelChunk.java:624)",
+    "net.minecraft.world.level.chunk.LevelChunk.getBlockEntity(LevelChunk.java:381)",
+    "net.minecraft.world.level.chunk.LevelChunk.getBlockEntity(LevelChunk.java:373)",
+];
+const GET_BLOCK_ENTITY_FROM_SET_BLOCK_STATE: [&str; 3] = [
+    "net.minecraft.world.level.chunk.LevelChunk.promotePendingBlockEntity(LevelChunk.java:624)",
+    "net.minecraft.world.level.chunk.LevelChunk.getBlockEntity(LevelChunk.java:381)",
+    "net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:331)",
+];
+const POST_LOAD_CHUNK_LOAD_STATIC: &str = "net.minecraft.world.level.chunk.storage.SerializableChunkData.lambda$postLoadChunk$0(SerializableChunkData.java:506)";
+const POST_LOAD_CHUNK: [&str; 3] = [
+    "net.minecraft.world.level.chunk.LevelChunk.runPostLoad(LevelChunk.java:525)",
+    "net.minecraft.world.level.chunk.status.ChunkStatusTasks.lambda$full$0(ChunkStatusTasks.java:165)",
+    "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
+];
+
 impl LevelChunk {
     fn is_in_level(&self) -> bool {
         self.loaded
@@ -150,7 +167,7 @@ impl LevelChunk {
     pub fn get_block_entity(&mut self, pos: BlockPos, creation: EntityCreationType, tickers: &mut BlockEntityTickers) -> Option<&mut BlockEntity> {
         if !self.block_entities.map.contains_key(&pos)
             && let Some(tag) = self.block_entities.pending.remove(&pos)
-            && self.promote_pending_block_entity(pos, &tag, tickers)
+            && self.promote_pending_block_entity(pos, &tag, tickers, if creation == EntityCreationType::Immediate { &GET_BLOCK_ENTITY_FROM_SET_BLOCK_STATE } else { &GET_BLOCK_ENTITY })
         {
             return self.block_entities.map.get_mut(&pos);
         }
@@ -226,7 +243,7 @@ impl LevelChunk {
         removed
     }
 
-    fn promote_pending_block_entity(&mut self, pos: BlockPos, tag: &Nbt, tickers: &mut BlockEntityTickers) -> bool {
+    fn promote_pending_block_entity(&mut self, pos: BlockPos, tag: &Nbt, tickers: &mut BlockEntityTickers, callers: &[&'static str]) -> bool {
         let state = self.block_state(pos);
         let entity = if tag.get("id").and_then(Nbt::as_str) == Some("DUMMY") {
             if state.has_block_entity() {
@@ -236,7 +253,7 @@ impl LevelChunk {
                 None
             }
         } else {
-            BlockEntity::load_static(pos, state, tag)
+            BlockEntity::load_static(pos, state, tag, callers)
         };
         match entity {
             Some(entity) => {
@@ -333,6 +350,10 @@ impl LevelChunk {
     }
 
     pub fn load_block_entities(&mut self, tags: &[Nbt]) {
+        if tags.is_empty() {
+            return;
+        }
+        let _frames = crate::server::main_thread_frames::enter(POST_LOAD_CHUNK.into_iter().chain(crate::server::main_thread_frames::CHUNK_SOURCE_TASK));
         for tag in tags {
             let keep_packed = tag.get("keepPacked").and_then(crate::world::level::block::entity::int_value).is_some_and(|b| b as i8 != 0);
             let pos = BlockEntity::get_pos_from_tag(self.pos, tag);
@@ -340,7 +361,7 @@ impl LevelChunk {
                 self.block_entities.pending.insert(pos, tag.clone());
             } else {
                 let state = self.block_state(pos);
-                if let Some(entity) = BlockEntity::load_static(pos, state, tag) {
+                if let Some(entity) = BlockEntity::load_static(pos, state, tag, &[POST_LOAD_CHUNK_LOAD_STATIC]) {
                     self.set_block_entity(entity);
                 }
             }
