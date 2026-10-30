@@ -250,6 +250,21 @@ fn extra_fall_particles_are_spawned_once() {
 }
 
 #[test]
+fn a_shoulder_entity_that_fails_to_load_is_thrown_to_the_caller_and_kept() {
+    let mut server = testing::server();
+    let player = join(&mut server, "Shoulder");
+    let bad = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:arrow".into())), ("pickup".into(), Nbt::Byte(3))].into());
+    let level = &mut server.levels[0];
+    level.game_time = 100;
+    level.player_mut(player).set_shoulder_entity_left(bad.clone());
+    let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| level.remove_entities_on_shoulder(player))).unwrap_err();
+    let reported = thrown.downcast::<crate::crash_report::ReportedException>().expect("a reported exception");
+    assert_eq!(reported.0.title(), "Loading entity NBT");
+    assert_eq!(reported.0.exception(), "java.lang.ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3");
+    assert_eq!(level.player(player).shoulder_entity_left, bad);
+}
+
+#[test]
 fn data_get_lists_ender_pearls_in_other_dimensions() {
     use crate::commands::arguments::selector::entity_world::EntityWorld;
     let mut server = testing::server();

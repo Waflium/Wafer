@@ -94,6 +94,11 @@ impl JavaThrowable {
         self.description.split_once(": ").map_or(self.description.as_str(), |(class_name, _)| class_name)
     }
 
+    pub fn is_java_error(&self) -> bool {
+        let class_name = self.class_name();
+        class_name.starts_with("java.") && class_name.ends_with("Error")
+    }
+
     pub fn message(&self) -> Option<&str> {
         self.description.split_once(": ").map(|(_, message)| message)
     }

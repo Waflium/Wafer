@@ -89,7 +89,10 @@ impl TagMap {
     pub fn put(&mut self, key: &str, value: Nbt) {
         match self.entries.iter_mut().find(|(k, _)| k == key) {
             Some((_, slot)) => *slot = value,
-            None => self.entries.push((key.to_string(), value)),
+            None => {
+                self.entries.push((key.to_string(), value));
+                self.capacity = self.table_capacity() as u32;
+            }
         }
     }
 }
@@ -498,6 +501,24 @@ pub fn java_hash_map_order<S: AsRef<str>>(keys: &[S]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copies_insert_in_iteration_order_with_the_default_capacity() {
+        let fields: TagMap = ["id", "Owner", "SkullOwner"].into_iter().map(|key| (key.to_string(), Nbt::Byte(0))).collect();
+        let copy = fields.shallow_copy().copy();
+        assert_eq!(copy.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(), ["Owner", "SkullOwner", "id"]);
+        assert_eq!(copy.table_capacity(), 16);
+    }
+
+    #[test]
+    fn table_capacity_grows_with_the_entry_count() {
+        let mut fields = TagMap::new();
+        assert_eq!(fields.table_capacity(), 16);
+        for i in 0..13 {
+            fields.put(&format!("k{i}"), Nbt::Byte(0));
+        }
+        assert_eq!(fields.table_capacity(), 32);
+    }
 
     #[test]
     fn compound_layout() {

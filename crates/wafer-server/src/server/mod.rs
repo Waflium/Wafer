@@ -1250,6 +1250,9 @@ impl Server {
                 }
             },
         };
+        if throwable.is_java_error() {
+            std::panic::resume_unwind(Box::new(crate::crash_report::JavaException(throwable)));
+        }
         let address = self.player(id).address.map_or_else(|| "local".to_string(), |address| crate::network::server_connection_listener::loggable_address(address, self.config.log_ips));
         warn!("Failed to handle packet for {address}\n{}", throwable.print_stack_trace().trim_end());
         if let Some(index) = self.level_of(id) {
