@@ -444,16 +444,42 @@ fn unknown_reference_message(registry: &str, key: &str) -> String {
     format!("Unknown registry key in ResourceKey[minecraft:root / {registry}]: {key}")
 }
 
-fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, resource_count: usize, pack_elements: &mut Vec<PackElement>, include_vanilla: bool) -> Option<Value> {
+static HIDES_VANILLA: AtomicBool = AtomicBool::new(false);
+static TAG_LOAD_FAILED: AtomicBool = AtomicBool::new(false);
+
+pub fn note_tag_load_failure() {
+    TAG_LOAD_FAILED.store(true, Ordering::Release);
+}
+
+fn read_element(registry: &'static str, id: &str, resource: &crate::server::packs::Resource, resource_count: usize, pack_elements: &mut Vec<PackElement>) -> Option<Value> {
     let json = match resource.supplier.read() {
         Ok(bytes) => crate::util::gson::parse_strict_bytes_element_throwable(&bytes),
         Err(error) => Err(JavaThrowable::new(format!("java.io.IOException: {error}"), Vec::new())),
     };
     let parsed = json.as_ref().ok().cloned().map(crate::util::gson::to_value);
-    if include_vanilla || resource.source_pack_id != VANILLA_ID {
+    if resource.source_pack_id != VANILLA_ID {
         pack_elements.push(PackElement { registry, id: id.to_string(), pack: resource.source_pack_id.clone(), resource_count, json });
     }
     parsed
+}
+
+fn vanilla_elements(resource_manager: &MultiPackResourceManager) -> Vec<PackElement> {
+    let mut elements = Vec::new();
+    let registries = wafer_data::builtin_synced_registries().iter().map(|builtin| builtin.name).chain(UNSYNCHRONIZED.iter().map(|&(name, _)| name)).chain(std::iter::once(DIMENSION_REGISTRY));
+    for name in registries {
+        let directory = name.strip_prefix("minecraft:").unwrap_or(name);
+        let resources = resource_manager.list_resources(directory, ".json");
+        for (location, resource) in resources.iter().filter(|(_, resource)| resource.source_pack_id == VANILLA_ID) {
+            let (namespace, path) = location.split_once(':').unwrap();
+            let id = format!("{namespace}:{}", &path[directory.len() + 1..path.len() - ".json".len()]);
+            let json = match resource.supplier.read() {
+                Ok(bytes) => crate::util::gson::parse_strict_bytes_element_throwable(&bytes),
+                Err(error) => Err(JavaThrowable::new(format!("java.io.IOException: {error}"), Vec::new())),
+            };
+            elements.push(PackElement { registry: name, id, pack: VANILLA_ID.to_string(), resource_count: resources.len(), json });
+        }
+    }
+    elements
 }
 
 fn load_registry(
@@ -461,7 +487,6 @@ fn load_registry(
     name: &'static str,
     builtin: &[&'static str],
     pack_elements: &mut Vec<PackElement>,
-    include_vanilla: bool,
 ) -> (DataRegistry, &'static [&'static str]) {
     let directory = name.strip_prefix("minecraft:").unwrap_or(name);
     let resources = resource_manager.list_resources(directory, ".json");
@@ -476,7 +501,7 @@ fn load_registry(
         if let Some(index) = existing {
             blocked[index] = false;
         }
-        let Some(json) = read_element(name, &id, resource, resources.len(), pack_elements, include_vanilla) else { continue };
+        let Some(json) = read_element(name, &id, resource, resources.len(), pack_elements) else { continue };
         let index = match existing {
             Some(index) => index,
             None => {
@@ -509,9 +534,9 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     let mut pack_elements = Vec::new();
     let mut synced = Vec::new();
     let mut registries = HashMap::new();
-    let include_vanilla = resource_manager.hides_vanilla_resources();
+    HIDES_VANILLA.store(resource_manager.hides_vanilla_resources(), Ordering::Release);
     for builtin in wafer_data::builtin_synced_registries() {
-        let (registry, entries) = load_registry(resource_manager, builtin.name, builtin.entries, &mut pack_elements, include_vanilla);
+        let (registry, entries) = load_registry(resource_manager, builtin.name, builtin.entries, &mut pack_elements);
         synced.push(SyncedRegistry { name: builtin.name, entries });
         registries.insert(builtin.name, registry);
     }
@@ -519,7 +544,7 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     let mut unsynchronized = Vec::new();
     for &(name, table) in UNSYNCHRONIZED {
         let builtin: Vec<&'static str> = table.iter().map(|&(entry, _)| entry).collect();
-        let (registry, entries) = load_registry(resource_manager, name, &builtin, &mut pack_elements, include_vanilla);
+        let (registry, entries) = load_registry(resource_manager, name, &builtin, &mut pack_elements);
         unsynchronized.push((name, entries));
         registries.insert(name, registry);
     }
@@ -530,7 +555,7 @@ pub fn load(resource_manager: &MultiPackResourceManager) {
     for (location, resource) in &dimension_resources {
         let (namespace, path) = location.split_once(':').unwrap();
         let id = format!("{namespace}:{}", &path["dimension".len() + 1..path.len() - ".json".len()]);
-        if let Some(json) = read_element("minecraft:dimension", &id, resource, dimension_resources.len(), &mut pack_elements, include_vanilla) {
+        if let Some(json) = read_element("minecraft:dimension", &id, resource, dimension_resources.len(), &mut pack_elements) {
             stems.push((leak(id), json));
         }
     }
@@ -562,7 +587,7 @@ pub fn is_loading() -> bool {
     UNBOUND.with(|unbound| unbound.borrow().is_some())
 }
 
-fn with_failed_references(mut unbound: Vec<(String, String)>, referenced: Vec<(String, String)>, failed: &[(&str, &str)]) -> Vec<(String, String)> {
+pub(crate) fn with_failed_references(mut unbound: Vec<(String, String)>, referenced: Vec<(String, String)>, failed: &[(&str, &str)]) -> Vec<(String, String)> {
     unbound.extend(referenced.into_iter().filter(|(registry, key)| failed.iter().any(|(failed_registry, failed_key)| failed_registry == registry && failed_key == key)));
     unbound
 }
@@ -634,7 +659,11 @@ fn validate_timelines(errors: &mut LoadingErrors) {
 }
 
 pub fn validate(resource_manager: &MultiPackResourceManager) -> Result<(), JavaThrowable> {
-    let pack_elements = std::mem::take(&mut *PACK_ELEMENTS.lock().unwrap());
+    let mut pack_elements = std::mem::take(&mut *PACK_ELEMENTS.lock().unwrap());
+    let tag_load_failed = TAG_LOAD_FAILED.swap(false, Ordering::AcqRel);
+    if HIDES_VANILLA.load(Ordering::Acquire) || !pack_elements.is_empty() || tag_load_failed {
+        pack_elements.extend(vanilla_elements(resource_manager));
+    }
     let (dimensions, worldgen): (Vec<&PackElement>, Vec<&PackElement>) = pack_elements.iter().partition(|element| element.registry == DIMENSION_REGISTRY);
     validate_registries(&worldgen, true, std::mem::take(&mut *TAG_UNBOUND.lock().unwrap()), std::mem::take(&mut *TAG_REFERENCES.lock().unwrap()))?;
     crate::tags::load_tags_for_dimension_registry(resource_manager);

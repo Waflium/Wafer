@@ -241,6 +241,7 @@ impl<'a> TagLoader<'a> {
             } else {
                 let missing: Vec<String> = missing_elements.iter().map(|e| e.to_string()).collect();
                 error!("Couldn't load tag {id} as it is missing following references: {}", missing.join(", "));
+                crate::core::data_registries::note_tag_load_failure();
             }
         });
         new_tags

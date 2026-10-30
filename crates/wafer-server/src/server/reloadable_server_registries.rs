@@ -314,8 +314,9 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
         return Err(duplicate);
     }
     let referenced = REFERENCED.with(|referenced| std::mem::take(&mut *referenced.borrow_mut()));
-    UNBOUND.with(|unbound| unbound.borrow_mut().extend(referenced.into_iter().filter(|reference| errors.0.contains_key(reference))));
-    for (registry, keys) in crate::core::data_registries::group_unbound(UNBOUND.with(|unbound| std::mem::take(&mut *unbound.borrow_mut()))) {
+    let failed: Vec<(&str, &str)> = errors.0.keys().map(|(registry, id)| (registry.as_str(), id.as_str())).collect();
+    let unbound = crate::core::data_registries::with_failed_references(UNBOUND.with(|unbound| std::mem::take(&mut *unbound.borrow_mut())), referenced, &failed);
+    for (registry, keys) in crate::core::data_registries::group_unbound(unbound) {
         errors.0.insert(("minecraft:root".to_string(), registry.clone()), registry_load_task::unbound_values(&format!("ResourceKey[minecraft:root / {registry}]"), &keys));
     }
     if !errors.0.is_empty() {
@@ -324,4 +325,34 @@ pub fn load(resource_manager: &MultiPackResourceManager, tags: &'static [Registr
     }
     wafer_data::with_pending_tags(tags, || validate_loot_registries(&registries, &sources))?;
     Ok(LoadResult::Loaded { registries: ReloadableRegistries { sources, ..registries }, recipes })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{HashMap, HashSet};
+
+    use wafer_protocol::nbt::Nbt;
+
+    use super::{LOOT_TABLE, PENDING_KEYS, REFERENCED};
+    use crate::world::level::storage::loot::loot_table::LootTable;
+
+    #[test]
+    fn known_references_are_recorded_while_loading() {
+        let keys = HashMap::from([(LOOT_TABLE, HashSet::from(["ta:a".to_string()]))]);
+        PENDING_KEYS.with(|pending| pending.replace(Some(keys)));
+        REFERENCED.with(|referenced| referenced.borrow_mut().clear());
+        let holder = LootTable::decode_holder(&Nbt::String("ta:a".into()));
+        let referenced = REFERENCED.with(|referenced| referenced.borrow().clone());
+        PENDING_KEYS.with(|pending| pending.replace(None));
+        assert!(holder.is_ok());
+        assert_eq!(referenced, [("minecraft:loot_table".to_string(), "ta:a".to_string())]);
+    }
+
+    #[test]
+    fn references_outside_a_load_are_not_recorded() {
+        REFERENCED.with(|referenced| referenced.borrow_mut().clear());
+        let holder = LootTable::decode_holder(&Nbt::String("minecraft:chests/simple_dungeon".into()));
+        assert!(holder.is_ok());
+        assert!(REFERENCED.with(|referenced| referenced.borrow().is_empty()));
+    }
 }

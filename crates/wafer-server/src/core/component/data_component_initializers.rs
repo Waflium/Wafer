@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn the_first_missing_lookup_in_registration_order_wins() {
         let error = build_with(|_, registry, _| registry != "minecraft:jukebox_song" && registry != "minecraft:decorated_pot_pattern").unwrap_err();
-        assert_eq!(error.description, "java.lang.IllegalStateException: Missing element ResourceKey[minecraft:jukebox_song / minecraft:11]");
+        assert_eq!(error.description, "java.lang.IllegalStateException: Missing element ResourceKey[minecraft:jukebox_song / minecraft:13]");
     }
 
     #[test]
