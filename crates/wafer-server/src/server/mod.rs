@@ -1135,7 +1135,7 @@ impl Server {
                 let result = match dispatched {
                     Ok(result) => result,
                     Err(payload) => {
-                        self.on_packet_error(payload, packet.id);
+                        self.on_packet_error(payload, &packet);
                         Ok(())
                     }
                 };
@@ -1165,7 +1165,7 @@ impl Server {
         }
     }
 
-    fn on_packet_error(&self, payload: Box<dyn std::any::Any + Send>, packet_id: i32) {
+    fn on_packet_error(&self, payload: Box<dyn std::any::Any + Send>, packet: &Packet) {
         use crate::crash_report::{JavaException, ReportedException};
         let throwable = match payload.downcast::<JavaException>() {
             Ok(exception) => exception.0,
@@ -1183,8 +1183,9 @@ impl Server {
                 }
             },
         };
-        let packet_type = wafer_data::PACKET_NAMES.iter().find(|(state, direction, id, _)| *state == "play" && *direction == "serverbound" && *id == packet_id).map_or_else(|| packet_id.to_string(), |(_, _, _, name)| format!("serverbound/{name}"));
-        error!("Failed to handle packet {packet_type}, suppressing error\n{}", throwable.print_stack_trace().trim_end());
+        let packet_type = wafer_data::PACKET_NAMES.iter().find(|(state, direction, id, _)| *state == "play" && *direction == "serverbound" && *id == packet.id).map_or_else(|| packet.id.to_string(), |(_, _, _, name)| format!("serverbound/{name}"));
+        let packet_string = crate::network::protocol::game::serverbound_packet_strings::to_string(packet).unwrap_or_else(|| packet_type.clone());
+        error!("Failed to handle packet {packet_string}, suppressing error\n{}", throwable.print_stack_trace().trim_end());
         self.report_packet_handling_exception(&throwable, &packet_type);
     }
 
@@ -2547,8 +2548,8 @@ mod tests {
     #[test]
     fn packet_handler_exceptions_are_suppressed_and_counted() {
         let server = crate::server::level::testing::server_with(crate::server::level::testing::flat_config());
-        server.on_packet_error(Box::new("boom".to_string()), serverbound::CHAT);
-        server.on_packet_error(Box::new(crate::crash_report::JavaException(JavaThrowable::new("java.lang.IllegalStateException: no", Vec::new()))), serverbound::CHAT);
+        server.on_packet_error(Box::new("boom".to_string()), &Packet { id: serverbound::CHAT, data: Vec::new() });
+        server.on_packet_error(Box::new(crate::crash_report::JavaException(JavaThrowable::new("java.lang.IllegalStateException: no", Vec::new()))), &Packet { id: serverbound::CHAT, data: Vec::new() });
         let dump = server.chunk_io_error_reporter.suppressed_exceptions().dump();
         assert!(dump.contains("packet/serverbound/minecraft:chat:class java.lang.IllegalStateException: no"), "{dump}");
         assert!(dump.contains("packet/serverbound/minecraft:chat:class java.lang.RuntimeException x 1"), "{dump}");

@@ -425,17 +425,17 @@ pub fn read_client_information(data: &[u8]) -> anyhow::Result<ClientInfo> {
     Ok(ClientInfo {
         language: r.string(16)?.to_owned(),
         view_distance: r.u8()? as i8,
-        chat_visibility: match r.varint()? {
+        chat_visibility: match r.varint()?.rem_euclid(3) {
             1 => ChatVisibility::System,
             2 => ChatVisibility::Hidden,
             _ => ChatVisibility::Full,
         },
         chat_colors: r.bool()?,
         skin_parts: r.u8()?,
-        main_hand: r.varint()?,
+        main_hand: if r.varint()? == 1 { 1 } else { 0 },
         text_filtering: r.bool()?,
         allows_listing: r.bool()?,
-        particle_status: r.varint()?,
+        particle_status: r.varint()?.rem_euclid(3),
     })
 }
 
@@ -447,4 +447,27 @@ async fn wait_for_spawn(prepare_spawn: &mut Option<oneshot::Receiver<Result<(), 
         *prepare_spawn = None;
     }
     std::future::pending().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn client_information_maps_out_of_range_ids_like_vanilla() {
+        let mut w = wafer_protocol::Writer::new();
+        w.string("en_us");
+        w.u8(10);
+        w.varint(4);
+        w.bool(true);
+        w.u8(127);
+        w.varint(5);
+        w.bool(false);
+        w.bool(true);
+        w.varint(-1);
+        let info = read_client_information(w.as_slice()).unwrap();
+        assert_eq!(info.chat_visibility, ChatVisibility::System);
+        assert_eq!(info.main_hand, 0);
+        assert_eq!(info.particle_status, 2);
+    }
 }
