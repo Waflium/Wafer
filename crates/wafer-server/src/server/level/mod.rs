@@ -2648,6 +2648,7 @@ pub mod testing {
     pub const SEED_WITHOUT_NEARBY_VILLAGES: i64 = 2;
 
     pub fn level() -> ServerLevel {
+        wafer_core::random::use_deterministic_unique_seeds(8682522807148012);
         let dimension = &wafer_data::DIMENSION_TYPES[0];
         let chunks = ChunkCache::new(dimension, FlatLevelSource::default(), None);
         let level = ServerLevel::new(super::super::OVERWORLD, 0, chunks, None, 10, 10);
@@ -2664,6 +2665,7 @@ pub mod testing {
     }
 
     pub fn server_with(config: ServerConfig) -> Server {
+        wafer_core::random::use_deterministic_unique_seeds(8682522807148012);
         let mut server = Server::new(config).unwrap();
         server.set_game_rule(game_rule::SPAWN_MOBS, 0);
         server

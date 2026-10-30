@@ -320,8 +320,23 @@ pub fn java_string_hash(s: &str) -> i32 {
     s.java_utf16().fold(0i32, |h, c| h.wrapping_mul(31).wrapping_add(c as i32))
 }
 
+thread_local! {
+    static DETERMINISTIC_UNIQUIFIER: std::cell::Cell<Option<i64>> = const { std::cell::Cell::new(None) };
+}
+
+pub fn use_deterministic_unique_seeds(seed: i64) {
+    DETERMINISTIC_UNIQUIFIER.with(|uniquifier| uniquifier.set(Some(seed)));
+}
+
 pub fn generate_unique_seed() -> i64 {
     use std::sync::atomic::{AtomicI64, Ordering};
+    if let Some(next) = DETERMINISTIC_UNIQUIFIER.with(|uniquifier| uniquifier.get().map(|seed| {
+        let next = seed.wrapping_mul(1181783497276652981);
+        uniquifier.set(Some(next));
+        next
+    })) {
+        return next;
+    }
     static UNIQUIFIER: AtomicI64 = AtomicI64::new(8682522807148012);
     let next = UNIQUIFIER
         .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |c| Some(c.wrapping_mul(1181783497276652981)))
