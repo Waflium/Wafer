@@ -14,6 +14,10 @@ mod resources;
 mod tags;
 mod network;
 mod recipebook;
+mod rfr;
+
+#[global_allocator]
+static GLOBAL: rfr::allocation::CountingAllocator = rfr::allocation::CountingAllocator;
 pub mod server;
 mod sounds;
 mod stats;

@@ -31,6 +31,8 @@ impl Packet {
 pub struct PacketReader {
     half: OwnedReadHalf,
     pub codec: Codec,
+    pub protocol: &'static str,
+    remote_address: Arc<str>,
     buf: Vec<u8>,
     decryptor: Option<Decryptor>,
     timeout: Pin<Box<Sleep>>,
@@ -44,6 +46,10 @@ impl PacketReader {
                 let mut r = Reader::new(&bytes);
                 let id = r.varint()?;
                 let data = bytes[bytes.len() - r.remaining()..].to_vec();
+                let profiler = crate::util::profiling::rfr::rust_profiler::instance();
+                if profiler.tracks_packets() {
+                    profiler.on_packet_received(self.protocol, "serverbound", wafer_data::packet_name(self.protocol, "serverbound", id).unwrap_or_default(), &self.remote_address, bytes.len() as i32);
+                }
                 return Ok(Packet { id, data });
             }
             self.read().await?;
@@ -85,6 +91,8 @@ impl PacketReader {
 pub struct PacketWriter {
     half: OwnedWriteHalf,
     pub codec: Codec,
+    pub protocol: &'static str,
+    remote_address: Arc<str>,
     out: Vec<u8>,
     encryptor: Option<Encryptor>,
 }
@@ -94,7 +102,15 @@ impl PacketWriter {
         let mut w = Writer::new();
         w.varint(id);
         body(&mut w);
+        self.packet_sent(id, w.as_slice().len());
         self.out.extend(self.codec.encode(w.as_slice()));
+    }
+
+    fn packet_sent(&self, id: i32, written_bytes: usize) {
+        let profiler = crate::util::profiling::rfr::rust_profiler::instance();
+        if profiler.tracks_packets() {
+            profiler.on_packet_sent(self.protocol, "clientbound", wafer_data::packet_name(self.protocol, "clientbound", id).unwrap_or_default(), &self.remote_address, written_bytes as i32);
+        }
     }
 
     pub async fn flush(&mut self) -> io::Result<()> {
@@ -126,10 +142,11 @@ impl PacketWriter {
 
 pub fn split(stream: TcpStream) -> io::Result<(PacketReader, PacketWriter)> {
     stream.set_nodelay(true)?;
+    let remote_address: Arc<str> = Arc::from(super::server_connection_listener::loggable_address(super::server_connection_listener::remote_address(stream.peer_addr()?), true));
     let (r, w) = stream.into_split();
     Ok((
-        PacketReader { half: r, codec: Codec::default(), buf: Vec::new(), decryptor: None, timeout: Box::pin(tokio::time::sleep(READ_TIMEOUT)) },
-        PacketWriter { half: w, codec: Codec::default(), out: Vec::new(), encryptor: None },
+        PacketReader { half: r, codec: Codec::default(), protocol: "handshake", remote_address: remote_address.clone(), buf: Vec::new(), decryptor: None, timeout: Box::pin(tokio::time::sleep(READ_TIMEOUT)) },
+        PacketWriter { half: w, codec: Codec::default(), protocol: "handshake", remote_address, out: Vec::new(), encryptor: None },
     ))
 }
 
@@ -279,7 +296,13 @@ pub fn spawn_io(
                     break;
                 }
                 match w.codec.try_encode(packet) {
-                    Ok(frame) => frames.extend(frame),
+                    Ok(frame) => {
+                        let mut id_reader = Reader::new(packet);
+                        if let Ok(id) = id_reader.varint() {
+                            w.packet_sent(id, packet.len());
+                        }
+                        frames.extend(frame)
+                    }
                     Err(cause) => {
                         fault = Some(cause);
                         break;

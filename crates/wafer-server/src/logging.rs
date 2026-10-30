@@ -83,6 +83,10 @@ pub fn stop() {
     STOPPED.store(true, std::sync::atomic::Ordering::Release);
 }
 
+pub fn is_logger_active() -> bool {
+    !STOPPED.load(std::sync::atomic::Ordering::Acquire)
+}
+
 pub fn shutdown() {
     flush();
     if let Some(logger) = LOGGER.get() {
@@ -146,7 +150,7 @@ fn format_record(out: &mut Vec<u8>, record: &Record) {
 
 fn write_records(dir: &Path, queue: Receiver<Message>) {
     let mut file = RollingFile::open(dir);
-    let mut stdout = BufWriter::with_capacity(BUFFER_SIZE, io::stdout());
+    let mut stdout = BufWriter::with_capacity(BUFFER_SIZE, crate::rfr::io::RecordedWrite::new(io::stdout(), None));
     let mut line = Vec::with_capacity(256);
     let mut next = queue.recv().ok();
     while let Some(message) = next {
@@ -175,7 +179,7 @@ fn write_records(dir: &Path, queue: Receiver<Message>) {
 
 struct RollingFile {
     dir: PathBuf,
-    out: Option<BufWriter<File>>,
+    out: Option<BufWriter<crate::rfr::io::RecordedWrite<File>>>,
     day: NaiveDate,
 }
 
@@ -197,8 +201,9 @@ impl RollingFile {
         self.dir.join("latest.log")
     }
 
-    fn create(&self) -> Option<BufWriter<File>> {
-        File::create(self.latest()).ok().map(|f| BufWriter::with_capacity(BUFFER_SIZE, f))
+    fn create(&self) -> Option<BufWriter<crate::rfr::io::RecordedWrite<File>>> {
+        let path = crate::rfr::io::path_string(&self.latest());
+        File::create(self.latest()).ok().map(|f| BufWriter::with_capacity(BUFFER_SIZE, crate::rfr::io::RecordedWrite::new(f, Some(path))))
     }
 
     fn write(&mut self, line: &[u8], time: SystemTime) {

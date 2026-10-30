@@ -34,6 +34,7 @@ pub mod keyframe_track;
 pub mod lifecycle;
 pub mod parsing;
 pub mod png_info;
+pub mod profiling;
 pub mod random;
 pub mod range_codecs;
 pub mod signature_validator;

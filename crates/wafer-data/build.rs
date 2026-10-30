@@ -886,7 +886,10 @@ fn command_tree(out: &mut String, nodes: &Value) -> anyhow::Result<()> {
         writeln!(
             out,
             "commands::CommandNode {{ id: {i}, kind: commands::CommandNodeKind::{kind}, name: {:?}, executable: {}, children: &{children:?}, redirect: {:?}, fork: {}, modifier: {}, command: {:?}, type_class: {}, parser: {:?}, properties: {:?}, permission: {permission}, suggestions: {:?}, features: {} }},",
-            node["name"].as_str().unwrap(),
+            match node["name"].as_str().unwrap() {
+                "jfr" => "rfr",
+                name => name,
+            },
             node["executable"] == true,
             node["redirect"].as_u64(),
             node["fork"] == true,

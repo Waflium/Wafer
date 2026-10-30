@@ -348,6 +348,7 @@ fn exit() -> ! {
     });
     super::begin_shutdown(1);
     super::halt_and_wait();
+    super::run_shutdown_hooks();
     crate::logging::flush();
     std::process::exit(1)
 }

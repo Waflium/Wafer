@@ -158,7 +158,7 @@ pub fn place_structure(server: &mut Server, source: &CommandSourceStack, structu
     let chunk_generator = level.chunks.generator.clone();
     let all_biomes = HolderSet::Direct((0..wafer_data::SyncedRegistry::get("minecraft:worldgen/biome").entries.len() as i32).collect());
     let (seed, min_y, height) = (level.seed, level.chunks.min_y(), level.chunks.height());
-    let Some(start) = structure.generate(structure_holder, &chunk_generator, seed, pos.chunk(), 0, min_y, height, &all_biomes) else {
+    let Some(start) = structure.generate(structure_holder, &chunk_generator, seed, pos.chunk(), level.dimension, 0, min_y, height, &all_biomes) else {
         return Err(ERROR_STRUCTURE_FAILED.create());
     };
     let bounding_box = start.get_bounding_box();

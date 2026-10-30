@@ -63,6 +63,7 @@ mod schedule_command;
 mod scoreboard_command;
 #[cfg(test)]
 mod scoreboard_command_tests;
+mod rfr_command;
 mod seed_command;
 mod set_block_command;
 mod set_player_idle_timeout_command;
@@ -266,6 +267,8 @@ static EXECUTORS: &[(&str, CommandFn)] = &[
     ("save-all flush", save_commands::save_all_flush),
     ("save-off", save_commands::save_off),
     ("save-on", save_commands::save_on),
+    ("rfr start", rfr_command::start_rfr),
+    ("rfr stop", rfr_command::stop_rfr),
     ("seed", seed_command::seed),
     ("setidletimeout minutes", set_player_idle_timeout_command::set_idle_timeout),
     ("stop", stop_command::stop),
@@ -482,7 +485,8 @@ mod tests {
                 let execute = crate::commands::node_at("execute");
                 lines.extend(super::help_command::smart_usage(execute, &source).iter().map(|l| format!("/execute {l}")));
             }
-            assert_eq!(lines, expected.lines().collect::<Vec<_>>(), "permission level {level}");
+            let expected: Vec<String> = expected.lines().map(|line| if line == "/jfr (start|stop)" { "/rfr (start|stop)".to_string() } else { line.to_string() }).collect();
+            assert_eq!(lines, expected, "permission level {level}");
         }
         let lines = run(&mut server, "help");
         assert!(lines.contains(&"/time (set|add|pause|resume|rate|query|of)".to_string()), "{lines:?}");

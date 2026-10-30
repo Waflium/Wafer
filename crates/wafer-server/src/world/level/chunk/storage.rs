@@ -135,6 +135,7 @@ pub struct RegionFile {
     used: RegionBitmap,
     version: RegionFileVersion,
     external: Option<Box<dyn ExternalChunkFiles>>,
+    info: Option<region_storage_info::RegionStorageInfo>,
 }
 
 impl RegionFile {
@@ -156,7 +157,9 @@ impl RegionFile {
     pub fn from_file(path: &Path, mut file: File, external: Option<Box<dyn ExternalChunkFiles>>) -> io::Result<RegionFile> {
         let size = file.metadata()?.len();
         let mut header = vec![0u8; 2 * SECTOR_BYTES as usize];
+        let start = crate::rfr::ticks();
         let read = file.read(&mut header)?;
+        crate::rfr::io::file_read(path, start, read as i64, read == 0);
         if read != 0 && read != header.len() {
             warn!("Region file {} has truncated header: {read}", path.display());
         }
@@ -168,6 +171,7 @@ impl RegionFile {
             used: RegionBitmap::default(),
             version: RegionFileVersion::selected(),
             external,
+            info: None,
         };
         region.used.force(0, 2);
         for i in 0..1024 {
@@ -240,7 +244,9 @@ impl RegionFile {
         let (sector, count) = ((offset >> 8) as u64, (offset & 0xFF) as u64);
         self.file.seek(SeekFrom::Start(sector * SECTOR_BYTES))?;
         let mut sectors = vec![0u8; (count * SECTOR_BYTES) as usize];
+        let start = crate::rfr::ticks();
         let read = self.file.read(&mut sectors)?;
+        crate::rfr::io::file_read(&self.path, start, read as i64, read == 0);
         if read < 5 {
             error!("Chunk {pos} header is truncated: expected {} but read {read}", sectors.len());
             return Ok(None);
@@ -278,6 +284,9 @@ impl RegionFile {
             error!("Declared size {length} of chunk {pos} is negative");
             return Ok(None);
         } else {
+            if let Some(info) = &self.info {
+                crate::util::profiling::rfr::rust_profiler::instance().on_region_file_read(info, pos, self.version.id() as i32, stream_length);
+            }
             sectors[5..5 + stream_length as usize].to_vec()
         };
         let compression = version & !EXTERNAL_STREAM_FLAG;
@@ -303,6 +312,9 @@ impl RegionFile {
 
     pub fn write(&mut self, pos: ChunkPos, nbt: &Nbt) -> io::Result<()> {
         let compressed = self.version.compress(&encode_nbt(nbt))?;
+        if let Some(info) = &self.info {
+            crate::util::profiling::rfr::rust_profiler::instance().on_region_file_write(info, pos, self.version.id() as i32, compressed.len() as i32 + 1);
+        }
         let mut record = Vec::with_capacity(compressed.len() + 5);
         record.extend(((compressed.len() + 1) as u32).to_be_bytes());
         record.push(self.version.id());
@@ -323,20 +335,20 @@ impl RegionFile {
                 Some(external) => {
                     external.write(pos, &compressed)?;
                     self.file.seek(SeekFrom::Start(new_sector as u64 * SECTOR_BYTES))?;
-                    self.file.write_all(&stub)?;
+                    self.write_all(&stub)?;
                 }
                 None => {
                     let tmp = self.external_path(pos).with_extension("tmp");
                     fs::write(&tmp, &compressed)?;
                     self.file.seek(SeekFrom::Start(new_sector as u64 * SECTOR_BYTES))?;
-                    self.file.write_all(&stub)?;
+                    self.write_all(&stub)?;
                     fs::rename(tmp, self.external_path(pos))?;
                 }
             }
         } else {
             new_sector = self.used.allocate(sectors_needed);
             self.file.seek(SeekFrom::Start(new_sector as u64 * SECTOR_BYTES))?;
-            self.file.write_all(&record)?;
+            self.write_all(&record)?;
             self.remove_external_file(pos);
         }
         self.offsets[index] = (new_sector as u32) << 8 | sectors_needed as u32;
@@ -382,7 +394,16 @@ impl RegionFile {
         self.offsets.iter().for_each(|o| header.extend(o.to_be_bytes()));
         self.timestamps.iter().for_each(|t| header.extend(t.to_be_bytes()));
         self.file.seek(SeekFrom::Start(0))?;
-        self.file.write_all(&header)
+        self.write_all(&header)
+    }
+
+    fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        let start = crate::rfr::ticks();
+        self.file.write_all(bytes)?;
+        if crate::rfr::runtime::FILE_WRITE.is_enabled() {
+            crate::rfr::io::file_write(Some(&crate::rfr::io::absolute_path_string(&self.path)), start, bytes.len() as i64);
+        }
+        Ok(())
     }
 
     fn pad_to_full_sector(&mut self) -> io::Result<()> {
@@ -399,12 +420,18 @@ impl RegionFile {
 pub struct RegionStorage {
     dir: PathBuf,
     sync: bool,
+    info: Option<region_storage_info::RegionStorageInfo>,
     open: HashMap<(i32, i32), RegionFile>,
 }
 
 impl RegionStorage {
     pub fn new(dir: PathBuf, sync: bool) -> RegionStorage {
-        RegionStorage { dir, sync, open: HashMap::new() }
+        RegionStorage { dir, sync, info: None, open: HashMap::new() }
+    }
+
+    pub fn with_info(mut self, info: region_storage_info::RegionStorageInfo) -> RegionStorage {
+        self.info = Some(info);
+        self
     }
 
     fn region_path(&self, pos: ChunkPos) -> PathBuf {
@@ -418,7 +445,9 @@ impl RegionStorage {
             let directory = if self.dir.exists() { self.dir.canonicalize().map_err(|e| storage_exception::create_directories_safe_failure(e, &self.dir, callers))? } else { self.dir.clone() };
             fs::create_dir_all(&directory).map_err(|e| storage_exception::create_directories_safe_failure(e, &directory, callers))?;
             let file = RegionFile::open_file(&path, self.sync).map_err(|e| storage_exception::open_region_file_failure(e, &path, self.sync, callers))?;
-            self.open.insert(key, RegionFile::from_file(&path, file, None)?);
+            let mut region = RegionFile::from_file(&path, file, None)?;
+            region.info = self.info.clone();
+            self.open.insert(key, region);
         }
         Ok(self.open.get_mut(&key).unwrap())
     }

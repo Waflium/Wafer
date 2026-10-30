@@ -102,6 +102,11 @@ pub fn exit_status() -> i32 {
     EXIT_STATUS.load(std::sync::atomic::Ordering::Acquire)
 }
 
+pub fn run_shutdown_hooks() {
+    crate::logging::stop();
+    crate::util::profiling::rfr::rfr_profiler::dump_on_exit();
+}
+
 pub(crate) fn begin_shutdown(status: i32) {
     EXIT_STATUS.store(status, std::sync::atomic::Ordering::Release);
     crate::logging::stop();

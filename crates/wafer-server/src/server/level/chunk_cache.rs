@@ -56,6 +56,7 @@ struct Job {
     holder: u64,
     status: ChunkStatus,
     work: FutureId,
+    profiled: Option<crate::util::profiling::rfr::callback::profiled_duration::ProfiledDuration>,
 }
 
 pub struct ChunkCache {
@@ -1103,7 +1104,7 @@ impl ChunkCache {
         }
         let holder = holder.id;
         let work = self.holders.futures.new_pending();
-        let job = Job { pos, holder, status, work };
+        let job = Job { pos, holder, status, work, profiled: None };
         self.start_step(job, generate);
         work
     }
@@ -1120,18 +1121,23 @@ impl ChunkCache {
         token
     }
 
-    fn start_step(&mut self, job: Job, generate: bool) {
+    fn start_step(&mut self, mut job: Job, generate: bool) {
         let pos = job.pos;
+        let generating = job.status != ChunkStatus::Empty && self.holders.get(pos.pack()).is_some_and(|holder| holder.persisted_status.is_none_or(|persisted| persisted < job.status));
+        if generating && let Some(reporting) = &self.reporting {
+            job.profiled = crate::util::profiling::rfr::rust_profiler::instance().on_chunk_generate(pos, &reporting.info.dimension, &format!("minecraft:{}", job.status.get_name()));
+        }
         match job.status {
             ChunkStatus::Empty => self.schedule_chunk_load(job),
             ChunkStatus::StructureStarts if generate => match (&self.generator, &self.structure_state) {
                 (generator, Some(state)) if self.generate_structures => {
                     let (generator, state, dimension, results) = (generator.clone(), state.clone(), self.dimension, self.results.0.clone());
+                    let level = self.reporting.as_ref().map_or_else(String::new, |reporting| reporting.info.dimension.clone());
                     let upgrading = self.is_upgrading(pos);
                     let mut structures = if upgrading { self.structure_chunks.remove(&pos).unwrap_or_default() } else { ChunkStructures::default() };
                     let token = self.new_async_token(job);
                     chunk_workers::execute(move || {
-                        generator.create_structures(&state, pos, dimension, &mut structures, upgrading);
+                        generator.create_structures(&state, pos, dimension, &level, &mut structures, upgrading);
                         let _ = results.send(WorkResult::StructureStarts { pos, token, structures });
                     });
                 }
@@ -1762,7 +1768,10 @@ impl ChunkCache {
         self.process_woken();
     }
 
-    fn complete_step(&mut self, job: Job) {
+    fn complete_step(&mut self, mut job: Job) {
+        if let Some(profiled) = job.profiled.take() {
+            profiled(true);
+        }
         let node = job.pos.pack();
         let Some(holder) = self.holders.get_mut(node).filter(|h| h.id == job.holder) else {
             self.holders.futures.complete(job.work, false);

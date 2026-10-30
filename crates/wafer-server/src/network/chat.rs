@@ -469,6 +469,10 @@ impl Component {
         Component { contents: Contents::Translatable { key: key.into(), fallback: None, args }, style: Style::default(), siblings: Vec::new() }
     }
 
+    pub fn translatable_with_fallback(key: &str, fallback: &str, args: Vec<Arg>) -> Component {
+        Component { contents: Contents::Translatable { key: key.into(), fallback: Some(fallback.into()), args }, style: Style::default(), siblings: Vec::new() }
+    }
+
     pub fn append(mut self, sibling: Component) -> Component {
         self.siblings.push(sibling);
         self

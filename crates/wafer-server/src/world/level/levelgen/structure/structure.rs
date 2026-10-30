@@ -258,16 +258,23 @@ impl Structure {
         chunk_generator: &ChunkGenerator,
         seed: i64,
         source_chunk_pos: ChunkPos,
+        dimension: &str,
         references: i32,
         min_y: i32,
         height: i32,
         valid_biome: &HolderSet,
     ) -> Option<StructureStart> {
+        let profiled = crate::util::profiling::rfr::rust_profiler::instance().on_structure_generate(source_chunk_pos, dimension, selected.key());
         let mut context = GenerationContext::new(chunk_generator, seed, source_chunk_pos, min_y, height, valid_biome);
-        let generation = self.find_valid_generation_point(&mut context)?;
-        let builder = generation.get_pieces_builder(&mut context);
-        let start = StructureStart::new(selected, source_chunk_pos, references, builder.build());
-        start.is_valid().then_some(start)
+        let start = self.find_valid_generation_point(&mut context).map(|generation| {
+            let builder = generation.get_pieces_builder(&mut context);
+            StructureStart::new(selected, source_chunk_pos, references, builder.build())
+        });
+        let valid = start.as_ref().is_some_and(StructureStart::is_valid);
+        if let Some(profiled) = profiled {
+            profiled(valid);
+        }
+        start.filter(|_| valid)
     }
 
     pub fn find_valid_generation_point<'a>(&'a self, context: &mut GenerationContext) -> Option<GenerationStub<'a>> {

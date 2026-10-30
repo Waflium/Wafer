@@ -98,7 +98,7 @@ pub fn start_tcp_server_listener(address: Option<std::net::IpAddr>, port: u16) -
     }
 }
 
-fn remote_address(address: SocketAddr) -> SocketAddr {
+pub(super) fn remote_address(address: SocketAddr) -> SocketAddr {
     match address {
         SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
             Some(v4) => SocketAddr::new(v4.into(), v6.port()),
@@ -139,6 +139,8 @@ async fn handle_connection(stream: TcpStream, context: &ListenerContext, io_thre
     let _port = hr.u16()?;
     match hr.varint()? {
         1 => {
+            r.protocol = "status";
+            w.protocol = "status";
             let status = context.status.read().unwrap().clone();
             match status {
                 Some(status) if context.settings.replies_to_status() => status_phase(r, w, &status).await,
@@ -168,13 +170,19 @@ async fn begin_login(r: PacketReader, mut w: PacketWriter, context: &ListenerCon
 
 async fn login_phase(mut r: PacketReader, mut w: PacketWriter, context: &ListenerContext, address: SocketAddr, transferred: bool, io_thread: Arc<str>) -> anyhow::Result<()> {
     let events = &context.events;
+    r.protocol = "login";
+    w.protocol = "login";
     let Some(profile) = super::login::login(&mut r, &mut w, context, address).await? else {
         return Ok(());
     };
+    r.protocol = "configuration";
+    w.protocol = "configuration";
     let cookie = CommonListenerCookie::create_initial(transferred);
     let Some(cookie) = super::configuration::configure(&mut r, &mut w, &context.config, &profile, events, cookie).await else {
         return Ok(());
     };
+    r.protocol = "play";
+    w.protocol = "play";
     let conn = NEXT_CONN_ID.fetch_add(1, Ordering::Relaxed);
     let packets = events.clone();
     let out = connection::spawn_io(r, w, io_thread, move |packet| {
