@@ -289,7 +289,11 @@ pub fn spawn_io(
             if fault.is_some() {
                 rx.close();
                 while let Ok(item) = rx.try_recv() {
-                    if let (Some(fallback_type), _) = split_fallback(&item) {
+                    let (fallback_type, packet) = split_fallback(&item);
+                    if let Some((id, chain)) = encoding_fault(packet) {
+                        let (packet_type, wrapper, causes) = encoder_exception(id, chain);
+                        error!(thread: &write_thread, "Error sending packet {packet_type}\n{wrapper}{causes}");
+                    } else if let Some(fallback_type) = fallback_type {
                         let name = wafer_data::packet_name("play", "clientbound", fallback_type).unwrap_or_default();
                         warn!(thread: &write_thread, "Failed to deliver packet, sending fallback clientbound/{name}\nio.netty.channel.StacklessClosedChannelException\n\tat io.netty.channel.AbstractChannel$AbstractUnsafe.write(Object, ChannelPromise)(Unknown Source)");
                     }
