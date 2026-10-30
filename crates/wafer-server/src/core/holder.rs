@@ -42,7 +42,9 @@ impl<T: RegistryElement> Holder<T> {
     }
 
     pub fn decode_partial(tag: &Nbt, direct: impl FnOnce(&Nbt) -> DecodeResult<T>) -> DecodeResult<Holder<T>> {
-        let Ok(key) = codec::identifier(tag) else { return direct(tag).map(Holder::direct) };
+        let Ok(key) = codec::identifier(tag) else {
+            return crate::core::data_registries::unwinding(crate::util::dfu_frames::registry_file_inline, || direct(tag)).map(Holder::direct);
+        };
         let loading_dynamic = crate::core::data_registries::is_loading();
         if loading_dynamic && crate::server::reloadable_server_registries::is_reloadable(T::REGISTRY) {
             DecodeResult::error(format!("Registry does not exist: {}", T::REGISTRY))

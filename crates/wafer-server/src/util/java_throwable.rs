@@ -48,6 +48,18 @@ impl JavaThrowable {
         }
     }
 
+    pub fn insert_frames(&mut self, position: usize, frames: &[&'static str]) {
+        let position = position.min(self.stack_trace.len());
+        self.stack_trace.splice(position..position, frames.iter().copied());
+        if let Some(report) = &mut self.report {
+            let position = position.min(report.category_stack_trace.len());
+            report.category_stack_trace.splice(position..position, frames.iter().copied());
+        }
+        if let Some(cause) = self.cause.as_deref_mut() {
+            cause.insert_frames(position, frames);
+        }
+    }
+
     pub fn with_frame(mut self, frame: &'static str) -> JavaThrowable {
         self.stack_trace.push(frame);
         self

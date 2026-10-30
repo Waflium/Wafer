@@ -151,7 +151,7 @@ impl ContextIntProvider {
     }
 
     pub fn decode_holder_partial(tag: &Nbt) -> DecodeResult<Holder<ContextIntProvider>> {
-        Holder::decode_partial(tag, ContextIntProvider::decode_partial)
+        Holder::decode_partial(tag, |direct| crate::core::data_registries::unwinding(crate::util::dfu_frames::recursive, || ContextIntProvider::decode_partial(direct)))
     }
 
     fn decode_holders(tag: &Nbt) -> DecodeResult<Vec<Holder<ContextIntProvider>>> {
@@ -163,9 +163,17 @@ impl ContextIntProvider {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<ContextIntProvider> {
-        codec::either_result(DecodeResult::from(codec::int(tag)), || ContextIntProvider::decode_typed(tag)).map(|value| match value {
-            Ok(value) => ContextIntProvider::ConstantValue(value),
-            Err(provider) => provider,
+        crate::core::data_registries::unwinding(crate::util::dfu_frames::codec_xmap, || {
+            codec::either_result(
+                crate::core::data_registries::unwinding(crate::util::dfu_frames::either_first, || {
+                    crate::core::data_registries::unwinding(crate::util::dfu_frames::codec_xmap, || DecodeResult::from(codec::int(tag)))
+                }),
+                || crate::core::data_registries::unwinding(crate::util::dfu_frames::either_second, || ContextIntProvider::decode_typed(tag)),
+            )
+            .map(|value| match value {
+                Ok(value) => ContextIntProvider::ConstantValue(value),
+                Err(provider) => provider,
+            })
         })
     }
 

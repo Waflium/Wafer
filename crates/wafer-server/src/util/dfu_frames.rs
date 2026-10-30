@@ -5,6 +5,12 @@ const MAP_CODEC_2_DECODE: &str = "com.mojang.serialization.MapCodec$2.decode(Map
 const OPTIONAL_FIELD_CODEC_DECODE: &str = "com.mojang.serialization.codecs.OptionalFieldCodec.decode(OptionalFieldCodec.java:34)";
 const RECORD_CODEC_BUILDER_2_DECODE: &str = "com.mojang.serialization.codecs.RecordCodecBuilder$2.decode(RecordCodecBuilder.java:107)";
 const DATA_RESULT_SUCCESS_FLAT_MAP: &str = "com.mojang.serialization.DataResult$Success.flatMap(DataResult.java:201)";
+const MAP_DECODER_4_DECODE: &str = "com.mojang.serialization.MapDecoder$4.decode(MapDecoder.java:94)";
+const MAP_DECODER_3_DECODE: &str = "com.mojang.serialization.MapDecoder$3.decode(MapDecoder.java:80)";
+const CODEC_3_DECODE: &str = "com.mojang.serialization.Codec$3.decode(Codec.java:102)";
+const CODEC_2_DECODE: &str = "com.mojang.serialization.Codec$2.decode(Codec.java:74)";
+const DECODER_1_DECODE: &str = "com.mojang.serialization.Decoder$1.decode(Decoder.java:49)";
+const DECODER_2_DECODE: &str = "com.mojang.serialization.Decoder$2.decode(Decoder.java:63)";
 
 const CODEC_VIEW: [&str; 4] = [
     "com.mojang.serialization.MapDecoder.lambda$compressedDecode$1(MapDecoder.java:52)",
@@ -52,6 +58,78 @@ pub fn optional_field() -> Vec<&'static str> {
     vec![DECODER_PARSE, OPTIONAL_FIELD_CODEC_DECODE]
 }
 
+pub fn optional_field_with_default() -> Vec<&'static str> {
+    vec![DECODER_PARSE, OPTIONAL_FIELD_CODEC_DECODE, MAP_DECODER_4_DECODE, MAP_CODEC_2_DECODE]
+}
+
+pub fn codec_xmap() -> Vec<&'static str> {
+    vec![DECODER_2_DECODE, CODEC_2_DECODE]
+}
+
+pub fn codec_flat_xmap() -> Vec<&'static str> {
+    vec![DECODER_1_DECODE, CODEC_2_DECODE]
+}
+
+pub fn map_codec_xmap() -> Vec<&'static str> {
+    vec![MAP_DECODER_4_DECODE, MAP_CODEC_2_DECODE]
+}
+
+pub fn map_codec_flat_xmap() -> Vec<&'static str> {
+    vec![MAP_DECODER_3_DECODE, CODEC_3_DECODE]
+}
+
+pub fn either_first() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.codecs.EitherCodec.decode(EitherCodec.java:14)"]
+}
+
+pub fn either_second() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.codecs.EitherCodec.decode(EitherCodec.java:18)"]
+}
+
+pub fn xor_first() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.codecs.XorCodec.decode(XorCodec.java:16)"]
+}
+
+pub fn xor_second() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.codecs.XorCodec.decode(XorCodec.java:17)"]
+}
+
+pub fn recursive() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.Codec$RecursiveCodec.decode(Codec.java:219)"]
+}
+
+pub fn registry_file_inline() -> Vec<&'static str> {
+    vec!["net.minecraft.core.registries.codec.RegistryFileCodec.decode(RegistryFileCodec.java:64)"]
+}
+
+pub fn pair_map_first() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.codecs.PairMapCodec.decode(PairMapCodec.java:26)"]
+}
+
+pub fn pair_map_second() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.codecs.PairMapCodec.lambda$decode$1(PairMapCodec.java:27)", DATA_RESULT_SUCCESS_FLAT_MAP, "com.mojang.serialization.codecs.PairMapCodec.decode(PairMapCodec.java:26)"]
+}
+
+#[derive(Clone, Copy)]
+pub enum FieldShape {
+    Required,
+    Optional,
+    OptionalDefault,
+    Nested,
+}
+
+pub fn record_field(shape: FieldShape, size: usize, index: usize) -> Vec<&'static str> {
+    let mut frames = match shape {
+        FieldShape::Nested => Vec::new(),
+        FieldShape::Required => required_field(),
+        FieldShape::Optional => optional_field(),
+        FieldShape::OptionalDefault => optional_field_with_default(),
+    };
+    frames.extend(record_group(size, index + 1));
+    frames.push(RECORD_CODEC_BUILDER_2_DECODE);
+    frames
+}
+
 pub fn record_map_codec() -> &'static str {
     RECORD_CODEC_BUILDER_2_DECODE
 }
@@ -88,6 +166,14 @@ const LONG_READ: [&str; 2] = [
     "com.mojang.serialization.DataResult$Success.map(DataResult.java:175)",
     "com.mojang.serialization.Codec$13.read(Codec.java:582)",
 ];
+
+pub fn byte_leaf() -> Vec<&'static str> {
+    primitive_leaf(["com.mojang.serialization.DataResult$Success.map(DataResult.java:175)", "com.mojang.serialization.Codec$10.read(Codec.java:525)"], false)
+}
+
+pub fn short_leaf() -> Vec<&'static str> {
+    primitive_leaf(["com.mojang.serialization.DataResult$Success.map(DataResult.java:175)", "com.mojang.serialization.Codec$11.read(Codec.java:544)"], false)
+}
 
 pub fn int_leaf(ranged: bool) -> Vec<&'static str> {
     primitive_leaf(INT_READ, ranged)
@@ -141,6 +227,7 @@ fn function(size: usize, frames: &mut Vec<&'static str>) {
         frames.push(applicative(size, 0));
         return;
     }
+    frames.push(MAP_DECODER_4_DECODE);
     let outer = outer_arity(size);
     function(size - outer, frames);
     function(outer, frames);
@@ -188,5 +275,11 @@ mod tests {
         assert_eq!(lines(record_group(6, 6)), ["325"]);
         assert_eq!(lines(record_group(8, 3)), ["408", "405"]);
         assert_eq!(lines(record_group(8, 8)), ["409"]);
+    }
+
+    #[test]
+    fn mapping_the_function_of_a_nested_applicative_adds_a_map_decoder_frame() {
+        assert_eq!(lines(record_group(11, 4)), ["324", "94", "322", "322"]);
+        assert_eq!(lines(record_group(8, 4)), ["409", "405"]);
     }
 }

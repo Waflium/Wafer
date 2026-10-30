@@ -35,6 +35,10 @@ impl Advancement {
     }
 
     fn decode_partial(tag: &Nbt) -> DecodeResult<Advancement> {
+        crate::core::data_registries::unwinding(crate::util::dfu_frames::codec_flat_xmap, || codec::as_codec(|| Advancement::decode_record(tag)))
+    }
+
+    fn decode_record(tag: &Nbt) -> DecodeResult<Advancement> {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }

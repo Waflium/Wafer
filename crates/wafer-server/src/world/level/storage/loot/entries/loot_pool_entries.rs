@@ -19,6 +19,7 @@ pub fn decode_partial(tag: &Nbt) -> DecodeResult<LootPoolEntryContainer> {
         Err(error) => return DecodeResult::error(error),
     };
     let mut record = Record::default();
+    codec::as_dispatch(|| {
     let decoded = match ty.as_str() {
         "minecraft:empty" | "minecraft:item" | "minecraft:dynamic" | "minecraft:slots" => {
             SingleEntryContainerBase::decode_in(&mut record, tag, &ty).map(|(entry, common)| (LootPoolEntryContainerType::Single(entry), common))
@@ -31,6 +32,7 @@ pub fn decode_partial(tag: &Nbt) -> DecodeResult<LootPoolEntryContainer> {
         other => return DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_pool_entry_type]: {other}")),
     };
     record.build(|| decoded.map(|(entry, common)| LootPoolEntryContainer::new(common, entry)))
+    })
 }
 
 #[cfg(test)]

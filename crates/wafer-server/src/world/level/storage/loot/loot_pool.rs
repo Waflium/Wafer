@@ -30,16 +30,18 @@ impl LootPool {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<LootPool> {
-        if let Err(error) = codec::map(tag) {
-            return DecodeResult::error(error);
-        }
-        let mut record = Record::default();
-        let entries = record.required(tag, "entries", |entries| codec::list_partial(entries, |entry| DecodeResult::from(loot_pool_entries::decode(entry))));
-        let condition = record.optional(tag, "condition", LootItemCondition::decode_holder_partial);
-        let modifier = record.optional(tag, "modifier", LootItemFunction::decode_holder);
-        let rolls = record.required(tag, "rolls", ContextIntProvider::decode_holder);
-        let bonus_rolls = record.with_default(tag, "bonus_rolls", floats::exactly(0.0), ContextFloatProvider::decode_holder);
-        record.build(|| Some(LootPool { entries: entries?, condition, modifier, rolls: rolls?, bonus_rolls }))
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = Record::default();
+            let entries = record.required(tag, "entries", |entries| codec::list_partial(entries, |entry| DecodeResult::from(loot_pool_entries::decode(entry))));
+            let condition = record.optional(tag, "condition", LootItemCondition::decode_holder_partial);
+            let modifier = record.optional(tag, "modifier", LootItemFunction::decode_holder);
+            let rolls = record.required(tag, "rolls", ContextIntProvider::decode_holder);
+            let bonus_rolls = record.with_default(tag, "bonus_rolls", floats::exactly(0.0), ContextFloatProvider::decode_holder);
+            record.build(|| Some(LootPool { entries: entries?, condition, modifier, rolls: rolls?, bonus_rolls }))
+        })
     }
 
     fn add_random_item<'a>(&self, result: &mut dyn FnMut(&mut LootContext<'a>, ItemStack), context: &mut LootContext<'a>) {

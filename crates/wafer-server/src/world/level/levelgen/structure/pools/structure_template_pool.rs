@@ -8,7 +8,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::structure_pool_element::{self, StructurePoolElement};
 use crate::util::codec::DecodeResult;
-use crate::world::item::component::codec::{Codec, RangeError, Stream};
+use crate::world::item::component::codec::{Codec, Field, RangeError, Stream, Wrap, decode_map_pair};
 use crate::world::item::component::types::{self, Pair, req};
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::blockpredicates::block_predicate::resource;
@@ -149,13 +149,14 @@ fn direct_codec_lazy() -> &'static Pair {
 }
 
 fn element_with_weight(tag: &Nbt) -> DecodeResult<Nbt> {
-    static ELEMENT: LazyLock<Codec> = LazyLock::new(|| Codec::Record(vec![req("element", (Codec::Lazy(structure_pool_element::codec_lazy), Stream::Lazy))]));
-    static WEIGHT: LazyLock<Codec> = LazyLock::new(|| Codec::Record(vec![req("weight", (Codec::Int(1, 150, RangeError::Outside), Stream::Int))]));
-    ELEMENT.decode_partial(tag).flat_map(|element| WEIGHT.decode_partial(tag).map(|weight| Nbt::Compound(vec![("element".into(), element), ("weight".into(), weight)].into())))
+    static ELEMENT: LazyLock<Field> = LazyLock::new(|| req("element", (Codec::Lazy(structure_pool_element::codec_lazy), Stream::Lazy)));
+    static WEIGHT: LazyLock<Field> = LazyLock::new(|| req("weight", (Codec::Int(1, 150, RangeError::Outside), Stream::Int)));
+    decode_map_pair(&ELEMENT, &WEIGHT, tag)
 }
 
 pub fn direct_codec() -> Pair {
-    types::record(vec![req("fallback", holder_codec()), req("elements", types::list((Codec::Func(element_with_weight), Stream::Nbt)))])
+    let element_with_weight = Codec::Framed(Box::new(Codec::Func(element_with_weight)), Wrap::CodecView);
+    types::record(vec![req("fallback", holder_codec()), req("elements", types::list((element_with_weight, Stream::Nbt)))])
 }
 
 pub fn holder_codec() -> Pair {

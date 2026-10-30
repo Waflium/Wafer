@@ -14,11 +14,13 @@ impl LocationCheck {
     pub fn decode(tag: &Nbt) -> DecodeResult<LocationCheck> {
         let mut record = codec::Record::default();
         let predicate = record.optional(tag, "predicate", LocationPredicate::decode);
-        let mut offset_record = codec::Record::default();
-        let x = offset_record.with_default(tag, "offsetX", 0, codec::int);
-        let y = offset_record.with_default(tag, "offsetY", 0, codec::int);
-        let z = offset_record.with_default(tag, "offsetZ", 0, codec::int);
-        let offset = record.absorb(offset_record.build(|| Some((x, y, z))));
+        let offset = record.nested(|| {
+            let mut offset_record = codec::Record::default();
+            let x = offset_record.with_default(tag, "offsetX", 0, codec::int);
+            let y = offset_record.with_default(tag, "offsetY", 0, codec::int);
+            let z = offset_record.with_default(tag, "offsetZ", 0, codec::int);
+            offset_record.build(|| Some((x, y, z)))
+        });
         record.build(|| Some(LocationCheck { predicate, offset: offset? }))
     }
 

@@ -2,6 +2,7 @@ use std::cell::Cell;
 
 use wafer_protocol::nbt::{Nbt, TagMap};
 
+use crate::util::dfu_frames;
 use crate::world::item::component::codec as component_codec;
 
 pub type DataResult<T> = Result<T, String>;
@@ -83,11 +84,44 @@ impl<T> From<DataResult<T>> for DecodeResult<T> {
     }
 }
 
-#[derive(Default)]
-pub struct Record(Vec<String>);
+pub struct Record(Vec<String>, usize, Option<(usize, usize, dfu_frames::FieldShape)>);
+
+thread_local! {
+    static LEADING_FIELDS: Cell<usize> = const { Cell::new(0) };
+}
+
+pub fn with_leading_field<R>(decode: impl FnOnce() -> R) -> R {
+    LEADING_FIELDS.with(|leading| leading.set(1));
+    let result = decode();
+    LEADING_FIELDS.with(|leading| leading.set(0));
+    result
+}
+
+impl Default for Record {
+    fn default() -> Record {
+        Record(Vec::new(), LEADING_FIELDS.with(|leading| leading.replace(0)), None)
+    }
+}
 
 impl Record {
+    fn scope<R>(&mut self, shape: dfu_frames::FieldShape, decode: impl FnOnce() -> R) -> R {
+        let index = self.1;
+        self.1 += 1;
+        let (result, position) = crate::core::data_registries::unwinding_deferred(decode);
+        if let Some(position) = position {
+            self.2 = Some((position, index, shape));
+        }
+        result
+    }
+
+    fn resolve(&self) {
+        if let Some((position, index, shape)) = self.2 {
+            crate::core::data_registries::splice_frames(position, &dfu_frames::record_field(shape, self.1, index));
+        }
+    }
+
     pub fn field<T>(&mut self, result: DataResult<T>) -> Option<T> {
+        self.1 += 1;
         match result {
             Ok(value) => Some(value),
             Err(error) => {
@@ -97,11 +131,26 @@ impl Record {
         }
     }
 
+    pub fn nested<T>(&mut self, decode: impl FnOnce() -> DecodeResult<T>) -> Option<T> {
+        let result = self.scope(dfu_frames::FieldShape::Nested, decode);
+        self.absorb_decoded(result)
+    }
+
+    pub fn skip(&mut self) {
+        self.1 += 1;
+    }
+
     pub fn finish(self) -> DataResult<()> {
+        self.resolve();
         if self.0.is_empty() { Ok(()) } else { Err(self.0.into_iter().rev().collect::<Vec<_>>().join("; ")) }
     }
 
     pub fn absorb<T>(&mut self, result: DecodeResult<T>) -> Option<T> {
+        self.1 += 1;
+        self.absorb_decoded(result)
+    }
+
+    fn absorb_decoded<T>(&mut self, result: DecodeResult<T>) -> Option<T> {
         if let Some(error) = result.error {
             self.0.push(error);
         }
@@ -110,24 +159,37 @@ impl Record {
 
     pub fn required<T, R: Into<DecodeResult<T>>>(&mut self, tag: &Nbt, name: &str, decode: impl FnOnce(&Nbt) -> R) -> Option<T> {
         match field(tag, name) {
-            Ok(value) => self.absorb(decode(value).into()),
+            Ok(value) => {
+                let result = self.scope(dfu_frames::FieldShape::Required, || decode(value).into());
+                self.absorb_decoded(result)
+            }
             Err(error) => {
+                self.1 += 1;
                 self.0.push(error);
                 None
             }
         }
     }
 
+    fn optional_with<T, R: Into<DecodeResult<T>>>(&mut self, shape: dfu_frames::FieldShape, tag: &Nbt, name: &str, decode: impl FnOnce(&Nbt) -> R) -> Option<T> {
+        let Some(value) = tag.get(name) else {
+            self.1 += 1;
+            return None;
+        };
+        let result = self.scope(shape, || decode(value).into());
+        self.absorb_decoded(result)
+    }
+
     pub fn optional<T, R: Into<DecodeResult<T>>>(&mut self, tag: &Nbt, name: &str, decode: impl FnOnce(&Nbt) -> R) -> Option<T> {
-        let value = tag.get(name)?;
-        self.absorb(decode(value).into())
+        self.optional_with(dfu_frames::FieldShape::Optional, tag, name, decode)
     }
 
     pub fn with_default<T, R: Into<DecodeResult<T>>>(&mut self, tag: &Nbt, name: &str, default: T, decode: impl FnOnce(&Nbt) -> R) -> T {
-        self.optional(tag, name, decode).unwrap_or(default)
+        self.optional_with(dfu_frames::FieldShape::OptionalDefault, tag, name, decode).unwrap_or(default)
     }
 
     pub fn build<T>(self, build: impl FnOnce() -> Option<T>) -> DecodeResult<T> {
+        self.resolve();
         let error = if self.0.is_empty() { None } else { Some(self.0.into_iter().rev().collect::<Vec<_>>().join("; ")) };
         DecodeResult { value: build(), error }
     }
@@ -192,11 +254,11 @@ pub fn bool_value(tag: &Nbt) -> DataResult<bool> {
 }
 
 pub fn int(tag: &Nbt) -> DataResult<i32> {
-    Ok(component_codec::as_i32(number(tag)?))
+    crate::core::data_registries::unwinding(|| dfu_frames::int_leaf(false), || Ok(component_codec::as_i32(number(tag)?)))
 }
 
 pub fn int_range(tag: &Nbt, min: i32, max: i32) -> DataResult<i32> {
-    let value = int(tag)?;
+    let value = crate::core::data_registries::unwinding(|| dfu_frames::int_leaf(true), || -> DataResult<i32> { Ok(component_codec::as_i32(number(tag)?)) })?;
     if value < min || value > max {
         return Err(format!("Value must be within range [{min};{max}]: {value}"));
     }
@@ -204,7 +266,7 @@ pub fn int_range(tag: &Nbt, min: i32, max: i32) -> DataResult<i32> {
 }
 
 pub fn long(tag: &Nbt) -> DataResult<i64> {
-    Ok(component_codec::as_i64(number(tag)?))
+    crate::core::data_registries::unwinding(|| dfu_frames::long_leaf(false), || Ok(component_codec::as_i64(number(tag)?)))
 }
 
 pub fn float(tag: &Nbt) -> DataResult<f32> {
@@ -247,7 +309,7 @@ pub fn list_of<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResu
     let mut values = Vec::with_capacity(items.len());
     let mut errors = Vec::new();
     for item in &items {
-        match decode(item) {
+        match list_element(|| decode(item)) {
             Ok(value) => values.push(value),
             Err(error) => errors.push(error),
         }
@@ -387,6 +449,25 @@ pub fn either_result<A, B>(first: DecodeResult<A>, second: impl FnOnce() -> Deco
     ))
 }
 
+pub fn as_codec<R>(decode: impl FnOnce() -> R) -> R {
+    crate::core::data_registries::unwinding(dfu_frames::codec_view, decode)
+}
+
+pub fn as_dispatch<R>(decode: impl FnOnce() -> R) -> R {
+    crate::core::data_registries::unwinding(
+        || {
+            let mut frames = dfu_frames::key_dispatch();
+            frames.extend(dfu_frames::codec_view());
+            frames
+        },
+        decode,
+    )
+}
+
+pub fn list_element<R>(decode: impl FnOnce() -> R) -> R {
+    crate::core::data_registries::unwinding(dfu_frames::list, decode)
+}
+
 pub fn list_partial<T>(tag: &Nbt, decode: impl Fn(&Nbt) -> DecodeResult<T>) -> DecodeResult<Vec<T>> {
     sized_list_partial(tag, usize::MAX, decode)
 }
@@ -402,7 +483,7 @@ pub fn sized_list_partial<T>(tag: &Nbt, max_size: usize, decode: impl Fn(&Nbt) -
         if elements.len() >= max_size {
             continue;
         }
-        let result = decode(item);
+        let result = list_element(|| decode(item));
         if let Some(error) = result.error {
             errors.push(error);
         }
@@ -428,7 +509,7 @@ pub fn list_between_partial<T>(tag: &Nbt, min: usize, max: usize, decode: impl F
         if elements.len() >= max {
             continue;
         }
-        let result = decode(item);
+        let result = list_element(|| decode(item));
         if let Some(error) = result.error {
             errors.push(error);
         }

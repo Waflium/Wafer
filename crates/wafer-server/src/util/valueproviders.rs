@@ -5,7 +5,7 @@ use serde_json::Value;
 use wafer_protocol::nbt::Nbt;
 
 use super::random::{WeightedList, non_empty_weighted_list_codec, weighted_data_codec};
-use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream};
+use crate::world::item::component::codec::{Codec, Dispatch, Selector, Stream, Wrap};
 use crate::world::item::component::types::{self, Pair, req};
 
 fn constant_value(provider: Nbt) -> Result<Nbt, String> {
@@ -113,11 +113,11 @@ fn validate_float_provider_range<const MIN: u32, const MAX: u32>(provider: Nbt) 
 }
 
 pub fn int_provider_codec_in<const MIN: i32, const MAX: i32>() -> Pair {
-    (Codec::Normalize(Box::new(int_provider_codec().0), validate_int_provider_range::<MIN, MAX>), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(int_provider_codec().0), validate_int_provider_range::<MIN, MAX>)), Wrap::FlatXmap), Stream::Nbt)
 }
 
 pub fn float_provider_codec_in<const MIN: u32, const MAX: u32>() -> Pair {
-    (Codec::Normalize(Box::new(float_provider_codec().0), validate_float_provider_range::<MIN, MAX>), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(float_provider_codec().0), validate_float_provider_range::<MIN, MAX>)), Wrap::FlatXmap), Stream::Nbt)
 }
 
 fn int_provider_lazy() -> &'static Pair {
@@ -150,7 +150,7 @@ pub fn int_provider_codec() -> Pair {
         Box::new(Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:int_provider_type"), cases }))),
         validate_int_provider_type,
     );
-    (Codec::Normalize(Box::new(Codec::Either(Box::new(Codec::int()), Box::new(dispatch))), effective_int_bounds), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(Codec::Either(Box::new(Codec::int()), Box::new(dispatch))), effective_int_bounds)), Wrap::Xmap), Stream::Nbt)
 }
 
 pub fn non_negative_int_provider_codec() -> Pair {
@@ -172,7 +172,7 @@ pub fn float_provider_codec() -> Pair {
         Box::new(Codec::Dispatch(Box::new(Dispatch { key: "type", selector: Selector::Registry("minecraft:float_provider_type"), cases }))),
         validate_float_provider_type,
     );
-    (Codec::Normalize(Box::new(Codec::Either(Box::new(Codec::float()), Box::new(dispatch))), constant_value), Stream::Nbt)
+    (Codec::Framed(Box::new(Codec::Normalize(Box::new(Codec::Either(Box::new(Codec::float()), Box::new(dispatch))), constant_value)), Wrap::Xmap), Stream::Nbt)
 }
 
 #[derive(Clone, PartialEq, Debug)]

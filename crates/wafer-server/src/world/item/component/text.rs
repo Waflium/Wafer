@@ -308,21 +308,89 @@ fn java_ops_number(tag: &Nbt) -> Nbt {
     }
 }
 
-fn contains_json_null(tag: &Nbt) -> bool {
-    match tag {
-        Nbt::List(items) => items.iter().any(|item| matches!(item, Nbt::End) || contains_json_null(item)),
-        Nbt::Compound(fields) => fields.iter().any(|(_, value)| matches!(value, Nbt::End) || contains_json_null(value)),
-        _ => false,
+fn json_null_containers(tag: &Nbt, containers: &mut Vec<bool>) -> bool {
+    let (children, is_list): (Vec<&Nbt>, bool) = match tag {
+        Nbt::List(items) => (items.iter().collect(), true),
+        Nbt::Compound(fields) => (fields.iter().map(|(_, value)| value).collect(), false),
+        _ => return false,
+    };
+    containers.push(is_list);
+    for child in children {
+        if matches!(child, Nbt::End) || json_null_containers(child, containers) {
+            return true;
+        }
     }
+    containers.pop();
+    false
 }
 
 const JSON_OPS_NULL_POINTER: &str = "Cannot invoke \"com.google.gson.JsonElement.getAsJsonPrimitive()\" because \"input\" is null";
 
+const JSON_OPS_LEAF: [&str; 2] = ["com.mojang.serialization.JsonOps.convertTo(JsonOps.java:61)", "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)"];
+
+const JSON_OPS_LIST_LEVEL: [&str; 14] = [
+    "com.mojang.serialization.DynamicOps.lambda$convertList$31(DynamicOps.java:245)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.ArrayList$Itr.forEachRemaining(ArrayList.java:1086)",
+    "java.base/java.util.Spliterators$IteratorSpliterator.forEachRemaining(Spliterators.java:1939)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:635)",
+    "java.base/java.util.stream.AbstractPipeline.evaluateToArrayNode(AbstractPipeline.java:291)",
+    "java.base/java.util.stream.ReferencePipeline.toArray(ReferencePipeline.java:652)",
+    "java.base/java.util.stream.ReferencePipeline.toArray(ReferencePipeline.java:658)",
+    "java.base/java.util.stream.ReferencePipeline.toList(ReferencePipeline.java:663)",
+    "com.mojang.serialization.JavaOps.createList(JavaOps.java:345)",
+    "com.mojang.serialization.DynamicOps.convertList(DynamicOps.java:245)",
+];
+
+const JSON_OPS_MAP_LEVEL: [&str; 12] = [
+    "com.mojang.serialization.DynamicOps.lambda$convertMap$32(DynamicOps.java:250)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.Iterator.forEachRemaining(Iterator.java:133)",
+    "java.base/java.util.Spliterators$IteratorSpliterator.forEachRemaining(Spliterators.java:1939)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:723)",
+    "com.mojang.serialization.JavaOps.createMap(JavaOps.java:287)",
+    "com.mojang.serialization.DynamicOps.convertMap(DynamicOps.java:249)",
+];
+
+const JSON_OPS_ARG_CONVERTER: [&str; 11] = [
+    "net.minecraft.resources.DelegatingOps.convertTo(DelegatingOps.java:52)",
+    "com.mojang.serialization.Dynamic.convert(Dynamic.java:231)",
+    "com.mojang.serialization.Dynamic.convert(Dynamic.java:213)",
+    "net.minecraft.util.ExtraCodecs.lambda$converter$0(ExtraCodecs.java:90)",
+    "com.mojang.datafixers.util.Pair.mapFirst(Pair.java:64)",
+    "com.mojang.serialization.Decoder$2.lambda$decode$0(Decoder.java:63)",
+    "com.mojang.serialization.DataResult$Success.map(DataResult.java:175)",
+    "com.mojang.serialization.Decoder$2.decode(Decoder.java:63)",
+    "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
+    "com.mojang.serialization.Decoder$1.decode(Decoder.java:49)",
+    "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
+];
+
 pub fn json_ops_null_pointer(tag: &Nbt) -> Option<String> {
-    if !matches!(tag, Nbt::List(_) | Nbt::Compound(_)) || !nbt::is_json_source() || !contains_json_null(tag) {
+    if !matches!(tag, Nbt::List(_) | Nbt::Compound(_)) || !nbt::is_json_source() {
         return None;
     }
-    crate::core::data_registries::throw("java.lang.NullPointerException", JSON_OPS_NULL_POINTER.into(), &[]);
+    let mut containers = Vec::new();
+    if !json_null_containers(tag, &mut containers) {
+        return None;
+    }
+    let mut frames: Vec<&'static str> = JSON_OPS_LEAF.to_vec();
+    for is_list in containers.iter().rev() {
+        let level: &[&'static str] = if *is_list { &JSON_OPS_LIST_LEVEL } else { &JSON_OPS_MAP_LEVEL };
+        frames.extend_from_slice(level);
+        frames.push(if *is_list { "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:56)" } else { "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:53)" });
+        frames.push(JSON_OPS_LEAF[1]);
+    }
+    frames.extend_from_slice(&JSON_OPS_ARG_CONVERTER);
+    crate::core::data_registries::throw_unwinding("java.lang.NullPointerException", JSON_OPS_NULL_POINTER.into(), &frames);
     Some(format!("java.lang.NullPointerException: {JSON_OPS_NULL_POINTER}"))
 }
 

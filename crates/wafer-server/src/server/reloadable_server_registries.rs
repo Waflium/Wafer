@@ -242,7 +242,7 @@ fn decode_registry<T>(
         let parsed = match crate::util::gson::parse_strict_bytes_element_throwable(&source.bytes) {
             Ok(json) => {
                 crate::core::data_registries::take_thrown();
-                let decoded = crate::nbt::with_json_source(|| decode(&element_to_nbt(&json))).map_err(ElementFailure::Decode);
+                let decoded = crate::nbt::with_json_source(|| crate::core::data_registries::recording(|| crate::core::data_registries::unwinding(|| vec![crate::util::dfu_frames::DECODER_PARSE], || decode(&element_to_nbt(&json))))).map_err(ElementFailure::Decode);
                 let decoded = match crate::core::data_registries::take_thrown() {
                     Some(thrown) => Err(ElementFailure::Throw(thrown)),
                     None => decoded,

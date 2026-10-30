@@ -26,15 +26,17 @@ impl AdvancementRewards {
     }
 
     pub fn decode_partial(tag: &Nbt) -> DecodeResult<AdvancementRewards> {
-        if let Err(error) = codec::map(tag) {
-            return DecodeResult::error(error);
-        }
-        let mut record = Record::default();
-        let experience = record.with_default(tag, "experience", 0, |experience| DecodeResult::from(codec::int(experience)));
-        let loot = record.with_default(tag, "loot", Vec::new(), |loot| DecodeResult::from(LootTable::decode_list(loot)));
-        let recipes = record.with_default(tag, "recipes", Vec::new(), |recipes| codec::list_partial(recipes, |recipe| DecodeResult::from(codec::identifier(recipe))));
-        let function = record.optional(tag, "function", |function| DecodeResult::from(codec::identifier(function)));
-        record.build(|| Some(AdvancementRewards { experience, loot, recipes, function }))
+        codec::as_codec(|| {
+            if let Err(error) = codec::map(tag) {
+                return DecodeResult::error(error);
+            }
+            let mut record = Record::default();
+            let experience = record.with_default(tag, "experience", 0, |experience| DecodeResult::from(codec::int(experience)));
+            let loot = record.with_default(tag, "loot", Vec::new(), |loot| DecodeResult::from(LootTable::decode_list(loot)));
+            let recipes = record.with_default(tag, "recipes", Vec::new(), |recipes| codec::list_partial(recipes, |recipe| DecodeResult::from(codec::identifier(recipe))));
+            let function = record.optional(tag, "function", |function| DecodeResult::from(codec::identifier(function)));
+            record.build(|| Some(AdvancementRewards { experience, loot, recipes, function }))
+        })
     }
 
     pub fn grant(&self, level: &mut ServerLevel, player: EntityId, trigger: CriterionTrigger) {

@@ -33,7 +33,7 @@ fn cost_codec() -> Pair {
 pub fn direct_codec() -> Pair {
     record(vec![
         req("description", text::text()),
-        req("supported_items", types::holder_set("minecraft:item")),
+        req("supported_items", types::holder_set("minecraft:item")).grouped(8),
         opt("primary_items", types::holder_set("minecraft:item")),
         req("weight", types::var_int(Codec::Int(1, 1024, RangeError::Within))),
         req("max_level", types::var_int(Codec::Int(1, MAX_LEVEL, RangeError::Within))),

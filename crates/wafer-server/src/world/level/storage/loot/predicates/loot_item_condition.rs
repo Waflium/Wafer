@@ -195,7 +195,7 @@ impl LootItemCondition {
             Ok(ty) => ty,
             Err(error) => return DecodeResult::error(error),
         };
-        match ty.as_str() {
+        codec::as_dispatch(|| match ty.as_str() {
             "minecraft:inverted" => InvertedLootItemCondition::decode(tag).map(LootItemCondition::Inverted),
             "minecraft:any_of" => AnyOfCondition::decode(tag).map(LootItemCondition::AnyOf),
             "minecraft:all_of" => AllOfCondition::decode(tag).map(LootItemCondition::AllOf),
@@ -219,7 +219,7 @@ impl LootItemCondition {
             "minecraft:enchantment_active_check" => EnchantmentActiveCheck::decode(tag).map(LootItemCondition::EnchantmentActiveCheck),
             "minecraft:environment_attribute_check" => DecodeResult::from(EnvironmentAttributeCheck::decode(tag)).map(LootItemCondition::EnvironmentAttributeCheck),
             other => DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_condition_type]: {other}")),
-        }
+        })
     }
 
     pub fn test(&self, context: &mut LootContext) -> bool {

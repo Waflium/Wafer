@@ -9,6 +9,7 @@ use crate::commands::arguments::parse_identifier;
 use crate::commands::arguments::selector::entity_selector::EntitySelector;
 use crate::commands::arguments::selector::entity_selector_parser::EntitySelectorParser;
 use crate::util::compilable_string::{CompilableString, command_parser_helper};
+use crate::util::dfu_frames;
 use crate::world::item::component::{DataComponentPatch, custom};
 use crate::world::level::storage::tag_value_input;
 
@@ -108,7 +109,7 @@ fn list<T>(tag: &Nbt,decode: impl Fn(&Nbt) -> DataResult<T>) -> DataResult<Vec<T
     let mut elements = Vec::new();
     let mut errors = Vec::new();
     for item in items {
-        let result = decode(item);
+        let result = crate::util::codec::list_element(|| decode(item));
         if let Some(error) = result.error {
             errors.push(error);
         }
@@ -231,11 +232,22 @@ pub fn decode_style_fields(fields: &[(String, Nbt)]) -> std::result::Result<Styl
 }
 
 fn decode_component(tag: &Nbt) -> DataResult<Component> {
-    let literal = string(tag).map(Component::literal);
-    let special = either(literal, || non_empty_list(tag, decode_component).map(create_from_list));
-    either(special, || match tag {
-        Nbt::Compound(fields) => decode_full(fields),
-        _ => DataResult::error(not_a_map(tag)),
+    use crate::core::data_registries::unwinding;
+    unwinding(dfu_frames::recursive, || {
+        unwinding(dfu_frames::codec_xmap, || {
+            let special = unwinding(dfu_frames::either_first, || {
+                let literal = string(tag).map(Component::literal);
+                either(literal, || unwinding(dfu_frames::either_second, || unwinding(dfu_frames::codec_flat_xmap, || non_empty_list(tag, decode_component).map(create_from_list))))
+            });
+            either(special, || {
+                unwinding(dfu_frames::either_second, || {
+                    unwinding(dfu_frames::codec_view, || match tag {
+                        Nbt::Compound(fields) => decode_full(fields),
+                        _ => DataResult::error(not_a_map(tag)),
+                    })
+                })
+            })
+        })
     })
 }
 
@@ -247,8 +259,20 @@ fn create_from_list(list: Vec<Component>) -> Component {
 }
 
 fn decode_full(fields: &[(String, Nbt)]) -> DataResult<Component> {
-    let contents = decode_contents(fields);
-    let extra = optional(get(fields, "extra"), |tag| non_empty_list(tag, decode_component));
+    use crate::core::data_registries::unwinding;
+    let contents = unwinding(
+        || {
+            let mut frames = vec!["net.minecraft.util.ExtraCodecs$3.decode(ExtraCodecs.java:346)"];
+            frames.extend(dfu_frames::record_group(3, 1));
+            frames.push(dfu_frames::record_map_codec());
+            frames
+        },
+        || decode_contents(fields),
+    );
+    let extra = unwinding(
+        || dfu_frames::record_field(dfu_frames::FieldShape::OptionalDefault, 3, 1),
+        || optional(get(fields, "extra"), |tag| unwinding(dfu_frames::codec_flat_xmap, || non_empty_list(tag, decode_component))),
+    );
     let style = style_fields(fields);
     let error = record_error(&[&contents.error, &extra.error, &style.error]);
     let value = match (contents.value, extra.value, style.value) {
@@ -264,6 +288,10 @@ fn decode_contents(fields: &[(String, Nbt)]) -> DataResult<Contents> {
     create_legacy_component_matcher("type", &CONTENT_TYPES, fields, decode_content_type)
 }
 
+const STRICT_EITHER_TYPED: &str = "net.minecraft.network.chat.ComponentSerialization$StrictEither.decode(ComponentSerialization.java:106)";
+const STRICT_EITHER_FUZZY: &str = "net.minecraft.network.chat.ComponentSerialization$StrictEither.decode(ComponentSerialization.java:108)";
+const FUZZY_CODEC: &str = "net.minecraft.network.chat.ComponentSerialization$FuzzyCodec.decode(ComponentSerialization.java:135)";
+
 fn create_legacy_component_matcher<T>(type_field_name: &str, types: &[&str], fields: &[(String, Nbt)], decode_type: impl Fn(&str, &[(String, Nbt)]) -> DataResult<T>) -> DataResult<T> {
     if let Some(kind) = get(fields, type_field_name) {
         let kind = match string(kind).into_result() {
@@ -273,15 +301,32 @@ fn create_legacy_component_matcher<T>(type_field_name: &str, types: &[&str], fie
         if !types.contains(&kind.as_str()) {
             return DataResult::error(format!("Unknown element id: {kind}"));
         }
-        return decode_type(&kind, fields);
-    }
-    for kind in types {
-        let result = decode_type(kind, fields);
-        if result.is_success() {
-            return result;
+        if type_field_name != "type" {
+            return decode_type(&kind, fields);
         }
+        return crate::core::data_registries::unwinding(
+            || {
+                let mut frames = dfu_frames::key_dispatch();
+                frames.push(STRICT_EITHER_TYPED);
+                frames
+            },
+            || decode_type(&kind, fields),
+        );
     }
-    DataResult::error("No matching codec found")
+    let fuzzy = type_field_name == "type";
+    let tried = crate::core::data_registries::unwinding(
+        || if fuzzy { vec![STRICT_EITHER_FUZZY] } else { Vec::new() },
+        || {
+            for kind in types {
+                let result = if fuzzy { crate::core::data_registries::unwinding(|| vec![FUZZY_CODEC], || decode_type(kind, fields)) } else { decode_type(kind, fields) };
+                if result.is_success() {
+                    return Some(result);
+                }
+            }
+            None
+        },
+    );
+    tried.unwrap_or_else(|| DataResult::error("No matching codec found"))
 }
 
 fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> DataResult<Contents> {
@@ -290,7 +335,10 @@ fn decode_content_type(kind: &str, fields: &[(String, Nbt)]) -> DataResult<Conte
         "translatable" => {
             let key = required(fields, "translate", string);
             let fallback = get(fields, "fallback").and_then(|f| string(f).value);
-            let args = optional(get(fields, "with"), |tag| list(tag, decode_arg));
+            let args = crate::core::data_registries::unwinding(
+                || dfu_frames::record_field(dfu_frames::FieldShape::Optional, 3, 2),
+                || optional(get(fields, "with"), |tag| list(tag, decode_arg)),
+            );
             let error = record_error(&[&key.error, &args.error]);
             let value = match (key.value, args.value) {
                 (Some(key), Some(args)) => Some(Contents::Translatable { key, fallback, args: args.unwrap_or_default() }),
@@ -412,7 +460,10 @@ fn decode_arg(tag: &Nbt) -> DataResult<Arg> {
         Nbt::Float(v) => Arg::Float(*v),
         Nbt::Double(v) => Arg::Double(*v),
         other => {
-            if let Some(message) = crate::world::item::component::text::json_ops_null_pointer(other) {
+            let null_pointer = crate::core::data_registries::unwinding(dfu_frames::codec_xmap, || {
+                crate::core::data_registries::unwinding(dfu_frames::either_first, || crate::world::item::component::text::json_ops_null_pointer(other))
+            });
+            if let Some(message) = null_pointer {
                 return DataResult::error(message);
             }
             return either(DataResult::error("This value needs to be parsed as component"), || decode_component(other)).map(|component| match component.contents {

@@ -41,7 +41,11 @@ pub enum Recipe {
 impl Recipe {
     pub fn decode(tag: &Nbt) -> DataResult<Recipe> {
         let ty = codec::decode_field(tag, "type", codec::identifier)?;
-        Ok(match ty.as_str() {
+        codec::as_dispatch(|| Recipe::decode_typed(&ty, tag))
+    }
+
+    fn decode_typed(ty: &str, tag: &Nbt) -> DataResult<Recipe> {
+        Ok(match ty {
             "minecraft:smelting" => Recipe::Cooking(AbstractCookingRecipe::decode(RecipeType::Smelting, tag)?),
             "minecraft:blasting" => Recipe::Cooking(AbstractCookingRecipe::decode(RecipeType::Blasting, tag)?),
             "minecraft:smoking" => Recipe::Cooking(AbstractCookingRecipe::decode(RecipeType::Smoking, tag)?),

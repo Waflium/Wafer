@@ -137,7 +137,8 @@ impl LootItemFunction {
             Ok(ty) => ty,
             Err(error) => return DecodeResult::error(error),
         };
-        let function = match ty.as_str() {
+        let mut unknown_type = None;
+        let function = codec::as_dispatch(|| codec::with_leading_field(|| match ty.as_str() {
             "minecraft:set_count" => SetItemCountFunction::decode(tag).map(LootItemFunctionType::SetCount),
             "minecraft:set_item" => SetItemFunction::decode(tag).map(LootItemFunctionType::SetItem),
             "minecraft:enchant_with_levels" => EnchantWithLevelsFunction::decode(tag).map(LootItemFunctionType::EnchantWithLevels),
@@ -180,8 +181,14 @@ impl LootItemFunction {
             "minecraft:set_ominous_bottle_amplifier" => SetOminousBottleAmplifierFunction::decode(tag).map(LootItemFunctionType::SetOminousBottleAmplifier),
             "minecraft:set_custom_model_data" => SetCustomModelDataFunction::decode(tag).map(LootItemFunctionType::SetCustomModelData),
             "minecraft:discard" => DecodeResult::success(LootItemFunctionType::Discard),
-            other => return DecodeResult::error(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_function_type]: {other}")),
-        };
+            other => {
+                unknown_type = Some(format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:loot_function_type]: {other}"));
+                DecodeResult::error("")
+            }
+        }));
+        if let Some(message) = unknown_type {
+            return DecodeResult::error(message);
+        }
         let mut record = codec::Record::default();
         let condition = record.optional(tag, "condition", LootItemCondition::decode_holder_partial);
         let function = record.absorb(function);

@@ -58,6 +58,27 @@ pub struct Dispatch {
     pub cases: Vec<(&'static str, Vec<Field>)>,
 }
 
+#[derive(Clone, Copy)]
+pub enum Wrap {
+    CodecView,
+    Xmap,
+    FlatXmap,
+    MapXmap,
+    MapFlatXmap,
+}
+
+impl Wrap {
+    fn frames(self) -> Vec<&'static str> {
+        match self {
+            Wrap::CodecView => dfu_frames::codec_view(),
+            Wrap::Xmap => dfu_frames::codec_xmap(),
+            Wrap::FlatXmap => dfu_frames::codec_flat_xmap(),
+            Wrap::MapXmap => dfu_frames::map_codec_xmap(),
+            Wrap::MapFlatXmap => dfu_frames::map_codec_flat_xmap(),
+        }
+    }
+}
+
 pub enum Codec {
     Unit,
     Bool,
@@ -79,6 +100,7 @@ pub enum Codec {
     IdEnum(&'static [(&'static str, i32)]),
     Lazy(fn() -> &'static (Codec, Stream)),
     Normalize(Box<Codec>, fn(Nbt) -> Result<Nbt, String>),
+    Framed(Box<Codec>, Wrap),
     Mapped(Box<Codec>, fn(Nbt) -> Result<Nbt, String>),
     List(Box<Codec>, usize, usize),
     SizedList(Box<Codec>, usize, usize),
@@ -135,14 +157,26 @@ impl Field {
         self.group = size;
         self
     }
+
+    pub fn xmapped(mut self) -> Field {
+        self.group = XMAPPED_SINGLE;
+        self
+    }
 }
+
+const XMAPPED_SINGLE: usize = usize::MAX;
 
 fn field_frames(fields: &[Field], index: usize) -> Vec<&'static str> {
     let field = &fields[index];
     let mut frames = match field.kind {
         Kind::Required | Kind::Plain => dfu_frames::required_field(),
-        _ => dfu_frames::optional_field(),
+        Kind::Optional | Kind::LenientOptional => dfu_frames::optional_field(),
+        Kind::Default(_) | Kind::Lenient(_) | Kind::AlwaysPresent(_) => dfu_frames::optional_field_with_default(),
     };
+    if fields.len() == 1 && field.group == XMAPPED_SINGLE {
+        frames.extend(dfu_frames::map_codec_xmap());
+        return frames;
+    }
     match fields.iter().position(|field| field.group > 0) {
         Some(start) => {
             let size = fields[start].group;
@@ -200,6 +234,15 @@ const NUMBER_LIMITS_FRAMES: [&str; 2] = ["com.google.gson.internal.NumberLimits.
 fn check_number_limits(text: &str, accessor_frame: &'static str) {
     if let Some(message) = lazily_parsed_number::number_limits_error(text) {
         let frames = [NUMBER_LIMITS_FRAMES[0], NUMBER_LIMITS_FRAMES[1], accessor_frame];
+        crate::core::data_registries::throw_unwinding("java.lang.NumberFormatException", message, &frames);
+    }
+}
+
+fn check_narrowing_number(tag: &Nbt, narrowing_frame: &'static str) {
+    if let Nbt::LazilyParsedNumber(text) = tag
+        && let Some(message) = lazily_parsed_number::number_limits_error(text)
+    {
+        let frames = [NUMBER_LIMITS_FRAMES[0], NUMBER_LIMITS_FRAMES[1], "com.google.gson.internal.LazilyParsedNumber.intValue(LazilyParsedNumber.java:52)", narrowing_frame];
         crate::core::data_registries::throw_unwinding("java.lang.NumberFormatException", message, &frames);
     }
 }
@@ -352,9 +395,14 @@ impl Codec {
                 _ => Err(format!("Not a boolean: {}", nbt::to_string(tag))),
             },
             Codec::Bool => number(tag).map(|n| Nbt::Byte((as_f64(n) != 0.0) as i8)),
-            Codec::Byte => number(tag).map(|n| Nbt::Byte(as_i64(n) as i8)),
-            Codec::UnsignedByte => number(tag).map(|n| Nbt::Byte(as_i64(n) as i8)),
-            Codec::Short => number(tag).map(|n| Nbt::Short(as_i64(n) as i16)),
+            Codec::Byte | Codec::UnsignedByte => number(tag).map(|n| {
+                check_narrowing_number(n, "java.base/java.lang.Number.byteValue(Number.java:105)");
+                Nbt::Byte(as_i64(n) as i8)
+            }),
+            Codec::Short => number(tag).map(|n| {
+                check_narrowing_number(n, "java.base/java.lang.Number.shortValue(Number.java:120)");
+                Nbt::Short(as_i64(n) as i16)
+            }),
             Codec::Int(min, max, err) => {
                 let v = as_i32(number(tag)?);
                 if (*min..=*max).contains(&v) { Ok(Nbt::Int(v)) } else { Err(range_error(*err, v.to_string(), min, max)) }
@@ -427,6 +475,7 @@ impl Codec {
             }
             Codec::Func(_)
             | Codec::Lazy(_)
+            | Codec::Framed(..)
             | Codec::Normalize(..)
             | Codec::Mapped(..)
             | Codec::List(..)
@@ -452,10 +501,14 @@ impl Codec {
 
     fn unwound_frames(&self) -> Vec<&'static str> {
         match self {
+            Codec::Byte | Codec::UnsignedByte => dfu_frames::byte_leaf(),
+            Codec::Short => dfu_frames::short_leaf(),
             Codec::Int(min, max, _) => dfu_frames::int_leaf(*min != i32::MIN || *max != i32::MAX),
             Codec::Long(min, max, _) => dfu_frames::long_leaf(*min != i64::MIN || *max != i64::MAX),
             Codec::List(..) | Codec::SizedList(..) => dfu_frames::list(),
-            Codec::Mapped(..) => dfu_frames::mapped(),
+            Codec::Mapped(..) | Codec::Alt(..) => dfu_frames::mapped(),
+            Codec::Framed(_, wrap) => wrap.frames(),
+            Codec::Lazy(_) => dfu_frames::recursive(),
             Codec::Record(_) | Codec::Dispatch(_) => dfu_frames::codec_view(),
             _ => Vec::new(),
         }
@@ -471,7 +524,10 @@ impl Codec {
             Codec::Custom(c) => c.decode_partial(tag),
             Codec::HolderSet(reg) => decode_holder_set_partial(reg, tag),
             Codec::Lazy(pair) => pair().0.decode_partial(tag),
-            Codec::Holder(_, Some(direct)) if !matches!(tag, Nbt::String(_)) || identifier(tag).is_err() => direct.decode_partial(tag),
+            Codec::Holder(_, Some(direct)) if !matches!(tag, Nbt::String(_)) || identifier(tag).is_err() => {
+                crate::core::data_registries::unwinding(dfu_frames::registry_file_inline, || direct.decode_partial(tag))
+            }
+            Codec::Framed(inner, _) => inner.decode_partial(tag),
             Codec::Normalize(inner, f) | Codec::Mapped(inner, f) => inner.decode_partial(tag).flat_map(|value| DecodeResult::from(f(value))),
             Codec::List(elem, min, max) => {
                 let items = match list(tag) {
@@ -611,10 +667,14 @@ impl Codec {
                 finish_record(complete.then(|| Nbt::Compound(out.into())), errors)
             }
             Codec::Dispatch(d) => decode_dispatch(d, tag),
-            Codec::Either(a, b) => crate::util::codec::either_result(a.decode_partial(tag), || b.decode_partial(tag)).map(|either| either.unwrap_or_else(|value| value)),
+            Codec::Either(a, b) => crate::util::codec::either_result(
+                crate::core::data_registries::unwinding(dfu_frames::either_first, || a.decode_partial(tag)),
+                || crate::core::data_registries::unwinding(dfu_frames::either_second, || b.decode_partial(tag)),
+            )
+            .map(|either| either.unwrap_or_else(|value| value)),
             Codec::Xor(a, b, first_text, second_text) => {
-                let first = a.decode_partial(tag);
-                let second = b.decode_partial(tag);
+                let first = crate::core::data_registries::unwinding(dfu_frames::xor_first, || a.decode_partial(tag));
+                let second = crate::core::data_registries::unwinding(dfu_frames::xor_second, || b.decode_partial(tag));
                 match (first.is_success(), second.is_success()) {
                     (true, true) => {
                         let message = format!(
@@ -634,8 +694,11 @@ impl Codec {
                     },
                 }
             }
-            Codec::Alt(a, b, convert) => crate::util::codec::either_result(a.decode_partial(tag), || b.decode_partial(tag).flat_map(|value| DecodeResult::from(convert(&value))))
-                .map(|either| either.unwrap_or_else(|value| value)),
+            Codec::Alt(a, b, convert) => crate::util::codec::either_result(
+                crate::core::data_registries::unwinding(dfu_frames::either_first, || a.decode_partial(tag)),
+                || crate::core::data_registries::unwinding(dfu_frames::either_second, || b.decode_partial(tag)).flat_map(|value| DecodeResult::from(convert(&value))),
+            )
+            .map(|either| either.unwrap_or_else(|value| value)),
             _ => DecodeResult::from(self.decode(tag)),
         }
     }
@@ -675,7 +738,7 @@ impl Codec {
             },
             Codec::Custom(c) => c.hash(value),
             Codec::Lazy(pair) => pair().0.hash(value),
-            Codec::Normalize(inner, _) | Codec::Mapped(inner, _) => inner.hash(value),
+            Codec::Normalize(inner, _) | Codec::Mapped(inner, _) | Codec::Framed(inner, _) => inner.hash(value),
             _ => hash_ops::hash_nbt(value),
         }
     }
@@ -831,6 +894,36 @@ fn decode_fields(fields: &[Field], tag: &Nbt, input: &[(String, Nbt)], out: &mut
     complete
 }
 
+pub fn decode_map_pair(first: &Field, second: &Field, tag: &Nbt) -> DecodeResult<Nbt> {
+    let input = match map(tag) {
+        Ok(input) => input,
+        Err(error) => return DecodeResult::error(error),
+    };
+    let decode_side = |field: &Field, side: fn() -> Vec<&'static str>| match input.iter().find(|(k, v)| k == field.name && !matches!(v, Nbt::End)) {
+        Some((_, v)) => crate::core::data_registries::unwinding(
+            || {
+                let mut frames = dfu_frames::required_field();
+                frames.extend(side());
+                frames
+            },
+            || field.codec.decode_partial(v),
+        ),
+        None => DecodeResult::error(missing_key(field.name, tag)),
+    };
+    decode_side(first, dfu_frames::pair_map_first).flat_map(|a| {
+        decode_side(second, dfu_frames::pair_map_second).map(|b| Nbt::Compound(vec![(first.name.to_string(), a), (second.name.to_string(), b)].into()))
+    })
+}
+
+fn case_frames(selector: &Selector, name: &str) -> Vec<&'static str> {
+    match (selector, name) {
+        (Selector::Registry("minecraft:worldgen/structure_type"), "minecraft:jigsaw") | (Selector::Registry("minecraft:worldgen/structure_placement"), "minecraft:random_spread") => {
+            dfu_frames::map_codec_flat_xmap()
+        }
+        _ => Vec::new(),
+    }
+}
+
 fn decode_dispatch(d: &Dispatch, tag: &Nbt) -> DecodeResult<Nbt> {
     let input = match map(tag) {
         Ok(input) => input,
@@ -873,7 +966,9 @@ fn decode_dispatch(d: &Dispatch, tag: &Nbt) -> DecodeResult<Nbt> {
     let (_, fields) = d.cases.iter().find(|(n, _)| *n == name).unwrap();
     let mut out = Vec::new();
     let mut errors = Vec::new();
-    let complete = crate::core::data_registries::unwinding(dfu_frames::key_dispatch, || decode_fields(fields, tag, input, &mut out, &mut errors));
+    let complete = crate::core::data_registries::unwinding(dfu_frames::key_dispatch, || {
+        crate::core::data_registries::unwinding(|| case_frames(&d.selector, &name), || decode_fields(fields, tag, input, &mut out, &mut errors))
+    });
     out.push((d.key.to_string(), Nbt::String(name)));
     finish_record(complete.then(|| Nbt::Compound(out.into())), errors)
 }
@@ -936,7 +1031,7 @@ pub fn read_utf8(r: &mut Reader, max: usize) -> Result<String, String> {
 
 pub fn write(codec: &Codec, stream: &Stream, value: &Nbt, w: &mut Writer) -> Result<(), String> {
     match codec {
-        Codec::Normalize(inner, _) | Codec::Mapped(inner, _) => return write(inner, stream, value, w),
+        Codec::Normalize(inner, _) | Codec::Mapped(inner, _) | Codec::Framed(inner, _) => return write(inner, stream, value, w),
         Codec::Alt(primary, _, _) if !matches!(stream, Stream::Either(..)) => return write(primary, stream, value, w),
         _ => {}
     }
@@ -1104,6 +1199,7 @@ fn canonical_number(codec: &Codec, v: i64) -> Nbt {
 
 pub fn read(codec: &Codec, stream: &Stream, r: &mut Reader) -> Result<Nbt, String> {
     match codec {
+        Codec::Framed(inner, _) => return read(inner, stream, r),
         Codec::Normalize(inner, f) | Codec::Mapped(inner, f) => return f(read(inner, stream, r)?),
         Codec::Alt(primary, _, _) if !matches!(stream, Stream::Either(..)) && !matches!(stream, Stream::Nbt) => return read(primary, stream, r),
         _ => {}

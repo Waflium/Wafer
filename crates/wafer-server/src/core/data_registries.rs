@@ -407,6 +407,31 @@ pub fn unwinding<R>(frames: impl FnOnce() -> Vec<&'static str>, decode: impl FnO
     result
 }
 
+pub fn unwinding_deferred<R>(decode: impl FnOnce() -> R) -> (R, Option<usize>) {
+    if !RECORDING.with(Cell::get) {
+        return (decode(), None);
+    }
+    let depth = DEPTH.with(|depth| depth.replace(depth.get() + 1));
+    let result = decode();
+    DEPTH.with(|current| current.set(depth));
+    if depth < UNWOUND_TO.with(Cell::get) {
+        let position = THROWN.with(|thrown| thrown.borrow().as_ref().map(|thrown| thrown.stack_trace.len()));
+        if position.is_some() {
+            UNWOUND_TO.with(|unwound_to| unwound_to.set(depth));
+        }
+        return (result, position);
+    }
+    (result, None)
+}
+
+pub fn splice_frames(position: usize, frames: &[&'static str]) {
+    THROWN.with(|thrown| {
+        if let Some(thrown) = thrown.borrow_mut().as_mut() {
+            thrown.insert_frames(position, frames);
+        }
+    });
+}
+
 pub fn take_thrown() -> Option<JavaThrowable> {
     THROWN.with(|thrown| thrown.borrow_mut().take())
 }
@@ -823,12 +848,12 @@ fn decode(registry: &str, element: &JsonElement) -> Result<(), String> {
         "minecraft:worldgen/biome" => crate::world::level::biome::validate(&tag),
         "minecraft:dimension" => LevelStem::validate(&tag),
         "minecraft:enchantment" => {
-            crate::world::item::enchantment::enchantment::direct_codec().0.decode(&tag)?;
+            decode_with(crate::world::item::enchantment::enchantment::direct_codec(), &tag)?;
             crate::world::item::enchantment::enchantment::Enchantment::decode(&tag).map(drop)
         }
         "minecraft:enchantment_provider" => {
             use crate::world::item::enchantment::providers::enchantment_provider;
-            enchantment_provider::direct_codec().0.decode(&tag)?;
+            decode_with(enchantment_provider::direct_codec(), &tag)?;
             enchantment_provider::EnchantmentProvider::parse(&json()).map(drop)
         }
         "minecraft:villager_trade" => crate::world::item::trading::villager_trade::VillagerTrade::decode(&tag).map(drop),
@@ -1294,6 +1319,65 @@ mod tests {
     fn an_overflowing_sum_of_weights_carries_the_codec_path_up_to_the_registry_root() {
         let structure = r#"{"type":"minecraft:buried_treasure","biomes":"minecraft:plains","step":"surface_structures","spawn_overrides":{"monster":{"bounding_box":"full","spawns":[{"type":"minecraft:pig","count":1,"weight":2147483647},{"type":"minecraft:pig","count":1,"weight":2147483647}]}}}"#;
         assert_eq!(thrown_while_decoding("minecraft:worldgen/structure", structure), include_str!("dfu_traces/structure_spawn_weights_overflow.txt"));
+    }
+
+    #[test]
+    fn validate_and_xmap_wrappers_and_pair_map_codecs_add_their_frames() {
+        let jigsaw = r#"{"type":"minecraft:jigsaw","biomes":"minecraft:plains","step":"surface_structures","spawn_overrides":{},"start_pool":"minecraft:village/plains/town_centers","size":1E+10000,"start_height":{"absolute":0},"use_expansion_hack":false,"max_distance_from_center":80}"#;
+        assert_eq!(thrown_while_decoding("minecraft:worldgen/structure", jigsaw), include_str!("dfu_traces/structure_jigsaw_size_number_format.txt"));
+        let spread = r#"{"structures":[{"structure":"minecraft:village_plains","weight":1}],"placement":{"type":"minecraft:random_spread","spacing":1E+10000,"separation":8,"salt":1}}"#;
+        assert_eq!(thrown_while_decoding("minecraft:worldgen/structure_set", spread), include_str!("dfu_traces/structure_set_random_spread_spacing_number_format.txt"));
+        let pool = r#"{"fallback":"minecraft:empty","elements":[{"element":{"element_type":"minecraft:empty_pool_element"},"weight":1E+10000}]}"#;
+        assert_eq!(thrown_while_decoding("minecraft:worldgen/template_pool", pool), include_str!("dfu_traces/template_pool_weight_number_format.txt"));
+        let placed = r#"{"feature":"minecraft:ore_coal","placement":[{"type":"minecraft:count","count":1E+10000}]}"#;
+        assert_eq!(thrown_while_decoding("minecraft:worldgen/placed_feature", placed), include_str!("dfu_traces/placed_feature_count_number_format.txt"));
+        let enchantment = r##"{"anvil_cost":1,"description":"Plain","effects":{},"max_cost":{"base":3,"per_level_above_first":4},"max_level":1E+10000,"min_cost":{"base":1,"per_level_above_first":2},"slots":["mainhand"],"supported_items":"#minecraft:swords","weight":5}"##;
+        assert_eq!(thrown_while_decoding("minecraft:enchantment", enchantment), include_str!("dfu_traces/enchantment_max_level_number_format.txt"));
+    }
+
+    #[test]
+    fn a_null_inside_translation_arguments_carries_the_json_ops_and_component_frames() {
+        let jukebox = |description: &str| format!(r#"{{"sound_event":"minecraft:music_disc.13","description":{description},"length_in_seconds":10,"comparator_output":1}}"#);
+        let cases = [
+            (r#"{"translate":"a","with":[[[null]]]}"#, include_str!("dfu_traces/translate_with_nested_null.txt")),
+            (r#"{"translate":"a","with":[[{"a":null}]]}"#, include_str!("dfu_traces/translate_with_list_map_null.txt")),
+            (r#"{"text":"x","extra":[{"translate":"a","with":[[null]]}]}"#, include_str!("dfu_traces/translate_with_extra_null.txt")),
+            (r#"{"type":"translatable","translate":"a","with":[[null]]}"#, include_str!("dfu_traces/translate_with_typed_null.txt")),
+            (r#"[{"translate":"a","with":[[null]]}]"#, include_str!("dfu_traces/translate_with_list_root_null.txt")),
+        ];
+        for (description, expected) in cases {
+            assert_eq!(thrown_while_decoding("minecraft:jukebox_song", &jukebox(description)), expected, "{description}");
+        }
+    }
+
+    fn thrown_while_decoding_loot(decode: impl FnOnce(&wafer_protocol::nbt::Nbt), json: &str) -> String {
+        let element = crate::util::gson::parse_strict(json).unwrap();
+        super::take_thrown();
+        crate::nbt::with_json_source(|| {
+            super::recording(|| super::unwinding(|| vec![crate::util::dfu_frames::DECODER_PARSE], || decode(&crate::world::item::component::element_to_nbt(&element))))
+        });
+        super::take_thrown().expect("the decoder throws").print_stack_trace()
+    }
+
+    #[test]
+    fn hand_written_loot_decoders_carry_the_codec_path_up_to_the_registry_root() {
+        use crate::world::level::storage::loot::loot_table::LootTable;
+        use crate::world::level::storage::loot::predicates::loot_item_condition::LootItemCondition;
+        let table = |tag: &wafer_protocol::nbt::Nbt| drop(LootTable::decode(tag));
+        let condition = |tag: &wafer_protocol::nbt::Nbt| drop(LootItemCondition::decode(tag));
+        assert_eq!(thrown_while_decoding_loot(table, r#"{"pools":[{"rolls":1E+10000,"entries":[]}]}"#), include_str!("dfu_traces/loot_table_rolls_number_format.txt"));
+        assert_eq!(
+            thrown_while_decoding_loot(table, r#"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:stick","weight":1E+10000}]}]}"#),
+            include_str!("dfu_traces/loot_table_entry_weight_number_format.txt")
+        );
+        assert_eq!(
+            thrown_while_decoding_loot(table, r#"{"pools":[{"rolls":1,"entries":[],"condition":{"type":"minecraft:time_check","clock":"minecraft:overworld","value":{"min":1},"period":1E+10000}}]}"#),
+            include_str!("dfu_traces/loot_table_pool_condition_number_format.txt")
+        );
+        assert_eq!(
+            thrown_while_decoding_loot(condition, r#"{"type":"minecraft:location_check","predicate":{},"offsetX":1E+10000}"#),
+            include_str!("dfu_traces/predicate_location_check_offset_number_format.txt")
+        );
     }
 
     #[test]
