@@ -30,6 +30,74 @@ fn application_class_loader() -> &'static str {
     LOADER.get_or_init(|| format!("java.net.URLClassLoader @{:x}", crate::util::java_collections::identity_hash_code()))
 }
 
+#[cfg(windows)]
+pub fn native_encode(text: &str) -> Vec<u8> {
+    use windows_sys::Win32::Globalization::{CP_ACP, WideCharToMultiByte};
+    let wide: Vec<u16> = text.encode_utf16().collect();
+    if wide.is_empty() {
+        return Vec::new();
+    }
+    let length = unsafe { WideCharToMultiByte(CP_ACP, 0, wide.as_ptr(), wide.len() as i32, std::ptr::null_mut(), 0, std::ptr::null(), std::ptr::null_mut()) };
+    let mut bytes = vec![0u8; length.max(0) as usize];
+    unsafe { WideCharToMultiByte(CP_ACP, 0, wide.as_ptr(), wide.len() as i32, bytes.as_mut_ptr(), length, std::ptr::null(), std::ptr::null_mut()) };
+    bytes
+}
+
+#[cfg(not(windows))]
+pub fn native_encode(text: &str) -> Vec<u8> {
+    text.as_bytes().to_vec()
+}
+
+fn file_uri_path(path: &std::path::Path) -> String {
+    let mut out = String::new();
+    let text = path.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+    if !text.starts_with('/') {
+        out.push('/');
+    }
+    for c in text.chars() {
+        let legal = c.is_ascii_alphanumeric() || "_-!.~'()*,;:$&+=/@".contains(c) || (!c.is_ascii() && !c.is_control() && !c.is_whitespace());
+        if legal {
+            out.push(c);
+        } else {
+            let mut buffer = [0u8; 4];
+            for byte in c.encode_utf8(&mut buffer).bytes() {
+                out.push_str(&format!("%{byte:02X}"));
+            }
+        }
+    }
+    out
+}
+
+fn library_location(path: &str) -> String {
+    let libraries = std::env::current_dir().unwrap_or_default().join("libraries");
+    format!("file:{}/{path}", file_uri_path(&libraries))
+}
+
+pub fn warn_restricted_native_access() {
+    let text = format!(
+        "WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by com.sun.jna.Native in an unnamed module ({})
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+",
+        library_location("net/java/dev/jna/jna/5.17.0/jna-5.17.0.jar")
+    );
+    crate::logging::system_err(native_encode(&text));
+}
+
+pub fn warn_terminally_deprecated_unsafe() {
+    let text = format!(
+        "WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.joml.MemUtil$MemUtilUnsafe ({})
+WARNING: Please consider reporting this to the maintainers of class org.joml.MemUtil$MemUtilUnsafe
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+",
+        library_location("org/joml/joml/1.10.9/joml-1.10.9.jar")
+    );
+    crate::logging::system_err(native_encode(&text));
+}
+
 pub fn current_time_millis() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_millis() as i64)
 }

@@ -50,6 +50,7 @@ struct Record {
 
 enum Message {
     Record(Record),
+    SystemErr(Vec<u8>),
     Flush(Sender<()>),
 }
 
@@ -65,6 +66,13 @@ pub fn init(dir: impl Into<PathBuf>) {
     let (queue, records) = channel();
     let writer = thread::Builder::new().name("Log4j2-AsyncAppender".into()).spawn(move || write_records(&dir, records)).expect("log writer thread");
     let _ = LOGGER.set(Logger { queue, writer: Mutex::new(Some(writer)) });
+}
+
+pub fn system_err(bytes: Vec<u8>) {
+    match LOGGER.get() {
+        Some(logger) => drop(logger.queue.send(Message::SystemErr(bytes))),
+        None => drop(io::stderr().write_all(&bytes)),
+    }
 }
 
 pub fn flush() {
@@ -156,6 +164,12 @@ fn write_records(dir: &Path, queue: Receiver<Message>) {
                 format_record(&mut line, &record);
                 let _ = stdout.write_all(&line);
                 file.write(&line, record.time);
+            }
+            Message::SystemErr(bytes) => {
+                let _ = stdout.flush();
+                let mut stderr = io::stderr().lock();
+                let _ = stderr.write_all(&bytes);
+                let _ = stderr.flush();
             }
             Message::Flush(done) => {
                 let _ = stdout.flush();

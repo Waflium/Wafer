@@ -167,12 +167,14 @@ fn start(args: Vec<String>) {
     }
     {
         let _main = crate::util::java_stack::enter("net.minecraft.server.Main.main(Main.java:104)");
+        crate::util::java_runtime::warn_restricted_native_access();
         crate::crash_report::preload();
     }
     crate::network::chat::load_language();
     if options.has("jfrProfile") {
         crate::util::profiling::jfr::jfr_profiler::INSTANCE.start();
     }
+    crate::util::java_runtime::warn_terminally_deprecated_unsafe();
     let settings_file = Path::new("server.properties");
     let settings = match DedicatedServerSettings::new(settings_file) {
         Ok(settings) => settings,
