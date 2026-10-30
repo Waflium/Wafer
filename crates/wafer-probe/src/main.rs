@@ -27,6 +27,14 @@ struct Options {
     say: Option<String>,
     dig: Option<u32>,
     script: Vec<String>,
+    close: Close,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Close {
+    Fin,
+    Reset,
+    Hang,
 }
 
 fn options() -> anyhow::Result<Options> {
@@ -47,6 +55,7 @@ fn options() -> anyhow::Result<Options> {
         say: None,
         dig: None,
         script: Vec::new(),
+        close: Close::Fin,
     };
     while let Some(flag) = args.next() {
         let mut value = || args.next().with_context(|| format!("{flag} needs a value"));
@@ -58,6 +67,14 @@ fn options() -> anyhow::Result<Options> {
             "--say" => o.say = Some(value()?),
             "--dig" => o.dig = Some(value()?.parse()?),
             "--script" => o.script = std::fs::read_to_string(value()?)?.lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect(),
+            "--close" => {
+                o.close = match value()?.as_str() {
+                    "fin" => Close::Fin,
+                    "reset" => Close::Reset,
+                    "hang" => Close::Hang,
+                    other => bail!("unknown close mode {other}\n{usage}"),
+                }
+            }
             _ => bail!("unknown option {flag}\n{usage}"),
         }
     }
@@ -115,6 +132,9 @@ async fn main() -> anyhow::Result<()> {
     };
     let mut stream = TcpStream::connect(&o.addr).await?;
     stream.set_nodelay(true)?;
+    if o.close == Close::Reset {
+        stream.set_linger(Some(Duration::ZERO))?;
+    }
     let mut codec = Codec::default();
 
     send(&mut stream, codec, handshake::serverbound::INTENTION, |w| {
@@ -313,6 +333,9 @@ async fn main() -> anyhow::Result<()> {
     rec.out.flush().await?;
     for (name, count) in &rec.seen {
         println!("{count:>5} x {name}");
+    }
+    if o.close == Close::Hang {
+        tokio::time::sleep(Duration::from_secs(120)).await;
     }
     Ok(())
 }

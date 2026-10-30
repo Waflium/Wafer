@@ -334,10 +334,17 @@ fn is_skippable(id: i32) -> bool {
 }
 
 pub fn disconnection_reason(error: &anyhow::Error) -> Component {
-    match error.downcast_ref::<io::Error>().map(io::Error::kind) {
-        Some(io::ErrorKind::TimedOut) => Component::translatable("disconnect.timeout"),
+    match error.downcast_ref::<io::Error>() {
+        Some(error) if error.kind() == io::ErrorKind::TimedOut => Component::translatable("disconnect.timeout"),
+        Some(error) if error.kind() == io::ErrorKind::ConnectionAborted => Component::translatable_with("disconnect.genericReason", vec![Arg::String(format!("Internal Exception: {}", read_exception(error)))]),
         _ => Component::translatable("multiplayer.disconnect.generic"),
     }
+}
+
+fn read_exception(error: &io::Error) -> String {
+    let message = crate::util::java_nio::os_message(error);
+    let message = message.trim_end().trim_end_matches('.');
+    if cfg!(windows) { format!("java.io.IOException: {message}") } else { format!("io.netty.channel.unix.Errors$NativeIoException: readAddress(..) failed: {message}") }
 }
 
 pub fn spawn_io(
@@ -478,5 +485,60 @@ mod tests {
         assert_eq!(split_fallback(&marked), (Some(SYSTEM_CHAT), &packet[..]));
         let plain = rx.try_recv().unwrap();
         assert_eq!(split_fallback(&plain), (None, &packet[..]));
+    }
+
+    fn reason_text(error: io::Error) -> String {
+        disconnection_reason(&anyhow::Error::from(error)).get_string()
+    }
+
+    #[test]
+    fn read_timeouts_and_closes_log_like_vanilla() {
+        assert_eq!(reason_text(io::Error::from(io::ErrorKind::TimedOut)), "Timed out");
+        assert_eq!(reason_text(io::Error::from(io::ErrorKind::UnexpectedEof)), "Disconnected");
+        assert_eq!(reason_text(io::Error::from(io::ErrorKind::ConnectionReset)), "Disconnected");
+        assert_eq!(disconnection_reason(&anyhow::anyhow!("bad packet")).get_string(), "Disconnected");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn aborted_reads_name_the_java_io_exception() {
+        let aborted = io::Error::from_raw_os_error(10053);
+        let message = crate::util::java_nio::os_message(&aborted);
+        assert!(!message.is_empty() && !message.contains("os error"));
+        assert_eq!(reason_text(aborted), format!("Internal Exception: java.io.IOException: {}", message.trim_end().trim_end_matches('.')));
+        assert_eq!(reason_text(io::Error::from_raw_os_error(10054)), "Disconnected");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn aborted_reads_name_the_netty_native_exception() {
+        assert_eq!(reason_text(io::Error::from_raw_os_error(103)), "Internal Exception: io.netty.channel.unix.Errors$NativeIoException: readAddress(..) failed: Software caused connection abort");
+        assert_eq!(reason_text(io::Error::from_raw_os_error(104)), "Disconnected");
+    }
+
+    async fn closed_client(reset: bool) -> io::Error {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = tokio::net::TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
+        let (server, _) = listener.accept().await.unwrap();
+        if reset {
+            client.set_linger(Some(Duration::ZERO)).unwrap();
+        }
+        drop(client);
+        let (mut reader, _writer) = split(server).unwrap();
+        reader.recv().await.err().unwrap().downcast::<io::Error>().unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_reset_connection_is_logged_as_a_plain_disconnect_like_vanilla() {
+        let error = closed_client(true).await;
+        assert_eq!(error.kind(), io::ErrorKind::ConnectionReset);
+        assert_eq!(reason_text(error), "Disconnected");
+    }
+
+    #[tokio::test]
+    async fn a_closed_connection_is_logged_as_a_plain_disconnect() {
+        let error = closed_client(false).await;
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        assert_eq!(reason_text(error), "Disconnected");
     }
 }

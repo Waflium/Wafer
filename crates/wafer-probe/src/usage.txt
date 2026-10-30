@@ -1,7 +1,8 @@
-usage: wafer-probe <host:port> <seconds> <out.jsonl> [--view N] [--name NAME] [--wait MS] [--walk] [--say TEXT] [--dig TICKS] [--script FILE]
+usage: wafer-probe <host:port> <seconds> <out.jsonl> [--view N] [--name NAME] [--wait MS] [--walk] [--say TEXT] [--dig TICKS] [--script FILE] [--close fin|reset|hang]
        wafer-probe --help
 
 Every received packet is written to <out.jsonl>. The client ticks at 20 Hz and ends each tick with client_tick_end.
+--close ends the session with a normal close (fin), a TCP reset (SO_LINGER 0) or by staying connected and silent for 120 seconds (hang).
 
 SCRIPT FILE
   One line per client tick, starting at tick 20 after the first position. Lines with ';' run several commands in
@@ -39,6 +40,7 @@ MOVEMENT AND INPUT
   start_fall_flying                     player_command start_fall_flying
   command <action> <data>               raw player_command (0 stop_sleeping, 1/2 sprint, 3 start_riding_jump, 4 stop_riding_jump, 5 open_inventory, 6 start_fall_flying)
   respawn | stats                       client_command perform_respawn / request_stats
+  change_game_mode <id>                 change_game_mode (0 survival, 1 creative, 2 adventure, 3 spectator)
   hotbar <slot>                         set_carried_item
   --walk moves 0.2 blocks in x every tick; --dig TICKS breaks the block below with start/stop_destroy_block.
 
