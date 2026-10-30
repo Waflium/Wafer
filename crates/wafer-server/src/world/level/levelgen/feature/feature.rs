@@ -117,23 +117,31 @@ pub enum Feature {
     NotImplemented,
 }
 
-static FEATURES: LazyLock<Vec<Feature>> = LazyLock::new(|| {
+static FEATURES: LazyLock<Vec<Option<Feature>>> = LazyLock::new(|| {
     crate::core::data_registries::json_entries("minecraft:worldgen/feature")
         .iter()
-        .map(|(name, json)| {
+        .enumerate()
+        .map(|(index, (name, json))| {
+            if crate::core::data_registries::is_entry_blocked("minecraft:worldgen/feature", index as i32) {
+                return None;
+            }
             let json: Value = serde_json::from_str(json).expect("feature json");
-            Feature::parse(&json).unwrap_or_else(|e| panic!("feature {name}: {e}"))
+            Some(Feature::parse(&json).unwrap_or_else(|e| panic!("feature {name}: {e}")))
         })
         .collect()
 });
 
 pub fn feature_index(name: &str) -> Option<u32> {
     let name = resource(name);
-    crate::core::data_registries::json_entries("minecraft:worldgen/feature").iter().position(|(n, _)| *n == name).map(|i| i as u32)
+    crate::core::data_registries::json_entries("minecraft:worldgen/feature")
+        .iter()
+        .position(|(n, _)| *n == name)
+        .filter(|&i| !crate::core::data_registries::is_entry_blocked("minecraft:worldgen/feature", i as i32))
+        .map(|i| i as u32)
 }
 
 pub fn feature(name: &str) -> Option<&'static Feature> {
-    feature_index(name).map(|index| &FEATURES[index as usize])
+    feature_index(name).and_then(|index| FEATURES[index as usize].as_ref())
 }
 
 fn nbt_to_json(nbt: &wafer_protocol::nbt::Nbt) -> Value {
@@ -334,7 +342,7 @@ impl FeatureHolder {
 
     pub fn value(&self) -> &Feature {
         match self {
-            FeatureHolder::Reference(index) => &FEATURES[*index as usize],
+            FeatureHolder::Reference(index) => FEATURES[*index as usize].as_ref().expect("a feature that is not blocked"),
             FeatureHolder::Direct(feature) => feature,
         }
     }

@@ -75,7 +75,7 @@ fn decode_structures(tag: &Nbt) -> DataResult<HolderSet> {
     }
     codec::holder_set(tag, REGISTRY, |element| {
         let id = codec::identifier(element)?;
-        if crate::core::data_registries::json_entries(REGISTRY).iter().any(|(key, _)| *key == id) {
+        if crate::core::data_registries::present_json_entries(REGISTRY).any(|(key, _)| *key == id) {
             Ok(id)
         } else if codec::is_nbt_ops() || crate::server::reloadable_server_registries::is_loading() {
             Err(format!("Failed to get element {id} from registry {REGISTRY}"))

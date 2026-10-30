@@ -55,7 +55,11 @@ pub const EMPTY: &str = "minecraft:empty";
 impl TemplatePoolHolder {
     pub fn by_name(name: &str) -> Option<TemplatePoolHolder> {
         let name = resource(name);
-        crate::core::data_registries::json_entries("minecraft:worldgen/template_pool").iter().position(|(n, _)| *n == name.as_str()).map(|i| TemplatePoolHolder(i as u16))
+        crate::core::data_registries::json_entries("minecraft:worldgen/template_pool")
+            .iter()
+            .position(|(n, _)| *n == name.as_str())
+            .filter(|&i| !crate::core::data_registries::is_entry_blocked("minecraft:worldgen/template_pool", i as i32))
+            .map(|i| TemplatePoolHolder(i as u16))
     }
 
     pub fn key(self) -> &'static str {

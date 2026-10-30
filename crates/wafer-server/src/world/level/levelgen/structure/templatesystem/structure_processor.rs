@@ -341,6 +341,7 @@ impl StructureProcessorListHolder {
                 crate::core::data_registries::json_entries("minecraft:worldgen/processor_list")
                     .iter()
                     .position(|(n, _)| *n == name)
+                    .filter(|&index| !crate::core::data_registries::is_entry_blocked("minecraft:worldgen/processor_list", index as i32))
                     .map(StructureProcessorListHolder::Reference)
                     .ok_or_else(|| format!("unknown processor list {name}"))
             }

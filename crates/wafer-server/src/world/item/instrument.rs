@@ -28,8 +28,7 @@ impl Instrument {
     fn registered() -> &'static [(&'static str, Instrument)] {
         static INSTRUMENTS: OnceLock<Vec<(&'static str, Instrument)>> = OnceLock::new();
         INSTRUMENTS.get_or_init(|| {
-            crate::core::data_registries::json_entries("minecraft:instrument")
-                .iter()
+            crate::core::data_registries::present_json_entries("minecraft:instrument")
                 .map(|&(name, json)| {
                     let tag = dc::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));
                     (name, Instrument::decode_direct(&tag).expect("vanilla instrument"))

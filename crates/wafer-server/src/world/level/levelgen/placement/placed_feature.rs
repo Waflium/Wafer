@@ -15,19 +15,27 @@ pub struct PlacedFeature {
     pub placement: Vec<PlacementModifier>,
 }
 
-static PLACED_FEATURES: LazyLock<Vec<PlacedFeature>> = LazyLock::new(|| {
+static PLACED_FEATURES: LazyLock<Vec<Option<PlacedFeature>>> = LazyLock::new(|| {
     crate::core::data_registries::json_entries("minecraft:worldgen/placed_feature")
         .iter()
-        .map(|(name, json)| {
+        .enumerate()
+        .map(|(index, (name, json))| {
+            if crate::core::data_registries::is_entry_blocked("minecraft:worldgen/placed_feature", index as i32) {
+                return None;
+            }
             let json: Value = serde_json::from_str(json).expect("placed feature json");
-            PlacedFeature::parse(&json).unwrap_or_else(|e| panic!("placed feature {name}: {e}"))
+            Some(PlacedFeature::parse(&json).unwrap_or_else(|e| panic!("placed feature {name}: {e}")))
         })
         .collect()
 });
 
 pub fn placed_feature_index(name: &str) -> Option<u32> {
     let name = resource(name);
-    crate::core::data_registries::json_entries("minecraft:worldgen/placed_feature").iter().position(|(n, _)| *n == name).map(|i| i as u32)
+    crate::core::data_registries::json_entries("minecraft:worldgen/placed_feature")
+        .iter()
+        .position(|(n, _)| *n == name)
+        .filter(|&i| !crate::core::data_registries::is_entry_blocked("minecraft:worldgen/placed_feature", i as i32))
+        .map(|i| i as u32)
 }
 
 static INLINE_PLACED_FEATURES: Mutex<Vec<&'static PlacedFeature>> = Mutex::new(Vec::new());
@@ -41,7 +49,7 @@ pub fn inline_placed(feature: Feature) -> u32 {
 
 pub fn get(index: u32) -> &'static PlacedFeature {
     match PLACED_FEATURES.get(index as usize) {
-        Some(feature) => feature,
+        Some(feature) => feature.as_ref().expect("a placed feature that is not blocked"),
         None => INLINE_PLACED_FEATURES.lock().unwrap()[index as usize - PLACED_FEATURES.len()],
     }
 }

@@ -32,7 +32,11 @@ pub struct StructureHolder(pub u16);
 impl StructureHolder {
     pub fn by_name(name: &str) -> Option<StructureHolder> {
         let name = resource(name);
-        crate::core::data_registries::json_entries("minecraft:worldgen/structure").iter().position(|(n, _)| *n == name).map(|i| StructureHolder(i as u16))
+        crate::core::data_registries::json_entries("minecraft:worldgen/structure")
+            .iter()
+            .position(|(n, _)| *n == name)
+            .filter(|&i| !crate::core::data_registries::is_entry_blocked("minecraft:worldgen/structure", i as i32))
+            .map(|i| StructureHolder(i as u16))
     }
 
     pub fn key(self) -> &'static str {
@@ -40,20 +44,26 @@ impl StructureHolder {
     }
 
     pub fn value(self) -> &'static Structure {
-        &STRUCTURES[self.0 as usize]
+        STRUCTURES[self.0 as usize].as_ref().expect("a structure that is not blocked")
     }
 
     pub fn all() -> impl Iterator<Item = StructureHolder> {
-        (0..crate::core::data_registries::json_entries("minecraft:worldgen/structure").len()).map(|i| StructureHolder(i as u16))
+        (0..crate::core::data_registries::json_entries("minecraft:worldgen/structure").len())
+            .filter(|&i| !crate::core::data_registries::is_entry_blocked("minecraft:worldgen/structure", i as i32))
+            .map(|i| StructureHolder(i as u16))
     }
 }
 
-static STRUCTURES: LazyLock<Vec<Structure>> = LazyLock::new(|| {
+static STRUCTURES: LazyLock<Vec<Option<Structure>>> = LazyLock::new(|| {
     crate::core::data_registries::json_entries("minecraft:worldgen/structure")
         .iter()
-        .map(|(name, source)| {
+        .enumerate()
+        .map(|(index, (name, source))| {
+            if crate::core::data_registries::is_entry_blocked("minecraft:worldgen/structure", index as i32) {
+                return None;
+            }
             let json: Value = serde_json::from_str(source).expect("structure json");
-            Structure::parse(&json).unwrap_or_else(|e| panic!("structure {name}: {e}"))
+            Some(Structure::parse(&json).unwrap_or_else(|e| panic!("structure {name}: {e}")))
         })
         .collect()
 });

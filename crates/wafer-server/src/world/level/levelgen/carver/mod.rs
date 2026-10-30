@@ -54,7 +54,7 @@ pub static BIOME_CARVERS: LazyLock<Vec<Vec<Arc<WorldCarver>>>> = LazyLock::new(|
 
 fn load_biome_carvers() -> Result<Vec<Vec<Arc<WorldCarver>>>, String> {
     let mut carvers = HashMap::new();
-    for &(name, source) in crate::core::data_registries::json_entries("minecraft:worldgen/carver") {
+    for &(name, source) in crate::core::data_registries::present_json_entries("minecraft:worldgen/carver") {
         let json: Value = serde_json::from_str(source).map_err(|e| format!("{name}: {e}"))?;
         carvers.insert(name, Arc::new(WorldCarver::parse(&json).map_err(|e| format!("{name}: {e}"))?));
     }

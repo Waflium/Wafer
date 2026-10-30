@@ -50,8 +50,7 @@ impl RegistryElement for TrialSpawnerConfig {
         static CONFIGS: OnceLock<Vec<(&'static str, TrialSpawnerConfig)>> = OnceLock::new();
         CONFIGS
             .get_or_init(|| {
-                crate::core::data_registries::json_entries("minecraft:trial_spawner")
-                    .iter()
+                crate::core::data_registries::present_json_entries("minecraft:trial_spawner")
                     .map(|&(name, json)| {
                         let tag = dc::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));
                         (name, TrialSpawnerConfig::decode_direct(&tag).expect("vanilla trial spawner config"))

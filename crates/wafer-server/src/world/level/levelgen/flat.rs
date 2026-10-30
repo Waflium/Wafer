@@ -32,7 +32,7 @@ impl StructureOverrides {
     fn from_strings<'a>(single: Option<&'a str>, list: Option<Vec<&'a str>>) -> Option<StructureOverrides> {
         let structure_set = |id: &str| {
             let id = crate::resources::identifier::parse(id).ok()?;
-            if crate::core::data_registries::json_entries(STRUCTURE_SET).iter().any(|(name, _)| *name == id) {
+            if crate::core::data_registries::present_json_entries(STRUCTURE_SET).any(|(name, _)| *name == id) {
                 return Some(id);
             }
             if allows_unbound_references() {

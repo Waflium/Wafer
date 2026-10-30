@@ -23,7 +23,11 @@ pub struct StructureSetHolder(pub u16);
 impl StructureSetHolder {
     pub fn by_name(name: &str) -> Option<StructureSetHolder> {
         let name = resource(name);
-        crate::core::data_registries::json_entries("minecraft:worldgen/structure_set").iter().position(|(n, _)| *n == name).map(|i| StructureSetHolder(i as u16))
+        crate::core::data_registries::json_entries("minecraft:worldgen/structure_set")
+            .iter()
+            .position(|(n, _)| *n == name)
+            .filter(|&i| !crate::core::data_registries::is_entry_blocked("minecraft:worldgen/structure_set", i as i32))
+            .map(|i| StructureSetHolder(i as u16))
     }
 
     pub fn key(self) -> &'static str {
@@ -31,20 +35,26 @@ impl StructureSetHolder {
     }
 
     pub fn value(self) -> &'static StructureSet {
-        &STRUCTURE_SETS[self.0 as usize]
+        STRUCTURE_SETS[self.0 as usize].as_ref().expect("a structure set that is not blocked")
     }
 
     pub fn all() -> impl Iterator<Item = StructureSetHolder> {
-        (0..crate::core::data_registries::json_entries("minecraft:worldgen/structure_set").len()).map(|i| StructureSetHolder(i as u16))
+        (0..crate::core::data_registries::json_entries("minecraft:worldgen/structure_set").len())
+            .filter(|&i| !crate::core::data_registries::is_entry_blocked("minecraft:worldgen/structure_set", i as i32))
+            .map(|i| StructureSetHolder(i as u16))
     }
 }
 
-static STRUCTURE_SETS: LazyLock<Vec<StructureSet>> = LazyLock::new(|| {
+static STRUCTURE_SETS: LazyLock<Vec<Option<StructureSet>>> = LazyLock::new(|| {
     crate::core::data_registries::json_entries("minecraft:worldgen/structure_set")
         .iter()
-        .map(|(name, source)| {
+        .enumerate()
+        .map(|(index, (name, source))| {
+            if crate::core::data_registries::is_entry_blocked("minecraft:worldgen/structure_set", index as i32) {
+                return None;
+            }
             let json: Value = serde_json::from_str(source).expect("structure set json");
-            StructureSet::parse(&json).unwrap_or_else(|e| panic!("structure set {name}: {e}"))
+            Some(StructureSet::parse(&json).unwrap_or_else(|e| panic!("structure set {name}: {e}")))
         })
         .collect()
 });

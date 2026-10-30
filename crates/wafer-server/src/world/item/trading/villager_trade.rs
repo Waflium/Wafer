@@ -70,16 +70,23 @@ impl VillagerTrade {
     }
 
     pub fn by_id(id: i32) -> &'static VillagerTrade {
-        static TRADES: OnceLock<Vec<VillagerTrade>> = OnceLock::new();
-        &TRADES.get_or_init(|| {
-            crate::core::data_registries::json_entries("minecraft:villager_trade")
-                .iter()
-                .map(|&(name, json)| {
-                    let tag = crate::world::item::component::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));
-                    VillagerTrade::decode(&tag).unwrap_or_else(|e| panic!("{name}: {e}"))
-                })
-                .collect()
-        })[id as usize]
+        static TRADES: OnceLock<Vec<Option<VillagerTrade>>> = OnceLock::new();
+        TRADES
+            .get_or_init(|| {
+                crate::core::data_registries::json_entries("minecraft:villager_trade")
+                    .iter()
+                    .enumerate()
+                    .map(|(index, &(name, json))| {
+                        if crate::core::data_registries::is_entry_blocked("minecraft:villager_trade", index as i32) {
+                            return None;
+                        }
+                        let tag = crate::world::item::component::json_to_nbt(&serde_json::from_str(json).expect("vanilla JSON"));
+                        Some(VillagerTrade::decode(&tag).unwrap_or_else(|e| panic!("{name}: {e}")))
+                    })
+                    .collect()
+            })[id as usize]
+            .as_ref()
+            .expect("a villager trade that is not blocked")
     }
 
     pub fn get_offer(&self, loot_context: &mut LootContext) -> Option<MerchantOffer> {
