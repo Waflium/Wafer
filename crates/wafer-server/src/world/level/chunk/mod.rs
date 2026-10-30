@@ -9,6 +9,7 @@ pub mod proto_chunk;
 pub mod serialization;
 pub mod storage;
 pub mod unseeded_chunk_generator;
+pub mod upgrade_data;
 
 use wafer_core::hash_map::FastMap;
 use wafer_core::{BlockPos, ChunkPos};
@@ -224,6 +225,7 @@ pub struct LevelChunk {
     pub blending_data: Option<std::sync::Arc<crate::world::level::levelgen::blending::blending_data::BlendingData>>,
     pub structures: ChunkStructures,
     pub post_processing: Vec<Vec<u16>>,
+    pub upgrade_data: upgrade_data::UpgradeData,
     pub game_event_listener_registry_sections: FastMap<i32, EuclideanGameEventListenerRegistry>,
     unsaved_listener: Option<std::sync::mpsc::Sender<i64>>,
 }
@@ -253,6 +255,7 @@ impl LevelChunk {
             post_load_block_entities: Vec::new(),
             blending_data: None,
             structures: ChunkStructures::default(),
+            upgrade_data: upgrade_data::UpgradeData::default(),
             game_event_listener_registry_sections: FastMap::default(),
             unsaved_listener: None,
         }

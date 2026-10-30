@@ -7,6 +7,7 @@ use wafer_protocol::nbt::Nbt;
 use super::data_layer::{self, DataLayer};
 use super::palette::{PackedData, PalettedContainer};
 use super::proto_chunk::ProtoChunkData;
+use super::upgrade_data::UpgradeData;
 use super::{Biome, ChunkStructures, Heightmap, HeightmapType, LevelChunk, LevelChunkSection, biome_strategy, block_strategy};
 use crate::server::level::chunk_level::ChunkStatus;
 use crate::world::level::levelgen::structure::structure::StructureHolder;
@@ -77,12 +78,12 @@ fn layer_from_nbt(nbt: Option<&Nbt>, parse_line: &'static str) -> Result<Option<
     }
 }
 
-fn fluid_by_name(name: &str) -> Option<Fluid> {
+pub fn fluid_by_name(name: &str) -> Option<Fluid> {
     let id = registry::FLUID.iter().position(|&f| f == name)?;
     Some([Fluid::Empty, Fluid::FlowingWater, Fluid::Water, Fluid::FlowingLava, Fluid::Lava][id])
 }
 
-fn ticks_to_nbt<T: Copy>(ticks: &[SavedTick<T>], name: impl Fn(T) -> &'static str) -> Nbt {
+pub fn saved_ticks_to_nbt<T: Copy>(ticks: &[SavedTick<T>], name: impl Fn(T) -> &'static str) -> Nbt {
     Nbt::List(
         ticks
             .iter()
@@ -100,7 +101,7 @@ fn ticks_to_nbt<T: Copy>(ticks: &[SavedTick<T>], name: impl Fn(T) -> &'static st
     )
 }
 
-fn ticks_from_nbt<T: Copy + Eq + std::hash::Hash>(nbt: Option<&Nbt>, ty: impl Fn(&str) -> Option<T>) -> Vec<SavedTick<T>> {
+pub fn saved_ticks_from_nbt<T: Copy + Eq + std::hash::Hash>(nbt: Option<&Nbt>, ty: impl Fn(Option<&Nbt>) -> Option<T>) -> Vec<SavedTick<T>> {
     nbt
         .map(Nbt::as_list)
         .unwrap_or(&[])
@@ -108,13 +109,18 @@ fn ticks_from_nbt<T: Copy + Eq + std::hash::Hash>(nbt: Option<&Nbt>, ty: impl Fn
         .filter_map(|t| {
             let int = |k: &str| t.get(k).and_then(Nbt::as_i64).map(|v| v as i32);
             Some(SavedTick {
-                ty: ty(t.get("i")?.as_str()?)?,
+                ty: ty(t.get("i"))?,
                 pos: BlockPos::new(int("x")?, int("y")?, int("z")?),
                 delay: int("t")?,
-                priority: TickPriority::by_value(int("p").unwrap_or(0)),
+                priority: TickPriority::by_value(int("p")?),
             })
         })
         .collect()
+}
+
+pub fn filter_tick_list_for_chunk<T>(saved_ticks: Vec<SavedTick<T>>, chunk_pos: ChunkPos) -> Vec<SavedTick<T>> {
+    let pos_key = chunk_pos.pack();
+    saved_ticks.into_iter().filter(|tick| ChunkPos::new(tick.pos.x >> 4, tick.pos.z >> 4).pack() == pos_key).collect()
 }
 
 pub fn state_to_nbt(state: BlockState) -> Nbt {
@@ -289,6 +295,9 @@ pub fn write(chunk: &LevelChunk, status: ChunkStatus, block_entities: Vec<Nbt>, 
     if let Some(retrogen) = chunk.proto.as_ref().and_then(|proto| proto.below_zero_retrogen.as_ref()) {
         tag.push(("below_zero_retrogen".into(), retrogen.encode()));
     }
+    if !chunk.upgrade_data.is_empty() {
+        tag.push(("UpgradeData".into(), chunk.upgrade_data.write()));
+    }
     tag.push(("sections".into(), Nbt::List(sections)));
     if chunk.light_correct {
         tag.push(("isLightOn".into(), Nbt::Byte(1)));
@@ -304,8 +313,8 @@ pub fn write(chunk: &LevelChunk, status: ChunkStatus, block_entities: Vec<Nbt>, 
     };
     let post_processing = chunk.post_processing.iter().map(|offsets| Nbt::List(offsets.iter().map(|&offset| Nbt::Short(offset as i16)).collect())).collect();
     tag.extend([
-        ("block_ticks".into(), ticks_to_nbt(block_ticks, Block::name)),
-        ("fluid_ticks".into(), ticks_to_nbt(fluid_ticks, |f| registry::FLUID[f as usize])),
+        ("block_ticks".into(), saved_ticks_to_nbt(block_ticks, Block::name)),
+        ("fluid_ticks".into(), saved_ticks_to_nbt(fluid_ticks, |f| registry::FLUID[f as usize])),
         ("PostProcessing".into(), Nbt::List(post_processing)),
         ("Heightmaps".into(), heightmaps_to_nbt(chunk, status)),
         ("structures".into(), pack_structure_data(chunk.pos, &chunk.structures)),
@@ -451,7 +460,11 @@ pub fn read(nbt: &Nbt, dimension: &DimensionType, seed: i64) -> Result<ReadChunk
         let biomes = biomes.unwrap_or_else(|| target.biomes.clone());
         *target = LevelChunkSection::from_containers(states, biomes);
     }
+    let sections_count = sections.len();
     let mut chunk = LevelChunk::with_sections(ChunkPos::new(x, z), dimension, sections);
+    if let Some(upgrade_data @ Nbt::Compound(_)) = nbt.get("UpgradeData") {
+        chunk.upgrade_data = UpgradeData::new(upgrade_data, sections_count);
+    }
     chunk.inhabited_time = nbt.get("InhabitedTime").and_then(Nbt::as_i64).unwrap_or(0);
     chunk.light_correct = nbt.get("isLightOn").and_then(Nbt::as_i64).is_some_and(|b| b != 0);
     let block_entities = nbt.get("block_entities").map(Nbt::as_list).unwrap_or(&[]);
@@ -478,8 +491,8 @@ pub fn read(nbt: &Nbt, dimension: &DimensionType, seed: i64) -> Result<ReadChunk
     for (section, offsets) in chunk.post_processing.iter_mut().zip(nbt.get("PostProcessing").map(Nbt::as_list).unwrap_or(&[])) {
         section.extend(offsets.as_list().iter().filter_map(Nbt::as_i64).map(|offset| offset as u16));
     }
-    let block_ticks = ticks_from_nbt(nbt.get("block_ticks"), Block::by_name);
-    let fluid_ticks = ticks_from_nbt(nbt.get("fluid_ticks"), fluid_by_name);
+    let block_ticks = filter_tick_list_for_chunk(saved_ticks_from_nbt(nbt.get("block_ticks"), |name| name?.as_str().and_then(Block::by_name)), chunk.pos);
+    let fluid_ticks = filter_tick_list_for_chunk(saved_ticks_from_nbt(nbt.get("fluid_ticks"), |name| name?.as_str().and_then(fluid_by_name)), chunk.pos);
     if status == ChunkStatus::Full {
         chunk.legacy_entities = nbt.get("entities").map(Nbt::as_list).unwrap_or(&[]).to_vec();
         return Ok(ReadChunk { chunk, status, block_ticks: LevelChunkTicks::with_pending(block_ticks), fluid_ticks: LevelChunkTicks::with_pending(fluid_ticks), light });
@@ -573,6 +586,35 @@ mod tests {
         assert_eq!(read.block_state(BlockPos::new(49, -60, -110)), stairs);
         assert_eq!(read.block_state(BlockPos::new(53, 100, -103)), blocks::GLOWSTONE.default_state());
         assert_eq!(read.block_state(BlockPos::new(48, -64, -112)), blocks::BEDROCK.default_state());
+    }
+
+    #[test]
+    fn upgrade_data_round_trips_through_the_chunk_tag() {
+        let mut chunk = FlatLevelSource::default().generate(ChunkPos::new(3, -7), overworld());
+        let tag = Nbt::Compound(vec![("Sides".to_string(), Nbt::Byte(5)), ("Indices".to_string(), Nbt::Compound(vec![("2".to_string(), Nbt::IntArray(vec![17]))].into()))].into());
+        chunk.upgrade_data = UpgradeData::new(&tag, 24);
+        let saved = write(&chunk, ChunkStatus::Full, Vec::new(), 0, &[], &[], &[]);
+        assert_eq!(saved.get("UpgradeData").and_then(|data| data.get("Sides")), Some(&Nbt::Byte(5)));
+        let read = read(&saved, overworld(), 0).unwrap().chunk;
+        assert!(!read.upgrade_data.is_empty());
+        assert_eq!(read.upgrade_data.write(), chunk.upgrade_data.write());
+        let plain = write(&FlatLevelSource::default().generate(ChunkPos::new(3, -7), overworld()), ChunkStatus::Full, Vec::new(), 0, &[], &[], &[]);
+        assert!(plain.get("UpgradeData").is_none());
+    }
+
+    #[test]
+    fn ticks_of_other_chunks_are_dropped_on_read() {
+        let chunk = FlatLevelSource::default().generate(ChunkPos::new(3, -7), overworld());
+        let tick = |x: i32, z: i32| SavedTick { ty: blocks::STONE, pos: BlockPos::new(x, 70, z), delay: 1, priority: TickPriority::NORMAL };
+        let saved = write(&chunk, ChunkStatus::Full, Vec::new(), 0, &[tick(50, -100), tick(64, -100), tick(50, -113)], &[], &[]);
+        let read = read(&saved, overworld(), 0).unwrap();
+        assert_eq!(read.block_ticks.count(), 1);
+    }
+
+    #[test]
+    fn ticks_without_a_priority_are_dropped_on_read() {
+        let ticks = Nbt::List(vec![Nbt::Compound(vec![("i".to_string(), Nbt::String("minecraft:stone".to_string())), ("x".to_string(), Nbt::Int(1)), ("y".to_string(), Nbt::Int(1)), ("z".to_string(), Nbt::Int(1)), ("t".to_string(), Nbt::Int(1))].into())]);
+        assert!(saved_ticks_from_nbt(Some(&ticks), |name| name?.as_str().and_then(Block::by_name)).is_empty());
     }
 
     #[test]

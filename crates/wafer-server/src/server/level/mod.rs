@@ -63,6 +63,7 @@ use crate::world::level::block;
 use crate::world::level::block::entity::BlockEntity;
 use crate::world::level::border::world_border::{Settings, WorldBorder};
 use crate::world::level::chunk::block_entities::EntityCreationType;
+use crate::world::level::chunk::upgrade_data::UpgradeData;
 use crate::world::level::chunk::storage::RegionStorage;
 use crate::world::level::entity::PersistentEntitySectionManager;
 use crate::world::level::entity::entity_tick_list::EntityTickList;
@@ -1055,6 +1056,7 @@ impl ServerLevel {
             }
         }
         self.chunks.chunk(chunk_pos).block_entities.pending.clear();
+        UpgradeData::upgrade(self, chunk_pos);
     }
 
     pub fn block_event(&mut self, pos: BlockPos, block: Block, b0: i32, b1: i32) {
@@ -1822,7 +1824,11 @@ impl ServerLevel {
     }
 
     pub fn schedule_fluid_tick(&mut self, pos: BlockPos, fluid: Fluid, delay: i32) {
-        let tick = self.create_tick(pos, fluid, delay, TickPriority::NORMAL);
+        self.schedule_fluid_tick_with_priority(pos, fluid, delay, TickPriority::NORMAL);
+    }
+
+    pub fn schedule_fluid_tick_with_priority(&mut self, pos: BlockPos, fluid: Fluid, delay: i32, priority: TickPriority) {
+        let tick = self.create_tick(pos, fluid, delay, priority);
         self.chunks.fluid_ticks.schedule(tick);
     }
 

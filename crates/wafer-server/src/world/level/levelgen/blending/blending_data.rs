@@ -41,6 +41,20 @@ impl Direction8 {
     pub const VALUES: [Direction8; 8] =
         [Direction8::North, Direction8::NorthEast, Direction8::East, Direction8::SouthEast, Direction8::South, Direction8::SouthWest, Direction8::West, Direction8::NorthWest];
 
+    pub fn directions(self) -> &'static [wafer_core::Direction] {
+        use wafer_core::Direction::{East, North, South, West};
+        match self {
+            Direction8::North => &[North],
+            Direction8::NorthEast => &[North, East],
+            Direction8::East => &[East],
+            Direction8::SouthEast => &[South, East],
+            Direction8::South => &[South],
+            Direction8::SouthWest => &[South, West],
+            Direction8::West => &[West],
+            Direction8::NorthWest => &[North, West],
+        }
+    }
+
     pub fn step_x(self) -> i32 {
         match self {
             Direction8::NorthEast | Direction8::East | Direction8::SouthEast => 1,
