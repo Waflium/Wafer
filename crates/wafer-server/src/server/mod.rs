@@ -2789,10 +2789,10 @@ mod tests {
         let _scope = main_thread_frames::tick();
         let report = dedicated::server_watchdog::create_watchdog_crash_report("Watching Server");
         let text = report.get_friendly_report(&crate::crash_report::ReportType::CRASH).replace("\r\n", "\n");
-        assert!(text.contains("java.lang.Error: Watchdog (Watching Server)\n\tat app//net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:980)"), "{text}");
+        assert!(text.contains("java.lang.Error: Watchdog (Watching Server)\n\tat net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:980)"), "{text}");
         assert!(text.contains("-- Head --\nThread: "), "{text}");
         assert!(text.contains("-- Thread Dump --\nDetails:\n\tThreads: \n"), "{text}");
-        assert!(text.contains("\"Server thread\" prio=8 Id=105 RUNNABLE\n\tat app//net.minecraft.server.MinecraftServer.tickServer"), "{text}");
+        assert!(text.contains("\"Server thread\" prio=8 Id=105 RUNNABLE\n\tat net.minecraft.server.MinecraftServer.tickServer"), "{text}");
         assert!(text.contains("Stacktrace:\n\tat net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:95)\n\tat net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)"), "{text}");
     }
 

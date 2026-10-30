@@ -118,7 +118,14 @@ const WATCHDOG_RUN_FRAME: &str = "net.minecraft.server.dedicated.ServerWatchdog.
 
 const LAMBDA_SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
 const THREAD_RUN_FRAME: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
-const SPIN_HIDDEN_FRAMES: [&str; 2] = ["app//net.minecraft.server.MinecraftServer$$Lambda/0x00000000a0e9a538.run(Unknown Source)", "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)"];
+const SPIN_HIDDEN_FRAMES: [&str; 2] = ["net.minecraft.server.MinecraftServer$$Lambda/0x00000000a0e9a538.run(Unknown Source)", "java.base/java.lang.Thread.runWith(Thread.java:1487)"];
+
+fn runtime_frame(frame: &str) -> String {
+    match frame.strip_prefix("java.base/") {
+        Some(rest) => format!("java.base@{}/{rest}", crate::util::java_runtime::java_version()),
+        None => frame.to_string(),
+    }
+}
 
 fn thread_info_frames(frames: &[&'static str]) -> Vec<String> {
     let mut out = Vec::with_capacity(frames.len() + 2);
@@ -127,10 +134,7 @@ fn thread_info_frames(frames: &[&'static str]) -> Vec<String> {
         if frame == THREAD_RUN_FRAME && previous == LAMBDA_SPIN_FRAME {
             out.extend(SPIN_HIDDEN_FRAMES.iter().map(ToString::to_string));
         }
-        out.push(match frame.strip_prefix("java.base/") {
-            Some(rest) => format!("java.base@25.0.4/{rest}"),
-            None => format!("app//{frame}"),
-        });
+        out.push(frame.to_string());
         previous = frame;
     }
     out
@@ -176,7 +180,7 @@ impl ThreadDumpEntry {
         }
         out.push('\n');
         for (index, frame) in self.frames.iter().take(8).enumerate() {
-            out.push_str(&format!("\tat {frame}\n"));
+            out.push_str(&format!("\tat {}\n", runtime_frame(frame)));
             if index == 0
                 && let Some(lock) = &self.lock
             {
@@ -212,7 +216,7 @@ fn idle_io_worker_frames() -> Vec<String> {
         "java.lang.Thread.run(Thread.java:1474)",
     ]
     .iter()
-    .map(|frame| format!("java.base@25.0.4/{frame}"))
+    .map(|frame| format!("java.base/{frame}"))
     .collect()
 }
 
@@ -225,7 +229,7 @@ fn idle_worker_main_frames() -> Vec<String> {
         "java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:187)",
     ]
     .iter()
-    .map(|frame| format!("java.base@25.0.4/{frame}"))
+    .map(|frame| format!("java.base/{frame}"))
     .collect()
 }
 
@@ -254,11 +258,11 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
                 "java.management@25.0.4/sun.management.ThreadImpl.dumpThreads0(Native Method)",
                 "java.management@25.0.4/sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:505)",
                 "java.management@25.0.4/sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:493)",
-                "app//net.minecraft.util.Util.dumpThreadInfo(Util.java:500)",
-                "app//net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:79)",
-                "app//net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)",
-                "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)",
-                "java.base@25.0.4/java.lang.Thread.run(Thread.java:1474)",
+                "net.minecraft.util.Util.dumpThreadInfo(Util.java:500)",
+                "net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:79)",
+                "net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)",
+                "java.base/java.lang.Thread.runWith(Thread.java:1487)",
+                "java.base/java.lang.Thread.run(Thread.java:1474)",
             ]
             .iter()
             .map(ToString::to_string)
@@ -274,15 +278,15 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
             lock: None,
             in_native: true,
             frames: [
-                "java.base@25.0.4/java.io.FileInputStream.readBytes(Native Method)",
-                "java.base@25.0.4/java.io.FileInputStream.read(FileInputStream.java:281)",
-                "java.base@25.0.4/java.lang.System$In.read(System.java:1872)",
-                "java.base@25.0.4/java.io.BufferedInputStream.read1(BufferedInputStream.java:328)",
-                "java.base@25.0.4/java.io.BufferedInputStream.read(BufferedInputStream.java:388)",
-                "java.base@25.0.4/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)",
-                "java.base@25.0.4/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)",
-                "java.base@25.0.4/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)",
-                "java.base@25.0.4/java.io.InputStreamReader.read(InputStreamReader.java:177)",
+                "java.base/java.io.FileInputStream.readBytes(Native Method)",
+                "java.base/java.io.FileInputStream.read(FileInputStream.java:281)",
+                "java.base/java.lang.System$In.read(System.java:1872)",
+                "java.base/java.io.BufferedInputStream.read1(BufferedInputStream.java:328)",
+                "java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:388)",
+                "java.base/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)",
+                "java.base/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)",
+                "java.base/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)",
+                "java.base/java.io.InputStreamReader.read(InputStreamReader.java:177)",
             ]
             .iter()
             .map(ToString::to_string)
@@ -340,12 +344,12 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
         "java.management@25.0.4/sun.management.ThreadImpl.dumpThreads0(Native Method)",
         "java.management@25.0.4/sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:505)",
         "java.management@25.0.4/sun.management.ThreadImpl.dumpAllThreads(ThreadImpl.java:493)",
-        "app//net.minecraft.util.Util.dumpThreadInfo(Util.java:500)",
-        "app//net.minecraft.server.MinecraftServer.dumpThreads(MinecraftServer.java:1878)",
-        "app//net.minecraft.server.MinecraftServer.saveDebugReport(MinecraftServer.java:1833)",
-        "app//net.minecraft.server.MinecraftServer.lambda$createProfiler$1(MinecraftServer.java:1917)",
-        "app//net.minecraft.server.MinecraftServer$$Lambda/0x000000001f08d9f8.run(Unknown Source)",
-        "app//net.minecraft.util.thread.BlockableEventLoop.lambda$submitAsync$0(BlockableEventLoop.java:75)",
+        "net.minecraft.util.Util.dumpThreadInfo(Util.java:500)",
+        "net.minecraft.server.MinecraftServer.dumpThreads(MinecraftServer.java:1878)",
+        "net.minecraft.server.MinecraftServer.saveDebugReport(MinecraftServer.java:1833)",
+        "net.minecraft.server.MinecraftServer.lambda$createProfiler$1(MinecraftServer.java:1917)",
+        "net.minecraft.server.MinecraftServer$$Lambda/0x000000001f08d9f8.run(Unknown Source)",
+        "net.minecraft.util.thread.BlockableEventLoop.lambda$submitAsync$0(BlockableEventLoop.java:75)",
     ]);
     let mut entries = vec![
         jvm_thread("Server thread", false, 8, 105, "RUNNABLE", None, false, server_frames),
@@ -358,12 +362,12 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             None,
             false,
             qualified_frames(&[
-                "java.base@25.0.4/java.lang.Thread.sleepNanos0(Native Method)",
-                "java.base@25.0.4/java.lang.Thread.sleepNanos(Thread.java:509)",
-                "java.base@25.0.4/java.lang.Thread.sleep(Thread.java:540)",
-                "app//net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:72)",
-                "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)",
-                "java.base@25.0.4/java.lang.Thread.run(Thread.java:1474)",
+                "java.base/java.lang.Thread.sleepNanos0(Native Method)",
+                "java.base/java.lang.Thread.sleepNanos(Thread.java:509)",
+                "java.base/java.lang.Thread.sleep(Thread.java:540)",
+                "net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:72)",
+                "java.base/java.lang.Thread.runWith(Thread.java:1487)",
+                "java.base/java.lang.Thread.run(Thread.java:1474)",
             ]),
         ),
         jvm_thread(
@@ -375,15 +379,15 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             None,
             true,
             qualified_frames(&[
-                "java.base@25.0.4/java.io.FileInputStream.readBytes(Native Method)",
-                "java.base@25.0.4/java.io.FileInputStream.read(FileInputStream.java:281)",
-                "java.base@25.0.4/java.lang.System$In.read(System.java:1872)",
-                "java.base@25.0.4/java.io.BufferedInputStream.read1(BufferedInputStream.java:328)",
-                "java.base@25.0.4/java.io.BufferedInputStream.read(BufferedInputStream.java:388)",
-                "java.base@25.0.4/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)",
-                "java.base@25.0.4/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)",
-                "java.base@25.0.4/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)",
-                "java.base@25.0.4/java.io.InputStreamReader.read(InputStreamReader.java:177)",
+                "java.base/java.io.FileInputStream.readBytes(Native Method)",
+                "java.base/java.io.FileInputStream.read(FileInputStream.java:281)",
+                "java.base/java.lang.System$In.read(System.java:1872)",
+                "java.base/java.io.BufferedInputStream.read1(BufferedInputStream.java:328)",
+                "java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:388)",
+                "java.base/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)",
+                "java.base/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)",
+                "java.base/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)",
+                "java.base/java.io.InputStreamReader.read(InputStreamReader.java:177)",
             ]),
         ),
         jvm_thread("Attach Listener", true, 5, 19, "RUNNABLE", None, false, Vec::new()),
@@ -399,9 +403,9 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             None,
             false,
             qualified_frames(&[
-                "java.base@25.0.4/java.lang.ref.Reference.waitForReferencePendingList(Native Method)",
-                "java.base@25.0.4/java.lang.ref.Reference.processPendingReferences(Reference.java:246)",
-                "java.base@25.0.4/java.lang.ref.Reference$ReferenceHandler.run(Reference.java:208)",
+                "java.base/java.lang.ref.Reference.waitForReferencePendingList(Native Method)",
+                "java.base/java.lang.ref.Reference.processPendingReferences(Reference.java:246)",
+                "java.base/java.lang.ref.Reference$ReferenceHandler.run(Reference.java:208)",
             ]),
         ),
         jvm_thread(
@@ -413,12 +417,12 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             Some(&reference_queue_lock("486e74d")),
             false,
             qualified_frames(&[
-                "java.base@25.0.4/java.lang.Object.wait0(Native Method)",
-                "java.base@25.0.4/java.lang.Object.wait(Object.java:389)",
-                "java.base@25.0.4/java.lang.Object.wait(Object.java:351)",
-                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:137)",
-                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:215)",
-                "java.base@25.0.4/java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:165)",
+                "java.base/java.lang.Object.wait0(Native Method)",
+                "java.base/java.lang.Object.wait(Object.java:389)",
+                "java.base/java.lang.Object.wait(Object.java:351)",
+                "java.base/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:137)",
+                "java.base/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:215)",
+                "java.base/java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:165)",
             ]),
         ),
         jvm_thread(
@@ -430,14 +434,14 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             Some(&reference_queue_lock("10c42094")),
             false,
             qualified_frames(&[
-                "java.base@25.0.4/java.lang.Object.wait0(Native Method)",
-                "java.base@25.0.4/java.lang.Object.wait(Object.java:389)",
-                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:123)",
-                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:201)",
-                "java.base@25.0.4/jdk.internal.ref.CleanerImpl.run(CleanerImpl.java:146)",
-                "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)",
-                "java.base@25.0.4/java.lang.Thread.run(Thread.java:1474)",
-                "java.base@25.0.4/jdk.internal.misc.InnocuousThread.run(InnocuousThread.java:148)",
+                "java.base/java.lang.Object.wait0(Native Method)",
+                "java.base/java.lang.Object.wait(Object.java:389)",
+                "java.base/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:123)",
+                "java.base/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:201)",
+                "java.base/jdk.internal.ref.CleanerImpl.run(CleanerImpl.java:146)",
+                "java.base/java.lang.Thread.runWith(Thread.java:1487)",
+                "java.base/java.lang.Thread.run(Thread.java:1474)",
+                "java.base/jdk.internal.misc.InnocuousThread.run(InnocuousThread.java:148)",
             ]),
         ),
         jvm_thread(
@@ -449,11 +453,11 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             Some(&reference_queue_lock("54834fb0")),
             false,
             qualified_frames(&[
-                "java.base@25.0.4/java.lang.Object.wait0(Native Method)",
-                "java.base@25.0.4/java.lang.Object.wait(Object.java:389)",
-                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:123)",
-                "java.base@25.0.4/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:201)",
-                "app//com.sun.jna.internal.Cleaner$CleanerThread.run(Cleaner.java:154)",
+                "java.base/java.lang.Object.wait0(Native Method)",
+                "java.base/java.lang.Object.wait(Object.java:389)",
+                "java.base/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:123)",
+                "java.base/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:201)",
+                "com.sun.jna.internal.Cleaner$CleanerThread.run(Cleaner.java:154)",
             ]),
         ),
         jvm_thread(
@@ -465,10 +469,10 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             None,
             false,
             qualified_frames(&[
-                "java.base@25.0.4/java.lang.Thread.sleepNanos0(Native Method)",
-                "java.base@25.0.4/java.lang.Thread.sleepNanos(Thread.java:509)",
-                "java.base@25.0.4/java.lang.Thread.sleep(Thread.java:540)",
-                "app//net.minecraft.util.Util$9.run(Util.java:1009)",
+                "java.base/java.lang.Thread.sleepNanos0(Native Method)",
+                "java.base/java.lang.Thread.sleepNanos(Thread.java:509)",
+                "java.base/java.lang.Thread.sleep(Thread.java:540)",
+                "net.minecraft.util.Util$9.run(Util.java:1009)",
             ]),
         ),
     ];
@@ -484,15 +488,15 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
                 lock: Some("java.util.concurrent.CompletableFuture$Signaller@5b64b5e2".to_string()),
                 in_native: false,
                 frames: qualified_frames(&[
-                    "java.base@25.0.4/jdk.internal.misc.Unsafe.park(Native Method)",
-                    "java.base@25.0.4/java.util.concurrent.locks.LockSupport.park(LockSupport.java:223)",
-                    "java.base@25.0.4/java.util.concurrent.CompletableFuture$Signaller.block(CompletableFuture.java:1885)",
-                    "java.base@25.0.4/java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:4364)",
-                    "java.base@25.0.4/java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:4310)",
-                    "java.base@25.0.4/java.util.concurrent.CompletableFuture.waitingGet(CompletableFuture.java:1919)",
-                    "java.base@25.0.4/java.util.concurrent.CompletableFuture.join(CompletableFuture.java:2138)",
-                    "app//net.minecraft.util.thread.BlockableEventLoop.executeBlocking(BlockableEventLoop.java:96)",
-                    "app//net.minecraft.server.MinecraftServer.lambda$createProfiler$2(MinecraftServer.java:1912)",
+                    "java.base/jdk.internal.misc.Unsafe.park(Native Method)",
+                    "java.base/java.util.concurrent.locks.LockSupport.park(LockSupport.java:223)",
+                    "java.base/java.util.concurrent.CompletableFuture$Signaller.block(CompletableFuture.java:1885)",
+                    "java.base/java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:4364)",
+                    "java.base/java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:4310)",
+                    "java.base/java.util.concurrent.CompletableFuture.waitingGet(CompletableFuture.java:1919)",
+                    "java.base/java.util.concurrent.CompletableFuture.join(CompletableFuture.java:2138)",
+                    "net.minecraft.util.thread.BlockableEventLoop.executeBlocking(BlockableEventLoop.java:96)",
+                    "net.minecraft.server.MinecraftServer.lambda$createProfiler$2(MinecraftServer.java:1912)",
                 ]),
                 locked_synchronizers: vec!["java.util.concurrent.ThreadPoolExecutor$Worker@7f43bd7".to_string()],
             });
@@ -535,7 +539,7 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
 
 pub fn create_watchdog_crash_report(message: &str) -> CrashReport {
     let server_frames = crate::server::main_thread_frames::published();
-    let frames: Vec<&'static str> = thread_info_frames(&server_frames).into_iter().map(|frame| &*Box::leak(frame.into_boxed_str())).collect();
+    let frames: Vec<&'static str> = thread_info_frames(&server_frames).iter().map(|frame| &*Box::leak(runtime_frame(frame).into_boxed_str())).collect();
     let exception = crate::util::java_throwable::JavaThrowable::new(format!("java.lang.Error: Watchdog ({message})"), frames);
     let mut report = {
         let _creator = crate::util::java_stack::enter_all(&[CREATE_WATCHDOG_CRASH_REPORT_FRAME, WATCHDOG_RUN_FRAME, THREAD_RUN_FRAME]);
