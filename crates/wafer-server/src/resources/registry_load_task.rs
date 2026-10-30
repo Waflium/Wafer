@@ -315,6 +315,12 @@ pub fn function_load_failed(cause_description: &str) -> JavaThrowable {
     JavaThrowable::new(format!("java.util.concurrent.CompletionException: {cause_description}"), frames).with_cause(cause)
 }
 
+pub fn function_load_thrown(cause: JavaThrowable) -> JavaThrowable {
+    let mut frames = FUNCTION_COMPLETION_FRAMES.to_vec();
+    frames.extend(FORK_JOIN_TAIL);
+    JavaThrowable::new(format!("java.util.concurrent.CompletionException: {}", cause.description), frames).with_cause(cause)
+}
+
 pub fn tag_decode_failed(context: TagLoadContext<'_>, message: &str) -> JavaThrowable {
     let mut frames = DATA_RESULT_GET_OR_THROW.to_vec();
     frames.extend(tag_load_frames(context, "net.minecraft.tags.TagLoader.load(TagLoader.java:61)"));

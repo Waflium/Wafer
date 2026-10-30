@@ -211,7 +211,7 @@ pub(crate) async fn serve_world(
     let runtime = tokio::runtime::Handle::current();
     let (done, finished) = oneshot::channel();
     let server_events = events.clone();
-    std::thread::Builder::new().name("Server thread".into()).spawn(move || {
+    std::thread::Builder::new().name("Server thread".into()).stack_size(64 << 20).spawn(move || {
         let _ = done.send(server::run(config, settings, world, services, queue, server_events, runtime, listen, console, management_server));
     })?;
     if console {

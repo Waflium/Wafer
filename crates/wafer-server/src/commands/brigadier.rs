@@ -539,12 +539,45 @@ fn relevant_nodes(node: &'static CommandNode, input: &StringReader) -> Vec<&'sta
     }
 }
 
+const MAX_PARSE_NODES_DEPTH: u32 = 2754;
+
+thread_local! {
+    static PARSE_NODES_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+struct ParseNodesFrame;
+
+impl ParseNodesFrame {
+    fn enter() -> ParseNodesFrame {
+        let depth = PARSE_NODES_DEPTH.with(|depth| depth.get() + 1);
+        if depth > MAX_PARSE_NODES_DEPTH {
+            crate::crash_report::throw_java_exception(stack_overflow_error());
+        }
+        PARSE_NODES_DEPTH.with(|current| current.set(depth));
+        ParseNodesFrame
+    }
+}
+
+impl Drop for ParseNodesFrame {
+    fn drop(&mut self) {
+        PARSE_NODES_DEPTH.with(|depth| depth.set(depth.get() - 1));
+    }
+}
+
+fn stack_overflow_error() -> crate::util::java_throwable::JavaThrowable {
+    let mut frames = vec!["com.mojang.brigadier.tree.CommandNode.getRelevantNodes(CommandNode.java:154)", "com.mojang.brigadier.CommandDispatcher.parseNodes(CommandDispatcher.java:300)"];
+    let pattern = ["com.mojang.brigadier.CommandDispatcher.parseNodes(CommandDispatcher.java:335)", "com.mojang.brigadier.CommandDispatcher.parseNodes(CommandDispatcher.java:335)", "com.mojang.brigadier.CommandDispatcher.parseNodes(CommandDispatcher.java:331)", "com.mojang.brigadier.CommandDispatcher.parseNodes(CommandDispatcher.java:331)"];
+    frames.extend(pattern.iter().cycle().take(1024 - frames.len()));
+    crate::util::java_throwable::JavaThrowable::new("java.lang.StackOverflowError", frames)
+}
+
 fn parse_nodes<'a>(
     node: &'static CommandNode,
     original_reader: StringReader<'a>,
     context_so_far: CommandContextBuilder,
     source: &CommandSourceStack,
 ) -> ParseResults<'a> {
+    let _frame = ParseNodesFrame::enter();
     let mut errors: Vec<(u16, CommandSyntaxException)> = Vec::new();
     let mut potentials: Vec<ParseResults<'a>> = Vec::new();
     let cursor = original_reader.cursor;
@@ -657,4 +690,36 @@ pub fn error_context(e: &CommandSyntaxException, command: &str) -> Option<Compon
         context = context.append(Component::literal(utf16(&input[cursor..])).with_color(ChatFormatting::Red).underlined());
     }
     Some(context.append(Component::translatable("command.context.here").with_color(ChatFormatting::Red).italic()))
+}
+
+#[cfg(test)]
+mod depth_tests {
+    use super::*;
+    use wafer_core::java_string::JavaStr;
+
+    fn overflows(levels: usize) -> bool {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(move || {
+                let server = crate::server::level::testing::server();
+                let source = CommandSourceStack::server(&server);
+                let units: Vec<u16> = format!("{}say hi", "execute as @a run ".repeat(levels)).java_utf16().collect();
+                match crate::util::catch_throwable(|| {
+                    parse(StringReader::new(&units), &source);
+                }) {
+                    Ok(()) => false,
+                    Err(thrown) => thrown.description == "java.lang.StackOverflowError" && thrown.stack_trace.len() == 1024,
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap()
+    }
+
+    #[test]
+    fn nested_executes_overflow_at_vanillas_depth() {
+        assert!(!overflows(688));
+        assert!(overflows(689));
+        assert_eq!(PARSE_NODES_DEPTH.with(std::cell::Cell::get), 0);
+    }
 }

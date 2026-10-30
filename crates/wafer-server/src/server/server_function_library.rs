@@ -82,7 +82,7 @@ impl ServerFunctionLibrary {
         let compilation_context = create_compilation_context(function_compilation_permission);
         let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(sources.len()).max(1);
         let next = AtomicUsize::new(0);
-        let mut compiled: Vec<Option<Result<CommandFunction, String>>> = (0..sources.len()).map(|_| None).collect();
+        let mut compiled: Vec<Option<Result<CommandFunction, crate::util::java_throwable::JavaThrowable>>> =(0..sources.len()).map(|_| None).collect();
         let tags = std::thread::scope(|scope| {
             let tags = std::thread::Builder::new().name(worker_name()).spawn_scoped(scope, || crate::util::catch_throwable(|| tags_loader.load(resource_manager))).expect("worker thread");
             let handles: Vec<_> = (0..workers)
@@ -90,16 +90,23 @@ impl ServerFunctionLibrary {
                     let (sources, next, compilation_context) = (&sources, &next, &compilation_context);
                     std::thread::Builder::new()
                         .name(worker_name())
+                        .stack_size(64 << 20)
                         .spawn_scoped(scope, move || {
                             crate::util::catch_throwable(|| {
                                 let mut done = Vec::new();
                                 loop {
                                     let index = next.fetch_add(1, Ordering::Relaxed);
                                     let Some((id, resource)) = sources.get(index) else { break };
-                                    let function = resource.supplier.read().map_err(|e| format!("java.io.IOException: {e}")).and_then(|bytes| {
-                                        CommandFunction::from_lines(id, compilation_context, &read_lines(&bytes))
-                                            .map_err(|e| format!("java.lang.IllegalArgumentException: {e}"))
+                                    let function = crate::util::catch_throwable(|| {
+                                        resource.supplier.read().map_err(|e| format!("java.io.IOException: {e}")).and_then(|bytes| {
+                                            CommandFunction::from_lines(id, compilation_context, &read_lines(&bytes))
+                                                .map_err(|e| format!("java.lang.IllegalArgumentException: {e}"))
+                                        })
                                     });
+                                    let function = match function {
+                                        Ok(function) => function.map_err(|exception| crate::resources::registry_load_task::function_load_failed(&exception)),
+                                        Err(thrown) => Err(crate::resources::registry_load_task::function_load_thrown(thrown)),
+                                    };
                                     done.push((index, function));
                                 }
                                 done
@@ -131,7 +138,7 @@ impl ServerFunctionLibrary {
                 Ok(function) => {
                     functions.insert(id.to_string(), Arc::new(function));
                 }
-                Err(exception) => error!("Failed to load function {id}\n{}", crate::resources::registry_load_task::function_load_failed(&exception).print_stack_trace().trim_end()),
+                Err(exception) => error!("Failed to load function {id}\n{}", exception.print_stack_trace().trim_end()),
             }
         }
         let tags = tags_loader.build(&tags, &|id, _| functions.get(id).cloned(), &Arc::ptr_eq);
