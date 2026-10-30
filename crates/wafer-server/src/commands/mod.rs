@@ -174,8 +174,22 @@ pub fn perform_prefixed_command_without_level(server: &mut Server, source: &Comm
 
 pub fn perform_command(server: &mut Server, parse: ParseResults, command: &str, source: &CommandSourceStack) {
     let _zone = crate::util::profiling::profiler::zone_with(|| format!("/{command}"));
-    let Some(chain) = finish_parsing(server, parse, command, source) else { return };
-    execute_command_in_context(server, |context| context.queue_initial_command_execution(chain, source, CommandResultCallback::EMPTY));
+    let performed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let Some(chain) = finish_parsing(server, parse, command, source) else { return };
+        execute_command_in_context(server, |context| context.queue_initial_command_execution(chain, source, CommandResultCallback::EMPTY));
+    }));
+    if let Err(payload) = performed {
+        let message = command_exception_message(&payload);
+        source.send_failure(server, unexpected_error(&message).message);
+    }
+}
+
+fn command_exception_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+    let throwable = match payload.downcast_ref::<crate::crash_report::ReportedException>() {
+        Some(reported) => reported.0.reported_exception(),
+        None => crate::crash_report::throwable_of(payload),
+    };
+    throwable.message().map_or_else(|| throwable.class_name().to_string(), str::to_string)
 }
 
 pub fn execute_command_in_context(server: &mut Server, config: impl FnOnce(&mut ExecutionContext)) {

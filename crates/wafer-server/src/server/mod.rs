@@ -1232,6 +1232,32 @@ impl Server {
         self.report_packet_handling_exception(&throwable, &packet_type);
     }
 
+    fn on_connection_tick_error(&mut self, id: EntityId, payload: Box<dyn std::any::Any + Send>) {
+        use crate::crash_report::{JavaException, ReportedException};
+        let throwable = match payload.downcast::<JavaException>() {
+            Ok(exception) => exception.0,
+            Err(payload) => match payload.downcast::<ReportedException>() {
+                Ok(reported) => {
+                    if reported.0.reported_exception().cause.as_deref().is_some_and(|cause| cause.class_name() == "java.lang.OutOfMemoryError") {
+                        std::panic::resume_unwind(reported);
+                    }
+                    reported.0.reported_exception()
+                }
+                Err(payload) => {
+                    let description = crate::crash_report::exception_of(&payload);
+                    let has_class = description.split_once(": ").map_or(&*description, |(class, _)| class).contains('.');
+                    JavaThrowable::new(if has_class { description } else { format!("java.lang.RuntimeException: {description}") }, crash_frames().into_iter().map(|frame| &*Box::leak(frame.into_boxed_str())).collect())
+                }
+            },
+        };
+        let address = self.player(id).address.map_or_else(|| "local".to_string(), |address| crate::network::server_connection_listener::loggable_address(address, self.config.log_ips));
+        warn!("Failed to handle packet for {address}\n{}", throwable.print_stack_trace().trim_end());
+        if let Some(index) = self.level_of(id) {
+            self.levels[index].abort_tick_continuation();
+        }
+        self.player_mut(id).disconnect_with(Component::literal("Internal server error"));
+    }
+
     pub fn report_packet_handling_exception(&self, throwable: &JavaThrowable, packet_type: &str) {
         self.chunk_io_error_reporter.suppressed_exceptions().add_entry(&format!("packet/{packet_type}"), throwable);
     }
@@ -1818,16 +1844,26 @@ impl Server {
                 self.remove_player(conn, Some(reason));
                 continue;
             }
-            if let Some(index) = self.level_of(id) {
-                level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_start(id);
-            }
-            if let Some(level) = self.level_of(id) {
-                self.run_pending_server_work(level);
-                self.run_level_tasks();
-            }
-            let connected = match self.level_of(id) {
-                Some(index) => level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_end(id),
-                None => false,
+            let ticked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if let Some(index) = self.level_of(id) {
+                    let _connection_tick = main_thread_frames::enter(CONNECTION_TICK_FRAMES);
+                    level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_start(id);
+                }
+                if let Some(level) = self.level_of(id) {
+                    self.run_pending_server_work(level);
+                    self.run_level_tasks();
+                }
+                match self.level_of(id) {
+                    Some(index) => level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_end(id),
+                    None => false,
+                }
+            }));
+            let connected = match ticked {
+                Ok(connected) => connected,
+                Err(payload) => {
+                    self.on_connection_tick_error(id, payload);
+                    false
+                }
             };
             if connected {
                 self.tick_command_suggestions(id);
@@ -2414,6 +2450,16 @@ const RUN_SERVER_CRASH_REPORT_FRAME: &str = "net.minecraft.server.MinecraftServe
 fn construct_or_extract_crash_report_scope() -> Vec<crate::util::java_stack::StackScope> {
     crate::util::java_stack::enter_all(&[CONSTRUCT_OR_EXTRACT_CRASH_REPORT_FRAME, RUN_SERVER_CRASH_REPORT_FRAME, SPIN_FRAME, THREAD_RUN_FRAME])
 }
+
+const CONNECTION_TICK_FRAMES: [&str; 7] = [
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.tickPlayer(ServerGamePacketListenerImpl.java:345)",
+    "net.minecraft.server.network.ServerGamePacketListenerImpl.tick(ServerGamePacketListenerImpl.java:320)",
+    "net.minecraft.network.Connection.tick(Connection.java:368)",
+    "net.minecraft.server.network.ServerConnectionListener.tick(ServerConnectionListener.java:175)",
+    "net.minecraft.server.MinecraftServer.tickConnection(MinecraftServer.java:1158)",
+    "net.minecraft.server.dedicated.DedicatedServer.tickConnection(DedicatedServer.java:401)",
+    "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1127)",
+];
 
 pub(crate) const RUN_SERVER_INITIALIZE_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:774)";
 pub(crate) const RUN_SERVER_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)";

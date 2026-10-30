@@ -6,7 +6,7 @@ use wafer_core::{BlockPos, Vec3, mth};
 use wafer_data::packets::play::clientbound;
 use wafer_data::{WORLD_VERSION, items, registry, registry_id};
 use wafer_protocol::Writer;
-use wafer_protocol::nbt::Nbt;
+use wafer_protocol::nbt::{Nbt, TagMap};
 
 use super::chunk_map::ChunkTrackingView;
 
@@ -67,6 +67,17 @@ use crate::world::food::constants::{EXHAUSTION_SPRINT, EXHAUSTION_SWIM};
 
 pub const DIMENSIONS: EntityDimensions = crate::world::entity::avatar::STANDING_DIMENSIONS;
 const SERVER_PLAYER_LOGGER: &str = "net.minecraft.server.level.ServerPlayer";
+const RESPAWN_ENTITY_ON_SHOULDER_FRAME: &str = "net.minecraft.server.level.ServerPlayer.respawnEntityOnShoulder(ServerPlayer.java:911)";
+pub(crate) const DO_TICK_REPORT_FRAME: &str = "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:818)";
+const REMOVE_ENTITIES_ON_SHOULDER_LEFT_FRAME: &str = "net.minecraft.server.level.ServerPlayer.removeEntitiesOnShoulder(ServerPlayer.java:900)";
+const REMOVE_ENTITIES_ON_SHOULDER_RIGHT_FRAME: &str = "net.minecraft.server.level.ServerPlayer.removeEntitiesOnShoulder(ServerPlayer.java:902)";
+const HANDLE_SHOULDER_ENTITIES_FRAMES: [&str; 5] = [
+    "net.minecraft.server.level.ServerPlayer.handleShoulderEntities(ServerPlayer.java:859)",
+    "net.minecraft.world.entity.player.Player.aiStep(Player.java:519)",
+    "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2886)",
+    "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
+    "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
+];
 const GAME_EVENT_WIN_GAME: u8 = 4;
 
 const CREATIVE_BLOCK_INTERACTION_RANGE_MODIFIER: AttributeModifier =
@@ -198,7 +209,18 @@ fn extract_parrot_variant(tag: &Nbt) -> Option<u32> {
     if is_empty_compound(tag) || tag.get("id").and_then(Nbt::as_str) != Some("minecraft:parrot") {
         return None;
     }
-    tag.get("Variant").and_then(Nbt::as_i64).map(|variant| crate::world::entity::animal::parrot::parrot::Variant::by_id(variant as i32) as u32)
+    let variant = match tag.get("Variant")? {
+        Nbt::Float(variant) => *variant as i32,
+        Nbt::Double(variant) => *variant as i32,
+        other => match other.as_i64() {
+            Some(variant) => variant as i32,
+            None => {
+                error!("Failed to read field (Variant={}): Not a number", crate::nbt::to_string(other));
+                return None;
+            }
+        },
+    };
+    Some(crate::world::entity::animal::parrot::parrot::Variant::by_id(variant) as u32)
 }
 
 impl ServerPlayer {
@@ -553,7 +575,7 @@ impl ServerPlayer {
         }
         let compound = |key: &str| {
             tag_value_input::read_or_error(nbt, key, |tag| match tag {
-                Nbt::Compound(_) => Ok(tag.clone()),
+                Nbt::Compound(_) => Ok(tag.copy()),
                 other => Err(format!("Not a compound tag: {}", crate::nbt::to_string(other))),
             })
             .unwrap_or(Nbt::Compound(Vec::new().into()))
@@ -811,12 +833,16 @@ impl ServerLevel {
     pub fn server_player_do_tick(&mut self, id: EntityId) {
         let ticks = !self.is_spectator(id) || !self.touching_unloaded_chunk(id);
         if ticks {
-            self.player_tick(id);
+            self.guard_player_tick(id, |level| level.player_tick(id));
         }
         self.then_tick(move |level| level.server_player_do_tick_end(id, ticks));
     }
 
     fn server_player_do_tick_end(&mut self, id: EntityId, ticks: bool) {
+        self.guard_player_tick(id, |level| level.server_player_do_tick_end_unguarded(id, ticks));
+    }
+
+    fn server_player_do_tick_end_unguarded(&mut self, id: EntityId, ticks: bool) {
         if ticks {
             self.tick_food(id);
             self.award_stat(id, stats::PLAY_TIME, 1);
@@ -924,6 +950,7 @@ impl ServerLevel {
         {
             return false;
         }
+        let _scope = crate::server::main_thread_frames::enter(["net.minecraft.server.level.ServerPlayer.hurtServer(ServerPlayer.java:1078)"]);
         self.player_hurt_server(id, source, damage)
     }
 
@@ -944,6 +971,7 @@ impl ServerLevel {
         self.play_shoulder_entity_ambient_sound(id, &right);
         let p = self.player(id);
         if p.entity.fall_distance > 0.5 || p.entity.is_in_water() || p.abilities_flying() || self.is_sleeping(id) || p.entity.is_in_powder_snow {
+            let _scope = crate::server::main_thread_frames::enter(HANDLE_SHOULDER_ENTITIES_FRAMES);
             self.remove_entities_on_shoulder(id);
         }
     }
@@ -987,12 +1015,18 @@ impl ServerLevel {
 
     pub fn remove_entities_on_shoulder(&mut self, id: EntityId) {
         if self.player(id).time_entity_sat_on_shoulder + 20 < self.game_time {
-            let left = std::mem::replace(&mut self.player_mut(id).shoulder_entity_left, Nbt::Compound(Vec::new().into()));
-            self.respawn_entity_on_shoulder(id, &left);
-            self.player_mut(id).set_shoulder_entity_left(Nbt::Compound(Vec::new().into()));
-            let right = std::mem::replace(&mut self.player_mut(id).shoulder_entity_right, Nbt::Compound(Vec::new().into()));
-            self.respawn_entity_on_shoulder(id, &right);
-            self.player_mut(id).set_shoulder_entity_right(Nbt::Compound(Vec::new().into()));
+            let left = self.player(id).shoulder_entity_left.clone();
+            {
+                let _scope = crate::server::main_thread_frames::enter([REMOVE_ENTITIES_ON_SHOULDER_LEFT_FRAME]);
+                self.respawn_entity_on_shoulder(id, &left);
+            }
+            self.player_mut(id).set_shoulder_entity_left(Nbt::Compound(TagMap::new()));
+            let right = self.player(id).shoulder_entity_right.clone();
+            {
+                let _scope = crate::server::main_thread_frames::enter([REMOVE_ENTITIES_ON_SHOULDER_RIGHT_FRAME]);
+                self.respawn_entity_on_shoulder(id, &right);
+            }
+            self.player_mut(id).set_shoulder_entity_right(Nbt::Compound(TagMap::new()));
         }
     }
 
@@ -1000,9 +1034,11 @@ impl ServerLevel {
         if is_empty_compound(tag) {
             return;
         }
+        let _scope = crate::server::main_thread_frames::enter([RESPAWN_ENTITY_ON_SHOULDER_FRAME]);
         let _collector = crate::world::level::storage::tag_value_input::ScopedCollector::new(PathElement::Text(self.entity_to_string(id)), SERVER_PLAYER_LOGGER);
         let child = crate::world::level::storage::tag_value_input::enter_child(PathElement::Text(".shoulder".to_string()));
-        let loaded = self.load_entity(tag);
+        let site = crate::server::main_thread_frames::current();
+        let loaded = self.create_entity_from_tag(tag, &site);
         drop(child);
         let Some(mut entity) = loaded else { return };
         let e = self.entity(id);

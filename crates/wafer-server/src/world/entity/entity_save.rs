@@ -273,6 +273,17 @@ pub fn loading_entity_exception_with(cause: JavaThrowable, passenger_depth: usiz
     reported_loading_entity_nbt(cause, &shared)
 }
 
+fn throw_creating_entity_exception(cause: JavaThrowable, site: &[&'static str]) -> ! {
+    let mut shared = ENTITY_TYPE_CREATE[..3].to_vec();
+    shared.extend_from_slice(site);
+    let mut cause_frames = cause.stack_trace;
+    cause_frames.extend_from_slice(&shared);
+    let report = crate::crash_report::CrashReport::of_exception("Loading entity NBT", &JavaThrowable::new(cause.description, cause_frames));
+    let mut reported_frames = vec![ENTITY_LOAD_REPORT];
+    reported_frames.extend_from_slice(&shared);
+    report.throw_reported(reported_frames)
+}
+
 pub fn player_loading_exception(cause: JavaThrowable) -> JavaThrowable {
     reported_loading_entity_nbt(cause, &PLAYER_LOAD)
 }
@@ -929,6 +940,23 @@ impl ServerLevel {
 
     pub fn load_entity(&mut self, nbt: &Nbt) -> Option<LevelEntity> {
         self.load_entity_at(nbt, 0, &[])
+    }
+
+    pub fn create_entity_from_tag(&mut self, nbt: &Nbt, site: &[&'static str]) -> Option<LevelEntity> {
+        let Some(entity_type) = nbt.get("id").and_then(Nbt::as_str) else {
+            warn!("Skipping Entity with id [invalid]");
+            return None;
+        };
+        let Some(mut entity) = ServerLevel::create_entity(entity_type) else {
+            warn!("Skipping Entity with id {entity_type}");
+            return None;
+        };
+        if let Err(cause) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt), &self.scoreboard) {
+            throw_creating_entity_exception(cause, site);
+        }
+        let entity = self.reassess_weapon_goal_detached(entity);
+        let entity = self.read_level_dependent_save_data_detached(entity, nbt);
+        Some(self.resolve_display_text_detached(entity))
     }
 
     pub fn load_entity_at(&mut self, nbt: &Nbt, passenger_depth: usize, site: &[&'static str]) -> Option<LevelEntity> {

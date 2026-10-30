@@ -104,6 +104,12 @@ impl ServerLevel {
         }
     }
 
+    pub(crate) fn abort_tick_continuation(&mut self) {
+        self.tick_continuation.frames.clear();
+        self.tick_continuation.root = None;
+        self.pending_server_work = None;
+    }
+
     pub fn drop_pending_server_work(&mut self) {
         while self.pending_server_work.take().is_some() {
             self.resume_entity_tick();

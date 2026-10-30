@@ -119,6 +119,17 @@ pub mod flags {
     pub const FALL_FLYING: u8 = 7;
 }
 
+const ON_BELOW_WORLD_PLAYER_TICK_FRAMES: [&str; 8] = [
+    "net.minecraft.world.entity.LivingEntity.onBelowWorld(LivingEntity.java:2229)",
+    "net.minecraft.world.entity.Entity.checkBelowWorld(Entity.java:679)",
+    "net.minecraft.world.entity.Entity.baseTick(Entity.java:648)",
+    "net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:450)",
+    "net.minecraft.world.entity.Entity.tick(Entity.java:583)",
+    "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2847)",
+    "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
+    "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
+];
+
 pub const MAX_ENTITY_TAG_COUNT: usize = 1024;
 pub const TOTAL_AIR_SUPPLY: i32 = 300;
 
@@ -2633,6 +2644,7 @@ impl ServerLevel {
 
     fn on_below_world(&mut self, id: EntityId) {
         if self.is_living(id) {
+            let _scope = self.is_player(id).then(|| crate::server::main_thread_frames::enter(ON_BELOW_WORLD_PLAYER_TICK_FRAMES));
             self.hurt(id, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::OUT_OF_WORLD), 4.0);
         } else {
             self.discard(id);
@@ -2751,6 +2763,7 @@ impl ServerLevel {
     }
 
     pub fn hurt(&mut self, id: EntityId, source: DamageSource, damage: f32) {
+        let _scope = self.is_player(id).then(|| crate::server::main_thread_frames::enter(["net.minecraft.world.entity.Entity.hurt(Entity.java:2153)"]));
         self.hurt_server(id, source, damage);
     }
 

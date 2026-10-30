@@ -1752,6 +1752,19 @@ impl ServerLevel {
         }
     }
 
+    pub(crate) fn guard_player_tick(&mut self, id: EntityId, tick: impl FnOnce(&mut ServerLevel)) {
+        if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tick(self))) {
+            let mut report = match panic.downcast::<crate::crash_report::ReportedException>() {
+                Ok(reported) => reported.0,
+                Err(panic) => crate::crash_report::CrashReport::for_throwable(&crate::crash_report::throwable_of(&panic), "Ticking player"),
+            };
+            self.fill_crash_report_category(id, report.add_category("Player being ticked"));
+            let mut frames = vec![server_player::DO_TICK_REPORT_FRAME];
+            frames.extend(crate::server::main_thread_frames::current());
+            report.throw_reported(frames);
+        }
+    }
+
     pub fn tick_after_entities(&mut self) {
         if self.entity_tick_range.take().is_some() {
             self.tick_list.end_iteration();

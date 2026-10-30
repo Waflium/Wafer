@@ -597,7 +597,10 @@ impl ServerLevel {
         if self.is_dead_or_dying(id) {
             return false;
         }
-        self.remove_entities_on_shoulder(id);
+        {
+            let _scope = crate::server::main_thread_frames::enter(["net.minecraft.world.entity.player.Player.hurtServer(Player.java:739)"]);
+            self.remove_entities_on_shoulder(id);
+        }
         if source.scales_with_difficulty(self) {
             match self.difficulty {
                 Difficulty::Peaceful => damage = 0.0,
