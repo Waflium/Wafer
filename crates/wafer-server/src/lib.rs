@@ -4,9 +4,12 @@ mod advancements;
 pub mod crash_report;
 mod commands;
 mod gametest;
+#[cfg(windows)]
+mod jna;
 mod core;
 mod datafixers;
 mod nbt;
+mod oshi;
 mod resources;
 mod tags;
 mod network;
@@ -14,6 +17,7 @@ mod recipebook;
 pub mod server;
 mod sounds;
 mod stats;
+mod system_report;
 mod util;
 mod world;
 

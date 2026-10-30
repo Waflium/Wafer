@@ -649,14 +649,21 @@ impl Server {
     }
 
     fn throw_exception_ticking_world(&self, index: usize, payload: Box<dyn std::any::Any + Send>) -> ! {
-        use crate::crash_report::{CrashReport, JavaException, ReportedException};
+        use crate::crash_report::{CrashReport, FOR_THROWABLE_FRAME, JavaException, ReportedException};
+        let mut creator_frames = vec![TICK_CHILDREN_CREATE_FRAME];
+        creator_frames.extend(main_thread_frames::current());
+        let creator = crate::util::java_stack::enter_all(&creator_frames);
         let mut report = match payload.downcast::<ReportedException>() {
             Ok(reported) => reported.0,
             Err(payload) => match payload.downcast::<JavaException>() {
                 Ok(exception) => CrashReport::for_throwable(&exception.0, "Exception ticking world"),
-                Err(payload) => CrashReport::new("Exception ticking world", crate::crash_report::exception_of(&payload), crash_frames()),
+                Err(payload) => {
+                    let _for_throwable = crate::util::java_stack::enter(FOR_THROWABLE_FRAME);
+                    CrashReport::new("Exception ticking world", crate::crash_report::exception_of(&payload), crash_frames())
+                }
             },
         };
+        drop(creator);
         let mut fill_frames = vec![FILL_REPORT_DETAILS_FRAME, TICK_CHILDREN_FILL_FRAME];
         fill_frames.extend(main_thread_frames::current());
         self.fill_level_report_details(index, &mut report, fill_frames);
@@ -2188,6 +2195,7 @@ pub fn run(
     let created = match created {
         Ok(created) => created,
         Err(panic) => {
+            let _creator = construct_or_extract_crash_report_scope();
             let report = match panic.downcast::<crate::crash_report::ReportedException>() {
                 Ok(reported) => reported.0,
                 Err(panic) => match panic.downcast::<crate::crash_report::JavaException>() {
@@ -2259,6 +2267,7 @@ pub fn run(
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_server_loop(&mut server, &mut events, &tasks, &timing)));
     let crashed = result.is_err();
     if let Err(panic) = result {
+        let _creator = construct_or_extract_crash_report_scope();
         let (reported, message) = match panic.downcast::<crate::crash_report::ReportedException>() {
             Ok(reported) => {
                 let message = reported.0.reported_exception().print_stack_trace();
@@ -2338,11 +2347,19 @@ pub(crate) fn crash_frames() -> Vec<String> {
     PANIC_FRAMES.take().unwrap_or_else(backtrace_frames)
 }
 
+const CONSTRUCT_OR_EXTRACT_CRASH_REPORT_FRAME: &str = "net.minecraft.server.MinecraftServer.constructOrExtractCrashReport(MinecraftServer.java:842)";
+const RUN_SERVER_CRASH_REPORT_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:778)";
+
+fn construct_or_extract_crash_report_scope() -> Vec<crate::util::java_stack::StackScope> {
+    crate::util::java_stack::enter_all(&[CONSTRUCT_OR_EXTRACT_CRASH_REPORT_FRAME, RUN_SERVER_CRASH_REPORT_FRAME, SPIN_FRAME, THREAD_RUN_FRAME])
+}
+
 pub(crate) const RUN_SERVER_INITIALIZE_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:774)";
 pub(crate) const RUN_SERVER_FRAME: &str = "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)";
 pub(crate) const SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
 pub(crate) const THREAD_RUN_FRAME: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
 const FILL_REPORT_DETAILS_FRAME: &str = "net.minecraft.server.level.ServerLevel.fillReportDetails(ServerLevel.java:1892)";
+const TICK_CHILDREN_CREATE_FRAME: &str = "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1118)";
 const TICK_CHILDREN_FILL_FRAME: &str = "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1119)";
 const TICK_CHILDREN_THROW_FRAME: &str = "net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1120)";
 pub(crate) const INIT_SERVER_FRAME: &str = "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:206)";
@@ -2407,6 +2424,7 @@ fn report_startup_crash(mut report: crate::crash_report::CrashReport, snapshot: 
 
 pub(crate) fn report_startup_failure(failure: &StartupFailure) {
     error!("Encountered an unexpected exception\n{}", failure.throwable.print_stack_trace().trim_end());
+    let _creator = construct_or_extract_crash_report_scope();
     let mut report = crate::crash_report::CrashReport::new("Exception in server tick loop", failure.throwable.description.clone(), failure.throwable.stack_trace.iter().map(ToString::to_string).collect());
     if let Some(snapshot) = &failure.snapshot {
         dedicated::server_watchdog::fill_system_report(&mut report, snapshot);

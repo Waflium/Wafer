@@ -160,6 +160,10 @@ fn start(args: Vec<String>) {
     if let Some(pid_file) = options.value_of("pidFile") {
         let _ = std::fs::write(pid_file, std::process::id().to_string());
     }
+    {
+        let _main = crate::util::java_stack::enter("net.minecraft.server.Main.main(Main.java:104)");
+        crate::crash_report::preload();
+    }
     let settings_file = Path::new("server.properties");
     let settings = match DedicatedServerSettings::new(settings_file) {
         Ok(settings) => settings,

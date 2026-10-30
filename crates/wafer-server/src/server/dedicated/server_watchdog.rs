@@ -113,6 +113,9 @@ const WATCHDOG_THREAD_FRAMES: [&str; 3] = [
     "java.base/java.lang.Thread.run(Thread.java:1474)",
 ];
 
+const CREATE_WATCHDOG_CRASH_REPORT_FRAME: &str = "net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:94)";
+const WATCHDOG_RUN_FRAME: &str = "net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)";
+
 const LAMBDA_SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
 const THREAD_RUN_FRAME: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
 const SPIN_HIDDEN_FRAMES: [&str; 2] = ["app//net.minecraft.server.MinecraftServer$$Lambda/0x00000000a0e9a538.run(Unknown Source)", "java.base@25.0.4/java.lang.Thread.runWith(Thread.java:1487)"];
@@ -327,7 +330,10 @@ pub fn create_watchdog_crash_report(message: &str) -> CrashReport {
     let server_frames = crate::server::main_thread_frames::published();
     let frames: Vec<&'static str> = thread_info_frames(&server_frames).into_iter().map(|frame| &*Box::leak(frame.into_boxed_str())).collect();
     let exception = crate::util::java_throwable::JavaThrowable::new(format!("java.lang.Error: Watchdog ({message})"), frames);
-    let mut report = CrashReport::of_exception(message, &exception);
+    let mut report = {
+        let _creator = crate::util::java_stack::enter_all(&[CREATE_WATCHDOG_CRASH_REPORT_FRAME, WATCHDOG_RUN_FRAME, THREAD_RUN_FRAME]);
+        CrashReport::of_exception(message, &exception)
+    };
     report
         .add_category_with_stack_trace("Thread Dump", WATCHDOG_THREAD_FRAMES.iter().map(ToString::to_string).collect())
         .set_detail("Threads", dump_thread_info(&server_frames));

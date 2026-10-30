@@ -3,7 +3,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::Local;
 
+use crate::system_report::SystemReport;
+use crate::util::java_stack;
 use crate::util::java_throwable::JavaThrowable;
+
+pub const CRASH_REPORT_INIT_FRAME: &str = "net.minecraft.CrashReport.<init>(CrashReport.java:35)";
+pub const FOR_THROWABLE_FRAME: &str = "net.minecraft.CrashReport.forThrowable(CrashReport.java:244)";
+const PRELOAD_FRAME: &str = "net.minecraft.CrashReport.preload(CrashReport.java:252)";
 
 #[cfg(windows)]
 const LINE_SEPARATOR: &str = "\r\n";
@@ -182,6 +188,8 @@ pub fn throw_delayed_exception() {
     }
 }
 
+const ON_THREAD_EXCEPTION_CREATE_FRAME: &str = "net.minecraft.util.Util.onThreadException(Util.java:311)";
+
 const ON_THREAD_EXCEPTION_FRAMES: [&str; 2] = [
     "net.minecraft.util.Util.onThreadException(Util.java:313)",
     "java.base/java.lang.Thread.dispatchUncaughtException(Thread.java:2556)",
@@ -189,7 +197,10 @@ const ON_THREAD_EXCEPTION_FRAMES: [&str; 2] = [
 
 pub fn on_thread_exception(thread_name: &str, thread_id: u32, throwable: &JavaThrowable) {
     error!("Caught exception in thread Thread[#{thread_id},{thread_name},5,main]\n{}", throwable.print_stack_trace().trim_end());
-    let mut report = CrashReport::for_throwable(throwable, "Exception on worker thread");
+    let mut report = {
+        let _creator = java_stack::enter_all(&[ON_THREAD_EXCEPTION_CREATE_FRAME, ON_THREAD_EXCEPTION_FRAMES[1]]);
+        CrashReport::for_throwable(throwable, "Exception on worker thread")
+    };
     report.add_category_with_stack_trace("ThreadInfo", ON_THREAD_EXCEPTION_FRAMES.iter().map(|frame| frame.to_string()).collect()).set_detail("Name", thread_name);
     relay_delay_crash(report);
 }
@@ -228,7 +239,10 @@ impl CrashReport {
             throwable: None,
             suppressed: Vec::new(),
             details: Vec::new(),
-            system_report: system_report(),
+            system_report: {
+                let _init = java_stack::enter(CRASH_REPORT_INIT_FRAME);
+                SystemReport::new().into_entries()
+            },
             tracking_stack_trace: true,
             uncategorized_stack_trace: Vec::new(),
             save_file: None,
@@ -237,6 +251,7 @@ impl CrashReport {
     }
 
     pub fn for_throwable(throwable: &JavaThrowable, title: &str) -> CrashReport {
+        let _scope = java_stack::enter(FOR_THROWABLE_FRAME);
         let mut throwable = throwable;
         while throwable.class_name() == "java.util.concurrent.CompletionException" {
             match throwable.cause.as_deref() {
@@ -415,29 +430,9 @@ pub fn crash_report_file(server_directory: &Path) -> std::path::PathBuf {
     server_directory.join("crash-reports").join(format!("crash-{}-server.txt", crate::util::get_filename_formatted_date_time()))
 }
 
-fn system_report() -> Vec<(String, String)> {
-    vec![
-        ("Minecraft Version".into(), wafer_data::VERSION_NAME.into()),
-        ("Minecraft Version ID".into(), wafer_data::VERSION_NAME.into()),
-        ("Operating System".into(), operating_system()),
-        ("CPUs".into(), std::thread::available_parallelism().map_or(1, |n| n.get()).to_string()),
-    ]
-}
-
-fn operating_system() -> String {
-    let arch = match std::env::consts::ARCH {
-        "x86_64" => "amd64",
-        "x86" => "x86",
-        "aarch64" => "aarch64",
-        other => other,
-    };
-    let name = match std::env::consts::OS {
-        "windows" => "Windows",
-        "linux" => "Linux",
-        "macos" => "Mac OS X",
-        other => other,
-    };
-    format!("{name} ({arch})")
+pub fn preload() {
+    let _scope = java_stack::enter_all(&[PRELOAD_FRAME]);
+    CrashReport::new("Don't panic!", "java.lang.Throwable".to_string(), vec![PRELOAD_FRAME.to_string()]).get_friendly_report(&ReportType::CRASH);
 }
 
 #[cfg(test)]
