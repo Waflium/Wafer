@@ -1256,7 +1256,10 @@ impl ChunkCache {
                         }
                         old => {
                             let mut chunk = generator.generate_blended(pos, dimension, beardifier, biomes, &blender);
-                            chunk.blending_data = old.and_then(|old| old.blending_data);
+                            if let Some(mut old) = old {
+                                chunk.blending_data = old.blending_data.take();
+                                chunk.carry_world_gen_data(&mut old);
+                            }
                             chunk
                         }
                     };
@@ -1798,7 +1801,7 @@ impl ChunkCache {
                     let mut chunk = chunk;
                     self.structure_chunks.insert(pos, std::mem::take(&mut chunk.structures));
                     self.loaded_structure_chunks.insert(pos);
-                    if chunk.blending_data.is_some() || chunk.proto.as_ref().is_some_and(|proto| proto.below_zero_retrogen.is_some()) {
+                    if chunk.blending_data.is_some() || chunk.proto.as_ref().is_some_and(|proto| proto.below_zero_retrogen.is_some()) || chunk.has_world_gen_data() {
                         self.holders.get_mut(pos.pack()).unwrap().loaded = Some(Box::new(chunk));
                     }
                 } else {
@@ -2090,7 +2093,7 @@ impl ChunkCache {
             self.waiting_unloads.insert(pos);
             return;
         }
-        let holder = self.holders.pending_unloads.shift_remove(&pos).unwrap();
+        let mut holder = self.holders.pending_unloads.shift_remove(&pos).unwrap();
         let chunk_pos = holder.pos;
         self.next_chunk_save_time.remove(&pos);
         let is_full = holder.status_done(&self.holders.futures, ChunkStatus::Full);
@@ -2122,7 +2125,13 @@ impl ChunkCache {
             self.fluid_ticks.remove_container(chunk_pos);
         } else if let Some(status) = holder.persisted_status.filter(|&status| status != ChunkStatus::Empty && status != ChunkStatus::Full) {
             let proto_chunk = if status < ChunkStatus::Terrain {
-                structures.map(|structures| self.create_proto_chunk(chunk_pos, status, structures, loaded_structures))
+                structures.map(|structures| {
+                    let mut proto_chunk = self.create_proto_chunk(chunk_pos, status, structures, loaded_structures);
+                    if let Some(mut loaded) = holder.loaded.take() {
+                        proto_chunk.carry_world_gen_data(&mut loaded);
+                    }
+                    proto_chunk
+                })
             } else {
                 terrain_chunk.or(chunk).or(holder.loaded.map(|chunk| *chunk))
             };

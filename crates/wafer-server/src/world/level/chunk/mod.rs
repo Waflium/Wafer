@@ -263,6 +263,17 @@ impl LevelChunk {
         self.unsaved_listener = Some(unsaved_listener);
     }
 
+    pub fn has_world_gen_data(&self) -> bool {
+        self.proto.as_ref().is_some_and(|proto| !proto.entities.is_empty()) || self.block_entities.pending.len() != 0
+    }
+
+    pub fn carry_world_gen_data(&mut self, from: &mut LevelChunk) {
+        if let (Some(proto), Some(from_proto)) = (self.proto.as_mut(), from.proto.as_mut()) {
+            proto.entities.append(&mut from_proto.entities);
+        }
+        self.block_entities.pending = std::mem::take(&mut from.block_entities.pending);
+    }
+
     pub fn mark_unsaved(&mut self) {
         let was_unsaved = self.unsaved;
         self.unsaved = true;
