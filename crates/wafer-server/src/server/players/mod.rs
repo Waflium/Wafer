@@ -75,9 +75,22 @@ const PLAYER_LIST_INIT_24_FRAME: &str = "net.minecraft.server.dedicated.Dedicate
 const PLAYER_LIST_INIT_26_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.<init>(DedicatedPlayerList.java:26)";
 const PLAYER_LIST_INIT_27_FRAME: &str = "net.minecraft.server.dedicated.DedicatedPlayerList.<init>(DedicatedPlayerList.java:27)";
 
+const FILE_INPUT_STREAM_OPEN0: &str = "java.base/java.io.FileInputStream.open0(Native Method)";
+const FILE_INPUT_STREAM_OPEN: &str = "java.base/java.io.FileInputStream.open(FileInputStream.java:185)";
+const FILE_INPUT_STREAM_INIT: &str = "java.base/java.io.FileInputStream.<init>(FileInputStream.java:139)";
+const GUAVA_FILES_NEW_READER: &str = "com.google.common.io.Files.newReader(Files.java:89)";
+const STORED_USER_LIST_LOAD_139: &str = "net.minecraft.server.players.StoredUserList.load(StoredUserList.java:139)";
+
 pub enum LoadError {
-    Io(std::io::Error),
+    Io(JavaThrowable),
     Unchecked(JavaThrowable),
+}
+
+pub fn file_input_stream_failure(error: &std::io::Error, file: &std::path::Path, callers: &[&'static str]) -> JavaThrowable {
+    let name = file.file_name().map_or_else(PathBuf::new, PathBuf::from);
+    let description = old_users_converter::file_not_found(error, &name).to_string();
+    let stack_trace = [FILE_INPUT_STREAM_OPEN0, FILE_INPUT_STREAM_OPEN, FILE_INPUT_STREAM_INIT, GUAVA_FILES_NEW_READER].into_iter().chain(callers.iter().copied()).collect();
+    JavaThrowable::new(description, stack_trace)
 }
 
 pub struct EntryException {
@@ -202,7 +215,9 @@ impl<E: StoredUserEntry> StoredUserList<E> {
         if !file.exists() {
             return Ok(());
         }
-        let text = std::fs::read(file).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()).map_err(LoadError::Io)?;
+        let text = std::fs::read(file)
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .map_err(|error| LoadError::Io(file_input_stream_failure(&error, file, &[STORED_USER_LIST_LOAD_139].into_iter().chain(tail.iter().copied()).collect::<Vec<_>>())))?;
         self.entries.clear();
         let load_tail: Vec<&'static str> = [STORED_USER_LIST_LOAD_141].into_iter().chain(tail.iter().copied()).collect();
         let Some(contents) = crate::util::gson::from_json_array(&text, &load_tail).map_err(LoadError::Unchecked)? else { return Ok(()) };
@@ -226,18 +241,14 @@ impl<E: StoredUserEntry> StoredUserList<E> {
         Ok(())
     }
 
-    fn log_load_io_failure(&self, what: &str, error: &std::io::Error) {
-        let exception = match &self.file {
-            Some(file) => crate::server::dedicated::settings::java_io_exception(error, file),
-            None => error.to_string(),
-        };
-        warn!("Failed to load {what}: \n{exception}");
+    fn log_load_io_failure(&self, what: &str, throwable: &JavaThrowable) {
+        warn!("Failed to load {what}: \n{}", throwable.print_stack_trace().trim_end());
     }
 
     fn load_io_only(mut self, what: &str, tail: &[&'static str]) -> Result<StoredUserList<E>, JavaThrowable> {
         match self.load(tail) {
             Ok(()) => {}
-            Err(LoadError::Io(error)) => self.log_load_io_failure(what, &error),
+            Err(LoadError::Io(throwable)) => self.log_load_io_failure(what, &throwable),
             Err(LoadError::Unchecked(throwable)) => return Err(throwable),
         }
         Ok(self)
@@ -251,7 +262,7 @@ impl<E: StoredUserEntry> StoredUserList<E> {
     pub fn reload_logged(&mut self, what: &str, tail: &[&'static str]) {
         match self.load(tail) {
             Ok(()) => {}
-            Err(LoadError::Io(error)) => self.log_load_io_failure(what, &error),
+            Err(LoadError::Io(throwable)) => self.log_load_io_failure(what, &throwable),
             Err(LoadError::Unchecked(throwable)) => warn!("Failed to load {what}: \n{}", throwable.print_stack_trace().trim_end()),
         }
     }
@@ -382,10 +393,8 @@ impl StoredUserList<IpBanEntry> {
     }
 }
 
-const DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S %z";
-
 fn format_date(date: &DateTime<FixedOffset>) -> String {
-    date.with_timezone(&Local).format(DATE_FORMAT).to_string()
+    crate::util::java_simple_date_format::BAN_LIST_DATE_FORMAT.lock().unwrap_or_else(std::sync::PoisonError::into_inner).format(date.timestamp_millis())
 }
 
 #[derive(Clone, Debug)]
@@ -412,7 +421,7 @@ impl Ban {
     }
 
     fn from_json(object: &Value) -> Ban {
-        let date = |key: &str| object[key].as_str().and_then(crate::util::java_simple_date_format::parse_date_time);
+        let date = |key: &str| object[key].as_str().and_then(crate::util::java_simple_date_format::parse_ban_list_date_time);
         Ban {
             created: date("created").unwrap_or_else(|| Local::now().fixed_offset()),
             source: object["source"].as_str().unwrap_or("(Unknown)").to_string(),

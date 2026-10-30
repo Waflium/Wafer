@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex};
 
 use chrono::TimeZone as _;
 use chrono_tz::{OffsetComponents, Tz};
@@ -190,69 +190,183 @@ fn match_zone_string(chars: &[char], start: usize, names: &[&str; 5]) -> Option<
     (1..=4).find(|&i| region_matches_ignore_case(chars, start, names[i]))
 }
 
-fn parse_zone_string(chars: &[char], start: usize) -> Option<ZoneFields> {
-    let (row, name_index) = ZONE_STRINGS.iter().find_map(|row| match_zone_string(chars, start, &row.names).map(|name_index| (row, name_index)))?;
-    let use_same_name = name_index <= 2 && row.names[name_index].eq_ignore_ascii_case(row.names[name_index + 2]);
-    let dst_amount = if name_index >= 3 { row.dst_savings } else { 0 };
-    let fixed = !(use_same_name || (name_index >= 3 && dst_amount == 0));
-    Some(ZoneFields { zone_offset: None, dst_offset: fixed.then_some(dst_amount), zone: Some(row) })
+fn default_zone_id() -> Option<String> {
+    if cfg!(not(windows))
+        && let Ok(zone) = std::env::var("TZ")
+        && !zone.is_empty()
+    {
+        return Some(zone);
+    }
+    iana_time_zone::get_timezone().ok()
 }
 
-fn parse_zone(chars: &[char], index: &mut usize) -> Option<ZoneFields> {
-    skip_blanks(chars, index);
-    let start = *index;
-    let fixed = |offset: i64| ZoneFields { zone_offset: Some(offset), dst_offset: Some(0), zone: None };
-    match chars.get(start)? {
-        '+' => parse_numeric_zone(chars, start + 1, 1, false).map(fixed),
-        '-' => parse_numeric_zone(chars, start + 1, -1, false).map(fixed),
-        'G' | 'g' if region_matches_ignore_case(chars, start, "GMT") => match chars.get(start + 3) {
-            Some('+') => parse_numeric_zone(chars, start + 4, 1, true).map(fixed),
-            Some('-') => parse_numeric_zone(chars, start + 4, -1, true).map(fixed),
-            _ => Some(fixed(0)),
-        },
-        _ => parse_zone_string(chars, start),
+static DEFAULT_ZONE: LazyLock<Option<&'static ZoneRow>> = LazyLock::new(|| {
+    let id = default_zone_id()?;
+    ZONE_STRINGS.iter().find(|row| row.names[0] == id)
+});
+
+#[derive(Clone, Copy)]
+enum CurrentZone {
+    Default,
+    Row(&'static ZoneRow),
+}
+
+pub struct SimpleDateFormat {
+    current: CurrentZone,
+    default: Option<&'static ZoneRow>,
+}
+
+pub static BAN_LIST_DATE_FORMAT: LazyLock<Mutex<SimpleDateFormat>> = LazyLock::new(|| Mutex::new(SimpleDateFormat::new()));
+
+impl SimpleDateFormat {
+    pub fn new() -> SimpleDateFormat {
+        SimpleDateFormat { current: CurrentZone::Default, default: *DEFAULT_ZONE }
+    }
+
+    #[cfg(test)]
+    fn with_default_zone(id: &str) -> SimpleDateFormat {
+        SimpleDateFormat { current: CurrentZone::Default, default: ZONE_STRINGS.iter().find(|row| row.names[0] == id) }
+    }
+
+    fn current_row(&self) -> Option<&'static ZoneRow> {
+        match self.current {
+            CurrentZone::Default => self.default,
+            CurrentZone::Row(row) => Some(row),
+        }
+    }
+
+    fn parse_zone_string(&mut self, chars: &[char], start: usize) -> Option<ZoneFields> {
+        let try_row = |row: &'static ZoneRow| match_zone_string(chars, start, &row.names).map(|name_index| (row, name_index));
+        let (row, name_index) = self
+            .current_row()
+            .and_then(try_row)
+            .or_else(|| self.default.and_then(try_row))
+            .or_else(|| ZONE_STRINGS.iter().find_map(try_row))?;
+        if self.current_row().is_none_or(|current| current.names[0] != row.names[0]) {
+            self.current = CurrentZone::Row(row);
+        }
+        Some(zone_fields(row, name_index))
+    }
+
+    pub fn parse(&mut self, text: &str) -> Option<i64> {
+        let chars: Vec<char> = text.chars().collect();
+        let mut index = 0;
+        let year = parse_number(&chars, &mut index)?;
+        expect_literal(&chars, &mut index, '-')?;
+        let month = parse_number(&chars, &mut index)?;
+        expect_literal(&chars, &mut index, '-')?;
+        let day = parse_number(&chars, &mut index)?;
+        expect_literal(&chars, &mut index, ' ')?;
+        let hour = parse_number(&chars, &mut index)?;
+        expect_literal(&chars, &mut index, ':')?;
+        let minute = parse_number(&chars, &mut index)?;
+        expect_literal(&chars, &mut index, ':')?;
+        let second = parse_number(&chars, &mut index)?;
+        expect_literal(&chars, &mut index, ' ')?;
+        let zone = self.parse_zone(&chars, &mut index)?;
+        let wall = wall_millis(year, month.wrapping_sub(1), day, hour, minute, second);
+        let (zone_offset, dst_offset) = match zone.zone {
+            Some(row) => {
+                let (raw, dst) = zone_offsets_at(row, wall);
+                (zone.zone_offset.unwrap_or(raw), zone.dst_offset.unwrap_or(dst))
+            }
+            None => (zone.zone_offset.unwrap_or(0), zone.dst_offset.unwrap_or(0)),
+        };
+        Some(wall.wrapping_sub(zone_offset + dst_offset))
+    }
+
+    pub fn format(&self, millis: i64) -> String {
+        let offset_millis = match self.current_row() {
+            Some(row) => zone_offset_at_instant(row, millis),
+            None => chrono::Local.timestamp_millis_opt(millis).single().map_or(0, |date| chrono::Offset::fix(date.offset()).local_minus_utc() as i64 * 1000),
+        };
+        let local = chrono::DateTime::from_timestamp_millis(millis.wrapping_add(offset_millis)).map_or_else(String::new, |date| date.naive_utc().format("%Y-%m-%d %H:%M:%S").to_string());
+        let minutes = offset_millis.abs() / 60_000;
+        format!("{local} {}{:02}{:02}", if offset_millis < 0 { '-' } else { '+' }, minutes / 60, minutes % 60)
     }
 }
 
-fn zone_offsets_at(zone: &ZoneRow, wall_millis: i64) -> (i64, i64) {
-    let tz: Option<Tz> = match zone.names[0] {
+impl Default for SimpleDateFormat {
+    fn default() -> SimpleDateFormat {
+        SimpleDateFormat::new()
+    }
+}
+
+fn zone_fields(row: &'static ZoneRow, name_index: usize) -> ZoneFields {
+    let use_same_name = name_index <= 2 && row.names[name_index].eq_ignore_ascii_case(row.names[name_index + 2]);
+    let dst_amount = if name_index >= 3 { row.dst_savings } else { 0 };
+    let fixed = !(use_same_name || (name_index >= 3 && dst_amount == 0));
+    ZoneFields { zone_offset: None, dst_offset: fixed.then_some(dst_amount), zone: Some(row) }
+}
+
+impl SimpleDateFormat {
+    fn parse_zone(&mut self, chars: &[char], index: &mut usize) -> Option<ZoneFields> {
+        skip_blanks(chars, index);
+        let start = *index;
+        let fixed = |offset: i64| ZoneFields { zone_offset: Some(offset), dst_offset: Some(0), zone: None };
+        match chars.get(start)? {
+            '+' => parse_numeric_zone(chars, start + 1, 1, false).map(fixed),
+            '-' => parse_numeric_zone(chars, start + 1, -1, false).map(fixed),
+            'G' | 'g' if region_matches_ignore_case(chars, start, "GMT") => match chars.get(start + 3) {
+                Some('+') => parse_numeric_zone(chars, start + 4, 1, true).map(fixed),
+                Some('-') => parse_numeric_zone(chars, start + 4, -1, true).map(fixed),
+                _ => Some(fixed(0)),
+            },
+            _ => self.parse_zone_string(chars, start),
+        }
+    }
+}
+
+const UTC1900_MILLIS: i64 = -2_208_988_800_000;
+const NEGATIVE_DST_ZONES: [&str; 6] = ["Africa/Casablanca", "Africa/El_Aaiun", "Africa/Windhoek", "Europe/Prague", "Europe/Dublin", "Eire"];
+
+fn java_zone(zone: &ZoneRow) -> Option<Tz> {
+    match zone.names[0] {
         "IET" => "America/Indiana/Indianapolis".parse().ok(),
         id => id.parse().ok(),
-    };
-    let Some(tz) = tz else { return (zone.raw_offset, 0) };
+    }
+}
+
+fn split_offsets(zone: &ZoneRow, base: i64, dst: i64) -> (i64, i64) {
+    let total = base + dst;
+    if NEGATIVE_DST_ZONES.contains(&zone.names[0]) && matches!(total - zone.raw_offset, 0 | 3_600_000) {
+        return (zone.raw_offset, total - zone.raw_offset);
+    }
+    (base, dst)
+}
+
+const MOROCCO_LAST_TRANSITION_END_MILLIS: i64 = 3_723_753_600_000;
+const MOROCCO_ZONES: [&str; 2] = ["Africa/Casablanca", "Africa/El_Aaiun"];
+
+fn zone_offsets_at(zone: &ZoneRow, wall_millis: i64) -> (i64, i64) {
+    if wall_millis < UTC1900_MILLIS || (wall_millis >= MOROCCO_LAST_TRANSITION_END_MILLIS && MOROCCO_ZONES.contains(&zone.names[0])) {
+        return (zone.raw_offset, 0);
+    }
+    let Some(tz) = java_zone(zone) else { return (zone.raw_offset, 0) };
     let Some(local) = chrono::DateTime::from_timestamp_millis(wall_millis).map(|instant| instant.naive_utc()) else { return (zone.raw_offset, 0) };
     match tz.offset_from_local_datetime(&local).earliest() {
-        Some(offset) if chrono_tz::OffsetName::abbreviation(&offset) != Some("LMT") => (offset.base_utc_offset().num_milliseconds(), offset.dst_offset().num_milliseconds()),
-        Some(_) => (zone.raw_offset, 0),
+        Some(offset) => split_offsets(zone, offset.base_utc_offset().num_milliseconds(), offset.dst_offset().num_milliseconds()),
         None => (zone.raw_offset, 0),
     }
 }
 
+fn zone_offset_at_instant(zone: &ZoneRow, instant_millis: i64) -> i64 {
+    if instant_millis < UTC1900_MILLIS {
+        return zone.raw_offset;
+    }
+    let Some(tz) = java_zone(zone) else { return zone.raw_offset };
+    let Some(instant) = chrono::DateTime::from_timestamp_millis(instant_millis) else { return zone.raw_offset };
+    let offset = tz.offset_from_utc_datetime(&instant.naive_utc());
+    offset.base_utc_offset().num_milliseconds() + offset.dst_offset().num_milliseconds()
+}
+
 pub fn parse(text: &str) -> Option<i64> {
-    let chars: Vec<char> = text.chars().collect();
-    let mut index = 0;
-    let year = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, '-')?;
-    let month = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, '-')?;
-    let day = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, ' ')?;
-    let hour = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, ':')?;
-    let minute = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, ':')?;
-    let second = parse_number(&chars, &mut index)?;
-    expect_literal(&chars, &mut index, ' ')?;
-    let zone = parse_zone(&chars, &mut index)?;
-    let wall = wall_millis(year, month.wrapping_sub(1), day, hour, minute, second);
-    let (zone_offset, dst_offset) = match zone.zone {
-        Some(row) => {
-            let (raw, dst) = zone_offsets_at(row, wall);
-            (zone.zone_offset.unwrap_or(raw), zone.dst_offset.unwrap_or(dst))
-        }
-        None => (zone.zone_offset.unwrap_or(0), zone.dst_offset.unwrap_or(0)),
-    };
-    Some(wall.wrapping_sub(zone_offset + dst_offset))
+    SimpleDateFormat::new().parse(text)
+}
+
+pub fn parse_ban_list_date_time(text: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let millis = BAN_LIST_DATE_FORMAT.lock().unwrap_or_else(std::sync::PoisonError::into_inner).parse(text)?;
+    chrono::DateTime::from_timestamp_millis(millis).map(|date| date.fixed_offset())
 }
 
 pub fn parse_date_time(text: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
@@ -261,7 +375,28 @@ pub fn parse_date_time(text: &str) -> Option<chrono::DateTime<chrono::FixedOffse
 
 #[cfg(test)]
 mod tests {
-    use super::parse;
+    use super::SimpleDateFormat;
+
+    #[test]
+    fn shared_formats_remember_the_last_parsed_zone_and_try_the_default_zone_first() {
+        let mut failures = Vec::new();
+        let mut format: Option<(String, SimpleDateFormat)> = None;
+        for line in include_str!("java_simple_date_format_sequences.tsv").lines() {
+            let columns: Vec<&str> = line.split('\t').collect();
+            let (default, text, expected, formatted_first, formatted_second) = (columns[0], columns[1], columns[2], columns[3], columns[4]);
+            if format.as_ref().is_none_or(|(id, _)| id != default) {
+                format = Some((default.to_string(), SimpleDateFormat::with_default_zone(default)));
+            }
+            let format = &mut format.as_mut().unwrap().1;
+            let expected = if expected == "ERR" { None } else { Some(expected.parse::<i64>().unwrap()) };
+            let actual = format.parse(text);
+            let actual_formats = (format.format(1_700_000_000_000), format.format(1_720_000_000_000));
+            if actual != expected || actual_formats.0 != formatted_first || actual_formats.1 != formatted_second {
+                failures.push(format!("{default} {text}: expected {expected:?} {formatted_first} {formatted_second}, got {actual:?} {} {}", actual_formats.0, actual_formats.1));
+            }
+        }
+        assert!(failures.is_empty(), "{} mismatches, first: {:#?}", failures.len(), &failures[..failures.len().min(20)]);
+    }
 
     #[test]
     fn parsing_matches_simple_date_format() {
@@ -270,7 +405,7 @@ mod tests {
             let (text, expected) = line.rsplit_once('\t').unwrap();
             let text = text.replace("\\t", "\t");
             let expected = if expected == "ERR" { None } else { Some(expected.parse::<i64>().unwrap()) };
-            let actual = parse(&text);
+            let actual = SimpleDateFormat::with_default_zone("Asia/Seoul").parse(&text);
             if actual != expected {
                 failures.push(format!("{text:?}: expected {expected:?}, got {actual:?}"));
             }

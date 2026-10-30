@@ -12,13 +12,14 @@ use crate::util::java_collections::JavaObjectHashSet;
 use crate::util::random::WeightedList;
 use crate::world::effect::MobEffectInstance;
 use crate::world::entity::{EntityId, RemovalReason};
-use crate::world::entity::entity_save::uuid_from_nbt;
+use crate::world::entity::entity_save::{LOAD_ENTITY_RECURSIVE_TAG, block_entity_tick_site, uuid_from_nbt};
 use crate::world::item::ItemStack;
 use crate::world::level::spawn_data::SpawnData;
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::storage::loot::loot_table::LootTable;
 use crate::world::level::storage::uuid_ints;
 
+const GET_OR_CREATE_DISPLAY_ENTITY: &str = "net.minecraft.world.level.block.entity.trialspawner.TrialSpawnerStateData.getOrCreateDisplayEntity(TrialSpawnerStateData.java:274)";
 const TAG_SPAWN_DATA: &str = "spawn_data";
 const TAG_NEXT_MOB_SPAWNS_AT: &str = "next_mob_spawns_at";
 const DELAY_BETWEEN_PLAYER_SCANS: i64 = 20;
@@ -223,7 +224,10 @@ impl TrialSpawnerStateData {
             let entity_to_spawn = self.get_or_create_next_spawn_data(trial_spawner, level, pos).get_entity_to_spawn();
             if entity_to_spawn.get("id").and_then(Nbt::as_str).is_some() {
                 let entity_to_spawn = entity_to_spawn.clone();
-                self.display_entity = !level.load_entity_recursive(&entity_to_spawn, &[], &mut |_| {}).is_empty();
+                let mut caller_frames = vec![LOAD_ENTITY_RECURSIVE_TAG, GET_OR_CREATE_DISPLAY_ENTITY];
+                caller_frames.extend(trial_spawner::TICK_SERVER_SITE);
+                let site = block_entity_tick_site(&caller_frames);
+                self.display_entity = !level.load_entity_recursive(&entity_to_spawn, &site, &mut |_| {}).is_empty();
             }
         }
         self.display_entity

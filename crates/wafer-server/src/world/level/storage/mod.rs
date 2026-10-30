@@ -28,7 +28,8 @@ use crate::util::codec::{self, DecodeResult, Record};
 use crate::util::extra_codecs;
 use crate::server::log_save_failure;
 use crate::world::difficulty::Difficulty;
-use crate::world::level::chunk::storage::{decode_compressed_nbt, decode_nbt, encode_nbt};
+use crate::util::java_throwable::JavaThrowable;
+use crate::world::level::chunk::storage::{decode_nbt, encode_nbt};
 use crate::util::lifecycle::Lifecycle;
 use crate::world::level::levelgen::world_dimensions::SpecialWorldProperty;
 use crate::world::level::levelgen::world_gen_settings::WorldGenSettings;
@@ -103,9 +104,26 @@ pub fn write_dat(path: &Path, nbt: &Nbt) -> io::Result<()> {
     fs::rename(tmp, path)
 }
 
-pub(crate) fn read_level_data_tag_raw(data_file: &Path) -> Result<Nbt, String> {
-    let bytes = fs::read(data_file).map_err(|e| crate::server::dedicated::settings::java_io_exception(&e, data_file))?;
-    decode_compressed_nbt(&bytes)
+const READ_LEVEL_DATA_TAG_RAW: &str = "net.minecraft.world.level.storage.LevelStorageSource.readLevelDataTagRaw(LevelStorageSource.java:269)";
+const GET_UNFIXED_DATA_TAG: &str = "net.minecraft.world.level.storage.LevelStorageSource$LevelStorageAccess.getUnfixedDataTag(LevelStorageSource.java:513)";
+const GET_UNFIXED_DATA_TAG_WITH_FALLBACK_PRIMARY: &str =
+    "net.minecraft.world.level.storage.LevelStorageSource$LevelStorageAccess.getUnfixedDataTagWithFallback(LevelStorageSource.java:500)";
+const GET_UNFIXED_DATA_TAG_WITH_FALLBACK_FALLBACK: &str =
+    "net.minecraft.world.level.storage.LevelStorageSource$LevelStorageAccess.getUnfixedDataTagWithFallback(LevelStorageSource.java:504)";
+
+pub(crate) fn read_level_data_tag_raw(data_file: &Path) -> Result<Nbt, JavaThrowable> {
+    crate::nbt::nbt_io::read_compressed(data_file).map_err(|mut throwable| {
+        throwable.push_frame(READ_LEVEL_DATA_TAG_RAW);
+        throwable
+    })
+}
+
+pub(crate) fn get_unfixed_data_tag(data_file: &Path, callers: &[&'static str]) -> Result<Nbt, JavaThrowable> {
+    read_level_data_tag_raw(data_file).map_err(|mut throwable| {
+        throwable.push_frame(GET_UNFIXED_DATA_TAG);
+        throwable.push_frames(callers);
+        throwable
+    })
 }
 
 pub(crate) fn read_compressed(file: &Path) -> io::Result<Nbt> {
@@ -173,17 +191,19 @@ impl WorldDir {
     pub fn has_world_data(&self) -> bool {
         self.level_dat().exists() || self.old_level_dat().exists()
     }
-    pub fn unfixed_data_tag_with_fallback(&self) -> Result<Nbt, String> {
-        match read_level_data_tag_raw(&self.level_dat()) {
+    pub fn unfixed_data_tag_with_fallback(&self, callers: &[&'static str]) -> Result<Nbt, JavaThrowable> {
+        let primary_callers: Vec<&'static str> = [GET_UNFIXED_DATA_TAG_WITH_FALLBACK_PRIMARY].into_iter().chain(callers.iter().copied()).collect();
+        match get_unfixed_data_tag(&self.level_dat(), &primary_callers) {
             Ok(root) => Ok(root),
-            Err(e) => {
-                warn!("Failed to load world data from {}
-{e}", self.level_dat().display());
+            Err(e) if e.is_io_exception() || e.is_nbt_exception() => {
+                warn!("Failed to load world data from {}\n{}", self.level_dat().display(), e.print_stack_trace().trim_end());
                 info!("Attempting to use fallback {}", self.old_level_dat().display());
-                let root = read_level_data_tag_raw(&self.old_level_dat())?;
+                let fallback_callers: Vec<&'static str> = [GET_UNFIXED_DATA_TAG_WITH_FALLBACK_FALLBACK].into_iter().chain(callers.iter().copied()).collect();
+                let root = get_unfixed_data_tag(&self.old_level_dat(), &fallback_callers)?;
                 self.restore_level_data_from_old();
                 Ok(root)
             }
+            Err(e) => Err(e),
         }
     }
     fn restore_level_data_from_old(&self) -> bool {
@@ -387,7 +407,7 @@ impl WorldData {
         if !dir.has_world_data() {
             return Ok(None);
         }
-        let level = dir.unfixed_data_tag_with_fallback().map_err(|e| invalid(&e))?;
+        let level = dir.unfixed_data_tag_with_fallback(&[]).map_err(io::Error::other)?;
         let level = level.get("Data").ok_or_else(|| invalid("level.dat has no Data"))?;
         let data_version = level.get("DataVersion").and_then(Nbt::as_i64).unwrap_or(-1) as i32;
         if get_file_fixer().requires_file_fixing(data_version) {

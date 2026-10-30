@@ -725,8 +725,10 @@ pub enum ScanKind {
     Structures,
 }
 
+#[derive(Clone, Copy)]
 pub enum Mode {
     Read,
+    ReadCompressed,
     Scan(ScanKind),
 }
 
@@ -745,6 +747,16 @@ const WRAP_FRAMES: [&str; 4] = [
     "net.minecraft.world.level.chunk.storage.RegionFile.getChunkDataInputStream(RegionFile.java:228)",
 ];
 
+const READ_COMPRESSED_WRAP_FRAMES: [&str; 3] = [
+    "net.minecraft.nbt.NbtIo.createDecompressorStream(NbtIo.java:41)",
+    "net.minecraft.nbt.NbtIo.readCompressed(NbtIo.java:49)",
+    "net.minecraft.nbt.NbtIo.readCompressed(NbtIo.java:36)",
+];
+
+const READ_COMPRESSED_READ: &str = "net.minecraft.nbt.NbtIo.readCompressed(NbtIo.java:50)";
+const READ_COMPRESSED_PATH: &str = "net.minecraft.nbt.NbtIo.readCompressed(NbtIo.java:36)";
+const READ_NOT_COMPOUND: &str = "net.minecraft.nbt.NbtIo.read(NbtIo.java:113)";
+
 pub fn simulate(compressed: &[u8], kind: StreamKind, mode: Mode) -> Result<Vec<u8>, (JavaThrowable, bool)> {
     let source = match kind {
         StreamKind::Deflate => Source::Inflater(InflaterInputStream::new(compressed)),
@@ -753,27 +765,35 @@ pub fn simulate(compressed: &[u8], kind: StreamKind, mode: Mode) -> Result<Vec<u
         StreamKind::Gzip => match GzipInputStream::new(compressed) {
             Ok(stream) => Source::Gzip(stream),
             Err(mut failure) => {
-                failure.push_frames(&WRAP_FRAMES);
+                match mode {
+                    Mode::ReadCompressed => failure.push_frames(&READ_COMPRESSED_WRAP_FRAMES),
+                    _ => failure.push_frames(&WRAP_FRAMES),
+                }
                 return Err((failure, true));
             }
         },
     };
     let mut parser = Parser { input: DataInputStream { source, position: 0, limit: 0 }, depth: 0, live_bytes: 0 };
     let result = match mode {
-        Mode::Read => read_root(&mut parser),
+        Mode::Read => read_root(&mut parser).map_err(at(NBT_IO_READ_OUTER)),
+        Mode::ReadCompressed => read_root(&mut parser).map_err(at(READ_COMPRESSED_READ)).map_err(at(READ_COMPRESSED_PATH)),
         Mode::Scan(kind) => scan_root(&mut parser, kind),
     };
     result.map(|()| parser.input.source.output()[..parser.input.position].to_vec()).map_err(|failure| (failure, false))
 }
 
 fn read_root(parser: &mut Parser) -> Result<(), Failure> {
-    read_unnamed_tag(parser).map_err(at(NBT_IO_READ_INNER)).map_err(at(NBT_IO_READ_OUTER))
+    let type_id = read_unnamed_tag(parser).map_err(at(NBT_IO_READ_INNER))?;
+    if type_id != 10 {
+        return Err(throwable("java.io.IOException: Root tag must be a named compound tag", &[READ_NOT_COMPOUND]));
+    }
+    Ok(())
 }
 
-fn read_unnamed_tag(parser: &mut Parser) -> Result<(), Failure> {
+fn read_unnamed_tag(parser: &mut Parser) -> Result<i8, Failure> {
     let type_id = parser.input.read_byte().map_err(at(READ_UNNAMED_TAG_TYPE))?;
     if type_id == 0 {
-        return Ok(());
+        return Ok(0);
     }
     parser.skip_string().map_err(at(READ_UNNAMED_TAG_SKIP))?;
     let kind = tag_kind(type_id);
@@ -782,6 +802,7 @@ fn read_unnamed_tag(parser: &mut Parser) -> Result<(), Failure> {
         other => other,
     }
     .map_err(at(READ_UNNAMED_TAG_LOAD))
+    .map(|()| type_id)
 }
 
 struct FieldTree {

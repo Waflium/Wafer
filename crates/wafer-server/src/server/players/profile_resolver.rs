@@ -51,17 +51,61 @@ impl Default for ProfileResolver {
     }
 }
 
+const LOADING_CACHE_GET_UNCHECKED: [&str; 8] = [
+    "com.google.common.cache.LocalCache$LoadingValueReference.loadFuture(LocalCache.java:3556)",
+    "com.google.common.cache.LocalCache$Segment.loadSync(LocalCache.java:2307)",
+    "com.google.common.cache.LocalCache$Segment.lockedGetOrLoad(LocalCache.java:2180)",
+    "com.google.common.cache.LocalCache$Segment.get(LocalCache.java:2071)",
+    "com.google.common.cache.LocalCache.get(LocalCache.java:3985)",
+    "com.google.common.cache.LocalCache.getOrLoad(LocalCache.java:4006)",
+    "com.google.common.cache.LocalCache$LocalLoadingCache.get(LocalCache.java:4946)",
+    "com.google.common.cache.LocalCache$LocalLoadingCache.getUnchecked(LocalCache.java:4953)",
+];
+
+const BY_NAME_LOAD: [&str; 2] = [
+    "net.minecraft.server.players.ProfileResolver$Cached$2.load(ProfileResolver.java:54)",
+    "net.minecraft.server.players.ProfileResolver$Cached$2.load(ProfileResolver.java:50)",
+];
+
+const BY_NAME_NESTED_LOAD: [&str; 4] = [
+    "net.minecraft.server.players.ProfileResolver$Cached$2.lambda$load$0(ProfileResolver.java:55)",
+    "java.base/java.util.Optional.flatMap(Optional.java:289)",
+    "net.minecraft.server.players.ProfileResolver$Cached$2.load(ProfileResolver.java:55)",
+    "net.minecraft.server.players.ProfileResolver$Cached$2.load(ProfileResolver.java:50)",
+];
+
+const BY_ID_LOAD: [&str; 2] = [
+    "net.minecraft.server.players.ProfileResolver$Cached$1.load(ProfileResolver.java:42)",
+    "net.minecraft.server.players.ProfileResolver$Cached$1.load(ProfileResolver.java:39)",
+];
+
+const FETCH_BY_NAME: &str = "net.minecraft.server.players.ProfileResolver$Cached.fetchByName(ProfileResolver.java:63)";
+const FETCH_BY_ID: &str = "net.minecraft.server.players.ProfileResolver$Cached.fetchById(ProfileResolver.java:70)";
+
 impl ProfileResolver {
-    pub fn fetch_by_name(&self, services: &Services, name_to_id_cache: &CachedUserNameToIdResolver, name: &str) -> Option<Profile> {
+    pub fn fetch_by_name(&self, services: &Services, name_to_id_cache: &CachedUserNameToIdResolver, name: &str, callers: &[&'static str]) -> Option<Profile> {
         if !is_valid_player_name(name) {
             return None;
         }
         self.profile_cache_by_name.get_unchecked(&name.to_string(), || {
-            name_to_id_cache.get(services, name).and_then(|name_and_id| self.fetch_by_id(services, name_and_id.id))
+            let outer: Vec<&'static str> = LOADING_CACHE_GET_UNCHECKED.into_iter().chain([FETCH_BY_NAME]).chain(callers.iter().copied()).collect();
+            let name_frames: Vec<&'static str> = BY_NAME_LOAD.into_iter().chain(outer.iter().copied()).collect();
+            name_to_id_cache.get(services, name, &name_frames).and_then(|name_and_id| {
+                let nested: Vec<&'static str> = BY_NAME_NESTED_LOAD.into_iter().chain(outer.iter().copied()).collect();
+                self.fetch_by_id_loading(services, name_and_id.id, &nested)
+            })
         })
     }
 
-    pub fn fetch_by_id(&self, services: &Services, id: u128) -> Option<Profile> {
-        self.profile_cache_by_id.get_unchecked(&id, || services.fetch_game_profile(id))
+    pub fn fetch_by_id(&self, services: &Services, id: u128, callers: &[&'static str]) -> Option<Profile> {
+        let outer: Vec<&'static str> = [FETCH_BY_ID].into_iter().chain(callers.iter().copied()).collect();
+        self.fetch_by_id_loading(services, id, &outer)
+    }
+
+    fn fetch_by_id_loading(&self, services: &Services, id: u128, outer: &[&'static str]) -> Option<Profile> {
+        self.profile_cache_by_id.get_unchecked(&id, || {
+            let frames: Vec<&'static str> = BY_ID_LOAD.into_iter().chain(LOADING_CACHE_GET_UNCHECKED).chain(outer.iter().copied()).collect();
+            services.fetch_game_profile(id, &frames)
+        })
     }
 }

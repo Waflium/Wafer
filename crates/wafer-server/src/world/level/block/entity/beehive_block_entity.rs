@@ -7,6 +7,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::attribute::environment_attributes;
 use crate::world::entity::animal::bee::bee;
+use crate::world::entity::entity_save::{LOAD_ENTITY_RECURSIVE_TYPED, block_entity_tick_site};
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::component::DataComponentType;
 use crate::world::item::component::{self as dc};
@@ -92,11 +93,11 @@ impl Occupant {
         Some(Occupant { entity_data, ticks_in_hive: int("ticks_in_hive")?, min_ticks_in_hive: int("min_ticks_in_hive")? })
     }
 
-    pub fn create_entity(&self, level: &mut ServerLevel, hive_pos: BlockPos) -> Option<LevelEntity> {
+    pub fn create_entity(&self, level: &mut ServerLevel, hive_pos: BlockPos, site: &dyn Fn() -> Vec<&'static str>) -> Option<LevelEntity> {
         let Nbt::Compound(mut entity_tag) = self.entity_data.clone() else { return None };
         entity_tag.retain(|(key, _)| !IGNORED_BEE_TAGS.contains(&key.as_str()));
         let collector = tag_value_input::ScopedCollector::new_empty("net.minecraft.world.entity.EntityType");
-        let entity = level.load_entity(&Nbt::Compound(entity_tag));
+        let entity = level.load_entity_typed(&Nbt::Compound(entity_tag), site);
         drop(collector);
         let mut entity = entity?;
         if !entity_type_tags::BEEHIVE_INHABITORS.contains(entity.entity().entity_type as usize) {
@@ -294,7 +295,7 @@ impl BeehiveBlockEntity {
     fn release_all_occupants(&mut self, level: &mut ServerLevel, pos: BlockPos, block_entity_state: BlockState, state: BlockState, release_status: BeeReleaseStatus) -> Vec<EntityId> {
         let mut spawned = Vec::new();
         let saved_flower_pos = self.saved_flower_pos;
-        self.stored.retain(|occupant_entry| !release_occupant(level, pos, state, occupant_entry.to_occupant(), Some(&mut spawned), release_status, saved_flower_pos));
+        self.stored.retain(|occupant_entry| !release_occupant(level, pos, state, occupant_entry.to_occupant(), Some(&mut spawned), release_status, saved_flower_pos, &Vec::new));
         if !spawned.is_empty() {
             level.block_entity_set_changed_static(pos, block_entity_state);
         }
@@ -330,6 +331,7 @@ fn release_occupant(
     spawned: Option<&mut Vec<EntityId>>,
     release_status: BeeReleaseStatus,
     saved_flower_pos: Option<BlockPos>,
+    site: &dyn Fn() -> Vec<&'static str>,
 ) -> bool {
     if level.environment_attributes().get_value_at(environment_attributes::BEES_STAY_IN_HIVE, block_pos) && release_status != BeeReleaseStatus::Emergency {
         return false;
@@ -340,7 +342,7 @@ fn release_occupant(
     if front_blocked && release_status != BeeReleaseStatus::Emergency {
         return false;
     }
-    let Some(mut entity) = bee_data.create_entity(level, block_pos) else { return false };
+    let Some(mut entity) = bee_data.create_entity(level, block_pos, site) else { return false };
     if let LevelEntity::Mob(mob) = &mut entity
         && bee::is_bee(mob)
     {
@@ -383,12 +385,22 @@ fn release_occupant(
     added
 }
 
+fn tick_occupants_site() -> Vec<&'static str> {
+    block_entity_tick_site(&[
+        LOAD_ENTITY_RECURSIVE_TYPED,
+        "net.minecraft.world.level.block.entity.BeehiveBlockEntity$Occupant.createEntity(BeehiveBlockEntity.java:399)",
+        "net.minecraft.world.level.block.entity.BeehiveBlockEntity.releaseOccupant(BeehiveBlockEntity.java:209)",
+        "net.minecraft.world.level.block.entity.BeehiveBlockEntity.tickOccupants(BeehiveBlockEntity.java:267)",
+        "net.minecraft.world.level.block.entity.BeehiveBlockEntity.serverTick(BeehiveBlockEntity.java:279)",
+    ])
+}
+
 fn tick_occupants(level: &mut ServerLevel, pos: BlockPos, state: BlockState, stored: &mut Vec<BeeData>, saved_flower_pos: Option<BlockPos>) {
     let mut changed = false;
     stored.retain_mut(|data| {
         if data.tick() {
             let release_status = if data.has_nectar() { BeeReleaseStatus::HoneyDelivered } else { BeeReleaseStatus::BeeReleased };
-            if release_occupant(level, pos, state, data.to_occupant(), None, release_status, saved_flower_pos) {
+            if release_occupant(level, pos, state, data.to_occupant(), None, release_status, saved_flower_pos, &tick_occupants_site) {
                 changed = true;
                 return false;
             }

@@ -2298,6 +2298,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
+ "tower",
  "wafer-core",
  "wafer-data",
  "wafer-protocol",

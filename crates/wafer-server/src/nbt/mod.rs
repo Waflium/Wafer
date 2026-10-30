@@ -1,3 +1,4 @@
+pub mod nbt_io;
 pub mod snbt_grammar;
 #[cfg(test)]
 pub mod tests;

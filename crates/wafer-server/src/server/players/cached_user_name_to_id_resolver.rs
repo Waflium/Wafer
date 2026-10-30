@@ -11,6 +11,8 @@ use super::NameAndId;
 use crate::network::login::offline_uuid;
 use crate::server::services::Services;
 
+const LOOKUP_GAME_PROFILE: &str = "net.minecraft.server.players.CachedUserNameToIdResolver.lookupGameProfile(CachedUserNameToIdResolver.java:73)";
+const GET_BY_NAME: &str = "net.minecraft.server.players.CachedUserNameToIdResolver.get(CachedUserNameToIdResolver.java:134)";
 const GAMEPROFILES_MRU_LIMIT: usize = 1000;
 const DATE_FORMAT: &str = "%Y-%m-%d %H:%M:%S %z";
 
@@ -73,7 +75,7 @@ impl CachedUserNameToIdResolver {
         self.write(&self.profiles.lock().unwrap());
     }
 
-    pub fn get(&self, services: &Services, name: &str) -> Option<NameAndId> {
+    pub fn get(&self, services: &Services, name: &str, callers: &[&'static str]) -> Option<NameAndId> {
         let user_name = name.to_lowercase();
         let mut profiles = self.profiles.lock().unwrap();
         let mut needs_save = false;
@@ -93,7 +95,7 @@ impl CachedUserNameToIdResolver {
                 Some(info.name_and_id.clone())
             }
             None => {
-                let profile = self.lookup_game_profile(services, &user_name);
+                let profile = self.lookup_game_profile(services, &user_name, callers);
                 if let Some(profile) = &profile {
                     add_internal(&mut profiles, profile.clone());
                     needs_save = true;
@@ -116,11 +118,12 @@ impl CachedUserNameToIdResolver {
         Some(info.name_and_id.clone())
     }
 
-    fn lookup_game_profile(&self, services: &Services, name: &str) -> Option<NameAndId> {
+    fn lookup_game_profile(&self, services: &Services, name: &str, callers: &[&'static str]) -> Option<NameAndId> {
         if !is_valid_player_name(name) {
             return self.create_unknown_profile(name);
         }
-        services.find_profile_by_name(name).or_else(|| self.create_unknown_profile(name))
+        let frames: Vec<&'static str> = [LOOKUP_GAME_PROFILE, GET_BY_NAME].into_iter().chain(callers.iter().copied()).collect();
+        services.find_profile_by_name(name, &frames).or_else(|| self.create_unknown_profile(name))
     }
 
     fn create_unknown_profile(&self, name: &str) -> Option<NameAndId> {
@@ -175,12 +178,12 @@ mod tests {
         let services = Services::offline();
         let cache = CachedUserNameToIdResolver::load(Some(dir.clone()));
         cache.add(NameAndId { id: 7, name: "Rozqn".into() });
-        assert_eq!(cache.get(&services, "ROZQN"), Some(NameAndId { id: 7, name: "Rozqn".into() }));
-        assert_eq!(cache.get(&services, "Other"), Some(NameAndId { id: offline_uuid("other"), name: "other".into() }));
+        assert_eq!(cache.get(&services, "ROZQN", &[]), Some(NameAndId { id: 7, name: "Rozqn".into() }));
+        assert_eq!(cache.get(&services, "Other", &[]), Some(NameAndId { id: offline_uuid("other"), name: "other".into() }));
         let reloaded = CachedUserNameToIdResolver::load(Some(dir.clone()));
         assert_eq!(reloaded.get_by_id(7).map(|p| p.name), Some("Rozqn".into()));
         reloaded.set_resolve_offline_users(false);
-        assert_eq!(reloaded.get(&services, "nobody"), None);
+        assert_eq!(reloaded.get(&services, "nobody", &[]), None);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

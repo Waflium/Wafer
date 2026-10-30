@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use wafer_core::java_string::JavaStr;
 use wafer_protocol::nbt::Nbt;
 
@@ -7,8 +9,15 @@ use crate::network::chat::{ChatFormatting, ClickEvent, Component, Contents, Styl
 use crate::network::login::Profile;
 use crate::server::Server;
 use crate::server::players::cached_user_name_to_id_resolver::is_valid_player_name;
+use crate::util::cached_thread_pool::CachedThreadPool;
 use crate::world::entity::EntityId;
 use crate::world::level::storage::{format_uuid, uuid_ints};
+
+const RESOLVE_NAME: &str = "net.minecraft.server.commands.FetchProfileCommand.lambda$resolveName$0(FetchProfileCommand.java:110)";
+const RESOLVE_ID: &str = "net.minecraft.server.commands.FetchProfileCommand.lambda$resolveId$0(FetchProfileCommand.java:127)";
+const POOL_RUN_WORKER: &str = "java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1090)";
+const POOL_WORKER_RUN: &str = "java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:614)";
+const THREAD_RUN: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
 
 static NO_PROFILE: DynamicCommandExceptionType = DynamicCommandExceptionType(|id| tr("commands.fetchprofile.no_profile", vec![id]));
 
@@ -83,7 +92,7 @@ pub fn resolve_name(server: &mut Server, context: &CommandContext, source: &Comm
     let source = source.clone();
     resolve_on_io_pool(server, move || {
         let name_component = Component::literal(name.as_str());
-        let result = resolver.fetch_by_name(&services, &name_to_id_cache, &name);
+        let result = resolver.fetch_by_name(&services, &name_to_id_cache, &name, &[RESOLVE_NAME, POOL_RUN_WORKER, POOL_WORKER_RUN, THREAD_RUN]);
         Box::new(move |server: &mut Server| match result {
             Some(profile) => report_resolved_profile(server, &source, "commands.fetchprofile.name.success", name_component, &profile),
             None => source.send_failure(server, Component::translatable_with("commands.fetchprofile.name.failure", vec![name_component.into()])),
@@ -98,7 +107,7 @@ pub fn resolve_id(server: &mut Server, context: &CommandContext, source: &Comman
     let source = source.clone();
     resolve_on_io_pool(server, move || {
         let id_component = Component::literal(format_uuid(id));
-        let result = resolver.fetch_by_id(&services, id);
+        let result = resolver.fetch_by_id(&services, id, &[RESOLVE_ID, POOL_RUN_WORKER, POOL_WORKER_RUN, THREAD_RUN]);
         Box::new(move |server: &mut Server| match result {
             Some(profile) => report_resolved_profile(server, &source, "commands.fetchprofile.id.success", id_component, &profile),
             None => source.send_failure(server, Component::translatable_with("commands.fetchprofile.id.failure", vec![id_component.into()])),
@@ -107,13 +116,13 @@ pub fn resolve_id(server: &mut Server, context: &CommandContext, source: &Comman
     Ok(1)
 }
 
+static DOWNLOAD_POOL: LazyLock<CachedThreadPool> = LazyLock::new(|| CachedThreadPool::new("Download-"));
+
 fn resolve_on_io_pool(server: &mut Server, task: impl FnOnce() -> Box<dyn FnOnce(&mut Server) + Send + Sync> + Send + 'static) {
     match server.task_sender.clone() {
-        Some(sender) => {
-            std::thread::spawn(move || {
-                let _ = sender.send(task());
-            });
-        }
+        Some(sender) => DOWNLOAD_POOL.execute(move || {
+            let _ = sender.send(task());
+        }),
         None => task()(server),
     }
 }

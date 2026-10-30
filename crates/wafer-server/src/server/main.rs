@@ -336,21 +336,28 @@ fn start(args: Vec<String>) {
 
 pub(crate) struct Abort;
 
+const MAIN_GET_UNFIXED_DATA_TAG_WITH_FALLBACK: &str = "net.minecraft.server.Main.main(Main.java:148)";
+const MAIN_FIX_AND_GET_SUMMARY_FROM_TAG: &str = "net.minecraft.server.Main.main(Main.java:153)";
+
 pub(crate) fn fix_world_data(access: &mut LevelStorageAccess, notification_manager: NotificationManager) -> Result<Option<Nbt>, Abort> {
     if !access.has_world_data() {
         return Ok(None);
     }
-    let level_data_unfixed = match access.get_unfixed_data_tag_with_fallback() {
+    let level_data_unfixed = match access.get_unfixed_data_tag_with_fallback(&[MAIN_GET_UNFIXED_DATA_TAG_WITH_FALLBACK]) {
         Ok(level_data_unfixed) => level_data_unfixed,
+        Err(e) if e.is_io_exception() || e.is_nbt_exception() => {
+            error!("Failed to load world data. World files may be corrupted. Shutting down.\n{}", e.print_stack_trace().trim_end());
+            return Err(Abort);
+        }
         Err(e) => {
-            error!("Failed to load world data. World files may be corrupted. Shutting down.\n{e}");
+            error!("Failed to start the minecraft server\n{}", e.print_stack_trace().trim_end());
             return Err(Abort);
         }
     };
-    let summary = match access.fix_and_get_summary_from_tag(&level_data_unfixed) {
+    let summary = match access.fix_and_get_summary_from_tag(&level_data_unfixed, &[MAIN_FIX_AND_GET_SUMMARY_FROM_TAG]) {
         Ok(summary) => summary,
         Err(e) => {
-            error!("Failed to start the minecraft server\n{e}");
+            error!("Failed to start the minecraft server\n{}", e.print_stack_trace().trim_end());
             return Err(Abort);
         }
     };

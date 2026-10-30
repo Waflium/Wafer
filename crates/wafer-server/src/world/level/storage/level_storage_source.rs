@@ -96,11 +96,17 @@ impl LevelStorageSource {
     }
 }
 
-fn make_level_summary(data_tag: &Dynamic, level_directory: &LevelDirectory, locked: bool, data_version: i32) -> Result<LevelSummary, String> {
+const MAKE_LEVEL_SUMMARY_UNKNOWN_DATA_VERSION: &str = "net.minecraft.world.level.storage.LevelStorageSource.makeLevelSummary(LevelStorageSource.java:328)";
+const FIX_AND_GET_SUMMARY_FROM_TAG: &str = "net.minecraft.world.level.storage.LevelStorageSource$LevelStorageAccess.fixAndGetSummaryFromTag(LevelStorageSource.java:494)";
+
+fn make_level_summary(data_tag: &Dynamic, level_directory: &LevelDirectory, locked: bool, data_version: i32) -> Result<LevelSummary, JavaThrowable> {
     let level_version = LevelVersion::parse(data_tag);
     let level_data_version = level_version.level_data_version();
     if level_data_version != 19132 && level_data_version != 19133 {
-        return Err(format!("net.minecraft.nbt.NbtFormatException: Unknown data version: {:x}", level_data_version as u32));
+        return Err(JavaThrowable::new(
+            format!("net.minecraft.nbt.NbtFormatException: Unknown data version: {:x}", level_data_version as u32),
+            vec![MAKE_LEVEL_SUMMARY_UNKNOWN_DATA_VERSION],
+        ));
     }
     let requires_manual_conversion = level_data_version != 19133;
     let requires_file_fixing = get_file_fixer().requires_file_fixing(data_version);
@@ -146,22 +152,26 @@ impl LevelStorageAccess {
         }
     }
 
-    pub fn fix_and_get_summary_from_tag(&self, data_tag: &Dynamic) -> Result<LevelSummary, String> {
+    pub fn fix_and_get_summary_from_tag(&self, data_tag: &Dynamic, callers: &[&'static str]) -> Result<LevelSummary, JavaThrowable> {
         self.check_lock();
         let data_version = data_tag.get("DataVersion").as_int(-1);
         let data_tag_fixed = DataFixTypes::LevelSummary.update_to_current_version(data_tag.clone(), data_version);
-        make_level_summary(&data_tag_fixed, &self.level_directory, false, data_version)
+        make_level_summary(&data_tag_fixed, &self.level_directory, false, data_version).map_err(|mut throwable| {
+            throwable.push_frame(FIX_AND_GET_SUMMARY_FROM_TAG);
+            throwable.push_frames(callers);
+            throwable
+        })
     }
 
-    pub fn get_unfixed_data_tag_with_fallback(&self) -> io::Result<Dynamic> {
-        let root = self.world_dir().unfixed_data_tag_with_fallback().map_err(io::Error::other)?;
+    pub fn get_unfixed_data_tag_with_fallback(&self, callers: &[&'static str]) -> Result<Dynamic, JavaThrowable> {
+        let root = self.world_dir().unfixed_data_tag_with_fallback(callers)?;
         Ok(Dynamic::new(data_compound_or_empty(root)))
     }
 
     pub fn get_unfixed_data_tag(&self, use_fallback: bool) -> io::Result<Dynamic> {
         self.check_lock();
         let data_file = if use_fallback { self.level_directory.old_data_file() } else { self.level_directory.data_file() };
-        let root = super::read_level_data_tag_raw(&data_file).map_err(io::Error::other)?;
+        let root = super::get_unfixed_data_tag(&data_file, &[]).map_err(io::Error::other)?;
         Ok(Dynamic::new(data_compound_or_empty(root)))
     }
 

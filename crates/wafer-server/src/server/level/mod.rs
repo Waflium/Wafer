@@ -103,6 +103,43 @@ pub const THUNDER_DURATION: (i32, i32) = (3600, 15600);
 
 const WORLD_GEN_CHUNK_ENTITIES_LOGGER: &str = "net.minecraft.world.level.chunk.status.ChunkStatusTasks";
 const LEGACY_CHUNK_ENTITIES_LOGGER: &str = "net.minecraft.world.level.chunk.storage.SerializableChunkData";
+const LOAD_ENTITIES_RECURSIVE_STREAM: [&str; 10] = [
+    "net.minecraft.world.entity.EntityType.lambda$loadEntitiesRecursive$0(EntityType.java:388)",
+    "java.base/java.util.stream.ReferencePipeline$11$1.accept(ReferencePipeline.java:489)",
+    "com.google.common.collect.Streams$1Splitr.tryAdvance(Streams.java:489)",
+    "java.base/java.util.Spliterator.forEachRemaining(Spliterator.java:332)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:153)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:176)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:632)",
+];
+const LEGACY_CHUNK_ENTITIES_SITE: [&str; 6] = [
+    "net.minecraft.world.level.entity.PersistentEntitySectionManager.addLegacyChunkEntities(PersistentEntitySectionManager.java:202)",
+    "net.minecraft.server.level.ServerLevel.addLegacyChunkEntities(ServerLevel.java:1707)",
+    "net.minecraft.world.level.chunk.storage.SerializableChunkData.lambda$postLoadChunk$0(SerializableChunkData.java:495)",
+    "net.minecraft.world.level.chunk.LevelChunk.runPostLoad(LevelChunk.java:525)",
+    "net.minecraft.world.level.chunk.status.ChunkStatusTasks.lambda$full$0(ChunkStatusTasks.java:165)",
+    "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
+];
+const WORLD_GEN_CHUNK_ENTITIES_SITE: [&str; 7] = [
+    "net.minecraft.world.level.entity.PersistentEntitySectionManager.addWorldGenChunkEntities(PersistentEntitySectionManager.java:206)",
+    "net.minecraft.server.level.ServerLevel.addWorldGenChunkEntities(ServerLevel.java:1711)",
+    "net.minecraft.world.level.chunk.status.ChunkStatusTasks.postLoadProtoChunk(ChunkStatusTasks.java:176)",
+    "net.minecraft.world.level.chunk.status.ChunkStatusTasks.lambda$full$1(ChunkStatusTasks.java:158)",
+    "net.minecraft.world.level.chunk.LevelChunk.runPostLoad(LevelChunk.java:525)",
+    "net.minecraft.world.level.chunk.status.ChunkStatusTasks.lambda$full$0(ChunkStatusTasks.java:165)",
+    "java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1789)",
+];
+fn chunk_entities_site(caller_frames: &[&'static str]) -> Vec<&'static str> {
+    let mut site = vec![crate::world::entity::entity_save::LOAD_ENTITY_RECURSIVE_REASON];
+    site.extend(LOAD_ENTITIES_RECURSIVE_STREAM);
+    site.extend_from_slice(caller_frames);
+    site.extend(crate::server::main_thread_frames::CHUNK_SOURCE_TASK);
+    site.extend(crate::server::main_thread_frames::current());
+    site
+}
 const GAME_EVENT_START_RAINING: u8 = 1;
 const GAME_EVENT_STOP_RAINING: u8 = 2;
 const GAME_EVENT_RAIN_LEVEL_CHANGE: u8 = 7;
@@ -1245,7 +1282,8 @@ impl ServerLevel {
         );
         for (index, nbt) in entities.iter().enumerate() {
             let _scope = crate::world::level::storage::tag_value_input::enter_child(crate::util::problem_reporter::PathElement::Indexed(index));
-            for entity in self.load_entity_recursive_in_scope(nbt, &[], &mut |_| {}) {
+            let site = chunk_entities_site(&LEGACY_CHUNK_ENTITIES_SITE);
+            for entity in self.load_entity_recursive_in_scope(nbt, &site, &mut |_| {}) {
                 self.add_entity(entity);
             }
         }
@@ -1258,7 +1296,8 @@ impl ServerLevel {
         );
         for (index, nbt) in entities.iter().enumerate() {
             let _scope = crate::world::level::storage::tag_value_input::enter_child(crate::util::problem_reporter::PathElement::Indexed(index));
-            for entity in self.load_entity_recursive_in_scope(nbt, &[], &mut |_| {}) {
+            let site = chunk_entities_site(&WORLD_GEN_CHUNK_ENTITIES_SITE);
+            for entity in self.load_entity_recursive_in_scope(nbt, &site, &mut |_| {}) {
                 self.add_entity(entity);
             }
         }

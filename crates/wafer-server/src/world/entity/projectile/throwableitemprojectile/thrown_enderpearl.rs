@@ -19,6 +19,16 @@ use crate::world::level::portal::teleport_transition::{PostTeleportTransition, T
 use crate::world::level::storage::tag_value_input;
 use crate::world::phys::hit_result::HitResult;
 
+const LOAD_AND_SPAWN_ENDER_PEARL_SITE: [&str; 7] = [
+    crate::world::entity::entity_save::LOAD_ENTITY_RECURSIVE_REASON,
+    "net.minecraft.server.level.ServerPlayer.loadAndSpawnEnderPearl(ServerPlayer.java:578)",
+    "java.base/java.lang.Iterable.forEach(Iterable.java:75)",
+    "net.minecraft.server.level.ServerPlayer.loadAndSpawnEnderPearls(ServerPlayer.java:568)",
+    "net.minecraft.server.network.config.PrepareSpawnTask$Ready.lambda$spawn$1(PrepareSpawnTask.java:201)",
+    "java.base/java.util.Optional.ifPresent(Optional.java:178)",
+    "net.minecraft.server.network.config.PrepareSpawnTask$Ready.spawn(PrepareSpawnTask.java:200)",
+];
+
 const ENTITY_TYPE: &str = "minecraft:ender_pearl";
 pub const ENDER_PEARL_TICKET_RADIUS: i32 = 2;
 
@@ -333,7 +343,8 @@ impl Server {
             return;
         };
         let level = &mut self.levels[pearl_level];
-        let mut loaded = level.load_entity_recursive_in_scope(pearl_input, &[], &mut |_| {}).into_iter();
+        let site = crate::world::entity::entity_save::player_spawn_site(&LOAD_AND_SPAWN_ENDER_PEARL_SITE);
+        let mut loaded = level.load_entity_recursive_in_scope(pearl_input, &site, &mut |_| {}).into_iter();
         let pearl = loaded.next().and_then(|pearl| {
             let chunk_pos = pearl.entity().chunk_position();
             level.add_entity(pearl).then_some(chunk_pos)

@@ -9,6 +9,14 @@ use wafer_protocol::Writer;
 use wafer_protocol::nbt::Nbt;
 
 use super::chunk_map::ChunkTrackingView;
+
+const LOAD_AND_SPAWN_PARENT_VEHICLE_SITE: [&str; 5] = [
+    crate::world::entity::entity_save::LOAD_ENTITY_RECURSIVE_REASON,
+    "net.minecraft.server.level.ServerPlayer.loadAndSpawnParentVehicle(ServerPlayer.java:520)",
+    "net.minecraft.server.network.config.PrepareSpawnTask$Ready.lambda$spawn$1(PrepareSpawnTask.java:202)",
+    "java.base/java.util.Optional.ifPresent(Optional.java:178)",
+    "net.minecraft.server.network.config.PrepareSpawnTask$Ready.spawn(PrepareSpawnTask.java:200)",
+];
 use crate::advancements::triggers::criteria_triggers;
 use super::game_mode::ServerPlayerGameMode;
 use crate::network::chat::remote_chat_session::RemoteChatSession;
@@ -732,7 +740,10 @@ impl ServerLevel {
     pub fn load_and_spawn_parent_vehicle(&mut self, id: EntityId, player_input: &Nbt) {
         let Some((root_tag, _root_scope)) = tag_value_input::child(player_input, "RootVehicle") else { return };
         let loaded = match tag_value_input::child(root_tag, "Entity") {
-            Some((entity_tag, _entity_scope)) => self.load_entity_recursive_in_scope(entity_tag, &[], &mut |_| {}),
+            Some((entity_tag, _entity_scope)) => {
+                let site = crate::world::entity::entity_save::player_spawn_site(&LOAD_AND_SPAWN_PARENT_VEHICLE_SITE);
+                self.load_entity_recursive_in_scope(entity_tag, &site, &mut |_| {})
+            }
             None => Vec::new(),
         };
         let mut added = Vec::new();

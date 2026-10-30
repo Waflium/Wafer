@@ -70,6 +70,13 @@ mod nio {
         "java.base/java.nio.channels.FileChannel.open(FileChannel.java:301)",
         "java.base/java.nio.channels.FileChannel.open(FileChannel.java:353)",
     ];
+    pub const NEW_INPUT_STREAM: [&str; 5] = [
+        "java.base/sun.nio.fs.WindowsFileSystemProvider.newByteChannel(WindowsFileSystemProvider.java:231)",
+        "java.base/java.nio.file.Files.newByteChannel(Files.java:357)",
+        "java.base/java.nio.file.Files.newByteChannel(Files.java:399)",
+        "java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:371)",
+        "java.base/java.nio.file.Files.newInputStream(Files.java:154)",
+    ];
     pub const CREATE_DIRECTORIES: [&str; 4] = [
         "java.base/sun.nio.fs.WindowsFileSystemProvider.createDirectory(WindowsFileSystemProvider.java:503)",
         "java.base/java.nio.file.Files.createDirectory(Files.java:647)",
@@ -104,6 +111,13 @@ mod nio {
         "java.base/sun.nio.fs.UnixFileSystemProvider.newFileChannel(UnixFileSystemProvider.java:213)",
         "java.base/java.nio.channels.FileChannel.open(FileChannel.java:301)",
         "java.base/java.nio.channels.FileChannel.open(FileChannel.java:353)",
+    ];
+    pub const NEW_INPUT_STREAM: [&str; 5] = [
+        "java.base/sun.nio.fs.UnixFileSystemProvider.newByteChannel(UnixFileSystemProvider.java:261)",
+        "java.base/java.nio.file.Files.newByteChannel(Files.java:357)",
+        "java.base/java.nio.file.Files.newByteChannel(Files.java:399)",
+        "java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:371)",
+        "java.base/java.nio.file.Files.newInputStream(Files.java:154)",
     ];
     pub const CREATE_DIRECTORIES: [&str; 4] = [
         "java.base/sun.nio.fs.UnixFileSystemProvider.createDirectory(UnixFileSystemProvider.java:418)",
@@ -166,6 +180,14 @@ pub fn open_region_file_failure(error: io::Error, path: &Path, sync: bool, calle
     throwable.stack_trace.push(GET_REGION_FILE_NEW_REGION);
     throwable.stack_trace.extend_from_slice(callers);
     io::Error::new(kind, throwable)
+}
+
+pub fn new_input_stream_failure(error: io::Error, path: &Path) -> JavaThrowable {
+    let frames = syscall_frames(&error);
+    let mut throwable = path_throwable(error, path);
+    throwable.stack_trace.extend(frames);
+    throwable.stack_trace.extend(nio::NEW_INPUT_STREAM);
+    throwable
 }
 
 fn path_throwable(error: io::Error, path: &Path) -> JavaThrowable {

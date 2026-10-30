@@ -3,10 +3,12 @@ use crate::commands::source::CommandSourceStack;
 use crate::network::chat::Component;
 use crate::server::Server;
 
+const DE_OP: &str = "net.minecraft.server.commands.DeOpCommands.lambda$register$1(DeOpCommands.java:30)";
+
 static ERROR_NOT_OP: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.deop.failed");
 
 pub fn deop_players(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    let players = context.get_game_profiles(server, source, "targets")?;
+    let players = context.get_game_profiles(server, source, "targets", DE_OP)?;
     let mut count = 0;
     for player in players {
         if server.is_op(player.id) {

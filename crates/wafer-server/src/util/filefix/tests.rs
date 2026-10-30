@@ -303,7 +303,7 @@ fn fix_with_forced_capabilities(universe: &Path, atomic_move: bool, hard_links: 
     super::file_fixer_upper::force_file_system_capabilities(Some(FileSystemCapabilities::new(atomic_move, hard_links)));
     let source = LevelStorageSource::create_default(universe);
     let mut access = source.validate_and_create_access("world").unwrap();
-    let unfixed = access.get_unfixed_data_tag_with_fallback().unwrap();
+    let unfixed = access.get_unfixed_data_tag_with_fallback(&[]).unwrap();
     let result = crate::util::datafix::data_fixers::get_file_fixer()
         .fix(&mut access, unfixed, &crate::util::worldupdate::upgrade_progress::UpgradeProgress::new(NotificationManager::default()))
         .map(|_| ());
@@ -403,7 +403,7 @@ fn a_corrupt_chunk_fails_the_upgrade_with_a_completion_exception() {
     let before = tree(&world);
     let source = LevelStorageSource::create_default(&universe);
     let mut access = source.validate_and_create_access("world").unwrap();
-    let unfixed = access.get_unfixed_data_tag_with_fallback().unwrap();
+    let unfixed = access.get_unfixed_data_tag_with_fallback(&[]).unwrap();
     let result = crate::util::datafix::data_fixers::get_file_fixer().fix(&mut access, unfixed, &crate::util::worldupdate::upgrade_progress::UpgradeProgress::new(NotificationManager::default()));
     match result {
         Err(FileFixFailure::Unchecked(exception)) => assert!(exception.to_string().starts_with("java.util.concurrent.CompletionException: "), "{exception}"),

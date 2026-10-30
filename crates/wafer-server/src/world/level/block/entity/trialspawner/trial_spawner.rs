@@ -16,8 +16,23 @@ use crate::util::codec::{self, DecodeResult};
 use crate::util::problem_reporter::PathElement;
 use crate::world::level::storage::tag_value_input::{self, ScopedCollector};
 use crate::world::difficulty::Difficulty;
+use crate::world::entity::entity_save::{LOAD_ENTITY_RECURSIVE_REASON, block_entity_tick_site};
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::{LevelEntity, mob, spawn_placements};
+
+pub const TICK_SERVER_SITE: [&str; 3] = [
+    "net.minecraft.world.level.block.entity.trialspawner.TrialSpawnerState.tickAndGetNext(TrialSpawnerState.java:65)",
+    "net.minecraft.world.level.block.entity.trialspawner.TrialSpawner.tickServer(TrialSpawner.java:293)",
+    "net.minecraft.world.level.block.TrialSpawnerBlock.lambda$getTicker$0(TrialSpawnerBlock.java:41)",
+];
+
+const SPAWN_MOB_SITE: [&str; 5] = [
+    LOAD_ENTITY_RECURSIVE_REASON,
+    "net.minecraft.world.level.block.entity.trialspawner.TrialSpawner.spawnMob(TrialSpawner.java:217)",
+    "net.minecraft.world.level.block.entity.trialspawner.TrialSpawnerState.tickAndGetNext(TrialSpawnerState.java:106)",
+    "net.minecraft.world.level.block.entity.trialspawner.TrialSpawner.tickServer(TrialSpawner.java:293)",
+    "net.minecraft.world.level.block.TrialSpawnerBlock.lambda$getTicker$0(TrialSpawnerBlock.java:41)",
+];
 use crate::world::level::BlockGetter;
 use crate::world::level::base_spawner;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
@@ -175,7 +190,8 @@ impl TrialSpawner {
         {
             return None;
         }
-        let mut loaded = level.load_entity_recursive_for_spawn(input, &[], &mut |_| {});
+        let site = block_entity_tick_site(&SPAWN_MOB_SITE);
+        let mut loaded = level.load_entity_recursive_for_spawn(input, &site, &mut |_| {});
         for entity in &mut loaded {
             let y_rot = level.random.next_float() * 360.0;
             entity.entity_mut().snap_to(spawn_pos.x, spawn_pos.y, spawn_pos.z, y_rot, 0.0);

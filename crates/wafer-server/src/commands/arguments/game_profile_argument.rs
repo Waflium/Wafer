@@ -5,8 +5,12 @@ use super::selector::entity_selector_parser::EntitySelectorParser;
 use crate::commands::brigadier::{CommandContext, CommandSyntaxException, SimpleCommandExceptionType, StringReader};
 use crate::commands::source::CommandSourceStack;
 use crate::server::Server;
+use crate::server::command_frames::command_frames;
 
 pub use crate::server::players::NameAndId;
+
+const PARSE_RESULT: &str = "net.minecraft.commands.arguments.GameProfileArgument.lambda$parse$0(GameProfileArgument.java:66)";
+const GET_GAME_PROFILES: &str = "net.minecraft.commands.arguments.GameProfileArgument.getGameProfiles(GameProfileArgument.java:32)";
 
 static ERROR_UNKNOWN_PLAYER: SimpleCommandExceptionType = SimpleCommandExceptionType("argument.player.unknown");
 
@@ -32,7 +36,7 @@ pub fn parse(reader: &mut StringReader, allow_selectors: bool) -> Result<GamePro
 }
 
 impl GameProfileResult {
-    fn names(&self, server: &Server, source: &CommandSourceStack) -> Result<Vec<NameAndId>, CommandSyntaxException> {
+    fn names(&self, server: &Server, source: &CommandSourceStack, command_frame: &'static str) -> Result<Vec<NameAndId>, CommandSyntaxException> {
         match self {
             GameProfileResult::Selector(selector) => {
                 let players = selector.find_players(server, source)?;
@@ -41,7 +45,7 @@ impl GameProfileResult {
                 }
                 Ok(players.into_iter().map(|id| name_and_id(server, id)).collect())
             }
-            GameProfileResult::Name(name) => Ok(vec![name_to_id(server, name)?]),
+            GameProfileResult::Name(name) => Ok(vec![name_to_id(server, name, command_frame)?]),
         }
     }
 }
@@ -51,14 +55,16 @@ fn name_and_id(server: &Server, id: crate::world::entity::EntityId) -> NameAndId
     NameAndId { id: profile.uuid, name: profile.name.clone() }
 }
 
-fn name_to_id(server: &Server, name: &str) -> Result<NameAndId, CommandSyntaxException> {
-    server.name_to_id_cache.get(&server.services, name).ok_or_else(|| ERROR_UNKNOWN_PLAYER.create())
+fn name_to_id(server: &Server, name: &str, command_frame: &'static str) -> Result<NameAndId, CommandSyntaxException> {
+    let mut frames = vec![PARSE_RESULT, GET_GAME_PROFILES, command_frame];
+    frames.extend(command_frames(server.command_origin));
+    server.name_to_id_cache.get(&server.services, name, &frames).ok_or_else(|| ERROR_UNKNOWN_PLAYER.create())
 }
 
 impl CommandContext {
-    pub fn get_game_profiles(&self, server: &Server, source: &CommandSourceStack, name: &str) -> Result<Vec<NameAndId>, CommandSyntaxException> {
+    pub fn get_game_profiles(&self, server: &Server, source: &CommandSourceStack, name: &str, command_frame: &'static str) -> Result<Vec<NameAndId>, CommandSyntaxException> {
         match self.argument(name) {
-            ArgumentValue::GameProfile(result) => result.names(server, source),
+            ArgumentValue::GameProfile(result) => result.names(server, source, command_frame),
             other => panic!("{name} is {other:?}"),
         }
     }

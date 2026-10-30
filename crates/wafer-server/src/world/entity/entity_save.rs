@@ -227,8 +227,45 @@ const PLAYER_LOAD: [&str; 12] = [
     "java.base/java.lang.Thread.run(Thread.java:1474)",
 ];
 
+const ENTITY_TYPE_CREATE_TYPED: [&str; 5] = [
+    "net.minecraft.world.entity.EntityType.lambda$create$3(EntityType.java:306)",
+    "java.base/java.util.Optional.ifPresent(Optional.java:178)",
+    "net.minecraft.world.entity.EntityType.create(EntityType.java:306)",
+    "net.minecraft.world.entity.EntityType.loadStaticEntity(EntityType.java:406)",
+    "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:369)",
+];
+
+pub const LOAD_ENTITY_RECURSIVE_REASON: &str = "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:358)";
+pub const LOAD_ENTITY_RECURSIVE_TAG: &str = "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:347)";
+pub const LOAD_ENTITY_RECURSIVE_TYPED: &str = "net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:353)";
+
+const BLOCK_ENTITY_TICK: [&str; 4] = [
+    "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:773)",
+    "net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper.tick(LevelChunk.java:827)",
+    "net.minecraft.world.level.Level.tickBlockEntities(Level.java:475)",
+    "net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:461)",
+];
+
+pub fn block_entity_tick_site(caller_frames: &[&'static str]) -> Vec<&'static str> {
+    let mut site = caller_frames.to_vec();
+    site.extend(BLOCK_ENTITY_TICK);
+    site.push(crate::server::command_frames::TICK_CHILDREN_LEVELS);
+    site.extend(crate::server::main_thread_frames::current());
+    site
+}
+
+pub fn player_spawn_site(caller_frames: &[&'static str]) -> Vec<&'static str> {
+    let mut site = caller_frames.to_vec();
+    site.extend_from_slice(&PLAYER_LOAD[2..]);
+    site
+}
+
 pub fn loading_entity_exception(cause: JavaThrowable, passenger_depth: usize, site: &[&'static str]) -> JavaThrowable {
-    let mut shared = ENTITY_TYPE_CREATE.to_vec();
+    loading_entity_exception_with(cause, passenger_depth, site, false)
+}
+
+pub fn loading_entity_exception_with(cause: JavaThrowable, passenger_depth: usize, site: &[&'static str], typed: bool) -> JavaThrowable {
+    let mut shared = if typed { ENTITY_TYPE_CREATE_TYPED.to_vec() } else { ENTITY_TYPE_CREATE.to_vec() };
     for _ in 0..passenger_depth {
         shared.extend(ENTITY_TYPE_LOAD_PASSENGERS);
     }
@@ -895,13 +932,21 @@ impl ServerLevel {
     }
 
     pub fn load_entity_at(&mut self, nbt: &Nbt, passenger_depth: usize, site: &[&'static str]) -> Option<LevelEntity> {
+        self.load_entity_with(nbt, passenger_depth, &|| site.to_vec(), false)
+    }
+
+    pub fn load_entity_typed(&mut self, nbt: &Nbt, site: &dyn Fn() -> Vec<&'static str>) -> Option<LevelEntity> {
+        self.load_entity_with(nbt, 0, site, true)
+    }
+
+    fn load_entity_with(&mut self, nbt: &Nbt, passenger_depth: usize, site: &dyn Fn() -> Vec<&'static str>, typed: bool) -> Option<LevelEntity> {
         let entity_type = nbt.get("id").and_then(Nbt::as_str)?;
         let Some(mut entity) = ServerLevel::create_entity(entity_type) else {
             warn!("Skipping Entity with id {entity_type}");
             return None;
         };
         if let Err(cause) = entity.load_in_level(&self.with_old_owner_converted(&entity, nbt), &self.scoreboard) {
-            warn!("Exception loading entity: \n{}", loading_entity_exception(cause, passenger_depth, site).print_stack_trace().trim_end());
+            warn!("Exception loading entity: \n{}", loading_entity_exception_with(cause, passenger_depth, &site(), typed).print_stack_trace().trim_end());
             return None;
         }
         let entity = self.reassess_weapon_goal_detached(entity);
@@ -1061,6 +1106,36 @@ mod tests {
         let cow = Nbt::Compound(vec![("id".into(), Nbt::String("minecraft:cow".into())), ("Passengers".into(), Nbt::List(vec![arrow_tag(Nbt::Byte(3))]))]);
         let loaded = level.load_entity_recursive(&cow, &[], &mut |_| {});
         assert_eq!(loaded.len(), 1);
+    }
+
+    #[test]
+    fn typed_loads_use_the_typed_create_frames() {
+        let cause = JavaThrowable::new("java.lang.IllegalStateException: boom", vec!["Cause.frame(Cause.java:1)"]);
+        let trace = loading_entity_exception_with(cause, 0, &[LOAD_ENTITY_RECURSIVE_TYPED, "Site.frame(Site.java:2)"], true).print_stack_trace();
+        let expected = "net.minecraft.ReportedException: Loading entity NBT\n\
+            \tat net.minecraft.world.entity.Entity.load(Entity.java:2481)\n\
+            \tat net.minecraft.world.entity.EntityType.lambda$create$3(EntityType.java:306)\n\
+            \tat java.base/java.util.Optional.ifPresent(Optional.java:178)\n\
+            \tat net.minecraft.world.entity.EntityType.create(EntityType.java:306)\n\
+            \tat net.minecraft.world.entity.EntityType.loadStaticEntity(EntityType.java:406)\n\
+            \tat net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:369)\n\
+            \tat net.minecraft.world.entity.EntityType.loadEntityRecursive(EntityType.java:353)\n\
+            \tat Site.frame(Site.java:2)\n\
+            Caused by: java.lang.IllegalStateException: boom\n\
+            \tat Cause.frame(Cause.java:1)\n\
+            \t... 7 more\n";
+        assert_eq!(trace, expected);
+    }
+
+    #[test]
+    fn block_entity_and_player_sites_append_vanilla_callers() {
+        let site = block_entity_tick_site(&["Caller.frame(Caller.java:3)"]);
+        assert_eq!(site[0], "Caller.frame(Caller.java:3)");
+        assert_eq!(&site[1..5], &BLOCK_ENTITY_TICK);
+        assert_eq!(site[5], crate::server::command_frames::TICK_CHILDREN_LEVELS);
+        let site = player_spawn_site(&["Caller.frame(Caller.java:3)"]);
+        assert_eq!(site[0], "Caller.frame(Caller.java:3)");
+        assert_eq!(&site[1..], &PLAYER_LOAD[2..]);
     }
 
     #[test]

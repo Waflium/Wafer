@@ -3,10 +3,12 @@ use crate::commands::source::CommandSourceStack;
 use crate::network::chat::Component;
 use crate::server::Server;
 
+const OP: &str = "net.minecraft.server.commands.OpCommand.lambda$register$3(OpCommand.java:33)";
+
 static ERROR_ALREADY_OP: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.op.failed");
 
 pub fn op_players(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    let players = context.get_game_profiles(server, source, "targets")?;
+    let players = context.get_game_profiles(server, source, "targets", OP)?;
     let mut count = 0;
     for player in players {
         if !server.is_op(player.id) {

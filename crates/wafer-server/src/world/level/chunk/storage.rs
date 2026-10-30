@@ -209,8 +209,8 @@ impl RegionFile {
     pub fn read(&mut self, pos: ChunkPos) -> io::Result<Option<Nbt>> {
         let Some((version, data)) = self.chunk_stream_data(pos)? else { return Ok(None) };
         match version.decompress(&data).and_then(|bytes| decode_nbt(&bytes)) {
-            Ok(nbt) => Ok(Some(nbt)),
-            Err(_) => chunk_stream_failure(version, &data, chunk_stream::Mode::Read, storage_exception::READ_CHUNK_STREAM).and_then(|prefix| decode_nbt(&prefix).map(Some)),
+            Ok(nbt) if matches!(nbt, Nbt::Compound(_)) => Ok(Some(nbt)),
+            _ => chunk_stream_failure(version, &data, chunk_stream::Mode::Read, storage_exception::READ_CHUNK_STREAM).and_then(|prefix| decode_nbt(&prefix).map(Some)),
         }
     }
 

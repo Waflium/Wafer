@@ -9,6 +9,7 @@ use crate::server::level::events;
 use crate::util::problem_reporter::PathElement;
 use crate::util::random::WeightedList;
 use crate::world::difficulty::Difficulty;
+use crate::world::entity::entity_save::{LOAD_ENTITY_RECURSIVE_REASON, block_entity_tick_site};
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::entity_type::EntityType;
 use crate::world::item::component::codec::Codec;
@@ -16,6 +17,12 @@ use crate::world::entity::{LevelEntity, mob, spawn_placements};
 use crate::world::level::BlockGetter;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::level::storage::tag_value_input;
+
+const SERVER_TICK_SITE: [&str; 3] = [
+    LOAD_ENTITY_RECURSIVE_REASON,
+    "net.minecraft.world.level.BaseSpawner.serverTick(BaseSpawner.java:156)",
+    "net.minecraft.world.level.block.entity.SpawnerBlockEntity.serverTick(SpawnerBlockEntity.java:60)",
+];
 
 const BASE_SPAWNER_LOGGER: &str = "net.minecraft.world.level.BaseSpawner";
 pub const SPAWN_DATA_TAG: &str = "SpawnData";
@@ -164,7 +171,8 @@ impl BaseSpawner {
             } else if !spawn_placements::check_spawn_rules(entity_type, level, EntitySpawnReason::Spawner, spawn_block_pos) {
                 continue;
             }
-            let mut loaded = level.load_entity_recursive_for_spawn(entity_tag, &[], &mut |entity| {
+            let site = block_entity_tick_site(&SERVER_TICK_SITE);
+            let mut loaded = level.load_entity_recursive_for_spawn(entity_tag, &site, &mut |entity| {
                 let e = entity.entity_mut();
                 let (y_rot, x_rot) = (e.y_rot, e.x_rot);
                 e.snap_to(spawn_pos.x, spawn_pos.y, spawn_pos.z, y_rot, x_rot);

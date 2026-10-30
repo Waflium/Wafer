@@ -2,6 +2,7 @@ pub mod argb;
 pub mod basic_file_attributes;
 pub mod block_util;
 pub mod brightness;
+pub mod cached_thread_pool;
 pub mod codec;
 pub mod datafix;
 pub mod compilable_string;

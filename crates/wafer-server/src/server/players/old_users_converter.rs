@@ -38,57 +38,39 @@ pub struct UserLookup {
 
 #[derive(Debug)]
 pub struct ConversionError {
-    message: String,
-    cause: Option<String>,
+    throwable: JavaThrowable,
 }
 
 impl ConversionError {
     pub fn new(message: impl Into<String>) -> ConversionError {
-        ConversionError { message: message.into(), cause: None }
+        ConversionError { throwable: JavaThrowable::new(format!("net.minecraft.server.players.OldUsersConverter$ConversionError: {}", message.into()), Vec::new()) }
     }
 
-    fn with_cause(message: impl Into<String>, cause: &LookupException) -> ConversionError {
-        ConversionError { message: message.into(), cause: Some(cause.to_string()) }
+    fn with_cause(message: impl Into<String>, cause: &JavaThrowable, callback_frame: &'static str, lookup_frames: &[&'static str]) -> ConversionError {
+        let frames = [callback_frame].into_iter().chain(lookup_frames.iter().copied()).collect();
+        let throwable = JavaThrowable::new(format!("net.minecraft.server.players.OldUsersConverter$ConversionError: {}", message.into()), frames).with_cause(cause.clone());
+        ConversionError { throwable }
+    }
+
+    fn print_stack_trace(&self) -> String {
+        self.throwable.print_stack_trace().trim_end().to_string()
     }
 }
 
 impl fmt::Display for ConversionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "net.minecraft.server.players.OldUsersConverter$ConversionError: {}", self.message)?;
-        match &self.cause {
-            Some(cause) => write!(f, "\nCaused by: {cause}"),
-            None => Ok(()),
-        }
+        f.write_str(&self.print_stack_trace())
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum LookupException {
-    ProfileNotFound(String),
-    AuthenticationUnavailable,
-    Authentication(String),
-}
-
-impl LookupException {
-    pub fn is_profile_not_found(&self) -> bool {
-        matches!(self, LookupException::ProfileNotFound(_))
-    }
-}
-
-impl fmt::Display for LookupException {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LookupException::ProfileNotFound(message) => write!(f, "com.mojang.authlib.services.ProfileNotFoundException: {message}"),
-            LookupException::AuthenticationUnavailable => f.write_str("com.mojang.authlib.exceptions.AuthenticationUnavailableException"),
-            LookupException::Authentication(cause) => write!(f, "com.mojang.authlib.exceptions.AuthenticationException: {cause}"),
-        }
-    }
+fn is_profile_not_found(exception: &JavaThrowable) -> bool {
+    exception.class_name() == "com.mojang.authlib.services.ProfileNotFoundException"
 }
 
 pub trait ProfileLookupCallback {
     fn on_profile_lookup_succeeded(&mut self, profile_name: &str, profile_id: u128) -> Result<(), ConversionError>;
 
-    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &LookupException) -> Result<(), ConversionError>;
+    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &JavaThrowable, lookup_frames: &[&'static str]) -> Result<(), ConversionError>;
 }
 
 pub struct OldUsersConverter<'a> {
@@ -174,6 +156,16 @@ const CONVERT_IP_BANLIST_123: &str = "net.minecraft.server.players.OldUsersConve
 const CONVERT_IP_BANLIST_130: &str = "net.minecraft.server.players.OldUsersConverter.convertIpBanlist(OldUsersConverter.java:130)";
 const CONVERT_OPS_LIST_156: &str = "net.minecraft.server.players.OldUsersConverter.convertOpsList(OldUsersConverter.java:156)";
 const CONVERT_WHITE_LIST_199: &str = "net.minecraft.server.players.OldUsersConverter.convertWhiteList(OldUsersConverter.java:199)";
+const LOOKUP_PLAYERS: &str = "net.minecraft.server.players.OldUsersConverter.lookupPlayers(OldUsersConverter.java:55)";
+const CONVERT_USER_BANLIST_103: &str = "net.minecraft.server.players.OldUsersConverter.convertUserBanlist(OldUsersConverter.java:103)";
+const CONVERT_OPS_LIST_179: &str = "net.minecraft.server.players.OldUsersConverter.convertOpsList(OldUsersConverter.java:179)";
+const CONVERT_WHITE_LIST_222: &str = "net.minecraft.server.players.OldUsersConverter.convertWhiteList(OldUsersConverter.java:222)";
+const CONVERT_PLAYERS_LOOKUP: &str = "net.minecraft.server.players.OldUsersConverter.convertPlayers(OldUsersConverter.java:349)";
+const CONVERT_OLD_USERS_PLAYERS: &str = "net.minecraft.server.dedicated.DedicatedServer.convertOldUsers(DedicatedServer.java:666)";
+const USER_BAN_CALLBACK_FAILED: &str = "net.minecraft.server.players.OldUsersConverter$1.onProfileLookupFailed(OldUsersConverter.java:99)";
+const OP_LIST_CALLBACK_FAILED: &str = "net.minecraft.server.players.OldUsersConverter$2.onProfileLookupFailed(OldUsersConverter.java:175)";
+const WHITE_LIST_CALLBACK_FAILED: &str = "net.minecraft.server.players.OldUsersConverter$3.onProfileLookupFailed(OldUsersConverter.java:218)";
+const PLAYER_FILES_CALLBACK_FAILED: &str = "net.minecraft.server.players.OldUsersConverter$5.onProfileLookupFailed(OldUsersConverter.java:322)";
 const CONVERT_OLD_USERS_622: &str = "net.minecraft.server.dedicated.DedicatedServer.convertOldUsers(DedicatedServer.java:622)";
 const CONVERT_OLD_USERS_633: &str = "net.minecraft.server.dedicated.DedicatedServer.convertOldUsers(DedicatedServer.java:633)";
 const CONVERT_OLD_USERS_644: &str = "net.minecraft.server.dedicated.DedicatedServer.convertOldUsers(DedicatedServer.java:644)";
@@ -188,8 +180,7 @@ fn is_file(path: &Path) -> bool {
 }
 
 fn parse_date(date_string: &str) -> Option<DateTime<FixedOffset>> {
-    let millis = crate::util::java_simple_date_format::parse(date_string)?;
-    DateTime::from_timestamp_millis(millis).map(|date| date.fixed_offset())
+    crate::util::java_simple_date_format::parse_ban_list_date_time(date_string)
 }
 
 fn user_def_ban(user_def: &[String]) -> Ban {
@@ -214,7 +205,7 @@ fn load_existing<E: super::StoredUserEntry>(list: &mut StoredUserList<E>, file: 
     if file.exists() {
         match list.load(tail) {
             Ok(()) => {}
-            Err(LoadError::Io(e)) => warn!("Could not load existing file {}\n{}", file_name(file), java_load_exception(&e, file)),
+            Err(LoadError::Io(throwable)) => warn!("Could not load existing file {}\n{}", file_name(file), throwable.print_stack_trace().trim_end()),
             Err(LoadError::Unchecked(throwable)) => return Err(throwable),
         }
     }
@@ -230,10 +221,11 @@ impl OldUsersConverter<'_> {
         if self.server_directory == Path::new(".") { PathBuf::from(name) } else { self.server_directory.join(name) }
     }
 
-    fn lookup_players<'n>(&self, names: impl IntoIterator<Item = &'n str>, callback: &mut dyn ProfileLookupCallback) -> Result<(), ConversionError> {
+    fn lookup_players<'n>(&self, names: impl IntoIterator<Item = &'n str>, tail: &[&'static str], callback: &mut dyn ProfileLookupCallback) -> Result<(), ConversionError> {
         let filtered_names: Vec<&str> = names.into_iter().filter(|name| !name.is_empty()).collect();
         if self.uses_authentication {
-            self.services.find_profiles_by_names(&filtered_names, callback)
+            let callers: Vec<&'static str> = [LOOKUP_PLAYERS].into_iter().chain(tail.iter().copied()).collect();
+            self.services.find_profiles_by_names(&filtered_names, &callers, callback)
         } else {
             for name in filtered_names {
                 callback.on_profile_lookup_succeeded(name, offline_uuid(name))?;
@@ -262,7 +254,7 @@ impl OldUsersConverter<'_> {
         let result = {
             let mut callback = UserBanCallback { converter: self, bans: &mut bans, user_map: &user_map };
             let names: Vec<&str> = user_map.iter().map(|(name, _)| name).collect();
-            self.lookup_players(names, &mut callback)
+            self.lookup_players(names, &server_tail(CONVERT_USER_BANLIST_103, CONVERT_OLD_USERS_622), &mut callback)
         };
         if let Err(e) = result {
             error!("Conversion failed, please try again later\n{e}");
@@ -321,7 +313,7 @@ impl OldUsersConverter<'_> {
         };
         let result = {
             let mut callback = OpListCallback { converter: self, ops_list: &mut ops_list };
-            self.lookup_players(lines.iter().map(String::as_str), &mut callback)
+            self.lookup_players(lines.iter().map(String::as_str), &server_tail(CONVERT_OPS_LIST_179, CONVERT_OLD_USERS_644), &mut callback)
         };
         if let Err(e) = result {
             error!("Conversion failed, please try again later\n{e}");
@@ -352,7 +344,7 @@ impl OldUsersConverter<'_> {
         };
         let result = {
             let mut callback = WhiteListCallback { converter: self, whitelist: &mut whitelist };
-            self.lookup_players(lines.iter().map(String::as_str), &mut callback)
+            self.lookup_players(lines.iter().map(String::as_str), &server_tail(CONVERT_WHITE_LIST_222, CONVERT_OLD_USERS_655), &mut callback)
         };
         if let Err(e) = result {
             error!("Conversion failed, please try again later\n{e}");
@@ -391,7 +383,7 @@ impl OldUsersConverter<'_> {
             unknown_player_directory: &unknown_player_directory,
             names: &player_names,
         };
-        if let Err(e) = self.lookup_players(player_names.iter().map(String::as_str), &mut callback) {
+        if let Err(e) = self.lookup_players(player_names.iter().map(String::as_str), &server_tail(CONVERT_PLAYERS_LOOKUP, CONVERT_OLD_USERS_PLAYERS), &mut callback) {
             error!("Conversion failed, please try again later\n{e}");
             return Ok(false);
         }
@@ -504,10 +496,10 @@ impl ProfileLookupCallback for UserBanCallback<'_, '_> {
         Ok(())
     }
 
-    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &LookupException) -> Result<(), ConversionError> {
-        warn!("Could not lookup user banlist entry for {profile_name}\n{exception}");
-        if !exception.is_profile_not_found() {
-            return Err(ConversionError::with_cause(format!("Could not request user {profile_name} from backend systems"), exception));
+    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &JavaThrowable, lookup_frames: &[&'static str]) -> Result<(), ConversionError> {
+        warn!("Could not lookup user banlist entry for {profile_name}\n{}", exception.print_stack_trace().trim_end());
+        if !is_profile_not_found(exception) {
+            return Err(ConversionError::with_cause(format!("Could not request user {profile_name} from backend systems"), exception, USER_BAN_CALLBACK_FAILED, lookup_frames));
         }
         Ok(())
     }
@@ -526,10 +518,10 @@ impl ProfileLookupCallback for OpListCallback<'_, '_> {
         Ok(())
     }
 
-    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &LookupException) -> Result<(), ConversionError> {
-        warn!("Could not lookup oplist entry for {profile_name}\n{exception}");
-        if !exception.is_profile_not_found() {
-            return Err(ConversionError::with_cause(format!("Could not request user {profile_name} from backend systems"), exception));
+    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &JavaThrowable, lookup_frames: &[&'static str]) -> Result<(), ConversionError> {
+        warn!("Could not lookup oplist entry for {profile_name}\n{}", exception.print_stack_trace().trim_end());
+        if !is_profile_not_found(exception) {
+            return Err(ConversionError::with_cause(format!("Could not request user {profile_name} from backend systems"), exception, OP_LIST_CALLBACK_FAILED, lookup_frames));
         }
         Ok(())
     }
@@ -548,10 +540,10 @@ impl ProfileLookupCallback for WhiteListCallback<'_, '_> {
         Ok(())
     }
 
-    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &LookupException) -> Result<(), ConversionError> {
-        warn!("Could not lookup user whitelist entry for {profile_name}\n{exception}");
-        if !exception.is_profile_not_found() {
-            return Err(ConversionError::with_cause(format!("Could not request user {profile_name} from backend systems"), exception));
+    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &JavaThrowable, lookup_frames: &[&'static str]) -> Result<(), ConversionError> {
+        warn!("Could not lookup user whitelist entry for {profile_name}\n{}", exception.print_stack_trace().trim_end());
+        if !is_profile_not_found(exception) {
+            return Err(ConversionError::with_cause(format!("Could not request user {profile_name} from backend systems"), exception, WHITE_LIST_CALLBACK_FAILED, lookup_frames));
         }
         Ok(())
     }
@@ -593,13 +585,13 @@ impl ProfileLookupCallback for PlayerFilesCallback<'_, '_> {
         self.move_player_file(self.world_new_player_directory, file_name, &format_uuid(profile_id))
     }
 
-    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &LookupException) -> Result<(), ConversionError> {
-        warn!("Could not lookup user uuid for {profile_name}\n{exception}");
-        if exception.is_profile_not_found() {
+    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &JavaThrowable, lookup_frames: &[&'static str]) -> Result<(), ConversionError> {
+        warn!("Could not lookup user uuid for {profile_name}\n{}", exception.print_stack_trace().trim_end());
+        if is_profile_not_found(exception) {
             let file_name_for_profile = self.get_file_name_for_profile(profile_name)?;
             self.move_player_file(self.unknown_player_directory, file_name_for_profile, file_name_for_profile)
         } else {
-            Err(ConversionError::with_cause(format!("Could not request user {profile_name} from backend systems"), exception))
+            Err(ConversionError::with_cause(format!("Could not request user {profile_name} from backend systems"), exception, PLAYER_FILES_CALLBACK_FAILED, lookup_frames))
         }
     }
 }
@@ -618,11 +610,11 @@ fn ensure_directory_exists(directory: &Path) -> Result<(), ConversionError> {
 
 pub fn convert_mob_owner_if_necessary(lookup: &UserLookup, owner: &str) -> Option<u128> {
     if !owner.is_empty() && owner.java_utf16().count() <= 16 {
-        if let Some(profile) = lookup.name_to_id_cache.get(&lookup.services, owner) {
+        if let Some(profile) = lookup.name_to_id_cache.get(&lookup.services, owner, &[]) {
             Some(profile.id)
         } else if lookup.uses_authentication {
             let mut callback = MobOwnerCallback { name_to_id_cache: &lookup.name_to_id_cache, profiles: Vec::new() };
-            let _ = lookup.services.find_profiles_by_names(&[owner], &mut callback);
+            let _ = lookup.services.find_profiles_by_names(&[owner], &[], &mut callback);
             callback.profiles.first().map(|profile| profile.id)
         } else {
             Some(offline_uuid(owner))
@@ -645,8 +637,8 @@ impl ProfileLookupCallback for MobOwnerCallback<'_> {
         Ok(())
     }
 
-    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &LookupException) -> Result<(), ConversionError> {
-        warn!("Could not lookup user whitelist entry for {profile_name}\n{exception}");
+    fn on_profile_lookup_failed(&mut self, profile_name: &str, exception: &JavaThrowable, _lookup_frames: &[&'static str]) -> Result<(), ConversionError> {
+        warn!("Could not lookup user whitelist entry for {profile_name}\n{}", exception.print_stack_trace().trim_end());
         Ok(())
     }
 }

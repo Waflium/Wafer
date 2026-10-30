@@ -29,7 +29,7 @@ pub fn log(client: ClientInfo, message: fmt::Arguments) {
 pub fn get_user(server: &Server, id: Option<u128>, name: Option<&str>) -> Option<NameAndId> {
     match (id, name) {
         (Some(id), _) => server.name_to_id_cache.get_by_id(id).or_else(|| server.services.fetch_profile(id)),
-        (None, Some(name)) => server.name_to_id_cache.get(&server.services, name),
+        (None, Some(name)) => server.name_to_id_cache.get(&server.services, name, &[]),
         (None, None) => None,
     }
 }

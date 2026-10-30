@@ -8,6 +8,10 @@ use crate::server::players::{Ban, IpBanEntry, UserBanEntry};
 use crate::world::entity::EntityId;
 use crate::world::level::storage::format_uuid;
 
+const BAN: &str = "net.minecraft.server.commands.BanPlayerCommands.lambda$register$0(BanPlayerCommands.java:33)";
+const BAN_WITH_REASON: &str = "net.minecraft.server.commands.BanPlayerCommands.lambda$register$1(BanPlayerCommands.java:36)";
+const PARDON: &str = "net.minecraft.server.commands.PardonCommand.lambda$register$1(PardonCommand.java:30)";
+
 static ERROR_ALREADY_BANNED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.ban.failed");
 static ERROR_NOT_BANNED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.pardon.failed");
 static ERROR_INVALID_IP: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.banip.invalid");
@@ -27,7 +31,8 @@ fn is_inet_address(text: &str) -> bool {
 }
 
 pub fn ban_players(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    let players = context.get_game_profiles(server, source, "targets")?;
+    let command_frame = if context.has_argument("reason") { BAN_WITH_REASON } else { BAN };
+    let players = context.get_game_profiles(server, source, "targets", command_frame)?;
     let reason = reason(server, context, source)?;
     let mut count = 0;
     for player in players {
@@ -56,7 +61,7 @@ pub fn ban_players(server: &mut Server, context: &CommandContext, source: &Comma
 }
 
 pub fn pardon_players(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    let players = context.get_game_profiles(server, source, "targets")?;
+    let players = context.get_game_profiles(server, source, "targets", PARDON)?;
     let mut count = 0;
     for player in players {
         if server.bans.contains_key(&format_uuid(player.id)) {

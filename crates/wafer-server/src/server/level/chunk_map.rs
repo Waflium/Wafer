@@ -360,9 +360,10 @@ impl ServerLevel {
     pub fn poll_chunk_task(&mut self) -> bool {
         let worked = {
             let _poll = crate::server::main_thread_frames::server_chunk_poll();
-            self.chunks.poll_task()
+            let worked = self.chunks.poll_task();
+            self.process_chunk_events();
+            worked
         };
-        self.process_chunk_events();
         let deserialized = self.run_entity_deserializer_queue_as_task();
         worked || deserialized
     }

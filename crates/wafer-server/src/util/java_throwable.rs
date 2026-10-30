@@ -83,6 +83,13 @@ impl JavaThrowable {
             || (class_name.starts_with("java.nio.file.") && class_name.ends_with("Exception"))
     }
 
+    pub fn is_nbt_exception(&self) -> bool {
+        matches!(
+            self.class_name(),
+            "net.minecraft.nbt.NbtException" | "net.minecraft.nbt.NbtFormatException" | "net.minecraft.nbt.NbtAccounterException" | "net.minecraft.nbt.ReportedNbtException"
+        )
+    }
+
     pub fn class_name(&self) -> &str {
         self.description.split_once(": ").map_or(self.description.as_str(), |(class_name, _)| class_name)
     }
