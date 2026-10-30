@@ -1,6 +1,8 @@
 use wafer_core::{BlockPos, Vec3};
 use wafer_data::packets::play::clientbound;
-use wafer_protocol::Writer;
+use crate::util::java_collections::identity_hash_code;
+use wafer_protocol::fault::{Fault, Frame};
+use wafer_protocol::{Writer, stream_codec};
 
 use crate::network::connection::{Outbound, Packet};
 use crate::server::level::game_mode::GameType;
@@ -48,8 +50,17 @@ struct RespawnTransition {
 impl Server {
     pub fn create_common_spawn_info(&self, p: &mut Writer, level_index: usize, player: &ServerPlayer) {
         let level = &self.levels[level_index];
-        if level.dimension_type_id < 0 {
-            p.fail(format!("java.lang.IllegalArgumentException: Can't find id for 'Direct{{DimensionType[{}]}}' in map net.minecraft.core.Registry$1\n\t... 24 more", level.dimension));
+        if let Some(direct_dimension_type) = &level.direct_dimension_type {
+            p.layer(&[stream_codec::composite(10, 1)], |p| {
+                p.fail_with(Fault::new(
+                    format!("java.lang.IllegalArgumentException: Can't find id for '{direct_dimension_type}' in map net.minecraft.core.Registry$1@{:x}", identity_hash_code()),
+                    &[
+                        Frame::Fixed("net.minecraft.core.IdMap.getIdOrThrow(IdMap.java:24)"),
+                        Frame::Fixed("net.minecraft.network.codec.ByteBufCodecs$32.encode(ByteBufCodecs.java:674)"),
+                        Frame::Fixed("net.minecraft.network.codec.ByteBufCodecs$32.encode(ByteBufCodecs.java:661)"),
+                    ],
+                ));
+            });
         }
         p.varint(crate::core::data_registries::network_id("minecraft:dimension_type", level.dimension_type_id));
         p.string(level.dimension);
@@ -261,7 +272,7 @@ impl Server {
             });
         }
         out.send(clientbound::RESPAWN, |p| {
-            self.create_common_spawn_info(p, level_index, &player);
+            p.layer(&[stream_codec::composite(2, 1)], |p| self.create_common_spawn_info(p, level_index, &player));
             p.u8(keep_all_player_data as u8);
         });
         let (pos, y_rot, x_rot) = (player.entity.position(), player.entity.y_rot, player.entity.x_rot);

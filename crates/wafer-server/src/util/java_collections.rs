@@ -818,6 +818,17 @@ pub fn identity_hash_code() -> i32 {
     })
 }
 
+pub fn identity_hash_code_of(object: &str) -> i32 {
+    static HASHES: std::sync::Mutex<Vec<(String, i32)>> = std::sync::Mutex::new(Vec::new());
+    let mut hashes = HASHES.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((_, hash)) = hashes.iter().find(|(name, _)| name == object) {
+        return *hash;
+    }
+    let hash = identity_hash_code();
+    hashes.push((object.to_string(), hash));
+    hash
+}
+
 pub fn identifier_hash(id: &str) -> i32 {
     let (namespace, path) = id.split_once(':').unwrap_or(("minecraft", id));
     java_string_hash(namespace).wrapping_mul(31).wrapping_add(java_string_hash(path))

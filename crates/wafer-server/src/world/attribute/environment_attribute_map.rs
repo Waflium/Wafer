@@ -154,17 +154,21 @@ impl Entry {
     }
 
     fn parse(attribute: &EnvironmentAttributeInfo, json: &Json) -> Result<Entry, String> {
+        Entry::parse_with_form(attribute, json).map(|(entry, _)| entry)
+    }
+
+    pub(crate) fn parse_with_form(attribute: &EnvironmentAttributeInfo, json: &Json) -> Result<(Entry, bool), String> {
         let value_error = match attribute.parse_value(json) {
-            Ok(argument) => return Ok(Entry { argument, modifier: AttributeModifier::Override }),
+            Ok(argument) => return Ok((Entry { argument, modifier: AttributeModifier::Override }, false)),
             Err(e) => e,
         };
-        let full = || -> Result<Entry, String> {
+        let full = || -> Result<(Entry, bool), String> {
             let operation = json.get("modifier").and_then(Json::as_str).ok_or("missing modifier")?;
             let modifier = OperationId::by_name(operation)
                 .and_then(|op| attribute.ty.modifier(op))
                 .ok_or_else(|| format!("unknown modifier {operation} for {}", attribute.name))?;
             let argument = modifier.parse_argument(attribute, json.get("argument").ok_or("missing argument")?)?;
-            Ok(Entry { argument, modifier })
+            Ok((Entry { argument, modifier }, true))
         };
         full().map_err(|e| format!("{}: {value_error}; {e}", attribute.name))
     }

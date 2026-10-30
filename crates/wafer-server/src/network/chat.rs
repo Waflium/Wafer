@@ -354,6 +354,7 @@ impl Contents {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Arg {
     Component(Component),
+    Boolean(bool),
     Byte(i8),
     Short(i16),
     Int(i32),
@@ -409,6 +410,7 @@ impl Arg {
     fn plain(&self) -> String {
         match self {
             Arg::Component(c) => c.get_string(),
+            Arg::Boolean(v) => v.to_string(),
             Arg::Byte(v) => v.to_string(),
             Arg::Short(v) => v.to_string(),
             Arg::Int(v) => v.to_string(),
@@ -422,6 +424,7 @@ impl Arg {
     fn to_nbt(&self) -> Nbt {
         match self {
             Arg::Component(c) => c.to_nbt(),
+            Arg::Boolean(v) => Nbt::Byte(*v as i8),
             Arg::Byte(v) => Nbt::Byte(*v),
             Arg::Short(v) => Nbt::Short(*v),
             Arg::Int(v) => Nbt::Int(*v),

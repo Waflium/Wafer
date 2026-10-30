@@ -221,6 +221,27 @@ pub fn float(v: &Value) -> Result<f32, String> {
 }
 
 impl IntProvider {
+    pub fn java_to_string(&self) -> String {
+        let range = |min: &i32, max: &i32| format!("[{min}-{max}]");
+        match self {
+            IntProvider::Constant(value) => value.to_string(),
+            IntProvider::Uniform { min_inclusive, max_inclusive }
+            | IntProvider::BiasedToBottom { min_inclusive, max_inclusive }
+            | IntProvider::VeryBiasedToBottom { min_inclusive, max_inclusive } => range(min_inclusive, max_inclusive),
+            IntProvider::Clamped { source, min_inclusive, max_inclusive } => {
+                format!("ClampedInt[source={}, minInclusive={min_inclusive}, maxInclusive={max_inclusive}]", source.java_to_string())
+            }
+            IntProvider::WeightedList { .. } => format!("net.minecraft.util.valueproviders.WeightedListInt@{:x}", crate::util::java_collections::identity_hash_code()),
+            IntProvider::ClampedNormal { mean, deviation, min_inclusive, max_inclusive } => format!(
+                "normal({}, {}) in {}",
+                crate::nbt::java_float_to_string(*mean),
+                crate::nbt::java_float_to_string(*deviation),
+                range(min_inclusive, max_inclusive)
+            ),
+            IntProvider::Trapezoid { min_inclusive, max_inclusive, plateau } => format!("trapezoid({plateau}) in {}", range(min_inclusive, max_inclusive)),
+        }
+    }
+
     pub fn parse(json: &Value) -> Result<IntProvider, String> {
         if let Some(value) = json_int(json) {
             return Ok(IntProvider::Constant(value));

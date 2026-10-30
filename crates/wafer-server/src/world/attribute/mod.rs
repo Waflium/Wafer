@@ -2,6 +2,7 @@ pub mod ambient_additions_settings;
 pub mod ambient_mood_settings;
 pub mod ambient_particle;
 pub mod ambient_sounds;
+pub mod attribute_string;
 pub mod attribute_range;
 pub mod attribute_type;
 pub mod background_music;

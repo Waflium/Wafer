@@ -146,12 +146,14 @@ fn create_level(
     chunk_io_error_reporter: &ChunkIoErrorReporter,
 ) -> ServerLevel {
     let generator = level_stem.generator.create(seed);
-    let (dimension_type_id, dimension_type) = match &level_stem.dimension_type {
+    let (dimension_type_id, dimension_type, direct_dimension_type) = match &level_stem.dimension_type {
         DimensionTypeHolder::Reference(dimension_type) => {
             let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension_type).expect("a dimension type");
-            (dimension_type_id, &wafer_data::dimension_types()[dimension_type_id as usize])
+            (dimension_type_id, &wafer_data::dimension_types()[dimension_type_id as usize], None)
         }
-        DimensionTypeHolder::Direct(tag) => (-1, crate::core::data_registries::inline_dimension_type(dimension, tag)),
+        DimensionTypeHolder::Direct { decoded, source } => {
+            (-1, crate::core::data_registries::inline_dimension_type(dimension, decoded), Some(crate::world::level::dimension::dimension_type_string::direct_holder_to_string(source)))
+        }
     };
     let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes));
     let generator_identifier = generator.get_type_name_for_data_fixer();
@@ -165,6 +167,7 @@ fn create_level(
     }
     let entity_storage = world_dir.map(|d| RegionStorage::new(d.entities(dimension), config.sync_chunk_writes));
     let mut level = ServerLevel::new(dimension, dimension_type_id, chunks, entity_storage, config.view_distance, config.simulation_distance);
+    level.direct_dimension_type = direct_dimension_type;
     if let Some(dir) = world_dir {
         level.chunks.set_error_reporting(chunk_io_error_reporter.clone(), &config.level_name, dimension);
         level.entity_manager.set_reporting(IoReporting { reporter: chunk_io_error_reporter.clone(), info: RegionStorageInfo::new(&config.level_name, dimension, "entities") });
@@ -1384,7 +1387,7 @@ impl Server {
             p.bool(false);
             p.bool(true);
             p.bool(false);
-            self.create_common_spawn_info(p, level_index, &player);
+            p.layer(&[wafer_protocol::stream_codec::composite(12, 10)], |p| self.create_common_spawn_info(p, level_index, &player));
             p.bool(config.online_mode);
             p.bool(self.enforce_secure_profile());
         });

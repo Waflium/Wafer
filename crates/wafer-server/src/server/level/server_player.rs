@@ -1519,7 +1519,7 @@ impl crate::server::Server {
         }
         self.player_mut(id).is_changing_dimension = true;
         out.send(clientbound::RESPAWN, |w| {
-            self.create_common_spawn_info(w, new_level, self.player(id));
+            w.layer(&[wafer_protocol::stream_codec::composite(2, 1)], |w| self.create_common_spawn_info(w, new_level, self.player(id)));
             w.u8(3);
         });
         out.send(clientbound::CHANGE_DIFFICULTY, |w| {

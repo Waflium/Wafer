@@ -451,8 +451,17 @@ fn compile_nbt_path(path: &str) -> std::result::Result<CompilableString<NbtPath>
 }
 
 fn decode_arg(tag: &Nbt) -> DataResult<Arg> {
+    if let Nbt::LazilyParsedNumber(text) = tag {
+        return match crate::datafixers::json_ops::convert_element_to_nbt(&crate::util::gson::JsonElement::Number(text.clone())) {
+            Ok(Some(Nbt::Byte(number))) => DataResult::success(Arg::Byte(number)),
+            Ok(Some(number)) => decode_arg(&number),
+            Ok(None) => DataResult::error("Unsupported null value"),
+            Err(error) => DataResult::error(error),
+        };
+    }
     let primitive = match tag {
         Nbt::String(s) => Arg::String(s.clone()),
+        Nbt::Byte(v) if crate::nbt::is_json_source() => Arg::Boolean(*v != 0),
         Nbt::Byte(v) => Arg::Byte(*v),
         Nbt::Short(v) => Arg::Short(*v),
         Nbt::Int(v) => Arg::Int(*v),

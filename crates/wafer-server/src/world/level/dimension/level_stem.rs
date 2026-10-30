@@ -12,7 +12,7 @@ pub const END: &str = "minecraft:the_end";
 #[derive(Clone)]
 pub enum DimensionTypeHolder {
     Reference(String),
-    Direct(Nbt),
+    Direct { decoded: Nbt, source: Nbt },
 }
 
 impl DimensionTypeHolder {
@@ -23,7 +23,7 @@ impl DimensionTypeHolder {
     fn encode(&self) -> Nbt {
         match self {
             DimensionTypeHolder::Reference(key) => Nbt::String(key.clone()),
-            DimensionTypeHolder::Direct(tag) => tag.clone(),
+            DimensionTypeHolder::Direct { decoded, .. } => decoded.clone(),
         }
     }
 }
@@ -51,7 +51,7 @@ impl LevelStem {
         record.build(|| {
             let dimension_type = match dimension_type? {
                 Nbt::String(key) => DimensionTypeHolder::Reference(key),
-                direct => DimensionTypeHolder::Direct(direct),
+                direct => DimensionTypeHolder::Direct { decoded: direct, source: tag.get("type")?.clone() },
             };
             Some(LevelStem { dimension_type, generator: generator? })
         })
