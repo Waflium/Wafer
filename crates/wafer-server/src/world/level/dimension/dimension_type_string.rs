@@ -10,8 +10,9 @@ use crate::world::attribute::environment_attribute_map::Entry;
 use crate::world::item::component::codec::{as_f64, as_i32, registry};
 use crate::world::level::levelgen::density_function::resource_name;
 
-pub fn direct_holder_to_string(tag: &Nbt) -> String {
-    format!("Direct{{{}}}", crate::nbt::with_json_source(|| dimension_type_to_string(tag)))
+pub fn direct_holder_to_string(tag: &Nbt, json_source: bool) -> String {
+    let description = if json_source { crate::nbt::with_json_source(|| dimension_type_to_string(tag)) } else { dimension_type_to_string(tag) };
+    format!("Direct{{{description}}}")
 }
 
 fn dimension_type_to_string(tag: &Nbt) -> String {

@@ -151,9 +151,11 @@ fn create_level(
             let dimension_type_id = SyncedRegistry::get("minecraft:dimension_type").id_of(dimension_type).expect("a dimension type");
             (dimension_type_id, &wafer_data::dimension_types()[dimension_type_id as usize], None)
         }
-        DimensionTypeHolder::Direct { decoded, source } => {
-            (-1, crate::core::data_registries::inline_dimension_type(dimension, decoded), Some(crate::world::level::dimension::dimension_type_string::direct_holder_to_string(source)))
-        }
+        DimensionTypeHolder::Direct { decoded, source, json_source } => (
+            -1,
+            crate::core::data_registries::inline_dimension_type(dimension, decoded),
+            Some(crate::world::level::dimension::dimension_type_string::direct_holder_to_string(source, *json_source)),
+        ),
     };
     let storage = world_dir.map(|d| RegionStorage::new(d.regions(dimension), config.sync_chunk_writes));
     let generator_identifier = generator.get_type_name_for_data_fixer();

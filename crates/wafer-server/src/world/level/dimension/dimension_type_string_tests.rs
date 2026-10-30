@@ -58,13 +58,27 @@ fn describe(extra: &str) -> String {
         Ok(_) => source,
         Err(error) => return format!("DECODE_ERROR {error}"),
     };
-    without_identity_hashes(&direct_holder_to_string(&tag))
+    without_identity_hashes(&direct_holder_to_string(&tag, true))
+}
+
+fn describe_nbt(extra: &str) -> String {
+    let text = serde_json::to_string(&dimension_type_json(extra)).unwrap();
+    let element = crate::util::gson::parse_strict(&text).unwrap();
+    let tag = crate::datafixers::json_ops::convert_element_to_nbt(&element).unwrap().unwrap();
+    without_identity_hashes(&direct_holder_to_string(&tag, false))
 }
 
 #[test]
 fn direct_dimension_types_print_like_java_records() {
-    let cases = include_str!("dimension_type_string_cases.txt");
-    let expected = include_str!("dimension_type_string_expected.txt");
+    assert_matches_java(include_str!("dimension_type_string_cases.txt"), include_str!("dimension_type_string_expected.txt"), describe);
+}
+
+#[test]
+fn direct_dimension_types_from_nbt_print_in_hash_map_order() {
+    assert_matches_java(include_str!("dimension_type_string_cases.txt"), include_str!("dimension_type_string_expected_nbt.txt"), describe_nbt);
+}
+
+fn assert_matches_java(cases: &str, expected: &str, describe: fn(&str) -> String) {
     let mut count = 0;
     let mut mismatches = Vec::new();
     for (case, expected) in cases.lines().zip(expected.lines()) {

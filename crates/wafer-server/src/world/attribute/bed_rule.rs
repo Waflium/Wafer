@@ -53,7 +53,7 @@ impl BedRule {
     }
 
     pub fn parse(json: &Value) -> Result<BedRule, String> {
-        let flag = |key: &str| json.get(key).map_or(Ok(false), |v| v.as_bool().ok_or_else(|| format!("{key} must be a boolean")));
+        let flag = |key: &str| json.get(key).map_or(Ok(false), |v| super::parse_bool(v).map_err(|_| format!("{key} must be a boolean")));
         Ok(BedRule {
             can_sleep: Rule::parse(json.get("can_sleep").ok_or("missing can_sleep")?)?,
             can_set_spawn: Rule::parse(json.get("can_set_spawn").ok_or("missing can_set_spawn")?)?,

@@ -23,6 +23,7 @@ impl TriState {
     pub fn parse(json: &Value) -> Result<TriState, String> {
         match json {
             Value::Bool(b) => Ok(TriState::from(*b)),
+            Value::Number(n) => Ok(TriState::from(n.as_f64().is_some_and(|v| v as i64 as i8 != 0))),
             Value::String(s) => match s.as_str() {
                 "true" => Ok(TriState::True),
                 "false" => Ok(TriState::False),
