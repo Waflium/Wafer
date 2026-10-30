@@ -2151,6 +2151,21 @@ impl ServerLevel {
         while living.y_body_rot - living.y_body_rot_o >= 180.0 {
             living.y_body_rot_o += 360.0;
         }
+        let e = self.entity_mut(id);
+        while e.x_rot - e.x_rot_o < -180.0 {
+            e.x_rot_o -= 360.0;
+        }
+        while e.x_rot - e.x_rot_o >= 180.0 {
+            e.x_rot_o += 360.0;
+        }
+        let y_head_rot = self.entity(id).y_head_rot;
+        let living = self.living_mut(id);
+        while y_head_rot - living.y_head_rot_o < -180.0 {
+            living.y_head_rot_o -= 360.0;
+        }
+        while y_head_rot - living.y_head_rot_o >= 180.0 {
+            living.y_head_rot_o += 360.0;
+        }
         profiler::pop();
         let fall_flying = self.entity(id).is_fall_flying();
         let living = self.living_mut(id);
