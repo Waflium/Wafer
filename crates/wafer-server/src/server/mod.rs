@@ -232,9 +232,27 @@ pub(crate) enum Task {
     Rcon { command: String, reply: tokio::sync::oneshot::Sender<String> },
     SpawnSearch(u64),
     StructureStarts { level: usize, pos: wafer_core::ChunkPos, starts: wafer_core::hash_map::FastMap<crate::world::level::levelgen::structure::structure::StructureHolder, i32> },
+    Remote(ServerTask),
 }
 
-pub(crate) type ServerTasks = Rc<RefCell<VecDeque<Task>>>;
+pub(crate) struct TickTask {
+    tick: i32,
+    task: Task,
+}
+
+#[derive(Default)]
+pub(crate) struct ServerTaskQueue {
+    pending_runnables: RefCell<VecDeque<TickTask>>,
+    tick_count: Cell<i32>,
+}
+
+impl ServerTaskQueue {
+    pub fn execute(&self, task: Task) {
+        self.pending_runnables.borrow_mut().push_back(TickTask { tick: self.tick_count.get(), task });
+    }
+}
+
+pub(crate) type ServerTasks = Rc<ServerTaskQueue>;
 
 struct PendingLogin {
     profile: Profile,
@@ -282,6 +300,13 @@ pub struct Server {
     login_disconnections_to_report: usize,
     prepare_spawn_tasks: Vec<PrepareSpawnTask>,
     tasks: ServerTasks,
+    remote_tasks: Option<std::sync::mpsc::Receiver<ServerTask>>,
+    next_tick_time: Instant,
+    may_have_delayed_tasks: bool,
+    delayed_tasks_max_next_tick_time: Instant,
+    waiting_for_next_tick: bool,
+    blocking_count: u32,
+    reentrant_count: u32,
     spawn_finders: HashMap<u64, level::player_spawn_finder::PlayerSpawnFinder>,
     next_spawn_finder: u64,
     console_inputs: Vec<(String, CommandSourceStack, bool)>,
@@ -554,6 +579,13 @@ impl Server {
             login_disconnections_to_report: 0,
             prepare_spawn_tasks: Vec::new(),
             tasks,
+            remote_tasks: None,
+            next_tick_time: Instant::now(),
+            may_have_delayed_tasks: false,
+            delayed_tasks_max_next_tick_time: Instant::now(),
+            waiting_for_next_tick: false,
+            blocking_count: 0,
+            reentrant_count: 0,
             spawn_finders: HashMap::new(),
             next_spawn_finder: 0,
             console_inputs: Vec::new(),
@@ -731,7 +763,8 @@ impl Server {
         loop {
             let ready = counter.ready_chunks(&self.levels);
             listener.update(level::progress::Stage::LoadInitialChunks, ready, counter.total_chunks());
-            self.wait_until_next_tick(Instant::now() + PREPARE_LEVELS_DEFAULT_DELAY);
+            self.next_tick_time = Instant::now() + PREPARE_LEVELS_DEFAULT_DELAY;
+            self.wait_until_next_tick();
             if counter.pending_chunks(&self.levels) == 0 {
                 break;
             }
@@ -740,40 +773,96 @@ impl Server {
         self.update_mob_spawning_flags();
     }
 
-    fn wait_until_next_tick(&mut self, deadline: Instant) {
-        let _scope = main_thread_frames::wait_until_next_tick();
-        let wakeup = self.overworld().chunks.main_thread_wakeup();
-        while let Some(wait) = deadline.checked_duration_since(Instant::now()).filter(|w| !w.is_zero()) {
-            let seen = wakeup.generation();
-            if !self.poll_task() {
-                wakeup.wait(seen, wait);
-            }
+    fn have_time(&self) -> bool {
+        self.running_task() || Instant::now() < if self.may_have_delayed_tasks { self.delayed_tasks_max_next_tick_time } else { self.next_tick_time }
+    }
+
+    fn running_task(&self) -> bool {
+        self.reentrant_count != 0
+    }
+
+    fn wait_until_next_tick(&mut self) {
+        {
+            let _scope = main_thread_frames::wait_until_next_tick_run_all();
+            self.run_all_tasks();
         }
+        self.waiting_for_next_tick = true;
+        let _scope = main_thread_frames::wait_until_next_tick();
+        self.managed_block(|server| !server.have_time());
+        self.waiting_for_next_tick = false;
+    }
+
+    fn wait_for_tasks(&self, seen: u64) {
+        let wait = if self.waiting_for_next_tick { self.next_tick_time.saturating_duration_since(Instant::now()) } else { Duration::from_micros(100) };
+        self.overworld().chunks.main_thread_wakeup().wait(seen, wait);
+    }
+
+    fn should_run(&self, task: &TickTask) -> bool {
+        task.tick + 3 < self.tick_count || self.have_time()
+    }
+
+    fn should_run_all_tasks(&self) -> bool {
+        self.blocking_count > 0
+    }
+
+    fn run_all_tasks(&mut self) {
+        while self.poll_task() {}
     }
 
     pub(crate) fn managed_block(&mut self, mut condition: impl FnMut(&mut Server) -> bool) {
-        let wakeup = self.overworld().chunks.main_thread_wakeup();
+        self.blocking_count += 1;
         while !condition(self) {
-            let seen = wakeup.generation();
+            let seen = self.overworld().chunks.main_thread_wakeup().generation();
             if !self.poll_task() {
-                wakeup.wait(seen, Duration::from_micros(100));
+                self.wait_for_tasks(seen);
             }
         }
+        self.blocking_count -= 1;
     }
 
     fn poll_task(&mut self) -> bool {
-        crate::crash_report::throw_delayed_exception();
-        let task = self.tasks.borrow_mut().pop_front();
-        if let Some(task) = task {
-            self.run_task(task);
+        let may_have_more_tasks = self.poll_task_internal();
+        self.may_have_delayed_tasks = may_have_more_tasks;
+        may_have_more_tasks
+    }
+
+    fn poll_task_internal(&mut self) -> bool {
+        if self.poll_server_task() {
             return true;
         }
-        for level in &mut self.levels {
-            if level.poll_chunk_task() {
-                return true;
+        if self.tick_rate_manager.is_sprinting() || self.should_run_all_tasks() || self.have_time() {
+            for level in &mut self.levels {
+                if level.poll_chunk_task() {
+                    return true;
+                }
             }
         }
         false
+    }
+
+    fn poll_server_task(&mut self) -> bool {
+        crate::crash_report::throw_delayed_exception();
+        if let Some(remote_tasks) = &self.remote_tasks {
+            while let Ok(task) = remote_tasks.try_recv() {
+                self.tasks.execute(Task::Remote(task));
+            }
+        }
+        let should_run = self.tasks.pending_runnables.borrow().front().map(|task| self.should_run_all_tasks() || self.should_run(task));
+        let Some(should_run) = should_run else {
+            return self.levels.iter_mut().fold(false, |ran, level| level.run_entity_deserializer_queue_as_task() | ran);
+        };
+        if !should_run {
+            return false;
+        }
+        let task = self.tasks.pending_runnables.borrow_mut().pop_front().expect("a peeked task");
+        self.do_run_task(task.task);
+        true
+    }
+
+    fn do_run_task(&mut self, task: Task) {
+        self.reentrant_count += 1;
+        self.run_task(task);
+        self.reentrant_count -= 1;
     }
 
     pub fn overworld(&self) -> &ServerLevel {
@@ -1110,12 +1199,12 @@ impl Server {
             level.no_save = false;
         }
         while self.levels.iter().any(|level| level.chunks.has_work()) {
-            let next_tick = Instant::now() + Duration::from_millis(1);
+            self.next_tick_time = Instant::now() + Duration::from_millis(1);
             for level in &mut self.levels {
                 level.chunks.deactivate_tickets_on_closing();
                 level.tick_chunk_source_without_chunks();
             }
-            self.wait_until_next_tick(next_tick);
+            self.wait_until_next_tick();
         }
         self.save_all_chunks(false, true, false);
         for level in &mut self.levels {
@@ -1254,7 +1343,7 @@ impl Server {
             Event::PrepareSpawnClosed { uuid } => self.close_prepare_spawn(uuid),
             Event::Console(line, has_level) => self.console_inputs.push((line, CommandSourceStack::server(self), has_level)),
             Event::Halt => self.halt(),
-            Event::Rcon { command, reply } => self.tasks.borrow_mut().push_back(Task::Rcon { command, reply }),
+            Event::Rcon { command, reply } => self.tasks.execute(Task::Rcon { command, reply }),
         }
     }
 
@@ -1513,21 +1602,9 @@ impl Server {
             }
             Task::StructureStarts { level, pos, starts } => self.levels[level].structure_check.on_structure_load(pos, starts),
             Task::SpawnSearch(finder) => self.run_spawn_search_step(finder),
+            Task::Remote(task) => task(self),
             _ => {}
         }
-    }
-
-    fn run_all_tasks(&mut self) -> bool {
-        let mut ran_task = false;
-        loop {
-            let Some(task) = self.tasks.borrow_mut().pop_front() else { break };
-            ran_task = true;
-            self.run_task(task);
-        }
-        for level in &mut self.levels {
-            ran_task |= level.run_entity_deserializer_queue_as_task();
-        }
-        ran_task
     }
 
     fn handle_console_inputs(&mut self) {
@@ -1862,6 +1939,7 @@ impl Server {
             }
         }
         self.tick_count += 1;
+        self.tasks.tick_count.set(self.tick_count);
         self.tick_rate_manager.tick();
         profiler::push("commandFunctions");
         ServerFunctionManager::tick(self);
@@ -2429,7 +2507,8 @@ pub fn run(
         let _scope = main_thread_frames::enter(BUILD_SERVER_STATUS_FRAMES);
         server.build_server_status();
     }
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_server_loop(&mut server, &mut events, &tasks, &timing)));
+    server.remote_tasks = Some(tasks);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_server_loop(&mut server, &mut events, &timing)));
     let crashed = result.is_err();
     if let Err(panic) = result {
         let _creator = construct_or_extract_crash_report_scope();
@@ -2630,31 +2709,31 @@ pub(crate) fn report_startup_failure(failure: &StartupFailure) {
     }
 }
 
-fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Event>, tasks: &std::sync::mpsc::Receiver<ServerTask>, timing: &dedicated::server_watchdog::ServerTiming) {
+fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Event>, timing: &dedicated::server_watchdog::ServerTiming) {
     const OVERLOADED_THRESHOLD: Duration = Duration::from_secs(1);
     const OVERLOADED_WARNING_INTERVAL: Duration = Duration::from_secs(10);
     const SNAPSHOT_INTERVAL: u64 = 20;
-    let mut next_tick = Instant::now();
-    let mut last_overload_warning = next_tick;
+    server.next_tick_time = Instant::now();
+    let mut last_overload_warning = server.next_tick_time;
     let mut ticks: u64 = 0;
     for level in &mut server.levels {
         level.defer_full_status_changes = false;
     }
     while !server.stopping {
         let this_tick = if server.tick_rate_manager.is_sprinting() && server.check_should_sprint_this_tick() {
-            next_tick = Instant::now();
-            last_overload_warning = next_tick;
+            server.next_tick_time = Instant::now();
+            last_overload_warning = server.next_tick_time;
             Duration::ZERO
         } else {
             let this_tick = Duration::from_nanos(server.tick_rate_manager.nanoseconds_per_tick() as u64);
-            if let Some(behind) = Instant::now().checked_duration_since(next_tick)
+            if let Some(behind) = Instant::now().checked_duration_since(server.next_tick_time)
                 && behind > OVERLOADED_THRESHOLD + 20 * this_tick
-                && next_tick.saturating_duration_since(last_overload_warning) >= OVERLOADED_WARNING_INTERVAL + 100 * this_tick
+                && server.next_tick_time.saturating_duration_since(last_overload_warning) >= OVERLOADED_WARNING_INTERVAL + 100 * this_tick
             {
                 let ticks = (behind.as_nanos() / this_tick.as_nanos()) as u32;
                 warn!("Can't keep up! Is the server overloaded? Running {}ms or {ticks} ticks behind", behind.as_millis());
-                next_tick += this_tick * ticks;
-                last_overload_warning = next_tick;
+                server.next_tick_time += this_tick * ticks;
+                last_overload_warning = server.next_tick_time;
             }
             this_tick
         };
@@ -2663,7 +2742,8 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             server.debug_command_profiler_delay_start = false;
             server.debug_command_profiler = Some(commands::debug_command::TimeProfiler::new(server.tick_count));
         }
-        next_tick += this_tick;
+        server.next_tick_time += this_tick;
+        let next_tick = server.next_tick_time;
         timing.set_next_tick_time(next_tick, server.tick_rate_manager.milliseconds_per_tick());
         let profiler_scope = server.create_profiler();
         if ticks.is_multiple_of(SNAPSHOT_INTERVAL)
@@ -2693,40 +2773,11 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
         profiler::pop();
         server.mark_ready();
         profiler::push("nextTickWait");
-        let delayed_tasks_max_next_tick = (Instant::now() + this_tick).max(next_tick);
-        let mut may_have_delayed_tasks = true;
-        let have_time = |may_have_delayed_tasks: bool| Instant::now() < if may_have_delayed_tasks { delayed_tasks_max_next_tick } else { next_tick };
+        server.may_have_delayed_tasks = true;
+        server.delayed_tasks_max_next_tick_time = (Instant::now() + this_tick).max(next_tick);
         {
-            let _scope = main_thread_frames::run_all_tasks();
-            loop {
-                let mut ran_server_task = false;
-                while let Ok(task) = tasks.try_recv() {
-                    profiler::increment_counter("runTask", 1);
-                    task(server);
-                    ran_server_task = true;
-                }
-                ran_server_task |= server.run_all_tasks();
-                may_have_delayed_tasks = ran_server_task || ((sprinting || have_time(may_have_delayed_tasks)) && server.poll_task());
-                if !may_have_delayed_tasks {
-                    break;
-                }
-            }
-        }
-        let wakeup = server.overworld().chunks.main_thread_wakeup();
-        let _scope = main_thread_frames::running_wait();
-        loop {
-            let seen = wakeup.generation();
-            while let Ok(task) = tasks.try_recv() {
-                profiler::increment_counter("runTask", 1);
-                task(server);
-            }
-            if !have_time(may_have_delayed_tasks) {
-                break;
-            }
-            may_have_delayed_tasks = server.poll_task();
-            if !may_have_delayed_tasks {
-                wakeup.wait(seen, next_tick.saturating_duration_since(Instant::now()));
-            }
+            let _scope = main_thread_frames::run_server_wait();
+            server.wait_until_next_tick();
         }
         if sprinting {
             server.tick_rate_manager.end_tick_work();
@@ -2742,6 +2793,40 @@ mod tests {
     use super::*;
     use crate::world::level::BlockGetter;
     use crate::world::level::chunk::ChunkGenerator;
+
+    #[test]
+    fn fresh_tasks_wait_for_time_or_three_ticks_unless_blocking() {
+        use std::sync::atomic::{AtomicI32, Ordering};
+        let mut server = level::testing::server_with(level::testing::flat_config());
+        let ran = Arc::new(AtomicI32::new(0));
+        let execute = |server: &Server| {
+            let ran = ran.clone();
+            server.tasks.execute(Task::Remote(Box::new(move |_| {
+                ran.fetch_add(1, Ordering::Relaxed);
+            })));
+        };
+        server.tasks.tick_count.set(server.tick_count);
+        server.next_tick_time = Instant::now();
+        execute(&server);
+        server.run_all_tasks();
+        assert_eq!(ran.load(Ordering::Relaxed), 0);
+        server.tick_count += 3;
+        server.run_all_tasks();
+        assert_eq!(ran.load(Ordering::Relaxed), 0);
+        server.tick_count += 1;
+        server.run_all_tasks();
+        assert_eq!(ran.load(Ordering::Relaxed), 1);
+        server.tasks.tick_count.set(server.tick_count);
+        execute(&server);
+        server.run_all_tasks();
+        assert_eq!(ran.load(Ordering::Relaxed), 1);
+        server.managed_block(|_| ran.load(Ordering::Relaxed) == 2);
+        execute(&server);
+        server.next_tick_time = Instant::now() + Duration::from_secs(60);
+        server.delayed_tasks_max_next_tick_time = server.next_tick_time;
+        server.run_all_tasks();
+        assert_eq!(ran.load(Ordering::Relaxed), 3);
+    }
 
     #[test]
     fn normal_world_spawns_on_terrain_and_reloads() {

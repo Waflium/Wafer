@@ -62,6 +62,6 @@ fn a_cancelled_spawn_search_never_finishes_with_a_position() {
     let mut server = testing::server_with(testing::flat_config());
     let id = server.find_spawn(0, wafer_core::BlockPos::new(0, -60, 0));
     server.spawn_finders.get_mut(&id).unwrap().cancel();
-    while server.poll_task() {}
+    server.managed_block(|server| server.spawn_finders[&id].finished().is_some());
     assert!(matches!(server.spawn_finders[&id].finished(), Some(Finished::Failed)));
 }

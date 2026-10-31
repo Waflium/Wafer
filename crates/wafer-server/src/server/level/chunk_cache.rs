@@ -521,7 +521,7 @@ impl ChunkCache {
             .map(|structures| structures.starts.iter().filter(|(_, start)| start.is_valid()).map(|(&structure, start)| (structure, start.get_references())).collect())
             .unwrap_or_default();
         match &self.server_tasks {
-            Some((tasks, level)) => tasks.borrow_mut().push_back(Task::StructureStarts { level: *level, pos, starts }),
+            Some((tasks, level)) => tasks.execute(Task::StructureStarts { level: *level, pos, starts }),
             None => self.structure_starts_available.push((pos, starts)),
         }
     }
@@ -893,7 +893,7 @@ impl ChunkCache {
                 Waiter::ReadyToSend(node) => self.distance_manager.main_thread_tasks.push_back(MainThreadTask::ChunkReadyToSend(node)),
                 Waiter::SpawnSearch(finder) => {
                     if let Some((tasks, _)) = &self.server_tasks {
-                        tasks.borrow_mut().push_back(Task::SpawnSearch(finder));
+                        tasks.execute(Task::SpawnSearch(finder));
                     }
                 }
                 Waiter::FullStatus { future, node, holder, token, status } => {
@@ -2612,7 +2612,7 @@ mod tests {
         let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), None);
         cache.server_tasks = Some((tasks.clone(), 2));
         cache.chunk(ChunkPos::new(0, 0));
-        assert!(tasks.borrow().iter().any(|task| matches!(task, crate::server::Task::StructureStarts { level: 2, pos, .. } if *pos == ChunkPos::new(0, 0))));
+        assert!(tasks.pending_runnables.borrow().iter().any(|task| matches!(&task.task, crate::server::Task::StructureStarts { level: 2, pos, .. } if *pos == ChunkPos::new(0, 0))));
         assert!(cache.take_structure_starts_available().is_empty());
     }
 

@@ -130,12 +130,12 @@ pub fn tick() -> FrameScope {
     enter_absolute(TICK_LOOP[..4].iter().copied())
 }
 
-pub fn run_all_tasks() -> FrameScope {
-    enter_absolute([RUN_ALL_TASKS, WAIT_UNTIL_NEXT_TICK_RUN_ALL, RUN_SERVER_WAIT])
+pub fn run_server_wait() -> FrameScope {
+    enter_absolute([RUN_SERVER_WAIT])
 }
 
-pub fn running_wait() -> FrameScope {
-    enter_absolute([MANAGED_BLOCK, WAIT_UNTIL_NEXT_TICK_BLOCK, RUN_SERVER_WAIT])
+pub fn wait_until_next_tick_run_all() -> FrameScope {
+    enter([RUN_ALL_TASKS, WAIT_UNTIL_NEXT_TICK_RUN_ALL])
 }
 
 pub fn wait_until_next_tick() -> FrameScope {

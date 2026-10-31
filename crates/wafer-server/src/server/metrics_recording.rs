@@ -165,7 +165,7 @@ impl Server {
     }
 
     fn refresh_metrics_gauges(&self, pending_events: usize) {
-        self.metrics_gauges.server.store(self.tasks.borrow().len() + pending_events, Ordering::Relaxed);
+        self.metrics_gauges.server.store(self.tasks.pending_runnables.borrow().len() + pending_events, Ordering::Relaxed);
         for (level, gauges) in self.levels.iter().zip(&self.metrics_gauges.levels) {
             let chunks = &level.chunks;
             gauges.chunk_source.store(chunks.main_thread_pending_tasks(), Ordering::Relaxed);
