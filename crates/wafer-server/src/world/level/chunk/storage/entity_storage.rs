@@ -63,6 +63,7 @@ pub struct EntityStorage {
     loading_inbox: Arc<AtomicUsize>,
     reporting: Option<IoReporting>,
     main_thread_wakeup: Arc<MainThreadWakeup>,
+    pub deserializer_running: bool,
 }
 
 impl EntityStorage {
@@ -74,6 +75,7 @@ impl EntityStorage {
             loading_inbox: Arc::default(),
             reporting: None,
             main_thread_wakeup: Arc::default(),
+            deserializer_running: false,
         }
     }
 

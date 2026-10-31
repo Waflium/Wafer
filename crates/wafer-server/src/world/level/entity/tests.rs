@@ -246,7 +246,9 @@ fn entities_read_from_disk_are_created_by_the_server_tasks_not_by_the_entity_man
     std::thread::sleep(std::time::Duration::from_millis(200));
     level.tick();
     assert!(entity_with_uuid(&level, uuid).is_none());
-    level.run_entity_deserializer_queue_as_task();
+    while level.register_entity_deserializer() {
+        level.run_entity_deserializer();
+    }
     level.tick();
     assert!(entity_with_uuid(&level, uuid).is_some());
     let _ = std::fs::remove_dir_all(dir);

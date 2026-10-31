@@ -365,14 +365,10 @@ impl ServerLevel {
     }
 
     pub fn poll_chunk_task(&mut self) -> bool {
-        let worked = {
-            let _poll = crate::server::main_thread_frames::server_chunk_poll();
-            let worked = self.chunks.poll_task();
-            self.process_chunk_events();
-            worked
-        };
-        let deserialized = self.run_entity_deserializer_queue_as_task();
-        worked || deserialized
+        let _poll = crate::server::main_thread_frames::server_chunk_poll();
+        let worked = self.chunks.poll_task();
+        self.process_chunk_events();
+        worked
     }
 
     pub fn load_chunk(&mut self, pos: ChunkPos) {

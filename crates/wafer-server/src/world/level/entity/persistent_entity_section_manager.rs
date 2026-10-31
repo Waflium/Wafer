@@ -22,7 +22,7 @@ const ENTITY_DESERIALIZER_RUN_ALL: &str = "net.minecraft.util.thread.AbstractCon
 const ENTITY_STORAGE_FLUSH: &str = "net.minecraft.world.level.chunk.storage.EntityStorage.flush(EntityStorage.java:141)";
 const SAVE_ALL_LOOP: &str = "net.minecraft.world.level.entity.PersistentEntitySectionManager.saveAll(PersistentEntitySectionManager.java:392)";
 const SAVE_ALL_END: &str = "net.minecraft.world.level.entity.PersistentEntitySectionManager.saveAll(PersistentEntitySectionManager.java:399)";
-const WAIT_FOR_ENTITIES: &str = "net.minecraft.server.level.ServerLevel.waitForEntities(ServerLevel.java:1732)";
+pub const WAIT_FOR_ENTITIES: &str = "net.minecraft.server.level.ServerLevel.waitForEntities(ServerLevel.java:1732)";
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 enum ChunkLoadStatus {
@@ -321,40 +321,52 @@ impl ServerLevel {
         self.entity_manager.chunks_to_unload = chunks_to_unload;
     }
 
-    pub fn run_entity_deserializer_queue_as_task(&mut self) -> bool {
+    pub fn register_entity_deserializer(&mut self) -> bool {
+        let storage = &mut self.entity_manager.permanent_storage;
+        if storage.deserializer_running || storage.loading_inbox_size() == 0 {
+            return false;
+        }
+        storage.deserializer_running = true;
+        true
+    }
+
+    pub fn run_entity_deserializer(&mut self) {
         let _scope = main_thread_frames::enter(std::iter::once(ENTITY_DESERIALIZER_TASK_RUN).chain(main_thread_frames::SERVER_TASK_POLL));
-        let tasks = self.run_entity_deserializer_queue();
-        crate::util::profiling::profiler::increment_counter("runTask", tasks);
-        tasks > 0
+        if self.entity_manager.permanent_storage.deserializer_running {
+            self.poll_entity_deserializer();
+        }
+        self.entity_manager.permanent_storage.deserializer_running = false;
     }
 
     fn flush_entity_storage(&mut self, flush_storage: bool, save_all_frame: &'static str) {
         self.entity_manager.permanent_storage.flush(flush_storage);
         let _scope = main_thread_frames::enter([ENTITY_DESERIALIZER_RUN_ALL, ENTITY_STORAGE_FLUSH, save_all_frame]);
-        self.run_entity_deserializer_queue();
+        self.run_all_entity_deserializers();
     }
 
-    fn run_entity_deserializer_queue(&mut self) -> i32 {
-        let mut ran_task = 0;
-        while let Some((pos, read)) = self.entity_manager.permanent_storage.poll_read() {
-            ran_task += 1;
-            let entities = match read {
-                Ok(Some(tag)) => match crate::util::catch_exception(|| self.read_chunk_entities(pos, &tag)) {
-                    Ok(entities) => Some(entities),
-                    Err(exception) => {
-                        error!("Failed to read chunk {pos}\njava.util.concurrent.CompletionException: {exception}");
-                        continue;
-                    }
-                },
-                Ok(None) => {
-                    self.entity_manager.permanent_storage.mark_empty(pos);
-                    None
+    fn run_all_entity_deserializers(&mut self) {
+        while self.poll_entity_deserializer() {}
+        self.entity_manager.permanent_storage.deserializer_running = false;
+    }
+
+    fn poll_entity_deserializer(&mut self) -> bool {
+        let Some((pos, read)) = self.entity_manager.permanent_storage.poll_read() else { return false };
+        let entities = match read {
+            Ok(Some(tag)) => match crate::util::catch_exception(|| self.read_chunk_entities(pos, &tag)) {
+                Ok(entities) => Some(entities),
+                Err(exception) => {
+                    error!("Failed to read chunk {pos}\njava.util.concurrent.CompletionException: {exception}");
+                    return true;
                 }
-                Err(_) => continue,
-            };
-            self.entity_manager.parsed_loads.push((pos, entities));
-        }
-        ran_task
+            },
+            Ok(None) => {
+                self.entity_manager.permanent_storage.mark_empty(pos);
+                None
+            }
+            Err(_) => return true,
+        };
+        self.entity_manager.parsed_loads.push((pos, entities));
+        true
     }
 
     pub fn process_pending_loads(&mut self) {
@@ -366,23 +378,14 @@ impl ServerLevel {
         }
     }
 
-    pub fn wait_for_entities_around(&mut self, center: ChunkPos, radius: i32) {
-        let _scope = main_thread_frames::enter([main_thread_frames::MANAGED_BLOCK, WAIT_FOR_ENTITIES]);
-        loop {
-            self.process_pending_loads();
-            let loaded = (-radius..=radius)
-                .all(|dx| (-radius..=radius).all(|dz| self.entity_manager.are_entities_loaded(ChunkPos::new(center.x + dx, center.z + dz).pack())));
-            if loaded {
-                return;
-            }
-            self.run_entity_deserializer_queue_as_task();
-            self.wait_for_chunk_work(std::time::Duration::from_millis(1));
-        }
+    pub fn entities_loaded_around(&mut self, center: ChunkPos, radius: i32) -> bool {
+        self.process_pending_loads();
+        (-radius..=radius).all(|dx| (-radius..=radius).all(|dz| self.entity_manager.are_entities_loaded(ChunkPos::new(center.x + dx, center.z + dz).pack())))
     }
 
     pub fn wait_for_entities(&mut self) {
         self.entity_manager.permanent_storage.flush(false);
-        self.run_entity_deserializer_queue_as_task();
+        self.run_all_entity_deserializers();
         self.process_pending_loads();
     }
 

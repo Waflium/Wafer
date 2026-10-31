@@ -233,6 +233,7 @@ pub(crate) enum Task {
     SpawnSearch(u64),
     StructureStarts { level: usize, pos: wafer_core::ChunkPos, starts: wafer_core::hash_map::FastMap<crate::world::level::levelgen::structure::structure::StructureHolder, i32> },
     Remote(ServerTask),
+    EntityDeserializer(usize),
 }
 
 pub(crate) struct TickTask {
@@ -847,9 +848,11 @@ impl Server {
                 self.tasks.execute(Task::Remote(task));
             }
         }
-        let should_run = self.tasks.pending_runnables.borrow().front().map(|task| self.should_run_all_tasks() || self.should_run(task));
-        let Some(should_run) = should_run else {
-            return self.levels.iter_mut().fold(false, |ran, level| level.run_entity_deserializer_queue_as_task() | ran);
+        for index in 0..self.levels.len() {
+            self.register_entity_deserializer(index);
+        }
+        let Some(should_run) = self.tasks.pending_runnables.borrow().front().map(|task| self.should_run_all_tasks() || self.should_run(task)) else {
+            return false;
         };
         if !should_run {
             return false;
@@ -857,6 +860,17 @@ impl Server {
         let task = self.tasks.pending_runnables.borrow_mut().pop_front().expect("a peeked task");
         self.do_run_task(task.task);
         true
+    }
+
+    fn register_entity_deserializer(&mut self, level: usize) {
+        if self.levels[level].register_entity_deserializer() {
+            self.tasks.execute(Task::EntityDeserializer(level));
+        }
+    }
+
+    fn wait_for_entities(&mut self, level: usize, center: wafer_core::ChunkPos, radius: i32) {
+        let _scope = main_thread_frames::enter([main_thread_frames::MANAGED_BLOCK, crate::world::level::entity::persistent_entity_section_manager::WAIT_FOR_ENTITIES]);
+        self.managed_block(|server| server.levels[level].entities_loaded_around(center, radius));
     }
 
     fn do_run_task(&mut self, task: Task) {
@@ -1424,7 +1438,7 @@ impl Server {
             Some(index) => {
                 let task = self.prepare_spawn_tasks.swap_remove(index);
                 let position = task.position.expect("ready spawn position");
-                self.levels[task.level].wait_for_entities_around(BlockPos::containing(position.x, position.y, position.z).chunk(), 3);
+                self.wait_for_entities(task.level, BlockPos::containing(position.x, position.y, position.z).chunk(), 3);
                 (task.level, position, task.angle.0, task.angle.1)
             }
             None => self.spawn_position(saved.as_ref()),
@@ -1603,6 +1617,10 @@ impl Server {
             Task::StructureStarts { level, pos, starts } => self.levels[level].structure_check.on_structure_load(pos, starts),
             Task::SpawnSearch(finder) => self.run_spawn_search_step(finder),
             Task::Remote(task) => task(self),
+            Task::EntityDeserializer(level) => {
+                self.levels[level].run_entity_deserializer();
+                self.register_entity_deserializer(level);
+            }
             _ => {}
         }
     }
