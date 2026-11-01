@@ -418,21 +418,46 @@ const COMPOUND_TAG_CONVERSION: [&str; 7] = [
     "com.mojang.serialization.Codec$2.decode(Codec.java:74)",
 ];
 
-fn unsupported_number(tag: &Nbt) -> Option<(String, usize)> {
+const JSON_LIST_CONVERSION: [&str; 15] = [
+    "com.mojang.serialization.DynamicOps.lambda$convertList$31(DynamicOps.java:245)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.ArrayList$Itr.forEachRemaining(ArrayList.java:1086)",
+    "java.base/java.util.Spliterators$IteratorSpliterator.forEachRemaining(Spliterators.java:1939)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:723)",
+    "net.minecraft.nbt.NbtOps.createList(NbtOps.java:354)",
+    "net.minecraft.nbt.NbtOps.createList(NbtOps.java:27)",
+    "com.mojang.serialization.DynamicOps.convertList(DynamicOps.java:245)",
+    "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:56)",
+    "com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)",
+];
+
+fn unsupported_number(tag: &Nbt) -> Option<(String, Vec<&'static [&'static str]>)> {
     match tag {
-        Nbt::LazilyParsedNumber(text) => wafer_protocol::lazily_parsed_number::number_limits_error(text).map(|message| (message, 0)),
-        Nbt::Compound(fields) => fields.iter().find_map(|(_, value)| unsupported_number(value)).map(|(message, depth)| (message, depth + 1)),
+        Nbt::LazilyParsedNumber(text) => wafer_protocol::lazily_parsed_number::number_limits_error(text).map(|message| (message, Vec::new())),
+        Nbt::Compound(fields) => fields.iter().find_map(|(_, value)| unsupported_number(value)).map(|(message, mut containers)| {
+            containers.push(&JSON_MAP_CONVERSION[..JSON_MAP_CONVERSION.len() - 1]);
+            (message, containers)
+        }),
+        Nbt::List(items) => items.iter().find_map(unsupported_number).map(|(message, mut containers)| {
+            containers.push(&JSON_LIST_CONVERSION);
+            (message, containers)
+        }),
         _ => None,
     }
 }
 
 fn throw_unsupported_number(tag: &Nbt) {
-    let Some((message, depth)) = unsupported_number(tag) else { return };
+    let Some((message, containers)) = unsupported_number(tag) else { return };
     let mut frames: Vec<&'static str> = JSON_NUMBER_CONVERSION.to_vec();
-    for level in 0..depth {
-        let end = if level + 1 == depth { JSON_MAP_CONVERSION.len() } else { JSON_MAP_CONVERSION.len() - 1 };
-        frames.extend_from_slice(&JSON_MAP_CONVERSION[..end]);
+    for container in containers {
+        frames.extend_from_slice(container);
     }
+    frames.push(JSON_MAP_CONVERSION[JSON_MAP_CONVERSION.len() - 1]);
     frames.extend_from_slice(&COMPOUND_TAG_CONVERSION);
     crate::core::data_registries::throw_unwinding("java.lang.NumberFormatException", message, &frames);
 }

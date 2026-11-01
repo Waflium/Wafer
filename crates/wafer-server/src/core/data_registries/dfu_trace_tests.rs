@@ -42,6 +42,32 @@ fn data_pack_elements_carry_the_vanilla_codec_frames_of_an_overflowing_number() 
 }
 
 #[test]
+fn numbers_in_lists_inside_compound_tags_add_the_list_conversion_frames() {
+    let list_block = "\tat com.mojang.serialization.DynamicOps.lambda$convertList$31(DynamicOps.java:245)
+\tat java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)
+\tat java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)
+\tat java.base/java.util.ArrayList$Itr.forEachRemaining(ArrayList.java:1086)
+\tat java.base/java.util.Spliterators$IteratorSpliterator.forEachRemaining(Spliterators.java:1939)
+\tat java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)
+\tat java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)
+\tat java.base/java.util.stream.ReduceOps$ReduceOp.evaluateSequential(ReduceOps.java:921)
+\tat java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)
+\tat java.base/java.util.stream.ReferencePipeline.collect(ReferencePipeline.java:723)
+\tat net.minecraft.nbt.NbtOps.createList(NbtOps.java:354)
+\tat net.minecraft.nbt.NbtOps.createList(NbtOps.java:27)
+\tat com.mojang.serialization.DynamicOps.convertList(DynamicOps.java:245)
+\tat com.mojang.serialization.JsonOps.convertTo(JsonOps.java:56)
+\tat com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)
+";
+    let size = include_str!("../dfu_traces/trial_spawner_entity_size.txt");
+    let number = "\tat com.mojang.serialization.JsonOps.convertTo(JsonOps.java:25)\n";
+    let split = size.find(number).unwrap() + number.len();
+    let expected = format!("{}{list_block}{}", &size[..split], &size[split..]);
+    let json = r##"{"spawn_potentials":[{"data":{"entity":{"id":"minecraft:slime","Pos":[1E+10000,0,0]}},"weight":1}]}"##;
+    assert_eq!(thrown_while_decoding("minecraft:trial_spawner", json), expected);
+}
+
+#[test]
 fn a_dimension_type_turns_the_exception_of_its_decoder_into_an_error_message() {
     let json = r##"{"ambient_light":0,"attributes":{},"coordinate_scale":1,"has_ceiling":false,"has_ender_dragon_fight":false,"has_skylight":true,"height":1E+10000,"infiniburn":"#minecraft:infiniburn_overworld","logical_height":384,"min_y":-64,"monster_spawn_block_light_limit":0,"monster_spawn_light_level":7,"timelines":"#minecraft:in_overworld"}"##;
     let element = crate::util::gson::parse_strict(json).unwrap();
