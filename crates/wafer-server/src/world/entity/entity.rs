@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI32, Ordering};
 
@@ -189,7 +190,7 @@ pub struct Entity {
     pub last_crystal_sound_play_tick: i32,
     pub last_known_speed: Vec3,
     pub last_known_position: Option<Vec3>,
-    pub in_block_state: Option<BlockState>,
+    pub in_block_state: Cell<Option<BlockState>>,
     pub movement_this_tick: VecDeque<Movement>,
     piston_deltas: [f64; 3],
     piston_deltas_game_time: i64,
@@ -272,7 +273,7 @@ impl Entity {
             last_crystal_sound_play_tick: 0,
             last_known_speed: Vec3::ZERO,
             last_known_position: None,
-            in_block_state: None,
+            in_block_state: Cell::new(None),
             movement_this_tick: VecDeque::new(),
             piston_deltas: [0.0; 3],
             piston_deltas_game_time: 0,
@@ -336,7 +337,7 @@ impl Entity {
     pub fn set_pos_raw(&mut self, pos: Vec3) {
         if self.pos != pos {
             if BlockPos::containing_vec(pos) != BlockPos::containing_vec(self.pos) {
-                self.in_block_state = None;
+                self.in_block_state.set(None);
             }
             self.pos = pos;
             self.pending_on_move = !self.first_tick;
@@ -1394,11 +1395,11 @@ impl ServerLevel {
     }
 
     pub fn in_block_state(&mut self, id: EntityId) -> BlockState {
-        if let Some(state) = self.entity(id).in_block_state {
+        if let Some(state) = self.entity(id).in_block_state.get() {
             return state;
         }
         let state = self.block_state(self.entity(id).block_position());
-        self.entity_mut(id).in_block_state = Some(state);
+        self.entity(id).in_block_state.set(Some(state));
         state
     }
 
@@ -2523,7 +2524,7 @@ impl ServerLevel {
         let _zone = profiler::zone("entityBaseTick");
         let e = self.entity_mut(id);
         e.compute_speed();
-        e.in_block_state = None;
+        e.in_block_state.set(None);
         if let Some(vehicle) = self.vehicle(id)
             && self.entity_ref(vehicle).is_none_or(Entity::is_removed)
         {

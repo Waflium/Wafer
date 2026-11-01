@@ -3437,8 +3437,18 @@ impl ServerLevel {
             return false;
         }
         let pos = self.entity(id).block_position();
-        let state_at = |pos: BlockPos| self.chunks.loaded_chunk(pos.chunk()).map_or(blocks::AIR.default_state(), |chunk| chunk.block_state(pos));
-        let state = state_at(pos);
+        let state_at = |pos: BlockPos| {
+            if self.chunks.is_outside_build_height(pos.y) {
+                return blocks::VOID_AIR.default_state();
+            }
+            self.chunks.count_get_chunk(pos.chunk());
+            self.chunks.loaded_chunk(pos.chunk()).map_or(blocks::AIR.default_state(), |chunk| chunk.block_state(pos))
+        };
+        let state = self.entity(id).in_block_state.get().unwrap_or_else(|| {
+            let state = state_at(pos);
+            self.entity(id).in_block_state.set(Some(state));
+            state
+        });
         if self.entity(id).is_fall_flying() && state.is(&block_tags::CAN_GLIDE_THROUGH) {
             return false;
         }
