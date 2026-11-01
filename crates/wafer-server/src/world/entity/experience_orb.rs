@@ -234,12 +234,7 @@ impl ServerLevel {
         best.map(|(id, _)| id)
     }
 
-    pub fn touch_experience_orbs(&mut self, player: EntityId) {
-        let area = self.player_pickup_area(player);
-        let orbs = self.experience_orbs_in(&area, None);
-        if orbs.is_empty() {
-            return;
-        }
+    pub fn touch_random_experience_orb(&mut self, player: EntityId, orbs: &[EntityId]) {
         let index = self.player_mut(player).entity.random.next_int_bounded(orbs.len() as i32);
         self.experience_orb_player_touch(orbs[index as usize], player);
     }

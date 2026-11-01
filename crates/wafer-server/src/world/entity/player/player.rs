@@ -504,7 +504,6 @@ impl ServerLevel {
         p.living.speed = speed;
         if p.health > 0.0 && !self.is_spectator(id) {
             self.touch_entities(id);
-            self.touch_experience_orbs(id);
         }
         self.handle_shoulder_entities(id);
     }

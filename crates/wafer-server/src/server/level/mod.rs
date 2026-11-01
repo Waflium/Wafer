@@ -2354,8 +2354,10 @@ impl ServerLevel {
 
     pub fn touch_entities(&mut self, player: EntityId) {
         let area = self.player_pickup_area(player);
+        let mut orbs = Vec::new();
         for id in self.get_entities(Some(player), &area) {
             match self.find_entity(id) {
+                Some(LevelEntity::ExperienceOrb(_)) => orbs.push(id),
                 Some(LevelEntity::Item(item)) if !item.entity.is_removed() => self.item_entity_player_touch(id, player),
                 Some(LevelEntity::Projectile(projectile)) if !projectile.entity.is_removed() && projectile.abstract_arrow().is_some() => {
                     self.player_touch(id, player);
@@ -2369,6 +2371,9 @@ impl ServerLevel {
                 }
                 _ => {}
             }
+        }
+        if !orbs.is_empty() {
+            self.touch_random_experience_orb(player, &orbs);
         }
     }
 
