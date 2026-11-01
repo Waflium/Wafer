@@ -4,6 +4,8 @@ use super::Server;
 use super::command_origin::CommandOrigin;
 use super::server_function_library::ServerFunctionLibrary;
 use crate::commands::execute_command_in_context;
+use crate::commands::execution::tasks::CallFunction;
+use crate::commands::execution::{CommandQueueEntry, EntryAction, ExecutionContext, Frame};
 use crate::commands::functions::CommandFunction;
 use crate::commands::source::{CommandResultCallback, CommandSourceStack};
 use crate::util::profiling::profiler;
@@ -50,6 +52,23 @@ impl ServerFunctionManager {
         if let Ok(function) = function.instantiate(None) {
             execute_command_in_context(server, |context| context.queue_initial_function_call(function, sender, CommandResultCallback::EMPTY));
         }
+    }
+
+    pub fn queue_in_current_context(resolve: impl FnOnce(&mut Server) -> Option<(Arc<CommandFunction>, CommandSourceStack)> + 'static) -> bool {
+        if !ExecutionContext::is_running() {
+            return false;
+        }
+        ExecutionContext::with(|context| {
+            let frame = context.create_top_frame(CommandResultCallback::EMPTY);
+            let call = move |server: &mut Server, frame: &Frame| {
+                let Some((function, sender)) = resolve(server) else { return };
+                if let Ok(function) = function.instantiate(None) {
+                    CallFunction { function, result_callback: sender.callback.clone(), return_parent_frame: false }.execute(sender, frame);
+                }
+            };
+            context.queue_next(CommandQueueEntry::new(frame, EntryAction::Custom(Box::new(call))));
+        });
+        true
     }
 
     pub fn replace_library(&mut self, library: ServerFunctionLibrary) {

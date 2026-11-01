@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::core::holder::Holder;
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::server::server_function_manager::ServerFunctionManager;
 use crate::util::codec::{self, DataResult, DecodeResult, Record};
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::crafting::recipe_holder::RecipeHolder;
@@ -77,7 +78,10 @@ impl AdvancementRewards {
         if let Some(function) = &self.function
             && level.with_server(|server| server.execute_reward_function(function, player, trigger)).is_none()
         {
-            level.pending_function_executions.push((function.clone(), player, trigger));
+            let queued = function.clone();
+            if !ServerFunctionManager::queue_in_current_context(move |server| server.reward_function_call(&queued, player)) {
+                level.pending_function_executions.push((function.clone(), player, trigger));
+            }
         }
     }
 }

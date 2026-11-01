@@ -216,7 +216,7 @@ impl ExecutionContext {
         ExecutionContext::run_command_queue(server);
     }
 
-    fn create_top_frame(&self, frame_result: CommandResultCallback) -> Frame {
+    pub(crate) fn create_top_frame(&self, frame_result: CommandResultCallback) -> Frame {
         if self.current_frame_depth == 0 {
             return Frame { depth: 0, return_value_consumer: frame_result, frame_control: FrameControl::ClearQueue };
         }

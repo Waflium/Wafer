@@ -2141,24 +2141,30 @@ impl Server {
     }
 
     pub fn execute_reward_function(&mut self, function: &str, player: EntityId, trigger: crate::advancements::triggers::criterion_trigger::CriterionTrigger) {
-        if self.level_of(player).is_none() {
-            return;
-        }
-        if let Some(function) = self.functions.get(function) {
-            let source = CommandSourceStack::player(self, player).with_suppressed_output().with_permission(2);
+        if let Some((function, source)) = self.reward_function_call(function, player) {
             self.run_from(CommandOrigin::AdvancementReward(trigger), |server| ServerFunctionManager::execute(server, &function, &source));
         }
     }
 
+    pub fn reward_function_call(&self, function: &str, player: EntityId) -> Option<(Arc<crate::commands::functions::CommandFunction>, CommandSourceStack)> {
+        self.level_of(player)?;
+        let function = self.functions.get(function)?;
+        Some((function, CommandSourceStack::player(self, player).with_suppressed_output().with_permission(2)))
+    }
+
     pub fn execute_enchantment_function(&mut self, index: usize, name: &str, entity: EntityId, position: wafer_core::Vec3, rotation: (f32, f32), from_player_tick: bool) {
-        match self.functions.get(name) {
-            Some(function) => {
-                let source = CommandSourceStack::server(self).with_permission(2).with_suppressed_output().with_entity(entity).with_level(self, index).with_position(position).with_rotation(rotation);
-                let origin = if from_player_tick { CommandOrigin::EnchantmentTickPlayer } else { self.command_origin };
-                self.run_from(origin, |server| ServerFunctionManager::execute(server, &function, &source));
-            }
-            None => error!("Enchantment run_function effect failed for non-existent function {name}"),
+        if let Some((function, source)) = self.enchantment_function_call(index, name, entity, position, rotation) {
+            let origin = if from_player_tick { CommandOrigin::EnchantmentTickPlayer } else { self.command_origin };
+            self.run_from(origin, |server| ServerFunctionManager::execute(server, &function, &source));
         }
+    }
+
+    pub fn enchantment_function_call(&self, index: usize, name: &str, entity: EntityId, position: wafer_core::Vec3, rotation: (f32, f32)) -> Option<(Arc<crate::commands::functions::CommandFunction>, CommandSourceStack)> {
+        let Some(function) = self.functions.get(name) else {
+            error!("Enchantment run_function effect failed for non-existent function {name}");
+            return None;
+        };
+        Some((function, CommandSourceStack::server(self).with_permission(2).with_suppressed_output().with_entity(entity).with_level(self, index).with_position(position).with_rotation(rotation)))
     }
 
     pub fn send_global_level_events(&mut self) {
