@@ -371,7 +371,7 @@ fn unpack_structure_data(pos: ChunkPos, tag: Option<&Nbt>, seed: i64) -> ChunkSt
     let mut structures = ChunkStructures::default();
     let Some(tag) = tag else { return structures };
     if let Some(Nbt::Compound(starts)) = tag.get("starts") {
-        for (key, start_tag) in starts {
+        for (key, start_tag) in starts.iteration() {
             match StructureHolder::by_name(key) {
                 None => error!("Unknown structure start: {key}"),
                 Some(structure) => {
@@ -383,7 +383,7 @@ fn unpack_structure_data(pos: ChunkPos, tag: Option<&Nbt>, seed: i64) -> ChunkSt
         }
     }
     if let Some(Nbt::Compound(references)) = tag.get("References") {
-        for (key, entry) in references {
+        for (key, entry) in references.iteration() {
             let Some(structure) = StructureHolder::by_name(key) else {
                 warn!("Found reference to unknown structure '{key}' in chunk {pos}, discarding");
                 continue;
