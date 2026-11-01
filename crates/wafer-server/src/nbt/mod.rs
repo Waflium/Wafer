@@ -281,16 +281,19 @@ pub fn write_block_state(state: wafer_data::BlockState) -> Nbt {
 }
 
 pub fn read_block_state(tag: &Nbt) -> wafer_data::BlockState {
-    let Some(block) = tag.get("id").and_then(Nbt::as_str).and_then(wafer_data::Block::by_name) else {
+    let id = tag.get("id").and_then(|id| crate::util::codec::identifier(id).map_err(|error| error!("Failed to read field (id={}): {error}", to_string(id))).ok());
+    let Some(block) = id.as_deref().and_then(wafer_data::Block::by_name) else {
         return wafer_data::blocks::AIR.default_state();
     };
     let mut result = block.default_state();
     if let Some(Nbt::Compound(properties)) = tag.get("properties") {
-        for (key, value) in properties {
-            if let Some(value) = value.as_str()
-                && let Some(state) = result.with_property_by_name(key, value)
-            {
-                result = state;
+        for (key, value) in properties.iteration() {
+            if !result.properties().any(|(name, _)| name == key) {
+                continue;
+            }
+            match value.as_str().and_then(|value| result.with_property_by_name(key, value)) {
+                Some(state) => result = state,
+                None => warn!("Unable to read property: {key} with value: {} for blockstate: {}", to_string(value), to_string(tag)),
             }
         }
     }
