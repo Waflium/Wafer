@@ -42,7 +42,7 @@ impl ChunkGenerator {
         match self {
             ChunkGenerator::Flat(flat) => biome == flat.biome,
             ChunkGenerator::Debug(debug) => biome == debug.biome(),
-            ChunkGenerator::Noise(noise) => noise.features_per_step().1[biome.0 as usize],
+            ChunkGenerator::Noise(noise) => noise.features_per_step().1.get(biome.slot()).copied().unwrap_or(false),
         }
     }
 

@@ -191,19 +191,29 @@ fn decode_biome_source(tag: &Nbt) -> DecodeResult<BiomeSourceDefinition> {
     let mut record = Record::default();
     match ty.as_str() {
         "minecraft:fixed" => {
-            let biome = record.required(tag, "biome", |biome| DecodeResult::from(holder("minecraft:worldgen/biome").decode(biome)));
+            let biome = record.required(tag, "biome", decode_biome_holder);
             record.build(|| {
-                let biome = Biome::by_name(biome?.as_str()?)?;
-                let encoded = Nbt::Compound(vec![("biome".into(), Nbt::String(biome.name().to_string())), ("type".into(), ty_tag)].into());
+                let biome_tag = biome?;
+                let biome = biome_of_holder(&biome_tag)?;
+                let encoded_biome = if biome.is_inline() { biome_tag } else { Nbt::String(biome.name().to_string()) };
+                let encoded = Nbt::Compound(vec![("biome".into(), encoded_biome), ("type".into(), ty_tag)].into());
                 Some(BiomeSourceDefinition::Built(Arc::new(BiomeSource::Fixed(biome)), encoded))
             })
         }
         "minecraft:checkerboard" => {
-            let biomes = record.required(tag, "biomes", |biomes| DecodeResult::from(Codec::HolderSet("minecraft:worldgen/biome").decode(biomes)));
+            let biomes = record.required(tag, "biomes", |biomes| match biomes {
+                Nbt::List(elements) if elements.iter().any(|element| matches!(element, Nbt::Compound(_))) => {
+                    codec::list_partial(biomes, decode_biome_holder).map(|_| biomes.clone())
+                }
+                _ => DecodeResult::from(Codec::HolderSet("minecraft:worldgen/biome").decode(biomes)),
+            });
             let scale = record.with_default(tag, "scale", 2, |scale| Codec::Int(0, 62, RangeError::Outside).decode(scale).map(|scale| scale.as_i64().unwrap_or(2) as i32));
             record.build(|| {
                 let biomes = biomes?;
-                let allowed = crate::core::holder_set::HolderSet::decode("minecraft:worldgen/biome", &biomes).ok()?.contents().iter().map(|&id| Biome(id as u16)).collect();
+                let allowed = match &biomes {
+                    Nbt::List(elements) if elements.iter().any(|element| matches!(element, Nbt::Compound(_))) => elements.iter().map(biome_of_holder).collect::<Option<Vec<Biome>>>()?,
+                    _ => crate::core::holder_set::HolderSet::decode("minecraft:worldgen/biome", &biomes).ok()?.contents().iter().map(|&id| Biome(id as u16)).collect(),
+                };
                 let mut fields = vec![("biomes".to_string(), biomes)];
                 if scale != 2 {
                     fields.push(("scale".into(), Nbt::Int(scale)));
@@ -217,9 +227,27 @@ fn decode_biome_source(tag: &Nbt) -> DecodeResult<BiomeSourceDefinition> {
     }
 }
 
+fn decode_biome_holder(tag: &Nbt) -> DecodeResult<Nbt> {
+    match tag {
+        Nbt::Compound(_) => DecodeResult::from(crate::world::level::biome::validate(tag).map(|()| tag.clone())),
+        _ => DecodeResult::from(holder("minecraft:worldgen/biome").decode(tag)),
+    }
+}
+
+fn biome_of_holder(tag: &Nbt) -> Option<Biome> {
+    match tag {
+        Nbt::Compound(_) => Some(crate::world::level::biome::inline_biome::register(tag)),
+        other => Biome::by_name(other.as_str()?),
+    }
+}
+
 fn decode_multi_noise(tag: &Nbt, ty_tag: Nbt) -> DecodeResult<BiomeSourceDefinition> {
+    let inline_biomes: Vec<Option<Biome>> = match tag.get("biomes") {
+        Some(Nbt::List(entries)) => entries.iter().map(|entry| entry.get("biome").filter(|biome| matches!(biome, Nbt::Compound(_))).and_then(|biome| decode_biome_holder(biome).value).as_ref().and_then(biome_of_holder)).collect(),
+        _ => Vec::new(),
+    };
     let parameters = match tag.get("biomes") {
-        Some(biomes) => match MultiNoiseBiomeSource::from_parameters(&codec::to_json(biomes)) {
+        Some(biomes) => match MultiNoiseBiomeSource::from_parameters(&codec::to_json(biomes), &inline_biomes) {
             Ok(source) => DecodeResult::success(source),
             Err(error) => DecodeResult::error(error),
         },

@@ -15,6 +15,7 @@ pub struct InlineBiome {
     pub(super) climate: ClimateSettings,
     pub attributes: EnvironmentAttributeMap,
     pub generation: BiomeGenerationSettings,
+    pub carvers: Vec<std::sync::Arc<crate::world::level::levelgen::carver::WorldCarver>>,
 }
 
 static INLINE_BIOMES: Mutex<Vec<(String, &'static InlineBiome)>> = Mutex::new(Vec::new());
@@ -31,7 +32,8 @@ fn create(tag: &Nbt) -> InlineBiome {
         .as_array()
         .map(|steps| steps.iter().map(|step| step.as_array().into_iter().flatten().filter_map(|feature| feature.as_str().and_then(placed_feature_index)).collect()).collect())
         .unwrap_or_default();
-    InlineBiome { tag: tag.clone(), climate, attributes, generation: BiomeGenerationSettings::new(features) }
+    let carvers = crate::world::level::levelgen::carver::carvers_of(&json["carvers"]).unwrap_or_default();
+    InlineBiome { tag: tag.clone(), climate, attributes, generation: BiomeGenerationSettings::new(features), carvers }
 }
 
 pub fn register(tag: &Nbt) -> Biome {
@@ -57,4 +59,8 @@ pub fn attribute_maps() -> Vec<EnvironmentAttributeMap> {
 
 pub fn identity_hash(biome: Biome) -> i32 {
     crate::util::java_collections::identity_hash_code_of(&format!("inline_biome:{}", biome.0 & !Biome::INLINE))
+}
+
+pub fn count() -> usize {
+    INLINE_BIOMES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).len()
 }

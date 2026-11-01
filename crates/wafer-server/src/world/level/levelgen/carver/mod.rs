@@ -50,26 +50,43 @@ impl WorldCarver {
     }
 }
 
-pub static BIOME_CARVERS: LazyLock<Vec<Vec<Arc<WorldCarver>>>> = LazyLock::new(|| load_biome_carvers().expect("vanilla carvers"));
+static CONFIGURED_CARVERS: LazyLock<HashMap<&'static str, Arc<WorldCarver>>> = LazyLock::new(|| load_configured_carvers().expect("vanilla carvers"));
 
-fn load_biome_carvers() -> Result<Vec<Vec<Arc<WorldCarver>>>, String> {
+static BIOME_CARVERS: LazyLock<Vec<Vec<Arc<WorldCarver>>>> = LazyLock::new(|| load_biome_carvers().expect("vanilla carvers"));
+
+pub fn biome_carvers(biome: crate::world::level::chunk::Biome) -> &'static [Arc<WorldCarver>] {
+    if biome.is_inline() {
+        return &crate::world::level::biome::inline_biome::get(biome).carvers;
+    }
+    &BIOME_CARVERS[biome.0 as usize]
+}
+
+fn load_configured_carvers() -> Result<HashMap<&'static str, Arc<WorldCarver>>, String> {
     let mut carvers = HashMap::new();
     for &(name, source) in crate::core::data_registries::present_json_entries("minecraft:worldgen/carver") {
         let json: Value = serde_json::from_str(source).map_err(|e| format!("{name}: {e}"))?;
         carvers.insert(name, Arc::new(WorldCarver::parse(&json).map_err(|e| format!("{name}: {e}"))?));
     }
+    Ok(carvers)
+}
+
+pub fn carvers_of(carvers: &Value) -> Result<Vec<Arc<WorldCarver>>, String> {
+    let names: Vec<&str> = match carvers {
+        Value::String(name) => vec![name],
+        Value::Array(names) => names.iter().map(|n| n.as_str().ok_or("bad carver")).collect::<Result<_, _>>()?,
+        other => return Err(format!("bad carvers {other}")),
+    };
+    names.into_iter().map(|name| CONFIGURED_CARVERS.get(name).cloned().ok_or_else(|| format!("unknown carver {name}"))).collect()
+}
+
+fn load_biome_carvers() -> Result<Vec<Vec<Arc<WorldCarver>>>, String> {
     let biomes: HashMap<&str, &str> = crate::core::data_registries::json_entries("minecraft:worldgen/biome").iter().copied().collect();
     SyncedRegistry::get("minecraft:worldgen/biome")
         .entries
         .iter()
         .map(|&biome| {
             let json: Value = serde_json::from_str(biomes[biome]).map_err(|e| format!("{biome}: {e}"))?;
-            let names: Vec<&str> = match &json["carvers"] {
-                Value::String(name) => vec![name],
-                Value::Array(names) => names.iter().map(|n| n.as_str().ok_or("bad carver")).collect::<Result<_, _>>()?,
-                other => return Err(format!("{biome}: bad carvers {other}")),
-            };
-            names.into_iter().map(|name| carvers.get(name).cloned().ok_or_else(|| format!("{biome}: unknown carver {name}"))).collect()
+            carvers_of(&json["carvers"]).map_err(|e| format!("{biome}: {e}"))
         })
         .collect()
 }

@@ -39,6 +39,14 @@ impl Biome {
         self.0 & Biome::INLINE != 0
     }
 
+    pub fn slot(self) -> usize {
+        if self.is_inline() { Biome::count() + (self.0 & !Biome::INLINE) as usize } else { self.0 as usize }
+    }
+
+    pub fn slot_count() -> usize {
+        Biome::count() + crate::world::level::biome::inline_biome::count()
+    }
+
     pub fn name(self) -> &'static str {
         if self.is_inline() {
             return "[unregistered]";

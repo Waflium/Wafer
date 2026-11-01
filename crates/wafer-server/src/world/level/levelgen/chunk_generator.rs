@@ -6,7 +6,7 @@ use wafer_core::ChunkPos;
 use wafer_data::{BlockState, DimensionType, block_tags, blocks};
 
 use super::aquifer::{Aquifer, AquiferSamplers, FluidPicker, NoiseBasedAquifer};
-use super::carver::BIOME_CARVERS;
+use super::carver::biome_carvers;
 use super::density_function::{Df, DensityVolume, Sampler, SamplerContext};
 use super::material::WorldGenerationContext;
 use super::worldgen_random::WorldgenRandom;
@@ -120,9 +120,9 @@ impl NoiseBasedChunkGenerator {
     pub fn features_per_step(&self) -> &(Vec<StepFeatureData>, Vec<bool>) {
         self.features_per_step.get_or_init(|| {
             let possible_biomes = self.biome_source.possible_biomes();
-            let mut possible = vec![false; wafer_data::SyncedRegistry::get("minecraft:worldgen/biome").entries.len()];
+            let mut possible = vec![false; Biome::slot_count()];
             for biome in &possible_biomes {
-                possible[biome.0 as usize] = true;
+                possible[biome.slot()] = true;
             }
             (feature_sorter::build_features_per_step(&possible_biomes, biome_generation_settings::get), possible)
         })
@@ -343,10 +343,10 @@ impl NoiseBasedChunkGenerator {
         let mut aquifer = self.create_aquifer(&mut ctx, &volume);
         self.do_fill(chunk, &mut ctx, &mut aquifer, &volume);
 
-        let mut possible = vec![false; wafer_data::SyncedRegistry::get("minecraft:worldgen/biome").entries.len()];
+        let mut possible = vec![false; Biome::slot_count()];
         for chunk_biomes in biomes {
             for biome in &chunk_biomes.quarts {
-                possible[biome.0 as usize] = true;
+                possible[biome.slot()] = true;
             }
         }
         let zoom_seed = self.zoom_seed;
@@ -394,7 +394,7 @@ impl NoiseBasedChunkGenerator {
             for dz in -CARVER_RANGE..=CARVER_RANGE {
                 let source = ChunkPos::new(pos.x + dx, pos.z + dz);
                 let biome = self.carver_biome(&mut climate_ctx, source);
-                for (index, carver) in BIOME_CARVERS[biome.0 as usize].iter().enumerate() {
+                for (index, carver) in biome_carvers(biome).iter().enumerate() {
                     random.set_large_feature_seed(self.seed().wrapping_add(index as i64), source.x, source.z);
                     if carver.is_start_chunk(&mut random) {
                         carver.carve(&generation, &mut random, pos, source, &mut mask);

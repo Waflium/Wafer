@@ -484,10 +484,10 @@ impl Condition {
         match condition {
             MaterialCondition::Biome(biomes) => {
                 if let Some(possible) = ctx.possible_biomes {
-                    if !biomes.iter().any(|b| possible[b.0 as usize]) {
+                    if !biomes.iter().any(|b| possible[b.slot()]) {
                         return Condition::Constant(false);
                     }
-                    if possible.iter().enumerate().all(|(i, &p)| !p || biomes.contains(&Biome(i as u16))) {
+                    if possible.iter().enumerate().all(|(i, &p)| !p || biomes.iter().any(|b| b.slot() == i)) {
                         return Condition::Constant(true);
                     }
                 }
