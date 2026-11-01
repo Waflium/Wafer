@@ -402,7 +402,7 @@ pub fn build() -> Vec<TypeInfo> {
     let t = |pair: Pair| info(false, pair);
     let dye = || p(dye_color());
     vec![
-        p(nbt(custom::custom_data_codec())),
+        p(nbt(custom::custom_data())),
         p(var_int(Codec::Int(1, 99, RangeError::Within))),
         p(var_int(positive_int())),
         p(var_int(non_negative_int())),
@@ -571,7 +571,7 @@ pub fn build() -> Vec<TypeInfo> {
         ])),
         p(nbt(Codec::Map(Box::new(Codec::Element("minecraft:block")), Box::new(Codec::string())))),
         p(custom::typed_entity_data("minecraft:entity_type")),
-        p(nbt(custom::custom_data_codec())),
+        p(nbt(custom::custom_data())),
         p(custom::typed_entity_data("minecraft:block_entity_type")),
         p(holder("minecraft:instrument", crate::world::item::instrument::direct_codec())),
         p(trim_material()),

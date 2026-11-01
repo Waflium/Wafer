@@ -40,6 +40,7 @@ const INT_STREAM_FRAMES: [&str; 14] = [
 
 const VEC3I_FIXED_SIZE: &str = "net.minecraft.core.Vec3i.lambda$static$0(Vec3i.java:19)";
 pub const BLOCK_POS_FIXED_SIZE: &str = "net.minecraft.core.BlockPos.lambda$static$0(BlockPos.java:35)";
+const UUID_FIXED_SIZE: &str = "net.minecraft.core.UUIDUtil.lambda$static$0(UUIDUtil.java:26)";
 
 fn throw_int_stream_element(value: &Nbt, owner: &'static str) {
     let Nbt::LazilyParsedNumber(text) = value else { return };
@@ -169,7 +170,7 @@ pub fn fixed_size_longs(tag: &Nbt, size: usize) -> DecodeResult<Vec<i64>> {
 }
 
 pub fn uuid(tag: &Nbt) -> DecodeResult<u128> {
-    fixed_size_ints(tag, 4).map(|ints| ints.iter().fold(0u128, |acc, &v| acc << 32 | v as u32 as u128))
+    fixed_size_ints_owned(tag, 4, UUID_FIXED_SIZE).map(|ints| ints.iter().fold(0u128, |acc, &v| acc << 32 | v as u32 as u128))
 }
 
 pub fn block_pos(tag: &Nbt) -> DecodeResult<wafer_core::BlockPos> {

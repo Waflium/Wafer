@@ -535,10 +535,7 @@ impl Codec {
             | Codec::Either(..)
             | Codec::Xor(..)
             | Codec::Alt(..) => self.decode_partial(tag).into_result(),
-            Codec::Compound => match tag {
-                Nbt::Compound(_) => Ok(tag.copy()),
-                _ => Err(format!("Not a compound tag: {}", nbt::to_string(tag))),
-            },
+            Codec::Compound => crate::util::codec::compound_tag(tag).into_result(),
             Codec::AnyTag => Ok(tag.clone()),
             Codec::Uuid => decode_uuid(tag),
             Codec::Custom(c) => c.decode(tag),

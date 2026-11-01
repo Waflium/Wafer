@@ -9,8 +9,10 @@ use super::types::{
 };
 use super::{DataComponentPatch, DataComponentType, text};
 use crate::commands::brigadier::StringReader;
+use crate::core::data_registries::unwinding;
 use crate::nbt;
 use crate::util::codec::{self as util_codec, DataResult, DecodeResult, Record};
+use crate::util::dfu_frames;
 use crate::util::hash_ops::{self, HashCode};
 
 macro_rules! rd {
@@ -39,6 +41,10 @@ fn parse_compound(value: &Nbt) -> Result<Nbt, String> {
 
 pub fn custom_data_codec() -> Codec {
     Codec::Alt(Box::new(Codec::Compound), Box::new(Codec::string()), parse_compound)
+}
+
+pub fn custom_data() -> Codec {
+    Codec::Framed(Box::new(custom_data_codec()), super::codec::Wrap::Xmap)
 }
 
 pub fn show_icon_default(value: Nbt) -> Result<Nbt, String> {
@@ -493,7 +499,10 @@ impl Profile {
         if let Err(error) = codec::map(tag) {
             return DecodeResult::error(error);
         }
-        let stored = stored_game_profile(tag);
+        let stored = unwinding(
+            || dfu_frames::record_field(dfu_frames::FieldShape::Nested, 2, 0),
+            || unwinding(dfu_frames::either_map_first, || stored_game_profile(tag)),
+        );
         let profile = if stored.is_success() {
             stored
         } else {
@@ -574,7 +583,8 @@ impl Custom for Profile {
     }
 
     fn decode_partial(&self, tag: &Nbt) -> DecodeResult<Nbt> {
-        util_codec::either_result(Profile::decode_full(tag), || match player_name(tag) {
+        let full = unwinding(dfu_frames::codec_xmap, || unwinding(dfu_frames::either_first, || unwinding(dfu_frames::codec_view, || Profile::decode_full(tag))));
+        util_codec::either_result(full, || match player_name(tag) {
             Ok(name) => DecodeResult::success(Nbt::Compound(vec![("name".into(), name)].into())),
             Err(error) => DecodeResult::error(error),
         })

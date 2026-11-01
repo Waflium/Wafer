@@ -94,6 +94,10 @@ pub fn either_second() -> Vec<&'static str> {
     vec!["com.mojang.serialization.codecs.EitherCodec.decode(EitherCodec.java:18)"]
 }
 
+pub fn either_map_first() -> Vec<&'static str> {
+    vec!["com.mojang.serialization.codecs.EitherMapCodec.decode(EitherMapCodec.java:27)"]
+}
+
 pub fn xor_first() -> Vec<&'static str> {
     vec!["com.mojang.serialization.codecs.XorCodec.decode(XorCodec.java:16)"]
 }
