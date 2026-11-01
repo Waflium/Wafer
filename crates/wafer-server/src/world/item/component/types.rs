@@ -259,8 +259,12 @@ fn effect_details_fields() -> Vec<Field> {
 }
 
 fn effect_details() -> &'static Pair {
-    static DETAILS: std::sync::LazyLock<Pair> =
-        std::sync::LazyLock::new(|| (Codec::Framed(Box::new(Codec::Normalize(Box::new(Codec::Record(effect_details_fields())), custom::show_icon_default)), Wrap::RecursiveMap), Stream::Record));
+    static DETAILS: std::sync::LazyLock<Pair> = std::sync::LazyLock::new(|| {
+        let mut fields = effect_details_fields();
+        let first = fields.remove(0).record_wrapped(Wrap::RecursiveMap);
+        fields.insert(0, first);
+        (Codec::Normalize(Box::new(Codec::Record(fields)), custom::show_icon_default), Stream::Record)
+    });
     &DETAILS
 }
 

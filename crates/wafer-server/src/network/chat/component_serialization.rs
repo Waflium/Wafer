@@ -452,6 +452,12 @@ fn compile_nbt_path(path: &str) -> std::result::Result<CompilableString<NbtPath>
 
 fn decode_arg(tag: &Nbt) -> DataResult<Arg> {
     if let Nbt::LazilyParsedNumber(text) = tag {
+        let number_format = crate::core::data_registries::unwinding(dfu_frames::codec_xmap, || {
+            crate::core::data_registries::unwinding(dfu_frames::either_first, || crate::world::item::component::text::json_ops_failure(tag))
+        });
+        if let Some(message) = number_format {
+            return DataResult::error(message);
+        }
         return match crate::datafixers::json_ops::convert_element_to_nbt(&crate::util::gson::JsonElement::Number(text.clone())) {
             Ok(Some(Nbt::Byte(number))) => DataResult::success(Arg::Byte(number)),
             Ok(Some(number)) => decode_arg(&number),
