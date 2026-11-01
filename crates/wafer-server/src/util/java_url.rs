@@ -103,6 +103,67 @@ impl JavaUrl {
         if self.port < 0 || self.port as u16 == self.default_port() { host } else { format!("{host}:{}", self.port) }
     }
 
+    pub fn resolve(&self, spec: &str) -> JavaUrl {
+        let spec = spec.trim_matches(|c: char| c <= ' ');
+        let (spec, reference) = match spec.split_once('#') {
+            Some((spec, reference)) => (spec, Some(reference.to_string())),
+            None => (spec, None),
+        };
+        let mut url = JavaUrl { query: None, reference, ..self.clone() };
+        if spec.is_empty() {
+            url.query = self.query.clone();
+            if url.reference.is_none() {
+                url.reference = self.reference.clone();
+            }
+            return url;
+        }
+        let query_only = spec.starts_with('?');
+        let spec = match spec.split_once('?') {
+            Some((spec, query)) => {
+                url.query = Some(query.to_string());
+                spec
+            }
+            None => spec,
+        };
+        let mut rest = spec;
+        if !rest.starts_with("////") && rest.starts_with("//") {
+            let after = &rest[2..];
+            let end = after.find('/').unwrap_or(after.len());
+            let authority = &after[..end];
+            let (host, port) = parse_authority(authority).unwrap_or_else(|_| (authority.to_string(), -1));
+            url.authority = Some(authority.to_string());
+            url.host = host;
+            url.port = port;
+            if !authority.is_empty() {
+                url.path = String::new();
+            }
+            rest = &after[end..];
+        }
+        let mut relative = false;
+        if !rest.is_empty() {
+            if rest.starts_with('/') {
+                url.path = rest.to_string();
+            } else if !url.path.is_empty() {
+                relative = true;
+                url.path = match url.path.rfind('/') {
+                    None if url.authority.is_some() => format!("/{rest}"),
+                    index => format!("{}{rest}", &url.path[..index.map_or(0, |index| index + 1)]),
+                };
+            } else {
+                url.path = if url.authority.is_some() { format!("/{rest}") } else { rest.to_string() };
+            }
+        } else if query_only {
+            url.path = match url.path.rfind('/') {
+                Some(index) => url.path[..index + 1].to_string(),
+                None => "/".to_string(),
+            };
+        }
+        if relative {
+            url.path = remove_dot_segments(url.path);
+        }
+        url
+    }
+
     pub fn with_query(&self, query: &str) -> JavaUrl {
         let mut url = self.clone();
         url.query = Some(match &self.query {
@@ -143,6 +204,37 @@ fn split_protocol(spec: &str) -> Option<(String, &str)> {
         }
     }
     None
+}
+
+fn remove_dot_segments(mut path: String) -> String {
+    while let Some(index) = path.find("/./") {
+        path.replace_range(index..index + 2, "");
+    }
+    let mut from = 0;
+    while let Some(found) = path[from..].find("/../") {
+        let index = from + found;
+        match path[..index].rfind('/').filter(|&previous| index > 0 && !(previous == 0 && path.starts_with("/../"))) {
+            Some(previous) => {
+                path.replace_range(previous..index + 3, "");
+                from = 0;
+            }
+            None => from = index + 3,
+        }
+    }
+    while path.ends_with("/..") {
+        let index = path.find("/..").expect("a /.. suffix");
+        match index.checked_sub(1).and_then(|end| path[..=end].rfind('/')) {
+            Some(previous) => path.truncate(previous + 1),
+            None => break,
+        }
+    }
+    if path.starts_with("./") && path.len() > 2 {
+        path.replace_range(..2, "");
+    }
+    if path.ends_with("/.") {
+        path.pop();
+    }
+    path
 }
 
 fn parse_authority(authority: &str) -> Result<(String, i32), JavaThrowable> {
@@ -216,5 +308,36 @@ mod tests {
         let error = JavaUrl::constant("notaurl").unwrap_err();
         assert_eq!(error.description, "java.lang.Error: Couldn't create constant for notaurl");
         assert_eq!(error.cause.as_ref().unwrap().description, "java.net.MalformedURLException: no protocol: notaurl");
+    }
+
+    #[test]
+    fn relative_specs_resolve_like_url_with_a_context() {
+        let cases = [
+            ("http://h/a/b/c?q#f", "d", "http://h/a/b/d"),
+            ("http://h/a/b/c?q#f", "./d", "http://h/a/b/d"),
+            ("http://h/a/b/c?q#f", "../d", "http://h/a/d"),
+            ("http://h/a/b/c?q#f", "../../d", "http://h/d"),
+            ("http://h/a/b/c?q#f", "../../../d", "http://h/../d"),
+            ("http://h/a/b/c?q#f", "/x/y", "http://h/x/y"),
+            ("http://h/a/b/c?q#f", "?z", "http://h/a/b/?z"),
+            ("http://h/a/b/c?q#f", "#g", "http://h/a/b/c?q#g"),
+            ("http://h/a/b/c?q#f", "", "http://h/a/b/c?q#f"),
+            ("http://h/a/b/c?q#f", "//other:8080/p?w", "http://other:8080/p?w"),
+            ("http://h/a/b/c?q#f", "//other", "http://other"),
+            ("http://h/a/b/", "..", "http://h/a/"),
+            ("http://h/a/b/", ".", "http://h/a/b/"),
+            ("http://h/a/b/", "./", "http://h/a/b/"),
+            ("http://h/a/b/c", "d/../e", "http://h/a/b/e"),
+            ("http://h/a/b/c", "d/./e/.", "http://h/a/b/d/e/"),
+            ("http://h", "d", "http://h/d"),
+            ("http://h:81/a", "?x#y", "http://h:81/?x#y"),
+            ("https://h/a/b/c", "g;x?y#s", "https://h/a/b/g;x?y#s"),
+            ("http://h/a/b/c", "////x", "http://h////x"),
+            ("http://h/a/b/c", "..//x", "http://h/a//x"),
+            ("http://h/a/b/c", "  spaced  ", "http://h/a/b/spaced"),
+        ];
+        for (base, spec, expected) in cases {
+            assert_eq!(JavaUrl::parse(base).unwrap().resolve(spec).to_string(), expected, "{base} + {spec:?}");
+        }
     }
 }

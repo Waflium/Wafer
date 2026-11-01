@@ -16,6 +16,7 @@ use crate::util::java_url::JavaUrl;
 
 pub const CONNECT_TIMEOUT: Duration = Duration::from_millis(5000);
 pub const READ_TIMEOUT: Duration = Duration::from_millis(5000);
+const MAX_REDIRECTS: u32 = 20;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Method {
@@ -67,6 +68,7 @@ pub enum Failure {
     UnexpectedEof,
     PrematureEof { chunked: bool, status: u16 },
     Other(String),
+    TooManyRedirects(u32),
 }
 
 const READ_SERVICE_RESPONSE_130: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:130)";
@@ -325,6 +327,7 @@ impl Failure {
                 JavaThrowable::new("java.io.IOException: Premature EOF", concat(&[head, &body_read_tail(*status)]))
             }
             Failure::Other(message) => JavaThrowable::new(format!("java.io.IOException: {message}"), Vec::new()),
+            Failure::TooManyRedirects(redirects) => JavaThrowable::new(format!("java.net.ProtocolException: Server redirected too many times ({redirects})"), Vec::new()),
         }
     }
 
@@ -684,6 +687,7 @@ struct Head {
     content_type: Option<String>,
     content_length: Option<usize>,
     chunked: bool,
+    location: Option<String>,
 }
 
 async fn read_head(reader: &mut Reader) -> Result<Head, Failure> {
@@ -695,7 +699,7 @@ async fn read_head(reader: &mut Reader) -> Result<Head, Failure> {
     let version = parts.next().unwrap_or_default();
     let status = parts.next().and_then(|code| code.trim().parse::<u16>().ok());
     let (true, Some(status)) = (version.starts_with("HTTP/"), status) else { return Err(Failure::Other(format!("Invalid Http response"))) };
-    let mut head = Head { status, content_type: None, content_length: None, chunked: false };
+    let mut head = Head { status, content_type: None, content_length: None, chunked: false, location: None };
     loop {
         match reader.read_line().await.map_err(header_failure)? {
             None => break,
@@ -707,6 +711,7 @@ async fn read_head(reader: &mut Reader) -> Result<Head, Failure> {
                         "content-type" => head.content_type = Some(value.to_string()),
                         "content-length" => head.content_length = value.parse().ok(),
                         "transfer-encoding" => head.chunked = value.eq_ignore_ascii_case("chunked"),
+                        "location" => head.location = Some(value.to_string()),
                         _ => {}
                     }
                 }
@@ -772,6 +777,33 @@ async fn read_body(reader: &mut Reader, head: &Head) -> Result<Vec<u8>, Failure>
 }
 
 pub async fn send(method: Method, url: &JavaUrl, body: Option<&[u8]>) -> Result<Response, Failure> {
+    let (mut method, mut url, mut body) = (method, url.clone(), body);
+    let mut redirects = 0;
+    while redirects < MAX_REDIRECTS {
+        let (response, location) = send_once(method, &url, body).await?;
+        let Some(location_url) = follow_redirect(&url, response.status, location) else { return Ok(response) };
+        if method == Method::Post && response.status != 307 {
+            method = Method::Get;
+            body = None;
+        }
+        url = location_url;
+        redirects += 1;
+    }
+    Err(Failure::TooManyRedirects(redirects))
+}
+
+fn follow_redirect(url: &JavaUrl, status: u16, location: Option<String>) -> Option<JavaUrl> {
+    if !(300..=307).contains(&status) || status == 306 || status == 304 || status == 305 {
+        return None;
+    }
+    let location = location?;
+    match JavaUrl::parse(&location) {
+        Ok(location_url) => location_url.protocol.eq_ignore_ascii_case(&url.protocol).then_some(location_url),
+        Err(_) => Some(url.resolve(&location)),
+    }
+}
+
+async fn send_once(method: Method, url: &JavaUrl, body: Option<&[u8]>) -> Result<(Response, Option<String>), Failure> {
     let request = request_bytes(method, url, body);
     let mut failed_once = false;
     loop {
@@ -781,7 +813,7 @@ pub async fn send(method: Method, url: &JavaUrl, body: Option<&[u8]>) -> Result<
         match read_head(&mut reader).await {
             Ok(head) => {
                 let body = read_body(&mut reader, &head).await?;
-                return Ok(Response { status: head.status, content_type: head.content_type, body });
+                return Ok((Response { status: head.status, content_type: head.content_type, body }, head.location));
             }
             Err(Failure::UnexpectedEof | Failure::ConnectionReset(Phase::Header) | Failure::ConnectionAborted(Phase::Header, _)) if !failed_once => failed_once = true,
             Err(failure) => return Err(failure),
@@ -881,6 +913,45 @@ mod tests {
         let url = JavaUrl::parse(&format!("http://127.0.0.1:{port}/")).unwrap();
         let response = send(Method::Get, &url, None).await.unwrap();
         assert_eq!((response.status, response.body.len()), (200, 0));
+    }
+
+    async fn serve_redirects() -> (u16, Arc<AtomicUsize>) {
+        serve(|stream| {
+            tokio::spawn(async move {
+                let mut stream = stream;
+                let mut buffer = [0u8; 2048];
+                let read = stream.read(&mut buffer).await.unwrap_or(0);
+                let request = String::from_utf8_lossy(&buffer[..read]).to_string();
+                let response = if request.starts_with("GET /a/final ") {
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"
+                } else if request.contains(" /loop ") {
+                    "HTTP/1.1 302 Found\r\nLocation: /loop\r\nContent-Length: 0\r\n\r\n"
+                } else {
+                    "HTTP/1.1 302 Found\r\nLocation: final\r\nContent-Length: 0\r\n\r\n"
+                };
+                let _ = stream.write_all(response.as_bytes()).await;
+            });
+        })
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn redirects_are_followed_as_get_like_http_url_connection() {
+        let (port, accepted) = serve_redirects().await;
+        let url = JavaUrl::parse(&format!("http://127.0.0.1:{port}/a/start")).unwrap();
+        let response = send(Method::Post, &url, Some(b"{}")).await.unwrap();
+        assert_eq!((response.status, response.body.as_slice()), (200, b"ok".as_slice()));
+        assert_eq!(accepted.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn redirect_loops_stop_after_twenty_requests() {
+        let (port, accepted) = serve_redirects().await;
+        let url = JavaUrl::parse(&format!("http://127.0.0.1:{port}/loop")).unwrap();
+        let failure = send(Method::Get, &url, None).await.unwrap_err();
+        assert_eq!(failure, Failure::TooManyRedirects(20));
+        assert_eq!(failure.cause(&url).description, "java.net.ProtocolException: Server redirected too many times (20)");
+        assert_eq!(accepted.load(Ordering::SeqCst), 20);
     }
 
     #[test]
