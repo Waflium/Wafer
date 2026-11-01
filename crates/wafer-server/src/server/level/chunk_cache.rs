@@ -108,6 +108,7 @@ pub struct ChunkCache {
     pub(crate) server_tasks: Option<(ServerTasks, usize)>,
     world_gen_chunk_entities: Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)>,
     legacy_chunk_entities: Vec<(ChunkPos, Vec<wafer_protocol::nbt::Nbt>)>,
+    pending_post_loads: FastMap<ChunkPos, (Job, Option<(LevelChunkTicks<Block>, LevelChunkTicks<Fluid>)>)>,
     world_gen_entity_teams: Vec<(u128, String)>,
     world_gen_entity_sounds: Vec<(Vec3, i32, SoundSource, f32, f32)>,
     pub scoreboard: Rc<RefCell<Scoreboard>>,
@@ -177,6 +178,7 @@ impl ChunkCache {
             server_tasks: None,
             world_gen_chunk_entities: Vec::new(),
             legacy_chunk_entities: Vec::new(),
+            pending_post_loads: FastMap::default(),
             world_gen_entity_teams: Vec::new(),
             world_gen_entity_sounds: Vec::new(),
             scoreboard: Rc::default(),
@@ -566,7 +568,14 @@ impl ChunkCache {
     }
 
     pub fn managed_block_level_step(&mut self) {
-        assert!(self.run_idle_step(), "waiting for a chunk with nothing to wait for");
+        if self.run_idle_step() {
+            return;
+        }
+        let pending: Vec<ChunkPos> = self.pending_post_loads.keys().copied().collect();
+        assert!(!pending.is_empty(), "waiting for a chunk with nothing to wait for");
+        for pos in pending {
+            self.run_post_load(pos);
+        }
     }
 
     pub fn run_idle_step(&mut self) -> bool {
@@ -1477,7 +1486,26 @@ impl ChunkCache {
             }
             if !chunk.legacy_entities.is_empty() {
                 self.legacy_chunk_entities.push((pos, std::mem::take(&mut chunk.legacy_entities)));
+                self.pending_post_loads.insert(pos, (job, proto_ticks));
+                return;
             }
+        }
+        self.finish_full_step(job, proto_ticks);
+    }
+
+    pub fn run_post_load(&mut self, pos: ChunkPos) {
+        if let Some((job, proto_ticks)) = self.pending_post_loads.remove(&pos) {
+            if self.holders.get(pos.pack()).is_none_or(|h| h.id != job.holder) {
+                self.holders.futures.complete(job.work, false);
+                return;
+            }
+            self.finish_full_step(job, proto_ticks);
+        }
+    }
+
+    fn finish_full_step(&mut self, job: Job, proto_ticks: Option<(LevelChunkTicks<Block>, LevelChunkTicks<Fluid>)>) {
+        let pos = job.pos;
+        if let Some(chunk) = self.chunks.get_mut(&pos) {
             let block_entities = std::mem::take(&mut chunk.post_load_block_entities);
             chunk.load_block_entities(&block_entities);
             chunk.loaded = true;

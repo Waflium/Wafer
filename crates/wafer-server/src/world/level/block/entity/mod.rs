@@ -304,7 +304,12 @@ impl BlockEntity {
     }
 
     pub fn load_static(pos: BlockPos, state: BlockState, tag: &Nbt, callers: &[&'static str]) -> Option<BlockEntity> {
-        let Some(ty) = tag.get("id").and_then(Nbt::as_str).and_then(crate::commands::arguments::parse_identifier).and_then(|id| BlockEntityType::by_name(&id)) else {
+        let ty = tag.get("id").and_then(|id| {
+            let read = crate::util::codec::identifier(id)
+                .and_then(|name| BlockEntityType::by_name(&name).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:block_entity_type]: {name}")));
+            read.map_err(|message| error!("Failed to read field (id={}): {message}", crate::nbt::to_string(id))).ok()
+        });
+        let Some(ty) = ty else {
             error!("Skipping block entity with invalid type: {}", tag.get("id").map_or("null".to_string(), crate::nbt::to_string));
             return None;
         };

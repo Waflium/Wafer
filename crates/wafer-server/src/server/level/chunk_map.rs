@@ -325,6 +325,7 @@ impl ServerLevel {
         }
         for (pos, entities) in self.chunks.take_legacy_chunk_entities().iter() {
             self.add_legacy_chunk_entities(*pos, entities);
+            self.chunks.run_post_load(*pos);
         }
         for (pos, entities) in self.chunks.take_world_gen_chunk_entities().iter() {
             self.add_world_gen_chunk_entities(*pos, entities);

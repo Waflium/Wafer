@@ -974,12 +974,8 @@ impl ServerLevel {
     }
 
     pub fn create_entity_from_tag(&mut self, nbt: &Nbt, site: &[&'static str]) -> Option<LevelEntity> {
-        let Some(entity_type) = nbt.get("id").and_then(Nbt::as_str) else {
-            warn!("Skipping Entity with id [invalid]");
-            return None;
-        };
-        let Some(mut entity) = ServerLevel::create_entity(entity_type) else {
-            warn!("Skipping Entity with id {entity_type}");
+        let Some(mut entity) = super::entity_type::EntityType::by(nbt).and_then(|ty| ServerLevel::create_entity(ty.get_key())) else {
+            warn!("Skipping Entity with id {}", nbt.get("id").and_then(Nbt::as_str).unwrap_or("[invalid]"));
             return None;
         };
         let below_create = || ENTITY_TYPE_CREATE[..3].iter().copied().chain(site.iter().copied()).collect();
@@ -1000,9 +996,14 @@ impl ServerLevel {
     }
 
     fn load_entity_with(&mut self, nbt: &Nbt, passenger_depth: usize, site: &dyn Fn() -> Vec<&'static str>, typed: bool) -> Option<LevelEntity> {
-        let entity_type = nbt.get("id").and_then(Nbt::as_str)?;
-        let Some(mut entity) = ServerLevel::create_entity(entity_type) else {
-            warn!("Skipping Entity with id {entity_type}");
+        let created = if typed {
+            let entity_type = nbt.get("id").and_then(Nbt::as_str)?;
+            ServerLevel::create_entity(entity_type)
+        } else {
+            super::entity_type::EntityType::by(nbt).and_then(|ty| ServerLevel::create_entity(ty.get_key()))
+        };
+        let Some(mut entity) = created else {
+            warn!("Skipping Entity with id {}", nbt.get("id").and_then(Nbt::as_str).unwrap_or("[invalid]"));
             return None;
         };
         let below_create = || entity_creation_frames(passenger_depth, &site(), typed);

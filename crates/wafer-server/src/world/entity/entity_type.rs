@@ -33,6 +33,14 @@ impl EntityType {
         wafer_data::registry::ENTITY_TYPE.iter().position(|&e| e == name).map(|i| entity_types::BY_ID[i])
     }
 
+    pub fn by(input: &wafer_protocol::nbt::Nbt) -> Option<&'static EntityType> {
+        crate::world::level::storage::tag_value_input::read(input, "id", |tag| {
+            crate::util::codec::DecodeResult::from(crate::util::codec::identifier(tag).and_then(|id| {
+                EntityType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_type]: {id}"))
+            }))
+        })
+    }
+
     pub fn get_key(&self) -> &'static str {
         wafer_data::registry::ENTITY_TYPE[self.id as usize]
     }
