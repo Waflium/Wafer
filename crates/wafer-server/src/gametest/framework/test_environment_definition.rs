@@ -18,7 +18,8 @@ pub const REGISTRY: &str = "minecraft:test_environment";
 fn decode_game_rule_map(tag: Nbt) -> Result<Nbt, String> {
     let entries = codec::map(&tag)?;
     let mut rules = Vec::with_capacity(entries.len());
-    for (name, value) in entries {
+    for i in crate::util::codec::map_entry_order(entries) {
+        let (name, value) = &entries[i];
         let id = codec::identifier(&Nbt::String(name.clone()))?;
         let rule = GameRule::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: {id}"))?;
         let info = rule.info();
@@ -275,5 +276,22 @@ fn run(server: &mut Server, level: usize, function_id: &str) {
             ServerFunctionManager::execute(server, &function, &source);
         }
         None => error!("Test Batch failed for non-existent function {function_id}"),
+    }
+}
+
+#[cfg(test)]
+mod hash_map_order_tests {
+    use super::*;
+
+    fn unknown_keys() -> Nbt {
+        Nbt::Compound(["x", "y", "z", "w"].iter().map(|key| (key.to_string(), Nbt::Int(1))).collect())
+    }
+
+    #[test]
+    fn game_rule_maps_are_decoded_in_hash_map_order_for_nbt() {
+        let error = decode_game_rule_map(unknown_keys()).unwrap_err();
+        assert!(error.ends_with("minecraft:w"), "{error}");
+        let error = crate::nbt::with_json_source(|| decode_game_rule_map(unknown_keys())).unwrap_err();
+        assert!(error.ends_with("minecraft:x"), "{error}");
     }
 }

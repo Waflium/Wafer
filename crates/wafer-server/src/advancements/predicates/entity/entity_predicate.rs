@@ -51,7 +51,8 @@ fn sub_predicate_codec(id: &str) -> Option<Pair> {
 fn decode_parts(tag: Nbt) -> Result<Nbt, String> {
     let entries = codec::map(&tag)?;
     let mut parts = Vec::with_capacity(entries.len());
-    for (key, value) in entries {
+    for i in crate::util::codec::map_entry_order(entries) {
+        let (key, value) = &entries[i];
         let id = crate::resources::identifier::read(key)?;
         let sub_codec = sub_predicate_codec(&id)
             .ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_sub_predicate_type]: {id}"))?;
@@ -99,5 +100,22 @@ impl EntityPredicate {
         params.this_entity = Some(entity);
         params.origin = Some(origin);
         LootContextBuilder::new(params).create(None)
+    }
+}
+
+#[cfg(test)]
+mod hash_map_order_tests {
+    use super::*;
+
+    fn unknown_keys() -> Nbt {
+        Nbt::Compound(["x", "y", "z", "w"].iter().map(|key| (key.to_string(), Nbt::Int(1))).collect())
+    }
+
+    #[test]
+    fn sub_predicate_maps_are_decoded_in_hash_map_order_for_nbt() {
+        let error = decode_parts(unknown_keys()).unwrap_err();
+        assert!(error.ends_with("minecraft:w"), "{error}");
+        let error = crate::nbt::with_json_source(|| decode_parts(unknown_keys())).unwrap_err();
+        assert!(error.ends_with("minecraft:x"), "{error}");
     }
 }

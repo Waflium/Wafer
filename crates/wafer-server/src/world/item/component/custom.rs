@@ -765,7 +765,8 @@ impl Custom for ExactPredicate {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         let fields = codec::map(tag)?;
         let mut out = Vec::new();
-        for (key, value) in fields {
+        for i in crate::util::codec::map_entry_order(fields) {
+            let (key, value) = &fields[i];
             let id = codec::identifier(&Nbt::String(key.clone()))?;
             let ty = DataComponentType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {id}"))?;
             if ty.is_transient() {
@@ -811,7 +812,8 @@ impl Custom for PartialPredicates {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
         let fields = codec::map(tag)?;
         let mut out = Vec::new();
-        for (key, value) in fields {
+        for i in crate::util::codec::map_entry_order(fields) {
+            let (key, value) = &fields[i];
             let id = codec::identifier(&Nbt::String(key.clone()))?;
             if codec::registry(PREDICATE_TYPES).contains(&id.as_str()) {
                 let decoded = match crate::core::component::predicates::data_component_predicate::type_codec(&id) {
@@ -886,6 +888,26 @@ mod tests {
         let pos = Nbt::IntArray(vec![-1, 64, 3]);
         BlockPosCodec.write(&pos, &mut w).unwrap();
         assert_eq!(BlockPosCodec.read(&mut Reader::new(w.as_slice())).unwrap(), pos);
+    }
+
+    fn unknown_keys() -> Nbt {
+        Nbt::Compound(["x", "y", "z", "w"].iter().map(|key| (key.to_string(), Nbt::Int(1))).collect())
+    }
+
+    #[test]
+    fn exact_predicates_decode_nbt_maps_in_hash_map_order() {
+        let error = ExactPredicate.decode(&unknown_keys()).unwrap_err();
+        assert!(error.ends_with("minecraft:w"), "{error}");
+        let error = crate::nbt::with_json_source(|| ExactPredicate.decode(&unknown_keys())).unwrap_err();
+        assert!(error.ends_with("minecraft:x"), "{error}");
+    }
+
+    #[test]
+    fn partial_predicates_decode_nbt_maps_in_hash_map_order() {
+        let error = PartialPredicates.decode(&unknown_keys()).unwrap_err();
+        assert!(error.ends_with("minecraft:w"), "{error}");
+        let error = crate::nbt::with_json_source(|| PartialPredicates.decode(&unknown_keys())).unwrap_err();
+        assert!(error.ends_with("minecraft:x"), "{error}");
     }
 }
 
