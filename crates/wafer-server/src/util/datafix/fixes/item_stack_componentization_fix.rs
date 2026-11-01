@@ -4,7 +4,7 @@ use std::sync::Arc;
 use wafer_protocol::nbt::Nbt;
 
 use crate::datafixers::data_fix::{DataFix, DataFixBase, TypeRewriteRule};
-use crate::datafixers::dynamic::{Dynamic, Number, OptionalDynamic};
+use crate::datafixers::dynamic::{Dynamic, Number, OptionalDynamic, merge_to_map_like};
 use crate::datafixers::schemas::schema::Schema;
 use crate::util::datafix::extra_data_fix_utils;
 use crate::util::datafix::fixes::references::ITEM_STACK;
@@ -776,10 +776,31 @@ impl ItemStackData {
 
 fn merge_remainder(item_stack: Dynamic, remainder: Dynamic) -> Dynamic {
     let Some(Nbt::Compound(item_stack_map)) = &item_stack.value else { return item_stack };
-    let Some(Nbt::Compound(_)) = &remainder.value else { return item_stack };
-    let mut merged = remainder;
-    for (key, value) in item_stack_map {
-        merged = merged.set(key, Dynamic::new(value.clone()));
+    let Some(Nbt::Compound(remainder_map)) = remainder.value else { return item_stack };
+    Dynamic::new(Nbt::Compound(merge_to_map_like(Some(remainder_map), item_stack_map)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wafer_protocol::nbt::TagMap;
+
+    #[test]
+    fn remainder_merge_puts_item_stack_entries_in_hash_map_order() {
+        let mut item_stack = TagMap::new();
+        for i in 0..11 {
+            item_stack.put(&format!("f{i}"), Nbt::Int(i));
+        }
+        item_stack.put("item3", Nbt::Int(1));
+        item_stack.put("item10", Nbt::Int(2));
+        for i in 0..11 {
+            item_stack.remove_key(&format!("f{i}"));
+        }
+        let mut remainder = TagMap::new();
+        remainder.put("a", Nbt::Int(0));
+        let merged = merge_remainder(Dynamic::new(Nbt::Compound(item_stack)), Dynamic::new(Nbt::Compound(remainder)));
+        let Some(Nbt::Compound(merged)) = merged.value else { panic!("a compound") };
+        let keys: Vec<&str> = merged.iteration().map(|(key, _)| key.as_str()).collect();
+        assert_eq!(keys, ["a", "item10", "item3"]);
     }
-    merged
 }
