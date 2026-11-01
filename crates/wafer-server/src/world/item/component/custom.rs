@@ -763,18 +763,16 @@ struct ExactPredicate;
 
 impl Custom for ExactPredicate {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
-        let fields = codec::map(tag)?;
-        let mut out = Vec::new();
-        for i in crate::util::codec::map_entry_order(fields) {
-            let (key, value) = &fields[i];
-            let id = codec::identifier(&Nbt::String(key.clone()))?;
+        let key = |key: &str| {
+            let id = codec::identifier(&Nbt::String(key.to_string()))?;
             let ty = DataComponentType::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {id}"))?;
             if ty.is_transient() {
                 return Err(format!("Encountered transient component {id}"));
             }
-            out.push((id, ty.decode(value)?));
-        }
-        Ok(Nbt::Compound(out.into()))
+            Ok((id, ty))
+        };
+        let entries = crate::util::codec::dispatched_map(tag, key, |(_, ty): &(String, DataComponentType), value| ty.decode(value))?;
+        Ok(Nbt::Compound(entries.into_iter().map(|((id, _), value)| (id, value)).collect()))
     }
 
     fn hash(&self, value: &Nbt) -> HashCode {
@@ -810,26 +808,28 @@ const PREDICATE_TYPES: &str = "minecraft:data_component_predicate_type";
 
 impl Custom for PartialPredicates {
     fn decode(&self, tag: &Nbt) -> Result<Nbt, String> {
-        let fields = codec::map(tag)?;
-        let mut out = Vec::new();
-        for i in crate::util::codec::map_entry_order(fields) {
-            let (key, value) = &fields[i];
-            let id = codec::identifier(&Nbt::String(key.clone()))?;
-            if codec::registry(PREDICATE_TYPES).contains(&id.as_str()) {
-                let decoded = match crate::core::component::predicates::data_component_predicate::type_codec(&id) {
-                    Some(predicate_codec) => predicate_codec.0.decode(value)?,
-                    None => value.clone(),
-                };
-                out.push((id, decoded));
-            } else if DataComponentType::by_name(&id).is_some() {
-                out.push((id, Codec::Unit.decode(value)?));
+        let key = |key: &str| {
+            let id = codec::identifier(&Nbt::String(key.to_string()))?;
+            if codec::registry(PREDICATE_TYPES).contains(&id.as_str()) || DataComponentType::by_name(&id).is_some() {
+                Ok(id)
             } else {
-                return Err(format!(
+                Err(format!(
                     "Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / {PREDICATE_TYPES}]: {id}; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: {id}"
-                ));
+                ))
             }
-        }
-        Ok(Nbt::Compound(out.into()))
+        };
+        let value = |id: &String, value: &Nbt| {
+            if codec::registry(PREDICATE_TYPES).contains(&id.as_str()) {
+                match crate::core::component::predicates::data_component_predicate::type_codec(id) {
+                    Some(predicate_codec) => predicate_codec.0.decode(value),
+                    None => Ok(value.clone()),
+                }
+            } else {
+                Codec::Unit.decode(value)
+            }
+        };
+        let entries = crate::util::codec::dispatched_map(tag, key, value)?;
+        Ok(Nbt::Compound(entries.into()))
     }
 
     fn hash(&self, value: &Nbt) -> HashCode {
@@ -890,24 +890,20 @@ mod tests {
         assert_eq!(BlockPosCodec.read(&mut Reader::new(w.as_slice())).unwrap(), pos);
     }
 
-    fn unknown_keys() -> Nbt {
-        Nbt::Compound(["x", "y", "z", "w"].iter().map(|key| (key.to_string(), Nbt::Int(1))).collect())
+    #[test]
+    fn exact_predicates_collect_every_error_like_dispatched_map() {
+        let tag = nbt::parse_fully(r#"{x:1,"minecraft:damage":"a","minecraft:max_stack_size":5,w:2}"#).unwrap();
+        let unknown = |key: &str| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: minecraft:{key}");
+        let expected = format!("{x}; {x}; {w}; {w}; Not a number missed input: {{\"minecraft:damage\":\"a\",w:2,x:1}}", x = unknown("x"), w = unknown("w"));
+        assert_eq!(ExactPredicate.decode(&tag).unwrap_err(), expected);
     }
 
     #[test]
-    fn exact_predicates_decode_nbt_maps_in_hash_map_order() {
-        let error = ExactPredicate.decode(&unknown_keys()).unwrap_err();
-        assert!(error.ends_with("minecraft:w"), "{error}");
-        let error = crate::nbt::with_json_source(|| ExactPredicate.decode(&unknown_keys())).unwrap_err();
-        assert!(error.ends_with("minecraft:x"), "{error}");
-    }
-
-    #[test]
-    fn partial_predicates_decode_nbt_maps_in_hash_map_order() {
-        let error = PartialPredicates.decode(&unknown_keys()).unwrap_err();
-        assert!(error.ends_with("minecraft:w"), "{error}");
-        let error = crate::nbt::with_json_source(|| PartialPredicates.decode(&unknown_keys())).unwrap_err();
-        assert!(error.ends_with("minecraft:x"), "{error}");
+    fn partial_predicates_collect_every_error_like_dispatched_map() {
+        let tag = nbt::parse_fully(r#"{nope:1,"minecraft:damage":{durability:"x"},"minecraft:max_stack_size":{}}"#).unwrap();
+        let nope = "Failed to parse either. First: Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_predicate_type]: minecraft:nope; Second: Unknown registry key in ResourceKey[minecraft:root / minecraft:data_component_type]: minecraft:nope";
+        let expected = format!("Failed to parse either. First: Not a map: \"x\"; Second: Not a number; {nope}; {nope} missed input: {{\"minecraft:damage\":{{durability:\"x\"}},nope:1}}");
+        assert_eq!(PartialPredicates.decode(&tag).unwrap_err(), expected);
     }
 }
 

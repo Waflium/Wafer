@@ -49,16 +49,13 @@ fn sub_predicate_codec(id: &str) -> Option<Pair> {
 }
 
 fn decode_parts(tag: Nbt) -> Result<Nbt, String> {
-    let entries = codec::map(&tag)?;
-    let mut parts = Vec::with_capacity(entries.len());
-    for i in crate::util::codec::map_entry_order(entries) {
-        let (key, value) = &entries[i];
+    let key = |key: &str| {
         let id = crate::resources::identifier::read(key)?;
-        let sub_codec = sub_predicate_codec(&id)
-            .ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_sub_predicate_type]: {id}"))?;
-        parts.push((id, sub_codec.0.decode(value)?));
-    }
-    Ok(Nbt::Compound(parts.into()))
+        let sub_codec = sub_predicate_codec(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_sub_predicate_type]: {id}"))?;
+        Ok((id, sub_codec))
+    };
+    let parts = crate::util::codec::dispatched_map(&tag, key, |(_, sub_codec): &(String, Pair), value| sub_codec.0.decode(value))?;
+    Ok(Nbt::Compound(parts.into_iter().map(|((id, _), value)| (id, value)).collect()))
 }
 
 pub fn codec() -> Pair {
@@ -104,18 +101,14 @@ impl EntityPredicate {
 }
 
 #[cfg(test)]
-mod hash_map_order_tests {
+mod sub_predicate_map_tests {
     use super::*;
 
-    fn unknown_keys() -> Nbt {
-        Nbt::Compound(["x", "y", "z", "w"].iter().map(|key| (key.to_string(), Nbt::Int(1))).collect())
-    }
-
     #[test]
-    fn sub_predicate_maps_are_decoded_in_hash_map_order_for_nbt() {
-        let error = decode_parts(unknown_keys()).unwrap_err();
-        assert!(error.ends_with("minecraft:w"), "{error}");
-        let error = crate::nbt::with_json_source(|| decode_parts(unknown_keys())).unwrap_err();
-        assert!(error.ends_with("minecraft:x"), "{error}");
+    fn sub_predicate_maps_collect_every_error_like_dispatched_map() {
+        let tag = crate::nbt::parse_fully(r#"{nope:1,"minecraft:flags":{is_on_fire:"q"},zed:2}"#).unwrap();
+        let unknown = |key: &str| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:entity_sub_predicate_type]: minecraft:{key}");
+        let expected = format!("{z}; {z}; {n}; {n}; Not a number missed input: {{\"minecraft:flags\":{{is_on_fire:\"q\"}},nope:1,zed:2}}", z = unknown("zed"), n = unknown("nope"));
+        assert_eq!(decode_parts(tag).unwrap_err(), expected);
     }
 }

@@ -16,20 +16,20 @@ use crate::world::item::component::types::{self, Pair, opt, req};
 pub const REGISTRY: &str = "minecraft:test_environment";
 
 fn decode_game_rule_map(tag: Nbt) -> Result<Nbt, String> {
-    let entries = codec::map(&tag)?;
-    let mut rules = Vec::with_capacity(entries.len());
-    for i in crate::util::codec::map_entry_order(entries) {
-        let (name, value) = &entries[i];
-        let id = codec::identifier(&Nbt::String(name.clone()))?;
+    let key = |name: &str| {
+        let id = codec::identifier(&Nbt::String(name.to_string()))?;
         let rule = GameRule::by_name(&id).ok_or_else(|| format!("Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: {id}"))?;
+        Ok((id, rule))
+    };
+    let value = |(_, rule): &(String, GameRule), value: &Nbt| {
         let info = rule.info();
-        let value = match info.kind {
-            GameRuleType::Bool => Codec::Bool.decode(value)?,
-            GameRuleType::Int => Codec::Int(info.min, info.max, RangeError::Outside).decode(value)?,
-        };
-        rules.push((id, value));
-    }
-    Ok(Nbt::Compound(rules.into()))
+        match info.kind {
+            GameRuleType::Bool => Codec::Bool.decode(value),
+            GameRuleType::Int => Codec::Int(info.min, info.max, RangeError::Outside).decode(value),
+        }
+    };
+    let rules = crate::util::codec::dispatched_map(&tag, key, value)?;
+    Ok(Nbt::Compound(rules.into_iter().map(|((id, _), value)| (id, value)).collect()))
 }
 
 fn definition_lazy() -> &'static Pair {
@@ -280,18 +280,14 @@ fn run(server: &mut Server, level: usize, function_id: &str) {
 }
 
 #[cfg(test)]
-mod hash_map_order_tests {
+mod game_rule_map_tests {
     use super::*;
 
-    fn unknown_keys() -> Nbt {
-        Nbt::Compound(["x", "y", "z", "w"].iter().map(|key| (key.to_string(), Nbt::Int(1))).collect())
-    }
-
     #[test]
-    fn game_rule_maps_are_decoded_in_hash_map_order_for_nbt() {
-        let error = decode_game_rule_map(unknown_keys()).unwrap_err();
-        assert!(error.ends_with("minecraft:w"), "{error}");
-        let error = crate::nbt::with_json_source(|| decode_game_rule_map(unknown_keys())).unwrap_err();
-        assert!(error.ends_with("minecraft:x"), "{error}");
+    fn game_rule_maps_collect_every_error_like_dispatched_map() {
+        let tag = crate::nbt::parse_fully(r#"{nope:1,"minecraft:keep_inventory":5,"minecraft:random_tick_speed":"x"}"#).unwrap();
+        let nope = "Unknown registry key in ResourceKey[minecraft:root / minecraft:game_rule]: minecraft:nope";
+        let expected = format!("{nope}; {nope}; Not a number missed input: {{\"minecraft:random_tick_speed\":\"x\",nope:1}}");
+        assert_eq!(decode_game_rule_map(tag).unwrap_err(), expected);
     }
 }
