@@ -58,6 +58,11 @@ impl ChatType {
     }
 
     pub fn bind(self, name: Component) -> Bound {
+        let id = SyncedRegistry::get("minecraft:chat_type").id_of(self.name());
+        if id.is_none_or(|id| crate::core::data_registries::is_entry_blocked("minecraft:chat_type", id as i32)) {
+            let message = format!("java.lang.IllegalStateException: Missing element ResourceKey[minecraft:chat_type / {}]", self.name());
+            crate::crash_report::throw_java_exception(crate::util::java_throwable::JavaThrowable::new(message, crate::util::java_stack::capture(&[])));
+        }
         Bound { chat_type: self, name, target_name: None }
     }
 }
