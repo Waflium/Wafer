@@ -394,12 +394,14 @@ impl ServerLevel {
 
     pub fn get_chunk_structures_at(&mut self, pos: ChunkPos, status: super::chunk_level::ChunkStatus) -> &crate::world::level::chunk::ChunkStructures {
         let future = self.chunks.begin_chunk_at_status(pos, status);
-        let _scope = crate::server::main_thread_frames::chunk_source_block();
-        self.process_chunk_events();
-        while !self.chunks.is_future_done(future) {
-            self.managed_block_step();
+        if let Some(future) = future {
+            let _scope = crate::server::main_thread_frames::chunk_source_block();
+            self.process_chunk_events();
+            while !self.chunks.is_future_done(future) {
+                self.managed_block_step();
+            }
         }
-        self.chunks.end_chunk_at_status(pos, future)
+        self.chunks.end_chunk_at_status(pos, status, future)
     }
 
     pub fn wait_for_chunk_work(&mut self, timeout: Duration) {

@@ -474,17 +474,35 @@ impl ChunkCache {
 
     pub fn get_chunk_structures(&mut self, pos: ChunkPos, status: ChunkStatus) -> &ChunkStructures {
         let future = self.begin_chunk_at_status(pos, status);
-        self.managed_block(future);
-        self.end_chunk_at_status(pos, future)
+        if let Some(future) = future {
+            self.managed_block(future);
+        }
+        self.end_chunk_at_status(pos, status, future)
     }
 
-    pub fn begin_chunk_at_status(&mut self, pos: ChunkPos, status: ChunkStatus) -> FutureId {
-        self.chunk_future_main_thread(pos, status, true)
+    pub fn count_get_chunk_at_status(&self, pos: ChunkPos, status: ChunkStatus) {
+        profiler::increment_counter("getChunk", 1);
+        if self.cached_chunk(pos, status, true).is_none() {
+            profiler::increment_counter("getChunkCacheMiss", 1);
+            self.store_in_cache(pos, status, true);
+        }
     }
 
-    pub fn end_chunk_at_status(&self, pos: ChunkPos, future: FutureId) -> &ChunkStructures {
-        if !self.holders.futures.is_success(future) {
-            panic!("Chunk not there when requested: {pos:?}");
+    pub fn begin_chunk_at_status(&mut self, pos: ChunkPos, status: ChunkStatus) -> Option<FutureId> {
+        profiler::increment_counter("getChunk", 1);
+        if self.cached_chunk(pos, status, true).is_some() {
+            return None;
+        }
+        profiler::increment_counter("getChunkCacheMiss", 1);
+        Some(self.chunk_future_main_thread(pos, status, true))
+    }
+
+    pub fn end_chunk_at_status(&self, pos: ChunkPos, status: ChunkStatus, future: Option<FutureId>) -> &ChunkStructures {
+        if let Some(future) = future {
+            if !self.holders.futures.is_success(future) {
+                panic!("Chunk not there when requested: {pos:?}");
+            }
+            self.store_in_cache(pos, status, true);
         }
         self.chunk_structures(pos).expect("chunk structures")
     }
@@ -1782,10 +1800,20 @@ impl ChunkCache {
     }
 
     pub fn starts_for_structure(&self, pos: ChunkPos, structure: StructureHolder) -> Vec<Arc<StructureStart>> {
+        self.collect_starts_for_structure(pos, structure, true)
+    }
+
+    fn collect_starts_for_structure(&self, pos: ChunkPos, structure: StructureHolder, counted: bool) -> Vec<Arc<StructureStart>> {
         let Some(references) = self.chunk_structures(pos).and_then(|structures| structures.get_references_for_structure(structure)) else { return Vec::new() };
         references
             .iter()
-            .filter_map(|key| self.chunk_structures(ChunkPos::unpack(key))?.get_start_for_structure(structure).filter(|start| start.is_valid()).cloned())
+            .filter_map(|key| {
+                let start_pos = ChunkPos::unpack(key);
+                if counted {
+                    self.count_get_chunk_at_status(start_pos, ChunkStatus::StructureStarts);
+                }
+                self.chunk_structures(start_pos)?.get_start_for_structure(structure).filter(|start| start.is_valid()).cloned()
+            })
             .collect()
     }
 
@@ -1800,7 +1828,7 @@ impl ChunkCache {
             .references
             .keys()
             .filter(|structure| structure.value().terrain_adaptation() != TerrainAdjustment::None)
-            .flat_map(|&structure| self.starts_for_structure(pos, structure))
+            .flat_map(|&structure| self.collect_starts_for_structure(pos, structure, false))
             .collect();
         Beardifier::for_structures_in_chunk(&structure_starts, pos)
     }
@@ -1819,7 +1847,7 @@ impl ChunkCache {
             structure_starts.resize_with(crate::core::data_registries::json_entries("minecraft:worldgen/structure").len(), Vec::new);
             let referenced: Vec<StructureHolder> = self.chunk_structures(center).map(|structures| structures.references.keys().copied().collect()).unwrap_or_default();
             for structure in referenced {
-                structure_starts[structure.0 as usize] = self.starts_for_structure(center, structure);
+                structure_starts[structure.0 as usize] = self.collect_starts_for_structure(center, structure, false);
             }
         }
         let structure_starts = Arc::new(structure_starts);
