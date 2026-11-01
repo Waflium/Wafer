@@ -57,6 +57,9 @@ pub fn query_instances_and_values_from_pdh(properties: &WildcardProperties, perf
     };
     let mut instances = object_items.instances;
     instances.retain(|instance| wildcard_match(&instance.to_lowercase(), &instance_filter));
+    if perf_object == "Process" {
+        instances = crate::util::java_runtime::as_java_process_instances(instances);
+    }
     let mut handler = PerfCounterQueryHandler::new();
     let mut counter_lists = Vec::with_capacity(properties.counters.len() - 1);
     for counter_name in &properties.counters[1..] {

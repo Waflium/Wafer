@@ -223,6 +223,22 @@ pub enum Event {
 
 pub type ServerTask = Box<dyn FnOnce(&mut Server) + Send + Sync>;
 
+#[derive(Clone)]
+pub struct ServerTaskSender {
+    sender: std::sync::mpsc::Sender<ServerTask>,
+    wakeup: Arc<std::sync::OnceLock<Arc<level::chunk_workers::MainThreadWakeup>>>,
+}
+
+impl ServerTaskSender {
+    pub fn send(&self, task: ServerTask) -> Result<(), std::sync::mpsc::SendError<ServerTask>> {
+        self.sender.send(task)?;
+        if let Some(wakeup) = self.wakeup.get() {
+            wakeup.wake();
+        }
+        Ok(())
+    }
+}
+
 pub(crate) enum Task {
     Chat { player: EntityId, body: SignedMessageBody, signature: Option<MessageSignature> },
     Command { player: EntityId, command: String },
@@ -341,7 +357,7 @@ pub struct Server {
     pub scheduled_events: TimerQueue,
     pub name_to_id_cache: Arc<CachedUserNameToIdResolver>,
     pub profile_resolver: Arc<players::profile_resolver::ProfileResolver>,
-    pub task_sender: Option<std::sync::mpsc::Sender<ServerTask>>,
+    pub task_sender: Option<ServerTaskSender>,
     pub custom_boss_events: CustomBossEvents,
     pub stopwatches: Stopwatches,
     pub services: Services,
@@ -365,7 +381,7 @@ pub struct Server {
 }
 
 pub type OnMetricsRecordingStopped = Box<dyn FnOnce(&mut Server, &ProfileResults)>;
-pub type OnMetricsRecordingFinished = Box<dyn FnOnce(PathBuf, MetricsReportContext, std::sync::mpsc::Sender<ServerTask>) + Send>;
+pub type OnMetricsRecordingFinished = Box<dyn FnOnce(PathBuf, MetricsReportContext, ServerTaskSender) + Send>;
 
 pub struct MetricsReportContext {
     pub level_name: String,
@@ -2344,7 +2360,8 @@ pub fn run(
     management_server: Option<Arc<ManagementServer>>,
 ) -> anyhow::Result<()> {
     main_thread_frames::publish_current_thread();
-    let (task_sender, tasks) = std::sync::mpsc::channel::<ServerTask>();
+    let (sender_half, tasks) = std::sync::mpsc::channel::<ServerTask>();
+    let task_sender = ServerTaskSender { sender: sender_half, wakeup: Arc::default() };
     if let Some(management_server) = &management_server {
         management_server.set_server(task_sender.clone());
     }
@@ -2479,6 +2496,7 @@ pub fn run(
     if let Some(management_server) = &management_server {
         management_server.set_waker(server.overworld().chunks.waker());
     }
+    let _ = task_sender.wakeup.set(server.overworld().chunks.main_thread_wakeup());
     server.settings = settings;
     info!("Done ({}s)! For help, type \"help\"", crate::util::java_format_fixed(started.elapsed().as_nanos() as f64 / 1.0e9, 3));
     server.services = services;

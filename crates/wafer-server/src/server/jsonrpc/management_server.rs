@@ -13,7 +13,7 @@ use super::methods::server_state_service;
 use super::outgoing_rpc_methods::{self, OutgoingRpcMethod};
 use super::security::authentication_handler::AuthenticationHandler;
 use crate::server::level::chunk_workers::WorkResult;
-use crate::server::{Server, ServerTask};
+use crate::server::{Server, ServerTaskSender};
 
 pub struct ManagementServer {
     host: String,
@@ -27,7 +27,7 @@ pub struct ManagementServer {
     heartbeat: Mutex<Option<tokio::task::AbortHandle>>,
     listener: Mutex<Option<tokio::task::AbortHandle>>,
     runtime: tokio::runtime::Handle,
-    tasks: OnceLock<std::sync::mpsc::Sender<ServerTask>>,
+    tasks: OnceLock<ServerTaskSender>,
     waker: OnceLock<crate::server::level::chunk_workers::ResultSender>,
     ready: AtomicBool,
 }
@@ -126,7 +126,7 @@ impl ManagementServer {
         self.connections.lock().unwrap().retain(|(i, _)| *i != id);
     }
 
-    pub fn set_server(&self, tasks: std::sync::mpsc::Sender<ServerTask>) {
+    pub fn set_server(&self, tasks: ServerTaskSender) {
         let _ = self.tasks.set(tasks);
     }
 

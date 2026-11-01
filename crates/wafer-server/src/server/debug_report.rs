@@ -58,7 +58,10 @@ impl Server {
         tail_frames.extend(main_thread_frames::current());
         let mut thrown_frames = vec![SERVER_LEVEL_SAVE_DEBUG_REPORT_THROW];
         thrown_frames.extend(tail_frames.iter().copied());
-        let mut test = CrashReport::of_exception("Level dump", &JavaThrowable::new("java.lang.Exception: dummy", thrown_frames));
+        let mut test = {
+            let _caller = crate::util::java_stack::enter_all(&thrown_frames);
+            CrashReport::of_exception("Level dump", &JavaThrowable::new("java.lang.Exception: dummy", thrown_frames.clone()))
+        };
         let mut fill_frames = vec![FILL_REPORT_DETAILS, SERVER_LEVEL_SAVE_DEBUG_REPORT_FILL];
         fill_frames.extend(tail_frames);
         self.fill_level_report_details(index, &mut test, fill_frames);

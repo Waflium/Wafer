@@ -2,6 +2,18 @@ pub const JAVA_VENDOR: &str = "Microsoft";
 pub const JAVA_VM_NAME: &str = "OpenJDK 64-Bit Server VM";
 pub const JAVA_VM_INFO: &str = "mixed mode, sharing";
 pub const JAVA_VM_VENDOR: &str = "Microsoft";
+pub const PROCESS_NAME: &str = "java";
+
+pub fn as_java_process_instances(mut instances: Vec<String>) -> Vec<String> {
+    let own = std::env::current_exe().ok().and_then(|path| path.file_stem().map(|stem| stem.to_string_lossy().into_owned()));
+    if let Some(own) = own
+        && let Some(index) = instances.iter().position(|instance| *instance == own)
+        && instances[..index].iter().any(|instance| instance == PROCESS_NAME)
+    {
+        instances[index] = PROCESS_NAME.to_string();
+    }
+    instances
+}
 
 pub fn java_version() -> &'static str {
     if cfg!(all(windows, target_arch = "aarch64")) { "25.0.0" } else { "25.0.1" }
