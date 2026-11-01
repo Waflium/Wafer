@@ -53,7 +53,7 @@ impl PlacementModifier {
         let ty = json.get("type").and_then(Value::as_str).ok_or("placement modifier without type")?;
         let get = |key: &str| json.get(key).ok_or_else(|| crate::util::codec::no_key(key, json));
         let int = |key: &str| get(key).and_then(|v| v.as_i64().map(|v| v as i32).ok_or_else(|| format!("{key} is not an int")));
-        let double = |key: &str| get(key).and_then(|v| v.as_f64().ok_or_else(|| format!("{key} is not a number")));
+        let double = |key: &str| get(key).and_then(|v| crate::util::gson::double_value(v).ok_or_else(|| format!("{key} is not a number")));
         let int_provider = |key: &str| get(key).and_then(IntProvider::parse);
         let predicate = |key: &str| get(key).and_then(BlockPredicate::parse);
         Ok(match ty.strip_prefix("minecraft:").unwrap_or(ty) {

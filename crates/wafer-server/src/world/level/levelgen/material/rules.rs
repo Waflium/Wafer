@@ -204,8 +204,8 @@ impl MaterialParser {
             "biome" => MaterialCondition::Biome(parse_biomes(field("biome_is")?)?),
             "noise_threshold" => MaterialCondition::NoiseThreshold {
                 noise: resource_name(field("noise")?.as_str().ok_or("noise")?),
-                min: field("min_threshold")?.as_f64().ok_or("min_threshold")?,
-                max: field("max_threshold")?.as_f64().ok_or("max_threshold")?,
+                min: crate::util::gson::double_value(field("min_threshold")?).ok_or("min_threshold")?,
+                max: crate::util::gson::double_value(field("max_threshold")?).ok_or("max_threshold")?,
                 is_3d: v.get("is_3d").and_then(Value::as_bool).unwrap_or(false),
             },
             "vertical_gradient" => MaterialCondition::VerticalGradient {

@@ -349,6 +349,11 @@ pub fn to_value(element: JsonElement) -> serde_json::Value {
     }
 }
 
+pub fn double_value(value: &serde_json::Value) -> Option<f64> {
+    let number = value.as_number()?;
+    number.as_f64().or_else(|| number.as_str().parse().ok())
+}
+
 pub fn number_value(text: &str) -> serde_json::Value {
     if let Ok(value) = text.parse::<i64>() {
         return serde_json::Value::Number(value.into());
@@ -356,7 +361,7 @@ pub fn number_value(text: &str) -> serde_json::Value {
     if let Ok(value) = text.parse::<u64>() {
         return serde_json::Value::Number(value.into());
     }
-    text.parse::<f64>().ok().and_then(serde_json::Number::from_f64).map_or(serde_json::Value::Null, serde_json::Value::Number)
+    serde_json::Number::from_string_unchecked(text.to_string()).into()
 }
 
 pub fn parse_lenient_value(json: &str) -> Result<serde_json::Value, String> {

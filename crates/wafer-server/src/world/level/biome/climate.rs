@@ -83,7 +83,7 @@ impl Parameter {
     }
 
     pub fn parse_report(v: &Value) -> Result<Parameter, String> {
-        Self::parse_with(v, |v| v.as_f64().map(|f| (f * 10000.0).round() as i64).ok_or_else(|| format!("bad number {v}")))
+        Self::parse_with(v, |v| crate::util::gson::double_value(v).map(|f| (f * 10000.0).round() as i64).ok_or_else(|| format!("bad number {v}")))
     }
 
     fn parse_with(v: &Value, q: impl Fn(&Value) -> Result<i64, String>) -> Result<Parameter, String> {

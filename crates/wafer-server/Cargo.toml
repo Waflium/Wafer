@@ -11,7 +11,7 @@ path = "src/main.rs"
 wafer-protocol.workspace = true
 tokio.workspace = true
 socket2 = "0.6"
-serde_json = { workspace = true, features = ["float_roundtrip", "preserve_order"] }
+serde_json = { workspace = true, features = ["arbitrary_precision", "float_roundtrip", "preserve_order"] }
 anyhow.workspace = true
 wafer-data.workspace = true
 wafer-core.workspace = true

@@ -224,7 +224,7 @@ pub fn parse_noise(json: &Value) -> Result<NormalNoise, String> {
         Some(other) => return Err(format!("bad normalize {other}")),
     };
     let modifiers = match json.get("amplitude_modifiers") {
-        Some(Value::Array(a)) => a.iter().map(|v| v.as_f64().ok_or("bad amplitude")).collect::<Result<_, _>>()?,
+        Some(Value::Array(a)) => a.iter().map(|v| crate::util::gson::double_value(v).ok_or("bad amplitude")).collect::<Result<_, _>>()?,
         _ => Vec::new(),
     };
     Ok(NormalNoise::new(NormalNoiseParameters {

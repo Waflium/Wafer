@@ -216,7 +216,7 @@ fn float_field(json: &Value, key: &str) -> Result<f32, String> {
 }
 
 pub fn float(v: &Value) -> Result<f32, String> {
-    let d = v.as_f64().ok_or_else(|| format!("expected a number, got {v}"))?;
+    let d = crate::util::gson::double_value(v).ok_or_else(|| format!("expected a number, got {v}"))?;
     format!("{d}").parse::<f32>().map_err(|e| e.to_string())
 }
 
