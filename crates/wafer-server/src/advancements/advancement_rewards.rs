@@ -74,7 +74,9 @@ impl AdvancementRewards {
             let recipes: Vec<&'static RecipeHolder> = self.recipes.iter().filter_map(|id| recipe_manager.by_key(id)).collect();
             level.award_recipes(player, &recipes);
         }
-        if let Some(function) = &self.function {
+        if let Some(function) = &self.function
+            && level.with_server(|server| server.execute_reward_function(function, player, trigger)).is_none()
+        {
             level.pending_function_executions.push((function.clone(), player, trigger));
         }
     }

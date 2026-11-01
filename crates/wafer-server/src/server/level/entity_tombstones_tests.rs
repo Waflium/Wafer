@@ -115,7 +115,7 @@ fn level_selectors_list_players_in_player_list_order_across_dimensions() {
     perform_prefixed_command(&mut server, &console, "execute in minecraft:the_nether run tp First 0.5 64 0.5");
     let expected: Vec<EntityId> = EntityWorld::players(&server).map(|player| player.entity.id).collect();
     assert_eq!(expected, vec![first, second, third]);
-    let mut lent = LentLevels::lend(&mut server.levels, 0);
+    let mut lent = LentLevels::lend(&mut server, 0);
     let level = lent.level();
     let listed: Vec<EntityId> = LevelWorld(level).players().map(|player| player.entity.id).collect();
     assert_eq!(listed, expected);

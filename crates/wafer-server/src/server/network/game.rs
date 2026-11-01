@@ -489,7 +489,7 @@ impl ServerLevel {
             self.then_tick(move |level| {
                 if result.consumes_action() {
                     let item_after = level.player(id).item_in_hand(hand).filter(|stack| stack.is(item_stack.get_item())).unwrap_or_else(ItemStack::empty);
-                    level.trigger_resumably(|level| crate::advancements::triggers::criteria_triggers::ANY_BLOCK_USE.trigger(level, id, pos, &item_after));
+                    crate::advancements::triggers::criteria_triggers::ANY_BLOCK_USE.trigger(level, id, pos, &item_after);
                 }
                 level.then_tick(move |level| {
                     let placement_attempt = was_block_placement_attempt(level.player(id), &item_stack);
@@ -579,7 +579,7 @@ impl ServerLevel {
         let result = self.interact_on(id, entity_id, hand, location);
         if let InteractionResult::Success { swing_source, was_item_interaction } = result {
             let awarded_for_stack = if was_item_interaction { used_item_stack.clone() } else { ItemStack::empty() };
-            self.trigger_resumably(|level| crate::advancements::triggers::criteria_triggers::PLAYER_INTERACTED_WITH_ENTITY.trigger(level, id, &awarded_for_stack, entity_id));
+            crate::advancements::triggers::criteria_triggers::PLAYER_INTERACTED_WITH_ENTITY.trigger(self, id, &awarded_for_stack, entity_id);
             self.then_tick(move |level| {
                 if result.should_swing() {
                     let swing_animation = used_item_stack.interact_animation();

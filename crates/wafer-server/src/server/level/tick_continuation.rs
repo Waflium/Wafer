@@ -14,7 +14,6 @@ pub enum PendingServerWork {
     EnderPearlTeleport(PendingEnderPearlTeleport),
     SpectatorPortalUse(PendingSpectatorPortalUse),
     BookOpen(PendingBookOpen),
-    Functions,
 }
 
 #[derive(Clone, Copy)]
@@ -55,19 +54,6 @@ impl TickContinuation {
 impl ServerLevel {
     pub fn tick_suspended(&self) -> bool {
         self.pending_server_work.is_some()
-    }
-
-    pub fn trigger_resumably(&mut self, trigger: impl FnOnce(&mut ServerLevel)) {
-        self.resumable_triggers = true;
-        trigger(self);
-        self.resumable_triggers = false;
-        self.yield_for_functions();
-    }
-
-    pub fn yield_for_functions(&mut self) {
-        if self.pending_server_work.is_none() && !(self.pending_function_executions.is_empty() && self.pending_enchantment_functions.is_empty()) {
-            self.pending_server_work = Some(PendingServerWork::Functions);
-        }
     }
 
     pub fn suspend_tick(&mut self, resume: impl FnOnce(&mut ServerLevel) + 'static) {
@@ -147,10 +133,9 @@ impl crate::server::Server {
                 PendingServerWork::EnderPearlTeleport(pending) => self.handle_pending_ender_pearl_teleport(index, pending),
                 PendingServerWork::SpectatorPortalUse(pending) => self.handle_pending_spectator_portal_use(index, pending),
                 PendingServerWork::BookOpen(pending) => self.open_pending_book(index, pending),
-                PendingServerWork::Functions => self.run_level_tasks(),
             }
             index = self.follow_tick_continuation(index);
-            super::lent_levels::LentLevels::lend(&mut self.levels, index).level().resume_entity_tick();
+            super::lent_levels::LentLevels::lend(self, index).level().resume_entity_tick();
         }
     }
 

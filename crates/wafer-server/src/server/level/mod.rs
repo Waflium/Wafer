@@ -214,8 +214,7 @@ pub struct ServerLevel {
     pub pending_function_executions: Vec<(String, EntityId, CriterionTrigger)>,
     pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32), bool)>,
     pub enchantment_tick_player: bool,
-    pub in_enchantment_tick: bool,
-    pub resumable_triggers: bool,
+    pub lent: bool,
     entity_tick_range: Option<(usize, usize)>,
     pub rain_level: f32,
     pub o_rain_level: f32,
@@ -369,8 +368,7 @@ impl ServerLevel {
             pending_function_executions: Vec::new(),
             pending_enchantment_functions: Vec::new(),
             enchantment_tick_player: false,
-            in_enchantment_tick: false,
-            resumable_triggers: false,
+            lent: false,
             entity_tick_range: None,
             environment_attributes: EnvironmentAttributeSystem::default(),
             clock_ticks: ServerClockManager::new().clocks.iter().map(|c| c.total_ticks).collect(),
@@ -2179,14 +2177,14 @@ impl ServerLevel {
         }
         self.tick_container_menu(id);
         self.tick_camera(id);
-        self.trigger_resumably(|level| criteria_triggers::TICK.trigger(level, id));
+        criteria_triggers::TICK.trigger(self, id);
         self.then_tick(move |level| level.tick_player_entity_levitation(id));
     }
 
     fn tick_player_entity_levitation(&mut self, id: EntityId) {
         if let Some(levitation_start_pos) = self.player(id).levitation_start_pos {
             let duration = self.entity(id).tick_count - self.player(id).levitation_start_time;
-            self.trigger_resumably(|level| criteria_triggers::LEVITATION.trigger(level, id, levitation_start_pos, duration));
+            criteria_triggers::LEVITATION.trigger(self, id, levitation_start_pos, duration);
         }
         self.then_tick(move |level| level.tick_player_entity_end(id));
     }

@@ -3559,7 +3559,7 @@ impl crate::server::Server {
 
     fn teleport_to_portal_destination(&mut self, level: usize, id: EntityId, transition: TeleportTransition) {
         let (from, to) = (self.levels[level].dimension, self.levels[transition.new_level].dimension);
-        let mut lent = crate::server::level::lent_levels::LentLevels::lend(&mut self.levels, level);
+        let mut lent = crate::server::level::lent_levels::LentLevels::lend(self, level);
         let current_level = lent.level();
         let allowed = current_level.is_allowed_to_enter_portal(to) && (from == to || current_level.can_teleport(id, from, to));
         drop(lent);

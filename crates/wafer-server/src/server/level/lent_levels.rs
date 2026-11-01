@@ -1,17 +1,30 @@
+use std::cell::Cell;
+use std::marker::PhantomData;
+
 use super::ServerLevel;
+use crate::server::Server;
+
+thread_local! {
+    static LENDER: Cell<(*mut Server, usize)> = const { Cell::new((std::ptr::null_mut(), 0)) };
+}
 
 pub struct LentLevels<'a> {
-    levels: &'a mut Vec<ServerLevel>,
+    server: *mut Server,
     index: usize,
     level: Option<ServerLevel>,
+    previous_lender: (*mut Server, usize),
+    _server: PhantomData<&'a mut Server>,
 }
 
 impl<'a> LentLevels<'a> {
-    pub fn lend(levels: &'a mut Vec<ServerLevel>, index: usize) -> LentLevels<'a> {
-        let mut others = std::mem::take(levels);
+    pub fn lend(server: &'a mut Server, index: usize) -> LentLevels<'a> {
+        let server: *mut Server = server;
+        let mut others = std::mem::take(unsafe { &mut (*server).levels });
         let mut level = others.remove(index);
         level.other_levels = others;
-        LentLevels { levels, index, level: Some(level) }
+        level.lent = true;
+        let previous_lender = LENDER.replace((server, index));
+        LentLevels { server, index, level: Some(level), previous_lender, _server: PhantomData }
     }
 
     pub fn level(&mut self) -> &mut ServerLevel {
@@ -35,11 +48,50 @@ impl std::ops::DerefMut for LentLevels<'_> {
 
 impl Drop for LentLevels<'_> {
     fn drop(&mut self) {
+        LENDER.set(self.previous_lender);
         if let Some(mut level) = self.level.take() {
+            level.lent = false;
             let mut levels = std::mem::take(&mut level.other_levels);
             levels.insert(self.index, level);
-            *self.levels = levels;
+            unsafe { (*self.server).levels = levels };
         }
+    }
+}
+
+struct ReturnedLevel<'a> {
+    level: &'a mut ServerLevel,
+    server: *mut Server,
+    index: usize,
+}
+
+impl Drop for ReturnedLevel<'_> {
+    fn drop(&mut self) {
+        let mut levels = std::mem::take(unsafe { &mut (*self.server).levels });
+        let mut level = levels.remove(self.index);
+        level.other_levels = levels;
+        level.lent = true;
+        unsafe { std::ptr::write(self.level, level) };
+    }
+}
+
+impl ServerLevel {
+    pub fn with_server<R>(&mut self, run: impl FnOnce(&mut Server) -> R) -> Option<R> {
+        if !self.lent {
+            return None;
+        }
+        let (server, index) = LENDER.get();
+        if server.is_null() || index > self.other_levels.len() {
+            return None;
+        }
+        let mut level = unsafe { std::ptr::read(self) };
+        let mut levels = std::mem::take(&mut level.other_levels);
+        level.lent = false;
+        levels.insert(index, level);
+        unsafe { (*server).levels = levels };
+        let returned = ReturnedLevel { level: self, server, index };
+        let result = run(unsafe { &mut *server });
+        drop(returned);
+        Some(result)
     }
 }
 

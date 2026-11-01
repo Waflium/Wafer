@@ -31,24 +31,8 @@ pub fn trigger(level: &mut ServerLevel, player: EntityId, trigger: CriterionTrig
             }
         }
     }
-    award_matched_from(level, player, matched_conditions, 0);
-}
-
-fn award_matched_from(level: &mut ServerLevel, player: EntityId, matched_conditions: Vec<TriggerInstanceKey>, first: usize) {
-    for index in first..matched_conditions.len() {
-        let criterion = matched_conditions[index];
+    for criterion in matched_conditions {
         PlayerAdvancements::award(level, player, criterion.advancement, criterion.criterion);
-        if level.resumable_triggers {
-            level.yield_for_functions();
-            if level.tick_suspended() && index + 1 < matched_conditions.len() {
-                level.suspend_tick(move |level| {
-                    level.resumable_triggers = true;
-                    award_matched_from(level, player, matched_conditions, index + 1);
-                    level.resumable_triggers = false;
-                });
-                return;
-            }
-        }
     }
 }
 

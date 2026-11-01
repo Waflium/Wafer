@@ -310,7 +310,7 @@ fn wolves_follow_and_report_to_owners_in_another_dimension() {
     assert!(position.distance_to_sqr(Vec3::new(20.5, 64.0, 0.5)) < 25.0, "the wolf stayed at {position:?}");
     let (out, mut packets) = Outbound::capture();
     server.levels[nether].player_mut(player).connection = out;
-    LentLevels::lend(&mut server.levels, 0).level().kill(wolf);
+    LentLevels::lend(&mut server, 0).level().kill(wolf);
     let ids: Vec<i32> = std::iter::from_fn(|| packets.try_recv().ok()).map(|p| Reader::new(&p).varint().unwrap()).collect();
     assert!(ids.contains(&clientbound::SYSTEM_CHAT), "{ids:?}");
 }

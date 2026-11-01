@@ -959,7 +959,7 @@ impl Server {
     }
 
     pub fn lend_level(&mut self, index: usize) -> level::lent_levels::LentLevels<'_> {
-        level::lent_levels::LentLevels::lend(&mut self.levels, index)
+        level::lent_levels::LentLevels::lend(self, index)
     }
 
     pub fn lend_entity_level(&mut self, entity: EntityId) -> level::lent_levels::LentLevels<'_> {
@@ -2024,14 +2024,14 @@ impl Server {
             let ticked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 if let Some(index) = self.level_of(id) {
                     let _connection_tick = main_thread_frames::enter(CONNECTION_TICK_FRAMES);
-                    level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_start(id);
+                    level::lent_levels::LentLevels::lend(self, index).level().tick_connection_start(id);
                 }
                 if let Some(level) = self.level_of(id) {
                     self.run_pending_server_work(level);
                     self.run_level_tasks();
                 }
                 match self.level_of(id) {
-                    Some(index) => level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_connection_end(id),
+                    Some(index) => level::lent_levels::LentLevels::lend(self, index).level().tick_connection_end(id),
                     None => false,
                 }
             }));
@@ -2094,7 +2094,7 @@ impl Server {
             level.game_time = game_time;
             level.chunks.game_time = game_time;
         }
-        let runs = level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_until_sleep();
+        let runs = level::lent_levels::LentLevels::lend(self, index).level().tick_until_sleep();
         let level = &mut self.levels[index];
         if level.should_wake_up_all_players() {
             let default_clock = level.dimension_type().default_clock.and_then(ServerClockManager::id_of);
@@ -2114,16 +2114,16 @@ impl Server {
             TimerQueue::tick(self, time);
             profiler::pop();
         }
-        level::lent_levels::LentLevels::lend(&mut self.levels, index).level().begin_block_ticks(runs);
+        level::lent_levels::LentLevels::lend(self, index).level().begin_block_ticks(runs);
         while let Some(pos) = self.levels[index].run_block_ticks() {
             self.command_block_tick(index, pos);
         }
-        level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_block_ticks(runs);
-        while level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_entities() {
+        level::lent_levels::LentLevels::lend(self, index).level().tick_after_block_ticks(runs);
+        while level::lent_levels::LentLevels::lend(self, index).level().tick_entities() {
             self.run_pending_server_work(index);
             self.send_global_level_events();
         }
-        level::lent_levels::LentLevels::lend(&mut self.levels, index).level().tick_after_entities();
+        level::lent_levels::LentLevels::lend(self, index).level().tick_after_entities();
         self.flush_other_level_ender_pearls();
         self.send_global_level_events();
     }
@@ -2132,24 +2132,32 @@ impl Server {
         self.deliver_level_broadcasts();
         for index in 0..self.levels.len() {
             for (function, player, trigger) in std::mem::take(&mut self.levels[index].pending_function_executions) {
-                if self.level_of(player).is_none() {
-                    continue;
-                }
-                if let Some(function) = self.functions.get(&function) {
-                    let source = CommandSourceStack::player(self, player).with_suppressed_output().with_permission(2);
-                    self.run_from(CommandOrigin::AdvancementReward(trigger), |server| ServerFunctionManager::execute(server, &function, &source));
-                }
+                self.execute_reward_function(&function, player, trigger);
             }
             for (name, entity, position, rotation, from_player_tick) in std::mem::take(&mut self.levels[index].pending_enchantment_functions) {
-                match self.functions.get(&name) {
-                    Some(function) => {
-                        let source = CommandSourceStack::server(self).with_permission(2).with_suppressed_output().with_entity(entity).with_level(self, index).with_position(position).with_rotation(rotation);
-                        let origin = if from_player_tick { CommandOrigin::EnchantmentTickPlayer } else { self.command_origin };
-                        self.run_from(origin, |server| ServerFunctionManager::execute(server, &function, &source));
-                    }
-                    None => error!("Enchantment run_function effect failed for non-existent function {name}"),
-                }
+                self.execute_enchantment_function(index, &name, entity, position, rotation, from_player_tick);
             }
+        }
+    }
+
+    pub fn execute_reward_function(&mut self, function: &str, player: EntityId, trigger: crate::advancements::triggers::criterion_trigger::CriterionTrigger) {
+        if self.level_of(player).is_none() {
+            return;
+        }
+        if let Some(function) = self.functions.get(function) {
+            let source = CommandSourceStack::player(self, player).with_suppressed_output().with_permission(2);
+            self.run_from(CommandOrigin::AdvancementReward(trigger), |server| ServerFunctionManager::execute(server, &function, &source));
+        }
+    }
+
+    pub fn execute_enchantment_function(&mut self, index: usize, name: &str, entity: EntityId, position: wafer_core::Vec3, rotation: (f32, f32), from_player_tick: bool) {
+        match self.functions.get(name) {
+            Some(function) => {
+                let source = CommandSourceStack::server(self).with_permission(2).with_suppressed_output().with_entity(entity).with_level(self, index).with_position(position).with_rotation(rotation);
+                let origin = if from_player_tick { CommandOrigin::EnchantmentTickPlayer } else { self.command_origin };
+                self.run_from(origin, |server| ServerFunctionManager::execute(server, &function, &source));
+            }
+            None => error!("Enchantment run_function effect failed for non-existent function {name}"),
         }
     }
 
