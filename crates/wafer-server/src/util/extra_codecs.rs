@@ -179,7 +179,8 @@ pub fn block_pos(tag: &Nbt) -> DecodeResult<wafer_core::BlockPos> {
     {
         return DecodeResult::success(wafer_core::BlockPos::new(*x, *y, *z));
     }
-    fixed_size_ints(tag, 3).map(|ints| wafer_core::BlockPos::new(ints[0], ints[1], ints[2]))
+    crate::core::data_registries::unwinding(super::dfu_frames::stable, || fixed_size_ints_owned(tag, 3, BLOCK_POS_FIXED_SIZE))
+        .map(|ints| wafer_core::BlockPos::new(ints[0], ints[1], ints[2]))
 }
 
 pub fn vec3(tag: &Nbt) -> DecodeResult<wafer_core::Vec3> {

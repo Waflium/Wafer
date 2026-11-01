@@ -230,6 +230,15 @@ impl LoadingErrors {
     }
 }
 
+fn decode_element<T>(json: &crate::util::gson::JsonElement, decode: fn(&Nbt) -> Result<T, String>) -> Result<T, ElementFailure> {
+    crate::core::data_registries::take_thrown();
+    let decoded = crate::nbt::with_json_source(|| crate::core::data_registries::recording(|| crate::core::data_registries::unwinding(|| vec![crate::util::dfu_frames::DECODER_PARSE], || decode(&element_to_nbt(json))))).map_err(ElementFailure::Decode);
+    match crate::core::data_registries::take_thrown() {
+        Some(thrown) => Err(ElementFailure::Throw(thrown)),
+        None => decoded,
+    }
+}
+
 fn decode_registry<T>(
     registry: &'static str,
     sources: &[Source],
@@ -241,12 +250,7 @@ fn decode_registry<T>(
     for source in sources {
         let parsed = match crate::util::gson::parse_strict_bytes_element_throwable(&source.bytes) {
             Ok(json) => {
-                crate::core::data_registries::take_thrown();
-                let decoded = crate::nbt::with_json_source(|| crate::core::data_registries::recording(|| crate::core::data_registries::unwinding(|| vec![crate::util::dfu_frames::DECODER_PARSE], || decode(&element_to_nbt(&json))))).map_err(ElementFailure::Decode);
-                let decoded = match crate::core::data_registries::take_thrown() {
-                    Some(thrown) => Err(ElementFailure::Throw(thrown)),
-                    None => decoded,
-                };
+                let decoded = decode_element(&json, decode);
                 if decoded.is_ok() {
                     duplicate_values.register(registry, &json);
                 }
@@ -334,6 +338,7 @@ mod tests {
     use wafer_protocol::nbt::Nbt;
 
     use super::{LOOT_TABLE, PENDING_KEYS, REFERENCED};
+    use crate::world::level::storage::loot::functions::loot_item_function::LootItemFunction;
     use crate::world::level::storage::loot::loot_table::LootTable;
 
     #[test]
@@ -346,6 +351,35 @@ mod tests {
         PENDING_KEYS.with(|pending| pending.replace(None));
         assert!(holder.is_ok());
         assert_eq!(referenced, [("minecraft:loot_table".to_string(), "ta:a".to_string())]);
+    }
+
+    fn decoded<T>(json: &str, decode: fn(&Nbt) -> Result<T, String>) -> Result<T, String> {
+        match super::decode_element(&crate::util::gson::parse_strict(json).unwrap(), decode) {
+            Ok(value) => Ok(value),
+            Err(super::ElementFailure::Throw(thrown)) => Err(thrown.print_stack_trace()),
+            Err(super::ElementFailure::Decode(error)) => Err(error),
+            Err(super::ElementFailure::Parse(thrown)) => Err(thrown.print_stack_trace()),
+        }
+    }
+
+    #[test]
+    fn item_modifiers_carry_the_vanilla_codec_frames_of_an_overflowing_number() {
+        let item_modifier = |tag: &Nbt| LootItemFunction::decode_typed(tag).into_result();
+        let cases = [
+            (r##"{"type":"minecraft:set_name","name":{"translate":"x","with":[1E+10000]}}"##, include_str!("../core/dfu_traces/item_modifier_set_name_translate.txt")),
+            (r##"{"type":"minecraft:set_components","components":{"minecraft:profile":{"id":[1,2,3,1E+10000]}}}"##, include_str!("../core/dfu_traces/item_modifier_set_components_profile_uuid.txt")),
+            (r##"{"type":"minecraft:set_components","components":{"minecraft:custom_data":{"a":[1E+10000]}}}"##, include_str!("../core/dfu_traces/item_modifier_set_components_custom_data.txt")),
+            (r##"{"type":"minecraft:set_components","components":{"minecraft:lodestone_tracker":{"target":{"dimension":"minecraft:overworld","pos":[1,2,1E+10000]}}}}"##, include_str!("../core/dfu_traces/item_modifier_set_components_lodestone_pos.txt")),
+        ];
+        for (json, expected) in cases {
+            assert_eq!(decoded(json, item_modifier).err().as_deref(), Some(expected), "{json}");
+        }
+    }
+
+    #[test]
+    fn a_loot_table_ignores_a_number_after_a_string_translation_argument() {
+        let json = r##"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:stick","functions":[{"type":"minecraft:set_name","name":{"translate":"x","with":["a",1E+10000]}}]}]}]}"##;
+        assert!(decoded(json, LootTable::decode).is_ok());
     }
 
     #[test]
