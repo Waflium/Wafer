@@ -116,7 +116,7 @@ impl LocationPredicate {
         if self.position.as_ref().is_some_and(|position| !position.matches(x, y, z)) {
             return false;
         }
-        if self.dimension.as_ref().is_some_and(|dimension| dimension != crate::server::OVERWORLD) {
+        if self.dimension.as_ref().is_some_and(|dimension| dimension != level.dimension) {
             return false;
         }
         let pos = BlockPos::containing(x, y, z);
