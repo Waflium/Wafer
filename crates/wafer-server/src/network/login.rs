@@ -148,13 +148,11 @@ async fn run(r: &mut PacketReader, w: &mut PacketWriter, context: &ListenerConte
                 profile
             }
             Ok(None) => {
-                error!(thread: &thread, "Username '{name}' tried to join with an invalid session");
-                disconnect(w, user, &thread, Component::translatable("multiplayer.disconnect.unverified_username")).await?;
+                disconnect_from_authenticator(w, user, &thread, Component::translatable("multiplayer.disconnect.unverified_username"), &format!("Username '{name}' tried to join with an invalid session")).await?;
                 return Ok(None);
             }
             Err(_) => {
-                error!(thread: &thread, "Couldn't verify username because servers are unavailable");
-                disconnect(w, user, &thread, Component::translatable("multiplayer.disconnect.authservers_down")).await?;
+                disconnect_from_authenticator(w, user, &thread, Component::translatable("multiplayer.disconnect.authservers_down"), "Couldn't verify username because servers are unavailable").await?;
                 return Ok(None);
             }
         }
@@ -191,6 +189,15 @@ async fn disconnect(w: &mut PacketWriter, user: &LoginUser, thread: &str, reason
     let sent = w.send(clientbound::LOGIN_DISCONNECT, |p| p.string(&reason.to_json())).await;
     user.lost_connection(&reason_text);
     warn!(thread: SERVER_THREAD, "handleDisconnection() called twice");
+    Ok(sent?)
+}
+
+async fn disconnect_from_authenticator(w: &mut PacketWriter, user: &LoginUser, thread: &str, reason: Component, error: &str) -> anyhow::Result<()> {
+    let reason_text = reason.get_string();
+    info!(thread: thread, "Disconnecting {}: {reason_text}", user.name());
+    error!(thread: thread, "{error}");
+    let sent = w.send(clientbound::LOGIN_DISCONNECT, |p| p.string(&reason.to_json())).await;
+    user.lost_connection(&reason_text);
     Ok(sent?)
 }
 
