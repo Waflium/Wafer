@@ -321,7 +321,7 @@ fn services_discovery_idle_thread() -> ThreadDumpEntry {
 const SERVER_THREAD_ID: u32 = 100;
 
 fn worker_main_id(index: usize) -> u32 {
-    if index <= 10 { 65 + index as u32 } else { 66 + index as u32 }
+    if index == 1 { 66 } else { 67 + index as u32 }
 }
 
 fn console_handler_thread() -> ThreadDumpEntry {
