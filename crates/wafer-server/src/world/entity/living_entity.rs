@@ -1826,6 +1826,7 @@ impl ServerLevel {
         if self.is_sleeping(id) {
             self.stop_sleeping(id);
         }
+        self.stop_using_item(id);
         if self.entity(id).custom_name().is_some() {
             let message = self.death_message(id);
             info!("Named entity {} died: {}", self.entity_to_string(id), message.get_string());

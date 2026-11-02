@@ -65,6 +65,18 @@ fn pillagers_charge_their_crossbow_and_shoot_players() {
 }
 
 #[test]
+fn dying_pillagers_stop_charging_their_crossbow() {
+    let mut level = testing::level();
+    let mut mob = Pillager::create();
+    mob.equipment[EquipmentSlot::Mainhand as usize] = Some(ItemStack::new(items::CROSSBOW, 1));
+    let pillager = add(&mut level, mob, Vec3::new(6.5, -60.0, 0.5));
+    level.start_using_item(pillager, crate::world::InteractionHand::MainHand);
+    assert!(level.is_using_item(pillager));
+    level.hurt_server(pillager, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::GENERIC_KILL), 100.0);
+    assert!(!level.is_using_item(pillager));
+}
+
+#[test]
 fn pillager_inventories_are_saved() {
     let mut mob = Pillager::create();
     pillager::pillager_mut(&mut mob).inventory.items[0] = ItemStack::new(items::DIAMOND, 3);
