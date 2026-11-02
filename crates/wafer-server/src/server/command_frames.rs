@@ -110,6 +110,26 @@ pub const PREPARE_LEVELS: [&str; 4] = [
     "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)",
 ];
 
+thread_local! {
+    static ORIGIN_BASE: std::cell::RefCell<Option<Vec<&'static str>>> = const { std::cell::RefCell::new(None) };
+}
+
+pub fn replace_origin_base(base: Option<Vec<&'static str>>) -> Option<Vec<&'static str>> {
+    ORIGIN_BASE.with(|origin_base| origin_base.replace(base))
+}
+
+fn origin_base() -> Vec<&'static str> {
+    ORIGIN_BASE.with(|origin_base| origin_base.borrow().clone()).unwrap_or_else(super::main_thread_frames::current)
+}
+
+pub fn enter_command(origin: CommandOrigin) -> super::main_thread_frames::FrameScope {
+    static CACHED: [std::sync::OnceLock<&'static [&'static str]>; 13] = [const { std::sync::OnceLock::new() }; 13];
+    match origin {
+        CommandOrigin::EnchantmentEffect | CommandOrigin::TestEnvironmentFunction | CommandOrigin::AdvancementReward => super::main_thread_frames::enter_absolute(command_frames(origin)),
+        _ => super::main_thread_frames::enter_absolute_static(CACHED[origin as usize].get_or_init(|| command_frames(origin).leak())),
+    }
+}
+
 pub fn command_frames(origin: CommandOrigin) -> Vec<&'static str> {
     let mut frames = COMMAND_EXECUTION.to_vec();
     frames.extend(origin_frames(origin));
@@ -194,11 +214,11 @@ pub fn origin_frames(origin: CommandOrigin) -> Vec<&'static str> {
         CommandOrigin::EnchantmentEffect => {
             frames.push(FUNCTION_EXECUTE);
             frames.push("net.minecraft.world.item.enchantment.effects.RunFunction.apply(RunFunction.java:42)");
-            frames.extend(super::main_thread_frames::current());
+            frames.extend(origin_base());
         }
         CommandOrigin::TestEnvironmentFunction => {
             frames.push(FUNCTION_EXECUTE);
-            frames.extend(super::main_thread_frames::current());
+            frames.extend(origin_base());
         }
         CommandOrigin::AdvancementReward => {
             frames.push(FUNCTION_EXECUTE);
@@ -207,7 +227,7 @@ pub fn origin_frames(origin: CommandOrigin) -> Vec<&'static str> {
             frames.push("net.minecraft.advancements.AdvancementRewards.grant(AdvancementRewards.java:76)");
             frames.push("net.minecraft.server.PlayerAdvancements.award(PlayerAdvancements.java:178)");
             frames.push("net.minecraft.advancements.triggers.SimpleCriterionTrigger.trigger(SimpleCriterionTrigger.java:53)");
-            frames.extend(super::main_thread_frames::current());
+            frames.extend(origin_base());
         }
     }
     frames

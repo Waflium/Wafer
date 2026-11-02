@@ -95,6 +95,7 @@ impl ExecuteCommand {
     pub fn execute(&self, server: &mut Server, sender: &CommandSourceStack, frame: &Frame) {
         let _zone = profiler::zone_with(|| format!("execute {}", self.stage.top_context().input));
         ExecutionContext::with(ExecutionContext::increment_cost);
+        let _frames = crate::server::command_frames::enter_command(server.command_origin);
         let forked = self.modifiers.is_forked();
         match run_executable(server, &self.stage, sender, forked) {
             Ok(result) => ExecutionContext::with_tracer(|tracer| tracer.on_return(frame.depth, &self.stage.top_context().input, result)),

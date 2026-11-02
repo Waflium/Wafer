@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
 use anyhow::bail;
@@ -18,6 +18,11 @@ use crate::server::notifications::server_activity_monitor::ServerActivityMonitor
 use crate::server::services::Services;
 
 static NEXT_CONN_ID: AtomicU64 = AtomicU64::new(1);
+static STARTED_CHILD_EVENT_LOOPS: AtomicUsize = AtomicUsize::new(0);
+
+pub fn started_child_event_loops() -> usize {
+    STARTED_CHILD_EVENT_LOOPS.load(Ordering::Relaxed)
+}
 
 pub struct ListenerSettings {
     replies_to_status: AtomicBool,
@@ -118,6 +123,7 @@ pub async fn accept_connections(listener: TcpListener, context: Arc<ListenerCont
             continue;
         };
         channels += 1;
+        STARTED_CHILD_EVENT_LOOPS.fetch_max(channels.min(event_loops - 1), Ordering::Relaxed);
         let io_thread: Arc<str> = Arc::from(format!("Netty {event_loop_type} IO #{}", channels % event_loops));
         let context = context.clone();
         tokio::spawn(async move {

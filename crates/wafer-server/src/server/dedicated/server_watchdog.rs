@@ -118,6 +118,8 @@ const WATCHDOG_RUN_FRAME: &str = "net.minecraft.server.dedicated.ServerWatchdog.
 
 const LAMBDA_SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
 const THREAD_RUN_FRAME: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
+const UNBOUND_ENTRY_ACTION_FRAME: &str = "net.minecraft.commands.execution.UnboundEntryAction.lambda$bind$0(UnboundEntryAction.java:8)";
+const UNBOUND_ENTRY_ACTION_HIDDEN_FRAME: &str = "net.minecraft.commands.execution.UnboundEntryAction$$Lambda/0x0000000011c33818.execute(Unknown Source)";
 const SPIN_HIDDEN_FRAMES: [&str; 2] = ["net.minecraft.server.MinecraftServer$$Lambda/0x00000000a0e9a538.run(Unknown Source)", "java.base/java.lang.Thread.runWith(Thread.java:1487)"];
 
 fn runtime_frame(frame: &str) -> String {
@@ -133,6 +135,9 @@ fn thread_info_frames(frames: &[&'static str]) -> Vec<String> {
     for &frame in frames {
         if frame == THREAD_RUN_FRAME && previous == LAMBDA_SPIN_FRAME {
             out.extend(SPIN_HIDDEN_FRAMES.iter().map(ToString::to_string));
+        }
+        if previous == UNBOUND_ENTRY_ACTION_FRAME {
+            out.push(UNBOUND_ENTRY_ACTION_HIDDEN_FRAME.to_string());
         }
         out.push(frame.to_string());
         previous = frame;
@@ -340,12 +345,16 @@ fn console_handler_thread() -> ThreadDumpEntry {
     }
 }
 
-fn netty_io_thread() -> ThreadDumpEntry {
+fn netty_io_threads() -> Vec<ThreadDumpEntry> {
+    (0..=crate::network::server_connection_listener::started_child_event_loops()).map(netty_io_thread).collect()
+}
+
+fn netty_io_thread(index: usize) -> ThreadDumpEntry {
     ThreadDumpEntry {
-        name: "Netty NIO IO #0".to_string(),
+        name: format!("Netty NIO IO #{index}"),
         daemon: true,
         priority: 5,
-        id: 105,
+        id: if index == 0 { 105 } else { 115 + index as u32 },
         state: "RUNNABLE",
         lock: None,
         in_native: true,
@@ -491,8 +500,8 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
             ]),
         ),
         console_handler_thread(),
-        netty_io_thread(),
     ];
+    entries.extend(netty_io_threads());
     entries.extend(jvm_threads());
     if crate::server::services::discovery_executor_blocked() {
         entries.push(services_discovery_thread());
@@ -588,8 +597,8 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             ]),
         ),
         console_handler_thread(),
-        netty_io_thread(),
     ];
+    entries.extend(netty_io_threads());
     entries.extend(jvm_threads());
     for (index, priority) in crate::server::level::chunk_workers::live_io_workers() {
         let name = format!("IO-Worker-{index}");
