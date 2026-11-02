@@ -1820,7 +1820,8 @@ impl ServerLevel {
         if self.entity(id).is_removed() || self.living(id).dead {
             return;
         }
-        if let Some(killer) = self.kill_credit(id) {
+        let killer = self.kill_credit(id);
+        if let Some(killer) = killer {
             main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.die(LivingEntity.java:1529)"], || self.award_kill_score(killer, id, &source));
         }
         if self.is_sleeping(id) {
@@ -1835,9 +1836,29 @@ impl ServerLevel {
         if source.causing_entity.is_none_or(|source_entity| self.killed_entity(source_entity, id, &source)) {
             main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.die(LivingEntity.java:1544)"], || self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_DIE));
             main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.die(LivingEntity.java:1545)"], || self.drop_all_death_loot(id, &source));
+            self.create_wither_rose(id, killer);
         }
         self.broadcast_entity_event(id, entity_event::DEATH);
         self.set_entity_pose(id, Pose::Dying);
+    }
+
+    pub fn create_wither_rose(&mut self, id: EntityId, killer: Option<EntityId>) {
+        if !killer.is_some_and(|killer| self.is_wither(killer)) {
+            return;
+        }
+        let mut placed = false;
+        if self.game_rules.get_bool(game_rule::MOB_GRIEFING) {
+            let pos = self.entity(id).block_position();
+            let state = blocks::WITHER_ROSE.default_state();
+            if self.block_state(pos).is_air() && crate::world::level::block::of(state).can_survive(state, self, pos) {
+                self.set_block(pos, state, crate::world::level::update_flags::UPDATE_ALL);
+                placed = true;
+            }
+        }
+        if !placed {
+            let position = self.entity(id).position();
+            self.add_fresh_entity(LevelEntity::Item(crate::world::entity::ItemEntity::new(position, ItemStack::new(items::WITHER_ROSE, 1))));
+        }
     }
 
     pub fn killed_entity(&mut self, id: EntityId, entity: EntityId, source: &DamageSource) -> bool {

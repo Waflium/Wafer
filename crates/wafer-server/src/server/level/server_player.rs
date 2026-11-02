@@ -1099,6 +1099,7 @@ impl ServerLevel {
             let killer_type = self.entity(killer).entity_type;
             self.award_stat(id, stats::ENTITY_KILLED_BY.get(killer_type as u16), 1);
             crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.die(ServerPlayer.java:1004)"], || self.award_kill_score(killer, id, &source));
+            self.create_wither_rose(id, Some(killer));
         }
         self.broadcast_entity_event(id, entity_event::DEATH);
         self.award_stat(id, stats::DEATHS, 1);
