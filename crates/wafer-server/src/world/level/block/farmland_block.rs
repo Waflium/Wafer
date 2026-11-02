@@ -8,7 +8,8 @@ use super::vegetation_block::{block_field, fields};
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::item::context::BlockPlaceContext;
-use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
+use crate::world::level::{LevelAccessor, LevelReader};
 use crate::world::level::update_flags::{UPDATE_ALL, UPDATE_CLIENTS};
 
 pub struct FarmlandBlock {
@@ -32,16 +33,7 @@ fn should_maintain_farmland(level: &mut dyn LevelReader, pos: BlockPos) -> bool 
 }
 
 fn is_near_water(level: &mut ServerLevel, pos: BlockPos) -> bool {
-    for x in pos.x - 4..=pos.x + 4 {
-        for y in pos.y..=pos.y + 1 {
-            for z in pos.z - 4..=pos.z + 4 {
-                if level.fluid_state(BlockPos::new(x, y, z)).is(&fluid_tags::WATER) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+    level.find_blocks_in(pos.offset(-4, 0, -4), pos.offset(4, 1, 4)).filter_state(|state| state.fluid_state().is(&fluid_tags::WATER)).any_matched()
 }
 
 impl BlockBehaviour for FarmlandBlock {

@@ -7,6 +7,7 @@ pub mod codec;
 pub mod csv_output;
 pub mod datafix;
 pub mod compilable_string;
+pub mod continuation;
 pub mod dependency_sorter;
 pub mod ease;
 pub mod easing_type;

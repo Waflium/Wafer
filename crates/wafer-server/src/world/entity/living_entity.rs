@@ -38,8 +38,9 @@ use crate::world::item::component::attack_range::AttackRange;
 use crate::world::item::component::blocks_attacks::BlocksAttacks;
 use crate::world::item::component::swing_animation::SwingAnimation;
 use crate::world::item::enchantment::{enchantment, enchantment_helper};
-use crate::world::level::BlockGetter;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::block::abstract_bed_block;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::level::clip::{ClipBlock, ClipContext, ClipFluid};
 use crate::world::phys::shapes::collision_context::CollisionContext;
@@ -767,9 +768,7 @@ impl ServerLevel {
         }
         let aabb = self.entity(id).dimensions.make_bounding_box(Vec3::new(xx, y, zz));
         if self.no_collision(&aabb) && !self.contains_any_liquid(&aabb) {
-            let from = BlockPos::containing(aabb.min_x, aabb.min_y, aabb.min_z);
-            let to = BlockPos::containing(aabb.max_x, aabb.max_y, aabb.max_z);
-            let has_invalid_position = self.find_blocks_in(from, to).filter_state(is_invalid_position).any_matched(self);
+            let has_invalid_position = self.find_blocks_in_aabb(&aabb).filter_state(is_invalid_position).any_matched();
             if has_invalid_position {
                 return false;
             }

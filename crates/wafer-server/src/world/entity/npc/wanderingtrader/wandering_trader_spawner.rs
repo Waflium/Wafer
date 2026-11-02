@@ -10,7 +10,9 @@ use crate::world::entity::ai::village::poi::poi_types::PoiType;
 use crate::world::entity::entity_spawn_reason::EntitySpawnReason;
 use crate::world::entity::entity_types;
 use crate::world::entity::spawn_placements;
-use crate::world::level::BlockGetter;
+use crate::util::continuation::Continuation;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 
 const DEFAULT_TICK_DELAY: i32 = 1200;
@@ -113,11 +115,6 @@ impl WanderingTraderSpawner {
     }
 
     fn has_enough_space(&self, level: &mut ServerLevel, spawn_pos: BlockPos) -> bool {
-        for pos in BlockPos::between_closed(spawn_pos, spawn_pos.offset(1, 2, 1)) {
-            if !level.block_state(pos).get_collision_shape(pos).is_empty() {
-                return false;
-            }
-        }
-        true
+        !level.find_blocks_in(spawn_pos, spawn_pos.offset(1, 2, 1)).for_each_until(|level, pos, state| Continuation::continue_if(level.get_state_collision_shape(state, pos).is_empty()))
     }
 }

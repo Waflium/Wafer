@@ -1,4 +1,4 @@
-use wafer_core::{BlockPos, Direction};
+use wafer_core::Direction;
 use wafer_data::Tag;
 
 use super::block_pos_tracker::BlockPosTracker;
@@ -9,7 +9,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::memory::walk_target::WalkTarget;
-use crate::world::level::BlockGetter;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::phys::shapes::collision_context::CollisionContext;
 
 pub fn create(range: i32, speed_modifier: f32, fluid_tag: &'static Tag) -> OneShot {
@@ -28,8 +28,7 @@ pub fn create(range: i32, speed_modifier: f32, fluid_tag: &'static Tag) -> OneSh
                 return true;
             }
             let context = CollisionContext::of(level, body);
-            let found = BlockPos::within_box_by_manhattan_distance(body_block_pos, range, range, range).filter(|pos| pos.differs_horizontally(body_block_pos)).find(|&pos| {
-                let state = level.block_state(pos);
+            let found = level.find_blocks_in_box_by_manhattan_distance(body_block_pos, range, range).filter_pos(|pos| pos.differs_horizontally(body_block_pos)).find_first_matching(|level, pos, state| {
                 if !level.get_state_collision_shape_in_context(state, pos, &context).is_empty() {
                     return false;
                 }

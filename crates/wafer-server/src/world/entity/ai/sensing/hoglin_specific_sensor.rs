@@ -5,7 +5,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::ai::memory::memory_module_type::{self, Erased, MemoryModuleType};
 use crate::world::entity::ai::memory::nearest_visible_living_entities::NearestVisibleLivingEntities;
 use crate::world::entity::{EntityId, entity_types};
-use crate::world::level::BlockGetter;
+use crate::world::level::LevelReader;
 
 pub fn requires() -> Vec<MemoryModuleType<Erased>> {
     vec![
@@ -48,5 +48,5 @@ pub fn do_tick(level: &mut ServerLevel, body: EntityId) {
 
 fn find_nearest_repellent(level: &mut ServerLevel, body: EntityId) -> Option<BlockPos> {
     let origin = level.entity(body).block_position();
-    BlockPos::within_box_by_manhattan_distance(origin, 8, 4, 8).find(|&pos| level.block_state(pos).is(&block_tags::HOGLIN_REPELLENTS))
+    level.find_blocks_in_box_by_manhattan_distance(origin, 8, 4).filter_state(|state| state.is(&block_tags::HOGLIN_REPELLENTS)).find_first()
 }

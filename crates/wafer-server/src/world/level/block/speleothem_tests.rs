@@ -66,6 +66,18 @@ impl LevelReader for Column {
     fn get_block_entity(&mut self, _pos: BlockPos) -> Option<&mut BlockEntity> {
         None
     }
+
+    fn get_height_of_level(&self) -> i32 {
+        384
+    }
+
+    fn get_chunk(&mut self, _chunk_x: i32, _chunk_z: i32) -> &crate::world::level::chunk::LevelChunk {
+        unreachable!()
+    }
+
+    fn loaded_chunk(&self, _chunk_x: i32, _chunk_z: i32) -> &crate::world::level::chunk::LevelChunk {
+        unreachable!()
+    }
 }
 
 impl ScheduledTickAccess for Column {

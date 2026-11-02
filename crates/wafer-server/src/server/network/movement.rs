@@ -8,6 +8,8 @@ use crate::server::level::game_mode::GameType;
 use crate::server::level::server_player::ServerPlayer;
 use crate::world::entity::relative::PositionMoveRotation;
 use crate::world::entity::{EntityId, MoverType};
+use crate::world::level::LevelReader;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 
 const CLIENT_LOADED_TIMEOUT: i32 = 60;
 
@@ -300,10 +302,7 @@ impl ServerLevel {
                 && !self.has_effect(id, wafer_data::mob_effects::LEVITATION)
                 && !is_fall_flying
                 && !is_auto_spin_attack
-                && {
-                    let box_ = self.entity(id).bounding_box().inflate_all(0.0625).expand_towards(0.0, -0.55, 0.0);
-                    self.all_air_in(&box_)
-                };
+                && self.no_blocks_around(id);
             self.player_mut(id).movement.client_is_floating = floating;
             self.move_player(id);
             let e = self.entity(id);
@@ -510,10 +509,7 @@ impl ServerLevel {
             if self.entity_ref(vehicle).is_none() {
                 return;
             }
-            let floating = oy_dist >= -0.03125 && !vehicle_rests_on_something && !self.allow_flight && !self.is_flying_vehicle(vehicle) && !self.entity(vehicle).is_no_gravity() && {
-                let box_ = self.entity(vehicle).bounding_box().inflate_all(0.0625).expand_towards(0.0, -0.55, 0.0);
-                self.all_air_in(&box_)
-            };
+            let floating = oy_dist >= -0.03125 && !vehicle_rests_on_something && !self.allow_flight && !self.is_flying_vehicle(vehicle) && !self.entity(vehicle).is_no_gravity() && self.no_blocks_around(vehicle);
             let position = self.entity(vehicle).position();
             let m = &mut self.player_mut(id).movement;
             m.client_vehicle_is_floating = floating;
@@ -531,6 +527,11 @@ impl ServerLevel {
                 self.player_mut(id).movement.vehicle_position_last_reset_at = tick_count;
             }
         }
+    }
+
+    fn no_blocks_around(&mut self, entity: EntityId) -> bool {
+        let box_ = self.entity(entity).bounding_box().inflate_all(0.0625).expand_towards(0.0, -0.55, 0.0);
+        self.find_blocks_in_aabb(&box_).filter_state(|state| state.is_air()).all_matched()
     }
 
     fn send_move_vehicle(&self, id: EntityId, vehicle: EntityId) {

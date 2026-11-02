@@ -366,10 +366,6 @@ impl crate::world::level::world_gen_level::WorldGenLevel for WorldGenRegion<'_> 
         self.entity_sounds.push((position, sound, source, volume, pitch));
     }
 
-    fn get_height_of_level(&self) -> i32 {
-        self.height
-    }
-
     fn set_block_and_update(&mut self, pos: BlockPos, state: BlockState) -> bool {
         WorldGenRegion::set_block_and_update(self, pos, state)
     }
@@ -539,6 +535,18 @@ impl LevelReader for WorldGenRegion<'_> {
 
     fn get_block_entity(&mut self, pos: BlockPos) -> Option<&mut BlockEntity> {
         WorldGenRegion::get_block_entity(self, pos)
+    }
+
+    fn get_height_of_level(&self) -> i32 {
+        self.height
+    }
+
+    fn get_chunk(&mut self, chunk_x: i32, chunk_z: i32) -> &LevelChunk {
+        WorldGenRegion::get_chunk(self, chunk_x, chunk_z)
+    }
+
+    fn loaded_chunk(&self, chunk_x: i32, chunk_z: i32) -> &LevelChunk {
+        self.chunk(chunk_x, chunk_z)
     }
 }
 

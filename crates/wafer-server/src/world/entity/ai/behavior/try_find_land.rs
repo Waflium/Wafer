@@ -9,7 +9,7 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::memory::walk_target::WalkTarget;
-use crate::world::level::BlockGetter;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::phys::shapes::collision_context::CollisionContext;
 
 const COOLDOWN_TICKS: i64 = 60;
@@ -30,12 +30,11 @@ pub fn create(range: i32, speed_modifier: f32) -> OneShot {
                 return true;
             }
             let context = CollisionContext::of(level, body);
-            let found = BlockPos::within_box_by_manhattan_distance(body_block_pos, range, range, range)
-                .filter(|pos| pos.differs_horizontally(body_block_pos))
-                .find(|&pos| {
-                    let state = level.block_state(pos);
-                    state.fluid_state().is_empty() && can_stand_on(level, pos, state, &context)
-                });
+            let found = level
+                .find_blocks_in_box_by_manhattan_distance(body_block_pos, range, range)
+                .filter_pos(|pos| pos.differs_horizontally(body_block_pos))
+                .filter_state(|state| state.fluid_state().is_empty())
+                .find_first_matching(|level, pos, state| can_stand_on(level, pos, state, &context));
             if let Some(target_pos) = found {
                 look_target.set(level, body, PositionTracker::BlockPos(BlockPosTracker::new(target_pos)));
                 walk_target.set(level, body, WalkTarget::new(PositionTracker::BlockPos(BlockPosTracker::new(target_pos)), speed_modifier, 1));

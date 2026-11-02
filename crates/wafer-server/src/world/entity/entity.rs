@@ -26,7 +26,7 @@ use super::inside_block::{InsideBlockEffectType, InsideBlockEffects, QueuedEffec
 use crate::server::level::game_mode::GameType;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::world::attribute::environment_attributes;
-use crate::world::level::BlockGetter;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::gameevent::game_event::{self, Context};
 use crate::world::level::block;
 use crate::world::level::block::state::block_behaviour::{self, RenderShape};

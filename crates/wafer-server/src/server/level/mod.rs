@@ -2617,6 +2617,18 @@ impl crate::world::level::LevelReader for ServerLevel {
     fn get_block_entity(&mut self, pos: BlockPos) -> Option<&mut crate::world::level::block::entity::BlockEntity> {
         ServerLevel::get_block_entity(self, pos)
     }
+
+    fn get_height_of_level(&self) -> i32 {
+        self.chunks.height()
+    }
+
+    fn get_chunk(&mut self, chunk_x: i32, chunk_z: i32) -> &crate::world::level::chunk::LevelChunk {
+        ServerLevel::get_chunk(self, ChunkPos::new(chunk_x, chunk_z))
+    }
+
+    fn loaded_chunk(&self, chunk_x: i32, chunk_z: i32) -> &crate::world::level::chunk::LevelChunk {
+        self.chunks.full_chunk(ChunkPos::new(chunk_x, chunk_z))
+    }
 }
 
 impl crate::world::level::ScheduledTickAccess for ServerLevel {
@@ -2702,10 +2714,6 @@ impl crate::world::level::world_gen_level::WorldGenLevel for ServerLevel {
 
     fn get_block_state(&mut self, pos: BlockPos) -> BlockState {
         BlockGetter::block_state(self, pos)
-    }
-
-    fn get_height_of_level(&self) -> i32 {
-        self.chunks.height()
     }
 
     fn set_section_block_state(&mut self, pos: BlockPos, state: BlockState) {
@@ -2813,10 +2821,6 @@ impl crate::world::level::server_level_accessor::ServerLevelAccessor for ServerL
 
     fn can_see_sky(&mut self, pos: BlockPos) -> bool {
         ServerLevel::can_see_sky(self, pos)
-    }
-
-    fn contains_any_liquid(&mut self, aabb: &AABB) -> bool {
-        ServerLevel::contains_any_liquid(self, aabb)
     }
 }
 

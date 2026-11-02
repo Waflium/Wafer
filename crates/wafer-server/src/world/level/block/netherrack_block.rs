@@ -4,7 +4,9 @@ use wafer_data::{BlockState, block_tags, blocks};
 
 use super::BlockBehaviour;
 use crate::server::level::ServerLevel;
-use crate::world::level::BlockGetter;
+use crate::util::continuation::Continuation;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::update_flags::UPDATE_ALL;
 
 pub struct NetherrackBlock;
@@ -14,7 +16,7 @@ impl BlockBehaviour for NetherrackBlock {
         if !level.block_state(pos.above()).propagates_skylight_down() {
             return false;
         }
-        BlockPos::between_closed(pos.offset(-1, -1, -1), pos.offset(1, 1, 1)).any(|p| level.block_state(p).is(&block_tags::NYLIUM))
+        level.find_blocks_in(pos.offset(-1, -1, -1), pos.offset(1, 1, 1)).filter_state(|block_state| block_state.is(&block_tags::NYLIUM)).any_matched()
     }
 
     fn is_bonemeal_success(&self, _level: &mut ServerLevel, _pos: BlockPos, _state: BlockState) -> bool {
@@ -23,20 +25,14 @@ impl BlockBehaviour for NetherrackBlock {
 
     fn perform_bonemeal(&self, level: &mut ServerLevel, pos: BlockPos, _state: BlockState) {
         let (mut found_red, mut found_blue) = (false, false);
-        for p in BlockPos::between_closed(pos.offset(-1, -1, -1), pos.offset(1, 1, 1)) {
-            let block_state = level.block_state(p);
-            if !block_state.is(&block_tags::NYLIUM) {
-                continue;
-            }
+        level.find_blocks_in(pos.offset(-1, -1, -1), pos.offset(1, 1, 1)).filter_state(|block_state| block_state.is(&block_tags::NYLIUM)).for_each_until(|_, _, block_state| {
             if block_state.is_block(blocks::WARPED_NYLIUM) {
                 found_blue = true;
             } else if block_state.is_block(blocks::CRIMSON_NYLIUM) {
                 found_red = true;
             }
-            if found_blue && found_red {
-                break;
-            }
-        }
+            Continuation::abort_if(found_blue && found_red)
+        });
         if found_blue && found_red {
             let state = if level.random.next_boolean() { blocks::WARPED_NYLIUM.default_state() } else { blocks::CRIMSON_NYLIUM.default_state() };
             level.set_block(pos, state, UPDATE_ALL);

@@ -9,7 +9,9 @@ use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::memory::walk_target::WalkTarget;
-use crate::world::level::BlockGetter;
+use crate::util::continuation::Continuation;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
+use crate::world::level::{BlockGetter, LevelReader};
 
 pub fn create(range: i32, speed_modifier: f32, fluid_tag: &'static Tag) -> OneShot {
     let mut next_ok_start_time = 0i64;
@@ -28,20 +30,21 @@ pub fn create(range: i32, speed_modifier: f32, fluid_tag: &'static Tag) -> OneSh
             }
             let body_position = level.entity(body).position();
             let mut found_pos: Option<BlockPos> = None;
-            for pos in BlockPos::within_box_by_manhattan_distance(body_block_pos, range, range, range).filter(|pos| pos.differs_horizontally(body_block_pos)) {
-                let state = level.block_state(pos);
-                if !(state.block().is_instance_of("LiquidBlock") && state.fluid_state().is(fluid_tag)) {
-                    continue;
-                }
-                let above_state = level.block_state(pos.above());
-                if above_state.is_air() {
-                    found_pos = Some(pos);
-                    break;
-                }
-                if found_pos.is_none() && !pos.closer_to_center_than(body_position, 1.5) {
-                    found_pos = Some(pos);
-                }
-            }
+            level
+                .find_blocks_in_box_by_manhattan_distance(body_block_pos, range, range)
+                .filter_pos(|pos| pos.differs_horizontally(body_block_pos))
+                .filter_state(|state| state.block().is_instance_of("LiquidBlock") && state.fluid_state().is(fluid_tag))
+                .for_each_until(|level, pos, _| {
+                    let above_state = level.block_state(pos.above());
+                    if above_state.is_air() {
+                        found_pos = Some(pos);
+                        return Continuation::Abort;
+                    }
+                    if found_pos.is_none() && !pos.closer_to_center_than(body_position, 1.5) {
+                        found_pos = Some(pos);
+                    }
+                    Continuation::Continue
+                });
             if let Some(block_pos) = found_pos {
                 look_target.set(level, body, PositionTracker::BlockPos(BlockPosTracker::new(block_pos)));
                 walk_target.set(level, body, WalkTarget::new(PositionTracker::BlockPos(BlockPosTracker::new(block_pos)), speed_modifier, 0));

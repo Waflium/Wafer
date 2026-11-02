@@ -38,7 +38,7 @@ use crate::world::entity::mob::{Mob, MobKind};
 use crate::world::entity::neutral_mob::{self, NeutralMob};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, calculate_view_vector, sound_event};
 use crate::world::item::ItemStack;
-use crate::world::level::BlockGetter;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::block;
 use crate::world::level::block::crop_block;
 use crate::world::level::block::entity::BlockEntityKind;
@@ -1121,23 +1121,20 @@ impl BeePollinateGoal {
     fn find_nearby_flower(&mut self, level: &mut ServerLevel, mob: EntityId) -> Option<BlockPos> {
         let mut temp_cache = HashMap::new();
         let origin = level.entity(mob).block_position();
-        let mut result = None;
-        for pos in BlockPos::within_box_by_manhattan_distance(origin, FLOWER_SEARCH_RADIUS, FLOWER_SEARCH_RADIUS, FLOWER_SEARCH_RADIUS) {
-            if !attracts_bees(level.block_state(pos)) {
-                continue;
-            }
-            let unreachable_until_time = self.unreachable_flower_cache.get(&pos.as_long()).copied().unwrap_or(i64::MIN);
+        let unreachable_flower_cache = &self.unreachable_flower_cache;
+        let result = level.find_blocks_in_box_by_manhattan_distance(origin, FLOWER_SEARCH_RADIUS, FLOWER_SEARCH_RADIUS).filter_state(attracts_bees).find_first_matching(|level, pos, _| {
+            let unreachable_until_time = unreachable_flower_cache.get(&pos.as_long()).copied().unwrap_or(i64::MIN);
             if level.game_time < unreachable_until_time {
                 temp_cache.insert(pos.as_long(), unreachable_until_time);
-                continue;
+                return false;
             }
             let path = level.get_navigation(mob, |navigation, level| navigation.create_path(level, mob, pos, 1));
             if path.is_some_and(|path| path.can_reach()) {
-                result = Some(pos);
-                break;
+                return true;
             }
             temp_cache.insert(pos.as_long(), level.game_time + 600);
-        }
+            false
+        });
         self.unreachable_flower_cache = temp_cache;
         result
     }

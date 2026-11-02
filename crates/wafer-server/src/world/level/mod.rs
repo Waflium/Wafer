@@ -44,8 +44,12 @@ use std::borrow::Cow;
 
 use wafer_core::random::RandomSource;
 use wafer_core::shapes::{self, VoxelShape};
-use wafer_core::{BlockPos, Direction};
+use wafer_core::{AABB, BlockPos, Direction};
 use wafer_data::{Block, BlockState, Fluid, FluidState, SupportType};
+
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
+use crate::world::level::blockscan::box_block_matcher::BoxBlockMatcher;
+use crate::world::level::blockscan::ordered_block_matcher::OrderedBlockMatcher;
 
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::ticks::TickPriority;
@@ -133,8 +137,67 @@ pub trait LevelReader: BlockGetter {
 
     fn get_block_entity(&mut self, pos: BlockPos) -> Option<&mut block::entity::BlockEntity>;
 
+    fn get_height_of_level(&self) -> i32;
+
+    fn get_max_y(&self) -> i32 {
+        self.get_min_y() + self.get_height_of_level() - 1
+    }
+
+    fn get_min_section_y(&self) -> i32 {
+        self.get_min_y() >> 4
+    }
+
+    fn get_max_section_y(&self) -> i32 {
+        self.get_max_y() >> 4
+    }
+
+    fn get_chunk(&mut self, chunk_x: i32, chunk_z: i32) -> &chunk::LevelChunk;
+
+    fn loaded_chunk(&self, chunk_x: i32, chunk_z: i32) -> &chunk::LevelChunk;
+
     fn is_water_at(&mut self, pos: BlockPos) -> bool {
         self.fluid_state(pos).is(&wafer_data::fluid_tags::WATER)
+    }
+
+    fn contains_any_liquid(&mut self, box_: &AABB) -> bool {
+        let from = BlockPos::containing(box_.min_x, box_.min_y, box_.min_z);
+        let to = BlockPos::containing(box_.max_x, box_.max_y, box_.max_z);
+        BoxBlockMatcher::new(self, from, to).filter_state(|state| !state.fluid_state().is_empty()).any_matched()
+    }
+
+    fn find_blocks_in_aabb(&mut self, box_: &AABB) -> BoxBlockMatcher<'_, Self, fn(BlockState) -> bool>
+    where
+        Self: Sized,
+    {
+        self.find_blocks_in(BlockPos::containing(box_.min_x, box_.min_y, box_.min_z), BlockPos::containing(box_.max_x, box_.max_y, box_.max_z))
+    }
+
+    fn find_blocks_in(&mut self, from: BlockPos, to: BlockPos) -> BoxBlockMatcher<'_, Self, fn(BlockState) -> bool>
+    where
+        Self: Sized,
+    {
+        BoxBlockMatcher::new(self, from, to)
+    }
+
+    fn find_blocks_in_positions<I: Iterator<Item = BlockPos>>(&mut self, positions: I) -> OrderedBlockMatcher<'_, Self, I, fn(BlockState) -> bool>
+    where
+        Self: Sized,
+    {
+        OrderedBlockMatcher::new(self, positions)
+    }
+
+    fn find_blocks_in_box_by_manhattan_distance(&mut self, origin: BlockPos, range_xz: i32, range_y: i32) -> OrderedBlockMatcher<'_, Self, impl Iterator<Item = BlockPos>, fn(BlockState) -> bool>
+    where
+        Self: Sized,
+    {
+        self.find_blocks_in_positions(BlockPos::within_box_by_manhattan_distance(origin, range_xz, range_y, range_xz))
+    }
+
+    fn find_blocks_in_manhattan(&mut self, origin: BlockPos, range: i32) -> OrderedBlockMatcher<'_, Self, impl Iterator<Item = BlockPos>, fn(BlockState) -> bool>
+    where
+        Self: Sized,
+    {
+        self.find_blocks_in_positions(BlockPos::within_manhattan(origin, range))
     }
 }
 

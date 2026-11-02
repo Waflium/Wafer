@@ -6,7 +6,9 @@ use crate::world::entity::data::DataValue;
 use crate::world::entity::item::ItemEntity;
 use crate::world::entity::{Entity, EntityId, LevelEntity};
 use crate::world::item::ItemStack;
+use crate::world::level::LevelReader;
 use crate::world::level::block::is_diode;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::phys::shapes::collision_context::CollisionContext;
 
 pub const DATA_DIRECTION: usize = 8;
@@ -85,10 +87,7 @@ impl ServerLevel {
         if self.hanging_entity_has_level_collision(view, &view.pop_box) {
             return false;
         }
-        let support_box = view.calculate_support_box();
-        let from = BlockPos::containing(support_box.min_x, support_box.min_y, support_box.min_z);
-        let to = BlockPos::containing(support_box.max_x, support_box.max_y, support_box.max_z);
-        let is_supported = !self.find_blocks_in(from, to).filter_state(|state| !is_supporting_block(state)).any_matched(self);
+        let is_supported = self.find_blocks_in_aabb(&view.calculate_support_box()).filter_state(is_supporting_block).all_matched();
         is_supported && self.hanging_entity_can_coexist(view, false)
     }
 

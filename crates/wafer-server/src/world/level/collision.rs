@@ -6,7 +6,6 @@ use wafer_data::blocks;
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
-use crate::world::level::BlockGetter;
 use crate::world::phys::shapes::collision_context::CollisionContext;
 
 #[derive(Clone, Copy, Debug)]
@@ -322,36 +321,6 @@ impl ServerLevel {
 
     pub fn has_chunk_at(&self, pos: BlockPos) -> bool {
         self.chunks.has_chunk(ChunkPos::new(pos.x >> 4, pos.z >> 4))
-    }
-
-    pub fn contains_any_liquid(&mut self, box_: &AABB) -> bool {
-        let from = BlockPos::containing(box_.min_x, box_.min_y, box_.min_z);
-        let to = BlockPos::containing(box_.max_x, box_.max_y, box_.max_z);
-        for z in from.z..=to.z {
-            for y in from.y..=to.y {
-                for x in from.x..=to.x {
-                    if !self.block_state(BlockPos::new(x, y, z)).fluid_state().is_empty() {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
-    pub fn all_air_in(&mut self, box_: &AABB) -> bool {
-        let from = BlockPos::containing(box_.min_x, box_.min_y, box_.min_z);
-        let to = BlockPos::containing(box_.max_x, box_.max_y, box_.max_z);
-        for z in from.z..=to.z {
-            for y in from.y..=to.y {
-                for x in from.x..=to.x {
-                    if !self.block_state(BlockPos::new(x, y, z)).is_air() {
-                        return false;
-                    }
-                }
-            }
-        }
-        true
     }
 }
 

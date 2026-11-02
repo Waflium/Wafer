@@ -3,14 +3,21 @@ use wafer_core::{BlockPos, Direction};
 use wafer_data::{Block, BlockState, block_tags};
 
 use super::BlockBehaviour;
-use super::vegetation_block::{self, Vegetation, at_most_matched, fields};
+use super::vegetation_block::{self, Vegetation, fields};
 use crate::server::level::ServerLevel;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 use crate::world::level::levelgen::feature::feature::{self, Feature};
 use crate::world::level::update_flags::{UPDATE_ALL, UPDATE_CLIENTS};
 
 pub struct MushroomBlock {
     feature: Option<&'static Feature>,
+}
+
+fn can_spread(level: &mut ServerLevel, pos: BlockPos, block: Block) -> bool {
+    let min_pos = pos.offset(-4, -1, -4);
+    let max_pos = pos.offset(4, 1, 4);
+    level.find_blocks_in(min_pos, max_pos).filter_state(|state| state.is_block(block)).at_most_matched(4)
 }
 
 fn random_offset(level: &mut ServerLevel, pos: BlockPos) -> BlockPos {
@@ -44,7 +51,7 @@ impl BlockBehaviour for MushroomBlock {
         if level.random.next_int_bounded(25) != 0 {
             return;
         }
-        if !at_most_matched(level, pos.offset(-4, -1, -4), pos.offset(4, 1, 4), state.block(), 4) {
+        if !can_spread(level, pos, state.block()) {
             return;
         }
         let mut offset = random_offset(level, pos);

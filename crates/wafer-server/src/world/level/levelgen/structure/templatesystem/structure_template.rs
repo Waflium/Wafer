@@ -16,7 +16,9 @@ use crate::world::entity::entity_type::EntityType;
 use crate::world::entity::{Entity, LevelEntity, neutral_mob};
 use crate::world::level::storage::tag_value_input::{ScopedCollector, enter_child};
 use crate::world::level::world_gen_level::WorldGenLevel;
+use crate::world::level::LevelReader;
 use crate::world::level::block;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::structure::BoundingBox;
@@ -207,7 +209,7 @@ impl StructureTemplate {
         let min_corner = BlockPos::new(position.x.min(corner2.x), position.y.min(corner2.y), position.z.min(corner2.z));
         let max_corner = BlockPos::new(position.x.max(corner2.x), position.y.max(corner2.y), position.z.max(corner2.z));
         self.size = size;
-        level.find_blocks_in(min_corner, max_corner).filter_state(|state| !ignore_blocks.contains(&state.block())).for_each(level, |level, pos, state| {
+        level.find_blocks_in(min_corner, max_corner).filter_state(|state| !ignore_blocks.contains(&state.block())).for_each(|level, pos, state| {
             let relative_pos = BlockPos::new(pos.x - min_corner.x, pos.y - min_corner.y, pos.z - min_corner.z);
             let nbt = level.get_block_entity(pos).map(|block_entity| block_entity.save_with_id());
             add_to_lists(StructureBlockInfo { pos: relative_pos, state, nbt }, &mut full_block_list, &mut block_entities_list, &mut other_blocks_list);

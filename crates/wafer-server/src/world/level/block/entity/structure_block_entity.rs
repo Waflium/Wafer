@@ -8,8 +8,9 @@ use super::BlockEntityKind;
 use crate::server::level::ServerLevel;
 use crate::util::codec;
 use crate::world::entity::EntityId;
-use crate::world::level::BlockGetter;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::block::mirror::Mirror;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::block::rotation::Rotation;
 use crate::world::level::levelgen::structure::BoundingBox;
 use crate::world::level::levelgen::structure::templatesystem::structure_place_settings::{PlaceRandom, StructurePlaceSettings};
@@ -229,7 +230,7 @@ impl ServerLevel {
         let mut result: Option<BoundingBox> = None;
         let corner1 = BlockPos::new(self_pos.x - SCAN_CORNER_BLOCKS_RANGE, self.chunks.min_y(), self_pos.z - SCAN_CORNER_BLOCKS_RANGE);
         let corner2 = BlockPos::new(self_pos.x + SCAN_CORNER_BLOCKS_RANGE, self.chunks.max_y(), self_pos.z + SCAN_CORNER_BLOCKS_RANGE);
-        self.find_blocks_in(corner1, corner2).filter_state(|state| state.is_block(blocks::STRUCTURE_BLOCK)).for_each(self, |level, pos, _| {
+        self.find_blocks_in(corner1, corner2).filter_state(|state| state.is_block(blocks::STRUCTURE_BLOCK)).for_each(|level, pos, _| {
             if let Some(entity) = level.structure_block_entity(pos)
                 && entity.mode == StructureMode::Corner
                 && entity.structure_name.as_deref() == structure_name

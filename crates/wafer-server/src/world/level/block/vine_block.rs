@@ -7,8 +7,8 @@ use wafer_data::{Block, BlockState, blocks};
 use super::BlockBehaviour;
 use super::mirror::Mirror;
 use super::rotation::Rotation;
-use super::vegetation_block::at_most_matched;
 use crate::server::level::ServerLevel;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::item::context::BlockPlaceContext;
 use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
 use crate::world::level::update_flags::UPDATE_CLIENTS;
@@ -82,7 +82,9 @@ fn updated_state(mut state: BlockState, level: &mut dyn LevelReader, pos: BlockP
 }
 
 fn can_spread(level: &mut ServerLevel, pos: BlockPos) -> bool {
-    at_most_matched(level, pos.offset(-4, -1, -4), pos.offset(4, 1, 4), blocks::VINE, 4)
+    let min_pos = pos.offset(-4, -1, -4);
+    let max_pos = pos.offset(4, 1, 4);
+    level.find_blocks_in(min_pos, max_pos).filter_state(|state| state.is_block(blocks::VINE)).at_most_matched(4)
 }
 
 fn copy_random_faces(from: BlockState, mut to: BlockState, level: &mut ServerLevel) -> BlockState {

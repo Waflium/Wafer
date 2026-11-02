@@ -5,6 +5,7 @@ use wafer_protocol::nbt::Nbt;
 
 use super::block_attached_entity::{self, BlockAttachedEntity, BlockAttachedKind};
 use crate::server::level::ServerLevel;
+use crate::util::continuation::Continuation;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::data::{DataValue, entity_defaults};
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, sound_event};
@@ -12,8 +13,9 @@ use crate::world::item::component as dc;
 use crate::world::item::cushion_item;
 use crate::world::item::dye_color::DyeColor;
 use crate::world::item::ItemStack;
-use crate::world::level::BlockGetter;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::storage::tag_value_input;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::phys::shapes::collision_context::CollisionContext;
 use crate::world::{InteractionHand, InteractionResult};
 
@@ -119,12 +121,9 @@ pub fn would_survive_at(level: &mut ServerLevel, bounding_box: &AABB) -> bool {
 
 fn has_anchor_below(level: &mut ServerLevel, bounding_box: &AABB) -> bool {
     let anchor_box = AABB::new(bounding_box.min_x, bounding_box.min_y - 0.015625, bounding_box.min_z, bounding_box.max_x.next_down(), bounding_box.min_y, bounding_box.max_z.next_down());
-    let search_box = anchor_box.expand_towards(0.0, -0.125, 0.0);
-    let from = BlockPos::containing(search_box.min_x, search_box.min_y, search_box.min_z);
-    let to = BlockPos::containing(search_box.max_x, search_box.max_y, search_box.max_z);
-    level.find_blocks_in(from, to).for_each_until(level, |_, block_pos, block_state| {
+    level.find_blocks_in_aabb(&anchor_box.expand_towards(0.0, -0.125, 0.0)).for_each_until(|_, block_pos, block_state| {
         let shape = block_state.get_shape(block_pos);
-        !shape.is_empty() && bounds(&shape).move_to_block(block_pos).intersects(&anchor_box)
+        Continuation::abort_if(!shape.is_empty() && bounds(&shape).move_to_block(block_pos).intersects(&anchor_box))
     })
 }
 
@@ -228,11 +227,9 @@ impl ServerLevel {
             return;
         }
         let deflated = self.entity(id).bounding_box().next_deflated();
-        let from = BlockPos::containing(deflated.min_x, deflated.min_y, deflated.min_z);
-        let to = BlockPos::containing(deflated.max_x, deflated.max_y, deflated.max_z);
-        self.find_blocks_in(from, to).filter_state(|state| state.is(&block_tags::FIRE)).for_each_until(self, |level, _, _| {
+        self.find_blocks_in_aabb(&deflated).filter_state(|state| state.is(&block_tags::FIRE)).for_each_until(|level, _, _| {
             level.hurt_server(id, DamageSource::new(damage_types::IN_FIRE), 1.0);
-            true
+            Continuation::Abort
         });
     }
 

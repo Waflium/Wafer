@@ -3,7 +3,8 @@ use wafer_core::random::RandomSource;
 use wafer_data::{BlockState, block_tags};
 
 use crate::server::level::ServerLevel;
-use crate::world::level::BlockGetter;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::levelgen::feature::feature::{self, Feature};
 
 pub struct TreeGrower {
@@ -162,7 +163,7 @@ fn is_two_by_two_sapling(state: BlockState, surrounding_blocks: &[(BlockState, B
 }
 
 fn has_flowers(level: &mut ServerLevel, pos: BlockPos) -> bool {
-    BlockPos::between_closed(pos.offset(-2, -1, -2), pos.offset(2, 1, 2)).any(|p| level.block_state(p).is(&block_tags::FLOWERS))
+    level.find_blocks_in(pos.offset(-2, -1, -2), pos.offset(2, 1, 2)).filter_state(|state| state.is(&block_tags::FLOWERS)).any_matched()
 }
 
 fn find_two_by_two_sapling_pos(level: &mut ServerLevel, state: BlockState, pos: BlockPos) -> Option<TwoByTwoSaplingPos> {

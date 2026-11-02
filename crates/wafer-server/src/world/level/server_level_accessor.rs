@@ -96,19 +96,4 @@ pub trait ServerLevelAccessor: LevelAccessor {
         }
         true
     }
-
-    fn contains_any_liquid(&mut self, aabb: &AABB) -> bool {
-        let from = BlockPos::containing(aabb.min_x, aabb.min_y, aabb.min_z);
-        let to = BlockPos::containing(aabb.max_x, aabb.max_y, aabb.max_z);
-        for z in from.z..=to.z {
-            for y in from.y..=to.y {
-                for x in from.x..=to.x {
-                    if !self.block_state(BlockPos::new(x, y, z)).fluid_state().is_empty() {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
 }

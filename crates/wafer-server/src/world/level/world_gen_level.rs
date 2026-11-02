@@ -27,12 +27,6 @@ pub trait WorldGenLevel: ServerLevelAccessor {
 
     fn play_entity_sound(&mut self, position: Vec3, sound: i32, source: SoundSource, volume: f32, pitch: f32);
 
-    fn get_height_of_level(&self) -> i32;
-
-    fn get_max_y(&self) -> i32 {
-        self.get_min_y() + self.get_height_of_level() - 1
-    }
-
     fn is_outside_build_height(&self, y: i32) -> bool {
         y < self.get_min_y() || y >= self.get_min_y() + self.get_height_of_level()
     }

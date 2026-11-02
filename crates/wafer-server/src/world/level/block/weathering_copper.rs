@@ -5,7 +5,9 @@ use wafer_core::BlockPos;
 use wafer_data::{Block, BlockState};
 
 use crate::server::level::ServerLevel;
-use crate::world::level::BlockGetter;
+use crate::util::continuation::Continuation;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::update_flags::UPDATE_ALL;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -94,6 +96,10 @@ pub fn with_properties_of(block: Block, state: BlockState) -> BlockState {
     state.properties().fold(block.default_state(), |result, (name, value)| result.with_property_by_name(name, value).unwrap_or(result))
 }
 
+fn is_same_ageing_type(state: BlockState) -> bool {
+    age(state.block()).is_some()
+}
+
 pub fn change_over_time(state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
     if level.random.next_float() < 0.05688889
         && let Some(weathered) = next_state(state, level, pos)
@@ -106,19 +112,21 @@ fn next_state(state: BlockState, level: &mut ServerLevel, pos: BlockPos) -> Opti
     let own_age = age(state.block())?;
     let mut same_age_count = 0;
     let mut older_count = 0;
-    for neighbour in BlockPos::within_manhattan(pos, 4) {
-        if neighbour == pos {
-            continue;
+    let aborted = level.find_blocks_in_manhattan(pos, 4).filter_pos(|block_pos| *block_pos != pos).filter_state(is_same_ageing_type).for_each_until(|level, block_pos, _| {
+        if let Some(found_age) = age(level.block_state(block_pos).block()) {
+            if found_age < own_age {
+                return Continuation::Abort;
+            }
+            if found_age > own_age {
+                older_count += 1;
+            } else {
+                same_age_count += 1;
+            }
         }
-        let Some(found_age) = age(level.block_state(neighbour).block()) else { continue };
-        if found_age < own_age {
-            return None;
-        }
-        if found_age > own_age {
-            older_count += 1;
-        } else {
-            same_age_count += 1;
-        }
+        Continuation::Continue
+    });
+    if aborted {
+        return None;
     }
     let chance = (older_count + 1) as f32 / (older_count + same_age_count + 1) as f32;
     let chance_modifier = if own_age == WeatherState::Unaffected { 0.75 } else { 1.0 };

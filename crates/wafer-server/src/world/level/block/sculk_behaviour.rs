@@ -7,6 +7,7 @@ use super::multiface_block::{self, get_face_property, has_any_face, has_face};
 use super::multiface_spreader::{DEFAULT_SPREAD_ORDER, MultifaceSpreader, SpreadConfig, SpreadType};
 use super::sculk_spreader::{ChargeCursor, SculkSpreader};
 use crate::server::level::SoundSource;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::world_gen_level::WorldGenLevel;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -204,18 +205,5 @@ fn can_place_growth(level: &mut impl WorldGenLevel, pos: BlockPos) -> bool {
     if !(state_above.is_air() || state_above.is_block(blocks::WATER) && state_above.fluid_state().fluid == Fluid::Water) {
         return false;
     }
-    let mut count = 0;
-    for x in pos.x - 4..=pos.x + 4 {
-        for y in pos.y..=pos.y + 2 {
-            for z in pos.z - 4..=pos.z + 4 {
-                if level.get_block_state(BlockPos::new(x, y, z)).is(&block_tags::SCULK_GROWTH_INHIBITORS) {
-                    count += 1;
-                    if count > 2 {
-                        return false;
-                    }
-                }
-            }
-        }
-    }
-    true
+    level.find_blocks_in(pos.offset(-4, 0, -4), pos.offset(4, 2, 4)).filter_state(|state| state.is(&block_tags::SCULK_GROWTH_INHIBITORS)).at_most_matched(2)
 }

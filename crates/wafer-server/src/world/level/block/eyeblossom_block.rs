@@ -12,6 +12,7 @@ use crate::world::entity::EntityId;
 use crate::world::entity::animal::bee::bee;
 use crate::world::entity::inside_block::InsideBlockEffects;
 use crate::world::level::update_flags::UPDATE_ALL;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::{LevelAccessor, LevelReader};
 
 const EYEBLOSSOM_XZ_RANGE: i32 = 3;
@@ -110,7 +111,7 @@ impl EyeblossomBlock {
         new_type.spawn_transform_particle(level, pos);
         let min_pos = pos.offset(-EYEBLOSSOM_XZ_RANGE, -EYEBLOSSOM_Y_RANGE, -EYEBLOSSOM_XZ_RANGE);
         let max_pos = pos.offset(EYEBLOSSOM_XZ_RANGE, EYEBLOSSOM_Y_RANGE, EYEBLOSSOM_XZ_RANGE);
-        level.find_blocks_in(min_pos, max_pos).filter_state(|nearby_state| nearby_state == state).for_each(level, |level, nearby_pos, _| {
+        level.find_blocks_in(min_pos, max_pos).filter_state(|nearby_state| nearby_state == state).for_each(|level, nearby_pos, _| {
             let distance = pos.dist_sqr(nearby_pos).sqrt();
             let delay = level.random.next_int_between_inclusive((distance * 5.0) as i32, (distance * 10.0) as i32);
             level.schedule_tick(nearby_pos, state.block(), delay);

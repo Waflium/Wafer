@@ -11,8 +11,9 @@ use crate::world::entity::entity_save::{LOAD_ENTITY_RECURSIVE_TYPED, block_entit
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::component::DataComponentType;
 use crate::world::item::component::{self as dc};
-use crate::world::level::BlockGetter;
+use crate::world::level::{BlockGetter, LevelReader};
 use crate::world::level::block::campfire_block;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::block::entity::BlockEntityKind;
 use crate::world::level::update_flags::UPDATE_ALL;
 use crate::world::phys::shapes::collision_context::CollisionContext;
@@ -252,7 +253,7 @@ impl ServerLevel {
     }
 
     pub fn beehive_is_fire_nearby(&mut self, pos: BlockPos) -> bool {
-        self.find_blocks_in(pos.offset(-1, -1, -1), pos.offset(1, 1, 1)).filter_state(|state| state.block().is_instance_of("FireBlock")).any_matched(self)
+        self.find_blocks_in(pos.offset(-1, -1, -1), pos.offset(1, 1, 1)).filter_state(|state| state.block().is_instance_of("FireBlock")).any_matched()
     }
 
     pub fn beehive_is_sedated(&mut self, pos: BlockPos) -> bool {

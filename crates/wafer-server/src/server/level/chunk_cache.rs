@@ -413,6 +413,10 @@ impl ChunkCache {
         self.chunks.get_mut(&pos).expect("full chunk")
     }
 
+    pub fn full_chunk(&self, pos: ChunkPos) -> &LevelChunk {
+        self.chunks.get(&pos).expect("full chunk")
+    }
+
     pub fn loaded_full_chunk(&mut self, pos: ChunkPos) -> &mut LevelChunk {
         if !self.chunks.contains_key(&pos) {
             self.chunk(pos);

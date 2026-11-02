@@ -1,4 +1,4 @@
-use wafer_core::{BlockPos, Vec3, mth};
+use wafer_core::{Vec3, mth};
 use wafer_data::damage_types;
 
 use super::projectile::{Projectile, ProjectileKind};
@@ -7,7 +7,8 @@ use crate::world::damagesource::DamageSource;
 use crate::world::entity::data::entity_defaults;
 use crate::world::entity::entity_reference::EntityReference;
 use crate::world::entity::{EntityDimensions, EntityId};
-use crate::world::level::BlockGetter;
+use crate::world::level::LevelReader;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::level::block::BlockHitResult;
 use crate::world::phys::entity_hit_result::EntityHitResult;
 
@@ -49,9 +50,7 @@ impl ServerLevel {
         let (x, y, z) = (e.x() + movement.x, e.y() + movement.y, e.z() + movement.z);
         self.update_rotation(id);
         let bb = self.entity(id).bounding_box();
-        let from = BlockPos::containing(bb.min_x, bb.min_y, bb.min_z);
-        let to = BlockPos::containing(bb.max_x, bb.max_y, bb.max_z);
-        let touches_no_air = !BlockPos::between_closed(from, to).any(|pos| self.block_state(pos).is_air());
+        let touches_no_air = self.find_blocks_in_aabb(&bb).filter_state(|state| state.is_air()).none_matched();
         if touches_no_air || self.entity(id).is_in_water() {
             self.discard(id);
         } else {

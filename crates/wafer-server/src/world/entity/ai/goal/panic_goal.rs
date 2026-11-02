@@ -4,7 +4,7 @@ use wafer_data::{Tag, damage_type_tags, fluid_tags};
 use crate::server::level::ServerLevel;
 use crate::world::entity::EntityId;
 use crate::world::entity::ai::util::default_random_pos;
-use crate::world::level::path_navigation_region::PathNavigationRegion;
+use crate::world::level::{BlockGetter, LevelReader};
 
 pub struct PanicGoal {
     pub speed_modifier: f64,
@@ -69,12 +69,12 @@ impl PanicGoal {
         !level.mob(mob).expect("a mob").ai.navigation.is_done()
     }
 
-    pub fn look_for_water(&self, level: &ServerLevel, mob: EntityId, xz_dist: i32) -> Option<BlockPos> {
+    pub fn look_for_water(&self, level: &mut ServerLevel, mob: EntityId, xz_dist: i32) -> Option<BlockPos> {
         let mob_position = level.entity(mob).block_position();
-        let region = PathNavigationRegion::new(level);
-        if !region.get_state_collision_shape(region.get_block_state(mob_position), mob_position).is_empty() {
+        let mob_state = level.block_state(mob_position);
+        if !level.get_state_collision_shape(mob_state, mob_position).is_empty() {
             return None;
         }
-        BlockPos::within_box_by_manhattan_distance(mob_position, xz_dist, 1, xz_dist).find(|&pos| region.get_block_state(pos).fluid_state().is(&fluid_tags::WATER))
+        level.find_blocks_in_box_by_manhattan_distance(mob_position, xz_dist, 1).filter_state(|state| state.fluid_state().is(&fluid_tags::WATER)).find_first()
     }
 }

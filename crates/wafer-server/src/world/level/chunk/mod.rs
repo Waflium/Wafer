@@ -382,6 +382,14 @@ impl LevelChunk {
         ((y - self.min_y) >> 4) as usize
     }
 
+    pub fn get_section_index_from_section_y(&self, section_y: i32) -> usize {
+        (section_y - (self.min_y >> 4)) as usize
+    }
+
+    pub fn get_section(&self, index: usize) -> &LevelChunkSection {
+        &self.sections[index]
+    }
+
     pub fn block_state(&self, pos: BlockPos) -> BlockState {
         let i = self.section_index(pos.y);
         match self.sections.get(i) {

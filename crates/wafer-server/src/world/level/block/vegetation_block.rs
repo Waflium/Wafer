@@ -2,9 +2,8 @@ use wafer_core::BlockPos;
 use wafer_data::{BlockState, Fluid, block_tags, blocks};
 
 use super::BlockBehaviour;
-use crate::server::level::ServerLevel;
 use crate::world::item::context::BlockPlaceContext;
-use crate::world::level::{BlockGetter, LevelAccessor, LevelReader};
+use crate::world::level::{LevelAccessor, LevelReader};
 
 #[allow(unused_variables)]
 pub trait Vegetation {
@@ -29,23 +28,6 @@ pub fn block_can_be_replaced(state: BlockState, ctx: &BlockPlaceContext) -> bool
 
 pub fn schedule_water_tick(level: &mut dyn LevelAccessor, pos: BlockPos) {
     level.schedule_fluid_tick(pos, Fluid::Water, 5);
-}
-
-pub fn at_most_matched(level: &mut ServerLevel, min: BlockPos, max: BlockPos, block: wafer_data::Block, n: usize) -> bool {
-    let mut count = 0;
-    for x in min.x..=max.x {
-        for y in min.y..=max.y {
-            for z in min.z..=max.z {
-                if level.block_state(BlockPos::new(x, y, z)).is_block(block) {
-                    count += 1;
-                    if count > n {
-                        return false;
-                    }
-                }
-            }
-        }
-    }
-    true
 }
 
 pub fn fields(block: wafer_data::Block) -> serde_json::Value {

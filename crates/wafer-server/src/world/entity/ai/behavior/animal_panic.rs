@@ -8,7 +8,7 @@ use crate::world::entity::ai::memory::memory_module_type;
 use crate::world::entity::ai::memory::memory_status::MemoryStatus;
 use crate::world::entity::ai::memory::walk_target::WalkTarget;
 use crate::world::entity::ai::util::land_random_pos;
-use crate::world::level::path_navigation_region::PathNavigationRegion;
+use crate::world::level::{BlockGetter, LevelReader};
 
 const PANIC_MIN_DURATION: i32 = 100;
 const PANIC_MAX_DURATION: i32 = 120;
@@ -58,17 +58,20 @@ impl AnimalPanic {
     }
 }
 
-fn look_for_water(level: &ServerLevel, mob: EntityId) -> Option<BlockPos> {
+fn look_for_water(level: &mut ServerLevel, mob: EntityId) -> Option<BlockPos> {
     let mob_position = level.entity(mob).block_position();
-    let region = PathNavigationRegion::new(level);
-    if !region.get_state_collision_shape(region.get_block_state(mob_position), mob_position).is_empty() {
+    let mob_state = level.block_state(mob_position);
+    if !level.get_state_collision_shape(mob_state, mob_position).is_empty() {
         return None;
     }
-    let mut block_matcher = BlockPos::within_box_by_manhattan_distance(mob_position, 5, 1, 5).filter(|&pos| is_water(region.get_block_state(pos)));
-    if mth::ceil(level.entity(mob).dimensions.width as f64) == 2 {
-        block_matcher.find(|&pos| is_water(region.get_block_state(pos.south())) && is_water(region.get_block_state(pos.east())) && is_water(region.get_block_state(pos.south().east())))
+    let is_two_wide = mth::ceil(level.entity(mob).dimensions.width as f64) == 2;
+    let block_matcher = level.find_blocks_in_box_by_manhattan_distance(mob_position, 5, 1).filter_state(is_water);
+    if is_two_wide {
+        block_matcher.find_first_matching(|level, pos, _| {
+            is_water(level.block_state(pos.south())) && is_water(level.block_state(pos.east())) && is_water(level.block_state(pos.south().east()))
+        })
     } else {
-        block_matcher.next()
+        block_matcher.find_first()
     }
 }
 

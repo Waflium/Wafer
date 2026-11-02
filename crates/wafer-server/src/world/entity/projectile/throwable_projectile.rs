@@ -1,10 +1,10 @@
-use wafer_core::BlockPos;
 use wafer_data::blocks;
 
 use crate::server::level::ServerLevel;
 use crate::world::entity::inside_block::InsideBlockEffects;
-use crate::world::level::BlockGetter;
+use crate::world::level::LevelReader;
 use crate::world::level::block;
+use crate::world::level::blockscan::block_matcher::BlockMatcher;
 use crate::world::entity::EntityId;
 use crate::world::phys::hit_result::{HitResult, Type};
 
@@ -39,13 +39,9 @@ impl ServerLevel {
             return;
         }
         let bb = self.entity(id).bounding_box();
-        let (from, to) = (BlockPos::containing(bb.min_x, bb.min_y, bb.min_z), BlockPos::containing(bb.max_x, bb.max_y, bb.max_z));
-        for pos in BlockPos::between_closed(from, to) {
-            let state = self.block_state(pos);
-            if state.is_block(blocks::BUBBLE_COLUMN) {
-                block::of(state).entity_inside(state, self, pos, id, &mut InsideBlockEffects::default(), true);
-            }
-        }
+        self.find_blocks_in_aabb(&bb).filter_state(|state| state.is_block(blocks::BUBBLE_COLUMN)).for_each(|level, pos, state| {
+            block::of(state).entity_inside(state, level, pos, id, &mut InsideBlockEffects::default(), true);
+        });
     }
 
     fn throwable_projectile_apply_inertia(&mut self, id: EntityId) {

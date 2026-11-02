@@ -35,6 +35,7 @@ use crate::world::entity::monster::zombie::drowned::Drowned;
 use crate::world::entity::monster::zombie::zombified_piglin::ZombifiedPiglin;
 use crate::world::entity::spawn_group_data::SpawnGroupData;
 use crate::world::entity::spawn_placements;
+use crate::world::level::LevelReader;
 use crate::world::level::server_level_accessor::ServerLevelAccessor;
 use crate::world::entity::{Entity, EntityDimensions, EntityId, LevelEntity, sound_event};
 use crate::world::item::ItemStack;
@@ -555,7 +556,7 @@ impl ServerLevel {
                 if !self.has_nearby_alive_player(xt as f64, yt as f64, zt as f64, 7.0)
                     && self.is_unobstructed_by_entities(None, &bounding_box)
                     && self.no_collision_for_new(&candidate, &bounding_box)
-                    && (can_spawn_in_liquids(&candidate) || !ServerLevel::contains_any_liquid(self, &bounding_box))
+                    && (can_spawn_in_liquids(&candidate) || !LevelReader::contains_any_liquid(self, &bounding_box))
                 {
                     let difficulty = self.current_difficulty_at(candidate.entity().block_position());
                     let (candidate, _) = self.finalize_spawn_detached(candidate, &difficulty, EntitySpawnReason::Reinforcement, None);
