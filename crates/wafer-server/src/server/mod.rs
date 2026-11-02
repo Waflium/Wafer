@@ -280,6 +280,19 @@ impl ServerTaskQueue {
     pub fn execute(&self, task: Task) {
         self.pending_runnables.borrow_mut().push_back(TickTask { tick: self.tick_count.get(), task });
     }
+
+    fn references_player(&self, id: EntityId) -> bool {
+        self.pending_runnables.borrow().iter().any(|tick_task| tick_task.task.captured_player() == Some(id))
+    }
+}
+
+impl Task {
+    fn captured_player(&self) -> Option<EntityId> {
+        match *self {
+            Task::Chat { player, .. } | Task::Command { player, .. } | Task::SignedCommand { player, .. } | Task::Chained { player, .. } => Some(player),
+            _ => None,
+        }
+    }
 }
 
 pub(crate) type ServerTasks = Rc<ServerTaskQueue>;
@@ -339,6 +352,7 @@ pub struct Server {
     blocking_count: u32,
     reentrant_count: u32,
     spawn_finders: HashMap<u64, level::player_spawn_finder::PlayerSpawnFinder>,
+    removed_players: HashMap<EntityId, (usize, ServerPlayer)>,
     next_spawn_finder: u64,
     console_inputs: Vec<(String, CommandSourceStack, bool)>,
     pub rcon_buffer: std::cell::RefCell<String>,
@@ -619,6 +633,7 @@ impl Server {
             blocking_count: 0,
             reentrant_count: 0,
             spawn_finders: HashMap::new(),
+            removed_players: HashMap::new(),
             next_spawn_finder: 0,
             console_inputs: Vec::new(),
             rcon_buffer: std::cell::RefCell::new(String::new()),
@@ -1661,6 +1676,17 @@ impl Server {
         }
     }
 
+    fn run_for_removed_player(&mut self, task: Task) {
+        let Some(id) = task.captured_player() else { return };
+        let Some((level, player)) = self.removed_players.remove(&id) else { return };
+        self.levels[level].players.insert(id, player);
+        self.run_task(task);
+        let Some(player) = self.levels[level].players.shift_remove(&id) else { return };
+        if self.tasks.references_player(id) {
+            self.removed_players.insert(id, (level, player));
+        }
+    }
+
     fn run_task(&mut self, task: Task) {
         profiler::increment_counter("runTask", 1);
         match task {
@@ -1671,6 +1697,7 @@ impl Server {
             }
             Task::Chained { player, run } if self.has_player(player) => run(self),
             Task::CommandSuggestions { player } if self.has_player(player) => self.try_process_command_suggestions(player),
+            task if task.captured_player().is_some_and(|player| self.removed_players.contains_key(&player)) => self.run_for_removed_player(task),
             Task::Rcon { command, reply } => {
                 self.rcon_buffer.borrow_mut().clear();
                 let source = CommandSourceStack::rcon(self);
@@ -1988,6 +2015,9 @@ impl Server {
                 p.varint(1);
                 p.uuid(player.profile.uuid);
             });
+        }
+        if self.tasks.references_player(id) {
+            self.removed_players.insert(id, (level_index, player));
         }
     }
 

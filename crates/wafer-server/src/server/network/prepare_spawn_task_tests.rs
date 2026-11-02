@@ -54,6 +54,27 @@ fn a_data_fixer_exception_while_placing_disconnects_the_player() {
 }
 
 #[test]
+fn a_command_queued_before_its_player_left_still_runs_with_the_removed_player() {
+    let mut server = testing::server_with(testing::flat_config());
+    let (out, mut packets) = Outbound::capture();
+    let profile = Profile { uuid: UUID, name: "Steve".into(), properties: Vec::new() };
+    server.handle(Event::Join { conn: 1, profile, cookie: CommonListenerCookie::create_initial(false), out, address: "127.0.0.1:25565".parse().unwrap() });
+    let id = server.connections[&1];
+    let mut command = wafer_protocol::Writer::new();
+    command.string("seed");
+    server.handle(Event::Packet { conn: 1, packet: crate::network::connection::Packet { id: wafer_data::packets::play::serverbound::CHAT_COMMAND, data: command.into_inner() } });
+    server.handle(Event::Left { conn: 1, reason: crate::network::chat::Component::translatable("multiplayer.disconnect.generic") });
+    server.remove_player(1, None, None);
+    assert!(!server.has_player(id));
+    assert!(server.removed_players.contains_key(&id));
+    while packets.try_recv().is_ok() {}
+    server.managed_block(|server| server.removed_players.is_empty());
+    assert!(!server.has_player(id));
+    let ids: Vec<i32> = std::iter::from_fn(|| packets.try_recv().ok()).map(|p| Reader::new(&p).varint().unwrap()).collect();
+    assert_eq!(ids, vec![clientbound::SYSTEM_CHAT, clientbound::SYSTEM_CHAT]);
+}
+
+#[test]
 fn the_join_spawn_search_finishes_through_server_tasks() {
     use crate::server::level::player_spawn_finder::Finished;
     let mut server = testing::server_with(testing::flat_config());
