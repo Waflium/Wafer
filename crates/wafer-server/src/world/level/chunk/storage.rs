@@ -42,7 +42,7 @@ fn invalid(msg: &str) -> io::Error {
 
 const OLD_CHUNK_DATA_VERSION: i32 = 4997;
 
-fn is_old_chunk(nbt: &Nbt) -> bool {
+pub fn is_old_chunk(nbt: &Nbt) -> bool {
     !matches!(nbt.get("DataVersion"), Some(Nbt::Int(data_version)) if *data_version >= OLD_CHUNK_DATA_VERSION) || matches!(nbt.get("blending_data"), Some(Nbt::Compound(_)))
 }
 

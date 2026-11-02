@@ -197,45 +197,65 @@ const UPDATE_NEIGHBOURS_ON_BLOCK_SET_UPDATE_NEIGHBORS_AT: [&str; 1] = ["net.mine
 const UPDATE_NEIGHBOURS_ON_BLOCK_SET_OUTPUT_SIGNAL: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighboursOnBlockSet(ServerLevel.java:899)"];
 const UPDATE_FROM_NEIGHBOUR_SHAPES: [&str; 1] = ["net.minecraft.world.level.block.Block.updateFromNeighbourShapes(Block.java:205)"];
 const UPDATE_SHAPE: [&str; 1] = ["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.updateShape(BlockBehaviour.java:1201)"];
-const UPDATE_NEIGHBORS_AT: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighborsAt(ServerLevel.java:1166)"];
-const UPDATE_NEIGHBORS_AT_ORIENTED: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighborsAt(ServerLevel.java:1171)"];
-const UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighborsAtExceptFromFacing(ServerLevel.java:1176)"];
-const COLLECTING_UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING: [&str; 1] =
-    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.updateNeighborsAtExceptFromFacing(CollectingNeighborUpdater.java:55)"];
-const NEIGHBOR_CHANGED: [&str; 2] =
-    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.neighborChanged(CollectingNeighborUpdater.java:45)", "net.minecraft.server.level.ServerLevel.neighborChanged(ServerLevel.java:1181)"];
-const NEIGHBOR_CHANGED_WITH_STATE: [&str; 2] =
-    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.neighborChanged(CollectingNeighborUpdater.java:50)", "net.minecraft.server.level.ServerLevel.neighborChanged(ServerLevel.java:1186)"];
-const NEIGHBOR_SHAPE_CHANGED: [&str; 2] =
-    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.shapeUpdate(CollectingNeighborUpdater.java:40)", "net.minecraft.world.level.Level.neighborShapeChanged(Level.java:339)"];
+const ADD_AND_RUN: &str = "net.minecraft.world.level.redstone.CollectingNeighborUpdater.addAndRun(CollectingNeighborUpdater.java:73)";
+const COLLECTING_UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING: &str =
+    "net.minecraft.world.level.redstone.CollectingNeighborUpdater.updateNeighborsAtExceptFromFacing(CollectingNeighborUpdater.java:55)";
+const UPDATE_NEIGHBORS_AT_ORIENTED_FRAME: &str = "net.minecraft.server.level.ServerLevel.updateNeighborsAt(ServerLevel.java:1171)";
+const UPDATE_NEIGHBORS_AT: [&str; 4] =
+    [ADD_AND_RUN, COLLECTING_UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING, UPDATE_NEIGHBORS_AT_ORIENTED_FRAME, "net.minecraft.server.level.ServerLevel.updateNeighborsAt(ServerLevel.java:1166)"];
+const UPDATE_NEIGHBORS_AT_ORIENTED: [&str; 3] = [ADD_AND_RUN, COLLECTING_UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING, UPDATE_NEIGHBORS_AT_ORIENTED_FRAME];
+const UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING: [&str; 3] =
+    [ADD_AND_RUN, COLLECTING_UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING, "net.minecraft.server.level.ServerLevel.updateNeighborsAtExceptFromFacing(ServerLevel.java:1176)"];
+const NEIGHBOR_CHANGED: [&str; 3] = [
+    ADD_AND_RUN,
+    "net.minecraft.world.level.redstone.CollectingNeighborUpdater.neighborChanged(CollectingNeighborUpdater.java:45)",
+    "net.minecraft.server.level.ServerLevel.neighborChanged(ServerLevel.java:1181)",
+];
+const NEIGHBOR_CHANGED_WITH_STATE: [&str; 3] = [
+    ADD_AND_RUN,
+    "net.minecraft.world.level.redstone.CollectingNeighborUpdater.neighborChanged(CollectingNeighborUpdater.java:50)",
+    "net.minecraft.server.level.ServerLevel.neighborChanged(ServerLevel.java:1186)",
+];
+const NEIGHBOR_SHAPE_CHANGED: [&str; 3] = [
+    ADD_AND_RUN,
+    "net.minecraft.world.level.redstone.CollectingNeighborUpdater.shapeUpdate(CollectingNeighborUpdater.java:40)",
+    "net.minecraft.world.level.Level.neighborShapeChanged(Level.java:339)",
+];
 const UPDATE_NEIGHBOUR_SHAPES: [&str; 1] = ["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.updateNeighbourShapes(BlockBehaviour.java:1128)"];
-const ADD_AND_RUN: [&str; 1] = ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.addAndRun(CollectingNeighborUpdater.java:73)"];
-const RUN_UPDATES: [&str; 1] = ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.runUpdates(CollectingNeighborUpdater.java:89)"];
-const SHAPE_UPDATE_GET_BLOCK_STATE: [&str; 2] =
-    ["net.minecraft.world.level.redstone.NeighborUpdater.executeShapeUpdate(NeighborUpdater.java:36)", "net.minecraft.world.level.redstone.CollectingNeighborUpdater$ShapeUpdate.runNext(CollectingNeighborUpdater.java:186)"];
-const SHAPE_UPDATE_UPDATE_SHAPE: [&str; 3] = [
+const RUN_UPDATES_FRAME: &str = "net.minecraft.world.level.redstone.CollectingNeighborUpdater.runUpdates(CollectingNeighborUpdater.java:89)";
+const RUN_UPDATES: [&str; 1] = [RUN_UPDATES_FRAME];
+const SHAPE_UPDATE_RUN_NEXT: &str = "net.minecraft.world.level.redstone.CollectingNeighborUpdater$ShapeUpdate.runNext(CollectingNeighborUpdater.java:186)";
+const SHAPE_UPDATE_GET_BLOCK_STATE: [&str; 3] = ["net.minecraft.world.level.redstone.NeighborUpdater.executeShapeUpdate(NeighborUpdater.java:36)", SHAPE_UPDATE_RUN_NEXT, RUN_UPDATES_FRAME];
+const SHAPE_UPDATE_UPDATE_SHAPE: [&str; 4] = [
     "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.updateShape(BlockBehaviour.java:1201)",
     "net.minecraft.world.level.redstone.NeighborUpdater.executeShapeUpdate(NeighborUpdater.java:41)",
-    "net.minecraft.world.level.redstone.CollectingNeighborUpdater$ShapeUpdate.runNext(CollectingNeighborUpdater.java:186)",
+    SHAPE_UPDATE_RUN_NEXT,
+    RUN_UPDATES_FRAME,
 ];
-const SHAPE_UPDATE_UPDATE_OR_DESTROY: [&str; 2] =
-    ["net.minecraft.world.level.redstone.NeighborUpdater.executeShapeUpdate(NeighborUpdater.java:42)", "net.minecraft.world.level.redstone.CollectingNeighborUpdater$ShapeUpdate.runNext(CollectingNeighborUpdater.java:186)"];
-const SIMPLE_NEIGHBOR_UPDATE_GET_BLOCK_STATE: [&str; 1] = ["net.minecraft.world.level.redstone.CollectingNeighborUpdater$SimpleNeighborUpdate.runNext(CollectingNeighborUpdater.java:111)"];
-const SIMPLE_NEIGHBOR_UPDATE_EXECUTE: [&str; 3] = [
-    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.handleNeighborChanged(BlockBehaviour.java:1117)",
-    "net.minecraft.world.level.redstone.NeighborUpdater.executeUpdate(NeighborUpdater.java:57)",
+const SHAPE_UPDATE_UPDATE_OR_DESTROY: [&str; 3] = ["net.minecraft.world.level.redstone.NeighborUpdater.executeShapeUpdate(NeighborUpdater.java:42)", SHAPE_UPDATE_RUN_NEXT, RUN_UPDATES_FRAME];
+const HANDLE_NEIGHBOR_CHANGED: &str = "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.handleNeighborChanged(BlockBehaviour.java:1117)";
+const EXECUTE_UPDATE: &str = "net.minecraft.world.level.redstone.NeighborUpdater.executeUpdate(NeighborUpdater.java:57)";
+const SIMPLE_NEIGHBOR_UPDATE_GET_BLOCK_STATE: [&str; 2] =
+    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater$SimpleNeighborUpdate.runNext(CollectingNeighborUpdater.java:111)", RUN_UPDATES_FRAME];
+const SIMPLE_NEIGHBOR_UPDATE_EXECUTE: [&str; 4] = [
+    HANDLE_NEIGHBOR_CHANGED,
+    EXECUTE_UPDATE,
     "net.minecraft.world.level.redstone.CollectingNeighborUpdater$SimpleNeighborUpdate.runNext(CollectingNeighborUpdater.java:112)",
+    RUN_UPDATES_FRAME,
 ];
-const FULL_NEIGHBOR_UPDATE_EXECUTE: [&str; 3] = [
-    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.handleNeighborChanged(BlockBehaviour.java:1117)",
-    "net.minecraft.world.level.redstone.NeighborUpdater.executeUpdate(NeighborUpdater.java:57)",
+const FULL_NEIGHBOR_UPDATE_EXECUTE: [&str; 4] = [
+    HANDLE_NEIGHBOR_CHANGED,
+    EXECUTE_UPDATE,
     "net.minecraft.world.level.redstone.CollectingNeighborUpdater$FullNeighborUpdate.runNext(CollectingNeighborUpdater.java:125)",
+    RUN_UPDATES_FRAME,
 ];
-const MULTI_NEIGHBOR_UPDATE_GET_BLOCK_STATE: [&str; 1] = ["net.minecraft.world.level.redstone.CollectingNeighborUpdater$MultiNeighborUpdate.runNext(CollectingNeighborUpdater.java:156)"];
-const MULTI_NEIGHBOR_UPDATE_EXECUTE: [&str; 3] = [
-    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.handleNeighborChanged(BlockBehaviour.java:1117)",
-    "net.minecraft.world.level.redstone.NeighborUpdater.executeUpdate(NeighborUpdater.java:57)",
+const MULTI_NEIGHBOR_UPDATE_GET_BLOCK_STATE: [&str; 2] =
+    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater$MultiNeighborUpdate.runNext(CollectingNeighborUpdater.java:156)", RUN_UPDATES_FRAME];
+const MULTI_NEIGHBOR_UPDATE_EXECUTE: [&str; 4] = [
+    HANDLE_NEIGHBOR_CHANGED,
+    EXECUTE_UPDATE,
     "net.minecraft.world.level.redstone.CollectingNeighborUpdater$MultiNeighborUpdate.runNext(CollectingNeighborUpdater.java:164)",
+    RUN_UPDATES_FRAME,
 ];
 
 const GAME_EVENT_START_RAINING: u8 = 1;
@@ -257,15 +277,62 @@ enum NeighborUpdates {
 
 enum NeighborStep {
     Shape { direction: Direction, neighbor_state: BlockState, pos: BlockPos, neighbor_pos: BlockPos, flags: i32, update_limit: i32 },
-    Changed {
-        state: Option<BlockState>,
-        pos: BlockPos,
-        block: Block,
-        orientation: Option<Orientation>,
-        moved_by_piston: bool,
-        get_frames: &'static [&'static str],
-        update_frames: &'static [&'static str],
-    },
+    Changed { state: Option<BlockState>, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool, kind: NeighborUpdateKind },
+}
+
+#[derive(Clone, Copy)]
+enum NeighborUpdateKind {
+    Simple,
+    Full,
+    Multi,
+}
+
+#[derive(Clone, Copy)]
+enum NeighborCaller {
+    UpdateNeighborsAt,
+    UpdateNeighborsAtOriented,
+    UpdateNeighborsAtExceptFromFacing,
+    NeighborChanged,
+    NeighborChangedWithState,
+    NeighborShapeChanged,
+}
+
+impl NeighborCaller {
+    fn frames(self) -> &'static [&'static str] {
+        match self {
+            NeighborCaller::UpdateNeighborsAt => &UPDATE_NEIGHBORS_AT,
+            NeighborCaller::UpdateNeighborsAtOriented => &UPDATE_NEIGHBORS_AT_ORIENTED,
+            NeighborCaller::UpdateNeighborsAtExceptFromFacing => &UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING,
+            NeighborCaller::NeighborChanged => &NEIGHBOR_CHANGED,
+            NeighborCaller::NeighborChangedWithState => &NEIGHBOR_CHANGED_WITH_STATE,
+            NeighborCaller::NeighborShapeChanged => &NEIGHBOR_SHAPE_CHANGED,
+        }
+    }
+}
+
+struct NeighborRunFrames {
+    run: &'static [&'static str],
+    shape_get_block_state: &'static [&'static str],
+    shape_update_shape: &'static [&'static str],
+    shape_update_or_destroy: &'static [&'static str],
+    get_block_state: [&'static [&'static str]; 3],
+    execute: [&'static [&'static str]; 3],
+}
+
+fn neighbor_run_frames(caller: NeighborCaller) -> &'static NeighborRunFrames {
+    static FRAMES: [std::sync::OnceLock<NeighborRunFrames>; 6] = [const { std::sync::OnceLock::new() }; 6];
+    FRAMES[caller as usize].get_or_init(|| {
+        let below: &[&'static str] = caller.frames();
+        let join = |above: &[&'static str]| -> &'static [&'static str] { Box::leak(above.iter().chain(below).copied().collect::<Vec<_>>().into_boxed_slice()) };
+        NeighborRunFrames {
+            run: join(&RUN_UPDATES),
+            shape_get_block_state: join(&SHAPE_UPDATE_GET_BLOCK_STATE),
+            shape_update_shape: join(&SHAPE_UPDATE_UPDATE_SHAPE),
+            shape_update_or_destroy: join(&SHAPE_UPDATE_UPDATE_OR_DESTROY),
+            get_block_state: [join(&SIMPLE_NEIGHBOR_UPDATE_GET_BLOCK_STATE), join(&FULL_NEIGHBOR_UPDATE_EXECUTE), join(&MULTI_NEIGHBOR_UPDATE_GET_BLOCK_STATE)],
+            execute: [join(&SIMPLE_NEIGHBOR_UPDATE_EXECUTE), join(&FULL_NEIGHBOR_UPDATE_EXECUTE), join(&MULTI_NEIGHBOR_UPDATE_EXECUTE)],
+        }
+    })
 }
 
 struct NeighborUpdater {
@@ -993,40 +1060,33 @@ impl ServerLevel {
     }
 
     pub fn update_neighbors_at(&mut self, pos: BlockPos, block: Block) {
-        let _frame = crate::server::main_thread_frames::enter_static(&UPDATE_NEIGHBORS_AT);
         let orientation = experimental_redstone_utils::initial_orientation(self, None, None);
-        self.update_neighbors_at_oriented(pos, block, orientation);
+        self.collecting_update_neighbors_at_except_from_facing(pos, block, None, orientation, NeighborCaller::UpdateNeighborsAt);
     }
 
     pub fn update_neighbors_at_oriented(&mut self, pos: BlockPos, block: Block, orientation: Option<Orientation>) {
-        let _frame = crate::server::main_thread_frames::enter_static(&UPDATE_NEIGHBORS_AT_ORIENTED);
-        self.collecting_update_neighbors_at_except_from_facing(pos, block, None, orientation);
+        self.collecting_update_neighbors_at_except_from_facing(pos, block, None, orientation, NeighborCaller::UpdateNeighborsAtOriented);
     }
 
     pub fn update_neighbors_at_except_from_facing(&mut self, pos: BlockPos, block: Block, skip: Option<Direction>, orientation: Option<Orientation>) {
-        let _frame = crate::server::main_thread_frames::enter_static(&UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING);
-        self.collecting_update_neighbors_at_except_from_facing(pos, block, skip, orientation);
+        self.collecting_update_neighbors_at_except_from_facing(pos, block, skip, orientation, NeighborCaller::UpdateNeighborsAtExceptFromFacing);
     }
 
-    fn collecting_update_neighbors_at_except_from_facing(&mut self, pos: BlockPos, block: Block, skip: Option<Direction>, orientation: Option<Orientation>) {
-        let _frame = crate::server::main_thread_frames::enter_static(&COLLECTING_UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING);
+    fn collecting_update_neighbors_at_except_from_facing(&mut self, pos: BlockPos, block: Block, skip: Option<Direction>, orientation: Option<Orientation>, caller: NeighborCaller) {
         let idx = usize::from(skip == Some(UPDATE_ORDER[0]));
-        self.add_and_run(pos, NeighborUpdates::Multi { source_pos: pos, source_block: block, orientation, skip, idx });
+        self.add_and_run(pos, NeighborUpdates::Multi { source_pos: pos, source_block: block, orientation, skip, idx }, caller);
     }
 
     pub fn neighbor_changed(&mut self, pos: BlockPos, block: Block, orientation: Option<Orientation>) {
-        let _frame = crate::server::main_thread_frames::enter_static(&NEIGHBOR_CHANGED);
-        self.add_and_run(pos, NeighborUpdates::Simple { pos, block, orientation });
+        self.add_and_run(pos, NeighborUpdates::Simple { pos, block, orientation }, NeighborCaller::NeighborChanged);
     }
 
     pub fn neighbor_changed_with_state(&mut self, state: BlockState, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {
-        let _frame = crate::server::main_thread_frames::enter_static(&NEIGHBOR_CHANGED_WITH_STATE);
-        self.add_and_run(pos, NeighborUpdates::Full { state, pos, block, orientation, moved_by_piston });
+        self.add_and_run(pos, NeighborUpdates::Full { state, pos, block, orientation, moved_by_piston }, NeighborCaller::NeighborChangedWithState);
     }
 
     pub fn neighbor_shape_changed(&mut self, direction: Direction, pos: BlockPos, neighbor_pos: BlockPos, neighbor_state: BlockState, flags: i32, update_limit: i32) {
-        let _frame = crate::server::main_thread_frames::enter_static(&NEIGHBOR_SHAPE_CHANGED);
-        self.add_and_run(pos, NeighborUpdates::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit });
+        self.add_and_run(pos, NeighborUpdates::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit }, NeighborCaller::NeighborShapeChanged);
     }
 
     pub fn update_neighbour_shapes(&mut self, state: BlockState, pos: BlockPos, flags: i32, update_limit: i32) {
@@ -1040,7 +1100,7 @@ impl ServerLevel {
         self.neighbor_updater.max_chained_neighbor_updates = max_chained_neighbor_updates;
     }
 
-    fn add_and_run(&mut self, pos: BlockPos, update: NeighborUpdates) {
+    fn add_and_run(&mut self, pos: BlockPos, update: NeighborUpdates, caller: NeighborCaller) {
         let updater = &mut self.neighbor_updater;
         let running_already = updater.count > 0;
         let too_many = updater.max_chained_neighbor_updates >= 0 && updater.count >= updater.max_chained_neighbor_updates;
@@ -1055,13 +1115,12 @@ impl ServerLevel {
             error!("Too many chained neighbor updates. Skipping the rest. First skipped position: {}, {}, {}", pos.x, pos.y, pos.z);
         }
         if !running_already {
-            let _add_and_run = crate::server::main_thread_frames::enter_static(&ADD_AND_RUN);
-            self.run_neighbor_updates();
+            self.run_neighbor_updates(neighbor_run_frames(caller));
         }
     }
 
-    fn run_neighbor_updates(&mut self) {
-        let _run_updates = crate::server::main_thread_frames::enter_static(&RUN_UPDATES);
+    fn run_neighbor_updates(&mut self, frames: &'static NeighborRunFrames) {
+        let phase = crate::server::main_thread_frames::enter_static(frames.run);
         loop {
             let updater = &mut self.neighbor_updater;
             if updater.stack.is_empty() && updater.added_this_layer.is_empty() {
@@ -1072,7 +1131,7 @@ impl ServerLevel {
             }
             while self.neighbor_updater.added_this_layer.is_empty() {
                 let (step, more) = self.next_neighbor_step();
-                self.execute_neighbor_step(step);
+                self.execute_neighbor_step(step, frames, &phase);
                 if !more {
                     self.neighbor_updater.stack.pop();
                     break;
@@ -1097,8 +1156,7 @@ impl ServerLevel {
                     block,
                     orientation,
                     moved_by_piston: false,
-                    get_frames: &SIMPLE_NEIGHBOR_UPDATE_GET_BLOCK_STATE,
-                    update_frames: &SIMPLE_NEIGHBOR_UPDATE_EXECUTE,
+                    kind: NeighborUpdateKind::Simple,
                 },
                 false,
             ),
@@ -1109,8 +1167,7 @@ impl ServerLevel {
                     block,
                     orientation,
                     moved_by_piston,
-                    get_frames: &FULL_NEIGHBOR_UPDATE_EXECUTE,
-                    update_frames: &FULL_NEIGHBOR_UPDATE_EXECUTE,
+                    kind: NeighborUpdateKind::Full,
                 },
                 false,
             ),
@@ -1136,31 +1193,30 @@ impl ServerLevel {
                     block: source_block,
                     orientation: step_orientation,
                     moved_by_piston: false,
-                    get_frames: &MULTI_NEIGHBOR_UPDATE_GET_BLOCK_STATE,
-                    update_frames: &MULTI_NEIGHBOR_UPDATE_EXECUTE,
+                    kind: NeighborUpdateKind::Multi,
                 };
                 (step, *idx < UPDATE_ORDER.len())
             }
         }
     }
 
-    fn execute_neighbor_step(&mut self, step: NeighborStep) {
+    fn execute_neighbor_step(&mut self, step: NeighborStep, frames: &'static NeighborRunFrames, phase: &crate::server::main_thread_frames::FrameScope) {
         match step {
             NeighborStep::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit } => {
-                let phase = crate::server::main_thread_frames::enter_static(&SHAPE_UPDATE_GET_BLOCK_STATE);
+                phase.switch_to(frames.shape_get_block_state);
                 let current = self.block_state(pos);
                 if flags & UPDATE_SKIP_SHAPE_UPDATE_ON_WIRE != 0 && current.is_block(blocks::REDSTONE_WIRE) {
                     return;
                 }
-                phase.switch_to(&SHAPE_UPDATE_UPDATE_SHAPE);
+                phase.switch_to(frames.shape_update_shape);
                 let new = block::of(current).update_shape(current, self, pos, direction, neighbor_pos, neighbor_state);
-                phase.switch_to(&SHAPE_UPDATE_UPDATE_OR_DESTROY);
+                phase.switch_to(frames.shape_update_or_destroy);
                 self.update_or_destroy(current, new, pos, flags, update_limit);
             }
-            NeighborStep::Changed { state, pos, block, orientation, moved_by_piston, get_frames, update_frames } => {
-                let phase = crate::server::main_thread_frames::enter_static(get_frames);
+            NeighborStep::Changed { state, pos, block, orientation, moved_by_piston, kind } => {
+                phase.switch_to(frames.get_block_state[kind as usize]);
                 let state = state.unwrap_or_else(|| self.block_state(pos));
-                phase.switch_to(update_frames);
+                phase.switch_to(frames.execute[kind as usize]);
                 block::of(state).neighbor_changed(state, self, pos, block, orientation, moved_by_piston);
             }
         }

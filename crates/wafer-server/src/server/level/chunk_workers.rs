@@ -146,25 +146,84 @@ enum IoRequest {
     Write { pos: ChunkPos, nbt: Result<Nbt, JavaThrowable> },
     Clear { pos: ChunkPos },
     WriteChunk(Box<ChunkToSave>),
-    Flush { flush: bool, reply: Sender<io::Result<()>> },
+    Synchronize { flush: bool, reply: Sender<io::Result<()>> },
+    FinishSynchronize { flush: bool, reply: Sender<io::Result<()>> },
 }
 
+enum IoTask {
+    Foreground(IoRequest),
+    StorePendingChunk,
+}
 
 struct IoQueue {
-    requests: VecDeque<IoRequest>,
+    foreground: VecDeque<IoRequest>,
+    background: usize,
     running: bool,
+}
+
+impl IoQueue {
+    fn pop(&mut self) -> Option<IoTask> {
+        match self.foreground.pop_front() {
+            Some(request) => Some(IoTask::Foreground(request)),
+            None if self.background > 0 => {
+                self.background -= 1;
+                Some(IoTask::StorePendingChunk)
+            }
+            None => None,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.foreground.is_empty() && self.background == 0
+    }
+}
+
+struct PendingStore {
+    data: Option<Nbt>,
+    sequence: u64,
+    active_writes: usize,
+}
+
+struct PendingSynchronize {
+    before: u64,
+    flush: bool,
+    reply: Sender<io::Result<()>>,
+}
+
+#[derive(Default)]
+struct PendingWrites {
+    stores: crate::util::FastIndexMap<ChunkPos, PendingStore>,
+    next_sequence: u64,
+    synchronizing: Vec<PendingSynchronize>,
 }
 
 struct IoShared {
     queue: Mutex<IoQueue>,
     storage: Mutex<RegionStorage>,
+    pending_writes: Mutex<PendingWrites>,
     reporting: Mutex<Option<IoReporting>>,
     active_chunk_writes: Arc<AtomicUsize>,
     queued_requests: Arc<AtomicUsize>,
 }
 
+impl IoShared {
+    fn schedule(self: &Arc<IoShared>, request: IoRequest) {
+        self.queued_requests.fetch_add(1, Ordering::Relaxed);
+        let mut queue = self.queue.lock().unwrap();
+        queue.foreground.push_back(request);
+        register_for_execution(self, &mut queue);
+    }
+
+    fn tell_store_pending(self: &Arc<IoShared>) {
+        self.queued_requests.fetch_add(1, Ordering::Relaxed);
+        let mut queue = self.queue.lock().unwrap();
+        queue.background += 1;
+        register_for_execution(self, &mut queue);
+    }
+}
+
 fn register_for_execution(shared: &Arc<IoShared>, queue: &mut IoQueue) {
-    if !queue.running && !queue.requests.is_empty() {
+    if !queue.running && !queue.is_empty() {
         queue.running = true;
         let shared = shared.clone();
         crate::util::io_pool().execute(move || run_io_worker(shared));
@@ -172,11 +231,23 @@ fn register_for_execution(shared: &Arc<IoShared>, queue: &mut IoQueue) {
 }
 
 fn run_io_worker(shared: Arc<IoShared>) {
-    let request = shared.queue.lock().unwrap().requests.pop_front();
-    let thrown = request.and_then(|request| {
+    let task = shared.queue.lock().unwrap().pop();
+    let thrown = task.and_then(|task| {
         shared.queued_requests.fetch_sub(1, Ordering::Relaxed);
         let _frames = crate::server::main_thread_frames::enter_complete(storage_exception::store_worker_frames());
-        process_io_request(&shared, request)
+        match task {
+            IoTask::Foreground(request) => {
+                let thrown = process_io_request(&shared, request);
+                if thrown.is_none() {
+                    shared.tell_store_pending();
+                }
+                thrown
+            }
+            IoTask::StorePendingChunk => {
+                store_pending_chunk(&shared);
+                None
+            }
+        }
     });
     {
         let mut queue = shared.queue.lock().unwrap();
@@ -188,57 +259,127 @@ fn run_io_worker(shared: Arc<IoShared>) {
     }
 }
 
-fn process_io_request(shared: &IoShared, request: IoRequest) -> Option<JavaThrowable> {
-    let active = &shared.active_chunk_writes;
-    let mut storage = shared.storage.lock().unwrap();
-    let storage = &mut *storage;
-    let reporting = shared.reporting.lock().unwrap();
-    match request {
-        IoRequest::Read { pos, reply } => match guarded(|| storage.read(pos)) {
-            Err(e) if storage_exception::is_java_error(&e) => {
-                std::mem::forget(reply);
-                return Some(storage_exception::on_load_worker_uncaught(&e));
+fn store_pending_chunk(shared: &Arc<IoShared>) {
+    let Some((pos, pending)) = shared.pending_writes.lock().unwrap().stores.shift_remove_index(0) else { return };
+    {
+        let mut storage = shared.storage.lock().unwrap();
+        let reporting = shared.reporting.lock().unwrap();
+        match &pending.data {
+            Some(nbt) => write(&mut storage, pos, nbt, reporting.as_ref()),
+            None => {
+                if let Err(e) = guarded(|| storage.clear(pos)) {
+                    store_failed(pos, &e, reporting.as_ref());
+                }
             }
-            result => reply(result.map_err(|e| {
-                let mut failure = storage_exception::on_load_worker(&e);
-                crate::world::level::chunk::storage::chunk_stream::create_reported_crash_report(&mut failure);
-                warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
-                io::Error::new(e.kind(), failure)
-            })),
-        },
-        IoRequest::ScanStructures { pos, reply } => reply(guarded(|| storage.scan_structures(pos)).map_err(|e| {
-            let failure = storage_exception::on_scan_worker(&e);
-            warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
-            io::Error::new(e.kind(), failure)
-        })),
-        IoRequest::ScanOldData { pos, reply } => reply(guarded(|| storage.scan_chunk(pos)).map_err(|e| {
-            let failure = storage_exception::on_scan_worker(&e);
-            warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
-            io::Error::new(e.kind(), failure)
-        })),
+        }
+    }
+    shared.active_chunk_writes.fetch_sub(pending.active_writes, Ordering::Relaxed);
+    finish_synchronizations(shared);
+    shared.tell_store_pending();
+}
+
+fn store(shared: &IoShared, pos: ChunkPos, data: Option<Nbt>, active_writes: usize) {
+    let mut pending_writes = shared.pending_writes.lock().unwrap();
+    let sequence = pending_writes.next_sequence;
+    match pending_writes.stores.get_mut(&pos) {
+        Some(pending) => {
+            pending.data = data;
+            pending.active_writes += active_writes;
+        }
+        None => {
+            pending_writes.next_sequence += 1;
+            pending_writes.stores.insert(pos, PendingStore { data, sequence, active_writes });
+        }
+    }
+}
+
+fn finish_synchronizations(shared: &Arc<IoShared>) {
+    let finished: Vec<PendingSynchronize> = {
+        let mut pending_writes = shared.pending_writes.lock().unwrap();
+        let first_pending = pending_writes.stores.first().map_or(u64::MAX, |(_, pending)| pending.sequence);
+        let (finished, waiting) = std::mem::take(&mut pending_writes.synchronizing).into_iter().partition(|synchronize| first_pending >= synchronize.before);
+        pending_writes.synchronizing = waiting;
+        finished
+    };
+    for synchronize in finished {
+        shared.schedule(IoRequest::FinishSynchronize { flush: synchronize.flush, reply: synchronize.reply });
+    }
+}
+
+fn process_io_request(shared: &Arc<IoShared>, request: IoRequest) -> Option<JavaThrowable> {
+    let active = &shared.active_chunk_writes;
+    match request {
         IoRequest::Write { pos, nbt } => {
-            let nbt = match nbt {
-                Ok(nbt) => nbt,
+            match nbt {
+                Ok(nbt) => store(shared, pos, Some(nbt), 1),
                 Err(throwable) => return Some(throwable),
-            };
-            write(storage, pos, &nbt, reporting.as_ref());
-            active.fetch_sub(1, Ordering::Relaxed);
+            }
+            return None;
         }
         IoRequest::Clear { pos } => {
-            if let Err(e) = guarded(|| storage.clear(pos)) {
-                store_failed(pos, &e, reporting.as_ref());
-            }
+            store(shared, pos, None, 0);
+            return None;
         }
         IoRequest::WriteChunk(save) => {
             let ChunkToSave { chunk, status, block_entities, game_time, block_ticks, fluid_ticks, light } = *save;
             match guarded(|| Ok(serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light))) {
-                Ok(nbt) => write(storage, chunk.pos, &nbt, reporting.as_ref()),
+                Ok(nbt) => store(shared, chunk.pos, Some(nbt), 1),
                 Err(e) if is_unregistered_holder(&JavaThrowable::from_io_error(&e)) => return Some(JavaThrowable::from_io_error(&e)),
-                Err(e) => store_failed(chunk.pos, &e, reporting.as_ref()),
+                Err(e) => {
+                    store_failed(chunk.pos, &e, shared.reporting.lock().unwrap().as_ref());
+                    active.fetch_sub(1, Ordering::Relaxed);
+                }
             }
-            active.fetch_sub(1, Ordering::Relaxed);
+            return None;
         }
-        IoRequest::Flush { flush, reply } => drop(reply.send(if flush { guarded(|| storage.flush()) } else { Ok(()) })),
+        IoRequest::Synchronize { flush, reply } => {
+            {
+                let mut pending_writes = shared.pending_writes.lock().unwrap();
+                let before = pending_writes.next_sequence;
+                pending_writes.synchronizing.push(PendingSynchronize { before, flush, reply });
+            }
+            finish_synchronizations(shared);
+            return None;
+        }
+        _ => {}
+    }
+    let pending_data = |pos: ChunkPos| shared.pending_writes.lock().unwrap().stores.get(&pos).map(|pending| pending.data.clone());
+    let mut storage = shared.storage.lock().unwrap();
+    let storage = &mut *storage;
+    match request {
+        IoRequest::Read { pos, reply } => match pending_data(pos) {
+            Some(data) => reply(Ok(data)),
+            None => match guarded(|| storage.read(pos)) {
+                Err(e) if storage_exception::is_java_error(&e) => {
+                    std::mem::forget(reply);
+                    return Some(storage_exception::on_load_worker_uncaught(&e));
+                }
+                result => reply(result.map_err(|e| {
+                    let mut failure = storage_exception::on_load_worker(&e);
+                    crate::world::level::chunk::storage::chunk_stream::create_reported_crash_report(&mut failure);
+                    warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+                    io::Error::new(e.kind(), failure)
+                })),
+            },
+        },
+        IoRequest::ScanStructures { pos, reply } => match pending_data(pos) {
+            Some(data) => reply(Ok(data)),
+            None => reply(guarded(|| storage.scan_structures(pos)).map_err(|e| {
+                let failure = storage_exception::on_scan_worker(&e);
+                warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+                io::Error::new(e.kind(), failure)
+            })),
+        },
+        IoRequest::ScanOldData { pos, reply } => match pending_data(pos) {
+            Some(data) => reply(Ok(data.as_ref().is_some_and(crate::world::level::chunk::storage::is_old_chunk))),
+            None => reply(guarded(|| storage.scan_chunk(pos)).map_err(|e| {
+                let failure = storage_exception::on_scan_worker(&e);
+                warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+                io::Error::new(e.kind(), failure)
+            })),
+        },
+        IoRequest::FinishSynchronize { flush, reply } => drop(reply.send(if flush { guarded(|| storage.flush()) } else { Ok(()) })),
+        IoRequest::Write { .. } | IoRequest::Clear { .. } | IoRequest::WriteChunk(_) | IoRequest::Synchronize { .. } => {}
     }
     None
 }
@@ -255,8 +396,9 @@ impl IoWorker {
         let active_chunk_writes = Arc::new(AtomicUsize::new(0));
         let queued_requests = Arc::new(AtomicUsize::new(0));
         let shared = Arc::new(IoShared {
-            queue: Mutex::new(IoQueue { requests: VecDeque::new(), running: false }),
+            queue: Mutex::new(IoQueue { foreground: VecDeque::new(), background: 0, running: false }),
             storage: Mutex::new(storage),
+            pending_writes: Mutex::new(PendingWrites::default()),
             reporting: Mutex::new(None),
             active_chunk_writes: active_chunk_writes.clone(),
             queued_requests: queued_requests.clone(),
@@ -265,10 +407,7 @@ impl IoWorker {
     }
 
     fn submit(&self, request: IoRequest) -> Result<(), std::sync::mpsc::SendError<IoRequest>> {
-        self.queued_requests.fetch_add(1, Ordering::Relaxed);
-        let mut queue = self.shared.queue.lock().unwrap();
-        queue.requests.push_back(request);
-        register_for_execution(&self.shared, &mut queue);
+        self.shared.schedule(request);
         Ok(())
     }
 
@@ -320,7 +459,7 @@ impl IoWorker {
 
     pub fn synchronize(&self, flush: bool) -> io::Result<()> {
         let (reply, result) = channel();
-        if self.submit(IoRequest::Flush { flush, reply }).is_err() {
+        if self.submit(IoRequest::Synchronize { flush, reply }).is_err() {
             return Err(io::Error::other("IO worker gone"));
         }
         result.recv().unwrap_or_else(|_| Err(io::Error::other("IO worker gone")))

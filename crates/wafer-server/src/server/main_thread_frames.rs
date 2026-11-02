@@ -1,77 +1,68 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicPtr, AtomicU64, AtomicUsize, Ordering, fence};
+use std::sync::atomic::{AtomicPtr, AtomicU64, Ordering, fence};
 
 use super::command_frames::{PREPARE_LEVELS, SPIN, TICK_LOOP};
 
 const CAPACITY: usize = 512;
+const LEN_BITS: u32 = 20;
+const LEN_MASK: u64 = (1 << LEN_BITS) - 1;
 const ABSOLUTE: u64 = 1;
 const LEN_SHIFT: u32 = 48;
 const ADDRESS_MASK: u64 = (1 << LEN_SHIFT) - 1;
 
 struct Stack {
     scopes: [AtomicU64; CAPACITY],
-    len: AtomicUsize,
-    version: AtomicU64,
+    state: AtomicU64,
+}
+
+fn len_of(state: u64) -> usize {
+    (state & LEN_MASK) as usize
+}
+
+fn next_state(state: u64, len: usize) -> u64 {
+    (((state >> LEN_BITS) + 1) << LEN_BITS) | len as u64
 }
 
 impl Stack {
     const fn new() -> Stack {
-        Stack { scopes: [const { AtomicU64::new(0) }; CAPACITY], len: AtomicUsize::new(0), version: AtomicU64::new(0) }
-    }
-
-    #[inline]
-    fn write(&self, update: impl FnOnce()) {
-        let version = self.version.load(Ordering::Relaxed);
-        self.version.store(version + 1, Ordering::Relaxed);
-        fence(Ordering::Release);
-        update();
-        self.version.store(version + 2, Ordering::Release);
+        Stack { scopes: [const { AtomicU64::new(0) }; CAPACITY], state: AtomicU64::new(0) }
     }
 
     fn push(&self, frames: &'static [&'static str], absolute: bool) {
-        self.write(|| {
-            let len = self.len.load(Ordering::Relaxed);
-            if len < CAPACITY {
-                self.scopes[len].store(encode(frames, absolute), Ordering::Relaxed);
-            }
-            self.len.store(len + 1, Ordering::Relaxed);
-        });
+        let state = self.state.load(Ordering::Relaxed);
+        let len = len_of(state);
+        if len < CAPACITY {
+            self.scopes[len].store(encode(frames, absolute), Ordering::Release);
+        }
+        self.state.store(next_state(state, len + 1), Ordering::Release);
     }
 
     fn pop(&self) {
-        self.write(|| {
-            let len = self.len.load(Ordering::Relaxed);
-            self.len.store(len.saturating_sub(1), Ordering::Relaxed);
-        });
+        let state = self.state.load(Ordering::Relaxed);
+        self.state.store(next_state(state, len_of(state).saturating_sub(1)), Ordering::Release);
     }
 
     fn replace_top(&self, frames: &'static [&'static str]) {
-        self.write(|| {
-            let len = self.len.load(Ordering::Relaxed);
-            if let Some(top) = len.checked_sub(1).and_then(|top| self.scopes.get(top)) {
-                let (_, absolute) = decode(top.load(Ordering::Relaxed));
-                top.store(encode(frames, absolute), Ordering::Relaxed);
-            }
-        });
+        let len = len_of(self.state.load(Ordering::Relaxed));
+        if let Some(top) = len.checked_sub(1).and_then(|top| self.scopes.get(top)) {
+            let (_, absolute) = decode(top.load(Ordering::Relaxed));
+            top.store(encode(frames, absolute), Ordering::Release);
+        }
     }
 
     fn snapshot(&self) -> Vec<u64> {
         let mut scopes = Vec::with_capacity(CAPACITY);
         loop {
-            let version = self.version.load(Ordering::Acquire);
-            if version & 1 != 0 {
-                std::hint::spin_loop();
-                continue;
-            }
+            let state = self.state.load(Ordering::Acquire);
             scopes.clear();
-            let len = self.len.load(Ordering::Relaxed).min(CAPACITY);
-            scopes.extend(self.scopes[..len].iter().map(|scope| scope.load(Ordering::Relaxed)));
+            scopes.extend(self.scopes[..len_of(state).min(CAPACITY)].iter().map(|scope| scope.load(Ordering::Relaxed)));
             fence(Ordering::Acquire);
-            if self.version.load(Ordering::Relaxed) == version {
+            if self.state.load(Ordering::Relaxed) == state {
                 return scopes;
             }
+            std::hint::spin_loop();
         }
     }
 
