@@ -134,7 +134,7 @@ impl Server {
             p.reset_position();
             p.movement.waiting_for_respawn = false;
             p.movement.client_loaded_timeout_timer = 60;
-            crate::advancements::triggers::criteria_triggers::CHANGED_DIMENSION.trigger(self.entity_level_mut(id), id, crate::server::THE_END, crate::server::OVERWORLD);
+            crate::advancements::triggers::criteria_triggers::CHANGED_DIMENSION.trigger(self.lend_entity_level(id).level(), id, crate::server::THE_END, crate::server::OVERWORLD);
             return Ok(());
         }
         if self.player(id).health > 0.0 {
@@ -310,7 +310,7 @@ impl Server {
         self.player_list.push(id);
         let order = self.take_player_list_order();
         self.player_mut(id).player_list_order = order;
-        crate::server::main_thread_frames::within(&["net.minecraft.server.players.PlayerList.respawn(PlayerList.java:463)"], || self.levels[level_index].init_inventory_menu(id));
+        crate::server::main_thread_frames::within(&["net.minecraft.server.players.PlayerList.respawn(PlayerList.java:463)"], || crate::server::level::lent_levels::LentLevels::lend(self, level_index).level().init_inventory_menu(id));
         if !keep_all_player_data
             && let Some(respawn_config) = self.player(id).respawn_config.clone()
             && let Some(respawn_level) = self.get_level(&respawn_config.respawn_data.dimension)

@@ -1587,9 +1587,9 @@ impl Server {
         player.send_post_effects();
         {
             let _frames = main_thread_frames::enter_absolute_static(&PLACE_NEW_PLAYER_FRAMES);
-            level.init_inventory_menu(id);
+            level::lent_levels::LentLevels::lend(self, level_index).level().init_inventory_menu(id);
         }
-        let player = level.player(id);
+        let player = self.levels[level_index].player(id);
         let joined = NameAndId { id: player.profile.uuid, name: player.profile.name.clone() };
         self.notification_manager.player_joined(&joined);
         if let Some(nbt) = &saved {

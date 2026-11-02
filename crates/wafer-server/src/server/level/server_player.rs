@@ -1579,7 +1579,8 @@ impl crate::server::Server {
         let new_level = self.level_of(id).expect("player on this server");
         let old_key = self.levels[old_level].dimension;
         let new_key = self.levels[new_level].dimension;
-        let level = &mut self.levels[new_level];
+        let mut lent = crate::server::level::lent_levels::LentLevels::lend(self, new_level);
+        let level = lent.level();
         crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.triggerDimensionChangeTriggers(ServerPlayer.java:1311)"], || {
             criteria_triggers::CHANGED_DIMENSION.trigger(level, id, old_key, new_key)
         });
@@ -1591,6 +1592,7 @@ impl crate::server::Server {
                 criteria_triggers::NETHER_TRAVEL.trigger(level, id, entered_nether_position)
             });
         }
+        drop(lent);
         if self.levels[new_level].dimension != crate::server::THE_NETHER {
             self.player_mut(id).entered_nether_position = None;
         }
