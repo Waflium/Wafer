@@ -221,7 +221,21 @@ pub fn encode(id: i32, body: impl FnOnce(&mut Writer)) -> Vec<u8> {
     faulted.extend_from_slice(&FAULTED_PACKET);
     faulted.extend_from_slice(&packet[..id_len]);
     fault.write_to(&mut faulted);
+    faulted.extend_from_slice(&crate::commands::execution::tasks::running_command().to_le_bytes());
     faulted
+}
+
+fn faulting_command(packet: &[u8]) -> u64 {
+    packet.last_chunk::<8>().map_or(0, |serial| u64::from_le_bytes(*serial))
+}
+
+async fn wait_for_event_loop(packet: &[u8]) {
+    let command = faulting_command(packet);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(200);
+    while command != 0 && crate::commands::execution::tasks::running_command() == command && std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+    }
+    tokio::time::sleep(EVENT_LOOP_WAKEUP).await;
 }
 
 pub(crate) fn encoding_fault(packet: &[u8]) -> Option<(i32, Fault)> {
@@ -377,7 +391,7 @@ pub fn spawn_io(
                 let packet = split_fallback(&item).1;
                 if let Some((id, encoding_fault)) = encoding_fault(packet) {
                     let encoder_exception = encoder_exception(id, encoding_fault, bundle_path(bundled));
-                    tokio::time::sleep(EVENT_LOOP_WAKEUP).await;
+                    wait_for_event_loop(packet).await;
                     error!(thread: &write_thread, "Error sending packet {}\n{}", encoder_exception.packet_type, encoder_exception.wrapper.print_stack_trace().trim_end());
                     if is_skippable(id) {
                         continue;

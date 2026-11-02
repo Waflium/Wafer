@@ -91,8 +91,25 @@ pub struct ExecuteCommand {
     stage: ChainStage,
 }
 
+static NEXT_COMMAND: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static RUNNING_COMMAND: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub fn running_command() -> u64 {
+    RUNNING_COMMAND.load(std::sync::atomic::Ordering::Acquire)
+}
+
+struct RunningCommand(u64);
+
+impl Drop for RunningCommand {
+    fn drop(&mut self) {
+        RUNNING_COMMAND.store(self.0, std::sync::atomic::Ordering::Release);
+    }
+}
+
 impl ExecuteCommand {
     pub fn execute(&self, server: &mut Server, sender: &CommandSourceStack, frame: &Frame) {
+        let serial = NEXT_COMMAND.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _running = RunningCommand(RUNNING_COMMAND.swap(serial, std::sync::atomic::Ordering::AcqRel));
         let _zone = profiler::zone_with(|| format!("execute {}", self.stage.top_context().input));
         ExecutionContext::with(ExecutionContext::increment_cost);
         let _frames = crate::server::command_frames::enter_command(server.command_origin);
