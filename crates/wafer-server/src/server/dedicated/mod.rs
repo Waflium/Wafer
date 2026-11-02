@@ -174,7 +174,7 @@ pub fn console_thread_terminated() -> bool {
     CONSOLE_THREAD_TERMINATED.load(std::sync::atomic::Ordering::Acquire)
 }
 
-static NEXT_STARTUP_THREAD_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(103);
+static NEXT_STARTUP_THREAD_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(102);
 static CONSOLE_HANDLER_ID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
 static DESTROY_JAVA_VM_ID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
 
@@ -187,11 +187,15 @@ pub fn console_handler_id() -> u32 {
 }
 
 pub fn destroy_java_vm_id() -> u32 {
-    *DESTROY_JAVA_VM_ID.get_or_init(next_startup_thread_id)
+    *DESTROY_JAVA_VM_ID.get_or_init(|| {
+        next_startup_thread_id();
+        next_startup_thread_id()
+    })
 }
 
 pub fn start_console_thread(events: mpsc::UnboundedSender<Event>) {
     console_handler_id();
+    destroy_java_vm_id();
     let _ = std::thread::Builder::new().name("Server console handler".into()).spawn(move || {
         let stdin = io::stdin();
         let mut line = Vec::new();

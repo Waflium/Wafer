@@ -219,7 +219,6 @@ pub(crate) async fn serve_world(
             }
         });
     }
-    server::dedicated::destroy_java_vm_id();
     let result = finished.await?;
     logging::flush();
     server::dedicated::server_stopped();
