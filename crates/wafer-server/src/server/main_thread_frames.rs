@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicPtr, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicPtr, AtomicU64, AtomicUsize, Ordering, fence};
 
 use super::command_frames::{PREPARE_LEVELS, SPIN, TICK_LOOP};
 
@@ -13,39 +13,72 @@ const ADDRESS_MASK: u64 = (1 << LEN_SHIFT) - 1;
 struct Stack {
     scopes: [AtomicU64; CAPACITY],
     len: AtomicUsize,
+    version: AtomicU64,
 }
 
 impl Stack {
     const fn new() -> Stack {
-        Stack { scopes: [const { AtomicU64::new(0) }; CAPACITY], len: AtomicUsize::new(0) }
+        Stack { scopes: [const { AtomicU64::new(0) }; CAPACITY], len: AtomicUsize::new(0), version: AtomicU64::new(0) }
+    }
+
+    #[inline]
+    fn write(&self, update: impl FnOnce()) {
+        let version = self.version.load(Ordering::Relaxed);
+        self.version.store(version + 1, Ordering::Relaxed);
+        fence(Ordering::Release);
+        update();
+        self.version.store(version + 2, Ordering::Release);
     }
 
     fn push(&self, frames: &'static [&'static str], absolute: bool) {
-        let len = self.len.load(Ordering::Relaxed);
-        if len < CAPACITY {
-            self.scopes[len].store(encode(frames, absolute), Ordering::Relaxed);
-        }
-        self.len.store(len + 1, Ordering::Release);
+        self.write(|| {
+            let len = self.len.load(Ordering::Relaxed);
+            if len < CAPACITY {
+                self.scopes[len].store(encode(frames, absolute), Ordering::Relaxed);
+            }
+            self.len.store(len + 1, Ordering::Relaxed);
+        });
     }
 
     fn pop(&self) {
-        let len = self.len.load(Ordering::Relaxed);
-        self.len.store(len.saturating_sub(1), Ordering::Release);
+        self.write(|| {
+            let len = self.len.load(Ordering::Relaxed);
+            self.len.store(len.saturating_sub(1), Ordering::Relaxed);
+        });
     }
 
     fn replace_top(&self, frames: &'static [&'static str]) {
-        let len = self.len.load(Ordering::Relaxed);
-        if let Some(top) = len.checked_sub(1).and_then(|top| self.scopes.get(top)) {
-            let (_, absolute) = decode(top.load(Ordering::Relaxed));
-            top.store(encode(frames, absolute), Ordering::Release);
+        self.write(|| {
+            let len = self.len.load(Ordering::Relaxed);
+            if let Some(top) = len.checked_sub(1).and_then(|top| self.scopes.get(top)) {
+                let (_, absolute) = decode(top.load(Ordering::Relaxed));
+                top.store(encode(frames, absolute), Ordering::Relaxed);
+            }
+        });
+    }
+
+    fn snapshot(&self) -> Vec<u64> {
+        let mut scopes = Vec::with_capacity(CAPACITY);
+        loop {
+            let version = self.version.load(Ordering::Acquire);
+            if version & 1 != 0 {
+                std::hint::spin_loop();
+                continue;
+            }
+            scopes.clear();
+            let len = self.len.load(Ordering::Relaxed).min(CAPACITY);
+            scopes.extend(self.scopes[..len].iter().map(|scope| scope.load(Ordering::Relaxed)));
+            fence(Ordering::Acquire);
+            if self.version.load(Ordering::Relaxed) == version {
+                return scopes;
+            }
         }
     }
 
     fn frames(&self) -> Vec<&'static str> {
-        let len = self.len.load(Ordering::Acquire).min(CAPACITY);
         let mut frames = Vec::new();
-        for scope in self.scopes[..len].iter().rev() {
-            let (scope_frames, absolute) = decode(scope.load(Ordering::Relaxed));
+        for scope in self.snapshot().into_iter().rev() {
+            let (scope_frames, absolute) = decode(scope);
             frames.extend_from_slice(scope_frames);
             if absolute {
                 return frames;
@@ -117,10 +150,7 @@ impl FrameScope {
 
 pub fn publish_current_thread() {
     let stack: &'static Stack = Box::leak(Box::new(Stack::new()));
-    for frames in LOCAL.with(|local| {
-        let len = local.len.load(Ordering::Relaxed).min(CAPACITY);
-        local.scopes[..len].iter().map(|scope| scope.load(Ordering::Relaxed)).collect::<Vec<_>>()
-    }) {
+    for frames in LOCAL.with(Stack::snapshot) {
         let (frames, absolute) = decode(frames);
         stack.push(frames, absolute);
     }
@@ -261,6 +291,32 @@ mod tests {
         }
         assert_eq!(&current()[..1], ["a"]);
         assert_eq!(current().len(), 3);
+    }
+
+    #[test]
+    fn other_threads_read_whole_stacks_while_it_changes() {
+        let stack: &'static Stack = Box::leak(Box::new(Stack::new()));
+        stack.push(&["base"], true);
+        let running = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let writer_running = running.clone();
+        let writer = std::thread::spawn(move || {
+            while writer_running.load(Ordering::Relaxed) {
+                stack.push(&["outer 1"], false);
+                stack.replace_top(&["outer 2"]);
+                stack.push(&["inner"], false);
+                stack.pop();
+                stack.pop();
+            }
+        });
+        for _ in 0..20_000 {
+            let frames = stack.frames();
+            assert!(
+                [&["base"][..], &["outer 1", "base"], &["outer 2", "base"], &["inner", "outer 2", "base"]].contains(&frames.as_slice()),
+                "{frames:?}"
+            );
+        }
+        running.store(false, Ordering::Relaxed);
+        writer.join().unwrap();
     }
 
     #[test]

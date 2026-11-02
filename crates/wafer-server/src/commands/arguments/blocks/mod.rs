@@ -12,6 +12,8 @@ use crate::world::level::storage::tag_value_input;
 use crate::world::level::update_flags::UPDATE_KNOWN_SHAPE;
 
 const BLOCK_INPUT_LOGGER: &str = "net.minecraft.commands.arguments.blocks.BlockInput";
+const PLACE_UPDATE_FROM_NEIGHBOUR_SHAPES: [&str; 1] = ["net.minecraft.commands.arguments.blocks.BlockInput.place(BlockInput.java:72)"];
+const PLACE_SET_BLOCK: [&str; 1] = ["net.minecraft.commands.arguments.blocks.BlockInput.place(BlockInput.java:81)"];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockInput {
@@ -27,12 +29,15 @@ impl BlockInput {
     }
 
     pub fn place(&self, level: &mut ServerLevel, pos: BlockPos, flags: i32) -> bool {
+        let phase = crate::server::main_thread_frames::enter_static(&PLACE_UPDATE_FROM_NEIGHBOUR_SHAPES);
         let mut state = if flags & UPDATE_KNOWN_SHAPE != 0 { self.state } else { level.update_from_neighbour_shapes(self.state, pos) };
         if state.is_air() {
             state = self.state;
         }
         state = self.overwrite_with_defined_properties(state);
+        phase.switch_to(&PLACE_SET_BLOCK);
         let mut affected = level.set_block(pos, state, flags);
+        drop(phase);
         if let Some(tag) = &self.tag
             && let Some(entity) = level.get_block_entity(pos)
         {

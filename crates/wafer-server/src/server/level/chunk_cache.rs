@@ -54,6 +54,17 @@ use crate::world::level::light_layer::LightLayer;
 use crate::world::level::lighting::{self, section};
 use crate::world::ticks::{LevelChunkTicks, LevelTicks};
 
+const SET_BLOCK_STATE_SECTION: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:265)"];
+static SET_BLOCK_STATE_HEIGHTMAPS: [[&str; 1]; 4] = [
+    ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:276)"],
+    ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:275)"],
+    ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:273)"],
+    ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:274)"],
+];
+const SET_BLOCK_STATE_UPDATE_SECTION_STATUS: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:279)"];
+const SET_BLOCK_STATE_SKY_LIGHT_SOURCES: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:286)"];
+const SET_BLOCK_STATE_CHECK_BLOCK: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:288)"];
+
 const CHUNK_LOAD_FAILURE_FRAMES: [&str; 6] = [
     "net.minecraft.server.MinecraftServer.reportChunkLoadFailure(MinecraftServer.java:2243)",
     "net.minecraft.server.level.ChunkMap.handleChunkLoadFailure(ChunkMap.java:619)",
@@ -2253,20 +2264,24 @@ impl ChunkCache {
         let chunk = self.loaded_full_chunk(pos.chunk());
         let index = ((pos.y - chunk.min_y()) >> 4) as usize;
         let was_empty = chunk.sections[index].has_only_air();
-        let old = chunk.set_block_state(pos, state)?;
+        let phase = crate::server::main_thread_frames::enter_static(&SET_BLOCK_STATE_SECTION);
+        let old = chunk.set_block_state_with(pos, state, |heightmap| phase.switch_to(&SET_BLOCK_STATE_HEIGHTMAPS[heightmap]))?;
         chunk.mark_unsaved();
         let is_empty = chunk.sections[index].has_only_air();
         let light_changed = lighting::has_different_light_properties(old, state);
         if was_empty != is_empty {
+            phase.switch_to(&SET_BLOCK_STATE_UPDATE_SECTION_STATUS);
             let section_node = section::of(pos.x >> 4, pos.y >> 4, pos.z >> 4);
             self.add_light_task(TaskType::PreUpdate, LightTask::UpdateSectionStatus(section_node, is_empty));
         }
         if light_changed {
             profiler::push("updateSkyLightSources");
+            phase.switch_to(&SET_BLOCK_STATE_SKY_LIGHT_SOURCES);
             if let Some(chunk) = self.chunks.get_mut(&pos.chunk()) {
                 chunk.update_sky_light_sources(pos);
             }
             profiler::pop_push("queueCheckLight");
+            phase.switch_to(&SET_BLOCK_STATE_CHECK_BLOCK);
             self.add_light_task(TaskType::PreUpdate, LightTask::CheckBlock(pos));
             profiler::pop();
         }

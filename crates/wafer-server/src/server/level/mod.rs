@@ -166,6 +166,78 @@ fn chunk_entities_site(caller_frames: &[&'static str]) -> Vec<&'static str> {
     site.extend(crate::server::main_thread_frames::current());
     site
 }
+const SET_BLOCK_GET_CHUNK: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:232)"];
+const SET_BLOCK_SET_BLOCK_STATE: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:234)"];
+const SET_BLOCK_GET_BLOCK_STATE: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:239)"];
+const SET_BLOCK_SEND_BLOCK_UPDATED: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:248)"];
+const SET_BLOCK_UPDATE_NEIGHBORS_AT: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:252)"];
+const SET_BLOCK_UPDATE_NEIGHBOUR_FOR_OUTPUT_SIGNAL: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:254)"];
+const SET_BLOCK_OLD_INDIRECT_NEIGHBOUR_SHAPES: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:261)"];
+const SET_BLOCK_NEIGHBOUR_SHAPES: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:262)"];
+const SET_BLOCK_NEW_INDIRECT_NEIGHBOUR_SHAPES: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:263)"];
+const SET_BLOCK_POI: [&str; 1] = ["net.minecraft.world.level.Level.setBlock(Level.java:266)"];
+const CHUNK_SET_BLOCK_STATE_PRE_REMOVE_SIDE_EFFECTS: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:300)"];
+const CHUNK_SET_BLOCK_STATE_REMOVE_BLOCK_ENTITY: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:303)"];
+const CHUNK_SET_BLOCK_STATE_AFFECT_NEIGHBORS: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:314)"];
+const CHUNK_SET_BLOCK_STATE_GET_BLOCK_STATE: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:319)"];
+const CHUNK_SET_BLOCK_STATE_ON_PLACE: [&str; 2] =
+    ["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.onPlace(BlockBehaviour.java:1141)", "net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:324)"];
+const CHUNK_SET_BLOCK_STATE_GET_BLOCK_ENTITY: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:331)"];
+const CHUNK_SET_BLOCK_STATE_ADD_BLOCK_ENTITY: [&str; 1] = ["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:344)"];
+const SEND_BLOCK_UPDATED_BLOCK_CHANGED: [&str; 1] = ["net.minecraft.server.level.ServerLevel.sendBlockUpdated(ServerLevel.java:1133)"];
+const SEND_BLOCK_UPDATED_INVALIDATE: [&str; 1] = ["net.minecraft.server.level.ServerLevel.sendBlockUpdated(ServerLevel.java:1134)"];
+const SEND_BLOCK_UPDATED_OLD_SHAPE: [&str; 1] = ["net.minecraft.server.level.ServerLevel.sendBlockUpdated(ServerLevel.java:1136)"];
+const SEND_BLOCK_UPDATED_NEW_SHAPE: [&str; 1] = ["net.minecraft.server.level.ServerLevel.sendBlockUpdated(ServerLevel.java:1137)"];
+const SEND_BLOCK_UPDATED_JOIN: [&str; 1] = ["net.minecraft.server.level.ServerLevel.sendBlockUpdated(ServerLevel.java:1138)"];
+const SEND_BLOCK_UPDATED_SHOULD_RECOMPUTE: [&str; 1] = ["net.minecraft.server.level.ServerLevel.sendBlockUpdated(ServerLevel.java:1149)"];
+const SEND_BLOCK_UPDATED_RECOMPUTE: [&str; 1] = ["net.minecraft.server.level.ServerLevel.sendBlockUpdated(ServerLevel.java:1157)"];
+const UPDATE_NEIGHBOURS_ON_BLOCK_SET_GET_BLOCK_STATE: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighboursOnBlockSet(ServerLevel.java:889)"];
+const UPDATE_NEIGHBOURS_ON_BLOCK_SET_AFFECT_NEIGHBORS: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighboursOnBlockSet(ServerLevel.java:894)"];
+const UPDATE_NEIGHBOURS_ON_BLOCK_SET_UPDATE_NEIGHBORS_AT: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighboursOnBlockSet(ServerLevel.java:897)"];
+const UPDATE_NEIGHBOURS_ON_BLOCK_SET_OUTPUT_SIGNAL: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighboursOnBlockSet(ServerLevel.java:899)"];
+const UPDATE_FROM_NEIGHBOUR_SHAPES: [&str; 1] = ["net.minecraft.world.level.block.Block.updateFromNeighbourShapes(Block.java:205)"];
+const UPDATE_SHAPE: [&str; 1] = ["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.updateShape(BlockBehaviour.java:1201)"];
+const UPDATE_NEIGHBORS_AT: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighborsAt(ServerLevel.java:1166)"];
+const UPDATE_NEIGHBORS_AT_ORIENTED: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighborsAt(ServerLevel.java:1171)"];
+const UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING: [&str; 1] = ["net.minecraft.server.level.ServerLevel.updateNeighborsAtExceptFromFacing(ServerLevel.java:1176)"];
+const COLLECTING_UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING: [&str; 1] =
+    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.updateNeighborsAtExceptFromFacing(CollectingNeighborUpdater.java:55)"];
+const NEIGHBOR_CHANGED: [&str; 2] =
+    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.neighborChanged(CollectingNeighborUpdater.java:45)", "net.minecraft.server.level.ServerLevel.neighborChanged(ServerLevel.java:1181)"];
+const NEIGHBOR_CHANGED_WITH_STATE: [&str; 2] =
+    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.neighborChanged(CollectingNeighborUpdater.java:50)", "net.minecraft.server.level.ServerLevel.neighborChanged(ServerLevel.java:1186)"];
+const NEIGHBOR_SHAPE_CHANGED: [&str; 2] =
+    ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.shapeUpdate(CollectingNeighborUpdater.java:40)", "net.minecraft.world.level.Level.neighborShapeChanged(Level.java:339)"];
+const UPDATE_NEIGHBOUR_SHAPES: [&str; 1] = ["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.updateNeighbourShapes(BlockBehaviour.java:1128)"];
+const ADD_AND_RUN: [&str; 1] = ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.addAndRun(CollectingNeighborUpdater.java:73)"];
+const RUN_UPDATES: [&str; 1] = ["net.minecraft.world.level.redstone.CollectingNeighborUpdater.runUpdates(CollectingNeighborUpdater.java:89)"];
+const SHAPE_UPDATE_GET_BLOCK_STATE: [&str; 2] =
+    ["net.minecraft.world.level.redstone.NeighborUpdater.executeShapeUpdate(NeighborUpdater.java:36)", "net.minecraft.world.level.redstone.CollectingNeighborUpdater$ShapeUpdate.runNext(CollectingNeighborUpdater.java:186)"];
+const SHAPE_UPDATE_UPDATE_SHAPE: [&str; 3] = [
+    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.updateShape(BlockBehaviour.java:1201)",
+    "net.minecraft.world.level.redstone.NeighborUpdater.executeShapeUpdate(NeighborUpdater.java:41)",
+    "net.minecraft.world.level.redstone.CollectingNeighborUpdater$ShapeUpdate.runNext(CollectingNeighborUpdater.java:186)",
+];
+const SHAPE_UPDATE_UPDATE_OR_DESTROY: [&str; 2] =
+    ["net.minecraft.world.level.redstone.NeighborUpdater.executeShapeUpdate(NeighborUpdater.java:42)", "net.minecraft.world.level.redstone.CollectingNeighborUpdater$ShapeUpdate.runNext(CollectingNeighborUpdater.java:186)"];
+const SIMPLE_NEIGHBOR_UPDATE_GET_BLOCK_STATE: [&str; 1] = ["net.minecraft.world.level.redstone.CollectingNeighborUpdater$SimpleNeighborUpdate.runNext(CollectingNeighborUpdater.java:111)"];
+const SIMPLE_NEIGHBOR_UPDATE_EXECUTE: [&str; 3] = [
+    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.handleNeighborChanged(BlockBehaviour.java:1117)",
+    "net.minecraft.world.level.redstone.NeighborUpdater.executeUpdate(NeighborUpdater.java:57)",
+    "net.minecraft.world.level.redstone.CollectingNeighborUpdater$SimpleNeighborUpdate.runNext(CollectingNeighborUpdater.java:112)",
+];
+const FULL_NEIGHBOR_UPDATE_EXECUTE: [&str; 3] = [
+    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.handleNeighborChanged(BlockBehaviour.java:1117)",
+    "net.minecraft.world.level.redstone.NeighborUpdater.executeUpdate(NeighborUpdater.java:57)",
+    "net.minecraft.world.level.redstone.CollectingNeighborUpdater$FullNeighborUpdate.runNext(CollectingNeighborUpdater.java:125)",
+];
+const MULTI_NEIGHBOR_UPDATE_GET_BLOCK_STATE: [&str; 1] = ["net.minecraft.world.level.redstone.CollectingNeighborUpdater$MultiNeighborUpdate.runNext(CollectingNeighborUpdater.java:156)"];
+const MULTI_NEIGHBOR_UPDATE_EXECUTE: [&str; 3] = [
+    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.handleNeighborChanged(BlockBehaviour.java:1117)",
+    "net.minecraft.world.level.redstone.NeighborUpdater.executeUpdate(NeighborUpdater.java:57)",
+    "net.minecraft.world.level.redstone.CollectingNeighborUpdater$MultiNeighborUpdate.runNext(CollectingNeighborUpdater.java:164)",
+];
+
 const GAME_EVENT_START_RAINING: u8 = 1;
 const GAME_EVENT_STOP_RAINING: u8 = 2;
 const GAME_EVENT_RAIN_LEVEL_CHANGE: u8 = 7;
@@ -185,7 +257,15 @@ enum NeighborUpdates {
 
 enum NeighborStep {
     Shape { direction: Direction, neighbor_state: BlockState, pos: BlockPos, neighbor_pos: BlockPos, flags: i32, update_limit: i32 },
-    Changed { state: Option<BlockState>, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool },
+    Changed {
+        state: Option<BlockState>,
+        pos: BlockPos,
+        block: Block,
+        orientation: Option<Orientation>,
+        moved_by_piston: bool,
+        get_frames: &'static [&'static str],
+        update_frames: &'static [&'static str],
+    },
 }
 
 struct NeighborUpdater {
@@ -714,39 +794,38 @@ impl ServerLevel {
         if self.is_debug() {
             return false;
         }
+        let phase = crate::server::main_thread_frames::enter_static(&SET_BLOCK_GET_CHUNK);
         self.load_chunk(pos.chunk());
+        phase.switch_to(&SET_BLOCK_SET_BLOCK_STATE);
         let Some(old) = self.chunks.set_block_state(pos, state) else { return false };
         let new_block = state.block();
         let block_changed = old.block() != new_block;
         let moved_by_piston = flags & UPDATE_MOVE_BY_PISTON != 0;
+        let chunk_phase = crate::server::main_thread_frames::enter_static(&CHUNK_SET_BLOCK_STATE_PRE_REMOVE_SIDE_EFFECTS);
         if block_changed && old.has_block_entity() && !block::of(state).should_changed_state_keep_block_entity(old) {
             if flags & UPDATE_SKIP_BLOCK_ENTITY_SIDEEFFECTS == 0 {
                 self.pre_remove_side_effects(pos);
             }
+            chunk_phase.switch_to(&CHUNK_SET_BLOCK_STATE_REMOVE_BLOCK_ENTITY);
             *removed = self.chunks.remove_block_entity(pos);
             if let Some(entity) = removed {
                 self.block_entity_set_removed(pos, entity);
             }
         }
         if (block_changed || new_block.is_instance_of("BaseRailBlock")) && (flags & UPDATE_NEIGHBORS != 0 || moved_by_piston) {
-            crate::server::main_thread_frames::within(&["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:314)", "net.minecraft.world.level.Level.setBlock(Level.java:234)"], || {
-                block::of(old).affect_neighbors_after_removal(old, self, pos, moved_by_piston)
-            });
+            chunk_phase.switch_to(&CHUNK_SET_BLOCK_STATE_AFFECT_NEIGHBORS);
+            block::of(old).affect_neighbors_after_removal(old, self, pos, moved_by_piston);
         }
+        chunk_phase.switch_to(&CHUNK_SET_BLOCK_STATE_GET_BLOCK_STATE);
         if !self.chunks.loaded_block_state(pos).is_block(new_block) {
             return false;
         }
         if flags & UPDATE_SKIP_ON_PLACE == 0 {
-            crate::server::main_thread_frames::within(
-                &[
-                    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.onPlace(BlockBehaviour.java:1141)",
-                    "net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:324)",
-                    "net.minecraft.world.level.Level.setBlock(Level.java:234)",
-                ],
-                || block::of(state).on_place(state, self, pos, old, moved_by_piston),
-            );
+            chunk_phase.switch_to(&CHUNK_SET_BLOCK_STATE_ON_PLACE);
+            block::of(state).on_place(state, self, pos, old, moved_by_piston);
         }
         if state.has_block_entity() && self.chunks.loaded_block_state(pos).is_block(new_block) {
+            chunk_phase.switch_to(&CHUNK_SET_BLOCK_STATE_GET_BLOCK_ENTITY);
             let existing = self.chunks.block_entity(pos, EntityCreationType::Check).map(|e| e.is_valid_block_state(state));
             if existing == Some(false) {
                 let ty = self.chunks.block_entity_ref(pos).map(BlockEntity::ty);
@@ -761,25 +840,35 @@ impl ServerLevel {
                 }
                 self.chunks.update_block_entity_ticker(pos);
             } else if let Some(entity) = BlockEntity::new_for(pos, state) {
+                chunk_phase.switch_to(&CHUNK_SET_BLOCK_STATE_ADD_BLOCK_ENTITY);
                 self.chunks.add_and_register_block_entity(entity);
             }
         }
+        drop(chunk_phase);
+        phase.switch_to(&SET_BLOCK_GET_BLOCK_STATE);
         if self.block_state(pos) == state {
             if flags & UPDATE_CLIENTS != 0 {
+                phase.switch_to(&SET_BLOCK_SEND_BLOCK_UPDATED);
                 self.send_block_updated(pos, old, state);
             }
             if flags & UPDATE_NEIGHBORS != 0 {
+                phase.switch_to(&SET_BLOCK_UPDATE_NEIGHBORS_AT);
                 self.update_neighbors_at(pos, old.block());
                 if state.has_analog_output_signal() {
+                    phase.switch_to(&SET_BLOCK_UPDATE_NEIGHBOUR_FOR_OUTPUT_SIGNAL);
                     self.update_neighbour_for_output_signal(pos, new_block);
                 }
             }
             if flags & UPDATE_KNOWN_SHAPE == 0 && update_limit > 0 {
                 let neighbour_flags = flags & !(UPDATE_NEIGHBORS | UPDATE_SUPPRESS_DROPS);
+                phase.switch_to(&SET_BLOCK_OLD_INDIRECT_NEIGHBOUR_SHAPES);
                 block::of(old).update_indirect_neighbour_shapes(old, self, pos, neighbour_flags, update_limit - 1);
+                phase.switch_to(&SET_BLOCK_NEIGHBOUR_SHAPES);
                 self.update_neighbour_shapes(state, pos, neighbour_flags, update_limit - 1);
+                phase.switch_to(&SET_BLOCK_NEW_INDIRECT_NEIGHBOUR_SHAPES);
                 block::of(state).update_indirect_neighbour_shapes(state, self, pos, neighbour_flags, update_limit - 1);
             }
+            phase.switch_to(&SET_BLOCK_POI);
             self.update_poi_on_block_state_change(pos, old, state);
         }
         true
@@ -801,13 +890,19 @@ impl ServerLevel {
     }
 
     pub fn send_block_updated(&mut self, pos: BlockPos, old: BlockState, current: BlockState) {
+        let phase = crate::server::main_thread_frames::enter_static(&SEND_BLOCK_UPDATED_BLOCK_CHANGED);
         if self.chunks.is_ticking(pos.chunk()) {
             self.chunk_map.block_changed(pos);
         }
+        phase.switch_to(&SEND_BLOCK_UPDATED_INVALIDATE);
         self.path_types_by_pos_cache.get_mut().invalidate(pos);
+        phase.switch_to(&SEND_BLOCK_UPDATED_OLD_SHAPE);
         let old_shape = self.get_state_collision_shape(old, pos);
+        phase.switch_to(&SEND_BLOCK_UPDATED_NEW_SHAPE);
         let new_shape = self.get_state_collision_shape(current, pos);
+        phase.switch_to(&SEND_BLOCK_UPDATED_JOIN);
         if join_is_not_empty(&old_shape, &new_shape, BooleanOp::NotSame) {
+            phase.switch_to(&SEND_BLOCK_UPDATED_SHOULD_RECOMPUTE);
             let navigations_to_update: Vec<EntityId> = self
                 .entities
                 .iter()
@@ -816,6 +911,7 @@ impl ServerLevel {
                     _ => None,
                 })
                 .collect();
+            phase.switch_to(&SEND_BLOCK_UPDATED_RECOMPUTE);
             for id in navigations_to_update {
                 self.get_navigation(id, |navigation, level| navigation.recompute_path(level, id));
             }
@@ -897,32 +993,44 @@ impl ServerLevel {
     }
 
     pub fn update_neighbors_at(&mut self, pos: BlockPos, block: Block) {
+        let _frame = crate::server::main_thread_frames::enter_static(&UPDATE_NEIGHBORS_AT);
         let orientation = experimental_redstone_utils::initial_orientation(self, None, None);
         self.update_neighbors_at_oriented(pos, block, orientation);
     }
 
     pub fn update_neighbors_at_oriented(&mut self, pos: BlockPos, block: Block, orientation: Option<Orientation>) {
-        self.update_neighbors_at_except_from_facing(pos, block, None, orientation);
+        let _frame = crate::server::main_thread_frames::enter_static(&UPDATE_NEIGHBORS_AT_ORIENTED);
+        self.collecting_update_neighbors_at_except_from_facing(pos, block, None, orientation);
     }
 
     pub fn update_neighbors_at_except_from_facing(&mut self, pos: BlockPos, block: Block, skip: Option<Direction>, orientation: Option<Orientation>) {
+        let _frame = crate::server::main_thread_frames::enter_static(&UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING);
+        self.collecting_update_neighbors_at_except_from_facing(pos, block, skip, orientation);
+    }
+
+    fn collecting_update_neighbors_at_except_from_facing(&mut self, pos: BlockPos, block: Block, skip: Option<Direction>, orientation: Option<Orientation>) {
+        let _frame = crate::server::main_thread_frames::enter_static(&COLLECTING_UPDATE_NEIGHBORS_AT_EXCEPT_FROM_FACING);
         let idx = usize::from(skip == Some(UPDATE_ORDER[0]));
         self.add_and_run(pos, NeighborUpdates::Multi { source_pos: pos, source_block: block, orientation, skip, idx });
     }
 
     pub fn neighbor_changed(&mut self, pos: BlockPos, block: Block, orientation: Option<Orientation>) {
+        let _frame = crate::server::main_thread_frames::enter_static(&NEIGHBOR_CHANGED);
         self.add_and_run(pos, NeighborUpdates::Simple { pos, block, orientation });
     }
 
     pub fn neighbor_changed_with_state(&mut self, state: BlockState, pos: BlockPos, block: Block, orientation: Option<Orientation>, moved_by_piston: bool) {
+        let _frame = crate::server::main_thread_frames::enter_static(&NEIGHBOR_CHANGED_WITH_STATE);
         self.add_and_run(pos, NeighborUpdates::Full { state, pos, block, orientation, moved_by_piston });
     }
 
     pub fn neighbor_shape_changed(&mut self, direction: Direction, pos: BlockPos, neighbor_pos: BlockPos, neighbor_state: BlockState, flags: i32, update_limit: i32) {
+        let _frame = crate::server::main_thread_frames::enter_static(&NEIGHBOR_SHAPE_CHANGED);
         self.add_and_run(pos, NeighborUpdates::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit });
     }
 
     pub fn update_neighbour_shapes(&mut self, state: BlockState, pos: BlockPos, flags: i32, update_limit: i32) {
+        let _frame = crate::server::main_thread_frames::enter_static(&UPDATE_NEIGHBOUR_SHAPES);
         for direction in UPDATE_SHAPE_ORDER {
             self.neighbor_shape_changed(direction.opposite(), pos.relative(direction), pos, state, flags, update_limit);
         }
@@ -947,11 +1055,13 @@ impl ServerLevel {
             error!("Too many chained neighbor updates. Skipping the rest. First skipped position: {}, {}, {}", pos.x, pos.y, pos.z);
         }
         if !running_already {
+            let _add_and_run = crate::server::main_thread_frames::enter_static(&ADD_AND_RUN);
             self.run_neighbor_updates();
         }
     }
 
     fn run_neighbor_updates(&mut self) {
+        let _run_updates = crate::server::main_thread_frames::enter_static(&RUN_UPDATES);
         loop {
             let updater = &mut self.neighbor_updater;
             if updater.stack.is_empty() && updater.added_this_layer.is_empty() {
@@ -980,10 +1090,30 @@ impl ServerLevel {
             &mut NeighborUpdates::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit } => {
                 (NeighborStep::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit }, false)
             }
-            &mut NeighborUpdates::Simple { pos, block, orientation } => (NeighborStep::Changed { state: None, pos, block, orientation, moved_by_piston: false }, false),
-            &mut NeighborUpdates::Full { state, pos, block, orientation, moved_by_piston } => {
-                (NeighborStep::Changed { state: Some(state), pos, block, orientation, moved_by_piston }, false)
-            }
+            &mut NeighborUpdates::Simple { pos, block, orientation } => (
+                NeighborStep::Changed {
+                    state: None,
+                    pos,
+                    block,
+                    orientation,
+                    moved_by_piston: false,
+                    get_frames: &SIMPLE_NEIGHBOR_UPDATE_GET_BLOCK_STATE,
+                    update_frames: &SIMPLE_NEIGHBOR_UPDATE_EXECUTE,
+                },
+                false,
+            ),
+            &mut NeighborUpdates::Full { state, pos, block, orientation, moved_by_piston } => (
+                NeighborStep::Changed {
+                    state: Some(state),
+                    pos,
+                    block,
+                    orientation,
+                    moved_by_piston,
+                    get_frames: &FULL_NEIGHBOR_UPDATE_EXECUTE,
+                    update_frames: &FULL_NEIGHBOR_UPDATE_EXECUTE,
+                },
+                false,
+            ),
             &mut NeighborUpdates::Multi { source_pos, source_block, orientation, skip, idx } => {
                 let direction = UPDATE_ORDER[idx];
                 let mut step_orientation = None;
@@ -1000,7 +1130,15 @@ impl ServerLevel {
                 if *idx < UPDATE_ORDER.len() && Some(UPDATE_ORDER[*idx]) == skip {
                     *idx += 1;
                 }
-                let step = NeighborStep::Changed { state: None, pos: source_pos.relative(direction), block: source_block, orientation: step_orientation, moved_by_piston: false };
+                let step = NeighborStep::Changed {
+                    state: None,
+                    pos: source_pos.relative(direction),
+                    block: source_block,
+                    orientation: step_orientation,
+                    moved_by_piston: false,
+                    get_frames: &MULTI_NEIGHBOR_UPDATE_GET_BLOCK_STATE,
+                    update_frames: &MULTI_NEIGHBOR_UPDATE_EXECUTE,
+                };
                 (step, *idx < UPDATE_ORDER.len())
             }
         }
@@ -1009,15 +1147,20 @@ impl ServerLevel {
     fn execute_neighbor_step(&mut self, step: NeighborStep) {
         match step {
             NeighborStep::Shape { direction, neighbor_state, pos, neighbor_pos, flags, update_limit } => {
+                let phase = crate::server::main_thread_frames::enter_static(&SHAPE_UPDATE_GET_BLOCK_STATE);
                 let current = self.block_state(pos);
                 if flags & UPDATE_SKIP_SHAPE_UPDATE_ON_WIRE != 0 && current.is_block(blocks::REDSTONE_WIRE) {
                     return;
                 }
+                phase.switch_to(&SHAPE_UPDATE_UPDATE_SHAPE);
                 let new = block::of(current).update_shape(current, self, pos, direction, neighbor_pos, neighbor_state);
+                phase.switch_to(&SHAPE_UPDATE_UPDATE_OR_DESTROY);
                 self.update_or_destroy(current, new, pos, flags, update_limit);
             }
-            NeighborStep::Changed { state, pos, block, orientation, moved_by_piston } => {
+            NeighborStep::Changed { state, pos, block, orientation, moved_by_piston, get_frames, update_frames } => {
+                let phase = crate::server::main_thread_frames::enter_static(get_frames);
                 let state = state.unwrap_or_else(|| self.block_state(pos));
+                phase.switch_to(update_frames);
                 block::of(state).neighbor_changed(state, self, pos, block, orientation, moved_by_piston);
             }
         }
@@ -1034,22 +1177,28 @@ impl ServerLevel {
     }
 
     pub fn update_neighbours_on_block_set(&mut self, pos: BlockPos, old: BlockState) {
+        let phase = crate::server::main_thread_frames::enter_static(&UPDATE_NEIGHBOURS_ON_BLOCK_SET_GET_BLOCK_STATE);
         let state = self.block_state(pos);
         let block = state.block();
         if !old.is_block(block) {
+            phase.switch_to(&UPDATE_NEIGHBOURS_ON_BLOCK_SET_AFFECT_NEIGHBORS);
             block::of(old).affect_neighbors_after_removal(old, self, pos, false);
         }
+        phase.switch_to(&UPDATE_NEIGHBOURS_ON_BLOCK_SET_UPDATE_NEIGHBORS_AT);
         self.update_neighbors_at(pos, block);
         if state.has_analog_output_signal() {
+            phase.switch_to(&UPDATE_NEIGHBOURS_ON_BLOCK_SET_OUTPUT_SIGNAL);
             self.update_neighbour_for_output_signal(pos, block);
         }
     }
 
     pub fn update_from_neighbour_shapes(&mut self, state: BlockState, pos: BlockPos) -> BlockState {
+        let _frame = crate::server::main_thread_frames::enter_static(&UPDATE_FROM_NEIGHBOUR_SHAPES);
         let mut new = state;
         for direction in UPDATE_SHAPE_ORDER {
             let neighbour_pos = pos.relative(direction);
             let neighbour = self.block_state(neighbour_pos);
+            let _update_shape = crate::server::main_thread_frames::enter_static(&UPDATE_SHAPE);
             new = block::of(new).update_shape(new, self, pos, direction, neighbour_pos, neighbour);
         }
         new

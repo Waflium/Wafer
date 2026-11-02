@@ -25,6 +25,8 @@ use crate::world::level::levelgen::structure::structure::StructureHolder;
 use crate::world::level::levelgen::structure::structure_start::StructureStart;
 use crate::world::level::lighting::sky_light_sources::{ChunkBlocks, ChunkSkyLightSources};
 
+const HEIGHTMAP_UPDATE_ORDER: [usize; 4] = [2, 3, 1, 0];
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Biome(pub u16);
 
@@ -399,6 +401,10 @@ impl LevelChunk {
     }
 
     pub fn set_block_state(&mut self, pos: BlockPos, state: BlockState) -> Option<BlockState> {
+        self.set_block_state_with(pos, state, |_| {})
+    }
+
+    pub fn set_block_state_with(&mut self, pos: BlockPos, state: BlockState, mut updating_heightmap: impl FnMut(usize)) -> Option<BlockState> {
         let i = self.section_index(pos.y);
         let section = &mut self.sections[i];
         let skipped = if self.proto.is_some() { state.is_block(blocks::AIR) } else { state.is_air() };
@@ -410,7 +416,8 @@ impl LevelChunk {
         if old == state {
             return None;
         }
-        for k in 0..self.heightmaps.len() {
+        for k in HEIGHTMAP_UPDATE_ORDER {
+            updating_heightmap(k);
             let (heightmaps, sections, min_y) = (&mut self.heightmaps, &self.sections, self.min_y);
             heightmaps[k].update(x, pos.y, z, state, |y| {
                 sections[((y - min_y) >> 4) as usize].block_state(x, (y & 15) as usize, z)
