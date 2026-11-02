@@ -145,6 +145,9 @@ impl PistonMovingBlockEntity {
         } else {
             self.moved_state
         };
+        if block_state.is_block(blocks::MOVING_PISTON) {
+            crate::crash_report::throw_java_exception(crate::world::level::block::moving_piston_block::collision_shape_stack_overflow());
+        }
         let extended_progress = self.get_extended_progress(self.progress);
         let offset = block_state.collision_offset(pos);
         let dx = self.direction.step_x() as f64 * extended_progress as f64;

@@ -12,6 +12,7 @@ use crate::network::connection::{PacketReader, PacketWriter, disconnection_reaso
 use crate::network::login::Profile;
 use crate::server::Event;
 use crate::server::dedicated::dedicated_server_properties::ServerResourcePackInfo;
+use crate::server::network::prepare_spawn_task::StartedBy;
 use crate::util::java_collections::{JavaHashMap, identifier_hash};
 use crate::world::level::storage::format_uuid;
 
@@ -195,7 +196,7 @@ impl ServerConfigurationPacketListener<'_> {
         self.add_optional_tasks();
         self.configuration_tasks.push_back(ConfigurationTask::PrepareSpawn);
         self.configuration_tasks.push_back(ConfigurationTask::JoinWorld);
-        self.start_next_task(w);
+        self.start_next_task(w, None);
     }
 
     fn add_optional_tasks(&mut self) {
@@ -207,7 +208,7 @@ impl ServerConfigurationPacketListener<'_> {
         }
     }
 
-    fn start_next_task(&mut self, w: &mut PacketWriter) {
+    fn start_next_task(&mut self, w: &mut PacketWriter, finished: Option<ConfigurationTask>) {
         let Some(task) = self.configuration_tasks.pop_front() else { return };
         self.current_task = Some(task);
         match task {
@@ -227,7 +228,12 @@ impl ServerConfigurationPacketListener<'_> {
             }
             ConfigurationTask::PrepareSpawn => {
                 let (reply, ready) = oneshot::channel();
-                self.spawn_requested = self.events.send(Event::PrepareSpawn { uuid: self.profile.uuid, name: self.profile.name.clone(), reply }).is_ok();
+                let started_by = match finished {
+                    Some(ConfigurationTask::ServerCodeOfConduct) => StartedBy::AcceptCodeOfConduct,
+                    Some(ConfigurationTask::ServerResourcePack) => StartedBy::ResourcePackResponse,
+                    _ => StartedBy::SelectKnownPacks,
+                };
+                self.spawn_requested = self.events.send(Event::PrepareSpawn { uuid: self.profile.uuid, name: self.profile.name.clone(), started_by, reply }).is_ok();
                 self.prepare_spawn = Some(ready);
             }
             ConfigurationTask::JoinWorld => w.queue(clientbound::FINISH_CONFIGURATION, |_| {}),
@@ -250,7 +256,7 @@ impl ServerConfigurationPacketListener<'_> {
             )));
         }
         self.current_task = None;
-        self.start_next_task(w);
+        self.start_next_task(w, Some(task));
         Ok(())
     }
 

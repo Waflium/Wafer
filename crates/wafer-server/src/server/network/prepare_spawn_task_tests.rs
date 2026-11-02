@@ -1,13 +1,20 @@
+use wafer_core::{BlockPos, ChunkPos, Direction};
+use wafer_data::blocks;
 use wafer_data::packets::play::clientbound;
 use wafer_protocol::Reader;
 use wafer_protocol::nbt::Nbt;
 
+use super::prepare_spawn_task::StartedBy;
 use crate::ServerConfig;
+use crate::commands::perform_prefixed_command;
+use crate::commands::source::CommandSourceStack;
 use crate::network::configuration::CommonListenerCookie;
 use crate::network::connection::Outbound;
 use crate::network::login::Profile;
 use crate::server::Event;
 use crate::server::level::testing;
+use crate::world::level::block::entity::piston_moving_block_entity::PistonMovingBlockEntity;
+use crate::world::level::block::moving_piston_block;
 use crate::world::level::storage::{format_uuid, write_compressed};
 
 const UUID: u128 = 0x1234;
@@ -27,7 +34,7 @@ fn a_data_fixer_exception_fails_the_configuration_task() {
     let dir = world_with_broken_player("prepare-spawn-fixer");
     let mut server = testing::server_with(ServerConfig { world: Some(dir.clone()), ..testing::flat_config() });
     let (reply, mut started) = tokio::sync::oneshot::channel();
-    server.start_prepare_spawn(UUID, "Steve", reply);
+    server.start_prepare_spawn(UUID, "Steve", StartedBy::SelectKnownPacks, reply);
     assert_eq!(started.try_recv(), Ok(Err(())));
     assert!(server.prepare_spawn_tasks.is_empty());
     std::fs::remove_dir_all(dir).unwrap();
@@ -63,5 +70,45 @@ fn a_cancelled_spawn_search_never_finishes_with_a_position() {
     let id = server.find_spawn(0, wafer_core::BlockPos::new(0, -60, 0));
     server.spawn_finders.get_mut(&id).unwrap().cancel();
     server.managed_block(|server| server.spawn_finders[&id].finished().is_some());
-    assert!(matches!(server.spawn_finders[&id].finished(), Some(Finished::Failed)));
+    assert!(matches!(server.spawn_finders[&id].finished(), Some(Finished::Cancelled)));
+}
+
+fn run(server: &mut crate::server::Server, command: &str) {
+    let source = CommandSourceStack::server(server);
+    perform_prefixed_command(server, &source, command);
+}
+
+#[test]
+fn a_moving_piston_moving_a_moving_piston_fails_the_spawn_search_with_a_reported_stack_overflow() {
+    use crate::server::level::player_spawn_finder::Finished;
+    let mut server = testing::server();
+    server.levels[0].chunks.chunk(ChunkPos::new(0, 0));
+    run(&mut server, "forceload add 0 0");
+    server.levels[0].finish_chunk_work();
+    server.tick();
+    run(&mut server, "setblock 8 -50 8 piston[facing=up]");
+    run(&mut server, "setblock 9 -50 8 redstone_block");
+    server.tick();
+    let pos = BlockPos::new(8, -49, 8);
+    *server.levels[0].piston_moving_block_entity(pos).expect("a moving piston") = PistonMovingBlockEntity::new(blocks::MOVING_PISTON.default_state(), Direction::Up, true, false);
+    let overflow = crate::util::catch_throwable(|| moving_piston_block::get_collision_shape(&server.levels[0], pos)).unwrap_err();
+    assert_eq!(overflow.description, "java.lang.StackOverflowError");
+    assert_eq!(overflow.stack_trace.len(), 1024);
+    assert_eq!(overflow.stack_trace[0], "net.minecraft.server.level.ServerChunkCache.getChunk(ServerChunkCache.java:132)");
+    assert_eq!(overflow.stack_trace[1023], "net.minecraft.world.level.block.piston.MovingPistonBlock.getCollisionShape(MovingPistonBlock.java:103)");
+    run(&mut server, "gamerule respawn_radius 0");
+    let id = server.find_spawn(0, pos);
+    server.managed_block(|server| server.spawn_finders[&id].finished().is_some());
+    let Some(Finished::Failed(reported)) = server.spawn_finders[&id].finished() else { panic!("the spawn search should fail") };
+    let trace = crate::server::level::player_spawn_finder::completion_exception(reported, Vec::new()).print_stack_trace();
+    assert!(trace.starts_with(
+        "java.util.concurrent.CompletionException: net.minecraft.ReportedException: Searching for spawn\n\
+        \tat java.base/java.util.concurrent.CompletableFuture.wrapInCompletionException(CompletableFuture.java:323)\n"
+    ));
+    assert!(trace.contains(
+        "\nCaused by: net.minecraft.ReportedException: Searching for spawn\n\
+        \tat net.minecraft.server.level.PlayerSpawnFinder.lambda$scheduleCandidate$0(PlayerSpawnFinder.java:149)\n\
+        \tat java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:884)\n"
+    ));
+    assert!(trace.contains("\nCaused by: java.lang.StackOverflowError\n\tat net.minecraft.server.level.ServerChunkCache.getChunk(ServerChunkCache.java:132)\n"));
 }

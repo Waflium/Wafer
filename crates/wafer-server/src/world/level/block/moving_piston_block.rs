@@ -12,6 +12,7 @@ use crate::world::InteractionResult;
 use crate::world::entity::EntityId;
 use crate::world::item::ItemStack;
 use crate::world::level::BlockGetter;
+use crate::util::java_throwable::JavaThrowable;
 use crate::world::level::storage::loot::loot_params::LootParams;
 
 pub struct MovingPistonBlock;
@@ -52,6 +53,30 @@ impl BlockBehaviour for MovingPistonBlock {
     fn mirror(&self, state: BlockState, mirror: Mirror) -> BlockState {
         super::rotate(state, mirror.get_rotation(state.get(FACING)))
     }
+}
+
+const COLLISION_SHAPE_STACK_OVERFLOW_TOP: [&str; 8] = [
+    "net.minecraft.server.level.ServerChunkCache.getChunk(ServerChunkCache.java:132)",
+    "net.minecraft.world.level.Level.getChunk(Level.java:215)",
+    "net.minecraft.world.level.LevelReader.getChunk(LevelReader.java:150)",
+    "net.minecraft.world.level.Level.getChunk(Level.java:210)",
+    "net.minecraft.world.level.Level.getChunkAt(Level.java:205)",
+    "net.minecraft.world.level.Level.getBlockEntity(Level.java:559)",
+    "net.minecraft.world.level.block.piston.MovingPistonBlock.getBlockEntity(MovingPistonBlock.java:109)",
+    "net.minecraft.world.level.block.piston.MovingPistonBlock.getCollisionShape(MovingPistonBlock.java:101)",
+];
+const COLLISION_SHAPE_RECURSION: [&str; 4] = [
+    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.getCollisionShape(BlockBehaviour.java:1071)",
+    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.getCollisionShape(BlockBehaviour.java:1067)",
+    "net.minecraft.world.level.block.piston.PistonMovingBlockEntity.getCollisionShape(PistonMovingBlockEntity.java:398)",
+    "net.minecraft.world.level.block.piston.MovingPistonBlock.getCollisionShape(MovingPistonBlock.java:103)",
+];
+const MAX_JAVA_STACK_TRACE_DEPTH: usize = 1024;
+
+pub fn collision_shape_stack_overflow() -> JavaThrowable {
+    let mut frames = COLLISION_SHAPE_STACK_OVERFLOW_TOP.to_vec();
+    frames.extend(COLLISION_SHAPE_RECURSION.iter().cycle().take(MAX_JAVA_STACK_TRACE_DEPTH - frames.len()));
+    JavaThrowable::new("java.lang.StackOverflowError", frames)
 }
 
 pub fn get_collision_shape(level: &ServerLevel, pos: BlockPos) -> VoxelShape {

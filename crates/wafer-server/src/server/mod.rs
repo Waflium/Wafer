@@ -215,7 +215,7 @@ pub enum Event {
     Left { conn: ConnId, reason: Component },
     Console(String, bool),
     Verify { profile: Profile, address: std::net::SocketAddr, user_name: String, reply: tokio::sync::oneshot::Sender<Verdict> },
-    PrepareSpawn { uuid: u128, name: String, reply: tokio::sync::oneshot::Sender<Result<(), ()>> },
+    PrepareSpawn { uuid: u128, name: String, started_by: network::prepare_spawn_task::StartedBy, reply: tokio::sync::oneshot::Sender<Result<(), ()>> },
     PrepareSpawnClosed { uuid: u128 },
     Halt,
     Rcon { command: String, reply: tokio::sync::oneshot::Sender<String> },
@@ -1376,7 +1376,7 @@ impl Server {
                 }
             }
             Event::Verify { profile, address, user_name, reply } => self.pending_logins.push(PendingLogin { profile, address, user_name, reply, waiting_for_dupe: false }),
-            Event::PrepareSpawn { uuid, name, reply } => self.start_prepare_spawn(uuid, &name, reply),
+            Event::PrepareSpawn { uuid, name, started_by, reply } => self.start_prepare_spawn(uuid, &name, started_by, reply),
             Event::PrepareSpawnClosed { uuid } => self.close_prepare_spawn(uuid),
             Event::Console(line, has_level) => self.console_inputs.push((line, CommandSourceStack::server(self), has_level)),
             Event::Halt => self.halt(),
@@ -1981,7 +1981,7 @@ impl Server {
                     self.auto_save(TICK_SERVER_PAUSED_AUTO_SAVE);
                 }
                 self.tick_logins();
-                self.tick_prepare_spawns();
+                self.tick_prepare_spawns(true);
                 self.handle_console_inputs();
                 return;
             }
@@ -2067,7 +2067,7 @@ impl Server {
             }
         }
         self.tick_logins();
-        self.tick_prepare_spawns();
+        self.tick_prepare_spawns(false);
         self.handle_console_inputs();
         profiler::pop_push("players");
         self.tick_player_list();

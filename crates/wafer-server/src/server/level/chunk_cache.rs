@@ -315,9 +315,10 @@ impl ChunkCache {
         self.chunk_range_future(pos.pack(), radius, |_| Some(ChunkStatus::Full), |c| RangeThen::Complete(c.holders.futures.new_pending()))
     }
 
-    pub fn when_complete_run_spawn_search(&mut self, future: FutureId, finder: u64) {
+    pub fn when_complete_run_spawn_search(&mut self, future: FutureId, finder: u64) -> bool {
         self.holders.futures.then(future, Waiter::SpawnSearch(finder));
         self.process_woken();
+        self.holders.futures.is_done(future)
     }
 
     pub fn update_chunk_forced(&mut self, pos: ChunkPos, forced: bool) -> bool {
