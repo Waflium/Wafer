@@ -94,4 +94,5 @@ pub struct PendingPortalTeleport {
     pub entity: EntityId,
     pub portal: Portal,
     pub entry_position: BlockPos,
+    pub frames: Vec<&'static str>,
 }

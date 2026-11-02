@@ -9,6 +9,11 @@ const KEEP_ALIVE: Duration = Duration::from_secs(60);
 
 thread_local! {
     static PRIORITY: Cell<u32> = const { Cell::new(0) };
+    static JAVA_THREAD_ID: Cell<u32> = const { Cell::new(0) };
+}
+
+pub fn current_java_thread_id() -> u32 {
+    JAVA_THREAD_ID.get()
 }
 
 pub struct PriorityScope(u32);
@@ -77,7 +82,8 @@ impl CachedThreadPool {
         }
         let name = (self.shared.next_name)();
         let priority = current_priority();
-        state.live.push((name.clone(), priority, super::next_java_thread_id()));
+        let java_thread_id = super::next_java_thread_id();
+        state.live.push((name.clone(), priority, java_thread_id));
         drop(state);
         let shared = self.shared.clone();
         let thread_name = name.clone();
@@ -85,6 +91,7 @@ impl CachedThreadPool {
             .name(name)
             .spawn(move || {
                 PRIORITY.set(priority);
+                JAVA_THREAD_ID.set(java_thread_id);
                 run_worker(shared, thread_name, Box::new(task))
             })
             .expect("worker thread");

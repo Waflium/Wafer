@@ -2567,7 +2567,7 @@ impl ServerLevel {
         if e.boarding_cooldown > 0 {
             e.boarding_cooldown -= 1;
         }
-        self.handle_portal(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.baseTick(Entity.java:616)"], || self.handle_portal(id));
         self.then_tick(move |level| level.entity_base_tick_end(id));
     }
 
@@ -3454,7 +3454,8 @@ impl ServerLevel {
                 }
                 return;
             }
-            self.pending_server_work = Some(PendingServerWork::PortalTeleport(PendingPortalTeleport { entity: id, portal, entry_position: process.get_entry_position() }));
+            let frames = std::iter::once("net.minecraft.world.entity.Entity.handlePortal(Entity.java:2942)").chain(crate::server::main_thread_frames::current()).collect();
+            self.pending_server_work = Some(PendingServerWork::PortalTeleport(PendingPortalTeleport { entity: id, portal, entry_position: process.get_entry_position(), frames }));
         } else if process.has_expired() {
             self.entity_mut(id).portal_process = None;
         }
@@ -3577,6 +3578,9 @@ impl crate::server::Server {
     pub fn handle_pending_portal_teleport(&mut self, level: usize, pending: PendingPortalTeleport) {
         let entity = self.levels[level].portal_entity(pending.entity);
         if let Some(transition) = pending.portal.get_portal_destination(self, level, &entity, pending.entry_position) {
+            let bridge = self.levels[level].is_player(pending.entity).then_some("net.minecraft.server.level.ServerPlayer.teleport(ServerPlayer.java:219)");
+            let frames = bridge.into_iter().chain(std::iter::once("net.minecraft.world.entity.Entity.teleportToPortalDestination(Entity.java:2955)")).chain(pending.frames.iter().copied());
+            let _frames = crate::server::main_thread_frames::enter_complete(frames.collect());
             self.teleport_to_portal_destination(level, pending.entity, transition);
         }
     }

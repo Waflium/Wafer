@@ -1548,7 +1548,7 @@ impl crate::server::Server {
         player.reset_position();
         let player = level.players.shift_remove(&id).expect("teleported player");
         level.add_player(player);
-        self.trigger_dimension_change_triggers(id, old_level);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.teleport(ServerPlayer.java:1283)"], || self.trigger_dimension_change_triggers(id, old_level));
         let level = &mut self.levels[new_level];
         level.stop_using_item(id);
         let player = level.player(id);

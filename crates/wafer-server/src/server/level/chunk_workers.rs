@@ -35,8 +35,7 @@ pub fn is_unregistered_holder(throwable: &JavaThrowable) -> bool {
 
 pub fn report_unregistered_holder(throwable: &JavaThrowable) {
     let name = next_io_worker_name();
-    let id = name.rsplit('-').next().and_then(|n| n.parse::<u32>().ok()).map_or(0, |n| 111 + n);
-    crate::crash_report::on_thread_exception(&name, id, throwable);
+    crate::crash_report::on_thread_exception(&name, crate::util::next_java_thread_id(), throwable);
 }
 
 pub fn live_io_workers() -> Vec<(usize, u32, u32)> {
@@ -199,8 +198,7 @@ fn process_io_request(shared: &IoShared, request: IoRequest) {
             Err(e) if storage_exception::is_java_error(&e) => {
                 let thread = thread::current();
                 let name = thread.name().unwrap_or_default();
-                let id = name.rsplit('-').next().and_then(|n| n.parse::<u32>().ok()).map_or(0, |n| 111 + n);
-                crate::crash_report::on_thread_exception(name, id, &storage_exception::on_load_worker_uncaught(&e));
+                crate::crash_report::on_thread_exception(name, crate::util::cached_thread_pool::current_java_thread_id(), &storage_exception::on_load_worker_uncaught(&e));
                 std::mem::forget(reply);
             }
             result => reply(result.map_err(|e| {

@@ -173,7 +173,7 @@ fn origin_base() -> Vec<&'static str> {
 pub fn enter_command(origin: CommandOrigin) -> super::main_thread_frames::FrameScope {
     static CACHED: [std::sync::OnceLock<&'static [&'static str]>; 13] = [const { std::sync::OnceLock::new() }; 13];
     match origin {
-        CommandOrigin::EnchantmentEffect | CommandOrigin::TestEnvironmentFunction | CommandOrigin::AdvancementReward => super::main_thread_frames::enter_absolute(command_frames(origin)),
+        CommandOrigin::EnchantmentEffect | CommandOrigin::TestEnvironmentFunction | CommandOrigin::AdvancementReward => super::main_thread_frames::enter_complete(command_frames(origin)),
         _ => super::main_thread_frames::enter_absolute_static(CACHED[origin as usize].get_or_init(|| command_frames(origin).leak())),
     }
 }

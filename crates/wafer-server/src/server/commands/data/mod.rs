@@ -168,7 +168,7 @@ fn manipulate_data(
     }
     {
         let frames = super::reload_command::command_frames(&["net.minecraft.server.commands.data.DataCommands.manipulateData(DataCommands.java:339)", lambda], server);
-        let _frames = crate::server::main_thread_frames::enter_absolute(frames);
+        let _frames = crate::server::main_thread_frames::enter_complete(frames);
         target.set_data(server, data)?;
     }
     source.send_success(server, || target.modified_success(server), true);
@@ -188,7 +188,7 @@ fn remove_data(server: &mut Server, context: &CommandContext, source: &CommandSo
             &["net.minecraft.server.commands.data.DataCommands.removeData(DataCommands.java:354)", "net.minecraft.server.commands.data.DataCommands.lambda$register$7(DataCommands.java:102)"],
             server,
         );
-        let _frames = crate::server::main_thread_frames::enter_absolute(frames);
+        let _frames = crate::server::main_thread_frames::enter_complete(frames);
         accessor.set_data(server, data)?;
     }
     source.send_success(server, || accessor.modified_success(server), true);
@@ -255,7 +255,7 @@ fn merge_data(server: &mut Server, context: &CommandContext, source: &CommandSou
             &["net.minecraft.server.commands.data.DataCommands.mergeData(DataCommands.java:411)", "net.minecraft.server.commands.data.DataCommands.lambda$register$1(DataCommands.java:81)"],
             server,
         );
-        let _frames = crate::server::main_thread_frames::enter_absolute(frames);
+        let _frames = crate::server::main_thread_frames::enter_complete(frames);
         accessor.set_data(server, result)?;
     }
     source.send_success(server, || accessor.modified_success(server), true);
