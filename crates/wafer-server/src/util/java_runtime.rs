@@ -4,13 +4,22 @@ pub const JAVA_VM_INFO: &str = "mixed mode";
 pub const JAVA_VM_VENDOR: &str = "Microsoft";
 pub const PROCESS_NAME: &str = "java";
 
-pub fn as_java_process_instances(mut instances: Vec<String>) -> Vec<String> {
-    let own = std::env::current_exe().ok().and_then(|path| path.file_stem().map(|stem| stem.to_string_lossy().into_owned()));
-    if let Some(own) = own
-        && let Some(index) = instances.iter().position(|instance| *instance == own)
+pub fn as_java_process_instances(instances: Vec<String>) -> Vec<String> {
+    match std::env::current_exe().ok().and_then(|path| path.file_stem().map(|stem| stem.to_string_lossy().into_owned())) {
+        Some(own) => as_java_instances_of(instances, &own),
+        None => instances,
+    }
+}
+
+fn as_java_instances_of(mut instances: Vec<String>, own: &str) -> Vec<String> {
+    if let Some(index) = instances.iter().position(|instance| instance == own)
         && instances[..index].iter().any(|instance| instance == PROCESS_NAME)
     {
-        instances[index] = PROCESS_NAME.to_string();
+        for instance in &mut instances[index..] {
+            if instance == own {
+                *instance = PROCESS_NAME.to_string();
+            }
+        }
     }
     instances
 }
@@ -267,5 +276,12 @@ mod tests {
     #[test]
     fn architectures_use_the_java_names() {
         assert!(matches!(os_arch(), "amd64" | "aarch64" | "x86" | "i386" | "x86_64"));
+    }
+
+    #[test]
+    fn every_own_instance_resolves_to_an_earlier_java() {
+        let names = |names: &[&str]| names.iter().map(ToString::to_string).collect::<Vec<_>>();
+        assert_eq!(as_java_instances_of(names(&["java", "wafer", "x", "wafer"]), "wafer"), names(&["java", "java", "x", "java"]));
+        assert_eq!(as_java_instances_of(names(&["wafer", "java", "wafer"]), "wafer"), names(&["wafer", "java", "wafer"]));
     }
 }
