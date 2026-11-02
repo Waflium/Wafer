@@ -8,8 +8,11 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::TcpStream;
 use tokio::time::Sleep;
 use tokio_rustls::TlsConnector;
-use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName};
-use tokio_rustls::rustls::{self, ClientConfig, RootCertStore};
+use tokio_rustls::rustls::client::WebPkiServerVerifier;
+use tokio_rustls::rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use tokio_rustls::rustls::crypto::WebPkiSupportedAlgorithms;
+use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use tokio_rustls::rustls::{self, ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme};
 
 use crate::util::java_throwable::JavaThrowable;
 use crate::util::java_url::JavaUrl;
@@ -55,7 +58,7 @@ pub enum Handshake {
     Eof,
     Unrecognized,
     Alert(String),
-    CertificateUnknown,
+    CertificateUnknown { tls13: bool },
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -71,6 +74,59 @@ pub enum Failure {
     PrematureEof { chunked: bool, status: u16 },
     Other(String),
     TooManyRedirects(u32),
+    Connect(Route, Box<Failure>),
+    UnableToTunnel(String),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Route {
+    Request,
+    Redirect { switched_to_get: bool },
+    UseProxy,
+}
+
+impl Route {
+    fn follow_redirect_frames(self) -> [&'static str; 5] {
+        let follow_redirect0 = match self {
+            Route::Redirect { switched_to_get: true } => "java.base/sun.net.www.protocol.http.HttpURLConnection.followRedirect0(HttpURLConnection.java:2529)",
+            Route::Redirect { switched_to_get: false } => "java.base/sun.net.www.protocol.http.HttpURLConnection.followRedirect0(HttpURLConnection.java:2540)",
+            Route::Request | Route::UseProxy => "java.base/sun.net.www.protocol.http.HttpURLConnection.followRedirect0(HttpURLConnection.java:2491)",
+        };
+        [
+            follow_redirect0,
+            "java.base/sun.net.www.protocol.http.HttpURLConnection.followRedirect(HttpURLConnection.java:2456)",
+            "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1631)",
+            "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1302)",
+            "java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:493)",
+        ]
+    }
+
+    fn connect_frames(self, https: bool) -> Vec<&'static str> {
+        match (self, https) {
+            (Route::Request, false) => HTTP_CONNECT_FRAMES.to_vec(),
+            (Route::Request, true) => HTTPS_CONNECT_FRAMES.to_vec(),
+            (Route::Redirect { .. }, false) => concat(&[&HTTP_CONNECT_FRAMES[..11], &self.follow_redirect_frames()]),
+            (Route::Redirect { .. }, true) => concat(&[&HTTPS_CONNECT_FRAMES[..12], &self.follow_redirect_frames()]),
+            (Route::UseProxy, false) => concat(&[&PROXY_OPEN_SERVER, &HTTP_PROXIED_CONNECT, &self.follow_redirect_frames()]),
+            (Route::UseProxy, true) => concat(&[&PROXY_OPEN_SERVER, &HTTPS_PROXIED_CONNECT, &self.follow_redirect_frames()]),
+        }
+    }
+
+    fn after_connect_frames(self) -> Vec<&'static str> {
+        match self {
+            Route::Request => TLS_HANDSHAKE_OUTER.to_vec(),
+            Route::Redirect { .. } => concat(&[&TLS_HANDSHAKE_OUTER[..2], &self.follow_redirect_frames(), &[HTTPS_GET_RESPONSE_CODE]]),
+            Route::UseProxy => concat(&[
+                &[
+                    TLS_HANDSHAKE_OUTER[0],
+                    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:138)",
+                    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:118)",
+                ],
+                &self.follow_redirect_frames(),
+                &[HTTPS_GET_RESPONSE_CODE],
+            ]),
+        }
+    }
 }
 
 const READ_SERVICE_RESPONSE_130: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:130)";
@@ -78,7 +134,7 @@ const READ_SERVICE_RESPONSE_141: &str = "com.mojang.authlib.minecraft.client.Min
 const READ_SERVICE_RESPONSE_147: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:147)";
 const BUILD_HTTP_EXCEPTION_164: &str = "com.mojang.authlib.minecraft.client.MinecraftClient.buildHttpException(MinecraftClient.java:164)";
 
-const HTTPS_CONNECT_FRAMES: [&str; 16] = [
+const HTTPS_CONNECT_FRAMES: [&str; 15] = [
     "java.base/java.net.SocksSocketImpl.connect(SocksSocketImpl.java:284)",
     "java.base/java.net.Socket.connect(Socket.java:659)",
     "java.base/sun.security.ssl.SSLSocketImpl.connect(SSLSocketImpl.java:304)",
@@ -87,14 +143,46 @@ const HTTPS_CONNECT_FRAMES: [&str; 16] = [
     "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:604)",
     "java.base/sun.net.www.protocol.https.HttpsClient.<init>(HttpsClient.java:206)",
     "java.base/sun.net.www.protocol.https.HttpsClient.New(HttpsClient.java:288)",
-    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.getNewHttpClient(AbstractDelegateHttpsURLConnection.java:196)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.getNewHttpClient(AbstractDelegateHttpsURLConnection.java:193)",
     "java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect0(HttpURLConnection.java:1008)",
     "java.base/sun.net.www.protocol.http.HttpURLConnection.plainConnect(HttpURLConnection.java:899)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection.connect(HttpURLConnection.java:872)",
-    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:181)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:179)",
     "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1377)",
     "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1302)",
     "java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:493)",
+];
+
+const PROXY_OPEN_SERVER: [&str; 5] = [
+    "java.base/java.net.Socket.connect(Socket.java:659)",
+    "java.base/sun.net.NetworkClient.doConnect(NetworkClient.java:161)",
+    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:516)",
+    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:570)",
+    "java.base/sun.net.www.http.HttpClient.openServer(HttpClient.java:599)",
+];
+
+const HTTP_PROXIED_CONNECT: [&str; 6] = [
+    "java.base/sun.net.www.http.HttpClient.<init>(HttpClient.java:276)",
+    "java.base/sun.net.www.http.HttpClient.New(HttpClient.java:380)",
+    "java.base/sun.net.www.http.HttpClient.New(HttpClient.java:407)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.proxiedConnect(HttpURLConnection.java:807)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.setProxiedClient(HttpURLConnection.java:800)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.setProxiedClient(HttpURLConnection.java:782)",
+];
+
+const HTTPS_PROXIED_CONNECT: [&str; 6] = [
+    "java.base/sun.net.www.protocol.https.HttpsClient.<init>(HttpsClient.java:206)",
+    "java.base/sun.net.www.protocol.https.HttpsClient.New(HttpsClient.java:288)",
+    "java.base/sun.net.www.protocol.https.HttpsClient.New(HttpsClient.java:218)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.proxiedConnect(AbstractDelegateHttpsURLConnection.java:146)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:134)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:118)",
+];
+
+const HTTPS_TUNNEL: [&str; 4] = [
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.doTunneling0(HttpURLConnection.java:1965)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.doTunneling(HttpURLConnection.java:1837)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:136)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:118)",
 ];
 
 const HTTP_CONNECT_FRAMES: [&str; 14] = [
@@ -146,7 +234,7 @@ const TLS_HANDSHAKE_DECODE: [&str; 6] = [
 ];
 const TLS_HANDSHAKE_OUTER: [&str; 6] = [
     "java.base/sun.net.www.protocol.https.HttpsClient.afterConnect(HttpsClient.java:483)",
-    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:190)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:187)",
     "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1377)",
     "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1302)",
     "java.base/java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:493)",
@@ -175,7 +263,7 @@ const METERED_STREAM_JUST_READ: [&str; 2] = ["java.base/sun.net.www.MeteredStrea
 const CHUNKED_FAST_READ: [&str; 2] = ["java.base/sun.net.www.http.ChunkedInputStream.fastRead(ChunkedInputStream.java:257)", "java.base/sun.net.www.http.ChunkedInputStream.read(ChunkedInputStream.java:698)"];
 const BODY_READ_TAIL: [&str; 12] = [
     "java.base/java.io.FilterInputStream.read(FilterInputStream.java:119)",
-    "java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3322)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3308)",
     "java.base/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)",
     "java.base/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)",
     "java.base/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)",
@@ -207,8 +295,13 @@ fn windows_error_text(text: &str) -> String {
 
 impl Failure {
     pub fn cause(&self, url: &JavaUrl) -> JavaThrowable {
+        self.cause_through(url, Route::Request)
+    }
+
+    fn cause_through(&self, url: &JavaUrl, route: Route) -> JavaThrowable {
         let https = url.is_https();
-        let connect_frames: Vec<&'static str> = if https { HTTPS_CONNECT_FRAMES.to_vec() } else { HTTP_CONNECT_FRAMES.to_vec() };
+        let connect_frames = route.connect_frames(https);
+        let after_connect_frames = route.after_connect_frames();
         let connect_tail = |head: &[&'static str]| -> Vec<&'static str> {
             let mut frames = head.to_vec();
             frames.extend(connect_frames.iter().copied());
@@ -221,7 +314,7 @@ impl Failure {
         let handshake_frames = |head: &[&'static str], tail: &[&'static str]| -> Vec<&'static str> {
             let mut frames = head.to_vec();
             frames.extend(tail);
-            frames.extend(TLS_HANDSHAKE_OUTER);
+            frames.extend(after_connect_frames.iter().copied());
             frames.push(READ_SERVICE_RESPONSE_130);
             frames
         };
@@ -304,7 +397,7 @@ impl Failure {
                             "java.base/sun.security.ssl.Alert.createSSLException(Alert.java:130)",
                             "java.base/sun.security.ssl.Alert.createSSLException(Alert.java:117)",
                             "java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:363)",
-                            "java.base/sun.security.ssl.Alert$AlertConsumer.consume(Alert.java:299)",
+                            "java.base/sun.security.ssl.Alert$AlertConsumer.consume(Alert.java:287)",
                             "java.base/sun.security.ssl.TransportContext.dispatch(TransportContext.java:202)",
                             "java.base/sun.security.ssl.SSLTransport.decode(SSLTransport.java:172)",
                             "java.base/sun.security.ssl.SSLSocketImpl.decode(SSLSocketImpl.java:1506)",
@@ -312,11 +405,11 @@ impl Failure {
                         &TLS_HANDSHAKE_DECODE[3..],
                     ),
                 ),
-                Handshake::CertificateUnknown => certificate_unknown(),
+                Handshake::CertificateUnknown { tls13 } => certificate_unknown(*tls13, &after_connect_frames),
             },
-            Failure::ReadTimedOut(phase) => chained(*phase, JavaThrowable::new("java.net.SocketTimeoutException: Read timed out", self.data_read_frames(*phase, &SOCKET_READ_TIMED_OUT, https))),
-            Failure::ConnectionReset(phase) => chained(*phase, JavaThrowable::new("java.net.SocketException: Connection reset", self.data_read_frames(*phase, &SOCKET_READ_RESET, https))),
-            Failure::ConnectionAborted(phase, text) => chained(*phase, JavaThrowable::new(format!("java.net.SocketException: {text}"), self.data_read_frames(*phase, &SOCKET_READ_RESET, https))),
+            Failure::ReadTimedOut(phase) => chained(*phase, https, JavaThrowable::new("java.net.SocketTimeoutException: Read timed out", self.data_read_frames(*phase, &SOCKET_READ_TIMED_OUT, https))),
+            Failure::ConnectionReset(phase) => chained(*phase, https, JavaThrowable::new("java.net.SocketException: Connection reset", self.data_read_frames(*phase, &SOCKET_READ_RESET, https))),
+            Failure::ConnectionAborted(phase, text) => chained(*phase, https, JavaThrowable::new(format!("java.net.SocketException: {text}"), self.data_read_frames(*phase, &SOCKET_READ_RESET, https))),
             Failure::UnexpectedEof => {
                 let mut frames = vec![PARSE_HEADER_EOF, PARSE_HTTP, PARSE_HEADER_EOF_RETRY, PARSE_HTTP, GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE];
                 if https {
@@ -338,6 +431,11 @@ impl Failure {
                 frames.push(READ_SERVICE_RESPONSE_130);
                 JavaThrowable::new(format!("java.net.ProtocolException: Server redirected too many times ({redirects})"), frames)
             }
+            Failure::Connect(route, failure) => failure.cause_through(url, *route),
+            Failure::UnableToTunnel(status_line) => JavaThrowable::new(
+                format!("java.io.IOException: Unable to tunnel through proxy. Proxy returns \"{status_line}\""),
+                concat(&[&HTTPS_TUNNEL, &Route::UseProxy.follow_redirect_frames(), &[HTTPS_GET_RESPONSE_CODE, READ_SERVICE_RESPONSE_130]]),
+            ),
         }
     }
 
@@ -358,7 +456,11 @@ impl Failure {
                 if reset {
                     frames.push(PARSE_HTTP_RETRY);
                 }
-                frames.extend([GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE, READ_SERVICE_RESPONSE_130]);
+                frames.extend([GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE]);
+                if https {
+                    frames.push(HTTPS_GET_RESPONSE_CODE);
+                }
+                frames.push(READ_SERVICE_RESPONSE_130);
             }
             Phase::Header => {
                 frames.extend(BUFFERED_READ);
@@ -400,9 +502,27 @@ struct Recorder {
 struct RecorderState {
     timed_out: bool,
     last_error: Option<(bool, io::ErrorKind, Option<i32>)>,
+    server_hello: Option<Vec<u8>>,
 }
 
+const SERVER_HELLO_CAPTURE: usize = 4096;
+
 impl Recorder {
+    fn capture_server_hello(&self) {
+        self.state.lock().unwrap().server_hello = Some(Vec::new());
+    }
+
+    fn received(&self, bytes: &[u8]) {
+        if let Some(captured) = &mut self.state.lock().unwrap().server_hello {
+            let take = bytes.len().min(SERVER_HELLO_CAPTURE.saturating_sub(captured.len()));
+            captured.extend_from_slice(&bytes[..take]);
+        }
+    }
+
+    fn take_server_hello(&self) -> Vec<u8> {
+        self.state.lock().unwrap().server_hello.take().unwrap_or_default()
+    }
+
     fn record(&self, write: bool, error: &io::Error) {
         self.state.lock().unwrap().last_error = Some((write, error.kind(), error.raw_os_error()));
     }
@@ -425,11 +545,13 @@ struct Timed {
 impl AsyncRead for Timed {
     fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
         let this = &mut *self;
+        let before = buf.filled().len();
         match Pin::new(&mut this.inner).poll_read(cx, buf) {
             Poll::Ready(result) => {
                 this.sleep = None;
-                if let Err(error) = &result {
-                    this.recorder.record(false, error);
+                match &result {
+                    Ok(()) => this.recorder.received(&buf.filled()[before..]),
+                    Err(error) => this.recorder.record(false, error),
                 }
                 Poll::Ready(result)
             }
@@ -507,10 +629,50 @@ fn tls_config() -> Arc<ClientConfig> {
                 None => roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned()),
             }
             let provider = Arc::new(rustls::crypto::ring::default_provider());
-            let config = ClientConfig::builder_with_provider(provider).with_safe_default_protocol_versions().expect("TLS protocol versions").with_root_certificates(roots).with_no_client_auth();
+            let trust_manager = X509TrustManager { algorithms: provider.signature_verification_algorithms, validator: WebPkiServerVerifier::builder_with_provider(Arc::new(roots), provider.clone()).build().ok() };
+            let config = ClientConfig::builder_with_provider(provider)
+                .with_safe_default_protocol_versions()
+                .expect("TLS protocol versions")
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(trust_manager))
+                .with_no_client_auth();
             Arc::new(config)
         })
         .clone()
+}
+
+#[derive(Debug)]
+struct X509TrustManager {
+    algorithms: WebPkiSupportedAlgorithms,
+    validator: Option<Arc<WebPkiServerVerifier>>,
+}
+
+impl X509TrustManager {
+    fn certificate_unknown() -> rustls::Error {
+        rustls::Error::InvalidCertificate(rustls::CertificateError::Other(rustls::OtherError(Arc::new(io::Error::other("PKIX path building failed")))))
+    }
+}
+
+impl ServerCertVerifier for X509TrustManager {
+    fn verify_server_cert(&self, end_entity: &CertificateDer<'_>, intermediates: &[CertificateDer<'_>], server_name: &ServerName<'_>, ocsp_response: &[u8], now: UnixTime) -> Result<ServerCertVerified, rustls::Error> {
+        let Some(validator) = &self.validator else { return Err(Self::certificate_unknown()) };
+        validator.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now).map_err(|error| match error {
+            rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer) => Self::certificate_unknown(),
+            error => error,
+        })
+    }
+
+    fn verify_tls12_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algorithms)
+    }
+
+    fn verify_tls13_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algorithms)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.algorithms.supported_schemes()
+    }
 }
 
 fn trust_store_certificates() -> Option<Vec<CertificateDer<'static>>> {
@@ -544,32 +706,50 @@ fn alert_name(description: &rustls::AlertDescription) -> String {
     name
 }
 
-fn chained(phase: Phase, throwable: JavaThrowable) -> JavaThrowable {
+fn chained(phase: Phase, https: bool, throwable: JavaThrowable) -> JavaThrowable {
     if phase != Phase::HeaderFields {
         return throwable;
     }
-    let frames = vec![
+    let mut frames = vec![
         "java.base/jdk.internal.reflect.DirectConstructorHandleAccessor.newInstance(DirectConstructorHandleAccessor.java:62)",
         "java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:499)",
         "java.base/java.lang.reflect.Constructor.newInstance(Constructor.java:483)",
         "java.base/sun.net.www.protocol.http.HttpURLConnection.getChainedException(HttpURLConnection.java:1751)",
         "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1321)",
         GET_INPUT_STREAM,
-        "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:140)",
     ];
+    if https {
+        frames.push("java.base/sun.net.www.protocol.https.HttpsURLConnectionImpl.getInputStream(HttpsURLConnectionImpl.java:223)");
+    }
+    frames.push("com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:140)");
     JavaThrowable::new(throwable.description.clone(), frames).with_cause(throwable)
 }
 
-fn certificate_unknown() -> JavaThrowable {
+fn certificate_unknown(tls13: bool, after_connect_frames: &[&'static str]) -> JavaThrowable {
     const UNABLE: &str = "unable to find valid certification path to requested target";
+    let consumer: [&'static str; 4] = if tls13 {
+        [
+            "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.checkServerCerts(CertificateMessage.java:1295)",
+            "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.onConsumeCertificate(CertificateMessage.java:1172)",
+            "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.consume(CertificateMessage.java:1115)",
+            "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.checkServerCerts(CertificateMessage.java:1279)",
+        ]
+    } else {
+        [
+            "java.base/sun.security.ssl.CertificateMessage$T12CertificateConsumer.checkServerCerts(CertificateMessage.java:651)",
+            "java.base/sun.security.ssl.CertificateMessage$T12CertificateConsumer.onCertificate(CertificateMessage.java:471)",
+            "java.base/sun.security.ssl.CertificateMessage$T12CertificateConsumer.consume(CertificateMessage.java:367)",
+            "java.base/sun.security.ssl.CertificateMessage$T12CertificateConsumer.checkServerCerts(CertificateMessage.java:635)",
+        ]
+    };
     let mut handshake = vec![
         "java.base/sun.security.ssl.Alert.createSSLException(Alert.java:130)",
         "java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:376)",
         "java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:319)",
         "java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:314)",
-        "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.checkServerCerts(CertificateMessage.java:1295)",
-        "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.onConsumeCertificate(CertificateMessage.java:1172)",
-        "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.consume(CertificateMessage.java:1115)",
+        consumer[0],
+        consumer[1],
+        consumer[2],
         "java.base/sun.security.ssl.SSLHandshake.consume(SSLHandshake.java:421)",
         "java.base/sun.security.ssl.HandshakeContext.dispatch(HandshakeContext.java:477)",
         "java.base/sun.security.ssl.HandshakeContext.dispatch(HandshakeContext.java:448)",
@@ -577,9 +757,7 @@ fn certificate_unknown() -> JavaThrowable {
         "java.base/sun.security.ssl.SSLTransport.decode(SSLTransport.java:172)",
     ];
     handshake.extend(&TLS_HANDSHAKE_DECODE[2..]);
-    handshake.push(TLS_HANDSHAKE_OUTER[0]);
-    handshake.push("java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:187)");
-    handshake.extend(&TLS_HANDSHAKE_OUTER[2..]);
+    handshake.extend(after_connect_frames);
     handshake.push(READ_SERVICE_RESPONSE_130);
     let validator: Vec<&'static str> = [
         "java.base/sun.security.validator.PKIXValidator.doBuild(PKIXValidator.java:387)",
@@ -587,7 +765,7 @@ fn certificate_unknown() -> JavaThrowable {
         "java.base/sun.security.validator.Validator.validate(Validator.java:256)",
         "java.base/sun.security.ssl.X509TrustManagerImpl.checkTrusted(X509TrustManagerImpl.java:230)",
         "java.base/sun.security.ssl.X509TrustManagerImpl.checkServerTrusted(X509TrustManagerImpl.java:132)",
-        "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.checkServerCerts(CertificateMessage.java:1279)",
+        consumer[3],
     ]
     .into_iter()
     .chain(handshake[5..].iter().copied())
@@ -623,19 +801,40 @@ fn classify_handshake(error: &io::Error, recorder: &Recorder) -> Failure {
     match rustls_error {
         Some(rustls::Error::AlertReceived(description)) => Failure::Handshake(Handshake::Alert(alert_name(description))),
         Some(rustls::Error::InvalidMessage(_)) => Failure::Handshake(Handshake::Unrecognized),
-        Some(rustls::Error::InvalidCertificate(_)) => Failure::Handshake(Handshake::CertificateUnknown),
+        Some(rustls::Error::InvalidCertificate(_)) => Failure::Handshake(Handshake::CertificateUnknown { tls13: server_hello_selects_tls13(&recorder.take_server_hello()).unwrap_or(false) }),
         _ => Failure::Other(error.to_string()),
     }
 }
 
-async fn connect(url: &JavaUrl) -> Result<Connection, Failure> {
-    let host = url.host.clone();
-    let port = url.effective_port();
-    let addresses: Vec<std::net::SocketAddr> = match tokio::net::lookup_host((host.as_str(), port)).await {
+fn server_hello_selects_tls13(records: &[u8]) -> Option<bool> {
+    let u16_at = |bytes: &[u8], at: usize| -> Option<usize> { Some(u16::from_be_bytes([*bytes.get(at)?, *bytes.get(at + 1)?]) as usize) };
+    if *records.first()? != 22 {
+        return Some(false);
+    }
+    let hello = records.get(5..)?;
+    if *hello.first()? != 2 {
+        return Some(false);
+    }
+    let mut at = 4 + 2 + 32;
+    at += 1 + *hello.get(at)? as usize + 2 + 1;
+    let end = at + 2 + u16_at(hello, at)?;
+    at += 2;
+    while at + 4 <= end {
+        let (extension, length) = (u16_at(hello, at)?, u16_at(hello, at + 2)?);
+        if extension == 43 {
+            return Some(u16_at(hello, at + 4)? == 0x0304);
+        }
+        at += 4 + length;
+    }
+    Some(false)
+}
+
+async fn open_server(host: &str, port: u16) -> Result<Timed, Failure> {
+    let addresses: Vec<std::net::SocketAddr> = match tokio::net::lookup_host((host, port)).await {
         Ok(addresses) => addresses.collect(),
-        Err(_) => return Err(Failure::UnknownHost(url.host.clone())),
+        Err(_) => return Err(Failure::UnknownHost(host.to_string())),
     };
-    let address = addresses.iter().find(|address| address.is_ipv4()).or(addresses.first()).copied().ok_or_else(|| Failure::UnknownHost(host.clone()))?;
+    let address = addresses.iter().find(|address| address.is_ipv4()).or(addresses.first()).copied().ok_or_else(|| Failure::UnknownHost(host.to_string()))?;
     let stream = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(address)).await {
         Err(_) => return Err(Failure::ConnectTimedOut),
         Ok(Err(error)) if error.kind() == io::ErrorKind::ConnectionRefused => return Err(Failure::ConnectionRefused),
@@ -643,17 +842,52 @@ async fn connect(url: &JavaUrl) -> Result<Connection, Failure> {
         Ok(Ok(stream)) => stream,
     };
     let _ = stream.set_nodelay(true);
-    let recorder = Arc::new(Recorder::default());
-    let timed = Timed { inner: stream, sleep: None, recorder: recorder.clone() };
+    Ok(Timed { inner: stream, sleep: None, recorder: Arc::new(Recorder::default()) })
+}
+
+fn connect_request_bytes(url: &JavaUrl) -> Vec<u8> {
+    format!(
+        "CONNECT {} HTTP/1.1\r\nUser-Agent: Java/{}\r\nHost: {}\r\nAccept: */*\r\nProxy-Connection: keep-alive\r\n\r\n",
+        url.connect_request_uri(),
+        crate::util::java_runtime::java_version(),
+        url.host_header()
+    )
+    .into_bytes()
+}
+
+async fn do_tunneling(url: &JavaUrl, timed: Timed) -> Result<Timed, Failure> {
+    let mut reader = Reader { connection: Connection::Plain(timed), buffer: Vec::new(), start: 0 };
+    let _ = reader.connection.write_all(&connect_request_bytes(url)).await;
+    let head = read_head(&mut reader).await?;
+    if head.status != 200 {
+        return Err(Failure::UnableToTunnel(head.status_line));
+    }
+    let Connection::Plain(timed) = reader.connection else { unreachable!() };
+    Ok(timed)
+}
+
+async fn connect(url: &JavaUrl, proxy: Option<&JavaUrl>) -> Result<Connection, Failure> {
+    let host = url.host.clone();
+    let timed = match proxy {
+        None => open_server(&host, url.effective_port()).await?,
+        Some(proxy) => open_server(&proxy.host, proxy.effective_port()).await?,
+    };
     if !url.is_https() {
         return Ok(Connection::Plain(timed));
     }
+    let timed = match proxy {
+        None => timed,
+        Some(_) => do_tunneling(url, timed).await?,
+    };
+    let recorder = timed.recorder.clone();
     let server_name = match ServerName::try_from(host.clone()) {
         Ok(name) => name,
         Err(_) => return Err(Failure::UnknownHost(host)),
     };
+    recorder.capture_server_hello();
     match TlsConnector::from(tls_config()).connect(server_name, timed).await {
         Ok(stream) => {
+            recorder.take_server_hello();
             recorder.take_error();
             Ok(Connection::Tls(Box::new(stream)))
         }
@@ -768,6 +1002,7 @@ fn request_bytes(method: Method, url: &JavaUrl, body: Option<&[u8]>) -> Vec<u8> 
 }
 
 struct Head {
+    status_line: String,
     status: u16,
     content_type: Option<String>,
     content_length: Option<usize>,
@@ -784,10 +1019,9 @@ async fn read_head(reader: &mut Reader) -> Result<Head, Failure> {
     let version = parts.next().unwrap_or_default();
     let status = parts.next().and_then(|code| code.trim().parse::<u16>().ok());
     let (true, Some(status)) = (version.starts_with("HTTP/"), status) else { return Err(Failure::Other(format!("Invalid Http response"))) };
-    let mut head = Head { status, content_type: None, content_length: None, chunked: false, location: None };
-    let fields_phase = if matches!(reader.connection, Connection::Plain(_)) { Phase::HeaderFields } else { Phase::Header };
+    let mut head = Head { status_line: status_line.clone(), status, content_type: None, content_length: None, chunked: false, location: None };
     loop {
-        match reader.read_line().await.map_err(|error| header_failure(error, fields_phase))? {
+        match reader.read_line().await.map_err(|error| header_failure(error, Phase::HeaderFields))? {
             None => break,
             Some(line) if line.is_empty() => break,
             Some(line) => {
@@ -864,22 +1098,38 @@ async fn read_body(reader: &mut Reader, head: &Head) -> Result<Vec<u8>, Failure>
 
 pub async fn send(method: Method, url: &JavaUrl, body: Option<&[u8]>) -> Result<Response, Failure> {
     let (mut method, mut url, mut body) = (method, url.clone(), body);
+    let mut proxy = None;
+    let mut connection = connect(&url, None).await?;
     let mut redirects = 0;
-    while redirects < MAX_REDIRECTS {
-        let (response, location) = send_once(method, &url, body).await?;
+    loop {
+        let (response, location) = exchange(connection, method, &url, body, proxy.as_ref()).await?;
         let Some(location_url) = follow_redirect(&url, response.status, location) else { return Ok(response) };
-        if method == Method::Post && response.status != 307 {
-            method = Method::Get;
-            body = None;
-        }
-        url = location_url;
+        let route = if response.status == 305 {
+            proxy = Some(location_url);
+            Route::UseProxy
+        } else {
+            proxy = None;
+            let switched_to_get = method == Method::Post && response.status != 307;
+            if switched_to_get {
+                method = Method::Get;
+                body = None;
+            }
+            url = location_url;
+            Route::Redirect { switched_to_get }
+        };
+        connection = connect(&url, proxy.as_ref()).await.map_err(|failure| match failure {
+            Failure::UnableToTunnel(_) => failure,
+            failure => Failure::Connect(route, Box::new(failure)),
+        })?;
         redirects += 1;
+        if redirects >= MAX_REDIRECTS {
+            return Err(Failure::TooManyRedirects(redirects));
+        }
     }
-    Err(Failure::TooManyRedirects(redirects))
 }
 
 fn follow_redirect(url: &JavaUrl, status: u16, location: Option<String>) -> Option<JavaUrl> {
-    if !(300..=307).contains(&status) || status == 306 || status == 304 || status == 305 {
+    if !(300..=307).contains(&status) || status == 306 || status == 304 {
         return None;
     }
     let location = location?;
@@ -889,11 +1139,15 @@ fn follow_redirect(url: &JavaUrl, status: u16, location: Option<String>) -> Opti
     }
 }
 
-async fn send_once(method: Method, url: &JavaUrl, body: Option<&[u8]>) -> Result<(Response, Option<String>), Failure> {
+async fn exchange(connection: Connection, method: Method, url: &JavaUrl, body: Option<&[u8]>, proxy: Option<&JavaUrl>) -> Result<(Response, Option<String>), Failure> {
     let request = request_bytes(method, url, body);
+    let mut connection = Some(connection);
     let mut failed_once = false;
     loop {
-        let connection = connect(url).await?;
+        let connection = match connection.take() {
+            Some(connection) => connection,
+            None => connect(url, proxy).await?,
+        };
         let mut reader = Reader { connection, buffer: Vec::new(), start: 0 };
         let _ = reader.connection.write_all(&request).await;
         match read_head(&mut reader).await {
@@ -1035,13 +1289,75 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn redirect_loops_stop_after_twenty_requests() {
+    async fn redirect_loops_stop_after_twenty_requests_and_a_twenty_first_connection() {
         let (port, accepted) = serve_redirects().await;
         let url = JavaUrl::parse(&format!("http://127.0.0.1:{port}/loop")).unwrap();
         let failure = send(Method::Get, &url, None).await.unwrap_err();
         assert_eq!(failure, Failure::TooManyRedirects(20));
         assert_eq!(failure.cause(&url).description, "java.net.ProtocolException: Server redirected too many times (20)");
-        assert_eq!(accepted.load(Ordering::SeqCst), 20);
+        assert_eq!(accepted.load(Ordering::SeqCst), 21);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn use_proxy_responses_are_re_requested_through_the_named_proxy() {
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let seen = requests.clone();
+        let (proxy_port, _) = serve(move |stream| {
+            let seen = seen.clone();
+            tokio::spawn(async move {
+                let mut stream = stream;
+                let mut buffer = [0u8; 1024];
+                let count = stream.read(&mut buffer).await.unwrap_or(0);
+                seen.lock().unwrap().push(String::from_utf8_lossy(&buffer[..count]).into_owned());
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok").await;
+            });
+        })
+        .await;
+        let (port, _) = serve(move |stream| {
+            tokio::spawn(async move {
+                let mut stream = stream;
+                let mut buffer = [0u8; 1024];
+                let _ = stream.read(&mut buffer).await;
+                let _ = stream.write_all(format!("HTTP/1.1 305 Use Proxy\r\nLocation: http://127.0.0.1:{proxy_port}\r\nContent-Length: 0\r\n\r\n").as_bytes()).await;
+            });
+        })
+        .await;
+        let url = JavaUrl::parse(&format!("http://127.0.0.1:{port}/discovery")).unwrap();
+        let response = send(Method::Get, &url, None).await.unwrap();
+        assert_eq!((response.status, response.body.as_slice()), (200, b"ok".as_slice()));
+        let requests = requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("GET /discovery HTTP/1.1\r\nCache-Control: no-cache\r\nPragma: no-cache\r\nUser-Agent: Java/"));
+        assert!(requests[0].contains(&format!("\r\nHost: 127.0.0.1:{port}\r\n")));
+    }
+
+    #[test]
+    fn tunnels_send_the_connect_request_of_http_url_connection() {
+        let request = String::from_utf8(connect_request_bytes(&JavaUrl::parse("https://example.test/x").unwrap())).unwrap();
+        assert_eq!(
+            request,
+            format!("CONNECT example.test:443 HTTP/1.1\r\nUser-Agent: Java/{}\r\nHost: example.test\r\nAccept: */*\r\nProxy-Connection: keep-alive\r\n\r\n", crate::util::java_runtime::java_version())
+        );
+    }
+
+    #[test]
+    fn the_server_hello_tells_tls_1_3_from_tls_1_2() {
+        let hello = |extensions: &[u8]| -> Vec<u8> {
+            let mut body = vec![3, 3];
+            body.extend([0u8; 32]);
+            body.extend([0, 0x13, 0x01, 0]);
+            body.extend((extensions.len() as u16).to_be_bytes());
+            body.extend(extensions);
+            let mut handshake = vec![2, 0, 0, body.len() as u8];
+            handshake.extend(body);
+            let mut record = vec![22, 3, 3];
+            record.extend((handshake.len() as u16).to_be_bytes());
+            record.extend(handshake);
+            record
+        };
+        assert_eq!(server_hello_selects_tls13(&hello(&[0, 0x33, 0, 2, 0, 0x1d, 0, 0x2b, 0, 2, 3, 4])), Some(true));
+        assert_eq!(server_hello_selects_tls13(&hello(&[0xff, 0x01, 0, 1, 0])), Some(false));
+        assert_eq!(server_hello_selects_tls13(&[21, 3, 3, 0, 2, 2, 40]), Some(false));
     }
 
     #[test]

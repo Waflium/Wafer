@@ -1,4 +1,4 @@
-com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://127.0.0.1:26105/d due to Premature EOF
+com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://127.0.0.1:28453/d due to Premature EOF
 	at com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:151)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.getWithEtag(MinecraftClient.java:81)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.get(MinecraftClient.java:65)
@@ -14,7 +14,7 @@ Caused by: java.io.IOException: Premature EOF
 	at java.base/sun.net.www.MeteredStream.justRead(MeteredStream.java:58)
 	at java.base/sun.net.www.MeteredStream.read(MeteredStream.java:135)
 	at java.base/java.io.FilterInputStream.read(FilterInputStream.java:119)
-	at java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3322)
+	at java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3308)
 	at java.base/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)
 	at java.base/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)
 	at java.base/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)

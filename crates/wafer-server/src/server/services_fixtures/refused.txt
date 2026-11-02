@@ -1,4 +1,4 @@
-com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from http://127.0.0.1:26099/d due to Connection refused: getsockopt
+com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from http://127.0.0.1:28455/d due to Connection refused: getsockopt
 	at com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:151)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.getWithEtag(MinecraftClient.java:81)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.get(MinecraftClient.java:65)

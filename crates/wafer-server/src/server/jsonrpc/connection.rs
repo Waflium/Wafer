@@ -30,7 +30,6 @@ pub struct Connection {
     server: Arc<ManagementServer>,
     client: ClientInfo,
     thread: String,
-    tls: bool,
 }
 
 enum Handshake {
@@ -64,10 +63,23 @@ const NETTY_READ_FRAMES: [&str; 18] = [
     "java.base/java.lang.Thread.run(Thread.java:1474)",
 ];
 
-fn java_read_exception(error: &std::io::Error, tls: bool) -> String {
-    if error.kind() == std::io::ErrorKind::ConnectionReset && !tls {
-        let frames: String = NETTY_READ_FRAMES.iter().map(|frame| format!("\n\tat {frame}")).collect();
-        return format!("java.net.SocketException: Connection reset{frames}");
+const SOCKET_DISPATCHER_READ_FRAMES: [&str; 6] = [
+    "java.base/sun.nio.ch.SocketDispatcher.read0(Native Method)",
+    "java.base/sun.nio.ch.SocketDispatcher.read(SocketDispatcher.java:47)",
+    "java.base/sun.nio.ch.IOUtil.readIntoNativeBuffer(IOUtil.java:341)",
+    "java.base/sun.nio.ch.IOUtil.read(IOUtil.java:295)",
+    "java.base/sun.nio.ch.IOUtil.read(IOUtil.java:270)",
+    "java.base/sun.nio.ch.SocketChannelImpl.implRead(SocketChannelImpl.java:422)",
+];
+
+fn java_read_exception(error: &std::io::Error) -> String {
+    let frames = |frames: &[&str]| -> String { frames.iter().map(|frame| format!("\n\tat {frame}")).collect() };
+    if error.kind() == std::io::ErrorKind::ConnectionReset {
+        return format!("java.net.SocketException: Connection reset{}", frames(&NETTY_READ_FRAMES));
+    }
+    if error.raw_os_error().is_some() {
+        let message = crate::util::java_nio::os_message(error);
+        return format!("java.io.IOException: {}{}{}", message.trim_end().trim_end_matches('.'), frames(&SOCKET_DISPATCHER_READ_FRAMES), frames(&NETTY_READ_FRAMES[2..]));
     }
     java_io_exception(error)
 }
@@ -82,7 +94,7 @@ fn java_io_exception(error: &std::io::Error) -> String {
 
 impl Connection {
     pub fn new(server: Arc<ManagementServer>, connection_id: i32, thread: String) -> Connection {
-        Connection { server, client: ClientInfo { connection_id }, thread, tls: false }
+        Connection { server, client: ClientInfo { connection_id }, thread }
     }
 
     fn log(&self, message: std::fmt::Arguments) {
@@ -111,8 +123,7 @@ impl Connection {
         self.log(format_args!("Management connection closed for {address}"));
     }
 
-    pub async fn run_tls<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(mut self, stream: S, remote: SocketAddr, acceptor: tokio_rustls::TlsAcceptor) {
-        self.tls = true;
+    pub async fn run_tls<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(self, stream: S, remote: SocketAddr, acceptor: tokio_rustls::TlsAcceptor) {
         let address = loggable_address(remote, true);
         self.log(format_args!("Management connection opened for {address}"));
         match acceptor.accept(stream).await {
@@ -121,6 +132,8 @@ impl Connection {
                     self.exception_caught(&exception);
                 }
             }
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {}
+            Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset || e.raw_os_error().is_some() => self.exception_caught(&java_read_exception(&e)),
             Err(e) => {
                 warn!(thread: &self.thread, "{TAIL_EXCEPTION}\nio.netty.handler.codec.DecoderException: javax.net.ssl.SSLHandshakeException: {e}");
             }
@@ -151,8 +164,9 @@ impl Connection {
                         codec.feed(&chunk[..n]);
                         continue;
                     }
+                    Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return self.close(&mut codec),
                     Err(e) => {
-                        self.exception_caught(&java_read_exception(&e, self.tls));
+                        self.exception_caught(&java_read_exception(&e));
                         return self.close(&mut codec);
                     }
                 },
@@ -246,12 +260,12 @@ impl Connection {
     ) -> Option<Closed> {
         match message {
             Some(Ok(Message::Text(text))) => match self.handle_text(text.as_str()).await {
-                Some(Ok(response)) => websocket.send(Message::text(response)).await.err().map(|e| Closed::Exception(format!("{e}"))),
+                Some(Ok(response)) => websocket.send(Message::text(response)).await.is_err().then_some(Closed::Cleanly),
                 Some(Err(exception)) => Some(Closed::Exception(exception)),
                 None => None,
             },
             Some(Ok(_)) => None,
-            Some(Err(tokio_tungstenite::tungstenite::Error::Io(e))) => Some(Closed::Exception(java_read_exception(&e, self.tls))),
+            Some(Err(tokio_tungstenite::tungstenite::Error::Io(e))) if e.kind() != std::io::ErrorKind::UnexpectedEof => Some(Closed::Exception(java_read_exception(&e))),
             Some(Err(_)) | None => Some(Closed::Cleanly),
         }
     }
@@ -296,7 +310,8 @@ impl Connection {
                         buffer.extend_from_slice(&chunk[..n]);
                         drained = n < chunk.len();
                     }
-                    Err(e) => return Closed::Exception(java_read_exception(&e, self.tls)),
+                    Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Closed::Cleanly,
+                    Err(e) => return Closed::Exception(java_read_exception(&e)),
                 },
                 notification = notifications.recv() => match notification {
                     Some(text) => {
@@ -592,4 +607,19 @@ async fn write_hixie<S: AsyncWrite + Unpin>(stream: &mut S, text: &str) -> std::
     frame.extend_from_slice(text.as_bytes());
     frame.push(0xFF);
     stream.write_all(&frame).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_failures_print_the_netty_read_frames() {
+        let reset = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
+        assert_eq!(java_read_exception(&reset), include_str!("connection_fixtures/reset_read.txt").trim_end());
+        let aborted = std::io::Error::from_raw_os_error(10053);
+        let (_, frames) = include_str!("connection_fixtures/aborted_read.txt").trim_end().split_once('\n').unwrap();
+        let message = crate::util::java_nio::os_message(&aborted);
+        assert_eq!(java_read_exception(&aborted), format!("java.io.IOException: {}\n{frames}", message.trim_end().trim_end_matches('.')));
+    }
 }

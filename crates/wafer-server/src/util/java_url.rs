@@ -151,8 +151,16 @@ impl JavaUrl {
     }
 
     pub fn host_header(&self) -> String {
-        let host = if self.host.contains(':') && !self.host.starts_with('[') { format!("[{}]", self.host) } else { self.host.clone() };
+        let host = self.bracketed_host();
         if self.port < 0 || self.port as u16 == self.default_port() { host } else { format!("{host}:{}", self.port) }
+    }
+
+    pub fn connect_request_uri(&self) -> String {
+        format!("{}:{}", self.bracketed_host(), self.effective_port())
+    }
+
+    fn bracketed_host(&self) -> String {
+        if self.host.contains(':') && !self.host.starts_with('[') { format!("[{}]", self.host) } else { self.host.clone() }
     }
 
     pub fn resolve(&self, spec: &str) -> JavaUrl {

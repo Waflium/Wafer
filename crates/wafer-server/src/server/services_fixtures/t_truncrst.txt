@@ -1,4 +1,4 @@
-com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://127.0.0.1:26107/d due to Connection reset
+com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://127.0.0.1:28450/d due to Connection reset
 	at com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:151)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.getWithEtag(MinecraftClient.java:81)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.get(MinecraftClient.java:65)
@@ -26,7 +26,7 @@ Caused by: java.net.SocketException: Connection reset
 	at java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:388)
 	at java.base/sun.net.www.MeteredStream.read(MeteredStream.java:134)
 	at java.base/java.io.FilterInputStream.read(FilterInputStream.java:119)
-	at java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3322)
+	at java.base/sun.net.www.protocol.http.HttpURLConnection$HttpInputStream.read(HttpURLConnection.java:3308)
 	at java.base/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:279)
 	at java.base/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:322)
 	at java.base/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:186)

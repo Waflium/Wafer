@@ -1,4 +1,4 @@
-com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://127.0.0.1:26102/d due to Unexpected end of file from server
+com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://127.0.0.1:28451/d due to Unexpected end of file from server
 	at com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:151)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.getWithEtag(MinecraftClient.java:81)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.get(MinecraftClient.java:65)

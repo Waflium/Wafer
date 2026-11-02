@@ -1,4 +1,4 @@
-com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://127.0.0.1:26101/d due to Read timed out
+com.mojang.authlib.exceptions.MinecraftClientException: Failed to read from https://127.0.0.1:28450/d due to Read timed out
 	at com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:151)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.getWithEtag(MinecraftClient.java:81)
 	at com.mojang.authlib.minecraft.client.MinecraftClient.get(MinecraftClient.java:65)

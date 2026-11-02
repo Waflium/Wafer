@@ -866,7 +866,7 @@ mod tests {
 
     #[test]
     fn io_failures_reproduce_the_bundled_server_traces() {
-        use crate::util::java_http_url_connection::{Handshake, Phase};
+        use crate::util::java_http_url_connection::{Handshake, Phase, Route};
         macro_rules! fixture {
             ($name:literal) => {
                 include_str!(concat!("services_fixtures/", $name, ".txt"))
@@ -880,12 +880,16 @@ mod tests {
             (fixture!("tls_rst"), Failure::Handshake(Handshake::ResetOnWrite)),
             (fixture!("tls_garbage"), Failure::Handshake(Handshake::Unrecognized)),
             (fixture!("t_alert"), Failure::Handshake(Handshake::Alert("handshake_failure".to_string()))),
-            (fixture!("pkix"), Failure::Handshake(Handshake::CertificateUnknown)),
+            (fixture!("pkix"), Failure::Handshake(Handshake::CertificateUnknown { tls13: true })),
+            (fixture!("pkix_tls12"), Failure::Handshake(Handshake::CertificateUnknown { tls13: false })),
             (fixture!("t_rsthello"), Failure::Handshake(Handshake::ResetOnRead)),
             (fixture!("http_silent"), Failure::ReadTimedOut(header)),
             (fixture!("http_close"), Failure::UnexpectedEof),
             (fixture!("http_rst"), Failure::ConnectionReset(header)),
             (fixture!("http_partial_rst"), Failure::ConnectionReset(Phase::HeaderFields)),
+            (fixture!("http_partial_silent"), Failure::ReadTimedOut(Phase::HeaderFields)),
+            (fixture!("https_partial_rst"), Failure::ConnectionReset(Phase::HeaderFields)),
+            (fixture!("https_partial_silent"), Failure::ReadTimedOut(Phase::HeaderFields)),
             (fixture!("http_trunc"), Failure::PrematureEof { chunked: false, status: 200 }),
             (fixture!("http_trunc_chunked"), Failure::PrematureEof { chunked: true, status: 200 }),
             (fixture!("http_trunc_rst"), Failure::ConnectionReset(body)),
@@ -902,8 +906,17 @@ mod tests {
             (fixture!("blackhole"), Failure::ConnectTimedOut),
             (fixture!("blackhole2"), Failure::ConnectTimedOut),
         ];
+        let through = |route: Route, failure: Failure| Failure::Connect(route, Box::new(failure));
+        let redirect = Route::Redirect { switched_to_get: false };
+        cases.push((fixture!("http_305_unknownhost"), through(Route::UseProxy, Failure::UnknownHost("nonexistent.invalid".to_string()))));
+        cases.push((fixture!("https_305_tunnel_404"), Failure::UnableToTunnel("HTTP/1.1 404 Not Found".to_string())));
+        cases.push((fixture!("https_302_tls_silent"), through(redirect, Failure::Handshake(Handshake::ReadTimedOut))));
         if cfg!(windows) {
             cases.push((fixture!("refused"), Failure::ConnectionRefused));
+            cases.push((fixture!("http_305_refused"), through(Route::UseProxy, Failure::ConnectionRefused)));
+            cases.push((fixture!("https_305_refused"), through(Route::UseProxy, Failure::ConnectionRefused)));
+            cases.push((fixture!("http_302_refused"), through(redirect, Failure::ConnectionRefused)));
+            cases.push((fixture!("https_302_refused"), through(redirect, Failure::ConnectionRefused)));
         }
         for (fixture, failure) in cases {
             let (actual, expected) = discovery_failure_trace(fixture, failure);
