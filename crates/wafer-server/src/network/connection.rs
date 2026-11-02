@@ -192,6 +192,7 @@ impl Outbound {
     }
 }
 
+const EVENT_LOOP_WAKEUP: std::time::Duration = std::time::Duration::from_millis(2);
 const FAULTED_PACKET: [u8; 5] = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
 const FALLBACK_MARKER: [u8; 5] = [0xFF, 0xFF, 0xFF, 0xFF, 0x0E];
 
@@ -376,6 +377,7 @@ pub fn spawn_io(
                 let packet = split_fallback(&item).1;
                 if let Some((id, encoding_fault)) = encoding_fault(packet) {
                     let encoder_exception = encoder_exception(id, encoding_fault, bundle_path(bundled));
+                    tokio::time::sleep(EVENT_LOOP_WAKEUP).await;
                     error!(thread: &write_thread, "Error sending packet {}\n{}", encoder_exception.packet_type, encoder_exception.wrapper.print_stack_trace().trim_end());
                     if is_skippable(id) {
                         continue;
