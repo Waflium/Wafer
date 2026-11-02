@@ -237,6 +237,9 @@ mod tests {
         let (first, release_first) = blocking_task(&names);
         let (second, release_second) = blocking_task(&names);
         pool.execute(first);
+        while names.lock().unwrap().is_empty() {
+            std::thread::yield_now();
+        }
         pool.execute(second);
         while names.lock().unwrap().len() < 2 {
             std::thread::yield_now();

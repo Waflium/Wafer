@@ -64,6 +64,17 @@ fn the_join_spawn_search_finishes_through_server_tasks() {
 }
 
 #[test]
+fn a_closed_join_spawn_search_is_dropped_once_its_last_candidate_ran() {
+    let mut server = testing::server_with(testing::flat_config());
+    let (reply, _started) = tokio::sync::oneshot::channel();
+    server.start_prepare_spawn(UUID, "Steve", StartedBy::SelectKnownPacks, reply);
+    assert_eq!(server.spawn_finders.len(), 1);
+    server.close_prepare_spawn(UUID);
+    server.managed_block(|server| server.spawn_finders.is_empty());
+    assert!(server.prepare_spawn_tasks.is_empty());
+}
+
+#[test]
 fn a_cancelled_spawn_search_never_finishes_with_a_position() {
     use crate::server::level::player_spawn_finder::Finished;
     let mut server = testing::server_with(testing::flat_config());

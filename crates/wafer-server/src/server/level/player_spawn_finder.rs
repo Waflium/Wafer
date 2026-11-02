@@ -152,6 +152,10 @@ impl PlayerSpawnFinder {
     pub fn cancel(&mut self) {
         self.finished.get_or_insert(Finished::Cancelled);
     }
+
+    fn abandoned(&self) -> bool {
+        matches!(self.finished, Some(Finished::Cancelled)) && self.pending.is_none()
+    }
 }
 
 fn callback_frames(callback: &Callback) -> Vec<&'static str> {
@@ -322,6 +326,9 @@ impl Server {
                     finder.failed_inline = matches!(candidate.callback, Callback::Inline(_));
                 }
             }
+        }
+        if self.spawn_finders.get(&id).is_some_and(PlayerSpawnFinder::abandoned) {
+            self.spawn_finders.remove(&id);
         }
     }
 }

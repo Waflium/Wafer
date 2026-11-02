@@ -168,8 +168,13 @@ impl Server {
         let (closed, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.prepare_spawn_tasks).into_iter().partition(|task| task.uuid == uuid);
         self.prepare_spawn_tasks = kept;
         for task in closed {
-            if let Some(finder) = task.spawn_finder.and_then(|finder| self.spawn_finders.get_mut(&finder)) {
-                finder.cancel();
+            let Some(id) = task.spawn_finder else { continue };
+            match self.spawn_finders.get_mut(&id) {
+                Some(finder) if finder.finished().is_none() => finder.cancel(),
+                Some(_) => {
+                    self.spawn_finders.remove(&id);
+                }
+                None => {}
             }
         }
     }
