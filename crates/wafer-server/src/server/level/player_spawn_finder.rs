@@ -332,7 +332,8 @@ impl ServerLevel {
     fn no_collision_no_liquid(&self, pos: BlockPos) -> bool {
         let (x, y, z) = (pos.x as f64 + 0.5, pos.y as f64, pos.z as f64 + 0.5);
         let half_width = PLAYER_WIDTH / 2.0;
-        self.no_block_and_liquid_collision(&AABB::new(x - half_width, y, z - half_width, x + half_width, y + PLAYER_HEIGHT, z + half_width))
+        let aabb = AABB::new(x - half_width, y, z - half_width, x + half_width, y + PLAYER_HEIGHT, z + half_width);
+        self.no_block_and_liquid_collision(&aabb) && self.entity_collisions(None, &aabb).is_empty()
     }
 }
 

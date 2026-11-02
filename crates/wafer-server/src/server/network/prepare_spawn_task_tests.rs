@@ -73,6 +73,22 @@ fn a_cancelled_spawn_search_never_finishes_with_a_position() {
     assert!(matches!(server.spawn_finders[&id].finished(), Some(Finished::Cancelled)));
 }
 
+#[test]
+fn spawn_candidates_inside_a_boat_are_rejected() {
+    use crate::server::level::player_spawn_finder::Finished;
+    let mut server = testing::server();
+    server.levels[0].chunks.chunk(ChunkPos::new(0, 0));
+    run(&mut server, "forceload add 0 0");
+    server.levels[0].finish_chunk_work();
+    server.tick();
+    run(&mut server, "gamerule respawn_radius 0");
+    run(&mut server, "summon oak_boat 8.5 -60 8.5");
+    let id = server.find_spawn(0, BlockPos::new(8, -60, 8));
+    server.managed_block(|server| server.spawn_finders[&id].finished().is_some());
+    let Some(Finished::Spawn(position)) = server.spawn_finders[&id].finished() else { panic!("the spawn search should succeed") };
+    assert_eq!((position.x, position.y, position.z), (8.5, -59.0, 8.5));
+}
+
 fn run(server: &mut crate::server::Server, command: &str) {
     let source = CommandSourceStack::server(server);
     perform_prefixed_command(server, &source, command);
