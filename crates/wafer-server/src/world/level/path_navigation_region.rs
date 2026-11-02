@@ -30,8 +30,12 @@ impl<'a> PathNavigationRegion<'a> {
     }
 
     pub fn get_block_state(&self, pos: BlockPos) -> BlockState {
-        if self.level.chunks.is_outside_build_height(pos.y) {
-            return if self.snapshot { blocks::AIR.default_state() } else { blocks::VOID_AIR.default_state() };
+        if self.snapshot {
+            if self.level.chunks.is_outside_build_height(pos.y) {
+                return blocks::AIR.default_state();
+            }
+        } else if !self.level.is_in_valid_bounds(pos) {
+            return blocks::VOID_AIR.default_state();
         }
         if !self.snapshot {
             self.level.chunks.count_get_chunk(pos.chunk());

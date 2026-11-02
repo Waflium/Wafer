@@ -4010,7 +4010,7 @@ pub fn check_spawn_obstruction(mob: &Mob, level: &mut (impl ServerLevelAccessor 
         MobKind::Axolotl(_) => axolotl::check_spawn_obstruction(mob, level),
         MobKind::Nautilus(_) | MobKind::ZombieNautilus(_) => super::animal::nautilus::abstract_nautilus::check_spawn_obstruction(mob, level),
         MobKind::Warden(_) => {
-            !level.contains_any_liquid(&bounding_box) && level.is_unobstructed(&bounding_box) && level.no_collision(&super::monster::warden::warden::DIMENSIONS.make_bounding_box(mob.entity.position()))
+            !level.contains_any_liquid(&bounding_box) && level.is_unobstructed(&bounding_box) && level.no_collision_for_detached(&mob.entity, &super::monster::warden::warden::DIMENSIONS.make_bounding_box(mob.entity.position()))
         }
         _ => !level.contains_any_liquid(&bounding_box) && level.is_unobstructed(&bounding_box),
     }

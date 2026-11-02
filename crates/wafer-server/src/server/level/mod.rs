@@ -2542,9 +2542,10 @@ impl ServerLevel {
 
 impl BlockGetter for ServerLevel {
     fn block_state(&mut self, pos: BlockPos) -> BlockState {
-        if !self.chunks.is_outside_build_height(pos.y) {
-            self.load_chunk(pos.chunk());
+        if !self.is_in_valid_bounds(pos) {
+            return blocks::VOID_AIR.default_state();
         }
+        self.load_chunk(pos.chunk());
         self.chunks.loaded_block_state(pos)
     }
 
@@ -2775,7 +2776,11 @@ impl crate::world::level::server_level_accessor::ServerLevelAccessor for ServerL
     }
 
     fn no_collision(&mut self, aabb: &AABB) -> bool {
-        ServerLevel::no_collision(self, aabb) && self.entity_collisions(None, aabb).is_empty()
+        ServerLevel::no_collision(self, aabb)
+    }
+
+    fn no_collision_for_detached(&mut self, entity: &crate::world::entity::Entity, aabb: &AABB) -> bool {
+        ServerLevel::no_collision_for_detached(self, entity, aabb)
     }
 
     fn is_unobstructed(&mut self, aabb: &AABB) -> bool {

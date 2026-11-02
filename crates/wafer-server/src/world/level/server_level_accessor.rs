@@ -38,6 +38,8 @@ pub trait ServerLevelAccessor: LevelAccessor {
 
     fn no_collision(&mut self, aabb: &AABB) -> bool;
 
+    fn no_collision_for_detached(&mut self, entity: &crate::world::entity::Entity, aabb: &AABB) -> bool;
+
     fn is_unobstructed(&mut self, aabb: &AABB) -> bool;
 
     fn add_fresh_entity(&mut self, entity: LevelEntity) -> bool;

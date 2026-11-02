@@ -219,6 +219,13 @@ impl ServerLevel {
             && self.no_border_collision(entity, box_)
     }
 
+    pub fn no_collision_for_detached(&self, entity: &crate::world::entity::Entity, box_: &AABB) -> bool {
+        let border = &self.world_border;
+        self.for_each_block_collision(box_, &CollisionContext::of_detached(entity), false, false, |_, c| c.shape.is_empty())
+            && self.entity_collisions(None, box_).is_empty()
+            && (!border.is_inside_close_to_border(entity, box_) || !join_is_not_empty(border.get_collision_shape(), &VoxelShape::from_boxes(&[*box_]), BooleanOp::And))
+    }
+
     pub fn no_collision_for_new(&self, entity: &crate::world::entity::LevelEntity, box_: &AABB) -> bool {
         let no_block_collision = self.for_each_block_collision(box_, &CollisionContext::EMPTY, false, false, |_, c| c.shape.is_empty());
         let no_entity_collision = box_.size() < 1.0e-7

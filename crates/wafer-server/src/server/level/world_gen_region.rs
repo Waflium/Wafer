@@ -461,6 +461,10 @@ impl ServerLevelAccessor for WorldGenRegion<'_> {
         for_each_block_collision(|pos| self.chunk_for_collisions(pos), aabb, &CollisionContext::EMPTY, false, false, |_, c| c.shape.is_empty())
     }
 
+    fn no_collision_for_detached(&mut self, entity: &crate::world::entity::Entity, aabb: &AABB) -> bool {
+        for_each_block_collision(|pos| self.chunk_for_collisions(pos), aabb, &CollisionContext::of_detached(entity), false, false, |_, c| c.shape.is_empty())
+    }
+
     fn is_unobstructed(&mut self, _aabb: &AABB) -> bool {
         true
     }
