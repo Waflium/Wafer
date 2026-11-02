@@ -6,7 +6,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, oneshot, Notify};
 use tokio::task::{AbortHandle, JoinHandle};
 
-use super::{java_inet_address, start_generic_thread};
+use super::{GenericThread, GenericThreadKind, java_inet_address, start_generic_thread};
 use crate::server::Event;
 
 const MAX_PACKET_SIZE: usize = 1460;
@@ -25,6 +25,7 @@ struct RconClientHandle {
 
 pub struct RconThread {
     listener: AbortHandle,
+    listener_thread: Arc<GenericThread>,
     clients: Arc<Mutex<Vec<RconClientHandle>>>,
     runtime: tokio::runtime::Handle,
 }
@@ -47,14 +48,15 @@ impl RconThread {
                 return None;
             }
         };
-        let listener_name = start_generic_thread(SERVER_THREAD, "RCON Listener");
+        let listener_thread = start_generic_thread(SERVER_THREAD, "RCON Listener", GenericThreadKind::RconListener);
         let clients: Arc<Mutex<Vec<RconClientHandle>>> = Arc::default();
         let password = password.to_string();
         let tracked = clients.clone();
+        let listener_name = listener_thread.name.clone();
         let listener = runtime.spawn(async move {
             while let Ok((stream, address)) = socket.accept().await {
                 let name = format!("RCON Client {}", java_inet_address(address.ip()));
-                let thread = start_generic_thread(&listener_name, &name);
+                let thread = start_generic_thread(&listener_name, &name, GenericThreadKind::RconClient);
                 let shutdown = Arc::new(Notify::new());
                 let task = tokio::spawn(run_client(stream, password.clone(), events.clone(), name.clone(), thread, shutdown.clone()));
                 let mut clients = tracked.lock().unwrap();
@@ -63,11 +65,12 @@ impl RconThread {
             }
         });
         info!("RCON running on {server_ip}:{port}");
-        Some(RconThread { listener: listener.abort_handle(), clients, runtime: runtime.clone() })
+        Some(RconThread { listener: listener.abort_handle(), listener_thread, clients, runtime: runtime.clone() })
     }
 
     pub fn stop(&self) {
         self.listener.abort();
+        self.listener_thread.finish();
         info!("Thread RCON Listener stopped");
         for client in self.clients.lock().unwrap().drain(..) {
             if !client.task.is_finished() {
@@ -79,16 +82,17 @@ impl RconThread {
     }
 }
 
-async fn run_client(mut stream: TcpStream, password: String, events: mpsc::UnboundedSender<Event>, name: String, thread: String, shutdown: Arc<Notify>) {
+async fn run_client(mut stream: TcpStream, password: String, events: mpsc::UnboundedSender<Event>, name: String, thread: Arc<GenericThread>, shutdown: Arc<Notify>) {
     tokio::select! {
-        _ = handle_client(&mut stream, password, events) => {}
+        _ = handle_client(&mut stream, password, events, &thread) => {}
         _ = shutdown.notified() => {}
     }
     let _ = stream.shutdown().await;
-    info!(thread: &thread, "Thread {name} shutting down");
+    info!(thread: &thread.name, "Thread {name} shutting down");
+    thread.finish();
 }
 
-async fn handle_client(stream: &mut TcpStream, password: String, events: mpsc::UnboundedSender<Event>) {
+async fn handle_client(stream: &mut TcpStream, password: String, events: mpsc::UnboundedSender<Event>, thread: &GenericThread) {
     let mut authed = false;
     let mut buf = [0u8; MAX_PACKET_SIZE];
     loop {
@@ -110,10 +114,13 @@ async fn handle_client(stream: &mut TcpStream, password: String, events: mpsc::U
                 if authed {
                     let command = string_from_byte_array(&buf, 12, read);
                     let (reply, response) = oneshot::channel();
+                    thread.set_running_command(true);
                     if events.send(Event::Rcon { command: command.clone(), reply }).is_err() {
+                        thread.set_running_command(false);
                         break;
                     }
                     let response = response.await.unwrap_or_else(|_| format!("Error executing: {command} (null)"));
+                    thread.set_running_command(false);
                     send_cmd_response(stream, request_id, &response).await
                 } else {
                     send(stream, SERVERDATA_AUTH_FAILURE, SERVERDATA_AUTH_RESPONSE, "").await

@@ -1,4 +1,5 @@
 use super::command_origin::CommandOrigin;
+use super::commands::{clone_commands, fill_biome_command, fill_command, force_load_command, place_command, set_block_command};
 
 pub const COMMAND_EXECUTION: [&str; 7] = [
     "com.mojang.brigadier.context.ContextChain.runExecutable(ContextChain.java:73)",
@@ -109,6 +110,53 @@ pub const PREPARE_LEVELS: [&str; 4] = [
     "net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:221)",
     "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:720)",
 ];
+
+const LAMBDA_PROXIES: &[(&str, &str)] = &[
+    ("net.minecraft.commands.execution.UnboundEntryAction.lambda$bind$0(UnboundEntryAction.java:8)", "net.minecraft.commands.execution.UnboundEntryAction$$Lambda/0x0000000011c33818.execute(Unknown Source)"),
+    ("net.minecraft.server.dedicated.DedicatedServer.lambda$runCommand$0(DedicatedServer.java:698)", "net.minecraft.server.dedicated.DedicatedServer$$Lambda/0x00000000acf649d0.run(Unknown Source)"),
+    ("net.minecraft.util.thread.BlockableEventLoop.lambda$submitAsync$0(BlockableEventLoop.java:75)", "net.minecraft.util.thread.BlockableEventLoop$$Lambda/0x00000000acf64c00.get(Unknown Source)"),
+    (fill_command::REPLACE_LAMBDA[0], "net.minecraft.server.commands.FillCommand$$Lambda/0x0000000032d62b30.run(Unknown Source)"),
+    (fill_command::OUTLINE_LAMBDA[0], "net.minecraft.server.commands.FillCommand$$Lambda/0x0000000032d62d60.run(Unknown Source)"),
+    (fill_command::HOLLOW_LAMBDA[0], "net.minecraft.server.commands.FillCommand$$Lambda/0x0000000032d62f90.run(Unknown Source)"),
+    (fill_command::DESTROY_LAMBDA[0], "net.minecraft.server.commands.FillCommand$$Lambda/0x0000000032d631c0.run(Unknown Source)"),
+    (fill_command::STRICT_LAMBDA[0], "net.minecraft.server.commands.FillCommand$$Lambda/0x0000000032d633f0.run(Unknown Source)"),
+    (fill_command::REPLACE_ALL_LAMBDA[0], "net.minecraft.server.commands.FillCommand$$Lambda/0x0000000032d63620.run(Unknown Source)"),
+    (fill_command::KEEP_LAMBDA[0], "net.minecraft.server.commands.FillCommand$$Lambda/0x0000000032d61228.run(Unknown Source)"),
+    (clone_commands::MODE_SUFFIX_LAMBDA[0], "net.minecraft.server.commands.CloneCommands$$Lambda/0x0000000032d4dae8.run(Unknown Source)"),
+    (clone_commands::FILTER_LAMBDA[0], "net.minecraft.server.commands.CloneCommands$$Lambda/0x0000000032d4df40.run(Unknown Source)"),
+    (clone_commands::FORCE_LAMBDA[0], "net.minecraft.server.commands.CloneCommands$$Lambda/0x0000000032d4e170.run(Unknown Source)"),
+    (clone_commands::MOVE_LAMBDA[0], "net.minecraft.server.commands.CloneCommands$$Lambda/0x0000000032d4e3a0.run(Unknown Source)"),
+    (clone_commands::NORMAL_LAMBDA[0], "net.minecraft.server.commands.CloneCommands$$Lambda/0x0000000032d4e5d0.run(Unknown Source)"),
+    (fill_biome_command::FILL_LAMBDA[0], "net.minecraft.server.commands.FillBiomeCommand$$Lambda/0x0000000080d7a290.run(Unknown Source)"),
+    (fill_biome_command::FILL_REPLACE_LAMBDA[0], "net.minecraft.server.commands.FillBiomeCommand$$Lambda/0x0000000080d7a4b8.run(Unknown Source)"),
+    (set_block_command::REPLACE_LAMBDA[0], "net.minecraft.server.commands.SetBlockCommand$$Lambda/0x0000000032d93ca0.run(Unknown Source)"),
+    (set_block_command::DESTROY_LAMBDA[0], "net.minecraft.server.commands.SetBlockCommand$$Lambda/0x0000000032d93ec8.run(Unknown Source)"),
+    (set_block_command::KEEP_LAMBDA[0], "net.minecraft.server.commands.SetBlockCommand$$Lambda/0x0000000032d940f0.run(Unknown Source)"),
+    (set_block_command::REPLACE_LITERAL_LAMBDA[0], "net.minecraft.server.commands.SetBlockCommand$$Lambda/0x0000000032d94320.run(Unknown Source)"),
+    (set_block_command::STRICT_LAMBDA[0], "net.minecraft.server.commands.SetBlockCommand$$Lambda/0x0000000032d94550.run(Unknown Source)"),
+    (place_command::FEATURE_HERE_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7ea50.run(Unknown Source)"),
+    (place_command::FEATURE_AT_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7ec78.run(Unknown Source)"),
+    (place_command::JIGSAW_HERE_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7ef10.run(Unknown Source)"),
+    (place_command::JIGSAW_AT_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7f1a8.run(Unknown Source)"),
+    (place_command::STRUCTURE_HERE_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7f440.run(Unknown Source)"),
+    (place_command::STRUCTURE_AT_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7f6d8.run(Unknown Source)"),
+    (place_command::TEMPLATE_HERE_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7f970.run(Unknown Source)"),
+    (place_command::TEMPLATE_AT_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7fc08.run(Unknown Source)"),
+    (place_command::TEMPLATE_ROTATION_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d7fea0.run(Unknown Source)"),
+    (place_command::TEMPLATE_MIRROR_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d80138.run(Unknown Source)"),
+    (place_command::TEMPLATE_INTEGRITY_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d803d0.run(Unknown Source)"),
+    (place_command::TEMPLATE_SEED_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d80678.run(Unknown Source)"),
+    (place_command::TEMPLATE_STRICT_LAMBDA[0], "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032d808a8.run(Unknown Source)"),
+    (place_command::PLACE_STRUCTURE_CHUNK_LAMBDA, "net.minecraft.server.commands.PlaceCommand$$Lambda/0x0000000032fc1128.accept(Unknown Source)"),
+    (force_load_command::ADD_LAMBDA[0], "net.minecraft.server.commands.ForceLoadCommand$$Lambda/0x0000000080d7b7f8.run(Unknown Source)"),
+    (force_load_command::ADD_AREA_LAMBDA[0], "net.minecraft.server.commands.ForceLoadCommand$$Lambda/0x0000000080d7ba20.run(Unknown Source)"),
+    (force_load_command::REMOVE_LAMBDA[0], "net.minecraft.server.commands.ForceLoadCommand$$Lambda/0x0000000080d7bc48.run(Unknown Source)"),
+    (force_load_command::REMOVE_AREA_LAMBDA[0], "net.minecraft.server.commands.ForceLoadCommand$$Lambda/0x0000000080d7be70.run(Unknown Source)"),
+];
+
+pub fn lambda_proxy_frame(lambda: &str) -> Option<&'static str> {
+    LAMBDA_PROXIES.iter().find(|(frame, _)| *frame == lambda).map(|(_, proxy)| *proxy)
+}
 
 thread_local! {
     static ORIGIN_BASE: std::cell::RefCell<Option<Vec<&'static str>>> = const { std::cell::RefCell::new(None) };
@@ -231,5 +279,18 @@ pub fn origin_frames(origin: CommandOrigin) -> Vec<&'static str> {
         }
     }
     frames
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lambda_proxies_belong_to_the_lambda_class() {
+        for (lambda, proxy) in LAMBDA_PROXIES {
+            let class = &lambda[..lambda.find(".lambda$").expect("a lambda frame")];
+            assert!(proxy.starts_with(&format!("{class}$$Lambda/0x")) && proxy.ends_with("(Unknown Source)"), "{lambda} => {proxy}");
+        }
+    }
 }
 

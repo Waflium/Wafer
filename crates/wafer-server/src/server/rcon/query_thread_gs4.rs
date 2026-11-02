@@ -8,7 +8,7 @@ use tokio::net::UdpSocket;
 use tokio::task::AbortHandle;
 
 use super::network_data_output_stream::NetworkDataOutputStream;
-use super::start_generic_thread;
+use super::{GenericThread, GenericThreadKind, start_generic_thread};
 
 const GAME_TYPE: &str = "SMP";
 const GAME_ID: &str = "MINECRAFT";
@@ -62,6 +62,7 @@ struct QueryThreadGs4 {
 
 pub struct QueryThreadHandle {
     task: AbortHandle,
+    thread: Arc<GenericThread>,
 }
 
 impl QueryThreadHandle {
@@ -83,7 +84,7 @@ impl QueryThreadHandle {
             }
         }
         let socket = init_socket(&server_ip, port, runtime)?;
-        let name = start_generic_thread(SERVER_THREAD, "Query Listener");
+        let generic_thread = start_generic_thread(SERVER_THREAD, "Query Listener", GenericThreadKind::QueryListener);
         let thread = QueryThreadGs4 {
             last_challenge_check: 0,
             port,
@@ -96,12 +97,13 @@ impl QueryThreadHandle {
             rules_response: NetworkDataOutputStream::new(MAX_PACKET_SIZE),
             last_rules_response: 0,
         };
-        let task = runtime.spawn(thread.run(name, runtime.clone()));
-        Some(QueryThreadHandle { task: task.abort_handle() })
+        let task = runtime.spawn(thread.run(generic_thread.clone(), runtime.clone()));
+        Some(QueryThreadHandle { task: task.abort_handle(), thread: generic_thread })
     }
 
     pub fn stop(&self) {
         self.task.abort();
+        self.thread.finish();
         info!("Thread Query Listener stopped");
     }
 }
@@ -136,8 +138,9 @@ fn get_local_host() -> Option<String> {
 }
 
 impl QueryThreadGs4 {
-    async fn run(mut self, name: String, runtime: tokio::runtime::Handle) {
-        info!(thread: &name, "Query running on {}:{}", self.server_ip, self.port);
+    async fn run(mut self, thread: Arc<GenericThread>, runtime: tokio::runtime::Handle) {
+        let name = &thread.name;
+        info!(thread: name, "Query running on {}:{}", self.server_ip, self.port);
         self.last_challenge_check = crate::util::get_millis();
         loop {
             match tokio::time::timeout(Duration::from_millis(500), self.socket.recv_from(&mut self.buffer)).await {
@@ -149,11 +152,12 @@ impl QueryThreadGs4 {
                 Ok(Err(e)) if e.raw_os_error() == Some(10040) => {}
                 Ok(Err(e)) if e.kind() == std::io::ErrorKind::ConnectionReset => {}
                 Ok(Err(e)) => {
-                    warn!(thread: &name, "Unexpected exception\n{e}");
+                    warn!(thread: name, "Unexpected exception\n{e}");
                     match init_socket(&self.server_ip, self.port, &runtime) {
                         Some(socket) => self.socket = socket,
                         None => {
-                            error!(thread: &name, "Failed to recover from exception, shutting down!");
+                            error!(thread: name, "Failed to recover from exception, shutting down!");
+                            thread.finish();
                             return;
                         }
                     }

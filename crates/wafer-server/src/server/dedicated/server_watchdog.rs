@@ -4,6 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::crash_report::{CrashReport, ReportType, crash_report_file};
+use crate::server::level::chunk_level::ChunkStatus;
+use crate::server::rcon::GenericThreadKind;
 use crate::util::lifecycle::Lifecycle;
 use crate::world::level::chunk::storage::chunk_io_error_reporter::ChunkIoErrorReporter;
 
@@ -62,8 +64,15 @@ pub fn linger() -> ! {
     std::process::exit(0)
 }
 
+static WATCHDOG_ID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+
+fn watchdog_id() -> u32 {
+    *WATCHDOG_ID.get_or_init(crate::util::next_java_thread_id)
+}
+
 pub fn start(timing: Arc<ServerTiming>, max_tick_time_millis: i64, server_directory: PathBuf) {
     let max_tick_time_nanos = max_tick_time_millis * 1_000_000;
+    watchdog_id();
     let _ = std::thread::Builder::new().name("Server Watchdog".into()).spawn(move || {
         while timing.running.load(Ordering::Relaxed) {
             let next_tick_time_nanos = timing.next_tick_time_nanos.load(Ordering::Relaxed);
@@ -118,8 +127,6 @@ const WATCHDOG_RUN_FRAME: &str = "net.minecraft.server.dedicated.ServerWatchdog.
 
 const LAMBDA_SPIN_FRAME: &str = "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)";
 const THREAD_RUN_FRAME: &str = "java.base/java.lang.Thread.run(Thread.java:1474)";
-const UNBOUND_ENTRY_ACTION_FRAME: &str = "net.minecraft.commands.execution.UnboundEntryAction.lambda$bind$0(UnboundEntryAction.java:8)";
-const UNBOUND_ENTRY_ACTION_HIDDEN_FRAME: &str = "net.minecraft.commands.execution.UnboundEntryAction$$Lambda/0x0000000011c33818.execute(Unknown Source)";
 const SPIN_HIDDEN_FRAMES: [&str; 2] = ["net.minecraft.server.MinecraftServer$$Lambda/0x00000000a0e9a538.run(Unknown Source)", "java.base/java.lang.Thread.runWith(Thread.java:1487)"];
 
 fn runtime_frame(frame: &str) -> String {
@@ -136,8 +143,8 @@ fn thread_info_frames(frames: &[&'static str]) -> Vec<String> {
         if frame == THREAD_RUN_FRAME && previous == LAMBDA_SPIN_FRAME {
             out.extend(SPIN_HIDDEN_FRAMES.iter().map(ToString::to_string));
         }
-        if previous == UNBOUND_ENTRY_ACTION_FRAME {
-            out.push(UNBOUND_ENTRY_ACTION_HIDDEN_FRAME.to_string());
+        if let Some(proxy) = crate::server::command_frames::lambda_proxy_frame(previous) {
+            out.push(proxy.to_string());
         }
         out.push(frame.to_string());
         previous = frame;
@@ -310,11 +317,6 @@ fn services_discovery_idle_thread() -> ThreadDumpEntry {
 }
 
 const SERVER_THREAD_ID: u32 = 100;
-const SERVER_WATCHDOG_ID: u32 = 112;
-
-fn io_worker_id(index: usize) -> u32 {
-    if index <= 6 { 105 + index as u32 } else { 106 + index as u32 }
-}
 
 fn worker_main_id(index: usize) -> u32 {
     if index <= 10 { 65 + index as u32 } else { 66 + index as u32 }
@@ -346,15 +348,15 @@ fn console_handler_thread() -> ThreadDumpEntry {
 }
 
 fn netty_io_threads() -> Vec<ThreadDumpEntry> {
-    (0..=crate::network::server_connection_listener::started_child_event_loops()).map(netty_io_thread).collect()
+    std::iter::once(105).chain(crate::network::server_connection_listener::child_event_loop_ids()).enumerate().map(|(index, id)| netty_io_thread(index, id)).collect()
 }
 
-fn netty_io_thread(index: usize) -> ThreadDumpEntry {
+fn netty_io_thread(index: usize, id: u32) -> ThreadDumpEntry {
     ThreadDumpEntry {
         name: format!("Netty NIO IO #{index}"),
         daemon: true,
         priority: 5,
-        id: if index == 0 { 105 } else { 115 + index as u32 },
+        id,
         state: "RUNNABLE",
         lock: None,
         in_native: true,
@@ -372,6 +374,161 @@ fn netty_io_thread(index: usize) -> ThreadDumpEntry {
         locked_monitors: vec![(2, "sun.nio.ch.Util$2@6888fd21".to_string()), (2, "sun.nio.ch.WEPollSelectorImpl@5ed0b52d".to_string())],
         locked_synchronizers: vec!["java.util.concurrent.locks.ReentrantLock$NonfairSync@53efc31a".to_string()],
     }
+}
+
+fn worker_main_threads(pool: &str) -> Vec<ThreadDumpEntry> {
+    let running = crate::server::level::chunk_workers::running_worker_steps();
+    (1..=crate::server::level::chunk_workers::worker_main_count())
+        .map(|index| {
+            let step = running.iter().find(|(worker, _)| *worker == index).map(|(_, status)| *status);
+            ThreadDumpEntry {
+                name: format!("Worker-Main-{index}"),
+                daemon: true,
+                priority: 5,
+                id: worker_main_id(index),
+                state: if step.is_some() { "RUNNABLE" } else { "WAITING" },
+                lock: step.is_none().then(|| pool.to_string()),
+                in_native: false,
+                frames: step.map_or_else(idle_worker_main_frames, |status| qualified_frames(running_worker_main_frames(status))),
+                locked_monitors: Vec::new(),
+                locked_synchronizers: Vec::new(),
+            }
+        })
+        .collect()
+}
+
+fn running_worker_main_frames(status: ChunkStatus) -> &'static [&'static str] {
+    match status {
+        ChunkStatus::Empty => &WORKER_MAIN_LOAD_FRAMES,
+        ChunkStatus::StructureStarts => &WORKER_MAIN_STRUCTURE_STARTS_FRAMES,
+        _ => &WORKER_MAIN_TERRAIN_FRAMES,
+    }
+}
+
+const WORKER_MAIN_STRUCTURE_STARTS_FRAMES: [&str; 9] = [
+    "net.minecraft.world.level.levelgen.BitRandomSource.nextInt(BitRandomSource.java:25)",
+    "net.minecraft.util.Util.shuffle(Util.java:1100)",
+    "net.minecraft.world.level.levelgen.structure.pools.SinglePoolElement.getShuffledJigsawBlocks(SinglePoolElement.java:121)",
+    "net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement$Placer.tryPlacingChildren(JigsawPlacement.java:144)",
+    "net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.addPieces(JigsawPlacement.java:379)",
+    "net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement.lambda$addPieces$2(JigsawPlacement.java:343)",
+    "net.minecraft.world.level.levelgen.structure.pools.JigsawPlacement$$Lambda/0x0000000082f273c8.accept(Unknown Source)",
+    "net.minecraft.world.level.levelgen.structure.Structure$GenerationStub.lambda$getPiecesBuilder$0(Structure.java:197)",
+    "net.minecraft.world.level.levelgen.structure.Structure$GenerationStub$$Lambda/0x0000000082f27868.apply(Unknown Source)",
+];
+
+const WORKER_MAIN_LOAD_FRAMES: [&str; 9] = [
+    "java.base/java.util.HashMap.getNode(HashMap.java:579)",
+    "java.base/java.util.HashMap.get(HashMap.java:565)",
+    "net.minecraft.nbt.CompoundTag.getCompound(CompoundTag.java:421)",
+    "net.minecraft.world.level.chunk.storage.SerializableChunkData.parse(SerializableChunkData.java:187)",
+    "net.minecraft.server.level.ChunkMap.lambda$scheduleChunkLoad$1(ChunkMap.java:585)",
+    "net.minecraft.server.level.ChunkMap$$Lambda/0x00000000abf47220.apply(Unknown Source)",
+    "java.base/java.util.Optional.map(Optional.java:260)",
+    "net.minecraft.server.level.ChunkMap.lambda$scheduleChunkLoad$0(ChunkMap.java:584)",
+    "net.minecraft.server.level.ChunkMap$$Lambda/0x00000000abf44b48.apply(Unknown Source)",
+];
+
+const WORKER_MAIN_TERRAIN_FRAMES: [&str; 9] = [
+    "net.minecraft.world.level.chunk.status.ChunkStatusTasks.buildTerrain(ChunkStatusTasks.java:82)",
+    "net.minecraft.world.level.chunk.status.ChunkPyramid$$Lambda/0x00000000abec3870.doWork(Unknown Source)",
+    "net.minecraft.world.level.chunk.status.ChunkStep.apply(ChunkStep.java:36)",
+    "net.minecraft.server.level.ChunkMap.applyStep(ChunkMap.java:666)",
+    "net.minecraft.server.level.GenerationChunkHolder.applyStep(GenerationChunkHolder.java:87)",
+    "net.minecraft.server.level.ChunkGenerationTask.scheduleChunkInLayer(ChunkGenerationTask.java:144)",
+    "net.minecraft.server.level.ChunkGenerationTask.scheduleLayer(ChunkGenerationTask.java:121)",
+    "net.minecraft.server.level.ChunkGenerationTask.scheduleNextLayer(ChunkGenerationTask.java:72)",
+    "net.minecraft.server.level.ChunkGenerationTask.runUntilWait(ChunkGenerationTask.java:57)",
+];
+
+const QUERY_LISTENER_FRAMES: [&str; 9] = [
+    "java.base/sun.nio.ch.Net.poll(Native Method)",
+    "java.base/sun.nio.ch.DatagramChannelImpl.park(DatagramChannelImpl.java:496)",
+    "java.base/sun.nio.ch.DatagramChannelImpl.tryBlockingReceive(DatagramChannelImpl.java:671)",
+    "java.base/sun.nio.ch.DatagramChannelImpl.blockingReceive(DatagramChannelImpl.java:619)",
+    "java.base/sun.nio.ch.DatagramSocketAdaptor.receive(DatagramSocketAdaptor.java:193)",
+    "java.base/java.net.DatagramSocket.receive(DatagramSocket.java:638)",
+    "net.minecraft.server.rcon.thread.QueryThreadGs4.run(QueryThreadGs4.java:257)",
+    "java.base/java.lang.Thread.runWith(Thread.java:1487)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+const RCON_LISTENER_FRAMES: [&str; 12] = [
+    "java.base/sun.nio.ch.Net.poll(Native Method)",
+    "java.base/sun.nio.ch.NioSocketImpl.park(NioSocketImpl.java:190)",
+    "java.base/sun.nio.ch.NioSocketImpl.timedAccept(NioSocketImpl.java:706)",
+    "java.base/sun.nio.ch.NioSocketImpl.accept(NioSocketImpl.java:748)",
+    "java.base/java.net.ServerSocket.implAccept(ServerSocket.java:593)",
+    "java.base/java.net.ServerSocket.platformImplAccept(ServerSocket.java:560)",
+    "java.base/java.net.ServerSocket.implAccept(ServerSocket.java:536)",
+    "java.base/java.net.ServerSocket.implAccept(ServerSocket.java:482)",
+    "java.base/java.net.ServerSocket.accept(ServerSocket.java:441)",
+    "net.minecraft.server.rcon.thread.RconThread.run(RconThread.java:42)",
+    "java.base/java.lang.Thread.runWith(Thread.java:1487)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+const RCON_CLIENT_READ_FRAMES: [&str; 14] = [
+    "java.base/sun.nio.ch.SocketDispatcher.read0(Native Method)",
+    "java.base/sun.nio.ch.SocketDispatcher.read(SocketDispatcher.java:47)",
+    "java.base/sun.nio.ch.NioSocketImpl.tryRead(NioSocketImpl.java:255)",
+    "java.base/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:305)",
+    "java.base/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:354)",
+    "java.base/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:798)",
+    "java.base/java.net.Socket$SocketInputStream.implRead(Socket.java:974)",
+    "java.base/java.net.Socket$SocketInputStream.read(Socket.java:964)",
+    "java.base/java.io.BufferedInputStream.fill(BufferedInputStream.java:289)",
+    "java.base/java.io.BufferedInputStream.read1(BufferedInputStream.java:330)",
+    "java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:388)",
+    "net.minecraft.server.rcon.thread.RconClient.run(RconClient.java:48)",
+    "java.base/java.lang.Thread.runWith(Thread.java:1487)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+const RCON_CLIENT_COMMAND_FRAMES: [&str; 12] = [
+    "java.base/jdk.internal.misc.Unsafe.park(Native Method)",
+    "java.base/java.util.concurrent.locks.LockSupport.park(LockSupport.java:223)",
+    "java.base/java.util.concurrent.CompletableFuture$Signaller.block(CompletableFuture.java:1885)",
+    "java.base/java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:4364)",
+    "java.base/java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:4310)",
+    "java.base/java.util.concurrent.CompletableFuture.waitingGet(CompletableFuture.java:1919)",
+    "java.base/java.util.concurrent.CompletableFuture.join(CompletableFuture.java:2138)",
+    "net.minecraft.util.thread.BlockableEventLoop.executeBlocking(BlockableEventLoop.java:96)",
+    "net.minecraft.server.dedicated.DedicatedServer.runCommand(DedicatedServer.java:698)",
+    "net.minecraft.server.rcon.thread.RconClient.run(RconClient.java:82)",
+    "java.base/java.lang.Thread.runWith(Thread.java:1487)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
+fn generic_threads() -> Vec<ThreadDumpEntry> {
+    crate::server::rcon::live_generic_threads()
+        .iter()
+        .map(|thread| {
+            let running_command = thread.kind == GenericThreadKind::RconClient && thread.is_running_command();
+            let (frames, locked_monitors, synchronizer): (&[&str], Vec<(usize, String)>, &str) = match thread.kind {
+                GenericThreadKind::QueryListener => {
+                    (&QUERY_LISTENER_FRAMES, vec![(4, "java.net.DatagramPacket@6052f905".to_string())], "java.util.concurrent.locks.ReentrantLock$NonfairSync@54a2cea")
+                }
+                GenericThreadKind::RconListener => (&RCON_LISTENER_FRAMES, Vec::new(), "java.util.concurrent.locks.ReentrantLock$NonfairSync@3ff23db"),
+                GenericThreadKind::RconClient if running_command => (&RCON_CLIENT_COMMAND_FRAMES, Vec::new(), ""),
+                GenericThreadKind::RconClient => {
+                    (&RCON_CLIENT_READ_FRAMES, vec![(10, "java.io.BufferedInputStream@3c0f93f1".to_string())], "java.util.concurrent.locks.ReentrantLock$NonfairSync@20b0e9f4")
+                }
+            };
+            ThreadDumpEntry {
+                name: thread.name.clone(),
+                daemon: false,
+                priority: 8,
+                id: thread.id,
+                state: if running_command { "WAITING" } else { "RUNNABLE" },
+                lock: running_command.then(|| "java.util.concurrent.CompletableFuture$Signaller@5a2bf7c2".to_string()),
+                in_native: !running_command,
+                frames: qualified_frames(frames),
+                locked_monitors,
+                locked_synchronizers: if synchronizer.is_empty() { Vec::new() } else { vec![synchronizer.to_string()] },
+            }
+        })
+        .collect()
 }
 
 fn jvm_threads() -> Vec<ThreadDumpEntry> {
@@ -484,7 +641,7 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
             "Server Watchdog",
             true,
             8,
-            SERVER_WATCHDOG_ID,
+            watchdog_id(),
             "RUNNABLE",
             None,
             false,
@@ -508,12 +665,12 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
     } else if crate::server::services::discovery_executor_started() {
         entries.push(services_discovery_idle_thread());
     }
-    for (index, priority) in crate::server::level::chunk_workers::live_io_workers() {
+    for (index, priority, id) in crate::server::level::chunk_workers::live_io_workers() {
         entries.push(ThreadDumpEntry {
             name: format!("IO-Worker-{index}"),
             daemon: false,
             priority,
-            id: io_worker_id(index),
+            id,
             state: "TIMED_WAITING",
             lock: Some("java.util.concurrent.SynchronousQueue$Transferer@7e1e9134".to_string()),
             in_native: false,
@@ -522,21 +679,8 @@ fn dump_thread_info(server_frames: &[&'static str]) -> String {
             locked_synchronizers: Vec::new(),
         });
     }
-    let pool = "java.util.concurrent.ForkJoinPool@1a2b089".to_string();
-    for index in 1..=crate::server::level::chunk_workers::worker_main_count() {
-        entries.push(ThreadDumpEntry {
-            name: format!("Worker-Main-{index}"),
-            daemon: true,
-            priority: 5,
-            id: worker_main_id(index),
-            state: "WAITING",
-            lock: Some(pool.clone()),
-            in_native: false,
-            frames: idle_worker_main_frames(),
-            locked_monitors: Vec::new(),
-            locked_synchronizers: Vec::new(),
-        });
-    }
+    entries.extend(worker_main_threads("java.util.concurrent.ForkJoinPool@1a2b089"));
+    entries.extend(generic_threads());
     entries.sort_by(|a, b| (a.daemon, a.state_order(), &a.name).cmp(&(b.daemon, b.state_order(), &b.name)));
     let mut out = String::new();
     for entry in &entries {
@@ -583,7 +727,7 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             "Server Watchdog",
             true,
             8,
-            SERVER_WATCHDOG_ID,
+            watchdog_id(),
             "TIMED_WAITING",
             None,
             false,
@@ -600,14 +744,14 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
     ];
     entries.extend(netty_io_threads());
     entries.extend(jvm_threads());
-    for (index, priority) in crate::server::level::chunk_workers::live_io_workers() {
+    for (index, priority, id) in crate::server::level::chunk_workers::live_io_workers() {
         let name = format!("IO-Worker-{index}");
         if name == blocked_io_worker {
             entries.push(ThreadDumpEntry {
                 name,
                 daemon: false,
                 priority,
-                id: io_worker_id(index),
+                id,
                 state: "WAITING",
                 lock: Some("java.util.concurrent.CompletableFuture$Signaller@5b64b5e2".to_string()),
                 in_native: false,
@@ -630,7 +774,7 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
                 name,
                 daemon: false,
                 priority,
-                id: io_worker_id(index),
+                id,
                 state: "TIMED_WAITING",
                 lock: Some("java.util.concurrent.SynchronousQueue$Transferer@43a01550".to_string()),
                 in_native: false,
@@ -640,21 +784,8 @@ pub fn dump_threads_for_debug_report(blocked_io_worker: &str) -> String {
             });
         }
     }
-    let pool = "java.util.concurrent.ForkJoinPool@49ba0150".to_string();
-    for index in 1..=crate::server::level::chunk_workers::worker_main_count() {
-        entries.push(ThreadDumpEntry {
-            name: format!("Worker-Main-{index}"),
-            daemon: true,
-            priority: 5,
-            id: worker_main_id(index),
-            state: "WAITING",
-            lock: Some(pool.clone()),
-            in_native: false,
-            frames: idle_worker_main_frames(),
-            locked_monitors: Vec::new(),
-            locked_synchronizers: Vec::new(),
-        });
-    }
+    entries.extend(worker_main_threads("java.util.concurrent.ForkJoinPool@49ba0150"));
+    entries.extend(generic_threads());
     entries.sort_by(|a, b| a.name.encode_utf16().cmp(b.name.encode_utf16()));
     let mut out = String::new();
     for entry in &entries {
@@ -710,5 +841,36 @@ pub fn server_system_details(snapshot: &ServerSnapshot) -> Vec<(&'static str, St
 pub fn fill_system_report(report: &mut CrashReport, snapshot: &ServerSnapshot) {
     for (key, value) in server_system_details(snapshot) {
         report.set_system_detail(key, value);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::command_frames::COMMAND_EXECUTION;
+
+    #[test]
+    fn command_lambdas_show_their_hidden_proxy_frame() {
+        let frames = thread_info_frames(&["net.minecraft.server.commands.FillCommand.lambda$wrapWithMode$0(FillCommand.java:84)", COMMAND_EXECUTION[0]]);
+        assert_eq!(
+            frames,
+            [
+                "net.minecraft.server.commands.FillCommand.lambda$wrapWithMode$0(FillCommand.java:84)",
+                "net.minecraft.server.commands.FillCommand$$Lambda/0x0000000032d62b30.run(Unknown Source)",
+                "com.mojang.brigadier.context.ContextChain.runExecutable(ContextChain.java:73)",
+            ]
+        );
+    }
+
+    #[test]
+    fn rcon_and_query_threads_are_listed_while_running() {
+        let thread = crate::server::rcon::start_generic_thread("Server thread", "RCON Client /127.0.0.9", GenericThreadKind::RconClient);
+        let dump = dump_thread_info(&[]);
+        assert!(dump.contains(&format!("\"{}\" prio=8 Id={} RUNNABLE (in native)\n\tat java.base@", thread.name, thread.id)), "{dump}");
+        thread.set_running_command(true);
+        let dump = dump_thread_info(&[]);
+        assert!(dump.contains(&format!("\"{}\" prio=8 Id={} WAITING on java.util.concurrent.CompletableFuture$Signaller@", thread.name, thread.id)), "{dump}");
+        thread.finish();
+        assert!(!dump_thread_info(&[]).contains(&thread.name));
     }
 }

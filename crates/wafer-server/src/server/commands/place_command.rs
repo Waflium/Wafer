@@ -10,6 +10,7 @@ use crate::core::holder_set::HolderSet;
 use crate::network::chat::Component;
 use crate::server::Server;
 use crate::server::level::ServerLevel;
+use crate::server::main_thread_frames;
 use crate::world::level::block::entity::structure_block_entity::create_random;
 use crate::world::level::block::mirror::Mirror;
 use crate::world::level::block::rotation::Rotation;
@@ -34,6 +35,32 @@ static ERROR_INVALID_TEMPLATE_POOL: DynamicCommandExceptionType = DynamicCommand
 
 type Result<T> = std::result::Result<T, CommandSyntaxException>;
 
+pub const FEATURE_HERE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$0(PlaceCommand.java:83)"];
+pub const FEATURE_AT_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$1(PlaceCommand.java:86)"];
+pub const JIGSAW_HERE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$2(PlaceCommand.java:98)"];
+pub const JIGSAW_AT_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$3(PlaceCommand.java:101)"];
+pub const STRUCTURE_HERE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$4(PlaceCommand.java:111)"];
+pub const STRUCTURE_AT_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$5(PlaceCommand.java:114)"];
+pub const TEMPLATE_HERE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$6(PlaceCommand.java:123)"];
+pub const TEMPLATE_AT_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$7(PlaceCommand.java:126)"];
+pub const TEMPLATE_ROTATION_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$8(PlaceCommand.java:129)"];
+pub const TEMPLATE_MIRROR_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$9(PlaceCommand.java:132)"];
+pub const TEMPLATE_INTEGRITY_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$10(PlaceCommand.java:135)"];
+pub const TEMPLATE_SEED_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$11(PlaceCommand.java:138)"];
+pub const TEMPLATE_STRICT_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.lambda$register$12(PlaceCommand.java:141)"];
+pub const PLACE_STRUCTURE_CHUNK_LAMBDA: &str = "net.minecraft.server.commands.PlaceCommand.lambda$placeStructure$1(PlaceCommand.java:200)";
+const PLACE_FEATURE: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.placeFeature(PlaceCommand.java:160)"];
+const PLACE_JIGSAW: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.placeJigsaw(PlaceCommand.java:177)"];
+const PLACE_STRUCTURE_GENERATE: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.placeStructure(PlaceCommand.java:190)"];
+const PLACE_STRUCTURE_CHUNKS: [&str; 5] = [
+    PLACE_STRUCTURE_CHUNK_LAMBDA,
+    "net.minecraft.world.level.ChunkPos$2.tryAdvance(ChunkPos.java:245)",
+    "java.base/java.util.Spliterator.forEachRemaining(Spliterator.java:332)",
+    "java.base/java.util.stream.ReferencePipeline$Head.forEach(ReferencePipeline.java:803)",
+    "net.minecraft.server.commands.PlaceCommand.placeStructure(PlaceCommand.java:199)",
+];
+const PLACE_TEMPLATE: [&str; 1] = ["net.minecraft.server.commands.PlaceCommand.placeTemplate(PlaceCommand.java:228)"];
+
 pub fn suggest_templates(_server: &Server, _context: &CommandContext, _source: &CommandSourceStack, mut builder: SuggestionsBuilder) -> Result<Suggestions> {
     shared_suggestion_provider::suggest_resource(structure_template_manager::list_templates().iter().map(String::as_str), &mut builder);
     Ok(builder.build())
@@ -48,10 +75,12 @@ fn infinite() -> BoundingBox {
 }
 
 pub fn place_feature_here(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&FEATURE_HERE_LAMBDA);
     place_feature(server, source, context.get_resource_or_id("feature"), source_block_pos(source))
 }
 
 pub fn place_feature_at(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&FEATURE_AT_LAMBDA);
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     place_feature(server, source, context.get_resource_or_id("feature"), pos)
 }
@@ -68,7 +97,7 @@ pub fn place_feature(server: &mut Server, source: &CommandSourceStack, feature_h
             &inline
         }
     };
-    if !level.with_level_random(|level, random| feature.place(level, random, pos)) {
+    if !main_thread_frames::within(&PLACE_FEATURE, || level.with_level_random(|level, random| feature.place(level, random, pos))) {
         return Err(ERROR_FEATURE_FAILED.create());
     }
     match feature_holder {
@@ -85,11 +114,13 @@ pub fn place_feature(server: &mut Server, source: &CommandSourceStack, feature_h
 }
 
 pub fn place_jigsaw_here(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&JIGSAW_HERE_LAMBDA);
     let pool = get_structure_template_pool(context, "pool")?;
     place_jigsaw(server, source, pool, context.get_identifier("target"), context.get_int("max_depth"), source_block_pos(source))
 }
 
 pub fn place_jigsaw_at(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&JIGSAW_AT_LAMBDA);
     let pool = get_structure_template_pool(context, "pool")?;
     let pos = get_loaded_block_pos(server, context, source, "position")?;
     place_jigsaw(server, source, pool, context.get_identifier("target"), context.get_int("max_depth"), pos)
@@ -104,7 +135,7 @@ pub fn place_jigsaw(server: &mut Server, source: &CommandSourceStack, pool: Temp
     let level = &mut server.levels[source.level];
     let chunk = pos.chunk();
     check_loaded(level, chunk, chunk)?;
-    if !generate_jigsaw(level, pool, target, max_depth, pos, false) {
+    if !main_thread_frames::within(&PLACE_JIGSAW, || generate_jigsaw(level, pool, target, max_depth, pos, false)) {
         return Err(ERROR_JIGSAW_FAILED.create());
     }
     source.send_success(server, || Component::translatable_with("commands.place.jigsaw.success", vec![pos.x.into(), pos.y.into(), pos.z.into()]), true);
@@ -137,11 +168,13 @@ pub(crate) fn generate_jigsaw(level: &mut ServerLevel, pool: TemplatePoolHolder,
 }
 
 pub fn place_structure_here(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&STRUCTURE_HERE_LAMBDA);
     let structure = get_structure(context, "structure")?;
     place_structure(server, source, structure, source_block_pos(source))
 }
 
 pub fn place_structure_at(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&STRUCTURE_AT_LAMBDA);
     let structure = get_structure(context, "structure")?;
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     place_structure(server, source, structure, pos)
@@ -158,6 +191,7 @@ pub fn place_structure(server: &mut Server, source: &CommandSourceStack, structu
     let chunk_generator = level.chunks.generator.clone();
     let all_biomes = HolderSet::Direct((0..wafer_data::SyncedRegistry::get("minecraft:worldgen/biome").entries.len() as i32).collect());
     let (seed, min_y, height) = (level.seed, level.chunks.min_y(), level.chunks.height());
+    let phase = main_thread_frames::enter_static(&PLACE_STRUCTURE_GENERATE);
     let Some(start) = structure.generate(structure_holder, &chunk_generator, seed, pos.chunk(), 0, min_y, height, &all_biomes) else {
         return Err(ERROR_STRUCTURE_FAILED.create());
     };
@@ -165,10 +199,12 @@ pub fn place_structure(server: &mut Server, source: &CommandSourceStack, structu
     let chunk_min = ChunkPos::new(bounding_box.min.x >> 4, bounding_box.min.z >> 4);
     let chunk_max = ChunkPos::new(bounding_box.max.x >> 4, bounding_box.max.z >> 4);
     check_loaded(level, chunk_min, chunk_max)?;
+    phase.switch_to(&PLACE_STRUCTURE_CHUNKS);
     for c in range_closed(chunk_min, chunk_max) {
         let chunk_bb = BoundingBox::new(c.min_block_x(), min_y, c.min_block_z(), c.min_block_x() + 15, min_y + height, c.min_block_z() + 15);
         level.with_level_random(|level, random| start.place_in_chunk(level, random, &chunk_bb, c));
     }
+    drop(phase);
     let id = structure_holder.key();
     source.send_success(
         server,
@@ -179,16 +215,31 @@ pub fn place_structure(server: &mut Server, source: &CommandSourceStack, structu
 }
 
 pub fn place_template_here(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&TEMPLATE_HERE_LAMBDA);
     place_template(server, source, context.get_identifier("template"), source_block_pos(source), Rotation::None, Mirror::None, 1.0, 0, false)
 }
 
 pub fn place_template_with(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let strict = context.nodes.iter().any(|n| wafer_data::commands::CommandNode::get(n.node).name == "strict");
+    let lambda: &'static [&'static str] = if strict {
+        &TEMPLATE_STRICT_LAMBDA
+    } else if context.has_argument("seed") {
+        &TEMPLATE_SEED_LAMBDA
+    } else if context.has_argument("integrity") {
+        &TEMPLATE_INTEGRITY_LAMBDA
+    } else if context.has_argument("mirror") {
+        &TEMPLATE_MIRROR_LAMBDA
+    } else if context.has_argument("rotation") {
+        &TEMPLATE_ROTATION_LAMBDA
+    } else {
+        &TEMPLATE_AT_LAMBDA
+    };
+    let _lambda = main_thread_frames::enter_static(lambda);
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     let rotation = if context.has_argument("rotation") { context.get_rotation("rotation") } else { Rotation::None };
     let mirror = if context.has_argument("mirror") { context.get_mirror("mirror") } else { Mirror::None };
     let integrity = if context.has_argument("integrity") { context.get_float("integrity") } else { 1.0 };
     let seed = if context.has_argument("seed") { context.get_int("seed") } else { 0 };
-    let strict = context.nodes.iter().any(|n| wafer_data::commands::CommandNode::get(n.node).name == "strict");
     place_template(server, source, context.get_identifier("template"), pos, rotation, mirror, integrity, seed, strict)
 }
 
@@ -217,7 +268,7 @@ pub fn place_template(
         place_settings.random = PlaceRandom::Own(std::cell::RefCell::new(create_random(seed as i64)));
     }
     let mut random = create_random(seed as i64);
-    if !structure_template.place_in_world(level, pos, pos, &place_settings, &mut random, 2 | if strict { 816 } else { 0 }) {
+    if !main_thread_frames::within(&PLACE_TEMPLATE, || structure_template.place_in_world(level, pos, pos, &place_settings, &mut random, 2 | if strict { 816 } else { 0 })) {
         return Err(ERROR_TEMPLATE_FAILED.create());
     }
     source.send_success(

@@ -33,6 +33,14 @@ impl Stack {
         self.len.store(len.saturating_sub(1), Ordering::Release);
     }
 
+    fn replace_top(&self, frames: &'static [&'static str]) {
+        let len = self.len.load(Ordering::Relaxed);
+        if let Some(top) = len.checked_sub(1).and_then(|top| self.scopes.get(top)) {
+            let (_, absolute) = decode(top.load(Ordering::Relaxed));
+            top.store(encode(frames, absolute), Ordering::Release);
+        }
+    }
+
     fn frames(&self) -> Vec<&'static str> {
         let len = self.len.load(Ordering::Acquire).min(CAPACITY);
         let mut frames = Vec::new();
@@ -97,6 +105,13 @@ pub struct FrameScope(std::marker::PhantomData<*const ()>);
 impl Drop for FrameScope {
     fn drop(&mut self) {
         with_stack(Stack::pop);
+    }
+}
+
+impl FrameScope {
+    #[inline]
+    pub fn switch_to(&self, frames: &'static [&'static str]) {
+        with_stack(|stack| stack.replace_top(frames));
     }
 }
 
@@ -246,5 +261,15 @@ mod tests {
         }
         assert_eq!(&current()[..1], ["a"]);
         assert_eq!(current().len(), 3);
+    }
+
+    #[test]
+    fn switching_a_scope_keeps_the_scopes_below() {
+        let _base = enter_absolute_static(&["a"]);
+        let phase = enter_static(&["b"]);
+        phase.switch_to(&["c", "d"]);
+        assert_eq!(current(), ["c", "d", "a"]);
+        drop(phase);
+        assert_eq!(current(), ["a"]);
     }
 }

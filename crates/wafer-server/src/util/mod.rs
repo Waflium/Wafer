@@ -91,6 +91,12 @@ pub fn io_pool() -> &'static cached_thread_pool::CachedThreadPool {
     IO_POOL.get_or_init(|| cached_thread_pool::CachedThreadPool::with_names(crate::server::level::chunk_workers::next_io_worker_name))
 }
 
+static NEXT_JAVA_THREAD_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(106);
+
+pub fn next_java_thread_id() -> u32 {
+    NEXT_JAVA_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn max_allowed_executor_threads() -> usize {
     std::thread::available_parallelism().map_or(1, |count| count.get()).saturating_sub(1).clamp(1, 255)
 }

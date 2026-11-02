@@ -6,10 +6,15 @@ use crate::commands::brigadier::{CommandContext, CommandSyntaxException, Dynamic
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
-use crate::server::command_frames::command_frames;
 use crate::server::main_thread_frames;
 
 const MAX_CHUNK_LIMIT: i64 = 256;
+
+pub const ADD_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.ForceLoadCommand.lambda$register$0(ForceLoadCommand.java:52)"];
+pub const ADD_AREA_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.ForceLoadCommand.lambda$register$1(ForceLoadCommand.java:55)"];
+pub const REMOVE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.ForceLoadCommand.lambda$register$2(ForceLoadCommand.java:61)"];
+pub const REMOVE_AREA_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.ForceLoadCommand.lambda$register$3(ForceLoadCommand.java:64)"];
+const CHANGE_FORCE_LOAD: [&str; 1] = ["net.minecraft.server.commands.ForceLoadCommand.changeForceLoad(ForceLoadCommand.java:172)"];
 
 static ERROR_TOO_MANY_CHUNKS: Dynamic2CommandExceptionType = Dynamic2CommandExceptionType(|max, amount| tr("commands.forceload.toobig", vec![max, amount]));
 static ERROR_NOT_TICKING: Dynamic2CommandExceptionType = Dynamic2CommandExceptionType(|pos, dimension| tr("commands.forceload.query.failure", vec![pos, dimension]));
@@ -92,14 +97,14 @@ fn change_force_load(server: &mut Server, context: &CommandContext, source: &Com
         return Err(ERROR_TOO_MANY_CHUNKS.create(MAX_CHUNK_LIMIT as i32, Arg::Long(chunk_count)));
     }
     let mut tracker = CommandResponseTracker::new();
-    let lambda = if context.has_argument("to") {
-        "net.minecraft.server.commands.ForceLoadCommand.lambda$register$1(ForceLoadCommand.java:55)"
-    } else {
-        "net.minecraft.server.commands.ForceLoadCommand.lambda$register$0(ForceLoadCommand.java:52)"
+    let lambda: &'static [&'static str] = match (add, context.has_argument("to")) {
+        (true, false) => &ADD_LAMBDA,
+        (true, true) => &ADD_AREA_LAMBDA,
+        (false, false) => &REMOVE_LAMBDA,
+        (false, true) => &REMOVE_AREA_LAMBDA,
     };
-    let mut frames = vec!["net.minecraft.server.commands.ForceLoadCommand.changeForceLoad(ForceLoadCommand.java:172)", lambda];
-    frames.extend(command_frames(server.command_origin));
-    let _scope = main_thread_frames::enter_complete(frames);
+    let _lambda = main_thread_frames::enter_static(lambda);
+    let _scope = main_thread_frames::enter_static(&CHANGE_FORCE_LOAD);
     for x in min_chunk_x..=max_chunk_x {
         for z in min_chunk_z..=max_chunk_z {
             let changed = server.levels[source.level].set_chunk_forced(x, z, add);

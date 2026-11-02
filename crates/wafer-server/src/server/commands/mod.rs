@@ -7,7 +7,7 @@ mod boss_bar_commands;
 #[cfg(test)]
 mod block_item_command_tests;
 mod clear_inventory_commands;
-mod clone_commands;
+pub(crate) mod clone_commands;
 mod compute_command;
 mod damage_command;
 mod data_pack_command;
@@ -27,8 +27,8 @@ mod experience_command;
 mod execute_command;
 pub mod fetch_profile_command;
 pub mod fill_biome_command;
-mod fill_command;
-mod force_load_command;
+pub(crate) mod fill_command;
+pub(crate) mod force_load_command;
 mod function_command;
 mod give_command;
 #[cfg(test)]
@@ -66,7 +66,7 @@ mod scoreboard_command;
 #[cfg(test)]
 mod scoreboard_command_tests;
 mod seed_command;
-mod set_block_command;
+pub(crate) mod set_block_command;
 mod set_player_idle_timeout_command;
 mod set_spawn_command;
 mod set_world_spawn_command;
@@ -186,7 +186,7 @@ static EXECUTORS: &[(&str, CommandFn)] = &[
     ("setblock pos block", set_block_command::replace),
     ("setblock pos block destroy", set_block_command::destroy),
     ("setblock pos block keep", set_block_command::keep),
-    ("setblock pos block replace", set_block_command::replace),
+    ("setblock pos block replace", set_block_command::replace_literal),
     ("setblock pos block strict", set_block_command::strict),
     ("help", help_command::help),
     ("help command", help_command::help_command),

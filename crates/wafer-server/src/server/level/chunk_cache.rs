@@ -1396,7 +1396,7 @@ impl ChunkCache {
                     let upgrading = self.is_upgrading(pos);
                     let mut structures = if upgrading { self.structure_chunks.remove(&pos).unwrap_or_default() } else { ChunkStructures::default() };
                     let token = self.new_async_token(job);
-                    chunk_workers::execute(move || {
+                    chunk_workers::execute_step(ChunkStatus::StructureStarts, move || {
                         generator.create_structures(&state, pos, dimension, &mut structures, upgrading);
                         let _ = results.send(WorkResult::StructureStarts { pos, token, structures });
                     });
@@ -1433,7 +1433,7 @@ impl ChunkCache {
                 let old = self.holders.get_mut(pos.pack()).unwrap().loaded.take();
                 let token = self.new_async_token(job);
                 let (generator, dimension, results) = (self.generator.clone(), self.dimension, self.results.0.clone());
-                chunk_workers::execute(move || {
+                chunk_workers::execute_step(ChunkStatus::Terrain, move || {
                     let chunk = match old {
                         Some(mut chunk) if upgrading => {
                             generator.build_terrain_upgrading(&mut chunk, dimension, beardifier, biomes, &blender);
@@ -1960,7 +1960,7 @@ impl ChunkCache {
         let (dimension, seed, results, context) = (self.dimension, self.seed, self.results.0.clone(), self.data_fix_context.clone());
         let _worker_priority = crate::util::cached_thread_pool::enter_priority(5);
         self.io.as_ref().unwrap().read(pos, move |read| {
-            chunk_workers::execute(move || {
+            chunk_workers::execute_step(ChunkStatus::Empty, move || {
                 let result = crate::util::catch_exception(|| {
                     read.and_then(|nbt| match nbt {
                         None => Ok(None),

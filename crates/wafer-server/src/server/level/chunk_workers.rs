@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::io;
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, LazyLock, Mutex};
 use std::thread;
 
@@ -39,9 +39,9 @@ pub fn report_unregistered_holder(throwable: &JavaThrowable) {
     crate::crash_report::on_thread_exception(&name, id, throwable);
 }
 
-pub fn live_io_workers() -> Vec<(usize, u32)> {
-    let mut workers: Vec<(usize, u32)> =
-        crate::util::io_pool().live_thread_priorities().iter().filter_map(|(name, priority)| Some((name.rsplit('-').next()?.parse().ok()?, *priority))).collect();
+pub fn live_io_workers() -> Vec<(usize, u32, u32)> {
+    let mut workers: Vec<(usize, u32, u32)> =
+        crate::util::io_pool().live_threads().iter().filter_map(|(name, priority, id)| Some((name.rsplit('-').next()?.parse().ok()?, *priority, *id))).collect();
     workers.sort_unstable();
     workers
 }
@@ -51,19 +51,23 @@ pub fn worker_main_count() -> usize {
 }
 
 struct WorkerPool {
-    jobs: Mutex<VecDeque<Job>>,
+    jobs: Mutex<VecDeque<(u8, Job)>>,
     available: Condvar,
+    running: Vec<AtomicU8>,
 }
 
+const IDLE: u8 = u8::MAX;
+
 static POOL: LazyLock<&'static WorkerPool> = LazyLock::new(|| {
-    let pool: &'static WorkerPool = Box::leak(Box::new(WorkerPool { jobs: Mutex::new(VecDeque::new()), available: Condvar::new() }));
     let threads = thread::available_parallelism().map_or(1, |n| n.get()).saturating_sub(1).clamp(1, 255);
+    let running = (0..threads).map(|_| AtomicU8::new(IDLE)).collect();
+    let pool: &'static WorkerPool = Box::leak(Box::new(WorkerPool { jobs: Mutex::new(VecDeque::new()), available: Condvar::new(), running }));
     for i in 0..threads {
         thread::Builder::new()
             .name(format!("Worker-Main-{}", i + 1))
             .spawn(move || {
                 loop {
-                    let job = {
+                    let (step, job) = {
                         let mut jobs = pool.jobs.lock().unwrap();
                         loop {
                             if let Some(job) = jobs.pop_front() {
@@ -72,7 +76,10 @@ static POOL: LazyLock<&'static WorkerPool> = LazyLock::new(|| {
                             jobs = pool.available.wait(jobs).unwrap();
                         }
                     };
-                    if let Err(exception) = crate::util::catch_exception(job) {
+                    pool.running[i].store(step, Ordering::Relaxed);
+                    let result = crate::util::catch_exception(job);
+                    pool.running[i].store(IDLE, Ordering::Relaxed);
+                    if let Err(exception) = result {
                         let exception = format!("java.util.concurrent.CompletionException: {exception}");
                         crate::crash_report::relay_delay_crash(crate::crash_report::CrashReport::new("Exception chunk generation/loading", exception, Vec::new()));
                     }
@@ -93,9 +100,26 @@ pub fn random_worker_name() -> &'static str {
 }
 
 pub fn execute(job: impl FnOnce() + Send + 'static) {
+    submit(IDLE, Box::new(job));
+}
+
+pub fn execute_step(status: ChunkStatus, job: impl FnOnce() + Send + 'static) {
+    submit(status.index() as u8, Box::new(job));
+}
+
+fn submit(step: u8, job: Job) {
     let pool = *POOL;
-    pool.jobs.lock().unwrap().push_back(Box::new(job));
+    pool.jobs.lock().unwrap().push_back((step, job));
     pool.available.notify_one();
+}
+
+pub fn running_worker_steps() -> Vec<(usize, ChunkStatus)> {
+    let Some(pool) = LazyLock::get(&POOL) else { return Vec::new() };
+    pool.running
+        .iter()
+        .enumerate()
+        .filter_map(|(index, status)| ChunkStatus::ALL.get(status.load(Ordering::Relaxed) as usize).map(|&status| (index + 1, status)))
+        .collect()
 }
 
 pub enum WorkResult {

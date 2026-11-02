@@ -9,12 +9,23 @@ use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
 use crate::server::level::ServerLevel;
+use crate::server::main_thread_frames;
 use crate::world::level::BlockGetter;
 use crate::world::level::levelgen::structure::BoundingBox;
 use crate::world::level::update_flags::UPDATE_LIMIT;
 
 static ERROR_AREA_TOO_LARGE: Dynamic2CommandExceptionType = Dynamic2CommandExceptionType(|max, count| tr("commands.fill.toobig", vec![max, count]));
 static ERROR_FAILED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.fill.failed");
+
+pub const REPLACE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillCommand.lambda$wrapWithMode$0(FillCommand.java:84)"];
+pub const OUTLINE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillCommand.lambda$wrapWithMode$1(FillCommand.java:87)"];
+pub const HOLLOW_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillCommand.lambda$wrapWithMode$2(FillCommand.java:91)"];
+pub const DESTROY_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillCommand.lambda$wrapWithMode$3(FillCommand.java:95)"];
+pub const STRICT_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillCommand.lambda$wrapWithMode$4(FillCommand.java:99)"];
+pub const REPLACE_ALL_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillCommand.lambda$register$4(FillCommand.java:60)"];
+pub const KEEP_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillCommand.lambda$register$9(FillCommand.java:67)"];
+const FILL_BLOCKS_PLACE: [&str; 1] = ["net.minecraft.server.commands.FillCommand.fillBlocks(FillCommand.java:136)"];
+const FILL_BLOCKS_UPDATE: [&str; 1] = ["net.minecraft.server.commands.FillCommand.fillBlocks(FillCommand.java:150)"];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -53,12 +64,22 @@ pub fn executors() -> Vec<(String, CommandFn)> {
         out.push((format!("{base} destroy"), destroy));
         out.push((format!("{base} strict"), strict));
     }
-    out.push(("fill from to block replace".into(), replace));
+    out.push(("fill from to block replace".into(), replace_all));
     out.push(("fill from to block keep".into(), keep));
     out
 }
 
-fn fill(server: &mut Server, context: &CommandContext, source: &CommandSourceStack, mode: Mode, keep: bool, strict: bool) -> Result<i32, CommandSyntaxException> {
+#[allow(clippy::too_many_arguments)]
+fn fill(
+    server: &mut Server,
+    context: &CommandContext,
+    source: &CommandSourceStack,
+    mode: Mode,
+    keep: bool,
+    strict: bool,
+    lambda: &'static [&'static str],
+) -> Result<i32, CommandSyntaxException> {
+    let _lambda = main_thread_frames::enter_static(lambda);
     let from = get_loaded_block_pos(server, context, source, "from")?;
     let to = get_loaded_block_pos(server, context, source, "to")?;
     let filter = if keep {
@@ -72,27 +93,31 @@ fn fill(server: &mut Server, context: &CommandContext, source: &CommandSourceSta
 }
 
 pub fn replace(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    fill(server, context, source, Mode::Replace, false, false)
+    fill(server, context, source, Mode::Replace, false, false, &REPLACE_LAMBDA)
+}
+
+pub fn replace_all(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    fill(server, context, source, Mode::Replace, false, false, &REPLACE_ALL_LAMBDA)
 }
 
 pub fn outline(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    fill(server, context, source, Mode::Outline, false, false)
+    fill(server, context, source, Mode::Outline, false, false, &OUTLINE_LAMBDA)
 }
 
 pub fn hollow(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    fill(server, context, source, Mode::Hollow, false, false)
+    fill(server, context, source, Mode::Hollow, false, false, &HOLLOW_LAMBDA)
 }
 
 pub fn destroy(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    fill(server, context, source, Mode::Destroy, false, false)
+    fill(server, context, source, Mode::Destroy, false, false, &DESTROY_LAMBDA)
 }
 
 pub fn strict(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    fill(server, context, source, Mode::Replace, false, true)
+    fill(server, context, source, Mode::Replace, false, true, &STRICT_LAMBDA)
 }
 
 pub fn keep(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
-    fill(server, context, source, Mode::Replace, true, false)
+    fill(server, context, source, Mode::Replace, true, false, &KEEP_LAMBDA)
 }
 
 fn fill_blocks(
@@ -116,6 +141,7 @@ fn fill_blocks(
         return Err(ERROR_FAILED.create());
     }
     let mut count = 0;
+    let phase = main_thread_frames::enter_static(&FILL_BLOCKS_PLACE);
     for pos in region.positions() {
         let passes = match &filter {
             None => true,
@@ -141,9 +167,11 @@ fn fill_blocks(
             }
         }
     }
+    phase.switch_to(&FILL_BLOCKS_UPDATE);
     for (pos, old) in updated {
         level.update_neighbours_on_block_set(pos, old);
     }
+    drop(phase);
     if count == 0 {
         return Err(ERROR_FAILED.create());
     }

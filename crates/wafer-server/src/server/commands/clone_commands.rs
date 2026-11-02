@@ -12,6 +12,7 @@ use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
 use crate::server::level::ServerLevel;
+use crate::server::main_thread_frames;
 use crate::world::level::BlockGetter;
 use crate::world::level::levelgen::structure::BoundingBox;
 use crate::world::level::storage::tag_value_input;
@@ -21,6 +22,19 @@ const CLONE_COMMANDS_LOGGER: &str = "net.minecraft.server.commands.CloneCommands
 static ERROR_OVERLAP: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.clone.overlap");
 static ERROR_AREA_TOO_LARGE: Dynamic2CommandExceptionType = Dynamic2CommandExceptionType(|max, count| tr("commands.clone.toobig", vec![max, count]));
 static ERROR_FAILED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.clone.failed");
+
+pub const MODE_SUFFIX_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.lambda$modeSuffix$0(CloneCommands.java:117)"];
+pub const FILTER_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.lambda$wrapWithCloneMode$0(CloneCommands.java:147)"];
+pub const FORCE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.lambda$wrapWithCloneMode$1(CloneCommands.java:150)"];
+pub const MOVE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.lambda$wrapWithCloneMode$2(CloneCommands.java:154)"];
+pub const NORMAL_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.lambda$wrapWithCloneMode$3(CloneCommands.java:158)"];
+const CLONE_COLLECT: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.clone(CloneCommands.java:201)"];
+const CLONE_CLEAR_BARRIER: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.clone(CloneCommands.java:231)"];
+const CLONE_CLEAR_AIR: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.clone(CloneCommands.java:235)"];
+const CLONE_BARRIER: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.clone(CloneCommands.java:246)"];
+const CLONE_SET: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.clone(CloneCommands.java:250)"];
+const CLONE_BLOCK_ENTITIES: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.clone(CloneCommands.java:263)"];
+const CLONE_UPDATE: [&str; 1] = ["net.minecraft.server.commands.CloneCommands.clone(CloneCommands.java:268)"];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -62,6 +76,18 @@ pub fn executors() -> Vec<(String, CommandFn)> {
 
 pub fn clone(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
     let literal = |name: &str| context.nodes.iter().any(|n| CommandNode::get(n.node).name == name);
+    let lambda: &'static [&'static str] = if literal("force") {
+        &FORCE_LAMBDA
+    } else if literal("move") {
+        &MOVE_LAMBDA
+    } else if literal("normal") {
+        &NORMAL_LAMBDA
+    } else if literal("replace") || literal("masked") || context.has_argument("filter") {
+        &FILTER_LAMBDA
+    } else {
+        &MODE_SUFFIX_LAMBDA
+    };
+    let _lambda = main_thread_frames::enter_static(lambda);
     let from_dimension =
         |server: &Server| if context.has_argument("sourceDimension") { context.get_dimension(server, "sourceDimension") } else { Ok(source.level) };
     let begin_level = from_dimension(server)?;
@@ -142,6 +168,7 @@ fn clone_blocks(
     let mut clear = VecDeque::new();
     let _collector = tag_value_input::ScopedCollector::new_empty(CLONE_COMMANDS_LOGGER);
     let offset = BlockPos::new(destination.min.x - from.min.x, destination.min.y - from.min.y, destination.min.z - from.min.z);
+    let phase = main_thread_frames::enter_static(&CLONE_COLLECT);
     for z in from.min.z..=from.max.z {
         for y in from.min.y..=from.max.y {
             for x in from.min.x..=from.max.x {
@@ -177,10 +204,12 @@ fn clone_blocks(
     let default_flags = 2 | if strict { 816 } else { 0 };
     if mode == Mode::Move {
         let level = &mut server.levels[from_dimension];
+        phase.switch_to(&CLONE_CLEAR_BARRIER);
         for &pos in &clear {
             level.set_block(pos, blocks::BARRIER.default_state(), default_flags | 816);
         }
         let standard_flags = if strict { default_flags } else { 3 };
+        phase.switch_to(&CLONE_CLEAR_AIR);
         for &pos in &clear {
             level.set_block(pos, blocks::AIR.default_state(), standard_flags);
         }
@@ -191,15 +220,18 @@ fn clone_blocks(
     infos.extend(block_entities);
     infos.extend(other);
     let level = &mut server.levels[to_dimension];
+    phase.switch_to(&CLONE_BARRIER);
     for info in infos.iter().rev() {
         level.set_block(info.pos, blocks::BARRIER.default_state(), default_flags | 816);
     }
     let mut count = 0;
+    phase.switch_to(&CLONE_SET);
     for info in &infos {
         if level.set_block(info.pos, info.state, default_flags) {
             count += 1;
         }
     }
+    phase.switch_to(&CLONE_BLOCK_ENTITIES);
     for info in &mut infos[solid_count..solid_count + block_entity_count] {
         if let Some(block_entity_info) = info.block_entity_info.take()
             && let Some(new_block_entity) = level.get_block_entity(info.pos)
@@ -213,10 +245,12 @@ fn clone_blocks(
         level.set_block(info.pos, info.state, default_flags);
     }
     if !strict {
+        phase.switch_to(&CLONE_UPDATE);
         for info in infos.iter().rev() {
             level.update_neighbours_on_block_set(info.pos, info.previous_state_at_destination);
         }
     }
+    drop(phase);
     let ticks = server.levels[from_dimension].chunks.block_ticks.ticks_in_area(&from);
     server.levels[to_dimension].chunks.block_ticks.copy_area_from(ticks, offset);
     if count == 0 {

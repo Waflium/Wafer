@@ -8,6 +8,7 @@ use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
 use crate::server::level::ServerLevel;
+use crate::server::main_thread_frames;
 use crate::world::level::chunk::Biome;
 use crate::world::level::levelgen::structure::BoundingBox;
 
@@ -16,6 +17,12 @@ static ERROR_VOLUME_TOO_LARGE: Dynamic2CommandExceptionType = Dynamic2CommandExc
 pub static ERROR_NO_BIOMES_SET: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.fillbiome.no_changes");
 
 type Result<T> = std::result::Result<T, CommandSyntaxException>;
+
+pub const FILL_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillBiomeCommand.lambda$register$0(FillBiomeCommand.java:58)"];
+pub const FILL_REPLACE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.FillBiomeCommand.lambda$register$2(FillBiomeCommand.java:62)"];
+const FILL_COMMAND: [&str; 1] = ["net.minecraft.server.commands.FillBiomeCommand.fill(FillBiomeCommand.java:142)"];
+const FILL_BIOMES: [&str; 1] = ["net.minecraft.server.commands.FillBiomeCommand.fill(FillBiomeCommand.java:124)"];
+const RESEND_BIOMES: [&str; 1] = ["net.minecraft.server.commands.FillBiomeCommand.fill(FillBiomeCommand.java:133)"];
 
 fn quantize_coord(block_coord: i32) -> i32 {
     (block_coord >> 2) << 2
@@ -52,6 +59,7 @@ pub fn fill(
         }
     }
     let mut changed_count = 0;
+    let phase = main_thread_frames::enter_static(&FILL_BIOMES);
     chunks.retain(|&pos| {
         let chunk = level.chunks.loaded_chunk_mut(pos).expect("full chunk");
         let previous_changed_count = changed_count;
@@ -75,7 +83,9 @@ pub fn fill(
         }
     });
     if changed_count > 0 {
+        phase.switch_to(&RESEND_BIOMES);
         level.resend_biomes_for_chunks(&chunks);
+        drop(phase);
         success_message_consumer(Component::translatable_with(
             "commands.fillbiome.success.count",
             vec![changed_count.into(), region.min.x.into(), region.min.y.into(), region.min.z.into(), region.max.x.into(), region.max.y.into(), region.max.z.into()],
@@ -87,10 +97,12 @@ pub fn fill(
 }
 
 pub fn fill_all(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&FILL_LAMBDA);
     fill_command(server, context, source, |_| true)
 }
 
 pub fn fill_replace(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32> {
+    let _lambda = main_thread_frames::enter_static(&FILL_REPLACE_LAMBDA);
     let (tag, id) = context.get_resource_or_tag("filter");
     let biomes = wafer_data::registry_entries("minecraft:worldgen/biome").unwrap_or_default();
     let id = id.to_string();
@@ -108,7 +120,7 @@ fn fill_command(server: &mut Server, context: &CommandContext, source: &CommandS
     let biome_id = context.get_identifier("biome");
     let biome = Biome::by_name(biome_id).ok_or_else(|| ERROR_UNKNOWN_RESOURCE.create(biome_id, "minecraft:worldgen/biome"))?;
     let mut message = None;
-    let result = fill(&mut server.levels[source.level], raw_from, raw_to, biome, filter, |m| message = Some(m))?;
+    let result = main_thread_frames::within(&FILL_COMMAND, || fill(&mut server.levels[source.level], raw_from, raw_to, biome, filter, |m| message = Some(m)))?;
     if let Some(message) = message {
         source.send_success(server, || message, true);
     }

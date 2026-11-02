@@ -41,7 +41,7 @@ struct Waiter {
 struct State {
     waiting: Vec<Arc<Waiter>>,
     running: usize,
-    live: Vec<(String, u32)>,
+    live: Vec<(String, u32, u32)>,
 }
 
 struct Shared {
@@ -77,7 +77,7 @@ impl CachedThreadPool {
         }
         let name = (self.shared.next_name)();
         let priority = current_priority();
-        state.live.push((name.clone(), priority));
+        state.live.push((name.clone(), priority, super::next_java_thread_id()));
         drop(state);
         let shared = self.shared.clone();
         let thread_name = name.clone();
@@ -99,14 +99,14 @@ impl CachedThreadPool {
         }
     }
 
-    pub fn live_thread_priorities(&self) -> Vec<(String, u32)> {
+    pub fn live_threads(&self) -> Vec<(String, u32, u32)> {
         self.shared.state.lock().unwrap().live.clone()
     }
 }
 
 fn exit(shared: &Shared, name: &str) {
     let mut state = shared.state.lock().unwrap();
-    if let Some(index) = state.live.iter().position(|(live, _)| live == name) {
+    if let Some(index) = state.live.iter().position(|(live, _, _)| live == name) {
         state.live.remove(index);
     }
 }
@@ -140,7 +140,7 @@ fn run_worker(shared: Arc<Shared>, name: String, first: Task) {
                 match state.waiting.iter().position(|waiting| Arc::ptr_eq(waiting, &waiter)) {
                     Some(index) => {
                         state.waiting.remove(index);
-                        if let Some(index) = state.live.iter().position(|(live, _)| *live == name) {
+                        if let Some(index) = state.live.iter().position(|(live, _, _)| *live == name) {
                             state.live.remove(index);
                         }
                         return;
@@ -199,6 +199,7 @@ mod tests {
         release_third.send(()).unwrap();
         pool.await_tasks(Duration::from_secs(5));
         assert_eq!(*names.lock().unwrap(), ["T-1", "T-2", "T-1"]);
-        assert_eq!(pool.live_thread_priorities(), [("T-1".to_string(), 5), ("T-2".to_string(), 5)]);
+        let live: Vec<(String, u32)> = pool.live_threads().into_iter().map(|(name, priority, _)| (name, priority)).collect();
+        assert_eq!(live, [("T-1".to_string(), 5), ("T-2".to_string(), 5)]);
     }
 }

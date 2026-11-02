@@ -6,10 +6,20 @@ use crate::commands::brigadier::{CommandContext, CommandSyntaxException, SimpleC
 use crate::commands::source::CommandSourceStack;
 use crate::network::chat::{Arg, Component};
 use crate::server::Server;
+use crate::server::main_thread_frames;
 use crate::world::level::BlockGetter;
 use crate::world::level::update_flags::UPDATE_LIMIT;
 
 static ERROR_FAILED: SimpleCommandExceptionType = SimpleCommandExceptionType("commands.setblock.failed");
+
+pub const REPLACE_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.SetBlockCommand.lambda$register$1(SetBlockCommand.java:39)"];
+pub const DESTROY_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.SetBlockCommand.lambda$register$2(SetBlockCommand.java:42)"];
+pub const KEEP_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.SetBlockCommand.lambda$register$3(SetBlockCommand.java:46)"];
+pub const REPLACE_LITERAL_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.SetBlockCommand.lambda$register$4(SetBlockCommand.java:50)"];
+pub const STRICT_LAMBDA: [&str; 1] = ["net.minecraft.server.commands.SetBlockCommand.lambda$register$5(SetBlockCommand.java:54)"];
+const SET_BLOCK_DESTROY: [&str; 1] = ["net.minecraft.server.commands.SetBlockCommand.setBlock(SetBlockCommand.java:72)"];
+const SET_BLOCK_PLACE: [&str; 1] = ["net.minecraft.server.commands.SetBlockCommand.setBlock(SetBlockCommand.java:78)"];
+const SET_BLOCK_UPDATE: [&str; 1] = ["net.minecraft.server.commands.SetBlockCommand.setBlock(SetBlockCommand.java:83)"];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -18,21 +28,31 @@ enum Mode {
 }
 
 pub fn replace(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    let _lambda = main_thread_frames::enter_static(&REPLACE_LAMBDA);
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     set_block(server, source, pos, context.get_block("block"), Mode::Replace, false, false)
 }
 
 pub fn destroy(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    let _lambda = main_thread_frames::enter_static(&DESTROY_LAMBDA);
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     set_block(server, source, pos, context.get_block("block"), Mode::Destroy, false, false)
 }
 
 pub fn keep(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    let _lambda = main_thread_frames::enter_static(&KEEP_LAMBDA);
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     set_block(server, source, pos, context.get_block("block"), Mode::Replace, true, false)
 }
 
+pub fn replace_literal(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    let _lambda = main_thread_frames::enter_static(&REPLACE_LITERAL_LAMBDA);
+    let pos = get_loaded_block_pos(server, context, source, "pos")?;
+    set_block(server, source, pos, context.get_block("block"), Mode::Replace, false, false)
+}
+
 pub fn strict(server: &mut Server, context: &CommandContext, source: &CommandSourceStack) -> Result<i32, CommandSyntaxException> {
+    let _lambda = main_thread_frames::enter_static(&STRICT_LAMBDA);
     let pos = get_loaded_block_pos(server, context, source, "pos")?;
     set_block(server, source, pos, context.get_block("block"), Mode::Replace, false, true)
 }
@@ -46,17 +66,17 @@ fn set_block(server: &mut Server, source: &CommandSourceStack, pos: BlockPos, bl
         return Err(ERROR_FAILED.create());
     }
     let place_needed = if mode == Mode::Destroy {
-        level.destroy_block(pos, true, None, UPDATE_LIMIT);
+        main_thread_frames::within(&SET_BLOCK_DESTROY, || level.destroy_block(pos, true, None, UPDATE_LIMIT));
         !block.state.is_air() || !level.block_state(pos).is_air()
     } else {
         true
     };
     let old = level.block_state(pos);
-    if place_needed && !block.place(level, pos, 2 | if strict { 816 } else { 256 }) {
+    if place_needed && !main_thread_frames::within(&SET_BLOCK_PLACE, || block.place(level, pos, 2 | if strict { 816 } else { 256 })) {
         return Err(ERROR_FAILED.create());
     }
     if !strict {
-        level.update_neighbours_on_block_set(pos, old);
+        main_thread_frames::within(&SET_BLOCK_UPDATE, || level.update_neighbours_on_block_set(pos, old));
     }
     source.send_success(server, || Component::translatable_with("commands.setblock.success", vec![Arg::Int(pos.x), Arg::Int(pos.y), Arg::Int(pos.z)]), true);
     Ok(1)
