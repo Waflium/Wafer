@@ -387,6 +387,11 @@ impl ServerLevel {
         self.process_chunk_events();
     }
 
+    pub fn save_all_chunks(&mut self, flush: bool) -> std::io::Result<usize> {
+        let game_time = self.game_time;
+        super::chunk_cache::ChunkCache::save_all_chunks(self, game_time, flush, |level| &mut level.chunks, ServerLevel::managed_block_step)
+    }
+
     pub fn get_chunk(&mut self, pos: ChunkPos) -> &mut crate::world::level::chunk::LevelChunk {
         self.load_chunk(pos);
         self.chunks.loaded_full_chunk(pos)

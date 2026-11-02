@@ -63,6 +63,21 @@ const CHUNK_LOAD_FAILURE_FRAMES: [&str; 6] = [
     "java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:503)",
 ];
 
+const SAVE_ALL_CHUNKS_BLOCK: [&str; 12] = [
+    crate::server::main_thread_frames::MANAGED_BLOCK,
+    "net.minecraft.server.level.ChunkMap.lambda$saveAllChunks$0(ChunkMap.java:438)",
+    "java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:214)",
+    "java.base/java.util.AbstractList$RandomAccessSpliterator.forEachRemaining(AbstractList.java:722)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:153)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:176)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:632)",
+    "net.minecraft.server.level.ChunkMap.saveAllChunks(ChunkMap.java:443)",
+    "net.minecraft.server.level.ServerChunkCache.save(ServerChunkCache.java:296)",
+];
+
 struct Job {
     pos: ChunkPos,
     holder: u64,
@@ -2477,32 +2492,44 @@ impl ChunkCache {
     }
 
     pub fn save(&mut self, game_time: i64, flush: bool) -> io::Result<usize> {
-        if self.io.is_none() {
+        Self::save_all_chunks(self, game_time, flush, |cache| cache, ChunkCache::managed_block_step)
+    }
+
+    pub fn save_all_chunks<C>(context: &mut C, game_time: i64, flush: bool, chunks: fn(&mut C) -> &mut ChunkCache, managed_block_step: fn(&mut C)) -> io::Result<usize> {
+        let cache = chunks(context);
+        if cache.io.is_none() {
             return Ok(0);
         }
-        self.game_time = game_time;
-        self.run_distance_manager_updates();
+        cache.game_time = game_time;
+        cache.run_distance_manager_updates();
         if !flush {
-            self.next_chunk_save_time.clear();
+            cache.next_chunk_save_time.clear();
             let now = Instant::now();
-            let visible = self.holders.ordered_keys();
-            let saved = visible.into_iter().filter(|&pos| self.save_chunk_if_needed(pos, now)).count();
+            let visible = cache.holders.ordered_keys();
+            let saved = visible.into_iter().filter(|&pos| cache.save_chunk_if_needed(pos, now)).count();
             return Ok(saved);
         }
-        let chunks_to_save: Vec<i64> = self.holders.ordered_keys().into_iter().filter(|key| self.holders.map[key].was_accessible_since_last_save).collect();
+        let chunks_to_save: Vec<i64> = cache.holders.ordered_keys().into_iter().filter(|key| cache.holders.map[key].was_accessible_since_last_save).collect();
         for &key in &chunks_to_save {
-            self.refresh_accessibility(key);
+            cache.refresh_accessibility(key);
         }
         let mut saved = 0;
         loop {
             let mut did_work = false;
             for &key in &chunks_to_save {
-                while self.holders.get(key).is_some_and(|holder| !holder.is_ready_for_saving(&self.holders.futures)) {
-                    self.managed_block_step();
+                {
+                    let _scope = crate::server::main_thread_frames::enter_static(&SAVE_ALL_CHUNKS_BLOCK);
+                    while {
+                        let cache = chunks(context);
+                        cache.holders.get(key).is_some_and(|holder| !holder.is_ready_for_saving(&cache.holders.futures))
+                    } {
+                        managed_block_step(context);
+                    }
                 }
-                let Some(holder) = self.holders.get(key) else { continue };
+                let cache = chunks(context);
+                let Some(holder) = cache.holders.get(key) else { continue };
                 let pos = holder.pos;
-                if holder.status_done(&self.holders.futures, ChunkStatus::Full) && self.save_chunk(pos) {
+                if holder.status_done(&cache.holders.futures, ChunkStatus::Full) && cache.save_chunk(pos) {
                     did_work = true;
                     saved += 1;
                 }
@@ -2511,10 +2538,11 @@ impl ChunkCache {
                 break;
             }
         }
-        self.poi_manager.storage.flush_all();
-        self.process_unloads(true);
-        self.poi_manager.storage.synchronize(true);
-        self.io.as_ref().unwrap().flush()?;
+        let cache = chunks(context);
+        cache.poi_manager.storage.flush_all();
+        cache.process_unloads(true);
+        cache.poi_manager.storage.synchronize(true);
+        cache.io.as_ref().unwrap().flush()?;
         Ok(saved)
     }
 }
@@ -2730,6 +2758,33 @@ mod tests {
         let mut by_sector: Vec<(u32, ChunkPos)> = targets.iter().map(|&pos| (u32::from_be_bytes(header[(pos.x + pos.z * 32) as usize * 4..][..4].try_into().unwrap()) >> 8, pos)).collect();
         by_sector.sort();
         assert_eq!(by_sector.into_iter().map(|(_, pos)| pos).collect::<Vec<_>>(), creation_order);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn flushed_saves_add_the_legacy_entities_of_the_chunks_they_wait_for() {
+        let dir = std::env::temp_dir().join(format!("wafer-flush-legacy-entities-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let target = ChunkPos::new(10, 10);
+        let mut cache = ChunkCache::new(overworld(), FlatLevelSource::default(), Some(RegionStorage::new(dir.clone(), false)));
+        cache.chunk(target);
+        cache.save(0, true).unwrap();
+        drop(cache);
+        let mut storage = RegionStorage::new(dir.clone(), false);
+        let Some(wafer_protocol::nbt::Nbt::Compound(mut fields)) = storage.read(target).unwrap() else { panic!("saved chunk") };
+        fields.push(("entities".into(), crate::nbt::parse_fully(r#"[{id:"minecraft:pig",Pos:[168.5d,-60.0d,168.5d]}]"#).unwrap()));
+        storage.write(target, &wafer_protocol::nbt::Nbt::Compound(fields)).unwrap();
+        storage.flush().unwrap();
+        drop(storage);
+        let chunks = ChunkCache::new(overworld(), FlatLevelSource::default(), Some(RegionStorage::new(dir.clone(), false)));
+        let mut level = ServerLevel::new(OVERWORLD, 0, chunks, None, 10, 10);
+        level.chunks.update_chunk_forced(ChunkPos::new(13, 10), true);
+        level.finish_chunk_work();
+        assert!(level.chunks.chunk_if_present(target).is_some());
+        assert!(level.entities.is_empty());
+        level.chunks.update_chunk_forced(ChunkPos::new(12, 10), true);
+        level.save_all_chunks(true).unwrap();
+        assert_eq!(level.entities.len(), 1);
         let _ = std::fs::remove_dir_all(dir);
     }
 

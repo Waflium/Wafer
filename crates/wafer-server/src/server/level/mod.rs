@@ -427,7 +427,7 @@ impl ServerLevel {
             self.defer_full_status_changes = false;
             self.process_chunk_events();
         }
-        if self.chunks.save(self.game_time, flush).is_err() {
+        if self.save_all_chunks(flush).is_err() {
             warn!("Failed to synchronize chunks");
         }
         drop(_scope);
@@ -1470,7 +1470,7 @@ impl ServerLevel {
             }
         });
         self.saved_data_writes.save_and_join(tags_to_save);
-        if self.chunks.save(self.game_time, true).is_err() {
+        if self.save_all_chunks(true).is_err() {
             warn!("Failed to synchronize chunks");
         }
         self.save_all_entities();
