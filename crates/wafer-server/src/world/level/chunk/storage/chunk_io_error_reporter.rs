@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::mpsc::{Sender, channel};
 
 use wafer_core::ChunkPos;
 
@@ -29,13 +28,10 @@ const MISPLACED_CHUNK_REPORTED_FRAME: &str = "net.minecraft.world.level.chunk.st
 const LOW_DISK_SPACE_REPORT_BYTES: u64 = 8192;
 const LOW_DISK_SPACE_WARNING_BYTES: u64 = 67_108_864;
 
-type StoreJob = Box<dyn FnOnce() + Send>;
-
 struct Shared {
     suppressed_exceptions: SuppressedExceptionCollector,
     server_directory: PathBuf,
     level_directory: Option<PathBuf>,
-    store_jobs: Sender<StoreJob>,
 }
 
 #[derive(Clone)]
@@ -59,15 +55,7 @@ pub fn chunk_load_failure_cause(throwable: &JavaThrowable) -> &JavaThrowable {
 
 impl ChunkIoErrorReporter {
     pub fn new(server_directory: PathBuf, level_directory: Option<PathBuf>) -> ChunkIoErrorReporter {
-        let (store_jobs, jobs) = channel::<StoreJob>();
-        let _ = std::thread::Builder::new().name(crate::server::level::chunk_workers::next_io_worker_name()).spawn(move || {
-            for job in jobs {
-                job();
-            }
-        });
-        ChunkIoErrorReporter {
-            shared: Arc::new(Shared { suppressed_exceptions: SuppressedExceptionCollector::default(), server_directory, level_directory, store_jobs }),
-        }
+        ChunkIoErrorReporter { shared: Arc::new(Shared { suppressed_exceptions: SuppressedExceptionCollector::default(), server_directory, level_directory }) }
     }
 
     pub fn suppressed_exceptions(&self) -> &SuppressedExceptionCollector {
@@ -77,11 +65,11 @@ impl ChunkIoErrorReporter {
     fn store_chunk_io_error(&self, mut report: CrashReport, pos: ChunkPos, storage_info: &RegionStorageInfo) {
         let debug_directory = self.shared.server_directory.join("debug");
         let storage_info = storage_info.clone();
-        let _ = self.shared.store_jobs.send(Box::new(move || {
+        crate::util::io_pool().execute(move || {
             if let Err(e) = store_report(&mut report, &debug_directory, pos, &storage_info) {
                 warn!("Failed to store chunk IO exception\n{}", e.print_stack_trace().trim_end());
             }
-        }));
+        });
     }
 
     pub fn report_chunk_load_failure(&self, throwable: &JavaThrowable, storage_info: &RegionStorageInfo, pos: ChunkPos) {

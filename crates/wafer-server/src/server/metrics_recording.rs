@@ -131,7 +131,7 @@ impl Server {
         let job = recorder.into_save_job(results);
         let on_finished = self.on_metrics_recording_finished.take();
         let Some(sender) = self.task_sender.clone() else { return };
-        let spawned = std::thread::Builder::new().name(crate::server::level::chunk_workers::next_io_worker_name()).spawn(move || {
+        crate::util::io_pool().execute(move || {
             let report_path = match job.run(&MetricsPersister::new("server")) {
                 Ok(report_path) => report_path,
                 Err(e) => {
@@ -154,9 +154,6 @@ impl Server {
                 on_finished(report_path, context, sender);
             }
         });
-        if let Err(e) = spawned {
-            error!("Could not start the profiler report thread\n{e}");
-        }
     }
 
     fn profiler_measured(&mut self) -> Vec<ProfilerMeasured> {

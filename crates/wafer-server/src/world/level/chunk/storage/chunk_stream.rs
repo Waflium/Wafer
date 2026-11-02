@@ -694,6 +694,21 @@ fn static_size(kind: TagKind) -> i32 {
     }
 }
 
+pub fn create_reported_crash_report(failure: &JavaThrowable) {
+    let (Some(report), Some(cause)) = (&failure.report, failure.cause.as_deref()) else { return };
+    if failure.description != REPORTED_NBT_EXCEPTION {
+        return;
+    }
+    let creator = match failure.stack_trace.first() {
+        Some(&READ_TAG_SAFE_THROW) => "net.minecraft.nbt.NbtIo.readTagSafe(NbtIo.java:192)",
+        Some(&READ_NAMED_TAG_DATA_THROW) => "net.minecraft.nbt.CompoundTag.readNamedTagData(CompoundTag.java:513)",
+        _ => return,
+    };
+    let frames: Vec<&'static str> = std::iter::once(creator).chain(failure.stack_trace[1..].iter().copied()).collect();
+    let _creator = crate::util::java_stack::enter_all(&frames);
+    crate::crash_report::CrashReport::for_throwable(cause, &report.title);
+}
+
 fn wrap(cause: Failure, throw_frame: &'static str, details: Vec<(String, String)>, load_frame: &'static str) -> Failure {
     let report = ThrowableReport { title: "Loading NBT data".to_string(), category: "NBT Tag".to_string(), details, category_stack_trace: vec![load_frame] };
     JavaThrowable::new(REPORTED_NBT_EXCEPTION, vec![throw_frame]).with_cause(cause).with_report(report)

@@ -39,8 +39,11 @@ pub fn report_unregistered_holder(throwable: &JavaThrowable) {
     crate::crash_report::on_thread_exception(&name, id, throwable);
 }
 
-pub fn io_worker_count() -> usize {
-    IO_WORKER_COUNT.load(Ordering::Relaxed) - 1
+pub fn live_io_workers() -> Vec<(usize, u32)> {
+    let mut workers: Vec<(usize, u32)> =
+        crate::util::io_pool().live_thread_priorities().iter().filter_map(|(name, priority)| Some((name.rsplit('-').next()?.parse().ok()?, *priority))).collect();
+    workers.sort_unstable();
+    workers
 }
 
 pub fn worker_main_count() -> usize {
@@ -126,90 +129,122 @@ enum IoRequest {
     Clear { pos: ChunkPos },
     WriteChunk(Box<ChunkToSave>),
     Flush { flush: bool, reply: Sender<io::Result<()>> },
-    SetReporting(IoReporting),
 }
 
 
+struct IoQueue {
+    requests: VecDeque<IoRequest>,
+    running: bool,
+}
+
+struct IoShared {
+    queue: Mutex<IoQueue>,
+    storage: Mutex<RegionStorage>,
+    reporting: Mutex<Option<IoReporting>>,
+    active_chunk_writes: Arc<AtomicUsize>,
+    queued_requests: Arc<AtomicUsize>,
+}
+
+fn register_for_execution(shared: &Arc<IoShared>, queue: &mut IoQueue) {
+    if !queue.running && !queue.requests.is_empty() {
+        queue.running = true;
+        let shared = shared.clone();
+        crate::util::io_pool().execute(move || run_io_worker(shared));
+    }
+}
+
+fn run_io_worker(shared: Arc<IoShared>) {
+    let request = shared.queue.lock().unwrap().requests.pop_front();
+    if let Some(request) = request {
+        shared.queued_requests.fetch_sub(1, Ordering::Relaxed);
+        let _frames = crate::server::main_thread_frames::enter_complete(storage_exception::store_worker_frames());
+        process_io_request(&shared, request);
+    }
+    let mut queue = shared.queue.lock().unwrap();
+    queue.running = false;
+    register_for_execution(&shared, &mut queue);
+}
+
+fn process_io_request(shared: &IoShared, request: IoRequest) {
+    let active = &shared.active_chunk_writes;
+    let mut storage = shared.storage.lock().unwrap();
+    let storage = &mut *storage;
+    let reporting = shared.reporting.lock().unwrap();
+    match request {
+        IoRequest::Read { pos, reply } => match guarded(|| storage.read(pos)) {
+            Err(e) if storage_exception::is_java_error(&e) => {
+                let thread = thread::current();
+                let name = thread.name().unwrap_or_default();
+                let id = name.rsplit('-').next().and_then(|n| n.parse::<u32>().ok()).map_or(0, |n| 111 + n);
+                crate::crash_report::on_thread_exception(name, id, &storage_exception::on_load_worker_uncaught(&e));
+                std::mem::forget(reply);
+            }
+            result => reply(result.map_err(|e| {
+                let failure = storage_exception::on_load_worker(&e);
+                crate::world::level::chunk::storage::chunk_stream::create_reported_crash_report(&failure);
+                warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+                io::Error::new(e.kind(), failure)
+            })),
+        },
+        IoRequest::ScanStructures { pos, reply } => reply(guarded(|| storage.scan_structures(pos)).map_err(|e| {
+            let failure = storage_exception::on_scan_worker(&e);
+            warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+            io::Error::new(e.kind(), failure)
+        })),
+        IoRequest::ScanOldData { pos, reply } => reply(guarded(|| storage.scan_chunk(pos)).map_err(|e| {
+            let failure = storage_exception::on_scan_worker(&e);
+            warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
+            io::Error::new(e.kind(), failure)
+        })),
+        IoRequest::Write { pos, nbt } => {
+            write(storage, pos, &nbt, reporting.as_ref());
+            active.fetch_sub(1, Ordering::Relaxed);
+        }
+        IoRequest::Clear { pos } => {
+            if let Err(e) = guarded(|| storage.clear(pos)) {
+                store_failed(pos, &e, reporting.as_ref());
+            }
+        }
+        IoRequest::WriteChunk(save) => {
+            let ChunkToSave { chunk, status, block_entities, game_time, block_ticks, fluid_ticks, light } = *save;
+            match guarded(|| Ok(serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light))) {
+                Ok(nbt) => write(storage, chunk.pos, &nbt, reporting.as_ref()),
+                Err(e) if is_unregistered_holder(&JavaThrowable::from_io_error(&e)) => report_unregistered_holder(&JavaThrowable::from_io_error(&e)),
+                Err(e) => store_failed(chunk.pos, &e, reporting.as_ref()),
+            }
+            active.fetch_sub(1, Ordering::Relaxed);
+        }
+        IoRequest::Flush { flush, reply } => drop(reply.send(if flush { guarded(|| storage.flush()) } else { Ok(()) })),
+    }
+}
+
 #[derive(Clone)]
 pub struct IoWorker {
-    requests: Sender<IoRequest>,
+    shared: Arc<IoShared>,
     pub active_chunk_writes: Arc<AtomicUsize>,
     queued_requests: Arc<AtomicUsize>,
 }
 
 impl IoWorker {
-    pub fn new(mut storage: RegionStorage) -> IoWorker {
-        let (requests, incoming) = channel::<IoRequest>();
+    pub fn new(storage: RegionStorage) -> IoWorker {
         let active_chunk_writes = Arc::new(AtomicUsize::new(0));
-        let active = active_chunk_writes.clone();
         let queued_requests = Arc::new(AtomicUsize::new(0));
-        let queued = queued_requests.clone();
-        thread::Builder::new()
-            .name(next_io_worker_name())
-            .spawn(move || {
-                let _frames = crate::server::main_thread_frames::enter_complete(storage_exception::store_worker_frames());
-                let mut reporting: Option<IoReporting> = None;
-                for request in incoming {
-                    queued.fetch_sub(1, Ordering::Relaxed);
-                    match request {
-                        IoRequest::Read { pos, reply } => match guarded(|| storage.read(pos)) {
-                            Err(e) if storage_exception::is_java_error(&e) => {
-                                let thread = thread::current();
-                                let name = thread.name().unwrap_or_default();
-                                let id = name.rsplit('-').next().and_then(|n| n.parse::<u32>().ok()).map_or(0, |n| 111 + n);
-                                crate::crash_report::on_thread_exception(name, id, &storage_exception::on_load_worker_uncaught(&e));
-                                std::mem::forget(reply);
-                            }
-                            result => reply(result.map_err(|e| {
-                                let failure = storage_exception::on_load_worker(&e);
-                                warn!("Failed to read chunk {pos}\n{}", failure.print_stack_trace().trim_end());
-                                io::Error::new(e.kind(), failure)
-                            })),
-                        },
-                        IoRequest::ScanStructures { pos, reply } => reply(guarded(|| storage.scan_structures(pos)).map_err(|e| {
-                            let failure = storage_exception::on_scan_worker(&e);
-                            warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
-                            io::Error::new(e.kind(), failure)
-                        })),
-                        IoRequest::ScanOldData { pos, reply } => reply(guarded(|| storage.scan_chunk(pos)).map_err(|e| {
-                            let failure = storage_exception::on_scan_worker(&e);
-                            warn!("Failed to bulk scan chunk {pos}\n{}", failure.print_stack_trace().trim_end());
-                            io::Error::new(e.kind(), failure)
-                        })),
-                        IoRequest::Write { pos, nbt } => {
-                            write(&mut storage, pos, &nbt, reporting.as_ref());
-                            active.fetch_sub(1, Ordering::Relaxed);
-                        }
-                        IoRequest::Clear { pos } => {
-                            if let Err(e) = guarded(|| storage.clear(pos)) {
-                                store_failed(pos, &e, reporting.as_ref());
-                            }
-                        }
-                        IoRequest::WriteChunk(save) => {
-                            let ChunkToSave { chunk, status, block_entities, game_time, block_ticks, fluid_ticks, light } = *save;
-                            match guarded(|| Ok(serialization::write(&chunk, status, block_entities, game_time, &block_ticks, &fluid_ticks, &light))) {
-                                Ok(nbt) => write(&mut storage, chunk.pos, &nbt, reporting.as_ref()),
-                                Err(e) if is_unregistered_holder(&JavaThrowable::from_io_error(&e)) => report_unregistered_holder(&JavaThrowable::from_io_error(&e)),
-                                Err(e) => store_failed(chunk.pos, &e, reporting.as_ref()),
-                            }
-                            active.fetch_sub(1, Ordering::Relaxed);
-                        }
-                        IoRequest::Flush { flush, reply } => drop(reply.send(if flush { guarded(|| storage.flush()) } else { Ok(()) })),
-                        IoRequest::SetReporting(new_reporting) => reporting = Some(new_reporting),
-                    }
-                }
-            })
-            .expect("IO worker thread");
-        IoWorker { requests, active_chunk_writes, queued_requests }
+        let shared = Arc::new(IoShared {
+            queue: Mutex::new(IoQueue { requests: VecDeque::new(), running: false }),
+            storage: Mutex::new(storage),
+            reporting: Mutex::new(None),
+            active_chunk_writes: active_chunk_writes.clone(),
+            queued_requests: queued_requests.clone(),
+        });
+        IoWorker { shared, active_chunk_writes, queued_requests }
     }
 
     fn submit(&self, request: IoRequest) -> Result<(), std::sync::mpsc::SendError<IoRequest>> {
         self.queued_requests.fetch_add(1, Ordering::Relaxed);
-        let sent = self.requests.send(request);
-        if sent.is_err() {
-            self.queued_requests.fetch_sub(1, Ordering::Relaxed);
-        }
-        sent
+        let mut queue = self.shared.queue.lock().unwrap();
+        queue.requests.push_back(request);
+        register_for_execution(&self.shared, &mut queue);
+        Ok(())
     }
 
     pub fn queue_size(&self) -> usize {
@@ -217,7 +252,7 @@ impl IoWorker {
     }
 
     pub fn set_reporting(&self, reporting: IoReporting) {
-        let _ = self.submit(IoRequest::SetReporting(reporting));
+        *self.shared.reporting.lock().unwrap() = Some(reporting);
     }
 
     pub fn read(&self, pos: ChunkPos, reply: impl FnOnce(io::Result<Option<Nbt>>) + Send + 'static) {

@@ -53,6 +53,15 @@ use crate::world::level::light_layer::LightLayer;
 use crate::world::level::lighting::{self, section};
 use crate::world::ticks::{LevelChunkTicks, LevelTicks};
 
+const CHUNK_LOAD_FAILURE_FRAMES: [&str; 6] = [
+    "net.minecraft.server.MinecraftServer.reportChunkLoadFailure(MinecraftServer.java:2243)",
+    "net.minecraft.server.level.ChunkMap.handleChunkLoadFailure(ChunkMap.java:619)",
+    "net.minecraft.server.level.ChunkMap.lambda$scheduleChunkLoad$4(ChunkMap.java:603)",
+    "java.base/java.util.concurrent.CompletableFuture.uniExceptionally(CompletableFuture.java:1011)",
+    "java.base/java.util.concurrent.CompletableFuture$UniExceptionally.tryFire(CompletableFuture.java:995)",
+    "java.base/java.util.concurrent.CompletableFuture$Completion.run(CompletableFuture.java:503)",
+];
+
 struct Job {
     pos: ChunkPos,
     holder: u64,
@@ -1947,9 +1956,9 @@ impl ChunkCache {
             self.apply_loaded(job, Ok(None));
             return;
         }
-        self.poi_manager.storage.prefetch(pos);
         let token = self.new_async_token(job);
         let (dimension, seed, results, context) = (self.dimension, self.seed, self.results.0.clone(), self.data_fix_context.clone());
+        let _worker_priority = crate::util::cached_thread_pool::enter_priority(5);
         self.io.as_ref().unwrap().read(pos, move |read| {
             chunk_workers::execute(move || {
                 let result = crate::util::catch_exception(|| {
@@ -1972,6 +1981,7 @@ impl ChunkCache {
                 let _ = results.send(WorkResult::Loaded { pos, token, result });
             });
         });
+        self.poi_manager.storage.prefetch(pos);
     }
 
     fn apply_loaded(&mut self, job: Job, result: io::Result<Option<serialization::ReadChunk>>) {
@@ -1986,6 +1996,10 @@ impl ChunkCache {
             Err(e) => {
                 if let Some(reporting) = &self.reporting {
                     let throwable = JavaThrowable::from_io_error(&e);
+                    let mut creator = CHUNK_LOAD_FAILURE_FRAMES.to_vec();
+                    creator.extend(crate::server::main_thread_frames::CHUNK_SOURCE_TASK);
+                    creator.extend(crate::server::main_thread_frames::current());
+                    let _creator = crate::util::java_stack::enter_all(&creator);
                     reporting.reporter.report_chunk_load_failure(chunk_load_failure_cause(&throwable), &reporting.info, pos);
                 }
                 None
