@@ -866,14 +866,19 @@ mod tests {
 
     #[test]
     fn io_failures_reproduce_the_bundled_server_traces() {
-        use crate::util::java_http_url_connection::{Handshake, Phase, Route};
+        use crate::util::java_http_url_connection::{Handshake, MergeHeaderRead, Phase, RetrySite, Route};
         macro_rules! fixture {
             ($name:literal) => {
                 include_str!(concat!("services_fixtures/", $name, ".txt"))
             };
         }
         let header = Phase::Header;
+        let fields = Phase::HeaderFields { read: MergeHeaderRead::InLine, status_line_parsed: true };
         let body = Phase::Body { status: 200 };
+        let retried = |site: RetrySite, failure: Failure| Failure::Retried(site, Box::new(failure));
+        let tunneling = |failure: Failure| Failure::Tunneling(Box::new(failure));
+        let reset_retry = RetrySite::ParseHttp;
+        let eof_retry = RetrySite::ParseHttpHeader;
         let mut cases: Vec<(&str, Failure)> = vec![
             (fixture!("tls_silent"), Failure::Handshake(Handshake::ReadTimedOut)),
             (fixture!("tls_close"), Failure::Handshake(Handshake::Eof)),
@@ -884,19 +889,26 @@ mod tests {
             (fixture!("pkix_tls12"), Failure::Handshake(Handshake::CertificateUnknown { tls13: false })),
             (fixture!("t_rsthello"), Failure::Handshake(Handshake::ResetOnRead)),
             (fixture!("http_silent"), Failure::ReadTimedOut(header)),
-            (fixture!("http_close"), Failure::UnexpectedEof),
-            (fixture!("http_rst"), Failure::ConnectionReset(header)),
-            (fixture!("http_partial_rst"), Failure::ConnectionReset(Phase::HeaderFields)),
-            (fixture!("http_partial_silent"), Failure::ReadTimedOut(Phase::HeaderFields)),
-            (fixture!("https_partial_rst"), Failure::ConnectionReset(Phase::HeaderFields)),
-            (fixture!("https_partial_silent"), Failure::ReadTimedOut(Phase::HeaderFields)),
+            (fixture!("http_close"), retried(eof_retry, Failure::UnexpectedEof)),
+            (fixture!("http_rst"), retried(reset_retry, Failure::ConnectionReset(header))),
+            (fixture!("http_partial_rst"), retried(reset_retry, Failure::ConnectionReset(fields))),
+            (fixture!("http_partial_silent"), Failure::ReadTimedOut(fields)),
+            (fixture!("https_partial_rst"), retried(reset_retry, Failure::ConnectionReset(fields))),
+            (fixture!("https_partial_silent"), Failure::ReadTimedOut(fields)),
+            (fixture!("http_retry_rst"), retried(eof_retry, Failure::ConnectionReset(header))),
+            (fixture!("https_305_connect_rst"), tunneling(Failure::ConnectionReset(header))),
+            (fixture!("https_305_connect_close"), tunneling(Failure::UnexpectedEof)),
+            (fixture!("https_305_connect_silent"), tunneling(Failure::ReadTimedOut(header))),
+            (fixture!("https_305_connect_partial_rst"), tunneling(Failure::ConnectionReset(fields))),
+            (fixture!("https_305_connect_partial_silent"), tunneling(Failure::ReadTimedOut(fields))),
+            (fixture!("https_305_connect_status_rst"), tunneling(Failure::ConnectionReset(Phase::HeaderFields { read: MergeHeaderRead::AfterCrLf, status_line_parsed: false }))),
             (fixture!("http_trunc"), Failure::PrematureEof { chunked: false, status: 200 }),
             (fixture!("http_trunc_chunked"), Failure::PrematureEof { chunked: true, status: 200 }),
             (fixture!("http_trunc_rst"), Failure::ConnectionReset(body)),
             (fixture!("http_body_silent"), Failure::ReadTimedOut(body)),
             (fixture!("t_silent"), Failure::ReadTimedOut(header)),
-            (fixture!("t_closeg"), Failure::UnexpectedEof),
-            (fixture!("t_rst"), Failure::ConnectionReset(header)),
+            (fixture!("t_closeg"), retried(eof_retry, Failure::UnexpectedEof)),
+            (fixture!("t_rst"), retried(reset_retry, Failure::ConnectionReset(header))),
             (fixture!("t_trunc"), Failure::PrematureEof { chunked: false, status: 200 }),
             (fixture!("t_truncrst"), Failure::ConnectionReset(body)),
             (fixture!("t_bodysilent"), Failure::ReadTimedOut(body)),
@@ -911,7 +923,19 @@ mod tests {
         cases.push((fixture!("http_305_unknownhost"), through(Route::UseProxy, Failure::UnknownHost("nonexistent.invalid".to_string()))));
         cases.push((fixture!("https_305_tunnel_404"), Failure::UnableToTunnel("HTTP/1.1 404 Not Found".to_string())));
         cases.push((fixture!("https_302_tls_silent"), through(redirect, Failure::Handshake(Handshake::ReadTimedOut))));
+        cases.push((fixture!("https_305_tunnel_rst"), through(Route::UseProxy, Failure::Handshake(Handshake::ResetOnWrite))));
+        cases.push((fixture!("https_305_tunnel_hello_rst"), through(Route::UseProxy, Failure::Handshake(Handshake::ResetOnRead))));
+        cases.push((fixture!("https_305_tunnel_hello_close"), through(Route::UseProxy, Failure::Handshake(Handshake::Eof))));
+        cases.push((fixture!("https_305_tunnel_hello_silent"), through(Route::UseProxy, Failure::Handshake(Handshake::ReadTimedOut))));
+        cases.push((fixture!("https_305_tunnel_hello_garbage"), through(Route::UseProxy, Failure::Handshake(Handshake::Unrecognized))));
+        cases.push((fixture!("https_305_tunnel_hello_alert"), through(Route::UseProxy, Failure::Handshake(Handshake::Alert("handshake_failure".to_string())))));
+        let retry = Route::Retry { site: eof_retry, proxied: false };
+        cases.push((fixture!("https_retry_hello_rst"), through(retry, Failure::Handshake(Handshake::ResetOnRead))));
+        cases.push((fixture!("https_retry_hello_close"), through(retry, Failure::Handshake(Handshake::Eof))));
+        cases.push((fixture!("https_retry_hello_silent"), through(retry, Failure::Handshake(Handshake::ReadTimedOut))));
         if cfg!(windows) {
+            cases.push((fixture!("http_retry_refused"), through(retry, Failure::ConnectionRefused)));
+            cases.push((fixture!("https_retry_refused"), through(retry, Failure::ConnectionRefused)));
             cases.push((fixture!("refused"), Failure::ConnectionRefused));
             cases.push((fixture!("http_305_refused"), through(Route::UseProxy, Failure::ConnectionRefused)));
             cases.push((fixture!("https_305_refused"), through(Route::UseProxy, Failure::ConnectionRefused)));

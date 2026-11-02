@@ -46,8 +46,56 @@ pub struct Response {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Phase {
     Header,
-    HeaderFields,
+    HeaderFields { read: MergeHeaderRead, status_line_parsed: bool },
     Body { status: u16 },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MergeHeaderRead {
+    InLine,
+    AfterLineEnd,
+    AfterCrLf,
+    AfterCrLfCr,
+}
+
+impl MergeHeaderRead {
+    fn frame(self) -> &'static str {
+        match self {
+            MergeHeaderRead::InLine => "java.base/sun.net.www.MessageHeader.mergeHeader(MessageHeader.java:546)",
+            MergeHeaderRead::AfterLineEnd => "java.base/sun.net.www.MessageHeader.mergeHeader(MessageHeader.java:561)",
+            MergeHeaderRead::AfterCrLf => "java.base/sun.net.www.MessageHeader.mergeHeader(MessageHeader.java:563)",
+            MergeHeaderRead::AfterCrLfCr => "java.base/sun.net.www.MessageHeader.mergeHeader(MessageHeader.java:565)",
+        }
+    }
+}
+
+fn parse_http_header_phase(received: &[u8]) -> Phase {
+    if received.len() < 8 {
+        return Phase::Header;
+    }
+    let mut bytes = received.iter().copied().skip(1);
+    let mut status_line_parsed = false;
+    loop {
+        loop {
+            let Some(c) = bytes.next() else { return Phase::HeaderFields { read: MergeHeaderRead::InLine, status_line_parsed } };
+            if c != b'\r' && c != b'\n' {
+                continue;
+            }
+            let Some(mut first) = bytes.next() else { return Phase::HeaderFields { read: MergeHeaderRead::AfterLineEnd, status_line_parsed } };
+            if c == b'\r' && first == b'\n' {
+                let Some(next) = bytes.next() else { return Phase::HeaderFields { read: MergeHeaderRead::AfterCrLf, status_line_parsed } };
+                first = next;
+                if first == b'\r' {
+                    let Some(next) = bytes.next() else { return Phase::HeaderFields { read: MergeHeaderRead::AfterCrLfCr, status_line_parsed } };
+                    first = next;
+                }
+            }
+            if first == b'\n' || first == b'\r' || first > b' ' {
+                status_line_parsed = true;
+                break;
+            }
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -76,6 +124,18 @@ pub enum Failure {
     TooManyRedirects(u32),
     Connect(Route, Box<Failure>),
     UnableToTunnel(String),
+    Retried(RetrySite, Box<Failure>),
+    Tunneling(Box<Failure>),
+}
+
+impl Failure {
+    fn retry_site(&self) -> Option<RetrySite> {
+        match self {
+            Failure::UnexpectedEof => Some(RetrySite::ParseHttpHeader),
+            Failure::ConnectionReset(Phase::Header | Phase::HeaderFields { .. }) | Failure::ConnectionAborted(Phase::Header | Phase::HeaderFields { .. }, _) => Some(RetrySite::ParseHttp),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -83,6 +143,40 @@ pub enum Route {
     Request,
     Redirect { switched_to_get: bool },
     UseProxy,
+    Retry { site: RetrySite, proxied: bool },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RetrySite {
+    ParseHttp,
+    ParseHttpHeader,
+}
+
+impl RetrySite {
+    fn open_server_frames(self) -> &'static [&'static str] {
+        match self {
+            RetrySite::ParseHttp => &["java.base/sun.net.www.http.HttpClient.parseHTTP(HttpClient.java:750)"],
+            RetrySite::ParseHttpHeader => &["java.base/sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:916)", PARSE_HTTP],
+        }
+    }
+
+    fn after_connect_frames(self) -> &'static [&'static str] {
+        match self {
+            RetrySite::ParseHttp => &["java.base/sun.net.www.http.HttpClient.parseHTTP(HttpClient.java:752)"],
+            RetrySite::ParseHttpHeader => &["java.base/sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:918)", PARSE_HTTP],
+        }
+    }
+
+    fn parse_http_frames(self) -> &'static [&'static str] {
+        match self {
+            RetrySite::ParseHttp => &[PARSE_HTTP_RETRY],
+            RetrySite::ParseHttpHeader => &[PARSE_HEADER_EOF_RETRY, PARSE_HTTP],
+        }
+    }
+}
+
+fn retry_frames(retry: Option<RetrySite>) -> &'static [&'static str] {
+    retry.map_or(&[], RetrySite::parse_http_frames)
 }
 
 impl Route {
@@ -90,7 +184,7 @@ impl Route {
         let follow_redirect0 = match self {
             Route::Redirect { switched_to_get: true } => "java.base/sun.net.www.protocol.http.HttpURLConnection.followRedirect0(HttpURLConnection.java:2529)",
             Route::Redirect { switched_to_get: false } => "java.base/sun.net.www.protocol.http.HttpURLConnection.followRedirect0(HttpURLConnection.java:2540)",
-            Route::Request | Route::UseProxy => "java.base/sun.net.www.protocol.http.HttpURLConnection.followRedirect0(HttpURLConnection.java:2491)",
+            Route::Request | Route::UseProxy | Route::Retry { .. } => "java.base/sun.net.www.protocol.http.HttpURLConnection.followRedirect0(HttpURLConnection.java:2491)",
         };
         [
             follow_redirect0,
@@ -109,6 +203,14 @@ impl Route {
             (Route::Redirect { .. }, true) => concat(&[&HTTPS_CONNECT_FRAMES[..12], &self.follow_redirect_frames()]),
             (Route::UseProxy, false) => concat(&[&PROXY_OPEN_SERVER, &HTTP_PROXIED_CONNECT, &self.follow_redirect_frames()]),
             (Route::UseProxy, true) => concat(&[&PROXY_OPEN_SERVER, &HTTPS_PROXIED_CONNECT, &self.follow_redirect_frames()]),
+            (Route::Retry { site, proxied }, https) => {
+                let open_server: &[&'static str] = match (proxied, https) {
+                    (true, _) => &PROXY_OPEN_SERVER,
+                    (false, false) => &HTTP_CONNECT_FRAMES[..4],
+                    (false, true) => &HTTPS_CONNECT_FRAMES[..6],
+                };
+                concat(&[open_server, site.open_server_frames(), &[GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE]])
+            }
         }
     }
 
@@ -125,6 +227,7 @@ impl Route {
                 &self.follow_redirect_frames(),
                 &[HTTPS_GET_RESPONSE_CODE],
             ]),
+            Route::Retry { site, .. } => concat(&[&TLS_HANDSHAKE_OUTER[..1], site.after_connect_frames(), &[GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE, HTTPS_GET_RESPONSE_CODE]]),
         }
     }
 }
@@ -180,6 +283,13 @@ const HTTPS_PROXIED_CONNECT: [&str; 6] = [
 
 const HTTPS_TUNNEL: [&str; 4] = [
     "java.base/sun.net.www.protocol.http.HttpURLConnection.doTunneling0(HttpURLConnection.java:1965)",
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.doTunneling(HttpURLConnection.java:1837)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:136)",
+    "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:118)",
+];
+
+const DO_TUNNELING_PARSE: [&str; 4] = [
+    "java.base/sun.net.www.protocol.http.HttpURLConnection.doTunneling0(HttpURLConnection.java:1873)",
     "java.base/sun.net.www.protocol.http.HttpURLConnection.doTunneling(HttpURLConnection.java:1837)",
     "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:136)",
     "java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.setProxiedClient(AbstractDelegateHttpsURLConnection.java:118)",
@@ -295,10 +405,10 @@ fn windows_error_text(text: &str) -> String {
 
 impl Failure {
     pub fn cause(&self, url: &JavaUrl) -> JavaThrowable {
-        self.cause_through(url, Route::Request)
+        self.cause_through(url, Route::Request, ParseSite::default())
     }
 
-    fn cause_through(&self, url: &JavaUrl, route: Route) -> JavaThrowable {
+    fn cause_through(&self, url: &JavaUrl, route: Route, site: ParseSite) -> JavaThrowable {
         let https = url.is_https();
         let connect_frames = route.connect_frames(https);
         let after_connect_frames = route.after_connect_frames();
@@ -407,16 +517,11 @@ impl Failure {
                 ),
                 Handshake::CertificateUnknown { tls13 } => certificate_unknown(*tls13, &after_connect_frames),
             },
-            Failure::ReadTimedOut(phase) => chained(*phase, https, JavaThrowable::new("java.net.SocketTimeoutException: Read timed out", self.data_read_frames(*phase, &SOCKET_READ_TIMED_OUT, https))),
-            Failure::ConnectionReset(phase) => chained(*phase, https, JavaThrowable::new("java.net.SocketException: Connection reset", self.data_read_frames(*phase, &SOCKET_READ_RESET, https))),
-            Failure::ConnectionAborted(phase, text) => chained(*phase, https, JavaThrowable::new(format!("java.net.SocketException: {text}"), self.data_read_frames(*phase, &SOCKET_READ_RESET, https))),
+            Failure::ReadTimedOut(phase) => chained(*phase, https, JavaThrowable::new("java.net.SocketTimeoutException: Read timed out", data_read_frames(*phase, &SOCKET_READ_TIMED_OUT, https, site))),
+            Failure::ConnectionReset(phase) => chained(*phase, https, JavaThrowable::new("java.net.SocketException: Connection reset", data_read_frames(*phase, &SOCKET_READ_RESET, https, site))),
+            Failure::ConnectionAborted(phase, text) => chained(*phase, https, JavaThrowable::new(format!("java.net.SocketException: {text}"), data_read_frames(*phase, &SOCKET_READ_RESET, https, site))),
             Failure::UnexpectedEof => {
-                let mut frames = vec![PARSE_HEADER_EOF, PARSE_HTTP, PARSE_HEADER_EOF_RETRY, PARSE_HTTP, GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE];
-                if https {
-                    frames.push(HTTPS_GET_RESPONSE_CODE);
-                }
-                frames.push(READ_SERVICE_RESPONSE_130);
-                JavaThrowable::new("java.net.SocketException: Unexpected end of file from server", frames)
+                JavaThrowable::new("java.net.SocketException: Unexpected end of file from server", concat(&[&[PARSE_HEADER_EOF, PARSE_HTTP], retry_frames(site.retry), &site.parse_http_caller(https)]))
             }
             Failure::PrematureEof { chunked, status } => {
                 let head: &[&'static str] = if *chunked { &CHUNKED_FAST_READ } else { &METERED_STREAM_JUST_READ };
@@ -431,58 +536,67 @@ impl Failure {
                 frames.push(READ_SERVICE_RESPONSE_130);
                 JavaThrowable::new(format!("java.net.ProtocolException: Server redirected too many times ({redirects})"), frames)
             }
-            Failure::Connect(route, failure) => failure.cause_through(url, *route),
+            Failure::Connect(route, failure) => failure.cause_through(url, *route, site),
             Failure::UnableToTunnel(status_line) => JavaThrowable::new(
                 format!("java.io.IOException: Unable to tunnel through proxy. Proxy returns \"{status_line}\""),
                 concat(&[&HTTPS_TUNNEL, &Route::UseProxy.follow_redirect_frames(), &[HTTPS_GET_RESPONSE_CODE, READ_SERVICE_RESPONSE_130]]),
             ),
+            Failure::Retried(retry, failure) => failure.cause_through(url, route, ParseSite { retry: Some(*retry), ..site }),
+            Failure::Tunneling(failure) => failure.cause_through(url, route, ParseSite { tunneling: true, ..site }),
         }
     }
+}
 
-    fn data_read_frames(&self, phase: Phase, socket_head: &[&'static str], https: bool) -> Vec<&'static str> {
-        let transport: Vec<&'static str> = if https { concat(&[&SOCKET_READ, &TLS_RECORD_READ, &TLS_APP_READ]) } else { concat(&[&SOCKET_READ, &PLAIN_APP_READ]) };
-        let reset = socket_head == SOCKET_READ_RESET;
-        let mut frames = socket_head.to_vec();
-        frames.extend(transport);
-        match phase {
-            Phase::HeaderFields => {
-                frames.extend([
-                    "java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:308)",
-                    "java.base/sun.net.www.MessageHeader.mergeHeader(MessageHeader.java:546)",
-                    "java.base/sun.net.www.MessageHeader.parseHeader(MessageHeader.java:504)",
-                    "java.base/sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:808)",
-                    PARSE_HTTP,
-                ]);
-                if reset {
-                    frames.push(PARSE_HTTP_RETRY);
-                }
-                frames.extend([GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE]);
-                if https {
-                    frames.push(HTTPS_GET_RESPONSE_CODE);
-                }
-                frames.push(READ_SERVICE_RESPONSE_130);
-            }
-            Phase::Header => {
-                frames.extend(BUFFERED_READ);
-                frames.push(PARSE_HEADER_READ);
-                frames.push(PARSE_HTTP);
-                if reset {
-                    frames.push(PARSE_HTTP_RETRY);
-                }
-                frames.extend([GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE]);
-                if https {
-                    frames.push(HTTPS_GET_RESPONSE_CODE);
-                }
-                frames.push(READ_SERVICE_RESPONSE_130);
-            }
-            Phase::Body { status } => {
-                frames.extend(BUFFERED_READ);
-                frames.push(METERED_STREAM_READ);
-                frames.extend(body_read_tail(status));
-            }
+#[derive(Clone, Copy, Default)]
+struct ParseSite {
+    retry: Option<RetrySite>,
+    tunneling: bool,
+}
+
+impl ParseSite {
+    fn parse_http_caller(self, https: bool) -> Vec<&'static str> {
+        if self.tunneling {
+            return concat(&[&DO_TUNNELING_PARSE, &Route::UseProxy.follow_redirect_frames(), &[HTTPS_GET_RESPONSE_CODE, READ_SERVICE_RESPONSE_130]]);
         }
+        let mut frames = vec![GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE];
+        if https {
+            frames.push(HTTPS_GET_RESPONSE_CODE);
+        }
+        frames.push(READ_SERVICE_RESPONSE_130);
         frames
     }
+}
+
+fn data_read_frames(phase: Phase, socket_head: &[&'static str], https: bool, site: ParseSite) -> Vec<&'static str> {
+    let transport: Vec<&'static str> = if https && !site.tunneling { concat(&[&SOCKET_READ, &TLS_RECORD_READ, &TLS_APP_READ]) } else { concat(&[&SOCKET_READ, &PLAIN_APP_READ]) };
+    let mut frames = socket_head.to_vec();
+    frames.extend(transport);
+    match phase {
+        Phase::HeaderFields { read, .. } => {
+            frames.extend([
+                "java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:308)",
+                read.frame(),
+                "java.base/sun.net.www.MessageHeader.parseHeader(MessageHeader.java:504)",
+                "java.base/sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:808)",
+                PARSE_HTTP,
+            ]);
+            frames.extend(retry_frames(site.retry));
+            frames.extend(site.parse_http_caller(https));
+        }
+        Phase::Header => {
+            frames.extend(BUFFERED_READ);
+            frames.push(PARSE_HEADER_READ);
+            frames.push(PARSE_HTTP);
+            frames.extend(retry_frames(site.retry));
+            frames.extend(site.parse_http_caller(https));
+        }
+        Phase::Body { status } => {
+            frames.extend(BUFFERED_READ);
+            frames.push(METERED_STREAM_READ);
+            frames.extend(body_read_tail(status));
+        }
+    }
+    frames
 }
 
 pub fn connection_refused_message() -> &'static str {
@@ -707,7 +821,7 @@ fn alert_name(description: &rustls::AlertDescription) -> String {
 }
 
 fn chained(phase: Phase, https: bool, throwable: JavaThrowable) -> JavaThrowable {
-    if phase != Phase::HeaderFields {
+    if !matches!(phase, Phase::HeaderFields { status_line_parsed: true, .. }) {
         return throwable;
     }
     let mut frames = vec![
@@ -856,9 +970,17 @@ fn connect_request_bytes(url: &JavaUrl) -> Vec<u8> {
 }
 
 async fn do_tunneling(url: &JavaUrl, timed: Timed) -> Result<Timed, Failure> {
-    let mut reader = Reader { connection: Connection::Plain(timed), buffer: Vec::new(), start: 0 };
+    let mut reader = Reader::new(Connection::Plain(timed));
     let _ = reader.connection.write_all(&connect_request_bytes(url)).await;
-    let head = read_head(&mut reader).await?;
+    let head = match read_head(&mut reader).await {
+        Ok(head) => head,
+        Err(failure) => {
+            if matches!(failure, Failure::ReadTimedOut(_)) {
+                leave_unclosed(reader);
+            }
+            return Err(Failure::Tunneling(Box::new(failure)));
+        }
+    };
     if head.status != 200 {
         return Err(Failure::UnableToTunnel(head.status_line));
     }
@@ -885,20 +1007,37 @@ async fn connect(url: &JavaUrl, proxy: Option<&JavaUrl>) -> Result<Connection, F
         Err(_) => return Err(Failure::UnknownHost(host)),
     };
     recorder.capture_server_hello();
-    match TlsConnector::from(tls_config()).connect(server_name, timed).await {
+    match TlsConnector::from(tls_config()).connect(server_name, timed).into_fallible().await {
         Ok(stream) => {
             recorder.take_server_hello();
             recorder.take_error();
             Ok(Connection::Tls(Box::new(stream)))
         }
-        Err(error) => Err(classify_handshake(&error, &recorder)),
+        Err((error, timed)) => {
+            let failure = classify_handshake(&error, &recorder);
+            if failure == Failure::Handshake(Handshake::ReadTimedOut) {
+                leave_unclosed(timed);
+            }
+            Err(failure)
+        }
     }
+}
+
+fn leave_unclosed<T>(socket: T) {
+    std::mem::forget(socket);
 }
 
 struct Reader {
     connection: Connection,
     buffer: Vec<u8>,
     start: usize,
+    header: Option<Vec<u8>>,
+}
+
+impl Reader {
+    fn new(connection: Connection) -> Reader {
+        Reader { connection, buffer: Vec::new(), start: 0, header: None }
+    }
 }
 
 enum ReadError {
@@ -923,6 +1062,9 @@ impl Reader {
         match result {
             Ok(count) => {
                 self.buffer.extend_from_slice(&chunk[..count]);
+                if let Some(header) = &mut self.header {
+                    header.extend_from_slice(&chunk[..count]);
+                }
                 Ok(count)
             }
             Err(error) => {
@@ -1011,17 +1153,21 @@ struct Head {
 }
 
 async fn read_head(reader: &mut Reader) -> Result<Head, Failure> {
-    let status_line = match reader.read_line().await.map_err(|error| header_failure(error, Phase::Header))? {
-        Some(line) => line,
-        None => return Err(Failure::UnexpectedEof),
-    };
+    reader.header = Some(reader.available().to_vec());
+    let head = parse_http_header(reader).await;
+    let received = reader.header.take().unwrap_or_default();
+    head.unwrap_or_else(|error| Err(header_failure(error, parse_http_header_phase(&received))))
+}
+
+async fn parse_http_header(reader: &mut Reader) -> Result<Result<Head, Failure>, ReadError> {
+    let Some(status_line) = reader.read_line().await? else { return Ok(Err(Failure::UnexpectedEof)) };
     let mut parts = status_line.splitn(3, ' ');
     let version = parts.next().unwrap_or_default();
     let status = parts.next().and_then(|code| code.trim().parse::<u16>().ok());
-    let (true, Some(status)) = (version.starts_with("HTTP/"), status) else { return Err(Failure::Other(format!("Invalid Http response"))) };
+    let (true, Some(status)) = (version.starts_with("HTTP/"), status) else { return Ok(Err(Failure::Other(format!("Invalid Http response")))) };
     let mut head = Head { status_line: status_line.clone(), status, content_type: None, content_length: None, chunked: false, location: None };
     loop {
-        match reader.read_line().await.map_err(|error| header_failure(error, Phase::HeaderFields))? {
+        match reader.read_line().await? {
             None => break,
             Some(line) if line.is_empty() => break,
             Some(line) => {
@@ -1038,7 +1184,7 @@ async fn read_head(reader: &mut Reader) -> Result<Head, Failure> {
             }
         }
     }
-    Ok(head)
+    Ok(Ok(head))
 }
 
 async fn read_body(reader: &mut Reader, head: &Head) -> Result<Vec<u8>, Failure> {
@@ -1118,11 +1264,12 @@ pub async fn send(method: Method, url: &JavaUrl, body: Option<&[u8]>) -> Result<
             Route::Redirect { switched_to_get }
         };
         connection = connect(&url, proxy.as_ref()).await.map_err(|failure| match failure {
-            Failure::UnableToTunnel(_) => failure,
+            Failure::UnableToTunnel(_) | Failure::Tunneling(_) => failure,
             failure => Failure::Connect(route, Box::new(failure)),
         })?;
         redirects += 1;
         if redirects >= MAX_REDIRECTS {
+            leave_unclosed(connection);
             return Err(Failure::TooManyRedirects(redirects));
         }
     }
@@ -1142,25 +1289,33 @@ fn follow_redirect(url: &JavaUrl, status: u16, location: Option<String>) -> Opti
 async fn exchange(connection: Connection, method: Method, url: &JavaUrl, body: Option<&[u8]>, proxy: Option<&JavaUrl>) -> Result<(Response, Option<String>), Failure> {
     let request = request_bytes(method, url, body);
     let mut connection = Some(connection);
-    let mut failed_once = false;
+    let mut retried = None;
     loop {
-        let connection = match connection.take() {
-            Some(connection) => connection,
-            None => connect(url, proxy).await?,
+        let connection = match (connection.take(), retried) {
+            (Some(connection), _) => connection,
+            (None, Some(site)) => connect(url, proxy).await.map_err(|failure| match failure {
+                Failure::UnableToTunnel(_) | Failure::Tunneling(_) => failure,
+                failure => Failure::Connect(Route::Retry { site, proxied: proxy.is_some() }, Box::new(failure)),
+            })?,
+            (None, None) => unreachable!(),
         };
-        let mut reader = Reader { connection, buffer: Vec::new(), start: 0 };
+        let mut reader = Reader::new(connection);
         let _ = reader.connection.write_all(&request).await;
         match read_head(&mut reader).await {
             Ok(head) => {
                 let body = read_body(&mut reader, &head).await?;
                 return Ok((Response { status: head.status, content_type: head.content_type, body }, head.location));
             }
-            Err(
-                Failure::UnexpectedEof
-                | Failure::ConnectionReset(Phase::Header | Phase::HeaderFields)
-                | Failure::ConnectionAborted(Phase::Header | Phase::HeaderFields, _),
-            ) if !failed_once => failed_once = true,
-            Err(failure) => return Err(failure),
+            Err(failure) if retried.is_none() && failure.retry_site().is_some() => retried = failure.retry_site(),
+            Err(failure) => {
+                if matches!(failure, Failure::ReadTimedOut(_)) {
+                    leave_unclosed(reader);
+                }
+                return Err(match retried {
+                    Some(site) => Failure::Retried(site, Box::new(failure)),
+                    None => failure,
+                });
+            }
         }
     }
 }
@@ -1220,8 +1375,20 @@ mod tests {
         .await;
         let url = JavaUrl::parse(&format!("http://127.0.0.1:{port}/")).unwrap();
         let failure = send(Method::Get, &url, None).await.unwrap_err();
-        assert_eq!(failure, Failure::ConnectionReset(Phase::Header));
+        assert_eq!(failure, Failure::Retried(RetrySite::ParseHttp, Box::new(Failure::ConnectionReset(Phase::Header))));
         assert_eq!(accepted.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn header_read_failures_are_placed_where_message_header_was_reading() {
+        let fields = |read, status_line_parsed| Phase::HeaderFields { read, status_line_parsed };
+        assert_eq!(parse_http_header_phase(b"HTTP/1."), Phase::Header);
+        assert_eq!(parse_http_header_phase(b"HTTP/1.1 200 O"), fields(MergeHeaderRead::InLine, false));
+        assert_eq!(parse_http_header_phase(b"HTTP/1.1 200 OK\r"), fields(MergeHeaderRead::AfterLineEnd, false));
+        assert_eq!(parse_http_header_phase(b"HTTP/1.1 200 OK\r\n"), fields(MergeHeaderRead::AfterCrLf, false));
+        assert_eq!(parse_http_header_phase(b"HTTP/1.1 200 OK\r\n\r"), fields(MergeHeaderRead::AfterCrLfCr, false));
+        assert_eq!(parse_http_header_phase(b"HTTP/1.1 200 OK\r\nContent-Ty"), fields(MergeHeaderRead::InLine, true));
+        assert_eq!(parse_http_header_phase(b"HTTP/1.1 200 OK\r\n continued"), fields(MergeHeaderRead::InLine, false));
     }
 
     #[tokio::test(flavor = "multi_thread")]
