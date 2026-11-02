@@ -800,7 +800,14 @@ impl Server {
         self.reentrant_count != 0
     }
 
+    fn wake_main_thread(&mut self) {
+        for level in &mut self.levels {
+            level.chunks.wake_main_thread();
+        }
+    }
+
     fn wait_until_next_tick(&mut self) {
+        self.wake_main_thread();
         {
             let _scope = main_thread_frames::wait_until_next_tick_run_all();
             self.run_all_tasks();
@@ -847,11 +854,16 @@ impl Server {
 
     fn poll_task_internal(&mut self) -> bool {
         if self.poll_server_task() {
+            self.wake_main_thread();
             return true;
         }
         if self.tick_rate_manager.is_sprinting() || self.should_run_all_tasks() || self.have_time() {
+            if self.levels.iter().any(|level| level.chunks.has_main_thread_tasks()) {
+                self.wake_main_thread();
+            }
+            let park_when_idle = self.waiting_for_next_tick || self.blocking_count == 0;
             for level in &mut self.levels {
-                if level.poll_chunk_task() {
+                if level.poll_chunk_task(park_when_idle) {
                     return true;
                 }
             }
@@ -2850,7 +2862,6 @@ fn run_server_loop(server: &mut Server, events: &mut mpsc::UnboundedReceiver<Eve
             server.handle(event);
         }
         for level in &mut server.levels {
-            level.chunks.run_light_updates();
             level.process_chunk_events();
         }
         profiler::pop();

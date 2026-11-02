@@ -146,6 +146,7 @@ pub struct ChunkCache {
     pub tick_deadline: Option<Instant>,
     pub poi_manager: PoiManager,
     reporting: Option<IoReporting>,
+    main_thread_parked: bool,
 }
 
 impl ChunkCache {
@@ -217,6 +218,7 @@ impl ChunkCache {
             block_entity_tickers: BlockEntityTickers::default(),
             poi_manager: PoiManager::new(None, dimension.min_y >> 4, (dimension.min_y + dimension.height as i32 - 1) >> 4),
             reporting: None,
+            main_thread_parked: false,
         };
         cache.set_seed(seed);
         cache.set_view_distance(10);
@@ -356,14 +358,6 @@ impl ChunkCache {
 
     pub fn main_thread_pending_tasks(&self) -> usize {
         self.distance_manager.main_thread_tasks.len() + self.arrived.values().filter(|result| matches!(result, WorkResult::Loaded { .. })).count()
-    }
-
-    pub fn light_queue_size(&self) -> usize {
-        self.light_engine.pending_task_count()
-    }
-
-    pub fn worldgen_queue_size(&self) -> usize {
-        self.worldgen_queue.size()
     }
 
     pub fn ticket_dispatcher_queue_size(&self) -> usize {
@@ -887,17 +881,33 @@ impl ChunkCache {
     }
 
     pub fn poll_task(&mut self) -> bool {
+        self.poll_task_or_park(false)
+    }
+
+    pub fn wake_main_thread(&mut self) {
+        self.main_thread_parked = false;
+    }
+
+    pub fn has_main_thread_tasks(&self) -> bool {
+        !self.distance_manager.main_thread_tasks.is_empty()
+    }
+
+    pub fn poll_task_or_park(&mut self, park_when_idle: bool) -> bool {
         if self.process_woken() {
             return true;
         }
         if self.run_distance_manager_updates() {
             return true;
         }
-        self.light_engine.try_schedule_update();
+        if !park_when_idle || !self.main_thread_parked || self.has_main_thread_tasks() {
+            self.light_engine.try_schedule_update();
+        }
         if let Some(task) = self.distance_manager.main_thread_tasks.pop_front() {
+            self.main_thread_parked = false;
             self.do_run_task(task);
             return true;
         }
+        self.main_thread_parked = park_when_idle;
         if self.run_worldgen() {
             return true;
         }
@@ -2928,7 +2938,7 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(120);
         while ready.len() < in_view.len() {
             assert!(Instant::now() < deadline, "only {} chunks ready", ready.len());
-            if !level.poll_chunk_task() {
+            if !level.poll_chunk_task(false) {
                 level.wait_for_chunk_work(Duration::from_millis(5));
             }
             for &pos in &in_view {
@@ -2963,6 +2973,22 @@ mod tests {
         assert!(now.iter().all(|p| (2..=8).contains(&p.x) && (-3..=3).contains(&p.z)));
         let order: Vec<ChunkPos> = level.chunks.distance_manager.entity_ticking_chunks().into_iter().map(ChunkPos::unpack).collect();
         assert_eq!(now, order);
+    }
+
+    #[test]
+    fn a_parked_main_thread_schedules_light_updates_only_once_woken() {
+        use crate::server::level::threaded_level_light_engine::{LightTask, TaskType};
+        let mut cache = testing::level().chunks;
+        while cache.poll_task_or_park(true) {}
+        cache.add_light_task(TaskType::PreUpdate, LightTask::RetainData(ChunkPos::new(0, 0), false));
+        while cache.poll_task_or_park(true) {}
+        assert!(cache.light_engine.has_work());
+        cache.wake_main_thread();
+        while cache.poll_task_or_park(true) {}
+        assert!(!cache.light_engine.has_work());
+        cache.add_light_task(TaskType::PreUpdate, LightTask::RetainData(ChunkPos::new(0, 0), false));
+        while cache.poll_task() {}
+        assert!(!cache.light_engine.has_work());
     }
 }
 

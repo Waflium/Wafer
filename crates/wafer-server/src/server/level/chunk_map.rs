@@ -365,9 +365,9 @@ impl ServerLevel {
         }
     }
 
-    pub fn poll_chunk_task(&mut self) -> bool {
+    pub fn poll_chunk_task(&mut self, park_when_idle: bool) -> bool {
         let _poll = crate::server::main_thread_frames::server_chunk_poll();
-        let worked = self.chunks.poll_task();
+        let worked = self.chunks.poll_task_or_park(park_when_idle);
         self.process_chunk_events();
         worked
     }

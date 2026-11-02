@@ -307,5 +307,5 @@ fn io_workers_report_their_queued_requests() {
 #[test]
 fn chunk_caches_without_storage_report_empty_queues() {
     let cache: ChunkCache = testing::level().chunks;
-    assert_eq!((cache.chunk_io_queue_size(), cache.poi_io_queue_size(), cache.worldgen_queue_size(), cache.light_queue_size()), (0, 0, 0, 0));
+    assert_eq!((cache.chunk_io_queue_size(), cache.poi_io_queue_size()), (0, 0));
 }

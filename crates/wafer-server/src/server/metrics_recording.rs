@@ -167,9 +167,7 @@ impl Server {
         for (level, gauges) in self.levels.iter().zip(&self.metrics_gauges.levels) {
             let chunks = &level.chunks;
             gauges.chunk_source.store(chunks.main_thread_pending_tasks(), Ordering::Relaxed);
-            gauges.light.store(chunks.light_queue_size(), Ordering::Relaxed);
             gauges.entity_deserializer.store(level.entity_manager.loading_inbox_size(), Ordering::Relaxed);
-            gauges.worldgen.store(chunks.worldgen_queue_size(), Ordering::Relaxed);
             gauges.ticket_dispatcher.store(chunks.ticket_dispatcher_queue_size(), Ordering::Relaxed);
             gauges.poi.store(chunks.poi_io_queue_size(), Ordering::Relaxed);
             gauges.chunk.store(chunks.chunk_io_queue_size(), Ordering::Relaxed);
