@@ -56,10 +56,10 @@ fn dispense_from(state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
     }
     level.set_block(pos, state.set(CRAFTING, true), UPDATE_CLIENTS);
     results.on_crafted_by_system(level);
-    dispense_item(level, pos, &results, state, picked_recipe.id);
+    crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CrafterBlock.dispenseFrom(CrafterBlock.java:173)"], || dispense_item(level, pos, &results, state, picked_recipe.id));
     for remaining_item in crafting_recipe.get_remaining_items(&mut craft_input) {
         if !remaining_item.is_empty() {
-            dispense_item(level, pos, &remaining_item, state, picked_recipe.id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CrafterBlock.dispenseFrom(CrafterBlock.java:178)"], || dispense_item(level, pos, &remaining_item, state, picked_recipe.id));
         }
     }
     if let Some(block_entity) = level.crafter(pos) {
@@ -99,6 +99,7 @@ fn dispense_item(level: &mut ServerLevel, pos: BlockPos, results: &ItemStack, bl
         spawn_item(level, remaining, 6, direction, item_spawn_offset);
         let players: Vec<_> = level.get_entities(None, &AABB::of_size(center_pos, 17.0, 17.0, 17.0)).into_iter().filter(|&id| level.is_player(id)).collect();
         let items = level.crafter(pos).map(|crafter| crafter.base.items.clone()).unwrap_or_default();
+        let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.level.block.CrafterBlock.dispenseItem(CrafterBlock.java:232)"]);
         for player in players {
             crate::advancements::triggers::criteria_triggers::CRAFTER_RECIPE_CRAFTED.trigger(level, player, recipe, &items);
         }
@@ -126,7 +127,7 @@ impl BlockBehaviour for CrafterBlock {
     }
 
     fn tick(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos) {
-        dispense_from(state, level, pos);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CrafterBlock.tick(CrafterBlock.java:91)"], || dispense_from(state, level, pos));
     }
 
     fn get_state_for_placement(&self, block: Block, ctx: &BlockPlaceContext, level: &mut ServerLevel) -> Option<BlockState> {
@@ -156,7 +157,7 @@ impl BlockBehaviour for CrafterBlock {
 
     fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
         if level.crafter(pos).is_some() {
-            level.open_menu(player, MenuProvider::BlockEntity(pos));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CrafterBlock.useWithoutItem(CrafterBlock.java:141)"], || level.open_menu(player, MenuProvider::BlockEntity(pos)));
         }
         InteractionResult::SUCCESS
     }

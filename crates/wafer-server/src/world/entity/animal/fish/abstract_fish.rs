@@ -152,7 +152,7 @@ impl ServerLevel {
             let flop_sound = self.mob(id).expect("a fish").get_flop_sound();
             self.make_sound(id, sound_event(flop_sound));
         }
-        self.mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.fish.AbstractFish.aiStep(AbstractFish.java:134)"], || self.mob_ai_step(id));
     }
 
     pub fn abstract_fish_mob_interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand) -> InteractionResult {

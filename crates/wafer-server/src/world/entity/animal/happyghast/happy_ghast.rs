@@ -369,7 +369,7 @@ impl ServerLevel {
     }
 
     pub fn happy_ghast_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.happyghast.HappyGhast.tick(HappyGhast.java:451)"], || self.mob_tick(id));
         self.then_tick(move |level| level.happy_ghast_tick_end(id));
     }
 
@@ -394,7 +394,7 @@ impl ServerLevel {
     pub fn happy_ghast_ai_step(&mut self, id: EntityId) {
         let on_still_timeout = self.happy_ghast_is_on_still_timeout(id);
         self.entity_mut(id).requires_precise_position = on_still_timeout;
-        self.ageable_mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.Animal.aiStep(Animal.java:73)", "net.minecraft.world.entity.animal.happyghast.HappyGhast.aiStep(HappyGhast.java:476)"], || self.ageable_mob_ai_step(id));
         if self.mob(id).is_some() {
             self.happy_ghast_continuous_heal(id);
         }

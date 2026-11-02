@@ -54,7 +54,6 @@ use wafer_data::packets::play::clientbound;
 use wafer_data::{Block, BlockState, DimensionType, Fluid, blocks};
 
 use crate::advancements::triggers::criteria_triggers;
-use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::network::connection::encode;
 use crate::world::attribute::environment_attribute_system::{EnvironmentAccess, EnvironmentAttributeReader};
 use crate::world::attribute::EnvironmentAttributeSystem;
@@ -107,6 +106,15 @@ pub const RAIN_DELAY: (i32, i32) = (12000, 180000);
 pub const RAIN_DURATION: (i32, i32) = (12000, 24000);
 pub const THUNDER_DELAY: (i32, i32) = (12000, 180000);
 pub const THUNDER_DURATION: (i32, i32) = (3600, 15600);
+
+const BLOCK_TICK_FRAMES: [&str; 6] = [
+    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.tick(BlockBehaviour.java:1153)",
+    "net.minecraft.server.level.ServerLevel.tickBlock(ServerLevel.java:851)",
+    "net.minecraft.world.ticks.LevelTicks.runCollectedTicks(LevelTicks.java:213)",
+    "net.minecraft.world.ticks.LevelTicks.tick(LevelTicks.java:96)",
+    "net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:392)",
+    crate::server::command_frames::TICK_CHILDREN_LEVELS,
+];
 
 const WORLD_GEN_CHUNK_ENTITIES_LOGGER: &str = "net.minecraft.world.level.chunk.status.ChunkStatusTasks";
 const LEGACY_CHUNK_ENTITIES_LOGGER: &str = "net.minecraft.world.level.chunk.storage.SerializableChunkData";
@@ -211,9 +219,8 @@ pub struct ServerLevel {
     pub pending_system_broadcasts: Vec<crate::network::chat::Component>,
     pub pending_broadcasts: Vec<Vec<u8>>,
     pub defer_full_status_changes: bool,
-    pub pending_function_executions: Vec<(String, EntityId, CriterionTrigger)>,
-    pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32), bool)>,
-    pub enchantment_tick_player: bool,
+    pub pending_function_executions: Vec<(String, EntityId)>,
+    pub pending_enchantment_functions: Vec<(String, EntityId, Vec3, (f32, f32))>,
     pub lent: bool,
     entity_tick_range: Option<(usize, usize)>,
     pub rain_level: f32,
@@ -367,7 +374,6 @@ impl ServerLevel {
             defer_full_status_changes: false,
             pending_function_executions: Vec::new(),
             pending_enchantment_functions: Vec::new(),
-            enchantment_tick_player: false,
             lent: false,
             entity_tick_range: None,
             environment_attributes: EnvironmentAttributeSystem::default(),
@@ -691,7 +697,7 @@ impl ServerLevel {
     }
 
     pub fn set_block(&mut self, pos: BlockPos, state: BlockState, flags: i32) -> bool {
-        self.set_block_with_limit(pos, state, flags, UPDATE_LIMIT)
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.LevelWriter.setBlock(LevelWriter.java:19)"], || self.set_block_with_limit(pos, state, flags, UPDATE_LIMIT))
     }
 
     pub fn set_block_with_limit(&mut self, pos: BlockPos, state: BlockState, flags: i32, update_limit: i32) -> bool {
@@ -720,13 +726,22 @@ impl ServerLevel {
             }
         }
         if (block_changed || new_block.is_instance_of("BaseRailBlock")) && (flags & UPDATE_NEIGHBORS != 0 || moved_by_piston) {
-            block::of(old).affect_neighbors_after_removal(old, self, pos, moved_by_piston);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:314)", "net.minecraft.world.level.Level.setBlock(Level.java:234)"], || {
+                block::of(old).affect_neighbors_after_removal(old, self, pos, moved_by_piston)
+            });
         }
         if !self.chunks.loaded_block_state(pos).is_block(new_block) {
             return false;
         }
         if flags & UPDATE_SKIP_ON_PLACE == 0 {
-            block::of(state).on_place(state, self, pos, old, moved_by_piston);
+            crate::server::main_thread_frames::within(
+                &[
+                    "net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.onPlace(BlockBehaviour.java:1141)",
+                    "net.minecraft.world.level.chunk.LevelChunk.setBlockState(LevelChunk.java:324)",
+                    "net.minecraft.world.level.Level.setBlock(Level.java:234)",
+                ],
+                || block::of(state).on_place(state, self, pos, old, moved_by_piston),
+            );
         }
         if state.has_block_entity() && self.chunks.loaded_block_state(pos).is_block(new_block) {
             let existing = self.chunks.block_entity(pos, EntityCreationType::Check).map(|e| e.is_valid_block_state(state));
@@ -1893,7 +1908,7 @@ impl ServerLevel {
                 if tick.ty.is_instance_of("CommandBlock") {
                     return Some(tick.pos);
                 }
-                block::of(state).tick(state, self, tick.pos);
+                crate::server::main_thread_frames::within(&BLOCK_TICK_FRAMES, || block::of(state).tick(state, self, tick.pos));
             }
         }
         None
@@ -2175,16 +2190,16 @@ impl ServerLevel {
         if living.damage_cooldown_time > 0 {
             living.damage_cooldown_time -= 1;
         }
-        self.tick_container_menu(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.tick(ServerPlayer.java:672)"], || self.tick_container_menu(id));
         self.tick_camera(id);
-        criteria_triggers::TICK.trigger(self, id);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.tick(ServerPlayer.java:694)"], || criteria_triggers::TICK.trigger(self, id));
         self.then_tick(move |level| level.tick_player_entity_levitation(id));
     }
 
     fn tick_player_entity_levitation(&mut self, id: EntityId) {
         if let Some(levitation_start_pos) = self.player(id).levitation_start_pos {
             let duration = self.entity(id).tick_count - self.player(id).levitation_start_time;
-            criteria_triggers::LEVITATION.trigger(self, id, levitation_start_pos, duration);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.tick(ServerPlayer.java:696)"], || criteria_triggers::LEVITATION.trigger(self, id, levitation_start_pos, duration));
         }
         self.then_tick(move |level| level.tick_player_entity_end(id));
     }
@@ -2219,8 +2234,9 @@ impl ServerLevel {
         profiler::push_with(|| self.entity_registered_name(id));
         profiler::increment_counter("tickNonPassenger", 1);
         self.common_tick(id);
-        self.tick_ridden(id);
+        crate::server::main_thread_frames::within(&crate::server::command_frames::TICK_NON_PASSENGER, || self.tick_ridden(id));
         profiler::pop();
+        let _frames = crate::server::main_thread_frames::enter_static(&crate::server::command_frames::TICK_NON_PASSENGER_PASSENGERS);
         self.then_tick(move |level| level.tick_passengers(id));
     }
 
@@ -2248,8 +2264,9 @@ impl ServerLevel {
             profiler::push_with(|| self.entity_registered_name(entity));
             profiler::increment_counter("tickPassenger", 1);
             self.common_tick(entity);
-            self.ride_tick(entity);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerLevel.tickPassenger(ServerLevel.java:880)"], || self.ride_tick(entity));
             profiler::pop();
+            let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.server.level.ServerLevel.tickPassenger(ServerLevel.java:884)"]);
             self.then_tick(move |level| level.tick_passengers(entity));
         }
     }
@@ -2356,6 +2373,7 @@ impl ServerLevel {
         let area = self.player_pickup_area(player);
         let mut orbs = Vec::new();
         for id in self.get_entities(Some(player), &area) {
+            let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.player.Player.touch(Player.java:532)", "net.minecraft.world.entity.player.Player.aiStep(Player.java:511)"]);
             match self.find_entity(id) {
                 Some(LevelEntity::ExperienceOrb(_)) => orbs.push(id),
                 Some(LevelEntity::Item(item)) if !item.entity.is_removed() => self.item_entity_player_touch(id, player),
@@ -2373,6 +2391,7 @@ impl ServerLevel {
             }
         }
         if !orbs.is_empty() {
+            let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.player.Player.touch(Player.java:532)", "net.minecraft.world.entity.player.Player.aiStep(Player.java:515)"]);
             self.touch_random_experience_orb(player, &orbs);
         }
     }
@@ -2388,7 +2407,7 @@ impl ServerLevel {
     pub fn server_player_take(&mut self, player: EntityId, entity: EntityId, count: i32) {
         self.living_entity_take(player, entity, count);
         let Some(mut menu) = self.take_container_menu(player) else { return };
-        self.menu_broadcast_changes(&mut menu, player);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.take(ServerPlayer.java:1337)"], || self.menu_broadcast_changes(&mut menu, player));
         self.restore_container_menu(player, menu);
     }
 
@@ -2417,7 +2436,7 @@ impl ServerLevel {
             return;
         }
         let left = item_stack.count;
-        self.take(player, id, original);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.item.ItemEntity.playerTouch(ItemEntity.java:385)"], || self.take(player, id, original));
         let Some(LevelEntity::Item(item)) = self.find_entity_mut(id) else { return };
         item.item.count = left;
         if left == 0 {
@@ -2433,10 +2452,20 @@ impl ServerLevel {
         self.award_stat(player, crate::stats::stats::ITEM_PICKED_UP.get(picked_up_item.0), original);
         let thrower = thrower.and_then(|uuid| crate::world::entity::entity_reference::EntityReference::of(uuid).get_entity(self));
         if let Some(thrower) = thrower.filter(|&thrower| self.is_player(thrower)) {
-            criteria_triggers::THROWN_ITEM_PICKED_UP_BY_ENTITY.trigger(self, thrower, &picked, player);
+            crate::server::main_thread_frames::within(
+                &[
+                    "net.minecraft.world.entity.LivingEntity.onItemPickup(LivingEntity.java:3423)",
+                    "net.minecraft.server.level.ServerPlayer.onItemPickup(ServerPlayer.java:2264)",
+                    "net.minecraft.world.entity.item.ItemEntity.playerTouch(ItemEntity.java:393)",
+                ],
+                || criteria_triggers::THROWN_ITEM_PICKED_UP_BY_ENTITY.trigger(self, thrower, &picked, player),
+            );
         }
         if let Some(thrower) = thrower {
-            criteria_triggers::THROWN_ITEM_PICKED_UP_BY_PLAYER.trigger(self, player, &picked, thrower);
+            crate::server::main_thread_frames::within(
+                &["net.minecraft.server.level.ServerPlayer.onItemPickup(ServerPlayer.java:2267)", "net.minecraft.world.entity.item.ItemEntity.playerTouch(ItemEntity.java:393)"],
+                || criteria_triggers::THROWN_ITEM_PICKED_UP_BY_PLAYER.trigger(self, player, &picked, thrower),
+            );
         }
     }
 

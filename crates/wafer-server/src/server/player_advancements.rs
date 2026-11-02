@@ -163,8 +163,7 @@ impl PlayerAdvancements {
             advancements.progress_changed.insert(holder);
             result = true;
             if !was_done && is_done {
-                let trigger = holder.value.criteria.iter().find(|(name, _)| name == criterion).map_or(CriterionTrigger::Impossible, |(_, criterion)| criterion.trigger);
-                holder.value.rewards.grant(level, player, trigger);
+                holder.value.rewards.grant(level, player);
                 if let Some(display) = &holder.value.display
                     && display.announce_to_chat
                     && level.game_rules.get_bool(game_rule::SHOW_ADVANCEMENT_MESSAGES)

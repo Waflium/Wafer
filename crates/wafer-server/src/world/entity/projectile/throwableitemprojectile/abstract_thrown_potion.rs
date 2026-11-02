@@ -36,12 +36,15 @@ impl ServerLevel {
     }
 
     pub fn abstract_thrown_potion_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion.onHit(AbstractThrownPotion.java:74)"], || self.projectile_base_on_hit(id, hit_result));
         let potion_item_stack = self.projectile(id).get_item();
         let contents = potion_item_stack.get(dc::POTION_CONTENTS).cloned().unwrap_or_else(|| EMPTY.clone());
         let potion = PotionContents::new(&contents);
-        self.affect_entities_around(id, &potion);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion.onHit(AbstractThrownPotion.java:82)"], || {
+            self.affect_entities_around(id, &potion)
+        });
         if potion.has_effects() {
+            let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion.onHit(AbstractThrownPotion.java:84)"]);
             match self.projectile(id).kind {
                 ProjectileKind::ThrownSplashPotion(_) => self.thrown_splash_potion_on_hit_as_potion(id, &potion_item_stack, hit_result),
                 _ => self.thrown_lingering_potion_on_hit_as_potion(id, &potion_item_stack, hit_result),
@@ -78,7 +81,9 @@ impl ServerLevel {
                 if dist < SPLASH_RANGE_SQ {
                     if hurts_water_sensitive_entities && self.is_sensitive_to_water(entity) {
                         let source = DamageSource::source(wafer_data::damage_types::INDIRECT_MAGIC, Some(id), self.projectile_get_owner(id));
-                        self.hurt_server(entity, source, 1.0);
+                        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion.affectEntitiesAround(AbstractThrownPotion.java:112)"], || {
+                            self.hurt_server(entity, source, 1.0)
+                        });
                     }
                     if extinguishes_entities && self.is_on_fire(entity) && self.is_alive(entity) {
                         self.extinguish_fire(entity);

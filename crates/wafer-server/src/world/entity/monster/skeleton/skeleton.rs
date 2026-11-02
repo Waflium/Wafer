@@ -80,8 +80,8 @@ impl Skeleton {
 impl ServerLevel {
     pub fn skeleton_tick(&mut self, id: EntityId) {
         let conversion = Conversion { converts_to: "minecraft:stray", conversion_sound: 1048, is_afflicted: self.entity(id).is_in_powder_snow, post_conversion_step: None };
-        self.conversion_tracker_tick(id, freezing_tracker, conversion);
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.skeleton.Skeleton.tick(Skeleton.java:53)"], || self.conversion_tracker_tick(id, freezing_tracker, conversion));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.skeleton.Skeleton.tick(Skeleton.java:54)"], || self.mob_tick(id));
     }
 
     pub fn skeleton_can_freeze(&self) -> bool {

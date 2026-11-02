@@ -167,7 +167,7 @@ impl Spider {
 
 impl ServerLevel {
     pub fn spider_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.spider.Spider.tick(Spider.java:87)"], || self.mob_tick(id));
         self.then_tick(move |level| level.spider_tick_end(id));
     }
 

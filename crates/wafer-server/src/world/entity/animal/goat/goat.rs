@@ -269,6 +269,6 @@ impl ServerLevel {
             goat.lower_head_tick -= 2;
         }
         goat.lower_head_tick = goat.lower_head_tick.clamp(0, 20);
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.goat.Goat.aiStep(Goat.java:318)"], || self.animal_ai_step(id));
     }
 }

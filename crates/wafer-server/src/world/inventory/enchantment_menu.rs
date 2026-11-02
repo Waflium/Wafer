@@ -136,7 +136,16 @@ impl ServerLevel {
                 *menu.containers[ENCHANT_SLOTS].get_item_mut(1) = currency;
             }
             self.award_stat(player, crate::stats::stats::ENCHANT_ITEM, 1);
-            crate::advancements::triggers::criteria_triggers::ENCHANTED_ITEM.trigger(self, player, &enchanted, enchantment_cost);
+            crate::server::main_thread_frames::within(
+                &[
+                    "net.minecraft.world.inventory.EnchantmentMenu.lambda$clickMenuButton$0(EnchantmentMenu.java:185)",
+                    "net.minecraft.world.inventory.ContainerLevelAccess.lambda$execute$0(ContainerLevelAccess.java:35)",
+                    "net.minecraft.world.inventory.ContainerLevelAccess$2.evaluate(ContainerLevelAccess.java:22)",
+                    "net.minecraft.world.inventory.ContainerLevelAccess.execute(ContainerLevelAccess.java:34)",
+                    "net.minecraft.world.inventory.EnchantmentMenu.clickMenuButton(EnchantmentMenu.java:162)",
+                ],
+                || crate::advancements::triggers::criteria_triggers::ENCHANTED_ITEM.trigger(self, player, &enchanted, enchantment_cost),
+            );
             self.menu_container_set_changed(menu, player, ENCHANT_SLOTS);
             let enchantment_seed = self.player(player).experience.enchantment_seed;
             if let Some(state) = menu.enchantment.as_mut() {

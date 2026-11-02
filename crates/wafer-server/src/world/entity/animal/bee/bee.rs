@@ -440,7 +440,7 @@ impl ServerLevel {
     }
 
     pub fn bee_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.bee.Bee.tick(Bee.java:303)"], || self.mob_tick(id));
         self.then_tick(move |level| level.bee_tick_end(id));
     }
 
@@ -565,7 +565,7 @@ impl ServerLevel {
     }
 
     pub fn bee_ai_step(&mut self, id: EntityId) {
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.bee.Bee.aiStep(Bee.java:512)"], || self.animal_ai_step(id));
         let Some(mob) = self.mob_mut(id) else { return };
         let bee = bee_mut(mob);
         if bee.stay_out_of_hive_countdown > 0 {

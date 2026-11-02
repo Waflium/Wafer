@@ -397,7 +397,7 @@ pub fn finish_using_item(item_stack: ItemStack, level: &mut ServerLevel, entity:
         return spyglass_item::finish_using_item(item_stack, level, entity);
     }
     match item_stack.get(component::CONSUMABLE).map(component::values::Consumable::from_nbt) {
-        Some(consumable) => level.on_consume(entity, item_stack, &consumable),
+        Some(consumable) => crate::server::main_thread_frames::within(&["net.minecraft.world.item.Item.finishUsingItem(Item.java:581)"], || level.on_consume(entity, item_stack, &consumable)),
         None => item_stack,
     }
 }

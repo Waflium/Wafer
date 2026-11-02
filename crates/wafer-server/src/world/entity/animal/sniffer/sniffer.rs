@@ -313,7 +313,7 @@ impl ServerLevel {
             self.sniffer_emit_digging_particles(id);
             self.sniffer_drop_seed(id);
         }
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.sniffer.Sniffer.tick(Sniffer.java:437)"], || self.mob_tick(id));
     }
 
     fn sniffer_emit_digging_particles(&mut self, id: EntityId) {

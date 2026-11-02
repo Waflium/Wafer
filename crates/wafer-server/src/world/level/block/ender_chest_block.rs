@@ -32,7 +32,7 @@ impl BlockBehaviour for EnderChestBlock {
             return InteractionResult::SUCCESS;
         }
         level.player_mut(player).ender_chest_inventory.set_active_chest(Some((pos, id)));
-        level.open_menu(player, MenuProvider::EnderChest);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.EnderChestBlock.useWithoutItem(EnderChestBlock.java:87)"], || level.open_menu(player, MenuProvider::EnderChest));
         level.award_stat(player, crate::stats::stats::OPEN_ENDERCHEST, 1);
         crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(level, player, true);
         InteractionResult::SUCCESS

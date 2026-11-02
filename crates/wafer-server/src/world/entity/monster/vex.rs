@@ -187,7 +187,7 @@ impl ServerLevel {
 
     pub fn vex_tick(&mut self, id: EntityId) {
         self.entity_mut(id).no_physics = true;
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Vex.tick(Vex.java:86)"], || self.mob_tick(id));
         self.then_tick(move |level| level.vex_tick_end(id));
     }
 

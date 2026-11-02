@@ -275,6 +275,7 @@ impl ServerLevel {
                 let (x, y, z) = (pos.x as f64, pos.y as f64, pos.z as f64);
                 let bb = AABB::new(x, y, z, x, y - 4.0, z).inflate(10.0, 5.0, 10.0);
                 let players: Vec<_> = self.get_entities(None, &bb).into_iter().filter(|&id| self.is_player(id)).collect();
+                let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.level.block.entity.BeaconBlockEntity.tick(BeaconBlockEntity.java:207)"]);
                 for player in players {
                     crate::advancements::triggers::criteria_triggers::CONSTRUCT_BEACON.trigger(self, player, levels);
                 }

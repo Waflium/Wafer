@@ -263,7 +263,9 @@ impl ServerLevel {
             SlotKind::BrewingStandPotion => {
                 if let Some(potion_contents) = carried.get(crate::world::item::component::POTION_CONTENTS) {
                     let potion_contents = potion_contents.clone();
-                    crate::advancements::triggers::criteria_triggers::BREWED_POTION.trigger(self, player, &potion_contents);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.BrewingStandMenu$PotionSlot.onTake(BrewingStandMenu.java:158)"], || {
+                        crate::advancements::triggers::criteria_triggers::BREWED_POTION.trigger(self, player, &potion_contents)
+                    });
                 }
                 self.slot_set_changed(menu, player, index);
             }

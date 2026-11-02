@@ -13,11 +13,7 @@ pub const THROW_THRESHOLD_TIME: i32 = 10;
 pub const BASE_DAMAGE: f32 = 8.0;
 pub const PROJECTILE_SHOOT_POWER: f32 = 2.5;
 pub const USE_DURATION: i32 = 72000;
-const RELEASE_USING_FRAMES: [&str; 3] = [
-    "net.minecraft.world.item.TridentItem.releaseUsing(TridentItem.java:119)",
-    "net.minecraft.world.item.ItemStack.releaseUsing(ItemStack.java:756)",
-    "net.minecraft.world.entity.LivingEntity.releaseUsingItem(LivingEntity.java:3746)",
-];
+const RELEASE_USING_FRAMES: [&str; 1] = ["net.minecraft.world.item.TridentItem.releaseUsing(TridentItem.java:119)"];
 
 fn trident_sound(item_stack: &ItemStack) -> SoundEvent {
     enchantment_helper::pick_highest_trident_sound(item_stack).and_then(|sound| SoundEvent::from_nbt(&sound)).unwrap_or_else(|| sound_event("minecraft:item.trident.throw").into())
@@ -43,7 +39,7 @@ pub fn release_using(level: &mut ServerLevel, item_stack: &ItemStack, entity: En
     level.award_stat(player, crate::stats::stats::ITEM_USED.get(item_stack.get_item().0), 1);
     let hand = level.used_item_hand(player);
     let mut item_stack = item_stack.clone();
-    item_stack.hurt_without_breaking(1, level, player);
+    crate::server::main_thread_frames::within(&["net.minecraft.world.item.TridentItem.releaseUsing(TridentItem.java:90)"], || item_stack.hurt_without_breaking(1, level, player));
     if riptide_strength == 0.0 {
         let thrown_item_stack = item_stack.consume_and_return(1, level, Some(player));
         level.player_mut(player).set_item_in_hand(hand, Some(item_stack));

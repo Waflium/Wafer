@@ -74,7 +74,7 @@ impl ServerLevel {
     }
 
     pub fn trader_llama_ai_step(&mut self, id: EntityId) {
-        self.abstract_horse_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.equine.TraderLlama.aiStep(TraderLlama.java:89)"], || self.abstract_horse_ai_step(id));
         if self.mob(id).is_some() {
             self.trader_llama_maybe_despawn(id);
         }

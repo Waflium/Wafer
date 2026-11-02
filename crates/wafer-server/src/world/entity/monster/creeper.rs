@@ -189,10 +189,10 @@ impl ServerLevel {
             }
             if creeper.swell >= creeper.max_swell {
                 creeper.swell = creeper.max_swell;
-                self.explode_creeper(id);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Creeper.tick(Creeper.java:157)"], || self.explode_creeper(id));
             }
         }
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Creeper.tick(Creeper.java:160)"], || self.mob_tick(id));
     }
 
     pub fn creeper_set_target(&mut self, id: EntityId, target: Option<EntityId>) {
@@ -250,12 +250,7 @@ impl ServerLevel {
         let position = mob.entity.position();
         self.living_mut(id).dead = true;
         {
-            let _scope = crate::server::main_thread_frames::enter(
-                ["net.minecraft.world.entity.monster.Creeper.explodeCreeper(Creeper.java:244)", "net.minecraft.world.entity.monster.Creeper.tick(Creeper.java:157)"]
-                    .into_iter()
-                    .chain(crate::server::command_frames::ENTITY_TICK)
-                    .chain([crate::server::command_frames::TICK_CHILDREN_LEVELS]),
-            );
+            let _scope = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.monster.Creeper.explodeCreeper(Creeper.java:244)"]);
             self.explode(Some(id), Some(id), None, position, radius, false, ExplosionInteraction::Mob);
         }
         self.spawn_lingering_cloud(id);

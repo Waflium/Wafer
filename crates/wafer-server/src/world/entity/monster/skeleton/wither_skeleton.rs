@@ -76,7 +76,7 @@ impl ServerLevel {
 
     pub fn wither_skeleton_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
         let was_hurt = {
-            let _scope = self.is_player(target).then(|| crate::server::main_thread_frames::enter_static(&DO_HURT_TARGET_FRAME));
+            let _scope = crate::server::main_thread_frames::enter_static(&DO_HURT_TARGET_FRAME);
             self.mob_do_hurt_target(id, target)
         };
         if !was_hurt {

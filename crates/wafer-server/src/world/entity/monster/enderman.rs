@@ -423,7 +423,7 @@ impl ServerLevel {
     pub fn enderman_ai_step(&mut self, id: EntityId) {
         self.living_mut(id).jumping = false;
         self.update_persistent_anger(id, true);
-        self.monster_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Enderman.aiStep(Enderman.java:247)"], || self.monster_ai_step(id));
     }
 
     pub fn enderman_custom_server_ai_step(&mut self, id: EntityId) {

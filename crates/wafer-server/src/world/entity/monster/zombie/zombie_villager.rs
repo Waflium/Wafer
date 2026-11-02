@@ -231,11 +231,11 @@ impl ServerLevel {
             let zombie_villager = zombie_villager_mut(self.mob_mut(id).expect("a zombie villager"));
             zombie_villager.villager_conversion_time -= amount;
             if zombie_villager.villager_conversion_time <= 0 {
-                self.finish_conversion(id);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.zombie.ZombieVillager.tick(ZombieVillager.java:172)"], || self.finish_conversion(id));
             }
         }
         if self.entity_ref(id).is_some() {
-            self.zombie_tick(id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.zombie.ZombieVillager.tick(ZombieVillager.java:176)"], || self.zombie_tick(id));
         }
     }
 
@@ -317,7 +317,15 @@ impl ServerLevel {
             if let Some(conversion_starter) = conversion_starter
                 && let Some(player) = level.players.values().find(|player| player.entity.uuid == conversion_starter).map(|player| player.entity.id)
             {
-                criteria_triggers::CURED_ZOMBIE_VILLAGER.trigger(level, player, id, villager);
+                crate::server::main_thread_frames::within(
+                    &[
+                        "net.minecraft.world.entity.monster.zombie.ZombieVillager.lambda$finishConversion$0(ZombieVillager.java:264)",
+                        "net.minecraft.world.entity.Mob.convertTo(Mob.java:1338)",
+                        "net.minecraft.world.entity.Mob.convertTo(Mob.java:1351)",
+                        "net.minecraft.world.entity.monster.zombie.ZombieVillager.finishConversion(ZombieVillager.java:241)",
+                    ],
+                    || criteria_triggers::CURED_ZOMBIE_VILLAGER.trigger(level, player, id, villager),
+                );
                 level.on_reputation_event(ReputationEventType::ZombieVillagerCured, player, villager);
             }
             level.add_effect(villager, MobEffectInstance::new(mob_effects::NAUSEA, 200, 0), None);

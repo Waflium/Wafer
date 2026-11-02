@@ -191,7 +191,7 @@ impl ServerLevel {
                 e.set_y_rot(y_head_rot);
             }
         }
-        self.monster_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Guardian.aiStep(Guardian.java:286)"], || self.monster_ai_step(id));
     }
 
     pub fn guardian_hurt_server(&mut self, id: EntityId, source: DamageSource, damage: f32) -> bool {

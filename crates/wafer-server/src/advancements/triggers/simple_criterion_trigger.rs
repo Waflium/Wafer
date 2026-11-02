@@ -31,6 +31,10 @@ pub fn trigger(level: &mut ServerLevel, player: EntityId, trigger: CriterionTrig
             }
         }
     }
+    if matched_conditions.is_empty() {
+        return;
+    }
+    let _frames = crate::server::main_thread_frames::enter_static(trigger.frames());
     for criterion in matched_conditions {
         PlayerAdvancements::award(level, player, criterion.advancement, criterion.criterion);
     }

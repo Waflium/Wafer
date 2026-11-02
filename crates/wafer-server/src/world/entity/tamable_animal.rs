@@ -181,7 +181,7 @@ impl ServerLevel {
         self.set_tame(id, true, true);
         self.set_owner(id, Some(player));
         if self.is_player(player) {
-            crate::advancements::triggers::criteria_triggers::TAME_ANIMAL.trigger(self, player, id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.TamableAnimal.tame(TamableAnimal.java:170)"], || crate::advancements::triggers::criteria_triggers::TAME_ANIMAL.trigger(self, player, id));
         }
     }
 

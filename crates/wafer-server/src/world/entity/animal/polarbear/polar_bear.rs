@@ -174,7 +174,7 @@ impl ServerLevel {
     }
 
     pub fn polar_bear_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.polarbear.PolarBear.tick(PolarBear.java:205)"], || self.mob_tick(id));
         self.then_tick(move |level| level.polar_bear_tick_end(id));
     }
 

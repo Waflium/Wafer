@@ -215,7 +215,7 @@ impl ServerLevel {
             }
         }
         self.entity_mut(id).data.set(DATA_CAN_MOVE, DataValue::Boolean(now_can_move));
-        self.monster_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.creaking.Creaking.aiStep(Creaking.java:269)"], || self.monster_ai_step(id));
     }
 
     pub fn creaking_tick(&mut self, id: EntityId) {
@@ -226,7 +226,7 @@ impl ServerLevel {
                 self.set_health(id, 0.0);
             }
         }
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.creaking.Creaking.tick(Creaking.java:284)"], || self.mob_tick(id));
     }
 
     pub fn creaking_tick_death(&mut self, id: EntityId) -> bool {

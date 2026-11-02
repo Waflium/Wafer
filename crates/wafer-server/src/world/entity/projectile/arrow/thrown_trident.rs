@@ -185,8 +185,14 @@ impl ServerLevel {
         let weapon_item = self.thrown_trident_get_weapon_item(id);
         dmg = self.modify_damage(&weapon_item, entity, &damage_source, dmg);
         thrown_trident_mut(self.projectile_mut(id)).dealt_damage = true;
-        let was_hurt = self.hurt_server(entity, damage_source, dmg);        if was_hurt {
-            self.do_post_attack_effects_with_item_source(entity, &damage_source, Some(&weapon_item));
+        let was_hurt = crate::server::main_thread_frames::within(
+            &["net.minecraft.world.entity.Entity.hurtOrSimulate(Entity.java:2163)", "net.minecraft.world.entity.projectile.arrow.ThrownTrident.onHitEntity(ThrownTrident.java:149)"],
+            || self.hurt_server(entity, damage_source, dmg),
+        );
+        if was_hurt {
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.ThrownTrident.onHitEntity(ThrownTrident.java:152)"], || {
+                self.do_post_attack_effects_with_item_source_on_break(entity, &damage_source, Some(&weapon_item))
+            });
             if self.is_living(entity) {
                 self.do_knockback(id, entity, &damage_source);
                 self.do_post_hurt_effects(id, entity);

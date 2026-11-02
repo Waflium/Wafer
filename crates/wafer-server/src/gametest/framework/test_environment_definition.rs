@@ -252,6 +252,13 @@ impl Activation {
             Activation::SetDifficulty(difficulty) => server.set_difficulty(difficulty, true),
             Activation::Functions(teardown_function) => {
                 if let Some(function) = teardown_function {
+                    let _frames = crate::server::main_thread_frames::enter_static(&[
+                        "net.minecraft.gametest.framework.TestEnvironmentDefinition$Functions.run(TestEnvironmentDefinition.java:227)",
+                        "net.minecraft.gametest.framework.TestEnvironmentDefinition$Functions.lambda$teardown$0(TestEnvironmentDefinition.java:215)",
+                        "net.minecraft.gametest.framework.TestEnvironmentDefinition$Functions.teardown(TestEnvironmentDefinition.java:215)",
+                        "net.minecraft.gametest.framework.TestEnvironmentDefinition$Functions.teardown(TestEnvironmentDefinition.java:199)",
+                        "net.minecraft.gametest.framework.TestEnvironmentDefinition$Activation.teardown(TestEnvironmentDefinition.java:70)",
+                    ]);
                     run(server, level, &function);
                 }
             }
@@ -273,7 +280,7 @@ fn run(server: &mut Server, level: usize, function_id: &str) {
     match server.functions.get(function_id) {
         Some(function) => {
             let source = CommandSourceStack::server(server).with_permission(2).with_suppressed_output().with_level(server, level);
-            ServerFunctionManager::execute(server, &function, &source);
+            server.run_from(crate::server::command_origin::CommandOrigin::TestEnvironmentFunction, |server| ServerFunctionManager::execute(server, &function, &source));
         }
         None => error!("Test Batch failed for non-existent function {function_id}"),
     }

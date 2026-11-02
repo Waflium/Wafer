@@ -151,7 +151,9 @@ impl ServerLevel {
         self.mob_mut(id).expect("an abstract villager").ambient_sound_time = -interval;
         self.reward_trade_xp(id, &offer_copy);
         if let Some(trading_player) = self.abstract_villager(id).trading_player.filter(|&player| self.is_player(player)) {
-            criteria_triggers::TRADE.trigger(self, trading_player, id, offer_copy.get_result());
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.npc.villager.AbstractVillager.notifyTrade(AbstractVillager.java:146)"], || {
+                criteria_triggers::TRADE.trigger(self, trading_player, id, offer_copy.get_result())
+            });
         }
     }
 

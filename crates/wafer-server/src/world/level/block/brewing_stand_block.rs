@@ -16,7 +16,7 @@ pub struct BrewingStandBlock;
 impl BlockBehaviour for BrewingStandBlock {
     fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
         if matches!(level.get_block_entity(pos).map(|e| &e.kind), Some(BlockEntityKind::BrewingStand(_))) {
-            level.open_menu(player, MenuProvider::BlockEntity(pos));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.BrewingStandBlock.useWithoutItem(BrewingStandBlock.java:66)"], || level.open_menu(player, MenuProvider::BlockEntity(pos)));
             level.award_stat(player, crate::stats::stats::INTERACT_WITH_BREWINGSTAND, 1);
         }
         InteractionResult::SUCCESS

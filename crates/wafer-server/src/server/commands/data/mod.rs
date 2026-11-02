@@ -111,7 +111,8 @@ fn modify(server: &mut Server, context: &CommandContext, source: &CommandSourceS
     let op = name(context, 5);
     let mode = if op == "insert" { 7 } else { 6 };
     let tags = source_tags(server, context, source, mode)?;
-    manipulate_data(server, context, source, |target, path| match op {
+    let lambda = modification_lambda_frame(context, mode);
+    manipulate_data(server, context, source, lambda, |target, path| match op {
         "insert" => path.insert(context.get_int("index"), target, &tags),
         "prepend" => path.insert(0, target, &tags),
         "append" => path.insert(-1, target, &tags),
@@ -136,10 +137,25 @@ fn modify(server: &mut Server, context: &CommandContext, source: &CommandSourceS
     })
 }
 
+fn modification_lambda_frame(context: &CommandContext, mode: usize) -> &'static str {
+    match name(context, mode) {
+        "value" => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$20(DataCommands.java:280)",
+        "compute" if name(context, context.nodes.len() - 2) == "float" => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$17(DataCommands.java:254)",
+        "compute" => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$18(DataCommands.java:267)",
+        "from" if context.has_argument("sourcePath") => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$4(DataCommands.java:225)",
+        "from" => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$3(DataCommands.java:222)",
+        _ if context.has_argument("end") => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$13(DataCommands.java:238)",
+        _ if context.has_argument("start") => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$11(DataCommands.java:235)",
+        _ if context.has_argument("sourcePath") => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$9(DataCommands.java:233)",
+        _ => "net.minecraft.server.commands.data.DataCommands.lambda$decorateModification$7(DataCommands.java:230)",
+    }
+}
+
 fn manipulate_data(
     server: &mut Server,
     context: &CommandContext,
     source: &CommandSourceStack,
+    lambda: &'static str,
     manipulator: impl FnOnce(&mut Nbt, &NbtPath) -> Result<i32, CommandSyntaxException>,
 ) -> Result<i32, CommandSyntaxException> {
     let target = DataAccessor::access(server, context, source, TARGET, "target")?;
@@ -150,7 +166,11 @@ fn manipulate_data(
     if result == 0 {
         return Err(ERROR_MERGE_UNCHANGED.create());
     }
-    target.set_data(server, data)?;
+    {
+        let frames = super::reload_command::command_frames(&["net.minecraft.server.commands.data.DataCommands.manipulateData(DataCommands.java:339)", lambda], server);
+        let _frames = crate::server::main_thread_frames::enter_absolute(frames);
+        target.set_data(server, data)?;
+    }
     source.send_success(server, || target.modified_success(server), true);
     Ok(result)
 }
@@ -163,7 +183,14 @@ fn remove_data(server: &mut Server, context: &CommandContext, source: &CommandSo
     if count == 0 {
         return Err(ERROR_MERGE_UNCHANGED.create());
     }
-    accessor.set_data(server, data)?;
+    {
+        let frames = super::reload_command::command_frames(
+            &["net.minecraft.server.commands.data.DataCommands.removeData(DataCommands.java:354)", "net.minecraft.server.commands.data.DataCommands.lambda$register$7(DataCommands.java:102)"],
+            server,
+        );
+        let _frames = crate::server::main_thread_frames::enter_absolute(frames);
+        accessor.set_data(server, data)?;
+    }
     source.send_success(server, || accessor.modified_success(server), true);
     Ok(count)
 }
@@ -223,7 +250,14 @@ fn merge_data(server: &mut Server, context: &CommandContext, source: &CommandSou
     if old == result {
         return Err(ERROR_MERGE_UNCHANGED.create());
     }
-    accessor.set_data(server, result)?;
+    {
+        let frames = super::reload_command::command_frames(
+            &["net.minecraft.server.commands.data.DataCommands.mergeData(DataCommands.java:411)", "net.minecraft.server.commands.data.DataCommands.lambda$register$1(DataCommands.java:81)"],
+            server,
+        );
+        let _frames = crate::server::main_thread_frames::enter_absolute(frames);
+        accessor.set_data(server, result)?;
+    }
     source.send_success(server, || accessor.modified_success(server), true);
     Ok(1)
 }

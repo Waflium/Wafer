@@ -102,7 +102,7 @@ impl ServerLevel {
     pub fn silverfish_tick(&mut self, id: EntityId) {
         let y_rot = self.entity(id).y_rot;
         self.living_mut(id).y_body_rot = y_rot;
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Silverfish.tick(Silverfish.java:106)"], || self.mob_tick(id));
     }
 
     pub fn silverfish_set_y_body_rot(&mut self, id: EntityId, y_body_rot: f32) {

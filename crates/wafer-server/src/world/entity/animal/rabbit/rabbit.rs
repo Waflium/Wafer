@@ -558,7 +558,7 @@ impl ServerLevel {
     }
 
     pub fn rabbit_ai_step(&mut self, id: EntityId) {
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.rabbit.Rabbit.aiStep(Rabbit.java:356)"], || self.animal_ai_step(id));
         let Some(mob) = self.mob_mut(id) else { return };
         let state = rabbit_mut(mob);
         if state.jump_ticks != state.jump_duration {

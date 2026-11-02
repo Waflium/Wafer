@@ -56,6 +56,8 @@ impl ServerLevel {
     pub fn spectral_arrow_do_post_hurt_effects(&mut self, id: EntityId, mob: EntityId) {
         let duration = spectral_arrow(self.projectile(id)).duration;
         let effect_source = self.projectile_get_effect_source(id);
-        self.add_effect(mob, MobEffectInstance::new(mob_effects::GLOWING, duration, 0), Some(effect_source));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.SpectralArrow.doPostHurtEffects(SpectralArrow.java:50)"], || {
+            self.add_effect(mob, MobEffectInstance::new(mob_effects::GLOWING, duration, 0), Some(effect_source))
+        });
     }
 }

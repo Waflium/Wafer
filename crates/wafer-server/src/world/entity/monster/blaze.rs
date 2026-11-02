@@ -113,7 +113,7 @@ impl ServerLevel {
         if !e.on_ground && e.delta_movement.y < 0.0 {
             e.set_delta_movement(e.delta_movement.multiply(1.0, 0.6, 1.0));
         }
-        self.monster_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Blaze.aiStep(Blaze.java:111)"], || self.monster_ai_step(id));
     }
 
     pub fn blaze_custom_server_ai_step(&mut self, id: EntityId) {

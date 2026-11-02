@@ -59,7 +59,7 @@ impl ServerLevel {
     }
 
     pub fn tick_lightning_bolt(&mut self, id: EntityId) {
-        self.entity_base_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.tick(Entity.java:583)", "net.minecraft.world.entity.LightningBolt.tick(LightningBolt.java:84)"], || self.entity_base_tick(id));
         self.then_tick(move |level| level.tick_lightning_bolt_end(id));
     }
 
@@ -82,6 +82,7 @@ impl ServerLevel {
                 let hit_entities = bolt.hit_entities.clone();
                 let viewers = self.get_entities_matching(Some(id), &area, |level, e| level.is_alive(e) && !hit_entities.contains(&e));
                 let players: Vec<EntityId> = self.players.values().filter(|p| (p.entity.position().distance_to_sqr(pos) as f32).sqrt() < 256.0).map(|p| p.entity.id).collect();
+                let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.LightningBolt.tick(LightningBolt.java:114)"]);
                 for player in players {
                     crate::advancements::triggers::criteria_triggers::LIGHTNING_STRIKE.trigger(self, player, id, &viewers);
                 }
@@ -99,11 +100,13 @@ impl ServerLevel {
             let area = AABB::new(pos.x - 3.0, pos.y - 3.0, pos.z - 3.0, pos.x + 3.0, pos.y + 6.0 + 3.0, pos.z + 3.0);
             let hit = self.get_entities_matching(Some(id), &area, |level, e| level.is_alive(e));
             for &entity in &hit {
-                self.thunder_hit(entity, id);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LightningBolt.tick(LightningBolt.java:133)"], || self.thunder_hit(entity, id));
             }
             self.lightning_bolt(id).hit_entities.extend(hit.iter().copied());
             if let Some(cause) = self.lightning_bolt(id).cause.filter(|&cause| self.is_player(cause)) {
-                crate::advancements::triggers::criteria_triggers::CHANNELED_LIGHTNING.trigger(self, cause, &hit);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LightningBolt.tick(LightningBolt.java:137)"], || {
+                    crate::advancements::triggers::criteria_triggers::CHANNELED_LIGHTNING.trigger(self, cause, &hit)
+                });
             }
         }
     }
@@ -136,7 +139,7 @@ impl ServerLevel {
         if self.entity(id).remaining_fire_ticks == 0 {
             self.ignite_for_ticks(id, 8 * 20);
         }
-        self.hurt_server(id, DamageSource::new(damage_types::LIGHTNING_BOLT), 5.0);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.thunderHit(Entity.java:3189)"], || self.hurt_server(id, DamageSource::new(damage_types::LIGHTNING_BOLT), 5.0));
     }
 
     fn spawn_lightning_fire(&mut self, id: EntityId, additional_sources: i32) {

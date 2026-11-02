@@ -72,7 +72,14 @@ impl ServerLevel {
         }
         if let SlotContainer::Menu(c) = menu.slots[index].container {
             let craft_items = menu.containers[craft_slots].crafting().get_items().to_vec();
-            menu.containers[c].award_used_recipes(self, player, &craft_items);
+            crate::server::main_thread_frames::within(
+                &[
+                    "net.minecraft.world.inventory.RecipeCraftingHolder.awardUsedRecipes(RecipeCraftingHolder.java:21)",
+                    "net.minecraft.world.inventory.ResultSlot.checkTakeAchievements(ResultSlot.java:62)",
+                    "net.minecraft.world.inventory.ResultSlot.onTake(ResultSlot.java:90)",
+                ],
+                || menu.containers[c].award_used_recipes(self, player, &craft_items),
+            );
         }
         if let SlotKind::Result { remove_count, .. } = &mut menu.slots[index].kind {
             *remove_count = 0;

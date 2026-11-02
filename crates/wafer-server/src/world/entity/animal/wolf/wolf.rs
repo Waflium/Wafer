@@ -348,7 +348,7 @@ impl ServerLevel {
     }
 
     pub fn wolf_ai_step(&mut self, id: EntityId) {
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.wolf.Wolf.aiStep(Wolf.java:340)"], || self.animal_ai_step(id));
         if self.mob(id).is_none() {
             return;
         }
@@ -366,7 +366,7 @@ impl ServerLevel {
     }
 
     pub fn wolf_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.wolf.Wolf.tick(Wolf.java:355)"], || self.mob_tick(id));
         self.then_tick(move |level| level.wolf_tick_end(id));
     }
 
@@ -525,7 +525,7 @@ impl ServerLevel {
         } else if item_stack.is(items::BONE) && !self.is_angry(id) {
             item_stack.consume(1, self, Some(player));
             self.player_mut(player).update_item_in_hand(hand, &item_stack);
-            self.try_to_tame(id, player);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.wolf.Wolf.mobInteract(Wolf.java:538)"], || self.try_to_tame(id, player));
             return InteractionResult::SUCCESS_SERVER;
         }
         self.animal_mob_interact(id, player, hand)
@@ -533,7 +533,7 @@ impl ServerLevel {
 
     fn try_to_tame(&mut self, id: EntityId, player: EntityId) {
         if self.entity_mut(id).random.next_int_bounded(3) == 0 {
-            self.tame(id, player);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.wolf.Wolf.tryToTame(Wolf.java:547)"], || self.tame(id, player));
             self.get_navigation(id, |navigation, _| navigation.stop());
             self.set_target(id, None);
             self.set_ordered_to_sit(id, true);

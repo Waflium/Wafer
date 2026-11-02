@@ -365,7 +365,7 @@ impl ServerLevel {
         if physics_enabled {
             let ctx = ClipContext { from: original_position, to: original_position.add_vec(movement), block: ClipBlock::Collider, fluid: ClipFluid::None, collision_context: CollisionContext::of(self, id) };
             let clip = self.clip_including_border(&ctx);
-            self.step_move_and_hit(id, clip.hit, clip.miss);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.tick(AbstractArrow.java:266)"], || self.step_move_and_hit(id, clip.hit, clip.miss));
         } else {
             self.entity_mut(id).set_pos(original_position.add_vec(movement));
             self.entity_moved(id);
@@ -415,12 +415,14 @@ impl ServerLevel {
     fn step_move_and_hit_iteration_end(&mut self, id: EntityId, block_hit_result: BlockHitResult, miss: bool, entities_hit: &[EntityHitResult]) -> bool {
         if entities_hit.is_empty() {
             if self.is_alive(id) && !miss {
-                self.hit_target_or_deflect_self(id, HitResult::Block { hit: block_hit_result, miss });
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.stepMoveAndHit(AbstractArrow.java:305)"], || {
+                    self.hit_target_or_deflect_self(id, HitResult::Block { hit: block_hit_result, miss })
+                });
                 self.entity_mut(id).needs_sync = true;
             }
             return false;
         } else if self.is_alive(id) && !self.entity(id).no_physics {
-            let deflection = self.hit_targets_or_deflect_self(id, entities_hit);
+            let deflection = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.stepMoveAndHit(AbstractArrow.java:310)"], || self.hit_targets_or_deflect_self(id, entities_hit));
             self.entity_mut(id).needs_sync = true;
             if self.projectile(id).get_pierce_level() > 0 && deflection == ProjectileDeflection::None {
                 return true;
@@ -533,7 +535,10 @@ impl ServerLevel {
         if self.is_on_fire(id) {
             self.ignite_for_seconds(entity, 5.0);
         }
-        if self.hurt_server(entity, damage_source, damage as f32) {
+        if crate::server::main_thread_frames::within(
+            &["net.minecraft.world.entity.Entity.hurtOrSimulate(Entity.java:2163)", "net.minecraft.world.entity.projectile.arrow.AbstractArrow.onHitEntity(AbstractArrow.java:476)"],
+            || self.hurt_server(entity, damage_source, damage as f32),
+        ) {
             if self.is_living(entity) {
                 if self.projectile(id).get_pierce_level() <= 0 {
                     let count = self.get_arrow_count(entity);
@@ -541,8 +546,10 @@ impl ServerLevel {
                 }
                 self.do_knockback(id, entity, &damage_source);
                 let weapon = self.get_projectile_weapon_item(id);
-                self.do_post_attack_effects_with_item_source(entity, &damage_source, weapon.as_ref());
-                self.do_post_hurt_effects(id, entity);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.onHitEntity(AbstractArrow.java:485)"], || {
+                    self.do_post_attack_effects_with_item_source(entity, &damage_source, weapon.as_ref())
+                });
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.onHitEntity(AbstractArrow.java:488)"], || self.do_post_hurt_effects(id, entity));
                 if self.is_player(entity)
                     && let Some(owner_player) = current_owner.filter(|&owner| self.is_player(owner))
                     && !self.entity(id).is_silent()
@@ -560,8 +567,12 @@ impl ServerLevel {
                 if let Some(player) = current_owner.filter(|&owner| self.is_player(owner)) {
                     let weapon = self.abstract_arrow(id).fired_from_weapon.clone();
                     match self.abstract_arrow(id).pierced_and_killed_entities.clone() {
-                        Some(killed) => criteria_triggers::KILLED_BY_ARROW.trigger(self, player, &killed, weapon.as_ref()),
-                        None if !alive => criteria_triggers::KILLED_BY_ARROW.trigger(self, player, &[entity], weapon.as_ref()),
+                        Some(killed) => crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.onHitEntity(AbstractArrow.java:500)"], || {
+                            criteria_triggers::KILLED_BY_ARROW.trigger(self, player, &killed, weapon.as_ref())
+                        }),
+                        None if !alive => crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.onHitEntity(AbstractArrow.java:502)"], || {
+                            criteria_triggers::KILLED_BY_ARROW.trigger(self, player, &[entity], weapon.as_ref())
+                        }),
                         None => {}
                     }
                 }
@@ -612,9 +623,11 @@ impl ServerLevel {
     pub fn abstract_arrow_on_hit_block(&mut self, id: EntityId, hit_result: BlockHitResult) {
         let state = self.block_state(hit_result.block_pos);
         self.abstract_arrow_mut(id).last_state = Some(state);
-        self.projectile_base_on_hit_block(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.onHitBlock(AbstractArrow.java:538)"], || self.projectile_base_on_hit_block(id, hit_result));
         if let Some(weapon_item) = self.get_projectile_weapon_item(id) {
-            self.hit_block_enchantment_effects(id, hit_result, &weapon_item);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.onHitBlock(AbstractArrow.java:542)"], || {
+                self.hit_block_enchantment_effects(id, hit_result, &weapon_item)
+            });
         }
         let movement = self.entity(id).delta_movement;
         let offset_direction = Vec3::new(java_signum(movement.x), java_signum(movement.y), java_signum(movement.z));
@@ -645,7 +658,9 @@ impl ServerLevel {
         let compensated_hit_position = Vec3::new(clamp(location.x, pos.x), clamp(location.y, pos.y), clamp(location.z, pos.z));
         let owner = self.projectile_get_owner(id).filter(|&owner| self.is_living(owner));
         let state = self.block_state(pos);
-        if enchantment_helper::on_hit_block(self, weapon, owner, id, None, compensated_hit_position, state) {
+        if crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.AbstractArrow.hitBlockEnchantmentEffects(AbstractArrow.java:562)"], || {
+            enchantment_helper::on_hit_block(self, weapon, owner, id, None, compensated_hit_position, state)
+        }) {
             self.abstract_arrow_on_item_break(id);
         }
     }

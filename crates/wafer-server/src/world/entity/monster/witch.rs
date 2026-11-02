@@ -181,7 +181,7 @@ impl ServerLevel {
                 self.broadcast_entity_event(id, entity_event::WITCH_HAT_MAGIC);
             }
         }
-        self.raider_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Witch.aiStep(Witch.java:173)"], || self.raider_ai_step(id));
     }
 
     fn witch_choose_potion(&mut self, id: EntityId) -> Option<&'static str> {

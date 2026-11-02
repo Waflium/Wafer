@@ -217,6 +217,7 @@ pub fn for_each_block_intersected_between_grouped(
         let start = BlockPos::containing(aabb_at_target.min_x, aabb_at_target.min_y, aabb_at_target.min_z);
         let end = BlockPos::containing(aabb_at_target.max_x, aabb_at_target.max_y, aabb_at_target.max_z);
         cursors.push(BlockPos::new(start.x.max(end.x), start.y.max(end.y), start.z.max(end.z)));
+        let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.level.BlockGetter.forEachBlockIntersectedBetween(BlockGetter.java:217)"]);
         for z in start.z.min(end.z)..=start.z.max(end.z) {
             for y in start.y.min(end.y)..=start.y.max(end.y) {
                 for x in start.x.min(end.x)..=start.x.max(end.x) {
@@ -235,18 +236,26 @@ pub fn for_each_block_intersected_between_grouped(
     let positions = between_corners_in_direction(first, second, travel);
     let group = cursors.len();
     cursors.push(positions[positions.len() - 1]);
-    for pos in positions {
-        if !visit(pos, 0, group) {
-            cursors[group] = pos;
-            return (false, cursors);
+    {
+        let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.level.BlockGetter.forEachBlockIntersectedBetween(BlockGetter.java:227)"]);
+        for pos in positions {
+            if !visit(pos, 0, group) {
+                cursors[group] = pos;
+                return (false, cursors);
+            }
+            visited.insert(pos);
         }
-        visited.insert(pos);
     }
-    let Some(iterations) = add_collisions_along_travel(&mut visited, travel, aabb_at_target, &mut cursors, &mut visit) else { return (false, cursors) };
+    let iterations = crate::server::main_thread_frames::within(
+        &["net.minecraft.world.level.BlockGetter.addCollisionsAlongTravel(BlockGetter.java:332)", "net.minecraft.world.level.BlockGetter.forEachBlockIntersectedBetween(BlockGetter.java:234)"],
+        || add_collisions_along_travel(&mut visited, travel, aabb_at_target, &mut cursors, &mut visit),
+    );
+    let Some(iterations) = iterations else { return (false, cursors) };
     let (first, second) = corners_of(aabb_at_target);
     let positions = between_corners_in_direction(first, second, travel);
     let group = cursors.len();
     cursors.push(positions[positions.len() - 1]);
+    let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.level.BlockGetter.forEachBlockIntersectedBetween(BlockGetter.java:242)"]);
     for pos in positions {
         if visited.insert(pos) && !visit(pos, iterations + 1, group) {
             cursors[group] = pos;

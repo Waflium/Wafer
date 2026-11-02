@@ -120,15 +120,29 @@ pub mod flags {
     pub const FALL_FLYING: u8 = 7;
 }
 
-const ON_BELOW_WORLD_PLAYER_TICK_FRAMES: [&str; 8] = [
+const START_RIDING_TRIGGER_FRAMES: [&str; 16] = [
+    "net.minecraft.world.entity.Entity.lambda$startRiding$1(Entity.java:2739)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.accept(ForEachOps.java:186)",
+    "java.base/java.util.stream.ReferencePipeline$2$1.accept(ReferencePipeline.java:197)",
+    "java.base/java.util.stream.Streams$StreamBuilderImpl.forEachRemaining(Streams.java:411)",
+    "java.base/java.util.stream.Streams$ConcatSpliterator.forEachRemaining(Streams.java:734)",
+    "java.base/java.util.stream.ReferencePipeline$Head.forEach(ReferencePipeline.java:803)",
+    "java.base/java.util.stream.ReferencePipeline$7$1FlatMap.accept(ReferencePipeline.java:293)",
+    "java.base/java.util.Collections$2.tryAdvance(Collections.java:5182)",
+    "java.base/java.util.Collections$2.forEachRemaining(Collections.java:5190)",
+    "java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:570)",
+    "java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:560)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp.evaluateSequential(ForEachOps.java:153)",
+    "java.base/java.util.stream.ForEachOps$ForEachOp$OfRef.evaluateSequential(ForEachOps.java:176)",
+    "java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:265)",
+    "java.base/java.util.stream.ReferencePipeline.forEach(ReferencePipeline.java:632)",
+    "net.minecraft.world.entity.Entity.startRiding(Entity.java:2738)",
+];
+
+const ON_BELOW_WORLD_FRAMES: [&str; 3] = [
     "net.minecraft.world.entity.LivingEntity.onBelowWorld(LivingEntity.java:2229)",
     "net.minecraft.world.entity.Entity.checkBelowWorld(Entity.java:679)",
     "net.minecraft.world.entity.Entity.baseTick(Entity.java:648)",
-    "net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:450)",
-    "net.minecraft.world.entity.Entity.tick(Entity.java:583)",
-    "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2847)",
-    "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
-    "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
 ];
 
 pub const MAX_ENTITY_TAG_COUNT: usize = 1024;
@@ -1641,7 +1655,9 @@ impl ServerLevel {
             if p.health > 0.0
                 && let Some(starting_to_fall_position) = p.starting_to_fall_position
             {
-                crate::advancements::triggers::criteria_triggers::FALL_FROM_HEIGHT.trigger(self, id, starting_to_fall_position);
+                crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.resetFallDistance(ServerPlayer.java:928)"], || {
+                    crate::advancements::triggers::criteria_triggers::FALL_FROM_HEIGHT.trigger(self, id, starting_to_fall_position)
+                });
             }
             self.player_mut(id).starting_to_fall_position = None;
         }
@@ -1671,6 +1687,7 @@ impl ServerLevel {
             self.phantom_check_fall_damage(id);
             return;
         }
+        let _server_player_frames = self.is_player(id).then(|| crate::server::main_thread_frames::enter_static(&["net.minecraft.server.level.ServerPlayer.checkFallDamage(ServerPlayer.java:1451)"]));
         if self.find_player(id).is_some_and(|p| p.spawn_extra_particles_on_fall) && on_ground && self.entity(id).fall_distance > 0.0 {
             let centered = Vec3::at_center_of(pos).add(0.0, 0.5, 0.0);
             let particles = mth::clamp(50.0 * self.entity(id).fall_distance, 0.0, 200.0) as i32;
@@ -1682,7 +1699,7 @@ impl ServerLevel {
             self.update_fluid_interaction(id);
         }
         if living && on_ground && self.entity(id).fall_distance > 0.0 {
-            self.on_changed_block(id, pos);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.checkFallDamage(LivingEntity.java:390)"], || self.on_changed_block(id, pos));
             let fall_power = self.entity(id).fall_distance + 1.0e-6 - self.attribute_value(id, Attribute::SafeFallDistance);
             let power = mth::floor(fall_power).max(0) as f64;
             if power > 0.0 && !on_state.is_air() {
@@ -1701,6 +1718,7 @@ impl ServerLevel {
                 self.send_block_particles(on_state, x, y, z, particles, (0.0, 0.0, 0.0), 0.15f32 as f64);
             }
         }
+        let _living_frames = living.then(|| crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.checkFallDamage(LivingEntity.java:414)"]));
         let e = self.entity_mut(id);
         if !e.is_in_water() && ya < 0.0 {
             e.fall_distance -= (ya as f32) as f64;
@@ -1708,15 +1726,17 @@ impl ServerLevel {
         if on_ground {
             let fall_distance = e.fall_distance;
             if fall_distance > 0.0 {
-                block::of(on_state).fall_on(self, on_state, pos, id, fall_distance);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.checkFallDamage(Entity.java:1767)"], || block::of(on_state).fall_on(self, on_state, pos, id, fall_distance));
                 if let Some(e) = self.entity_ref(id) {
                     let position = e.position();
                     let affected_state = e.main_supporting_block_pos.map_or(on_state, |block_pos| self.block_state(block_pos));
-                    self.game_event(game_event::HIT_GROUND, position, Context::of_entity_and_state(Some(id), Some(affected_state)));
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.checkFallDamage(Entity.java:1770)"], || {
+                        self.game_event(game_event::HIT_GROUND, position, Context::of_entity_and_state(Some(id), Some(affected_state)))
+                    });
                 }
             }
             if self.entity_ref(id).is_some() {
-                self.reset_fall_distance(id);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.checkFallDamage(Entity.java:1772)"], || self.reset_fall_distance(id));
             }
         }
         if living && on_ground && let Some(p) = self.find_player_mut(id) {
@@ -1731,7 +1751,7 @@ impl ServerLevel {
         self.check_supporting_block(id, on_ground, Some(Vec3::new(xa, ya, za)));
         let pos = self.on_pos_legacy(id);
         let state = self.block_state(pos);
-        self.check_fall_damage(id, ya, on_ground, state, pos);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.doCheckFallDamage(Entity.java:1758)"], || self.check_fall_damage(id, ya, on_ground, state, pos));
     }
 
     pub fn touching_unloaded_chunk(&self, id: EntityId) -> bool {
@@ -2175,7 +2195,7 @@ impl ServerLevel {
             }
             Some(_) => {}
         }
-        self.apply_effects_from_movements(id, &movements);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1064)"], || self.apply_effects_from_movements(id, &movements));
         self.restore_final_movements(id, movements);
     }
 
@@ -2213,7 +2233,7 @@ impl ServerLevel {
         let was_on_fire = self.is_on_fire(id);
         let was_freezing = self.entity(id).is_freezing();
         let previous_fire_ticks = self.entity(id).remaining_fire_ticks;
-        self.check_inside_blocks(id, movements);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1121)"], || self.check_inside_blocks(id, movements));
         self.apply_inside_effects(id);
         if self.entity_ref(id).is_none() {
             return;
@@ -2314,22 +2334,32 @@ impl ServerLevel {
                         let axis_move = delta.get(axis);
                         if axis_move != 0.0 {
                             let to = pos.relative(axis.positive(), axis_move);
-                            max_iterations -= self.check_inside_blocks_between(id, pos, to, &mut visited, max_iterations);
+                            max_iterations -= crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.checkInsideBlocks(Entity.java:1485)"], || {
+                                self.check_inside_blocks_between(id, pos, to, &mut visited, max_iterations)
+                            });
                             pos = to;
                         }
                     }
                 }
-                _ => max_iterations -= self.check_inside_blocks_between(id, movement.from, movement.to, &mut visited, 16),
+                _ => {
+                    max_iterations -= crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.checkInsideBlocks(Entity.java:1490)"], || {
+                        self.check_inside_blocks_between(id, movement.from, movement.to, &mut visited, 16)
+                    })
+                }
             }
             if max_iterations <= 0 {
-                self.check_inside_blocks_between(id, movement.to, movement.to, &mut visited, 1);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.checkInsideBlocks(Entity.java:1495)"], || {
+                    self.check_inside_blocks_between(id, movement.to, movement.to, &mut visited, 1)
+                });
             }
         }
     }
 
     fn on_inside_block(&mut self, id: EntityId, state: wafer_data::BlockState) {
         if self.is_player(id) {
-            crate::advancements::triggers::criteria_triggers::ENTER_BLOCK.trigger(self, id, state);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.onInsideBlock(ServerPlayer.java:653)"], || {
+                crate::advancements::triggers::criteria_triggers::ENTER_BLOCK.trigger(self, id, state)
+            });
         } else if self.as_projectile(id).is_some_and(|projectile| matches!(projectile.kind, super::projectile::projectile::ProjectileKind::ThrownEnderpearl(_))) {
             self.thrown_enderpearl_on_inside_block(id, state);
         }
@@ -2357,6 +2387,7 @@ impl ServerLevel {
         let box_from = self.entity(id).make_bounding_box(from);
         let travel = to.subtract(from);
         let mut cursor_events: Vec<(usize, usize)> = Vec::new();
+        let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.Entity.checkInsideBlocks(Entity.java:1510)"]);
         let (_, cursors) = for_each_block_intersected_between_grouped(from, to, &deflated, |pos, iteration, group| {
             if !self.is_alive(id) {
                 return false;
@@ -2387,13 +2418,15 @@ impl ServerLevel {
                     let is_precise = moved_far || deflated.intersects_block(pos);
                     effects.advance_step(iteration);
                     let block_events_before = self.block_event_count();
-                    behaviour.entity_inside(state, self, pos, id, &mut effects, is_precise);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.lambda$checkInsideBlocks$0(Entity.java:1546)"], || {
+                        behaviour.entity_inside(state, self, pos, id, &mut effects, is_precise)
+                    });
                     for index in block_events_before..self.block_event_count() {
                         if self.block_event_pos(index) == pos {
                             cursor_events.push((index, group));
                         }
                     }
-                    self.on_inside_block(id, state);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.lambda$checkInsideBlocks$0(Entity.java:1547)"], || self.on_inside_block(id, state));
                 }
                 if inside_fluid {
                     effects.advance_step(iteration);
@@ -2645,7 +2678,7 @@ impl ServerLevel {
 
     fn on_below_world(&mut self, id: EntityId) {
         if self.is_living(id) {
-            let _scope = self.is_player(id).then(|| crate::server::main_thread_frames::enter(ON_BELOW_WORLD_PLAYER_TICK_FRAMES));
+            let _scope = crate::server::main_thread_frames::enter_static(&ON_BELOW_WORLD_FRAMES);
             self.hurt(id, crate::world::damagesource::DamageSource::new(wafer_data::damage_types::OUT_OF_WORLD), 4.0);
         } else {
             self.discard(id);
@@ -2659,7 +2692,9 @@ impl ServerLevel {
     }
 
     pub fn apply_effects_from_blocks_between(&mut self, id: EntityId, from: Vec3, to: Vec3) {
-        self.apply_effects_from_movements(id, &[Movement { from, to, axis_dependent_original_movement: None }]);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.applyEffectsFromBlocks(Entity.java:1104)"], || {
+            self.apply_effects_from_movements(id, &[Movement { from, to, axis_dependent_original_movement: None }])
+        });
     }
 
     pub fn move_towards_closest_space(&mut self, id: EntityId, x: f64, y: f64, z: f64) {
@@ -2764,7 +2799,7 @@ impl ServerLevel {
     }
 
     pub fn hurt(&mut self, id: EntityId, source: DamageSource, damage: f32) {
-        let _scope = self.is_player(id).then(|| crate::server::main_thread_frames::enter(["net.minecraft.world.entity.Entity.hurt(Entity.java:2153)"]));
+        let _scope = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.Entity.hurt(Entity.java:2153)"]);
         self.hurt_server(id, source, damage);
     }
 
@@ -2916,16 +2951,16 @@ impl ServerLevel {
         if !self.is_alive(id) {
             return InteractionResult::Pass;
         }
-        let interaction_result = self.check_and_handle_important_interactions(id, player, hand);
+        let interaction_result = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.interact(Mob.java:1226)"], || self.check_and_handle_important_interactions(id, player, hand));
         if interaction_result.consumes_action() {
             self.entity_game_event_by(id, game_event::ENTITY_INTERACT, Some(player));
             return interaction_result;
         }
-        let super_reaction = self.entity_interact(id, player, hand, location);
+        let super_reaction = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.interact(Mob.java:1231)"], || self.entity_interact(id, player, hand, location));
         if super_reaction != InteractionResult::Pass {
             return super_reaction;
         }
-        let interaction_result = self.mob_interact(id, player, hand);
+        let interaction_result = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.interact(Mob.java:1236)"], || self.mob_interact(id, player, hand));
         if interaction_result.consumes_action() {
             self.entity_game_event_by(id, game_event::ENTITY_INTERACT, Some(player));
             interaction_result
@@ -2965,7 +3000,7 @@ impl ServerLevel {
             && held_item.is(wafer_data::items::SHEARS)
             && self.can_shear_equipment(id, player)
             && !self.player(player).is_secondary_use_active()
-            && self.attempt_to_shear_equipment(id, player, hand)
+            && crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Entity.interact(Entity.java:2578)"], || self.attempt_to_shear_equipment(id, player, hand))
         {
             return InteractionResult::SUCCESS;
         }
@@ -3791,6 +3826,8 @@ impl ServerLevel {
         if send_event_and_triggers {
             let vehicle_position = self.entity(entity_to_ride).position();
             self.game_event_from_entity(Some(id), game_event::ENTITY_MOUNT, vehicle_position);
+            let _server_player_frames = self.is_player(id).then(|| crate::server::main_thread_frames::enter_static(&["net.minecraft.server.level.ServerPlayer.startRiding(ServerPlayer.java:2290)"]));
+            let _frames = crate::server::main_thread_frames::enter_static(&START_RIDING_TRIGGER_FRAMES);
             for passenger in self.indirect_passengers(entity_to_ride) {
                 if self.is_player(passenger) {
                     crate::advancements::triggers::criteria_triggers::START_RIDING_TRIGGER.trigger(self, passenger);

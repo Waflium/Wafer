@@ -457,7 +457,7 @@ impl ServerLevel {
     }
 
     pub fn cat_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.feline.Cat.tick(Cat.java:324)"], || self.mob_tick(id));
         self.then_tick(move |level| level.cat_tick_end(id));
     }
 

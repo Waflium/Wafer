@@ -620,7 +620,13 @@ impl ServerLevel {
         if super_interaction != InteractionResult::Pass {
             return super_interaction;
         }
-        if self.player(player).is_secondary_use_active() || !(self.boat(id).out_of_control_ticks < TIME_TO_EJECT) || !self.start_riding(player, id, false, true) {
+        if self.player(player).is_secondary_use_active()
+            || !(self.boat(id).out_of_control_ticks < TIME_TO_EJECT)
+            || !crate::server::main_thread_frames::within(
+                &["net.minecraft.world.entity.Entity.startRiding(Entity.java:2695)", "net.minecraft.world.entity.vehicle.boat.AbstractBoat.interact(AbstractBoat.java:806)"],
+                || self.start_riding(player, id, false, true),
+            )
+        {
             InteractionResult::Pass
         } else {
             InteractionResult::SUCCESS

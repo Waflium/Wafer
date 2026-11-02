@@ -1,5 +1,4 @@
 use super::Server;
-use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum CommandOrigin {
@@ -14,8 +13,9 @@ pub enum CommandOrigin {
     ScheduledFunctionTag,
     TickFunctions,
     LoadFunctions,
-    AdvancementReward(CriterionTrigger),
-    EnchantmentTickPlayer,
+    AdvancementReward,
+    EnchantmentEffect,
+    TestEnvironmentFunction,
 }
 
 impl Server {

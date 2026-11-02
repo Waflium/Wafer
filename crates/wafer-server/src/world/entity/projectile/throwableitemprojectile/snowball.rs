@@ -33,11 +33,11 @@ impl ServerLevel {
         let is_blaze = wafer_data::registry::ENTITY_TYPE[self.entity(entity).entity_type as usize] == "minecraft:blaze";
         let damage = if is_blaze { 3 } else { 0 };
         let source = self.thrown(id);
-        self.hurt(entity, source, damage as f32);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball.onHitEntity(Snowball.java:59)"], || self.hurt(entity, source, damage as f32));
     }
 
     pub fn snowball_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball.onHit(Snowball.java:64)"], || self.projectile_base_on_hit(id, hit_result));
         self.broadcast_entity_event(id, EVENT_BREAK);
         self.discard(id);
     }

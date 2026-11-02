@@ -82,17 +82,23 @@ impl ServerLevel {
         let was_hurt = match owner.filter(|&owner| self.is_living(owner)) {
             Some(living_owner) => {
                 let damage_source = DamageSource::source(damage_types::WITHER_SKULL, Some(id), Some(living_owner));
-                let was_hurt = self.hurt_server(target, damage_source.clone(), 8.0);
+                let was_hurt = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull.onHitEntity(WitherSkull.java:73)"], || {
+                    self.hurt_server(target, damage_source.clone(), 8.0)
+                });
                 if was_hurt {
                     if self.is_alive(target) {
-                        self.do_post_attack_effects(target, &damage_source);
+                        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull.onHitEntity(WitherSkull.java:76)"], || {
+                            self.do_post_attack_effects(target, &damage_source)
+                        });
                     } else {
                         self.heal(living_owner, 5.0);
                     }
                 }
                 was_hurt
             }
-            None => self.hurt_server(target, DamageSource::new(damage_types::MAGIC), 5.0),
+            None => crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull.onHitEntity(WitherSkull.java:82)"], || {
+                self.hurt_server(target, DamageSource::new(damage_types::MAGIC), 5.0)
+            }),
         };
         if was_hurt && self.is_living(target) {
             let wither_seconds = match self.difficulty {
@@ -102,13 +108,15 @@ impl ServerLevel {
             };
             if wither_seconds > 0 {
                 let effect_source = owner.unwrap_or(id);
-                self.add_effect(target, MobEffectInstance::new(mob_effects::WITHER, 20 * wither_seconds, 1), Some(effect_source));
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull.onHitEntity(WitherSkull.java:92)"], || {
+                    self.add_effect(target, MobEffectInstance::new(mob_effects::WITHER, 20 * wither_seconds, 1), Some(effect_source))
+                });
             }
         }
     }
 
     pub fn wither_skull_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull.onHit(WitherSkull.java:99)"], || self.projectile_base_on_hit(id, hit_result));
         let position = self.entity(id).position();
         let indirect_source = self.projectile_get_owner(id).filter(|&owner| self.is_living(owner));
         let dangerous = is_dangerous(self.entity(id));

@@ -941,7 +941,7 @@ pub struct CraftingTableBlock;
 
 impl BlockBehaviour for CraftingTableBlock {
     fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
-        level.open_menu(player, crate::world::inventory::menu_provider::MenuProvider::Crafting(pos));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CraftingTableBlock.useWithoutItem(CraftingTableBlock.java:27)"], || level.open_menu(player, crate::world::inventory::menu_provider::MenuProvider::Crafting(pos)));
         level.award_stat(player, crate::stats::stats::INTERACT_WITH_CRAFTING_TABLE, 1);
         InteractionResult::SUCCESS
     }

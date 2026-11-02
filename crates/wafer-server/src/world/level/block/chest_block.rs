@@ -317,7 +317,7 @@ impl BlockBehaviour for ChestBlock {
             Combined::Double(first, second) => Some(MenuProvider::DoubleChest { first, second }),
         };
         if let Some(provider) = provider {
-            level.open_menu(player, provider);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.ChestBlock.useWithoutItem(ChestBlock.java:184)"], || level.open_menu(player, provider));
             level.award_stat(player, self.get_open_chest_stat(), 1);
             crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(level, player, true);
         }

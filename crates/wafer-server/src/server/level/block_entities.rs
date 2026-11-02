@@ -130,7 +130,9 @@ impl ServerLevel {
         };
         let loot_table = LootTable::get(&loot_table_key);
         if let Some(player) = player.filter(|&player| self.is_player(player)) {
-            crate::advancements::triggers::criteria_triggers::GENERATE_LOOT.trigger(self, player, &loot_table_key);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.RandomizableContainer.unpackLootTable(RandomizableContainer.java:79)"], || {
+                crate::advancements::triggers::criteria_triggers::GENERATE_LOOT.trigger(self, player, &loot_table_key)
+            });
         }
         let luck = player.map(|player| self.attribute_value(player, Attribute::Luck) as f32);
         let mut params = LootParams::new(self);
@@ -187,6 +189,13 @@ impl ServerLevel {
         if !ty.is_valid(state) {
             return;
         }
+        let _frames = crate::server::main_thread_frames::enter_static(&[
+            "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:773)",
+            "net.minecraft.world.level.chunk.LevelChunk$RebindableTickingBlockEntityWrapper.tick(LevelChunk.java:827)",
+            "net.minecraft.world.level.Level.tickBlockEntities(Level.java:475)",
+            "net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:461)",
+            crate::server::command_frames::TICK_CHILDREN_LEVELS,
+        ]);
         match ticker {
             BlockEntityTicker::Furnace => self.furnace_server_tick(pos, state),
             BlockEntityTicker::Hopper => self.hopper_push_items_tick(pos, state),

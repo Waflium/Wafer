@@ -67,6 +67,59 @@ pub enum CriterionTrigger {
 }
 
 impl CriterionTrigger {
+    pub fn frames(self) -> &'static [&'static str] {
+        use CriterionTrigger::*;
+        match self {
+            Impossible => &[],
+            PlayerKilledEntity | EntityKilledPlayer | KillMobNearSculkCatalyst => &["net.minecraft.advancements.triggers.KilledTrigger.trigger(KilledTrigger.java:26)"],
+            EnterBlock => &["net.minecraft.advancements.triggers.EnterBlockTrigger.trigger(EnterBlockTrigger.java:25)"],
+            InventoryChanged => &[
+                "net.minecraft.advancements.triggers.InventoryChangeTrigger.trigger(InventoryChangeTrigger.java:48)",
+                "net.minecraft.advancements.triggers.InventoryChangeTrigger.trigger(InventoryChangeTrigger.java:44)",
+            ],
+            RecipeUnlocked => &["net.minecraft.advancements.triggers.RecipeUnlockedTrigger.trigger(RecipeUnlockedTrigger.java:21)"],
+            PlayerHurtEntity => &["net.minecraft.advancements.triggers.PlayerHurtEntityTrigger.trigger(PlayerHurtEntityTrigger.java:26)"],
+            EntityHurtPlayer => &["net.minecraft.advancements.triggers.EntityHurtPlayerTrigger.trigger(EntityHurtPlayerTrigger.java:20)"],
+            EnchantedItem => &["net.minecraft.advancements.triggers.EnchantedItemTrigger.trigger(EnchantedItemTrigger.java:21)"],
+            FilledBucket => &["net.minecraft.advancements.triggers.FilledBucketTrigger.trigger(FilledBucketTrigger.java:20)"],
+            BrewedPotion => &["net.minecraft.advancements.triggers.BrewedPotionTrigger.trigger(BrewedPotionTrigger.java:20)"],
+            ConstructBeacon => &["net.minecraft.advancements.triggers.ConstructBeaconTrigger.trigger(ConstructBeaconTrigger.java:19)"],
+            UsedEnderEye => &["net.minecraft.advancements.triggers.UsedEnderEyeTrigger.trigger(UsedEnderEyeTrigger.java:23)"],
+            SummonedEntity => &["net.minecraft.advancements.triggers.SummonedEntityTrigger.trigger(SummonedEntityTrigger.java:24)"],
+            BredAnimals => &["net.minecraft.advancements.triggers.BredAnimalsTrigger.trigger(BredAnimalsTrigger.java:29)"],
+            Location | SleptInBed | Tick | HeroOfTheVillage | VoluntaryExile | AvoidVibration => &["net.minecraft.advancements.triggers.PlayerTrigger.trigger(PlayerTrigger.java:28)"],
+            CuredZombieVillager => &["net.minecraft.advancements.triggers.CuredZombieVillagerTrigger.trigger(CuredZombieVillagerTrigger.java:27)"],
+            VillagerTrade => &["net.minecraft.advancements.triggers.TradeTrigger.trigger(TradeTrigger.java:26)"],
+            ItemDurabilityChanged => &["net.minecraft.advancements.triggers.ItemDurabilityTrigger.trigger(ItemDurabilityTrigger.java:21)"],
+            Levitation => &["net.minecraft.advancements.triggers.LevitationTrigger.trigger(LevitationTrigger.java:21)"],
+            ChangedDimension => &["net.minecraft.advancements.triggers.ChangeDimensionTrigger.trigger(ChangeDimensionTrigger.java:21)"],
+            TameAnimal => &["net.minecraft.advancements.triggers.TameAnimalTrigger.trigger(TameAnimalTrigger.java:24)"],
+            PlacedBlock | ItemUsedOnBlock | AllayDropItemOnBlock => &["net.minecraft.advancements.triggers.ItemUsedOnLocationTrigger.trigger(ItemUsedOnLocationTrigger.java:54)"],
+            ConsumeItem => &["net.minecraft.advancements.triggers.ConsumeItemTrigger.trigger(ConsumeItemTrigger.java:23)"],
+            EffectsChanged => &["net.minecraft.advancements.triggers.EffectsChangedTrigger.trigger(EffectsChangedTrigger.java:26)"],
+            UsedTotem => &["net.minecraft.advancements.triggers.UsedTotemTrigger.trigger(UsedTotemTrigger.java:23)"],
+            NetherTravel | FallFromHeight | RideEntityInLava => &["net.minecraft.advancements.triggers.DistanceTrigger.trigger(DistanceTrigger.java:24)"],
+            FishingRodHooked => &["net.minecraft.advancements.triggers.FishingRodHookedTrigger.trigger(FishingRodHookedTrigger.java:30)"],
+            ChanneledLightning => &["net.minecraft.advancements.triggers.ChanneledLightningTrigger.trigger(ChanneledLightningTrigger.java:27)"],
+            ShotCrossbow => &["net.minecraft.advancements.triggers.ShotCrossbowTrigger.trigger(ShotCrossbowTrigger.java:23)"],
+            SpearMobs => &["net.minecraft.advancements.triggers.SpearMobsTrigger.trigger(SpearMobsTrigger.java:19)"],
+            KilledByArrow => &["net.minecraft.advancements.triggers.KilledByArrowTrigger.trigger(KilledByArrowTrigger.java:44)"],
+            SlideDownBlock => &["net.minecraft.advancements.triggers.SlideDownBlockTrigger.trigger(SlideDownBlockTrigger.java:25)"],
+            BeeNestDestroyed => &["net.minecraft.advancements.triggers.BeeNestDestroyedTrigger.trigger(BeeNestDestroyedTrigger.java:28)"],
+            TargetHit => &["net.minecraft.advancements.triggers.TargetBlockTrigger.trigger(TargetBlockTrigger.java:26)"],
+            DefaultBlockUse => &["net.minecraft.advancements.triggers.DefaultBlockInteractionTrigger.trigger(DefaultBlockInteractionTrigger.java:37)"],
+            AnyBlockUse => &["net.minecraft.advancements.triggers.AnyBlockInteractionTrigger.trigger(AnyBlockInteractionTrigger.java:42)"],
+            PlayerGeneratesContainerLoot => &["net.minecraft.advancements.triggers.LootTableTrigger.trigger(LootTableTrigger.java:21)"],
+            ThrownItemPickedUpByEntity | ThrownItemPickedUpByPlayer => &["net.minecraft.advancements.triggers.PickedUpItemTrigger.trigger(PickedUpItemTrigger.java:27)"],
+            PlayerInteractedWithEntity | PlayerShearedEquipment => &["net.minecraft.advancements.triggers.PlayerInteractTrigger.trigger(PlayerInteractTrigger.java:26)"],
+            StartedRiding => &["net.minecraft.advancements.triggers.StartRidingTrigger.trigger(StartRidingTrigger.java:19)"],
+            LightningStrike => &["net.minecraft.advancements.triggers.LightningStrikeTrigger.trigger(LightningStrikeTrigger.java:28)"],
+            UsingItem => &["net.minecraft.advancements.triggers.UsingItemTrigger.trigger(UsingItemTrigger.java:21)"],
+            RecipeCrafted | CrafterRecipeCrafted => &["net.minecraft.advancements.triggers.RecipeCraftedTrigger.trigger(RecipeCraftedTrigger.java:26)"],
+            FallAfterExplosion => &["net.minecraft.advancements.triggers.FallAfterExplosionTrigger.trigger(FallAfterExplosionTrigger.java:30)"],
+        }
+    }
+
     pub const COUNT: usize = 58;
 
     pub const VALUES: [CriterionTrigger; CriterionTrigger::COUNT] = [

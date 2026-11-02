@@ -42,7 +42,7 @@ pub trait BlockItemBehaviour: Send + Sync {
 
 pub fn use_on(item: &dyn BlockItemBehaviour, level: &mut ServerLevel, player: EntityId, hand: InteractionHand, hit: BlockHitResult, stack: ItemStack) -> InteractionResult {
     let ctx = BlockPlaceContext::new(level, Some(player), hand, stack.clone(), hit);
-    let place_result = place(item, level, ctx);
+    let place_result = crate::server::main_thread_frames::within(&["net.minecraft.world.item.BlockItem.useOn(BlockItem.java:43)"], || place(item, level, ctx));
     if place_result.consumes_action() {
         return place_result;
     }
@@ -66,7 +66,7 @@ pub fn place(item: &dyn BlockItemBehaviour, level: &mut ServerLevel, ctx: BlockP
     }
     let Some(ctx) = item.update_placement_context(level, ctx) else { return InteractionResult::Fail };
     let Some(state) = item.placement_state(level, &ctx) else { return InteractionResult::Fail };
-    if !item.place_block(level, &ctx, state) {
+    if !crate::server::main_thread_frames::within(&["net.minecraft.world.item.BlockItem.placeBlock(BlockItem.java:150)", "net.minecraft.world.item.BlockItem.place(BlockItem.java:79)"], || item.place_block(level, &ctx, state)) {
         return InteractionResult::Fail;
     }
     let pos = ctx.clicked_pos();
@@ -79,7 +79,9 @@ pub fn place(item: &dyn BlockItemBehaviour, level: &mut ServerLevel, ctx: BlockP
         let item_stack = ctx.item.clone();
         block::of(placed).set_placed_by(level, pos, placed, player, ctx.item);
         if let Some(player) = player {
-            crate::advancements::triggers::criteria_triggers::PLACED_BLOCK.trigger(level, player, pos, &item_stack);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.item.BlockItem.place(BlockItem.java:96)"], || {
+                crate::advancements::triggers::criteria_triggers::PLACED_BLOCK.trigger(level, player, pos, &item_stack)
+            });
         }
     }
     let sound = placed.sound_type();

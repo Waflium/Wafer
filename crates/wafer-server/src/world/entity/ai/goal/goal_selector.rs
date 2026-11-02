@@ -85,11 +85,16 @@ impl GoalSelector {
             }
         }
         profiler::pop();
+        let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.ai.goal.GoalSelector.tick(GoalSelector.java:96)"]);
         self.tick_running_goals(level, mob, true);
     }
 
     pub fn tick_running_goals(&mut self, level: &mut ServerLevel, mob: EntityId, force_tick_all_running_goals: bool) {
         profiler::push("goalTick");
+        let _frames = crate::server::main_thread_frames::enter_static(&[
+            "net.minecraft.world.entity.ai.goal.WrappedGoal.tick(WrappedGoal.java:66)",
+            "net.minecraft.world.entity.ai.goal.GoalSelector.tickRunningGoals(GoalSelector.java:105)",
+        ]);
         for goal in &mut self.available_goals {
             if goal.is_running() && (force_tick_all_running_goals || goal.requires_update_every_tick()) {
                 goal.tick(level, mob);

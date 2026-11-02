@@ -218,7 +218,9 @@ impl BlockBehaviour for AbstractBedBlock {
             level.send_overlay_message(player, &Component::translatable("block.minecraft.bed.occupied"));
             return InteractionResult::SUCCESS_SERVER;
         }
-        if let Err(problem) = level.start_sleep_in_bed(player, self.kind, state, &bed_rule, pos)
+        if let Err(problem) = crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.AbstractBedBlock.useWithoutItem(AbstractBedBlock.java:111)"], || {
+            level.start_sleep_in_bed(player, self.kind, state, &bed_rule, pos)
+        })
             && let Some(message) = problem
         {
             level.send_overlay_message(player, &message);

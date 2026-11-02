@@ -326,7 +326,7 @@ impl ServerLevel {
                     return;
                 }
                 if self.player(player).abilities.instabuild {
-                    self.destroy_and_ack(player, pos);
+                    crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.handleBlockBreakAction(ServerPlayerGameMode.java:198)"], || self.destroy_and_ack(player, pos));
                     return;
                 }
                 let game_type = self.player(player).game_mode.game_type;
@@ -340,12 +340,17 @@ impl ServerLevel {
                 let mut progress = 1.0;
                 if !state.is_air() {
                     let main_hand_item = self.item_by_slot(player, EquipmentSlot::Mainhand).unwrap_or_else(ItemStack::empty);
-                    enchantment_helper::on_hit_block(self, &main_hand_item, Some(player), player, Some(EquipmentSlot::Mainhand), Vec3::at_center_of(pos), state);
-                    block::of(state).attack(state, self, pos, player);
+                    crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.handleBlockBreakAction(ServerPlayerGameMode.java:212)"], || {
+                        enchantment_helper::on_hit_block(self, &main_hand_item, Some(player), player, Some(EquipmentSlot::Mainhand), Vec3::at_center_of(pos), state)
+                    });
+                    crate::server::main_thread_frames::within(
+                        &["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.attack(BlockBehaviour.java:1185)", "net.minecraft.server.level.ServerPlayerGameMode.handleBlockBreakAction(ServerPlayerGameMode.java:213)"],
+                        || block::of(state).attack(state, self, pos, player),
+                    );
                     progress = self.destroy_progress_at(player, state, pos);
                 }
                 if !state.is_air() && progress >= 1.0 {
-                    self.destroy_and_ack(player, pos);
+                    crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.handleBlockBreakAction(ServerPlayerGameMode.java:218)"], || self.destroy_and_ack(player, pos));
                 } else {
                     let gm = &self.player(player).game_mode;
                     if gm.is_destroying_block {
@@ -372,7 +377,7 @@ impl ServerLevel {
                         if progress >= 0.7 {
                             self.player_mut(player).game_mode.is_destroying_block = false;
                             self.destroy_block_progress(player, pos, -1);
-                            self.destroy_and_ack(player, pos);
+                            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.handleBlockBreakAction(ServerPlayerGameMode.java:246)"], || self.destroy_and_ack(player, pos));
                             return;
                         }
                         let gm = &mut self.player_mut(player).game_mode;
@@ -401,7 +406,7 @@ impl ServerLevel {
     }
 
     fn destroy_and_ack(&mut self, player: EntityId, pos: BlockPos) {
-        if !self.destroy_block_by_player(player, pos) {
+        if !crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.destroyAndAck(ServerPlayerGameMode.java:275)"], || self.destroy_block_by_player(player, pos)) {
             self.send_block_update(player, pos);
         }
     }
@@ -428,23 +433,27 @@ impl ServerLevel {
             return false;
         }
         let behaviour = block::of(state);
-        let adjusted = behaviour.player_will_destroy(self, pos, state, player);
+        let adjusted = crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.destroyBlock(ServerPlayerGameMode.java:306)"], || behaviour.player_will_destroy(self, pos, state, player));
         let mut block_entity = None;
         let fluid = crate::world::level::BlockGetter::fluid_state(self, pos);
-        let changed = self.set_block_removing(pos, super::legacy_block(fluid), update_flags::UPDATE_ALL, update_flags::UPDATE_LIMIT, &mut block_entity);
+        let changed = crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.destroyBlock(ServerPlayerGameMode.java:309)"], || {
+            self.set_block_removing(pos, super::legacy_block(fluid), update_flags::UPDATE_ALL, update_flags::UPDATE_LIMIT, &mut block_entity)
+        });
         if changed {
-            behaviour.destroy(self, pos, adjusted);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.destroyBlock(ServerPlayerGameMode.java:314)"], || behaviour.destroy(self, pos, adjusted));
         }
         if self.prevents_block_drops(player) {
             return true;
         }
         let destroyed_with = self.player(player).inventory.held().cloned();
         let can_destroy = self.has_correct_tool_for_drops(player, adjusted);
-        self.mine_block_with_held_item(player, adjusted);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.destroyBlock(ServerPlayerGameMode.java:325)"], || self.mine_block_with_held_item(player, adjusted));
         if changed && can_destroy {
             self.award_stat(player, crate::stats::stats::BLOCK_MINED.get(state.block().0), 1);
             self.cause_food_exhaustion(player, crate::world::food::constants::EXHAUSTION_MINE);
-            behaviour.player_destroy(self, player, pos, adjusted, block_entity.as_ref(), destroyed_with);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.destroyBlock(ServerPlayerGameMode.java:327)"], || {
+                behaviour.player_destroy(self, player, pos, adjusted, block_entity.as_ref(), destroyed_with)
+            });
         }
         true
     }
@@ -469,7 +478,7 @@ impl ServerLevel {
         let state = self.block_state(pos);
         if self.player(player).game_mode.game_type == GameType::Spectator {
             if let Some(menu_provider) = block::of(state).get_menu_provider(state, self, pos) {
-                self.open_menu(player, menu_provider);
+                crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.useItemOn(ServerPlayerGameMode.java:383)"], || self.open_menu(player, menu_provider));
                 return InteractionResult::CONSUME;
             }
             if let Some(portal) = crate::world::level::block::portal::of(state) {
@@ -486,15 +495,25 @@ impl ServerLevel {
         if !suppress_using_block {
             let behaviour = block::of(state);
             let held = item.clone().unwrap_or_else(|| ItemStack::new(wafer_data::items::AIR, 0));
-            let result = behaviour.use_item_on(held, state, self, pos, player, hand, &hit);
+            let result = crate::server::main_thread_frames::within(
+                &["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.useItemOn(BlockBehaviour.java:1173)", "net.minecraft.server.level.ServerPlayerGameMode.useItemOn(ServerPlayerGameMode.java:408)"],
+                || behaviour.use_item_on(held, state, self, pos, player, hand, &hit),
+            );
             if result.consumes_action() {
-                criteria_triggers::ITEM_USED_ON_BLOCK.trigger(self, player, pos, &used_item_stack);
+                crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.useItemOn(ServerPlayerGameMode.java:410)"], || {
+                    criteria_triggers::ITEM_USED_ON_BLOCK.trigger(self, player, pos, &used_item_stack)
+                });
                 return result;
             }
             if result == InteractionResult::TryWithEmptyHand && hand == InteractionHand::MainHand {
-                let result = behaviour.use_without_item(state, self, pos, player, &hit);
+                let result = crate::server::main_thread_frames::within(
+                    &["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.useWithoutItem(BlockBehaviour.java:1177)", "net.minecraft.server.level.ServerPlayerGameMode.useItemOn(ServerPlayerGameMode.java:415)"],
+                    || behaviour.use_without_item(state, self, pos, player, &hit),
+                );
                 if result.consumes_action() {
-                    criteria_triggers::DEFAULT_BLOCK_USE.trigger(self, player, pos);
+                    crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.useItemOn(ServerPlayerGameMode.java:417)"], || {
+                        criteria_triggers::DEFAULT_BLOCK_USE.trigger(self, player, pos)
+                    });
                     return result;
                 }
             }
@@ -504,7 +523,10 @@ impl ServerLevel {
                 let result;
                 if self.has_infinite_materials(player) {
                     let count = stack.count;
-                    result = item::use_on(self, player, hand, hit, stack.clone()).0;
+                    result = crate::server::main_thread_frames::within(
+                        &["net.minecraft.world.item.ItemStack.useOn(ItemStack.java:384)", "net.minecraft.server.level.ServerPlayerGameMode.useItemOn(ServerPlayerGameMode.java:432)"],
+                        || item::use_on(self, player, hand, hit, stack.clone()).0,
+                    );
                     match self.player(player).item_in_hand(hand) {
                         Some(mut in_hand) if ItemStack::is_same_item(&in_hand, &stack) => {
                             in_hand.count = count;
@@ -515,7 +537,10 @@ impl ServerLevel {
                     }
                 } else {
                     let transformed;
-                    (result, transformed) = item::use_on(self, player, hand, hit, stack);
+                    (result, transformed) = crate::server::main_thread_frames::within(
+                        &["net.minecraft.world.item.ItemStack.useOn(ItemStack.java:384)", "net.minecraft.server.level.ServerPlayerGameMode.useItemOn(ServerPlayerGameMode.java:435)"],
+                        || item::use_on(self, player, hand, hit, stack),
+                    );
                     if let InteractionResult::Success { .. } = result {
                         let in_hand = self.player(player).item_in_hand(hand);
                         let result_item_stack = transformed.or_else(|| in_hand.clone());
@@ -525,7 +550,9 @@ impl ServerLevel {
                     }
                 }
                 if result.consumes_action() {
-                    criteria_triggers::ITEM_USED_ON_BLOCK.trigger(self, player, pos, &used_item_stack);
+                    crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayerGameMode.useItemOn(ServerPlayerGameMode.java:444)"], || {
+                        criteria_triggers::ITEM_USED_ON_BLOCK.trigger(self, player, pos, &used_item_stack)
+                    });
                 }
                 result
             }
@@ -545,7 +572,10 @@ impl ServerLevel {
         if self.player(player).cooldowns.is_on_cooldown(&item_stack) {
             return InteractionResult::Pass;
         }
-        let (result, transformed) = item::use_item(self, player, hand, item_stack.clone());
+        let (result, transformed) = crate::server::main_thread_frames::within(
+            &["net.minecraft.world.item.ItemStack.use(ItemStack.java:402)", "net.minecraft.server.level.ServerPlayerGameMode.useItem(ServerPlayerGameMode.java:342)"],
+            || item::use_item(self, player, hand, item_stack.clone()),
+        );
         let held = self.player(player).item_in_hand(hand);
         let result_stack = match result {
             InteractionResult::Success { .. } => transformed.or(held),

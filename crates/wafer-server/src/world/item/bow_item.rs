@@ -24,7 +24,9 @@ pub fn release_using(level: &mut ServerLevel, item_stack: &ItemStack, entity: En
     let fired_projectiles = level.draw(item_stack, projectile, player);
     if !fired_projectiles.is_empty() {
         let hand = level.used_item_hand(player);
-        level.projectile_weapon_shoot(player, hand, &fired_projectiles, pow * 3.0, 1.0, pow == 1.0, None);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.item.BowItem.releaseUsing(BowItem.java:47)"], || {
+            level.projectile_weapon_shoot(player, hand, &fired_projectiles, pow * 3.0, 1.0, pow == 1.0, None)
+        });
     }
     let e = level.entity(player);
     let (x, y, z) = (e.x(), e.y(), e.z());

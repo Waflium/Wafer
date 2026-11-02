@@ -76,7 +76,7 @@ impl ServerLevel {
     }
 
     pub fn glow_squid_ai_step(&mut self, id: EntityId) {
-        self.squid_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.squid.GlowSquid.aiStep(GlowSquid.java:84)"], || self.squid_ai_step(id));
         let mob = self.mob_mut(id).expect("a glow squid");
         let dark_ticks = mob.get_dark_ticks_remaining();
         if dark_ticks > 0 {

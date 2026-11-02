@@ -231,7 +231,13 @@ impl ServerLevel {
             }
             if self.is_stepping_carefully(source_entity) && event.is(&game_event_tags::IGNORE_VIBRATIONS_SNEAKING) {
                 if self.vibration_user_can_trigger_avoid_vibration(user) && self.is_player(source_entity) {
-                    criteria_triggers::AVOID_VIBRATION.trigger(self, source_entity);
+                    crate::server::main_thread_frames::within(
+                        &[
+                            "net.minecraft.world.level.gameevent.vibrations.VibrationSystem$User.isValidVibration(VibrationSystem.java:500)",
+                            "net.minecraft.world.level.gameevent.vibrations.VibrationSystem$Listener.handleGameEvent(VibrationSystem.java:248)",
+                        ],
+                        || criteria_triggers::AVOID_VIBRATION.trigger(self, source_entity),
+                    );
                 }
                 return false;
             }

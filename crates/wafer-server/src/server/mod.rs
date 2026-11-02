@@ -1342,7 +1342,7 @@ impl Server {
                     serverbound::CHANGE_GAME_MODE => self.handle_change_game_mode(id, &packet),
                     serverbound::PICK_ITEM_FROM_ENTITY => self.handle_pick_item_from_entity(id, &packet),
                     serverbound::RESOURCE_PACK => self.handle_resource_pack_response(id, &packet),
-                    _ => self.entity_level_mut(id).handle_player_packet(id, &packet),
+                    _ => self.lend_entity_level(id).level().handle_player_packet(id, &packet),
                 }));
                 let result = match dispatched {
                     Ok(result) => result,
@@ -1585,7 +1585,10 @@ impl Server {
         level.send_active_player_effects(id);
         let player = level.player_mut(id);
         player.send_post_effects();
-        level.init_inventory_menu(id);
+        {
+            let _frames = main_thread_frames::enter_absolute_static(&PLACE_NEW_PLAYER_FRAMES);
+            level.init_inventory_menu(id);
+        }
         let player = level.player(id);
         let joined = NameAndId { id: player.profile.uuid, name: player.profile.name.clone() };
         self.notification_manager.player_joined(&joined);
@@ -2060,7 +2063,7 @@ impl Server {
         profiler::pop_push("debugSubscribers");
         if self.tick_rate_manager.runs_normally() {
             profiler::pop_push("gameTests");
-            crate::gametest::framework::game_test_ticker::tick(self);
+            main_thread_frames::within(&["net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1135)"], || crate::gametest::framework::game_test_ticker::tick(self));
         }
         profiler::pop_push("server gui refresh");
         self.update_scoreboard_waypoints();
@@ -2131,18 +2134,18 @@ impl Server {
     pub fn run_level_tasks(&mut self) {
         self.deliver_level_broadcasts();
         for index in 0..self.levels.len() {
-            for (function, player, trigger) in std::mem::take(&mut self.levels[index].pending_function_executions) {
-                self.execute_reward_function(&function, player, trigger);
+            for (function, player) in std::mem::take(&mut self.levels[index].pending_function_executions) {
+                self.execute_reward_function(&function, player);
             }
-            for (name, entity, position, rotation, from_player_tick) in std::mem::take(&mut self.levels[index].pending_enchantment_functions) {
-                self.execute_enchantment_function(index, &name, entity, position, rotation, from_player_tick);
+            for (name, entity, position, rotation) in std::mem::take(&mut self.levels[index].pending_enchantment_functions) {
+                self.execute_enchantment_function(index, &name, entity, position, rotation);
             }
         }
     }
 
-    pub fn execute_reward_function(&mut self, function: &str, player: EntityId, trigger: crate::advancements::triggers::criterion_trigger::CriterionTrigger) {
+    pub fn execute_reward_function(&mut self, function: &str, player: EntityId) {
         if let Some((function, source)) = self.reward_function_call(function, player) {
-            self.run_from(CommandOrigin::AdvancementReward(trigger), |server| ServerFunctionManager::execute(server, &function, &source));
+            self.run_from(CommandOrigin::AdvancementReward, |server| ServerFunctionManager::execute(server, &function, &source));
         }
     }
 
@@ -2152,10 +2155,9 @@ impl Server {
         Some((function, CommandSourceStack::player(self, player).with_suppressed_output().with_permission(2)))
     }
 
-    pub fn execute_enchantment_function(&mut self, index: usize, name: &str, entity: EntityId, position: wafer_core::Vec3, rotation: (f32, f32), from_player_tick: bool) {
+    pub fn execute_enchantment_function(&mut self, index: usize, name: &str, entity: EntityId, position: wafer_core::Vec3, rotation: (f32, f32)) {
         if let Some((function, source)) = self.enchantment_function_call(index, name, entity, position, rotation) {
-            let origin = if from_player_tick { CommandOrigin::EnchantmentTickPlayer } else { self.command_origin };
-            self.run_from(origin, |server| ServerFunctionManager::execute(server, &function, &source));
+            self.run_from(CommandOrigin::EnchantmentEffect, |server| ServerFunctionManager::execute(server, &function, &source));
         }
     }
 
@@ -2648,6 +2650,21 @@ fn construct_or_extract_crash_report_scope() -> Vec<crate::util::java_stack::Sta
     crate::util::java_stack::enter_all(&[CONSTRUCT_OR_EXTRACT_CRASH_REPORT_FRAME, RUN_SERVER_CRASH_REPORT_FRAME, SPIN_FRAME, THREAD_RUN_FRAME])
 }
 
+const PLACE_NEW_PLAYER_FRAMES: [&str; 12] = [
+    "net.minecraft.server.players.PlayerList.placeNewPlayer(PlayerList.java:233)",
+    "net.minecraft.server.network.config.PrepareSpawnTask$Ready.spawn(PrepareSpawnTask.java:198)",
+    "net.minecraft.server.network.config.PrepareSpawnTask.spawnPlayer(PrepareSpawnTask.java:91)",
+    "net.minecraft.server.network.ServerConfigurationPacketListenerImpl.handleConfigurationFinished(ServerConfigurationPacketListenerImpl.java:178)",
+    "net.minecraft.network.protocol.configuration.ServerboundFinishConfigurationPacket.handle(ServerboundFinishConfigurationPacket.java:22)",
+    "net.minecraft.network.protocol.configuration.ServerboundFinishConfigurationPacket.handle(ServerboundFinishConfigurationPacket.java:8)",
+    "net.minecraft.network.PacketProcessor$ListenerAndPacket.handle(PacketProcessor.java:55)",
+    "net.minecraft.network.PacketProcessor.processQueuedPackets(PacketProcessor.java:38)",
+    "net.minecraft.server.MinecraftServer.processPacketsAndTick(MinecraftServer.java:1011)",
+    "net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:752)",
+    "net.minecraft.server.MinecraftServer.lambda$spin$0(MinecraftServer.java:310)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+
 const CONNECTION_TICK_FRAMES: [&str; 7] = [
     "net.minecraft.server.network.ServerGamePacketListenerImpl.tickPlayer(ServerGamePacketListenerImpl.java:345)",
     "net.minecraft.server.network.ServerGamePacketListenerImpl.tick(ServerGamePacketListenerImpl.java:320)",
@@ -2938,10 +2955,11 @@ mod tests {
         let _scope = main_thread_frames::tick();
         let report = dedicated::server_watchdog::create_watchdog_crash_report("Watching Server");
         let text = report.get_friendly_report(&crate::crash_report::ReportType::CRASH).replace("\r\n", "\n");
-        assert!(text.contains("java.lang.Error: Watchdog (Watching Server)\n\tat net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:980)"), "{text}");
+        assert!(text.contains("java.lang.Error: Watchdog (Watching Server)\n\tat app//net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:980)"), "{text}");
         assert!(text.contains("-- Head --\nThread: "), "{text}");
-        assert!(text.contains("-- Thread Dump --\nDetails:\n\tThreads: \n"), "{text}");
-        assert!(text.contains("\"Server thread\" prio=8 Id=105 RUNNABLE\n\tat net.minecraft.server.MinecraftServer.tickServer"), "{text}");
+        assert!(text.contains("-- Thread Dump --\nDetails:\n\tThreads: \n\"DestroyJavaVM\" prio=5 Id=104 RUNNABLE\n\n\n\"Server thread\" prio=8 Id=100 RUNNABLE\n\tat app//net.minecraft.server.MinecraftServer.tickServer"), "{text}");
+        assert!(text.contains("\tat java.base@25.0.1/java.io.BufferedInputStream.read(BufferedInputStream.java:388)\n\t-  locked java.io.BufferedInputStream@"), "{text}");
+        assert!(text.contains("\"Netty NIO IO #0\" daemon prio=5 Id=105 RUNNABLE (in native)\n"), "{text}");
         assert!(text.contains("Stacktrace:\n\tat net.minecraft.server.dedicated.ServerWatchdog.createWatchdogCrashReport(ServerWatchdog.java:95)\n\tat net.minecraft.server.dedicated.ServerWatchdog.run(ServerWatchdog.java:52)"), "{text}");
     }
 

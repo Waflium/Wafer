@@ -19,6 +19,7 @@ use crate::advancements::triggers::criteria_triggers;
 use crate::core::holder_set::HolderSet;
 use crate::network::connection::encode;
 use crate::server::level::ServerLevel;
+use crate::server::main_thread_frames;
 use crate::stats::stats;
 use crate::util::codec::{self, DecodeResult};
 use crate::util::extra_codecs;
@@ -51,16 +52,11 @@ use crate::world::waypoints::waypoint_transmitter::{self, Connection, EntityAzim
 const SPEED_MODIFIER_POWDER_SNOW_ID: &str = "minecraft:powder_snow";
 const TICKS_REQUIRED_TO_FREEZE: i32 = 140;
 
-const HANDLE_FALL_FLYING_COLLISIONS_PLAYER_FRAMES: [&str; 9] = [
+const HANDLE_FALL_FLYING_COLLISIONS_PLAYER_FRAMES: [&str; 4] = [
     "net.minecraft.world.entity.LivingEntity.handleFallFlyingCollisions(LivingEntity.java:2713)",
     "net.minecraft.world.entity.LivingEntity.travelFallFlying(LivingEntity.java:2652)",
     "net.minecraft.world.entity.LivingEntity.travel(LivingEntity.java:2479)",
     "net.minecraft.world.entity.player.Player.travel(Player.java:1477)",
-    "net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3233)",
-    "net.minecraft.world.entity.player.Player.aiStep(Player.java:490)",
-    "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2886)",
-    "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
-    "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
 ];
 
 pub struct LivingEntity {
@@ -840,7 +836,7 @@ impl ServerLevel {
     }
 
     pub fn post_piercing_attack(&mut self, id: EntityId) {
-        self.do_post_piercing_attack_effects(id);
+        main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.postPiercingAttack(LivingEntity.java:1765)"], || self.do_post_piercing_attack_effects(id));
     }
 
     pub fn was_recently_stabbed(&self, id: EntityId, target: EntityId, allowed_time: i32) -> bool {
@@ -976,7 +972,14 @@ impl ServerLevel {
         }
         let new_damage = item_stack.damage_value() + new_amount;
         if self.is_player(owner) {
-            criteria_triggers::ITEM_DURABILITY_CHANGED.trigger(self, owner, &item_stack, new_damage);
+            main_thread_frames::within(
+                &[
+                    "net.minecraft.world.item.ItemStack.applyDamage(ItemStack.java:491)",
+                    "net.minecraft.world.item.ItemStack.hurtAndBreak(ItemStack.java:472)",
+                    "net.minecraft.world.item.ItemStack.hurtAndBreak(ItemStack.java:520)",
+                ],
+                || criteria_triggers::ITEM_DURABILITY_CHANGED.trigger(self, owner, &item_stack, new_damage),
+            );
         }
         item_stack.set_damage_value(new_damage);
         if item_stack.is_broken() {
@@ -1348,13 +1351,13 @@ impl ServerLevel {
             }
         }
         if self.is_dead_or_dying(id) {
-            if !self.check_totem_death_protection(id, &source) {
+            if !main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.hurtServer(LivingEntity.java:1323)"], || self.check_totem_death_protection(id, &source)) {
                 if took_full_damage {
                     let sound = self.get_death_sound(id);
                     self.make_sound(id, sound);
                     self.play_secondary_hurt_sound(id, &source);
                 }
-                self.die(id, source);
+                main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.hurtServer(LivingEntity.java:1328)"], || self.die(id, source));
             }
         } else if took_full_damage {
             self.play_hurt_sound(id, &source);
@@ -1374,13 +1377,17 @@ impl ServerLevel {
             }
         }
         if self.is_player(id) {
-            criteria_triggers::ENTITY_HURT_PLAYER.trigger(self, id, &source, original_damage, damage, blocked);
+            main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.hurtServer(LivingEntity.java:1347)"], || {
+                criteria_triggers::ENTITY_HURT_PLAYER.trigger(self, id, &source, original_damage, damage, blocked)
+            });
             if damage_blocked > 0.0 && damage_blocked < 3.4028235E37 {
                 self.award_stat(id, stats::DAMAGE_BLOCKED_BY_SHIELD, crate::util::java_round_f(damage_blocked * 10.0));
             }
         }
         if let Some(source_player) = source.causing_entity.filter(|&entity| self.is_player(entity)) {
-            criteria_triggers::PLAYER_HURT_ENTITY.trigger(self, source_player, id, &source, original_damage, damage, blocked);
+            main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.hurtServer(LivingEntity.java:1354)"], || {
+                criteria_triggers::PLAYER_HURT_ENTITY.trigger(self, source_player, id, &source, original_damage, damage, blocked)
+            });
         }
         success
     }
@@ -1765,13 +1772,23 @@ impl ServerLevel {
             self.set_item_slot(id, slot, stack);
             if self.is_player(id) {
                 self.award_stat(id, stats::ITEM_USED.get(protection_item.get_item().0), 1);
-                criteria_triggers::USED_TOTEM.trigger(self, id, &protection_item);
+                main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.checkTotemDeathProtection(LivingEntity.java:1482)"], || {
+                    criteria_triggers::USED_TOTEM.trigger(self, id, &protection_item)
+                });
                 self.cause_use_vibration(&protection_item, id, crate::world::level::gameevent::game_event::ITEM_INTERACT_FINISH);
             }
             self.set_health(id, 1.0);
-            for effect in &death_effects {
-                self.apply_consume_effect(id, effect);
-            }
+            main_thread_frames::within(
+                &[
+                    "net.minecraft.world.item.component.DeathProtection.applyEffects(DeathProtection.java:42)",
+                    "net.minecraft.world.entity.LivingEntity.checkTotemDeathProtection(LivingEntity.java:1486)",
+                ],
+                || {
+                    for effect in &death_effects {
+                        self.apply_consume_effect(id, effect);
+                    }
+                },
+            );
             self.broadcast_entity_event(id, entity_event::PROTECTED_FROM_DEATH);
             return true;
         }
@@ -1801,7 +1818,7 @@ impl ServerLevel {
             return;
         }
         if let Some(killer) = self.kill_credit(id) {
-            self.award_kill_score(killer, id, &source);
+            main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.die(LivingEntity.java:1529)"], || self.award_kill_score(killer, id, &source));
         }
         if self.is_sleeping(id) {
             self.stop_sleeping(id);
@@ -1812,8 +1829,8 @@ impl ServerLevel {
         }
         self.handle_killing_blow(id);
         if source.causing_entity.is_none_or(|source_entity| self.killed_entity(source_entity, id, &source)) {
-            self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_DIE);
-            self.drop_all_death_loot(id, &source);
+            main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.die(LivingEntity.java:1544)"], || self.entity_game_event(id, crate::world::level::gameevent::game_event::ENTITY_DIE));
+            main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.die(LivingEntity.java:1545)"], || self.drop_all_death_loot(id, &source));
         }
         self.broadcast_entity_event(id, entity_event::DEATH);
         self.set_entity_pose(id, Pose::Dying);
@@ -1846,7 +1863,9 @@ impl ServerLevel {
 
     pub fn entity_award_kill_score(&mut self, killer: EntityId, victim: EntityId, killing_blow: &DamageSource) {
         if self.is_player(victim) {
-            criteria_triggers::ENTITY_KILLED_PLAYER.trigger(self, victim, killer, killing_blow);
+            main_thread_frames::within(&["net.minecraft.world.entity.Entity.awardKillScore(Entity.java:2281)"], || {
+                criteria_triggers::ENTITY_KILLED_PLAYER.trigger(self, victim, killer, killing_blow)
+            });
         }
     }
 
@@ -2086,12 +2105,18 @@ impl ServerLevel {
     }
 
     pub fn living_entity_tick(&mut self, id: EntityId) {
-        self.entity_tick(id);
+        {
+            let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.Entity.tick(Entity.java:583)", "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2847)"]);
+            self.entity_tick(id);
+        }
         self.then_tick(move |level| level.living_entity_tick_end(id));
     }
 
     fn living_entity_tick_end(&mut self, id: EntityId) {
-        self.updating_using_item(id);
+        {
+            let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2848)"]);
+            self.updating_using_item(id);
+        }
         let arrow_count = self.get_arrow_count(id);
         if arrow_count > 0 {
             let living = self.living_mut(id);
@@ -2114,7 +2139,10 @@ impl ServerLevel {
                 self.set_stinger_count(id, stinger_count - 1);
             }
         }
-        self.detect_equipment_updates(id);
+        {
+            let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2874)"]);
+            self.detect_equipment_updates(id);
+        }
         if self.entity(id).tick_count % 20 == 0 {
             self.recheck_combat_status(id);
         }
@@ -2125,6 +2153,7 @@ impl ServerLevel {
             }
         }
         if !self.entity(id).is_removed() {
+            let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2886)"]);
             self.ai_step(id);
         }
         let e = self.entity(id);
@@ -2216,8 +2245,11 @@ impl ServerLevel {
         {
             self.stop_sleeping(id);
         }
-        self.tick_enchantment_effects(id);
-        self.entity_base_tick(id);
+        {
+            let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:447)"]);
+            self.tick_enchantment_effects(id);
+        }
+        main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:450)"], || self.entity_base_tick(id));
         self.then_tick(move |level| level.living_entity_base_tick_end(id));
     }
 
@@ -2225,12 +2257,14 @@ impl ServerLevel {
         let _zone = profiler::zone("livingEntityBaseTick");
         if self.is_alive(id) {
             if self.is_in_wall(id) {
+                let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:458)"]);
                 self.hurt_server(id, DamageSource::new(damage_types::IN_WALL), 1.0);
             } else if self.is_player(id) && !self.world_border.is_within_bounds_aabb(&self.entity(id).bounding_box()) {
                 let border = &self.world_border;
                 let dist = border.get_distance_to_border(self.entity(id).x(), self.entity(id).z()) + border.get_safe_zone();
                 let damage_per_block = border.get_damage_per_block();
                 if dist < 0.0 && damage_per_block > 0.0 {
+                    let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:465)"]);
                     self.hurt_server(id, DamageSource::new(damage_types::OUTSIDE_BORDER), mth::floor(-dist * damage_per_block).max(1) as f32);
                 }
             }
@@ -2246,6 +2280,7 @@ impl ServerLevel {
                     if self.should_take_drowning_damage(id) {
                         self.entity_mut(id).set_air_supply(0);
                         self.broadcast_entity_event(id, entity_event::DROWN_PARTICLES);
+                        let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:478)"]);
                         self.hurt_server(id, DamageSource::new(damage_types::DROWN), 2.0);
                     }
                 } else if self.entity(id).air_supply() < self.entity(id).get_max_air_supply() && self.should_effects_refill_air_supply(id) {
@@ -2262,6 +2297,7 @@ impl ServerLevel {
             let pos = self.entity(id).block_position();
             if self.living(id).last_pos != Some(pos) {
                 self.living_mut(id).last_pos = Some(pos);
+                let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:494)"]);
                 self.on_changed_block(id, pos);
             }
         }
@@ -2274,6 +2310,7 @@ impl ServerLevel {
             living.damage_cooldown_time -= 1;
         }
         if self.is_dead_or_dying(id) {
+            let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:505)"]);
             self.tick_death(id);
         }
         let living = &mut self.living_mut(id);
@@ -2296,7 +2333,10 @@ impl ServerLevel {
                 living.last_hurt_by_mob_timestamp = tick_count;
             }
         }
-        self.tick_effects(id);
+        {
+            let _frames = main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:526)"]);
+            self.tick_effects(id);
+        }
         let y_head_rot = self.entity(id).y_head_rot;
         let living = self.living_mut(id);
         living.y_head_rot_o = y_head_rot;
@@ -2437,7 +2477,7 @@ impl ServerLevel {
             if self.equipment_has_changed(id, previous.as_ref(), current.as_ref()) {
                 changed.push((slot, current.clone()));
                 if let Some(previous) = previous {
-                    self.stop_location_based_effects(id, &previous, slot);
+                    main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.collectEquipmentChanges(LivingEntity.java:3062)"], || self.stop_location_based_effects(id, &previous, slot));
                 }
             }
         }
@@ -2451,7 +2491,7 @@ impl ServerLevel {
                         instance.add_transient_modifier(modifier);
                     }
                 });
-                self.run_location_changed_effects_on_item(current, id, *slot);
+                main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.collectEquipmentChanges(LivingEntity.java:3080)"], || self.run_location_changed_effects_on_item(current, id, *slot));
             }
         }
         changed
@@ -2459,7 +2499,7 @@ impl ServerLevel {
 
     pub fn detect_equipment_updates(&mut self, id: EntityId) {
         let last_equipment_items = self.living(id).last_equipment_items.clone();
-        let mut changed = self.collect_equipment_changes(id, &last_equipment_items);
+        let mut changed = main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.detectEquipmentUpdates(LivingEntity.java:3037)"], || self.collect_equipment_changes(id, &last_equipment_items));
         if changed.is_empty() {
             return;
         }
@@ -2504,7 +2544,12 @@ impl ServerLevel {
         if self.is_player(id) && self.is_spectator(id) {
             return;
         }
-        self.run_location_changed_effects(id);
+        let frames: &'static [&'static str] = if self.is_player(id) {
+            &["net.minecraft.world.entity.LivingEntity.onChangedBlock(LivingEntity.java:580)", "net.minecraft.server.level.ServerPlayer.onChangedBlock(ServerPlayer.java:1437)"]
+        } else {
+            &["net.minecraft.world.entity.LivingEntity.onChangedBlock(LivingEntity.java:580)"]
+        };
+        main_thread_frames::within(frames, || self.run_location_changed_effects(id));
     }
 
     pub fn refresh_dirty_attributes(&mut self, id: EntityId) {
@@ -2793,7 +2838,7 @@ impl ServerLevel {
             living.zza = 0.0;
         } else if self.is_effective_ai(id) {
             profiler::push("newAi");
-            self.server_ai_step(id);
+            main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3187)"], || self.server_ai_step(id));
             profiler::pop();
         }
         profiler::pop();
@@ -2831,14 +2876,14 @@ impl ServerLevel {
             self.reset_fall_distance(id);
         }
         match self.controlling_passenger(id).filter(|&controller| self.is_player(controller)) {
-            Some(controller) if self.is_alive(id) => self.travel_ridden(id, controller, input),
+            Some(controller) if self.is_alive(id) => main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3231)"], || self.travel_ridden(id, controller, input)),
             _ => {
                 if self.can_simulate_movement(id) && self.is_effective_ai(id) {
-                    self.travel(id, input);
+                    main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3233)"], || self.travel(id, input));
                 }
             }
         }
-        self.apply_effects_from_blocks(id);
+        main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3236)"], || self.apply_effects_from_blocks(id));
         profiler::pop();
         profiler::push("freezing");
         let e = self.entity_mut(id);
@@ -2849,18 +2894,18 @@ impl ServerLevel {
         }
         self.remove_frost(id);
         self.try_add_frost(id);
-        self.tick_freezing_damage(id);
+        main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3255)"], || self.tick_freezing_damage(id));
         profiler::pop();
         profiler::push("push");
         if self.living(id).auto_spin_attack_ticks > 0 {
             self.living_mut(id).auto_spin_attack_ticks -= 1;
             let current = self.entity(id).bounding_box();
-            self.check_auto_spin_attack(id, before_travel_box, current);
+            main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3263)"], || self.check_auto_spin_attack(id, before_travel_box, current));
         }
-        self.push_entities(id);
+        main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3265)"], || self.push_entities(id));
         profiler::pop();
         if self.is_sensitive_to_water(id) && self.is_in_water_or_rain(id) {
-            self.hurt_server(id, DamageSource::new(damage_types::DROWN), 1.0);
+            main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3270)"], || self.hurt_server(id, DamageSource::new(damage_types::DROWN), 1.0));
         }
     }
 
@@ -3227,7 +3272,7 @@ impl ServerLevel {
             if dmg > 0.0 {
                 let sound = self.get_fall_damage_sound(id, dmg as i32);
                 self.entity_play_sound(id, sound_event(sound), 1.0, 1.0);
-                let _scope = self.is_player(id).then(|| crate::server::main_thread_frames::enter(HANDLE_FALL_FLYING_COLLISIONS_PLAYER_FRAMES));
+                let _scope = self.is_player(id).then(|| main_thread_frames::enter_static(&HANDLE_FALL_FLYING_COLLISIONS_PLAYER_FRAMES));
                 self.hurt(id, DamageSource::new(damage_types::FLY_INTO_WALL), dmg);
             }
         }
@@ -3502,19 +3547,20 @@ impl ServerLevel {
             return false;
         }
         let (effect, amplifier) = (new_effect.effect, new_effect.amplifier);
+        let _frames = source.is_none().then(|| main_thread_frames::enter_static(&["net.minecraft.world.entity.LivingEntity.addEffect(LivingEntity.java:1070)"]));
         let living = &mut self.living_mut(id);
         let changed = match living.effect_index(effect) {
             Err(index) => {
                 living.active_effects.insert(index, new_effect);
                 living.effects_mod_count += 1;
-                self.on_effect_added(id, effect, source);
+                main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.addEffect(LivingEntity.java:1082)"], || self.on_effect_added(id, effect, source));
                 self.on_mob_effect_added(id, effect);
                 true
             }
             Ok(index) => {
                 let changed = living.active_effects[index].update(&new_effect);
                 if changed {
-                    self.on_effect_updated(id, effect, true, source);
+                    main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.addEffect(LivingEntity.java:1088)"], || self.on_effect_updated(id, effect, true, source));
                 }
                 changed
             }
@@ -3644,11 +3690,11 @@ impl ServerLevel {
             if !keep {
                 let removed = living.active_effects.remove(index);
                 living.effects_mod_count += 1;
-                self.on_effects_removed(id, &[removed]);
+                main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.tickEffects(LivingEntity.java:905)"], || self.on_effects_removed(id, &[removed]));
                 continue;
             }
             if living.active_effects[index].duration % 600 == 0 {
-                self.on_effect_updated(id, effect, false, None);
+                main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.tickEffects(LivingEntity.java:908)"], || self.on_effect_updated(id, effect, false, None));
             }
             index += 1;
         }
@@ -3924,6 +3970,13 @@ mod tests {
         let bad = wafer_protocol::nbt::Nbt::Compound(vec![("id".into(), wafer_protocol::nbt::Nbt::String("minecraft:arrow".into())), ("pickup".into(), wafer_protocol::nbt::Nbt::Byte(3))].into());
         level.player_mut(player).set_shoulder_entity_left(bad);
         level.entity_mut(player).horizontal_collision = true;
+        let _layers = crate::server::main_thread_frames::enter_static(&[
+            "net.minecraft.world.entity.LivingEntity.aiStep(LivingEntity.java:3233)",
+            "net.minecraft.world.entity.player.Player.aiStep(Player.java:490)",
+            "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2886)",
+            "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
+            "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
+        ]);
         let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| level.handle_fall_flying_collisions(player, 1.0, 0.0))).unwrap_err();
         let reported = thrown.downcast::<crate::crash_report::ReportedException>().expect("a reported exception");
         assert_eq!(

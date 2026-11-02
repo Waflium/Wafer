@@ -96,7 +96,7 @@ impl ServerLevel {
     pub fn endermite_tick(&mut self, id: EntityId) {
         let y_rot = self.entity(id).y_rot;
         self.living_mut(id).y_body_rot = y_rot;
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Endermite.tick(Endermite.java:102)"], || self.mob_tick(id));
     }
 
     pub fn endermite_set_y_body_rot(&mut self, id: EntityId, y_body_rot: f32) {
@@ -105,7 +105,7 @@ impl ServerLevel {
     }
 
     pub fn endermite_ai_step(&mut self, id: EntityId) {
-        self.monster_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Endermite.aiStep(Endermite.java:113)"], || self.monster_ai_step(id));
         let Some(mob) = self.mob_mut(id) else { return };
         let persistence_required = mob.is_persistence_required();
         let endermite = endermite_mut(mob);

@@ -278,7 +278,7 @@ impl ServerLevel {
     }
 
     pub fn allay_ai_step(&mut self, id: EntityId) {
-        self.mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.allay.Allay.aiStep(Allay.java:256)"], || self.mob_ai_step(id));
         if self.mob(id).is_none() {
             return;
         }
@@ -293,7 +293,7 @@ impl ServerLevel {
     }
 
     pub fn allay_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.allay.Allay.tick(Allay.java:271)"], || self.mob_tick(id));
         self.then_tick(move |level| level.allay_tick_end(id));
     }
 

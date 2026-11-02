@@ -104,7 +104,7 @@ impl BlockBehaviour for ShulkerBoxBlock {
         if let Some(status) = status
             && can_open(state, level, pos, status)
         {
-            level.open_menu(player, MenuProvider::BlockEntity(pos));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.ShulkerBoxBlock.useWithoutItem(ShulkerBoxBlock.java:69)"], || level.open_menu(player, MenuProvider::BlockEntity(pos)));
             level.award_stat(player, crate::stats::stats::OPEN_SHULKER_BOX, 1);
             crate::world::entity::monster::piglin::piglin_ai::anger_nearby_piglins(level, player, true);
         }

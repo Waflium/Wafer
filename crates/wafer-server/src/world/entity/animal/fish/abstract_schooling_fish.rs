@@ -116,7 +116,7 @@ impl ServerLevel {
     }
 
     pub fn abstract_schooling_fish_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.fish.AbstractSchoolingFish.tick(AbstractSchoolingFish.java:74)"], || self.mob_tick(id));
         self.then_tick(move |level| level.abstract_schooling_fish_tick_end(id));
     }
 

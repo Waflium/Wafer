@@ -72,7 +72,7 @@ impl Projectile {
 
 impl ServerLevel {
     pub fn arrow_tick(&mut self, id: EntityId) {
-        self.abstract_arrow_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.arrow.Arrow.tick(Arrow.java:80)"], || self.abstract_arrow_tick(id));
         self.then_tick(move |level| level.arrow_tick_end(id));
     }
 
@@ -90,8 +90,23 @@ impl ServerLevel {
         let projectile = self.projectile(id);
         let Some(contents) = projectile.arrow_potion_contents().cloned() else { return };
         let duration_scale = projectile.arrow_potion_duration_scale();
-        for effect in PotionContents::new(&contents).for_each_effect(duration_scale) {
-            self.add_effect(mob, effect, Some(effect_source));
+        let contents = PotionContents::new(&contents);
+        let potion_effects = contents.potion().map_or(0, |potion| potion.effects().len());
+        for (index, effect) in contents.for_each_effect(duration_scale).into_iter().enumerate() {
+            let frames: &'static [&'static str] = if index < potion_effects {
+                &[
+                    "net.minecraft.world.entity.projectile.arrow.Arrow.lambda$doPostHurtEffects$0(Arrow.java:122)",
+                    "net.minecraft.world.item.alchemy.PotionContents.forEachEffect(PotionContents.java:112)",
+                    "net.minecraft.world.entity.projectile.arrow.Arrow.doPostHurtEffects(Arrow.java:122)",
+                ]
+            } else {
+                &[
+                    "net.minecraft.world.entity.projectile.arrow.Arrow.lambda$doPostHurtEffects$0(Arrow.java:122)",
+                    "net.minecraft.world.item.alchemy.PotionContents.forEachEffect(PotionContents.java:116)",
+                    "net.minecraft.world.entity.projectile.arrow.Arrow.doPostHurtEffects(Arrow.java:122)",
+                ]
+            };
+            crate::server::main_thread_frames::within(frames, || self.add_effect(mob, effect, Some(effect_source)));
         }
     }
 }

@@ -322,7 +322,7 @@ impl ServerLevel {
         shoot(&mut projectile);
         let id = projectile.entity.id;
         self.add_fresh_entity(LevelEntity::Projectile(Box::new(projectile)));
-        self.apply_on_projectile_spawned(id, item_stack);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.Projectile.spawnProjectile(Projectile.java:246)"], || self.apply_on_projectile_spawned(id, item_stack));
         id
     }
 
@@ -338,13 +338,13 @@ impl ServerLevel {
     }
 
     pub fn apply_on_projectile_spawned(&mut self, id: EntityId, pickup_item_stack: &ItemStack) {
-        self.on_projectile_spawned(pickup_item_stack, id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.Projectile.applyOnProjectileSpawned(Projectile.java:252)"], || self.on_projectile_spawned(pickup_item_stack, id));
         let weapon = self.projectile(id).abstract_arrow().and_then(|arrow| arrow.fired_from_weapon.clone());
         if let Some(weapon) = weapon
             && !weapon.is_empty()
             && pickup_item_stack.get_item() != weapon.get_item()
         {
-            self.on_projectile_spawned(&weapon, id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.Projectile.applyOnProjectileSpawned(Projectile.java:256)"], || self.on_projectile_spawned(&weapon, id));
         }
     }
 
@@ -374,7 +374,7 @@ impl ServerLevel {
                 }
             }
         }
-        self.projectile_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.Projectile.hitTargetOrDeflectSelf(Projectile.java:288)"], || self.projectile_on_hit(id, hit_result));
         ProjectileDeflection::None
     }
 
@@ -433,13 +433,13 @@ impl ServerLevel {
                     self.on_redirect_projectile(id, entity_hit);
                 }
                 let location = entity_hit_result.location;
-                self.on_hit_entity(id, entity_hit_result);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.Projectile.onHit(Projectile.java:325)"], || self.on_hit_entity(id, entity_hit_result));
                 self.game_event(crate::world::level::gameevent::game_event::PROJECTILE_LAND, location, crate::world::level::gameevent::game_event::Context::of(Some(id)));
             }
             Type::Block => {
                 let HitResult::Block { hit, .. } = hit_result else { unreachable!() };
                 let target = hit.block_pos;
-                self.on_hit_block(id, hit);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.Projectile.onHit(Projectile.java:329)"], || self.on_hit_block(id, hit));
                 let block_state = self.block_state(target);
                 self.game_event_at_with(crate::world::level::gameevent::game_event::PROJECTILE_LAND, target, crate::world::level::gameevent::game_event::Context::of_entity_and_state(Some(id), Some(block_state)));
             }
@@ -458,9 +458,17 @@ impl ServerLevel {
     pub fn on_hit_entity(&mut self, id: EntityId, hit_result: EntityHitResult) {
         match self.projectile(id).kind {
             ProjectileKind::Snowball(_) => self.snowball_on_hit_entity(id, hit_result),
-            ProjectileKind::ThrownEgg(_) | ProjectileKind::ThrownEnderpearl(_) => {
+            ProjectileKind::ThrownEgg(_) => {
                 let source = self.thrown(id);
-                self.hurt(hit_result.entity, source, 0.0);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEgg.onHitEntity(ThrownEgg.java:55)"], || {
+                    self.hurt(hit_result.entity, source, 0.0)
+                });
+            }
+            ProjectileKind::ThrownEnderpearl(_) => {
+                let source = self.thrown(id);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl.onHitEntity(ThrownEnderpearl.java:91)"], || {
+                    self.hurt(hit_result.entity, source, 0.0)
+                });
             }
             ProjectileKind::Arrow(_) | ProjectileKind::SpectralArrow(_) => self.abstract_arrow_on_hit_entity(id, hit_result),
             ProjectileKind::ThrownTrident(_) => self.thrown_trident_on_hit_entity(id, hit_result),
@@ -493,7 +501,10 @@ impl ServerLevel {
 
     pub fn projectile_base_on_hit_block(&mut self, id: EntityId, hit_result: BlockHitResult) {
         let state = self.block_state(hit_result.block_pos);
-        block::of(state).on_projectile_hit(self, state, &hit_result, id);
+        crate::server::main_thread_frames::within(
+            &["net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase.onProjectileHit(BlockBehaviour.java:1268)", "net.minecraft.world.entity.projectile.Projectile.onHitBlock(Projectile.java:340)"],
+            || block::of(state).on_projectile_hit(self, state, &hit_result, id),
+        );
     }
 
     pub fn can_hit_entity(&self, id: EntityId, entity: EntityId) -> bool {

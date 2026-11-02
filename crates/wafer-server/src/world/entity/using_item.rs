@@ -105,7 +105,9 @@ impl ServerLevel {
         let use_item = self.living(id).use_item.clone();
         if in_hand.is_some() && in_hand.as_ref().map(|s| s.item) == use_item.as_ref().map(|s| s.item) {
             self.living_mut(id).use_item = in_hand.clone();
-            self.update_using_item(id, in_hand.expect("item in hand"));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.updatingUsingItem(LivingEntity.java:3549)"], || {
+                self.update_using_item(id, in_hand.expect("item in hand"))
+            });
         } else {
             self.stop_using_item(id);
         }
@@ -113,8 +115,11 @@ impl ServerLevel {
 
     fn update_using_item(&mut self, id: EntityId, mut stack: ItemStack) {
         if self.is_player(id) {
-            crate::advancements::triggers::criteria_triggers::USING_ITEM.trigger(self, id, &stack);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.updateUsingItem(ServerPlayer.java:2225)"], || {
+                crate::advancements::triggers::criteria_triggers::USING_ITEM.trigger(self, id, &stack)
+            });
         }
+        let _frames = self.is_player(id).then(|| crate::server::main_thread_frames::enter_static(&["net.minecraft.server.level.ServerPlayer.updateUsingItem(ServerPlayer.java:2226)"]));
         let remaining = self.living(id).use_item_remaining;
         if let Some(consumable) = stack.get(dc::CONSUMABLE).map(Consumable::from_nbt)
             && consumable.should_emit_particles_and_sounds(remaining)
@@ -127,7 +132,9 @@ impl ServerLevel {
                 let slot = self.used_item_hand(id).as_equipment_slot();
                 kinetic_weapon.damage_entities(self, &stack, remaining, id, slot);
             }
-            None => crate::world::item::on_use_tick(self, id, &mut stack, remaining),
+            None => crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.updateUsingItem(LivingEntity.java:3596)"], || {
+                crate::world::item::on_use_tick(self, id, &mut stack, remaining)
+            }),
         }
         if stack != before {
             let hand = self.used_item_hand(id);
@@ -141,7 +148,7 @@ impl ServerLevel {
         let living = self.living_mut(id);
         living.use_item_remaining -= 1;
         if living.use_item_remaining == 0 && !crate::world::item::use_on_release(&stack) {
-            self.complete_using_item(id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.updateUsingItem(LivingEntity.java:3598)"], || self.complete_using_item(id));
         }
     }
 
@@ -150,6 +157,7 @@ impl ServerLevel {
         if !self.is_using_item(id) {
             return;
         }
+        let _frames = self.is_player(id).then(|| crate::server::main_thread_frames::enter_static(&["net.minecraft.server.level.ServerPlayer.completeUsingItem(ServerPlayer.java:1738)"]));
         if let Some(player) = self.find_player(id) {
             player.connection.send(clientbound::ENTITY_EVENT, |w| {
                 w.i32(id);
@@ -158,10 +166,10 @@ impl ServerLevel {
         }
         let hand = self.used_item_hand(id);
         if Some(&use_item) != self.get_item_in_hand(id, hand).as_ref() {
-            self.release_using_item(id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.completeUsingItem(LivingEntity.java:3703)"], || self.release_using_item(id));
             return;
         }
-        let result = self.finish_using_item(id, use_item.clone());
+        let result = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.completeUsingItem(LivingEntity.java:3708)"], || self.finish_using_item(id, use_item.clone()));
         if result != use_item {
             self.set_item_in_hand(id, hand, result);
         }
@@ -170,7 +178,7 @@ impl ServerLevel {
 
     pub fn finish_using_item(&mut self, id: EntityId, stack: ItemStack) -> ItemStack {
         let before = stack.clone();
-        let result = crate::world::item::finish_using_item(stack, self, id);
+        let result = crate::server::main_thread_frames::within(&["net.minecraft.world.item.ItemStack.finishUsingItem(ItemStack.java:415)"], || crate::world::item::finish_using_item(stack, self, id));
         self.apply_after_use_component_side_effects(id, result, before)
     }
 
@@ -214,7 +222,9 @@ impl ServerLevel {
         {
             self.living_mut(id).use_item = Some(in_hand.clone());
             let remaining = self.living(id).use_item_remaining;
-            if crate::world::item::release_using(self, &in_hand, id, remaining) {
+            if crate::server::main_thread_frames::within(&["net.minecraft.world.item.ItemStack.releaseUsing(ItemStack.java:756)", "net.minecraft.world.entity.LivingEntity.releaseUsingItem(LivingEntity.java:3746)"], || {
+                crate::world::item::release_using(self, &in_hand, id, remaining)
+            }) {
                 let current = self.get_item_in_hand(id, hand).unwrap_or_else(ItemStack::empty);
                 let with_side_effects = self.apply_after_use_component_side_effects(id, current.clone(), in_hand.clone());
                 if with_side_effects != current {
@@ -222,7 +232,7 @@ impl ServerLevel {
                 }
             }
             if crate::world::item::use_on_release(&in_hand) {
-                self.updating_using_item(id);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.LivingEntity.releaseUsingItem(LivingEntity.java:3748)"], || self.updating_using_item(id));
             }
         }
         self.stop_using_item(id);
@@ -250,7 +260,9 @@ impl ServerLevel {
         self.emit_particles_and_sounds(id, &stack, consumable, 16);
         if self.is_player(id) {
             self.award_stat(id, crate::stats::stats::ITEM_USED.get(stack.get_item().0), 1);
-            crate::advancements::triggers::criteria_triggers::CONSUME_ITEM.trigger(self, id, &stack);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.item.component.Consumable.onConsume(Consumable.java:84)"], || {
+                crate::advancements::triggers::criteria_triggers::CONSUME_ITEM.trigger(self, id, &stack)
+            });
         }
         if let Some(food) = stack.get(dc::FOOD).map(FoodProperties::from_nbt) {
             self.food_properties_on_consume(id, &food, consumable);
@@ -269,8 +281,15 @@ impl ServerLevel {
         if let Some(ominous_bottle_amplifier) = stack.get(dc::OMINOUS_BOTTLE_AMPLIFIER).and_then(Nbt::as_i64) {
             self.add_effect(id, MobEffectInstance::with(mob_effects::BAD_OMEN, 120000, ominous_bottle_amplifier as i32, false, false, true), None);
         }
-        for effect in &consumable.on_consume_effects {
-            self.apply_consume_effect(id, effect);
+        {
+            let _frames = crate::server::main_thread_frames::enter_static(&[
+                "net.minecraft.world.item.component.Consumable.lambda$onConsume$1(Consumable.java:89)",
+                "java.base/java.util.ArrayList.forEach(ArrayList.java:1604)",
+                "net.minecraft.world.item.component.Consumable.onConsume(Consumable.java:89)",
+            ]);
+            for effect in &consumable.on_consume_effects {
+                self.apply_consume_effect(id, effect);
+            }
         }
         self.entity_game_event(id, if consumable.animation == ItemUseAnimation::Drink { crate::world::level::gameevent::game_event::DRINK } else { crate::world::level::gameevent::game_event::EAT });
         stack.consume(1, self, Some(id));
@@ -308,6 +327,7 @@ impl ServerLevel {
                 if self.entity_mut(id).random.next_float() >= *probability {
                     return;
                 }
+                let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect.apply(ApplyStatusEffectsConsumeEffect.java:53)"]);
                 for effect in effects {
                     self.add_effect(id, effect.clone(), None);
                 }

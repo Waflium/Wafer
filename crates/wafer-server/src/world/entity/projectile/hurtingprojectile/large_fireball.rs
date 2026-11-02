@@ -62,7 +62,7 @@ impl Projectile {
 
 impl ServerLevel {
     pub fn large_fireball_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.LargeFireball.onHit(LargeFireball.java:34)"], || self.projectile_base_on_hit(id, hit_result));
         let grief = self.game_rules.get_bool(game_rule::MOB_GRIEFING);
         let explosion_power = large_fireball(self.projectile(id)).explosion_power;
         let position = self.entity(id).position();
@@ -75,7 +75,7 @@ impl ServerLevel {
         let entity = hit_result.entity;
         let owner = self.projectile_get_owner(id);
         let damage_source = self.fireball(id, owner);
-        self.hurt_server(entity, damage_source, 6.0);
-        self.do_post_attack_effects(entity, &damage_source);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.LargeFireball.onHitEntity(LargeFireball.java:52)"], || self.hurt_server(entity, damage_source, 6.0));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.LargeFireball.onHitEntity(LargeFireball.java:53)"], || self.do_post_attack_effects(entity, &damage_source));
     }
 }

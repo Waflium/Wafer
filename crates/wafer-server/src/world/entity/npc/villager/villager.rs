@@ -406,7 +406,7 @@ impl ServerLevel {
     }
 
     pub fn villager_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.npc.villager.Villager.tick(Villager.java:262)"], || self.mob_tick(id));
         self.then_tick(move |level| level.villager_tick_end(id));
     }
 
@@ -438,7 +438,7 @@ impl ServerLevel {
         if no_offers {
             return InteractionResult::CONSUME;
         }
-        self.start_trading(id, player);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.npc.villager.Villager.mobInteract(Villager.java:298)"], || self.start_trading(id, player));
         InteractionResult::SUCCESS
     }
 
@@ -451,7 +451,7 @@ impl ServerLevel {
         self.update_special_prices(id, player);
         self.set_trading_player(id, Some(player));
         let level = self.get_villager_data(id).level;
-        self.open_trading_screen(id, player, level);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.npc.villager.Villager.startTrading(Villager.java:316)"], || self.open_trading_screen(id, player, level));
     }
 
     pub fn villager_set_trading_player(&mut self, id: EntityId, player: Option<EntityId>) {

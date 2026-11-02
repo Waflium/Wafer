@@ -510,7 +510,7 @@ impl ServerLevel {
     }
 
     pub fn turtle_ai_step(&mut self, id: EntityId) {
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.turtle.Turtle.aiStep(Turtle.java:277)"], || self.animal_ai_step(id));
         let Some(mob) = self.mob(id) else { return };
         let lay_egg_counter = turtle(mob).lay_egg_counter;
         if self.is_alive(id) && is_laying_egg(&mob.entity) && lay_egg_counter >= 1 && lay_egg_counter % 5 == 0 {

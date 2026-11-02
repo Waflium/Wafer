@@ -53,7 +53,7 @@ impl BreedGoal {
         level.get_navigation(mob, |navigation, level| navigation.move_to_entity(level, mob, partner, speed_modifier));
         self.love_time += 1;
         if self.love_time >= reduced_tick_delay(60) && level.entity(mob).distance_to_sqr(level.entity(partner)) < 9.0 {
-            breed(self, level, mob, partner);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.ai.goal.BreedGoal.tick(BreedGoal.java:59)"], || breed(self, level, mob, partner));
         }
     }
 
@@ -80,6 +80,6 @@ impl BreedGoal {
     }
 
     fn breed(&self, level: &mut ServerLevel, mob: EntityId, partner: EntityId) {
-        level.spawn_child_from_breeding(mob, partner);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.ai.goal.BreedGoal.breed(BreedGoal.java:77)"], || level.spawn_child_from_breeding(mob, partner));
     }
 }

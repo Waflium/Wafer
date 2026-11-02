@@ -1,5 +1,4 @@
 use super::command_origin::CommandOrigin;
-use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 
 pub const COMMAND_EXECUTION: [&str; 7] = [
     "com.mojang.brigadier.context.ContextChain.runExecutable(ContextChain.java:73)",
@@ -52,6 +51,24 @@ pub const ENTITY_TICK: [&str; 5] = [
     "net.minecraft.server.level.ServerLevel.lambda$tick$0(ServerLevel.java:457)",
     "net.minecraft.world.level.entity.EntityTickList.forEach(EntityTickList.java:53)",
     "net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:427)",
+];
+
+pub const TICK_NON_PASSENGER: [&str; 6] = [
+    "net.minecraft.server.level.ServerLevel.tickNonPassenger(ServerLevel.java:860)",
+    "net.minecraft.world.level.Level.guardEntityTick(Level.java:484)",
+    "net.minecraft.server.level.ServerLevel.lambda$tick$0(ServerLevel.java:457)",
+    "net.minecraft.world.level.entity.EntityTickList.forEach(EntityTickList.java:53)",
+    "net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:427)",
+    TICK_CHILDREN_LEVELS,
+];
+
+pub const TICK_NON_PASSENGER_PASSENGERS: [&str; 6] = [
+    "net.minecraft.server.level.ServerLevel.tickNonPassenger(ServerLevel.java:864)",
+    "net.minecraft.world.level.Level.guardEntityTick(Level.java:484)",
+    "net.minecraft.server.level.ServerLevel.lambda$tick$0(ServerLevel.java:457)",
+    "net.minecraft.world.level.entity.EntityTickList.forEach(EntityTickList.java:53)",
+    "net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:427)",
+    TICK_CHILDREN_LEVELS,
 ];
 
 pub const TIMER_TICK: [&str; 3] = [
@@ -174,55 +191,23 @@ pub fn origin_frames(origin: CommandOrigin) -> Vec<&'static str> {
             frames.push("net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1094)");
             frames.extend(TICK_LOOP);
         }
-        CommandOrigin::EnchantmentTickPlayer => {
+        CommandOrigin::EnchantmentEffect => {
             frames.push(FUNCTION_EXECUTE);
             frames.push("net.minecraft.world.item.enchantment.effects.RunFunction.apply(RunFunction.java:42)");
-            frames.push("net.minecraft.world.item.enchantment.Enchantment.lambda$tick$0(Enchantment.java:338)");
-            frames.push("net.minecraft.world.item.enchantment.Enchantment.applyEffects(Enchantment.java:437)");
-            frames.push("net.minecraft.world.item.enchantment.Enchantment.tick(Enchantment.java:335)");
-            frames.push("net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$tickEffects$0(EnchantmentHelper.java:246)");
-            frames.push("net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:152)");
-            frames.push("net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnEquipment(EnchantmentHelper.java:159)");
-            frames.push("net.minecraft.world.item.enchantment.EnchantmentHelper.tickEffects(EnchantmentHelper.java:246)");
-            frames.push("net.minecraft.world.entity.LivingEntity.baseTick(LivingEntity.java:447)");
-            frames.push("net.minecraft.world.entity.Entity.tick(Entity.java:583)");
-            frames.push("net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2847)");
-            frames.push("net.minecraft.world.entity.player.Player.tick(Player.java:276)");
-            frames.push("net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)");
-            frames.extend(PLAYER_CONNECTION_TICK);
-            frames.push(TICK_CHILDREN_CONNECTIONS);
-            frames.push("net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1127)");
-            frames.extend(TICK_LOOP);
+            frames.extend(super::main_thread_frames::current());
         }
-        CommandOrigin::AdvancementReward(trigger) => {
+        CommandOrigin::TestEnvironmentFunction => {
+            frames.push(FUNCTION_EXECUTE);
+            frames.extend(super::main_thread_frames::current());
+        }
+        CommandOrigin::AdvancementReward => {
             frames.push(FUNCTION_EXECUTE);
             frames.push("net.minecraft.advancements.AdvancementRewards.lambda$grant$1(AdvancementRewards.java:76)");
             frames.push("java.base/java.util.Optional.ifPresent(Optional.java:178)");
             frames.push("net.minecraft.advancements.AdvancementRewards.grant(AdvancementRewards.java:76)");
             frames.push("net.minecraft.server.PlayerAdvancements.award(PlayerAdvancements.java:178)");
             frames.push("net.minecraft.advancements.triggers.SimpleCriterionTrigger.trigger(SimpleCriterionTrigger.java:53)");
-            match trigger {
-                CriterionTrigger::Location => {
-                    frames.push("net.minecraft.advancements.triggers.PlayerTrigger.trigger(PlayerTrigger.java:28)");
-                    frames.push("net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:810)");
-                    frames.extend(PLAYER_CONNECTION_TICK);
-                    frames.push(TICK_CHILDREN_CONNECTIONS);
-                    frames.push("net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1127)");
-                }
-                CriterionTrigger::Levitation => {
-                    frames.push("net.minecraft.advancements.triggers.LevitationTrigger.trigger(LevitationTrigger.java:21)");
-                    frames.push("net.minecraft.server.level.ServerPlayer.tick(ServerPlayer.java:696)");
-                    frames.extend(ENTITY_TICK);
-                    frames.push(TICK_CHILDREN_LEVELS);
-                }
-                _ => {
-                    frames.push("net.minecraft.advancements.triggers.PlayerTrigger.trigger(PlayerTrigger.java:28)");
-                    frames.push("net.minecraft.server.level.ServerPlayer.tick(ServerPlayer.java:694)");
-                    frames.extend(ENTITY_TICK);
-                    frames.push(TICK_CHILDREN_LEVELS);
-                }
-            }
-            frames.extend(TICK_LOOP);
+            frames.extend(super::main_thread_frames::current());
         }
     }
     frames

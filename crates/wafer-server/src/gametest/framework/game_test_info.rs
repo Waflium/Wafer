@@ -237,9 +237,23 @@ pub fn tick(server: &mut Server, id: InfoId) {
     tick_internal(server, id);
     if info(server, id).is_done() {
         if info(server, id).error.is_some() {
-            test_failed(server, id);
+            crate::server::main_thread_frames::within(
+                &[
+                    "net.minecraft.gametest.framework.GameTestInfo.lambda$tick$0(GameTestInfo.java:124)",
+                    "java.base/java.util.ArrayList.forEach(ArrayList.java:1604)",
+                    "net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:124)",
+                ],
+                || test_failed(server, id),
+            );
         } else {
-            test_passed(server, id);
+            crate::server::main_thread_frames::within(
+                &[
+                    "net.minecraft.gametest.framework.GameTestInfo.lambda$tick$1(GameTestInfo.java:126)",
+                    "java.base/java.util.ArrayList.forEach(ArrayList.java:1604)",
+                    "net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:126)",
+                ],
+                || test_passed(server, id),
+            );
         }
     }
 }
@@ -344,7 +358,7 @@ fn test_passed(server: &mut Server, id: InfoId) {
             Listener::BatchCompletion { tracker, batch_index } => {
                 let (level, pos) = (info(server, id).level, test_block_pos(server, id));
                 server.levels[level].test_instance_block_entity_remove_barriers(pos);
-                game_test_runner::test_completed(server, tracker, batch_index, id);
+                crate::server::main_thread_frames::within(&["net.minecraft.gametest.framework.GameTestRunner$1.testPassed(GameTestRunner.java:194)"], || game_test_runner::test_completed(server, tracker, batch_index, id));
             }
         }
     }

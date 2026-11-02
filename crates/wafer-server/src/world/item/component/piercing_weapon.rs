@@ -54,7 +54,7 @@ impl PiercingWeapon {
             hit_something |= level.stab_attack(attacker, hand, hit_result.entity, damage, true, self.deals_knockback, self.dismounts);
         }
         level.on_attack(attacker);
-        level.post_piercing_attack(attacker);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.item.component.PiercingWeapon.attack(PiercingWeapon.java:86)"], || level.post_piercing_attack(attacker));
         if hit_something {
             self.make_hit_sound(level, attacker);
         }

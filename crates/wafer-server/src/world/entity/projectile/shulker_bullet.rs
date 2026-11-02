@@ -270,11 +270,16 @@ impl ServerLevel {
         let owner = self.projectile_get_owner(id);
         let living_owner = owner.filter(|&owner| self.is_living(owner));
         let damage_source = DamageSource::source(damage_types::MOB_PROJECTILE, Some(id), living_owner);
-        let was_hurt = self.hurt_server(target, damage_source.clone(), 4.0);
+        let was_hurt = crate::server::main_thread_frames::within(
+            &["net.minecraft.world.entity.Entity.hurtOrSimulate(Entity.java:2163)", "net.minecraft.world.entity.projectile.ShulkerBullet.onHitEntity(ShulkerBullet.java:304)"],
+            || self.hurt_server(target, damage_source.clone(), 4.0),
+        );
         if was_hurt {
-            self.do_post_attack_effects(target, &damage_source);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.ShulkerBullet.onHitEntity(ShulkerBullet.java:307)"], || self.do_post_attack_effects(target, &damage_source));
             if self.is_living(target) {
-                self.add_effect(target, MobEffectInstance::new(mob_effects::LEVITATION, 200, 0), Some(owner.unwrap_or(id)));
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.ShulkerBullet.onHitEntity(ShulkerBullet.java:310)"], || {
+                    self.add_effect(target, MobEffectInstance::new(mob_effects::LEVITATION, 200, 0), Some(owner.unwrap_or(id)))
+                });
             }
         }
     }
@@ -293,7 +298,7 @@ impl ServerLevel {
     }
 
     pub fn shulker_bullet_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.ShulkerBullet.onHit(ShulkerBullet.java:334)"], || self.projectile_base_on_hit(id, hit_result));
         self.shulker_bullet_destroy(id);
     }
 

@@ -77,6 +77,12 @@ impl ServerLevel {
                 let pos = if has_pos { Some(Vec3::new(r.f64()?, r.f64()?, r.f64()?)) } else { None };
                 let rot = if has_rot { Some((r.f32()?, r.f32()?)) } else { None };
                 let flags = r.u8()?;
+                let _packet = crate::server::main_thread_frames::enter_static(match packet.id {
+                    serverbound::MOVE_PLAYER_POS => &MOVE_PLAYER_POS_PACKET,
+                    serverbound::MOVE_PLAYER_POS_ROT => &MOVE_PLAYER_POS_ROT_PACKET,
+                    serverbound::MOVE_PLAYER_ROT => &MOVE_PLAYER_ROT_PACKET,
+                    _ => &MOVE_PLAYER_STATUS_ONLY_PACKET,
+                });
                 self.handle_move_player(id, pos, rot, flags & 1 != 0, flags & 2 != 0);
             }
             serverbound::ACCEPT_TELEPORTATION => {
@@ -121,6 +127,7 @@ impl ServerLevel {
                 let pos = BlockPos::new(pos.0, pos.1, pos.2);
                 let direction = Direction::from_3d_data_value(r.u8()? as i32);
                 let sequence = r.varint()?;
+                let _packet = crate::server::main_thread_frames::enter_static(&PLAYER_ACTION_PACKET);
                 self.handle_player_action(id, action, pos, direction, sequence);
             }
             serverbound::USE_ITEM_ON => {
@@ -134,12 +141,14 @@ impl ServerLevel {
                 let sequence = r.varint()?;
                 let location = Vec3::new(block_pos.x as f64 + cx as f64, block_pos.y as f64 + cy as f64, block_pos.z as f64 + cz as f64);
                 let hit = BlockHitResult { location, direction, block_pos, inside, world_border_hit };
+                let _packet = crate::server::main_thread_frames::enter_static(&USE_ITEM_ON_PACKET);
                 self.handle_use_item_on(id, hand, hit, sequence);
             }
             serverbound::USE_ITEM => {
                 let hand = InteractionHand::from_id(r.varint()?);
                 let sequence = r.varint()?;
                 let (y_rot, x_rot) = (r.f32()?, r.f32()?);
+                let _packet = crate::server::main_thread_frames::enter_static(&USE_ITEM_PACKET);
                 self.handle_use_item(id, hand, sequence, y_rot, x_rot);
             }
             serverbound::PUNCH => {
@@ -159,6 +168,7 @@ impl ServerLevel {
                 let hand = InteractionHand::from_id(r.varint()?);
                 let (x, y, z) = r.lp_vec3()?;
                 let using_secondary_action = r.bool()?;
+                let _packet = crate::server::main_thread_frames::enter_static(&INTERACT_PACKET);
                 self.handle_interact(id, entity_id, hand, Vec3::new(x, y, z), using_secondary_action);
             }
             serverbound::SIGN_UPDATE => {
@@ -185,9 +195,13 @@ impl ServerLevel {
             serverbound::CONTAINER_BUTTON_CLICK => {
                 let container_id = r.varint()?;
                 let button_id = r.varint()?;
+                let _packet = crate::server::main_thread_frames::enter_static(&CONTAINER_BUTTON_CLICK_PACKET);
                 self.handle_container_button_click(id, container_id, button_id);
             }
-            serverbound::CONTAINER_CLICK => self.handle_container_click(id, &mut r)?,
+            serverbound::CONTAINER_CLICK => {
+                let _packet = crate::server::main_thread_frames::enter_static(&CONTAINER_CLICK_PACKET);
+                self.handle_container_click(id, &mut r)?
+            }
             serverbound::RENAME_ITEM => {
                 let name = r.string(32767)?.to_string();
                 self.handle_rename_item(id, &name);
@@ -395,7 +409,9 @@ impl ServerLevel {
                     return;
                 }
                 if let Some(piercing_weapon) = crate::world::item::component::piercing_weapon::PiercingWeapon::of(&item_in_hand) {
-                    piercing_weapon.attack(self, id, wafer_data::EquipmentSlot::Mainhand);
+                    crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlayerAction(ServerGamePacketListenerImpl.java:1444)"], || {
+                        piercing_weapon.attack(self, id, wafer_data::EquipmentSlot::Mainhand)
+                    });
                 }
             }
             SWAP_ITEM_WITH_OFFHAND => {
@@ -418,11 +434,7 @@ impl ServerLevel {
                     self.server_player_drop(id, true);
                 }
             }
-            RELEASE_USE_ITEM => {
-                let _processing = crate::server::main_thread_frames::enter_static(&crate::server::main_thread_frames::PACKET_PROCESSING);
-                let _packet = crate::server::main_thread_frames::enter_static(&HANDLE_RELEASE_USE_ITEM_FRAMES);
-                self.release_using_item(id)
-            }
+            RELEASE_USE_ITEM => crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlayerAction(ServerGamePacketListenerImpl.java:1470)"], || self.release_using_item(id)),
             START_DESTROY_BLOCK | CHANGE_DESTROY_DIRECTION | ABORT_DESTROY_BLOCK | STOP_DESTROY_BLOCK => {
                 let action = match action {
                     START_DESTROY_BLOCK => BlockBreakAction::StartDestroyBlock,
@@ -431,7 +443,9 @@ impl ServerLevel {
                     _ => BlockBreakAction::StopDestroyBlock,
                 };
                 let max_y = self.chunks.max_y();
-                self.handle_block_break_action(id, pos, action, direction, max_y);
+                crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlayerAction(ServerGamePacketListenerImpl.java:1474)"], || {
+                    self.handle_block_break_action(id, pos, action, direction, max_y)
+                });
                 self.ack_block_changes_up_to(id, sequence);
             }
             _ => {}
@@ -485,11 +499,13 @@ impl ServerLevel {
             self.send_spawn_protection_message(id, pos);
             self.send_use_item_on_block_updates(level_index, id, pos, direction);
         } else if self.player(id).movement.awaiting_position_from_client.is_none() && self.may_interact(id, pos) {
-            let result = self.use_item_on(id, hand, hit);
+            let result = crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleUseItemOn(ServerGamePacketListenerImpl.java:1545)"], || self.use_item_on(id, hand, hit));
             self.then_tick(move |level| {
                 if result.consumes_action() {
                     let item_after = level.player(id).item_in_hand(hand).filter(|stack| stack.is(item_stack.get_item())).unwrap_or_else(ItemStack::empty);
-                    crate::advancements::triggers::criteria_triggers::ANY_BLOCK_USE.trigger(level, id, pos, &item_after);
+                    crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleUseItemOn(ServerGamePacketListenerImpl.java:1548)"], || {
+                        crate::advancements::triggers::criteria_triggers::ANY_BLOCK_USE.trigger(level, id, pos, &item_after)
+                    });
                 }
                 level.then_tick(move |level| {
                     let placement_attempt = was_block_placement_attempt(level.player(id), &item_stack);
@@ -576,10 +592,12 @@ impl ServerLevel {
             return;
         }
         let used_item_stack = self.player(id).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
-        let result = self.interact_on(id, entity_id, hand, location);
+        let result = crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleInteract(ServerGamePacketListenerImpl.java:2065)"], || self.interact_on(id, entity_id, hand, location));
         if let InteractionResult::Success { swing_source, was_item_interaction } = result {
             let awarded_for_stack = if was_item_interaction { used_item_stack.clone() } else { ItemStack::empty() };
-            crate::advancements::triggers::criteria_triggers::PLAYER_INTERACTED_WITH_ENTITY.trigger(self, id, &awarded_for_stack, entity_id);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleInteract(ServerGamePacketListenerImpl.java:2068)"], || {
+                crate::advancements::triggers::criteria_triggers::PLAYER_INTERACTED_WITH_ENTITY.trigger(self, id, &awarded_for_stack, entity_id)
+            });
             self.then_tick(move |level| {
                 if result.should_swing() {
                     let swing_animation = used_item_stack.interact_animation();
@@ -603,7 +621,7 @@ impl ServerLevel {
         if target_x_rot != entity.x_rot || target_y_rot != entity.y_rot {
             entity.abs_snap_rotation_to(target_y_rot, target_x_rot);
         }
-        let result = self.use_item(id, hand);
+        let result = crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleUseItem(ServerGamePacketListenerImpl.java:1604)"], || self.use_item(id, hand));
         self.then_tick(move |level| {
             if let InteractionResult::Success { swing_source, .. } = result
                 && result.should_swing()
@@ -1578,11 +1596,42 @@ const HANDLE_CHANGE_GAME_MODE_FRAMES: [&str; 3] = [
     "net.minecraft.network.protocol.game.ServerboundChangeGameModePacket.handle(ServerboundChangeGameModePacket.java:9)",
 ];
 
-const HANDLE_RELEASE_USE_ITEM_FRAMES: [&str; 3] = [
-    "net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlayerAction(ServerGamePacketListenerImpl.java:1470)",
+const PROCESSING: [&str; 4] = crate::server::main_thread_frames::PACKET_PROCESSING;
+
+const fn packet_frames(handle: &'static str, bridge: &'static str) -> [&'static str; 6] {
+    [handle, bridge, PROCESSING[0], PROCESSING[1], PROCESSING[2], PROCESSING[3]]
+}
+
+const PLAYER_ACTION_PACKET: [&str; 6] = packet_frames(
     "net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.handle(ServerboundPlayerActionPacket.java:50)",
     "net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.handle(ServerboundPlayerActionPacket.java:10)",
-];
+);
+const USE_ITEM_ON_PACKET: [&str; 6] = packet_frames(
+    "net.minecraft.network.protocol.game.ServerboundUseItemOnPacket.handle(ServerboundUseItemOnPacket.java:31)",
+    "net.minecraft.network.protocol.game.ServerboundUseItemOnPacket.handle(ServerboundUseItemOnPacket.java:11)",
+);
+const USE_ITEM_PACKET: [&str; 6] = packet_frames(
+    "net.minecraft.network.protocol.game.ServerboundUseItemPacket.handle(ServerboundUseItemPacket.java:32)",
+    "net.minecraft.network.protocol.game.ServerboundUseItemPacket.handle(ServerboundUseItemPacket.java:10)",
+);
+const INTERACT_PACKET: [&str; 6] = packet_frames(
+    "net.minecraft.network.protocol.game.ServerboundInteractPacket.handle(ServerboundInteractPacket.java:32)",
+    "net.minecraft.network.protocol.game.ServerboundInteractPacket.handle(ServerboundInteractPacket.java:11)",
+);
+const CONTAINER_BUTTON_CLICK_PACKET: [&str; 6] = packet_frames(
+    "net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket.handle(ServerboundContainerButtonClickPacket.java:23)",
+    "net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket.handle(ServerboundContainerButtonClickPacket.java:9)",
+);
+const CONTAINER_CLICK_PACKET: [&str; 6] = packet_frames(
+    "net.minecraft.network.protocol.game.ServerboundContainerClickPacket.handle(ServerboundContainerClickPacket.java:54)",
+    "net.minecraft.network.protocol.game.ServerboundContainerClickPacket.handle(ServerboundContainerClickPacket.java:14)",
+);
+const MOVE_PLAYER_HANDLE: &str = "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.handle(ServerboundMovePlayerPacket.java:183)";
+const MOVE_PLAYER_POS_PACKET: [&str; 6] = packet_frames(MOVE_PLAYER_HANDLE, "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Pos.handle(ServerboundMovePlayerPacket.java:80)");
+const MOVE_PLAYER_POS_ROT_PACKET: [&str; 6] = packet_frames(MOVE_PLAYER_HANDLE, "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$PosRot.handle(ServerboundMovePlayerPacket.java:42)");
+const MOVE_PLAYER_ROT_PACKET: [&str; 6] = packet_frames(MOVE_PLAYER_HANDLE, "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Rot.handle(ServerboundMovePlayerPacket.java:114)");
+const MOVE_PLAYER_STATUS_ONLY_PACKET: [&str; 6] =
+    packet_frames(MOVE_PLAYER_HANDLE, "net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$StatusOnly.handle(ServerboundMovePlayerPacket.java:142)");
 
 const HANDLE_PLACE_RECIPE: [&str; 9] = [
     "net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlaceRecipe(ServerGamePacketListenerImpl.java:2232)",

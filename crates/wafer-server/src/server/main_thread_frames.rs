@@ -1,43 +1,124 @@
-use std::borrow::Cow;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
+use std::collections::HashMap;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicPtr, AtomicU64, AtomicUsize, Ordering};
 
 use super::command_frames::{PREPARE_LEVELS, SPIN, TICK_LOOP};
 
-struct Scope {
-    frames: Cow<'static, [&'static str]>,
-    absolute: bool,
+const CAPACITY: usize = 512;
+const ABSOLUTE: u64 = 1;
+const LEN_SHIFT: u32 = 48;
+const ADDRESS_MASK: u64 = (1 << LEN_SHIFT) - 1;
+
+struct Stack {
+    scopes: [AtomicU64; CAPACITY],
+    len: AtomicUsize,
+}
+
+impl Stack {
+    const fn new() -> Stack {
+        Stack { scopes: [const { AtomicU64::new(0) }; CAPACITY], len: AtomicUsize::new(0) }
+    }
+
+    fn push(&self, frames: &'static [&'static str], absolute: bool) {
+        let len = self.len.load(Ordering::Relaxed);
+        if len < CAPACITY {
+            self.scopes[len].store(encode(frames, absolute), Ordering::Relaxed);
+        }
+        self.len.store(len + 1, Ordering::Release);
+    }
+
+    fn pop(&self) {
+        let len = self.len.load(Ordering::Relaxed);
+        self.len.store(len.saturating_sub(1), Ordering::Release);
+    }
+
+    fn frames(&self) -> Vec<&'static str> {
+        let len = self.len.load(Ordering::Acquire).min(CAPACITY);
+        let mut frames = Vec::new();
+        for scope in self.scopes[..len].iter().rev() {
+            let (scope_frames, absolute) = decode(scope.load(Ordering::Relaxed));
+            frames.extend_from_slice(scope_frames);
+            if absolute {
+                return frames;
+            }
+        }
+        frames.extend(SPIN);
+        frames
+    }
+}
+
+fn encode(frames: &'static [&'static str], absolute: bool) -> u64 {
+    let address = frames.as_ptr() as u64;
+    if address > ADDRESS_MASK || frames.len() >= 1 << (64 - LEN_SHIFT) {
+        return encode(&[], absolute);
+    }
+    address | ((frames.len() as u64) << LEN_SHIFT) | if absolute { ABSOLUTE } else { 0 }
+}
+
+fn decode(scope: u64) -> (&'static [&'static str], bool) {
+    let len = (scope >> LEN_SHIFT) as usize;
+    if len == 0 {
+        return (&[], scope & ABSOLUTE != 0);
+    }
+    let address = (scope & ADDRESS_MASK & !ABSOLUTE) as *const &'static str;
+    (unsafe { std::slice::from_raw_parts(address, len) }, scope & ABSOLUTE != 0)
 }
 
 thread_local! {
-    static SCOPES: RefCell<Vec<Scope>> = const { RefCell::new(Vec::new()) };
-    static PUBLISHING: Cell<bool> = const { Cell::new(false) };
+    static LOCAL: Stack = const { Stack::new() };
+    static PUBLISHED_HERE: Cell<Option<&'static Stack>> = const { Cell::new(None) };
 }
 
-static PUBLISHED: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+static PUBLISHED: AtomicPtr<Stack> = AtomicPtr::new(std::ptr::null_mut());
 
-pub struct FrameScope(());
+static INTERNED: Mutex<Option<HashMap<Vec<&'static str>, &'static [&'static str]>>> = Mutex::new(None);
+
+fn with_stack<R>(action: impl FnOnce(&Stack) -> R) -> R {
+    match PUBLISHED_HERE.get() {
+        Some(stack) => action(stack),
+        None => LOCAL.with(action),
+    }
+}
+
+fn intern(frames: Vec<&'static str>) -> &'static [&'static str] {
+    let mut interned = INTERNED.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let interned = interned.get_or_insert_with(HashMap::new);
+    if let Some(existing) = interned.get(&frames) {
+        return existing;
+    }
+    let leaked: &'static [&'static str] = Box::leak(frames.clone().into_boxed_slice());
+    interned.insert(frames, leaked);
+    leaked
+}
+
+pub struct FrameScope(std::marker::PhantomData<*const ()>);
 
 impl Drop for FrameScope {
     fn drop(&mut self) {
-        SCOPES.with(|scopes| scopes.borrow_mut().pop());
-        publish();
+        with_stack(Stack::pop);
     }
 }
 
 pub fn publish_current_thread() {
-    PUBLISHING.set(true);
-    publish();
-}
-
-fn publish() {
-    if PUBLISHING.get() {
-        *PUBLISHED.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = current();
+    let stack: &'static Stack = Box::leak(Box::new(Stack::new()));
+    for frames in LOCAL.with(|local| {
+        let len = local.len.load(Ordering::Relaxed).min(CAPACITY);
+        local.scopes[..len].iter().map(|scope| scope.load(Ordering::Relaxed)).collect::<Vec<_>>()
+    }) {
+        let (frames, absolute) = decode(frames);
+        stack.push(frames, absolute);
     }
+    PUBLISHED_HERE.set(Some(stack));
+    PUBLISHED.store(std::ptr::from_ref(stack).cast_mut(), Ordering::Release);
 }
 
 pub fn published() -> Vec<&'static str> {
-    PUBLISHED.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
+    let stack = PUBLISHED.load(Ordering::Acquire);
+    if stack.is_null() {
+        return Vec::new();
+    }
+    unsafe { &*stack }.frames()
 }
 
 pub const MANAGED_BLOCK: &str = "net.minecraft.util.thread.BlockableEventLoop.managedBlock(BlockableEventLoop.java:156)";
@@ -73,28 +154,38 @@ pub const SERVER_CHUNK_POLL: [&str; 3] = [
     "net.minecraft.server.MinecraftServer.pollTask(MinecraftServer.java:888)",
 ];
 
-fn push(frames: Cow<'static, [&'static str]>, absolute: bool) -> FrameScope {
-    SCOPES.with(|scopes| scopes.borrow_mut().push(Scope { frames, absolute }));
-    publish();
-    FrameScope(())
+fn push(frames: &'static [&'static str], absolute: bool) -> FrameScope {
+    with_stack(|stack| stack.push(frames, absolute));
+    FrameScope(std::marker::PhantomData)
 }
 
 pub fn enter(frames: impl IntoIterator<Item = &'static str>) -> FrameScope {
-    push(Cow::Owned(frames.into_iter().collect()), false)
+    push(intern(frames.into_iter().collect()), false)
 }
 
+#[inline]
 pub fn enter_static(frames: &'static [&'static str]) -> FrameScope {
-    push(Cow::Borrowed(frames), false)
+    push(frames, false)
+}
+
+#[inline]
+pub fn within<R>(frames: &'static [&'static str], run: impl FnOnce() -> R) -> R {
+    let _scope = enter_static(frames);
+    run()
 }
 
 pub fn enter_absolute(frames: impl IntoIterator<Item = &'static str>) -> FrameScope {
     let mut frames: Vec<&'static str> = frames.into_iter().collect();
     frames.extend(SPIN);
-    push(Cow::Owned(frames), true)
+    push(intern(frames), true)
+}
+
+pub fn enter_absolute_static(frames: &'static [&'static str]) -> FrameScope {
+    push(frames, true)
 }
 
 pub fn enter_complete(frames: Vec<&'static str>) -> FrameScope {
-    push(Cow::Owned(frames), true)
+    push(intern(frames), true)
 }
 
 pub const PACKET_PROCESSING: [&str; 4] = [
@@ -105,17 +196,7 @@ pub const PACKET_PROCESSING: [&str; 4] = [
 ];
 
 pub fn current() -> Vec<&'static str> {
-    SCOPES.with(|scopes| {
-        let mut frames = Vec::new();
-        for scope in scopes.borrow().iter().rev() {
-            frames.extend_from_slice(&scope.frames);
-            if scope.absolute {
-                return frames;
-            }
-        }
-        frames.extend(SPIN);
-        frames
-    })
+    with_stack(Stack::frames)
 }
 
 pub fn init_server_prepare_levels() -> FrameScope {
@@ -127,27 +208,27 @@ pub fn init_server_save() -> FrameScope {
 }
 
 pub fn tick() -> FrameScope {
-    enter_absolute(TICK_LOOP[..4].iter().copied())
+    enter_absolute_static(&TICK_LOOP)
 }
 
 pub fn run_server_wait() -> FrameScope {
-    enter_absolute([RUN_SERVER_WAIT])
+    enter_absolute_static(&[RUN_SERVER_WAIT, SPIN[0], SPIN[1]])
 }
 
 pub fn wait_until_next_tick_run_all() -> FrameScope {
-    enter([RUN_ALL_TASKS, WAIT_UNTIL_NEXT_TICK_RUN_ALL])
+    enter_static(&[RUN_ALL_TASKS, WAIT_UNTIL_NEXT_TICK_RUN_ALL])
 }
 
 pub fn wait_until_next_tick() -> FrameScope {
-    enter([MANAGED_BLOCK, WAIT_UNTIL_NEXT_TICK_BLOCK])
+    enter_static(&[MANAGED_BLOCK, WAIT_UNTIL_NEXT_TICK_BLOCK])
 }
 
 pub fn server_chunk_poll() -> FrameScope {
-    enter(SERVER_CHUNK_POLL)
+    enter_static(&SERVER_CHUNK_POLL)
 }
 
 pub fn chunk_source_block() -> FrameScope {
-    enter([MANAGED_BLOCK, GET_CHUNK_BLOCK])
+    enter_static(&[MANAGED_BLOCK, GET_CHUNK_BLOCK])
 }
 
 #[cfg(test)]

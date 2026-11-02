@@ -41,7 +41,7 @@ impl ServerLevel {
             _ => false,
         };
         let is_entity = hit_result.get_type() == Type::Entity;
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.DragonFireball.onHit(DragonFireball.java:34)"], || self.projectile_base_on_hit(id, hit_result));
         if is_entity && owned_hit {
             return;
         }

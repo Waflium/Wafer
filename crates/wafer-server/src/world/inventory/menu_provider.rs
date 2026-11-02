@@ -8,12 +8,34 @@ use super::inventory_menu::CONTAINER_ID;
 use crate::advancements::predicates::item_predicate::ItemPredicate;
 use crate::network::chat::{Arg, ChatFormatting, Component};
 use crate::server::level::{ServerLevel, SoundSource};
+use crate::server::main_thread_frames;
 use crate::world::container::ContainerRef;
 use crate::world::entity::vehicle::minecart::abstract_minecart::MinecartKind;
 use crate::world::entity::{EntityId, LevelEntity};
 use crate::world::item::crafting::recipe_type::RecipeType;
 use crate::world::level::block::chest_block;
 use crate::world::level::block::entity::{BlockEntity, BlockEntityKind};
+
+const INIT_MENU_FRAMES_OPEN_MENU: [&str; 3] = [
+    "net.minecraft.world.inventory.AbstractContainerMenu.addSlotListener(AbstractContainerMenu.java:168)",
+    "net.minecraft.server.level.ServerPlayer.initMenu(ServerPlayer.java:629)",
+    "net.minecraft.server.level.ServerPlayer.openMenu(ServerPlayer.java:1509)",
+];
+const INIT_MENU_FRAMES_INIT_INVENTORY_MENU: [&str; 3] = [
+    "net.minecraft.world.inventory.AbstractContainerMenu.addSlotListener(AbstractContainerMenu.java:168)",
+    "net.minecraft.server.level.ServerPlayer.initMenu(ServerPlayer.java:629)",
+    "net.minecraft.server.level.ServerPlayer.initInventoryMenu(ServerPlayer.java:634)",
+];
+const INIT_MENU_FRAMES_OPEN_HORSE_INVENTORY: [&str; 3] = [
+    "net.minecraft.world.inventory.AbstractContainerMenu.addSlotListener(AbstractContainerMenu.java:168)",
+    "net.minecraft.server.level.ServerPlayer.initMenu(ServerPlayer.java:629)",
+    "net.minecraft.server.level.ServerPlayer.openHorseInventory(ServerPlayer.java:1528)",
+];
+const INIT_MENU_FRAMES_OPEN_NAUTILUS_INVENTORY: [&str; 3] = [
+    "net.minecraft.world.inventory.AbstractContainerMenu.addSlotListener(AbstractContainerMenu.java:168)",
+    "net.minecraft.server.level.ServerPlayer.initMenu(ServerPlayer.java:629)",
+    "net.minecraft.server.level.ServerPlayer.openNautilusInventory(ServerPlayer.java:1540)",
+];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum MenuProvider {
@@ -116,7 +138,9 @@ impl ServerLevel {
                     }
                     return None;
                 }
-                self.unpack_loot_table(pos, Some(player));
+                main_thread_frames::within(&["net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity.createMenu(RandomizableContainerBlockEntity.java:86)"], || {
+                    self.unpack_loot_table(pos, Some(player))
+                });
                 let container = ContainerRef::block(self, pos);
                 self.container_start_open(container, player);
                 let mut menu = AbstractContainerMenu::new(container_id, kind, Some(container));
@@ -201,6 +225,7 @@ impl ServerLevel {
 
     pub fn init_inventory_menu(&mut self, player: EntityId) {
         let Some(mut menu) = self.player_mut(player).inventory_menu.take() else { return };
+        main_thread_frames::within(&INIT_MENU_FRAMES_INIT_INVENTORY_MENU, || self.menu_add_slot_listener(&mut menu, player));
         self.menu_set_synchronizer(&mut menu, player);
         self.restore_container_menu(player, menu);
     }
@@ -250,7 +275,7 @@ impl ServerLevel {
         let p = self.player_mut(player);
         p.last_window_id = p.last_window_id % 100 + 1;
         let container_id = p.last_window_id;
-        let Some((mut menu, title)) = self.create_menu(provider, container_id, player) else {
+        let Some((mut menu, title)) = main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.openMenu(ServerPlayer.java:1501)"], || self.create_menu(provider, container_id, player)) else {
             if self.is_spectator(player) {
                 let message = Component::translatable("container.spectatorCantOpen").with_color(ChatFormatting::Red);
                 self.player(player).send_overlay_message(&message);
@@ -263,7 +288,7 @@ impl ServerLevel {
             w.varint(menu_type);
             w.layer(&[stream_codec::composite(3, 3)], |w| title.write(w));
         });
-        self.menu_broadcast_changes(&mut menu, player);
+        main_thread_frames::within(&INIT_MENU_FRAMES_OPEN_MENU, || self.menu_add_slot_listener(&mut menu, player));
         self.menu_set_synchronizer(&mut menu, player);
         self.player_mut(player).container_menu = Some(menu);
         true
@@ -285,7 +310,7 @@ impl ServerLevel {
             w.i32(horse);
         });
         let mut menu = AbstractContainerMenu::horse_inventory(container_id, horse, inventory_columns as usize, inventory_version);
-        self.menu_broadcast_changes(&mut menu, player);
+        main_thread_frames::within(&INIT_MENU_FRAMES_OPEN_HORSE_INVENTORY, || self.menu_add_slot_listener(&mut menu, player));
         self.menu_set_synchronizer(&mut menu, player);
         self.player_mut(player).container_menu = Some(menu);
     }
@@ -306,7 +331,7 @@ impl ServerLevel {
             w.i32(nautilus);
         });
         let mut menu = AbstractContainerMenu::nautilus_inventory(container_id, nautilus, inventory_version);
-        self.menu_broadcast_changes(&mut menu, player);
+        main_thread_frames::within(&INIT_MENU_FRAMES_OPEN_NAUTILUS_INVENTORY, || self.menu_add_slot_listener(&mut menu, player));
         self.menu_set_synchronizer(&mut menu, player);
         self.player_mut(player).container_menu = Some(menu);
     }
@@ -327,8 +352,14 @@ impl ServerLevel {
             return;
         }
         let Some(mut menu) = self.take_container_menu(player) else { return };
-        if self.menu_still_valid(&menu, player) && self.menu_click_menu_button(&mut menu, player, button_id) {
-            self.menu_broadcast_changes(&mut menu, player);
+        if self.menu_still_valid(&menu, player)
+            && main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleContainerButtonClick(ServerGamePacketListenerImpl.java:2252)"], || {
+                self.menu_click_menu_button(&mut menu, player, button_id)
+            })
+        {
+            main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleContainerButtonClick(ServerGamePacketListenerImpl.java:2254)"], || {
+                self.menu_broadcast_changes(&mut menu, player)
+            });
         }
         self.restore_container_menu(player, menu);
     }
@@ -345,7 +376,9 @@ impl ServerLevel {
             }
             let full_resync_needed = state_id != menu.state_id();
             menu.set_suppress_remote_updates(true);
-            let clicked = self.menu_clicked(&mut menu, player, slot, button, input);
+            let clicked = main_thread_frames::within(&["net.minecraft.world.inventory.AbstractContainerMenu.clicked(AbstractContainerMenu.java:341)", "net.minecraft.server.network.ServerGamePacketListenerImpl.handleContainerClick(ServerGamePacketListenerImpl.java:2185)"], || {
+                self.menu_clicked(&mut menu, player, slot, button, input)
+            });
             for (slot, stack) in claims {
                 menu.set_remote_slot_unsafe(slot, stack);
             }
@@ -353,9 +386,13 @@ impl ServerLevel {
             menu.set_suppress_remote_updates(false);
             clicked?;
             if full_resync_needed {
-                self.menu_broadcast_full_state(&mut menu, player);
+                main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleContainerClick(ServerGamePacketListenerImpl.java:2196)"], || {
+                    self.menu_broadcast_full_state(&mut menu, player)
+                });
             } else {
-                self.menu_broadcast_changes(&mut menu, player);
+                main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleContainerClick(ServerGamePacketListenerImpl.java:2198)"], || {
+                    self.menu_broadcast_changes(&mut menu, player)
+                });
             }
             Ok(())
         })();

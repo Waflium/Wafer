@@ -30,7 +30,7 @@ impl ThrownExperienceBottle {
 
 impl ServerLevel {
     pub fn thrown_experience_bottle_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownExperienceBottle.onHit(ThrownExperienceBottle.java:43)"], || self.projectile_base_on_hit(id, hit_result));
         let block_position = self.entity(id).block_position();
         self.level_event(None, PARTICLES_SPELL_POTION_SPLASH, block_position, -13083194);
         if !self.entity(id).is_silent() {

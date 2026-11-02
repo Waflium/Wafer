@@ -74,9 +74,8 @@ pub fn reload(server: &mut Server, _context: &CommandContext, source: &CommandSo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 
-    const ORIGINS: [CommandOrigin; 13] = [
+    const ORIGINS: [CommandOrigin; 12] = [
         CommandOrigin::Console,
         CommandOrigin::PlayerChat,
         CommandOrigin::Rcon,
@@ -87,9 +86,8 @@ mod tests {
         CommandOrigin::ScheduledFunctionTag,
         CommandOrigin::TickFunctions,
         CommandOrigin::LoadFunctions,
-        CommandOrigin::AdvancementReward(CriterionTrigger::Tick),
-        CommandOrigin::AdvancementReward(CriterionTrigger::Location),
-        CommandOrigin::EnchantmentTickPlayer,
+        CommandOrigin::AdvancementReward,
+        CommandOrigin::EnchantmentEffect,
     ];
 
     fn contains(frames: &[&str], needle: &str) -> bool {
@@ -128,9 +126,7 @@ mod tests {
         assert!(contains(&origin_frames(CommandOrigin::ScheduledFunctionTag), "FunctionTagCallback.handle"));
         assert!(contains(&origin_frames(CommandOrigin::TickFunctions), "ServerFunctionManager.tick(ServerFunctionManager.java:55)"));
         assert!(contains(&origin_frames(CommandOrigin::LoadFunctions), "ServerFunctionManager.tick(ServerFunctionManager.java:53)"));
-        assert!(contains(&origin_frames(CommandOrigin::AdvancementReward(CriterionTrigger::Tick)), "AdvancementRewards.grant"));
-        assert!(contains(&origin_frames(CommandOrigin::AdvancementReward(CriterionTrigger::Location)), "ServerPlayer.doTick(ServerPlayer.java:810)"));
-        assert!(contains(&origin_frames(CommandOrigin::AdvancementReward(CriterionTrigger::Levitation)), "LevitationTrigger.trigger"));
-        assert!(contains(&origin_frames(CommandOrigin::EnchantmentTickPlayer), "RunFunction.apply"));
+        assert!(contains(&origin_frames(CommandOrigin::AdvancementReward), "AdvancementRewards.grant"));
+        assert!(contains(&origin_frames(CommandOrigin::EnchantmentEffect), "RunFunction.apply"));
     }
 }

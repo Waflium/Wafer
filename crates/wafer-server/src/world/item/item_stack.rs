@@ -111,7 +111,10 @@ impl ItemStack {
             return;
         }
         let new_damage = (self.damage_value() + new_amount).min(self.max_damage() - 1);
-        crate::advancements::triggers::criteria_triggers::ITEM_DURABILITY_CHANGED.trigger(level, player, self, new_damage);
+        crate::server::main_thread_frames::within(
+            &["net.minecraft.world.item.ItemStack.applyDamage(ItemStack.java:491)", "net.minecraft.world.item.ItemStack.hurtWithoutBreaking(ItemStack.java:510)"],
+            || crate::advancements::triggers::criteria_triggers::ITEM_DURABILITY_CHANGED.trigger(level, player, self, new_damage),
+        );
         self.set_damage_value(new_damage);
         if self.is_broken() {
             self.shrink(1);

@@ -149,7 +149,7 @@ fn run_batch(server: &mut Server, batch_index: usize) {
         return;
     }
     if batch_index >= runner(server).batches.len() {
-        end_current_environment(server);
+        crate::server::main_thread_frames::within(&["net.minecraft.gametest.framework.GameTestRunner.runBatch(GameTestRunner.java:151)"], || end_current_environment(server));
         run_scheduled_rerun_tests(server);
         return;
     }
@@ -173,7 +173,7 @@ fn run_batch(server: &mut Server, batch_index: usize) {
         current_batch.index,
         test_infos_for_this_batch.len()
     );
-    end_current_environment(server);
+    crate::server::main_thread_frames::within(&["net.minecraft.gametest.framework.GameTestRunner.runBatch(GameTestRunner.java:170)"], || end_current_environment(server));
     let level = server.get_level(&current_batch.dimension).unwrap_or(0);
     if let Some(definition) = current_batch.environment.value() {
         let activation = definition.activate(server, level);
@@ -207,17 +207,17 @@ pub fn test_completed(server: &mut Server, tracker: usize, batch_index: usize, i
     }
     let level = server.game_test_ticker.infos[id].level;
     unforce_chunks(server, level);
-    run_batch(server, batch_index + 1);
+    crate::server::main_thread_frames::within(&["net.minecraft.gametest.framework.GameTestRunner$1.testCompleted(GameTestRunner.java:183)"], || run_batch(server, batch_index + 1));
 }
 
 pub fn batch_test_failed(server: &mut Server, tracker: usize, batch_index: usize, id: InfoId) {
     if server.game_test_ticker.runner.as_ref().is_some_and(|runner| runner.halt_on_error) {
-        end_current_environment(server);
+        crate::server::main_thread_frames::within(&["net.minecraft.gametest.framework.GameTestRunner$1.testFailed(GameTestRunner.java:200)"], || end_current_environment(server));
         let level = server.game_test_ticker.infos[id].level;
         unforce_chunks(server, level);
         super::game_test_ticker::clear(server);
     } else {
-        test_completed(server, tracker, batch_index, id);
+        crate::server::main_thread_frames::within(&["net.minecraft.gametest.framework.GameTestRunner$1.testFailed(GameTestRunner.java:205)"], || test_completed(server, tracker, batch_index, id));
     }
 }
 
@@ -232,7 +232,7 @@ fn unforce_chunks(server: &mut Server, level: usize) {
 fn end_current_environment(server: &mut Server) {
     let Some(runner) = server.game_test_ticker.runner.as_mut() else { return };
     if let Some((activation, level)) = runner.current_environment.take() {
-        activation.teardown(server, level);
+        crate::server::main_thread_frames::within(&["net.minecraft.gametest.framework.GameTestRunner.endCurrentEnvironment(GameTestRunner.java:219)"], || activation.teardown(server, level));
     }
 }
 

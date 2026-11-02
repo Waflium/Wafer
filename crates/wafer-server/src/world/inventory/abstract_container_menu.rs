@@ -241,6 +241,7 @@ pub struct AbstractContainerMenu {
     quickcraft_status: i32,
     quickcraft_slots: Vec<usize>,
     suppress_remote_updates: bool,
+    has_slot_listener: bool,
     has_synchronizer: bool,
 }
 
@@ -273,6 +274,7 @@ impl AbstractContainerMenu {
             quickcraft_status: 0,
             quickcraft_slots: Vec::new(),
             suppress_remote_updates: false,
+            has_slot_listener: false,
             has_synchronizer: false,
         };
         let c = container.map_or(SlotContainer::Menu(0), SlotContainer::Container);
@@ -750,9 +752,9 @@ impl ServerLevel {
                 if !self.slot_may_pickup(menu, player, i) {
                     return Ok(());
                 }
-                let mut clicked = self.quick_move_stack(menu, player, i);
+                let mut clicked = crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.AbstractContainerMenu.doClick(AbstractContainerMenu.java:441)"], || self.quick_move_stack(menu, player, i));
                 while !clicked.is_empty() && ItemStack::is_same_item(&self.slot_get(menu, player, i), &clicked) {
-                    clicked = self.quick_move_stack(menu, player, i);
+                    clicked = crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.AbstractContainerMenu.doClick(AbstractContainerMenu.java:443)"], || self.quick_move_stack(menu, player, i));
                 }
             } else {
                 if slot_index < 0 {
@@ -773,7 +775,14 @@ impl ServerLevel {
                         let amount = if primary { clicked.count } else { (clicked.count + 1) / 2 };
                         if let Some(mut taken) = self.slot_try_remove(menu, player, i, amount, i32::MAX) {
                             self.set_carried(player, taken.clone());
-                            self.slot_on_take(menu, player, i, &mut taken);
+                            crate::server::main_thread_frames::within(
+                                &[
+                                    "net.minecraft.world.inventory.AbstractContainerMenu.lambda$doClick$0(AbstractContainerMenu.java:468)",
+                                    "java.base/java.util.Optional.ifPresent(Optional.java:178)",
+                                    "net.minecraft.world.inventory.AbstractContainerMenu.doClick(AbstractContainerMenu.java:466)",
+                                ],
+                                || self.slot_on_take(menu, player, i, &mut taken),
+                            );
                             self.set_carried(player, taken);
                         }
                     } else if self.slot_may_place(menu, player, i, &carried) {
@@ -790,7 +799,14 @@ impl ServerLevel {
                     {
                         carried.grow(taken.count);
                         self.set_carried(player, carried);
-                        self.slot_on_take(menu, player, i, &mut taken);
+                        crate::server::main_thread_frames::within(
+                            &[
+                                "net.minecraft.world.inventory.AbstractContainerMenu.lambda$doClick$1(AbstractContainerMenu.java:487)",
+                                "java.base/java.util.Optional.ifPresent(Optional.java:178)",
+                                "net.minecraft.world.inventory.AbstractContainerMenu.doClick(AbstractContainerMenu.java:485)",
+                            ],
+                            || self.slot_on_take(menu, player, i, &mut taken),
+                        );
                     }
                 }
                 self.slot_set_changed(menu, player, i);
@@ -809,7 +825,7 @@ impl ServerLevel {
                         set_inventory(self, target_stack.clone());
                         self.slot_on_swap_craft(menu, i, target_stack.count);
                         self.slot_set_by_player(menu, player, i, ItemStack::empty());
-                        self.slot_on_take(menu, player, i, &mut target_stack);
+                        crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.AbstractContainerMenu.doClick(AbstractContainerMenu.java:509)"], || self.slot_on_take(menu, player, i, &mut target_stack));
                         set_inventory(self, target_stack);
                     }
                 } else if target_stack.is_empty() {
@@ -832,7 +848,7 @@ impl ServerLevel {
                         let piece = source.split(max);
                         set_inventory(self, source);
                         self.slot_set_by_player(menu, player, i, piece);
-                        self.slot_on_take(menu, player, i, &mut target_stack);
+                        crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.AbstractContainerMenu.doClick(AbstractContainerMenu.java:529)"], || self.slot_on_take(menu, player, i, &mut target_stack));
                         let mut rest = target_stack;
                         let infinite_materials = self.player(player).abilities.instabuild;
                         self.player_mut(player).inventory.add_stack(&mut rest, infinite_materials);
@@ -840,7 +856,7 @@ impl ServerLevel {
                     } else {
                         set_inventory(self, target_stack.clone());
                         self.slot_set_by_player(menu, player, i, source);
-                        self.slot_on_take(menu, player, i, &mut target_stack);
+                        crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.AbstractContainerMenu.doClick(AbstractContainerMenu.java:536)"], || self.slot_on_take(menu, player, i, &mut target_stack));
                         set_inventory(self, target_stack);
                     }
                 }
@@ -1155,7 +1171,23 @@ impl ServerLevel {
             if stack.count == clicked.count {
                 return ItemStack::empty();
             }
-            self.slot_on_take(menu, player, index, &mut stack);
+            let on_take_frame: &'static [&'static str] = match menu.kind {
+                MenuKind::Inventory => &["net.minecraft.world.inventory.InventoryMenu.quickMoveStack(InventoryMenu.java:175)"],
+                MenuKind::Crafting => &["net.minecraft.world.inventory.CraftingMenu.quickMoveStack(CraftingMenu.java:149)"],
+                MenuKind::Furnace(_) => &["net.minecraft.world.inventory.AbstractFurnaceMenu.quickMoveStack(AbstractFurnaceMenu.java:129)"],
+                MenuKind::Dispenser => &["net.minecraft.world.inventory.DispenserMenu.quickMoveStack(DispenserMenu.java:75)"],
+                MenuKind::BrewingStand => &["net.minecraft.world.inventory.BrewingStandMenu.quickMoveStack(BrewingStandMenu.java:114)"],
+                MenuKind::Beacon => &["net.minecraft.world.inventory.BeaconMenu.quickMoveStack(BeaconMenu.java:127)"],
+                MenuKind::Enchantment => &["net.minecraft.world.inventory.EnchantmentMenu.quickMoveStack(EnchantmentMenu.java:273)"],
+                MenuKind::Crafter => &["net.minecraft.world.inventory.CrafterMenu.quickMoveStack(CrafterMenu.java:101)"],
+                MenuKind::Stonecutter => &["net.minecraft.world.inventory.StonecutterMenu.quickMoveStack(StonecutterMenu.java:246)"],
+                MenuKind::Smithing | MenuKind::Anvil => &["net.minecraft.world.inventory.ItemCombinerMenu.quickMoveStack(ItemCombinerMenu.java:159)"],
+                MenuKind::Grindstone => &["net.minecraft.world.inventory.GrindstoneMenu.quickMoveStack(GrindstoneMenu.java:264)"],
+                MenuKind::Loom => &["net.minecraft.world.inventory.LoomMenu.quickMoveStack(LoomMenu.java:274)"],
+                MenuKind::CartographyTable => &["net.minecraft.world.inventory.CartographyTableMenu.quickMoveStack(CartographyTableMenu.java:206)"],
+                _ => &["net.minecraft.world.inventory.MerchantMenu.quickMoveStack(MerchantMenu.java:147)"],
+            };
+            crate::server::main_thread_frames::within(on_take_frame, || self.slot_on_take(menu, player, index, &mut stack));
             match menu.kind {
                 MenuKind::Inventory | MenuKind::Crafting if index == 0 => self.player_drop(player, stack, false, Prediction::Predicted),
                 MenuKind::Stonecutter => {
@@ -1180,11 +1212,15 @@ impl ServerLevel {
             self.crafter_menu_slot_changed(menu);
         }
         let slot = &menu.slots[i];
-        if !menu.has_synchronizer || matches!(slot.kind, SlotKind::Result { .. }) || slot.container != SlotContainer::Inventory {
+        if !menu.has_slot_listener || matches!(slot.kind, SlotKind::Result { .. }) || slot.container != SlotContainer::Inventory {
             return false;
         }
         let p = self.player(player);
         let menu_was_taken = if menu.container_id == CONTAINER_ID { p.inventory_menu.is_none() } else { p.container_menu.is_none() };
+        let _frames = crate::server::main_thread_frames::enter_static(&[
+            "net.minecraft.server.level.ServerPlayer$2.slotChanged(ServerPlayer.java:364)",
+            "net.minecraft.world.inventory.AbstractContainerMenu.triggerSlotListeners(AbstractContainerMenu.java:258)",
+        ]);
         if !menu_was_taken {
             criteria_triggers::INVENTORY_CHANGED.trigger(self, player, current);
             return false;
@@ -1205,7 +1241,9 @@ impl ServerLevel {
     pub fn menu_broadcast_changes(&mut self, menu: &mut AbstractContainerMenu, player: EntityId) {
         for i in 0..menu.slots.len() {
             let mut current = self.slot_get(menu, player, i);
-            if self.trigger_slot_listeners(menu, player, i, &current) {
+            if crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.AbstractContainerMenu.broadcastChanges(AbstractContainerMenu.java:215)"], || {
+                self.trigger_slot_listeners(menu, player, i, &current)
+            }) {
                 current = self.slot_get(menu, player, i);
             }
             if !menu.suppress_remote_updates && !menu.remote_slots[i].matches(&current) {
@@ -1253,12 +1291,21 @@ impl ServerLevel {
     pub fn menu_broadcast_full_state(&mut self, menu: &mut AbstractContainerMenu, player: EntityId) {
         for i in 0..menu.slots.len() {
             let current = self.slot_get(menu, player, i);
-            self.trigger_slot_listeners(menu, player, i, &current);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.AbstractContainerMenu.broadcastFullState(AbstractContainerMenu.java:234)"], || {
+                self.trigger_slot_listeners(menu, player, i, &current)
+            });
         }
         for i in 0..menu.data_count() {
             menu.data_prev[i] = self.menu_data(menu, i);
         }
         self.menu_send_all_data_to_remote(menu, player);
+    }
+
+    pub fn menu_add_slot_listener(&mut self, menu: &mut AbstractContainerMenu, player: EntityId) {
+        if !menu.has_slot_listener {
+            menu.has_slot_listener = true;
+            self.menu_broadcast_changes(menu, player);
+        }
     }
 
     pub fn menu_set_synchronizer(&mut self, menu: &mut AbstractContainerMenu, player: EntityId) {

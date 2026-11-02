@@ -307,7 +307,7 @@ impl ServerLevel {
     pub fn sulfur_cube_tick(&mut self, id: EntityId) {
         self.sulfur_cube_tick_fuse(id);
         self.sulfur_cube_prime_when_on_powered_position(id);
-        self.abstract_cube_mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.cubemob.SulfurCube.tick(SulfurCube.java:287)"], || self.abstract_cube_mob_tick(id));
     }
 
     fn sulfur_cube_tick_fuse(&mut self, id: EntityId) {

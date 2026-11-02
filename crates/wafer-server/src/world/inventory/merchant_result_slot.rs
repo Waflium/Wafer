@@ -34,7 +34,7 @@ impl ServerLevel {
         let mut buy_a = menu.containers[CONTAINER].get_item(0).clone();
         let mut buy_b = menu.containers[CONTAINER].get_item(1).clone();
         if offer.take(&mut buy_a, &mut buy_b) || offer.take(&mut buy_b, &mut buy_a) {
-            self.notify_trade(trader, offer_index);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.inventory.MerchantResultSlot.onTake(MerchantResultSlot.java:71)"], || self.notify_trade(trader, offer_index));
             self.award_stat(player, stats::TRADED_WITH_VILLAGER, 1);
             self.merchant_container_set_item(menu, 0, buy_a);
             self.merchant_container_set_item(menu, 1, buy_b);

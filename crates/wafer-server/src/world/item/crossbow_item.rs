@@ -39,7 +39,7 @@ pub fn use_item(level: &mut ServerLevel, player: EntityId, hand: InteractionHand
     let Some(item_stack) = level.player(player).item_in_hand(hand) else { return (InteractionResult::Pass, None) };
     let charged = charged_projectiles(&item_stack);
     if !charged.is_empty() {
-        perform_shooting(level, player, hand, get_shooting_power(&charged), 1.0, None);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.item.CrossbowItem.use(CrossbowItem.java:82)"], || perform_shooting(level, player, hand, get_shooting_power(&charged), 1.0, None));
         return (InteractionResult::CONSUME, None);
     }
     if !level.get_projectile(player, &item_stack).is_empty() {
@@ -236,10 +236,12 @@ pub fn perform_shooting(level: &mut ServerLevel, shooter: EntityId, hand: Intera
     }
     let projectiles: Vec<ItemStack> = charged.iter().map(|template| template.create().unwrap_or_else(ItemStack::empty)).collect();
     let is_player = level.is_player(shooter);
-    level.projectile_weapon_shoot(shooter, hand, &projectiles, power, uncertainty, is_player, target_override);
+    crate::server::main_thread_frames::within(&["net.minecraft.world.item.CrossbowItem.performShooting(CrossbowItem.java:183)"], || {
+        level.projectile_weapon_shoot(shooter, hand, &projectiles, power, uncertainty, is_player, target_override)
+    });
     if is_player {
         let weapon = level.item_by_slot(shooter, slot).unwrap_or_else(ItemStack::empty);
-        criteria_triggers::SHOT_CROSSBOW.trigger(level, shooter, &weapon);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.item.CrossbowItem.performShooting(CrossbowItem.java:186)"], || criteria_triggers::SHOT_CROSSBOW.trigger(level, shooter, &weapon));
         level.award_stat(shooter, crate::stats::stats::ITEM_USED.get(weapon.get_item().0), 1);
     }
 }

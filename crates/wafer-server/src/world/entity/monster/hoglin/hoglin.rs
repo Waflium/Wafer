@@ -195,7 +195,7 @@ impl ServerLevel {
         if hoglin.attack_animation_remaining_ticks > 0 {
             hoglin.attack_animation_remaining_ticks -= 1;
         }
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.hoglin.Hoglin.aiStep(Hoglin.java:181)"], || self.animal_ai_step(id));
     }
 
     pub fn hoglin_mob_interact(&mut self, id: EntityId, player: EntityId, hand: InteractionHand) -> InteractionResult {

@@ -143,7 +143,10 @@ impl ServerLevel {
 
     pub fn nautilus_base_tick(&mut self, id: EntityId) {
         let air_supply = self.entity(id).air_supply();
-        self.mob_base_tick(id);
+        {
+            let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.animal.nautilus.Nautilus.baseTick(Nautilus.java:158)"]);
+            self.mob_base_tick(id);
+        }
         self.then_tick(move |level| level.nautilus_base_tick_end(id, air_supply));
     }
 

@@ -72,14 +72,18 @@ fn try_spawn_golem(level: &mut ServerLevel, top_pos: BlockPos) {
     if let Some(snow_golem_match) = SNOW_GOLEM_FULL.find(level, top_pos) {
         let snow_golem = SnowGolem::create();
         let spawn_pos = snow_golem_match.get_block(0, 2, 0);
-        spawn_golem_in_world(level, &snow_golem_match, snow_golem, spawn_pos);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CarvedPumpkinBlock.trySpawnGolem(CarvedPumpkinBlock.java:68)"], || {
+            spawn_golem_in_world(level, &snow_golem_match, snow_golem, spawn_pos)
+        });
         return;
     }
     if let Some(iron_golem_match) = IRON_GOLEM_FULL.find(level, top_pos) {
         let mut iron_golem = IronGolem::create();
         iron_golem::set_player_created(&mut iron_golem.entity, true);
         let spawn_pos = iron_golem_match.get_block(1, 2, 0);
-        spawn_golem_in_world(level, &iron_golem_match, iron_golem, spawn_pos);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CarvedPumpkinBlock.trySpawnGolem(CarvedPumpkinBlock.java:77)"], || {
+            spawn_golem_in_world(level, &iron_golem_match, iron_golem, spawn_pos)
+        });
         return;
     }
     if let Some(copper_golem_match) = COPPER_GOLEM_FULL.find(level, top_pos) {
@@ -88,7 +92,9 @@ fn try_spawn_golem(level: &mut ServerLevel, top_pos: BlockPos) {
         let pumpkin_block = copper_golem_match.get_block(0, 0, 0);
         let copper_block = copper_golem_match.get_block(0, 1, 0);
         let (pumpkin_state, copper_state) = (level.block_state(pumpkin_block), level.block_state(copper_block));
-        spawn_golem_in_world(level, &copper_golem_match, copper_golem, pumpkin_block);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CarvedPumpkinBlock.trySpawnGolem(CarvedPumpkinBlock.java:86)"], || {
+            spawn_golem_in_world(level, &copper_golem_match, copper_golem, pumpkin_block)
+        });
         replace_copper_block_with_chest(level, copper_block, copper_state, pumpkin_state);
         level.copper_golem_spawn(id, get_weather_state_from_pattern(copper_state));
     }
@@ -113,6 +119,7 @@ fn spawn_golem_in_world(level: &mut ServerLevel, golem_match: &BlockPatternMatch
     level.add_fresh_entity(LevelEntity::Mob(Box::new(golem)));
     let area = level.entity(id).bounding_box().inflate(5.0, 5.0, 5.0);
     let players: Vec<_> = level.get_entities(None, &area).into_iter().filter(|&entity| level.is_player(entity)).collect();
+    let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.level.block.CarvedPumpkinBlock.spawnGolemInWorld(CarvedPumpkinBlock.java:112)"]);
     for player in players {
         criteria_triggers::SUMMONED_ENTITY.trigger(level, player, id);
     }
@@ -142,7 +149,7 @@ pub fn update_pattern_blocks(level: &mut ServerLevel, golem_match: &BlockPattern
 impl BlockBehaviour for CarvedPumpkinBlock {
     fn on_place(&self, state: BlockState, level: &mut ServerLevel, pos: BlockPos, old_state: BlockState, _moved_by_piston: bool) {
         if !old_state.is_block(state.block()) {
-            try_spawn_golem(level, pos);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.CarvedPumpkinBlock.onPlace(CarvedPumpkinBlock.java:56)"], || try_spawn_golem(level, pos));
         }
     }
 

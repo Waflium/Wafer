@@ -2,7 +2,6 @@ use wafer_core::random::RandomSource;
 use wafer_data::registry;
 use wafer_protocol::nbt::Nbt;
 
-use crate::advancements::triggers::criterion_trigger::CriterionTrigger;
 use crate::core::holder::Holder;
 use crate::server::level::{ServerLevel, SoundSource};
 use crate::server::server_function_manager::ServerFunctionManager;
@@ -40,7 +39,7 @@ impl AdvancementRewards {
         })
     }
 
-    pub fn grant(&self, level: &mut ServerLevel, player: EntityId, trigger: CriterionTrigger) {
+    pub fn grant(&self, level: &mut ServerLevel, player: EntityId) {
         level.give_experience_points(player, self.experience);
         let mut changes = false;
         for loot_table in &self.loot {
@@ -76,11 +75,11 @@ impl AdvancementRewards {
             level.award_recipes(player, &recipes);
         }
         if let Some(function) = &self.function
-            && level.with_server(|server| server.execute_reward_function(function, player, trigger)).is_none()
+            && level.with_server(|server| server.execute_reward_function(function, player)).is_none()
         {
             let queued = function.clone();
             if !ServerFunctionManager::queue_in_current_context(move |server| server.reward_function_call(&queued, player)) {
-                level.pending_function_executions.push((function.clone(), player, trigger));
+                level.pending_function_executions.push((function.clone(), player));
             }
         }
     }

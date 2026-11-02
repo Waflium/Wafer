@@ -188,7 +188,7 @@ impl ServerLevel {
     }
 
     pub fn wandering_trader_ai_step(&mut self, id: EntityId) {
-        self.ageable_mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.npc.wanderingtrader.WanderingTrader.aiStep(WanderingTrader.java:201)"], || self.ageable_mob_ai_step(id));
         if self.mob(id).is_none() {
             return;
         }

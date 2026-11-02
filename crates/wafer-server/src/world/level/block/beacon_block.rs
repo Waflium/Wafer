@@ -20,7 +20,7 @@ impl BeaconBlock {
 impl BlockBehaviour for BeaconBlock {
     fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
         if let Some(BlockEntityKind::Beacon(_)) = level.get_block_entity(pos).map(|entity| &entity.kind) {
-            level.open_menu(player, MenuProvider::BlockEntity(pos));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.BeaconBlock.useWithoutItem(BeaconBlock.java:41)"], || level.open_menu(player, MenuProvider::BlockEntity(pos)));
             level.award_stat(player, crate::stats::stats::INTERACT_WITH_BEACON, 1);
         }
         InteractionResult::SUCCESS

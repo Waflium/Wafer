@@ -625,13 +625,12 @@ impl EnchantmentEntityEffect {
             EnchantmentEntityEffect::RunFunction(function) => {
                 let e = level.entity(entity);
                 let rotation = (e.x_rot, e.y_rot);
-                let from_player_tick = level.enchantment_tick_player;
                 let index = level.index;
-                if level.with_server(|server| server.execute_enchantment_function(index, function, entity, position, rotation, from_player_tick)).is_none() {
+                if level.with_server(|server| server.execute_enchantment_function(index, function, entity, position, rotation)).is_none() {
                     let queued = function.clone();
                     let call = move |server: &mut crate::server::Server| server.enchantment_function_call(index, &queued, entity, position, rotation);
                     if !crate::server::server_function_manager::ServerFunctionManager::queue_in_current_context(call) {
-                        level.pending_enchantment_functions.push((function.clone(), entity, position, rotation, from_player_tick));
+                        level.pending_enchantment_functions.push((function.clone(), entity, position, rotation));
                     }
                 }
             }

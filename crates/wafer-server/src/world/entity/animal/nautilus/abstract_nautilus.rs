@@ -297,7 +297,7 @@ impl ServerLevel {
     }
 
     pub fn abstract_nautilus_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.nautilus.AbstractNautilus.tick(AbstractNautilus.java:312)"], || self.mob_tick(id));
         self.then_tick(move |level| level.abstract_nautilus_tick_end(id));
     }
 

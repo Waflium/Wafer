@@ -253,7 +253,7 @@ impl ServerLevel {
         if self.mob(id).expect("a warden").is_persistence_required() || self.requires_custom_persistence(id) {
             warden_ai::set_dig_cooldown(self, id);
         }
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.warden.Warden.tick(Warden.java:295)"], || self.mob_tick(id));
     }
 
     pub fn warden_custom_server_ai_step(&mut self, id: EntityId) {

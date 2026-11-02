@@ -106,7 +106,7 @@ impl SnowGolem {
 
 impl ServerLevel {
     pub fn snow_golem_ai_step(&mut self, id: EntityId) {
-        self.mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.golem.SnowGolem.aiStep(SnowGolem.java:99)"], || self.mob_ai_step(id));
         if self.mob(id).is_none() {
             return;
         }

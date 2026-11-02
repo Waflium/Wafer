@@ -189,7 +189,7 @@ impl ServerLevel {
     }
 
     pub fn copper_golem_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.golem.CopperGolem.tick(CopperGolem.java:209)"], || self.mob_tick(id));
         self.then_tick(move |level| level.copper_golem_tick_end(id));
     }
 

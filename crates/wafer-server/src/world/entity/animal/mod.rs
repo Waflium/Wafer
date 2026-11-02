@@ -307,7 +307,7 @@ impl ServerLevel {
         offspring.entity.snap_to(e.x(), e.y(), e.z(), 0.0, 0.0);
         let offspring_id = offspring.entity.id;
         self.entities.insert(offspring_id, LevelEntity::Mob(offspring));
-        self.finalize_spawn_child_from_breeding(id, partner, Some(offspring_id));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.Animal.spawnChildFromBreeding(Animal.java:223)"], || self.finalize_spawn_child_from_breeding(id, partner, Some(offspring_id)));
         let offspring = self.entities.shift_remove(&offspring_id).expect("offspring");
         self.add_fresh_entity(offspring);
     }
@@ -320,7 +320,14 @@ impl ServerLevel {
     pub fn finalize_spawn_child_from_breeding(&mut self, id: EntityId, partner: EntityId, offspring: Option<EntityId>) {
         if let Some(cause) = self.get_love_cause(id).or_else(|| self.get_love_cause(partner)) {
             self.award_stat(cause, crate::stats::stats::ANIMALS_BRED, 1);
-            crate::advancements::triggers::criteria_triggers::BRED_ANIMALS.trigger(self, cause, id, partner, offspring);
+            crate::server::main_thread_frames::within(
+                &[
+                    "net.minecraft.world.entity.animal.Animal.lambda$finalizeSpawnChildFromBreeding$1(Animal.java:232)",
+                    "java.base/java.util.Optional.ifPresent(Optional.java:178)",
+                    "net.minecraft.world.entity.animal.Animal.finalizeSpawnChildFromBreeding(Animal.java:230)",
+                ],
+                || crate::advancements::triggers::criteria_triggers::BRED_ANIMALS.trigger(self, cause, id, partner, offspring),
+            );
         }
         self.set_age(id, 6000);
         self.set_age(partner, 6000);
@@ -341,7 +348,7 @@ impl ServerLevel {
     }
 
     pub fn animal_ai_step(&mut self, id: EntityId) {
-        self.ageable_mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.Animal.aiStep(Animal.java:73)"], || self.ageable_mob_ai_step(id));
         let mob = self.mob_mut(id).expect("an animal");
         let age = mob.ageable().expect("an animal").age;
         let animal = mob.animal_mut().expect("an animal");

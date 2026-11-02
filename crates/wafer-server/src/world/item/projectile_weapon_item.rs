@@ -164,8 +164,12 @@ impl ServerLevel {
             let weapon = self.item_by_slot(shooter, slot).unwrap_or_else(ItemStack::empty);
             let projectile_entity = self.create_projectile(shooter, &weapon, projectile, is_crit);
             let item = weapon.get_item();
-            self.spawn_projectile_from_weapon(item, projectile_entity, projectile, shooter, i, power, uncertainty, angle, target_override);
-            self.hurt_and_break(shooter, slot, get_durability_use(item, projectile));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.item.ProjectileWeaponItem.shoot(ProjectileWeaponItem.java:65)"], || {
+                self.spawn_projectile_from_weapon(item, projectile_entity, projectile, shooter, i, power, uncertainty, angle, target_override)
+            });
+            crate::server::main_thread_frames::within(&["net.minecraft.world.item.ProjectileWeaponItem.shoot(ProjectileWeaponItem.java:71)"], || {
+                self.hurt_and_break(shooter, slot, get_durability_use(item, projectile))
+            });
             if self.item_by_slot(shooter, slot).is_none_or(|weapon| weapon.is_empty()) {
                 break;
             }

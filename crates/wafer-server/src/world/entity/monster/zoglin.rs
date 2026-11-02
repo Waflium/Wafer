@@ -213,7 +213,7 @@ impl ServerLevel {
         if zoglin.attack_animation_remaining_ticks > 0 {
             zoglin.attack_animation_remaining_ticks -= 1;
         }
-        self.monster_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Zoglin.aiStep(Zoglin.java:280)"], || self.monster_ai_step(id));
     }
 
     pub fn zoglin_get_ambient_sound(&self, id: EntityId) -> &'static str {

@@ -46,7 +46,9 @@ impl BlockBehaviour for TargetBlock {
         let output_strength = self.update_redstone_output(level, state, hit_result, projectile);
         if let Some(player_owner) = level.projectile_get_owner(projectile).filter(|&owner| level.is_player(owner)) {
             level.award_stat(player_owner, crate::stats::stats::TARGET_HIT, 1);
-            crate::advancements::triggers::criteria_triggers::TARGET_BLOCK_HIT.trigger(level, player_owner, projectile, hit_result.location, output_strength);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.TargetBlock.onProjectileHit(TargetBlock.java:44)"], || {
+                crate::advancements::triggers::criteria_triggers::TARGET_BLOCK_HIT.trigger(level, player_owner, projectile, hit_result.location, output_strength)
+            });
         }
     }
 

@@ -293,7 +293,7 @@ impl ServerLevel {
             let y_rot = mth::atan2(delta_movement.z, delta_movement.x) as f32 * mth::RAD_TO_DEG - 90.0;
             self.entity_mut(id).set_y_rot(y_rot);
         }
-        self.monster_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.boss.wither.WitherBoss.aiStep(WitherBoss.java:198)"], || self.monster_ai_step(id));
         let Some(mob) = self.mob_mut(id) else { return };
         let wither = wither_mut(mob);
         for i in 0..2 {

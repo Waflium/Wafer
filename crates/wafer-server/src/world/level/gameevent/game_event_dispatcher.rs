@@ -30,6 +30,11 @@ impl ServerLevel {
         }
         if !to_handle_by_distance.is_empty() {
             to_handle_by_distance.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let _frames = crate::server::main_thread_frames::enter_static(&[
+                "net.minecraft.world.level.gameevent.GameEventDispatcher.handleGameEventMessagesInQueue(GameEventDispatcher.java:66)",
+                "net.minecraft.world.level.gameevent.GameEventDispatcher.post(GameEventDispatcher.java:55)",
+                "net.minecraft.server.level.ServerLevel.gameEvent(ServerLevel.java:1124)",
+            ]);
             for (_, listener) in to_handle_by_distance {
                 self.handle_game_event(listener, game_event, context, position);
             }
@@ -49,11 +54,13 @@ impl ServerLevel {
     }
 
     pub fn entity_game_event(&mut self, id: EntityId, game_event: GameEvent) {
+        let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.Entity.gameEvent(Entity.java:1614)"]);
         self.entity_game_event_by(id, game_event, Some(id));
     }
 
     pub fn entity_game_event_by(&mut self, id: EntityId, game_event: GameEvent, source_entity: Option<EntityId>) {
         let position = self.entity(id).position();
+        let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.level.LevelAccessor.gameEvent(LevelAccessor.java:86)", "net.minecraft.world.entity.Entity.gameEvent(Entity.java:1610)"]);
         self.game_event_from_entity(source_entity, game_event, position);
     }
 
@@ -81,6 +88,12 @@ impl ServerLevel {
             if self.game_event_listener_delivery_mode(listener) == DeliveryMode::ByDistance {
                 to_handle_by_distance.push((source_position.distance_to_sqr(position), listener));
             } else {
+                let _frames = crate::server::main_thread_frames::enter_static(&[
+                    "net.minecraft.world.level.gameevent.GameEventDispatcher.lambda$post$0(GameEventDispatcher.java:38)",
+                    "net.minecraft.world.level.gameevent.EuclideanGameEventListenerRegistry.visitInRangeListeners(EuclideanGameEventListenerRegistry.java:98)",
+                    "net.minecraft.world.level.gameevent.GameEventDispatcher.post(GameEventDispatcher.java:49)",
+                    "net.minecraft.server.level.ServerLevel.gameEvent(ServerLevel.java:1124)",
+                ]);
                 self.handle_game_event(listener, game_event, context, source_position);
             }
         }

@@ -119,7 +119,7 @@ impl SkeletonHorse {
 
 impl ServerLevel {
     pub fn skeleton_horse_ai_step(&mut self, id: EntityId) {
-        self.abstract_horse_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.equine.SkeletonHorse.aiStep(SkeletonHorse.java:135)"], || self.abstract_horse_ai_step(id));
         let Some(mob) = self.mob_mut(id) else { return };
         if std::mem::take(&mut skeleton_horse_mut(mob).trap_goal_removal_pending) {
             mob.ai.goal_selector.remove_goal(|goal| matches!(goal, Goal::SkeletonTrap(_)));

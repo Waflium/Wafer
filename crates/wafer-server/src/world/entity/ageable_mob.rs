@@ -249,7 +249,7 @@ impl ServerLevel {
     }
 
     pub fn ageable_mob_ai_step(&mut self, id: EntityId) {
-        self.mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.AgeableMob.aiStep(AgeableMob.java:191)"], || self.mob_ai_step(id));
         let mob = self.mob_mut(id).expect("an ageable mob");
         let ageable = mob.ageable_mut().expect("an ageable mob");
         if ageable.forced_age_timer > 0 {

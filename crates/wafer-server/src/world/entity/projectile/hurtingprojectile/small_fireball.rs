@@ -41,10 +41,10 @@ impl ServerLevel {
         let remaining_fire_ticks = self.entity(entity).remaining_fire_ticks;
         self.ignite_for_seconds(entity, 5.0);
         let damage_source = self.fireball(id, owner);
-        if !self.hurt_server(entity, damage_source, 5.0) {
+        if !crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball.onHitEntity(SmallFireball.java:45)"], || self.hurt_server(entity, damage_source, 5.0)) {
             self.set_remaining_fire_ticks(entity, remaining_fire_ticks);
         } else {
-            self.do_post_attack_effects(entity, &damage_source);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball.onHitEntity(SmallFireball.java:50)"], || self.do_post_attack_effects(entity, &damage_source));
         }
     }
 
@@ -61,7 +61,7 @@ impl ServerLevel {
     }
 
     pub fn small_fireball_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.SmallFireball.onHit(SmallFireball.java:71)"], || self.projectile_base_on_hit(id, hit_result));
         self.discard(id);
     }
 }

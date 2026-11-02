@@ -2600,7 +2600,7 @@ impl ServerLevel {
             let Some(equippable) = item_stack.get(dc::EQUIPPABLE).map(item::component::values::Equippable::from_nbt) else { continue };
             let creative = self.find_player(player).is_some_and(|p| p.game_mode.game_type.is_creative());
             if equippable.can_be_sheared && (!crate::world::item::enchantment::enchantment_helper::has_prevent_armor_change(&item_stack) || creative) {
-                self.shear_item(id, player, hand, slot, item_stack);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.attemptToShearEquipment(Mob.java:640)"], || self.shear_item(id, player, hand, slot, item_stack));
                 let sound = equippable.shearing_sound.as_str().map_or(super::sound_event("minecraft:item.shears.snip"), super::sound_event);
                 self.entity_play_sound(id, sound, 1.0, 1.0);
                 return true;
@@ -2610,12 +2610,14 @@ impl ServerLevel {
     }
 
     fn shear_item(&mut self, id: EntityId, player: EntityId, hand: InteractionHand, slot: EquipmentSlot, item_stack_to_shear: ItemStack) {
-        self.hurt_and_break(player, hand.as_equipment_slot(), 1);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.shearItem(Mob.java:649)"], || self.hurt_and_break(player, hand.as_equipment_slot(), 1));
         let equipment_spawn_offset = self.mob(id).expect("a mob").passenger_attachment();
         self.living_set_item_slot(id, slot, ItemStack::empty());
         self.entity_game_event_by(id, crate::world::level::gameevent::game_event::SHEAR, Some(player));
         self.spawn_at_location_with_offset(id, item_stack_to_shear.clone(), equipment_spawn_offset);
-        crate::advancements::triggers::criteria_triggers::PLAYER_SHEARED_EQUIPMENT.trigger(self, player, &item_stack_to_shear, id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.shearItem(Mob.java:655)"], || {
+            crate::advancements::triggers::criteria_triggers::PLAYER_SHEARED_EQUIPMENT.trigger(self, player, &item_stack_to_shear, id)
+        });
     }
 
     pub fn convert_to(&mut self, id: EntityId, entity_type: &str, params: ConversionParams, after_conversion: impl FnOnce(&mut ServerLevel, EntityId)) -> Option<EntityId> {
@@ -2724,7 +2726,10 @@ impl ServerLevel {
     }
 
     pub fn mob_tick(&mut self, id: EntityId) {
-        self.living_entity_tick(id);
+        {
+            let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.Mob.tick(Mob.java:379)"]);
+            self.living_entity_tick(id);
+        }
         self.then_tick(move |level| level.mob_tick_end(id));
     }
 
@@ -2740,7 +2745,10 @@ impl ServerLevel {
     }
 
     pub fn mob_base_tick(&mut self, id: EntityId) {
-        self.living_entity_base_tick(id);
+        {
+            let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.Mob.baseTick(Mob.java:320)"]);
+            self.living_entity_base_tick(id);
+        }
         self.then_tick(move |level| level.mob_base_tick_end(id));
     }
 
@@ -2808,7 +2816,7 @@ impl ServerLevel {
     }
 
     pub fn mob_ai_step(&mut self, id: EntityId) {
-        self.living_entity_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.aiStep(Mob.java:513)"], || self.living_entity_ai_step(id));
         if !self.is_mob(id) {
             return;
         }
@@ -3217,7 +3225,7 @@ impl ServerLevel {
         dmg += crate::world::item::get_attack_damage_bonus(self, &weapon_item, target, &damage_source);
         let old_movement = self.entity(target).delta_movement;
         let was_hurt = {
-            let _scope = self.is_player(target).then(|| crate::server::main_thread_frames::enter_static(&MOB_DO_HURT_TARGET_FRAME));
+            let _scope = crate::server::main_thread_frames::enter_static(&MOB_DO_HURT_TARGET_FRAME);
             self.hurt_server(target, damage_source, dmg)
         };
         if was_hurt {
@@ -3226,11 +3234,11 @@ impl ServerLevel {
             if self.is_living(target) {
                 crate::world::item::hurt_enemy(self, &weapon_item, target, id);
             }
-            self.do_post_attack_effects(target, &damage_source);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.doHurtTarget(Mob.java:1502)"], || self.do_post_attack_effects(target, &damage_source));
             self.set_last_hurt_mob(id, target);
             self.play_attack_sound(id);
         }
-        self.post_piercing_attack(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.doHurtTarget(Mob.java:1507)"], || self.post_piercing_attack(id));
         was_hurt
     }
 
@@ -3289,27 +3297,27 @@ impl ServerLevel {
         let id_based_tick_count = mob.entity.tick_count.wrapping_add(id);
         if id_based_tick_count % 2 != 0 && mob.entity.tick_count > 1 {
             profiler::push("targetSelector");
-            self.with_target_selector(id, |selector, level| selector.tick_running_goals(level, id, false));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.serverAiStep(Mob.java:804)"], || self.with_target_selector(id, |selector, level| selector.tick_running_goals(level, id, false)));
             profiler::pop();
             profiler::push("goalSelector");
-            self.with_goal_selector(id, |selector, level| selector.tick_running_goals(level, id, false));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.serverAiStep(Mob.java:808)"], || self.with_goal_selector(id, |selector, level| selector.tick_running_goals(level, id, false)));
             profiler::pop();
         } else {
             profiler::push("targetSelector");
-            self.with_target_selector(id, |selector, level| selector.tick(level, id));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.serverAiStep(Mob.java:796)"], || self.with_target_selector(id, |selector, level| selector.tick(level, id)));
             profiler::pop();
             profiler::push("goalSelector");
-            self.with_goal_selector(id, |selector, level| selector.tick(level, id));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.serverAiStep(Mob.java:800)"], || self.with_goal_selector(id, |selector, level| selector.tick(level, id)));
             profiler::pop();
         }
         if self.mob(id).is_none() {
             return;
         }
         profiler::push("navigation");
-        self.get_navigation(id, |navigation, level| navigation.tick(level, id));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.serverAiStep(Mob.java:813)"], || self.get_navigation(id, |navigation, level| navigation.tick(level, id)));
         profiler::pop();
         profiler::push("mob tick");
-        self.custom_server_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.Mob.serverAiStep(Mob.java:818)"], || self.custom_server_ai_step(id));
         profiler::pop();
         profiler::push("controls");
         profiler::push("move");

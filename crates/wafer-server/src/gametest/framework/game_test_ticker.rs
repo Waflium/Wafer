@@ -78,7 +78,14 @@ pub fn tick(server: &mut Server) {
         if server.game_test_ticker.runner.is_none() {
             break;
         }
-        game_test_info::tick(server, info);
+        crate::server::main_thread_frames::within(
+            &[
+                "net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:56)",
+                "java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:905)",
+                "net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:56)",
+            ],
+            || game_test_info::tick(server, info),
+        );
     }
     let infos = &server.game_test_ticker.infos;
     let mut test_infos = std::mem::take(&mut server.game_test_ticker.test_infos);

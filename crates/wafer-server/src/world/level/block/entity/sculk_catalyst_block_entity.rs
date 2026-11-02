@@ -89,6 +89,12 @@ impl ServerLevel {
     fn catalyst_listener_try_award_it_spreads_advancement(&mut self, mob: EntityId) {
         let Some(player) = self.get_last_hurt_by_mob(mob).filter(|&entity| self.is_player(entity)) else { return };
         let damage_source = self.get_last_damage_source(mob).cloned().unwrap_or_else(|| DamageSource::entity(damage_types::PLAYER_ATTACK, player));
-        criteria_triggers::KILL_MOB_NEAR_SCULK_CATALYST.trigger(self, player, mob, &damage_source);
+        crate::server::main_thread_frames::within(
+            &[
+                "net.minecraft.world.level.block.entity.SculkCatalystBlockEntity$CatalystListener.tryAwardItSpreadsAdvancement(SculkCatalystBlockEntity.java:123)",
+                "net.minecraft.world.level.block.entity.SculkCatalystBlockEntity$CatalystListener.handleGameEvent(SculkCatalystBlockEntity.java:94)",
+            ],
+            || criteria_triggers::KILL_MOB_NEAR_SCULK_CATALYST.trigger(self, player, mob, &damage_source),
+        );
     }
 }

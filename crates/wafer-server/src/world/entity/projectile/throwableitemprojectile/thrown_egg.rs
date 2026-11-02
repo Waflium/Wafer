@@ -32,7 +32,7 @@ impl ThrownEgg {
 
 impl ServerLevel {
     pub fn thrown_egg_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEgg.onHit(ThrownEgg.java:60)"], || self.projectile_base_on_hit(id, hit_result));
         let random = &mut self.entity_mut(id).random;
         if random.next_int_bounded(8) == 0 {
             let count = if random.next_int_bounded(32) == 0 { 4 } else { 1 };

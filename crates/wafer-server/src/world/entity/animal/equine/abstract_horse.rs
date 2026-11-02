@@ -690,7 +690,7 @@ impl ServerLevel {
         if self.entity_mut(id).random.next_int_bounded(200) == 0 {
             self.move_tail(id);
         }
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.equine.AbstractHorse.aiStep(AbstractHorse.java:549)"], || self.animal_ai_step(id));
         if self.mob(id).is_none() || !self.is_alive(id) {
             return;
         }
@@ -737,7 +737,7 @@ impl ServerLevel {
     }
 
     pub fn abstract_horse_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.equine.AbstractHorse.tick(AbstractHorse.java:590)"], || self.mob_tick(id));
         self.then_tick(move |level| level.abstract_horse_tick_end(id));
     }
 

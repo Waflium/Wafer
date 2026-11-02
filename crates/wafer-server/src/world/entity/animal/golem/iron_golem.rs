@@ -201,7 +201,7 @@ impl ServerLevel {
     }
 
     pub fn iron_golem_ai_step(&mut self, id: EntityId) {
-        self.mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.golem.IronGolem.aiStep(IronGolem.java:120)"], || self.mob_ai_step(id));
         let Some(mob) = self.mob_mut(id) else { return };
         let iron_golem = iron_golem_mut(mob);
         if iron_golem.attack_animation_tick > 0 {

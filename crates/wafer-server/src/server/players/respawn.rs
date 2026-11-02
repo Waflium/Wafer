@@ -27,6 +27,15 @@ const PERFORM_RESPAWN: i32 = 0;
 const REQUEST_STATS: i32 = 1;
 const REQUEST_GAMERULE_VALUES: i32 = 2;
 const GAME_EVENT_NO_RESPAWN_BLOCK_AVAILABLE: u8 = 0;
+const PROCESSING: [&str; 4] = crate::server::main_thread_frames::PACKET_PROCESSING;
+const CLIENT_COMMAND_PACKET: [&str; 6] = [
+    "net.minecraft.network.protocol.game.ServerboundClientCommandPacket.handle(ServerboundClientCommandPacket.java:32)",
+    "net.minecraft.network.protocol.game.ServerboundClientCommandPacket.handle(ServerboundClientCommandPacket.java:8)",
+    PROCESSING[0],
+    PROCESSING[1],
+    PROCESSING[2],
+    PROCESSING[3],
+];
 
 pub fn write_death_location(p: &mut Writer, location: &Option<(String, BlockPos)>) {
     match location {
@@ -115,7 +124,12 @@ impl Server {
         }
         if self.player(id).won_game {
             self.player_mut(id).won_game = false;
-            self.respawn(id, true, RemovalReason::ChangedDimension);
+            {
+                let _packet = crate::server::main_thread_frames::enter_static(&CLIENT_COMMAND_PACKET);
+                crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleClientCommand(ServerGamePacketListenerImpl.java:2110)"], || {
+                    self.respawn(id, true, RemovalReason::ChangedDimension)
+                });
+            }
             let p = self.player_mut(id);
             p.reset_position();
             p.movement.waiting_for_respawn = false;
@@ -126,7 +140,12 @@ impl Server {
         if self.player(id).health > 0.0 {
             return Ok(());
         }
-        self.respawn(id, false, RemovalReason::Killed);
+        {
+            let _packet = crate::server::main_thread_frames::enter_static(&CLIENT_COMMAND_PACKET);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleClientCommand(ServerGamePacketListenerImpl.java:2118)"], || {
+                self.respawn(id, false, RemovalReason::Killed)
+            });
+        }
         let p = self.player_mut(id);
         p.reset_position();
         p.movement.waiting_for_respawn = false;
@@ -291,7 +310,7 @@ impl Server {
         self.player_list.push(id);
         let order = self.take_player_list_order();
         self.player_mut(id).player_list_order = order;
-        self.levels[level_index].init_inventory_menu(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.players.PlayerList.respawn(PlayerList.java:463)"], || self.levels[level_index].init_inventory_menu(id));
         if !keep_all_player_data
             && let Some(respawn_config) = self.player(id).respawn_config.clone()
             && let Some(respawn_level) = self.get_level(&respawn_config.respawn_data.dimension)

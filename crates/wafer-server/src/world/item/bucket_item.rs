@@ -75,7 +75,9 @@ impl BucketItem {
         if self.empty_contents(level, Some(player), place_pos, Some(hit)) {
             self.check_extra_content(level, Some(player), &item_stack, place_pos);
             if self.content != Fluid::Empty {
-                crate::advancements::triggers::criteria_triggers::PLACED_BLOCK.trigger(level, player, place_pos, &item_stack);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.item.BucketItem.use(BucketItem.java:67)"], || {
+                    crate::advancements::triggers::criteria_triggers::PLACED_BLOCK.trigger(level, player, place_pos, &item_stack)
+                });
             }
             level.award_stat(player, crate::stats::stats::ITEM_USED.get(item_stack.item.0), 1);
             let empty_result = if has_infinite_materials(level, player) { item_stack.clone() } else { ItemStack::new(items::BUCKET, 1) };
@@ -96,7 +98,9 @@ impl BucketItem {
                 level.game_event_at(Some(player), crate::world::level::gameevent::game_event::FLUID_PICKUP, pos);
                 let filled = taken.clone();
                 let result = item_utils::create_filled_result(level, player, hand, item_stack, taken, true);
-                crate::advancements::triggers::criteria_triggers::FILLED_BUCKET.trigger(level, player, &filled);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.item.BucketItem.use(BucketItem.java:85)"], || {
+                    crate::advancements::triggers::criteria_triggers::FILLED_BUCKET.trigger(level, player, &filled)
+                });
                 return (InteractionResult::SUCCESS, Some(result));
             }
         }

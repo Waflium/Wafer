@@ -76,12 +76,9 @@ const DIE_REMOVE_ENTITIES_ON_SHOULDER_FRAMES: [&str; 3] = [
 ];
 const REMOVE_ENTITIES_ON_SHOULDER_LEFT_FRAME: &str = "net.minecraft.server.level.ServerPlayer.removeEntitiesOnShoulder(ServerPlayer.java:900)";
 const REMOVE_ENTITIES_ON_SHOULDER_RIGHT_FRAME: &str = "net.minecraft.server.level.ServerPlayer.removeEntitiesOnShoulder(ServerPlayer.java:902)";
-const HANDLE_SHOULDER_ENTITIES_FRAMES: [&str; 5] = [
+const HANDLE_SHOULDER_ENTITIES_FRAMES: [&str; 2] = [
     "net.minecraft.server.level.ServerPlayer.handleShoulderEntities(ServerPlayer.java:859)",
     "net.minecraft.world.entity.player.Player.aiStep(Player.java:519)",
-    "net.minecraft.world.entity.LivingEntity.tick(LivingEntity.java:2886)",
-    "net.minecraft.world.entity.player.Player.tick(Player.java:276)",
-    "net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)",
 ];
 const GAME_EVENT_WIN_GAME: u8 = 4;
 
@@ -838,7 +835,7 @@ impl ServerLevel {
     pub fn server_player_do_tick(&mut self, id: EntityId) {
         let ticks = !self.is_spectator(id) || !self.touching_unloaded_chunk(id);
         if ticks {
-            self.guard_player_tick(id, |level| level.player_tick(id));
+            self.guard_player_tick(id, |level| crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:740)"], || level.player_tick(id)));
         }
         self.then_tick(move |level| level.server_player_do_tick_end(id, ticks));
     }
@@ -918,7 +915,7 @@ impl ServerLevel {
             p.send_experience();
         }
         if self.entity(id).tick_count % 20 == 0 {
-            criteria_triggers::LOCATION.trigger(self, id);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.doTick(ServerPlayer.java:810)"], || criteria_triggers::LOCATION.trigger(self, id));
         }
     }
 
@@ -976,7 +973,7 @@ impl ServerLevel {
         self.play_shoulder_entity_ambient_sound(id, &right);
         let p = self.player(id);
         if p.entity.fall_distance > 0.5 || p.entity.is_in_water() || p.abilities_flying() || self.is_sleeping(id) || p.entity.is_in_powder_snow {
-            let _scope = crate::server::main_thread_frames::enter(HANDLE_SHOULDER_ENTITIES_FRAMES);
+            let _scope = crate::server::main_thread_frames::enter_static(&HANDLE_SHOULDER_ENTITIES_FRAMES);
             self.remove_entities_on_shoulder(id);
         }
     }
@@ -1101,7 +1098,7 @@ impl ServerLevel {
         if let Some(killer) = self.kill_credit(id) {
             let killer_type = self.entity(killer).entity_type;
             self.award_stat(id, stats::ENTITY_KILLED_BY.get(killer_type as u16), 1);
-            self.award_kill_score(killer, id, &source);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.die(ServerPlayer.java:1004)"], || self.award_kill_score(killer, id, &source));
         }
         self.broadcast_entity_event(id, entity_event::DEATH);
         self.award_stat(id, stats::DEATHS, 1);
@@ -1150,7 +1147,9 @@ impl ServerLevel {
         let victim_holder = ScoreHolder::for_entity(self, victim);
         self.handle_team_kill(&holder, &victim_holder, ObjectiveCriteria::team_kill);
         self.handle_team_kill(&victim_holder, &holder, ObjectiveCriteria::killed_by_team);
-        criteria_triggers::PLAYER_KILLED_ENTITY.trigger(self, id, victim, killing_blow);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.awardKillScore(ServerPlayer.java:1049)"], || {
+            criteria_triggers::PLAYER_KILLED_ENTITY.trigger(self, id, victim, killing_blow)
+        });
     }
 
     fn handle_team_kill(&mut self, source: &ScoreHolder, target: &ScoreHolder, criteria_by_team: fn(crate::world::scores::team_color::TeamColor) -> ObjectiveCriteria) {
@@ -1361,7 +1360,7 @@ impl ServerLevel {
             p.levitation_start_time = tick_count;
             p.levitation_start_pos = Some(p.entity.position());
         }
-        criteria_triggers::EFFECTS_CHANGED.trigger(self, id, source);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.onEffectAdded(ServerPlayer.java:1823)"], || criteria_triggers::EFFECTS_CHANGED.trigger(self, id, source));
     }
 
     pub fn server_player_on_effect_updated(&mut self, id: EntityId, effect: MobEffect, refresh_attributes: bool, source: Option<EntityId>) {
@@ -1369,7 +1368,7 @@ impl ServerLevel {
         let p = self.player(id);
         let instance = p.living.effect(effect).expect("updated effect");
         p.connection.send_raw(update_mob_effect(id, instance, false));
-        criteria_triggers::EFFECTS_CHANGED.trigger(self, id, source);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.onEffectUpdated(ServerPlayer.java:1831)"], || criteria_triggers::EFFECTS_CHANGED.trigger(self, id, source));
     }
 
     pub fn server_player_on_effects_removed(&mut self, id: EntityId, effects: &[MobEffectInstance]) {
@@ -1381,7 +1380,7 @@ impl ServerLevel {
                 p.levitation_start_pos = None;
             }
         }
-        criteria_triggers::EFFECTS_CHANGED.trigger(self, id, None);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.onEffectsRemoved(ServerPlayer.java:1845)"], || criteria_triggers::EFFECTS_CHANGED.trigger(self, id, None));
     }
 
     pub fn show_end_credits(&mut self, id: EntityId) {
@@ -1581,12 +1580,16 @@ impl crate::server::Server {
         let old_key = self.levels[old_level].dimension;
         let new_key = self.levels[new_level].dimension;
         let level = &mut self.levels[new_level];
-        criteria_triggers::CHANGED_DIMENSION.trigger(level, id, old_key, new_key);
+        crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.triggerDimensionChangeTriggers(ServerPlayer.java:1311)"], || {
+            criteria_triggers::CHANGED_DIMENSION.trigger(level, id, old_key, new_key)
+        });
         if old_key == crate::server::THE_NETHER
             && new_key == crate::server::OVERWORLD
             && let Some(entered_nether_position) = level.player(id).entered_nether_position
         {
-            criteria_triggers::NETHER_TRAVEL.trigger(level, id, entered_nether_position);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.triggerDimensionChangeTriggers(ServerPlayer.java:1314)"], || {
+                criteria_triggers::NETHER_TRAVEL.trigger(level, id, entered_nether_position)
+            });
         }
         if self.levels[new_level].dimension != crate::server::THE_NETHER {
             self.player_mut(id).entered_nether_position = None;

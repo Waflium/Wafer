@@ -339,7 +339,7 @@ impl Zombie {
 
 impl ServerLevel {
     pub fn zombie_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.zombie.Zombie.tick(Zombie.java:234)"], || self.mob_tick(id));
         self.then_tick(move |level| level.zombie_tick_end(id));
     }
 
@@ -370,7 +370,7 @@ impl ServerLevel {
 
     pub fn zombie_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
         let result = {
-            let _scope = self.is_player(target).then(|| crate::server::main_thread_frames::enter_static(&DO_HURT_TARGET_FRAME));
+            let _scope = crate::server::main_thread_frames::enter_static(&DO_HURT_TARGET_FRAME);
             self.mob_do_hurt_target(id, target)
         };
         if result {
@@ -388,13 +388,15 @@ impl ServerLevel {
 
     pub fn husk_do_hurt_target(&mut self, id: EntityId, target: EntityId) -> bool {
         let result = {
-            let _scope = self.is_player(target).then(|| crate::server::main_thread_frames::enter_static(&HUSK_DO_HURT_TARGET_FRAME));
+            let _scope = crate::server::main_thread_frames::enter_static(&HUSK_DO_HURT_TARGET_FRAME);
             self.zombie_do_hurt_target(id, target)
         };
         if result && self.item_by_slot_ref(id, EquipmentSlot::Mainhand).is_none() && self.is_living(target) {
             let pos = self.entity(id).block_position();
             let difficulty = self.current_difficulty_at(pos).get_effective_difficulty();
-            self.add_effect(target, MobEffectInstance::new(mob_effects::HUNGER, 140 * difficulty as i32, 0), Some(id));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.zombie.Husk.doHurtTarget(Husk.java:73)"], || {
+                self.add_effect(target, MobEffectInstance::new(mob_effects::HUNGER, 140 * difficulty as i32, 0), Some(id))
+            });
         }
         result
     }

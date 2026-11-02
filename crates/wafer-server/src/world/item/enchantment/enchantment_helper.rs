@@ -8,10 +8,82 @@ use super::enchanted_item_in_use::EnchantedItemInUse;
 use super::enchantment::Enchantment;
 use super::targeted_conditional_effect::EnchantmentTarget;
 use crate::server::level::ServerLevel;
+use crate::server::main_thread_frames;
 use crate::world::damagesource::DamageSource;
 use crate::world::entity::EntityId;
 use crate::world::entity::attributes::{Attribute, AttributeModifier};
 use crate::world::item::ItemStack;
+
+const TICK_EFFECTS_FRAMES: [&str; 7] = [
+    "net.minecraft.world.item.enchantment.Enchantment.lambda$tick$0(Enchantment.java:338)",
+    "net.minecraft.world.item.enchantment.Enchantment.applyEffects(Enchantment.java:437)",
+    "net.minecraft.world.item.enchantment.Enchantment.tick(Enchantment.java:335)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$tickEffects$0(EnchantmentHelper.java:246)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:152)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnEquipment(EnchantmentHelper.java:159)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.tickEffects(EnchantmentHelper.java:246)",
+];
+
+const LOCATION_CHANGED_FRAMES: [&str; 6] = [
+    "net.minecraft.world.item.enchantment.effects.EnchantmentEntityEffect.onChangedBlock(EnchantmentEntityEffect.java:40)",
+    "net.minecraft.world.item.enchantment.Enchantment.runLocationChangedEffects(Enchantment.java:472)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$runLocationChangedEffects$0(EnchantmentHelper.java:230)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:152)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnEquipment(EnchantmentHelper.java:159)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runLocationChangedEffects(EnchantmentHelper.java:230)",
+];
+
+const LOCATION_CHANGED_ON_ITEM_FRAMES: [&str; 5] = [
+    "net.minecraft.world.item.enchantment.effects.EnchantmentEntityEffect.onChangedBlock(EnchantmentEntityEffect.java:40)",
+    "net.minecraft.world.item.enchantment.Enchantment.runLocationChangedEffects(Enchantment.java:472)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$runLocationChangedEffects$1(EnchantmentHelper.java:234)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:152)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runLocationChangedEffects(EnchantmentHelper.java:234)",
+];
+
+const POST_ATTACK_VICTIM_FRAMES: [&str; 6] = [
+    "net.minecraft.world.item.enchantment.Enchantment.doPostAttack(Enchantment.java:302)",
+    "net.minecraft.world.item.enchantment.Enchantment.doPostAttack(Enchantment.java:289)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$doPostAttackEffectsWithItemSourceOnBreak$0(EnchantmentHelper.java:217)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:152)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnEquipment(EnchantmentHelper.java:159)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.doPostAttackEffectsWithItemSourceOnBreak(EnchantmentHelper.java:217)",
+];
+
+const POST_ATTACK_ATTACKER_FRAMES: [&str; 5] = [
+    "net.minecraft.world.item.enchantment.Enchantment.doPostAttack(Enchantment.java:302)",
+    "net.minecraft.world.item.enchantment.Enchantment.doPostAttack(Enchantment.java:289)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$doPostAttackEffectsWithItemSourceOnBreak$1(EnchantmentHelper.java:221)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:152)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.doPostAttackEffectsWithItemSourceOnBreak(EnchantmentHelper.java:221)",
+];
+
+const POST_PIERCING_ATTACK_FRAMES: [&str; 6] = [
+    "net.minecraft.world.item.enchantment.Enchantment.lambda$doPostPiercingAttack$0(Enchantment.java:311)",
+    "net.minecraft.world.item.enchantment.Enchantment.applyEffects(Enchantment.java:437)",
+    "net.minecraft.world.item.enchantment.Enchantment.doPostPiercingAttack(Enchantment.java:308)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$doPostPiercingAttackEffects$0(EnchantmentHelper.java:208)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:152)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.doPostPiercingAttackEffects(EnchantmentHelper.java:208)",
+];
+
+const PROJECTILE_SPAWNED_FRAMES: [&str; 6] = [
+    "net.minecraft.world.item.enchantment.Enchantment.lambda$onProjectileSpawned$0(Enchantment.java:346)",
+    "net.minecraft.world.item.enchantment.Enchantment.applyEffects(Enchantment.java:437)",
+    "net.minecraft.world.item.enchantment.Enchantment.onProjectileSpawned(Enchantment.java:343)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$onProjectileSpawned$0(EnchantmentHelper.java:282)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:130)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.onProjectileSpawned(EnchantmentHelper.java:282)",
+];
+
+const HIT_BLOCK_FRAMES: [&str; 6] = [
+    "net.minecraft.world.item.enchantment.Enchantment.lambda$onHitBlock$0(Enchantment.java:354)",
+    "net.minecraft.world.item.enchantment.Enchantment.applyEffects(Enchantment.java:437)",
+    "net.minecraft.world.item.enchantment.Enchantment.onHitBlock(Enchantment.java:351)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.lambda$onHitBlock$0(EnchantmentHelper.java:287)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.runIterationOnItem(EnchantmentHelper.java:130)",
+    "net.minecraft.world.item.enchantment.EnchantmentHelper.onHitBlock(EnchantmentHelper.java:287)",
+];
 
 fn enchantments(stack: &ItemStack) -> Vec<(&'static Enchantment, i32)> {
     stack.enchantments().enchantments.into_iter().filter_map(|(id, level)| Some((Enchantment::by_id(&id)?, level))).collect()
@@ -61,6 +133,7 @@ pub fn get_piercing_count(level: &mut ServerLevel, weapon: &ItemStack, ammo: &It
 
 pub fn on_projectile_spawned(level: &mut ServerLevel, weapon: &ItemStack, projectile: EntityId, owner: Option<EntityId>) {
     let item = EnchantedItemInUse::without_slot(weapon.clone(), owner);
+    let _frames = main_thread_frames::enter_static(&PROJECTILE_SPAWNED_FRAMES);
     run_iteration_on_item(weapon, |enchantment, enchantment_level| enchantment.on_projectile_spawned(level, enchantment_level, &item, projectile));
 }
 
@@ -74,6 +147,7 @@ pub fn on_hit_block(
     hit_block: wafer_data::BlockState,
 ) -> bool {
     let item = EnchantedItemInUse { item_stack: weapon.clone(), in_slot: slot, owner };
+    let _frames = main_thread_frames::enter_static(&HIT_BLOCK_FRAMES);
     run_iteration_on_item(weapon, |enchantment, enchantment_level| enchantment.on_hit_block(level, enchantment_level, &item, entity, hit_location, hit_block));
     false
 }
@@ -339,13 +413,17 @@ impl ServerLevel {
     }
 
     pub fn run_location_changed_effects(&mut self, entity: EntityId) {
+        let _frames = main_thread_frames::enter_static(&LOCATION_CHANGED_FRAMES);
         for slot in EquipmentSlot::VALUES {
             let Some(piece) = self.item_by_slot(entity, slot) else { continue };
-            self.run_location_changed_effects_on_item(&piece, entity, slot);
+            for (enchantment, level, item) in self.run_iteration_on_item_in_slot(&piece, slot, entity) {
+                enchantment.run_location_changed_effects(self, level, &item, entity);
+            }
         }
     }
 
     pub fn run_location_changed_effects_on_item(&mut self, stack: &ItemStack, entity: EntityId, slot: EquipmentSlot) {
+        let _frames = main_thread_frames::enter_static(&LOCATION_CHANGED_ON_ITEM_FRAMES);
         for (enchantment, level, item) in self.run_iteration_on_item_in_slot(stack, slot, entity) {
             enchantment.run_location_changed_effects(self, level, &item, entity);
         }
@@ -365,14 +443,13 @@ impl ServerLevel {
     }
 
     pub fn tick_enchantment_effects(&mut self, entity: EntityId) {
-        self.enchantment_tick_player = self.is_player(entity);
+        let _frames = main_thread_frames::enter_static(&TICK_EFFECTS_FRAMES);
         for slot in EquipmentSlot::VALUES {
             let Some(piece) = self.item_by_slot(entity, slot) else { continue };
             for (enchantment, level, item) in self.run_iteration_on_item_in_slot(&piece, slot, entity) {
                 enchantment.tick(self, level, &item, entity);
             }
         }
-        self.enchantment_tick_player = false;
     }
 
     pub fn process_durability_change(&mut self, item_stack: &ItemStack, amount: i32) -> i32 {
@@ -467,18 +544,27 @@ impl ServerLevel {
 
     pub fn do_post_attack_effects(&mut self, victim: EntityId, source: &DamageSource) {
         let weapon = source.causing_entity.filter(|&attacker| self.is_living(attacker)).map(|attacker| self.get_weapon_item(attacker));
+        let _frames = main_thread_frames::enter_static(&["net.minecraft.world.item.enchantment.EnchantmentHelper.doPostAttackEffects(EnchantmentHelper.java:201)"]);
         self.do_post_attack_effects_with_item_source(victim, source, weapon.as_ref());
     }
 
     pub fn do_post_piercing_attack_effects(&mut self, user: EntityId) {
         let weapon = self.get_weapon_item(user);
+        let _frames = main_thread_frames::enter_static(&POST_PIERCING_ATTACK_FRAMES);
         for (enchantment, level, item) in self.run_iteration_on_item_in_slot(&weapon, EquipmentSlot::Mainhand, user) {
             enchantment.do_post_piercing_attack(self, level, &item, user);
         }
     }
 
     pub fn do_post_attack_effects_with_item_source(&mut self, victim: EntityId, source: &DamageSource, item_source: Option<&ItemStack>) {
+        main_thread_frames::within(&["net.minecraft.world.item.enchantment.EnchantmentHelper.doPostAttackEffectsWithItemSource(EnchantmentHelper.java:212)"], || {
+            self.do_post_attack_effects_with_item_source_on_break(victim, source, item_source)
+        });
+    }
+
+    pub fn do_post_attack_effects_with_item_source_on_break(&mut self, victim: EntityId, source: &DamageSource, item_source: Option<&ItemStack>) {
         if self.is_living(victim) {
+            let _frames = main_thread_frames::enter_static(&POST_ATTACK_VICTIM_FRAMES);
             for (enchantment, level, item) in self.run_iteration_on_equipment(victim) {
                 enchantment.do_post_attack(self, level, &item, EnchantmentTarget::Victim, victim, source);
             }
@@ -486,6 +572,7 @@ impl ServerLevel {
         if let Some(item_source) = item_source
             && let Some(attacker) = source.causing_entity.filter(|&attacker| self.is_living(attacker))
         {
+            let _frames = main_thread_frames::enter_static(&POST_ATTACK_ATTACKER_FRAMES);
             for (enchantment, level, item) in self.run_iteration_on_item_in_slot(item_source, EquipmentSlot::Mainhand, attacker) {
                 enchantment.do_post_attack(self, level, &item, EnchantmentTarget::Attacker, victim, source);
             }

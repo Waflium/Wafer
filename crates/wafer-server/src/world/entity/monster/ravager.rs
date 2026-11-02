@@ -160,7 +160,7 @@ impl ServerLevel {
     }
 
     pub fn ravager_ai_step(&mut self, id: EntityId) {
-        self.raider_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Ravager.aiStep(Ravager.java:150)"], || self.raider_ai_step(id));
         if !self.is_alive(id) {
             return;
         }

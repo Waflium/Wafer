@@ -37,7 +37,9 @@ impl ResultContainer {
 
     pub fn award_used_recipes(&mut self, level: &mut ServerLevel, player: EntityId, item_stacks: &[ItemStack]) {
         if let Some(recipe_used) = self.recipe_used.and_then(|id| RecipeManager::get().by_key(id)) {
-            crate::advancements::triggers::criteria_triggers::RECIPE_CRAFTED.trigger(level, player, recipe_used.id, item_stacks);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.level.ServerPlayer.triggerRecipeCrafted(ServerPlayer.java:1683)"], || {
+                crate::advancements::triggers::criteria_triggers::RECIPE_CRAFTED.trigger(level, player, recipe_used.id, item_stacks)
+            });
             if !recipe_used.value.is_special() {
                 level.award_recipes(player, &[recipe_used]);
                 self.set_recipe_used(None);

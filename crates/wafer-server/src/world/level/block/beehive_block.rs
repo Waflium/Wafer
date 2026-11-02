@@ -85,7 +85,9 @@ impl BlockBehaviour for BeehiveBlock {
             crate::world::containers::update_neighbours_after_destroy(level, state, pos);
             anger_nearby_bees(level, pos);
         }
-        crate::advancements::triggers::criteria_triggers::BEE_NEST_DESTROYED.trigger(level, player, state, &destroyed_with, beehive_block_entity.get_occupant_count());
+        crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.BeehiveBlock.playerDestroy(BeehiveBlock.java:98)"], || {
+            crate::advancements::triggers::criteria_triggers::BEE_NEST_DESTROYED.trigger(level, player, state, &destroyed_with, beehive_block_entity.get_occupant_count())
+        });
     }
 
     fn on_explosion_hit(

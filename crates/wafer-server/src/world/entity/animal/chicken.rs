@@ -169,7 +169,7 @@ impl Chicken {
 
 impl ServerLevel {
     pub fn chicken_ai_step(&mut self, id: EntityId) {
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.chicken.Chicken.aiStep(Chicken.java:123)"], || self.animal_ai_step(id));
         if self.mob(id).is_none() {
             return;
         }

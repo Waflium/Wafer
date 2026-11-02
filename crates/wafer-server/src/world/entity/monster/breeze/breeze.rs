@@ -99,7 +99,7 @@ impl ServerLevel {
         if sound_tick == 0 {
             self.breeze_play_whirl_sound(id);
         }
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.breeze.Breeze.tick(Breeze.java:158)"], || self.mob_tick(id));
     }
 
     fn breeze_reset_jump_trail(&mut self, id: EntityId) {

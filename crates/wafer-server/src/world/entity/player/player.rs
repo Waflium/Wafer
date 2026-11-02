@@ -55,7 +55,7 @@ impl ServerLevel {
                 p.sleep_counter = 0;
             }
         }
-        self.living_entity_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.tick(Player.java:276)"], || self.living_entity_tick(id));
         self.then_tick(move |level| level.player_tick_end(id));
     }
 
@@ -172,7 +172,7 @@ impl ServerLevel {
             return InteractionResult::Pass;
         }
         let item_stack_clone = self.player(id).item_in_hand(hand).unwrap_or_else(ItemStack::empty);
-        let interact = self.interact(entity, id, hand, location);
+        let interact = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.interactOn(Player.java:880)"], || self.interact(entity, id, hand, location));
         if interact.consumes_action() {
             let item_stack = self.player(id).item_in_hand(hand);
             let count = item_stack.as_ref().map_or(0, |s| s.count);
@@ -190,7 +190,9 @@ impl ServerLevel {
             if has_infinite_materials {
                 item_stack = item_stack_clone;
             }
-            let interaction_result = crate::world::item::interact_living_entity(self, &mut item_stack, id, entity, hand);
+            let interaction_result = crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.interactOn(Player.java:893)"], || {
+                crate::world::item::interact_living_entity(self, &mut item_stack, id, entity, hand)
+            });
             if interaction_result.consumes_action() {
                 let position = self.entity(entity).position();
                 self.game_event(crate::world::level::gameevent::game_event::ENTITY_INTERACT, position, crate::world::level::gameevent::game_event::Context::of(Some(id)));
@@ -281,26 +283,29 @@ impl ServerLevel {
             let sweep_attack = self.is_sweep_attack(id, full_strength_attack, critical_attack, knockback_attack);
             let old_living_entity_health = if self.is_living(entity) { self.health(entity) } else { 0.0 };
             let old_movement = self.entity(entity).delta_movement;
-            let was_hurt = {
-                let _scope = self.is_player(entity).then(|| crate::server::main_thread_frames::enter_static(&ATTACK_HURT_FRAMES));
-                self.hurt_server(entity, damage_source, total_damage)
-            };
+            let was_hurt = crate::server::main_thread_frames::within(&ATTACK_HURT_FRAMES, || self.hurt_server(entity, damage_source, total_damage));
             if was_hurt {
                 let knockback = self.get_knockback(id, entity, &damage_source) + if knockback_attack { 0.5 } else { 0.0 };
-                self.cause_extra_knockback(id, entity, knockback, old_movement, &damage_source, total_damage, true);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.attack(Player.java:1044)"], || {
+                    self.cause_extra_knockback(id, entity, knockback, old_movement, &damage_source, total_damage, true)
+                });
                 if sweep_attack {
-                    self.do_sweep_attack(id, entity, base_damage, &damage_source, attack_strength_scale);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.attack(Player.java:1046)"], || {
+                        self.do_sweep_attack(id, entity, base_damage, &damage_source, attack_strength_scale)
+                    });
                 }
                 self.attack_visual_effects(id, entity, critical_attack, sweep_attack, full_strength_attack, false, magic_boost);
                 self.set_last_hurt_mob(id, entity);
-                self.item_attack_interaction(id, entity, &attacking_item_stack, &damage_source, true);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.attack(Player.java:1053)"], || {
+                    self.item_attack_interaction(id, entity, &attacking_item_stack, &damage_source, true)
+                });
                 self.damage_stats_and_hearts(id, entity, old_living_entity_health);
                 self.cause_food_exhaustion(id, 0.1);
             } else {
                 self.play_server_side_sound(id, "minecraft:entity.player.attack.nodamage");
             }
         }
-        self.post_piercing_attack(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.attack(Player.java:1062)"], || self.post_piercing_attack(id));
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -409,19 +414,24 @@ impl ServerLevel {
         let hurt_target = self.dragon_part_parent(entity).unwrap_or(entity);
         let mut item_hurt_enemy = false;
         if self.is_living(hurt_target) {
-            crate::world::item::hurt_enemy(self, attacking_item_stack, hurt_target, id);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.itemAttackInteraction(Player.java:1150)"], || {
+                crate::world::item::hurt_enemy(self, attacking_item_stack, hurt_target, id)
+            });
             item_hurt_enemy = attacking_item_stack.has(dc::WEAPON);
             if item_hurt_enemy {
                 self.award_stat(id, stats::ITEM_USED.get(attacking_item_stack.item.0), 1);
             }
         }
         if apply_to_target {
-            self.do_post_attack_effects_with_item_source(entity, damage_source, Some(attacking_item_stack));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.itemAttackInteraction(Player.java:1153)"], || {
+                self.do_post_attack_effects_with_item_source(entity, damage_source, Some(attacking_item_stack))
+            });
         }
         if !attacking_item_stack.is_empty() && self.is_living(hurt_target) && item_hurt_enemy {
+            let _frames = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.player.Player.itemAttackInteraction(Player.java:1159)"]);
             crate::world::item::post_hurt_enemy(self, attacking_item_stack, id);
             let item_damage_per_attack = attacking_item_stack.get(dc::WEAPON).and_then(|weapon| weapon.get("item_damage_per_attack")).map_or(1, component_codec::as_i32);
-            self.hurt_and_break(id, EquipmentSlot::Mainhand, item_damage_per_attack);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.item.ItemStack.postHurtEnemy(ItemStack.java:572)"], || self.hurt_and_break(id, EquipmentSlot::Mainhand, item_damage_per_attack));
         }
     }
 
@@ -459,11 +469,11 @@ impl ServerLevel {
             }
             if self.entity(id).position().distance_to_sqr(self.entity(nearby).position()) < 9.0 {
                 let enchanted_damage = self.get_enchanted_damage(id, nearby, sweep_damage, damage_source) * attack_strength_scale;
-                if self.hurt_server(nearby, *damage_source, enchanted_damage) {
+                if crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.doSweepAttack(Player.java:1212)"], || self.hurt_server(nearby, *damage_source, enchanted_damage)) {
                     let y_rot = self.entity(id).y_rot * mth::DEG_TO_RAD;
                     let (sin, cos) = (mth::sin(y_rot as f64) as f64, mth::cos(y_rot as f64) as f64);
                     self.knockback(nearby, 0.4f32 as f64, sin, -cos, damage_source, enchanted_damage, false);
-                    self.do_post_attack_effects(nearby, damage_source);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.doSweepAttack(Player.java:1214)"], || self.do_post_attack_effects(nearby, damage_source));
                 }
             }
         }
@@ -492,12 +502,12 @@ impl ServerLevel {
     }
 
     pub fn player_ai_step(&mut self, id: EntityId) {
-        self.tick_regeneration(id);
-        self.inventory_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.aiStep(Player.java:483)"], || self.tick_regeneration(id));
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.aiStep(Player.java:484)"], || self.inventory_tick(id));
         if self.player(id).abilities_flying() {
             self.reset_fall_distance(id);
         }
-        self.living_entity_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.aiStep(Player.java:490)"], || self.living_entity_ai_step(id));
         let speed = self.attribute_value(id, crate::world::entity::attributes::Attribute::MovementSpeed) as f32;
         let p = self.player_mut(id);
         p.entity.y_head_rot = p.entity.y_rot;
@@ -604,7 +614,7 @@ impl ServerLevel {
             return false;
         }
         {
-            let _scope = crate::server::main_thread_frames::enter(["net.minecraft.world.entity.player.Player.hurtServer(Player.java:739)"]);
+            let _scope = crate::server::main_thread_frames::enter_static(&["net.minecraft.world.entity.player.Player.hurtServer(Player.java:739)"]);
             self.remove_entities_on_shoulder(id);
         }
         if source.scales_with_difficulty(self) {
@@ -615,7 +625,7 @@ impl ServerLevel {
                 Difficulty::Normal => {}
             }
         }
-        if damage == 0.0 { false } else { self.living_entity_hurt_server(id, source, damage) }
+        if damage == 0.0 { false } else { crate::server::main_thread_frames::within(&["net.minecraft.world.entity.player.Player.hurtServer(Player.java:757)"], || self.living_entity_hurt_server(id, source, damage)) }
     }
 
     pub fn player_is_invulnerable_to(&mut self, id: EntityId, source: &DamageSource) -> bool {
@@ -780,7 +790,14 @@ impl ServerLevel {
         if result.is_ok() {
             self.award_stat(id, abstract_bed_block::get_slept_in_bed_stat_type(kind), 1);
             if can_set_spawn {
-                crate::advancements::triggers::criteria_triggers::SLEPT_IN_BED.trigger(self, id);
+                crate::server::main_thread_frames::within(
+                    &[
+                        "net.minecraft.server.level.ServerPlayer.lambda$startSleepInBed$1(ServerPlayer.java:1380)",
+                        "com.mojang.datafixers.util.Either$Right.ifRight(Either.java:109)",
+                        "net.minecraft.server.level.ServerPlayer.startSleepInBed(ServerPlayer.java:1377)",
+                    ],
+                    || crate::advancements::triggers::criteria_triggers::SLEPT_IN_BED.trigger(self, id),
+                );
             }
         }
         if !self.can_sleep_through_nights() {

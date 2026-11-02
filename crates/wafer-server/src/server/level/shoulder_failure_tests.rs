@@ -225,11 +225,13 @@ fn spawn_mob(level: &mut ServerLevel, kind: &str, odd_tick: bool) -> EntityId {
     id
 }
 
-fn melee_attack_frames(kind: &str, odd_tick: bool) -> Vec<&'static str> {
+fn melee_attack_frames(kind: &str, odd_tick: bool, expected: &[&'static str]) -> Vec<&'static str> {
     let (mut level, player) = shoulder_level();
     let mob = spawn_mob(&mut level, kind, odd_tick);
     let _tick = main_thread_frames::tick();
-    let _scope = entity_tick_frames::melee_attack(&level, mob, player);
+    let goal = expected.iter().rposition(|frame| frame.contains("MeleeAttackGoal.tick") || frame.contains("ZombieAttackGoal.tick")).unwrap();
+    let _layers = main_thread_frames::enter(expected[goal + 1..expected.len() - TICK_TAIL.len()].iter().copied());
+    let _scope = entity_tick_frames::melee_attack(&level, mob);
     let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| level.do_hurt_target(mob, player))).unwrap_err();
     thrown_frames(thrown)
 }
@@ -238,9 +240,9 @@ fn melee_attack_frames(kind: &str, odd_tick: bool) -> Vec<&'static str> {
 fn a_shoulder_entity_failing_on_a_zombie_attack_matches_vanilla() {
     let hurt = [MOB_DO_HURT_TARGET, ZOMBIE_DO_HURT_TARGET];
     let even = expected(&[&SHOULDER_LOAD_HEAD, &hurt, &MELEE, &ZOMBIE_GOAL, &EVEN_SELECTOR, &MONSTER_STEP, &MOB_TICK, &[ZOMBIE_TICK], &ENTITY_TICK_TAIL, &TICK_TAIL]);
-    assert_eq!(melee_attack_frames("minecraft:zombie", false), even);
+    assert_eq!(melee_attack_frames("minecraft:zombie", false, &even), even);
     let odd = expected(&[&SHOULDER_LOAD_HEAD, &hurt, &MELEE, &ZOMBIE_GOAL, &ODD_SELECTOR, &MONSTER_STEP, &MOB_TICK, &[ZOMBIE_TICK], &ENTITY_TICK_TAIL, &TICK_TAIL]);
-    assert_eq!(melee_attack_frames("minecraft:zombie", true), odd);
+    assert_eq!(melee_attack_frames("minecraft:zombie", true, &odd), odd);
 }
 
 #[test]
@@ -257,7 +259,7 @@ fn a_shoulder_entity_failing_on_other_melee_attacks_matches_vanilla() {
         &ENTITY_TICK_TAIL,
         &TICK_TAIL,
     ]);
-    assert_eq!(melee_attack_frames("minecraft:husk", false), husk);
+    assert_eq!(melee_attack_frames("minecraft:husk", false, &husk), husk);
     let villager = expected(&[
         &SHOULDER_LOAD_HEAD,
         &[MOB_DO_HURT_TARGET, ZOMBIE_DO_HURT_TARGET],
@@ -270,7 +272,7 @@ fn a_shoulder_entity_failing_on_other_melee_attacks_matches_vanilla() {
         &ENTITY_TICK_TAIL,
         &TICK_TAIL,
     ]);
-    assert_eq!(melee_attack_frames("minecraft:zombie_villager", false), villager);
+    assert_eq!(melee_attack_frames("minecraft:zombie_villager", false, &villager), villager);
     let vindicator = expected(&[
         &SHOULDER_LOAD_HEAD,
         &[MOB_DO_HURT_TARGET],
@@ -282,7 +284,7 @@ fn a_shoulder_entity_failing_on_other_melee_attacks_matches_vanilla() {
         &ENTITY_TICK_TAIL,
         &TICK_TAIL,
     ]);
-    assert_eq!(melee_attack_frames("minecraft:vindicator", true), vindicator);
+    assert_eq!(melee_attack_frames("minecraft:vindicator", true, &vindicator), vindicator);
     let wither_skeleton = expected(&[
         &SHOULDER_LOAD_HEAD,
         &[MOB_DO_HURT_TARGET, "net.minecraft.world.entity.monster.skeleton.WitherSkeleton.doHurtTarget(WitherSkeleton.java:97)"],
@@ -293,7 +295,7 @@ fn a_shoulder_entity_failing_on_other_melee_attacks_matches_vanilla() {
         &ENTITY_TICK_TAIL,
         &TICK_TAIL,
     ]);
-    assert_eq!(melee_attack_frames("minecraft:wither_skeleton", true), wither_skeleton);
+    assert_eq!(melee_attack_frames("minecraft:wither_skeleton", true, &wither_skeleton), wither_skeleton);
     let skeleton = expected(&[
         &SHOULDER_LOAD_HEAD,
         &[MOB_DO_HURT_TARGET],
@@ -305,7 +307,7 @@ fn a_shoulder_entity_failing_on_other_melee_attacks_matches_vanilla() {
         &ENTITY_TICK_TAIL,
         &TICK_TAIL,
     ]);
-    assert_eq!(melee_attack_frames("minecraft:skeleton", false), skeleton);
+    assert_eq!(melee_attack_frames("minecraft:skeleton", false, &skeleton), skeleton);
 }
 
 #[test]
@@ -323,7 +325,7 @@ fn a_shoulder_entity_failing_on_a_creeper_explosion_matches_vanilla() {
     let _tick = main_thread_frames::tick();
     let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         for _ in 0..4 {
-            level.creeper_tick(id);
+            level.tick_non_passenger(id);
         }
     }))
     .unwrap_err();
@@ -352,7 +354,8 @@ fn a_shoulder_entity_failing_during_an_entity_tick_crashes_with_the_vanilla_repo
     let _tick = main_thread_frames::tick();
     let thrown = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         level.guard_entity_tick(zombie, |level| {
-            let _scope = entity_tick_frames::melee_attack(level, zombie, player);
+            let _anchor = main_thread_frames::enter_static(&crate::server::command_frames::TICK_NON_PASSENGER);
+            let _scope = entity_tick_frames::melee_attack(level, zombie);
             level.do_hurt_target(zombie, player);
         })
     }))

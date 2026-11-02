@@ -222,7 +222,7 @@ impl ServerLevel {
     }
 
     pub fn shulker_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Shulker.tick(Shulker.java:238)"], || self.mob_tick(id));
         self.then_tick(move |level| level.shulker_tick_end(id));
     }
 

@@ -75,8 +75,8 @@ impl ServerLevel {
             self.set_last_hurt_mob(owner, entity);
         }
         let source = DamageSource { causing_entity: owner, direct_entity: Some(id), ..DamageSource::new(damage_types::WIND_CHARGE) };
-        if self.hurt_server(entity, source, 1.0) && self.is_living(entity) {
-            self.do_post_attack_effects(entity, &source);
+        if crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge.onHitEntity(AbstractWindCharge.java:101)"], || self.hurt_server(entity, source, 1.0)) && self.is_living(entity) {
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge.onHitEntity(AbstractWindCharge.java:103)"], || self.do_post_attack_effects(entity, &source));
         }
         let position = self.entity(id).position();
         self.abstract_wind_charge_explode(id, position);
@@ -92,7 +92,7 @@ impl ServerLevel {
     }
 
     pub fn abstract_wind_charge_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge.onHit(AbstractWindCharge.java:132)"], || self.projectile_base_on_hit(id, hit_result));
         self.discard(id);
     }
 

@@ -270,7 +270,7 @@ impl ServerLevel {
     }
 
     pub fn camel_tick(&mut self, id: EntityId) {
-        self.abstract_horse_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.camel.Camel.tick(Camel.java:203)"], || self.abstract_horse_tick(id));
         self.then_tick(move |level| level.camel_tick_end(id));
     }
 

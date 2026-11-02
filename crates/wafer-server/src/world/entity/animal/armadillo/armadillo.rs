@@ -256,7 +256,7 @@ impl ServerLevel {
     }
 
     pub fn armadillo_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.armadillo.Armadillo.tick(Armadillo.java:182)"], || self.mob_tick(id));
         self.then_tick(move |level| level.armadillo_tick_end(id));
     }
 

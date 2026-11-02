@@ -552,7 +552,7 @@ impl ServerLevel {
             living.xxa = 0.0;
             living.zza = 0.0;
         }
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.fox.Fox.aiStep(Fox.java:296)"], || self.animal_ai_step(id));
         if !self.is_fox(id) {
             return;
         }
@@ -637,7 +637,7 @@ impl ServerLevel {
     }
 
     pub fn fox_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.fox.Fox.tick(Fox.java:614)"], || self.mob_tick(id));
         self.then_tick(move |level| level.fox_tick_end(id));
     }
 

@@ -201,7 +201,9 @@ impl ServerLevel {
         if self.update_awaiting_teleport(id) {
             self.entity_mut(id).abs_snap_rotation_to(mth::wrap_degrees(y_rot), mth::wrap_degrees(x_rot));
         } else {
-            self.handle_player_position_change(id, target, y_rot, x_rot, on_ground, horizontal_collision);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handleMovePlayer(ServerGamePacketListenerImpl.java:1186)"], || {
+                self.handle_player_position_change(id, target, y_rot, x_rot, on_ground, horizontal_collision)
+            });
         }
     }
 
@@ -307,10 +309,12 @@ impl ServerLevel {
             let e = self.entity(id);
             let client_delta = Vec3::new(e.x() - start.x, e.y() - start.y, e.z() - start.z);
             self.set_on_ground_with_movement(id, on_ground, horizontal_collision, client_delta);
-            self.do_check_fall_damage(id, client_delta.x, client_delta.y, client_delta.z, on_ground);
+            crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlayerPositionChange(ServerGamePacketListenerImpl.java:1300)"], || {
+                self.do_check_fall_damage(id, client_delta.x, client_delta.y, client_delta.z, on_ground)
+            });
             self.handle_player_known_movement(id, client_delta);
             if moved_upwards {
-                self.reset_fall_distance(id);
+                crate::server::main_thread_frames::within(&["net.minecraft.server.network.ServerGamePacketListenerImpl.handlePlayerPositionChange(ServerGamePacketListenerImpl.java:1306)"], || self.reset_fall_distance(id));
             }
             let in_liquid_landed = {
                 let e = self.entity(id);

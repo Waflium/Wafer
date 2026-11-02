@@ -134,7 +134,7 @@ impl ServerLevel {
     }
 
     pub fn thrown_enderpearl_on_hit(&mut self, id: EntityId, hit_result: HitResult) {
-        self.projectile_base_on_hit(id, hit_result);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl.onHit(ThrownEnderpearl.java:96)"], || self.projectile_base_on_hit(id, hit_result));
         let random = &mut self.entity_mut(id).random;
         for _ in 0..32 {
             random.next_double();
@@ -165,7 +165,9 @@ impl ServerLevel {
                         self.server_player_teleport_same_dimension(owner, transition);
                         self.reset_fall_distance(owner);
                         self.living_mut(owner).reset_current_impulse_context();
-                        self.hurt_server(owner, DamageSource::new(damage_types::ENDER_PEARL), 5.0);
+                        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl.onHit(ThrownEnderpearl.java:136)"], || {
+                            self.hurt_server(owner, DamageSource::new(damage_types::ENDER_PEARL), 5.0)
+                        });
                         self.thrown_enderpearl_play_sound(teleport_pos);
                     }
                 } else if !same_level {

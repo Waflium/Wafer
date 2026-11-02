@@ -25,7 +25,7 @@ pub struct EnchantingTableBlock;
 impl BlockBehaviour for EnchantingTableBlock {
     fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
         if let Some(BlockEntityKind::EnchantingTable(_)) = level.get_block_entity(pos).map(|entity| &entity.kind) {
-            level.open_menu(player, MenuProvider::BlockEntity(pos));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.EnchantingTableBlock.useWithoutItem(EnchantingTableBlock.java:80)"], || level.open_menu(player, MenuProvider::BlockEntity(pos)));
         }
         InteractionResult::SUCCESS
     }

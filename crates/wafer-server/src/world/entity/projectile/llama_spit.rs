@@ -66,8 +66,8 @@ impl ServerLevel {
         let Some(owner) = self.projectile_get_owner(id).filter(|&owner| self.is_living(owner)) else { return };
         let target = hit_result.entity;
         let damage_source = DamageSource::source(damage_types::SPIT, Some(id), Some(owner));
-        if self.hurt_server(target, damage_source.clone(), 1.0) {
-            self.do_post_attack_effects(target, &damage_source);
+        if crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.LlamaSpit.onHitEntity(LlamaSpit.java:84)"], || self.hurt_server(target, damage_source.clone(), 1.0)) {
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.LlamaSpit.onHitEntity(LlamaSpit.java:85)"], || self.do_post_attack_effects(target, &damage_source));
         }
     }
 

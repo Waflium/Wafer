@@ -198,7 +198,7 @@ impl ServerLevel {
     }
 
     pub fn dolphin_tick(&mut self, id: EntityId) {
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.dolphin.Dolphin.tick(Dolphin.java:252)"], || self.mob_tick(id));
         self.then_tick(move |level| level.dolphin_tick_end(id));
     }
 

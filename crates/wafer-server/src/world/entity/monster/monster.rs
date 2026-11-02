@@ -21,7 +21,7 @@ impl ServerLevel {
 
     pub fn monster_ai_step(&mut self, id: EntityId) {
         self.update_no_action_time(id);
-        self.mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Monster.aiStep(Monster.java:44)"], || self.mob_ai_step(id));
     }
 
     pub fn update_no_action_time(&mut self, id: EntityId) {

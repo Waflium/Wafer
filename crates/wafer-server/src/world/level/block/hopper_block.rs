@@ -47,7 +47,7 @@ impl BlockBehaviour for HopperBlock {
 
     fn use_without_item(&self, _state: BlockState, level: &mut ServerLevel, pos: BlockPos, player: EntityId, _hit: &BlockHitResult) -> InteractionResult {
         if matches!(level.get_block_entity(pos).map(|e| &e.kind), Some(BlockEntityKind::Hopper(_))) {
-            level.open_menu(player, MenuProvider::BlockEntity(pos));
+            crate::server::main_thread_frames::within(&["net.minecraft.world.level.block.HopperBlock.useWithoutItem(HopperBlock.java:115)"], || level.open_menu(player, MenuProvider::BlockEntity(pos)));
             level.award_stat(player, crate::stats::stats::INSPECT_HOPPER, 1);
         }
         InteractionResult::SUCCESS

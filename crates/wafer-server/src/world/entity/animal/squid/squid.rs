@@ -152,7 +152,7 @@ impl ServerLevel {
     }
 
     pub fn squid_ai_step(&mut self, id: EntityId) {
-        self.ageable_mob_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.squid.Squid.aiStep(Squid.java:121)"], || self.ageable_mob_ai_step(id));
         let in_water = self.entity(id).is_in_water();
         let authoritative = self.is_local_instance_authoritative(id);
         let gravity = self.gravity(id);

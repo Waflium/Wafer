@@ -290,7 +290,7 @@ impl ServerLevel {
         let cube_mob = self.mob_mut(id).expect("a cube mob").abstract_cube_mob_mut().expect("a cube mob");
         cube_mob.o_squish = cube_mob.squish;
         cube_mob.squish += (cube_mob.target_squish - cube_mob.squish) * 0.5;
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.cubemob.AbstractCubeMob.tick(AbstractCubeMob.java:130)"], || self.mob_tick(id));
         self.then_tick(move |level| level.abstract_cube_mob_tick_end(id));
     }
 
@@ -377,7 +377,7 @@ impl ServerLevel {
 
     pub fn abstract_cube_mob_player_touch(&mut self, id: EntityId, player: EntityId) {
         if self.can_deal_damage(id) {
-            self.deal_damage(id, player);
+            crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.cubemob.AbstractCubeMob.playerTouch(AbstractCubeMob.java:236)"], || self.deal_damage(id, player));
         }
     }
 
@@ -385,12 +385,12 @@ impl ServerLevel {
         if self.is_alive(id) && self.do_teams_allow_damage(id, target) && self.is_within_melee_attack_range(id, target) && self.has_line_of_sight(id, target) {
             let damage_source = DamageSource { causing_entity: Some(id), direct_entity: Some(id), ..DamageSource::new(damage_types::MOB_ATTACK) };
             let damage = self.get_attack_damage(id);
-            if self.hurt_server(target, damage_source, damage) {
+            if crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.cubemob.AbstractCubeMob.dealDamage(AbstractCubeMob.java:245)"], || self.hurt_server(target, damage_source, damage)) {
                 let random = &mut self.entity_mut(id).random;
                 let a = random.next_float();
                 let b = random.next_float();
                 self.entity_play_sound(id, sound_event("minecraft:entity.slime.attack"), 1.0, (a - b) * 0.2 + 1.0);
-                self.do_post_attack_effects(target, &damage_source);
+                crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.cubemob.AbstractCubeMob.dealDamage(AbstractCubeMob.java:247)"], || self.do_post_attack_effects(target, &damage_source));
             }
         }
     }

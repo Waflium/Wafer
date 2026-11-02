@@ -280,7 +280,7 @@ impl ServerLevel {
 
     pub fn parrot_tick(&mut self, id: EntityId) {
         parrot_mut(self.mob_mut(id).expect("a parrot")).shoulder_riding_entity.ride_cooldown_counter += 1;
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.parrot.ShoulderRidingEntity.tick(ShoulderRidingEntity.java:41)"], || self.mob_tick(id));
     }
 
     pub fn parrot_ai_step(&mut self, id: EntityId) {
@@ -294,7 +294,7 @@ impl ServerLevel {
         if self.random.next_int_bounded(400) == 0 {
             imitate_nearby_mobs(self, id);
         }
-        self.animal_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.parrot.Parrot.aiStep(Parrot.java:246)"], || self.animal_ai_step(id));
         if self.mob(id).is_some() {
             self.parrot_calculate_flapping(id);
         }

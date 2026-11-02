@@ -10,7 +10,7 @@ impl ServerLevel {
     }
 
     pub fn open_trading_screen(&mut self, merchant: EntityId, player: EntityId, level: i32) {
-        if self.open_menu(player, MenuProvider::Merchant(merchant)) {
+        if crate::server::main_thread_frames::within(&["net.minecraft.world.item.trading.Merchant.openTradingScreen(Merchant.java:39)"], || self.open_menu(player, MenuProvider::Merchant(merchant))) {
             let container_id = self.container_menu_id(player);
             if !self.get_offers(merchant).is_empty() {
                 let xp = self.get_villager_xp(merchant);

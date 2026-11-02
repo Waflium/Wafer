@@ -152,7 +152,7 @@ impl ServerLevel {
     }
 
     pub fn tadpole_ai_step(&mut self, id: EntityId) {
-        self.abstract_fish_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.frog.Tadpole.aiStep(Tadpole.java:118)"], || self.abstract_fish_ai_step(id));
         let Some(mob) = self.mob(id) else { return };
         if !mob.is_age_locked() {
             let age = tadpole(mob).age;

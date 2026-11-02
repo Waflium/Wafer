@@ -176,7 +176,7 @@ impl ServerLevel {
                 }
             }
         }
-        self.monster_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.raid.Raider.aiStep(Raider.java:117)"], || self.monster_ai_step(id));
     }
 
     pub fn raider_apply_raid_buffs(&mut self, id: EntityId, wave: i32, _is_captain: bool) {

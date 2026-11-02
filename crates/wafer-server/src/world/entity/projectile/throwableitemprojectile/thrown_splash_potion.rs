@@ -59,12 +59,16 @@ impl ServerLevel {
                 let effect = effect_instance.effect;
                 if effect.info().instantaneous {
                     let owner = self.projectile_get_owner(id);
-                    self.apply_instantaneous_effect(effect, Some(id), owner, entity, effect_instance.amplifier, scale);
+                    crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion.onHitAsPotion(ThrownSplashPotion.java:67)"], || {
+                        self.apply_instantaneous_effect(effect, Some(id), owner, entity, effect_instance.amplifier, scale)
+                    });
                 } else {
                     let duration = effect_instance.map_duration(|d| (scale * d as f64 * duration_scale as f64 + 0.5) as i32);
                     let new_effect = MobEffectInstance::with(effect, duration, effect_instance.amplifier, effect_instance.ambient, effect_instance.visible, effect_instance.visible);
                     if !new_effect.ends_within(20) {
-                        self.add_effect(entity, new_effect, Some(effect_source));
+                        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion.onHitAsPotion(ThrownSplashPotion.java:72)"], || {
+                            self.add_effect(entity, new_effect, Some(effect_source))
+                        });
                     }
                 }
             }

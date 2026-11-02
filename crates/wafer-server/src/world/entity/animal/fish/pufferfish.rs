@@ -158,11 +158,11 @@ impl ServerLevel {
                 pufferfish_mut(self.mob_mut(id).expect("a pufferfish")).deflate_timer += 1;
             }
         }
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.fish.Pufferfish.tick(Pufferfish.java:137)"], || self.mob_tick(id));
     }
 
     pub fn pufferfish_ai_step(&mut self, id: EntityId) {
-        self.abstract_fish_ai_step(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.animal.fish.Pufferfish.aiStep(Pufferfish.java:142)"], || self.abstract_fish_ai_step(id));
         if self.mob(id).is_some_and(|mob| mob.get_puff_state() > 0) && self.is_alive(id) {
             let area = self.entity(id).bounding_box().inflate_all(0.3);
             let conditions = targeting_conditions();

@@ -246,7 +246,7 @@ impl ServerLevel {
             let on_warm_strider = self.vehicle(id).is_some_and(|vehicle| self.is_strider(vehicle) && !is_suffocating(self.entity(vehicle)));
             self.strider_set_suffocating(id, !in_warm_blocks && !on_warm_strider);
         }
-        self.mob_tick(id);
+        crate::server::main_thread_frames::within(&["net.minecraft.world.entity.monster.Strider.tick(Strider.java:331)"], || self.mob_tick(id));
         self.then_tick(move |level| level.strider_float(id));
     }
 
