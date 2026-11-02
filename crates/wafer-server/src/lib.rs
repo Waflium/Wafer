@@ -14,6 +14,7 @@ mod resources;
 mod tags;
 mod network;
 mod recipebook;
+mod roztweak;
 pub mod server;
 mod sounds;
 mod stats;

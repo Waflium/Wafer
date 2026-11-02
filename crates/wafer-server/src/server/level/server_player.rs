@@ -149,6 +149,7 @@ pub struct ServerPlayer {
     pub last_death_location: Option<(String, BlockPos)>,
     pub inventory: Inventory,
     pub ender_chest_inventory: crate::world::inventory::player_ender_chest_container::PlayerEnderChestContainer,
+    pub bukkit_values: Option<Nbt>,
     pub inventory_menu: Option<AbstractContainerMenu>,
     pub container_menu: Option<AbstractContainerMenu>,
     pub recipe_book: crate::stats::server_recipe_book::ServerRecipeBook,
@@ -320,6 +321,7 @@ impl ServerPlayer {
             last_death_location: None,
             inventory: Inventory::new(),
             ender_chest_inventory: Default::default(),
+            bukkit_values: None,
             inventory_menu: Some(AbstractContainerMenu::inventory()),
             container_menu: None,
             recipe_book: Default::default(),
@@ -482,6 +484,9 @@ impl ServerPlayer {
         self.food_data.save(&mut nbt);
         nbt.push(("abilities".into(), self.abilities.to_nbt()));
         nbt.push(("EnderItems".into(), self.ender_chest_inventory.store_as_slots()));
+        if let Some(bukkit_values) = crate::roztweak::save_bukkit_values(&self.bukkit_values, self.ender_chest_inventory.extra()) {
+            nbt.push((crate::roztweak::BUKKIT_VALUES.into(), bukkit_values));
+        }
         if let Some((dimension, pos)) = &self.last_death_location {
             nbt.push((
                 "LastDeathLocation".into(),
@@ -556,6 +561,10 @@ impl ServerPlayer {
         let walking_speed = self.abilities.walking_speed as f64;
         self.living.attributes.instance(Attribute::MovementSpeed).expect("players have movement speed").set_base_value(walking_speed);
         self.ender_chest_inventory.from_decoded_slots(tag_value_input::list_or_empty(nbt, "EnderItems", decode_item_stack_with_slot));
+        self.bukkit_values = nbt.get(crate::roztweak::BUKKIT_VALUES).cloned();
+        if let Some(bukkit_values) = &self.bukkit_values {
+            self.ender_chest_inventory.load_extra(crate::roztweak::decode_ender_chest_extra(bukkit_values));
+        }
         self.last_death_location = tag_value_input::read(nbt, "LastDeathLocation", |tag| DecodeResult::from(GlobalPos::decode(tag))).map(|pos| (pos.dimension, pos.pos));
         self.warden_spawn_tracker = tag_value_input::read(nbt, "warden_spawn_tracker", WardenSpawnTracker::decode).unwrap_or_default();
         self.entered_nether_position = tag_value_input::read(nbt, "entered_nether_pos", extra_codecs::vec3);

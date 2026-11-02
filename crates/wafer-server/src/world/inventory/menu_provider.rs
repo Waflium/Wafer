@@ -152,7 +152,7 @@ impl ServerLevel {
             MenuProvider::EnderChest => {
                 let container = ContainerRef::PlayerEnderChest(player);
                 self.container_start_open(container, player);
-                Some((AbstractContainerMenu::new(container_id, MenuKind::Chest { rows: 3 }, Some(container)), Component::translatable("container.enderchest")))
+                Some((AbstractContainerMenu::new(container_id, MenuKind::Chest { rows: 6 }, Some(container)), Component::translatable("container.enderchest")))
             }
             MenuProvider::Crafting(pos) => Some((AbstractContainerMenu::crafting(container_id, pos), Component::translatable("container.crafting"))),
             MenuProvider::Stonecutter(pos) => Some((AbstractContainerMenu::stonecutter(container_id, pos), Component::translatable("container.stonecutter"))),

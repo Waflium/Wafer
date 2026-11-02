@@ -257,6 +257,7 @@ impl Server {
         }
         player.experience.enchantment_seed = old.experience.enchantment_seed;
         player.ender_chest_inventory = old.ender_chest_inventory;
+        player.bukkit_values = old.bukkit_values;
         player.seen_credits = old.seen_credits;
         player.entered_nether_position = old.entered_nether_position;
         player.current_explosion_impact_pos = old.current_explosion_impact_pos;
