@@ -235,11 +235,17 @@ fn escape_control_characters(c: char) -> Option<String> {
 }
 
 pub fn java_double_to_string(v: f64) -> String {
-    java_decimal(v.is_nan(), v.is_infinite(), v.is_sign_negative(), v == 0.0, (1e-3..1e7).contains(&v.abs()), format!("{v:e}"))
+    let shortest = format!("{v:e}");
+    let two_digits = format!("{v:.1e}");
+    let scientific = if shortest.contains('.') || two_digits.parse::<f64>() != Ok(v) { shortest } else { two_digits };
+    java_decimal(v.is_nan(), v.is_infinite(), v.is_sign_negative(), v == 0.0, (1e-3..1e7).contains(&v.abs()), scientific)
 }
 
 pub fn java_float_to_string(v: f32) -> String {
-    java_decimal(v.is_nan(), v.is_infinite(), v.is_sign_negative(), v == 0.0, (1e-3..1e7).contains(&v.abs()), format!("{v:e}"))
+    let shortest = format!("{v:e}");
+    let two_digits = format!("{v:.1e}");
+    let scientific = if shortest.contains('.') || two_digits.parse::<f32>() != Ok(v) { shortest } else { two_digits };
+    java_decimal(v.is_nan(), v.is_infinite(), v.is_sign_negative(), v == 0.0, (1e-3..1e7).contains(&v.abs()), scientific)
 }
 
 fn java_decimal(nan: bool, infinite: bool, negative: bool, zero: bool, plain: bool, scientific: String) -> String {
@@ -257,6 +263,10 @@ fn java_decimal(nan: bool, infinite: bool, negative: bool, zero: bool, plain: bo
     let (mantissa, exponent) = scientific.split_once('e').unwrap();
     let exponent: i32 = exponent.parse().unwrap();
     let digits: String = mantissa.chars().filter(|&c| c != '.').collect();
+    let digits = match digits.trim_end_matches('0') {
+        "" => &digits[..1],
+        trimmed => trimmed,
+    };
     if !plain {
         let fraction = if digits.len() > 1 { &digits[1..] } else { "0" };
         return format!("{sign}{}.{fraction}E{exponent}", &digits[..1]);

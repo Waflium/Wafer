@@ -194,6 +194,32 @@ fn snbt_matches_vanilla() {
 }
 
 #[test]
+fn decimals_print_like_java() {
+    let doubles = [
+        (f64::from_bits(1), "4.9E-324"),
+        (-f64::from_bits(1), "-4.9E-324"),
+        (f64::from_bits(2), "9.9E-324"),
+        (f64::from_bits(3), "1.5E-323"),
+        (f64::from_bits(7), "3.5E-323"),
+        (f64::from_bits(100), "4.94E-322"),
+        (f64::from_bits(1000), "4.94E-321"),
+        (1e23, "1.0E23"),
+        (0.5, "0.5"),
+        (2e-3, "0.002"),
+        (9e-4, "9.0E-4"),
+        (1e7, "1.0E7"),
+        (2e22, "2.0E22"),
+    ];
+    for (value, expected) in doubles {
+        assert_eq!(java_double_to_string(value), expected);
+    }
+    let floats = [(f32::from_bits(1), "1.4E-45"), (f32::from_bits(2), "2.8E-45"), (f32::from_bits(3), "4.2E-45"), (1e10, "1.0E10"), (0.5, "0.5"), (1e-40, "1.0E-40")];
+    for (value, expected) in floats {
+        assert_eq!(java_float_to_string(value), expected);
+    }
+}
+
+#[test]
 fn parse_fully_rejects_trailing_data() {
     assert_eq!(parse_fully(" {a:1} ").unwrap(), Nbt::Compound(vec![("a".into(), Nbt::Int(1))].into()));
     assert_eq!(error(&parse_fully("{a:1} x").unwrap_err()), "ERR Unexpected trailing data | CTX {a:1} x<--[HERE]");
