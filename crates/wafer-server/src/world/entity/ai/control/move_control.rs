@@ -9,7 +9,6 @@ use crate::world::level::BlockGetter;
 use crate::world::level::path_navigation_region::PathNavigationRegion;
 use crate::world::level::pathfinder::path_type::PathType;
 use crate::world::level::pathfinder::pathfinding_context::PathfindingContext;
-use crate::world::level::pathfinder::walk_node_evaluator::get_path_type_static;
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub enum Operation {
@@ -184,6 +183,7 @@ impl ServerLevel {
         let e = self.entity(id);
         let pos = BlockPos::containing(e.x() + dx as f64, e.block_position().y as f64, e.z() + dz as f64);
         let context = PathfindingContext::new(PathNavigationRegion::new(self), id);
-        get_path_type_static(&context, pos.x, pos.y, pos.z) == PathType::Walkable
+        let node_evaluator = &self.mob(id).expect("a mob").ai.navigation.path_finder.node_evaluator;
+        node_evaluator.get_path_type(&context, pos.x, pos.y, pos.z) == PathType::Walkable
     }
 }

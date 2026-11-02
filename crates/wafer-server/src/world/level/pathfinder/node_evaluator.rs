@@ -3,6 +3,7 @@ use wafer_core::{BlockPos, mth};
 use wafer_data::{BlockState, block_tags, blocks};
 
 use super::node::Node;
+use super::path_type::PathType;
 use super::pathfinding_context::PathfindingContext;
 use super::swim_node_evaluator::SwimNodeEvaluator;
 use super::target::Target;
@@ -86,6 +87,13 @@ impl NodeEvaluatorKind {
         match self {
             NodeEvaluatorKind::Walk(walk) => &mut walk.node_evaluator,
             NodeEvaluatorKind::Swim(swim) => &mut swim.node_evaluator,
+        }
+    }
+
+    pub fn get_path_type(&self, context: &PathfindingContext, x: i32, y: i32, z: i32) -> PathType {
+        match self {
+            NodeEvaluatorKind::Walk(walk) => walk.get_path_type(context, x, y, z),
+            NodeEvaluatorKind::Swim(swim) => swim.get_path_type(context, x, y, z),
         }
     }
 
