@@ -14,6 +14,10 @@ use crate::world::level::chunk::block_entities::EntityCreationType;
 use crate::world::level::storage::loot::loot_params::LootParams;
 use crate::world::level::storage::loot::loot_table::LootTable;
 
+const BOUND_TICKING_BLOCK_ENTITY_FOR_THROWABLE: &str = "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:783)";
+const BOUND_TICKING_BLOCK_ENTITY_ADD_CATEGORY: &str = "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:784)";
+const BOUND_TICKING_BLOCK_ENTITY_REPORTED: &str = "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:787)";
+
 impl ServerLevel {
     pub fn get_block_entity(&mut self, pos: BlockPos) -> Option<&mut BlockEntity> {
         if !self.is_in_valid_bounds(pos) {
@@ -164,11 +168,11 @@ impl ServerLevel {
         let mut kept = 0;
         for i in 0..list.len() {
             let (id, pos) = list[i];
-            let Some(ticker) = self.chunks.bound_ticker(id, pos) else { continue };
+            let Some((ticker, logged_invalid_block_state)) = self.chunks.bound_ticker(id, pos) else { continue };
             list[kept] = list[i];
             kept += 1;
             if tick_block_entities && self.in_block_ticking_range(pos.chunk()) {
-                self.tick_bound_block_entity(pos, ticker);
+                self.tick_bound_block_entity(pos, ticker, logged_invalid_block_state);
             }
         }
         list.truncate(kept);
@@ -178,16 +182,24 @@ impl ServerLevel {
         tickers.ticking = false;
     }
 
-    fn tick_bound_block_entity(&mut self, pos: BlockPos, ticker: BlockEntityTicker) {
+    fn tick_bound_block_entity(&mut self, pos: BlockPos, ticker: BlockEntityTicker, logged_invalid_block_state: bool) {
         if !self.world_border.is_within_bounds_pos(pos) || !self.chunks.is_ticking(pos.chunk()) || !self.entity_manager.are_entities_loaded(pos.chunk().pack()) {
             return;
         }
         let Some(entity) = self.chunks.block_entity_ref(pos) else { return };
         let ty = entity.ty();
+        let cached_block = entity.block_state();
         let _zone = profiler::zone_with(|| ty.name().to_string());
         let state = self.chunks.loaded_chunk(pos.chunk()).map(|c| c.block_state(pos)).unwrap_or_else(|| wafer_data::blocks::AIR.default_state());
         if !ty.is_valid(state) {
+            if !logged_invalid_block_state {
+                self.chunks.set_logged_invalid_block_state(pos, true);
+                warn!("Block entity {} @ {pos} state {state:?} invalid for ticking:", ty.name());
+            }
             return;
+        }
+        if logged_invalid_block_state {
+            self.chunks.set_logged_invalid_block_state(pos, false);
         }
         let _frames = crate::server::main_thread_frames::enter_static(&[
             "net.minecraft.world.level.chunk.LevelChunk$BoundTickingBlockEntity.tick(LevelChunk.java:773)",
@@ -196,6 +208,27 @@ impl ServerLevel {
             "net.minecraft.server.level.ServerLevel.tick(ServerLevel.java:461)",
             crate::server::command_frames::TICK_CHILDREN_LEVELS,
         ]);
+        if let Err(panic) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.tick_block_entity_ticker(pos, state, ticker))) {
+            let below = crate::server::main_thread_frames::current().split_off(1);
+            let mut report = match panic.downcast::<crate::crash_report::ReportedException>() {
+                Ok(reported) => reported.0,
+                Err(panic) => {
+                    let creator: Vec<&'static str> = std::iter::once(BOUND_TICKING_BLOCK_ENTITY_FOR_THROWABLE).chain(below.iter().copied()).collect();
+                    let _creator = crate::util::java_stack::enter_all(&creator);
+                    crate::crash_report::CrashReport::for_throwable(&crate::crash_report::throwable_of(&panic), "Ticking block entity")
+                }
+            };
+            let category_frames = std::iter::once(BOUND_TICKING_BLOCK_ENTITY_ADD_CATEGORY).chain(below.iter().copied()).map(str::to_string).collect();
+            let category = report.add_category_with_stack_trace("Block entity being ticked", category_frames);
+            category.set_detail("Name", crate::world::level::block::entity::name_for_reporting(ty));
+            category.set_detail("Cached block", format!("{cached_block:?}"));
+            category.set_detail("Actual block", format!("{:?}", self.chunks.loaded_block_state(pos)));
+            category.set_detail("Block location", crate::crash_report::CrashReportCategory::format_location(self.chunks.min_y(), self.chunks.max_y(), pos.x, pos.y, pos.z));
+            report.throw_reported(std::iter::once(BOUND_TICKING_BLOCK_ENTITY_REPORTED).chain(below).collect());
+        }
+    }
+
+    fn tick_block_entity_ticker(&mut self, pos: BlockPos, state: BlockState, ticker: BlockEntityTicker) {
         match ticker {
             BlockEntityTicker::Furnace => self.furnace_server_tick(pos, state),
             BlockEntityTicker::Hopper => self.hopper_push_items_tick(pos, state),

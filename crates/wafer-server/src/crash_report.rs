@@ -352,6 +352,7 @@ impl CrashReport {
     }
 
     pub fn add_category_with_stack_trace(&mut self, name: &str, stack_trace: Vec<String>) -> &mut CrashReportCategory {
+        let stack_trace = if self.tracking_stack_trace { stack_trace } else { Vec::new() };
         let mut category = CrashReportCategory { title: name.to_string(), entries: Vec::new(), stack_trace };
         if self.tracking_stack_trace {
             let size = category.stack_trace.len();
@@ -382,12 +383,21 @@ impl CrashReport {
         self.system_report.push((key.to_string(), value.into()));
     }
 
+    fn replace_message(&self, description: &str) -> Option<String> {
+        matches!(description, "java.lang.NullPointerException" | "java.lang.StackOverflowError" | "java.lang.OutOfMemoryError").then(|| format!("{description}: {}", self.title))
+    }
+
     fn exception_message(&self) -> String {
         if let Some(throwable) = &self.throwable {
+            if let Some(description) = self.replace_message(&throwable.description) {
+                let mut replaced = throwable.clone();
+                replaced.description = description;
+                return replaced.print_stack_trace_with_separator(LINE_SEPARATOR);
+            }
             return throwable.print_stack_trace_with_separator(LINE_SEPARATOR);
         }
         let mut out = String::new();
-        out.push_str(&self.exception);
+        out.push_str(self.replace_message(&self.exception).as_deref().unwrap_or(&self.exception));
         out.push_str(LINE_SEPARATOR);
         for frame in &self.stack_trace {
             out.push_str("\tat ");

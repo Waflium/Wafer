@@ -2285,8 +2285,14 @@ impl ChunkCache {
         chunks.get_mut(&chunk_pos).unwrap().update_block_entity_ticker(pos, block_entity_tickers);
     }
 
-    pub fn bound_ticker(&self, id: u64, pos: BlockPos) -> Option<crate::world::level::block::entity::BlockEntityTicker> {
+    pub fn bound_ticker(&self, id: u64, pos: BlockPos) -> Option<(crate::world::level::block::entity::BlockEntityTicker, bool)> {
         self.chunks.get(&pos.chunk())?.bound_ticker(id, pos)
+    }
+
+    pub fn set_logged_invalid_block_state(&mut self, pos: BlockPos, logged: bool) {
+        if let Some(chunk) = self.chunks.get_mut(&pos.chunk()) {
+            chunk.set_logged_invalid_block_state(pos, logged);
+        }
     }
 
     pub fn write_chunk_with_light(&mut self, pos: ChunkPos, w: &mut Writer) {

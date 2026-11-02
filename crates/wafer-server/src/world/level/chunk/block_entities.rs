@@ -139,7 +139,7 @@ impl BlockEntityTickers {
 pub struct ChunkBlockEntities {
     pub map: BlockEntityMap,
     pub pending: PendingBlockEntities,
-    pub tickers_in_level: HashMap<BlockPos, (u64, BlockEntityTicker)>,
+    pub tickers_in_level: HashMap<BlockPos, (u64, BlockEntityTicker, bool)>,
 }
 
 const GET_BLOCK_ENTITY: [&str; 3] = [
@@ -274,10 +274,13 @@ impl LevelChunk {
                 self.block_entities.tickers_in_level.remove(&pos);
             }
             Some(ticker) => match self.block_entities.tickers_in_level.get_mut(&pos) {
-                Some(existing) => existing.1 = ticker,
+                Some(existing) => {
+                    existing.1 = ticker;
+                    existing.2 = false;
+                }
                 None if self.loaded => {
                     let id = tickers.add(pos);
-                    self.block_entities.tickers_in_level.insert(pos, (id, ticker));
+                    self.block_entities.tickers_in_level.insert(pos, (id, ticker, false));
                 }
                 None => {}
             },
@@ -313,8 +316,14 @@ impl LevelChunk {
         self.block_entities.tickers_in_level.clear();
     }
 
-    pub fn bound_ticker(&self, id: u64, pos: BlockPos) -> Option<BlockEntityTicker> {
-        self.block_entities.tickers_in_level.get(&pos).filter(|(bound, _)| *bound == id).map(|(_, ticker)| *ticker)
+    pub fn bound_ticker(&self, id: u64, pos: BlockPos) -> Option<(BlockEntityTicker, bool)> {
+        self.block_entities.tickers_in_level.get(&pos).filter(|(bound, _, _)| *bound == id).map(|(_, ticker, logged_invalid_block_state)| (*ticker, *logged_invalid_block_state))
+    }
+
+    pub fn set_logged_invalid_block_state(&mut self, pos: BlockPos, logged: bool) {
+        if let Some(ticker) = self.block_entities.tickers_in_level.get_mut(&pos) {
+            ticker.2 = logged;
+        }
     }
 
     pub fn get_block_entities_pos(&self) -> Vec<BlockPos> {

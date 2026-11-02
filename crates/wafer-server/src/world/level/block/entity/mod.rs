@@ -296,7 +296,7 @@ impl BlockEntity {
     }
 
     pub fn get_name_for_reporting(&self) -> String {
-        format!("{} // {}", self.ty.name(), canonical_class_name(self.ty.name()))
+        name_for_reporting(self.ty)
     }
 
     pub fn problem_path(&self) -> PathElement {
@@ -841,6 +841,10 @@ fn create_exception(ty: BlockEntityType, pos: BlockPos, state: BlockState) -> cr
         format!("java.lang.IllegalStateException: Invalid block entity {} // {} state at {pos}, got {state:?}", ty.name(), canonical_class_name(ty.name()))
     };
     crate::util::java_throwable::JavaThrowable::new(description, create_frames::create_frames(ty.name()).to_vec())
+}
+
+pub fn name_for_reporting(ty: BlockEntityType) -> String {
+    format!("{} // {}", ty.name(), canonical_class_name(ty.name()))
 }
 
 fn canonical_class_name(type_name: &str) -> &'static str {

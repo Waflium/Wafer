@@ -242,12 +242,15 @@ impl ServerLevel {
         let movement = piston.get_movement_direction();
         let delta_progress = (new_progress - piston.progress) as f64;
         let state = piston.get_collision_related_block_state();
-        let shape = state.collision_voxel_shape();
+        let (shape, offset) = if state.is_block(blocks::MOVING_PISTON) {
+            (std::borrow::Cow::Owned(crate::world::level::block::moving_piston_block::get_collision_shape(self, pos)), Vec3::ZERO)
+        } else {
+            (std::borrow::Cow::Borrowed(state.collision_voxel_shape()), state.collision_offset(pos))
+        };
         if shape.is_empty() {
             return;
         }
-        let offset = state.collision_offset(pos);
-        let shape_bounds = bounds(shape).move_by(offset.x, offset.y, offset.z);
+        let shape_bounds = bounds(&shape).move_by(offset.x, offset.y, offset.z);
         let aabb = piston.move_by_position_and_progress(pos, shape_bounds);
         let entities = self.get_entities(None, &piston_math::get_movement_area(&aabb, movement, delta_progress).minmax(&aabb));
         if entities.is_empty() {
