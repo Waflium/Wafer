@@ -43,6 +43,7 @@ pub struct Response {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Phase {
     Header,
+    HeaderFields,
     Body { status: u16 },
 }
 
@@ -54,6 +55,7 @@ pub enum Handshake {
     Eof,
     Unrecognized,
     Alert(String),
+    CertificateUnknown,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -310,10 +312,11 @@ impl Failure {
                         &TLS_HANDSHAKE_DECODE[3..],
                     ),
                 ),
+                Handshake::CertificateUnknown => certificate_unknown(),
             },
-            Failure::ReadTimedOut(phase) => JavaThrowable::new("java.net.SocketTimeoutException: Read timed out", self.data_read_frames(*phase, &SOCKET_READ_TIMED_OUT, https)),
-            Failure::ConnectionReset(phase) => JavaThrowable::new("java.net.SocketException: Connection reset", self.data_read_frames(*phase, &SOCKET_READ_RESET, https)),
-            Failure::ConnectionAborted(phase, text) => JavaThrowable::new(format!("java.net.SocketException: {text}"), self.data_read_frames(*phase, &SOCKET_READ_RESET, https)),
+            Failure::ReadTimedOut(phase) => chained(*phase, JavaThrowable::new("java.net.SocketTimeoutException: Read timed out", self.data_read_frames(*phase, &SOCKET_READ_TIMED_OUT, https))),
+            Failure::ConnectionReset(phase) => chained(*phase, JavaThrowable::new("java.net.SocketException: Connection reset", self.data_read_frames(*phase, &SOCKET_READ_RESET, https))),
+            Failure::ConnectionAborted(phase, text) => chained(*phase, JavaThrowable::new(format!("java.net.SocketException: {text}"), self.data_read_frames(*phase, &SOCKET_READ_RESET, https))),
             Failure::UnexpectedEof => {
                 let mut frames = vec![PARSE_HEADER_EOF, PARSE_HTTP, PARSE_HEADER_EOF_RETRY, PARSE_HTTP, GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE];
                 if https {
@@ -343,9 +346,22 @@ impl Failure {
         let reset = socket_head == SOCKET_READ_RESET;
         let mut frames = socket_head.to_vec();
         frames.extend(transport);
-        frames.extend(BUFFERED_READ);
         match phase {
+            Phase::HeaderFields => {
+                frames.extend([
+                    "java.base/java.io.BufferedInputStream.read(BufferedInputStream.java:308)",
+                    "java.base/sun.net.www.MessageHeader.mergeHeader(MessageHeader.java:546)",
+                    "java.base/sun.net.www.MessageHeader.parseHeader(MessageHeader.java:504)",
+                    "java.base/sun.net.www.http.HttpClient.parseHTTPHeader(HttpClient.java:808)",
+                    PARSE_HTTP,
+                ]);
+                if reset {
+                    frames.push(PARSE_HTTP_RETRY);
+                }
+                frames.extend([GET_INPUT_STREAM_0_READ, GET_INPUT_STREAM, GET_RESPONSE_CODE, READ_SERVICE_RESPONSE_130]);
+            }
             Phase::Header => {
+                frames.extend(BUFFERED_READ);
                 frames.push(PARSE_HEADER_READ);
                 frames.push(PARSE_HTTP);
                 if reset {
@@ -358,6 +374,7 @@ impl Failure {
                 frames.push(READ_SERVICE_RESPONSE_130);
             }
             Phase::Body { status } => {
+                frames.extend(BUFFERED_READ);
                 frames.push(METERED_STREAM_READ);
                 frames.extend(body_read_tail(status));
             }
@@ -527,6 +544,69 @@ fn alert_name(description: &rustls::AlertDescription) -> String {
     name
 }
 
+fn chained(phase: Phase, throwable: JavaThrowable) -> JavaThrowable {
+    if phase != Phase::HeaderFields {
+        return throwable;
+    }
+    let frames = vec![
+        "java.base/jdk.internal.reflect.DirectConstructorHandleAccessor.newInstance(DirectConstructorHandleAccessor.java:62)",
+        "java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:499)",
+        "java.base/java.lang.reflect.Constructor.newInstance(Constructor.java:483)",
+        "java.base/sun.net.www.protocol.http.HttpURLConnection.getChainedException(HttpURLConnection.java:1751)",
+        "java.base/sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1321)",
+        GET_INPUT_STREAM,
+        "com.mojang.authlib.minecraft.client.MinecraftClient.readServiceResponse(MinecraftClient.java:140)",
+    ];
+    JavaThrowable::new(throwable.description.clone(), frames).with_cause(throwable)
+}
+
+fn certificate_unknown() -> JavaThrowable {
+    const UNABLE: &str = "unable to find valid certification path to requested target";
+    let mut handshake = vec![
+        "java.base/sun.security.ssl.Alert.createSSLException(Alert.java:130)",
+        "java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:376)",
+        "java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:319)",
+        "java.base/sun.security.ssl.TransportContext.fatal(TransportContext.java:314)",
+        "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.checkServerCerts(CertificateMessage.java:1295)",
+        "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.onConsumeCertificate(CertificateMessage.java:1172)",
+        "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.consume(CertificateMessage.java:1115)",
+        "java.base/sun.security.ssl.SSLHandshake.consume(SSLHandshake.java:421)",
+        "java.base/sun.security.ssl.HandshakeContext.dispatch(HandshakeContext.java:477)",
+        "java.base/sun.security.ssl.HandshakeContext.dispatch(HandshakeContext.java:448)",
+        "java.base/sun.security.ssl.TransportContext.dispatch(TransportContext.java:199)",
+        "java.base/sun.security.ssl.SSLTransport.decode(SSLTransport.java:172)",
+    ];
+    handshake.extend(&TLS_HANDSHAKE_DECODE[2..]);
+    handshake.push(TLS_HANDSHAKE_OUTER[0]);
+    handshake.push("java.base/sun.net.www.protocol.https.AbstractDelegateHttpsURLConnection.connect(AbstractDelegateHttpsURLConnection.java:187)");
+    handshake.extend(&TLS_HANDSHAKE_OUTER[2..]);
+    handshake.push(READ_SERVICE_RESPONSE_130);
+    let validator: Vec<&'static str> = [
+        "java.base/sun.security.validator.PKIXValidator.doBuild(PKIXValidator.java:387)",
+        "java.base/sun.security.validator.PKIXValidator.engineValidate(PKIXValidator.java:270)",
+        "java.base/sun.security.validator.Validator.validate(Validator.java:256)",
+        "java.base/sun.security.ssl.X509TrustManagerImpl.checkTrusted(X509TrustManagerImpl.java:230)",
+        "java.base/sun.security.ssl.X509TrustManagerImpl.checkServerTrusted(X509TrustManagerImpl.java:132)",
+        "java.base/sun.security.ssl.CertificateMessage$T13CertificateConsumer.checkServerCerts(CertificateMessage.java:1279)",
+    ]
+    .into_iter()
+    .chain(handshake[5..].iter().copied())
+    .collect();
+    let builder: Vec<&'static str> = [
+        "java.base/sun.security.provider.certpath.SunCertPathBuilder.build(SunCertPathBuilder.java:148)",
+        "java.base/sun.security.provider.certpath.SunCertPathBuilder.engineBuild(SunCertPathBuilder.java:129)",
+        "java.base/java.security.cert.CertPathBuilder.build(CertPathBuilder.java:299)",
+        "java.base/sun.security.validator.PKIXValidator.doBuild(PKIXValidator.java:382)",
+    ]
+    .into_iter()
+    .chain(validator[1..].iter().copied())
+    .collect();
+    JavaThrowable::new(format!("javax.net.ssl.SSLHandshakeException: (certificate_unknown) PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: {UNABLE}"), handshake).with_cause(
+        JavaThrowable::new(format!("sun.security.validator.ValidatorException: PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: {UNABLE}"), validator)
+            .with_cause(JavaThrowable::new(format!("sun.security.provider.certpath.SunCertPathBuilderException: {UNABLE}"), builder)),
+    )
+}
+
 fn classify_handshake(error: &io::Error, recorder: &Recorder) -> Failure {
     if recorder.timed_out() {
         return Failure::Handshake(Handshake::ReadTimedOut);
@@ -543,9 +623,7 @@ fn classify_handshake(error: &io::Error, recorder: &Recorder) -> Failure {
     match rustls_error {
         Some(rustls::Error::AlertReceived(description)) => Failure::Handshake(Handshake::Alert(alert_name(description))),
         Some(rustls::Error::InvalidMessage(_)) => Failure::Handshake(Handshake::Unrecognized),
-        Some(rustls::Error::InvalidCertificate(_)) => Failure::Other(
-            "PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target".to_string(),
-        ),
+        Some(rustls::Error::InvalidCertificate(_)) => Failure::Handshake(Handshake::CertificateUnknown),
         _ => Failure::Other(error.to_string()),
     }
 }
@@ -652,11 +730,11 @@ impl Reader {
     }
 }
 
-fn header_failure(error: ReadError) -> Failure {
+fn header_failure(error: ReadError, phase: Phase) -> Failure {
     match error {
-        ReadError::Timeout => Failure::ReadTimedOut(Phase::Header),
-        ReadError::Reset => Failure::ConnectionReset(Phase::Header),
-        ReadError::Aborted(text) => Failure::ConnectionAborted(Phase::Header, text),
+        ReadError::Timeout => Failure::ReadTimedOut(phase),
+        ReadError::Reset => Failure::ConnectionReset(phase),
+        ReadError::Aborted(text) => Failure::ConnectionAborted(phase, text),
         ReadError::Other(message) => Failure::Other(message),
     }
 }
@@ -698,7 +776,7 @@ struct Head {
 }
 
 async fn read_head(reader: &mut Reader) -> Result<Head, Failure> {
-    let status_line = match reader.read_line().await.map_err(header_failure)? {
+    let status_line = match reader.read_line().await.map_err(|error| header_failure(error, Phase::Header))? {
         Some(line) => line,
         None => return Err(Failure::UnexpectedEof),
     };
@@ -707,8 +785,9 @@ async fn read_head(reader: &mut Reader) -> Result<Head, Failure> {
     let status = parts.next().and_then(|code| code.trim().parse::<u16>().ok());
     let (true, Some(status)) = (version.starts_with("HTTP/"), status) else { return Err(Failure::Other(format!("Invalid Http response"))) };
     let mut head = Head { status, content_type: None, content_length: None, chunked: false, location: None };
+    let fields_phase = if matches!(reader.connection, Connection::Plain(_)) { Phase::HeaderFields } else { Phase::Header };
     loop {
-        match reader.read_line().await.map_err(header_failure)? {
+        match reader.read_line().await.map_err(|error| header_failure(error, fields_phase))? {
             None => break,
             Some(line) if line.is_empty() => break,
             Some(line) => {
@@ -822,7 +901,11 @@ async fn send_once(method: Method, url: &JavaUrl, body: Option<&[u8]>) -> Result
                 let body = read_body(&mut reader, &head).await?;
                 return Ok((Response { status: head.status, content_type: head.content_type, body }, head.location));
             }
-            Err(Failure::UnexpectedEof | Failure::ConnectionReset(Phase::Header) | Failure::ConnectionAborted(Phase::Header, _)) if !failed_once => failed_once = true,
+            Err(
+                Failure::UnexpectedEof
+                | Failure::ConnectionReset(Phase::Header | Phase::HeaderFields)
+                | Failure::ConnectionAborted(Phase::Header | Phase::HeaderFields, _),
+            ) if !failed_once => failed_once = true,
             Err(failure) => return Err(failure),
         }
     }

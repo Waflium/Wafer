@@ -174,6 +174,17 @@ impl MinecraftClientException {
         }
     }
 
+    fn is_authentication_unavailable(&self) -> bool {
+        match (&self.error_type, &self.http) {
+            (ErrorType::ServiceUnavailable, _) => true,
+            (ErrorType::HttpError, Some((status, error))) => {
+                let special = ["ForbiddenOperationException", "multiplayer.access.banned", "FORCED_USERNAME_CHANGE", "InsufficientPrivilegesException"];
+                !special.iter().any(|name| error.eq_ignore_ascii_case(name)) && *status != 401 && *status >= 500
+            }
+            _ => false,
+        }
+    }
+
     pub fn log_html_body(&self, thread: Option<&str>) {
         if let Some(message) = &self.html_body_log {
             match thread {
@@ -741,7 +752,61 @@ async fn client_post(url: &JavaUrl, body: &[String], context: &[&'static str]) -
     read_service_response(java_http_url_connection::send(Method::Post, url, Some(&body)).await, url, true, &[POST_WITH_ETAG, CLIENT_POST], context).await
 }
 
+fn concatenate_url(check_url: &str, arguments: &[(&str, &str)]) -> String {
+    let query = arguments.iter().map(|(key, value)| format!("{}={}", url_encode(key), url_encode(value))).collect::<Vec<_>>().join("&");
+    let separator = if check_url.contains('?') { '&' } else { '?' };
+    format!("{check_url}{separator}{query}")
+}
+
+pub async fn has_joined_server(check_url: &str, arguments: &[(&str, &str)], thread: &str) -> Result<Option<serde_json::Value>, ()> {
+    let Ok(url) = JavaUrl::constant(&concatenate_url(check_url, arguments)) else { return Err(()) };
+    match client_get(&url, &[]).await {
+        Ok(response) => Ok(response),
+        Err(exception) => {
+            exception.log_html_body(Some(thread));
+            if exception.is_authentication_unavailable() { Err(()) } else { Ok(None) }
+        }
+    }
+}
+
+fn url_encode(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        match byte {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'.' | b'-' | b'*' | b'_' => out.push(byte as char),
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+fn url_connection_class(url: &JavaUrl) -> Option<&'static str> {
+    match url.protocol.as_str() {
+        "file" => Some("sun.net.www.protocol.file.FileURLConnection"),
+        "ftp" => Some("sun.net.www.protocol.ftp.FtpURLConnection"),
+        "jar" => Some("sun.net.www.protocol.jar.JarURLConnection"),
+        "jrt" => Some("sun.net.www.protocol.jrt.JavaRuntimeURLConnection"),
+        "mailto" => Some("sun.net.www.protocol.mailto.MailToURLConnection"),
+        _ => None,
+    }
+}
+
 async fn get_json(url: &JavaUrl) -> Option<serde_json::Value> {
+    if let Some(connection) = url_connection_class(url) {
+        let frames = [
+            "com.mojang.authlib.minecraft.client.MinecraftClient.createUrlConnection(MinecraftClient.java:211)",
+            "com.mojang.authlib.minecraft.client.MinecraftClient.prepareRequest(MinecraftClient.java:177)",
+            "com.mojang.authlib.minecraft.client.MinecraftClient.getWithEtag(MinecraftClient.java:80)",
+            CLIENT_GET,
+        ];
+        let message = format!(
+            "java.lang.ClassCastException: class {connection} cannot be cast to class java.net.HttpURLConnection ({connection} and java.net.HttpURLConnection are in module java.base of loader 'bootstrap')"
+        );
+        let throwable = JavaThrowable::new(message, frames.into_iter().chain(DISCOVERY_CONTEXT).collect());
+        warn!(thread: DISCOVERY_THREAD, "Failed to connect\n{}", throwable.print_stack_trace().trim_end());
+        return None;
+    }
     match client_get(url, &DISCOVERY_CONTEXT).await {
         Ok(value) => value,
         Err(exception) => {
@@ -762,6 +827,18 @@ mod tests {
     use super::*;
 
     const CALLER: &str = "Caller.frame(Caller.java:1)";
+
+    #[test]
+    fn has_joined_queries_are_built_like_http_discovery_service() {
+        assert_eq!(
+            concatenate_url("https://sessionserver.mojang.com/session/minecraft/hasJoined", &[("serverId", "-1a2b"), ("username", "Pro be&ä")]),
+            "https://sessionserver.mojang.com/session/minecraft/hasJoined?serverId=-1a2b&username=Pro+be%26%C3%A4"
+        );
+        assert_eq!(
+            concatenate_url("https://x.test/a?b=c", &[("ip", "0:0:0:0:0:0:0:1"), ("serverId", "-1a2b"), ("username", "Pro be&ä")]),
+            "https://x.test/a?b=c&ip=0%3A0%3A0%3A0%3A0%3A0%3A0%3A1&serverId=-1a2b&username=Pro+be%26%C3%A4"
+        );
+    }
 
     #[test]
     fn http_errors_become_authentication_exceptions_with_the_caller_frames() {
@@ -803,10 +880,12 @@ mod tests {
             (fixture!("tls_rst"), Failure::Handshake(Handshake::ResetOnWrite)),
             (fixture!("tls_garbage"), Failure::Handshake(Handshake::Unrecognized)),
             (fixture!("t_alert"), Failure::Handshake(Handshake::Alert("handshake_failure".to_string()))),
+            (fixture!("pkix"), Failure::Handshake(Handshake::CertificateUnknown)),
             (fixture!("t_rsthello"), Failure::Handshake(Handshake::ResetOnRead)),
             (fixture!("http_silent"), Failure::ReadTimedOut(header)),
             (fixture!("http_close"), Failure::UnexpectedEof),
             (fixture!("http_rst"), Failure::ConnectionReset(header)),
+            (fixture!("http_partial_rst"), Failure::ConnectionReset(Phase::HeaderFields)),
             (fixture!("http_trunc"), Failure::PrematureEof { chunked: false, status: 200 }),
             (fixture!("http_trunc_chunked"), Failure::PrematureEof { chunked: true, status: 200 }),
             (fixture!("http_trunc_rst"), Failure::ConnectionReset(body)),

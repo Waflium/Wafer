@@ -1,6 +1,5 @@
 use wafer_core::java_string::JavaStr;
 use std::net::SocketAddr;
-use std::sync::LazyLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
@@ -142,7 +141,7 @@ async fn run(r: &mut PacketReader, w: &mut PacketWriter, context: &ListenerConte
         w.enable_encryption(&secret);
         let thread = format!("User Authenticator #{}", UNIQUE_THREAD_ID.fetch_add(1, Ordering::Relaxed) + 1);
         let ip = config.prevent_proxy_connections.then(|| host_address(address.ip()));
-        match has_joined_server(services, &name, &hash, ip.as_deref()).await {
+        match has_joined_server(services, &name, &hash, ip.as_deref(), &thread).await {
             Ok(Some(profile)) => {
                 info!(thread: &thread, "UUID of player {} is {}", profile.name, crate::world::level::storage::format_uuid(profile.uuid));
                 context.server_activity_monitor.report_login_activity();
@@ -202,8 +201,6 @@ async fn protocol_error(w: &mut PacketWriter, user: &LoginUser, exception: &str)
     Ok(None)
 }
 
-static HTTP: LazyLock<reqwest::Client> = LazyLock::new(|| reqwest::Client::builder().timeout(Duration::from_secs(10)).build().expect("an HTTP client"));
-
 fn host_address(ip: std::net::IpAddr) -> String {
     match ip {
         std::net::IpAddr::V4(v4) => v4.to_string(),
@@ -211,21 +208,14 @@ fn host_address(ip: std::net::IpAddr) -> String {
     }
 }
 
-async fn has_joined_server(services: &Services, name: &str, server_hash: &str, ip: Option<&str>) -> anyhow::Result<Option<Profile>> {
+async fn has_joined_server(services: &Services, name: &str, server_hash: &str, ip: Option<&str>, thread: &str) -> anyhow::Result<Option<Profile>> {
     let Some(url) = services.url_async("session", "verify").await else { bail!("Services are unavailable") };
-    let mut request = HTTP.get(url).query(&[("username", name), ("serverId", server_hash)]);
+    let mut arguments = Vec::with_capacity(3);
     if let Some(ip) = ip {
-        request = request.query(&[("ip", ip)]);
+        arguments.push(("ip", ip));
     }
-    let response = request.send().await?;
-    let status = response.status();
-    if status.is_server_error() {
-        bail!("session server returned {status}");
-    }
-    if status != reqwest::StatusCode::OK {
-        return Ok(None);
-    }
-    let json: serde_json::Value = response.json().await?;
+    arguments.extend([("serverId", server_hash), ("username", name)]);
+    let Some(json) = crate::server::services::has_joined_server(&url, &arguments, thread).await.map_err(|()| anyhow::anyhow!("Services are unavailable"))? else { return Ok(None) };
     let (Some(id), Some(name)) = (json["id"].as_str(), json["name"].as_str()) else { return Ok(None) };
     let uuid = u128::from_str_radix(id, 16)?;
     let properties = json["properties"]
