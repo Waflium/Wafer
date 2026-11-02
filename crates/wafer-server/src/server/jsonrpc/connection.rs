@@ -10,6 +10,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::sync::mpsc;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::frame::Frame;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::{Data, OpCode};
 use tokio_tungstenite::tungstenite::protocol::{Role, WebSocketConfig};
 
 use super::gson;
@@ -313,7 +315,7 @@ impl Connection {
                 }
             }
             while let Ok(text) = notifications.try_recv() {
-                if websocket.send(Message::text(text.to_string())).await.is_err() {
+                if websocket.send(text_message(&text)).await.is_err() {
                     return Closed::Cleanly;
                 }
             }
@@ -327,7 +329,7 @@ impl Connection {
                 }
                 notification = notifications.recv() => match notification {
                     Some(text) => {
-                        if websocket.send(Message::text(text.to_string())).await.is_err() {
+                        if websocket.send(text_message(&text)).await.is_err() {
                             return Closed::Cleanly;
                         }
                     }
@@ -343,8 +345,8 @@ impl Connection {
         message: Option<Result<Message, tokio_tungstenite::tungstenite::Error>>,
     ) -> Option<Closed> {
         match message {
-            Some(Ok(Message::Text(text))) => match self.handle_text(text.as_str()).await {
-                Some(Ok(response)) => websocket.send(Message::text(response)).await.is_err().then_some(Closed::Cleanly),
+            Some(Ok(Message::Text(text))) => match self.handle_text(&wafer_core::java_string::from_code_points(text.as_str())).await {
+                Some(Ok(response)) => websocket.send(text_message(&response)).await.is_err().then_some(Closed::Cleanly),
                 Some(Err(exception)) => Some(Closed::Exception(exception)),
                 None => None,
             },
@@ -676,7 +678,7 @@ fn take_hixie_frame(buffer: &mut Vec<u8>) -> Option<HixieFrame> {
             if end > HIXIE_MAX_FRAME_SIZE {
                 return Some(HixieFrame::TooLong);
             }
-            let text = String::from_utf8_lossy(&buffer[1..1 + end]).into_owned();
+            let text = wafer_core::java_string::decode_utf8(&buffer[1..1 + end]).into_owned();
             buffer.drain(..end + 2);
             Some(HixieFrame::Text(text))
         }
@@ -685,10 +687,17 @@ fn take_hixie_frame(buffer: &mut Vec<u8>) -> Option<HixieFrame> {
     }
 }
 
+fn text_message(text: &str) -> Message {
+    match wafer_core::java_string::to_netty_utf8(text) {
+        std::borrow::Cow::Borrowed(_) => Message::text(text),
+        std::borrow::Cow::Owned(bytes) => Message::Frame(Frame::message(bytes, OpCode::Data(Data::Text), true)),
+    }
+}
+
 async fn write_hixie<S: AsyncWrite + Unpin>(stream: &mut S, text: &str) -> std::io::Result<()> {
     let mut frame = Vec::with_capacity(text.len() + 2);
     frame.push(0x00);
-    frame.extend_from_slice(text.as_bytes());
+    frame.extend_from_slice(&wafer_core::java_string::to_netty_utf8(text));
     frame.push(0xFF);
     stream.write_all(&frame).await
 }

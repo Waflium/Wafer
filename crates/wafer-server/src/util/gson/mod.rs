@@ -373,11 +373,11 @@ pub fn parse_strict_value(json: &str) -> Result<serde_json::Value, String> {
 }
 
 pub fn parse_strict_bytes(bytes: &[u8]) -> Result<serde_json::Value, String> {
-    parse_strict_value(&String::from_utf8_lossy(bytes))
+    parse_strict_value(&wafer_core::java_string::decode_utf8(bytes))
 }
 
 pub fn parse_strict_bytes_element_throwable(bytes: &[u8]) -> Result<JsonElement, JavaThrowable> {
-    parse_strict_throwable(&String::from_utf8_lossy(bytes))
+    parse_strict_throwable(&wafer_core::java_string::decode_utf8(bytes))
 }
 
 pub fn to_stable_string(element: &JsonElement) -> String {

@@ -3,6 +3,7 @@ use std::io;
 use std::path::Path;
 
 use chrono::{Local, Offset};
+use wafer_core::java_string::{from_utf16, utf16_units};
 
 use crate::util::java_integer::{parse_int, parse_long};
 
@@ -169,13 +170,13 @@ fn split_logical_line(line: &str) -> (String, String) {
 
 fn unescape(input: &str) -> String {
     let chars: Vec<char> = input.chars().collect();
-    let mut out = String::with_capacity(input.len());
+    let mut out: Vec<u16> = Vec::with_capacity(input.len());
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
         i += 1;
         if c != '\\' {
-            out.push(c);
+            out.extend(utf16_units(c.encode_utf8(&mut [0; 4])));
             continue;
         }
         let Some(&next) = chars.get(i) else { break };
@@ -184,17 +185,16 @@ fn unescape(input: &str) -> String {
             'u' => {
                 let hex: String = chars[i..(i + 4).min(chars.len())].iter().collect();
                 i += 4;
-                let unit = u16::from_str_radix(&hex, 16).unwrap_or(0);
-                out.push(char::from_u32(unit as u32).unwrap_or('\u{fffd}'));
+                out.push(u16::from_str_radix(&hex, 16).unwrap_or(0));
             }
-            't' => out.push('\t'),
-            'r' => out.push('\r'),
-            'n' => out.push('\n'),
-            'f' => out.push('\x0c'),
-            other => out.push(other),
+            't' => out.push(b'\t' as u16),
+            'r' => out.push(b'\r' as u16),
+            'n' => out.push(b'\n' as u16),
+            'f' => out.push(0x0c),
+            other => out.extend(utf16_units(other.encode_utf8(&mut [0; 4]))),
         }
     }
-    out
+    from_utf16(&out)
 }
 
 fn save_convert(input: &str, escape_space: bool, escape_unicode: bool) -> String {
@@ -224,8 +224,7 @@ fn save_convert(input: &str, escape_space: bool, escape_unicode: bool) -> String
                 out.push(c);
             }
             _ if escape_unicode && ((c as u32) < 0x20 || (c as u32) > 0x7e) => {
-                let mut units = [0u16; 2];
-                for unit in c.encode_utf16(&mut units) {
+                for unit in utf16_units(c.encode_utf8(&mut [0; 4])) {
                     out.push_str(&format!("\\u{unit:04X}"));
                 }
             }
@@ -275,7 +274,7 @@ pub fn load_from_file(path: &Path) -> Properties {
         }
     };
     match std::str::from_utf8(&bytes) {
-        Ok(text) => Properties::load(text),
+        Ok(text) => Properties::load(&wafer_core::java_string::from_code_points(text)),
         Err(_) => {
             info!("Failed to load properties as UTF-8 from file {}, trying ISO_8859_1", path.display());
             Properties::load(&bytes.iter().map(|&b| b as char).collect::<String>())
@@ -284,9 +283,40 @@ pub fn load_from_file(path: &Path) -> Properties {
 }
 
 pub fn store_to_file(properties: &Properties, path: &Path) {
-    if std::fs::write(path, properties.store("Minecraft server properties", false)).is_err() {
+    let content = properties.store("Minecraft server properties", false);
+    let (bytes, malformed) = buffered_writer_bytes(&content);
+    if std::fs::write(path, bytes).is_err() || malformed {
         error!("Failed to store properties to file: {}", path.display());
     }
+}
+
+const BUFFERED_WRITER_CHARS: usize = 8192;
+
+fn buffered_writer_bytes(content: &str) -> (Vec<u8>, bool) {
+    if !wafer_core::java_string::contains_lone_surrogate(content) {
+        return (content.as_bytes().to_vec(), false);
+    }
+    let units: Vec<u16> = utf16_units(content).collect();
+    let mut malformed = None;
+    let mut index = 0;
+    for decoded in char::decode_utf16(units.iter().copied()) {
+        match decoded {
+            Ok(c) => index += c.len_utf16(),
+            Err(_) => {
+                malformed = Some(index);
+                break;
+            }
+        }
+    }
+    let Some(malformed) = malformed else { return (wafer_core::java_string::to_utf8_lossy(content).into_owned().into_bytes(), false) };
+    let encode = |units: &[u16]| wafer_core::java_string::to_utf8_lossy(&from_utf16(units)).into_owned().into_bytes();
+    let mut bytes = encode(&units[..malformed]);
+    let chunk_start = malformed / BUFFERED_WRITER_CHARS * BUFFERED_WRITER_CHARS;
+    let paired_with_leftover = chunk_start > 0 && (0xDC00..=0xDFFF).contains(&units[chunk_start]) && (0xD800..=0xDBFF).contains(&units[chunk_start - 1]);
+    if !paired_with_leftover {
+        bytes.extend(encode(&units[chunk_start..malformed]));
+    }
+    (bytes, true)
 }
 
 pub struct Settings {
@@ -328,6 +358,7 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wafer_core::java_string::JavaStr;
 
     #[test]
     fn loads_like_java_properties() {
@@ -352,5 +383,22 @@ mod tests {
         let lines: Vec<&str> = stored.split(LINE_SEPARATOR).collect();
         assert_eq!(lines[0], "#Minecraft server properties");
         assert_eq!(&lines[2..5], ["a\\ key=x\\=y\\#z", "level-type=minecraft\\:normal", "motd=\\ A Minecraft Server"]);
+    }
+
+    #[test]
+    fn surrogate_escapes_load_as_utf16_units() {
+        let p = Properties::load("motd=M\\uDBF6\\uDC00N\\uD800O\nemoji=\\uD83D\\uDE00");
+        assert_eq!(p.get("motd").unwrap().java_utf16().collect::<Vec<_>>(), [0x4D, 0xDBF6, 0xDC00, 0x4E, 0xD800, 0x4F]);
+        assert_eq!(p.get("emoji"), Some("\u{1F600}"));
+    }
+
+    #[test]
+    fn a_lone_surrogate_fails_the_store_after_writing_the_buffered_prefix_twice() {
+        let content = from_utf16(&[0x61, 0x0A, 0x4D, 0xDBF6, 0xDC00, 0x4E, 0xD800, 0x4F, 0x0A]);
+        let (bytes, malformed) = buffered_writer_bytes(&content);
+        assert!(malformed);
+        assert_eq!(bytes, b"a\nM\xF4\x8D\xA0\x80Na\nM\xF4\x8D\xA0\x80N");
+        let genuine = from_utf16(&[0x4D, 0xDBF6, 0xDC00, 0x0A]);
+        assert_eq!(buffered_writer_bytes(&genuine), (b"M\xF4\x8D\xA0\x80\n".to_vec(), false));
     }
 }

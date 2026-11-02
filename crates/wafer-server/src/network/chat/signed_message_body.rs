@@ -20,8 +20,9 @@ impl SignedMessageBody {
     pub fn update_signature(&self, output: &mut Vec<u8>) {
         output.extend_from_slice(&self.salt.to_be_bytes());
         output.extend_from_slice(&self.time_stamp.div_euclid(1000).to_be_bytes());
-        output.extend_from_slice(&(self.content.len() as i32).to_be_bytes());
-        output.extend_from_slice(self.content.as_bytes());
+        let content = wafer_core::java_string::to_utf8_lossy(&self.content);
+        output.extend_from_slice(&(content.len() as i32).to_be_bytes());
+        output.extend_from_slice(content.as_bytes());
         self.last_seen.update_signature(output);
     }
 

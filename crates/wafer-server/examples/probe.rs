@@ -53,7 +53,7 @@ fn text(nbt: &Nbt) -> String {
 #[tokio::main]
 async fn main() {
     let addr = std::env::args().nth(1).unwrap_or_else(|| "127.0.0.1:25599".into());
-    let commands: Vec<String> = std::env::args().skip(2).collect();
+    let commands: Vec<String> = std::env::args().skip(2).map(|arg| wafer_core::java_string::from_code_points(&arg).into_owned()).collect();
     let mut c = Client { stream: TcpStream::connect(&addr).await.unwrap(), codec: Codec::default() };
     c.send(handshake::serverbound::INTENTION, |w| {
         w.varint(PROTOCOL_VERSION);

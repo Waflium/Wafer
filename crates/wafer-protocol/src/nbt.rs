@@ -385,11 +385,10 @@ fn write_string(w: &mut Writer, s: &str, origin: Option<Frame>) {
     }
     if bytes.len() > u16::MAX as usize {
         let units: Vec<u16> = utf16_units(s).collect();
-        let display = |units: &[u16]| char::decode_utf16(units.iter().copied()).map(|c| c.unwrap_or('?')).collect::<String>();
         let message = format!(
             "java.io.UTFDataFormatException: encoded string ({}...{}) too long: {} bytes",
-            display(&units[..8]),
-            display(&units[units.len() - 8..]),
+            from_utf16(&units[..8]),
+            from_utf16(&units[units.len() - 8..]),
             bytes.len()
         );
         let mut fault = Fault::new(message, &WRITE_UTF);
@@ -414,9 +413,9 @@ fn read_string(r: &mut Reader) -> Result<String, DecodeError> {
         let b = bytes[i] as u16;
         let (unit, size) = if b & 0x80 == 0 {
             (b, 1)
-        } else if b & 0xE0 == 0xC0 && i + 1 < bytes.len() {
+        } else if b & 0xE0 == 0xC0 && i + 1 < bytes.len() && bytes[i + 1] & 0xC0 == 0x80 {
             ((b & 0x1F) << 6 | (bytes[i + 1] as u16 & 0x3F), 2)
-        } else if b & 0xF0 == 0xE0 && i + 2 < bytes.len() {
+        } else if b & 0xF0 == 0xE0 && i + 2 < bytes.len() && bytes[i + 1] & 0xC0 == 0x80 && bytes[i + 2] & 0xC0 == 0x80 {
             ((b & 0x0F) << 12 | (bytes[i + 1] as u16 & 0x3F) << 6 | (bytes[i + 2] as u16 & 0x3F), 3)
         } else {
             return Err(DecodeError::InvalidUtf8);

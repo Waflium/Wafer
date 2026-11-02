@@ -222,7 +222,7 @@ impl PackResources {
     pub fn read_metadata(&self) -> Result<Option<crate::util::gson::JsonElement>, crate::util::java_throwable::JavaThrowable> {
         let Some(supplier) = self.root_resource("pack.mcmeta") else { return Ok(None) };
         let bytes = supplier.read().map_err(|error| crate::util::java_throwable::JavaThrowable::from_io_error(&error))?;
-        match crate::util::gson::gson_helper_parse(&String::from_utf8_lossy(&bytes)) {
+        match crate::util::gson::gson_helper_parse(&wafer_core::java_string::decode_utf8(&bytes)) {
             Ok(metadata) => Ok(Some(metadata)),
             Err(mut throwable) => {
                 throwable.push_frames(&[

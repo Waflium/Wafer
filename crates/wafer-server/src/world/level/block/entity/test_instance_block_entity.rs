@@ -132,7 +132,7 @@ impl Data {
     }
 
     pub fn read(r: &mut Reader) -> anyhow::Result<Data> {
-        let test = if r.bool()? { Some(crate::resources::identifier::read(r.string(32767)?).map_err(anyhow::Error::msg)?) } else { None };
+        let test = if r.bool()? { Some(crate::resources::identifier::read(&r.string(32767)?).map_err(anyhow::Error::msg)?) } else { None };
         let size = BlockPos::new(r.varint()?, r.varint()?, r.varint()?);
         let rotation = Rotation::VALUES[r.varint()?.rem_euclid(4) as usize];
         let ignore_entities = r.bool()?;

@@ -157,7 +157,7 @@ fn string_from_byte_array(b: &[u8], offset: usize, length: usize) -> String {
     while b[i] != 0 && i < max {
         i += 1;
     }
-    String::from_utf8_lossy(&b[offset.min(i)..i]).into_owned()
+    wafer_core::java_string::decode_utf8(&b[offset.min(i)..i]).into_owned()
 }
 
 async fn send(stream: &mut TcpStream, request_id: i32, cmd: i32, text: &str) -> std::io::Result<()> {

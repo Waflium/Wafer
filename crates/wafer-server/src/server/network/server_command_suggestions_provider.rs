@@ -18,7 +18,7 @@ impl Server {
     pub(in crate::server) fn handle_custom_command_suggestions(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
         let mut reader = packet.reader();
         let request_id = reader.varint()?;
-        let command = reader.string(MAX_COMMAND_LENGTH)?.to_owned();
+        let command = reader.string(MAX_COMMAND_LENGTH)?.into_owned();
         let provider = &mut self.player_mut(id).command_suggestions;
         if provider.last_request.replace((request_id, command)).is_none() && provider.has_budget {
             self.tasks.execute(Task::CommandSuggestions { player: id });

@@ -54,7 +54,7 @@ pub fn read_code_of_conducts() -> Result<Vec<(String, String)>, String> {
             .map_err(|e| java_io_exception(&e))
             .and_then(|bytes| String::from_utf8(bytes).map_err(|_| "java.nio.charset.MalformedInputException: Input length = 1".to_string()))
             .map_err(|cause| format!("java.lang.IllegalArgumentException: Failed to read Code of Conduct file {filename}\nCaused by: {cause}"))?;
-        let code_of_conduct = crate::util::string_util::strip_color(&read_all_lines(&text).join("\n"));
+        let code_of_conduct = crate::util::string_util::strip_color(&read_all_lines(&wafer_core::java_string::from_code_points(&text)).join("\n"));
         if let Some((_, existing)) = code_of_conducts.iter().find(|(l, _)| *l == language) {
             return Err(format!("java.lang.IllegalArgumentException: Multiple entries with same key: {language}={code_of_conduct} and {language}={existing}"));
         }
@@ -194,13 +194,13 @@ pub fn start_console_thread(events: mpsc::UnboundedSender<Event>) {
     console_handler_id();
     let _ = std::thread::Builder::new().name("Server console handler".into()).spawn(move || {
         let stdin = io::stdin();
-        let mut line = String::new();
+        let mut line = Vec::new();
         while !STOPPED_OR_NOT_RUNNING.load(std::sync::atomic::Ordering::Acquire) {
             line.clear();
-            match stdin.lock().read_line(&mut line) {
+            match stdin.lock().read_until(b'\n', &mut line) {
                 Ok(0) => break,
                 Ok(_) => {
-                    let command = line.trim_end_matches(['\n', '\r']).to_string();
+                    let command = wafer_core::java_string::decode_utf8(&line).trim_end_matches(['\n', '\r']).to_string();
                     let has_level = OVERWORLD_CREATED.load(std::sync::atomic::Ordering::Acquire);
                     if events.send(Event::Console(command, has_level)).is_err() {
                         break;

@@ -36,9 +36,9 @@ struct RequestChallenge {
 impl RequestChallenge {
     fn new(buf: &[u8]) -> RequestChallenge {
         let ident_bytes = [buf[3], buf[4], buf[5], buf[6]];
-        let ident = String::from_utf8_lossy(&ident_bytes);
+        let ident = wafer_core::java_string::decode_utf8(&ident_bytes);
         let challenge = rand::rng().random_range(0..16777216);
-        let challenge_bytes = format!("\t{ident}{challenge}\0").into_bytes();
+        let challenge_bytes = wafer_core::java_string::to_utf8_lossy(&format!("\t{ident}{challenge}\0")).into_owned().into_bytes();
         RequestChallenge { time: crate::world::entity::player::profile_public_key::now_millis(), challenge, ident_bytes, challenge_bytes }
     }
 

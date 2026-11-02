@@ -556,7 +556,7 @@ fn playsound_and_stopsound() {
     assert_eq!(sound.len(), 1);
     assert_eq!(sound[0].0, clientbound::SOUND);
     let mut r = wafer_protocol::Reader::new(&sound[0].1);
-    assert_eq!((r.varint().unwrap(), r.string(32767).unwrap(), r.bool().unwrap(), r.varint().unwrap()), (0, "minecraft:block.note_block.bass", false, 8));
+    assert_eq!((r.varint().unwrap(), r.string(32767).unwrap(), r.bool().unwrap(), r.varint().unwrap()), (0, "minecraft:block.note_block.bass".into(), false, 8));
     assert_eq!((r.i32().unwrap(), r.i32().unwrap(), r.i32().unwrap(), r.f32().unwrap(), r.f32().unwrap()), (4, -480, 4, 1.0, 1.0));
     assert_eq!(exec(&mut server, &console, "playsound block.note_block.bass master @a 0.5 -60 0.5 1 1 0.2"), Ok(2));
     let far = bob.packets();

@@ -109,7 +109,7 @@ impl LoginUser {
 async fn run(r: &mut PacketReader, w: &mut PacketWriter, context: &ListenerContext, address: SocketAddr, user: &mut LoginUser) -> anyhow::Result<Option<Profile>> {
     let (config, keys, services, events) = (&context.config, &*context.keys, &context.services, &context.events);
     let hello = r.expect(serverbound::HELLO).await?;
-    let name = hello.reader().string(16)?.to_owned();
+    let name = hello.reader().string(16)?.into_owned();
     if !is_valid_player_name(&name) {
         return protocol_error(w, user, "java.lang.IllegalStateException: Invalid characters in username").await;
     }

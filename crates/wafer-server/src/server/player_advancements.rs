@@ -107,7 +107,7 @@ impl PlayerAdvancements {
             && path.is_file()
         {
             match std::fs::read_to_string(&path) {
-                Ok(text) => match parse_data(&text) {
+                Ok(text) => match parse_data(&wafer_core::java_string::from_code_points(&text)) {
                     Ok(data) => self.apply_from(manager, data),
                     Err(error) => error!("Couldn't parse player advancements in {}\n{error}", path.display()),
                 },
@@ -129,7 +129,7 @@ impl PlayerAdvancements {
         let result = path
             .parent()
             .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|_| std::fs::write(path, serde_json::to_string_pretty(&Value::Object(map)).expect("advancement json")));
+            .and_then(|_| std::fs::write(path, wafer_core::java_string::to_utf8_lossy(&serde_json::to_string_pretty(&Value::Object(map)).expect("advancement json")).as_bytes()));
         if let Err(error) = result {
             error!("Couldn't save player advancements to {}\n{error}", path.display());
         }

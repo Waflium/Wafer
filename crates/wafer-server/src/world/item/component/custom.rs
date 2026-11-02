@@ -675,7 +675,7 @@ impl Custom for Profile {
         for key in SKIN_FIELDS {
             if rd!(r.bool()) {
                 let s = rd!(r.string(32767));
-                fields.push((key.into(), Nbt::String(crate::commands::arguments::parse_identifier(s).unwrap_or_else(|| s.to_string()))));
+                fields.push((key.into(), Nbt::String(crate::commands::arguments::parse_identifier(&s).unwrap_or_else(|| s.into_owned()))));
             }
         }
         if rd!(r.bool()) {

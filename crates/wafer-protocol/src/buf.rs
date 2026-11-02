@@ -1,4 +1,5 @@
-use wafer_core::java_string::JavaStr;
+use wafer_core::java_string::{self, JavaStr};
+use std::borrow::Cow;
 use std::fmt;
 
 use crate::fault::{Fault, Frame};
@@ -107,13 +108,13 @@ impl<'a> Reader<'a> {
         Err(DecodeError::VarIntTooLong)
     }
 
-    pub fn string(&mut self, max_len: usize) -> Result<&'a str, DecodeError> {
+    pub fn string(&mut self, max_len: usize) -> Result<Cow<'a, str>, DecodeError> {
         let byte_len = self.varint()?;
         let byte_len = usize::try_from(byte_len).map_err(|_| DecodeError::StringTooLong)?;
         if byte_len > max_len * 3 {
             return Err(DecodeError::StringTooLong);
         }
-        let s = std::str::from_utf8(self.take(byte_len)?).map_err(|_| DecodeError::InvalidUtf8)?;
+        let s = java_string::decode_utf8(self.take(byte_len)?);
         if s.java_utf16().count() > max_len {
             return Err(DecodeError::StringTooLong);
         }
@@ -302,15 +303,15 @@ impl Writer {
     }
 
     pub fn string_max(&mut self, s: &str, max_len: usize) {
-        let s = &*crate::java_string::to_utf8_lossy(s);
         if s.len() > max_len {
             let length = s.java_utf16().count();
             if length > max_len {
                 self.fail_with(Fault::new(format!("io.netty.handler.codec.EncoderException: String too big (was {length} characters, max {max_len})"), STRING_TOO_BIG_FRAMES));
             }
         }
-        self.varint(s.len() as i32);
-        self.bytes(s.as_bytes());
+        let bytes = java_string::to_netty_utf8(s);
+        self.varint(bytes.len() as i32);
+        self.bytes(&bytes);
     }
 
     pub fn uuid(&mut self, v: u128) {
@@ -467,7 +468,7 @@ mod tests {
     fn string_enforces_max_len() {
         let mut w = Writer::new();
         w.string("abcd");
-        assert_eq!(Reader::new(w.as_slice()).string(4), Ok("abcd"));
+        assert_eq!(Reader::new(w.as_slice()).string(4), Ok("abcd".into()));
         assert_eq!(Reader::new(w.as_slice()).string(3), Err(DecodeError::StringTooLong));
     }
 }

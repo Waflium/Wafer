@@ -49,7 +49,7 @@ impl ServerStatsCounter {
         if counter.file.is_file() {
             match std::fs::read(&counter.file) {
                 Err(e) => error!("Couldn't read statistics file {}\n{e}", counter.file.display()),
-                Ok(bytes) => match crate::util::gson::parse_strict(&String::from_utf8_lossy(&bytes)) {
+                Ok(bytes) => match crate::util::gson::parse_strict(&wafer_core::java_string::decode_utf8(&bytes)) {
                     Err(e) => error!("Couldn't parse statistics file {}\n{e}", counter.file.display()),
                     Ok(element) => {
                         let version = crate::nbt::get_json_data_version(&element, 1343);
@@ -64,7 +64,7 @@ impl ServerStatsCounter {
 
     pub fn save(&self) {
         let result = file_util::create_directories_safe(self.file.parent().unwrap_or(&self.file))
-            .and_then(|_| std::fs::write(&self.file, serde_json::to_string_pretty(&self.to_json()).expect("stats serialize")));
+            .and_then(|_| std::fs::write(&self.file, wafer_core::java_string::to_utf8_lossy(&serde_json::to_string_pretty(&self.to_json()).expect("stats serialize")).as_bytes()));
         if let Err(e) = result {
             error!("Couldn't save stats to {}\n{e}", self.file.display());
         }

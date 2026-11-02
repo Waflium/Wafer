@@ -175,7 +175,7 @@ impl ServerLevel {
                 let pos = r.position()?;
                 let mut lines = Vec::with_capacity(4);
                 for _ in 0..4 {
-                    lines.push(r.string(384)?.to_string());
+                    lines.push(r.string(384)?.into_owned());
                 }
                 let slot = SignTextSlot::by_id(r.varint()?);
                 self.handle_sign_update(id, BlockPos::new(pos.0, pos.1, pos.2), lines, slot);
@@ -203,7 +203,7 @@ impl ServerLevel {
                 self.handle_container_click(id, &mut r)?
             }
             serverbound::RENAME_ITEM => {
-                let name = r.string(32767)?.to_string();
+                let name = r.string(32767)?.into_owned();
                 self.handle_rename_item(id, &name);
             }
             serverbound::CONTAINER_SLOT_STATE_CHANGED => {
@@ -274,7 +274,7 @@ impl ServerLevel {
             }
             serverbound::SET_COMMAND_BLOCK => {
                 let (x, y, z) = r.position()?;
-                let command = r.string(32767)?.to_owned();
+                let command = r.string(32767)?.into_owned();
                 let mode = r.varint()?;
                 if !(0..3).contains(&mode) {
                     anyhow::bail!("Unknown command block mode {mode}");
@@ -284,16 +284,16 @@ impl ServerLevel {
             }
             serverbound::SET_COMMAND_MINECART => {
                 let entity = r.varint()?;
-                let command = r.string(32767)?.to_owned();
+                let command = r.string(32767)?.into_owned();
                 let track_output = r.bool()?;
                 self.handle_set_command_minecart(id, entity, &command, track_output);
             }
             serverbound::SET_JIGSAW_BLOCK => {
                 let pos = r.position()?;
-                let mut identifier = || crate::resources::identifier::parse(r.string(32767)?).map_err(anyhow::Error::msg);
+                let mut identifier = || crate::resources::identifier::parse(&r.string(32767)?).map_err(anyhow::Error::msg);
                 let (name, target, pool) = (identifier()?, identifier()?, identifier()?);
-                let final_state = r.string(32767)?.to_owned();
-                let joint = JointType::by_name(r.string(32767)?).unwrap_or(JointType::Aligned);
+                let final_state = r.string(32767)?.into_owned();
+                let joint = JointType::by_name(&r.string(32767)?).unwrap_or(JointType::Aligned);
                 let selection_priority = r.varint()?;
                 let placement_priority = r.varint()?;
                 let jigsaw = JigsawBlockEntity { name, target, pool, joint, final_state, placement_priority, selection_priority };
@@ -302,7 +302,7 @@ impl ServerLevel {
             serverbound::SET_TEST_BLOCK => {
                 let (x, y, z) = r.position()?;
                 let mode = usize::try_from(r.varint()?).ok().and_then(|id| TestBlockMode::VALUES.get(id).copied()).unwrap_or(TestBlockMode::Start);
-                let message = r.string(32767)?.to_owned();
+                let message = r.string(32767)?.into_owned();
                 self.handle_set_test_block(id, BlockPos::new(x, y, z), mode, message);
             }
             serverbound::SET_STRUCTURE_BLOCK => {
@@ -313,14 +313,14 @@ impl ServerLevel {
                 };
                 let update_type = UpdateType::VALUES[read_enum(UpdateType::VALUES.len())?];
                 let mode = StructureMode::VALUES[read_enum(StructureMode::VALUES.len())?];
-                let name = r.string(32767)?.to_owned();
+                let name = r.string(32767)?.into_owned();
                 let mut clamped = |min: i32, max: i32| -> anyhow::Result<i32> { Ok((r.u8()? as i8 as i32).clamp(min, max)) };
                 let offset = BlockPos::new(clamped(-48, 48)?, clamped(-48, 48)?, clamped(-48, 48)?);
                 let size = BlockPos::new(clamped(0, 48)?, clamped(0, 48)?, clamped(0, 48)?);
                 let mirror = r.varint()?;
                 let mirror = *usize::try_from(mirror).ok().and_then(|ordinal| Mirror::VALUES.get(ordinal)).ok_or_else(|| anyhow::anyhow!("Unknown enum ordinal {mirror}"))?;
                 let rotation = Rotation::VALUES[r.varint()?.rem_euclid(4) as usize];
-                let data = r.string(128)?.to_owned();
+                let data = r.string(128)?.into_owned();
                 let integrity = r.f32()?.clamp(0.0, 1.0);
                 let seed = r.varlong()?;
                 let flags = r.u8()? as i8;
@@ -356,9 +356,9 @@ impl ServerLevel {
                 }
                 let mut pages = Vec::with_capacity(count as usize);
                 for _ in 0..count {
-                    pages.push(r.string(1024)?.to_owned());
+                    pages.push(r.string(1024)?.into_owned());
                 }
-                let title = if r.bool()? { Some(r.string(32)?.to_owned()) } else { None };
+                let title = if r.bool()? { Some(r.string(32)?.into_owned()) } else { None };
                 self.handle_edit_book(id, slot, pages, title);
             }
             serverbound::BUNDLE_ITEM_SELECTED => {
@@ -375,7 +375,7 @@ impl ServerLevel {
             serverbound::SEEN_ADVANCEMENTS => {
                 let action = r.varint()?;
                 if action == 0 {
-                    let tab = crate::resources::identifier::read(r.string(32767)?).map_err(anyhow::Error::msg)?;
+                    let tab = crate::resources::identifier::read(&r.string(32767)?).map_err(anyhow::Error::msg)?;
                     self.handle_seen_advancements(id, &tab);
                 } else if action != 1 {
                     anyhow::bail!("Unknown seen advancements action {action}");
@@ -1491,8 +1491,8 @@ impl crate::server::Server {
         }
         let mut entries = Vec::new();
         for _ in 0..count {
-            let game_rule_key = crate::resources::identifier::parse(r.string(32767)?).map_err(anyhow::Error::msg)?;
-            let value = r.string(32767)?.to_owned();
+            let game_rule_key = crate::resources::identifier::parse(&r.string(32767)?).map_err(anyhow::Error::msg)?;
+            let value = r.string(32767)?.into_owned();
             entries.push((game_rule_key, value));
         }
         let player = self.player(id);

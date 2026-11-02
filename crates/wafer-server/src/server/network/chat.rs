@@ -122,7 +122,7 @@ impl ServerPlayer {
 impl Server {
     pub(in crate::server) fn handle_chat(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
         let mut r = packet.reader();
-        let content = r.string(256)?.to_owned();
+        let content = r.string(256)?.into_owned();
         let time_stamp = r.i64()?;
         let salt = r.i64()?;
         let signature = MessageSignature::read_optional(&mut r)?;
@@ -151,7 +151,7 @@ impl Server {
     }
 
     pub(in crate::server) fn handle_chat_command(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
-        let command = packet.reader().string(32767)?.to_owned();
+        let command = packet.reader().string(32767)?.into_owned();
         if self.try_handle_chat(id, &command, true) {
             self.tasks.execute(Task::Command { player: id, command });
         }
@@ -173,7 +173,7 @@ impl Server {
 
     pub(in crate::server) fn handle_signed_chat_command(&mut self, id: EntityId, packet: &Packet) -> anyhow::Result<()> {
         let mut r = packet.reader();
-        let command = r.string(32767)?.to_owned();
+        let command = r.string(32767)?.into_owned();
         let time_stamp = r.i64()?;
         let salt = r.i64()?;
         let count = r.varint()?;
@@ -182,7 +182,7 @@ impl Server {
         }
         let mut arguments = Vec::with_capacity(count as usize);
         for _ in 0..count {
-            let name = r.string(MAX_ARGUMENT_NAME_LENGTH)?.to_owned();
+            let name = r.string(MAX_ARGUMENT_NAME_LENGTH)?.into_owned();
             arguments.push(ArgumentSignature { name, signature: MessageSignature::read(&mut r)? });
         }
         let update = Update::read(&mut r)?;

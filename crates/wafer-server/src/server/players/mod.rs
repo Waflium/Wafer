@@ -207,7 +207,7 @@ impl<E: StoredUserEntry> StoredUserList<E> {
                 Value::Object(object)
             })
             .collect();
-        std::fs::write(file, crate::util::gson::json_writer::escape_html_safe(&serde_json::to_string_pretty(&Value::Array(array))?))
+        std::fs::write(file, wafer_core::java_string::to_utf8_lossy(&crate::util::gson::json_writer::escape_html_safe(&serde_json::to_string_pretty(&Value::Array(array))?)).as_bytes())
     }
 
     pub fn load(&mut self, tail: &[&'static str]) -> Result<(), LoadError> {
@@ -216,7 +216,7 @@ impl<E: StoredUserEntry> StoredUserList<E> {
             return Ok(());
         }
         let text = std::fs::read(file)
-            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .map(|bytes| wafer_core::java_string::decode_utf8(&bytes).into_owned())
             .map_err(|error| LoadError::Io(file_input_stream_failure(&error, file, &[STORED_USER_LIST_LOAD_139].into_iter().chain(tail.iter().copied()).collect::<Vec<_>>())))?;
         self.entries.clear();
         let load_tail: Vec<&'static str> = [STORED_USER_LIST_LOAD_141].into_iter().chain(tail.iter().copied()).collect();

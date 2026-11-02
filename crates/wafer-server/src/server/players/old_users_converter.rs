@@ -85,7 +85,7 @@ pub struct OldUsersConverter<'a> {
 type UserMap = JavaHashMap<Vec<String>>;
 
 fn lines_of(bytes: &[u8]) -> Vec<String> {
-    let text = String::from_utf8_lossy(bytes);
+    let text = wafer_core::java_string::decode_utf8(bytes);
     let mut lines = Vec::new();
     let mut line = String::new();
     let mut chars = text.chars().peekable();

@@ -295,7 +295,7 @@ impl ServerConfigurationPacketListener<'_> {
         let mut r = wafer_protocol::Reader::new(data);
         let read = |r: &mut wafer_protocol::Reader| -> anyhow::Result<Vec<(String, String, String)>> {
             let count = r.varint()?;
-            (0..count).map(|_| Ok((r.string(32767)?.to_owned(), r.string(32767)?.to_owned(), r.string(32767)?.to_owned()))).collect()
+            (0..count).map(|_| Ok((r.string(32767)?.into_owned(), r.string(32767)?.into_owned(), r.string(32767)?.into_owned()))).collect()
         };
         let accepted = read(&mut r).map_err(|_| decoder_exception())?;
         if accepted != [("minecraft".to_string(), "core".to_string(), VERSION_NAME.to_string())] {
@@ -435,7 +435,7 @@ pub fn write_resource_pack_push(info: &ServerResourcePackInfo, p: &mut wafer_pro
 pub fn read_client_information(data: &[u8]) -> anyhow::Result<ClientInfo> {
     let mut r = wafer_protocol::Reader::new(data);
     Ok(ClientInfo {
-        language: r.string(16)?.to_owned(),
+        language: r.string(16)?.into_owned(),
         view_distance: r.u8()? as i8,
         chat_visibility: match r.varint()?.rem_euclid(3) {
             1 => ChatVisibility::System,

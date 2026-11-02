@@ -72,7 +72,7 @@ async fn status_and_ping() {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     };
     assert_eq!(id, status::clientbound::STATUS_RESPONSE);
-    let status: serde_json::Value = serde_json::from_str(Reader::new(&data).string(32767).unwrap()).unwrap();
+    let status: serde_json::Value = serde_json::from_str(&Reader::new(&data).string(32767).unwrap()).unwrap();
     assert_eq!(status["version"]["name"], VERSION_NAME);
     assert_eq!(status["version"]["protocol"], PROTOCOL_VERSION);
     assert_eq!(status["description"], "test motd");
@@ -92,7 +92,7 @@ async fn outdated_client_is_refused() {
         let mut c = Client::connect(addr, protocol, 2).await;
         let (id, data) = c.recv().await;
         assert_eq!(id, login::clientbound::LOGIN_DISCONNECT);
-        let reason: serde_json::Value = serde_json::from_str(Reader::new(&data).string(262144).unwrap()).unwrap();
+        let reason: serde_json::Value = serde_json::from_str(&Reader::new(&data).string(262144).unwrap()).unwrap();
         assert_eq!(reason, serde_json::json!({ "translate": key, "with": [VERSION_NAME] }));
     }
 }
@@ -103,7 +103,7 @@ async fn transfers_are_refused_unless_accepted() {
     let mut c = Client::connect(addr, PROTOCOL_VERSION, 3).await;
     let (id, data) = c.recv().await;
     assert_eq!(id, login::clientbound::LOGIN_DISCONNECT);
-    let reason: serde_json::Value = serde_json::from_str(Reader::new(&data).string(262144).unwrap()).unwrap();
+    let reason: serde_json::Value = serde_json::from_str(&Reader::new(&data).string(262144).unwrap()).unwrap();
     assert_eq!(reason, serde_json::json!({ "translate": "multiplayer.disconnect.transfers_disabled" }));
 }
 
@@ -142,7 +142,7 @@ async fn joins_superflat_world() {
     let (data, _) = c.recv_until(configuration::clientbound::SELECT_KNOWN_PACKS).await;
     let mut r = Reader::new(&data);
     assert_eq!(r.varint().unwrap(), 1);
-    assert_eq!((r.string(64).unwrap(), r.string(64).unwrap(), r.string(64).unwrap()), ("minecraft", "core", VERSION_NAME));
+    assert_eq!((r.string(64).unwrap(), r.string(64).unwrap(), r.string(64).unwrap()), ("minecraft".into(), "core".into(), VERSION_NAME.into()));
     c.send(configuration::serverbound::SELECT_KNOWN_PACKS, |w| {
         w.varint(1);
         w.string("minecraft");
@@ -251,6 +251,6 @@ async fn whitelist_refuses_strangers() {
     .await;
     let (id, data) = c.recv().await;
     assert_eq!(id, login::clientbound::LOGIN_DISCONNECT);
-    let reason: serde_json::Value = serde_json::from_str(Reader::new(&data).string(262144).unwrap()).unwrap();
+    let reason: serde_json::Value = serde_json::from_str(&Reader::new(&data).string(262144).unwrap()).unwrap();
     assert_eq!(reason, serde_json::json!({ "translate": "multiplayer.disconnect.not_whitelisted" }));
 }

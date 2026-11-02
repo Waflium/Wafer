@@ -12,7 +12,7 @@ impl NetworkDataOutputStream {
     }
 
     pub fn write_string(&mut self, data: &str) {
-        self.output_stream.extend_from_slice(data.as_bytes());
+        self.output_stream.extend_from_slice(wafer_core::java_string::to_utf8_lossy(data).as_bytes());
         self.output_stream.push(0);
     }
 

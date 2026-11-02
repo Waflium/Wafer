@@ -31,7 +31,7 @@ pub(crate) fn worker_name() -> String {
 }
 
 fn read_lines(bytes: &[u8]) -> Vec<String> {
-    let text = String::from_utf8_lossy(bytes);
+    let text = wafer_core::java_string::decode_utf8(bytes);
     let mut lines = Vec::new();
     let mut rest = text.as_ref();
     while !rest.is_empty() {

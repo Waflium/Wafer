@@ -603,15 +603,15 @@ impl Component {
     }
 
     pub fn get_string_with_limit(&self, limit: usize) -> String {
-        let mut string = self.get_string();
-        let mut length = 0;
-        if let Some((end, _)) = string.char_indices().find(|&(_, c)| {
-            length += c.len_utf16();
-            length > limit
-        }) {
-            string.truncate(end);
+        let string = self.get_string();
+        if string.len() <= limit {
+            return string;
         }
-        string
+        let units: Vec<u16> = wafer_core::java_string::utf16_units(&string).collect();
+        if units.len() <= limit {
+            return string;
+        }
+        wafer_core::java_string::from_utf16(&units[..limit])
     }
 
     pub fn java_to_string(&self) -> String {

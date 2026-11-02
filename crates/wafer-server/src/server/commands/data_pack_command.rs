@@ -84,7 +84,7 @@ fn create_pack(server: &mut Server, context: &CommandContext, source: &CommandSo
     let top_mcmeta: Value = json!({ "pack": { "description": description.to_json_value(), "min_format": format, "max_format": format } });
     let written = std::fs::create_dir(&pack_dir)
         .and_then(|_| std::fs::create_dir(pack_dir.join("data")))
-        .and_then(|_| std::fs::write(pack_dir.join("pack.mcmeta"), serde_json::to_string_pretty(&top_mcmeta).unwrap()));
+        .and_then(|_| std::fs::write(pack_dir.join("pack.mcmeta"), wafer_core::java_string::to_utf8_lossy(&serde_json::to_string_pretty(&top_mcmeta).unwrap()).as_bytes()));
     if let Err(e) = written {
         let absolute = std::path::absolute(&datapack_dir).unwrap_or(datapack_dir);
         warn!("Failed to create pack at {}\njava.io.IOException: {e}", absolute.display());

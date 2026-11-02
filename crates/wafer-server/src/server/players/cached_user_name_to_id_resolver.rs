@@ -52,7 +52,7 @@ impl CachedUserNameToIdResolver {
         if let Some(file) = &file
             && let Ok(text) = std::fs::read_to_string(file)
         {
-            match serde_json::from_str::<Value>(&text) {
+            match serde_json::from_str::<Value>(&wafer_core::java_string::from_code_points(&text)) {
                 Ok(Value::Array(entries)) => entries.iter().rev().filter_map(read_game_profile).for_each(|info| profiles.safe_add(info)),
                 Ok(_) => {}
                 Err(e) => warn!("Failed to load profile cache {}: {e}", file.display()),
@@ -135,7 +135,7 @@ impl CachedUserNameToIdResolver {
         let mut infos: Vec<&GameProfileInfo> = profiles.by_uuid.values().collect();
         infos.sort_by_key(|info| std::cmp::Reverse(info.last_access));
         let entries: Vec<Value> = infos.into_iter().take(GAMEPROFILES_MRU_LIMIT).map(write_game_profile).collect();
-        let _ = std::fs::write(file, serde_json::to_string(&entries).unwrap());
+        let _ = std::fs::write(file, wafer_core::java_string::to_utf8_lossy(&serde_json::to_string(&entries).unwrap()).as_bytes());
     }
 }
 

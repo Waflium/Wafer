@@ -3,6 +3,8 @@ mod copy_tests;
 pub mod nbt_io;
 pub mod snbt_grammar;
 #[cfg(test)]
+mod surrogate_tests;
+#[cfg(test)]
 pub mod tests;
 pub mod text_component_tag_visitor;
 

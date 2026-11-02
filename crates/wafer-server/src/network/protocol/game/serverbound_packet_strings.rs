@@ -272,7 +272,7 @@ fn block_pos(r: &mut Reader) -> anyhow::Result<wafer_core::BlockPos> {
 }
 
 fn identifier(r: &mut Reader) -> anyhow::Result<String> {
-    crate::resources::identifier::read(r.string(32767)?).map_err(anyhow::Error::msg)
+    crate::resources::identifier::read(&r.string(32767)?).map_err(anyhow::Error::msg)
 }
 
 fn optional<T: std::fmt::Display>(value: Option<T>) -> String {

@@ -729,7 +729,7 @@ async fn read_service_response(result: Result<Response, Failure>, url: &JavaUrl,
     if status == 304 {
         return Ok(None);
     }
-    let body = String::from_utf8_lossy(&response.body).into_owned();
+    let body = wafer_core::java_string::decode_utf8(&response.body).into_owned();
     if status >= 400 {
         return Err(http_failure(&url.to_string(), status, response.content_type.as_deref(), &body, call, context));
     }

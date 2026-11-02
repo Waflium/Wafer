@@ -95,7 +95,7 @@ async fn online_mode_encrypts_then_asks_the_session_server() {
 
     let (id, data) = c.recv().await;
     assert_eq!(id, login::clientbound::LOGIN_DISCONNECT);
-    let reason: serde_json::Value = serde_json::from_str(Reader::new(&data).string(262144).unwrap()).unwrap();
+    let reason: serde_json::Value = serde_json::from_str(&Reader::new(&data).string(262144).unwrap()).unwrap();
     let key = reason["translate"].as_str().unwrap();
     assert!(key == "multiplayer.disconnect.unverified_username" || key == "multiplayer.disconnect.authservers_down", "{reason}");
 }

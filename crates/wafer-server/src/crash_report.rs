@@ -473,7 +473,7 @@ impl CrashReport {
             if let Some(parent) = save_file.parent().filter(|parent| !parent.as_os_str().is_empty()) {
                 crate::util::file_util::create_directories_safe(parent)?;
             }
-            std::fs::write(save_file, self.get_friendly_report(report_type))
+            std::fs::write(save_file, wafer_core::java_string::to_utf8_lossy(&self.get_friendly_report(report_type)).as_bytes())
         })();
         match saved {
             Ok(()) => {

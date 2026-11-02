@@ -79,7 +79,7 @@ pub struct Tracer {
 
 impl Tracer {
     fn write(&mut self, text: &str) {
-        let _ = self.output.write_all(text.as_bytes());
+        let _ = self.output.write_all(wafer_core::java_string::to_utf8_lossy(text).as_bytes());
     }
 
     fn println(&mut self, text: &str) {
