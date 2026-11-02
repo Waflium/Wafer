@@ -8,7 +8,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::TcpStream;
 use tokio::time::Sleep;
 use tokio_rustls::TlsConnector;
-use tokio_rustls::rustls::client::WebPkiServerVerifier;
+use tokio_rustls::rustls::client::{Resumption, WebPkiServerVerifier};
 use tokio_rustls::rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use tokio_rustls::rustls::crypto::WebPkiSupportedAlgorithms;
 use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName, UnixTime};
@@ -16,6 +16,7 @@ use tokio_rustls::rustls::{self, ClientConfig, DigitallySignedStruct, RootCertSt
 
 use crate::util::java_throwable::JavaThrowable;
 use crate::util::java_url::JavaUrl;
+use crate::util::ssl_context_impl;
 
 pub const CONNECT_TIMEOUT: Duration = Duration::from_millis(5000);
 pub const READ_TIMEOUT: Duration = Duration::from_millis(5000);
@@ -729,30 +730,40 @@ impl Connection {
     }
 }
 
-fn tls_config() -> Arc<ClientConfig> {
-    static CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
-    CONFIG
-        .get_or_init(|| {
-            let mut roots = RootCertStore::empty();
-            match trust_store_certificates() {
-                Some(certificates) => {
-                    for certificate in certificates {
-                        let _ = roots.add(certificate);
-                    }
+fn tls_config(server_name_indication: bool) -> Arc<ClientConfig> {
+    static CONFIGS: OnceLock<[Arc<ClientConfig>; 2]> = OnceLock::new();
+    let [with_server_name, without_server_name] = CONFIGS.get_or_init(|| {
+        let mut roots = RootCertStore::empty();
+        match trust_store_certificates() {
+            Some(certificates) => {
+                for certificate in certificates {
+                    let _ = roots.add(certificate);
                 }
-                None => roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned()),
             }
-            let provider = Arc::new(rustls::crypto::ring::default_provider());
-            let trust_manager = X509TrustManager { algorithms: provider.signature_verification_algorithms, validator: WebPkiServerVerifier::builder_with_provider(Arc::new(roots), provider.clone()).build().ok() };
-            let config = ClientConfig::builder_with_provider(provider)
-                .with_safe_default_protocol_versions()
-                .expect("TLS protocol versions")
-                .dangerous()
-                .with_custom_certificate_verifier(Arc::new(trust_manager))
-                .with_no_client_auth();
-            Arc::new(config)
-        })
-        .clone()
+            None => roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned()),
+        }
+        let provider = Arc::new(ssl_context_impl::client_provider());
+        let trust_manager = X509TrustManager { algorithms: provider.signature_verification_algorithms, validator: WebPkiServerVerifier::builder_with_provider(Arc::new(roots), provider.clone()).build().ok() };
+        let mut config = ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .expect("TLS protocol versions")
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(trust_manager))
+            .with_no_client_auth();
+        config.resumption = Resumption::store(Arc::new(ssl_context_impl::SslSessionContextImpl::new()));
+        config.status_request_v2 = Some(ssl_context_impl::STATUS_REQUEST_V2.to_vec());
+        config.signature_algorithms_cert = ssl_context_impl::signature_schemes(&ssl_context_impl::SIGNATURE_SCHEMES_CERT);
+        config.cert_decompressors = Vec::new();
+        let mut without_server_name = config.clone();
+        without_server_name.enable_sni = false;
+        [Arc::new(config), Arc::new(without_server_name)]
+    });
+    if server_name_indication { with_server_name.clone() } else { without_server_name.clone() }
+}
+
+fn raw_to_sni_host_name(host: &str) -> Option<&str> {
+    let host = host.strip_suffix('.').unwrap_or(host);
+    (host.find('.').is_some_and(|dot| dot > 0) && !host.ends_with('.') && host.parse::<std::net::IpAddr>().is_err()).then_some(host)
 }
 
 #[derive(Debug)]
@@ -785,7 +796,7 @@ impl ServerCertVerifier for X509TrustManager {
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        self.algorithms.supported_schemes()
+        ssl_context_impl::signature_schemes(&ssl_context_impl::SIGNATURE_SCHEMES)
     }
 }
 
@@ -972,15 +983,7 @@ fn connect_request_bytes(url: &JavaUrl) -> Vec<u8> {
 async fn do_tunneling(url: &JavaUrl, timed: Timed) -> Result<Timed, Failure> {
     let mut reader = Reader::new(Connection::Plain(timed));
     let _ = reader.connection.write_all(&connect_request_bytes(url)).await;
-    let head = match read_head(&mut reader).await {
-        Ok(head) => head,
-        Err(failure) => {
-            if matches!(failure, Failure::ReadTimedOut(_)) {
-                leave_unclosed(reader);
-            }
-            return Err(Failure::Tunneling(Box::new(failure)));
-        }
-    };
+    let head = read_head(&mut reader).await.map_err(|failure| Failure::Tunneling(Box::new(failure)))?;
     if head.status != 200 {
         return Err(Failure::UnableToTunnel(head.status_line));
     }
@@ -1007,7 +1010,7 @@ async fn connect(url: &JavaUrl, proxy: Option<&JavaUrl>) -> Result<Connection, F
         Err(_) => return Err(Failure::UnknownHost(host)),
     };
     recorder.capture_server_hello();
-    match TlsConnector::from(tls_config()).connect(server_name, timed).into_fallible().await {
+    match TlsConnector::from(tls_config(raw_to_sni_host_name(&host).is_some())).connect(server_name, timed).into_fallible().await {
         Ok(stream) => {
             recorder.take_server_hello();
             recorder.take_error();
@@ -1308,9 +1311,6 @@ async fn exchange(connection: Connection, method: Method, url: &JavaUrl, body: O
             }
             Err(failure) if retried.is_none() && failure.retry_site().is_some() => retried = failure.retry_site(),
             Err(failure) => {
-                if matches!(failure, Failure::ReadTimedOut(_)) {
-                    leave_unclosed(reader);
-                }
                 return Err(match retried {
                     Some(site) => Failure::Retried(site, Box::new(failure)),
                     None => failure,
@@ -1377,6 +1377,55 @@ mod tests {
         let failure = send(Method::Get, &url, None).await.unwrap_err();
         assert_eq!(failure, Failure::Retried(RetrySite::ParseHttp, Box::new(Failure::ConnectionReset(Phase::Header))));
         assert_eq!(accepted.load(Ordering::SeqCst), 2);
+    }
+
+    fn without_random_values(hello: &[u8]) -> Vec<u8> {
+        let mut hello = hello.to_vec();
+        let u16_at = |bytes: &[u8], at: usize| u16::from_be_bytes([bytes[at], bytes[at + 1]]) as usize;
+        hello[11..43].fill(0);
+        let session_id = hello[43] as usize;
+        hello[44..44 + session_id].fill(0);
+        let mut at = 44 + session_id;
+        at += 2 + u16_at(&hello, at);
+        at += 1 + hello[at] as usize;
+        let end = at + 2 + u16_at(&hello, at);
+        at += 2;
+        while at < end {
+            let (extension, length) = (u16_at(&hello, at), u16_at(&hello, at + 2));
+            if extension == 51 {
+                let mut share = at + 6;
+                while share < at + 4 + length {
+                    let key = u16_at(&hello, share + 2);
+                    hello[share + 4..share + 4 + key].fill(0);
+                    share += 4 + key;
+                }
+            }
+            at += 4 + length;
+        }
+        hello
+    }
+
+    fn client_hello(host: &str) -> Vec<u8> {
+        let name = ServerName::try_from(host.to_string()).unwrap();
+        let mut connection = rustls::ClientConnection::new(tls_config(raw_to_sni_host_name(host).is_some()), name).unwrap();
+        let mut hello = Vec::new();
+        connection.write_tls(&mut hello).unwrap();
+        hello
+    }
+
+    fn hex(text: &str) -> Vec<u8> {
+        let text = text.trim();
+        (0..text.len()).step_by(2).map(|at| u8::from_str_radix(&text[at..at + 2], 16).unwrap()).collect()
+    }
+
+    #[test]
+    fn the_client_hello_is_the_one_jsse_sends() {
+        let expected = hex(include_str!("java_http_url_connection_fixtures/client_hello_host_name.hex"));
+        assert_eq!(without_random_values(&client_hello("api.minecraftservices.com")), without_random_values(&expected));
+        let expected = hex(include_str!("java_http_url_connection_fixtures/client_hello_ip_address.hex"));
+        assert_eq!(without_random_values(&client_hello("127.0.0.1")), without_random_values(&expected));
+        assert_eq!(raw_to_sni_host_name("localhost"), None);
+        assert_eq!(raw_to_sni_host_name("example.com."), Some("example.com"));
     }
 
     #[test]
