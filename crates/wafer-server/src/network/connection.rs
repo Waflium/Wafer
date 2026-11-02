@@ -195,6 +195,7 @@ impl Outbound {
 const EVENT_LOOP_WAKEUP: std::time::Duration = std::time::Duration::from_millis(2);
 const FAULTED_PACKET: [u8; 5] = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
 const FALLBACK_MARKER: [u8; 5] = [0xFF, 0xFF, 0xFF, 0xFF, 0x0E];
+const READ_FAILURE_MARKER: [u8; 5] = [0xFF, 0xFF, 0xFF, 0xFF, 0x0D];
 
 fn split_fallback(item: &[u8]) -> (Option<i32>, &[u8]) {
     let Some(rest) = item.strip_prefix(&FALLBACK_MARKER) else { return (None, item) };
@@ -348,6 +349,203 @@ fn is_skippable(id: i32) -> bool {
     matches!(id, DISGUISED_CHAT | PLAYER_CHAT | PLAYER_COMBAT_KILL | SYSTEM_CHAT | TAG_QUERY)
 }
 
+const SOCKET_WRITE: [&str; 9] = [
+    "java.base/sun.nio.ch.SocketDispatcher.write0(Native Method)",
+    "java.base/sun.nio.ch.SocketDispatcher.write(SocketDispatcher.java:57)",
+    "java.base/sun.nio.ch.IOUtil.writeFromNativeBuffer(IOUtil.java:137)",
+    "java.base/sun.nio.ch.IOUtil.write(IOUtil.java:81)",
+    "java.base/sun.nio.ch.IOUtil.write(IOUtil.java:58)",
+    "java.base/sun.nio.ch.SocketChannelImpl.implWrite(SocketChannelImpl.java:562)",
+    "java.base/sun.nio.ch.SocketChannelImpl.write(SocketChannelImpl.java:614)",
+    "io.netty.channel.socket.nio.NioSocketChannel.doWrite(NioSocketChannel.java:408)",
+    "io.netty.channel.AbstractChannel$AbstractUnsafe.flush0(AbstractChannel.java:794)",
+];
+const SOCKET_GATHERING_WRITE: [&str; 8] = [
+    "java.base/sun.nio.ch.SocketDispatcher.writev0(Native Method)",
+    "java.base/sun.nio.ch.SocketDispatcher.writev(SocketDispatcher.java:62)",
+    "java.base/sun.nio.ch.IOUtil.write(IOUtil.java:227)",
+    "java.base/sun.nio.ch.IOUtil.write(IOUtil.java:158)",
+    "java.base/sun.nio.ch.SocketChannelImpl.implWrite(SocketChannelImpl.java:593)",
+    "java.base/sun.nio.ch.SocketChannelImpl.write(SocketChannelImpl.java:627)",
+    "io.netty.channel.socket.nio.NioSocketChannel.doWrite(NioSocketChannel.java:423)",
+    "io.netty.channel.AbstractChannel$AbstractUnsafe.flush0(AbstractChannel.java:794)",
+];
+const WRITE_AND_FLUSH: [&str; 8] = [
+    "io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.flush0(AbstractNioChannel.java:404)",
+    "io.netty.channel.AbstractChannel$AbstractUnsafe.flush(AbstractChannel.java:758)",
+    "io.netty.channel.DefaultChannelPipeline$HeadContext.flush(DefaultChannelPipeline.java:1391)",
+    "io.netty.channel.AbstractChannelHandlerContext.flush(AbstractChannelHandlerContext.java:754)",
+    "io.netty.channel.ChannelOutboundHandlerAdapter.flush(ChannelOutboundHandlerAdapter.java:125)",
+    "io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:819)",
+    "io.netty.channel.AbstractChannelHandlerContext.writeAndFlush(AbstractChannelHandlerContext.java:776)",
+    "io.netty.channel.AbstractChannelHandlerContext.writeAndFlush(AbstractChannelHandlerContext.java:859)",
+];
+const LISTENER_DO_SEND_PACKET: [&str; 3] = [
+    "io.netty.channel.DefaultChannelPipeline.writeAndFlush(DefaultChannelPipeline.java:1046)",
+    "io.netty.channel.Channel.writeAndFlush(Channel.java:257)",
+    "net.minecraft.network.Connection.doSendPacket(Connection.java:323)",
+];
+const VOID_DO_SEND_PACKET: [&str; 3] = [
+    "io.netty.channel.DefaultChannelPipeline.writeAndFlush(DefaultChannelPipeline.java:1041)",
+    "io.netty.channel.Channel.writeAndFlush(Channel.java:262)",
+    "net.minecraft.network.Connection.doSendPacket(Connection.java:327)",
+];
+const SEND_PACKET_TASK: &str = "net.minecraft.network.Connection.lambda$sendPacket$0(Connection.java:317)";
+const EXCEPTION_CAUGHT_SEND: [&str; 10] = [
+    "net.minecraft.network.Connection.sendPacket(Connection.java:315)",
+    "net.minecraft.network.Connection.send(Connection.java:297)",
+    "net.minecraft.network.Connection.send(Connection.java:291)",
+    "net.minecraft.network.Connection.exceptionCaught(Connection.java:142)",
+    "io.netty.channel.AbstractChannelHandlerContext.invokeExceptionCaught(AbstractChannelHandlerContext.java:290)",
+    "io.netty.channel.AbstractChannelHandlerContext.fireExceptionCaught(AbstractChannelHandlerContext.java:272)",
+    "io.netty.channel.DefaultChannelPipeline$HeadContext.exceptionCaught(DefaultChannelPipeline.java:1396)",
+    "io.netty.channel.DefaultChannelPipeline.fireExceptionCaught(DefaultChannelPipeline.java:890)",
+    "io.netty.channel.nio.AbstractNioByteChannel$NioByteUnsafe.handleReadException(AbstractNioByteChannel.java:132)",
+    "io.netty.channel.nio.AbstractNioByteChannel$NioByteUnsafe.read(AbstractNioByteChannel.java:187)",
+];
+const READ_READY: &str = "io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.handle(AbstractNioChannel.java:445)";
+const FORCE_FLUSH: [&str; 2] = [
+    "io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.forceFlush(AbstractNioChannel.java:411)",
+    "io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.handle(AbstractNioChannel.java:439)",
+];
+const SELECTED_KEY: [&str; 10] = [
+    "io.netty.channel.nio.NioIoHandler$DefaultNioRegistration.handle(NioIoHandler.java:388)",
+    "io.netty.channel.nio.NioIoHandler.processSelectedKey(NioIoHandler.java:596)",
+    "io.netty.channel.nio.NioIoHandler.processSelectedKeysPlain(NioIoHandler.java:541)",
+    "io.netty.channel.nio.NioIoHandler.processSelectedKeys(NioIoHandler.java:514)",
+    "io.netty.channel.nio.NioIoHandler.run(NioIoHandler.java:484)",
+    "io.netty.channel.SingleThreadIoEventLoop.runIo(SingleThreadIoEventLoop.java:225)",
+    "io.netty.channel.SingleThreadIoEventLoop.run(SingleThreadIoEventLoop.java:196)",
+    "io.netty.util.concurrent.SingleThreadEventExecutor$5.run(SingleThreadEventExecutor.java:1204)",
+    "io.netty.util.internal.ThreadExecutorMap$2.run(ThreadExecutorMap.java:74)",
+    "java.base/java.lang.Thread.run(Thread.java:1474)",
+];
+const CLOSED_CHANNEL_WRITE: &str = "io.netty.channel.AbstractChannel$AbstractUnsafe.write(Object, ChannelPromise)(Unknown Source)";
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Flushed {
+    SendPacket { listener: bool },
+    ExceptionCaught,
+    Pending { buffers: usize },
+}
+
+fn write_exception(error: &io::Error, flushed: Flushed) -> JavaThrowable {
+    let description = match error.kind() {
+        io::ErrorKind::ConnectionReset => "java.io.IOException: Connection reset by peer".to_string(),
+        _ if error.raw_os_error().is_some() => format!("java.io.IOException: {}", crate::util::java_nio::os_message(error).trim_end().trim_end_matches('.')),
+        _ => format!("java.io.IOException: {error}"),
+    };
+    let mut frames = Vec::new();
+    match flushed {
+        Flushed::Pending { buffers } => {
+            frames.extend_from_slice(if buffers > 1 { &SOCKET_GATHERING_WRITE } else { &SOCKET_WRITE });
+            frames.extend(FORCE_FLUSH);
+            frames.extend(SELECTED_KEY);
+        }
+        Flushed::SendPacket { listener } => {
+            frames.extend(SOCKET_WRITE);
+            frames.extend(WRITE_AND_FLUSH);
+            if listener {
+                frames.extend(LISTENER_DO_SEND_PACKET);
+            } else {
+                frames.pop();
+                frames.extend(VOID_DO_SEND_PACKET);
+            }
+            frames.push(SEND_PACKET_TASK);
+            frames.extend(EVENT_LOOP_TAIL);
+        }
+        Flushed::ExceptionCaught => {
+            frames.extend(SOCKET_WRITE);
+            frames.extend(WRITE_AND_FLUSH);
+            frames.extend(LISTENER_DO_SEND_PACKET);
+            frames.extend(EXCEPTION_CAUGHT_SEND);
+            frames.push(READ_READY);
+            frames.extend(SELECTED_KEY);
+        }
+    }
+    JavaThrowable::new(description, frames)
+}
+
+fn closed_channel_exception(cause: Option<&JavaThrowable>) -> JavaThrowable {
+    let exception = JavaThrowable::new("io.netty.channel.StacklessClosedChannelException", vec![CLOSED_CHANNEL_WRITE]);
+    match cause {
+        Some(cause) => exception.with_cause(cause.clone()),
+        None => exception,
+    }
+}
+
+fn is_read_exception(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<io::Error>().is_some_and(|error| !matches!(error.kind(), io::ErrorKind::UnexpectedEof | io::ErrorKind::TimedOut))
+}
+
+fn read_exception_description(error: &anyhow::Error) -> String {
+    match error.downcast_ref::<io::Error>() {
+        Some(error) if error.kind() == io::ErrorKind::ConnectionReset => "java.net.SocketException: Connection reset".into(),
+        Some(error) if error.raw_os_error().is_some() => format!("java.io.IOException: {}", crate::util::java_nio::os_message(error).trim_end().trim_end_matches('.')),
+        _ => format!("java.io.IOException: {error}"),
+    }
+}
+
+struct Written {
+    end: usize,
+    fallback_type: Option<i32>,
+    read_failure: bool,
+}
+
+async fn write_flushed(half: &mut OwnedWriteHalf, frames: &[u8], written_items: &[Written]) -> Result<(), (io::Error, Flushed, usize)> {
+    let mut written = 0;
+    let mut blocked = false;
+    while written < frames.len() {
+        match half.try_write(&frames[written..]) {
+            Ok(n) => written += n,
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                blocked = true;
+                if let Err(error) = half.writable().await {
+                    let failing = written_items.iter().position(|item| item.end > written).unwrap_or(written_items.len());
+                    return Err((error, Flushed::Pending { buffers: written_items.len() - failing }, failing));
+                }
+            }
+            Err(error) => {
+                let failing = written_items.iter().position(|item| item.end > written).unwrap_or(written_items.len());
+                let flushed = match written_items.get(failing) {
+                    _ if blocked => Flushed::Pending { buffers: written_items.len() - failing },
+                    Some(item) if item.read_failure => Flushed::ExceptionCaught,
+                    item => Flushed::SendPacket { listener: item.is_some_and(|item| item.fallback_type.is_some()) },
+                };
+                return Err((error, flushed, failing));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn failed_to_deliver(write_thread: &str, fallback_type: i32, cause: &JavaThrowable) {
+    let name = wafer_data::packet_name("play", "clientbound", fallback_type).unwrap_or_default();
+    warn!(thread: write_thread, "Failed to deliver packet, sending fallback clientbound/{name}\n{}", cause.print_stack_trace().trim_end());
+}
+
+fn fail_queued(queued: Vec<Vec<u8>>, bundled: &mut bool, write_thread: &str, cause: &JavaThrowable) {
+    for item in queued {
+        if item.starts_with(&READ_FAILURE_MARKER) {
+            continue;
+        }
+        let (fallback_type, packet) = split_fallback(&item);
+        if packet_id(packet) == Some(wafer_data::packets::play::clientbound::BUNDLE_DELIMITER) {
+            *bundled = !*bundled;
+            continue;
+        }
+        if *bundled {
+            continue;
+        }
+        if let Some((id, encoding_fault)) = encoding_fault(packet) {
+            let encoder_exception = encoder_exception(id, encoding_fault, NettyPath::Plain);
+            error!(thread: write_thread, "Error sending packet {}\n{}", encoder_exception.packet_type, encoder_exception.wrapper.print_stack_trace().trim_end());
+        } else if let Some(fallback_type) = fallback_type {
+            failed_to_deliver(write_thread, fallback_type, cause);
+        }
+    }
+}
+
 pub fn disconnection_reason(error: &anyhow::Error) -> Component {
     match error.downcast_ref::<io::Error>().map(io::Error::kind) {
         Some(io::ErrorKind::TimedOut) => Component::translatable("disconnect.timeout"),
@@ -366,22 +564,38 @@ pub fn spawn_io(
     let on_packet = Arc::new(on_packet);
     let on_read = on_packet.clone();
     let write_thread = io_thread.clone();
-    tokio::spawn(async move {
+    let read_failures = sender.clone();
+    let reader = tokio::spawn(async move {
         loop {
             match r.recv().await {
                 Ok(packet) => on_read(Ok(packet)),
-                Err(e) => return on_read(Err(disconnection_reason(&e))),
+                Err(e) => {
+                    if is_read_exception(&e) {
+                        let reason = Component::translatable_with("disconnect.genericReason", vec![Arg::String(format!("Internal Exception: {}", read_exception_description(&e)))]);
+                        let mut disconnect = READ_FAILURE_MARKER.to_vec();
+                        disconnect.extend(encode(wafer_data::packets::play::clientbound::DISCONNECT, |p| reason.write(p)));
+                        let _ = read_failures.send(disconnect);
+                    }
+                    return on_read(Err(disconnection_reason(&e)));
+                }
             }
         }
     });
     tokio::spawn(async move {
         let mut bundled = false;
+        let mut written_items = Vec::new();
         while let Some(first) = rx.recv().await {
             let mut frames = Vec::new();
+            written_items.clear();
             let mut fault = None;
             let mut next = Some(first);
             while let Some(item) = next.take().or_else(|| rx.try_recv().ok()) {
-                let packet = split_fallback(&item).1;
+                if let Some(disconnect) = item.strip_prefix(&READ_FAILURE_MARKER) {
+                    frames.extend(w.codec.encode(disconnect));
+                    written_items.push(Written { end: frames.len(), fallback_type: None, read_failure: true });
+                    break;
+                }
+                let (fallback_type, packet) = split_fallback(&item);
                 if let Some((id, encoding_fault)) = encoding_fault(packet) {
                     let encoder_exception = encoder_exception(id, encoding_fault, bundle_path(bundled));
                     wait_for_event_loop(packet).await;
@@ -396,7 +610,10 @@ pub fn spawn_io(
                     bundled = !bundled;
                 }
                 match w.codec.try_encode(packet) {
-                    Ok(frame) => frames.extend(frame),
+                    Ok(frame) => {
+                        frames.extend(frame);
+                        written_items.push(Written { end: frames.len(), fallback_type, read_failure: false });
+                    }
                     Err(cause) => {
                         fault = Some(cause);
                         break;
@@ -405,23 +622,8 @@ pub fn spawn_io(
             }
             if fault.is_some() {
                 rx.close();
-                while let Ok(item) = rx.try_recv() {
-                    let (fallback_type, packet) = split_fallback(&item);
-                    if packet_id(packet) == Some(wafer_data::packets::play::clientbound::BUNDLE_DELIMITER) {
-                        bundled = !bundled;
-                        continue;
-                    }
-                    if bundled {
-                        continue;
-                    }
-                    if let Some((id, encoding_fault)) = encoding_fault(packet) {
-                        let encoder_exception = encoder_exception(id, encoding_fault, NettyPath::Plain);
-                        error!(thread: &write_thread, "Error sending packet {}\n{}", encoder_exception.packet_type, encoder_exception.wrapper.print_stack_trace().trim_end());
-                    } else if let Some(fallback_type) = fallback_type {
-                        let name = wafer_data::packet_name("play", "clientbound", fallback_type).unwrap_or_default();
-                        warn!(thread: &write_thread, "Failed to deliver packet, sending fallback clientbound/{name}\nio.netty.channel.StacklessClosedChannelException\n\tat io.netty.channel.AbstractChannel$AbstractUnsafe.write(Object, ChannelPromise)(Unknown Source)");
-                    }
-                }
+                let queued = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+                fail_queued(queued, &mut bundled, &write_thread, &closed_channel_exception(None));
             }
             let reason = fault.map(|cause| Component::translatable_with("disconnect.genericReason", vec![Arg::String(format!("Internal Exception: {}", cause[0]))]));
             if let Some(reason) = &reason {
@@ -430,13 +632,36 @@ pub fn spawn_io(
             if let Some(encryptor) = &mut w.encryptor {
                 encryptor.apply(&mut frames);
             }
-            let written = w.half.write_all(&frames).await.is_ok();
+            let written = write_flushed(&mut w.half, &frames, &written_items).await;
             if let Some(reason) = reason {
                 rx.close();
                 on_packet(Err(reason));
                 break;
             }
-            if !written {
+            if let Err((error, flushed, failing)) = written {
+                rx.close();
+                let queued: Vec<Vec<u8>> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+                let flushed = match flushed {
+                    Flushed::Pending { buffers } => Flushed::Pending { buffers: buffers + queued.len() },
+                    flushed => flushed,
+                };
+                let cause = write_exception(&error, flushed);
+                let closed = closed_channel_exception(Some(&cause));
+                let pending = matches!(flushed, Flushed::Pending { .. });
+                for (index, item) in written_items[failing..].iter().enumerate() {
+                    if let Some(fallback_type) = item.fallback_type {
+                        failed_to_deliver(&write_thread, fallback_type, if index == 0 || pending { &cause } else { &closed });
+                    }
+                }
+                fail_queued(queued, &mut bundled, &write_thread, if pending { &cause } else { &closed });
+                reader.abort();
+                on_packet(Err(Component::translatable("multiplayer.disconnect.generic")));
+                break;
+            }
+            if written_items.last().is_some_and(|item| item.read_failure) {
+                rx.close();
+                let queued = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+                fail_queued(queued, &mut bundled, &write_thread, &closed_channel_exception(None));
                 break;
             }
         }
@@ -494,6 +719,71 @@ mod tests {
         assert_eq!(split_fallback(&marked), (Some(SYSTEM_CHAT), &packet[..]));
         let plain = rx.try_recv().unwrap();
         assert_eq!(split_fallback(&plain), (None, &packet[..]));
+    }
+
+    fn with_first_line(fixture: &str, first_line: &str) -> String {
+        let (_, rest) = fixture.split_once('\n').unwrap();
+        format!("{first_line}\n{}", rest.trim_end())
+    }
+
+    #[test]
+    fn a_send_that_hits_an_aborted_connection_fails_like_vanilla() {
+        let aborted = io::Error::from_raw_os_error(if cfg!(windows) { 10053 } else { 103 });
+        let cause = write_exception(&aborted, Flushed::SendPacket { listener: true });
+        let first_line = format!("java.io.IOException: {}", crate::util::java_nio::os_message(&aborted).trim_end().trim_end_matches('.'));
+        assert_eq!(cause.print_stack_trace().trim_end(), with_first_line(include_str!("connection_fixtures/aborted_send.txt"), &first_line));
+        let closed = closed_channel_exception(Some(&cause)).print_stack_trace();
+        let fixture = include_str!("connection_fixtures/closed_after_aborted_send.txt").replacen(
+            "Caused by: java.io.IOException: 현재 연결은 사용자의 호스트 시스템의 소프트웨어의 의해 중단되었습니다",
+            &format!("Caused by: {first_line}"),
+            1,
+        );
+        assert_eq!(closed.trim_end(), fixture.trim_end());
+    }
+
+    #[test]
+    fn a_disconnect_after_a_read_reset_that_cannot_be_written_closes_the_channel_like_vanilla() {
+        let cause = write_exception(&io::Error::from(io::ErrorKind::ConnectionReset), Flushed::ExceptionCaught);
+        assert_eq!(closed_channel_exception(Some(&cause)).print_stack_trace().trim_end(), include_str!("connection_fixtures/closed_after_read_reset.txt").trim_end());
+    }
+
+    #[test]
+    fn packets_pending_on_a_blocked_socket_fail_with_the_reset_like_vanilla() {
+        let cause = write_exception(&io::Error::from(io::ErrorKind::ConnectionReset), Flushed::Pending { buffers: 2 });
+        assert_eq!(cause.print_stack_trace().trim_end(), include_str!("connection_fixtures/pending_reset.txt").trim_end());
+        let single = write_exception(&io::Error::from(io::ErrorKind::ConnectionReset), Flushed::Pending { buffers: 1 });
+        assert_eq!(single.stack_trace[0], "java.base/sun.nio.ch.SocketDispatcher.write0(Native Method)");
+        assert_eq!(single.stack_trace[9], "io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.forceFlush(AbstractNioChannel.java:411)");
+    }
+
+    #[test]
+    fn a_send_without_a_listener_flushes_through_the_void_promise() {
+        let cause = write_exception(&io::Error::from(io::ErrorKind::ConnectionReset), Flushed::SendPacket { listener: false });
+        let frames = &cause.stack_trace[SOCKET_WRITE.len() + WRITE_AND_FLUSH.len() - 1..];
+        assert_eq!(
+            &frames[..4],
+            [
+                "io.netty.channel.DefaultChannelPipeline.writeAndFlush(DefaultChannelPipeline.java:1041)",
+                "io.netty.channel.Channel.writeAndFlush(Channel.java:262)",
+                "net.minecraft.network.Connection.doSendPacket(Connection.java:327)",
+                SEND_PACKET_TASK,
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_reset_client_fails_the_queued_system_chat_on_the_write() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = tokio::net::TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
+        let (server, _) = listener.accept().await.unwrap();
+        client.set_linger(Some(Duration::ZERO)).unwrap();
+        drop(client);
+        let (_, mut writer) = split(server).unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let frames = vec![0; 64];
+        let written = [Written { end: 32, fallback_type: None, read_failure: false }, Written { end: 64, fallback_type: Some(SYSTEM_CHAT), read_failure: false }];
+        let (_, flushed, failing) = write_flushed(&mut writer.half, &frames, &written).await.unwrap_err();
+        assert_eq!((flushed, failing), (Flushed::SendPacket { listener: false }, 0));
     }
 
     fn reason_text(error: io::Error) -> String {
